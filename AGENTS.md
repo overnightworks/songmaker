@@ -32,11 +32,19 @@ pip install torch numpy scipy suno-bark
 | Track | File | Genre | BPM | Key |
 |-------|------|-------|-----|-----|
 | 01 Download Days | lbums/download_days/tracks/01_download_days.py | Punk Rock (Offspring/Green Day) | 175 | E minor |
+| 02 Fire in the Hole | albums/download_days/tracks/02_fire_in_the_hole.py | Boom-Bap Hip-Hop | 90 | A minor |
 
 **Lyrics theme**: Nostalgia for 90s youth in Erlangen, Germany — downloading MP3s (Green Day, Offspring, Nirvana), LAN parties playing Counter-Strike, biking through Erlangen singing songs, playing Nintendo wrestling with friend David, athletics training at Turnerbund Erlangen.
 
 ### Album: MC Tobbisch Birthday (Legacy)
 Old birthday album with 15 tracks generated via edge-tts (deprecated). Archived in lbums/mc_tobbisch_birthday/legacy_sources/ and legacy_output/.
+
+### Album: Midnight Frequency
+| Track | File | Genre | BPM | Key |
+|-------|------|-------|-----|-----|
+| 01 Let Me Fall | albums/midnight_frequency/tracks/01_let_me_fall.py | Melodic House (CYRIL x Avicii) | 120 | D minor |
+
+**Lyrics theme**: Surrender and freedom — the moment you stop gripping your life and discover the fall IS the destination. Physical imagery (walls, air, windows, birds, city lights). No nostalgia — pure present-tense sensation.
 
 ## Known Limitations
 
@@ -80,14 +88,24 @@ d:/songmaker/
 │
 ├── albums/
 │   ├── download_days/                 ← Album: Download Days
+│   │   ├── lyrics/                    ← Lyrics drafts (review before coding)
+│   │   │   └── 02_fire_in_the_hole.md ← Boom-Bap Hip-Hop (90 BPM, A minor)
 │   │   ├── tracks/                    ← 1 file = 1 song (strict rule)
 │   │   │   └── 01_download_days.py    ← Punk rock anthem (175 BPM, E minor)
+│   │   │   └── 02_fire_in_the_hole.py    ← Boom-Bap Hip-Hop (90 BPM, A minor)
 │   │   └── output/                    ← Generated MP3 files
 │   │
 │   └── mc_tobbisch_birthday/          ← Album: MC Tobbisch Birthday (legacy)
 │       ├── tracks/                    ← Track scripts
 │       ├── legacy_sources/            ← Archived old edge-tts scripts
 │       ├── legacy_output/             ← Archived old MP3 outputs
+
+### Album: Midnight Frequency
+| Track | File | Genre | BPM | Key |
+|-------|------|-------|-----|-----|
+| 01 Let Me Fall | albums/midnight_frequency/tracks/01_let_me_fall.py | Melodic House (CYRIL x Avicii) | 120 | D minor |
+
+**Lyrics theme**: Surrender and freedom — the moment you stop gripping your life and discover the fall IS the destination. Physical imagery (walls, air, windows, birds, city lights). No nostalgia — pure present-tense sensation.
 │       └── output/                    ← Generated MP3 files
 │
 ├── soundfonts/                        ← SoundFont .sf2 files (for FluidSynth)
@@ -98,6 +116,23 @@ d:/songmaker/
 ```
 
 ## Core Rules
+
+### 0. Lyrics-First Workflow
+Every new song starts as a lyrics markdown file, NOT a Python script.
+
+**Workflow:**
+1. Create lbums/<album>/lyrics/<NN>_<song_name>.md with section-tagged lyrics
+2. Review and iterate on lyrics with Flex0r until status is  APPROVED
+3. Only then create the Python track script in 	racks/
+
+**Lyrics file format:**
+- Header: title, album, genre, BPM, key, vocal styles, status
+- Sections tagged: [INTRO], [VERSE 1], [CHORUS], [BRIDGE], [OUTRO]
+- Each section notes the vocal style (RAP, SINGING, SPOKEN, SHOUT, WHISPER)
+- Status:  DRAFT   REVIEW   APPROVED
+- Notes section for language, rhyme scheme, personal references
+
+**Never generate a Python track script from unapproved lyrics.**
 
 ### 1. One Song = One File
 Every track generator lives in `albums/<album_name>/tracks/` as a single Python file.
