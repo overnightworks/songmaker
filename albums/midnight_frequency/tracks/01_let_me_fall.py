@@ -26,6 +26,7 @@ from bark_engine import (
     VocalStyle,
     calculate_vocal_durations,
 )
+from bark_engine.models import VocalLanguage
 from instrumental_engine import (
     Arrangement,
     Chord,
@@ -801,6 +802,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.5,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── VERSE 1A ───
     VocalSection(
@@ -819,6 +822,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── VERSE 1B ───
     VocalSection(
@@ -837,6 +842,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── PRE-CHORUS 1 ───
     VocalSection(
@@ -853,6 +860,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── CHORUS 1A ───
     VocalSection(
@@ -871,6 +880,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.8,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── CHORUS 1B ───
     VocalSection(
@@ -889,6 +900,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.8,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── VERSE 2A ───
     VocalSection(
@@ -907,6 +920,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── VERSE 2B ───
     VocalSection(
@@ -925,6 +940,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── PRE-CHORUS 2 ───
     VocalSection(
@@ -941,6 +958,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── CHORUS 2A ───
     VocalSection(
@@ -959,6 +978,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.8,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── CHORUS 2B ───
     VocalSection(
@@ -977,6 +998,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.8,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── BRIDGE ───
     VocalSection(
@@ -994,6 +1017,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.3,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── FINAL CHORUS A ───
     VocalSection(
@@ -1012,6 +1037,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.9,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── FINAL CHORUS B ───
     VocalSection(
@@ -1029,6 +1056,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.9,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── OUTRO ───
     VocalSection(
@@ -1042,6 +1071,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.3,
         pitch_correction_key="D",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
 ]
 

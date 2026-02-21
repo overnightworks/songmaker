@@ -26,6 +26,7 @@ from bark_engine import (
     VocalStyle,
     calculate_vocal_durations,
 )
+from bark_engine.models import VocalLanguage
 from instrumental_engine import (
     Arrangement,
     Chord,
@@ -289,20 +290,20 @@ def _chorus_pad_chords() -> tuple[Chord, ...]:
 def _chorus_supersaw_chords() -> tuple[Chord, ...]:
     """Full supersaw chords for drops: Am → F → G → Em, 16 beats each."""
     return (
-        Chord(notes=(A4, C5, E5), velocity=0.8, duration_beats=16.0),   # Am
-        Chord(notes=(F4, A4, C5), velocity=0.8, duration_beats=16.0),   # F
-        Chord(notes=(G4, B4, D5), velocity=0.8, duration_beats=16.0),   # G
-        Chord(notes=(E4, G4, B4), velocity=0.8, duration_beats=16.0),   # Em
+        Chord(notes=(A4, C5, E5), velocity=0.65, duration_beats=16.0),  # Am
+        Chord(notes=(F4, A4, C5), velocity=0.65, duration_beats=16.0),  # F
+        Chord(notes=(G4, B4, D5), velocity=0.65, duration_beats=16.0),  # G
+        Chord(notes=(E4, G4, B4), velocity=0.65, duration_beats=16.0),  # Em
     )
 
 
 def _final_supersaw_chords() -> tuple[Chord, ...]:
     """Stacked supersaw chords for final drop — octave doubled."""
     return (
-        Chord(notes=(A3, A4, C5, E5), velocity=0.9, duration_beats=16.0),  # Am
-        Chord(notes=(F3, F4, A4, C5), velocity=0.9, duration_beats=16.0),  # F
-        Chord(notes=(G3, G4, B4, D5), velocity=0.9, duration_beats=16.0),  # G
-        Chord(notes=(E3, E4, G4, B4), velocity=0.9, duration_beats=16.0),  # Em
+        Chord(notes=(A3, A4, C5, E5), velocity=0.75, duration_beats=16.0),  # Am
+        Chord(notes=(F3, F4, A4, C5), velocity=0.75, duration_beats=16.0),  # F
+        Chord(notes=(G3, G4, B4, D5), velocity=0.75, duration_beats=16.0),  # G
+        Chord(notes=(E3, E4, G4, B4), velocity=0.75, duration_beats=16.0),  # Em
     )
 
 
@@ -546,19 +547,19 @@ def build_arrangement() -> Arrangement:
                     InstrumentTrack(
                         name="pad", instrument_id="pad",
                         events=_build_pad_chords(),
-                        volume=0.45,
+                        volume=0.38,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pluck", instrument_id="pluck",
                         events=_verse_arpeggios(),
-                        volume=0.35,
+                        volume=0.30,
                         pan=PanPosition.CENTER_RIGHT,
                     ),
                     InstrumentTrack(
                         name="bass", instrument_id="sub_bass",
                         events=_build_bass(),
-                        volume=0.55,
+                        volume=0.48,
                         pan=PanPosition.CENTER,
                     ),
                 ),
@@ -574,25 +575,25 @@ def build_arrangement() -> Arrangement:
                     InstrumentTrack(
                         name="supersaw", instrument_id="supersaw",
                         events=_chorus_supersaw_chords(),
-                        volume=0.65,
+                        volume=0.50,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pad", instrument_id="pad",
                         events=_chorus_pad_chords(),
-                        volume=0.25,
+                        volume=0.20,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pluck", instrument_id="pluck",
                         events=_chorus_arpeggios(),
-                        volume=0.25,
+                        volume=0.20,
                         pan=PanPosition.CENTER_LEFT,
                     ),
                     InstrumentTrack(
                         name="bass", instrument_id="sub_bass",
                         events=_chorus_bass(),
-                        volume=0.65,
+                        volume=0.55,
                         pan=PanPosition.CENTER,
                     ),
                 ),
@@ -636,19 +637,19 @@ def build_arrangement() -> Arrangement:
                     InstrumentTrack(
                         name="pad", instrument_id="pad",
                         events=_build_pad_chords(),
-                        volume=0.5,
+                        volume=0.42,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pluck", instrument_id="pluck",
                         events=_verse_arpeggios(),
-                        volume=0.35,
+                        volume=0.30,
                         pan=PanPosition.CENTER_LEFT,
                     ),
                     InstrumentTrack(
                         name="bass", instrument_id="sub_bass",
                         events=_build_bass(),
-                        volume=0.6,
+                        volume=0.50,
                         pan=PanPosition.CENTER,
                     ),
                 ),
@@ -664,25 +665,25 @@ def build_arrangement() -> Arrangement:
                     InstrumentTrack(
                         name="supersaw", instrument_id="supersaw",
                         events=_chorus_supersaw_chords(),
-                        volume=0.7,
+                        volume=0.55,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pad", instrument_id="pad",
                         events=_chorus_pad_chords(),
-                        volume=0.3,
+                        volume=0.22,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pluck", instrument_id="pluck",
                         events=_chorus_arpeggios(),
-                        volume=0.28,
+                        volume=0.22,
                         pan=PanPosition.CENTER_RIGHT,
                     ),
                     InstrumentTrack(
                         name="bass", instrument_id="sub_bass",
                         events=_chorus_bass(),
-                        volume=0.7,
+                        volume=0.58,
                         pan=PanPosition.CENTER,
                     ),
                 ),
@@ -719,25 +720,25 @@ def build_arrangement() -> Arrangement:
                     InstrumentTrack(
                         name="supersaw", instrument_id="supersaw",
                         events=_final_supersaw_chords(),
-                        volume=0.8,
+                        volume=0.60,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pad", instrument_id="pad",
                         events=_chorus_pad_chords(),
-                        volume=0.3,
+                        volume=0.22,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pluck", instrument_id="pluck",
                         events=_chorus_arpeggios(),
-                        volume=0.3,
+                        volume=0.22,
                         pan=PanPosition.CENTER_LEFT,
                     ),
                     InstrumentTrack(
                         name="bass", instrument_id="sub_bass",
                         events=_final_bass(),
-                        volume=0.75,
+                        volume=0.60,
                         pan=PanPosition.CENTER,
                     ),
                 ),
@@ -786,6 +787,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.5,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── VERSE 1A ───
     VocalSection(
@@ -804,6 +807,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── VERSE 1B ───
     VocalSection(
@@ -822,6 +827,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── PRE-CHORUS 1 ───
     VocalSection(
@@ -838,6 +845,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── CHORUS 1A ───
     VocalSection(
@@ -856,6 +865,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.8,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── CHORUS 1B ───
     VocalSection(
@@ -874,6 +885,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.8,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── VERSE 2A ───
     VocalSection(
@@ -892,6 +905,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── VERSE 2B ───
     VocalSection(
@@ -910,6 +925,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── PRE-CHORUS 2 ───
     VocalSection(
@@ -926,6 +943,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.7,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── CHORUS 2A ───
     VocalSection(
@@ -944,6 +963,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.8,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── CHORUS 2B ───
     VocalSection(
@@ -962,6 +983,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.8,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── BRIDGE ───
     VocalSection(
@@ -979,6 +1002,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.3,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── FINAL CHORUS A ───
     VocalSection(
@@ -997,6 +1022,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.9,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── FINAL CHORUS B ───
     VocalSection(
@@ -1014,6 +1041,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.9,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
     # ─── OUTRO ───
     VocalSection(
@@ -1027,6 +1056,8 @@ VOCALS: Final[list[VocalSection]] = [
         pitch_correction_intensity=0.3,
         pitch_correction_key="A",
         pitch_correction_scale="minor",
+        language=VocalLanguage.ENGLISH,
+        rvc_model="male_singer_v1",
     ),
 ]
 
@@ -1110,7 +1141,7 @@ def main() -> None:
     engine.cleanup()
 
     # ── 4. Apply ducking ──
-    print("🔉 Applying vocal-instrumental ducking (-3dB)...")
+    print("🔉 Applying vocal-instrumental ducking (-6dB)...")
     vocal_durations = calculate_vocal_durations(generated_vocals)
     vocal_placement_seconds: list[tuple[str, float]] = [
         (sid, beat * SECONDS_PER_BEAT) for sid, beat in VOCAL_PLACEMENT
@@ -1120,21 +1151,24 @@ def main() -> None:
         inst_right,
         vocal_placement_seconds,
         vocal_durations,
-        reduction_db=-3.0,
-        attack_seconds=0.05,
-        release_seconds=0.2,
+        reduction_db=-6.0,
+        attack_seconds=0.08,
+        release_seconds=0.3,
     )
 
     # ── 5. Overlay vocals onto ducked instrumental ──
     print("🎚️  Mixing vocals onto instrumental...")
     vocal_map = {v.section_id: v.samples for v in generated_vocals}
 
+    # Vocal gain boost — compensates for Bark's quiet output
+    VOCAL_GAIN: float = 1.4
+
     for section_id, beat in VOCAL_PLACEMENT:
         samples = vocal_map.get(section_id)
         if samples is None:
             continue
         start_sample = int(beat * SECONDS_PER_BEAT * SAMPLE_RATE)
-        vocal_mono = list(samples)
+        vocal_mono = [s * VOCAL_GAIN for s in samples]
         overlay_onto(
             ducked_left,
             ducked_right,
