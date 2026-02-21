@@ -17,38 +17,43 @@ d:/songmaker/
 │   │   ├── models.py                  ← VocalSection, VocalStyle, GeneratedVocal
 │   │   ├── constants.py               ← BARK_SAMPLE_RATE, TARGET_SAMPLE_RATE
 │   │   ├── take_selection.py          ← Multi-take scoring + best-of-N selection
+│   │   ├── pitch_correction.py        ← Auto-tune: pitch detection + PSOLA correction
 │   │   ├── text_processing.py         ← Chunk splitting, ♪ markers
 │   │   ├── audio_io.py                ← WAV read/write, mixing, MP3 mastering, vocal durations
 │   │   ├── audio_utils.py             ← Trim, crossfade, resample
-│   │   ├── vocal_filters.py           ← FFmpeg filter chains per vocal style
-│   │   └── pitch_correction.py        ← Auto-tune: pitch detection + PSOLA correction
+│   │   └── vocal_filters.py           ← FFmpeg filter chains per vocal style
 │   │
-│   ├── instrumental_engine/           ← Shared instrumental engine
-│   │   ├── __init__.py                ← Public API
-│   │   ├── arrangement_engine.py      ← Main orchestrator: renders Arrangement → audio
-│   │   ├── models.py                  ← Arrangement, SongSection, Note, Chord, etc.
-│   │   ├── constants.py               ← SAMPLE_RATE, midi_to_freq, note helpers
-│   │   ├── synth_instruments.py       ← 8 DSP synths (supersaw, pad, pluck, etc.)
-│   │   ├── drum_machine.py            ← Drum synthesis + pattern library
-│   │   ├── soundfont_engine.py        ← FluidSynth/SoundFont integration
-│   │   ├── ducking.py                 ← Vocal-instrumental ducking (always active)
-│   │   ├── effects.py                 ← Reverb, delay, chorus, sidechain, etc.
-│   │   ├── mastering.py               ← Professional mastering chain (multiband/LUFS/stereo/clip)
-│   │   └── mixer.py                   ← Stereo mixing, panning, WAV/MP3 export
-│   │
-│   └── (legacy track generators)      ← Old edge-tts based scripts (deprecated)
+│   └── instrumental_engine/           ← Shared instrumental engine
+│       ├── __init__.py                ← Public API
+│       ├── arrangement_engine.py      ← Main orchestrator: renders Arrangement → audio
+│       ├── models.py                  ← Arrangement, SongSection, Note, Chord, etc.
+│       ├── constants.py               ← SAMPLE_RATE, midi_to_freq, note helpers
+│       ├── synth_instruments.py       ← 8 DSP synths (supersaw, pad, pluck, etc.)
+│       ├── drum_machine.py            ← Drum synthesis + pattern library
+│       ├── soundfont_engine.py        ← FluidSynth/SoundFont integration
+│       ├── soundfont_validator.py      ← SoundFont health check + setup validation
+│       ├── ducking.py                 ← Vocal-instrumental ducking (always active)
+│       ├── effects.py                 ← Reverb, delay, chorus, sidechain, etc.
+│       ├── mastering.py               ← Professional mastering chain (multiband/LUFS/stereo/clip)
+│       └── mixer.py                   ← Stereo mixing, panning, WAV/MP3 export
 │
 ├── albums/
-│   └── mc_tobbisch_birthday/
-│       ├── tracks/                    ← 1 file = 1 song (strict rule)
-│       │   ├── 01_download_days.py
-│       │   └── ...
+│   ├── download_days/                 ← Album: Download Days
+│   │   ├── tracks/                    ← 1 file = 1 song (strict rule)
+│   │   │   └── 01_download_days.py    ← Punk rock anthem (175 BPM, E minor)
+│   │   └── output/                    ← Generated MP3 files
+│   │
+│   └── mc_tobbisch_birthday/          ← Album: MC Tobbisch Birthday (legacy)
+│       ├── tracks/                    ← Track scripts
+│       ├── legacy_sources/            ← Archived old edge-tts scripts
+│       ├── legacy_output/             ← Archived old MP3 outputs
 │       └── output/                    ← Generated MP3 files
-│           ├── 01_Download_Days.mp3
-│           └── ...
 │
-├── soundfonts/                        ← SoundFont files (optional)
-└── (legacy .mp3 files at root)        ← Old album output (deprecated)
+├── soundfonts/                        ← SoundFont .sf2 files (for FluidSynth)
+├── docs/                              ← Setup guides (soundfont_setup.md, etc.)
+├── examples/                          ← Example/test scripts
+├── plans/                             ← Technical specifications
+└── tests/                             ← Unit tests
 ```
 
 ## Core Rules
