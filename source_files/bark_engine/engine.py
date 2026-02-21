@@ -157,10 +157,11 @@ class BarkVocalEngine:
             processed = self._apply_vocal_processing(
                 pitch_corrected, section.section_id, section.style
             )
+            final = self._apply_rvc(processed, section)
 
             vocal = GeneratedVocal(
                 section_id=section.section_id,
-                samples=processed,
+                samples=final,
                 volume=section.volume,
                 gap_after_seconds=section.gap_after_seconds,
             )
@@ -190,6 +191,9 @@ class BarkVocalEngine:
             "pitch_correction_intensity": section.pitch_correction_intensity,
             "pitch_correction_key": section.pitch_correction_key,
             "pitch_correction_scale": section.pitch_correction_scale,
+            "rvc_model": section.rvc_model,
+            "rvc_pitch_shift": section.rvc_pitch_shift,
+            "rvc_index_rate": section.rvc_index_rate,
         }
         blob = json.dumps(key_data, sort_keys=True).encode()
         return hashlib.sha256(blob).hexdigest()[:16]
@@ -444,6 +448,56 @@ class BarkVocalEngine:
 
         processed, _ = read_wav_file(output_path)
         return processed
+
+    def _apply_rvc(
+        self, samples: list[float], section: VocalSection
+    ) -> list[float]:
+        """Apply RVC voice conversion if configured.
+
+        Converts vocals through a trained RVC voice model to produce
+        more natural-sounding output. Runs in an isolated Python 3.12
+        venv via subprocess.
+
+        Args:
+            samples: Processed audio samples at TARGET_SAMPLE_RATE.
+            section: Vocal section with RVC configuration.
+
+        Returns:
+            Voice-converted audio (or original if RVC is not configured).
+        """
+        if section.rvc_model is None:
+            return samples
+
+        try:
+            from rvc_engine import RVCConverter, is_rvc_available
+        except ImportError:
+            print(f"   ⚠️  rvc_engine not found, skipping RVC")
+            return samples
+
+        if not is_rvc_available():
+            print(
+                f"   ⚠️  RVC not available for {section.section_id} "
+                f"(run setup_rvc_venv.py to install)"
+            )
+            return samples
+
+        converter = RVCConverter(
+            model_name=section.rvc_model,
+            pitch_shift=section.rvc_pitch_shift,
+            index_rate=section.rvc_index_rate,
+        )
+
+        result = converter.convert_samples(
+            samples,
+            sample_rate=TARGET_SAMPLE_RATE,
+            temp_dir=self._temp_dir,
+        )
+
+        if result is not None:
+            return result
+
+        print(f"   ⚠️  RVC conversion failed, using original audio")
+        return samples
 
     def cleanup(self) -> None:
         """Remove temporary files and directory."""

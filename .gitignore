@@ -25,6 +25,10 @@ __pycache__/
 venv/
 .venv/
 env/
+_rvc_venv/
+
+# RVC voice models (large binary files)
+rvc_models/
 
 # IDE
 .vscode/
