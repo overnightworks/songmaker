@@ -19,47 +19,83 @@ from instrumental_engine.models import GMProgram
 
 
 FLUIDSYNTH_CHECK_CMD: Final[str] = "fluidsynth"
-DEFAULT_SOUNDFONT_PATHS: Final[tuple[str, ...]] = (
-    "soundfonts/GeneralUser_GS.sf2",
+
+# SoundFont search paths in quality-priority order (best first).
+# The engine tries these in order and uses the first one found.
+SOUNDFONT_PRIORITY: Final[tuple[str, ...]] = (
+    # High quality — large, detailed samples
+    "soundfonts/Timbres_of_Heaven.sf2",
+    "soundfonts/MuseScore_General.sf2",
+    # Good general purpose
     "soundfonts/FluidR3_GM.sf2",
+    "soundfonts/GeneralUser_GS.sf2",
+    # Fallback names
     "soundfonts/default.sf2",
+    # System-wide locations (Windows)
     "C:/tools/fluidsynth/share/soundfonts/default.sf2",
     "C:/soundfonts/GeneralUser_GS.sf2",
+    "C:/soundfonts/FluidR3_GM.sf2",
 )
 
+# Instrument-specific SoundFonts — when present, these override the
+# default GM SoundFont for their instrument category.
+# Maps GM program ranges to preferred SoundFont filenames.
+INSTRUMENT_SOUNDFONTS: Final[dict[str, tuple[int, ...]]] = {
+    # Piano-specific SoundFont (programs 0-7: piano family)
+    "soundfonts/Salamander_Grand_Piano.sf2": (0, 1, 2, 3, 4, 5, 6, 7),
+}
 
-def find_soundfont() -> Path:
-    """Locate a SoundFont file on the system.
 
-    Searches known paths and the ``soundfonts/`` directory for ``.sf2`` files.
+def find_soundfont(gm_program: int | None = None) -> Path:
+    """Locate the best SoundFont file for a given instrument.
+
+    Searches for instrument-specific SoundFonts first (e.g., Salamander
+    for piano), then falls back to the best available general-purpose
+    SoundFont in quality-priority order.
+
+    Args:
+        gm_program: Optional GM program number. When provided, the engine
+            checks for instrument-specific SoundFonts first.
 
     Returns:
-        Path to the first discovered SoundFont file.
+        Path to the best available SoundFont file.
 
     Raises:
         FileNotFoundError: With download instructions if no SoundFont found.
     """
-    for sf_path in DEFAULT_SOUNDFONT_PATHS:
+    # Check instrument-specific SoundFonts first
+    if gm_program is not None:
+        for sf_path, programs in INSTRUMENT_SOUNDFONTS.items():
+            if gm_program in programs:
+                path = Path(sf_path)
+                if path.exists():
+                    return path
+
+    # Search general-purpose SoundFonts in priority order
+    for sf_path in SOUNDFONT_PRIORITY:
         path = Path(sf_path)
         if path.exists():
             return path
 
+    # Scan soundfonts/ directory — pick largest file (usually best quality)
     sf_dir = Path("soundfonts")
     if sf_dir.is_dir():
-        discovered = sorted(sf_dir.glob("*.sf2"))
+        discovered = sorted(sf_dir.glob("*.sf2"), key=lambda p: p.stat().st_size, reverse=True)
         if discovered:
             return discovered[0]
 
     raise FileNotFoundError(
         "No SoundFont (.sf2) files found.\n"
         "\n"
-        "Place a General MIDI SoundFont in the 'soundfonts/' directory:\n"
+        "Run the download script to get recommended SoundFonts:\n"
+        "  python download_soundfonts.py\n"
+        "\n"
+        "Or manually place a General MIDI SoundFont in 'soundfonts/':\n"
         "  soundfonts/FluidR3_GM.sf2\n"
         "\n"
         "Recommended downloads:\n"
-        "  FluidR3_GM.sf2 (~140 MB): "
-        "https://member.keymusician.com/Member/FluidR3_GM/FluidR3_GM.sf2\n"
-        "  GeneralUser_GS.sf2 (~30 MB): https://generaluser.sourceforge.io/\n"
+        "  FluidR3_GM.sf2 (~140 MB):       python download_soundfonts.py fluidr3\n"
+        "  MuseScore_General.sf2 (~208 MB): python download_soundfonts.py musescore\n"
         "\n"
         "See docs/soundfont_setup.md for the complete setup guide."
     )

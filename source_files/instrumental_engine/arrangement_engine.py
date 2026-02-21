@@ -101,7 +101,7 @@ def _resolve_instrument(
     """
     if instrument_id.startswith("sf:"):
         require_fluidsynth()
-        sf_path = find_soundfont()
+        sf_path = find_soundfont(gm_program=int(track.gm_program))
         return SoundFontRenderer(
             soundfont_path=sf_path,
             gm_program=track.gm_program,
