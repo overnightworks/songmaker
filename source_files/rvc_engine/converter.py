@@ -1,16 +1,7 @@
-"""RVC voice conversion via isolated subprocess.
+"""RVC voice conversion via subprocess.
 
-RVC requires Python 3.10-3.12 and specific dependency versions
-(faiss-cpu 1.7.3, numpy<=1.25, etc.) that conflict with our main
-Python 3.14 environment. This module runs RVC inference in a
-separate venv via subprocess, communicating through WAV files.
-
-Architecture:
-    Main process (Python 3.14)
-        → writes input WAV to temp file
-        → calls RVC venv Python with inference script
-        → reads output WAV back
-        → returns audio samples
+Runs RVC inference in the project venv via subprocess, communicating
+through WAV files.
 
 This design is intentionally GPU-agnostic and hardware-independent.
 Upgrading from a GTX 1660 Ti to an RTX 3090 requires zero code
@@ -25,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Final
 
-RVC_VENV_DIR: Final[str] = "_rvc_venv"
+RVC_VENV_DIR: Final[str] = ".venv"
 RVC_MODELS_DIR: Final[str] = "rvc_models"
 RVC_INFERENCE_SCRIPT: Final[str] = "_rvc_infer.py"
 

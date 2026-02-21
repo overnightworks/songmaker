@@ -1,16 +1,6 @@
-"""XTTS v2 text-to-speech via isolated subprocess.
+"""XTTS v2 text-to-speech via subprocess.
 
-Coqui XTTS v2 requires Python 3.10-3.12 and specific dependency versions
-that conflict with our main Python 3.14 environment. This module runs
-XTTS inference in a separate venv via subprocess, communicating through
-WAV files.
-
-Architecture:
-    Main process (Python 3.14)
-        -> writes config JSON
-        -> calls XTTS venv Python with inference script
-        -> reads output WAV back
-        -> returns audio samples
+Runs XTTS inference via subprocess, communicating through WAV files.
 
 XTTS is best for spoken/whispered/rap vocals. It cannot sing —
 use Bark for singing sections.
@@ -27,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Final
 
-XTTS_VENV_DIR: Final[str] = "_rvc_venv"  # Shared venv with RVC
+XTTS_VENV_DIR: Final[str] = ".venv"
 XTTS_INFERENCE_SCRIPT: Final[str] = "_xtts_infer.py"
 VOICE_REFS_DIR: Final[str] = "voice_refs"
 

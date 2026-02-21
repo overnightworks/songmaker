@@ -1,0 +1,121 @@
+[project]
+name = "songmaker"
+version = "1.0.0"
+description = "AI-powered song generation engine — vocals + instrumentals from pure Python scripts"
+authors = [{ name = "Flex0r (Felix Hummert)", email = "felix.hummert@gmail.com" }]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    # Core audio processing
+    "numpy>=1.26",
+    "scipy>=1.12",
+
+    # Vocal synthesis (Bark AI)
+    "suno-bark>=0.1",
+
+    # Deep learning runtime (CUDA version resolved via tool.uv index)
+    "torch>=2.2",
+    "torchaudio>=2.2",
+
+    # RVC voice conversion (installed with --no-deps, numpy override below)
+    "rvc-python>=0.1",
+    "fairseq==0.12.2",
+    "torchcrepe",
+    "pyworld",
+    "praat-parselmouth",
+    "faiss-cpu",
+
+    # Audio utilities (shared by multiple backends)
+    "soundfile",
+    "librosa",
+    "numba",
+    "pydantic",
+    "omegaconf",
+]
+
+[project.optional-dependencies]
+# XTTS v2 text-to-speech (voice cloning)
+xtts = ["coqui-tts"]
+
+# MusicGen AI instrumental generation
+musicgen = ["audiocraft"]
+
+# Demucs stem separation
+demucs = ["demucs"]
+
+# Legacy album support (MC Tobbisch Birthday)
+legacy = ["edge-tts>=6.1"]
+
+# Development / testing
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4",
+]
+
+[project.urls]
+Repository = "https://github.com/flex0r/songmaker"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["source_files"]
+include = [
+    "bark_engine*",
+    "instrumental_engine*",
+    "rvc_engine*",
+    "xtts_engine*",
+    "ai_engine*",
+    "stem_separator*",
+]
+
+# ---------------------------------------------------------------
+# uv configuration
+# ---------------------------------------------------------------
+[tool.uv]
+# rvc-python pins old numpy/faiss versions that lack Python 3.12 wheels.
+# fairseq pins hydra-core<1.1 but works fine with newer versions.
+override-dependencies = [
+    "numpy>=1.26",
+    "faiss-cpu>=1.7.4",
+    "hydra-core>=1.1",
+    "omegaconf>=2.1",
+]
+
+# Only resolve default deps (skip optional groups that have conflicts).
+# Install extras explicitly: uv sync --extra xtts
+default-groups = []
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu121" }
+torchaudio = { index = "pytorch-cu121" }
+
+# ---------------------------------------------------------------
+# Tool configuration
+# ---------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["source_files"]
+
+# ---------------------------------------------------------------
+# External tools (must be on system PATH):
+#   ffmpeg      — MP3 encoding, vocal filtering
+#   FluidSynth  — SoundFont instrument rendering (optional)
+#
+# SoundFonts:
+#   python download_soundfonts.py
+# ---------------------------------------------------------------

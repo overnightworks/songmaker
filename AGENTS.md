@@ -21,11 +21,11 @@ python albums/download_days/tracks/01_download_days.py
 ## Dependencies
 
 ```bash
-pip install torch numpy scipy suno-bark
+py -3.12 -m venv .venv && .venv/Scripts/activate
+pip install -e .              # All core + RVC deps
 # ffmpeg must be on PATH (for MP3 encoding + vocal processing)
 # Optional: FluidSynth + SoundFont (.sf2) for realistic instruments
 # Optional: python download_soundfonts.py  (download high-quality SoundFonts)
-# Optional: python setup_rvc_venv.py       (RVC voice conversion, needs Python 3.12)
 ```
 
 ## Architecture

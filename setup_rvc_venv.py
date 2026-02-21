@@ -25,7 +25,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-VENV_DIR = Path("_rvc_venv")
+VENV_DIR = Path(".venv")
 REQUIRED_PYTHON = "3.12"
 
 

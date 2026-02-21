@@ -33,6 +33,12 @@ rvc_models/
 # Voice reference audio files (for XTTS cloning)
 voice_refs/
 
+# Claude Code
+.claude/
+
+# Build artifacts
+*.egg-info/
+
 # IDE
 .vscode/
 .idea/

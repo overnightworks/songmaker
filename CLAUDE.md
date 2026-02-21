@@ -5,8 +5,9 @@ AI-powered song generation engine by Flex0r. Generates complete songs (vocals + 
 
 **Creator**: Flex0r (Felix)
 **For**: MC Tobbisch (Tobias)
-**Python**: 3.12+
-**Run a track**: `python albums/<album>/tracks/<NN>_<song>.py`
+**Python**: 3.12 (pinned — AI backends require <=3.12)
+**Venv**: `.venv/` (single unified environment for all deps)
+**Run a track**: `.venv/Scripts/python albums/<album>/tracks/<NN>_<song>.py`
 
 ## Key Rules
 
@@ -25,12 +26,16 @@ AI-powered song generation engine by Flex0r. Generates complete songs (vocals + 
 - `soundfonts/` — SoundFont `.sf2` files
 - `AGENTS.md` — Full project documentation (detailed reference)
 
-## Dependencies
-```
-pip install torch numpy scipy suno-bark
+## Setup
+```bash
+py -3.12 -m venv .venv
+.venv/Scripts/activate          # Windows
+pip install -e .                # Core + RVC deps from pyproject.toml
+pip install -e .[xtts]          # + XTTS voice cloning (optional)
+pip install -e .[demucs]        # + Stem separation (optional)
 # ffmpeg must be on PATH
 # Optional: FluidSynth + SoundFont for realistic instruments
-# GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121
+# GPU: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
 ## Active Albums

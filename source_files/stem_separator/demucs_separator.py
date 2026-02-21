@@ -1,15 +1,6 @@
-"""Demucs stem separation via isolated subprocess.
+"""Demucs stem separation via subprocess.
 
 Splits any audio file into 4 stems: vocals, drums, bass, other.
-Uses Meta's Demucs model in a separate Python 3.12 venv.
-
-Architecture:
-    Main process (Python 3.14)
-        -> writes config JSON with input path
-        -> calls venv Python with inference script
-        -> reads output WAV files (one per stem)
-        -> returns dict of stem name -> audio samples
-
 VRAM: ~3 GB minimum. Use segment=7 for 6 GB GPUs.
 """
 
@@ -21,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-VENV_DIR: Final[str] = "_rvc_venv"  # Shared venv
+VENV_DIR: Final[str] = ".venv"
 INFERENCE_SCRIPT: Final[str] = "_demucs_infer.py"
 STEM_NAMES: Final[tuple[str, ...]] = ("drums", "bass", "other", "vocals")
 

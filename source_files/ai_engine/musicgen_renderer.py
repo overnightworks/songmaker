@@ -1,15 +1,6 @@
-"""MusicGen AI instrumental generation via isolated subprocess.
+"""MusicGen AI instrumental generation via subprocess.
 
-Meta's MusicGen generates music from text descriptions. This module
-runs MusicGen in a separate Python 3.12 venv via subprocess to avoid
-dependency conflicts with Python 3.14.
-
-Architecture:
-    Main process (Python 3.14)
-        -> writes config JSON with prompt + duration
-        -> calls venv Python with inference script
-        -> reads output WAV back
-        -> resamples to 44.1kHz stereo
+Meta's MusicGen generates music from text descriptions.
 
 Model selection is VRAM-aware:
     - musicgen-small  (300M):  ~4-5 GB VRAM  (GTX 1660 Ti)
@@ -29,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Final
 
-VENV_DIR: Final[str] = "_rvc_venv"  # Shared venv with RVC/XTTS
+VENV_DIR: Final[str] = ".venv"
 INFERENCE_SCRIPT: Final[str] = "_musicgen_infer.py"
 MUSICGEN_SAMPLE_RATE: Final[int] = 32000
 TARGET_SAMPLE_RATE: Final[int] = 44100
