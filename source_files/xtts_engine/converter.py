@@ -129,7 +129,7 @@ class XTTSConverter:
             True if synthesis succeeded.
         """
         if not self.is_ready:
-            print(f"   XTTS not ready, skipping synthesis")
+            print("   XTTS not ready, skipping synthesis")
             return False
 
         try:
@@ -151,10 +151,10 @@ class XTTSConverter:
             tts.tts_to_file(**kwargs)
 
             if Path(output_path).exists():
-                print(f"   XTTS synthesis complete")
+                print("   XTTS synthesis complete")
                 return True
             else:
-                print(f"   XTTS output file not created")
+                print("   XTTS output file not created")
                 return False
 
         except Exception as exc:

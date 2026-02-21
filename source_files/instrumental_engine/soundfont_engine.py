@@ -17,7 +17,6 @@ from typing import Final
 from instrumental_engine.constants import SAMPLE_RATE
 from instrumental_engine.models import GMProgram
 
-
 FLUIDSYNTH_CHECK_CMD: Final[str] = "fluidsynth"
 
 # SoundFont search paths in quality-priority order (best first).

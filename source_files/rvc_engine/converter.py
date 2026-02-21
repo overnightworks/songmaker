@@ -174,7 +174,7 @@ class RVCConverter:
             True if conversion succeeded.
         """
         if not self.is_ready:
-            print(f"   Warning: RVC not ready, skipping voice conversion")
+            print("   Warning: RVC not ready, skipping voice conversion")
             return False
 
         try:
@@ -190,10 +190,10 @@ class RVCConverter:
             )
 
             if Path(output_path).exists():
-                print(f"   RVC conversion complete")
+                print("   RVC conversion complete")
                 return True
             else:
-                print(f"   RVC output file not created")
+                print("   RVC output file not created")
                 return False
 
         except Exception as exc:

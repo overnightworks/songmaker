@@ -130,7 +130,7 @@ class MusicGenRenderer:
             If output_path is provided, also saves to that path.
         """
         if not self.is_ready:
-            print(f"   MusicGen not ready, skipping generation")
+            print("   MusicGen not ready, skipping generation")
             return None
 
         try:

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Final
 
 from instrumental_engine.constants import SAMPLE_RATE, TWO_PI
 

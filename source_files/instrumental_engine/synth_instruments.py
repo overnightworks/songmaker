@@ -13,7 +13,6 @@ from typing import Final
 
 from instrumental_engine.constants import SAMPLE_RATE, TWO_PI
 
-
 ENVELOPE_MIN: Final[float] = 0.0001
 
 

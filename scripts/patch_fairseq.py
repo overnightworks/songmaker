@@ -8,9 +8,9 @@ fairseq uses mutable dataclass defaults (e.g., `field: Config = Config()` and
 Run after: uv sync
 """
 
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VENV = PROJECT_ROOT / ".venv"

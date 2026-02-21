@@ -9,7 +9,6 @@ from __future__ import annotations
 import math
 
 from bark_engine.pitch_correction import (
-    PitchFrame,
     apply_pitch_correction,
     detect_pitch_contour,
     freq_to_midi,
@@ -123,7 +122,7 @@ def test_quantize_partial_intensity() -> None:
     assert (
         min(original, full_snap) <= half_snap <= max(original, full_snap)
     ), f"Half snap {half_snap} not between {original} and {full_snap}"
-    print(f"✅ quantize_to_scale: intensity=0.5 → between original and target")
+    print("✅ quantize_to_scale: intensity=0.5 → between original and target")
 
 
 def test_quantize_already_on_scale() -> None:
@@ -132,7 +131,7 @@ def test_quantize_already_on_scale() -> None:
     result = quantize_to_scale(a4_freq, "A", "major", intensity=1.0)
     error_cents = _freq_error_cents(result, a4_freq)
     assert error_cents < 0.1, f"On-scale note shifted: error={error_cents:.1f} cents"
-    print(f"✅ quantize_to_scale: on-scale note stays put")
+    print("✅ quantize_to_scale: on-scale note stays put")
 
 
 def test_detect_pitch_440hz() -> None:

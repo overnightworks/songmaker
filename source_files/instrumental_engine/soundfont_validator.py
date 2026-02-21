@@ -23,11 +23,10 @@ if __name__ == "__main__":
 
 from instrumental_engine.constants import SAMPLE_RATE
 from instrumental_engine.soundfont_engine import (
-    SOUNDFONT_PRIORITY,
     FLUIDSYNTH_CHECK_CMD,
+    SOUNDFONT_PRIORITY,
     write_midi_file,
 )
-
 
 SOUNDFONTS_DIRECTORY: Final[str] = "soundfonts"
 

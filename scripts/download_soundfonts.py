@@ -16,7 +16,6 @@ Prerequisites:
 
 from __future__ import annotations
 
-import hashlib
 import shutil
 import sys
 import urllib.request
@@ -94,7 +93,9 @@ def _download_with_progress(url: str, dest: Path, expected_mb: int) -> bool:
                 mb_done = downloaded / (1024 * 1024)
                 if total_size > 0:
                     pct = (downloaded / total_size) * 100
-                    print(f"\r   Progress: {mb_done:.1f} MB / {total_size / (1024*1024):.1f} MB ({pct:.0f}%)", end="", flush=True)
+                    total_mb = total_size / (1024 * 1024)
+                    msg = f"\r   Progress: {mb_done:.1f} / {total_mb:.1f} MB ({pct:.0f}%)"
+                    print(msg, end="", flush=True)
                 else:
                     print(f"\r   Downloaded: {mb_done:.1f} MB", end="", flush=True)
 
@@ -160,7 +161,7 @@ def list_soundfonts() -> None:
         manual = [f for f in SOUNDFONTS_DIR.glob("*.sf2")
                   if f.name not in {i.filename for i in AVAILABLE_SOUNDFONTS.values()}]
         if manual:
-            print(f"\n  Manually installed SoundFonts:")
+            print("\n  Manually installed SoundFonts:")
             for sf in manual:
                 mb = sf.stat().st_size / (1024 * 1024)
                 print(f"    {sf.name} ({mb:.1f} MB)")
@@ -186,10 +187,10 @@ def main() -> int:
         print(f"{'='*60}")
 
         if success_count > 0:
-            print(f"\nSoundFonts are automatically detected by the engine.")
-            print(f"Use 'sf:' prefix instruments in your track scripts:")
-            print(f"  instrument_id='sf:piano'")
-            print(f"  instrument_id='sf:strings'")
+            print("\nSoundFonts are automatically detected by the engine.")
+            print("Use 'sf:' prefix instruments in your track scripts:")
+            print("  instrument_id='sf:piano'")
+            print("  instrument_id='sf:strings'")
 
         return 0 if success_count == len(AVAILABLE_SOUNDFONTS) else 1
 

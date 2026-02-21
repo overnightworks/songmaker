@@ -13,7 +13,6 @@ from typing import Final
 from instrumental_engine.constants import SAMPLE_RATE, TWO_PI
 from instrumental_engine.models import DrumHit, DrumPattern, DrumSound
 
-
 KICK_DURATION: Final[float] = 0.25
 SNARE_DURATION: Final[float] = 0.18
 HIHAT_CLOSED_DURATION: Final[float] = 0.06

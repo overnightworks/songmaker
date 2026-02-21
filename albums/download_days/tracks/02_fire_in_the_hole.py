@@ -25,6 +25,7 @@ from bark_engine import (
 )
 from bark_engine.models import VocalLanguage
 from instrumental_engine import (
+    SAMPLE_RATE,
     Arrangement,
     Chord,
     DrumHit,
@@ -38,13 +39,12 @@ from instrumental_engine import (
     SongSection,
     apply_ducking,
     render_arrangement,
-    SAMPLE_RATE,
 )
 from instrumental_engine.mixer import (
+    master_to_mp3,
     normalize_stereo,
     overlay_onto,
     write_stereo_wav,
-    master_to_mp3,
 )
 
 # ═══════════════════════════════════════════════════════════════════
@@ -851,7 +851,7 @@ def main() -> None:
     print("=" * 60)
     print(f"  🔫 Generating: {SONG_TITLE}")
     print(f"  🎵 BPM: {SONG_BPM} | Key: {SONG_KEY} {SONG_SCALE}")
-    print(f"  🎮 Style: Boom-Bap | Server: Dark Terrorists")
+    print("  🎮 Style: Boom-Bap | Server: Dark Terrorists")
     print("=" * 60)
 
     # ── Step 1: Render stereo instrumental ──

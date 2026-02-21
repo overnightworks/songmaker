@@ -164,7 +164,7 @@ def main() -> None:
 
     print()
     print("=" * 50)
-    print(f"✅ SoundFont test complete!")
+    print("✅ SoundFont test complete!")
     print(f"   Output: {result_path}")
     print()
     print("Contents:")

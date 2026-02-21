@@ -103,7 +103,7 @@ class DemucsSeparator:
             SeparatedStems with audio for each stem, or None on failure.
         """
         if not self.is_ready:
-            print(f"   Demucs not ready, skipping separation")
+            print("   Demucs not ready, skipping separation")
             return None
 
         try:
@@ -154,7 +154,7 @@ class DemucsSeparator:
                 stems[name] = samples
                 stem_path.unlink(missing_ok=True)
 
-            print(f"   Demucs separation complete")
+            print("   Demucs separation complete")
 
             return SeparatedStems(
                 vocals=stems.get("vocals", []),

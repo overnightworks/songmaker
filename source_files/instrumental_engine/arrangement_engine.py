@@ -6,18 +6,10 @@ effects processing, and stereo mixing into finished instrumentals.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Final
 
 from instrumental_engine.constants import SAMPLE_RATE, midi_to_freq
-from instrumental_engine.drum_machine import render_drum_pattern, repeat_pattern
-from instrumental_engine.effects import (
-    apply_chorus,
-    apply_delay,
-    apply_reverb,
-    apply_sidechain_compression,
-)
+from instrumental_engine.drum_machine import repeat_pattern
 from instrumental_engine.mixer import (
     apply_fade_out_stereo,
     apply_limiter,
@@ -26,7 +18,6 @@ from instrumental_engine.mixer import (
     mix_stereo_tracks,
     normalize_stereo,
     overlay_onto,
-    write_mono_wav,
     write_stereo_wav,
 )
 from instrumental_engine.models import (
@@ -55,7 +46,6 @@ from instrumental_engine.synth_instruments import (
     SubBassSynth,
     SupersawSynth,
 )
-
 
 SYNTH_REGISTRY: Final[dict[str, InstrumentRenderer]] = {
     "supersaw": SupersawSynth(),

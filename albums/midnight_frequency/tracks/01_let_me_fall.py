@@ -25,6 +25,7 @@ from bark_engine import (
 )
 from bark_engine.models import VocalLanguage
 from instrumental_engine import (
+    SAMPLE_RATE,
     Arrangement,
     Chord,
     DrumHit,
@@ -34,7 +35,6 @@ from instrumental_engine import (
     Note,
     PanPosition,
     Rest,
-    SAMPLE_RATE,
     SectionType,
     SongSection,
     apply_ducking,

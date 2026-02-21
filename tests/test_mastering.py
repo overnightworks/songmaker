@@ -9,7 +9,6 @@ from __future__ import annotations
 import math
 
 import numpy as np
-
 from instrumental_engine.mastering import (
     master_stereo,
     measure_lufs,
@@ -396,7 +395,7 @@ def main() -> None:
         print("🎉 All mastering tests passed!")
     else:
         print(f"⚠️  {failed} test(s) failed")
-        sys.exit(1)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

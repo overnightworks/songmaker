@@ -478,7 +478,7 @@ class BarkVocalEngine:
         try:
             from rvc_engine import RVCConverter, is_rvc_available
         except ImportError:
-            print(f"   ⚠️  rvc_engine not found, skipping RVC")
+            print("   ⚠️  rvc_engine not found, skipping RVC")
             return samples
 
         if not is_rvc_available():
@@ -503,7 +503,7 @@ class BarkVocalEngine:
         if result is not None:
             return result
 
-        print(f"   ⚠️  RVC conversion failed, using original audio")
+        print("   ⚠️  RVC conversion failed, using original audio")
         return samples
 
     @staticmethod
@@ -546,12 +546,12 @@ class BarkVocalEngine:
         try:
             from xtts_engine import XTTSConverter, is_xtts_available
         except ImportError:
-            print(f"   xtts_engine not found, falling back to Bark")
+            print("   xtts_engine not found, falling back to Bark")
             self.preload_models()
             return self._generate_with_take_selection(section)
 
         if not is_xtts_available():
-            print(f"   XTTS not available, falling back to Bark")
+            print("   XTTS not available, falling back to Bark")
             self.preload_models()
             return self._generate_with_take_selection(section)
 
@@ -571,7 +571,7 @@ class BarkVocalEngine:
         if result is not None:
             return result
 
-        print(f"   XTTS synthesis failed, falling back to Bark")
+        print("   XTTS synthesis failed, falling back to Bark")
         self.preload_models()
         return self._generate_with_take_selection(section)
 

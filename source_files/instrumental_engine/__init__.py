@@ -58,15 +58,6 @@ from instrumental_engine.arrangement_engine import (
     render_section,
     render_track,
 )
-from instrumental_engine.ducking import apply_ducking
-from instrumental_engine.mastering import (
-    master_stereo,
-    measure_lufs,
-    multiband_compress,
-    normalize_to_lufs,
-    soft_clip,
-    widen_stereo,
-)
 from instrumental_engine.constants import (
     SAMPLE_RATE,
     midi_to_freq,
@@ -79,6 +70,7 @@ from instrumental_engine.drum_machine import (
     render_drum_pattern,
     repeat_pattern,
 )
+from instrumental_engine.ducking import apply_ducking
 from instrumental_engine.effects import (
     apply_chorus,
     apply_delay,
@@ -87,6 +79,14 @@ from instrumental_engine.effects import (
     apply_stereo_widener,
     generate_impact,
     generate_noise_sweep,
+)
+from instrumental_engine.mastering import (
+    master_stereo,
+    measure_lufs,
+    multiband_compress,
+    normalize_to_lufs,
+    soft_clip,
+    widen_stereo,
 )
 from instrumental_engine.mixer import (
     apply_fade_out_stereo,

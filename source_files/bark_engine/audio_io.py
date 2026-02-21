@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+from instrumental_engine.mastering import master_stereo
 
 from bark_engine.constants import TARGET_SAMPLE_RATE
-from instrumental_engine.mastering import master_stereo
 
 if TYPE_CHECKING:
     from bark_engine.models import GeneratedVocal

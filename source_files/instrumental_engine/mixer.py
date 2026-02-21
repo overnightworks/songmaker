@@ -19,7 +19,6 @@ from instrumental_engine.constants import SAMPLE_RATE
 from instrumental_engine.mastering import master_stereo
 from instrumental_engine.models import PAN_VALUES, PanPosition, RenderedTrack
 
-
 LIMITER_THRESHOLD: Final[float] = 0.95
 LIMITER_RATIO: Final[float] = 4.0
 
