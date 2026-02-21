@@ -1,0 +1,48 @@
+# ═══════════════════════════════════════════════════════════════
+# MC Tobbisch Birthday Album — Git Ignore
+# ═══════════════════════════════════════════════════════════════
+
+# Generated audio output (large binary files)
+albums/*/output/*.mp3
+albums/*/output/*.wav
+albums/*/legacy_output/
+
+# Temporary audio files
+_temp_*
+*.wav
+*.mp3
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Bark model cache (downloaded ~5GB)
+# Stored in ~/.cache/suno/bark_v0/ by default — not in project
+
+# SoundFont files (optional, large)
+soundfonts/*.sf2
+
+# Torch model checkpoints
+*.pt
+*.pth
+*.ckpt
+
+# Legacy sources (archived, not needed for new development)
+albums/*/legacy_sources/
