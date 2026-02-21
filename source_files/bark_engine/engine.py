@@ -3,11 +3,16 @@
 Generates singing vocals using Bark AI with multi-take selection.
 Each VocalSection generates N takes (default 3), scores them on
 quality metrics, and auto-selects the best one.
+
+Vocal caching: processed vocals are saved to a ``_vocal_cache/``
+directory so that re-runs skip sections whose config has not changed.
 """
 
 from __future__ import annotations
 
 import functools
+import hashlib
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -33,8 +38,11 @@ from bark_engine.text_processing import (
 )
 from bark_engine.vocal_filters import VOCAL_FILTERS
 
+VOCAL_CACHE_DIR_NAME: str = "_vocal_cache"
+
 os.environ["SUNO_USE_SMALL_MODELS"] = "True"
-os.environ["SUNO_OFFLOAD_CPU"] = "True"
+if not torch.cuda.is_available():
+    os.environ["SUNO_OFFLOAD_CPU"] = "True"
 
 
 def _patch_torch_load() -> None:
@@ -73,13 +81,23 @@ class BarkVocalEngine:
         engine.cleanup()
     """
 
-    def __init__(self, temp_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        temp_dir: Path | None = None,
+        cache_dir: Path | None = None,
+        use_cache: bool = True,
+    ) -> None:
         """Initialize the Bark vocal engine.
 
         Args:
             temp_dir: Directory for temporary audio files.
+            cache_dir: Directory for vocal cache files. Defaults to
+                ``_vocal_cache/`` in the current working directory.
+            use_cache: Whether to use vocal caching (default True).
         """
         self._temp_dir = temp_dir or Path(TEMP_DIR_NAME)
+        self._cache_dir = cache_dir or Path(VOCAL_CACHE_DIR_NAME)
+        self._use_cache = use_cache
         self._models_loaded = False
 
     @property
@@ -99,7 +117,8 @@ class BarkVocalEngine:
 
         from bark import preload_models
 
-        print("   🔄 Loading Bark models (CPU, small)...")
+        device = "GPU (CUDA)" if torch.cuda.is_available() else "CPU"
+        print(f"   🔄 Loading Bark models ({device}, small)...")
         preload_models()
         self._models_loaded = True
         print("   ✅ Bark models loaded")
@@ -107,8 +126,9 @@ class BarkVocalEngine:
     def generate_vocals(self, sections: list[VocalSection]) -> list[GeneratedVocal]:
         """Generate singing vocals for all sections with multi-take selection.
 
-        For each section, generates num_takes candidates, scores each on
-        quality metrics, and auto-selects the best take. Take metadata
+        Cached vocals are reused when the section config has not changed.
+        For each uncached section, generates num_takes candidates, scores each
+        on quality metrics, and auto-selects the best take. Take metadata
         is saved as JSON in the temp directory for debugging.
 
         Args:
@@ -118,27 +138,123 @@ class BarkVocalEngine:
             List of generated vocals with audio samples at 44.1kHz.
         """
         self._temp_dir.mkdir(parents=True, exist_ok=True)
-        self.preload_models()
+        if self._use_cache:
+            self._cache_dir.mkdir(parents=True, exist_ok=True)
 
         results: list[GeneratedVocal] = []
 
         for section in sections:
+            cached = self._load_from_cache(section)
+            if cached is not None:
+                results.append(cached)
+                continue
+
+            # Need to generate — ensure models are loaded
+            self.preload_models()
+
             best_samples = self._generate_with_take_selection(section)
             pitch_corrected = self._apply_pitch_correction(best_samples, section)
             processed = self._apply_vocal_processing(
                 pitch_corrected, section.section_id, section.style
             )
 
-            results.append(
-                GeneratedVocal(
-                    section_id=section.section_id,
-                    samples=processed,
-                    volume=section.volume,
-                    gap_after_seconds=section.gap_after_seconds,
-                )
+            vocal = GeneratedVocal(
+                section_id=section.section_id,
+                samples=processed,
+                volume=section.volume,
+                gap_after_seconds=section.gap_after_seconds,
             )
+            self._save_to_cache(section, vocal)
+            results.append(vocal)
 
         return results
+
+    # ------------------------------------------------------------------
+    # Vocal cache
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _section_cache_key(section: VocalSection) -> str:
+        """Compute a deterministic hash for a VocalSection config.
+
+        The hash covers all fields that affect the generated audio so the
+        cache is automatically invalidated when any parameter changes.
+        """
+        key_data = {
+            "text": section.text,
+            "language": str(section.language),
+            "speaker_index": section.speaker_index,
+            "style": str(section.style),
+            "singing": section.singing,
+            "num_takes": section.num_takes,
+            "pitch_correction_intensity": section.pitch_correction_intensity,
+            "pitch_correction_key": section.pitch_correction_key,
+            "pitch_correction_scale": section.pitch_correction_scale,
+        }
+        blob = json.dumps(key_data, sort_keys=True).encode()
+        return hashlib.sha256(blob).hexdigest()[:16]
+
+    def _cache_path(self, section: VocalSection) -> Path:
+        """Return the cache WAV path for a section."""
+        h = self._section_cache_key(section)
+        return self._cache_dir / f"{section.section_id}_{h}.wav"
+
+    def _cache_meta_path(self, section: VocalSection) -> Path:
+        """Return the cache metadata JSON path for a section."""
+        h = self._section_cache_key(section)
+        return self._cache_dir / f"{section.section_id}_{h}.json"
+
+    def _load_from_cache(self, section: VocalSection) -> GeneratedVocal | None:
+        """Try to load a previously cached vocal for this section."""
+        if not self._use_cache:
+            return None
+
+        wav_path = self._cache_path(section)
+        if not wav_path.exists():
+            return None
+
+        try:
+            samples, _ = read_wav_file(str(wav_path))
+            if not samples:
+                return None
+            print(f"   ⚡ Cache hit: {section.section_id} (skipping generation)")
+            return GeneratedVocal(
+                section_id=section.section_id,
+                samples=samples,
+                volume=section.volume,
+                gap_after_seconds=section.gap_after_seconds,
+            )
+        except Exception:
+            return None
+
+    def _save_to_cache(self, section: VocalSection, vocal: GeneratedVocal) -> None:
+        """Save generated vocal to the cache directory."""
+        if not self._use_cache:
+            return
+
+        try:
+            self._cache_dir.mkdir(parents=True, exist_ok=True)
+            write_wav_file(
+                str(self._cache_path(section)),
+                vocal.samples,
+                TARGET_SAMPLE_RATE,
+            )
+            # Save metadata so users can inspect what config produced this
+            meta = {
+                "section_id": section.section_id,
+                "cache_key": self._section_cache_key(section),
+                "text": section.text,
+                "style": str(section.style),
+                "language": str(section.language),
+                "speaker_index": section.speaker_index,
+                "num_takes": section.num_takes,
+            }
+            self._cache_meta_path(section).write_text(
+                json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            print(f"   💾 Cached: {section.section_id}")
+        except Exception as exc:
+            print(f"   ⚠️  Cache write failed for {section.section_id}: {exc}")
 
     def _generate_with_take_selection(self, section: VocalSection) -> list[float]:
         """Generate multiple takes and select the best one.

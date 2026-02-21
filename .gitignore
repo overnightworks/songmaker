@@ -12,6 +12,9 @@ _temp_*
 *.wav
 *.mp3
 
+# Bark vocal cache (reusable across runs)
+_vocal_cache/
+
 # Python bytecode
 __pycache__/
 *.py[cod]

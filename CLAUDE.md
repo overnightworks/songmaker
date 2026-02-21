@@ -1,0 +1,46 @@
+# Songmaker — Claude Code Config
+
+## Project
+AI-powered song generation engine by Flex0r. Generates complete songs (vocals + instrumentals) from pure Python scripts.
+
+**Creator**: Flex0r (Felix)
+**For**: MC Tobbisch (Tobias)
+**Python**: 3.12+
+**Run a track**: `python albums/<album>/tracks/<NN>_<song>.py`
+
+## Key Rules
+
+1. **Lyrics-first workflow**: New songs start as `albums/<album>/lyrics/<NN>_<song>.md`, NOT Python. Get lyrics to APPROVED status before creating track script.
+2. **One song = one file**: Every track lives in `albums/<album>/tracks/` as a single `.py` file.
+3. **Engine reuse**: Both engines live in `source_files/` — never duplicate engine code into track files.
+4. **Ducking always active**: Vocals duck instrumentals by -3dB automatically.
+5. **Never commit secrets or API keys.**
+
+## Project Structure
+- `source_files/bark_engine/` — Shared vocal engine (Bark AI)
+- `source_files/instrumental_engine/` — Shared instrumental engine (pure DSP)
+- `albums/<album>/tracks/` — One `.py` per song
+- `albums/<album>/lyrics/` — Lyrics markdown files (draft → review → approved)
+- `albums/<album>/output/` — Generated MP3 files
+- `soundfonts/` — SoundFont `.sf2` files
+- `AGENTS.md` — Full project documentation (detailed reference)
+
+## Dependencies
+```
+pip install torch numpy scipy suno-bark
+# ffmpeg must be on PATH
+# Optional: FluidSynth + SoundFont for realistic instruments
+# GPU: pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
+
+## Active Albums
+- **Download Days** — Punk rock / hip-hop, 90s Erlangen nostalgia
+- **Midnight Frequency** — Melodic house, surrender and freedom themes
+- **MC Tobbisch Birthday** — Legacy (edge-tts, archived)
+
+## Conventions
+- Commit messages: conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`)
+- Language: Lyrics can be German or English; code and docs in English
+- Sample rate: 44100 Hz everywhere
+- Output: Stereo WAV → MP3 192kbps via ffmpeg
+- Mastering: Multiband compression → Stereo widening → LUFS -14 → Soft clipping

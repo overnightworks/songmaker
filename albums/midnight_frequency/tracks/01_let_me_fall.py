@@ -172,18 +172,18 @@ def _build_melodic_house_beat() -> DrumPattern:
         length_beats=4.0,
         hits=(
             # Kick: every beat
-            DrumHit(sound=DrumSound.KICK, beat_offset=0.0, velocity=0.85),
-            DrumHit(sound=DrumSound.KICK, beat_offset=1.0, velocity=0.85),
-            DrumHit(sound=DrumSound.KICK, beat_offset=2.0, velocity=0.85),
-            DrumHit(sound=DrumSound.KICK, beat_offset=3.0, velocity=0.85),
+            DrumHit(sound=DrumSound.KICK, beat_position=0.0, velocity=0.85),
+            DrumHit(sound=DrumSound.KICK, beat_position=1.0, velocity=0.85),
+            DrumHit(sound=DrumSound.KICK, beat_position=2.0, velocity=0.85),
+            DrumHit(sound=DrumSound.KICK, beat_position=3.0, velocity=0.85),
             # Clap on 2 and 4
-            DrumHit(sound=DrumSound.CLAP, beat_offset=1.0, velocity=0.6),
-            DrumHit(sound=DrumSound.CLAP, beat_offset=3.0, velocity=0.6),
+            DrumHit(sound=DrumSound.CLAP, beat_position=1.0, velocity=0.6),
+            DrumHit(sound=DrumSound.CLAP, beat_position=3.0, velocity=0.6),
             # Closed hats: offbeat 8ths
-            DrumHit(sound=DrumSound.HIHAT_CLOSED, beat_offset=0.5, velocity=0.3),
-            DrumHit(sound=DrumSound.HIHAT_CLOSED, beat_offset=1.5, velocity=0.3),
-            DrumHit(sound=DrumSound.HIHAT_CLOSED, beat_offset=2.5, velocity=0.3),
-            DrumHit(sound=DrumSound.HIHAT_CLOSED, beat_offset=3.5, velocity=0.3),
+            DrumHit(sound=DrumSound.CLOSED_HIHAT, beat_position=0.5, velocity=0.3),
+            DrumHit(sound=DrumSound.CLOSED_HIHAT, beat_position=1.5, velocity=0.3),
+            DrumHit(sound=DrumSound.CLOSED_HIHAT, beat_position=2.5, velocity=0.3),
+            DrumHit(sound=DrumSound.CLOSED_HIHAT, beat_position=3.5, velocity=0.3),
         ),
     )
 
@@ -194,14 +194,14 @@ def _build_verse_beat() -> DrumPattern:
         name="verse_light",
         length_beats=4.0,
         hits=(
-            DrumHit(sound=DrumSound.KICK, beat_offset=0.0, velocity=0.7),
-            DrumHit(sound=DrumSound.KICK, beat_offset=1.0, velocity=0.7),
-            DrumHit(sound=DrumSound.KICK, beat_offset=2.0, velocity=0.7),
-            DrumHit(sound=DrumSound.KICK, beat_offset=3.0, velocity=0.7),
-            DrumHit(sound=DrumSound.HIHAT_CLOSED, beat_offset=0.5, velocity=0.2),
-            DrumHit(sound=DrumSound.HIHAT_CLOSED, beat_offset=1.5, velocity=0.2),
-            DrumHit(sound=DrumSound.HIHAT_CLOSED, beat_offset=2.5, velocity=0.2),
-            DrumHit(sound=DrumSound.HIHAT_CLOSED, beat_offset=3.5, velocity=0.2),
+            DrumHit(sound=DrumSound.KICK, beat_position=0.0, velocity=0.7),
+            DrumHit(sound=DrumSound.KICK, beat_position=1.0, velocity=0.7),
+            DrumHit(sound=DrumSound.KICK, beat_position=2.0, velocity=0.7),
+            DrumHit(sound=DrumSound.KICK, beat_position=3.0, velocity=0.7),
+            DrumHit(sound=DrumSound.CLOSED_HIHAT, beat_position=0.5, velocity=0.2),
+            DrumHit(sound=DrumSound.CLOSED_HIHAT, beat_position=1.5, velocity=0.2),
+            DrumHit(sound=DrumSound.CLOSED_HIHAT, beat_position=2.5, velocity=0.2),
+            DrumHit(sound=DrumSound.CLOSED_HIHAT, beat_position=3.5, velocity=0.2),
         ),
     )
 
@@ -212,27 +212,27 @@ def _build_build_beat() -> DrumPattern:
         name="build_roll",
         length_beats=4.0,
         hits=(
-            DrumHit(sound=DrumSound.KICK, beat_offset=0.0, velocity=0.8),
-            DrumHit(sound=DrumSound.KICK, beat_offset=1.0, velocity=0.8),
-            DrumHit(sound=DrumSound.KICK, beat_offset=2.0, velocity=0.8),
-            DrumHit(sound=DrumSound.KICK, beat_offset=3.0, velocity=0.8),
+            DrumHit(sound=DrumSound.KICK, beat_position=0.0, velocity=0.8),
+            DrumHit(sound=DrumSound.KICK, beat_position=1.0, velocity=0.8),
+            DrumHit(sound=DrumSound.KICK, beat_position=2.0, velocity=0.8),
+            DrumHit(sound=DrumSound.KICK, beat_position=3.0, velocity=0.8),
             # Snare roll: 16th notes, increasing velocity
-            DrumHit(sound=DrumSound.SNARE, beat_offset=0.0, velocity=0.25),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=0.25, velocity=0.28),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=0.5, velocity=0.3),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=0.75, velocity=0.33),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=1.0, velocity=0.35),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=1.25, velocity=0.38),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=1.5, velocity=0.4),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=1.75, velocity=0.43),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=2.0, velocity=0.45),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=2.25, velocity=0.5),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=2.5, velocity=0.55),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=2.75, velocity=0.58),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=3.0, velocity=0.6),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=3.25, velocity=0.65),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=3.5, velocity=0.7),
-            DrumHit(sound=DrumSound.SNARE, beat_offset=3.75, velocity=0.75),
+            DrumHit(sound=DrumSound.SNARE, beat_position=0.0, velocity=0.25),
+            DrumHit(sound=DrumSound.SNARE, beat_position=0.25, velocity=0.28),
+            DrumHit(sound=DrumSound.SNARE, beat_position=0.5, velocity=0.3),
+            DrumHit(sound=DrumSound.SNARE, beat_position=0.75, velocity=0.33),
+            DrumHit(sound=DrumSound.SNARE, beat_position=1.0, velocity=0.35),
+            DrumHit(sound=DrumSound.SNARE, beat_position=1.25, velocity=0.38),
+            DrumHit(sound=DrumSound.SNARE, beat_position=1.5, velocity=0.4),
+            DrumHit(sound=DrumSound.SNARE, beat_position=1.75, velocity=0.43),
+            DrumHit(sound=DrumSound.SNARE, beat_position=2.0, velocity=0.45),
+            DrumHit(sound=DrumSound.SNARE, beat_position=2.25, velocity=0.5),
+            DrumHit(sound=DrumSound.SNARE, beat_position=2.5, velocity=0.55),
+            DrumHit(sound=DrumSound.SNARE, beat_position=2.75, velocity=0.58),
+            DrumHit(sound=DrumSound.SNARE, beat_position=3.0, velocity=0.6),
+            DrumHit(sound=DrumSound.SNARE, beat_position=3.25, velocity=0.65),
+            DrumHit(sound=DrumSound.SNARE, beat_position=3.5, velocity=0.7),
+            DrumHit(sound=DrumSound.SNARE, beat_position=3.75, velocity=0.75),
         ),
     )
 
@@ -243,20 +243,20 @@ def _build_drop_beat() -> DrumPattern:
         name="drop_full",
         length_beats=4.0,
         hits=(
-            DrumHit(sound=DrumSound.KICK, beat_offset=0.0, velocity=0.95),
-            DrumHit(sound=DrumSound.KICK, beat_offset=1.0, velocity=0.9),
-            DrumHit(sound=DrumSound.KICK, beat_offset=2.0, velocity=0.9),
-            DrumHit(sound=DrumSound.KICK, beat_offset=3.0, velocity=0.9),
+            DrumHit(sound=DrumSound.KICK, beat_position=0.0, velocity=0.95),
+            DrumHit(sound=DrumSound.KICK, beat_position=1.0, velocity=0.9),
+            DrumHit(sound=DrumSound.KICK, beat_position=2.0, velocity=0.9),
+            DrumHit(sound=DrumSound.KICK, beat_position=3.0, velocity=0.9),
             # Clap on 2 and 4
-            DrumHit(sound=DrumSound.CLAP, beat_offset=1.0, velocity=0.7),
-            DrumHit(sound=DrumSound.CLAP, beat_offset=3.0, velocity=0.7),
+            DrumHit(sound=DrumSound.CLAP, beat_position=1.0, velocity=0.7),
+            DrumHit(sound=DrumSound.CLAP, beat_position=3.0, velocity=0.7),
             # Open hats: offbeat
-            DrumHit(sound=DrumSound.HIHAT_OPEN, beat_offset=0.5, velocity=0.35),
-            DrumHit(sound=DrumSound.HIHAT_OPEN, beat_offset=1.5, velocity=0.35),
-            DrumHit(sound=DrumSound.HIHAT_OPEN, beat_offset=2.5, velocity=0.35),
-            DrumHit(sound=DrumSound.HIHAT_OPEN, beat_offset=3.5, velocity=0.35),
+            DrumHit(sound=DrumSound.OPEN_HIHAT, beat_position=0.5, velocity=0.35),
+            DrumHit(sound=DrumSound.OPEN_HIHAT, beat_position=1.5, velocity=0.35),
+            DrumHit(sound=DrumSound.OPEN_HIHAT, beat_position=2.5, velocity=0.35),
+            DrumHit(sound=DrumSound.OPEN_HIHAT, beat_position=3.5, velocity=0.35),
             # Crash on beat 1
-            DrumHit(sound=DrumSound.CRASH, beat_offset=0.0, velocity=0.5),
+            DrumHit(sound=DrumSound.CRASH, beat_position=0.0, velocity=0.5),
         ),
     )
 
@@ -267,10 +267,10 @@ def _build_outro_beat() -> DrumPattern:
         name="outro_minimal",
         length_beats=4.0,
         hits=(
-            DrumHit(sound=DrumSound.KICK, beat_offset=0.0, velocity=0.5),
-            DrumHit(sound=DrumSound.KICK, beat_offset=2.0, velocity=0.4),
-            DrumHit(sound=DrumSound.HIHAT_CLOSED, beat_offset=1.0, velocity=0.15),
-            DrumHit(sound=DrumSound.HIHAT_CLOSED, beat_offset=3.0, velocity=0.1),
+            DrumHit(sound=DrumSound.KICK, beat_position=0.0, velocity=0.5),
+            DrumHit(sound=DrumSound.KICK, beat_position=2.0, velocity=0.4),
+            DrumHit(sound=DrumSound.CLOSED_HIHAT, beat_position=1.0, velocity=0.15),
+            DrumHit(sound=DrumSound.CLOSED_HIHAT, beat_position=3.0, velocity=0.1),
         ),
     )
 
@@ -510,16 +510,16 @@ def build_arrangement() -> Arrangement:
                 bpm=BPM,
                 tracks=(
                     InstrumentTrack(
-                        instrument_id="dark_pad",
+                        name="pad", instrument_id="dark_pad",
                         events=_intro_pad_chord(),
                         volume=0.3,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="pluck",
+                        name="pluck", instrument_id="pluck",
                         events=_intro_pluck(),
                         volume=0.25,
-                        pan=PanPosition.SLIGHT_RIGHT,
+                        pan=PanPosition.CENTER_RIGHT,
                     ),
                 ),
             ),
@@ -531,26 +531,25 @@ def build_arrangement() -> Arrangement:
                 bpm=BPM,
                 tracks=(
                     InstrumentTrack(
-                        instrument_id="dark_pad",
+                        name="pad", instrument_id="dark_pad",
                         events=_verse_pad_chords(),
                         volume=0.35,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="pluck",
+                        name="pluck", instrument_id="pluck",
                         events=_verse_arpeggios(),
                         volume=0.3,
-                        pan=PanPosition.SLIGHT_LEFT,
+                        pan=PanPosition.CENTER_LEFT,
                     ),
                     InstrumentTrack(
-                        instrument_id="sub_bass",
+                        name="bass", instrument_id="sub_bass",
                         events=_verse_bass(),
                         volume=0.5,
                         pan=PanPosition.CENTER,
                     ),
                 ),
                 drum_pattern=VERSE_BEAT,
-                drum_volume=0.5,
             ),
             # ─── PRE-CHORUS 1 / BUILD: 96-128 beats ───
             SongSection(
@@ -560,26 +559,25 @@ def build_arrangement() -> Arrangement:
                 bpm=BPM,
                 tracks=(
                     InstrumentTrack(
-                        instrument_id="dark_pad",
+                        name="pad", instrument_id="dark_pad",
                         events=_build_pad_chords(),
                         volume=0.45,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="pluck",
+                        name="pluck", instrument_id="pluck",
                         events=_verse_arpeggios(),
                         volume=0.35,
-                        pan=PanPosition.SLIGHT_RIGHT,
+                        pan=PanPosition.CENTER_RIGHT,
                     ),
                     InstrumentTrack(
-                        instrument_id="sub_bass",
+                        name="bass", instrument_id="sub_bass",
                         events=_build_bass(),
                         volume=0.55,
                         pan=PanPosition.CENTER,
                     ),
                 ),
                 drum_pattern=BUILD_BEAT,
-                drum_volume=0.6,
             ),
             # ─── DROP / CHORUS 1: 128-192 beats ───
             SongSection(
@@ -589,32 +587,31 @@ def build_arrangement() -> Arrangement:
                 bpm=BPM,
                 tracks=(
                     InstrumentTrack(
-                        instrument_id="supersaw",
+                        name="supersaw", instrument_id="supersaw",
                         events=_chorus_supersaw_chords(),
                         volume=0.65,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="dark_pad",
+                        name="pad", instrument_id="dark_pad",
                         events=_chorus_pad_chords(),
                         volume=0.25,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="pluck",
+                        name="pluck", instrument_id="pluck",
                         events=_chorus_arpeggios(),
                         volume=0.25,
-                        pan=PanPosition.SLIGHT_LEFT,
+                        pan=PanPosition.CENTER_LEFT,
                     ),
                     InstrumentTrack(
-                        instrument_id="sub_bass",
+                        name="bass", instrument_id="sub_bass",
                         events=_chorus_bass(),
                         volume=0.65,
                         pan=PanPosition.CENTER,
                     ),
                 ),
                 drum_pattern=DROP_BEAT,
-                drum_volume=0.7,
             ),
             # ─── VERSE 2: 192-256 beats ───
             SongSection(
@@ -624,26 +621,25 @@ def build_arrangement() -> Arrangement:
                 bpm=BPM,
                 tracks=(
                     InstrumentTrack(
-                        instrument_id="dark_pad",
+                        name="pad", instrument_id="dark_pad",
                         events=_verse_pad_chords(),
                         volume=0.3,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="pluck",
+                        name="pluck", instrument_id="pluck",
                         events=_verse_arpeggios(),
                         volume=0.28,
-                        pan=PanPosition.SLIGHT_RIGHT,
+                        pan=PanPosition.CENTER_RIGHT,
                     ),
                     InstrumentTrack(
-                        instrument_id="sub_bass",
+                        name="bass", instrument_id="sub_bass",
                         events=_verse_bass(),
                         volume=0.45,
                         pan=PanPosition.CENTER,
                     ),
                 ),
                 drum_pattern=VERSE_BEAT,
-                drum_volume=0.4,
             ),
             # ─── PRE-CHORUS 2 / BUILD: 256-288 beats ───
             SongSection(
@@ -653,26 +649,25 @@ def build_arrangement() -> Arrangement:
                 bpm=BPM,
                 tracks=(
                     InstrumentTrack(
-                        instrument_id="dark_pad",
+                        name="pad", instrument_id="dark_pad",
                         events=_build_pad_chords(),
                         volume=0.5,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="pluck",
+                        name="pluck", instrument_id="pluck",
                         events=_verse_arpeggios(),
                         volume=0.35,
-                        pan=PanPosition.SLIGHT_LEFT,
+                        pan=PanPosition.CENTER_LEFT,
                     ),
                     InstrumentTrack(
-                        instrument_id="sub_bass",
+                        name="bass", instrument_id="sub_bass",
                         events=_build_bass(),
                         volume=0.6,
                         pan=PanPosition.CENTER,
                     ),
                 ),
                 drum_pattern=BUILD_BEAT,
-                drum_volume=0.7,
             ),
             # ─── DROP / CHORUS 2: 288-352 beats ───
             SongSection(
@@ -682,32 +677,31 @@ def build_arrangement() -> Arrangement:
                 bpm=BPM,
                 tracks=(
                     InstrumentTrack(
-                        instrument_id="supersaw",
+                        name="supersaw", instrument_id="supersaw",
                         events=_chorus_supersaw_chords(),
                         volume=0.7,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="dark_pad",
+                        name="pad", instrument_id="dark_pad",
                         events=_chorus_pad_chords(),
                         volume=0.3,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="pluck",
+                        name="pluck", instrument_id="pluck",
                         events=_chorus_arpeggios(),
                         volume=0.28,
-                        pan=PanPosition.SLIGHT_RIGHT,
+                        pan=PanPosition.CENTER_RIGHT,
                     ),
                     InstrumentTrack(
-                        instrument_id="sub_bass",
+                        name="bass", instrument_id="sub_bass",
                         events=_chorus_bass(),
                         volume=0.7,
                         pan=PanPosition.CENTER,
                     ),
                 ),
                 drum_pattern=DROP_BEAT,
-                drum_volume=0.75,
             ),
             # ─── BRIDGE / BREAKDOWN: 352-384 beats ───
             SongSection(
@@ -717,13 +711,13 @@ def build_arrangement() -> Arrangement:
                 bpm=BPM,
                 tracks=(
                     InstrumentTrack(
-                        instrument_id="dark_pad",
+                        name="pad", instrument_id="dark_pad",
                         events=_bridge_pad_chords(),
                         volume=0.2,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="pluck",
+                        name="pluck", instrument_id="pluck",
                         events=_bridge_pluck(),
                         volume=0.3,
                         pan=PanPosition.CENTER,
@@ -738,32 +732,31 @@ def build_arrangement() -> Arrangement:
                 bpm=BPM,
                 tracks=(
                     InstrumentTrack(
-                        instrument_id="supersaw",
+                        name="supersaw", instrument_id="supersaw",
                         events=_final_supersaw_chords(),
                         volume=0.8,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="dark_pad",
+                        name="pad", instrument_id="dark_pad",
                         events=_chorus_pad_chords(),
                         volume=0.3,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="pluck",
+                        name="pluck", instrument_id="pluck",
                         events=_chorus_arpeggios(),
                         volume=0.3,
-                        pan=PanPosition.SLIGHT_LEFT,
+                        pan=PanPosition.CENTER_LEFT,
                     ),
                     InstrumentTrack(
-                        instrument_id="sub_bass",
+                        name="bass", instrument_id="sub_bass",
                         events=_final_bass(),
                         volume=0.75,
                         pan=PanPosition.CENTER,
                     ),
                 ),
                 drum_pattern=DROP_BEAT,
-                drum_volume=0.8,
             ),
             # ─── OUTRO: 448-480 beats ───
             SongSection(
@@ -773,20 +766,19 @@ def build_arrangement() -> Arrangement:
                 bpm=BPM,
                 tracks=(
                     InstrumentTrack(
-                        instrument_id="dark_pad",
+                        name="pad", instrument_id="dark_pad",
                         events=_outro_pad_chord(),
                         volume=0.2,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
-                        instrument_id="pluck",
+                        name="pluck", instrument_id="pluck",
                         events=_outro_pluck(),
                         volume=0.2,
-                        pan=PanPosition.SLIGHT_RIGHT,
+                        pan=PanPosition.CENTER_RIGHT,
                     ),
                 ),
                 drum_pattern=OUTRO_BEAT,
-                drum_volume=0.25,
             ),
         ),
     )
