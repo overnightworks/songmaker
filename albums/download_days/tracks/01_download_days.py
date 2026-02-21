@@ -9,12 +9,9 @@ Produced by Flex0r for MC Tobbisch.
 
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 from typing import Final
-
-sys.path.insert(0, "source_files")
 
 from bark_engine import (
     BarkVocalEngine,

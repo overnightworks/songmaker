@@ -15,10 +15,7 @@ from __future__ import annotations
 import math
 import os
 import random
-import sys
 from typing import Final
-
-sys.path.insert(0, "source_files")
 
 from bark_engine import (
     BarkVocalEngine,
@@ -37,6 +34,7 @@ from instrumental_engine import (
     Note,
     PanPosition,
     Rest,
+    SAMPLE_RATE,
     SectionType,
     SongSection,
     apply_ducking,
@@ -52,8 +50,6 @@ from instrumental_engine.mixer import (
 # ═══════════════════════════════════════════════════════════════════════════
 # Constants
 # ═══════════════════════════════════════════════════════════════════════════
-
-SAMPLE_RATE: Final[int] = 44100
 BPM: Final[int] = 122
 SECONDS_PER_BEAT: Final[float] = 60.0 / BPM
 TOTAL_BEATS: Final[float] = 480.0

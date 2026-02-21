@@ -1,80 +1,27 @@
-"""RVC voice conversion via subprocess.
+"""RVC voice conversion — direct import, no subprocess.
 
-Runs RVC inference in the project venv via subprocess, communicating
-through WAV files.
+Runs RVC inference in-process using rvc-python. Communicates
+through WAV files for the file-based API, or directly via
+samples for the convenience API.
 
-This design is intentionally GPU-agnostic and hardware-independent.
-Upgrading from a GTX 1660 Ti to an RTX 3090 requires zero code
-changes — the RVC subprocess auto-detects CUDA.
+GPU auto-detection: CUDA when available, CPU fallback.
 """
 
 from __future__ import annotations
 
-import json
-import subprocess
-import sys
 from pathlib import Path
 from typing import Final
 
-RVC_VENV_DIR: Final[str] = ".venv"
 RVC_MODELS_DIR: Final[str] = "rvc_models"
-RVC_INFERENCE_SCRIPT: Final[str] = "_rvc_infer.py"
-
-
-def _find_rvc_venv() -> Path | None:
-    """Find the RVC virtual environment directory.
-
-    Searches in the project root and common locations.
-    Returns the venv directory path or None if not found.
-    """
-    search_paths = [
-        Path(RVC_VENV_DIR),
-        Path("source_files") / RVC_VENV_DIR,
-        Path.home() / ".songmaker" / RVC_VENV_DIR,
-    ]
-
-    for venv_path in search_paths:
-        python_path = _get_venv_python(venv_path)
-        if python_path and python_path.exists():
-            return venv_path
-
-    return None
-
-
-def _get_venv_python(venv_dir: Path) -> Path | None:
-    """Get the Python executable path for a venv (Windows or Unix)."""
-    candidates = [
-        venv_dir / "Scripts" / "python.exe",  # Windows
-        venv_dir / "bin" / "python",           # Unix
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
-    return None
 
 
 def is_rvc_available() -> bool:
-    """Check if RVC is installed and ready to use.
-
-    Returns True if the RVC venv exists and has rvc-python installed.
-    """
-    venv_dir = _find_rvc_venv()
-    if venv_dir is None:
-        return False
-
-    python = _get_venv_python(venv_dir)
-    if python is None:
-        return False
-
+    """Check if RVC is installed and ready to use."""
     try:
-        result = subprocess.run(
-            [str(python), "-c", "from rvc_python.infer import RVCInference; print('ok')"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return result.returncode == 0 and "ok" in result.stdout
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+        from rvc_python.infer import RVCInference  # noqa: F401
+
+        return True
+    except ImportError:
         return False
 
 
@@ -117,11 +64,10 @@ def _find_model(model_name: str) -> tuple[Path | None, Path | None]:
 
 
 class RVCConverter:
-    """Voice conversion using RVC in an isolated subprocess.
+    """Voice conversion using RVC (in-process).
 
     Converts input audio through a trained RVC voice model to
-    produce natural-sounding vocals. All inference runs in a
-    separate Python 3.12 venv to avoid dependency conflicts.
+    produce natural-sounding vocals.
 
     Usage:
         converter = RVCConverter(model_name="male_singer_v2")
@@ -164,25 +110,56 @@ class RVCConverter:
         self._model_path, self._index_path = _find_model(model_name)
         if self._model_path is None:
             print(
-                f"   ⚠️  RVC model '{model_name}' not found. "
+                f"   Warning: RVC model '{model_name}' not found. "
                 f"Place .pth file in {RVC_MODELS_DIR}/"
             )
 
-        # Find venv
-        self._venv_dir = _find_rvc_venv()
-        if self._venv_dir is None:
-            print(
-                f"   ⚠️  RVC venv not found. "
-                f"Run setup_rvc_venv.py to create it."
+        # Lazy-loaded RVC instance (heavy — loads torch + model)
+        self._rvc = None
+
+    @staticmethod
+    def _detect_model_version(model_path: Path) -> str:
+        """Auto-detect RVC model version (v1 or v2) from checkpoint."""
+        import torch
+
+        try:
+            ckpt = torch.load(str(model_path), map_location="cpu", weights_only=False)
+            return ckpt.get("version", "v2")
+        except Exception:
+            return "v2"
+
+    def _get_rvc(self):
+        """Lazy-load the RVC inference engine."""
+        if self._rvc is None:
+            import torch
+            from rvc_python.infer import RVCInference
+
+            device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            version = self._detect_model_version(self._model_path)
+
+            self._rvc = RVCInference(device=device)
+            self._rvc.load_model(
+                str(self._model_path),
+                version=version,
+                index_path=str(self._index_path) if self._index_path else "",
             )
+            # Set inference parameters via set_params (infer_file only takes 2 args)
+            self._rvc.set_params(
+                f0method=self.f0_method,
+                f0up_key=self.pitch_shift,
+                index_rate=self.index_rate,
+                filter_radius=self.filter_radius,
+                rms_mix_rate=self.rms_mix_rate,
+                protect=self.protect,
+            )
+        return self._rvc
 
     @property
     def is_ready(self) -> bool:
-        """Whether the converter has a valid model and venv."""
+        """Whether the converter has a valid model and RVC is installed."""
         return (
             self._model_path is not None
             and self._model_path.exists()
-            and self._venv_dir is not None
             and is_rvc_available()
         )
 
@@ -197,65 +174,31 @@ class RVCConverter:
             True if conversion succeeded.
         """
         if not self.is_ready:
-            print(f"   ⚠️  RVC not ready, skipping voice conversion")
+            print(f"   Warning: RVC not ready, skipping voice conversion")
             return False
-
-        python = _get_venv_python(self._venv_dir)
-        if python is None:
-            return False
-
-        # Build the inference command
-        config = {
-            "input_path": str(Path(input_path).resolve()),
-            "output_path": str(Path(output_path).resolve()),
-            "model_path": str(self._model_path.resolve()),
-            "index_path": str(self._index_path.resolve()) if self._index_path else "",
-            "pitch_shift": self.pitch_shift,
-            "index_rate": self.index_rate,
-            "filter_radius": self.filter_radius,
-            "rms_mix_rate": self.rms_mix_rate,
-            "protect": self.protect,
-            "f0_method": self.f0_method,
-        }
-
-        # Write config to temp file (avoids shell escaping issues)
-        config_path = Path(output_path).parent / "_rvc_config.json"
-        config_path.write_text(json.dumps(config), encoding="utf-8")
-
-        # Get the inference script path
-        script_path = Path(__file__).parent / RVC_INFERENCE_SCRIPT
 
         try:
-            print(f"   🎭 RVC converting: {self.model_name} "
-                  f"(pitch={self.pitch_shift:+d}, "
-                  f"f0={self.f0_method})...")
-
-            result = subprocess.run(
-                [str(python), str(script_path), str(config_path)],
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minute timeout
+            print(
+                f"   RVC converting: {self.model_name} "
+                f"(pitch={self.pitch_shift:+d}, f0={self.f0_method})..."
             )
 
-            if result.returncode != 0:
-                print(f"   ❌ RVC failed: {result.stderr[:200]}")
-                return False
+            rvc = self._get_rvc()
+            rvc.infer_file(
+                str(Path(input_path).resolve()),
+                str(Path(output_path).resolve()),
+            )
 
             if Path(output_path).exists():
-                print(f"   ✅ RVC conversion complete")
+                print(f"   RVC conversion complete")
                 return True
             else:
-                print(f"   ❌ RVC output file not created")
+                print(f"   RVC output file not created")
                 return False
 
-        except subprocess.TimeoutExpired:
-            print(f"   ❌ RVC timed out after 5 minutes")
+        except Exception as exc:
+            print(f"   RVC failed: {exc}")
             return False
-        except FileNotFoundError:
-            print(f"   ❌ RVC venv Python not found")
-            return False
-        finally:
-            config_path.unlink(missing_ok=True)
 
     def convert_samples(
         self,
@@ -289,12 +232,10 @@ class RVCConverter:
 
         if success and Path(output_path).exists():
             result_samples, _ = read_wav_file(output_path)
-            # Clean up temp files
             Path(input_path).unlink(missing_ok=True)
             Path(output_path).unlink(missing_ok=True)
             return result_samples
 
-        # Clean up on failure
         Path(input_path).unlink(missing_ok=True)
         Path(output_path).unlink(missing_ok=True)
         return None

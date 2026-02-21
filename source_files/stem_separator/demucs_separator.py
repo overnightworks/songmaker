@@ -1,4 +1,4 @@
-"""Demucs stem separation via subprocess.
+"""Demucs stem separation — direct import, no subprocess.
 
 Splits any audio file into 4 stems: vocals, drums, bass, other.
 VRAM: ~3 GB minimum. Use segment=7 for 6 GB GPUs.
@@ -6,63 +6,20 @@ VRAM: ~3 GB minimum. Use segment=7 for 6 GB GPUs.
 
 from __future__ import annotations
 
-import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-VENV_DIR: Final[str] = ".venv"
-INFERENCE_SCRIPT: Final[str] = "_demucs_infer.py"
 STEM_NAMES: Final[tuple[str, ...]] = ("drums", "bass", "other", "vocals")
-
-
-def _find_venv() -> Path | None:
-    """Find the isolated virtual environment directory."""
-    search_paths = [
-        Path(VENV_DIR),
-        Path("source_files") / VENV_DIR,
-        Path.home() / ".songmaker" / VENV_DIR,
-    ]
-    for venv_path in search_paths:
-        python_path = _get_venv_python(venv_path)
-        if python_path and python_path.exists():
-            return venv_path
-    return None
-
-
-def _get_venv_python(venv_dir: Path) -> Path | None:
-    """Get the Python executable path for a venv."""
-    candidates = [
-        venv_dir / "Scripts" / "python.exe",
-        venv_dir / "bin" / "python",
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
-    return None
 
 
 def is_demucs_available() -> bool:
     """Check if Demucs is installed and ready to use."""
-    venv_dir = _find_venv()
-    if venv_dir is None:
-        return False
-
-    python = _get_venv_python(venv_dir)
-    if python is None:
-        return False
-
     try:
-        result = subprocess.run(
-            [str(python), "-c",
-             "from demucs.pretrained import get_model; print('ok')"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return result.returncode == 0 and "ok" in result.stdout
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+        from demucs.pretrained import get_model  # noqa: F401
+
+        return True
+    except ImportError:
         return False
 
 
@@ -81,7 +38,7 @@ class SeparatedStems:
 
 
 class DemucsSeparator:
-    """Audio stem separation using Meta's Demucs.
+    """Audio stem separation using Meta's Demucs (in-process).
 
     Splits any audio into 4 stems: vocals, drums, bass, other.
     Useful for remixing, isolating instruments, or creating
@@ -109,17 +66,24 @@ class DemucsSeparator:
         self.model_name = model_name
         self.segment = segment
 
-        self._venv_dir = _find_venv()
-        if self._venv_dir is None:
-            print(
-                f"   Warning: Isolated venv not found. "
-                f"Run setup_rvc_venv.py to create it."
-            )
+        # Lazy-loaded model (heavy — loads torch + model weights)
+        self._model = None
+
+    def _get_model(self):
+        """Lazy-load the Demucs model."""
+        if self._model is None:
+            import torch
+            from demucs.pretrained import get_model
+
+            self._model = get_model(self.model_name)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self._model.to(device)
+        return self._model
 
     @property
     def is_ready(self) -> bool:
         """Whether Demucs is available."""
-        return self._venv_dir is not None and is_demucs_available()
+        return is_demucs_available()
 
     def separate(
         self,
@@ -142,60 +106,53 @@ class DemucsSeparator:
             print(f"   Demucs not ready, skipping separation")
             return None
 
-        python = _get_venv_python(self._venv_dir)
-        if python is None:
-            return None
-
-        work_dir = temp_dir or Path("_temp_demucs")
-        work_dir.mkdir(parents=True, exist_ok=True)
-
-        stem_dir = output_dir or str(work_dir / "stems")
-        Path(stem_dir).mkdir(parents=True, exist_ok=True)
-
-        config = {
-            "input_path": str(Path(input_path).resolve()),
-            "output_dir": str(Path(stem_dir).resolve()),
-            "model_name": self.model_name,
-            "segment": self.segment,
-        }
-
-        config_path = work_dir / "_demucs_config.json"
-        config_path.write_text(json.dumps(config), encoding="utf-8")
-
-        script_path = Path(__file__).parent / INFERENCE_SCRIPT
-
         try:
+            import torch
+            import torchaudio
+            from demucs.apply import apply_model
+
             print(f"   Demucs separating: {self.model_name}...")
 
-            result = subprocess.run(
-                [str(python), str(script_path), str(config_path)],
-                capture_output=True,
-                text=True,
-                timeout=600,  # 10 minute timeout
-            )
+            model = self._get_model()
+            device = next(model.parameters()).device
 
-            if result.returncode != 0:
-                print(f"   Demucs failed: {result.stderr[:200]}")
-                return None
+            # Load audio
+            wav, sr = torchaudio.load(input_path)
+            if wav.shape[0] == 1:
+                wav = wav.repeat(2, 1)
+            wav = wav.unsqueeze(0).to(device)
 
-            # Read stem files
+            # Separate
+            with torch.no_grad():
+                sources = apply_model(
+                    model, wav, segment=self.segment, device=device,
+                )
+
+            # sources shape: (batch, stems, channels, samples)
+            source_names = model.sources  # e.g., ['drums', 'bass', 'other', 'vocals']
+
+            # Optionally write stem WAV files
+            if output_dir is not None:
+                Path(output_dir).mkdir(parents=True, exist_ok=True)
+                for i, name in enumerate(source_names):
+                    stem = sources[0, i]
+                    stem_path = Path(output_dir) / f"{name}.wav"
+                    torchaudio.save(str(stem_path), stem.cpu(), sample_rate=sr)
+
+            # Read stems into sample lists
             from bark_engine.audio_io import read_wav_file
 
             stems: dict[str, list[float]] = {}
-            sample_rate = 44100
+            work_dir = temp_dir or Path("_temp_demucs")
+            work_dir.mkdir(parents=True, exist_ok=True)
 
-            for stem_name in STEM_NAMES:
-                stem_path = Path(stem_dir) / f"{stem_name}.wav"
-                if stem_path.exists():
-                    samples, sr = read_wav_file(str(stem_path))
-                    stems[stem_name] = samples
-                    sample_rate = sr
-                    # Clean up if using temp dir
-                    if output_dir is None:
-                        stem_path.unlink(missing_ok=True)
-                else:
-                    print(f"   Warning: stem '{stem_name}' not found")
-                    stems[stem_name] = []
+            for i, name in enumerate(source_names):
+                stem = sources[0, i]
+                stem_path = work_dir / f"_demucs_{name}.wav"
+                torchaudio.save(str(stem_path), stem.cpu(), sample_rate=sr)
+                samples, _ = read_wav_file(str(stem_path))
+                stems[name] = samples
+                stem_path.unlink(missing_ok=True)
 
             print(f"   Demucs separation complete")
 
@@ -204,14 +161,9 @@ class DemucsSeparator:
                 drums=stems.get("drums", []),
                 bass=stems.get("bass", []),
                 other=stems.get("other", []),
-                sample_rate=sample_rate,
+                sample_rate=sr,
             )
 
-        except subprocess.TimeoutExpired:
-            print(f"   Demucs timed out after 10 minutes")
+        except Exception as exc:
+            print(f"   Demucs failed: {exc}")
             return None
-        except FileNotFoundError:
-            print(f"   Demucs venv Python not found")
-            return None
-        finally:
-            config_path.unlink(missing_ok=True)

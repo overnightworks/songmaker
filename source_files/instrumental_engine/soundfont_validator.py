@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
 from instrumental_engine.constants import SAMPLE_RATE
 from instrumental_engine.soundfont_engine import (
-    DEFAULT_SOUNDFONT_PATHS,
+    SOUNDFONT_PRIORITY,
     FLUIDSYNTH_CHECK_CMD,
     write_midi_file,
 )
@@ -159,7 +159,7 @@ def find_best_soundfont() -> Path | None:
     Returns:
         Path to SoundFont file, or None if not found.
     """
-    for sf_path_str in DEFAULT_SOUNDFONT_PATHS:
+    for sf_path_str in SOUNDFONT_PRIORITY:
         path = Path(sf_path_str)
         if path.exists():
             return path

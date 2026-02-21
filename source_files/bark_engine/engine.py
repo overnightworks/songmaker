@@ -484,7 +484,7 @@ class BarkVocalEngine:
         if not is_rvc_available():
             print(
                 f"   ⚠️  RVC not available for {section.section_id} "
-                f"(run setup_rvc_venv.py to install)"
+                f"(run: uv sync)"
             )
             return samples
 

@@ -1,4 +1,4 @@
-"""MusicGen AI instrumental generation via subprocess.
+"""MusicGen AI instrumental generation — direct import, no subprocess.
 
 Meta's MusicGen generates music from text descriptions.
 
@@ -14,14 +14,9 @@ with crossfading.
 
 from __future__ import annotations
 
-import json
-import subprocess
-import sys
 from pathlib import Path
 from typing import Final
 
-VENV_DIR: Final[str] = ".venv"
-INFERENCE_SCRIPT: Final[str] = "_musicgen_infer.py"
 MUSICGEN_SAMPLE_RATE: Final[int] = 32000
 TARGET_SAMPLE_RATE: Final[int] = 44100
 
@@ -33,51 +28,13 @@ VRAM_THRESHOLDS: Final[dict[str, float]] = {
 }
 
 
-def _find_venv() -> Path | None:
-    """Find the isolated virtual environment directory."""
-    search_paths = [
-        Path(VENV_DIR),
-        Path("source_files") / VENV_DIR,
-        Path.home() / ".songmaker" / VENV_DIR,
-    ]
-    for venv_path in search_paths:
-        python_path = _get_venv_python(venv_path)
-        if python_path and python_path.exists():
-            return venv_path
-    return None
-
-
-def _get_venv_python(venv_dir: Path) -> Path | None:
-    """Get the Python executable path for a venv."""
-    candidates = [
-        venv_dir / "Scripts" / "python.exe",
-        venv_dir / "bin" / "python",
-    ]
-    for p in candidates:
-        if p.exists():
-            return p
-    return None
-
-
 def is_musicgen_available() -> bool:
-    """Check if MusicGen is installed and ready to use."""
-    venv_dir = _find_venv()
-    if venv_dir is None:
-        return False
-
-    python = _get_venv_python(venv_dir)
-    if python is None:
-        return False
-
+    """Check if MusicGen (audiocraft) is installed and ready to use."""
     try:
-        result = subprocess.run(
-            [str(python), "-c", "from audiocraft.models import MusicGen; print('ok')"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return result.returncode == 0 and "ok" in result.stdout
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+        from audiocraft.models import MusicGen  # noqa: F401
+
+        return True
+    except ImportError:
         return False
 
 
@@ -87,37 +44,22 @@ def _detect_best_model() -> str:
     Returns the largest model that fits in available GPU memory.
     Falls back to musicgen-small for CPU-only systems.
     """
-    venv_dir = _find_venv()
-    if venv_dir is None:
-        return "facebook/musicgen-small"
-
-    python = _get_venv_python(venv_dir)
-    if python is None:
-        return "facebook/musicgen-small"
-
     try:
-        result = subprocess.run(
-            [str(python), "-c",
-             "import torch; "
-             "print(torch.cuda.get_device_properties(0).total_mem / 1e9 "
-             "if torch.cuda.is_available() else 0)"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        if result.returncode == 0:
-            vram_gb = float(result.stdout.strip())
+        import torch
+
+        if torch.cuda.is_available():
+            vram_gb = torch.cuda.get_device_properties(0).total_mem / 1e9
             for model, threshold in VRAM_THRESHOLDS.items():
                 if vram_gb >= threshold:
                     return model
-    except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+    except Exception:
         pass
 
     return "facebook/musicgen-small"
 
 
 class MusicGenRenderer:
-    """AI instrumental generator using Meta's MusicGen.
+    """AI instrumental generator using Meta's MusicGen (in-process).
 
     Generates backing tracks from text prompts like
     "melodic house, deep bass, 124 BPM, E minor".
@@ -145,12 +87,18 @@ class MusicGenRenderer:
         else:
             self._model_name = model_name
 
-        self._venv_dir = _find_venv()
-        if self._venv_dir is None:
-            print(
-                f"   Warning: Isolated venv not found. "
-                f"Run setup_rvc_venv.py to create it."
-            )
+        # Lazy-loaded MusicGen instance (heavy — downloads model on first use)
+        self._model = None
+
+    def _get_model(self):
+        """Lazy-load the MusicGen model."""
+        if self._model is None:
+            import torch
+            from audiocraft.models import MusicGen
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self._model = MusicGen.get_pretrained(self._model_name, device=device)
+        return self._model
 
     @property
     def model_name(self) -> str:
@@ -160,7 +108,7 @@ class MusicGenRenderer:
     @property
     def is_ready(self) -> bool:
         """Whether MusicGen is available."""
-        return self._venv_dir is not None and is_musicgen_available()
+        return is_musicgen_available()
 
     def generate(
         self,
@@ -185,76 +133,50 @@ class MusicGenRenderer:
             print(f"   MusicGen not ready, skipping generation")
             return None
 
-        python = _get_venv_python(self._venv_dir)
-        if python is None:
-            return None
-
-        work_dir = temp_dir or Path("_temp_musicgen")
-        work_dir.mkdir(parents=True, exist_ok=True)
-
-        raw_output = str(work_dir / "_musicgen_raw.wav")
-
-        config = {
-            "prompt": prompt,
-            "output_path": str(Path(raw_output).resolve()),
-            "duration_seconds": min(duration_seconds, 30.0),
-            "model_name": self._model_name,
-            "sample_rate": MUSICGEN_SAMPLE_RATE,
-        }
-
-        config_path = work_dir / "_musicgen_config.json"
-        config_path.write_text(json.dumps(config), encoding="utf-8")
-
-        script_path = Path(__file__).parent / INFERENCE_SCRIPT
-
         try:
+            import torchaudio
+
             print(
                 f"   MusicGen generating: {self._model_name} "
                 f"({duration_seconds:.0f}s)..."
             )
             print(f"   Prompt: {prompt[:80]}...")
 
-            result = subprocess.run(
-                [str(python), str(script_path), str(config_path)],
-                capture_output=True,
-                text=True,
-                timeout=600,  # 10 minute timeout for large models
-            )
+            model = self._get_model()
+            model.set_generation_params(duration=min(duration_seconds, 30.0))
 
-            if result.returncode != 0:
-                print(f"   MusicGen failed: {result.stderr[:200]}")
-                return None
+            wav = model.generate([prompt])
 
-            if not Path(raw_output).exists():
-                print(f"   MusicGen output file not created")
-                return None
+            # wav shape: (batch, channels, samples) — take first batch item
+            audio = wav[0].cpu()  # (channels, samples)
 
-            # Read and resample to target sample rate
+            # Save raw to temp, then read back and resample
+            work_dir = temp_dir or Path("_temp_musicgen")
+            work_dir.mkdir(parents=True, exist_ok=True)
+            raw_path = str(work_dir / "_musicgen_raw.wav")
+
+            torchaudio.save(raw_path, audio, sample_rate=MUSICGEN_SAMPLE_RATE)
+
             from bark_engine.audio_io import read_wav_file
             from bark_engine.audio_utils import resample_audio
 
-            samples, sr = read_wav_file(raw_output)
-            Path(raw_output).unlink(missing_ok=True)
+            samples, sr = read_wav_file(raw_path)
+            Path(raw_path).unlink(missing_ok=True)
 
             if sr != TARGET_SAMPLE_RATE:
                 samples = resample_audio(samples, sr, TARGET_SAMPLE_RATE)
 
-            # Save to output path if requested
             if output_path is not None:
                 from bark_engine.audio_io import write_wav_file
+
                 write_wav_file(output_path, samples, TARGET_SAMPLE_RATE)
 
             print(f"   MusicGen generation complete ({len(samples)/TARGET_SAMPLE_RATE:.1f}s)")
             return samples
 
-        except subprocess.TimeoutExpired:
-            print(f"   MusicGen timed out after 10 minutes")
+        except Exception as exc:
+            print(f"   MusicGen failed: {exc}")
             return None
-        except FileNotFoundError:
-            print(f"   MusicGen venv Python not found")
-            return None
-        finally:
-            config_path.unlink(missing_ok=True)
 
     def generate_sections(
         self,

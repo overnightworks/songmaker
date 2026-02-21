@@ -7,9 +7,6 @@ blending, and PSOLA resynthesis against pure tones and silence.
 from __future__ import annotations
 
 import math
-import sys
-
-sys.path.insert(0, "source_files")
 
 from bark_engine.pitch_correction import (
     PitchFrame,

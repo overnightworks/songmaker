@@ -7,9 +7,6 @@ multiband compression stability, and stereo widening correctness.
 from __future__ import annotations
 
 import math
-import sys
-
-sys.path.insert(0, "source_files")
 
 import numpy as np
 
