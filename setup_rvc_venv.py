@@ -1,27 +1,70 @@
-"""Set up an isolated Python 3.12 virtual environment for RVC.
+"""Set up an isolated Python 3.12 virtual environment for AI backends.
 
-RVC requires Python 3.10-3.12 and specific dependency versions
-(faiss-cpu, numpy, etc.) that conflict with Python 3.14. This
-script creates a separate venv with everything RVC needs.
+Multiple AI packages (RVC, XTTS, MusicGen, Demucs) require Python 3.10-3.12
+and specific dependency versions that conflict with Python 3.14. This script
+creates a shared venv with all backends installed.
 
-Run this script once from an admin terminal:
-    python setup_rvc_venv.py
+Usage:
+    python setup_rvc_venv.py              # Install all available backends
+    python setup_rvc_venv.py --rvc        # Install RVC only
+    python setup_rvc_venv.py --xtts       # Install XTTS only
+    python setup_rvc_venv.py --musicgen   # Install MusicGen only
+    python setup_rvc_venv.py --demucs     # Install Demucs only
+    python setup_rvc_venv.py --list       # Show what's installed
 
 Prerequisites:
     - Python 3.12 must be installed (py -3.12 must work)
     - Internet connection for pip downloads
-    - Visual C++ Build Tools for pyworld compilation
-      (or use --no-pyworld flag to skip)
+    - GPU: CUDA-capable GPU recommended (auto-detected)
 """
 
 from __future__ import annotations
 
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 VENV_DIR = Path("_rvc_venv")
 REQUIRED_PYTHON = "3.12"
+
+
+@dataclass
+class Backend:
+    """Backend package definition."""
+
+    name: str
+    pip_packages: list[str]
+    verify_import: str
+    description: str
+
+
+BACKENDS: dict[str, Backend] = {
+    "rvc": Backend(
+        name="RVC Voice Conversion",
+        pip_packages=["rvc-python"],
+        verify_import="from rvc_python.infer import RVCInference; print('ok')",
+        description="Convert vocals through trained voice models",
+    ),
+    "xtts": Backend(
+        name="XTTS v2 Text-to-Speech",
+        pip_packages=["coqui-tts"],
+        verify_import="from TTS.api import TTS; print('ok')",
+        description="High-quality speech synthesis with voice cloning",
+    ),
+    "musicgen": Backend(
+        name="MusicGen AI Instrumentals",
+        pip_packages=["audiocraft"],
+        verify_import="from audiocraft.models import MusicGen; print('ok')",
+        description="Generate instrumentals from text descriptions",
+    ),
+    "demucs": Backend(
+        name="Demucs Stem Separation",
+        pip_packages=["demucs"],
+        verify_import="from demucs.pretrained import get_model; print('ok')",
+        description="Split audio into vocals/drums/bass/other stems",
+    ),
+}
 
 
 def find_python312() -> str | None:
@@ -58,50 +101,32 @@ def find_python312() -> str | None:
     return None
 
 
-def main() -> int:
-    print("=" * 60)
-    print("RVC Virtual Environment Setup")
-    print("=" * 60)
+def get_venv_python() -> str:
+    """Get the Python executable path for the venv."""
+    if sys.platform == "win32":
+        return str(VENV_DIR / "Scripts" / "python.exe")
+    return str(VENV_DIR / "bin" / "python")
 
-    # Find Python 3.12
-    python_cmd = find_python312()
-    if python_cmd is None:
-        print(
-            f"\n❌ Python {REQUIRED_PYTHON} not found.\n"
-            f"Install it from https://www.python.org/downloads/\n"
-            f"Make sure to check 'Add Python to PATH' during install.\n"
-            f"After installing, run this script again."
-        )
-        return 1
 
-    print(f"\n✅ Found Python: {python_cmd}")
-
-    # Create venv
+def create_venv(python_cmd: str) -> bool:
+    """Create the virtual environment if it doesn't exist."""
     if VENV_DIR.exists():
-        print(f"\n⚠️  Venv already exists at {VENV_DIR}/")
-        response = input("Delete and recreate? [y/N]: ").strip().lower()
-        if response != "y":
-            print("Aborted.")
-            return 0
-        import shutil
-        shutil.rmtree(VENV_DIR)
+        venv_python = get_venv_python()
+        if Path(venv_python).exists():
+            print(f"\nVenv already exists at {VENV_DIR}/")
+            return True
 
-    print(f"\n🔧 Creating venv at {VENV_DIR}/...")
+    print(f"\nCreating venv at {VENV_DIR}/...")
     subprocess.run(
         python_cmd.split() + ["-m", "venv", str(VENV_DIR)],
         check=True,
     )
 
-    # Get venv Python path
-    if sys.platform == "win32":
-        venv_python = str(VENV_DIR / "Scripts" / "python.exe")
-    else:
-        venv_python = str(VENV_DIR / "bin" / "python")
-
-    print(f"✅ Venv created: {venv_python}")
+    venv_python = get_venv_python()
+    print(f"Venv created: {venv_python}")
 
     # Upgrade pip
-    print("\n📦 Upgrading pip...")
+    print("\nUpgrading pip...")
     subprocess.run(
         [venv_python, "-m", "pip", "install", "--upgrade", "pip"],
         check=True,
@@ -109,7 +134,7 @@ def main() -> int:
     )
 
     # Install PyTorch with CUDA
-    print("\n📦 Installing PyTorch with CUDA...")
+    print("\nInstalling PyTorch with CUDA...")
     subprocess.run(
         [
             venv_python, "-m", "pip", "install",
@@ -119,52 +144,200 @@ def main() -> int:
         check=True,
     )
 
-    # Install rvc-python and dependencies
-    print("\n📦 Installing rvc-python...")
-    subprocess.run(
-        [venv_python, "-m", "pip", "install", "rvc-python"],
-        check=True,
-    )
+    return True
 
-    # Verify installation
-    print("\n🔍 Verifying installation...")
+
+def install_backend(backend_key: str) -> bool:
+    """Install a specific backend into the venv.
+
+    Args:
+        backend_key: Backend identifier (rvc, xtts, musicgen, demucs).
+
+    Returns:
+        True if installation succeeded.
+    """
+    backend = BACKENDS[backend_key]
+    venv_python = get_venv_python()
+
+    print(f"\nInstalling {backend.name}...")
+    for pkg in backend.pip_packages:
+        print(f"  pip install {pkg}")
+        result = subprocess.run(
+            [venv_python, "-m", "pip", "install", pkg],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print(f"  Failed to install {pkg}:")
+            # Show last few lines of stderr for diagnosis
+            lines = result.stderr.strip().split("\n")
+            for line in lines[-5:]:
+                print(f"    {line}")
+            return False
+
+    # Verify
+    print(f"  Verifying {backend.name}...")
     result = subprocess.run(
-        [venv_python, "-c", "from rvc_python.infer import RVCInference; print('OK')"],
+        [venv_python, "-c", backend.verify_import],
         capture_output=True,
         text=True,
+        timeout=60,
     )
 
-    if result.returncode == 0 and "OK" in result.stdout:
-        print("✅ RVC installed successfully!")
+    if result.returncode == 0 and "ok" in result.stdout:
+        print(f"  {backend.name} installed successfully!")
+        return True
     else:
-        print(f"❌ Verification failed: {result.stderr}")
+        print(f"  Verification failed: {result.stderr[:200]}")
+        return False
+
+
+def check_installed() -> dict[str, bool]:
+    """Check which backends are installed in the venv."""
+    venv_python = get_venv_python()
+    if not Path(venv_python).exists():
+        return {k: False for k in BACKENDS}
+
+    status = {}
+    for key, backend in BACKENDS.items():
+        try:
+            result = subprocess.run(
+                [venv_python, "-c", backend.verify_import],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            status[key] = result.returncode == 0 and "ok" in result.stdout
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            status[key] = False
+
+    return status
+
+
+def list_status() -> None:
+    """Print the installation status of all backends."""
+    print(f"\n{'='*60}")
+    print("Songmaker AI Backend Status")
+    print(f"{'='*60}")
+
+    venv_python = get_venv_python()
+    venv_exists = Path(venv_python).exists()
+
+    print(f"\nVenv: {VENV_DIR}/ {'(exists)' if venv_exists else '(not created)'}")
+
+    if venv_exists:
+        # Check CUDA
+        try:
+            result = subprocess.run(
+                [venv_python, "-c",
+                 "import torch; print(f'CUDA {torch.cuda.get_device_name(0)}' "
+                 "if torch.cuda.is_available() else 'CPU only')"],
+                capture_output=True, text=True, timeout=15,
+            )
+            print(f"Device: {result.stdout.strip()}")
+        except Exception:
+            pass
+
+    status = check_installed()
+
+    print()
+    for key, backend in BACKENDS.items():
+        installed = status.get(key, False)
+        mark = "INSTALLED" if installed else "not installed"
+        print(f"  [{key:10}] {backend.name:35} [{mark}]")
+        print(f"              {backend.description}")
+
+    not_installed = [k for k, v in status.items() if not v]
+    if not_installed:
+        print(f"\nTo install missing backends:")
+        for key in not_installed:
+            print(f"  python setup_rvc_venv.py --{key}")
+        print(f"  python setup_rvc_venv.py           # (install all)")
+
+
+def main() -> int:
+    print("=" * 60)
+    print("Songmaker AI Backend Setup")
+    print("=" * 60)
+
+    args = sys.argv[1:]
+
+    # List mode
+    if "--list" in args:
+        list_status()
+        return 0
+
+    # Find Python 3.12
+    python_cmd = find_python312()
+    if python_cmd is None:
+        print(
+            f"\nPython {REQUIRED_PYTHON} not found.\n"
+            f"Install it from https://www.python.org/downloads/\n"
+            f"Make sure to check 'Add Python to PATH' during install.\n"
+            f"After installing, run this script again."
+        )
         return 1
 
+    print(f"\nFound Python: {python_cmd}")
+
+    # Create venv
+    if not create_venv(python_cmd):
+        return 1
+
+    # Determine which backends to install
+    requested = []
+    for key in BACKENDS:
+        if f"--{key}" in args:
+            requested.append(key)
+
+    # If no specific backends requested, install all
+    if not requested:
+        requested = list(BACKENDS.keys())
+
+    # Install backends
+    results: dict[str, bool] = {}
+    for key in requested:
+        results[key] = install_backend(key)
+
     # Check CUDA
+    venv_python = get_venv_python()
     result = subprocess.run(
-        [venv_python, "-c", "import torch; print('CUDA' if torch.cuda.is_available() else 'CPU')"],
-        capture_output=True,
-        text=True,
+        [venv_python, "-c",
+         "import torch; print('CUDA' if torch.cuda.is_available() else 'CPU')"],
+        capture_output=True, text=True,
     )
     device = result.stdout.strip()
-    print(f"✅ Device: {device}")
 
-    # Create models directory
-    models_dir = Path("rvc_models")
-    models_dir.mkdir(exist_ok=True)
-    print(f"\n✅ Models directory: {models_dir}/")
+    # Create supporting directories
+    Path("rvc_models").mkdir(exist_ok=True)
+    Path("voice_refs").mkdir(exist_ok=True)
 
-    print("\n" + "=" * 60)
-    print("Setup complete!")
-    print("=" * 60)
-    print(f"\nNext steps:")
-    print(f"  1. Download an RVC voice model (.pth + .index files)")
-    print(f"     from https://voice-models.com or https://weights.com")
-    print(f"  2. Place the files in {models_dir}/")
-    print(f"  3. Set rvc_model='model_name' in your VocalSection config")
-    print(f"\nThe main engine will auto-detect the RVC venv at {VENV_DIR}/")
+    # Summary
+    print(f"\n{'='*60}")
+    print("Setup Summary")
+    print(f"{'='*60}")
+    print(f"Device: {device}")
 
-    return 0
+    for key, success in results.items():
+        status = "OK" if success else "FAILED"
+        print(f"  {BACKENDS[key].name}: {status}")
+
+    success_count = sum(results.values())
+    print(f"\n{success_count}/{len(results)} backends installed successfully.")
+
+    if results.get("rvc"):
+        print(f"\nRVC next steps:")
+        print(f"  1. Download a voice model (.pth + .index)")
+        print(f"  2. Place in rvc_models/")
+        print(f"  3. Set rvc_model='model_name' in VocalSection")
+
+    if results.get("xtts"):
+        print(f"\nXTTS next steps:")
+        print(f"  1. Record or find a ~6 second voice reference (.wav)")
+        print(f"  2. Place in voice_refs/")
+        print(f"  3. Set backend='xtts', voice_ref='name' in VocalSection")
+
+    return 0 if all(results.values()) else 1
 
 
 if __name__ == "__main__":

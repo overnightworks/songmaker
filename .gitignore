@@ -30,6 +30,9 @@ _rvc_venv/
 # RVC voice models (large binary files)
 rvc_models/
 
+# Voice reference audio files (for XTTS cloning)
+voice_refs/
+
 # IDE
 .vscode/
 .idea/
