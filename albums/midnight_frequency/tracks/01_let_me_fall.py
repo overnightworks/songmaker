@@ -304,20 +304,20 @@ def _chorus_pad_chords() -> tuple[Chord, ...]:
 def _chorus_supersaw_chords() -> tuple[Chord, ...]:
     """Full supersaw chords for drops: Dm → Bb → C → Gm, 16 beats each."""
     return (
-        Chord(notes=(D4, F4, A4), velocity=0.8, duration_beats=16.0),
-        Chord(notes=(BB3, D4, F4), velocity=0.8, duration_beats=16.0),
-        Chord(notes=(C4, E4, G4), velocity=0.8, duration_beats=16.0),
-        Chord(notes=(G3, BB3, D4), velocity=0.8, duration_beats=16.0),
+        Chord(notes=(D4, F4, A4), velocity=0.65, duration_beats=16.0),
+        Chord(notes=(BB3, D4, F4), velocity=0.65, duration_beats=16.0),
+        Chord(notes=(C4, E4, G4), velocity=0.65, duration_beats=16.0),
+        Chord(notes=(G3, BB3, D4), velocity=0.65, duration_beats=16.0),
     )
 
 
 def _final_supersaw_chords() -> tuple[Chord, ...]:
     """Stacked supersaw chords for final drop — octave doubled."""
     return (
-        Chord(notes=(D3, D4, F4, A4), velocity=0.9, duration_beats=16.0),
-        Chord(notes=(BB2, BB3, D4, F4), velocity=0.9, duration_beats=16.0),
-        Chord(notes=(C3, C4, E4, G4), velocity=0.9, duration_beats=16.0),
-        Chord(notes=(G2, G3, BB3, D4), velocity=0.9, duration_beats=16.0),
+        Chord(notes=(D3, D4, F4, A4), velocity=0.75, duration_beats=16.0),
+        Chord(notes=(BB2, BB3, D4, F4), velocity=0.75, duration_beats=16.0),
+        Chord(notes=(C3, C4, E4, G4), velocity=0.75, duration_beats=16.0),
+        Chord(notes=(G2, G3, BB3, D4), velocity=0.75, duration_beats=16.0),
     )
 
 
@@ -589,25 +589,25 @@ def build_arrangement() -> Arrangement:
                     InstrumentTrack(
                         name="supersaw", instrument_id="supersaw",
                         events=_chorus_supersaw_chords(),
-                        volume=0.65,
+                        volume=0.50,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pad", instrument_id="dark_pad",
                         events=_chorus_pad_chords(),
-                        volume=0.25,
+                        volume=0.20,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pluck", instrument_id="pluck",
                         events=_chorus_arpeggios(),
-                        volume=0.25,
+                        volume=0.20,
                         pan=PanPosition.CENTER_LEFT,
                     ),
                     InstrumentTrack(
                         name="bass", instrument_id="sub_bass",
                         events=_chorus_bass(),
-                        volume=0.65,
+                        volume=0.55,
                         pan=PanPosition.CENTER,
                     ),
                 ),
@@ -651,19 +651,19 @@ def build_arrangement() -> Arrangement:
                     InstrumentTrack(
                         name="pad", instrument_id="dark_pad",
                         events=_build_pad_chords(),
-                        volume=0.5,
+                        volume=0.40,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pluck", instrument_id="pluck",
                         events=_verse_arpeggios(),
-                        volume=0.35,
+                        volume=0.30,
                         pan=PanPosition.CENTER_LEFT,
                     ),
                     InstrumentTrack(
                         name="bass", instrument_id="sub_bass",
                         events=_build_bass(),
-                        volume=0.6,
+                        volume=0.50,
                         pan=PanPosition.CENTER,
                     ),
                 ),
@@ -679,25 +679,25 @@ def build_arrangement() -> Arrangement:
                     InstrumentTrack(
                         name="supersaw", instrument_id="supersaw",
                         events=_chorus_supersaw_chords(),
-                        volume=0.7,
+                        volume=0.55,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pad", instrument_id="dark_pad",
                         events=_chorus_pad_chords(),
-                        volume=0.3,
+                        volume=0.22,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pluck", instrument_id="pluck",
                         events=_chorus_arpeggios(),
-                        volume=0.28,
+                        volume=0.22,
                         pan=PanPosition.CENTER_RIGHT,
                     ),
                     InstrumentTrack(
                         name="bass", instrument_id="sub_bass",
                         events=_chorus_bass(),
-                        volume=0.7,
+                        volume=0.58,
                         pan=PanPosition.CENTER,
                     ),
                 ),
@@ -734,25 +734,25 @@ def build_arrangement() -> Arrangement:
                     InstrumentTrack(
                         name="supersaw", instrument_id="supersaw",
                         events=_final_supersaw_chords(),
-                        volume=0.8,
+                        volume=0.60,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pad", instrument_id="dark_pad",
                         events=_chorus_pad_chords(),
-                        volume=0.3,
+                        volume=0.22,
                         pan=PanPosition.CENTER,
                     ),
                     InstrumentTrack(
                         name="pluck", instrument_id="pluck",
                         events=_chorus_arpeggios(),
-                        volume=0.3,
+                        volume=0.22,
                         pan=PanPosition.CENTER_LEFT,
                     ),
                     InstrumentTrack(
                         name="bass", instrument_id="sub_bass",
                         events=_final_bass(),
-                        volume=0.75,
+                        volume=0.60,
                         pan=PanPosition.CENTER,
                     ),
                 ),
@@ -1135,21 +1135,24 @@ def main() -> None:
         inst_right,
         vocal_placement_seconds,
         vocal_durations,
-        reduction_db=-3.0,
-        attack_seconds=0.05,
-        release_seconds=0.2,
+        reduction_db=-6.0,
+        attack_seconds=0.08,
+        release_seconds=0.3,
     )
 
     # ── 5. Overlay vocals onto ducked instrumental ──
     print("🎚️  Mixing vocals onto instrumental...")
     vocal_map = {v.section_id: v.samples for v in generated_vocals}
 
+    # Vocal gain boost — compensates for Bark's quiet output
+    VOCAL_GAIN: float = 1.4
+
     for section_id, beat in VOCAL_PLACEMENT:
         samples = vocal_map.get(section_id)
         if samples is None:
             continue
         start_sample = int(beat * SECONDS_PER_BEAT * SAMPLE_RATE)
-        vocal_mono = list(samples)
+        vocal_mono = [s * VOCAL_GAIN for s in samples]
         overlay_onto(
             ducked_left,
             ducked_right,
