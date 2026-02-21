@@ -5,6 +5,47 @@
 AI-powered song generation engine by Flex0r.
 All music (vocals + instrumentals) is generated entirely in Python.
 
+**Creator**: Flex0r (the user)
+**For**: MC Tobbisch (Tobias, the user's close friend)
+**Purpose**: Generate complete songs (vocals + instrumentals) from pure Python scripts
+
+## Quick Start
+
+`ash
+# Run a track (generates instrumental + vocals + mastered MP3)
+python albums/download_days/tracks/01_download_days.py
+
+# Output lands in: albums/download_days/output/01_Download_Days.mp3
+`
+
+## Dependencies
+
+`ash
+pip install torch numpy scipy suno-bark
+# ffmpeg must be on PATH (for MP3 encoding + vocal processing)
+# Optional: FluidSynth + SoundFont (.sf2) for realistic instruments
+`
+
+## Existing Tracks
+
+### Album: Download Days
+| Track | File | Genre | BPM | Key |
+|-------|------|-------|-----|-----|
+| 01 Download Days | lbums/download_days/tracks/01_download_days.py | Punk Rock (Offspring/Green Day) | 175 | E minor |
+
+**Lyrics theme**: Nostalgia for 90s youth in Erlangen, Germany — downloading MP3s (Green Day, Offspring, Nirvana), LAN parties playing Counter-Strike, biking through Erlangen singing songs, playing Nintendo wrestling with friend David, athletics training at Turnerbund Erlangen.
+
+### Album: MC Tobbisch Birthday (Legacy)
+Old birthday album with 15 tracks generated via edge-tts (deprecated). Archived in lbums/mc_tobbisch_birthday/legacy_sources/ and legacy_output/.
+
+## Known Limitations
+
+- **Bark CPU speed**: ~15-19 it/s on CPU, ~90s per vocal section, ~270s with 3 takes
+- **Bark quality variance**: Stochastic output — same text produces different quality each run (mitigated by multi-take selection)
+- **Bark pitch drift**: Vocals don’t follow musical key (mitigated by pitch correction at 70%)
+- **GPU speedup**: Install pip install torch --index-url https://download.pytorch.org/whl/cu121 for 10-25× faster Bark generation (no code changes needed)
+- **No real-time preview**: Full track generation takes 20-45 min on CPU
+
 ## Project Structure
 
 ```
@@ -249,6 +290,25 @@ C, C#, D, D#, E, F, F#, G, G#, A, A#, B (flats like Bb/Eb also accepted)
 ```
 🎵 Pitch correction (C minor, intensity=0.7)...
 ```
+
+## VocalSection Complete Reference
+
+All fields with defaults:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| section_id | str | required | Unique identifier |
+| text | str | required | Lyrics/spoken text |
+| style | VocalStyle | required | SINGING, RAP, SHOUT, or SPOKEN |
+| language | VocalLanguage | ENGLISH | ENGLISH or GERMAN |
+| speaker_index | int | 0 | Bark voice preset (0-9) |
+| singing | bool | False | Add musical markers |
+| volume | float | 1.0 | Volume in final mix |
+| gap_after_seconds | float | 0.0 | Silence padding after section |
+| num_takes | int | 3 | Number of takes to generate (best-of-N) |
+| pitch_correction_intensity | float | 0.7 | 0.0=off, 0.7=natural, 1.0=hard snap |
+| pitch_correction_key | str | C | Musical key (C, C#, D, ..., B) |
+| pitch_correction_scale | str | minor | major, minor, or chromatic |
 
 ## Instrumental Engine (instrumental_engine)
 
