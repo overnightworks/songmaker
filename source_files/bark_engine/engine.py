@@ -149,10 +149,15 @@ class BarkVocalEngine:
                 results.append(cached)
                 continue
 
-            # Need to generate — ensure models are loaded
-            self.preload_models()
+            backend = self._resolve_backend(section)
 
-            best_samples = self._generate_with_take_selection(section)
+            if backend == "xtts":
+                best_samples = self._generate_with_xtts(section)
+            else:
+                # Bark backend — ensure models are loaded
+                self.preload_models()
+                best_samples = self._generate_with_take_selection(section)
+
             pitch_corrected = self._apply_pitch_correction(best_samples, section)
             processed = self._apply_vocal_processing(
                 pitch_corrected, section.section_id, section.style
@@ -191,6 +196,8 @@ class BarkVocalEngine:
             "pitch_correction_intensity": section.pitch_correction_intensity,
             "pitch_correction_key": section.pitch_correction_key,
             "pitch_correction_scale": section.pitch_correction_scale,
+            "backend": section.backend,
+            "voice_ref": section.voice_ref,
             "rvc_model": section.rvc_model,
             "rvc_pitch_shift": section.rvc_pitch_shift,
             "rvc_index_rate": section.rvc_index_rate,
@@ -498,6 +505,75 @@ class BarkVocalEngine:
 
         print(f"   ⚠️  RVC conversion failed, using original audio")
         return samples
+
+    @staticmethod
+    def _resolve_backend(section: VocalSection) -> str:
+        """Resolve the vocal backend for a section.
+
+        When backend="auto", uses XTTS for spoken/whispered/rap styles
+        and Bark for singing/epic/shout styles.
+
+        Args:
+            section: Vocal section configuration.
+
+        Returns:
+            Resolved backend name ("bark" or "xtts").
+        """
+        if section.backend == "auto":
+            xtts_styles = {VocalStyle.SPOKEN, VocalStyle.WHISPER, VocalStyle.RAP}
+            if section.style in xtts_styles:
+                # Check if XTTS is actually available
+                try:
+                    from xtts_engine import is_xtts_available
+                    if is_xtts_available():
+                        return "xtts"
+                except ImportError:
+                    pass
+            return "bark"
+        return section.backend
+
+    def _generate_with_xtts(self, section: VocalSection) -> list[float]:
+        """Generate vocals using XTTS v2 backend.
+
+        Falls back to Bark if XTTS is not available.
+
+        Args:
+            section: Vocal section configuration.
+
+        Returns:
+            Audio samples at TARGET_SAMPLE_RATE (44.1kHz).
+        """
+        try:
+            from xtts_engine import XTTSConverter, is_xtts_available
+        except ImportError:
+            print(f"   xtts_engine not found, falling back to Bark")
+            self.preload_models()
+            return self._generate_with_take_selection(section)
+
+        if not is_xtts_available():
+            print(f"   XTTS not available, falling back to Bark")
+            self.preload_models()
+            return self._generate_with_take_selection(section)
+
+        language = "en" if section.language.value == "en" else "de"
+        converter = XTTSConverter(
+            voice_ref=section.voice_ref,
+            language=language,
+        )
+
+        result = converter.synthesize_samples(
+            text=section.text,
+            language=language,
+            sample_rate=TARGET_SAMPLE_RATE,
+            temp_dir=self._temp_dir,
+        )
+
+        if result is not None:
+            return result
+
+        print(f"   XTTS synthesis failed, falling back to Bark")
+        self.preload_models()
+        return self._generate_with_take_selection(section)
 
     def cleanup(self) -> None:
         """Remove temporary files and directory."""

@@ -59,7 +59,11 @@ source_files/
 │   ├── converter.py             # RVCConverter — subprocess-based
 │   └── _rvc_infer.py            # Inference script (runs in Python 3.12)
 │
-└── (future backends below)
+├── xtts_engine/                 # XTTS v2 text-to-speech (isolated venv)
+│   ├── converter.py             # XTTSConverter — subprocess-based
+│   └── _xtts_infer.py           # Inference script (runs in Python 3.12)
+│
+└── (future: ai_engine/, stem_separator/)
 ```
 
 ---

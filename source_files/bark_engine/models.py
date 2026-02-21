@@ -41,6 +41,9 @@ class VocalSection:
         pitch_correction_intensity: Correction strength (0.0=off, 1.0=hard snap).
         pitch_correction_key: Musical key for pitch quantization (C, C#, D, etc.).
         pitch_correction_scale: Scale type for quantization (major, minor, chromatic).
+        backend: Vocal backend ("bark", "xtts", "auto"). Auto = XTTS for
+            SPOKEN/WHISPER/RAP, Bark for SINGING/EPIC/SHOUT.
+        voice_ref: Voice reference name (in voice_refs/) for XTTS cloning.
         rvc_model: RVC voice model name (in rvc_models/). None = skip RVC.
         rvc_pitch_shift: RVC pitch shift in semitones (-24 to +24).
         rvc_index_rate: RVC feature retrieval strength (0.0-1.0).
@@ -58,6 +61,8 @@ class VocalSection:
     pitch_correction_intensity: float = 0.7
     pitch_correction_key: str = "C"
     pitch_correction_scale: str = "minor"
+    backend: str = "bark"
+    voice_ref: str | None = None
     rvc_model: str | None = None
     rvc_pitch_shift: int = 0
     rvc_index_rate: float = 0.66
