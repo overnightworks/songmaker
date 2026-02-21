@@ -1,14 +1,14 @@
-# MC Tobbisch Birthday Album — Project Guide
+# Songmaker — Project Guide
 
 ## Overview
 
-AI-generated birthday album for MC Tobbisch, produced by Flex0r.
+AI-powered song generation engine by Flex0r.
 All music (vocals + instrumentals) is generated entirely in Python.
 
 ## Project Structure
 
 ```
-d:/mc_tobbisch_birthday_album/
+d:/songmaker/
 ├── AGENTS.md                          ← You are here
 ├── source_files/
 │   ├── bark_engine/                   ← Shared vocal engine (Bark AI singing)

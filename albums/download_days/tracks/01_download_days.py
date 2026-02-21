@@ -4,7 +4,7 @@ A nostalgic punk rock tribute to the days of 56K modems, Napster downloads,
 LAN parties, Counter-Strike, biking through Erlangen, and a friendship
 that's indestructible. Features quiet-loud dynamics à la Nirvana.
 
-Produced by Flex0r for MC Tobbisch's Birthday Album.
+Produced by Flex0r for MC Tobbisch.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 # SoundFont Setup Guide
 
-**Project**: MC Tobbisch Birthday Album  
+**Project**: Songmaker  
 **Status**: Required for production use  
 **Last Updated**: 2026-02-21
 
@@ -98,7 +98,7 @@ You need at least one General MIDI (GM) SoundFont file. These contain all 128 st
 Place your downloaded `.sf2` file in the project's `soundfonts/` directory:
 
 ```
-mc_tobbisch_birthday_album/
+songmaker/
 └── soundfonts/
     └── FluidR3_GM.sf2      ← Place here
 ```

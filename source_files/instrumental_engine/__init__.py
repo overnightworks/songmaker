@@ -1,4 +1,4 @@
-"""Instrumental engine for MC Tobbisch Birthday Album.
+"""Instrumental engine for Songmaker.
 
 Package providing high-quality instrumental generation using:
 - Pure-Python DSP synthesizers (supersaw, pad, pluck, bass, lead, piano, strings, guitar)

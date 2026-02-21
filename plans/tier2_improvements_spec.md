@@ -1,6 +1,6 @@
 # Tier 2 Improvements — Technical Specification
 
-**Project**: MC Tobbisch Birthday Album  
+**Project**: Songmaker  
 **Version**: 2.0 (No Backwards Compatibility)  
 **Status**: Planning Phase  
 **Created**: 2026-02-21  
@@ -24,7 +24,7 @@
 
 ## Executive Summary
 
-This specification defines 5 CPU-compatible improvements to the MC Tobbisch Birthday Album project. All improvements are **enabled by default** with no backwards compatibility constraints, allowing for the cleanest possible architecture.
+This specification defines 5 CPU-compatible improvements to the Songmaker project. All improvements are **enabled by default** with no backwards compatibility constraints, allowing for the cleanest possible architecture.
 
 **Design Philosophy**:
 - **Best-by-default**: Multi-take selection, ducking, pitch correction, professional mastering enabled out of the box

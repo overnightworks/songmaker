@@ -1,4 +1,4 @@
-"""Bark-based singing vocal engine for MC Tobbisch Birthday Album.
+"""Bark-based singing vocal engine for Songmaker.
 
 Package providing AI singing vocal generation using Bark (by Suno),
 replacing edge-tts speech synthesis with actual singing voices.
