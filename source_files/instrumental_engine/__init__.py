@@ -5,7 +5,9 @@ Package providing high-quality instrumental generation using:
 - FluidSynth SoundFont rendering (when available) for sampled instruments
 - Synthesized drum machine with genre-specific pattern library
 - Stereo mixer with panning, effects, and mastering
+- Professional mastering chain (multiband compression, LUFS, stereo widening)
 - Arrangement system for section-based song composition
+- Vocal-instrumental ducking with smooth cosine envelopes
 
 Public API:
     - render_and_export: Render arrangement to WAV/MP3
@@ -15,6 +17,9 @@ Public API:
     - DrumPattern, DrumHit, DrumSound: Drum configuration
     - PATTERN_LIBRARY: Pre-built drum patterns
     - SYNTH_REGISTRY: Available synthesizer instruments
+    - apply_ducking: Vocal-instrumental ducking
+    - master_stereo: Professional mastering pipeline
+    - multiband_compress, measure_lufs, widen_stereo, soft_clip: Mastering components
 
 Usage:
     from instrumental_engine import (
@@ -52,6 +57,15 @@ from instrumental_engine.arrangement_engine import (
     render_arrangement,
     render_section,
     render_track,
+)
+from instrumental_engine.ducking import apply_ducking
+from instrumental_engine.mastering import (
+    master_stereo,
+    measure_lufs,
+    multiband_compress,
+    normalize_to_lufs,
+    soft_clip,
+    widen_stereo,
 )
 from instrumental_engine.constants import (
     SAMPLE_RATE,
@@ -104,6 +118,13 @@ from instrumental_engine.soundfont_engine import (
     SoundFontRenderer,
     find_soundfont,
     is_fluidsynth_available,
+    require_fluidsynth,
+)
+from instrumental_engine.soundfont_validator import (
+    SoundFontHealth,
+    SoundFontSetupError,
+    check_soundfont_health,
+    require_soundfont_setup,
 )
 from instrumental_engine.synth_instruments import (
     DistortedGuitarSynth,
@@ -123,6 +144,8 @@ __all__ = [
     "render_section",
     "render_track",
     "SYNTH_REGISTRY",
+    # Ducking
+    "apply_ducking",
     # Constants
     "SAMPLE_RATE",
     "midi_to_freq",
@@ -165,10 +188,23 @@ __all__ = [
     "stereo_to_mono",
     "apply_fade_out_stereo",
     "master_to_mp3",
+    # Mastering
+    "master_stereo",
+    "multiband_compress",
+    "measure_lufs",
+    "normalize_to_lufs",
+    "widen_stereo",
+    "soft_clip",
     # SoundFont
     "SoundFontRenderer",
     "find_soundfont",
     "is_fluidsynth_available",
+    "require_fluidsynth",
+    # SoundFont validation
+    "SoundFontHealth",
+    "SoundFontSetupError",
+    "check_soundfont_health",
+    "require_soundfont_setup",
     # Synth instruments
     "SupersawSynth",
     "PadSynth",

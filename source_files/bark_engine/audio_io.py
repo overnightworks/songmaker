@@ -6,10 +6,15 @@ import struct
 import subprocess
 import wave
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from bark_engine.constants import TARGET_SAMPLE_RATE
+from instrumental_engine.mastering import master_stereo
+
+if TYPE_CHECKING:
+    from bark_engine.models import GeneratedVocal
 
 
 def write_wav_file(
@@ -139,31 +144,62 @@ def apply_fade_out(samples: list[float], duration_seconds: float = 4.0) -> list[
     return result
 
 
-def master_to_mp3(wav_path: str, mp3_path: str) -> bool:
-    """Master and encode WAV to MP3 with limiting and EQ.
+def master_to_mp3(
+    wav_path: str,
+    mp3_path: str,
+    target_lufs: float = -14.0,
+    stereo_width: float = 1.2,
+) -> bool:
+    """Master WAV to MP3 with professional mastering chain.
+
+    Replaces the old ffmpeg-filter-only approach with a full DSP pipeline:
+        1. Load mono WAV and create stereo pair
+        2. Apply mastering (multiband compression → stereo widening →
+           LUFS normalization → soft clipping)
+        3. Write mastered audio to temporary WAV
+        4. Encode to MP3 via ffmpeg (192kbps)
+        5. Clean up temporary and source WAV files
 
     Args:
         wav_path: Input WAV file path.
         mp3_path: Output MP3 file path.
+        target_lufs: Target integrated LUFS (-14.0 for streaming).
+        stereo_width: Stereo width multiplier (1.0 = unchanged, 1.2 = wider).
 
     Returns:
-        True if successful.
+        True if mastering and encoding succeeded.
     """
+    wav_file = Path(wav_path)
+    if not wav_file.exists():
+        print(f"   ❌ Mastering failed: WAV file not found: {wav_path}")
+        return False
+
+    samples, sample_rate = read_wav_file(wav_path)
+    if not samples:
+        print("   ❌ Mastering failed: empty WAV file")
+        return False
+
+    print(
+        f"   🎛️  Mastering: multiband → stereo({stereo_width}×) → LUFS({target_lufs}) → clip"
+    )
+    mastered_left, mastered_right = master_stereo(
+        samples,
+        list(samples),
+        target_lufs=target_lufs,
+        stereo_width=stereo_width,
+        sample_rate=sample_rate,
+    )
+
+    mastered_wav = wav_path.replace(".wav", "_mastered.wav")
+    _write_stereo_wav(mastered_wav, mastered_left, mastered_right, sample_rate)
+
     try:
         subprocess.run(
             [
                 "ffmpeg",
                 "-y",
                 "-i",
-                wav_path,
-                "-af",
-                (
-                    "acompressor=threshold=-8dB:ratio=3:attack=5:release=100,"
-                    "equalizer=f=50:t=h:w=30:g=-1,"
-                    "equalizer=f=3000:t=h:w=2000:g=2,"
-                    "equalizer=f=10000:t=h:w=3000:g=1.5,"
-                    "alimiter=limit=0.97:attack=0.3:release=5"
-                ),
+                mastered_wav,
                 "-codec:a",
                 "libmp3lame",
                 "-b:a",
@@ -173,8 +209,57 @@ def master_to_mp3(wav_path: str, mp3_path: str) -> bool:
             check=True,
             capture_output=True,
         )
-        Path(wav_path).unlink(missing_ok=True)
+        Path(mastered_wav).unlink(missing_ok=True)
+        wav_file.unlink(missing_ok=True)
+        print(f"   ✅ Mastered to {mp3_path}")
         return True
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
-        print(f"   ❌ Mastering failed: {exc}")
+        Path(mastered_wav).unlink(missing_ok=True)
+        print(f"   ❌ MP3 encoding failed: {exc}")
         return False
+
+
+def _write_stereo_wav(
+    filename: str,
+    left: list[float],
+    right: list[float],
+    sample_rate: int,
+) -> None:
+    """Write stereo WAV file from two float channel lists.
+
+    Args:
+        filename: Output WAV file path.
+        left: Left channel samples in [-1.0, 1.0].
+        right: Right channel samples in [-1.0, 1.0].
+        sample_rate: Sample rate in Hz.
+    """
+    n_samples = min(len(left), len(right))
+    with wave.open(filename, "w") as wf:
+        wf.setnchannels(2)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        frames = bytearray()
+        for i in range(n_samples):
+            l_val = max(-32767, min(32767, int(left[i] * 32767)))
+            r_val = max(-32767, min(32767, int(right[i] * 32767)))
+            frames.extend(struct.pack("<hh", l_val, r_val))
+        wf.writeframes(bytes(frames))
+
+
+def calculate_vocal_durations(
+    vocals: list[GeneratedVocal],
+    sample_rate: int = TARGET_SAMPLE_RATE,
+) -> dict[str, float]:
+    """Calculate duration of each generated vocal section in seconds.
+
+    Maps each vocal's section_id to its audio length, enabling the ducking
+    engine to build sample-accurate gain envelopes.
+
+    Args:
+        vocals: List of generated vocal results from BarkVocalEngine.
+        sample_rate: Sample rate of vocal audio (default TARGET_SAMPLE_RATE).
+
+    Returns:
+        Dict mapping section_id → duration in seconds.
+    """
+    return {vocal.section_id: len(vocal.samples) / sample_rate for vocal in vocals}

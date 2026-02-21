@@ -1,7 +1,7 @@
 """SoundFont-based instrument rendering via FluidSynth.
 
 Provides high-quality sampled instruments using General MIDI SoundFonts.
-Falls back gracefully to synth instruments when FluidSynth is unavailable.
+FluidSynth is required for all ``sf:*`` instruments — no fallback to DSP.
 """
 
 from __future__ import annotations
@@ -10,12 +10,12 @@ import struct
 import subprocess
 import tempfile
 import wave
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from instrumental_engine.constants import SAMPLE_RATE, midi_to_freq
-from instrumental_engine.models import GMProgram, InstrumentRenderer
+from instrumental_engine.constants import SAMPLE_RATE
+from instrumental_engine.models import GMProgram
 
 
 FLUIDSYNTH_CHECK_CMD: Final[str] = "fluidsynth"
@@ -28,24 +28,48 @@ DEFAULT_SOUNDFONT_PATHS: Final[tuple[str, ...]] = (
 )
 
 
-def find_soundfont() -> Path | None:
+def find_soundfont() -> Path:
     """Locate a SoundFont file on the system.
 
+    Searches known paths and the ``soundfonts/`` directory for ``.sf2`` files.
+
     Returns:
-        Path to SoundFont file, or None if not found.
+        Path to the first discovered SoundFont file.
+
+    Raises:
+        FileNotFoundError: With download instructions if no SoundFont found.
     """
     for sf_path in DEFAULT_SOUNDFONT_PATHS:
         path = Path(sf_path)
         if path.exists():
             return path
-    return None
+
+    sf_dir = Path("soundfonts")
+    if sf_dir.is_dir():
+        discovered = sorted(sf_dir.glob("*.sf2"))
+        if discovered:
+            return discovered[0]
+
+    raise FileNotFoundError(
+        "No SoundFont (.sf2) files found.\n"
+        "\n"
+        "Place a General MIDI SoundFont in the 'soundfonts/' directory:\n"
+        "  soundfonts/FluidR3_GM.sf2\n"
+        "\n"
+        "Recommended downloads:\n"
+        "  FluidR3_GM.sf2 (~140 MB): "
+        "https://member.keymusician.com/Member/FluidR3_GM/FluidR3_GM.sf2\n"
+        "  GeneralUser_GS.sf2 (~30 MB): https://generaluser.sourceforge.io/\n"
+        "\n"
+        "See docs/soundfont_setup.md for the complete setup guide."
+    )
 
 
 def is_fluidsynth_available() -> bool:
-    """Check if FluidSynth CLI is available.
+    """Check if FluidSynth CLI is available on PATH.
 
     Returns:
-        True if fluidsynth command is accessible.
+        True if fluidsynth command is accessible, False otherwise.
     """
     try:
         subprocess.run(
@@ -58,7 +82,34 @@ def is_fluidsynth_available() -> bool:
         return False
 
 
-def _write_midi_file(
+def require_fluidsynth() -> None:
+    """Require FluidSynth to be installed or raise with instructions.
+
+    Raises:
+        RuntimeError: With OS-specific installation instructions.
+    """
+    if is_fluidsynth_available():
+        return
+
+    raise RuntimeError(
+        "FluidSynth is required but not found on PATH.\n"
+        "\n"
+        "Install FluidSynth:\n"
+        "  Windows:  winget install FluidSynth.FluidSynth\n"
+        "  macOS:    brew install fluid-synth\n"
+        "  Linux:    sudo apt-get install -y fluidsynth\n"
+        "\n"
+        "Manual download: "
+        "https://github.com/FluidSynth/fluidsynth/releases\n"
+        "\n"
+        "After installation, restart your terminal and verify:\n"
+        "  fluidsynth --version\n"
+        "\n"
+        "See docs/soundfont_setup.md for the complete setup guide."
+    )
+
+
+def write_midi_file(
     midi_path: Path,
     notes: list[tuple[int, float, float, float]],
     program: int,
@@ -257,7 +308,7 @@ class SoundFontRenderer:
             midi_path = tmp / "input.mid"
             wav_path = tmp / "output.wav"
 
-            _write_midi_file(midi_path, notes, int(self.gm_program))
+            write_midi_file(midi_path, notes, int(self.gm_program))
 
             try:
                 subprocess.run(

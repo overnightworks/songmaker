@@ -20,6 +20,7 @@ from bark_engine import (
     BarkVocalEngine,
     VocalSection,
     VocalStyle,
+    calculate_vocal_durations,
     read_wav_file,
     write_wav_file,
     overlay_audio,
@@ -40,6 +41,7 @@ from instrumental_engine import (
     Rest,
     SectionType,
     SongSection,
+    apply_ducking,
     render_and_export,
     render_arrangement,
     SAMPLE_RATE,
@@ -662,6 +664,18 @@ VOCAL_PLACEMENT: Final[list[tuple[str, float]]] = [
 # ═══════════════════════════════════════════════════════════════════
 
 
+def _vocal_placement_in_seconds() -> list[tuple[str, float]]:
+    """Convert beat-based vocal placement to seconds for ducking engine.
+
+    Returns:
+        List of (section_id, start_seconds) tuples.
+    """
+    return [
+        (section_id, start_beat * SECONDS_PER_BEAT)
+        for section_id, start_beat in VOCAL_PLACEMENT
+    ]
+
+
 def main() -> None:
     """Generate the complete 'Download Days' track."""
     start_time = time.time()
@@ -690,10 +704,25 @@ def main() -> None:
     generated_vocals = engine.generate_vocals(VOCALS)
     engine.cleanup()
 
-    # ── Step 3: Mix vocals onto instrumental ──
-    print("\n🎚️  Step 3: Mixing vocals onto instrumental...")
+    # ── Step 3: Apply ducking to instrumental ──
+    print("\n🎚️  Step 3: Applying vocal ducking...")
+    vocal_durations = calculate_vocal_durations(generated_vocals)
+    vocal_placement_seconds = _vocal_placement_in_seconds()
+    ducked_left, ducked_right = apply_ducking(
+        instrumental_left,
+        instrumental_right,
+        vocal_placement_seconds,
+        vocal_durations,
+        reduction_db=-3.0,
+        attack_seconds=0.05,
+        release_seconds=0.2,
+    )
+    ducked_mono = stereo_to_mono(ducked_left, ducked_right)
+
+    # ── Step 4: Mix vocals onto ducked instrumental ──
+    print("\n🎤 Step 4: Mixing vocals onto ducked instrumental...")
     vocal_lookup = {v.section_id: v for v in generated_vocals}
-    mixed = list(instrumental_mono)
+    mixed = list(ducked_mono)
 
     for section_id, start_beat in VOCAL_PLACEMENT:
         vocal = vocal_lookup.get(section_id)
@@ -707,8 +736,8 @@ def main() -> None:
         vocal_dur = len(vocal.samples) / SAMPLE_RATE
         print(f"   🎤 {section_id}: placed at beat {start_beat:.0f} ({vocal_dur:.1f}s)")
 
-    # ── Step 4: Normalize and master ──
-    print("\n💿 Step 4: Mastering to MP3...")
+    # ── Step 5: Normalize and master ──
+    print("\n💿 Step 5: Mastering to MP3...")
     mixed = normalize_audio(mixed, 0.95)
     mixed_wav = str(OUTPUT_DIR / f"{OUTPUT_NAME}_mixed.wav")
     write_wav_file(mixed_wav, mixed)

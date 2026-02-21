@@ -43,7 +43,7 @@ from instrumental_engine.models import (
 from instrumental_engine.soundfont_engine import (
     SoundFontRenderer,
     find_soundfont,
-    is_fluidsynth_available,
+    require_fluidsynth,
 )
 from instrumental_engine.synth_instruments import (
     DistortedGuitarSynth,
@@ -80,28 +80,43 @@ SYNTH_REGISTRY: Final[dict[str, InstrumentRenderer]] = {
 def _resolve_instrument(
     instrument_id: str, track: InstrumentTrack
 ) -> InstrumentRenderer:
-    """Resolve instrument ID to a renderer, preferring SoundFont when available.
+    """Resolve instrument ID to a renderer.
+
+    For ``sf:*`` instruments, requires FluidSynth and a SoundFont file.
+    Raises descriptive errors with setup instructions if unavailable.
+
+    For DSP synth instruments, returns the registered synth directly.
 
     Args:
         instrument_id: Instrument identifier string.
-        track: Track configuration for fallback GM program info.
+        track: Track configuration with GM program info.
 
     Returns:
         An InstrumentRenderer implementation.
+
+    Raises:
+        RuntimeError: If ``sf:*`` requested but FluidSynth not installed.
+        FileNotFoundError: If ``sf:*`` requested but no SoundFont found.
+        ValueError: If instrument_id is not recognized.
     """
-    if instrument_id.startswith("sf:") and is_fluidsynth_available():
+    if instrument_id.startswith("sf:"):
+        require_fluidsynth()
         sf_path = find_soundfont()
-        if sf_path is not None:
-            return SoundFontRenderer(
-                soundfont_path=sf_path,
-                gm_program=track.gm_program,
-            )
+        return SoundFontRenderer(
+            soundfont_path=sf_path,
+            gm_program=track.gm_program,
+        )
 
     synth = SYNTH_REGISTRY.get(instrument_id)
     if synth is not None:
         return synth
 
-    return PianoSynth()
+    available = ", ".join(sorted(SYNTH_REGISTRY.keys()))
+    raise ValueError(
+        f"Unknown instrument_id: {instrument_id!r}. "
+        f"Available DSP synths: {available}. "
+        f"For SoundFont instruments, use 'sf:' prefix (e.g. 'sf:piano')."
+    )
 
 
 def render_track(track: InstrumentTrack, bpm: int, total_beats: float) -> RenderedTrack:

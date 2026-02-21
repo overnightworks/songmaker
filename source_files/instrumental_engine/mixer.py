@@ -1,7 +1,9 @@
 """Stereo mixing engine for combining instrument tracks.
 
 Handles stereo panning, volume control, and final mix-down
-with limiting and normalization.
+with limiting and normalization. Mastering uses a professional
+chain: multiband compression → stereo widening → LUFS normalization
+→ soft clipping → MP3 encoding via ffmpeg.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from pathlib import Path
 from typing import Final
 
 from instrumental_engine.constants import SAMPLE_RATE
+from instrumental_engine.mastering import master_stereo
 from instrumental_engine.models import PAN_VALUES, PanPosition, RenderedTrack
 
 
@@ -247,30 +250,53 @@ def apply_fade_out_stereo(
 def master_to_mp3(
     wav_path: str,
     mp3_path: str,
+    target_lufs: float = -14.0,
+    stereo_width: float = 1.2,
     bitrate: str = "192k",
 ) -> bool:
-    """Master and encode WAV to MP3 via ffmpeg.
+    """Master WAV to MP3 with professional mastering chain.
 
-    Applies multiband compression, EQ, and limiting.
+    Replaces the old ffmpeg-filter-only approach with a full DSP pipeline:
+        1. Load stereo WAV
+        2. Apply mastering (multiband compression → stereo widening →
+           LUFS normalization → soft clipping)
+        3. Write mastered audio to temporary WAV
+        4. Encode to MP3 via ffmpeg (192kbps)
+        5. Clean up temporary and source WAV files
 
     Args:
         wav_path: Input WAV file path.
         mp3_path: Output MP3 file path.
+        target_lufs: Target integrated LUFS (-14.0 for streaming platforms).
+        stereo_width: Stereo width multiplier (1.0 = unchanged, 1.2 = wider).
         bitrate: MP3 encoding bitrate.
 
     Returns:
-        True if successful.
+        True if mastering and encoding succeeded.
     """
-    filter_chain = ",".join(
-        [
-            "acompressor=threshold=-8dB:ratio=3:attack=5:release=100",
-            "equalizer=f=50:t=h:w=30:g=-1",
-            "equalizer=f=200:t=h:w=100:g=1",
-            "equalizer=f=3000:t=h:w=2000:g=2",
-            "equalizer=f=10000:t=h:w=3000:g=1.5",
-            "alimiter=limit=0.97:attack=0.3:release=5",
-        ]
+    wav_file = Path(wav_path)
+    if not wav_file.exists():
+        print(f"   ❌ Mastering failed: WAV file not found: {wav_path}")
+        return False
+
+    left, right, sample_rate = _read_stereo_wav(wav_path)
+    if not left or not right:
+        print("   ❌ Mastering failed: empty or invalid WAV file")
+        return False
+
+    print(
+        f"   🎛️  Mastering: multiband → stereo({stereo_width}×) → LUFS({target_lufs}) → clip"
     )
+    mastered_left, mastered_right = master_stereo(
+        left,
+        right,
+        target_lufs=target_lufs,
+        stereo_width=stereo_width,
+        sample_rate=sample_rate,
+    )
+
+    mastered_wav = wav_path.replace(".wav", "_mastered.wav")
+    write_stereo_wav(mastered_wav, mastered_left, mastered_right, sample_rate)
 
     try:
         subprocess.run(
@@ -278,9 +304,7 @@ def master_to_mp3(
                 "ffmpeg",
                 "-y",
                 "-i",
-                wav_path,
-                "-af",
-                filter_chain,
+                mastered_wav,
                 "-codec:a",
                 "libmp3lame",
                 "-b:a",
@@ -290,8 +314,56 @@ def master_to_mp3(
             check=True,
             capture_output=True,
         )
-        Path(wav_path).unlink(missing_ok=True)
+        Path(mastered_wav).unlink(missing_ok=True)
+        wav_file.unlink(missing_ok=True)
+        print(f"   ✅ Mastered to {mp3_path}")
         return True
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
-        print(f"   ❌ Mastering failed: {exc}")
+        Path(mastered_wav).unlink(missing_ok=True)
+        print(f"   ❌ MP3 encoding failed: {exc}")
         return False
+
+
+def _read_stereo_wav(filename: str) -> tuple[list[float], list[float], int]:
+    """Read stereo WAV file to separate float channel lists.
+
+    Handles mono files by duplicating to both channels.
+
+    Args:
+        filename: Input WAV file path.
+
+    Returns:
+        Tuple of (left_samples, right_samples, sample_rate).
+    """
+    with wave.open(filename, "r") as wf:
+        n_channels = wf.getnchannels()
+        sample_width = wf.getsampwidth()
+        sample_rate = wf.getframerate()
+        n_frames = wf.getnframes()
+        raw = wf.readframes(n_frames)
+
+    left: list[float] = []
+    right: list[float] = []
+
+    if sample_width == 2:
+        step = 2 * n_channels
+        for i in range(0, len(raw), step):
+            l_val = struct.unpack("<h", raw[i : i + 2])[0] / 32767.0
+            left.append(l_val)
+            if n_channels >= 2:
+                r_val = struct.unpack("<h", raw[i + 2 : i + 4])[0] / 32767.0
+                right.append(r_val)
+            else:
+                right.append(l_val)
+    elif sample_width == 1:
+        step = n_channels
+        for i in range(0, len(raw), step):
+            l_val = (raw[i] - 128) / 128.0
+            left.append(l_val)
+            if n_channels >= 2:
+                r_val = (raw[i + 1] - 128) / 128.0
+                right.append(r_val)
+            else:
+                right.append(l_val)
+
+    return left, right, sample_rate

@@ -37,6 +37,10 @@ class VocalSection:
         singing: Whether to add ♪ markers for Bark singing mode.
         volume: Relative volume multiplier (0.0 - 1.0).
         gap_after_seconds: Silence gap after this section in seconds.
+        num_takes: Number of takes to generate; best is auto-selected.
+        pitch_correction_intensity: Correction strength (0.0=off, 1.0=hard snap).
+        pitch_correction_key: Musical key for pitch quantization (C, C#, D, etc.).
+        pitch_correction_scale: Scale type for quantization (major, minor, chromatic).
     """
 
     section_id: str
@@ -47,6 +51,10 @@ class VocalSection:
     singing: bool = True
     volume: float = 1.0
     gap_after_seconds: float = 0.5
+    num_takes: int = 3
+    pitch_correction_intensity: float = 0.7
+    pitch_correction_key: str = "C"
+    pitch_correction_scale: str = "minor"
 
 
 @dataclass(frozen=True)
