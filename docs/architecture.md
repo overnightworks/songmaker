@@ -63,7 +63,11 @@ source_files/
 │   ├── converter.py             # XTTSConverter — subprocess-based
 │   └── _xtts_infer.py           # Inference script (runs in Python 3.12)
 │
-└── (future: ai_engine/, stem_separator/)
+├── ai_engine/                   # MusicGen AI instrumentals (isolated venv)
+│   ├── musicgen_renderer.py     # MusicGenRenderer — VRAM-aware model selection
+│   └── _musicgen_infer.py       # Inference script (runs in Python 3.12)
+│
+└── (future: stem_separator/)
 ```
 
 ---
