@@ -67,7 +67,9 @@ source_files/
 │   ├── musicgen_renderer.py     # MusicGenRenderer — VRAM-aware model selection
 │   └── _musicgen_infer.py       # Inference script (runs in Python 3.12)
 │
-└── (future: stem_separator/)
+└── stem_separator/              # Demucs stem separation (isolated venv)
+    ├── demucs_separator.py      # DemucsSeparator — 4-stem audio splitter
+    └── _demucs_infer.py         # Inference script (runs in Python 3.12)
 ```
 
 ---
