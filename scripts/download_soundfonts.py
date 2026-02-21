@@ -5,9 +5,9 @@ General MIDI SoundFont files. These are large binary files (~150-400 MB)
 that are gitignored.
 
 Usage:
-    python download_soundfonts.py           # Download all recommended
-    python download_soundfonts.py --list    # Show available SoundFonts
-    python download_soundfonts.py fluidr3   # Download specific one
+    python scripts/download_soundfonts.py           # Download all recommended
+    python scripts/download_soundfonts.py --list    # Show available SoundFonts
+    python scripts/download_soundfonts.py fluidr3   # Download specific one
 
 Prerequisites:
     - Internet connection
@@ -23,7 +23,8 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-SOUNDFONTS_DIR = Path("soundfonts")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SOUNDFONTS_DIR = PROJECT_ROOT / "soundfonts"
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,8 @@ from pathlib import Path
 import re
 import sys
 
-VENV = Path(".venv")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+VENV = PROJECT_ROOT / ".venv"
 FAIRSEQ_DIR = VENV / "Lib" / "site-packages" / "fairseq"
 INIT = FAIRSEQ_DIR / "__init__.py"
 

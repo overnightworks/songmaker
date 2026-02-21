@@ -25,7 +25,7 @@ py -3.12 -m venv .venv && .venv/Scripts/activate
 pip install -e .              # All core + RVC deps
 # ffmpeg must be on PATH (for MP3 encoding + vocal processing)
 # Optional: FluidSynth + SoundFont (.sf2) for realistic instruments
-# Optional: python download_soundfonts.py  (download high-quality SoundFonts)
+# Optional: python scripts/download_soundfonts.py  (download high-quality SoundFonts)
 ```
 
 ## Architecture
@@ -115,10 +115,9 @@ d:/songmaker/
 **Lyrics theme**: Surrender and freedom — the moment you stop gripping your life and discover the fall IS the destination. Physical imagery (walls, air, windows, birds, city lights). No nostalgia — pure present-tense sensation.
 │       └── output/                    ← Generated MP3 files
 │
+├── scripts/                           ← Utility scripts (download_soundfonts, patch_fairseq, etc.)
 ├── soundfonts/                        ← SoundFont .sf2 files (for FluidSynth)
-├── docs/                              ← Setup guides (soundfont_setup.md, etc.)
-├── examples/                          ← Example/test scripts
-├── plans/                             ← Technical specifications
+├── docs/                              ← Setup guides (soundfont_setup.md, architecture.md)
 └── tests/                             ← Unit tests
 ```
 

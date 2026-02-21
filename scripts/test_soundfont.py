@@ -4,20 +4,17 @@ Renders two musical examples using SoundFont instruments via FluidSynth:
 1. C major scale (C4–C5) with sf:piano (GM program 0)
 2. Chord progression (C–F–G–C) with sf:strings (GM program 48)
 
-Exports to examples/soundfont_test.mp3.
+Exports to scripts/soundfont_test.mp3.
 
 Usage::
 
-    python examples/test_soundfont.py
+    python scripts/test_soundfont.py
 """
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Final
-
-sys.path.insert(0, "source_files")
 
 from instrumental_engine import (
     Arrangement,

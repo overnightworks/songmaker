@@ -117,5 +117,5 @@ pythonpath = ["source_files"]
 #   FluidSynth  — SoundFont instrument rendering (optional)
 #
 # SoundFonts:
-#   python download_soundfonts.py
+#   python scripts/download_soundfonts.py
 # ---------------------------------------------------------------

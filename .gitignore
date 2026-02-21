@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# MC Tobbisch Birthday Album — Git Ignore
+# Songmaker — Git Ignore
 # ═══════════════════════════════════════════════════════════════
 
 # Generated audio output (large binary files)
@@ -59,6 +59,9 @@ soundfonts/*.sf2
 *.pt
 *.pth
 *.ckpt
+
+# Planning docs (stale specs, already implemented)
+plans/
 
 # Legacy sources (archived, not needed for new development)
 albums/*/legacy_sources/
