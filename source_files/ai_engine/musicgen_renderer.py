@@ -14,8 +14,11 @@ with crossfading.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Final
+
+logger = logging.getLogger(__name__)
 
 MUSICGEN_SAMPLE_RATE: Final[int] = 32000
 TARGET_SAMPLE_RATE: Final[int] = 44100
@@ -130,17 +133,17 @@ class MusicGenRenderer:
             If output_path is provided, also saves to that path.
         """
         if not self.is_ready:
-            print("   MusicGen not ready, skipping generation")
+            logger.warning("MusicGen not ready, skipping generation")
             return None
 
         try:
             import torchaudio
 
-            print(
-                f"   MusicGen generating: {self._model_name} "
-                f"({duration_seconds:.0f}s)..."
+            logger.info(
+                "MusicGen generating: %s (%.0fs)...",
+                self._model_name, duration_seconds,
             )
-            print(f"   Prompt: {prompt[:80]}...")
+            logger.debug("Prompt: %s...", prompt[:80])
 
             model = self._get_model()
             model.set_generation_params(duration=min(duration_seconds, 30.0))
@@ -171,11 +174,11 @@ class MusicGenRenderer:
 
                 write_wav_file(output_path, samples, TARGET_SAMPLE_RATE)
 
-            print(f"   MusicGen generation complete ({len(samples)/TARGET_SAMPLE_RATE:.1f}s)")
+            logger.info("MusicGen generation complete (%.1fs)", len(samples) / TARGET_SAMPLE_RATE)
             return samples
 
         except Exception as exc:
-            print(f"   MusicGen failed: {exc}")
+            logger.error("MusicGen failed: %s", exc)
             return None
 
     def generate_sections(
@@ -203,7 +206,7 @@ class MusicGenRenderer:
         crossfade_samples = int(crossfade_seconds * TARGET_SAMPLE_RATE)
 
         for i, (prompt, duration) in enumerate(prompts):
-            print(f"   Segment {i+1}/{len(prompts)}:")
+            logger.info("Segment %d/%d:", i + 1, len(prompts))
             segment = self.generate(prompt, duration, temp_dir=temp_dir)
             if segment is None:
                 continue

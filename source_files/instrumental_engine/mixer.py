@@ -8,6 +8,7 @@ chain: multiband compression → stereo widening → LUFS normalization
 
 from __future__ import annotations
 
+import logging
 import math
 import struct
 import subprocess
@@ -18,6 +19,8 @@ from typing import Final
 from instrumental_engine.constants import SAMPLE_RATE
 from instrumental_engine.mastering import master_stereo
 from instrumental_engine.models import PAN_VALUES, PanPosition, RenderedTrack
+
+logger = logging.getLogger(__name__)
 
 LIMITER_THRESHOLD: Final[float] = 0.95
 LIMITER_RATIO: Final[float] = 4.0
@@ -275,16 +278,17 @@ def master_to_mp3(
     """
     wav_file = Path(wav_path)
     if not wav_file.exists():
-        print(f"   ❌ Mastering failed: WAV file not found: {wav_path}")
+        logger.error("Mastering failed: WAV file not found: %s", wav_path)
         return False
 
     left, right, sample_rate = _read_stereo_wav(wav_path)
     if not left or not right:
-        print("   ❌ Mastering failed: empty or invalid WAV file")
+        logger.error("Mastering failed: empty or invalid WAV file")
         return False
 
-    print(
-        f"   🎛️  Mastering: multiband → stereo({stereo_width}×) → LUFS({target_lufs}) → clip"
+    logger.info(
+        "Mastering: multiband -> stereo(%.1fx) -> LUFS(%.1f) -> clip",
+        stereo_width, target_lufs,
     )
     mastered_left, mastered_right = master_stereo(
         left,
@@ -315,11 +319,11 @@ def master_to_mp3(
         )
         Path(mastered_wav).unlink(missing_ok=True)
         wav_file.unlink(missing_ok=True)
-        print(f"   ✅ Mastered to {mp3_path}")
+        logger.info("Mastered to %s", mp3_path)
         return True
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
         Path(mastered_wav).unlink(missing_ok=True)
-        print(f"   ❌ MP3 encoding failed: {exc}")
+        logger.error("MP3 encoding failed: %s", exc)
         return False
 
 

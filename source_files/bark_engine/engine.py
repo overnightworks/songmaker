@@ -13,6 +13,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -37,6 +38,8 @@ from bark_engine.text_processing import (
     split_text_into_chunks,
 )
 from bark_engine.vocal_filters import VOCAL_FILTERS
+
+logger = logging.getLogger(__name__)
 
 VOCAL_CACHE_DIR_NAME: str = "_vocal_cache"
 
@@ -118,10 +121,10 @@ class BarkVocalEngine:
         from bark import preload_models
 
         device = "GPU (CUDA)" if torch.cuda.is_available() else "CPU"
-        print(f"   🔄 Loading Bark models ({device}, small)...")
+        logger.info("Loading Bark models (%s, small)...", device)
         preload_models()
         self._models_loaded = True
-        print("   ✅ Bark models loaded")
+        logger.info("Bark models loaded")
 
     def generate_vocals(self, sections: list[VocalSection]) -> list[GeneratedVocal]:
         """Generate singing vocals for all sections with multi-take selection.
@@ -228,7 +231,7 @@ class BarkVocalEngine:
             samples, _ = read_wav_file(str(wav_path))
             if not samples:
                 return None
-            print(f"   ⚡ Cache hit: {section.section_id} (skipping generation)")
+            logger.info("Cache hit: %s (skipping generation)", section.section_id)
             return GeneratedVocal(
                 section_id=section.section_id,
                 samples=samples,
@@ -263,9 +266,9 @@ class BarkVocalEngine:
             self._cache_meta_path(section).write_text(
                 json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
             )
-            print(f"   💾 Cached: {section.section_id}")
+            logger.info("Cached: %s", section.section_id)
         except Exception as exc:
-            print(f"   ⚠️  Cache write failed for {section.section_id}: {exc}")
+            logger.warning("Cache write failed for %s: %s", section.section_id, exc)
 
     def _generate_with_take_selection(self, section: VocalSection) -> list[float]:
         """Generate multiple takes and select the best one.
@@ -283,9 +286,9 @@ class BarkVocalEngine:
 
         for take_idx in range(num_takes):
             take_number = take_idx + 1
-            print(
-                f"   🎤 Generating: {section.section_id} "
-                f"(take {take_number}/{num_takes})..."
+            logger.info(
+                "Generating: %s (take %d/%d)...",
+                section.section_id, take_number, num_takes,
             )
 
             raw_samples = self._generate_section_audio(section)
@@ -331,11 +334,11 @@ class BarkVocalEngine:
         if section.pitch_correction_intensity <= 0.0:
             return samples
 
-        print(
-            f"      🎵 Pitch correction "
-            f"({section.pitch_correction_key} "
-            f"{section.pitch_correction_scale}, "
-            f"intensity={section.pitch_correction_intensity:.1f})..."
+        logger.info(
+            "Pitch correction (%s %s, intensity=%.1f)...",
+            section.pitch_correction_key,
+            section.pitch_correction_scale,
+            section.pitch_correction_intensity,
         )
 
         return apply_pitch_correction(
@@ -388,9 +391,9 @@ class BarkVocalEngine:
         crossfade_samples = int(BARK_SAMPLE_RATE * 0.05)
 
         for chunk_idx, chunk_text in enumerate(chunks):
-            print(
-                f"      📝 Chunk {chunk_idx + 1}/{len(chunks)}: "
-                f"{chunk_text[:50]}..."
+            logger.debug(
+                "Chunk %d/%d: %s...",
+                chunk_idx + 1, len(chunks), chunk_text[:50],
             )
 
             if section.singing and not chunk_text.startswith("♪"):
@@ -478,13 +481,13 @@ class BarkVocalEngine:
         try:
             from rvc_engine import RVCConverter, is_rvc_available
         except ImportError:
-            print("   ⚠️  rvc_engine not found, skipping RVC")
+            logger.warning("rvc_engine not found, skipping RVC")
             return samples
 
         if not is_rvc_available():
-            print(
-                f"   ⚠️  RVC not available for {section.section_id} "
-                f"(run: uv sync)"
+            logger.warning(
+                "RVC not available for %s (run: uv sync)",
+                section.section_id,
             )
             return samples
 
@@ -503,7 +506,7 @@ class BarkVocalEngine:
         if result is not None:
             return result
 
-        print("   ⚠️  RVC conversion failed, using original audio")
+        logger.warning("RVC conversion failed, using original audio")
         return samples
 
     @staticmethod
@@ -546,12 +549,12 @@ class BarkVocalEngine:
         try:
             from xtts_engine import XTTSConverter, is_xtts_available
         except ImportError:
-            print("   xtts_engine not found, falling back to Bark")
+            logger.warning("xtts_engine not found, falling back to Bark")
             self.preload_models()
             return self._generate_with_take_selection(section)
 
         if not is_xtts_available():
-            print("   XTTS not available, falling back to Bark")
+            logger.warning("XTTS not available, falling back to Bark")
             self.preload_models()
             return self._generate_with_take_selection(section)
 
@@ -571,7 +574,7 @@ class BarkVocalEngine:
         if result is not None:
             return result
 
-        print("   XTTS synthesis failed, falling back to Bark")
+        logger.warning("XTTS synthesis failed, falling back to Bark")
         self.preload_models()
         return self._generate_with_take_selection(section)
 

@@ -9,8 +9,11 @@ GPU auto-detection: CUDA when available, CPU fallback.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Final
+
+logger = logging.getLogger(__name__)
 
 RVC_MODELS_DIR: Final[str] = "rvc_models"
 
@@ -109,9 +112,9 @@ class RVCConverter:
         # Validate model exists
         self._model_path, self._index_path = _find_model(model_name)
         if self._model_path is None:
-            print(
-                f"   Warning: RVC model '{model_name}' not found. "
-                f"Place .pth file in {RVC_MODELS_DIR}/"
+            logger.warning(
+                "RVC model '%s' not found. Place .pth file in %s/",
+                model_name, RVC_MODELS_DIR,
             )
 
         # Lazy-loaded RVC instance (heavy — loads torch + model)
@@ -174,13 +177,13 @@ class RVCConverter:
             True if conversion succeeded.
         """
         if not self.is_ready:
-            print("   Warning: RVC not ready, skipping voice conversion")
+            logger.warning("RVC not ready, skipping voice conversion")
             return False
 
         try:
-            print(
-                f"   RVC converting: {self.model_name} "
-                f"(pitch={self.pitch_shift:+d}, f0={self.f0_method})..."
+            logger.info(
+                "RVC converting: %s (pitch=%+d, f0=%s)...",
+                self.model_name, self.pitch_shift, self.f0_method,
             )
 
             rvc = self._get_rvc()
@@ -190,14 +193,14 @@ class RVCConverter:
             )
 
             if Path(output_path).exists():
-                print("   RVC conversion complete")
+                logger.info("RVC conversion complete")
                 return True
             else:
-                print("   RVC output file not created")
+                logger.error("RVC output file not created")
                 return False
 
         except Exception as exc:
-            print(f"   RVC failed: {exc}")
+            logger.error("RVC failed: %s", exc)
             return False
 
     def convert_samples(

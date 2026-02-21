@@ -6,6 +6,7 @@ FluidSynth is required for all ``sf:*`` instruments — no fallback to DSP.
 
 from __future__ import annotations
 
+import logging
 import struct
 import subprocess
 import tempfile
@@ -16,6 +17,8 @@ from typing import Final
 
 from instrumental_engine.constants import SAMPLE_RATE
 from instrumental_engine.models import GMProgram
+
+logger = logging.getLogger(__name__)
 
 FLUIDSYNTH_CHECK_CMD: Final[str] = "fluidsynth"
 
@@ -364,7 +367,7 @@ class SoundFontRenderer:
                     timeout=30,
                 )
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-                print(f"   ⚠️  FluidSynth render failed: {exc}")
+                logger.warning("FluidSynth render failed: %s", exc)
                 return [0.0] * int(total_duration * SAMPLE_RATE)
 
             if wav_path.exists():

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import struct
 import subprocess
 import wave
@@ -12,6 +13,8 @@ import numpy as np
 from instrumental_engine.mastering import master_stereo
 
 from bark_engine.constants import TARGET_SAMPLE_RATE
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from bark_engine.models import GeneratedVocal
@@ -171,16 +174,17 @@ def master_to_mp3(
     """
     wav_file = Path(wav_path)
     if not wav_file.exists():
-        print(f"   ❌ Mastering failed: WAV file not found: {wav_path}")
+        logger.error("Mastering failed: WAV file not found: %s", wav_path)
         return False
 
     samples, sample_rate = read_wav_file(wav_path)
     if not samples:
-        print("   ❌ Mastering failed: empty WAV file")
+        logger.error("Mastering failed: empty WAV file")
         return False
 
-    print(
-        f"   🎛️  Mastering: multiband → stereo({stereo_width}×) → LUFS({target_lufs}) → clip"
+    logger.info(
+        "Mastering: multiband -> stereo(%.1fx) -> LUFS(%.1f) -> clip",
+        stereo_width, target_lufs,
     )
     mastered_left, mastered_right = master_stereo(
         samples,
@@ -211,11 +215,11 @@ def master_to_mp3(
         )
         Path(mastered_wav).unlink(missing_ok=True)
         wav_file.unlink(missing_ok=True)
-        print(f"   ✅ Mastered to {mp3_path}")
+        logger.info("Mastered to %s", mp3_path)
         return True
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
         Path(mastered_wav).unlink(missing_ok=True)
-        print(f"   ❌ MP3 encoding failed: {exc}")
+        logger.error("MP3 encoding failed: %s", exc)
         return False
 
 

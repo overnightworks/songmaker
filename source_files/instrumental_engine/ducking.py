@@ -12,10 +12,13 @@ Architecture:
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import Final
 
 from instrumental_engine.constants import SAMPLE_RATE
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_REDUCTION_DB: Final[float] = -3.0
 DEFAULT_ATTACK_SECONDS: Final[float] = 0.05
@@ -188,9 +191,10 @@ def apply_ducking(
     ducked_right = [sample * envelope[i] for i, sample in enumerate(instrumental_right)]
 
     ducked_regions = sum(1 for s, e in vocal_regions if s < total_samples)
-    print(
-        f"   📉 Ducking: {reduction_db:.1f}dB across {ducked_regions} vocal regions "
-        f"(attack={attack_seconds * 1000:.0f}ms, release={release_seconds * 1000:.0f}ms)"
+    logger.info(
+        "Ducking: %.1fdB across %d vocal regions (attack=%.0fms, release=%.0fms)",
+        reduction_db, ducked_regions,
+        attack_seconds * 1000, release_seconds * 1000,
     )
 
     return ducked_left, ducked_right

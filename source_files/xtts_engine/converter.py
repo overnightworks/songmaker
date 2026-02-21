@@ -11,8 +11,11 @@ Zero-shot voice cloning from a ~6 second reference audio clip.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Final
+
+logger = logging.getLogger(__name__)
 
 VOICE_REFS_DIR: Final[str] = "voice_refs"
 
@@ -89,9 +92,9 @@ class XTTSConverter:
         if voice_ref is not None:
             self._voice_ref_path = find_voice_ref(voice_ref)
             if self._voice_ref_path is None:
-                print(
-                    f"   Warning: Voice reference '{voice_ref}' not found. "
-                    f"Place a WAV file in {VOICE_REFS_DIR}/"
+                logger.warning(
+                    "Voice reference '%s' not found. Place a WAV file in %s/",
+                    voice_ref, VOICE_REFS_DIR,
                 )
 
         # Lazy-loaded TTS instance (heavy — downloads model on first use)
@@ -129,13 +132,13 @@ class XTTSConverter:
             True if synthesis succeeded.
         """
         if not self.is_ready:
-            print("   XTTS not ready, skipping synthesis")
+            logger.warning("XTTS not ready, skipping synthesis")
             return False
 
         try:
             lang = language or self.language
-            ref_info = f", voice={self._voice_ref_path.name}" if self._voice_ref_path else ""
-            print(f"   XTTS synthesizing: lang={lang}{ref_info}...")
+            ref_info = ", voice=%s" % self._voice_ref_path.name if self._voice_ref_path else ""
+            logger.info("XTTS synthesizing: lang=%s%s...", lang, ref_info)
 
             tts = self._get_tts()
 
@@ -151,14 +154,14 @@ class XTTSConverter:
             tts.tts_to_file(**kwargs)
 
             if Path(output_path).exists():
-                print("   XTTS synthesis complete")
+                logger.info("XTTS synthesis complete")
                 return True
             else:
-                print("   XTTS output file not created")
+                logger.error("XTTS output file not created")
                 return False
 
         except Exception as exc:
-            print(f"   XTTS failed: {exc}")
+            logger.error("XTTS failed: %s", exc)
             return False
 
     def synthesize_samples(

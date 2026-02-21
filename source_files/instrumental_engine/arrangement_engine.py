@@ -6,6 +6,7 @@ effects processing, and stereo mixing into finished instrumentals.
 
 from __future__ import annotations
 
+import logging
 from typing import Final
 
 from instrumental_engine.constants import SAMPLE_RATE, midi_to_freq
@@ -46,6 +47,8 @@ from instrumental_engine.synth_instruments import (
     SubBassSynth,
     SupersawSynth,
 )
+
+logger = logging.getLogger(__name__)
 
 SYNTH_REGISTRY: Final[dict[str, InstrumentRenderer]] = {
     "supersaw": SupersawSynth(),
@@ -243,7 +246,7 @@ def render_and_export(
     Returns:
         Path to the output file (MP3 if exported, else WAV).
     """
-    print(f"   🎵 Rendering: {arrangement.title}")
+    logger.info("Rendering: %s", arrangement.title)
     left, right = render_arrangement(arrangement)
 
     if fade_out_seconds > 0:
@@ -252,12 +255,12 @@ def render_and_export(
     wav_path = f"{output_path}.wav"
     write_stereo_wav(wav_path, left, right)
     duration = len(left) / SAMPLE_RATE
-    print(f"   ✅ WAV written: {wav_path} ({duration:.1f}s)")
+    logger.info("WAV written: %s (%.1fs)", wav_path, duration)
 
     if export_mp3:
         mp3_path = f"{output_path}.mp3"
         if master_to_mp3(wav_path, mp3_path):
-            print(f"   ✅ MP3 exported: {mp3_path}")
+            logger.info("MP3 exported: %s", mp3_path)
             return mp3_path
 
     return wav_path

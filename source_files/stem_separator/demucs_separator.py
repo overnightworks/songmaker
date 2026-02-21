@@ -6,9 +6,12 @@ VRAM: ~3 GB minimum. Use segment=7 for 6 GB GPUs.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
+
+logger = logging.getLogger(__name__)
 
 STEM_NAMES: Final[tuple[str, ...]] = ("drums", "bass", "other", "vocals")
 
@@ -103,7 +106,7 @@ class DemucsSeparator:
             SeparatedStems with audio for each stem, or None on failure.
         """
         if not self.is_ready:
-            print("   Demucs not ready, skipping separation")
+            logger.warning("Demucs not ready, skipping separation")
             return None
 
         try:
@@ -111,7 +114,7 @@ class DemucsSeparator:
             import torchaudio
             from demucs.apply import apply_model
 
-            print(f"   Demucs separating: {self.model_name}...")
+            logger.info("Demucs separating: %s...", self.model_name)
 
             model = self._get_model()
             device = next(model.parameters()).device
@@ -154,7 +157,7 @@ class DemucsSeparator:
                 stems[name] = samples
                 stem_path.unlink(missing_ok=True)
 
-            print("   Demucs separation complete")
+            logger.info("Demucs separation complete")
 
             return SeparatedStems(
                 vocals=stems.get("vocals", []),
@@ -165,5 +168,5 @@ class DemucsSeparator:
             )
 
         except Exception as exc:
-            print(f"   Demucs failed: {exc}")
+            logger.error("Demucs failed: %s", exc)
             return None

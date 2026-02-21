@@ -16,10 +16,13 @@ Scoring Metrics:
 from __future__ import annotations
 
 import json
+import logging
 import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Final
+
+logger = logging.getLogger(__name__)
 
 ENERGY_WEIGHT: Final[float] = 0.3
 SILENCE_WEIGHT: Final[float] = 0.3
@@ -261,22 +264,24 @@ def select_best_take(
 
     if verbose:
         for _, score in takes:
-            clipping_indicator = "⚠️" if score.clipping_detected else "✔️"
-            print(
-                f"      Take {score.take_number}: "
-                f"energy={score.energy_consistency:.2f} "
-                f"silence={score.silence_ratio:.2f} "
-                f"clip={clipping_indicator} "
-                f"duration={score.duration_match:.2f} "
-                f"→ composite={score.composite_score:.3f}"
+            clipping_indicator = "WARN" if score.clipping_detected else "OK"
+            logger.info(
+                "Take %d: energy=%.2f silence=%.2f clip=%s "
+                "duration=%.2f -> composite=%.3f",
+                score.take_number,
+                score.energy_consistency,
+                score.silence_ratio,
+                clipping_indicator,
+                score.duration_match,
+                score.composite_score,
             )
 
     best_samples, best_score = max(takes, key=lambda t: t[1].composite_score)
 
     if verbose:
-        print(
-            f"   ✅ Selected take {best_score.take_number} "
-            f"(score: {best_score.composite_score:.3f})"
+        logger.info(
+            "Selected take %d (score: %.3f)",
+            best_score.take_number, best_score.composite_score,
         )
 
     return best_samples, best_score
