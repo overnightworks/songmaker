@@ -533,6 +533,10 @@ class DiffSingerEngine:
             print("| Stage 1: Duration prediction")
             enc_out, x_masks = self._run_dur_linguistic(tensors)
             ph_dur = self._run_dur_predictor(enc_out, x_masks, tensors, voice)
+            # Enforce minimum phoneme duration for clear articulation
+            ph_dur = self._enforce_min_phoneme_dur(ph_dur, min_frames=8)
+            # Constrain total duration to match intended note durations
+            ph_dur = self._constrain_total_dur(ph_dur, tensors.n_frames)
             print(f"|   Predicted durations: {ph_dur[0].tolist()}")
         else:
             # Use hand-crafted durations
@@ -658,6 +662,68 @@ class DiffSingerEngine:
         sample_gains = np.interp(np.arange(n), centers, gains)
 
         return (waveform * sample_gains).astype(np.float32)
+
+    @staticmethod
+    def _enforce_min_phoneme_dur(
+        ph_dur: np.ndarray, min_frames: int = 8
+    ) -> np.ndarray:
+        """Enforce minimum duration per phoneme for clear articulation.
+
+        Very short phonemes (< ~93ms at hop=512/sr=44100) produce garbled,
+        unintelligible output. This stretches short phonemes to the minimum
+        and borrows frames from the longest neighbor to keep total stable.
+        """
+        dur = ph_dur.copy()
+        n = dur.shape[1]
+
+        for i in range(n):
+            if dur[0, i] < min_frames:
+                deficit = min_frames - dur[0, i]
+                dur[0, i] = min_frames
+                # Borrow from longest phoneme to keep total roughly stable
+                longest = int(np.argmax(dur[0]))
+                if dur[0, longest] > min_frames + deficit:
+                    dur[0, longest] -= deficit
+
+        return dur
+
+    @staticmethod
+    def _constrain_total_dur(
+        ph_dur: np.ndarray, target_frames: int
+    ) -> np.ndarray:
+        """Scale predicted phoneme durations so total matches intended duration.
+
+        DiffSinger's duration predictor often outputs significantly more frames
+        than the intended note durations, causing phrases to overshoot their
+        beat windows and overlap. This rescales proportionally while preserving
+        the minimum phoneme duration.
+        """
+        dur = ph_dur.copy()
+        predicted_total = int(dur.sum())
+        if predicted_total <= 0 or target_frames <= 0:
+            return dur
+
+        ratio = target_frames / predicted_total
+        if abs(ratio - 1.0) < 0.05:
+            # Close enough — just adjust the longest
+            diff = target_frames - predicted_total
+            if diff != 0:
+                longest = int(np.argmax(dur[0]))
+                dur[0, longest] += diff
+            return dur
+
+        # Scale all durations proportionally
+        scaled = np.maximum(np.round(dur * ratio).astype(np.int64), 1)
+
+        # Fix rounding error
+        diff = target_frames - int(scaled.sum())
+        if diff != 0:
+            longest = int(np.argmax(scaled[0]))
+            scaled[0, longest] += diff
+            if scaled[0, longest] < 1:
+                scaled[0, longest] = 1
+
+        return scaled
 
     def _adjust_note_dur(self, note_dur: np.ndarray, target_frames: int) -> np.ndarray:
         """Adjust note durations to sum to target_frames."""

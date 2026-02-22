@@ -6,6 +6,7 @@ BPM: 120
 Key: D minor
 Duration: 480 beats (4:00)
 
+Vocals: DiffSinger (TIGER v106) + RVC (whitney92)
 Emotional arc: Suffocation → grip slipping → freefall → euphoria → transcendence
 Hook: "Let me fall, I don't need the ground / Let me fall into the sound"
 """
@@ -15,15 +16,12 @@ from __future__ import annotations
 import math
 import os
 import random
+from pathlib import Path
 from typing import Final
 
-from bark_engine import (
-    BarkVocalEngine,
-    VocalSection,
-    VocalStyle,
-    calculate_vocal_durations,
-)
-from bark_engine.models import VocalLanguage
+import numpy as np
+
+from diffsinger_engine import DiffSingerEngine, VocalNote, VocalPhrase
 from instrumental_engine import (
     SAMPLE_RATE,
     Arrangement,
@@ -785,310 +783,572 @@ def build_arrangement() -> Arrangement:
 # Vocals
 # ═══════════════════════════════════════════════════════════════════════════
 
-VOCALS: Final[list[VocalSection]] = [
-    # ─── INTRO ───
-    VocalSection(
-        section_id="intro",
-        text="I built these walls, with steady hands",
-        style=VocalStyle.WHISPER,
-        singing=True,
-        volume=0.6,
-        gap_after_seconds=0.0,
-        num_takes=3,
-        pitch_correction_intensity=0.5,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── VERSE 1A ───
-    VocalSection(
-        section_id="verse_1a",
-        text=(
-            "I built these walls with steady hands, "
-            "but steady hands still shake at night. "
-            "I held my breath for twenty years, "
-            "forgot what air tastes like"
-        ),
-        style=VocalStyle.SINGING,
-        singing=True,
-        volume=0.8,
-        gap_after_seconds=0.5,
-        num_takes=3,
-        pitch_correction_intensity=0.7,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── VERSE 1B ───
-    VocalSection(
-        section_id="verse_1b",
-        text=(
-            "I drew the map, I marked the lines, "
-            "colored inside every one. "
-            "The picture looked like someone's life, "
-            "but I don't know whose"
-        ),
-        style=VocalStyle.SINGING,
-        singing=True,
-        volume=0.8,
-        gap_after_seconds=0.3,
-        num_takes=3,
-        pitch_correction_intensity=0.7,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── PRE-CHORUS 1 ───
-    VocalSection(
-        section_id="pre_chorus_1",
-        text=(
-            "My fingers slip, the edge is gone, "
-            "and I'm not scared anymore"
-        ),
-        style=VocalStyle.SINGING,
-        singing=True,
-        volume=0.85,
-        gap_after_seconds=0.0,
-        num_takes=3,
-        pitch_correction_intensity=0.7,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── CHORUS 1A ───
-    VocalSection(
-        section_id="chorus_1a",
-        text=(
-            "Let me fall, I don't need the ground. "
-            "Let me fall into the sound. "
-            "I've been holding on so long, "
-            "let me fall where I belong"
-        ),
-        style=VocalStyle.SINGING,
-        singing=True,
-        volume=0.9,
-        gap_after_seconds=0.3,
-        num_takes=3,
-        pitch_correction_intensity=0.8,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── CHORUS 1B ───
-    VocalSection(
-        section_id="chorus_1b",
-        text=(
-            "Let me fall, through the noise and the light. "
-            "Let me fall through the night. "
-            "I don't need to understand, "
-            "let me fall from my own hands"
-        ),
-        style=VocalStyle.SINGING,
-        singing=True,
-        volume=0.9,
-        gap_after_seconds=0.5,
-        num_takes=3,
-        pitch_correction_intensity=0.8,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── VERSE 2A ───
-    VocalSection(
-        section_id="verse_2a",
-        text=(
-            "I see the city from up here, "
-            "the lights look just like breathing. "
-            "My old life fits inside a window, "
-            "too small to climb back through"
-        ),
-        style=VocalStyle.SINGING,
-        singing=True,
-        volume=0.75,
-        gap_after_seconds=0.5,
-        num_takes=3,
-        pitch_correction_intensity=0.7,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── VERSE 2B ───
-    VocalSection(
-        section_id="verse_2b",
-        text=(
-            "I kept a list of all the things "
-            "that I was supposed to be. "
-            "I folded it into a bird, "
-            "and watched it leave without me"
-        ),
-        style=VocalStyle.SINGING,
-        singing=True,
-        volume=0.8,
-        gap_after_seconds=0.3,
-        num_takes=3,
-        pitch_correction_intensity=0.7,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── PRE-CHORUS 2 ───
-    VocalSection(
-        section_id="pre_chorus_2",
-        text=(
-            "The air is thin, the sky is wide, "
-            "and I was never meant to land"
-        ),
-        style=VocalStyle.SINGING,
-        singing=True,
-        volume=0.9,
-        gap_after_seconds=0.0,
-        num_takes=3,
-        pitch_correction_intensity=0.7,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── CHORUS 2A ───
-    VocalSection(
-        section_id="chorus_2a",
-        text=(
-            "Let me fall, I don't need the ground. "
-            "Let me fall into the sound. "
-            "I've been holding on so long, "
-            "let me fall where I belong"
-        ),
-        style=VocalStyle.SINGING,
-        singing=True,
-        volume=0.9,
-        gap_after_seconds=0.3,
-        num_takes=3,
-        pitch_correction_intensity=0.8,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── CHORUS 2B ───
-    VocalSection(
-        section_id="chorus_2b",
-        text=(
-            "Let me fall, through the noise and the light. "
-            "Let me fall through the night. "
-            "I don't need to understand, "
-            "let me fall from my own hands"
-        ),
-        style=VocalStyle.SINGING,
-        singing=True,
-        volume=0.9,
-        gap_after_seconds=0.5,
-        num_takes=3,
-        pitch_correction_intensity=0.8,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── BRIDGE ───
-    VocalSection(
-        section_id="bridge",
-        text=(
-            "There is no bottom. There is no end. "
-            "Just the fall. "
-            "And falling feels like flying"
-        ),
-        style=VocalStyle.WHISPER,
-        singing=True,
-        volume=0.7,
-        gap_after_seconds=0.0,
-        num_takes=3,
-        pitch_correction_intensity=0.3,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── FINAL CHORUS A ───
-    VocalSection(
-        section_id="final_chorus_a",
-        text=(
-            "Let me fall, I don't need the ground. "
-            "Let me fall into the sound. "
-            "I've been standing still so long, "
-            "let me fall where I belong"
-        ),
-        style=VocalStyle.EPIC,
-        singing=True,
-        volume=1.0,
-        gap_after_seconds=0.3,
-        num_takes=3,
-        pitch_correction_intensity=0.9,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── FINAL CHORUS B ───
-    VocalSection(
-        section_id="final_chorus_b",
-        text=(
-            "Let me fall, I don't need to understand. "
-            "Let me fall, "
-            "let me fall from my own hands"
-        ),
-        style=VocalStyle.EPIC,
-        singing=True,
-        volume=1.0,
-        gap_after_seconds=0.5,
-        num_takes=3,
-        pitch_correction_intensity=0.9,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-    # ─── OUTRO ───
-    VocalSection(
-        section_id="outro",
-        text="Falling feels like flying, falling feels like flying",
-        style=VocalStyle.WHISPER,
-        singing=True,
-        volume=0.5,
-        gap_after_seconds=0.0,
-        num_takes=3,
-        pitch_correction_intensity=0.3,
-        pitch_correction_key="D",
-        pitch_correction_scale="minor",
-        language=VocalLanguage.ENGLISH,
-        rvc_model="male_singer_v1",
-    ),
-]
+# ═══════════════════════════════════════════════════════════════════════════
+# DiffSinger vocal phrases — melodies in D minor
+# ═══════════════════════════════════════════════════════════════════════════
+# D minor scale: D(62) E(64) F(65) G(67) A(69) Bb(70) C(72) D(74)
+# Chord tones:
+#   Dm = D F A    Bb = Bb D F    F = F A C    C = C E G
+#   Gm = G Bb D   A = A C# E
+#
+# RVC: whitney92 for all phrases (warm female voice character)
+# Voice: tiger_fresh for soft, tiger_electric for power
 
-# Vocal placement: (section_id, start_beat)
-VOCAL_PLACEMENT: Final[list[tuple[str, float]]] = [
-    ("intro", 0.0),
-    ("verse_1a", 32.0),
-    ("verse_1b", 64.0),
-    ("pre_chorus_1", 96.0),
-    ("chorus_1a", 128.0),
-    ("chorus_1b", 160.0),
-    ("verse_2a", 192.0),
-    ("verse_2b", 224.0),
-    ("pre_chorus_2", 256.0),
-    ("chorus_2a", 288.0),
-    ("chorus_2b", 320.0),
-    ("bridge", 352.0),
-    ("final_chorus_a", 384.0),
-    ("final_chorus_b", 416.0),
-    ("outro", 452.0),
+VOICEBANK_DIR = Path(__file__).resolve().parent.parent.parent.parent / "_diffsinger" / "checkpoints" / "tiger_voice"
+
+RVC_MODEL = "whitney92"
+RVC_PITCH_SHIFT = 0
+RVC_INDEX_RATE = 0.3  # Low index for pronunciation clarity over timbre
+
+
+def _n(midi: int, lyric: str, beats: float, vel: float = 1.0) -> VocalNote:
+    """Shortcut for creating a VocalNote."""
+    return VocalNote(midi=midi, lyric=lyric, duration_beats=beats, velocity=vel)
+
+
+def _r(beats: float) -> VocalNote:
+    """Shortcut for a rest."""
+    return VocalNote(midi=0, lyric="", duration_beats=beats, is_rest=True)
+
+
+# ── INTRO: "I built these walls / with steady hands" ─────────────
+# Soft, intimate. Over Dm pad. Floating, almost whispered singing.
+# All words >= 0.75 beats for clear articulation at 120 BPM.
+intro_phrase = VocalPhrase(
+    phrase_id="intro",
+    bpm=BPM,
+    voice="tiger_fresh",
+    gender=-0.2,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        _n(62, "I", 1.0),           # D4
+        _n(65, "built", 1.5),       # F4
+        _n(64, "these", 1.0),       # E4
+        _n(62, "walls", 3.0),       # D4 — settle
+        _r(2.0),
+        _n(65, "with", 1.0),        # F4
+        _n(67, "steady", 2.0),      # G4
+        _n(65, "hands", 3.5),       # F4 — resolve down
+        _r(1.0),
+    ),
+)
+
+# ── VERSE 1A: "I built these walls..." ────────────────────────────
+# Fewer words per phrase. Each word gets time to breathe.
+verse_1a_phrase = VocalPhrase(
+    phrase_id="verse_1a",
+    bpm=BPM,
+    voice="tiger_fresh",
+    gender=-0.15,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "I built these walls with steady hands" — over Dm
+        _n(62, "I", 0.75),          # D4
+        _n(65, "built", 1.25),      # F4
+        _n(64, "these", 1.0),       # E4
+        _n(62, "walls", 2.0),       # D4
+        _n(65, "with", 0.75),       # F4
+        _n(67, "steady", 1.5),      # G4
+        _n(65, "hands", 2.5),       # F4
+        _r(1.0),
+        # "but steady hands still shake at night" — over Bb
+        _n(65, "but", 0.75),        # F4
+        _n(67, "steady", 1.5),      # G4
+        _n(69, "hands", 1.25),      # A4
+        _n(67, "still", 1.0),       # G4
+        _n(70, "shake", 1.5),       # Bb4
+        _n(69, "at", 0.75),         # A4
+        _n(67, "night", 3.0),       # G4
+        _r(1.0),
+        # "I held my breath for twenty years" — over F
+        _n(65, "I", 0.75),          # F4
+        _n(69, "held", 1.5),        # A4
+        _n(67, "my", 0.75),         # G4
+        _n(65, "breath", 1.5),      # F4
+        _n(67, "for", 0.75),        # G4
+        _n(69, "twenty", 1.5),      # A4
+        _n(72, "years", 2.5),       # C5
+        _r(1.0),
+        # "forgot what air tastes like" — over C
+        _n(72, "forgot", 1.5),      # C5
+        _n(69, "what", 0.75),       # A4
+        _n(67, "air", 1.5),         # G4
+        _n(65, "tastes", 1.25),     # F4
+        _n(62, "like", 3.0),        # D4
+        _r(1.0),
+    ),
+)
+
+# ── VERSE 1B: "I drew the map..." ────────────────────────────────
+verse_1b_phrase = VocalPhrase(
+    phrase_id="verse_1b",
+    bpm=BPM,
+    voice="tiger_fresh",
+    gender=-0.15,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "I drew the map, I marked the lines" — over Dm
+        _n(62, "I", 0.75),          # D4
+        _n(65, "drew", 1.25),       # F4
+        _n(64, "the", 0.75),        # E4
+        _n(67, "map", 2.0),         # G4
+        _r(0.75),
+        _n(65, "I", 0.75),          # F4
+        _n(69, "marked", 1.5),      # A4
+        _n(67, "the", 0.75),        # G4
+        _n(65, "lines", 2.5),       # F4
+        _r(1.0),
+        # "colored inside every one" — over Bb
+        _n(67, "colored", 1.5),     # G4
+        _n(69, "inside", 1.5),      # A4
+        _n(70, "every", 1.5),       # Bb4
+        _n(67, "one", 3.0),         # G4
+        _r(1.0),
+        # "the picture looked like someone's life" — over F
+        _n(65, "the", 0.75),        # F4
+        _n(69, "picture", 1.5),     # A4
+        _n(67, "looked", 1.0),      # G4
+        _n(65, "like", 0.75),       # F4
+        _n(69, "someone's", 1.5),   # A4
+        _n(72, "life", 2.5),        # C5
+        _r(1.0),
+        # "but I don't know whose" — over C
+        _n(72, "but", 0.75),        # C5
+        _n(69, "I", 0.75),          # A4
+        _n(67, "don't", 1.0),       # G4
+        _n(65, "know", 1.5),        # F4
+        _n(62, "whose", 3.5),       # D4
+        _r(1.0),
+    ),
+)
+
+# ── PRE-CHORUS 1: "My fingers slip..." ────────────────────────────
+pre_chorus_1_phrase = VocalPhrase(
+    phrase_id="pre_chorus_1",
+    bpm=BPM,
+    voice="tiger_fresh",
+    gender=-0.1,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "My fingers slip"
+        _n(65, "my", 0.75),         # F4
+        _n(69, "fingers", 2.0),     # A4
+        _n(72, "slip", 2.5),        # C5
+        _r(1.5),
+        # "the edge is gone"
+        _n(70, "the", 0.75),        # Bb4
+        _n(72, "edge", 1.5),        # C5
+        _n(74, "is", 0.75),         # D5
+        _n(72, "gone", 2.5),        # C5
+        _r(1.5),
+        # "and I'm not scared anymore"
+        _n(72, "and", 0.75),        # C5
+        _n(74, "I'm", 1.25),        # D5
+        _n(72, "not", 0.75),        # C5
+        _n(69, "scared", 2.0),      # A4
+        _n(67, "anymore", 3.5),     # G4
+        _r(1.0),
+    ),
+)
+
+# ── CHORUS 1A: "Let me fall..." ───────────────────────────────────
+# Hook with descending "let me fall" motif. All words >= 0.75 beats.
+chorus_1a_phrase = VocalPhrase(
+    phrase_id="chorus_1a",
+    bpm=BPM,
+    voice="tiger_electric",
+    gender=-0.1,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "Let me fall" — descending hook
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 3.0),        # A4 — falling!
+        _r(1.0),
+        # "I don't need the ground"
+        _n(69, "I", 0.75),          # A4
+        _n(72, "don't", 1.25),      # C5
+        _n(70, "need", 1.25),       # Bb4
+        _n(69, "the", 0.75),        # A4
+        _n(67, "ground", 2.5),      # G4
+        _r(1.0),
+        # "Let me fall into the sound"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 2.0),        # A4
+        _n(70, "into", 1.25),       # Bb4
+        _n(69, "the", 0.75),        # A4
+        _n(67, "sound", 3.0),       # G4
+        _r(1.0),
+        # "I've been holding on so long"
+        _n(67, "I've", 0.75),       # G4
+        _n(69, "been", 1.0),        # A4
+        _n(72, "holding", 2.0),     # C5
+        _n(69, "on", 1.0),          # A4
+        _n(67, "so", 0.75),         # G4
+        _n(65, "long", 2.5),        # F4
+        _r(1.0),
+        # "let me fall where I belong"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 2.0),        # A4
+        _n(67, "where", 1.0),       # G4
+        _n(69, "I", 0.75),          # A4
+        _n(70, "belong", 3.5),      # Bb4
+        _r(0.75),
+    ),
+)
+
+# ── CHORUS 1B: "Let me fall, through the noise..." ───────────────
+chorus_1b_phrase = VocalPhrase(
+    phrase_id="chorus_1b",
+    bpm=BPM,
+    voice="tiger_electric",
+    gender=-0.1,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "Let me fall"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 3.0),        # A4
+        _r(1.0),
+        # "through the noise and the light"
+        _n(69, "through", 1.0),     # A4
+        _n(70, "the", 0.75),        # Bb4
+        _n(72, "noise", 1.5),       # C5
+        _n(69, "and", 0.75),        # A4
+        _n(67, "the", 0.75),        # G4
+        _n(65, "light", 2.5),       # F4
+        _r(1.0),
+        # "Let me fall through the night"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 2.0),        # A4
+        _n(67, "through", 1.0),     # G4
+        _n(65, "the", 0.75),        # F4
+        _n(62, "night", 3.0),       # D4
+        _r(1.0),
+        # "I don't need to understand"
+        _n(65, "I", 0.75),          # F4
+        _n(67, "don't", 1.0),       # G4
+        _n(69, "need", 1.25),       # A4
+        _n(67, "to", 0.75),         # G4
+        _n(72, "understand", 3.5),  # C5
+        _r(1.0),
+        # "let me fall from my own hands"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 2.0),        # A4
+        _n(67, "from", 0.75),       # G4
+        _n(65, "my", 0.75),         # F4
+        _n(67, "own", 1.0),         # G4
+        _n(62, "hands", 3.5),       # D4
+        _r(0.75),
+    ),
+)
+
+# ── VERSE 2A: "I see the city from up here..." ───────────────────
+verse_2a_phrase = VocalPhrase(
+    phrase_id="verse_2a",
+    bpm=BPM,
+    voice="tiger_fresh",
+    gender=-0.15,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "I see the city from up here"
+        _n(62, "I", 0.75),          # D4
+        _n(65, "see", 1.25),        # F4
+        _n(64, "the", 0.75),        # E4
+        _n(67, "city", 2.0),        # G4
+        _n(65, "from", 1.0),        # F4
+        _n(69, "up", 1.0),          # A4
+        _n(67, "here", 2.5),        # G4
+        _r(1.0),
+        # "the lights look just like breathing"
+        _n(67, "the", 0.75),        # G4
+        _n(70, "lights", 1.5),      # Bb4
+        _n(69, "look", 1.0),        # A4
+        _n(67, "just", 0.75),       # G4
+        _n(65, "like", 1.0),        # F4
+        _n(69, "breathing", 3.0),   # A4
+        _r(1.0),
+        # "my old life fits inside a window"
+        _n(65, "my", 0.75),         # F4
+        _n(69, "old", 1.25),        # A4
+        _n(67, "life", 1.25),       # G4
+        _n(65, "fits", 1.0),        # F4
+        _n(69, "inside", 1.5),      # A4
+        _n(67, "a", 0.75),          # G4
+        _n(72, "window", 2.5),      # C5
+        _r(1.0),
+        # "too small to climb back through"
+        _n(72, "too", 1.0),         # C5
+        _n(69, "small", 1.25),      # A4
+        _n(67, "to", 0.75),         # G4
+        _n(65, "climb", 1.25),      # F4
+        _n(64, "back", 1.0),        # E4
+        _n(62, "through", 3.0),     # D4
+        _r(1.0),
+    ),
+)
+
+# ── VERSE 2B: "I kept a list..." ─────────────────────────────────
+verse_2b_phrase = VocalPhrase(
+    phrase_id="verse_2b",
+    bpm=BPM,
+    voice="tiger_fresh",
+    gender=-0.15,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "I kept a list of all the things"
+        _n(62, "I", 0.75),          # D4
+        _n(65, "kept", 1.25),       # F4
+        _n(64, "a", 0.75),          # E4
+        _n(67, "list", 1.5),        # G4
+        _n(65, "of", 0.75),         # F4
+        _n(69, "all", 1.25),        # A4
+        _n(67, "the", 0.75),        # G4
+        _n(65, "things", 2.5),      # F4
+        _r(1.0),
+        # "that I was supposed to be"
+        _n(67, "that", 0.75),       # G4
+        _n(69, "I", 0.75),          # A4
+        _n(67, "was", 1.0),         # G4
+        _n(70, "supposed", 2.0),    # Bb4
+        _n(69, "to", 0.75),         # A4
+        _n(67, "be", 3.0),          # G4
+        _r(1.0),
+        # "I folded it into a bird"
+        _n(65, "I", 0.75),          # F4
+        _n(69, "folded", 1.5),      # A4
+        _n(67, "it", 0.75),         # G4
+        _n(69, "into", 1.5),        # A4
+        _n(67, "a", 0.75),          # G4
+        _n(72, "bird", 2.5),        # C5
+        _r(1.0),
+        # "and watched it leave without me"
+        _n(72, "and", 0.75),        # C5
+        _n(69, "watched", 1.25),    # A4
+        _n(67, "it", 0.75),         # G4
+        _n(65, "leave", 1.5),       # F4
+        _n(64, "without", 2.0),     # E4
+        _n(62, "me", 3.5),          # D4
+        _r(1.0),
+    ),
+)
+
+# ── PRE-CHORUS 2: "The air is thin..." ───────────────────────────
+pre_chorus_2_phrase = VocalPhrase(
+    phrase_id="pre_chorus_2",
+    bpm=BPM,
+    voice="tiger_fresh",
+    gender=-0.1,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "The air is thin"
+        _n(67, "the", 0.75),        # G4
+        _n(69, "air", 2.0),         # A4
+        _n(72, "is", 0.75),         # C5
+        _n(74, "thin", 2.5),        # D5
+        _r(1.5),
+        # "the sky is wide"
+        _n(72, "the", 0.75),        # C5
+        _n(74, "sky", 2.0),         # D5
+        _n(72, "is", 0.75),         # C5
+        _n(70, "wide", 3.0),        # Bb4
+        _r(1.5),
+        # "and I was never meant to land"
+        _n(72, "and", 0.75),        # C5
+        _n(74, "I", 1.25),          # D5
+        _n(72, "was", 0.75),        # C5
+        _n(69, "never", 1.5),       # A4
+        _n(67, "meant", 1.25),      # G4
+        _n(65, "to", 0.75),         # F4
+        _n(69, "land", 3.5),        # A4
+        _r(1.0),
+    ),
+)
+
+# ── CHORUS 2A = same melody as CHORUS 1A ──────────────────────────
+chorus_2a_phrase = VocalPhrase(
+    phrase_id="chorus_2a",
+    bpm=BPM,
+    voice="tiger_electric",
+    gender=-0.1,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=chorus_1a_phrase.notes,
+)
+
+# ── CHORUS 2B = same melody as CHORUS 1B ──────────────────────────
+chorus_2b_phrase = VocalPhrase(
+    phrase_id="chorus_2b",
+    bpm=BPM,
+    voice="tiger_electric",
+    gender=-0.1,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=chorus_1b_phrase.notes,
+)
+
+# ── BRIDGE: "There is no bottom..." ──────────────────────────────
+bridge_phrase = VocalPhrase(
+    phrase_id="bridge",
+    bpm=BPM,
+    voice="tiger_fresh",
+    gender=-0.2,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "There is no bottom"
+        _n(62, "there", 1.25),      # D4
+        _n(65, "is", 1.0),          # F4
+        _n(67, "no", 1.0),          # G4
+        _n(69, "bottom", 3.0),      # A4
+        _r(2.0),
+        # "There is no end"
+        _n(64, "there", 1.25),      # E4
+        _n(65, "is", 1.0),          # F4
+        _n(67, "no", 1.0),          # G4
+        _n(69, "end", 3.0),         # A4
+        _r(2.0),
+        # "Just the fall"
+        _n(65, "just", 1.25),       # F4
+        _n(67, "the", 0.75),        # G4
+        _n(70, "fall", 3.5),        # Bb4
+        _r(2.0),
+        # "And falling feels like flying"
+        _n(67, "and", 0.75),        # G4
+        _n(69, "falling", 2.0),     # A4
+        _n(67, "feels", 1.25),      # G4
+        _n(65, "like", 1.0),        # F4
+        _n(67, "flying", 3.5),      # G4
+        _r(1.0),
+    ),
+)
+
+# ── FINAL CHORUS A: "Let me fall..." (EPIC) ──────────────────────
+# Same hook as chorus 1a but lyrics variation: "standing still" instead of "holding on"
+final_chorus_a_phrase = VocalPhrase(
+    phrase_id="final_chorus_a",
+    bpm=BPM,
+    voice="tiger_electric",
+    gender=-0.1,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "Let me fall"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 3.0),        # A4
+        _r(1.0),
+        # "I don't need the ground"
+        _n(69, "I", 0.75),          # A4
+        _n(72, "don't", 1.25),      # C5
+        _n(70, "need", 1.25),       # Bb4
+        _n(69, "the", 0.75),        # A4
+        _n(67, "ground", 2.5),      # G4
+        _r(1.0),
+        # "Let me fall into the sound"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 2.0),        # A4
+        _n(70, "into", 1.25),       # Bb4
+        _n(69, "the", 0.75),        # A4
+        _n(67, "sound", 3.0),       # G4
+        _r(1.0),
+        # "I've been standing still so long"
+        _n(67, "I've", 0.75),       # G4
+        _n(69, "been", 1.0),        # A4
+        _n(72, "standing", 2.0),    # C5
+        _n(69, "still", 1.0),       # A4
+        _n(67, "so", 0.75),         # G4
+        _n(65, "long", 2.5),        # F4
+        _r(1.0),
+        # "let me fall where I belong"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 2.0),        # A4
+        _n(67, "where", 1.0),       # G4
+        _n(69, "I", 0.75),          # A4
+        _n(70, "belong", 3.5),      # Bb4
+        _r(0.75),
+    ),
+)
+
+# ── FINAL CHORUS B: "Let me fall..." (EPIC, shorter) ─────────────
+final_chorus_b_phrase = VocalPhrase(
+    phrase_id="final_chorus_b",
+    bpm=BPM,
+    voice="tiger_electric",
+    gender=-0.1,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "Let me fall"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 3.0),        # A4
+        _r(1.0),
+        # "I don't need to understand"
+        _n(69, "I", 0.75),          # A4
+        _n(72, "don't", 1.25),      # C5
+        _n(70, "need", 1.25),       # Bb4
+        _n(69, "to", 0.75),         # A4
+        _n(72, "understand", 3.5),  # C5
+        _r(1.0),
+        # "Let me fall"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 3.5),        # A4
+        _r(1.5),
+        # "let me fall from my own hands"
+        _n(74, "let", 1.0),         # D5
+        _n(72, "me", 0.75),         # C5
+        _n(69, "fall", 2.0),        # A4
+        _n(67, "from", 0.75),       # G4
+        _n(65, "my", 0.75),         # F4
+        _n(67, "own", 1.0),         # G4
+        _n(62, "hands", 4.5),       # D4
+        _r(0.75),
+    ),
+)
+
+# ── OUTRO: "Falling feels like flying" ───────────────────────────
+outro_phrase = VocalPhrase(
+    phrase_id="outro",
+    bpm=BPM,
+    voice="tiger_fresh",
+    gender=-0.2,
+    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
+    notes=(
+        # "Falling feels like flying"
+        _n(67, "falling", 2.5),     # G4
+        _n(65, "feels", 1.25),      # F4
+        _n(64, "like", 1.0),        # E4
+        _n(62, "flying", 3.5),      # D4
+        _r(2.0),
+        # "Falling feels like flying" — second, lower
+        _n(65, "falling", 2.5),     # F4
+        _n(64, "feels", 1.25),      # E4
+        _n(62, "like", 1.0),        # D4
+        _n(60, "flying", 4.5),      # C4
+        _r(1.0),
+    ),
+)
+
+# All vocal phrases with their beat placements
+VOCAL_PHRASES: Final[list[tuple[VocalPhrase, float]]] = [
+    (intro_phrase, 0.0),
+    (verse_1a_phrase, 32.0),
+    (verse_1b_phrase, 64.0),
+    (pre_chorus_1_phrase, 96.0),
+    (chorus_1a_phrase, 128.0),
+    (chorus_1b_phrase, 160.0),
+    (verse_2a_phrase, 192.0),
+    (verse_2b_phrase, 224.0),
+    (pre_chorus_2_phrase, 256.0),
+    (chorus_2a_phrase, 288.0),
+    (chorus_2b_phrase, 320.0),
+    (bridge_phrase, 352.0),
+    (final_chorus_a_phrase, 384.0),
+    (final_chorus_b_phrase, 416.0),
+    (outro_phrase, 452.0),
 ]
 
 # SFX placement: (synth_func, beat, volume, left_gain, right_gain)
@@ -1111,16 +1371,16 @@ SFX_PLACEMENT: Final[
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main() -> None:
-    """Generate Let Me Fall: instrumental + vocals + SFX → mastered MP3."""
+    """Generate Let Me Fall: instrumental + DiffSinger vocals + SFX → mastered MP3."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # ── 1. Render instrumental ──
-    print("🎹 Rendering instrumental arrangement...")
+    print("Rendering instrumental arrangement...")
     arrangement = build_arrangement()
     inst_left, inst_right = render_arrangement(arrangement)
 
     # ── 2. Render SFX layer ──
-    print("🔊 Synthesizing SFX (risers + impacts)...")
+    print("Synthesizing SFX (risers + impacts)...")
     total_samples = len(inst_left)
     sfx_left: list[float] = [0.0] * total_samples
     sfx_right: list[float] = [0.0] * total_samples
@@ -1144,42 +1404,80 @@ def main() -> None:
 
     overlay_onto(inst_left, inst_right, sfx_left, sfx_right, 0)
 
-    # ── 3. Generate vocals ──
-    print("🎤 Generating vocals with Bark AI...")
-    engine = BarkVocalEngine()
-    engine.preload_models()
-    generated_vocals = engine.generate_vocals(VOCALS)
-    engine.cleanup()
+    # ── 3. Generate vocals with DiffSinger ──
+    print("Generating vocals with DiffSinger + RVC...")
+    ds_engine = DiffSingerEngine(voicebank_dir=str(VOICEBANK_DIR), device="cuda")
+
+    vocal_results: dict[str, np.ndarray] = {}
+    for phrase, _beat in VOCAL_PHRASES:
+        print(f"\n  Generating: {phrase.phrase_id}")
+        result = ds_engine.generate(phrase)
+        vocal_results[phrase.phrase_id] = result.samples
+        print(f"    Duration: {result.duration:.2f}s")
+
+    # ── 3b. Trim vocals to fit beat windows (prevent overlap) ──
+    print("\nTrimming vocals to beat windows...")
+    FADE_OUT_MS: float = 80.0  # ms fade at end of each phrase
+    fade_samples = int(FADE_OUT_MS / 1000.0 * SAMPLE_RATE)
+
+    for i, (phrase, beat) in enumerate(VOCAL_PHRASES):
+        samples = vocal_results.get(phrase.phrase_id)
+        if samples is None:
+            continue
+
+        # Calculate max allowed duration from this phrase to the next
+        if i + 1 < len(VOCAL_PHRASES):
+            next_beat = VOCAL_PHRASES[i + 1][1]
+            max_seconds = (next_beat - beat) * SECONDS_PER_BEAT
+        else:
+            # Last phrase: allow until song end
+            max_seconds = (TOTAL_BEATS - beat) * SECONDS_PER_BEAT
+
+        max_samples = int(max_seconds * SAMPLE_RATE)
+        actual_samples = len(samples)
+
+        if actual_samples > max_samples:
+            # Trim and apply fade-out at the cut point
+            trimmed = samples[:max_samples].copy()
+            fade_len = min(fade_samples, max_samples)
+            fade_curve = np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
+            trimmed[-fade_len:] *= fade_curve
+            vocal_results[phrase.phrase_id] = trimmed
+            print(f"  {phrase.phrase_id}: trimmed {actual_samples/SAMPLE_RATE:.2f}s -> {max_samples/SAMPLE_RATE:.2f}s")
+        else:
+            print(f"  {phrase.phrase_id}: {actual_samples/SAMPLE_RATE:.2f}s (fits in {max_seconds:.2f}s window)")
 
     # ── 4. Apply ducking ──
-    print("🔉 Applying vocal-instrumental ducking (-3dB)...")
-    vocal_durations = calculate_vocal_durations(generated_vocals)
+    print("\nApplying vocal-instrumental ducking (-3dB)...")
+    vocal_durations: dict[str, float] = {}
+    for phrase, _beat in VOCAL_PHRASES:
+        samples = vocal_results.get(phrase.phrase_id)
+        if samples is not None:
+            vocal_durations[phrase.phrase_id] = len(samples) / SAMPLE_RATE
+
     vocal_placement_seconds: list[tuple[str, float]] = [
-        (sid, beat * SECONDS_PER_BEAT) for sid, beat in VOCAL_PLACEMENT
+        (phrase.phrase_id, beat * SECONDS_PER_BEAT) for phrase, beat in VOCAL_PHRASES
     ]
     ducked_left, ducked_right = apply_ducking(
         inst_left,
         inst_right,
         vocal_placement_seconds,
         vocal_durations,
-        reduction_db=-6.0,
+        reduction_db=-3.0,
         attack_seconds=0.08,
         release_seconds=0.3,
     )
 
     # ── 5. Overlay vocals onto ducked instrumental ──
-    print("🎚️  Mixing vocals onto instrumental...")
-    vocal_map = {v.section_id: v.samples for v in generated_vocals}
+    print("Mixing vocals onto instrumental...")
+    VOCAL_GAIN: float = 0.85
 
-    # Vocal gain boost — compensates for Bark's quiet output
-    VOCAL_GAIN: float = 1.4
-
-    for section_id, beat in VOCAL_PLACEMENT:
-        samples = vocal_map.get(section_id)
+    for phrase, beat in VOCAL_PHRASES:
+        samples = vocal_results.get(phrase.phrase_id)
         if samples is None:
             continue
         start_sample = int(beat * SECONDS_PER_BEAT * SAMPLE_RATE)
-        vocal_mono = [s * VOCAL_GAIN for s in samples]
+        vocal_mono = (samples * VOCAL_GAIN).tolist()
         overlay_onto(
             ducked_left,
             ducked_right,
@@ -1189,19 +1487,19 @@ def main() -> None:
         )
 
     # ── 6. Normalize and export ──
-    print("📊 Normalizing stereo mix...")
+    print("Normalizing stereo mix...")
     final_left, final_right = normalize_stereo(ducked_left, ducked_right)
 
-    print(f"💾 Writing WAV: {WAV_PATH}")
+    print(f"Writing WAV: {WAV_PATH}")
     write_stereo_wav(WAV_PATH, final_left, final_right)
 
-    print(f"🎵 Mastering to MP3: {MP3_PATH}")
+    print(f"Mastering to MP3: {MP3_PATH}")
     master_to_mp3(WAV_PATH, MP3_PATH, target_lufs=-14.0, stereo_width=1.2)
 
     duration_seconds = TOTAL_BEATS * SECONDS_PER_BEAT
     minutes = int(duration_seconds // 60)
     seconds = int(duration_seconds % 60)
-    print(f"✅ Done! {MP3_PATH} ({minutes}:{seconds:02d})")
+    print(f"Done! {MP3_PATH} ({minutes}:{seconds:02d})")
 
 
 if __name__ == "__main__":
