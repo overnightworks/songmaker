@@ -520,28 +520,35 @@ class DiffSingerEngine:
 
     # ── Main generation ──────────────────────────────────────────
 
-    def generate(self, phrase: VocalPhrase) -> DiffSingerResult:
-        """Generate singing voice from a VocalPhrase using the full pipeline."""
+    def generate(
+        self, phrase: VocalPhrase, use_pred_dur: bool = False
+    ) -> DiffSingerResult:
+        """Generate singing voice from a VocalPhrase using the full pipeline.
+
+        Args:
+            phrase: The vocal phrase to synthesize.
+            use_pred_dur: If True, use the neural duration predictor.
+                If False (default), use hand-crafted durations computed
+                directly from note durations for precise timing control.
+        """
         voice = phrase.voice
 
         # Build input tensors
         tensors = build_phrase_tensors(phrase, self.config)
 
-        # Stage 1: Duration prediction
+        # Stage 1: Duration
         has_dur_model = (self.dur_dir / "files" / "dur.onnx").exists()
-        if has_dur_model:
-            print("| Stage 1: Duration prediction")
+        if use_pred_dur and has_dur_model:
+            print("| Stage 1: Duration prediction (neural)")
             enc_out, x_masks = self._run_dur_linguistic(tensors)
             ph_dur = self._run_dur_predictor(enc_out, x_masks, tensors, voice)
-            # Enforce minimum phoneme duration for clear articulation
             ph_dur = self._enforce_min_phoneme_dur(ph_dur, min_frames=8)
-            # Constrain total duration to match intended note durations
             ph_dur = self._constrain_total_dur(ph_dur, tensors.n_frames)
             print(f"|   Predicted durations: {ph_dur[0].tolist()}")
         else:
-            # Use hand-crafted durations
+            # Use hand-crafted durations from note definitions
             ph_dur = tensors.ph_dur
-            print(f"| Using hand-crafted durations (no dur model)")
+            print(f"| Stage 1: Using score durations ({tensors.n_frames} frames)")
 
         n_frames = int(ph_dur.sum())
 
@@ -616,6 +623,12 @@ class DiffSingerEngine:
             waveform = self._apply_rvc(waveform, phrase)
 
         duration = len(waveform) / self.config.sample_rate
+
+        # Validation: compare actual vs expected duration
+        expected_sec = n_frames * self.config.hop_size / self.config.sample_rate
+        drift_pct = abs(duration - expected_sec) / expected_sec * 100 if expected_sec > 0 else 0
+        status = "OK" if drift_pct < 5 else "DRIFT"
+        print(f"| [{status}] {phrase.phrase_id}: {duration:.2f}s actual vs {expected_sec:.2f}s expected ({drift_pct:.1f}% drift)")
 
         return DiffSingerResult(
             samples=waveform,
