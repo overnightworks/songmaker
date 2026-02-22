@@ -18,6 +18,7 @@ import logging
 import tempfile
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +40,8 @@ class PhraseCheck:
     duration_sec: float
     window_sec: float  # max allowed duration from beat layout
     issues: list[str] = field(default_factory=list)
+    whisper_similarity: float | None = None  # 0.0-1.0, set by pronunciation check
+    whisper_transcript: str | None = None
 
     @property
     def status(self) -> str:
@@ -60,17 +63,28 @@ class ValidationReport:
         return all(c.status == "OK" for c in self.checks)
 
     def summary(self) -> str:
-        """Human-readable summary."""
+        """Human-readable summary with Whisper scores."""
         lines = ["\n=== Vocal Validation Report ===\n"]
         for c in self.checks:
             icon = {"OK": "[OK]", "WARN": "[!!]", "FAIL": "[XX]"}[c.status]
-            lines.append(f"  {icon} {c.phrase_id}: {c.duration_sec:.2f}s / {c.window_sec:.2f}s window")
+            sim_str = f"{c.whisper_similarity:.0%}" if c.whisper_similarity is not None else "n/a"
+            lines.append(
+                f"  {icon} {c.phrase_id}: {c.duration_sec:.2f}s / "
+                f"{c.window_sec:.2f}s window | Whisper: {sim_str}"
+            )
             for issue in c.issues:
                 lines.append(f"        {issue}")
         ok = sum(1 for c in self.checks if c.status == "OK")
         warn = sum(1 for c in self.checks if c.status == "WARN")
         fail = sum(1 for c in self.checks if c.status == "FAIL")
         lines.append(f"\n  Total: {ok} OK, {warn} warnings, {fail} failures out of {len(self.checks)} phrases")
+
+        # Average Whisper score
+        sims = [c.whisper_similarity for c in self.checks if c.whisper_similarity is not None]
+        if sims:
+            avg = sum(sims) / len(sims)
+            lines.append(f"  Average Whisper similarity: {avg:.0%}")
+
         return "\n".join(lines)
 
 
@@ -254,7 +268,10 @@ def validate_phrase(
     _rms_db, loudness_issues = check_loudness(samples)
     check.issues.extend(loudness_issues)
     check.issues.extend(check_phonemes(phrase))
-    check.issues.extend(check_pronunciation(phrase, samples))
+    pron = check_pronunciation(phrase, samples)
+    check.issues.extend(pron.issues)
+    check.whisper_similarity = pron.similarity
+    check.whisper_transcript = pron.transcript
 
     return check
 
@@ -303,20 +320,24 @@ def validate_all(
 
 # ── Whisper pronunciation validation ────────────────────────────────
 
+WHISPER_MODEL_SIZE = "small.en"  # "tiny.en" (fast, inaccurate) or "small.en" (6x larger, honest scores)
+
 _whisper_model = None
+_whisper_model_name = None
 
 
 def _get_whisper_model():
-    """Lazy-load Whisper tiny.en model (first call takes a few seconds)."""
-    global _whisper_model
-    if _whisper_model is None:
+    """Lazy-load Whisper model (first call downloads + loads)."""
+    global _whisper_model, _whisper_model_name
+    if _whisper_model is None or _whisper_model_name != WHISPER_MODEL_SIZE:
         try:
             import whisper
         except ImportError:
             logger.warning("openai-whisper not installed - skipping pronunciation check")
             return None
-        logger.info("Loading Whisper tiny.en model...")
-        _whisper_model = whisper.load_model("tiny.en")
+        logger.info("Loading Whisper %s model...", WHISPER_MODEL_SIZE)
+        _whisper_model = whisper.load_model(WHISPER_MODEL_SIZE)
+        _whisper_model_name = WHISPER_MODEL_SIZE
     return _whisper_model
 
 
@@ -325,29 +346,87 @@ def _extract_lyrics(phrase: VocalPhrase) -> list[str]:
     return [n.lyric.lower().strip() for n in phrase.notes if not n.is_rest and n.lyric.strip()]
 
 
+@dataclass
+class PronunciationResult:
+    """Result of Whisper pronunciation check."""
+
+    similarity: float | None  # 0.0-1.0, None if skipped
+    transcript: str | None  # What Whisper heard
+    issues: list[str]
+
+
+def _word_error_rate(reference: list[str], hypothesis: list[str]) -> float:
+    """Compute Word Error Rate using Levenshtein distance on word lists.
+
+    WER = (substitutions + deletions + insertions) / len(reference)
+    Returns 0.0 (perfect) to 1.0+ (completely wrong; can exceed 1.0 if
+    hypothesis is longer than reference due to insertions).
+    """
+    n = len(reference)
+    m = len(hypothesis)
+    if n == 0:
+        return 0.0 if m == 0 else 1.0
+
+    # DP table for edit distance
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n + 1):
+        dp[i][0] = i
+    for j in range(m + 1):
+        dp[0][j] = j
+
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            if reference[i - 1] == hypothesis[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1]
+            else:
+                dp[i][j] = 1 + min(
+                    dp[i - 1][j],      # deletion
+                    dp[i][j - 1],      # insertion
+                    dp[i - 1][j - 1],  # substitution
+                )
+
+    return dp[n][m] / n
+
+
+def _find_wrong_words(reference: list[str], hypothesis: list[str]) -> list[str]:
+    """Find specific word-level mismatches using SequenceMatcher for alignment."""
+    mismatched = []
+    matcher = SequenceMatcher(None, reference, hypothesis)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "replace":
+            mismatched.append(f"'{' '.join(reference[i1:i2])}'->'{' '.join(hypothesis[j1:j2])}'")
+        elif tag == "delete":
+            mismatched.append(f"'{' '.join(reference[i1:i2])}'->MISSING")
+        elif tag == "insert":
+            mismatched.append(f"EXTRA->'{' '.join(hypothesis[j1:j2])}'")
+    return mismatched
+
+
 def check_pronunciation(
     phrase: VocalPhrase,
     samples: np.ndarray,
-    similarity_threshold: float = 0.4,
-) -> list[str]:
-    """Transcribe audio with Whisper and compare to expected lyrics.
+) -> PronunciationResult:
+    """Transcribe audio with Whisper and score using Word Error Rate.
+
+    Uses WER (stricter than character-level SequenceMatcher):
+    - Counts wrong/missing/extra words
+    - 3 wrong words out of 10 = 70% accuracy, not 90%+
+    - Score = 1 - WER, clamped to [0, 1]
 
     Args:
         phrase: The vocal phrase with expected lyrics.
         samples: Generated audio (float32, 44100 Hz).
-        similarity_threshold: Per-word similarity below which to flag (0-1).
 
     Returns:
-        List of issue strings (WARN level).
+        PronunciationResult with word accuracy score, transcript, and issues.
     """
     model = _get_whisper_model()
     if model is None:
-        return []
+        return PronunciationResult(similarity=None, transcript=None, issues=[])
 
-    issues: list[str] = []
     expected_words = _extract_lyrics(phrase)
     if not expected_words:
-        return issues
+        return PronunciationResult(similarity=None, transcript=None, issues=[])
 
     expected_text = " ".join(expected_words)
 
@@ -371,27 +450,194 @@ def check_pronunciation(
     transcribed_clean = "".join(c if c.isalnum() or c == " " else "" for c in transcribed)
     transcribed_words = transcribed_clean.split()
 
-    # Overall similarity
-    overall_sim = SequenceMatcher(None, expected_text, transcribed_clean).ratio()
+    # Word Error Rate (strict word-level metric)
+    wer = _word_error_rate(expected_words, transcribed_words)
+    word_accuracy = max(0.0, 1.0 - wer)  # clamp to [0, 1]
 
-    if overall_sim < 0.6:
+    issues: list[str] = []
+    if word_accuracy < 0.5:
         issues.append(
-            f"WARN: pronunciation mismatch - expected \"{expected_text}\" "
-            f"but heard \"{transcribed_clean}\" (similarity: {overall_sim:.0%})"
+            f"WARN: pronunciation mismatch (WER) - expected \"{expected_text}\" "
+            f"but heard \"{transcribed_clean}\" (word accuracy: {word_accuracy:.0%})"
         )
-    elif overall_sim < 0.8:
-        # Find specific mismatched words
-        mismatched = []
-        matcher = SequenceMatcher(None, expected_words, transcribed_words)
-        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-            if tag in ("replace", "delete"):
-                bad_words = expected_words[i1:i2]
-                got_words = transcribed_words[j1:j2] if tag == "replace" else ["(missing)"]
-                mismatched.append(f"'{' '.join(bad_words)}'->'{' '.join(got_words)}'")
-        if mismatched:
+    elif word_accuracy < 0.8:
+        wrong = _find_wrong_words(expected_words, transcribed_words)
+        if wrong:
             issues.append(
-                f"WARN: unclear words - {', '.join(mismatched)} "
-                f"(overall: {overall_sim:.0%})"
+                f"WARN: unclear words - {', '.join(wrong)} "
+                f"(word accuracy: {word_accuracy:.0%})"
             )
 
-    return issues
+    return PronunciationResult(
+        similarity=word_accuracy,
+        transcript=transcribed_clean,
+        issues=issues,
+    )
+
+
+# ── Run history for cross-run comparison ────────────────────────────
+
+def save_run(
+    report: ValidationReport,
+    run_label: str,
+    output_dir: str,
+    song_name: str = "",
+) -> Path:
+    """Save validation results to a persistent JSON history file.
+
+    Each call appends a new run entry. The history file lives next to
+    the generated audio so it's gitignored with _output/.
+
+    Args:
+        report: The ValidationReport from validate_all().
+        run_label: Short description of what changed (e.g. "100ms consonants, no RVC").
+        output_dir: The _output/<album>/ directory.
+        song_name: Optional song identifier for the history filename.
+
+    Returns:
+        Path to the history file.
+    """
+    import json
+    from datetime import datetime
+
+    history_dir = Path(output_dir)
+    history_dir.mkdir(parents=True, exist_ok=True)
+    fname = f"validation_history_{song_name}.json" if song_name else "validation_history.json"
+    history_path = history_dir / fname
+
+    # Load existing history
+    runs: list[dict] = []
+    if history_path.exists():
+        try:
+            runs = json.loads(history_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            runs = []
+
+    # Build run entry
+    phrase_scores = {}
+    for c in report.checks:
+        phrase_scores[c.phrase_id] = {
+            "status": c.status,
+            "duration_sec": round(c.duration_sec, 2),
+            "window_sec": round(c.window_sec, 2),
+            "whisper_similarity": round(c.whisper_similarity, 3) if c.whisper_similarity is not None else None,
+            "whisper_transcript": c.whisper_transcript,
+            "issues": c.issues,
+        }
+
+    sims = [c.whisper_similarity for c in report.checks if c.whisper_similarity is not None]
+    avg_sim = round(sum(sims) / len(sims), 3) if sims else None
+
+    run_entry = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "label": run_label,
+        "avg_whisper_similarity": avg_sim,
+        "total_phrases": len(report.checks),
+        "ok": sum(1 for c in report.checks if c.status == "OK"),
+        "warn": sum(1 for c in report.checks if c.status == "WARN"),
+        "fail": sum(1 for c in report.checks if c.status == "FAIL"),
+        "phrases": phrase_scores,
+    }
+
+    runs.append(run_entry)
+    history_path.write_text(json.dumps(runs, indent=2, ensure_ascii=False), encoding="utf-8")
+    logger.info("Saved validation run '%s' to %s", run_label, history_path)
+    return history_path
+
+
+def compare_runs(
+    output_dir: str,
+    song_name: str = "",
+    last_n: int = 0,
+) -> str:
+    """Generate a comparison table across saved validation runs.
+
+    Args:
+        output_dir: The _output/<album>/ directory.
+        song_name: Optional song identifier.
+        last_n: Only show the last N runs (0 = all).
+
+    Returns:
+        Formatted comparison table string.
+    """
+    import json
+
+    history_dir = Path(output_dir)
+    fname = f"validation_history_{song_name}.json" if song_name else "validation_history.json"
+    history_path = history_dir / fname
+
+    if not history_path.exists():
+        return "No validation history found."
+
+    try:
+        runs = json.loads(history_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return "Error reading validation history."
+
+    if not runs:
+        return "No runs recorded yet."
+
+    if last_n > 0:
+        runs = runs[-last_n:]
+
+    # Collect all phrase IDs across runs (preserve order from latest run)
+    all_phrases: list[str] = []
+    for run in runs:
+        for pid in run["phrases"]:
+            if pid not in all_phrases:
+                all_phrases.append(pid)
+
+    # Build header
+    lines = ["\n=== Validation Run Comparison ===\n"]
+
+    # Run summary row
+    run_headers = []
+    for i, run in enumerate(runs):
+        label = run["label"][:30]
+        ts = run["timestamp"][5:16].replace("T", " ")  # MM-DD HH:MM
+        run_headers.append(f"#{i+1} {ts}")
+        lines.append(f"  #{i+1}: {label}")
+        lines.append(f"      {run['timestamp']} | avg: {_fmt_pct(run.get('avg_whisper_similarity'))} | "
+                      f"{run['ok']}ok {run['warn']}warn {run['fail']}fail")
+
+    lines.append("")
+
+    # Per-phrase comparison table
+    # Column widths
+    pid_width = max(len(p) for p in all_phrases) if all_phrases else 10
+    col_width = max(len(h) for h in run_headers) + 2
+
+    # Header row
+    header = f"  {'Phrase':<{pid_width}}"
+    for h in run_headers:
+        header += f"  {h:>{col_width}}"
+    lines.append(header)
+    lines.append("  " + "-" * (pid_width + (col_width + 2) * len(runs)))
+
+    # Data rows
+    for pid in all_phrases:
+        row = f"  {pid:<{pid_width}}"
+        for run in runs:
+            pdata = run["phrases"].get(pid)
+            if pdata is None:
+                row += f"  {'---':>{col_width}}"
+            else:
+                sim = pdata.get("whisper_similarity")
+                row += f"  {_fmt_pct(sim):>{col_width}}"
+        lines.append(row)
+
+    # Average row
+    lines.append("  " + "-" * (pid_width + (col_width + 2) * len(runs)))
+    avg_row = f"  {'AVERAGE':<{pid_width}}"
+    for run in runs:
+        avg_row += f"  {_fmt_pct(run.get('avg_whisper_similarity')):>{col_width}}"
+    lines.append(avg_row)
+
+    return "\n".join(lines)
+
+
+def _fmt_pct(val: float | None) -> str:
+    """Format a 0-1 float as percentage, or 'n/a'."""
+    if val is None:
+        return "n/a"
+    return f"{val:.0%}"

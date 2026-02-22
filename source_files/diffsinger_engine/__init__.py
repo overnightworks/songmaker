@@ -22,7 +22,8 @@ Usage:
 
 from .engine import DiffSingerEngine
 from .models import DiffSingerResult, VocalNote, VocalPhrase
-from .validation import ValidationReport, check_beat_budgets, validate_all, validate_phrase
+from .optimizer import generate_optimized
+from .validation import ValidationReport, check_beat_budgets, compare_runs, save_run, validate_all, validate_phrase
 
 __all__ = [
     "DiffSingerEngine",
@@ -31,6 +32,9 @@ __all__ = [
     "VocalNote",
     "VocalPhrase",
     "check_beat_budgets",
+    "compare_runs",
+    "generate_optimized",
+    "save_run",
     "validate_all",
     "validate_phrase",
 ]

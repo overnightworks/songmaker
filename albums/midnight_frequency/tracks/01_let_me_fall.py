@@ -55,6 +55,14 @@ TOTAL_BEATS: Final[float] = 480.0
 OUTPUT_DIR: Final[str] = "_output/midnight_frequency"
 WAV_PATH: Final[str] = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall.wav")
 MP3_PATH: Final[str] = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall.mp3")
+SONG_NAME: Final[str] = "01_let_me_fall"
+
+# Change this label before each generation run to describe the config
+RUN_LABEL: Final[str] = "WER scoring, small.en, optimizer retries"
+
+# Optimization settings
+TARGET_ACCURACY: Final[float] = 0.85  # Per-phrase Whisper word accuracy target
+MAX_RETRIES: Final[int] = 10  # Max generation attempts per phrase
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MIDI note constants (D minor: D E F G A Bb C)
@@ -1426,7 +1434,7 @@ def main() -> None:
         return
 
     # ── Full generation ──
-    from diffsinger_engine.validation import check_beat_budgets, validate_all
+    from diffsinger_engine.validation import check_beat_budgets, compare_runs, save_run, validate_all
 
     # ── 0. Beat budget check (instant, catches composition errors) ──
     check_beat_budgets(VOCAL_PHRASES, TOTAL_BEATS)
@@ -1464,16 +1472,18 @@ def main() -> None:
 
     overlay_onto(inst_left, inst_right, sfx_left, sfx_right, 0)
 
-    # ── 3. Generate vocals with DiffSinger ──
-    print("Generating vocals with DiffSinger + RVC...")
+    # ── 3. Generate vocals with DiffSinger (self-optimizing) ──
+    from diffsinger_engine.optimizer import generate_optimized
+
+    print(f"Generating vocals with DiffSinger (target: {TARGET_ACCURACY:.0%}, max retries: {MAX_RETRIES})...")
     ds_engine = DiffSingerEngine(voicebank_dir=str(VOICEBANK_DIR), device="cuda")
 
-    vocal_results: dict[str, np.ndarray] = {}
-    for phrase, _beat in VOCAL_PHRASES:
-        print(f"\n  Generating: {phrase.phrase_id}")
-        result = ds_engine.generate(phrase)
-        vocal_results[phrase.phrase_id] = result.samples
-        print(f"    Duration: {result.duration:.2f}s")
+    vocal_results = generate_optimized(
+        engine=ds_engine,
+        phrases=VOCAL_PHRASES,
+        target_accuracy=TARGET_ACCURACY,
+        max_retries=MAX_RETRIES,
+    )
 
     # ── 3b. Validate vocals before trimming ──
     validation_data = []
@@ -1489,6 +1499,10 @@ def main() -> None:
 
     report = validate_all(validation_data)
     print(report.summary())
+
+    # Save run to history and print comparison
+    save_run(report, RUN_LABEL, OUTPUT_DIR, song_name=SONG_NAME)
+    print(compare_runs(OUTPUT_DIR, song_name=SONG_NAME))
 
     # ── 3c. Safety trim — notes already fit by construction, but DiffSinger
     #    adds head/tail padding that may slightly overshoot the window. ──
