@@ -22,10 +22,14 @@ Usage:
 
 from .engine import DiffSingerEngine
 from .models import DiffSingerResult, VocalNote, VocalPhrase
+from .validation import ValidationReport, validate_all, validate_phrase
 
 __all__ = [
     "DiffSingerEngine",
     "DiffSingerResult",
+    "ValidationReport",
     "VocalNote",
     "VocalPhrase",
+    "validate_all",
+    "validate_phrase",
 ]

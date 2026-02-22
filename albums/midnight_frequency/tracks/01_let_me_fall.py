@@ -1371,7 +1371,56 @@ SFX_PLACEMENT: Final[
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main() -> None:
-    """Generate Let Me Fall: instrumental + DiffSinger vocals + SFX → mastered MP3."""
+    """Generate Let Me Fall: instrumental + DiffSinger vocals + SFX -> mastered MP3.
+
+    Modes:
+        (default)              Full song generation with validation report
+        --preview              Generate individual phrase WAVs only
+        --preview verse_1a     Generate specific phrase(s) only
+        --validate             Run phoneme validation without generating audio
+    """
+    import sys
+
+    args = sys.argv[1:]
+
+    # ── Preview mode: individual phrase WAVs ──
+    if args and args[0] == "--preview":
+        from diffsinger_engine.preview import generate_previews
+
+        phrase_ids = args[1:] if len(args) > 1 else None
+        generate_previews(
+            phrases=VOCAL_PHRASES,
+            voicebank_dir=VOICEBANK_DIR,
+            output_dir=os.path.join(OUTPUT_DIR, "previews"),
+            bpm=BPM,
+            total_beats=TOTAL_BEATS,
+            phrase_ids=phrase_ids,
+        )
+        return
+
+    # ── Validate mode: phoneme check only (no audio generation) ──
+    if args and args[0] == "--validate":
+        from diffsinger_engine.validation import check_phonemes
+
+        print("\n=== Phoneme Validation (dry run) ===\n")
+        all_ok = True
+        for phrase, beat in VOCAL_PHRASES:
+            issues = check_phonemes(phrase)
+            if issues:
+                print(f"  [!!] {phrase.phrase_id} (beat {beat}):")
+                for issue in issues:
+                    print(f"        {issue}")
+                all_ok = False
+            else:
+                n_notes = sum(1 for n in phrase.notes if not n.is_rest)
+                print(f"  [OK] {phrase.phrase_id}: {n_notes} notes, all phonemes resolved")
+        if all_ok:
+            print("\nAll phrases passed phoneme validation.")
+        return
+
+    # ── Full generation ──
+    from diffsinger_engine.validation import validate_all
+
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # ── 1. Render instrumental ──
@@ -1415,7 +1464,22 @@ def main() -> None:
         vocal_results[phrase.phrase_id] = result.samples
         print(f"    Duration: {result.duration:.2f}s")
 
-    # ── 3b. Trim vocals to fit beat windows (prevent overlap) ──
+    # ── 3b. Validate vocals before trimming ──
+    validation_data = []
+    for i, (phrase, beat) in enumerate(VOCAL_PHRASES):
+        samples = vocal_results.get(phrase.phrase_id)
+        if samples is None:
+            continue
+        if i + 1 < len(VOCAL_PHRASES):
+            window_sec = (VOCAL_PHRASES[i + 1][1] - beat) * SECONDS_PER_BEAT
+        else:
+            window_sec = (TOTAL_BEATS - beat) * SECONDS_PER_BEAT
+        validation_data.append((phrase, samples, window_sec))
+
+    report = validate_all(validation_data)
+    print(report.summary())
+
+    # ── 3c. Trim vocals to fit beat windows (prevent overlap) ──
     print("\nTrimming vocals to beat windows...")
     FADE_OUT_MS: float = 80.0  # ms fade at end of each phrase
     fade_samples = int(FADE_OUT_MS / 1000.0 * SAMPLE_RATE)
@@ -1425,19 +1489,16 @@ def main() -> None:
         if samples is None:
             continue
 
-        # Calculate max allowed duration from this phrase to the next
         if i + 1 < len(VOCAL_PHRASES):
             next_beat = VOCAL_PHRASES[i + 1][1]
             max_seconds = (next_beat - beat) * SECONDS_PER_BEAT
         else:
-            # Last phrase: allow until song end
             max_seconds = (TOTAL_BEATS - beat) * SECONDS_PER_BEAT
 
         max_samples = int(max_seconds * SAMPLE_RATE)
         actual_samples = len(samples)
 
         if actual_samples > max_samples:
-            # Trim and apply fade-out at the cut point
             trimmed = samples[:max_samples].copy()
             fade_len = min(fade_samples, max_samples)
             fade_curve = np.linspace(1.0, 0.0, fade_len, dtype=np.float32)

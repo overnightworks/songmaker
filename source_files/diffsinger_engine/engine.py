@@ -777,8 +777,19 @@ class DiffSingerEngine:
             )
 
             if result is not None:
-                print(f"| RVC conversion complete: {len(result)} samples")
-                return np.array(result, dtype=np.float32)
+                rvc_arr = np.array(result, dtype=np.float32)
+                input_len = len(waveform)
+                if len(rvc_arr) > input_len:
+                    # RVC adds ~8-9% extra samples — trim to match input length
+                    rvc_arr = rvc_arr[:input_len]
+                    print(f"| RVC trimmed to match input: {len(result)} -> {input_len} samples")
+                elif len(rvc_arr) < input_len:
+                    # Pad if shorter (unlikely but safe)
+                    rvc_arr = np.pad(rvc_arr, (0, input_len - len(rvc_arr)))
+                    print(f"| RVC padded to match input: {len(result)} -> {input_len} samples")
+                else:
+                    print(f"| RVC conversion complete: {len(rvc_arr)} samples (exact match)")
+                return rvc_arr
             else:
                 print("| RVC conversion failed, using original")
                 return waveform
