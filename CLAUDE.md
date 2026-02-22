@@ -16,6 +16,8 @@ AI-powered song generation engine by Flex0r. Generates complete songs (vocals + 
 3. **Engine reuse**: Both engines live in `source_files/` — never duplicate engine code into track files.
 4. **Ducking always active**: Vocals duck instrumentals by -3dB automatically.
 5. **Never commit secrets or API keys.**
+6. **DiffSinger: 2 lyric lines per phrase** (~12-16 notes). 4+ lines = garbled consonants, 1 line = too short for context. See AGENTS.md for full DiffSinger production rules.
+7. **Validate before shipping**: Run `check_beat_budgets()` pre-generation and Whisper pronunciation check post-generation. Target >80% similarity per phrase.
 
 ## Project Structure
 - `source_files/` — Shared engine code (bark, instrumental, diffsinger, rvc, xtts)

@@ -135,7 +135,7 @@ def build_phrase_tensors(
                 n_ph = len(result.phonemes)
                 note_ph_counts.append(n_ph)
                 # Distribute duration: consonants get short fixed, vowels get remainder
-                consonant_dur = min(0.06, note_dur_sec / (n_ph + 1))
+                consonant_dur = min(0.10, note_dur_sec / (n_ph + 1))
                 vowel_idxs = [i for i, ph in enumerate(result.phonemes) if ph in _VOWELS]
 
                 if vowel_idxs:

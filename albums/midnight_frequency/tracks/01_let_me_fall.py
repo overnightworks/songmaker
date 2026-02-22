@@ -796,7 +796,7 @@ def build_arrangement() -> Arrangement:
 
 VOICEBANK_DIR = Path(__file__).resolve().parent.parent.parent.parent / "_models" / "diffsinger" / "checkpoints" / "tiger_voice"
 
-RVC_MODEL = "whitney92"
+RVC_MODEL = None  # Disabled - RVC damages consonant clarity during DiffSinger testing
 RVC_PITCH_SHIFT = 0
 RVC_INDEX_RATE = 0.3  # Low index for pronunciation clarity over timbre
 

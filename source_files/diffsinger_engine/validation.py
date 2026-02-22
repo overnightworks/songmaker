@@ -9,16 +9,24 @@ Checks:
   - Clipping: Is the audio distorted?
   - Loudness: Is the RMS consistent across phrases?
   - Phoneme coverage: Did G2P produce phonemes for every note?
+  - Pronunciation: Does Whisper STT match expected lyrics?
 """
 
 from __future__ import annotations
 
+import logging
+import tempfile
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
+from pathlib import Path
 
 import numpy as np
+import soundfile as sf
 
 from .models import VocalPhrase
 from .phonemizer import phonemize_word
+
+logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 44100
 
@@ -182,7 +190,7 @@ def check_beat_budgets(
 ) -> list[str]:
     """Verify every phrase's notes fit within its beat window.
 
-    This is a pure-math check — no audio generation needed. It should
+    This is a pure-math check - no audio generation needed. It should
     run instantly and catch composition errors before any slow processing.
 
     Args:
@@ -216,7 +224,7 @@ def check_beat_budgets(
             )
 
     if errors:
-        header = f"\nBeat budget check FAILED — {len(errors)} phrase(s) overflow:\n"
+        header = f"\nBeat budget check FAILED - {len(errors)} phrase(s) overflow:\n"
         detail = "\n".join(errors)
         raise ValueError(header + detail)
 
@@ -246,6 +254,7 @@ def validate_phrase(
     _rms_db, loudness_issues = check_loudness(samples)
     check.issues.extend(loudness_issues)
     check.issues.extend(check_phonemes(phrase))
+    check.issues.extend(check_pronunciation(phrase, samples))
 
     return check
 
@@ -290,3 +299,99 @@ def validate_all(
                     break
 
     return report
+
+
+# ── Whisper pronunciation validation ────────────────────────────────
+
+_whisper_model = None
+
+
+def _get_whisper_model():
+    """Lazy-load Whisper tiny.en model (first call takes a few seconds)."""
+    global _whisper_model
+    if _whisper_model is None:
+        try:
+            import whisper
+        except ImportError:
+            logger.warning("openai-whisper not installed - skipping pronunciation check")
+            return None
+        logger.info("Loading Whisper tiny.en model...")
+        _whisper_model = whisper.load_model("tiny.en")
+    return _whisper_model
+
+
+def _extract_lyrics(phrase: VocalPhrase) -> list[str]:
+    """Extract expected words from phrase notes (skip rests)."""
+    return [n.lyric.lower().strip() for n in phrase.notes if not n.is_rest and n.lyric.strip()]
+
+
+def check_pronunciation(
+    phrase: VocalPhrase,
+    samples: np.ndarray,
+    similarity_threshold: float = 0.4,
+) -> list[str]:
+    """Transcribe audio with Whisper and compare to expected lyrics.
+
+    Args:
+        phrase: The vocal phrase with expected lyrics.
+        samples: Generated audio (float32, 44100 Hz).
+        similarity_threshold: Per-word similarity below which to flag (0-1).
+
+    Returns:
+        List of issue strings (WARN level).
+    """
+    model = _get_whisper_model()
+    if model is None:
+        return []
+
+    issues: list[str] = []
+    expected_words = _extract_lyrics(phrase)
+    if not expected_words:
+        return issues
+
+    expected_text = " ".join(expected_words)
+
+    # Whisper needs a WAV file on disk
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+
+    try:
+        sf.write(str(tmp_path), samples, SAMPLE_RATE)
+        result = model.transcribe(
+            str(tmp_path),
+            language="en",
+            fp16=False,
+            condition_on_previous_text=False,
+        )
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    transcribed = result["text"].strip().lower()
+    # Clean punctuation
+    transcribed_clean = "".join(c if c.isalnum() or c == " " else "" for c in transcribed)
+    transcribed_words = transcribed_clean.split()
+
+    # Overall similarity
+    overall_sim = SequenceMatcher(None, expected_text, transcribed_clean).ratio()
+
+    if overall_sim < 0.6:
+        issues.append(
+            f"WARN: pronunciation mismatch - expected \"{expected_text}\" "
+            f"but heard \"{transcribed_clean}\" (similarity: {overall_sim:.0%})"
+        )
+    elif overall_sim < 0.8:
+        # Find specific mismatched words
+        mismatched = []
+        matcher = SequenceMatcher(None, expected_words, transcribed_words)
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag in ("replace", "delete"):
+                bad_words = expected_words[i1:i2]
+                got_words = transcribed_words[j1:j2] if tag == "replace" else ["(missing)"]
+                mismatched.append(f"'{' '.join(bad_words)}'->'{' '.join(got_words)}'")
+        if mismatched:
+            issues.append(
+                f"WARN: unclear words - {', '.join(mismatched)} "
+                f"(overall: {overall_sim:.0%})"
+            )
+
+    return issues
