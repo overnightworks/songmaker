@@ -78,6 +78,13 @@ def main() -> None:
     env["ACESTEP_DEVICE"] = args.device
     # Use PyTorch LM backend (avoids nano-vllm CUDA/triton issues on Windows)
     env.setdefault("ACESTEP_LM_BACKEND", "pt")
+    # Enable CPU offloading for low-VRAM GPUs (6GB GTX 1660 Ti)
+    env.setdefault("ACESTEP_OFFLOAD_TO_CPU", "1")
+    env.setdefault("ACESTEP_OFFLOAD_DIT_TO_CPU", "1")
+    # Skip LLM initialization (not enough VRAM for DiT + LM)
+    env.setdefault("ACESTEP_INIT_LLM", "0")
+    # Disable torch.compile (torchao INT8 incompatible with torch 2.7.1)
+    env.setdefault("ACESTEP_COMPILE_MODEL", "0")
 
     print(f"Starting ACE-Step server on port {args.port}...")
     print(f"  Device: {args.device}")
