@@ -22,7 +22,7 @@ Usage:
 
 from .engine import DiffSingerEngine
 from .models import DiffSingerResult, VocalNote, VocalPhrase
-from .validation import ValidationReport, validate_all, validate_phrase
+from .validation import ValidationReport, check_beat_budgets, validate_all, validate_phrase
 
 __all__ = [
     "DiffSingerEngine",
@@ -30,6 +30,7 @@ __all__ = [
     "ValidationReport",
     "VocalNote",
     "VocalPhrase",
+    "check_beat_budgets",
     "validate_all",
     "validate_phrase",
 ]

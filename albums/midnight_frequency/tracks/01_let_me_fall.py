@@ -842,40 +842,40 @@ verse_1a_phrase = VocalPhrase(
     gender=-0.15,
     rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
     notes=(
-        # "I built these walls with steady hands" — over Dm
-        _n(62, "I", 0.75),          # D4
-        _n(65, "built", 1.25),      # F4
-        _n(64, "these", 1.0),       # E4
-        _n(62, "walls", 2.0),       # D4
-        _n(65, "with", 0.75),       # F4
-        _n(67, "steady", 1.5),      # G4
-        _n(65, "hands", 2.5),       # F4
-        _r(1.0),
-        # "but steady hands still shake at night" — over Bb
-        _n(65, "but", 0.75),        # F4
-        _n(67, "steady", 1.5),      # G4
-        _n(69, "hands", 1.25),      # A4
-        _n(67, "still", 1.0),       # G4
-        _n(70, "shake", 1.5),       # Bb4
-        _n(69, "at", 0.75),         # A4
-        _n(67, "night", 3.0),       # G4
-        _r(1.0),
-        # "I held my breath for twenty years" — over F
-        _n(65, "I", 0.75),          # F4
-        _n(69, "held", 1.5),        # A4
-        _n(67, "my", 0.75),         # G4
-        _n(65, "breath", 1.5),      # F4
-        _n(67, "for", 0.75),        # G4
-        _n(69, "twenty", 1.5),      # A4
-        _n(72, "years", 2.5),       # C5
-        _r(1.0),
-        # "forgot what air tastes like" — over C
-        _n(72, "forgot", 1.5),      # C5
-        _n(69, "what", 0.75),       # A4
-        _n(67, "air", 1.5),         # G4
-        _n(65, "tastes", 1.25),     # F4
-        _n(62, "like", 3.0),        # D4
-        _r(1.0),
+        # "I built these walls with steady hands" — 8 beats over Dm
+        _n(62, "I", 0.5),           # D4
+        _n(65, "built", 1.0),       # F4
+        _n(64, "these", 0.75),      # E4
+        _n(62, "walls", 1.5),       # D4
+        _n(65, "with", 0.5),        # F4
+        _n(67, "steady", 1.25),     # G4
+        _n(65, "hands", 1.75),      # F4
+        _r(0.75),
+        # "but steady hands still shake at night" — 8 beats over Bb
+        _n(65, "but", 0.5),         # F4
+        _n(67, "steady", 1.25),     # G4
+        _n(69, "hands", 1.0),       # A4
+        _n(67, "still", 0.75),      # G4
+        _n(70, "shake", 1.25),      # Bb4
+        _n(69, "at", 0.5),          # A4
+        _n(67, "night", 2.0),       # G4
+        _r(0.75),
+        # "I held my breath for twenty years" — 8 beats over F
+        _n(65, "I", 0.5),           # F4
+        _n(69, "held", 1.25),       # A4
+        _n(67, "my", 0.5),          # G4
+        _n(65, "breath", 1.25),     # F4
+        _n(67, "for", 0.5),         # G4
+        _n(69, "twenty", 1.25),     # A4
+        _n(72, "years", 2.0),       # C5
+        _r(0.75),
+        # "forgot what air tastes like" — 8 beats over C
+        _n(72, "forgot", 1.25),     # C5
+        _n(69, "what", 0.5),        # A4
+        _n(67, "air", 1.25),        # G4
+        _n(65, "tastes", 1.0),      # F4
+        _n(62, "like", 2.5),        # D4
+        _r(1.5),
     ),
 )
 
@@ -887,38 +887,38 @@ verse_1b_phrase = VocalPhrase(
     gender=-0.15,
     rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
     notes=(
-        # "I drew the map, I marked the lines" — over Dm
-        _n(62, "I", 0.75),          # D4
-        _n(65, "drew", 1.25),       # F4
-        _n(64, "the", 0.75),        # E4
-        _n(67, "map", 2.0),         # G4
-        _r(0.75),
-        _n(65, "I", 0.75),          # F4
-        _n(69, "marked", 1.5),      # A4
-        _n(67, "the", 0.75),        # G4
-        _n(65, "lines", 2.5),       # F4
-        _r(1.0),
-        # "colored inside every one" — over Bb
-        _n(67, "colored", 1.5),     # G4
-        _n(69, "inside", 1.5),      # A4
-        _n(70, "every", 1.5),       # Bb4
-        _n(67, "one", 3.0),         # G4
-        _r(1.0),
-        # "the picture looked like someone's life" — over F
-        _n(65, "the", 0.75),        # F4
-        _n(69, "picture", 1.5),     # A4
-        _n(67, "looked", 1.0),      # G4
-        _n(65, "like", 0.75),       # F4
-        _n(69, "someone's", 1.5),   # A4
-        _n(72, "life", 2.5),        # C5
-        _r(1.0),
-        # "but I don't know whose" — over C
-        _n(72, "but", 0.75),        # C5
-        _n(69, "I", 0.75),          # A4
-        _n(67, "don't", 1.0),       # G4
-        _n(65, "know", 1.5),        # F4
-        _n(62, "whose", 3.5),       # D4
-        _r(1.0),
+        # "I drew the map, I marked the lines" — 8 beats over Dm
+        _n(62, "I", 0.5),           # D4
+        _n(65, "drew", 1.0),        # F4
+        _n(64, "the", 0.5),         # E4
+        _n(67, "map", 1.5),         # G4
+        _r(0.5),
+        _n(65, "I", 0.5),           # F4
+        _n(69, "marked", 1.0),      # A4
+        _n(67, "the", 0.5),         # G4
+        _n(65, "lines", 1.5),       # F4
+        _r(0.5),
+        # "colored inside every one" — 8 beats over Bb
+        _n(67, "colored", 1.25),    # G4
+        _n(69, "inside", 1.25),     # A4
+        _n(70, "every", 1.25),      # Bb4
+        _n(67, "one", 2.5),         # G4
+        _r(1.75),
+        # "the picture looked like someone's life" — 8 beats over F
+        _n(65, "the", 0.5),         # F4
+        _n(69, "picture", 1.25),    # A4
+        _n(67, "looked", 0.75),     # G4
+        _n(65, "like", 0.5),        # F4
+        _n(69, "someone's", 1.25),  # A4
+        _n(72, "life", 2.0),        # C5
+        _r(1.75),
+        # "but I don't know whose" — 8 beats over C
+        _n(72, "but", 0.5),         # C5
+        _n(69, "I", 0.5),           # A4
+        _n(67, "don't", 0.75),      # G4
+        _n(65, "know", 1.25),       # F4
+        _n(62, "whose", 3.0),       # D4
+        _r(2.0),
     ),
 )
 
@@ -960,42 +960,42 @@ chorus_1a_phrase = VocalPhrase(
     gender=-0.1,
     rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
     notes=(
-        # "Let me fall" — descending hook
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 3.0),        # A4 — falling!
+        # "Let me fall" — 5.5 beats, descending hook
+        _n(74, "let", 0.75),        # D5
+        _n(72, "me", 0.5),          # C5
+        _n(69, "fall", 2.5),        # A4 — falling!
+        _r(0.5),
+        # "I don't need the ground" — 5.5 beats
+        _n(69, "I", 0.5),           # A4
+        _n(72, "don't", 1.0),       # C5
+        _n(70, "need", 1.0),        # Bb4
+        _n(69, "the", 0.5),         # A4
+        _n(67, "ground", 2.0),      # G4
+        _r(0.5),
+        # "Let me fall into the sound" — 7 beats
+        _n(74, "let", 0.75),        # D5
+        _n(72, "me", 0.5),          # C5
+        _n(69, "fall", 1.5),        # A4
+        _n(70, "into", 1.0),        # Bb4
+        _n(69, "the", 0.5),         # A4
+        _n(67, "sound", 2.25),      # G4
+        _r(0.5),
+        # "I've been holding on so long" — 7 beats
+        _n(67, "I've", 0.5),        # G4
+        _n(69, "been", 0.75),       # A4
+        _n(72, "holding", 1.5),     # C5
+        _n(69, "on", 0.75),         # A4
+        _n(67, "so", 0.5),          # G4
+        _n(65, "long", 2.0),        # F4
         _r(1.0),
-        # "I don't need the ground"
-        _n(69, "I", 0.75),          # A4
-        _n(72, "don't", 1.25),      # C5
-        _n(70, "need", 1.25),       # Bb4
-        _n(69, "the", 0.75),        # A4
-        _n(67, "ground", 2.5),      # G4
-        _r(1.0),
-        # "Let me fall into the sound"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 2.0),        # A4
-        _n(70, "into", 1.25),       # Bb4
-        _n(69, "the", 0.75),        # A4
-        _n(67, "sound", 3.0),       # G4
-        _r(1.0),
-        # "I've been holding on so long"
-        _n(67, "I've", 0.75),       # G4
-        _n(69, "been", 1.0),        # A4
-        _n(72, "holding", 2.0),     # C5
-        _n(69, "on", 1.0),          # A4
-        _n(67, "so", 0.75),         # G4
-        _n(65, "long", 2.5),        # F4
-        _r(1.0),
-        # "let me fall where I belong"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 2.0),        # A4
-        _n(67, "where", 1.0),       # G4
-        _n(69, "I", 0.75),          # A4
-        _n(70, "belong", 3.5),      # Bb4
-        _r(0.75),
+        # "let me fall where I belong" — 7 beats
+        _n(74, "let", 0.75),        # D5
+        _n(72, "me", 0.5),          # C5
+        _n(69, "fall", 1.5),        # A4
+        _n(67, "where", 0.75),      # G4
+        _n(69, "I", 0.5),           # A4
+        _n(70, "belong", 2.5),      # Bb4
+        _r(0.5),
     ),
 )
 
@@ -1007,42 +1007,42 @@ chorus_1b_phrase = VocalPhrase(
     gender=-0.1,
     rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
     notes=(
-        # "Let me fall"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 3.0),        # A4
-        _r(1.0),
-        # "through the noise and the light"
-        _n(69, "through", 1.0),     # A4
-        _n(70, "the", 0.75),        # Bb4
-        _n(72, "noise", 1.5),       # C5
-        _n(69, "and", 0.75),        # A4
-        _n(67, "the", 0.75),        # G4
-        _n(65, "light", 2.5),       # F4
-        _r(1.0),
-        # "Let me fall through the night"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 2.0),        # A4
-        _n(67, "through", 1.0),     # G4
-        _n(65, "the", 0.75),        # F4
-        _n(62, "night", 3.0),       # D4
-        _r(1.0),
-        # "I don't need to understand"
-        _n(65, "I", 0.75),          # F4
-        _n(67, "don't", 1.0),       # G4
-        _n(69, "need", 1.25),       # A4
-        _n(67, "to", 0.75),         # G4
-        _n(72, "understand", 3.5),  # C5
-        _r(1.0),
-        # "let me fall from my own hands"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 2.0),        # A4
-        _n(67, "from", 0.75),       # G4
-        _n(65, "my", 0.75),         # F4
-        _n(67, "own", 1.0),         # G4
-        _n(62, "hands", 3.5),       # D4
+        # "Let me fall" — 4.25 beats
+        _n(74, "let", 0.75),        # D5
+        _n(72, "me", 0.5),          # C5
+        _n(69, "fall", 2.5),        # A4
+        _r(0.5),
+        # "through the noise and the light" — 5.75 beats
+        _n(69, "through", 0.75),    # A4
+        _n(70, "the", 0.5),         # Bb4
+        _n(72, "noise", 1.0),       # C5
+        _n(69, "and", 0.5),         # A4
+        _n(67, "the", 0.5),         # G4
+        _n(65, "light", 2.0),       # F4
+        _r(0.5),
+        # "Let me fall through the night" — 7.0 beats
+        _n(74, "let", 0.75),        # D5
+        _n(72, "me", 0.5),          # C5
+        _n(69, "fall", 1.5),        # A4
+        _n(67, "through", 0.75),    # G4
+        _n(65, "the", 0.5),         # F4
+        _n(62, "night", 2.5),       # D4
+        _r(0.5),
+        # "I don't need to understand" — 7.0 beats
+        _n(65, "I", 0.5),           # F4
+        _n(67, "don't", 0.75),      # G4
+        _n(69, "need", 1.0),        # A4
+        _n(67, "to", 0.5),          # G4
+        _n(72, "understand", 3.0),  # C5
+        _r(1.25),
+        # "let me fall from my own hands" — 8.0 beats
+        _n(74, "let", 0.75),        # D5
+        _n(72, "me", 0.5),          # C5
+        _n(69, "fall", 1.5),        # A4
+        _n(67, "from", 0.5),        # G4
+        _n(65, "my", 0.5),          # F4
+        _n(67, "own", 0.75),        # G4
+        _n(62, "hands", 2.75),      # D4
         _r(0.75),
     ),
 )
@@ -1055,40 +1055,40 @@ verse_2a_phrase = VocalPhrase(
     gender=-0.15,
     rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
     notes=(
-        # "I see the city from up here"
-        _n(62, "I", 0.75),          # D4
-        _n(65, "see", 1.25),        # F4
-        _n(64, "the", 0.75),        # E4
-        _n(67, "city", 2.0),        # G4
-        _n(65, "from", 1.0),        # F4
-        _n(69, "up", 1.0),          # A4
-        _n(67, "here", 2.5),        # G4
+        # "I see the city from up here" — 8 beats over Dm
+        _n(62, "I", 0.5),           # D4
+        _n(65, "see", 1.0),         # F4
+        _n(64, "the", 0.5),         # E4
+        _n(67, "city", 1.5),        # G4
+        _n(65, "from", 0.75),       # F4
+        _n(69, "up", 0.75),         # A4
+        _n(67, "here", 2.25),       # G4
+        _r(0.75),
+        # "the lights look just like breathing" — 8 beats over Bb
+        _n(67, "the", 0.5),         # G4
+        _n(70, "lights", 1.25),     # Bb4
+        _n(69, "look", 0.75),       # A4
+        _n(67, "just", 0.5),        # G4
+        _n(65, "like", 0.75),       # F4
+        _n(69, "breathing", 2.5),   # A4
+        _r(1.75),
+        # "my old life fits inside a window" — 8 beats over F
+        _n(65, "my", 0.5),          # F4
+        _n(69, "old", 1.0),         # A4
+        _n(67, "life", 1.0),        # G4
+        _n(65, "fits", 0.75),       # F4
+        _n(69, "inside", 1.25),     # A4
+        _n(67, "a", 0.5),           # G4
+        _n(72, "window", 2.0),      # C5
         _r(1.0),
-        # "the lights look just like breathing"
-        _n(67, "the", 0.75),        # G4
-        _n(70, "lights", 1.5),      # Bb4
-        _n(69, "look", 1.0),        # A4
-        _n(67, "just", 0.75),       # G4
-        _n(65, "like", 1.0),        # F4
-        _n(69, "breathing", 3.0),   # A4
-        _r(1.0),
-        # "my old life fits inside a window"
-        _n(65, "my", 0.75),         # F4
-        _n(69, "old", 1.25),        # A4
-        _n(67, "life", 1.25),       # G4
-        _n(65, "fits", 1.0),        # F4
-        _n(69, "inside", 1.5),      # A4
-        _n(67, "a", 0.75),          # G4
-        _n(72, "window", 2.5),      # C5
-        _r(1.0),
-        # "too small to climb back through"
-        _n(72, "too", 1.0),         # C5
-        _n(69, "small", 1.25),      # A4
-        _n(67, "to", 0.75),         # G4
-        _n(65, "climb", 1.25),      # F4
-        _n(64, "back", 1.0),        # E4
-        _n(62, "through", 3.0),     # D4
-        _r(1.0),
+        # "too small to climb back through" — 8 beats over C
+        _n(72, "too", 0.75),        # C5
+        _n(69, "small", 1.0),       # A4
+        _n(67, "to", 0.5),          # G4
+        _n(65, "climb", 1.0),       # F4
+        _n(64, "back", 0.75),       # E4
+        _n(62, "through", 2.5),     # D4
+        _r(1.5),
     ),
 )
 
@@ -1100,40 +1100,40 @@ verse_2b_phrase = VocalPhrase(
     gender=-0.15,
     rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
     notes=(
-        # "I kept a list of all the things"
-        _n(62, "I", 0.75),          # D4
-        _n(65, "kept", 1.25),       # F4
-        _n(64, "a", 0.75),          # E4
-        _n(67, "list", 1.5),        # G4
-        _n(65, "of", 0.75),         # F4
-        _n(69, "all", 1.25),        # A4
-        _n(67, "the", 0.75),        # G4
-        _n(65, "things", 2.5),      # F4
-        _r(1.0),
-        # "that I was supposed to be"
-        _n(67, "that", 0.75),       # G4
-        _n(69, "I", 0.75),          # A4
-        _n(67, "was", 1.0),         # G4
-        _n(70, "supposed", 2.0),    # Bb4
-        _n(69, "to", 0.75),         # A4
-        _n(67, "be", 3.0),          # G4
-        _r(1.0),
-        # "I folded it into a bird"
-        _n(65, "I", 0.75),          # F4
-        _n(69, "folded", 1.5),      # A4
-        _n(67, "it", 0.75),         # G4
-        _n(69, "into", 1.5),        # A4
-        _n(67, "a", 0.75),          # G4
-        _n(72, "bird", 2.5),        # C5
-        _r(1.0),
-        # "and watched it leave without me"
-        _n(72, "and", 0.75),        # C5
-        _n(69, "watched", 1.25),    # A4
-        _n(67, "it", 0.75),         # G4
-        _n(65, "leave", 1.5),       # F4
-        _n(64, "without", 2.0),     # E4
-        _n(62, "me", 3.5),          # D4
-        _r(1.0),
+        # "I kept a list of all the things" — 8 beats over Dm
+        _n(62, "I", 0.5),           # D4
+        _n(65, "kept", 1.0),        # F4
+        _n(64, "a", 0.5),           # E4
+        _n(67, "list", 1.25),       # G4
+        _n(65, "of", 0.5),          # F4
+        _n(69, "all", 1.0),         # A4
+        _n(67, "the", 0.5),         # G4
+        _n(65, "things", 2.0),      # F4
+        _r(0.75),
+        # "that I was supposed to be" — 8 beats over Bb
+        _n(67, "that", 0.5),        # G4
+        _n(69, "I", 0.5),           # A4
+        _n(67, "was", 0.75),        # G4
+        _n(70, "supposed", 1.5),    # Bb4
+        _n(69, "to", 0.5),          # A4
+        _n(67, "be", 2.5),          # G4
+        _r(1.75),
+        # "I folded it into a bird" — 8 beats over F
+        _n(65, "I", 0.5),           # F4
+        _n(69, "folded", 1.25),     # A4
+        _n(67, "it", 0.5),          # G4
+        _n(69, "into", 1.25),       # A4
+        _n(67, "a", 0.5),           # G4
+        _n(72, "bird", 2.25),       # C5
+        _r(1.75),
+        # "and watched it leave without me" — 8 beats over C
+        _n(72, "and", 0.5),         # C5
+        _n(69, "watched", 1.0),     # A4
+        _n(67, "it", 0.5),          # G4
+        _n(65, "leave", 1.25),      # F4
+        _n(64, "without", 1.5),     # E4
+        _n(62, "me", 2.5),          # D4
+        _r(0.75),
     ),
 )
 
@@ -1197,30 +1197,30 @@ bridge_phrase = VocalPhrase(
     gender=-0.2,
     rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
     notes=(
-        # "There is no bottom"
+        # "There is no bottom" — 8 beats
         _n(62, "there", 1.25),      # D4
         _n(65, "is", 1.0),          # F4
         _n(67, "no", 1.0),          # G4
         _n(69, "bottom", 3.0),      # A4
-        _r(2.0),
-        # "There is no end"
+        _r(1.75),
+        # "There is no end" — 8 beats
         _n(64, "there", 1.25),      # E4
         _n(65, "is", 1.0),          # F4
         _n(67, "no", 1.0),          # G4
         _n(69, "end", 3.0),         # A4
-        _r(2.0),
-        # "Just the fall"
+        _r(1.75),
+        # "Just the fall" — 7 beats
         _n(65, "just", 1.25),       # F4
         _n(67, "the", 0.75),        # G4
-        _n(70, "fall", 3.5),        # Bb4
-        _r(2.0),
-        # "And falling feels like flying"
+        _n(70, "fall", 3.25),       # Bb4
+        _r(1.75),
+        # "And falling feels like flying" — 9 beats
         _n(67, "and", 0.75),        # G4
         _n(69, "falling", 2.0),     # A4
         _n(67, "feels", 1.25),      # G4
         _n(65, "like", 1.0),        # F4
-        _n(67, "flying", 3.5),      # G4
-        _r(1.0),
+        _n(67, "flying", 3.25),     # G4
+        _r(0.75),
     ),
 )
 
@@ -1233,42 +1233,42 @@ final_chorus_a_phrase = VocalPhrase(
     gender=-0.1,
     rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
     notes=(
-        # "Let me fall"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 3.0),        # A4
-        _r(1.0),
-        # "I don't need the ground"
-        _n(69, "I", 0.75),          # A4
-        _n(72, "don't", 1.25),      # C5
-        _n(70, "need", 1.25),       # Bb4
-        _n(69, "the", 0.75),        # A4
-        _n(67, "ground", 2.5),      # G4
-        _r(1.0),
-        # "Let me fall into the sound"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 2.0),        # A4
-        _n(70, "into", 1.25),       # Bb4
-        _n(69, "the", 0.75),        # A4
-        _n(67, "sound", 3.0),       # G4
-        _r(1.0),
-        # "I've been standing still so long"
-        _n(67, "I've", 0.75),       # G4
-        _n(69, "been", 1.0),        # A4
-        _n(72, "standing", 2.0),    # C5
-        _n(69, "still", 1.0),       # A4
-        _n(67, "so", 0.75),         # G4
-        _n(65, "long", 2.5),        # F4
-        _r(1.0),
-        # "let me fall where I belong"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 2.0),        # A4
-        _n(67, "where", 1.0),       # G4
-        _n(69, "I", 0.75),          # A4
-        _n(70, "belong", 3.5),      # Bb4
-        _r(0.75),
+        # "Let me fall" — 4.25 beats
+        _n(74, "let", 0.75),        # D5
+        _n(72, "me", 0.5),          # C5
+        _n(69, "fall", 2.5),        # A4
+        _r(0.5),
+        # "I don't need the ground" — 5.5 beats
+        _n(69, "I", 0.5),           # A4
+        _n(72, "don't", 1.0),       # C5
+        _n(70, "need", 1.0),        # Bb4
+        _n(69, "the", 0.5),         # A4
+        _n(67, "ground", 2.0),      # G4
+        _r(0.5),
+        # "Let me fall into the sound" — 7.0 beats
+        _n(74, "let", 0.75),        # D5
+        _n(72, "me", 0.5),          # C5
+        _n(69, "fall", 1.5),        # A4
+        _n(70, "into", 1.0),        # Bb4
+        _n(69, "the", 0.5),         # A4
+        _n(67, "sound", 2.25),      # G4
+        _r(0.5),
+        # "I've been standing still so long" — 7.25 beats
+        _n(67, "I've", 0.5),        # G4
+        _n(69, "been", 0.75),       # A4
+        _n(72, "standing", 1.5),    # C5
+        _n(69, "still", 0.75),      # A4
+        _n(67, "so", 0.5),          # G4
+        _n(65, "long", 2.0),        # F4
+        _r(1.25),
+        # "let me fall where I belong" — 8.0 beats
+        _n(74, "let", 0.75),        # D5
+        _n(72, "me", 0.5),          # C5
+        _n(69, "fall", 1.5),        # A4
+        _n(67, "where", 0.75),      # G4
+        _n(69, "I", 0.5),           # A4
+        _n(70, "belong", 2.5),      # Bb4
+        _r(1.5),
     ),
 )
 
@@ -1398,11 +1398,18 @@ def main() -> None:
         )
         return
 
-    # ── Validate mode: phoneme check only (no audio generation) ──
+    # ── Validate mode: full dry-run validation (no audio generation) ──
     if args and args[0] == "--validate":
-        from diffsinger_engine.validation import check_phonemes
+        from diffsinger_engine.validation import check_beat_budgets, check_phonemes
 
-        print("\n=== Phoneme Validation (dry run) ===\n")
+        print("\n=== Beat Budget Validation ===\n")
+        try:
+            check_beat_budgets(VOCAL_PHRASES, TOTAL_BEATS)
+            print("  All phrases fit their beat windows.\n")
+        except ValueError as e:
+            print(str(e))
+
+        print("=== Phoneme Validation ===\n")
         all_ok = True
         for phrase, beat in VOCAL_PHRASES:
             issues = check_phonemes(phrase)
@@ -1419,7 +1426,11 @@ def main() -> None:
         return
 
     # ── Full generation ──
-    from diffsinger_engine.validation import validate_all
+    from diffsinger_engine.validation import check_beat_budgets, validate_all
+
+    # ── 0. Beat budget check (instant, catches composition errors) ──
+    check_beat_budgets(VOCAL_PHRASES, TOTAL_BEATS)
+    print("Beat budget check passed — all phrases fit their windows.")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -1479,9 +1490,9 @@ def main() -> None:
     report = validate_all(validation_data)
     print(report.summary())
 
-    # ── 3c. Trim vocals to fit beat windows (prevent overlap) ──
-    print("\nTrimming vocals to beat windows...")
-    FADE_OUT_MS: float = 80.0  # ms fade at end of each phrase
+    # ── 3c. Safety trim — notes already fit by construction, but DiffSinger
+    #    adds head/tail padding that may slightly overshoot the window. ──
+    FADE_OUT_MS: float = 80.0
     fade_samples = int(FADE_OUT_MS / 1000.0 * SAMPLE_RATE)
 
     for i, (phrase, beat) in enumerate(VOCAL_PHRASES):
@@ -1490,23 +1501,18 @@ def main() -> None:
             continue
 
         if i + 1 < len(VOCAL_PHRASES):
-            next_beat = VOCAL_PHRASES[i + 1][1]
-            max_seconds = (next_beat - beat) * SECONDS_PER_BEAT
+            max_seconds = (VOCAL_PHRASES[i + 1][1] - beat) * SECONDS_PER_BEAT
         else:
             max_seconds = (TOTAL_BEATS - beat) * SECONDS_PER_BEAT
 
         max_samples = int(max_seconds * SAMPLE_RATE)
-        actual_samples = len(samples)
 
-        if actual_samples > max_samples:
+        if len(samples) > max_samples:
             trimmed = samples[:max_samples].copy()
             fade_len = min(fade_samples, max_samples)
-            fade_curve = np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
-            trimmed[-fade_len:] *= fade_curve
+            trimmed[-fade_len:] *= np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
             vocal_results[phrase.phrase_id] = trimmed
-            print(f"  {phrase.phrase_id}: trimmed {actual_samples/SAMPLE_RATE:.2f}s -> {max_samples/SAMPLE_RATE:.2f}s")
-        else:
-            print(f"  {phrase.phrase_id}: {actual_samples/SAMPLE_RATE:.2f}s (fits in {max_seconds:.2f}s window)")
+            print(f"  {phrase.phrase_id}: safety-trimmed {len(samples)/SAMPLE_RATE:.2f}s -> {max_samples/SAMPLE_RATE:.2f}s")
 
     # ── 4. Apply ducking ──
     print("\nApplying vocal-instrumental ducking (-3dB)...")

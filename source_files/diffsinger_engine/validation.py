@@ -175,6 +175,52 @@ def check_phonemes(phrase: VocalPhrase) -> list[str]:
     return issues
 
 
+def check_beat_budgets(
+    phrases: list[tuple[VocalPhrase, float]],
+    total_beats: float,
+    tolerance_beats: float = 0.5,
+) -> list[str]:
+    """Verify every phrase's notes fit within its beat window.
+
+    This is a pure-math check — no audio generation needed. It should
+    run instantly and catch composition errors before any slow processing.
+
+    Args:
+        phrases: List of (VocalPhrase, start_beat) tuples.
+        total_beats: Total song length in beats.
+        tolerance_beats: Small buffer to allow for head/tail padding.
+
+    Returns:
+        List of error messages. Empty list = all phrases fit.
+
+    Raises:
+        ValueError: If any phrase overflows its beat window.
+    """
+    errors = []
+
+    for i, (phrase, beat) in enumerate(phrases):
+        # Calculate beat window
+        if i + 1 < len(phrases):
+            window_beats = phrases[i + 1][1] - beat
+        else:
+            window_beats = total_beats - beat
+
+        # Sum note durations
+        note_beats = sum(n.duration_beats for n in phrase.notes)
+
+        if note_beats > window_beats + tolerance_beats:
+            overflow = note_beats - window_beats
+            errors.append(
+                f"  {phrase.phrase_id}: {note_beats:.1f} beats of notes in "
+                f"{window_beats:.0f}-beat window (overflow: {overflow:.1f} beats)"
+            )
+
+    if errors:
+        header = f"\nBeat budget check FAILED — {len(errors)} phrase(s) overflow:\n"
+        detail = "\n".join(errors)
+        raise ValueError(header + detail)
+
+
 def validate_phrase(
     phrase: VocalPhrase,
     samples: np.ndarray,
