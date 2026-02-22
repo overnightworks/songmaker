@@ -1,4 +1,12 @@
-"""DiffSinger ONNX inference engine."""
+"""DiffSinger ONNX inference engine — full 4-stage pipeline.
+
+Pipeline:
+  1. Linguistic encoder → hidden states from phoneme tokens
+  2. Duration predictor → phoneme durations (frames)
+  3. Pitch predictor → expressive f0 curve (MIDI semitones)
+  4. Acoustic model → mel spectrogram
+  5. Vocoder → waveform
+"""
 
 from __future__ import annotations
 
@@ -8,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from .ds_builder import build_tensors
+from .ds_builder import PhraseTensors, build_phrase_tensors, midi_to_hz
 from .models import (
     DiffSingerResult,
     VocalPhrase,
@@ -16,7 +24,6 @@ from .models import (
     VocoderConfig,
 )
 
-# Default diffusion steps for reflow models
 DEFAULT_STEPS = 20
 
 
@@ -24,7 +31,7 @@ class DiffSingerEngine:
     """Orchestrates DiffSinger ONNX inference for singing voice synthesis.
 
     Usage:
-        engine = DiffSingerEngine(voicebank_dir="path/to/tiger")
+        engine = DiffSingerEngine(voicebank_dir="path/to/tiger_voice")
         result = engine.generate(phrase)
     """
 
@@ -39,10 +46,15 @@ class DiffSingerEngine:
         self.device = device
         self.steps = steps
 
-        # Load voicebank config
+        # Load top-level voicebank config
         self.config = self._load_voicebank_config()
 
-        # Resolve vocoder directory
+        # Resolve sub-model directories
+        self.dur_dir = self.voicebank_dir / "dsdur"
+        self.pitch_dir = self.voicebank_dir / "dspitch"
+        self.acoustic_dir = self.voicebank_dir / "dsacoustic"
+
+        # Resolve vocoder
         if vocoder_dir is not None:
             self.vocoder_dir = Path(vocoder_dir)
         elif self.config.vocoder_dir is not None:
@@ -52,24 +64,54 @@ class DiffSingerEngine:
 
         self.vocoder_config = self._load_vocoder_config()
 
-        # Load speaker embeddings
-        self.speaker_embeds: dict[str, np.ndarray] = {}
-        for spk_name in self.config.speakers:
-            emb_path = self.voicebank_dir / f"{spk_name}.emb"
-            if emb_path.exists():
-                with open(emb_path, "rb") as f:
-                    embed = np.frombuffer(f.read(), dtype=np.float32).copy()
-                self.speaker_embeds[spk_name] = embed
+        # Load phoneme maps for each sub-model
+        self.dur_phoneme_map = self._load_phoneme_map(self.dur_dir / "files" / "phonemes.txt")
+        self.pitch_phoneme_map = self._load_phoneme_map(self.pitch_dir / "files" / "phonemes.txt")
+        self.acoustic_phoneme_map = self._load_phoneme_map(
+            self.acoustic_dir / "phonemes.txt"
+        )
+
+        # Use the acoustic phoneme map as the primary one
+        self.config.phoneme_map = self.acoustic_phoneme_map
+
+        # Load speaker embeddings from each sub-model
+        self.dur_speaker_embeds = self._load_speaker_embeds(self.dur_dir / "files")
+        self.pitch_speaker_embeds = self._load_speaker_embeds(self.pitch_dir / "files")
+        self.acoustic_speaker_embeds = self._load_speaker_embeds(self.acoustic_dir)
 
         # Lazy-loaded ONNX sessions
+        self._dur_linguistic_session = None
+        self._dur_session = None
+        self._pitch_linguistic_session = None
+        self._pitch_session = None
         self._acoustic_session = None
         self._vocoder_session = None
-        self._linguistic_session = None
-        self._pitch_session = None
-        self._variance_session = None
+
+    def _load_phoneme_map(self, path: Path) -> dict[str, int]:
+        """Load a phoneme→index map from a text file."""
+        ph_map = {}
+        if not path.exists():
+            return ph_map
+        with open(path, "r", encoding="utf-8") as f:
+            for idx, line in enumerate(f):
+                ph = line.strip()
+                if ph:
+                    ph_map[ph] = idx
+        return ph_map
+
+    def _load_speaker_embeds(self, directory: Path) -> dict[str, np.ndarray]:
+        """Load .emb speaker embedding files from a directory."""
+        embeds = {}
+        if not directory.exists():
+            return embeds
+        for emb_path in directory.glob("*.emb"):
+            with open(emb_path, "rb") as f:
+                embed = np.frombuffer(f.read(), dtype=np.float32).copy()
+            embeds[emb_path.stem] = embed
+        return embeds
 
     def _load_voicebank_config(self) -> VoicebankConfig:
-        """Parse dsconfig.yaml from the voicebank directory."""
+        """Parse top-level dsconfig.yaml."""
         config_path = self.voicebank_dir / "dsconfig.yaml"
         if not config_path.exists():
             raise FileNotFoundError(f"dsconfig.yaml not found in {self.voicebank_dir}")
@@ -79,72 +121,38 @@ class DiffSingerEngine:
 
         config = VoicebankConfig(base_dir=self.voicebank_dir)
 
-        # Load phoneme map
-        phonemes_file = raw.get("phonemes", "phonemes.txt")
-        ph_path = self.voicebank_dir / phonemes_file
-        if ph_path.exists():
-            if ph_path.suffix == ".json":
-                with open(ph_path, "r", encoding="utf-8") as f:
-                    config.phoneme_map = json.load(f)
-            else:
-                # Line-indexed text file
-                with open(ph_path, "r", encoding="utf-8") as f:
-                    for idx, line in enumerate(f):
-                        ph = line.strip()
-                        if ph:
-                            config.phoneme_map[ph] = idx
-
-        # Model paths
+        # Model paths (acoustic)
         if raw.get("acoustic"):
             config.acoustic_path = self.voicebank_dir / raw["acoustic"]
-        if raw.get("linguistic"):
-            config.linguistic_path = self.voicebank_dir / raw["linguistic"]
-        if raw.get("dur"):
-            config.dur_path = self.voicebank_dir / raw["dur"]
-        if raw.get("pitch"):
-            config.pitch_path = self.voicebank_dir / raw["pitch"]
-        if raw.get("variance"):
-            config.variance_path = self.voicebank_dir / raw["variance"]
 
-        # Vocoder — first check as subdirectory of voicebank, then parent
+        # Vocoder
         vocoder_name = raw.get("vocoder", "")
         if vocoder_name:
-            # Check if vocoder is a subdirectory of the voicebank
             vocoder_subdir = self.voicebank_dir / vocoder_name
             if vocoder_subdir.is_dir():
                 config.vocoder_dir = vocoder_subdir
             else:
-                # Try to find vocoder in parent checkpoints dir
                 checkpoints_dir = self.voicebank_dir.parent
                 for subdir in checkpoints_dir.iterdir():
                     if subdir.is_dir() and vocoder_name.replace("-", "_") in subdir.name.replace("-", "_"):
                         config.vocoder_dir = subdir
                         break
 
-        # Speakers
         config.speakers = raw.get("speakers", [])
         config.hidden_size = raw.get("hidden_size", 256)
 
         # Feature flags
-        config.use_lang_id = raw.get("use_lang_id", False)
         config.use_key_shift_embed = raw.get("use_key_shift_embed", False)
         config.use_speed_embed = raw.get("use_speed_embed", False)
         config.use_energy_embed = raw.get("use_energy_embed", False)
         config.use_breathiness_embed = raw.get("use_breathiness_embed", False)
         config.use_voicing_embed = raw.get("use_voicing_embed", False)
         config.use_tension_embed = raw.get("use_tension_embed", False)
-        config.use_expr = raw.get("use_expr", False)
-        config.use_note_rest = raw.get("use_note_rest", False)
+        config.use_expr = raw.get("use_expr", True)
+        config.use_note_rest = raw.get("use_note_rest", True)
         config.use_continuous_acceleration = raw.get("use_continuous_acceleration", True)
         config.use_variable_depth = raw.get("use_variable_depth", False)
         config.max_depth = raw.get("max_depth", 0.0)
-
-        # Variance prediction
-        config.predict_dur = raw.get("predict_dur", False)
-        config.predict_energy = raw.get("predict_energy", False)
-        config.predict_breathiness = raw.get("predict_breathiness", False)
-        config.predict_voicing = raw.get("predict_voicing", False)
-        config.predict_tension = raw.get("predict_tension", False)
 
         # Audio
         config.sample_rate = raw.get("sample_rate", 44100)
@@ -161,7 +169,7 @@ class DiffSingerEngine:
         return config
 
     def _load_vocoder_config(self) -> VocoderConfig:
-        """Parse vocoder.yaml from the vocoder directory."""
+        """Parse vocoder.yaml."""
         vc = VocoderConfig()
         config_path = self.vocoder_dir / "vocoder.yaml"
 
@@ -173,11 +181,9 @@ class DiffSingerEngine:
             vc.sample_rate = raw.get("sample_rate", 44100)
             vc.hop_size = raw.get("hop_size", 512)
             vc.num_mel_bins = raw.get("num_mel_bins", 128)
-            # If vocoder.yaml doesn't specify mel_base, inherit from acoustic config
             vc.mel_base = raw.get("mel_base", self.config.mel_base)
             vc.mel_scale = raw.get("mel_scale", self.config.mel_scale)
         else:
-            # Look for any .onnx file
             for onnx_file in self.vocoder_dir.glob("*.onnx"):
                 vc.model_path = onnx_file
                 break
@@ -185,6 +191,8 @@ class DiffSingerEngine:
             vc.mel_scale = self.config.mel_scale
 
         return vc
+
+    # ── ONNX session management ──────────────────────────────────
 
     def _get_ort_session(self, model_path: Path):
         """Create an ONNX Runtime inference session."""
@@ -203,165 +211,264 @@ class DiffSingerEngine:
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
         session = ort.InferenceSession(
-            str(model_path),
-            sess_options=sess_options,
-            providers=providers,
+            str(model_path), sess_options=sess_options, providers=providers,
         )
         actual = session.get_providers()
-        print(f"| ORT providers: {actual}")
+        print(f"| ORT [{model_path.name}]: {actual}")
         return session
+
+    @property
+    def dur_linguistic_session(self):
+        if self._dur_linguistic_session is None:
+            path = self.dur_dir / "files" / "linguistic.onnx"
+            print(f"| Loading dur linguistic: {path.name}")
+            self._dur_linguistic_session = self._get_ort_session(path)
+        return self._dur_linguistic_session
+
+    @property
+    def dur_session(self):
+        if self._dur_session is None:
+            path = self.dur_dir / "files" / "dur.onnx"
+            print(f"| Loading dur predictor: {path.name}")
+            self._dur_session = self._get_ort_session(path)
+        return self._dur_session
+
+    @property
+    def pitch_linguistic_session(self):
+        if self._pitch_linguistic_session is None:
+            path = self.pitch_dir / "files" / "linguistic.onnx"
+            print(f"| Loading pitch linguistic: {path.name}")
+            self._pitch_linguistic_session = self._get_ort_session(path)
+        return self._pitch_linguistic_session
+
+    @property
+    def pitch_session(self):
+        if self._pitch_session is None:
+            path = self.pitch_dir / "files" / "pitch.onnx"
+            print(f"| Loading pitch predictor: {path.name}")
+            self._pitch_session = self._get_ort_session(path)
+        return self._pitch_session
 
     @property
     def acoustic_session(self):
         if self._acoustic_session is None:
-            if self.config.acoustic_path is None or not self.config.acoustic_path.exists():
-                raise FileNotFoundError(
-                    f"Acoustic model not found: {self.config.acoustic_path}"
-                )
-            print(f"| Loading acoustic model: {self.config.acoustic_path.name}")
-            self._acoustic_session = self._get_ort_session(self.config.acoustic_path)
+            path = self.config.acoustic_path
+            if path is None or not path.exists():
+                raise FileNotFoundError(f"Acoustic model not found: {path}")
+            print(f"| Loading acoustic: {path.name}")
+            self._acoustic_session = self._get_ort_session(path)
         return self._acoustic_session
 
     @property
     def vocoder_session(self):
         if self._vocoder_session is None:
-            if self.vocoder_config.model_path is None or not self.vocoder_config.model_path.exists():
-                raise FileNotFoundError(
-                    f"Vocoder model not found: {self.vocoder_config.model_path}"
-                )
-            print(f"| Loading vocoder: {self.vocoder_config.model_path.name}")
-            self._vocoder_session = self._get_ort_session(self.vocoder_config.model_path)
+            path = self.vocoder_config.model_path
+            if path is None or not path.exists():
+                raise FileNotFoundError(f"Vocoder not found: {path}")
+            print(f"| Loading vocoder: {path.name}")
+            self._vocoder_session = self._get_ort_session(path)
         return self._vocoder_session
 
-    def _get_speaker_embed(self, voice: str, n_frames: int) -> np.ndarray | None:
-        """Get speaker embedding expanded to (1, n_frames, hidden_size)."""
-        if not self.speaker_embeds:
-            return None
+    # ── Speaker embedding helpers ────────────────────────────────
 
-        # Try exact match first
+    def _get_speaker_embed(
+        self, embeds: dict[str, np.ndarray], voice: str, n: int, mode: str = "token"
+    ) -> np.ndarray:
+        """Get speaker embedding expanded to the right shape.
+
+        mode="token": (1, n, hidden_size) for token-level models
+        mode="frame": (1, n, hidden_size) for frame-level models
+        """
         embed = None
-        for name, emb in self.speaker_embeds.items():
+        for name, emb in embeds.items():
             if voice.lower() in name.lower():
                 embed = emb
                 break
-
+        if embed is None and embeds:
+            embed = next(iter(embeds.values()))
         if embed is None:
-            # Use first available speaker
-            embed = next(iter(self.speaker_embeds.values()))
+            embed = np.zeros(self.config.hidden_size, dtype=np.float32)
 
-        return np.tile(
-            embed.reshape(1, 1, -1), (1, n_frames, 1)
-        ).astype(np.float32)
+        return np.tile(embed.reshape(1, 1, -1), (1, n, 1)).astype(np.float32)
 
-    def generate(self, phrase: VocalPhrase) -> DiffSingerResult:
-        """Generate singing voice from a VocalPhrase.
+    # ── Pipeline stages ──────────────────────────────────────────
 
-        Args:
-            phrase: The vocal phrase to synthesize.
+    def _run_dur_linguistic(self, tensors: PhraseTensors) -> tuple[np.ndarray, np.ndarray]:
+        """Stage 1a: Linguistic encoder for duration prediction.
 
-        Returns:
-            DiffSingerResult with audio samples.
+        Returns: (encoder_out, x_masks)
         """
-        # Get speaker embedding
-        speaker_embed = None
-        if self.speaker_embeds:
-            for name, emb in self.speaker_embeds.items():
-                if phrase.voice.lower() in name.lower():
-                    speaker_embed = emb
-                    break
-            if speaker_embed is None:
-                speaker_embed = next(iter(self.speaker_embeds.values()))
+        # Re-tokenize for the dur model's phoneme map
+        tokens = self._retokenize(tensors, self.dur_phoneme_map)
 
-        # Build inference tensors
-        tensors = build_tensors(phrase, self.config, speaker_embed)
-
-        # Run acoustic model
-        mel = self._run_acoustic(tensors)
-
-        # Convert mel base if needed
-        mel = self._convert_mel_base(mel)
-
-        # Run vocoder
-        waveform = self._run_vocoder(mel, tensors.f0_hz)
-
-        # Normalize to [-1, 1]
-        max_val = np.abs(waveform).max()
-        if max_val > 0:
-            waveform = waveform / max_val * 0.95
-
-        # Apply RVC voice conversion if configured
-        if phrase.rvc_model is not None:
-            waveform = self._apply_rvc(waveform, phrase)
-
-        duration = len(waveform) / self.config.sample_rate
-
-        return DiffSingerResult(
-            samples=waveform,
-            sample_rate=self.config.sample_rate,
-            duration=duration,
-            phrase_id=phrase.phrase_id,
-        )
-
-    def _run_acoustic(self, tensors) -> np.ndarray:
-        """Run the acoustic ONNX model."""
-        session = self.acoustic_session
-
-        # Get available input names
+        session = self.dur_linguistic_session
         input_names = {inp.name for inp in session.get_inputs()}
 
-        inputs = {}
-        inputs["tokens"] = tensors.tokens
-        inputs["durations"] = tensors.durations
-        inputs["f0"] = tensors.f0_hz
+        inputs = {"tokens": tokens}
+        if "word_div" in input_names:
+            inputs["word_div"] = tensors.word_div
+            inputs["word_dur"] = tensors.word_dur
+        elif "ph_dur" in input_names:
+            inputs["ph_dur"] = tensors.ph_dur
 
-        # Acceleration — scalar tensors (shape [])
+        encoder_out, x_masks = session.run(["encoder_out", "x_masks"], inputs)
+        return encoder_out, x_masks
+
+    def _run_dur_predictor(
+        self,
+        encoder_out: np.ndarray,
+        x_masks: np.ndarray,
+        tensors: PhraseTensors,
+        voice: str,
+    ) -> np.ndarray:
+        """Stage 1b: Duration predictor.
+
+        Returns: predicted phoneme durations (int64, frames)
+        """
+        session = self.dur_session
+        input_names = {inp.name for inp in session.get_inputs()}
+
+        spk_embed = self._get_speaker_embed(
+            self.dur_speaker_embeds, voice, tensors.n_tokens, mode="token"
+        )
+
+        inputs = {
+            "encoder_out": encoder_out,
+            "x_masks": x_masks,
+            "ph_midi": tensors.ph_midi,
+            "spk_embed": spk_embed,
+        }
+
+        ph_dur_pred = session.run(["ph_dur_pred"], inputs)[0]  # float (1, n_tokens)
+
+        # Round to integer frames, ensure >= 1 for non-padding
+        dur_frames = np.maximum(np.round(ph_dur_pred).astype(np.int64), 1)
+        return dur_frames  # (1, n_tokens)
+
+    def _run_pitch_linguistic(self, tensors: PhraseTensors, ph_dur: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Stage 2a: Linguistic encoder for pitch prediction.
+
+        Returns: (encoder_out, x_masks)
+        """
+        tokens = self._retokenize(tensors, self.pitch_phoneme_map)
+
+        session = self.pitch_linguistic_session
+        inputs = {
+            "tokens": tokens,
+            "ph_dur": ph_dur,
+        }
+
+        encoder_out, x_masks = session.run(["encoder_out", "x_masks"], inputs)
+        return encoder_out, x_masks
+
+    def _run_pitch_predictor(
+        self,
+        encoder_out: np.ndarray,
+        ph_dur: np.ndarray,
+        tensors: PhraseTensors,
+        voice: str,
+    ) -> np.ndarray:
+        """Stage 2b: Pitch predictor — generates expressive f0 curve.
+
+        Returns: pitch_pred in MIDI semitones (float32, (1, n_frames))
+        """
+        session = self.pitch_session
+        input_names = {inp.name for inp in session.get_inputs()}
+
+        n_frames = int(ph_dur.sum())
+
+        inputs = {
+            "encoder_out": encoder_out,
+            "ph_dur": ph_dur,
+            "note_midi": tensors.note_midi,
+            "note_dur": tensors.note_dur,
+        }
+
+        # Initial pitch — 60.0 placeholder since retake=True everywhere
+        inputs["pitch"] = np.full((1, n_frames), 60.0, dtype=np.float32)
+
+        # Retake — all True (generate all frames fresh)
+        inputs["retake"] = np.ones((1, n_frames), dtype=bool)
+
+        # Expression — controls vibrato/expressiveness (0-1)
+        if "expr" in input_names:
+            inputs["expr"] = np.full((1, n_frames), tensors.expr, dtype=np.float32)
+
+        # Note rest
+        if "note_rest" in input_names:
+            inputs["note_rest"] = tensors.note_rest
+
+        # Speaker embedding
+        if "spk_embed" in input_names:
+            inputs["spk_embed"] = self._get_speaker_embed(
+                self.pitch_speaker_embeds, voice, n_frames, mode="frame"
+            )
+
+        # Diffusion steps
         if "steps" in input_names:
             inputs["steps"] = np.array(self.steps, dtype=np.int64)
         if "speedup" in input_names and "steps" not in input_names:
             inputs["speedup"] = np.array(max(1, 1000 // self.steps), dtype=np.int64)
 
-        # Expression inputs — always provide if the model expects them
-        if "energy" in input_names:
-            if tensors.energy is not None:
-                inputs["energy"] = tensors.energy
-            else:
-                inputs["energy"] = np.zeros((1, tensors.n_frames), dtype=np.float32)
-        if "breathiness" in input_names:
-            if tensors.breathiness is not None:
-                inputs["breathiness"] = tensors.breathiness
-            else:
-                inputs["breathiness"] = np.zeros((1, tensors.n_frames), dtype=np.float32)
-        if "tension" in input_names:
-            if tensors.tension is not None:
-                inputs["tension"] = tensors.tension
-            else:
-                inputs["tension"] = np.zeros((1, tensors.n_frames), dtype=np.float32)
+        print(f"| Pitch prediction: {n_frames} frames, {self.steps} steps")
+        pitch_pred = session.run(["pitch_pred"], inputs)[0]  # (1, n_frames) MIDI semitones
+        return pitch_pred
+
+    def _run_acoustic(
+        self,
+        tensors: PhraseTensors,
+        ph_dur: np.ndarray,
+        f0_hz: np.ndarray,
+        voice: str,
+    ) -> np.ndarray:
+        """Stage 3: Acoustic model — generates mel spectrogram.
+
+        Returns: mel (1, n_frames, num_mel_bins)
+        """
+        session = self.acoustic_session
+        input_names = {inp.name for inp in session.get_inputs()}
+
+        n_frames = int(ph_dur.sum())
+
+        # Re-tokenize for acoustic phoneme map
+        tokens = self._retokenize(tensors, self.acoustic_phoneme_map)
+
+        inputs = {
+            "tokens": tokens,
+            "durations": ph_dur,
+            "f0": f0_hz,
+        }
+
+        # Gender
         if "gender" in input_names:
-            if tensors.gender is not None:
-                inputs["gender"] = tensors.gender
-            else:
-                inputs["gender"] = np.zeros((1, tensors.n_frames), dtype=np.float32)
+            inputs["gender"] = np.full((1, n_frames), tensors.gender, dtype=np.float32)
+
+        # Velocity
         if "velocity" in input_names:
-            inputs["velocity"] = np.ones((1, tensors.n_frames), dtype=np.float32)
+            inputs["velocity"] = np.full(
+                (1, n_frames), tensors.velocity, dtype=np.float32
+            )
 
-        # Speaker embedding — required if model expects it
+        # Speaker embedding
         if "spk_embed" in input_names:
-            if tensors.spk_embed is not None:
-                inputs["spk_embed"] = tensors.spk_embed
-            else:
-                # Zero embed as fallback
-                inputs["spk_embed"] = np.zeros(
-                    (1, tensors.n_frames, self.config.hidden_size), dtype=np.float32
-                )
+            inputs["spk_embed"] = self._get_speaker_embed(
+                self.acoustic_speaker_embeds, voice, n_frames, mode="frame"
+            )
 
-        # Depth — scalar tensor (shape [])
+        # Depth
         if "depth" in input_names:
             depth = self.config.max_depth if self.config.use_variable_depth else 1.0
             inputs["depth"] = np.array(depth, dtype=np.float32)
 
-        print(f"| Acoustic inference: {tensors.n_frames} frames, {self.steps} steps")
+        # Steps
+        if "steps" in input_names:
+            inputs["steps"] = np.array(self.steps, dtype=np.int64)
+        if "speedup" in input_names and "steps" not in input_names:
+            inputs["speedup"] = np.array(max(1, 1000 // self.steps), dtype=np.int64)
+
+        print(f"| Acoustic inference: {n_frames} frames, {self.steps} steps")
         mel = session.run(["mel"], inputs)[0]
-        return mel  # (1, n_frames, num_mel_bins)
+        return mel
 
     def _convert_mel_base(self, mel: np.ndarray) -> np.ndarray:
         """Convert mel spectrogram base between acoustic and vocoder if needed."""
@@ -377,7 +484,7 @@ class DiffSingerEngine:
         return mel
 
     def _run_vocoder(self, mel: np.ndarray, f0_hz: np.ndarray) -> np.ndarray:
-        """Run the NSF-HiFiGAN vocoder."""
+        """Stage 4: Vocoder — mel + f0 → waveform."""
         session = self.vocoder_session
         input_names = {inp.name for inp in session.get_inputs()}
 
@@ -387,9 +494,183 @@ class DiffSingerEngine:
 
         print(f"| Vocoder inference: mel shape {mel.shape}")
         waveform = session.run(["waveform"], inputs)[0]
-
-        # waveform shape: (1, n_samples) → flatten
         return waveform.squeeze()
+
+    def _retokenize(self, tensors: PhraseTensors, phoneme_map: dict[str, int]) -> np.ndarray:
+        """Re-map token IDs from the primary phoneme map to a sub-model's map.
+
+        Since all sub-models may have different phoneme orderings, we need to
+        map from the original phoneme strings to each model's specific IDs.
+        """
+        # Reverse the acoustic phoneme map to get phoneme strings
+        reverse_map = {v: k for k, v in self.acoustic_phoneme_map.items()}
+        original_tokens = tensors.tokens[0]
+
+        new_tokens = []
+        for tok in original_tokens:
+            ph_name = reverse_map.get(int(tok), "SP")
+            if ph_name in phoneme_map:
+                new_tokens.append(phoneme_map[ph_name])
+            elif ph_name.lower() in phoneme_map:
+                new_tokens.append(phoneme_map[ph_name.lower()])
+            else:
+                new_tokens.append(phoneme_map.get("SP", phoneme_map.get("<PAD>", 0)))
+
+        return np.array(new_tokens, dtype=np.int64).reshape(1, -1)
+
+    # ── Main generation ──────────────────────────────────────────
+
+    def generate(self, phrase: VocalPhrase) -> DiffSingerResult:
+        """Generate singing voice from a VocalPhrase using the full pipeline."""
+        voice = phrase.voice
+
+        # Build input tensors
+        tensors = build_phrase_tensors(phrase, self.config)
+
+        # Stage 1: Duration prediction
+        has_dur_model = (self.dur_dir / "files" / "dur.onnx").exists()
+        if has_dur_model:
+            print("| Stage 1: Duration prediction")
+            enc_out, x_masks = self._run_dur_linguistic(tensors)
+            ph_dur = self._run_dur_predictor(enc_out, x_masks, tensors, voice)
+            print(f"|   Predicted durations: {ph_dur[0].tolist()}")
+        else:
+            # Use hand-crafted durations
+            ph_dur = tensors.ph_dur
+            print(f"| Using hand-crafted durations (no dur model)")
+
+        n_frames = int(ph_dur.sum())
+
+        # Stage 2: Pitch prediction
+        has_pitch_model = (self.pitch_dir / "files" / "pitch.onnx").exists()
+        if has_pitch_model:
+            print("| Stage 2: Pitch prediction")
+
+            # Adjust note_dur to match predicted n_frames
+            note_dur_adjusted = self._adjust_note_dur(tensors.note_dur, n_frames)
+
+            # Create adjusted tensors
+            adjusted = PhraseTensors(
+                tokens=tensors.tokens,
+                n_tokens=tensors.n_tokens,
+                word_div=tensors.word_div,
+                word_dur=tensors.word_dur,
+                ph_midi=tensors.ph_midi,
+                note_midi=tensors.note_midi,
+                note_dur=note_dur_adjusted,
+                note_rest=tensors.note_rest,
+                ph_dur=ph_dur,
+                n_frames=n_frames,
+                expr=tensors.expr,
+                gender=tensors.gender,
+                velocity=tensors.velocity,
+            )
+
+            enc_out_pitch, _ = self._run_pitch_linguistic(adjusted, ph_dur)
+            pitch_midi = self._run_pitch_predictor(enc_out_pitch, ph_dur, adjusted, voice)
+
+            # Convert MIDI semitones → Hz for acoustic model
+            f0_hz = np.where(
+                pitch_midi > 0,
+                440.0 * np.power(2.0, (pitch_midi - 69.0) / 12.0),
+                0.0,
+            ).astype(np.float32)
+
+            print(f"|   Pitch range: {pitch_midi.min():.1f} - {pitch_midi.max():.1f} MIDI")
+        else:
+            # Build f0 from note MIDI (flat, no expression)
+            print("| No pitch model, using flat MIDI→Hz")
+            f0_frames = []
+            for i in range(tensors.n_tokens):
+                midi_val = tensors._phoneme_midi[i]
+                hz = midi_to_hz(midi_val) if midi_val > 0 else 0.0
+                dur = int(ph_dur[0, i])
+                f0_frames.extend([hz] * dur)
+            f0_hz = np.array(f0_frames[:n_frames], dtype=np.float32).reshape(1, -1)
+
+        # Stage 3: Acoustic model
+        print("| Stage 3: Acoustic synthesis")
+        mel = self._run_acoustic(tensors, ph_dur, f0_hz, voice)
+
+        # Convert mel base if needed
+        mel = self._convert_mel_base(mel)
+
+        # Stage 4: Vocoder
+        print("| Stage 4: Vocoder")
+        waveform = self._run_vocoder(mel, f0_hz)
+
+        # Loudness leveling — even out energy dips in sustained notes
+        waveform = self._level_loudness(waveform)
+
+        # Normalize
+        max_val = np.abs(waveform).max()
+        if max_val > 0:
+            waveform = waveform / max_val * 0.95
+
+        # Optional RVC
+        if phrase.rvc_model is not None:
+            waveform = self._apply_rvc(waveform, phrase)
+
+        duration = len(waveform) / self.config.sample_rate
+
+        return DiffSingerResult(
+            samples=waveform,
+            sample_rate=self.config.sample_rate,
+            duration=duration,
+            phrase_id=phrase.phrase_id,
+        )
+
+    @staticmethod
+    def _level_loudness(
+        waveform: np.ndarray,
+        window_sec: float = 0.3,
+        target_rms: float = 0.22,
+        max_gain: float = 5.0,
+        sr: int = 44100,
+    ) -> np.ndarray:
+        """Even out volume dips using windowed RMS gain with smooth interpolation."""
+        from scipy.ndimage import gaussian_filter1d
+
+        window = int(sr * window_sec)
+        hop = window // 4
+        n = len(waveform)
+        if n < window:
+            return waveform
+
+        # Measure RMS at each hop position
+        positions = list(range(0, n - window + 1, hop))
+        rms_values = np.array([
+            np.sqrt(np.mean(waveform[p:p + window] ** 2)) for p in positions
+        ])
+
+        # Compute gain: boost quiet parts toward target_rms
+        gains = np.where(
+            rms_values > 0.005,
+            np.minimum(target_rms / rms_values, max_gain),
+            1.0,
+        )
+
+        # Heavy gaussian smoothing to avoid artifacts
+        gains = gaussian_filter1d(gains, sigma=8)
+
+        # Interpolate gain to sample-level
+        centers = np.array(positions) + window // 2
+        sample_gains = np.interp(np.arange(n), centers, gains)
+
+        return (waveform * sample_gains).astype(np.float32)
+
+    def _adjust_note_dur(self, note_dur: np.ndarray, target_frames: int) -> np.ndarray:
+        """Adjust note durations to sum to target_frames."""
+        adjusted = note_dur.copy()
+        current_total = int(adjusted.sum())
+        diff = target_frames - current_total
+        if diff != 0:
+            # Distribute difference across the longest note
+            longest_idx = int(np.argmax(adjusted[0]))
+            adjusted[0, longest_idx] += diff
+            if adjusted[0, longest_idx] < 1:
+                adjusted[0, longest_idx] = 1
+        return adjusted
 
     def _apply_rvc(self, waveform: np.ndarray, phrase: VocalPhrase) -> np.ndarray:
         """Apply RVC voice conversion to the generated waveform."""
@@ -411,9 +692,8 @@ class DiffSingerEngine:
                 print(f"| RVC model '{phrase.rvc_model}' not found, skipping")
                 return waveform
 
-            samples_list = waveform.tolist()
             result = converter.convert_samples(
-                samples_list,
+                waveform.tolist(),
                 sample_rate=self.config.sample_rate,
             )
 
