@@ -45,6 +45,9 @@ musicgen = ["audiocraft"]
 # Demucs stem separation
 demucs = ["demucs"]
 
+# DiffSinger singing voice synthesis
+diffsinger = ["g2p_en", "onnxruntime-gpu"]
+
 # Legacy album support (MC Tobbisch Birthday)
 legacy = ["edge-tts>=6.1"]
 
@@ -71,6 +74,7 @@ include = [
     "ai_engine*",
     "stem_separator*",
     "acestep_engine*",
+    "diffsinger_engine*",
 ]
 
 # ---------------------------------------------------------------

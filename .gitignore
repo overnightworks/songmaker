@@ -31,6 +31,9 @@ _rvc_venv/
 # ACE-Step (separate repo, large model checkpoints)
 _acestep/
 
+# DiffSinger (repo clone + ONNX models, ~600MB)
+_diffsinger/
+
 # RVC voice models (large binary files)
 rvc_models/
 
