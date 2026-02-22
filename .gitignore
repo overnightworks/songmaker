@@ -2,73 +2,51 @@
 # Songmaker — Git Ignore
 # ═══════════════════════════════════════════════════════════════
 
-# Generated audio output (large binary files)
-albums/*/output/*.mp3
-albums/*/output/*.wav
-albums/*/legacy_output/
+# ── Three top-level folders for all large/generated files ──
+_models/
+_cache/
+_output/
 
-# Temporary audio files
-_temp_*
+# ── Audio files (safety net) ──
 *.wav
 *.mp3
 
-# Bark vocal cache (reusable across runs)
-_vocal_cache/
-
-# Python bytecode
+# ── Python bytecode ──
 __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
 
-# Virtual environments
+# ── Virtual environments ──
 venv/
 .venv/
 .venv-*/
 env/
-_rvc_venv/
 
-# ACE-Step (separate repo, large model checkpoints)
-_acestep/
-
-# DiffSinger (repo clone + ONNX models, ~600MB)
-_diffsinger/
-
-# RVC voice models (large binary files)
-rvc_models/
-
-# Voice reference audio files (for XTTS cloning)
-voice_refs/
-
-# Claude Code
+# ── Claude Code ──
 .claude/
 
-# Build artifacts
+# ── Build artifacts ──
 *.egg-info/
 
-# IDE
+# ── IDE ──
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS files
+# ── OS files ──
 Thumbs.db
 .DS_Store
 
-# Bark model cache (downloaded ~5GB)
-# Stored in ~/.cache/suno/bark_v0/ by default — not in project
-
-# SoundFont files (optional, large)
-soundfonts/*.sf2
-
-# Torch model checkpoints
+# ── Torch model checkpoints (safety net) ──
 *.pt
 *.pth
 *.ckpt
 
-# Planning docs (stale specs, already implemented)
+# ── Misc ──
 plans/
-
-# Legacy sources (archived, not needed for new development)
+.pytest_cache/
+.ruff_cache/
 albums/*/legacy_sources/
+albums/*/legacy_output/

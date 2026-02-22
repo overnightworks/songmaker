@@ -10,7 +10,7 @@ Each song is a single `.py` file that defines lyrics, melodies, chord progressio
 
 ```bash
 python albums/download_days/tracks/01_download_days.py
-# -> albums/download_days/output/01_Download_Days.mp3
+# -> _output/download_days/01_Download_Days.mp3
 ```
 
 ## Engines
@@ -81,10 +81,16 @@ songmaker/
 │   └── stem_separator/          #   Demucs (optional)
 ├── albums/
 │   ├── <album>/lyrics/          # Markdown lyrics (draft -> approved)
-│   ├── <album>/tracks/          # One .py per song
-│   └── <album>/output/          # Generated MP3 files
-├── scripts/                     # Utilities (soundfont download, fairseq patch)
-├── soundfonts/                  # SoundFont .sf2 files (gitignored)
+│   └── <album>/tracks/          # One .py per song
+├── _models/                     # AI model weights (gitignored)
+│   ├── diffsinger/              #   DiffSinger ONNX models + voicebanks
+│   ├── rvc/                     #   RVC voice conversion models
+│   ├── soundfonts/              #   SoundFont .sf2 files
+│   ├── acestep/                 #   ACE-Step repo + checkpoints
+│   └── voice_refs/              #   XTTS voice reference audio
+├── _cache/                      # Temp/cached files (gitignored)
+├── _output/                     # Generated audio per album (gitignored)
+├── scripts/                     # Utilities (setup, download)
 ├── tests/                       # Unit tests (pytest)
 ├── docs/                        # Architecture docs
 └── pyproject.toml               # Dependencies, tool config

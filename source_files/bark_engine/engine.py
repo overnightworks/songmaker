@@ -4,7 +4,7 @@ Generates singing vocals using Bark AI with multi-take selection.
 Each VocalSection generates N takes (default 3), scores them on
 quality metrics, and auto-selects the best one.
 
-Vocal caching: processed vocals are saved to a ``_vocal_cache/``
+Vocal caching: processed vocals are saved to a ``_cache/bark_vocals/``
 directory so that re-runs skip sections whose config has not changed.
 """
 
@@ -41,7 +41,7 @@ from bark_engine.vocal_filters import VOCAL_FILTERS
 
 logger = logging.getLogger(__name__)
 
-VOCAL_CACHE_DIR_NAME: str = "_vocal_cache"
+VOCAL_CACHE_DIR_NAME: str = "_cache/bark_vocals"
 
 os.environ["SUNO_USE_SMALL_MODELS"] = "True"
 if not torch.cuda.is_available():

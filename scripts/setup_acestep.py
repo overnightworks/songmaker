@@ -1,8 +1,8 @@
 """Setup ACE-Step 1.5 using uv.
 
 This script:
-  1. Clones the ACE-Step 1.5 repo into _acestep/
-  2. Runs `uv sync` inside the repo (creates _acestep/.venv with all deps)
+  1. Clones the ACE-Step 1.5 repo into _models/acestep/
+  2. Runs `uv sync` inside the repo (creates _models/acestep/.venv with all deps)
   3. Downloads model checkpoints (turbo model + 0.6B LM)
 
 ACE-Step's pyproject.toml uses [tool.uv.sources] for CUDA-specific
@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 REPO_URL = "https://github.com/ACE-Step/ACE-Step-1.5.git"
-ACESTEP_DIR = Path(__file__).resolve().parent.parent / "_acestep"
+ACESTEP_DIR = Path(__file__).resolve().parent.parent / "_models" / "acestep"
 
 
 def _find_uv() -> list[str]:

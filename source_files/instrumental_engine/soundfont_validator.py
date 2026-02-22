@@ -28,7 +28,7 @@ from instrumental_engine.soundfont_engine import (
     write_midi_file,
 )
 
-SOUNDFONTS_DIRECTORY: Final[str] = "soundfonts"
+SOUNDFONTS_DIRECTORY: Final[str] = "_models/soundfonts"
 
 FLUIDSYNTH_INSTALL_INSTRUCTIONS: Final[str] = (
     """

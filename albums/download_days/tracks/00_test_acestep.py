@@ -42,7 +42,7 @@ from instrumental_engine.mixer import stereo_to_mono, write_mono_wav  # noqa: E4
 logger = logging.getLogger(__name__)
 
 SONG_BPM: Final[int] = 72
-OUTPUT_DIR: Final[Path] = Path("albums/download_days/output")
+OUTPUT_DIR: Final[Path] = Path("_output/download_days")
 OUTPUT_NAME: Final[str] = "00_ACEStep_Test"
 SECONDS_PER_BEAT: Final[float] = 60.0 / SONG_BPM
 

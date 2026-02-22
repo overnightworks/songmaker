@@ -18,12 +18,13 @@ AI-powered song generation engine by Flex0r. Generates complete songs (vocals + 
 5. **Never commit secrets or API keys.**
 
 ## Project Structure
-- `source_files/bark_engine/` — Shared vocal engine (Bark AI)
-- `source_files/instrumental_engine/` — Shared instrumental engine (pure DSP)
+- `source_files/` — Shared engine code (bark, instrumental, diffsinger, rvc, xtts)
 - `albums/<album>/tracks/` — One `.py` per song
 - `albums/<album>/lyrics/` — Lyrics markdown files (draft → review → approved)
-- `albums/<album>/output/` — Generated MP3 files
-- `soundfonts/` — SoundFont `.sf2` files
+- `_models/` — AI model weights (DiffSinger, RVC, SoundFonts, ACE-Step, voice refs)
+- `_cache/` — Temp files and vocal cache (all gitignored)
+- `_output/` — Generated audio per album (WAV + MP3, all gitignored)
+- `scripts/` — Setup and utility scripts
 - `AGENTS.md` — Full project documentation (detailed reference)
 
 ## Setup

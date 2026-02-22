@@ -51,7 +51,7 @@ from instrumental_engine.mixer import (
 
 SONG_TITLE: Final[str] = "Download Days"
 SONG_BPM: Final[int] = 175
-OUTPUT_DIR: Final[Path] = Path("albums/download_days/output")
+OUTPUT_DIR: Final[Path] = Path("_output/download_days")
 OUTPUT_NAME: Final[str] = "01_Download_Days"
 
 # Power chord MIDI definitions (root + fifth)

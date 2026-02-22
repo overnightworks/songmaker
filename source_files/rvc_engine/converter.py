@@ -15,7 +15,7 @@ from typing import Final
 
 logger = logging.getLogger(__name__)
 
-RVC_MODELS_DIR: Final[str] = "rvc_models"
+RVC_MODELS_DIR: Final[str] = "_models/rvc"
 
 
 def is_rvc_available() -> bool:
@@ -223,7 +223,7 @@ class RVCConverter:
         """
         from bark_engine.audio_io import read_wav_file, write_wav_file
 
-        work_dir = temp_dir or Path("_temp_bark")
+        work_dir = temp_dir or Path("_cache/temp")
         work_dir.mkdir(parents=True, exist_ok=True)
 
         input_path = str(work_dir / "_rvc_input.wav")

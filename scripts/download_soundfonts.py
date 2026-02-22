@@ -1,6 +1,6 @@
 """Download recommended SoundFont files for Songmaker.
 
-Run once to populate the soundfonts/ directory with high-quality
+Run once to populate the _models/soundfonts/ directory with high-quality
 General MIDI SoundFont files. These are large binary files (~150-400 MB)
 that are gitignored.
 
@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SOUNDFONTS_DIR = PROJECT_ROOT / "soundfonts"
+SOUNDFONTS_DIR = PROJECT_ROOT / "_models" / "soundfonts"
 
 
 @dataclass(frozen=True)

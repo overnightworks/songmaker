@@ -17,7 +17,7 @@ from pathlib import Path
 from urllib.request import urlretrieve
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DIFFSINGER_DIR = PROJECT_ROOT / "_diffsinger"
+DIFFSINGER_DIR = PROJECT_ROOT / "_models" / "diffsinger"
 CHECKPOINTS_DIR = DIFFSINGER_DIR / "checkpoints"
 
 # TIGER voicebank v106 (CC BY-NC-ND 4.0)

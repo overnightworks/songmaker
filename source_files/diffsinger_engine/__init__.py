@@ -16,7 +16,7 @@ Usage:
         ),
     )
 
-    engine = DiffSingerEngine(voicebank_dir="_diffsinger/checkpoints/tiger")
+    engine = DiffSingerEngine(voicebank_dir="_models/diffsinger/checkpoints/tiger")
     result = engine.generate(phrase)
 """
 

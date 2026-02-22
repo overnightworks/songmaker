@@ -17,7 +17,7 @@ from typing import Final
 
 logger = logging.getLogger(__name__)
 
-VOICE_REFS_DIR: Final[str] = "voice_refs"
+VOICE_REFS_DIR: Final[str] = "_models/voice_refs"
 
 
 def is_xtts_available() -> bool:
@@ -186,7 +186,7 @@ class XTTSConverter:
         """
         from bark_engine.audio_io import read_wav_file
 
-        work_dir = temp_dir or Path("_temp_bark")
+        work_dir = temp_dir or Path("_cache/temp")
         work_dir.mkdir(parents=True, exist_ok=True)
 
         output_path = str(work_dir / "_xtts_output.wav")

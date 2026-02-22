@@ -52,7 +52,7 @@ BPM: Final[int] = 120
 SECONDS_PER_BEAT: Final[float] = 60.0 / BPM
 TOTAL_BEATS: Final[float] = 480.0
 
-OUTPUT_DIR: Final[str] = "albums/midnight_frequency/output"
+OUTPUT_DIR: Final[str] = "_output/midnight_frequency"
 WAV_PATH: Final[str] = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall.wav")
 MP3_PATH: Final[str] = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall.mp3")
 
@@ -794,7 +794,7 @@ def build_arrangement() -> Arrangement:
 # RVC: whitney92 for all phrases (warm female voice character)
 # Voice: tiger_fresh for soft, tiger_electric for power
 
-VOICEBANK_DIR = Path(__file__).resolve().parent.parent.parent.parent / "_diffsinger" / "checkpoints" / "tiger_voice"
+VOICEBANK_DIR = Path(__file__).resolve().parent.parent.parent.parent / "_models" / "diffsinger" / "checkpoints" / "tiger_voice"
 
 RVC_MODEL = "whitney92"
 RVC_PITCH_SHIFT = 0

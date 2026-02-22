@@ -1,6 +1,6 @@
 """Launch the ACE-Step 1.5 API server.
 
-Starts the FastAPI server on port 8001 using the _acestep/.venv venv.
+Starts the FastAPI server on port 8001 using the _models/acestep/.venv venv.
 The server loads the model once and serves generation requests over HTTP.
 
 Usage:
@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ACESTEP_DIR = Path(__file__).resolve().parent.parent / "_acestep"
+ACESTEP_DIR = Path(__file__).resolve().parent.parent / "_models" / "acestep"
 DEFAULT_PORT = 8001
 
 

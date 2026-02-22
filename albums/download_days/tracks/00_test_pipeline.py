@@ -40,7 +40,7 @@ from instrumental_engine.mixer import stereo_to_mono, write_mono_wav
 
 SONG_TITLE: Final[str] = "Voice Test Ballad"
 SONG_BPM: Final[int] = 72  # Slow ballad tempo
-OUTPUT_DIR: Final[Path] = Path("albums/download_days/output")
+OUTPUT_DIR: Final[Path] = Path("_output/download_days")
 OUTPUT_NAME: Final[str] = "00_Voice_Test"
 
 

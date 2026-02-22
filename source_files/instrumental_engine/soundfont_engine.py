@@ -26,13 +26,13 @@ FLUIDSYNTH_CHECK_CMD: Final[str] = "fluidsynth"
 # The engine tries these in order and uses the first one found.
 SOUNDFONT_PRIORITY: Final[tuple[str, ...]] = (
     # High quality — large, detailed samples
-    "soundfonts/Timbres_of_Heaven.sf2",
-    "soundfonts/MuseScore_General.sf2",
+    "_models/soundfonts/Timbres_of_Heaven.sf2",
+    "_models/soundfonts/MuseScore_General.sf2",
     # Good general purpose
-    "soundfonts/FluidR3_GM.sf2",
-    "soundfonts/GeneralUser_GS.sf2",
+    "_models/soundfonts/FluidR3_GM.sf2",
+    "_models/soundfonts/GeneralUser_GS.sf2",
     # Fallback names
-    "soundfonts/default.sf2",
+    "_models/soundfonts/default.sf2",
     # System-wide locations (Windows)
     "C:/tools/fluidsynth/share/soundfonts/default.sf2",
     "C:/soundfonts/GeneralUser_GS.sf2",
@@ -44,7 +44,7 @@ SOUNDFONT_PRIORITY: Final[tuple[str, ...]] = (
 # Maps GM program ranges to preferred SoundFont filenames.
 INSTRUMENT_SOUNDFONTS: Final[dict[str, tuple[int, ...]]] = {
     # Piano-specific SoundFont (programs 0-7: piano family)
-    "soundfonts/Salamander_Grand_Piano.sf2": (0, 1, 2, 3, 4, 5, 6, 7),
+    "_models/soundfonts/Salamander_Grand_Piano.sf2": (0, 1, 2, 3, 4, 5, 6, 7),
 }
 
 
@@ -80,7 +80,7 @@ def find_soundfont(gm_program: int | None = None) -> Path:
             return path
 
     # Scan soundfonts/ directory — pick largest file (usually best quality)
-    sf_dir = Path("soundfonts")
+    sf_dir = Path("_models/soundfonts")
     if sf_dir.is_dir():
         discovered = sorted(sf_dir.glob("*.sf2"), key=lambda p: p.stat().st_size, reverse=True)
         if discovered:
@@ -92,8 +92,8 @@ def find_soundfont(gm_program: int | None = None) -> Path:
         "Run the download script to get recommended SoundFonts:\n"
         "  python scripts/download_soundfonts.py\n"
         "\n"
-        "Or manually place a General MIDI SoundFont in 'soundfonts/':\n"
-        "  soundfonts/FluidR3_GM.sf2\n"
+        "Or manually place a General MIDI SoundFont in '_models/soundfonts/':\n"
+        "  _models/soundfonts/FluidR3_GM.sf2\n"
         "\n"
         "Recommended downloads:\n"
         "  FluidR3_GM.sf2 (~140 MB):       python scripts/download_soundfonts.py fluidr3\n"

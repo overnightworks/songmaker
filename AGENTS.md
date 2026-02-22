@@ -15,7 +15,7 @@ All music (vocals + instrumentals) is generated entirely in Python.
 # Run a track (generates instrumental + vocals + mastered MP3)
 python albums/download_days/tracks/01_download_days.py
 
-# Output lands in: albums/download_days/output/01_Download_Days.mp3
+# Output lands in: _output/download_days/01_Download_Days.mp3
 `
 
 ## Dependencies
@@ -113,10 +113,16 @@ d:/songmaker/
 | 01 Let Me Fall | albums/midnight_frequency/tracks/01_let_me_fall.py | Melodic House (CYRIL x Avicii) | 120 | D minor |
 
 **Lyrics theme**: Surrender and freedom — the moment you stop gripping your life and discover the fall IS the destination. Physical imagery (walls, air, windows, birds, city lights). No nostalgia — pure present-tense sensation.
-│       └── output/                    ← Generated MP3 files
 │
-├── scripts/                           ← Utility scripts (download_soundfonts, patch_fairseq, etc.)
-├── soundfonts/                        ← SoundFont .sf2 files (for FluidSynth)
+├── _models/                           ← AI model weights (gitignored)
+│   ├── diffsinger/                    ← DiffSinger ONNX models + voicebanks
+│   ├── rvc/                           ← RVC voice models
+│   ├── soundfonts/                    ← SoundFont .sf2 files
+│   ├── acestep/                       ← ACE-Step repo + checkpoints
+│   └── voice_refs/                    ← XTTS voice reference audio
+├── _cache/                            ← Temp/cached files (gitignored)
+├── _output/                           ← Generated audio per album (gitignored)
+├── scripts/                           ← Utility scripts (setup, download)
 ├── docs/                              ← Setup guides (soundfont_setup.md, architecture.md)
 └── tests/                             ← Unit tests
 ```
@@ -236,7 +242,7 @@ auto-selects the highest-scoring take.
 ```
 
 **Metadata:** All take scores are saved as JSON in the temp directory for debugging:
-`_temp_bark/{section_id}_takes.json`
+`_cache/temp/{section_id}_takes.json`
 
 ### VocalSection Configuration
 | Field | Type | Default | Description |

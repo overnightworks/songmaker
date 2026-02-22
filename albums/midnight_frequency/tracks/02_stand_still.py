@@ -54,7 +54,7 @@ BPM: Final[int] = 122
 SECONDS_PER_BEAT: Final[float] = 60.0 / BPM
 TOTAL_BEATS: Final[float] = 480.0
 
-OUTPUT_DIR: Final[str] = "albums/midnight_frequency/output"
+OUTPUT_DIR: Final[str] = "_output/midnight_frequency"
 WAV_PATH: Final[str] = os.path.join(OUTPUT_DIR, "02_Stand_Still.wav")
 MP3_PATH: Final[str] = os.path.join(OUTPUT_DIR, "02_Stand_Still.mp3")
 
