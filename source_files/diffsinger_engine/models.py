@@ -33,6 +33,11 @@ class VocalPhrase:
     pitch_shift: int = 0  # Semitone transposition
     seed: int = -1  # Reproducibility (-1=random)
 
+    # Optional RVC voice conversion (post-processing)
+    rvc_model: str | None = None  # RVC model name (e.g. "male_singer_v1")
+    rvc_pitch_shift: int = 0  # RVC pitch shift in semitones
+    rvc_index_rate: float = 0.66  # Voice character strength (0-1)
+
 
 @dataclass(frozen=True)
 class DiffSingerResult:

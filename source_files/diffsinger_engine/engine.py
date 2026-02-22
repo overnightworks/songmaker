@@ -289,6 +289,10 @@ class DiffSingerEngine:
         if max_val > 0:
             waveform = waveform / max_val * 0.95
 
+        # Apply RVC voice conversion if configured
+        if phrase.rvc_model is not None:
+            waveform = self._apply_rvc(waveform, phrase)
+
         duration = len(waveform) / self.config.sample_rate
 
         return DiffSingerResult(
@@ -386,6 +390,43 @@ class DiffSingerEngine:
 
         # waveform shape: (1, n_samples) → flatten
         return waveform.squeeze()
+
+    def _apply_rvc(self, waveform: np.ndarray, phrase: VocalPhrase) -> np.ndarray:
+        """Apply RVC voice conversion to the generated waveform."""
+        try:
+            from rvc_engine import RVCConverter, is_rvc_available
+
+            if not is_rvc_available():
+                print("| RVC not available, skipping voice conversion")
+                return waveform
+
+            print(f"| RVC voice conversion: model={phrase.rvc_model}")
+            converter = RVCConverter(
+                model_name=phrase.rvc_model,
+                pitch_shift=phrase.rvc_pitch_shift,
+                index_rate=phrase.rvc_index_rate,
+            )
+
+            if not converter.is_ready:
+                print(f"| RVC model '{phrase.rvc_model}' not found, skipping")
+                return waveform
+
+            samples_list = waveform.tolist()
+            result = converter.convert_samples(
+                samples_list,
+                sample_rate=self.config.sample_rate,
+            )
+
+            if result is not None:
+                print(f"| RVC conversion complete: {len(result)} samples")
+                return np.array(result, dtype=np.float32)
+            else:
+                print("| RVC conversion failed, using original")
+                return waveform
+
+        except ImportError:
+            print("| rvc_engine not installed, skipping voice conversion")
+            return waveform
 
     def generate_phrases(
         self, phrases: list[VocalPhrase]
