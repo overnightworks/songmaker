@@ -152,6 +152,7 @@ def master_to_mp3(
     mp3_path: str,
     target_lufs: float = -14.0,
     stereo_width: float = 1.2,
+    bitrate: str = "320k",
 ) -> bool:
     """Master WAV to MP3 with professional mastering chain.
 
@@ -160,7 +161,7 @@ def master_to_mp3(
         2. Apply mastering (multiband compression → stereo widening →
            LUFS normalization → soft clipping)
         3. Write mastered audio to temporary WAV
-        4. Encode to MP3 via ffmpeg (192kbps)
+        4. Encode to MP3 via ffmpeg
         5. Clean up temporary and source WAV files
 
     Args:
@@ -168,6 +169,7 @@ def master_to_mp3(
         mp3_path: Output MP3 file path.
         target_lufs: Target integrated LUFS (-14.0 for streaming).
         stereo_width: Stereo width multiplier (1.0 = unchanged, 1.2 = wider).
+        bitrate: MP3 bitrate (default "320k" for high quality).
 
     Returns:
         True if mastering and encoding succeeded.
@@ -207,7 +209,7 @@ def master_to_mp3(
                 "-codec:a",
                 "libmp3lame",
                 "-b:a",
-                "192k",
+                bitrate,
                 mp3_path,
             ],
             check=True,
