@@ -24,8 +24,12 @@ __pycache__/
 # Virtual environments
 venv/
 .venv/
+.venv-*/
 env/
 _rvc_venv/
+
+# ACE-Step (separate repo, large model checkpoints)
+_acestep/
 
 # RVC voice models (large binary files)
 rvc_models/

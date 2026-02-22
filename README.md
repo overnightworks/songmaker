@@ -17,6 +17,7 @@ python albums/download_days/tracks/01_download_days.py
 
 | Engine | What it does | Technology |
 |--------|-------------|------------|
+| **ACE-Step** | High-quality singing vocals | ACE-Step 1.5 (text-to-music AI) |
 | **Bark Vocal** | Singing + speech synthesis | Suno Bark AI |
 | **Instrumental** | Beats, bass, leads, pads | Pure DSP + SoundFont (FluidSynth) |
 | **RVC** | Voice conversion | Retrieval-based Voice Conversion |
@@ -51,6 +52,10 @@ pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Optional: download SoundFont files for realistic instruments
 python scripts/download_soundfonts.py
+
+# Optional: ACE-Step singing vocals (separate venv, ~5GB models)
+python scripts/setup_acestep.py
+python scripts/start_acestep.py   # Launch API server on port 8001
 ```
 
 Or with [uv](https://docs.astral.sh/uv/) (recommended):
@@ -67,6 +72,7 @@ make sync-all                   # All extras + fairseq patch
 ```
 songmaker/
 ├── source_files/                # Shared engines
+│   ├── acestep_engine/          #   ACE-Step singing vocals (REST API client)
 │   ├── bark_engine/             #   Vocal synthesis (Bark AI)
 │   ├── instrumental_engine/     #   DSP synths, drums, SoundFonts, mastering
 │   ├── rvc_engine/              #   Voice conversion (optional)

@@ -70,6 +70,7 @@ include = [
     "xtts_engine*",
     "ai_engine*",
     "stem_separator*",
+    "acestep_engine*",
 ]
 
 # ---------------------------------------------------------------
