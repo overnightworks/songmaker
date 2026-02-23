@@ -49,7 +49,19 @@ CLEANUP: dict[str, str] = {
     "tovisch": "Tobbisch",
     "Topisch": "Tobbisch",
     "K.I.": "KI",
+    "K.U.": "KI",
     "Juli Kende": "du Legende",
+    "Midlight": "Mitleid",
+    "Abster": "Napster",
+    "Torbjeg": "Tobbisch",
+    "Tobisch": "Tobbisch",
+    "die Langung": "Erlangen",
+    "der Langung": "Erlangen",
+    "der Lange": "Erlangen",
+    "in der Langung": "in Erlangen",
+    "Diegle": "Deagle",
+    "Biegle": "Deagle",
+    "Niegel": "Deagle",
 }
 
 
@@ -98,6 +110,9 @@ def write_lrc(path: Path, title: str, artist: str, album: str,
 def transcribe_to_lrc(mp3_path: Path, album_meta: dict, force: bool = False) -> bool:
     """Transcribe an MP3 with Whisper medium and write an LRC file.
 
+    Uses initial_prompt from album.json track entry or a .prompt file
+    next to the MP3 to help Whisper recognize lyrics over instrumentals.
+
     Returns True if transcription was performed, False if skipped.
     """
     lrc_path = mp3_path.with_suffix(".lrc")
@@ -113,14 +128,22 @@ def transcribe_to_lrc(mp3_path: Path, album_meta: dict, force: bool = False) -> 
         print("  loading Whisper medium model...")
         transcribe_to_lrc._model = whisper.load_model("medium")
 
+    # Build initial_prompt from: album.json track hints, .prompt file, or lyrics .md
+    initial_prompt = _get_lyrics_hint(mp3_path, album_meta)
+    if initial_prompt:
+        print(f"  using lyrics hint ({len(initial_prompt)} chars)")
+
     model = transcribe_to_lrc._model
-    result = model.transcribe(
-        str(mp3_path),
+    kwargs: dict = dict(
         language="de",
         fp16=False,
         word_timestamps=True,
         condition_on_previous_text=True,
     )
+    if initial_prompt:
+        kwargs["initial_prompt"] = initial_prompt
+
+    result = model.transcribe(str(mp3_path), **kwargs)
 
     # Build lines from segments
     lines: list[tuple[float, str]] = []
@@ -141,6 +164,45 @@ def transcribe_to_lrc(mp3_path: Path, album_meta: dict, force: bool = False) -> 
     write_lrc(lrc_path, title, artist, album_name, lines)
     print(f"  wrote: {lrc_path.name} ({len(lines)} lines)")
     return True
+
+
+def _get_lyrics_hint(mp3_path: Path, album_meta: dict) -> str:
+    """Find lyrics hint text to prime Whisper's initial_prompt.
+
+    Sources (in priority order):
+    1. "lyrics_hint" field in album.json track entry
+    2. A .prompt file next to the MP3 (e.g. 03_rap_battle_part_2.prompt)
+    3. Corresponding lyrics .md file from albums/<album>/lyrics/
+    """
+    mp3_name = mp3_path.name
+
+    # 1. Check album.json track entry
+    for track in album_meta.get("tracks", []):
+        if track.get("file") == mp3_name and track.get("lyrics_hint"):
+            return track["lyrics_hint"]
+
+    # 2. Check for .prompt file next to MP3
+    prompt_path = mp3_path.with_suffix(".prompt")
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding="utf-8").strip()
+
+    # 3. Try to find lyrics .md from album source
+    # _output/<album>/final/<file>.mp3 → albums/<album>/lyrics/<file>.md
+    try:
+        album_dir = mp3_path.parent.parent.parent  # up from final/
+        # Map output folder name to album folder name
+        album_name = mp3_path.parent.parent.name
+        lyrics_dir = Path("albums") / album_name / "lyrics"
+        if lyrics_dir.exists():
+            # Try matching by track number prefix
+            stem = mp3_path.stem
+            for md_file in lyrics_dir.glob("*.md"):
+                if md_file.stem.split("_")[0] == stem.split("_")[0]:
+                    return md_file.read_text(encoding="utf-8").strip()[:2000]
+    except (IndexError, ValueError):
+        pass
+
+    return ""
 
 
 # ---------------------------------------------------------------------------
