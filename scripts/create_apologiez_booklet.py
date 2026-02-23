@@ -20,81 +20,71 @@ TRACKS = [
         "subtitle": "Feel-good pop/dance • 116 BPM • G major",
         "lyrics": """\
 [intro]
-Tobbisch!
+Tobi, this one's for you, Bruder
 This one's for you, Bruder
 
 [verse]
-Du warst bei Spotify, Sony Music, the real deal,
-Und ich sitz hier mit nem GPU und frag die KI how she feels,
-Du warst DJ in den Clubs, ich war zu Hause am coden,
-Aber irgendwie sind wir connected seit dem Pausenhof-Boden
-
-Du bist der Stefan Raab unter unseren Leuten,
-Kannst singen, kannst labern, kannst die ganze Crowd begeistern,
-Und ich? Ich bau Maschinen die versuchen das zu tun,
+Wir sind Connectet, suchen das zu tun,
 Was du schon konntest mit dreizehn, Alter, gönn dir Ruh!
 
-[chorus]
-Happy Birthday Tobbisch, raise your glass tonight!
-Du bist der Grund warum ich Songs schreib auch wenn keiner klingt ganz right,
-Happy Birthday Tobbisch, dieses Mal klingts gut,
-Weil die KI jetzt endlich singt als hätt sie echten Mut!
+Happy Birthday Tobi, raise your glass tonight!
+Du bist der Grund warum ich Songs schreib,
+Auch wenn keiner klingt ganz right,
+Happy Birthday Tobi, dieses Mal klingt's gut,
+Weil die KI jetzt endlich singt, als hätt sie echten Mut!
 
 [verse]
-Wir sehen uns nicht oft, aber Bruder das ist egal,
-Manche Freundschaften brauchen keinen Terminkalender, keine Wahl,
+Wir sehen uns nicht oft, aber Bruder, das ist egal,
+Manche Freundschaften brauchen keinen Kalender, keine Wahl,
 Du rufst an, ich ruf an, manchmal Jahre dazwischen,
-Aber wenn wir reden fühlt sichs an wie gestern auf den Tischen
+Aber wenn wir reden, fühlt sich's an wie gestern auf den Tischen
 
-In der Schule warst du schon der Typ der alle zum Lachen bringt,
-Der eine der aufsteht und einfach irgendwas Verrücktes singt,
-Du hast das beruflich gemacht, Sony, Spotify, die ganze Welt,
+In der Schule warst du schon der Typ, der alle zum Lachen bringt,
+Der eine, der aufsteht und einfach irgendwas Verrücktes singt,
+Jetzt machst du das beruflich, Sony, Spotify, die ganze Welt,
 Und ich schick dir AI-Songs, sorry dass der letzte hat gefehlt!
 
 [chorus]
-Happy Birthday Tobbisch, raise your glass tonight!
-Du bist der Grund warum ich Songs schreib auch wenn keiner klingt ganz right,
-Happy Birthday Tobbisch, dieses Mal klingts gut,
-Weil die KI jetzt endlich singt als hätt sie echten Mut!
+Happy Birthday Tobi, raise your glass tonight!
+Du bist der Grund warum ich Songs schreib,
+Auch wenn keiner klingt ganz right,
+Happy Birthday Tobi, dieses Mal klingt's gut,
+Weil die KI jetzt endlich singt, als hätt sie echten Mut!
 
 [bridge]
-Okay, real talk Tobi,
+Okay, real talk, Tobi,
 Das letzte Album war Müll, ich weiß,
-Die Stimmen klangen wie ein Roboter der weint,
+Die Stimmen klangen wie ein Roboter, der weint,
 Aber ich hab weitergemacht, für dich,
-Weil du der Einzige bist ders verdient,
+Weil du der Einzige bist, der's verdient,
 Dass jemand um vier Uhr morgens,
 Einer KI beibringt zu singen,
 Happy Birthday, du Legende!
 
 [chorus]
-Happy Birthday Tobbisch, raise your glass tonight!
+Happy Birthday Tobi, raise your glass tonight!
 Flex0r und die Maschinen singen nur für dich heut Nacht,
-Happy Birthday Tobbisch, Freunde seit Tag eins,
-Egal wie weit, du weißt, ich meins!
+Happy Birthday Tobi, Freunde seit Tag eins,
+Egal wie weit, du weißt, ich mein's!
+
+Happy Birthday Tobi, Freunde seit Tag eins,
+Egal wie weit, du weißt, ich mein's!
 
 [outro]
-Happy Birthday, Bruder
-Happy Birthday, Tobbisch
-GG WP""",
+Happy Birthday Tobi,
+Dieses Mal klingt's gut,
+Weil die KI jetzt endlich singt!""",
     },
     {
         "number": "02",
         "title": "Sorry (Not Sorry)",
         "subtitle": "R&B slow jam • 85 BPM • E minor",
         "lyrics": """\
-[intro]
-Tobi... ich muss dir was sagen...
-
 [verse]
-I pressed send on your birthday,
-Forty-one candles, and a ZIP file full of pain,
-Du hast auf Play gedrückt in Berlin,
-Und ich saß in Erlangen und hab gewartet auf ein Zeichen
-
+Und hab gewartet auf ein Zeichen,
 But all I got was silence, Bruder,
 Kein Wort, kein Emoji, nichts,
-Du warst zu nett um mir zu sagen,
+Du warst so nett um mir zu sagen,
 Dass der Monty Python Song ein Verbrechen ist
 
 [chorus]
@@ -104,14 +94,11 @@ Sorry for the Tarkan song at night,
 But I'm not sorry that I tried to get it right
 
 I'm sorry, Tobbisch, yeah I know,
-Du bist der Musikmann, ich hab dir Müll geschickt als Show,
-But thirty years of friendship, Erlangen to Berlin,
-Deserve a better song than what that AI has been
+Du bist der Musikmann, ich hab dir Müll geschickt als Show
 
 [verse]
-Du bist der Typ der auf der Bühne steht und alle rockt,
 Stefan Raab in cool, der Crowd den Atem stockt,
-Und ich? Ich schick dir WAV files um vier Uhr morgens,
+Und ich schick dir WAV files um vier Uhr morgens,
 Wo ne Maschine singt als hätt sie Zahnschmerzen
 
 Du hast in der Musikbranche Karriere gemacht, kein Scherz,
@@ -120,14 +107,13 @@ Und dein Schulfreund aus Erlangen denkt er kann dir Musik machen,
 Alter, ich versteh wenn du nicht wusstest ob du weinen oder lachen
 
 [chorus]
-I'm sorry, not sorry, that I tried,
-Sorry for the robot voice that cried,
+Sorry, that I tried,
 Sorry for the Tarkan song at night,
 But I'm not sorry that I tried to get it right
 
 I'm sorry, Tobbisch, yeah I know,
-Du bist der Musikmann, ich hab dir Müll geschickt als Show,
-But thirty years of friendship, Erlangen to Berlin,
+Ich hab dir Müll geschickt als Show,
+Thirty years of friendship, Erlangen to Berlin,
 Deserve a better song than what that AI has been
 
 [bridge]
@@ -137,17 +123,17 @@ Du in Berlin, ich immer noch in Erlangen,
 Aber manche Dinge ändern sich nie,
 Ich werde immer versuchen dir Songs zu schicken,
 Und sie werden immer besser,
+Und sie werden immer besser,
 Das hier ist der Beweis
 
 [chorus]
-I'm sorry, not sorry, that I tried,
 Sorry that the old one made you cry,
 But this time hear the difference in the sound,
 This time, Tobbisch, I won't let you down
 
 [outro]
-Happy forty-one, Bruder...
 This one's better, right?
+...right?
 ...right?""",
     },
     {
@@ -162,7 +148,7 @@ Flex0r versus MC Tobbisch!
 Last time was trash, this time we mean it!
 
 [Flex0r]
-Yo Tobbisch, Part eins war peinlich, ich gebs zu,
+Yo Tobbisch, Part eins war peinlich, ich geb's zu,
 Die KI hat gerappt wie ne Waschmaschine im Schuh,
 Aber jetzt bin ich upgraded, neues Modell, neuer Sound,
 Und du bist immer noch der Typ der in der Schule rumgeclownt!
@@ -200,8 +186,6 @@ Alle reisen um die Welt und du sitzt da wo du immer schon saßt,
 Erst Poker, dann Gaming, fast gut aber nie genug,
 Und jetzt AI Musik, Bruder, wann lernst du, wann ist Schluss?
 
-Ich hab Tessa, Charlotte, Berlin, mein Leben ist komplett,
-Und du hast Kaffee und Bier um vier Uhr im Bett,
 Aber egal wie schlecht die Songs sind, egal wie schief der Ton,
 Du bist mein Bruder seit der Schulbank, das reicht als Grund, Champion!
 
@@ -228,8 +212,7 @@ Von all den Leuten die ich kenn, Berlin bis Erlangen,
 Bist du der Einzige der nie aufhört anzufangen!
 
 [outro]
-Unentschieden!
-Wie immer!
+Unentschieden, wie immer!
 Flex0r und MC Tobbisch!
 Part drei kommt wenn die KI Gefühle hat!""",
     },
@@ -243,7 +226,7 @@ Eins, zwei, drei, vier!
 
 [verse]
 Ich kann nicht singen, das ist Fakt,
-Meine Stimme klingt wie'n Staubsauger der rappt,
+Meine Stimme klingt wie ein Staubsauger, der rappt,
 Ich kann kein Klavier, keine Gitarre, keinen Bass,
 Aber ich kann coden, Bruder, und das reicht für Spaß!
 
@@ -252,36 +235,22 @@ Prompt rein, Beat raus, ich weiß genau,
 Mein Nachbar klopft und fragt ob alles klar,
 Ich sag ja, Alter, ich mach grad ein Album, ist doch wunderbar!
 
-[chorus]
-Die KI singt für dich,
-Weil ich es selber nicht kann,
-Die KI singt für dich,
-Und sie gibt alles was sie hat, Mann!
-Ich hab keine Stimme, ich hab keinen Plan,
-Aber ich hab ne Maschine die für mich singen kann,
-Die KI singt für dich,
-Und ich mein jedes Wort!
-
 [verse]
 Version eins war Bark, oh Gott, was für ein Graus,
 Die Stimme klang als würd ein Roboter kotzen im Haus,
-Ich hab dir trotzdem zehn Songs geschickt, zum Geburtstag, wie nett,
-Und du hast geschwiegen, Bruder, und ich lag wach im Bett!
+Ich hab dir trotzdem zehn Songs geschickt,
+Zum Geburtstag, wie nett, und du hast geschwiegen, Bruder,
+Und ich lag wach im Bett!
 
 Dann kam ACE-Step, neues Modell, neuer Sound,
-Plötzlich klingt es fast nach Musik, ich dreh mich im Kreis, ich bin Hound,
+Plötzlich klingt das fast nach Musik, ich dreh mich im Kreis,
 Zehn Stunden rendern für drei Minuten Song,
 Meine GPU glüht, aber Tobi, es hat sich gelohnt!
 
 [chorus]
-Die KI singt für dich,
-Weil ich es selber nicht kann,
-Die KI singt für dich,
-Und sie gibt alles was sie hat, Mann!
 Ich hab keine Stimme, ich hab keinen Plan,
-Aber ich hab ne Maschine die für mich singen kann,
-Die KI singt für dich,
-Und ich mein jedes Wort!
+Aber ich hab ne Maschine, die für mich singen kann,
+Die KI singt für dich und ich mein jedes Wort!
 
 [bridge]
 Und ja, du bist der Musikmann,
@@ -294,14 +263,17 @@ Die KI singt für dich,
 Weil ich es selber nicht kann,
 Die KI singt für dich,
 Und sie wird besser, Song für Song, das ist der Plan!
-Ich hab keine Stimme, aber ich hab nen Freund,
-Der das hier hört und vielleicht, vielleicht, ein bisschen weint,
+Ich hab keine Stimme, aber ich hab'n Freund,
+Der das hier hört und vielleicht, vielleicht ein bisschen weint,
 Die KI singt für dich,
-Tobi, das hier ist für dich!
+Das hier ist für dich!
 
 [outro]
-Die KI singt für dich...
-Und nächstes Jahr wird sie noch besser, versprochen!""",
+Die KI singt für dich, und sie gibt alles was sie hat, Mann,
+Die KI singt für dich, die KI singt für dich,
+Und sie wird besser, Song für Song, das ist der Plan,
+Die KI singt für dich, weil ich es selber nicht kann,
+Die KI singt für dich, und ich mein jedes Wort!""",
     },
     {
         "number": "05",
@@ -314,35 +286,19 @@ Du weißt das, ich weiß das,
 Ich sag lieber nichts als was Falsches,
 Und dann sag ich gar nichts
 
-Wir sehen uns einmal im Jahr wenn's gut läuft,
-Weihnachten oder dein Geburtstag,
+Wir sehen uns einmal im Jahr,
+Wenn's gut läuft, Weihnachten oder dein Geburtstag,
 Und dazwischen ist Stille,
 Aber keine die wehtut, eine die reicht
 
 [chorus]
 Du bist mein Bruder,
-Nicht weil wir mussten, weil wir's sind,
+Nicht weil wir mussten, weil wir sind,
 Du bist mein Bruder,
-Seit dem Pausenhof, seit wir Kinder sind,
-Und ich hab dir das nie gesagt,
-Weil Männer sowas halt nicht sagen,
-Aber heute Nacht sagt's ne Maschine für mich,
-Und ich mein jedes Wort, das sie singt
+Seit dem Pausenhof, seit wir Kinder sind
 
-[verse]
-Bei dir muss ich nicht so tun als wär ich irgendwer,
-Kein Smalltalk, keine Rolle, einfach da,
-Einfach Felix, der Typ aus Erlangen,
-Der mit dir auf dem Boden saß und Bier getrunken hat
-
-Du in Berlin mit Tessa und der Kleinen,
-Und ich hier, immer noch am selben Fleck,
-Aber wenn du anrufst ist es wie früh um neun im Schulhof,
-Als hätt sich nichts verändert, als wär keiner je weg
-
-[chorus]
 Du bist mein Bruder,
-Nicht weil wir mussten, weil wir's sind,
+Nicht weil wir mussten, weil wir sind,
 Du bist mein Bruder,
 Seit dem Pausenhof, seit wir Kinder sind,
 Und ich hab dir das nie gesagt,
@@ -355,22 +311,20 @@ Dreißig Jahre, Tobi,
 Vom Klassenzimmer bis hierher,
 Vom E-Werk bis Berlin,
 Von Napster bis Spotify,
-Wir sind älter geworden,
 Aber das hier ist gleich geblieben,
 Und das ist mehr als die meisten Menschen jemals haben
 
 [chorus]
 Du bist mein Bruder,
-Das ist alles was ich sagen will,
 Du bist mein Bruder,
-Und das reicht, das reicht, das reicht,
+Du bist mein Bruder,
 Und wenn die Maschine aufhört zu singen,
 Dann bleibt das hier,
 Bleibt das hier
 
 [outro]
 Ich hab dich lieb, Bruder,
-Das war's, mehr brauch ich nicht zu sagen""",
+GG WP""",
     },
     {
         "number": "BONUS",
@@ -380,11 +334,11 @@ Das war's, mehr brauch ich nicht zu sagen""",
 [intro]
 Power Terminators connected,
 Server Dark Terrorists,
-Map de_aztec, alle da, let's go!
+Map de_aztec, let's go!
 
 [verse]
 Runde eins, CT Spawn, AWP schon in der Hand,
-Flexx0r scoped die Brücke, Fadenkreuz am Rand,
+Flex0r scoped die Brücke, Fadenkreuz am Rand,
 Noob Saibot gibt die Ansage, links halten, rechts ist frei,
 Kill O Zap zieht die Deagle, Headshot, eins, zwei, drei!
 
@@ -394,33 +348,26 @@ Doch! Ace! Der ganze Raum schreit, Monitor wackelt,
 Was war das, Wichser?! Nächste Runde, weiter geballert!
 
 [chorus]
-Fire in the Hole! Power Terminators kommen rein,
-Dark Terrorists Server, cs_militia, de_aztec, alles mein!
+Fire in the Hole! Power Terminators kommen rein!
 Fire in the Hole! AWP, AK, Deagle am Start,
-Frag um Frag um Frag, Power Terminators, hart!
+Frag um Frag um Frag, Power Terminators!
 MONSTER KILL!
 
 [verse]
 Vier Uhr morgens, Bildschirm brennt, Augen komplett rot,
-Pizza aufm Boden, Schlaf ist tot, Red Bull auch schon tot,
+Pizza auf dem Boden, Schlaf ist tot, Red Bull auch schon tot,
 Du Spaßt, kauf Kevlar! Halts Maul, ich spar auf AWP!
-Nächste Runde Eco, trotzdem Clutch, hört die Welt noch?
 
-Clan War läuft, plötzlich, Wallhack! Scheiß Cheater!
+Clan War läuft, plötzlich Wallhack, Scheiß Cheater!
 Der Typ sieht durch die Wand, Autoaim, was ein Biter!
-Vote kick! Der hat Aimbot, Alter, meld den Wichser!
+Vote kick, der hat Aimbot, Alter, meld den Wichser!
 Scheiß drauf, nächste Runde, wir sind trotzdem krasser!
 
-Noob Saibot ruft den Strat, Alle B, jetzt pushen!
+Noob Saibot ruft den Strat, alle B jetzt pushen!
 Kill O Zap, Deagle ready, Headshot durch die Büsche,
 Tobbisch sprüht die AK leer, der Smoke verzieht sich,
-Flexx0r wartet hinten, Scope, Zoom, Kopf, erledigt, sicher!
+Flex0r wartet hinten, Scope, Zoom, Kopf, erledigt, sicher!
 
-[chorus]
-Fire in the Hole! Power Terminators kommen rein,
-Dark Terrorists Server, cs_militia, de_aztec, alles mein!
-Fire in the Hole! AWP, AK, Deagle am Start,
-Frag um Frag um Frag, Power Terminators, hart!
 MONSTER KILL!
 
 [bridge]
@@ -432,12 +379,12 @@ Hör ich Fire in the Hole, eine letzte Runde
 [chorus]
 FIRE IN THE HOLE! Power Terminators kommen rein!
 Dark Terrorists Server, Spaßten, de_aztec ist mein!
-Noob Saibot! Kill O Zap! Tobbisch! Flexx0r!
-HEADSHOT! HEADSHOT! HEADSHOT! GAME OVER!
+Noob Saibot! Kill O Zap! Tobbisch! Flex0r!
+HEADSHOT! HEADSHOT! GAME OVER!
 MONSTER KILL!
 
 [outro]
-Server disconnected,
+Server disconnected!
 GG WP""",
     },
 ]

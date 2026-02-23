@@ -35,7 +35,7 @@ Game sounds are from CS 1.6 and UT99 — widely sampled in hip-hop production.
 > *`sfx_round_start`*
 > Power Terminators connected.
 > Server: Dark Terrorists.
-> Map: de_aztec. Alle da? Let's go.
+> Map: DE Aztec. Alle da? Let's go.
 
 ---
 
@@ -56,7 +56,7 @@ Game sounds are from CS 1.6 and UT99 — widely sampled in hip-hop production.
 ## [CHORUS] — Singing, hard hook
 
 > Fire in the Hole! *`sfx_fire_hole`* Power Terminators kommen rein,
-> Dark Terrorists Server, cs_militia, de_aztec — alles mein!
+> Dark Terrorists Server, Militia, Aztec, Dust — alles mein!
 > Fire in the Hole! AWP, AK, Deagle am Start,
 > Frag um Frag um Frag — Power Terminators, hart!
 > *`sfx_monster_kill`* — MMMM… MONSTER KILL!
@@ -68,7 +68,7 @@ Game sounds are from CS 1.6 and UT99 — widely sampled in hip-hop production.
 > Vier Uhr morgens, Bildschirm brennt, Augen komplett rot,
 > Pizza aufm Boden, Schlaf ist tot, Red Bull auch schon tot,
 > "Du Spasst, kauf Kevlar!" — "Halt's Maul, ich spar' auf AWP!",
-> Nächste Runde Eco, trotzdem Clutch — hört die Welt noch?
+> Bomb planted B Site, Ticker läuft, vierzig Sekunden noch!
 >
 > Clan War läuft, plötzlich — Wallhack! Scheiß Cheater!
 > Der Typ sieht durch die Wand, Autoaim, was'n Biter!
