@@ -156,6 +156,10 @@ def transcribe_to_lrc(mp3_path: Path, album_meta: dict, force: bool = False) -> 
             text = text.replace(old, new)
         lines.append((seg["start"], text))
 
+    # Fuzzy-correct against original lyrics (fix Whisper misrecognitions)
+    if initial_prompt:
+        lines = _fuzzy_correct(lines, initial_prompt)
+
     # Derive title from track metadata or filename
     title = _title_from_filename(mp3_path.stem)
     artist = album_meta.get("artist", "Flex0r & ACE-Step")
@@ -203,6 +207,124 @@ def _get_lyrics_hint(mp3_path: Path, album_meta: dict) -> str:
         pass
 
     return ""
+
+
+def _fuzzy_correct(
+    lines: list[tuple[float, str]],
+    hint_text: str,
+    threshold: float = 0.70,
+    min_word_len: int = 5,
+) -> list[tuple[float, str]]:
+    """Fix Whisper misrecognitions by comparing against original lyrics.
+
+    Builds a vocabulary from the original lyrics, then for each Whisper word
+    that ISN'T in that vocabulary, finds the closest match.  If the similarity
+    ratio exceeds *threshold* the word is replaced.
+
+    Short words (< min_word_len) are skipped to avoid false positives on
+    common function words like 'die/sie/und/Mann'.
+    Words in the SAFE_WORDS set are never replaced (common German/English words
+    that Whisper transcribes correctly).
+    """
+    from difflib import SequenceMatcher
+
+    # Common words that Whisper gets right — never replace these
+    SAFE_WORDS = {
+        # German function words & pronouns
+        "meine", "deine", "seine", "keine", "meinen", "deinen", "seinen",
+        "keinen", "meiner", "deiner", "seiner", "keiner", "diese", "dieser",
+        "dieses", "diesem", "diesen", "jeder", "jedes", "jedem", "jeden",
+        "mutter", "vater", "bruder", "kinder", "alter", "erste", "ersten",
+        "erstes", "erster", "zweite", "dritte", "immer", "nicht", "nichts",
+        "hatte", "haben", "habe", "waren", "wurde", "wirst", "durch",
+        "unter", "neben", "gegen", "hinter", "zwischen", "Jahre",
+        "Jahre", "jahre", "sagen", "gehen", "kommen", "stehen", "liegen",
+        "machen", "lassen", "geben", "nehmen", "finden", "wissen",
+        "kennen", "kennt", "kenne", "singt", "singst", "singen",
+        "schickt", "schickst", "schicken", "stimme", "stimmen",
+        "leben", "leute", "leuten", "freund", "freunde",
+        # English common words
+        "every", "never", "after", "before", "still", "about", "which",
+        "their", "there", "where", "right", "night", "light",
+        "stream", "battle", "songs", "start", "stand",
+    }
+
+    # Build vocabulary: lowercased key -> original-cased word
+    clean = re.sub(r"\[.*?\]", "", hint_text)          # strip [verse] etc.
+    clean = clean.replace("\\n", " ")                   # handle literal \n
+    orig_vocab: dict[str, str] = {}
+    for word in re.findall(r"[A-Za-z\u00C0-\u024F0-9'-]+", clean):
+        key = word.lower()
+        if key not in orig_vocab:
+            orig_vocab[key] = word
+
+    if not orig_vocab:
+        return lines
+
+    corrections: dict[str, str | None] = {}   # cache: whisper_lower -> replacement
+    stats = {"checked": 0, "replaced": 0}
+
+    def _best_replacement(w: str) -> str | None:
+        """Find best vocabulary match for a single word, or None."""
+        key = w.lower()
+
+        # Already in original vocab — correct
+        if key in orig_vocab:
+            return None
+
+        # Too short — skip to avoid false positives
+        if len(key) < min_word_len:
+            return None
+
+        # Safe word — Whisper gets these right, never replace
+        if key in SAFE_WORDS:
+            return None
+
+        # Check cache
+        if key in corrections:
+            return corrections[key]
+
+        best_word: str | None = None
+        best_ratio = 0.0
+        for orig_key, orig_word in orig_vocab.items():
+            if len(orig_key) < min_word_len:
+                continue
+            # Skip if lengths differ too much (unlikely phonetic match)
+            if abs(len(key) - len(orig_key)) > max(3, len(key) // 2):
+                continue
+            ratio = SequenceMatcher(None, key, orig_key).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_word = orig_word
+
+        result = best_word if best_ratio >= threshold else None
+        corrections[key] = result
+        return result
+
+    # Word-splitting pattern: keeps punctuation attached for reconstruction
+    word_re = re.compile(r"([A-Za-z\u00C0-\u024F0-9'-]+)")
+
+    corrected: list[tuple[float, str]] = []
+    for time, text in lines:
+        parts = word_re.split(text)  # alternating [sep, word, sep, word, ...]
+        new_parts: list[str] = []
+        for part in parts:
+            if word_re.fullmatch(part):
+                stats["checked"] += 1
+                repl = _best_replacement(part)
+                if repl is not None:
+                    stats["replaced"] += 1
+                    new_parts.append(repl)
+                else:
+                    new_parts.append(part)
+            else:
+                new_parts.append(part)
+        corrected.append((time, "".join(new_parts)))
+
+    if stats["replaced"]:
+        print(f"  fuzzy-corrected {stats['replaced']}/{stats['checked']} words")
+
+    return corrected
 
 
 # ---------------------------------------------------------------------------
@@ -877,6 +999,64 @@ def collect_tracks(folder: Path, meta: dict) -> list[dict]:
     return tracks_data
 
 
+# ---------------------------------------------------------------------------
+# Embed lyrics into MP3 ID3 tags
+# ---------------------------------------------------------------------------
+
+def embed_lyrics_in_mp3(folder: Path, tracks_data: list[dict]) -> None:
+    """Embed LRC lyrics into MP3 files as ID3 tags (USLT + SYLT).
+
+    USLT = unsynchronized lyrics (plain text) — supported by nearly all players.
+    SYLT = synchronized lyrics (timestamped) — supported by some players.
+    """
+    from mutagen.id3 import ID3, ID3NoHeaderError, USLT, SYLT, Encoding
+
+    for t in tracks_data:
+        mp3_path = folder / t["file"]
+        if not mp3_path.exists():
+            continue
+
+        lines = t.get("lines", [])
+        if not lines:
+            continue
+
+        # Build plain text lyrics (for USLT)
+        plain_text = "\n".join(line[1] for line in lines)
+
+        # Build synced lyrics (for SYLT): list of (text, timestamp_ms)
+        sylt_data = [(line[1], int(line[0] * 1000)) for line in lines]
+
+        try:
+            tags = ID3(str(mp3_path))
+        except ID3NoHeaderError:
+            tags = ID3()
+
+        # Remove existing lyrics tags
+        tags.delall("USLT")
+        tags.delall("SYLT")
+
+        # Add unsynchronized lyrics (plain text — universal support)
+        tags.add(USLT(
+            encoding=Encoding.UTF8,
+            lang="deu",
+            desc="",
+            text=plain_text,
+        ))
+
+        # Add synchronized lyrics (timestamped — for players that support it)
+        tags.add(SYLT(
+            encoding=Encoding.UTF8,
+            lang="deu",
+            desc="",
+            format=2,  # milliseconds
+            type=1,    # lyrics
+            text=sylt_data,
+        ))
+
+        tags.save(str(mp3_path))
+        print(f"  embedded lyrics: {mp3_path.name}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sync lyrics: transcribe → LRC → HTML")
     parser.add_argument("path", help="Album folder or single MP3 file")
@@ -926,10 +1106,14 @@ def main() -> None:
     generate_player_html(folder, meta, tracks_data)
     generate_booklet_html(folder, meta, tracks_data)
 
+    print("\nStep 4: Embedding lyrics into MP3s...")
+    embed_lyrics_in_mp3(folder, tracks_data)
+
     print(f"\nDone! Generated:")
     print(f"  LRC files: {sum(1 for _ in folder.glob('*.lrc'))}")
     print(f"  lyrics_player.html")
     print(f"  lyrics_booklet.html")
+    print(f"  MP3 lyrics embedded: {len(tracks_data)} tracks")
 
 
 if __name__ == "__main__":
