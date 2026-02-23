@@ -1003,13 +1003,31 @@ def collect_tracks(folder: Path, meta: dict) -> list[dict]:
 # Embed lyrics into MP3 ID3 tags
 # ---------------------------------------------------------------------------
 
-def embed_lyrics_in_mp3(folder: Path, tracks_data: list[dict]) -> None:
-    """Embed LRC lyrics into MP3 files as ID3 tags (USLT + SYLT).
+def embed_lyrics_in_mp3(folder: Path, meta: dict, tracks_data: list[dict]) -> None:
+    """Embed LRC lyrics and cover art into MP3 files as ID3 tags.
 
-    USLT = unsynchronized lyrics (plain text) — supported by nearly all players.
-    SYLT = synchronized lyrics (timestamped) — supported by some players.
+    Tags embedded:
+    - USLT: unsynchronized lyrics (plain text) — supported by nearly all players
+    - SYLT: synchronized lyrics (timestamped) — supported by some players
+    - APIC: album cover art — shown by virtually all players
+    - TPE1: artist, TALB: album, TIT2: title, TRCK: track number
     """
-    from mutagen.id3 import ID3, ID3NoHeaderError, USLT, SYLT, Encoding
+    from mutagen.id3 import (ID3, ID3NoHeaderError, USLT, SYLT, APIC,
+                              TPE1, TALB, TIT2, TRCK, Encoding)
+
+    # Load cover art if available (cover.png or cover.jpg)
+    cover_data: bytes | None = None
+    cover_mime: str = ""
+    for name in ("cover.png", "cover.jpg", "cover.jpeg"):
+        cover_path = folder / name
+        if cover_path.exists():
+            cover_data = cover_path.read_bytes()
+            cover_mime = "image/png" if name.endswith(".png") else "image/jpeg"
+            print(f"  cover art: {name} ({len(cover_data) // 1024} KB)")
+            break
+
+    artist = meta.get("artist", "Flex0r")
+    album = meta.get("title", "Songmaker")
 
     for t in tracks_data:
         mp3_path = folder / t["file"]
@@ -1017,44 +1035,60 @@ def embed_lyrics_in_mp3(folder: Path, tracks_data: list[dict]) -> None:
             continue
 
         lines = t.get("lines", [])
-        if not lines:
-            continue
-
-        # Build plain text lyrics (for USLT)
-        plain_text = "\n".join(line[1] for line in lines)
-
-        # Build synced lyrics (for SYLT): list of (text, timestamp_ms)
-        sylt_data = [(line[1], int(line[0] * 1000)) for line in lines]
 
         try:
             tags = ID3(str(mp3_path))
         except ID3NoHeaderError:
             tags = ID3()
 
-        # Remove existing lyrics tags
+        # Remove existing tags we'll overwrite
         tags.delall("USLT")
         tags.delall("SYLT")
+        tags.delall("APIC")
+        tags.delall("TPE1")
+        tags.delall("TALB")
+        tags.delall("TIT2")
+        tags.delall("TRCK")
 
-        # Add unsynchronized lyrics (plain text — universal support)
-        tags.add(USLT(
-            encoding=Encoding.UTF8,
-            lang="deu",
-            desc="",
-            text=plain_text,
-        ))
+        # Metadata tags
+        tags.add(TPE1(encoding=Encoding.UTF8, text=[artist]))
+        tags.add(TALB(encoding=Encoding.UTF8, text=[album]))
+        tags.add(TIT2(encoding=Encoding.UTF8, text=[t.get("title", "")]))
+        if t.get("number"):
+            tags.add(TRCK(encoding=Encoding.UTF8, text=[t["number"]]))
 
-        # Add synchronized lyrics (timestamped — for players that support it)
-        tags.add(SYLT(
-            encoding=Encoding.UTF8,
-            lang="deu",
-            desc="",
-            format=2,  # milliseconds
-            type=1,    # lyrics
-            text=sylt_data,
-        ))
+        # Cover art
+        if cover_data:
+            tags.add(APIC(
+                encoding=Encoding.UTF8,
+                mime=cover_mime,
+                type=3,  # front cover
+                desc="Cover",
+                data=cover_data,
+            ))
+
+        # Lyrics (only if we have lines)
+        if lines:
+            plain_text = "\n".join(line[1] for line in lines)
+            sylt_data = [(line[1], int(line[0] * 1000)) for line in lines]
+
+            tags.add(USLT(
+                encoding=Encoding.UTF8,
+                lang="deu",
+                desc="",
+                text=plain_text,
+            ))
+            tags.add(SYLT(
+                encoding=Encoding.UTF8,
+                lang="deu",
+                desc="",
+                format=2,  # milliseconds
+                type=1,    # lyrics
+                text=sylt_data,
+            ))
 
         tags.save(str(mp3_path))
-        print(f"  embedded lyrics: {mp3_path.name}")
+        print(f"  embedded: {mp3_path.name}")
 
 
 def main() -> None:
@@ -1106,8 +1140,8 @@ def main() -> None:
     generate_player_html(folder, meta, tracks_data)
     generate_booklet_html(folder, meta, tracks_data)
 
-    print("\nStep 4: Embedding lyrics into MP3s...")
-    embed_lyrics_in_mp3(folder, tracks_data)
+    print("\nStep 4: Embedding lyrics + cover into MP3s...")
+    embed_lyrics_in_mp3(folder, meta, tracks_data)
 
     print(f"\nDone! Generated:")
     print(f"  LRC files: {sum(1 for _ in folder.glob('*.lrc'))}")
