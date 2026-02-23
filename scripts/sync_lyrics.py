@@ -556,6 +556,7 @@ function loadTrack(index) {{
     }};
     lyricsContainer.appendChild(div);
   }});
+  lyricsContainer.scrollTop = 0;
 }}
 
 audio.addEventListener('timeupdate', () => {{
@@ -594,7 +595,10 @@ audio.addEventListener('timeupdate', () => {{
 audio.addEventListener('ended', () => {{
   if (currentTrack < TRACKS.length - 1) {{
     loadTrack(currentTrack + 1);
-    audio.play();
+    audio.addEventListener('canplay', function onCanPlay() {{
+      audio.removeEventListener('canplay', onCanPlay);
+      audio.play();
+    }});
   }}
 }});
 
