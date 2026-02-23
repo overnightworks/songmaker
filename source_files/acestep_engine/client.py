@@ -25,7 +25,7 @@ DEFAULT_HOST: Final[str] = "http://localhost"
 DEFAULT_PORT: Final[int] = 8001
 TARGET_SAMPLE_RATE: Final[int] = 44100
 POLL_INTERVAL: Final[float] = 3.0
-POLL_TIMEOUT: Final[float] = 600.0
+POLL_TIMEOUT: Final[float] = 1800.0
 
 
 def is_acestep_available(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> bool:
