@@ -1103,14 +1103,14 @@ def embed_lyrics_in_mp3(folder: Path, meta: dict, tracks_data: list[dict]) -> No
             sylt_data = [(line[1], int(line[0] * 1000)) for line in lines]
 
             tags.add(USLT(
-                encoding=Encoding.UTF8,
-                lang="deu",
+                encoding=Encoding.UTF16,
+                lang="und",
                 desc="",
                 text=plain_text,
             ))
             tags.add(SYLT(
-                encoding=Encoding.UTF8,
-                lang="deu",
+                encoding=Encoding.UTF16,
+                lang="und",
                 desc="",
                 format=2,  # milliseconds
                 type=1,    # lyrics

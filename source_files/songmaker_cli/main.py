@@ -1,0 +1,168 @@
+"""Songmaker CLI — generate songs from markdown, sync lyrics."""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+import time
+from pathlib import Path
+
+logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
+
+
+def next_version(output_dir: Path, base_name: str) -> int:
+    """Find the next version number for a track (v1, v2, ...)."""
+    existing = list(output_dir.glob(f"{base_name}_v*.mp3"))
+    if not existing:
+        return 1
+    versions = []
+    for p in existing:
+        part = p.stem.replace(base_name + "_v", "")
+        if part.isdigit():
+            versions.append(int(part))
+    return max(versions, default=0) + 1
+
+
+def cmd_generate(args: argparse.Namespace) -> None:
+    """Generate a song from a markdown file via ACE-Step."""
+    from acestep_engine import AceStepClient, AceStepConfig, is_acestep_available
+    from bark_engine.audio_io import master_to_mp3, normalize_audio, write_wav_file
+    from songmaker_cli.parser import parse_song_md
+
+    md_path = Path(args.path).resolve()
+    if not md_path.exists():
+        print(f"  ERROR: {md_path} not found")
+        sys.exit(1)
+
+    meta = parse_song_md(md_path)
+    title = meta.get("title", md_path.stem)
+    album = meta.get("album", md_path.parent.parent.name)
+    prompt = meta.get("prompt", "")
+    lyrics = meta.get("lyrics", "")
+
+    if not prompt:
+        print("  ERROR: No 'prompt' field in frontmatter")
+        sys.exit(1)
+    if not lyrics:
+        print("  ERROR: No '## Lyrics' section found")
+        sys.exit(1)
+
+    # Build output path
+    output_dir = Path(f"_output/{album}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    base_name = md_path.stem
+    version = next_version(output_dir, base_name)
+    versioned = f"{base_name}_v{version}"
+
+    # Build config
+    seed = args.seed if args.seed is not None else meta.get("seed", -1)
+    config = AceStepConfig(
+        prompt=prompt,
+        lyrics=lyrics,
+        bpm=meta.get("bpm", 120),
+        duration=meta.get("duration", 60),
+        key=meta.get("key", "Am"),
+        time_signature=meta.get("time_signature", "4/4"),
+        vocal_language=meta.get("language", "en"),
+        seed=seed,
+    )
+
+    print("=" * 60)
+    print(f"  {title} — v{version}")
+    print(f"  {config.bpm} BPM | {config.key} | {config.duration}s")
+    print(f"  Album: {album}")
+    print("=" * 60)
+
+    if not is_acestep_available():
+        print("  ERROR: ACE-Step server not running!")
+        print("  Start it with: python scripts/start_acestep.py")
+        sys.exit(1)
+
+    print("\n  Generating via ACE-Step...")
+    start_time = time.time()
+    client = AceStepClient()
+    result = client.generate(config)
+    if result is None:
+        print("  ERROR: Generation failed!")
+        sys.exit(1)
+
+    raw_wav = str(output_dir / f"{versioned}_raw.wav")
+    write_wav_file(raw_wav, result.samples)
+
+    samples = normalize_audio(result.samples, 0.95)
+    wav_path = str(output_dir / f"{versioned}.wav")
+    write_wav_file(wav_path, samples)
+
+    mp3_path = str(output_dir / f"{versioned}.mp3")
+    master_to_mp3(wav_path, mp3_path)
+
+    elapsed = time.time() - start_time
+    print(f"\n{'=' * 60}")
+    print(f"  Done: {mp3_path}")
+    print(f"  Time: {elapsed:.0f}s | Duration: {result.duration:.1f}s | Seed: {result.seed}")
+    print(f"{'=' * 60}")
+
+    if args.sync:
+        final_dir = output_dir / "final"
+        if final_dir.exists():
+            print(f"\n  Running sync on {final_dir}...")
+            _run_sync(str(final_dir), force=False)
+
+
+def cmd_sync(args: argparse.Namespace) -> None:
+    """Run the lyrics sync pipeline on an output folder."""
+    _run_sync(args.path, force=args.force, html_only=args.html_only)
+
+
+def _run_sync(path: str, force: bool = False, html_only: bool = False) -> None:
+    """Call sync_lyrics.py logic programmatically."""
+    # Import sync_lyrics from scripts/ (add to path if needed)
+    import importlib.util
+
+    sync_path = Path("scripts/sync_lyrics.py").resolve()
+    if not sync_path.exists():
+        print(f"  ERROR: {sync_path} not found")
+        sys.exit(1)
+
+    spec = importlib.util.spec_from_file_location("sync_lyrics", sync_path)
+    sync_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sync_mod)
+
+    # Simulate CLI args
+    sys.argv = ["sync_lyrics", path]
+    if force:
+        sys.argv.append("--force")
+    if html_only:
+        sys.argv.append("--html-only")
+    sync_mod.main()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="songmaker",
+        description="Generate songs from markdown files and sync lyrics.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    # generate
+    gen = sub.add_parser("generate", help="Generate a song from a markdown file")
+    gen.add_argument("path", help="Path to song .md file")
+    gen.add_argument("--seed", type=int, default=None, help="Random seed (overrides frontmatter)")
+    gen.add_argument("--sync", action="store_true", help="Run sync pipeline after generation")
+
+    # sync
+    syn = sub.add_parser("sync", help="Sync lyrics: transcribe, LRC, HTML, ID3")
+    syn.add_argument("path", help="Album output folder or single MP3")
+    syn.add_argument("--force", action="store_true", help="Re-transcribe even if LRC exists")
+    syn.add_argument("--html-only", action="store_true", help="Only regenerate HTML from existing LRC")
+
+    args = parser.parse_args()
+    if args.command == "generate":
+        cmd_generate(args)
+    elif args.command == "sync":
+        cmd_sync(args)
+
+
+if __name__ == "__main__":
+    main()

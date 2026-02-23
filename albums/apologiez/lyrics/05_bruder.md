@@ -1,94 +1,92 @@
-# Bruder
-
-| Field | Value |
-|-------|-------|
-| **Title** | Bruder |
-| **Album** | Apologiez |
-| **Track** | 05 |
-| **Genre** | Emotional Pop / Indie (Ed Sheeran x Clueso x Bosse) |
-| **BPM** | 78 |
-| **Key** | C major |
-| **Language** | German (with minimal English) |
-| **Vocal styles** | SINGING (intimate, honest) |
-| **Status** | DRAFT |
-
+---
+title: Bruder
+album: apologiez
+track: 5
+genre: Emotional Pop / Indie (Ed Sheeran x Clueso x Bosse)
+prompt: >
+  emotional acoustic pop ballad, male vocal, intimate and vulnerable,
+  simple piano, gentle acoustic guitar, soft strings, warm and honest,
+  Ed Sheeran style, Clueso style, German singer songwriter,
+  slow build to emotional climax, heartfelt, raw, like a voicemail at 2am
+bpm: 78
+duration: 210
+key: C
+language: de
+status: approved
 ---
 
-## Song Concept
+# Bruder
 
-The album closer. No jokes, no gimmicks, no apologies. Just the thing Felix has never said out loud: I love you, Bruder. You're one of the few people I can be myself around. Thirty years of friendship don't need daily contact — they just need to be real. This song says what Felix wanted to say at Christmas but couldn't, what he thinks at 4 AM but never texts.
+## Concept
+
+The album closer. No jokes, no gimmicks, no apologies. Just the thing Felix has never said out loud: I love you, Bruder. Thirty years of friendship don't need daily contact — they just need to be real.
 
 **Core thesis**: Du bist mein Bruder. Das reicht. Das ist alles.
 
 **Tone**: Quiet, warm, vulnerable. Like a voicemail you leave at 2 AM knowing he'll hear it in the morning.
 
----
-
 ## Lyrics
 
-### [INTRO] (16 beats)
-*(Simple piano, nothing else)*
-
-### [VERSE 1]
+[verse]
 Ich bin nicht gut in sowas,
-Du weisst das, ich weiss das,
+Du weißt das, ich weiß das,
 Ich sag lieber nichts als was Falsches,
 Und dann sag ich gar nichts
 
-Wir sehen uns einmal im Jahr wenn's gut laeuft,
+Wir sehen uns einmal im Jahr wenn's gut läuft,
 Weihnachten oder dein Geburtstag,
 Und dazwischen ist Stille,
 Aber keine die wehtut, eine die reicht
 
-### [CHORUS]
+[chorus]
 Du bist mein Bruder,
 Nicht weil wir mussten, weil wir's sind,
 Du bist mein Bruder,
 Seit dem Pausenhof, seit wir Kinder sind,
 Und ich hab dir das nie gesagt,
-Weil Maenner sowas halt nicht sagen,
-Aber heute Nacht sagt's ne Maschine fuer mich,
+Weil Männer sowas halt nicht sagen,
+Aber heute Nacht sagt's ne Maschine für mich,
 Und ich mein jedes Wort, das sie singt
 
-### [VERSE 2]
-Bei dir muss ich nicht so tun als waer ich irgendwer,
+[verse]
+Bei dir muss ich nicht so tun als wär ich irgendwer,
 Kein Smalltalk, keine Rolle, einfach da,
 Einfach Felix, der Typ aus Erlangen,
-Der mit dir auf dem Boden sass und Bier getrunken hat
+Der mit dir auf dem Boden saß und Bier getrunken hat
 
 Du in Berlin mit Tessa und der Kleinen,
 Und ich hier, immer noch am selben Fleck,
-Aber wenn du anrufst ist es wie frueh um neun im Schulhof,
-Als haett sich nichts veraendert, als waer keiner je weg
+Aber wenn du anrufst ist es wie früh um neun im Schulhof,
+Als hätt sich nichts verändert, als wär keiner je weg
 
-### [CHORUS]
+[chorus]
 Du bist mein Bruder,
 Nicht weil wir mussten, weil wir's sind,
 Du bist mein Bruder,
 Seit dem Pausenhof, seit wir Kinder sind,
 Und ich hab dir das nie gesagt,
-Weil Maenner sowas halt nicht sagen,
-Aber heute Nacht sagt's ne Maschine fuer mich,
+Weil Männer sowas halt nicht sagen,
+Aber heute Nacht sagt's ne Maschine für mich,
 Und ich mein jedes Wort, das sie singt
 
-### [BRIDGE]
-Dreissig Jahre, Tobi,
+[bridge]
+Dreißig Jahre, Tobi,
 Vom Klassenzimmer bis hierher,
 Vom E-Werk bis Berlin,
 Von Napster bis Spotify,
-Wir sind aelter geworden,
+Wir sind älter geworden,
 Aber das hier ist gleich geblieben,
 Und das ist mehr als die meisten Menschen jemals haben
 
-### [FINAL CHORUS]
+[chorus]
 Du bist mein Bruder,
 Das ist alles was ich sagen will,
 Du bist mein Bruder,
 Und das reicht, das reicht, das reicht,
-Und wenn die Maschine aufhoert zu singen,
+Und wenn die Maschine aufhört zu singen,
 Dann bleibt das hier,
 Bleibt das hier
 
-### [OUTRO]
+[outro]
 Ich hab dich lieb, Bruder,
 Das war's, mehr brauch ich nicht zu sagen

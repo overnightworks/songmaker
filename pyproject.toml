@@ -1,7 +1,7 @@
 [project]
 name = "songmaker"
 version = "1.0.0"
-description = "AI-powered song generation engine — vocals + instrumentals from pure Python scripts"
+description = "AI-powered song generation engine — songs from markdown files"
 authors = [{ name = "Flex0r (Felix Hummert)", email = "felix.hummert@gmail.com" }]
 readme = "README.md"
 license = { text = "MIT" }
@@ -57,6 +57,9 @@ dev = [
     "ruff>=0.4",
 ]
 
+[project.scripts]
+songmaker = "songmaker_cli.main:main"
+
 [project.urls]
 Repository = "https://github.com/flex0r/songmaker"
 
@@ -75,6 +78,7 @@ include = [
     "stem_separator*",
     "acestep_engine*",
     "diffsinger_engine*",
+    "songmaker_cli*",
 ]
 
 # ---------------------------------------------------------------
