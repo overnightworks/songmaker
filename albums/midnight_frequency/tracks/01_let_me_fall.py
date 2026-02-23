@@ -6,7 +6,14 @@ BPM: 120
 Key: D minor
 Duration: 480 beats (4:00)
 
-Vocals: DiffSinger (TIGER v106) + RVC (whitney92)
+Vocals: ACE-Step 1.5 (text-to-music AI)
+Instrumental: Songmaker engine (dark_pad, supersaw, pluck, sub_bass, drums)
+
+Three vocal modes (--mode):
+    full-mix     ACE-Step generates everything (vocals + its own instruments)
+    demucs       ACE-Step full mix → Demucs vocal extraction → Songmaker instrumentals
+    songmaker    Songmaker instrumentals only (no vocals, for mixing later)
+
 Emotional arc: Suffocation → grip slipping → freefall → euphoria → transcendence
 Hook: "Let me fall, I don't need the ground / Let me fall into the sound"
 """
@@ -16,12 +23,9 @@ from __future__ import annotations
 import math
 import os
 import random
-from pathlib import Path
+import sys
 from typing import Final
 
-import numpy as np
-
-from diffsinger_engine import DiffSingerEngine, VocalNote, VocalPhrase
 from instrumental_engine import (
     SAMPLE_RATE,
     Arrangement,
@@ -51,18 +55,11 @@ from instrumental_engine.mixer import (
 BPM: Final[int] = 120
 SECONDS_PER_BEAT: Final[float] = 60.0 / BPM
 TOTAL_BEATS: Final[float] = 480.0
+TOTAL_SECONDS: Final[float] = TOTAL_BEATS * SECONDS_PER_BEAT  # 240s = 4:00
 
 OUTPUT_DIR: Final[str] = "_output/midnight_frequency"
 WAV_PATH: Final[str] = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall.wav")
 MP3_PATH: Final[str] = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall.mp3")
-SONG_NAME: Final[str] = "01_let_me_fall"
-
-# Change this label before each generation run to describe the config
-RUN_LABEL: Final[str] = "WER scoring, small.en, optimizer retries"
-
-# Optimization settings
-TARGET_ACCURACY: Final[float] = 0.85  # Per-phrase Whisper word accuracy target
-MAX_RETRIES: Final[int] = 10  # Max generation attempts per phrase
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MIDI note constants (D minor: D E F G A Bb C)
@@ -788,576 +785,100 @@ def build_arrangement() -> Arrangement:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Vocals
+# ACE-Step vocal configuration
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ═══════════════════════════════════════════════════════════════════════════
-# DiffSinger vocal phrases — melodies in D minor
-# ═══════════════════════════════════════════════════════════════════════════
-# D minor scale: D(62) E(64) F(65) G(67) A(69) Bb(70) C(72) D(74)
-# Chord tones:
-#   Dm = D F A    Bb = Bb D F    F = F A C    C = C E G
-#   Gm = G Bb D   A = A C# E
-#
-# RVC: whitney92 for all phrases (warm female voice character)
-# Voice: tiger_fresh for soft, tiger_electric for power
-
-VOICEBANK_DIR = Path(__file__).resolve().parent.parent.parent.parent / "_models" / "diffsinger" / "checkpoints" / "tiger_voice"
-
-RVC_MODEL = None  # Disabled - RVC damages consonant clarity during DiffSinger testing
-RVC_PITCH_SHIFT = 0
-RVC_INDEX_RATE = 0.3  # Low index for pronunciation clarity over timbre
-
-
-def _n(midi: int, lyric: str, beats: float, vel: float = 1.0) -> VocalNote:
-    """Shortcut for creating a VocalNote."""
-    return VocalNote(midi=midi, lyric=lyric, duration_beats=beats, velocity=vel)
-
-
-def _r(beats: float) -> VocalNote:
-    """Shortcut for a rest."""
-    return VocalNote(midi=0, lyric="", duration_beats=beats, is_rest=True)
-
-
-# ── INTRO: "I built these walls / with steady hands" ─────────────
-# Soft, intimate. Over Dm pad. Floating, almost whispered singing.
-# All words >= 0.75 beats for clear articulation at 120 BPM.
-intro_phrase = VocalPhrase(
-    phrase_id="intro",
-    bpm=BPM,
-    voice="tiger_fresh",
-    gender=-0.2,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        _n(62, "I", 1.0),           # D4
-        _n(65, "built", 1.5),       # F4
-        _n(64, "these", 1.0),       # E4
-        _n(62, "walls", 3.0),       # D4 — settle
-        _r(2.0),
-        _n(65, "with", 1.0),        # F4
-        _n(67, "steady", 2.0),      # G4
-        _n(65, "hands", 3.5),       # F4 — resolve down
-        _r(1.0),
-    ),
+ACESTEP_PROMPT: Final[str] = (
+    "melodic house, female vocal, supersaw synths, four-on-the-floor drums, "
+    "dark pad, sub bass, emotional, euphoric drop, D minor, "
+    "CYRIL style, Avicii inspired"
 )
 
-# ── VERSE 1A: "I built these walls..." ────────────────────────────
-# Fewer words per phrase. Each word gets time to breathe.
-verse_1a_phrase = VocalPhrase(
-    phrase_id="verse_1a",
-    bpm=BPM,
-    voice="tiger_fresh",
-    gender=-0.15,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "I built these walls with steady hands" — 8 beats over Dm
-        _n(62, "I", 0.5),           # D4
-        _n(65, "built", 1.0),       # F4
-        _n(64, "these", 0.75),      # E4
-        _n(62, "walls", 1.5),       # D4
-        _n(65, "with", 0.5),        # F4
-        _n(67, "steady", 1.25),     # G4
-        _n(65, "hands", 1.75),      # F4
-        _r(0.75),
-        # "but steady hands still shake at night" — 8 beats over Bb
-        _n(65, "but", 0.5),         # F4
-        _n(67, "steady", 1.25),     # G4
-        _n(69, "hands", 1.0),       # A4
-        _n(67, "still", 0.75),      # G4
-        _n(70, "shake", 1.25),      # Bb4
-        _n(69, "at", 0.5),          # A4
-        _n(67, "night", 2.0),       # G4
-        _r(0.75),
-        # "I held my breath for twenty years" — 8 beats over F
-        _n(65, "I", 0.5),           # F4
-        _n(69, "held", 1.25),       # A4
-        _n(67, "my", 0.5),          # G4
-        _n(65, "breath", 1.25),     # F4
-        _n(67, "for", 0.5),         # G4
-        _n(69, "twenty", 1.25),     # A4
-        _n(72, "years", 2.0),       # C5
-        _r(0.75),
-        # "forgot what air tastes like" — 8 beats over C
-        _n(72, "forgot", 1.25),     # C5
-        _n(69, "what", 0.5),        # A4
-        _n(67, "air", 1.25),        # G4
-        _n(65, "tastes", 1.0),      # F4
-        _n(62, "like", 2.5),        # D4
-        _r(1.5),
-    ),
-)
+ACESTEP_LYRICS: Final[str] = """\
+[intro]
+I built these walls
+With steady hands
 
-# ── VERSE 1B: "I drew the map..." ────────────────────────────────
-verse_1b_phrase = VocalPhrase(
-    phrase_id="verse_1b",
-    bpm=BPM,
-    voice="tiger_fresh",
-    gender=-0.15,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "I drew the map, I marked the lines" — 8 beats over Dm
-        _n(62, "I", 0.5),           # D4
-        _n(65, "drew", 1.0),        # F4
-        _n(64, "the", 0.5),         # E4
-        _n(67, "map", 1.5),         # G4
-        _r(0.5),
-        _n(65, "I", 0.5),           # F4
-        _n(69, "marked", 1.0),      # A4
-        _n(67, "the", 0.5),         # G4
-        _n(65, "lines", 1.5),       # F4
-        _r(0.5),
-        # "colored inside every one" — 8 beats over Bb
-        _n(67, "colored", 1.25),    # G4
-        _n(69, "inside", 1.25),     # A4
-        _n(70, "every", 1.25),      # Bb4
-        _n(67, "one", 2.5),         # G4
-        _r(1.75),
-        # "the picture looked like someone's life" — 8 beats over F
-        _n(65, "the", 0.5),         # F4
-        _n(69, "picture", 1.25),    # A4
-        _n(67, "looked", 0.75),     # G4
-        _n(65, "like", 0.5),        # F4
-        _n(69, "someone's", 1.25),  # A4
-        _n(72, "life", 2.0),        # C5
-        _r(1.75),
-        # "but I don't know whose" — 8 beats over C
-        _n(72, "but", 0.5),         # C5
-        _n(69, "I", 0.5),           # A4
-        _n(67, "don't", 0.75),      # G4
-        _n(65, "know", 1.25),       # F4
-        _n(62, "whose", 3.0),       # D4
-        _r(2.0),
-    ),
-)
+[verse]
+I built these walls with steady hands
+But steady hands still shake at night
+I held my breath for twenty years
+Forgot what air tastes like
 
-# ── PRE-CHORUS 1: "My fingers slip..." ────────────────────────────
-pre_chorus_1_phrase = VocalPhrase(
-    phrase_id="pre_chorus_1",
-    bpm=BPM,
-    voice="tiger_fresh",
-    gender=-0.1,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "My fingers slip"
-        _n(65, "my", 0.75),         # F4
-        _n(69, "fingers", 2.0),     # A4
-        _n(72, "slip", 2.5),        # C5
-        _r(1.5),
-        # "the edge is gone"
-        _n(70, "the", 0.75),        # Bb4
-        _n(72, "edge", 1.5),        # C5
-        _n(74, "is", 0.75),         # D5
-        _n(72, "gone", 2.5),        # C5
-        _r(1.5),
-        # "and I'm not scared anymore"
-        _n(72, "and", 0.75),        # C5
-        _n(74, "I'm", 1.25),        # D5
-        _n(72, "not", 0.75),        # C5
-        _n(69, "scared", 2.0),      # A4
-        _n(67, "anymore", 3.5),     # G4
-        _r(1.0),
-    ),
-)
+I drew the map, I marked the lines
+Colored inside every one
+The picture looked like someone's life
+But I don't know whose
 
-# ── CHORUS 1A: "Let me fall..." ───────────────────────────────────
-# Hook with descending "let me fall" motif. All words >= 0.75 beats.
-chorus_1a_phrase = VocalPhrase(
-    phrase_id="chorus_1a",
-    bpm=BPM,
-    voice="tiger_electric",
-    gender=-0.1,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "Let me fall" — 5.5 beats, descending hook
-        _n(74, "let", 0.75),        # D5
-        _n(72, "me", 0.5),          # C5
-        _n(69, "fall", 2.5),        # A4 — falling!
-        _r(0.5),
-        # "I don't need the ground" — 5.5 beats
-        _n(69, "I", 0.5),           # A4
-        _n(72, "don't", 1.0),       # C5
-        _n(70, "need", 1.0),        # Bb4
-        _n(69, "the", 0.5),         # A4
-        _n(67, "ground", 2.0),      # G4
-        _r(0.5),
-        # "Let me fall into the sound" — 7 beats
-        _n(74, "let", 0.75),        # D5
-        _n(72, "me", 0.5),          # C5
-        _n(69, "fall", 1.5),        # A4
-        _n(70, "into", 1.0),        # Bb4
-        _n(69, "the", 0.5),         # A4
-        _n(67, "sound", 2.25),      # G4
-        _r(0.5),
-        # "I've been holding on so long" — 7 beats
-        _n(67, "I've", 0.5),        # G4
-        _n(69, "been", 0.75),       # A4
-        _n(72, "holding", 1.5),     # C5
-        _n(69, "on", 0.75),         # A4
-        _n(67, "so", 0.5),          # G4
-        _n(65, "long", 2.0),        # F4
-        _r(1.0),
-        # "let me fall where I belong" — 7 beats
-        _n(74, "let", 0.75),        # D5
-        _n(72, "me", 0.5),          # C5
-        _n(69, "fall", 1.5),        # A4
-        _n(67, "where", 0.75),      # G4
-        _n(69, "I", 0.5),           # A4
-        _n(70, "belong", 2.5),      # Bb4
-        _r(0.5),
-    ),
-)
+[pre-chorus]
+My fingers slip
+The edge is gone
+And I'm not scared anymore
 
-# ── CHORUS 1B: "Let me fall, through the noise..." ───────────────
-chorus_1b_phrase = VocalPhrase(
-    phrase_id="chorus_1b",
-    bpm=BPM,
-    voice="tiger_electric",
-    gender=-0.1,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "Let me fall" — 4.25 beats
-        _n(74, "let", 0.75),        # D5
-        _n(72, "me", 0.5),          # C5
-        _n(69, "fall", 2.5),        # A4
-        _r(0.5),
-        # "through the noise and the light" — 5.75 beats
-        _n(69, "through", 0.75),    # A4
-        _n(70, "the", 0.5),         # Bb4
-        _n(72, "noise", 1.0),       # C5
-        _n(69, "and", 0.5),         # A4
-        _n(67, "the", 0.5),         # G4
-        _n(65, "light", 2.0),       # F4
-        _r(0.5),
-        # "Let me fall through the night" — 7.0 beats
-        _n(74, "let", 0.75),        # D5
-        _n(72, "me", 0.5),          # C5
-        _n(69, "fall", 1.5),        # A4
-        _n(67, "through", 0.75),    # G4
-        _n(65, "the", 0.5),         # F4
-        _n(62, "night", 2.5),       # D4
-        _r(0.5),
-        # "I don't need to understand" — 7.0 beats
-        _n(65, "I", 0.5),           # F4
-        _n(67, "don't", 0.75),      # G4
-        _n(69, "need", 1.0),        # A4
-        _n(67, "to", 0.5),          # G4
-        _n(72, "understand", 3.0),  # C5
-        _r(1.25),
-        # "let me fall from my own hands" — 8.0 beats
-        _n(74, "let", 0.75),        # D5
-        _n(72, "me", 0.5),          # C5
-        _n(69, "fall", 1.5),        # A4
-        _n(67, "from", 0.5),        # G4
-        _n(65, "my", 0.5),          # F4
-        _n(67, "own", 0.75),        # G4
-        _n(62, "hands", 2.75),      # D4
-        _r(0.75),
-    ),
-)
+[chorus]
+Let me fall
+I don't need the ground
+Let me fall into the sound
+I've been holding on so long
+Let me fall where I belong
 
-# ── VERSE 2A: "I see the city from up here..." ───────────────────
-verse_2a_phrase = VocalPhrase(
-    phrase_id="verse_2a",
-    bpm=BPM,
-    voice="tiger_fresh",
-    gender=-0.15,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "I see the city from up here" — 8 beats over Dm
-        _n(62, "I", 0.5),           # D4
-        _n(65, "see", 1.0),         # F4
-        _n(64, "the", 0.5),         # E4
-        _n(67, "city", 1.5),        # G4
-        _n(65, "from", 0.75),       # F4
-        _n(69, "up", 0.75),         # A4
-        _n(67, "here", 2.25),       # G4
-        _r(0.75),
-        # "the lights look just like breathing" — 8 beats over Bb
-        _n(67, "the", 0.5),         # G4
-        _n(70, "lights", 1.25),     # Bb4
-        _n(69, "look", 0.75),       # A4
-        _n(67, "just", 0.5),        # G4
-        _n(65, "like", 0.75),       # F4
-        _n(69, "breathing", 2.5),   # A4
-        _r(1.75),
-        # "my old life fits inside a window" — 8 beats over F
-        _n(65, "my", 0.5),          # F4
-        _n(69, "old", 1.0),         # A4
-        _n(67, "life", 1.0),        # G4
-        _n(65, "fits", 0.75),       # F4
-        _n(69, "inside", 1.25),     # A4
-        _n(67, "a", 0.5),           # G4
-        _n(72, "window", 2.0),      # C5
-        _r(1.0),
-        # "too small to climb back through" — 8 beats over C
-        _n(72, "too", 0.75),        # C5
-        _n(69, "small", 1.0),       # A4
-        _n(67, "to", 0.5),          # G4
-        _n(65, "climb", 1.0),       # F4
-        _n(64, "back", 0.75),       # E4
-        _n(62, "through", 2.5),     # D4
-        _r(1.5),
-    ),
-)
+Let me fall
+Through the noise and the light
+Let me fall through the night
+I don't need to understand
+Let me fall from my own hands
 
-# ── VERSE 2B: "I kept a list..." ─────────────────────────────────
-verse_2b_phrase = VocalPhrase(
-    phrase_id="verse_2b",
-    bpm=BPM,
-    voice="tiger_fresh",
-    gender=-0.15,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "I kept a list of all the things" — 8 beats over Dm
-        _n(62, "I", 0.5),           # D4
-        _n(65, "kept", 1.0),        # F4
-        _n(64, "a", 0.5),           # E4
-        _n(67, "list", 1.25),       # G4
-        _n(65, "of", 0.5),          # F4
-        _n(69, "all", 1.0),         # A4
-        _n(67, "the", 0.5),         # G4
-        _n(65, "things", 2.0),      # F4
-        _r(0.75),
-        # "that I was supposed to be" — 8 beats over Bb
-        _n(67, "that", 0.5),        # G4
-        _n(69, "I", 0.5),           # A4
-        _n(67, "was", 0.75),        # G4
-        _n(70, "supposed", 1.5),    # Bb4
-        _n(69, "to", 0.5),          # A4
-        _n(67, "be", 2.5),          # G4
-        _r(1.75),
-        # "I folded it into a bird" — 8 beats over F
-        _n(65, "I", 0.5),           # F4
-        _n(69, "folded", 1.25),     # A4
-        _n(67, "it", 0.5),          # G4
-        _n(69, "into", 1.25),       # A4
-        _n(67, "a", 0.5),           # G4
-        _n(72, "bird", 2.25),       # C5
-        _r(1.75),
-        # "and watched it leave without me" — 8 beats over C
-        _n(72, "and", 0.5),         # C5
-        _n(69, "watched", 1.0),     # A4
-        _n(67, "it", 0.5),          # G4
-        _n(65, "leave", 1.25),      # F4
-        _n(64, "without", 1.5),     # E4
-        _n(62, "me", 2.5),          # D4
-        _r(0.75),
-    ),
-)
+[verse]
+I see the city from up here
+The lights look just like breathing
+My old life fits inside a window
+Too small to climb back through
 
-# ── PRE-CHORUS 2: "The air is thin..." ───────────────────────────
-pre_chorus_2_phrase = VocalPhrase(
-    phrase_id="pre_chorus_2",
-    bpm=BPM,
-    voice="tiger_fresh",
-    gender=-0.1,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "The air is thin"
-        _n(67, "the", 0.75),        # G4
-        _n(69, "air", 2.0),         # A4
-        _n(72, "is", 0.75),         # C5
-        _n(74, "thin", 2.5),        # D5
-        _r(1.5),
-        # "the sky is wide"
-        _n(72, "the", 0.75),        # C5
-        _n(74, "sky", 2.0),         # D5
-        _n(72, "is", 0.75),         # C5
-        _n(70, "wide", 3.0),        # Bb4
-        _r(1.5),
-        # "and I was never meant to land"
-        _n(72, "and", 0.75),        # C5
-        _n(74, "I", 1.25),          # D5
-        _n(72, "was", 0.75),        # C5
-        _n(69, "never", 1.5),       # A4
-        _n(67, "meant", 1.25),      # G4
-        _n(65, "to", 0.75),         # F4
-        _n(69, "land", 3.5),        # A4
-        _r(1.0),
-    ),
-)
+I kept a list of all the things
+That I was supposed to be
+I folded it into a bird
+And watched it leave without me
 
-# ── CHORUS 2A = same melody as CHORUS 1A ──────────────────────────
-chorus_2a_phrase = VocalPhrase(
-    phrase_id="chorus_2a",
-    bpm=BPM,
-    voice="tiger_electric",
-    gender=-0.1,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=chorus_1a_phrase.notes,
-)
+[pre-chorus]
+The air is thin
+The sky is wide
+And I was never meant to land
 
-# ── CHORUS 2B = same melody as CHORUS 1B ──────────────────────────
-chorus_2b_phrase = VocalPhrase(
-    phrase_id="chorus_2b",
-    bpm=BPM,
-    voice="tiger_electric",
-    gender=-0.1,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=chorus_1b_phrase.notes,
-)
+[chorus]
+Let me fall
+I don't need the ground
+Let me fall into the sound
+I've been holding on so long
+Let me fall where I belong
 
-# ── BRIDGE: "There is no bottom..." ──────────────────────────────
-bridge_phrase = VocalPhrase(
-    phrase_id="bridge",
-    bpm=BPM,
-    voice="tiger_fresh",
-    gender=-0.2,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "There is no bottom" — 8 beats
-        _n(62, "there", 1.25),      # D4
-        _n(65, "is", 1.0),          # F4
-        _n(67, "no", 1.0),          # G4
-        _n(69, "bottom", 3.0),      # A4
-        _r(1.75),
-        # "There is no end" — 8 beats
-        _n(64, "there", 1.25),      # E4
-        _n(65, "is", 1.0),          # F4
-        _n(67, "no", 1.0),          # G4
-        _n(69, "end", 3.0),         # A4
-        _r(1.75),
-        # "Just the fall" — 7 beats
-        _n(65, "just", 1.25),       # F4
-        _n(67, "the", 0.75),        # G4
-        _n(70, "fall", 3.25),       # Bb4
-        _r(1.75),
-        # "And falling feels like flying" — 9 beats
-        _n(67, "and", 0.75),        # G4
-        _n(69, "falling", 2.0),     # A4
-        _n(67, "feels", 1.25),      # G4
-        _n(65, "like", 1.0),        # F4
-        _n(67, "flying", 3.25),     # G4
-        _r(0.75),
-    ),
-)
+Let me fall
+Through the noise and the light
+Let me fall through the night
+I don't need to understand
+Let me fall from my own hands
 
-# ── FINAL CHORUS A: "Let me fall..." (EPIC) ──────────────────────
-# Same hook as chorus 1a but lyrics variation: "standing still" instead of "holding on"
-final_chorus_a_phrase = VocalPhrase(
-    phrase_id="final_chorus_a",
-    bpm=BPM,
-    voice="tiger_electric",
-    gender=-0.1,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "Let me fall" — 4.25 beats
-        _n(74, "let", 0.75),        # D5
-        _n(72, "me", 0.5),          # C5
-        _n(69, "fall", 2.5),        # A4
-        _r(0.5),
-        # "I don't need the ground" — 5.5 beats
-        _n(69, "I", 0.5),           # A4
-        _n(72, "don't", 1.0),       # C5
-        _n(70, "need", 1.0),        # Bb4
-        _n(69, "the", 0.5),         # A4
-        _n(67, "ground", 2.0),      # G4
-        _r(0.5),
-        # "Let me fall into the sound" — 7.0 beats
-        _n(74, "let", 0.75),        # D5
-        _n(72, "me", 0.5),          # C5
-        _n(69, "fall", 1.5),        # A4
-        _n(70, "into", 1.0),        # Bb4
-        _n(69, "the", 0.5),         # A4
-        _n(67, "sound", 2.25),      # G4
-        _r(0.5),
-        # "I've been standing still so long" — 7.25 beats
-        _n(67, "I've", 0.5),        # G4
-        _n(69, "been", 0.75),       # A4
-        _n(72, "standing", 1.5),    # C5
-        _n(69, "still", 0.75),      # A4
-        _n(67, "so", 0.5),          # G4
-        _n(65, "long", 2.0),        # F4
-        _r(1.25),
-        # "let me fall where I belong" — 8.0 beats
-        _n(74, "let", 0.75),        # D5
-        _n(72, "me", 0.5),          # C5
-        _n(69, "fall", 1.5),        # A4
-        _n(67, "where", 0.75),      # G4
-        _n(69, "I", 0.5),           # A4
-        _n(70, "belong", 2.5),      # Bb4
-        _r(1.5),
-    ),
-)
+[bridge]
+There is no bottom
+There is no end
+Just the fall
+And falling feels like flying
 
-# ── FINAL CHORUS B: "Let me fall..." (EPIC, shorter) ─────────────
-final_chorus_b_phrase = VocalPhrase(
-    phrase_id="final_chorus_b",
-    bpm=BPM,
-    voice="tiger_electric",
-    gender=-0.1,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "Let me fall"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 3.0),        # A4
-        _r(1.0),
-        # "I don't need to understand"
-        _n(69, "I", 0.75),          # A4
-        _n(72, "don't", 1.25),      # C5
-        _n(70, "need", 1.25),       # Bb4
-        _n(69, "to", 0.75),         # A4
-        _n(72, "understand", 3.5),  # C5
-        _r(1.0),
-        # "Let me fall"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 3.5),        # A4
-        _r(1.5),
-        # "let me fall from my own hands"
-        _n(74, "let", 1.0),         # D5
-        _n(72, "me", 0.75),         # C5
-        _n(69, "fall", 2.0),        # A4
-        _n(67, "from", 0.75),       # G4
-        _n(65, "my", 0.75),         # F4
-        _n(67, "own", 1.0),         # G4
-        _n(62, "hands", 4.5),       # D4
-        _r(0.75),
-    ),
-)
+[chorus]
+Let me fall
+I don't need the ground
+Let me fall into the sound
+I've been standing still so long
+Let me fall where I belong
 
-# ── OUTRO: "Falling feels like flying" ───────────────────────────
-outro_phrase = VocalPhrase(
-    phrase_id="outro",
-    bpm=BPM,
-    voice="tiger_fresh",
-    gender=-0.2,
-    rvc_model=RVC_MODEL, rvc_pitch_shift=RVC_PITCH_SHIFT, rvc_index_rate=RVC_INDEX_RATE,
-    notes=(
-        # "Falling feels like flying"
-        _n(67, "falling", 2.5),     # G4
-        _n(65, "feels", 1.25),      # F4
-        _n(64, "like", 1.0),        # E4
-        _n(62, "flying", 3.5),      # D4
-        _r(2.0),
-        # "Falling feels like flying" — second, lower
-        _n(65, "falling", 2.5),     # F4
-        _n(64, "feels", 1.25),      # E4
-        _n(62, "like", 1.0),        # D4
-        _n(60, "flying", 4.5),      # C4
-        _r(1.0),
-    ),
-)
+Let me fall
+I don't need to understand
+Let me fall
+Let me fall from my own hands
 
-# All vocal phrases with their beat placements
-VOCAL_PHRASES: Final[list[tuple[VocalPhrase, float]]] = [
-    (intro_phrase, 0.0),
-    (verse_1a_phrase, 32.0),
-    (verse_1b_phrase, 64.0),
-    (pre_chorus_1_phrase, 96.0),
-    (chorus_1a_phrase, 128.0),
-    (chorus_1b_phrase, 160.0),
-    (verse_2a_phrase, 192.0),
-    (verse_2b_phrase, 224.0),
-    (pre_chorus_2_phrase, 256.0),
-    (chorus_2a_phrase, 288.0),
-    (chorus_2b_phrase, 320.0),
-    (bridge_phrase, 352.0),
-    (final_chorus_a_phrase, 384.0),
-    (final_chorus_b_phrase, 416.0),
-    (outro_phrase, 452.0),
-]
+[outro]
+Falling feels like flying
+Falling feels like flying
+"""
 
 # SFX placement: (synth_func, beat, volume, left_gain, right_gain)
 SFX_PLACEMENT: Final[
@@ -1379,79 +900,229 @@ SFX_PLACEMENT: Final[
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main() -> None:
-    """Generate Let Me Fall: instrumental + DiffSinger vocals + SFX -> mastered MP3.
+    """Generate Let Me Fall with configurable vocal mode.
 
-    Modes:
-        (default)              Full song generation with validation report
-        --preview              Generate individual phrase WAVs only
-        --preview verse_1a     Generate specific phrase(s) only
-        --validate             Run phoneme validation without generating audio
+    Usage:
+        python 01_let_me_fall.py                     # Default: full-mix
+        python 01_let_me_fall.py --mode full-mix      # ACE-Step generates everything
+        python 01_let_me_fall.py --mode demucs         # ACE-Step → Demucs extraction → Songmaker mix
+        python 01_let_me_fall.py --mode songmaker      # Songmaker instrumentals only (no vocals)
+        python 01_let_me_fall.py --seed 42             # Reproducible generation
     """
-    import sys
+    import argparse
+    import logging
+    import time
 
-    args = sys.argv[1:]
+    from bark_engine.audio_io import (
+        normalize_audio,
+        overlay_audio,
+        write_wav_file,
+    )
 
-    # ── Preview mode: individual phrase WAVs ──
-    if args and args[0] == "--preview":
-        from diffsinger_engine.preview import generate_previews
+    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 
-        phrase_ids = args[1:] if len(args) > 1 else None
-        generate_previews(
-            phrases=VOCAL_PHRASES,
-            voicebank_dir=VOICEBANK_DIR,
-            output_dir=os.path.join(OUTPUT_DIR, "previews"),
-            bpm=BPM,
-            total_beats=TOTAL_BEATS,
-            phrase_ids=phrase_ids,
-        )
-        return
+    parser = argparse.ArgumentParser(description="Generate Let Me Fall")
+    parser.add_argument(
+        "--mode", choices=["full-mix", "demucs", "songmaker"],
+        default="full-mix",
+        help="Vocal generation mode (default: full-mix)",
+    )
+    parser.add_argument("--seed", type=int, default=-1, help="Random seed (-1 = random)")
+    args = parser.parse_args()
 
-    # ── Validate mode: full dry-run validation (no audio generation) ──
-    if args and args[0] == "--validate":
-        from diffsinger_engine.validation import check_beat_budgets, check_phonemes
-
-        print("\n=== Beat Budget Validation ===\n")
-        try:
-            check_beat_budgets(VOCAL_PHRASES, TOTAL_BEATS)
-            print("  All phrases fit their beat windows.\n")
-        except ValueError as e:
-            print(str(e))
-
-        print("=== Phoneme Validation ===\n")
-        all_ok = True
-        for phrase, beat in VOCAL_PHRASES:
-            issues = check_phonemes(phrase)
-            if issues:
-                print(f"  [!!] {phrase.phrase_id} (beat {beat}):")
-                for issue in issues:
-                    print(f"        {issue}")
-                all_ok = False
-            else:
-                n_notes = sum(1 for n in phrase.notes if not n.is_rest)
-                print(f"  [OK] {phrase.phrase_id}: {n_notes} notes, all phonemes resolved")
-        if all_ok:
-            print("\nAll phrases passed phoneme validation.")
-        return
-
-    # ── Full generation ──
-    from diffsinger_engine.validation import check_beat_budgets, compare_runs, save_run, validate_all
-
-    # ── 0. Beat budget check (instant, catches composition errors) ──
-    check_beat_budgets(VOCAL_PHRASES, TOTAL_BEATS)
-    print("Beat budget check passed — all phrases fit their windows.")
-
+    start_time = time.time()
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # ── 1. Render instrumental ──
-    print("Rendering instrumental arrangement...")
+    print("=" * 60)
+    print("  Let Me Fall — Melodic House")
+    print(f"  Mode: {args.mode} | {BPM} BPM | D minor | 4:00")
+    print("=" * 60)
+
+    # ── Mode: full-mix — ACE-Step does everything ──
+    if args.mode == "full-mix":
+        _generate_full_mix(args.seed)
+
+    # ── Mode: demucs — ACE-Step vocals + Songmaker instrumentals ──
+    elif args.mode == "demucs":
+        _generate_demucs_mix(args.seed)
+
+    # ── Mode: songmaker — Songmaker instrumentals only ──
+    elif args.mode == "songmaker":
+        _generate_songmaker_only()
+
+    elapsed = time.time() - start_time
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
+    print(f"\n{'=' * 60}")
+    print(f"  Total time: {minutes}:{seconds:02d}")
+    print(f"{'=' * 60}")
+
+
+def _generate_full_mix(seed: int) -> None:
+    """Mode 1: ACE-Step generates the entire song (vocals + instruments)."""
+    from acestep_engine import AceStepClient, AceStepConfig, is_acestep_available
+    from bark_engine.audio_io import write_wav_file
+
+    print("\n  Checking ACE-Step server...")
+    if not is_acestep_available():
+        print("  ERROR: ACE-Step server not running!")
+        print("  Start it with: python scripts/start_acestep.py")
+        sys.exit(1)
+
+    config = AceStepConfig(
+        prompt=ACESTEP_PROMPT,
+        lyrics=ACESTEP_LYRICS,
+        bpm=BPM,
+        duration=int(TOTAL_SECONDS),
+        key="Dm",
+        time_signature="4/4",
+        vocal_language="en",
+        seed=seed,
+    )
+
+    print(f"  Generating {config.duration}s via ACE-Step (this takes ~9 minutes)...")
+    client = AceStepClient()
+    result = client.generate(config)
+    if result is None:
+        print("  ERROR: ACE-Step generation failed!")
+        sys.exit(1)
+
+    print(f"  Generated: {result.duration:.1f}s, seed={result.seed}")
+
+    # Write directly — ACE-Step's output IS the final mix
+    write_wav_file(WAV_PATH, result.samples)
+    print(f"  WAV: {WAV_PATH}")
+
+    from bark_engine.audio_io import master_to_mp3 as mono_master
+    mono_master(WAV_PATH, MP3_PATH)
+    print(f"  MP3: {MP3_PATH}")
+
+
+def _generate_demucs_mix(seed: int) -> None:
+    """Mode 2: ACE-Step full mix → Demucs vocal extraction → Songmaker instrumentals."""
+    from acestep_engine import AceStepClient, AceStepConfig, is_acestep_available
+    from bark_engine.audio_io import normalize_audio, overlay_audio, write_wav_file
+    from instrumental_engine.mixer import stereo_to_mono
+
+    print("\n  Checking ACE-Step server...")
+    if not is_acestep_available():
+        print("  ERROR: ACE-Step server not running!")
+        print("  Start it with: python scripts/start_acestep.py")
+        sys.exit(1)
+
+    # Step 1: Generate full mix via ACE-Step
+    config = AceStepConfig(
+        prompt=ACESTEP_PROMPT,
+        lyrics=ACESTEP_LYRICS,
+        bpm=BPM,
+        duration=int(TOTAL_SECONDS),
+        key="Dm",
+        time_signature="4/4",
+        vocal_language="en",
+        seed=seed,
+    )
+
+    print(f"\n  Step 1/5: Generating {config.duration}s via ACE-Step...")
+    client = AceStepClient()
+    result = client.generate(config)
+    if result is None:
+        print("  ERROR: ACE-Step generation failed!")
+        sys.exit(1)
+
+    print(f"    Generated: {result.duration:.1f}s, seed={result.seed}")
+
+    # Save raw ACE-Step output for reference
+    raw_path = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall_acestep_raw.wav")
+    write_wav_file(raw_path, result.samples)
+
+    # Step 2: Extract vocals with Demucs
+    print("\n  Step 2/5: Extracting vocals with Demucs...")
+    try:
+        from stem_separator import DemucsSeparator, is_demucs_available
+
+        if not is_demucs_available():
+            print("    ERROR: Demucs not installed! Run: pip install -e \".[demucs]\"")
+            sys.exit(1)
+
+        separator = DemucsSeparator()
+        stems = separator.separate(raw_path)
+        if stems is None:
+            print("    ERROR: Demucs separation failed!")
+            sys.exit(1)
+
+        vocals = stems.vocals
+        print(f"    Extracted vocals: {len(vocals) / SAMPLE_RATE:.1f}s")
+
+        # Save isolated vocals
+        vocals_path = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall_vocals.wav")
+        write_wav_file(vocals_path, vocals)
+
+    except ImportError:
+        print("    ERROR: stem_separator not available!")
+        sys.exit(1)
+
+    # Step 3: Render Songmaker instrumentals
+    print("\n  Step 3/5: Rendering Songmaker instrumentals + SFX...")
     arrangement = build_arrangement()
     inst_left, inst_right = render_arrangement(arrangement)
+    _add_sfx(inst_left, inst_right)
+    inst_mono = stereo_to_mono(inst_left, inst_right)
 
-    # ── 2. Render SFX layer ──
-    print("Synthesizing SFX (risers + impacts)...")
+    # Step 4: Mix vocals onto instrumentals with ducking
+    print("\n  Step 4/5: Mixing vocals onto instrumentals...")
+    mixed = list(inst_mono)
+
+    # Pad if vocals are longer than instrumental
+    if len(vocals) > len(mixed):
+        mixed.extend([0.0] * (len(vocals) - len(mixed)))
+
+    # Apply simple ducking: reduce instrumental where vocals are active
+    VOCAL_GAIN = 0.85
+    DUCK_DB = -3.0
+    duck_factor = 10 ** (DUCK_DB / 20.0)
+
+    for i in range(min(len(vocals), len(mixed))):
+        if abs(vocals[i]) > 0.01:
+            mixed[i] *= duck_factor
+        mixed[i] += vocals[i] * VOCAL_GAIN
+
+    mixed = normalize_audio(mixed, 0.95)
+
+    # Step 5: Master and export
+    print("\n  Step 5/5: Mastering...")
+    write_wav_file(WAV_PATH, mixed)
+    print(f"  WAV: {WAV_PATH}")
+
+    from bark_engine.audio_io import master_to_mp3 as mono_master
+    mono_master(WAV_PATH, MP3_PATH)
+    print(f"  MP3: {MP3_PATH}")
+
+
+def _generate_songmaker_only() -> None:
+    """Mode 3: Songmaker instrumentals only (no vocals)."""
+    print("\n  Rendering Songmaker instrumentals + SFX...")
+    arrangement = build_arrangement()
+    inst_left, inst_right = render_arrangement(arrangement)
+    _add_sfx(inst_left, inst_right)
+
+    print("  Normalizing stereo mix...")
+    final_left, final_right = normalize_stereo(inst_left, inst_right)
+
+    print(f"  Writing WAV: {WAV_PATH}")
+    write_stereo_wav(WAV_PATH, final_left, final_right)
+
+    print(f"  Mastering to MP3: {MP3_PATH}")
+    master_to_mp3(WAV_PATH, MP3_PATH, target_lufs=-14.0, stereo_width=1.2)
+
+    duration_seconds = TOTAL_BEATS * SECONDS_PER_BEAT
+    minutes = int(duration_seconds // 60)
+    seconds = int(duration_seconds % 60)
+    print(f"  Done! {MP3_PATH} ({minutes}:{seconds:02d})")
+
+
+def _add_sfx(inst_left: list[float], inst_right: list[float]) -> None:
+    """Add white noise risers and impact hits to the instrumental mix."""
     total_samples = len(inst_left)
-    sfx_left: list[float] = [0.0] * total_samples
-    sfx_right: list[float] = [0.0] * total_samples
 
     for sfx_type, beat, volume, l_gain, r_gain in SFX_PLACEMENT:
         start_sample = int(beat * SECONDS_PER_BEAT * SAMPLE_RATE)
@@ -1467,120 +1138,8 @@ def main() -> None:
         for i, (sl, sr) in enumerate(zip(s_left, s_right)):
             idx = start_sample + i
             if idx < total_samples:
-                sfx_left[idx] += sl * l_gain
-                sfx_right[idx] += sr * r_gain
-
-    overlay_onto(inst_left, inst_right, sfx_left, sfx_right, 0)
-
-    # ── 3. Generate vocals with DiffSinger (self-optimizing) ──
-    from diffsinger_engine.optimizer import generate_optimized
-
-    print(f"Generating vocals with DiffSinger (target: {TARGET_ACCURACY:.0%}, max retries: {MAX_RETRIES})...")
-    ds_engine = DiffSingerEngine(voicebank_dir=str(VOICEBANK_DIR), device="cuda")
-
-    vocal_results = generate_optimized(
-        engine=ds_engine,
-        phrases=VOCAL_PHRASES,
-        target_accuracy=TARGET_ACCURACY,
-        max_retries=MAX_RETRIES,
-    )
-
-    # ── 3b. Validate vocals before trimming ──
-    validation_data = []
-    for i, (phrase, beat) in enumerate(VOCAL_PHRASES):
-        samples = vocal_results.get(phrase.phrase_id)
-        if samples is None:
-            continue
-        if i + 1 < len(VOCAL_PHRASES):
-            window_sec = (VOCAL_PHRASES[i + 1][1] - beat) * SECONDS_PER_BEAT
-        else:
-            window_sec = (TOTAL_BEATS - beat) * SECONDS_PER_BEAT
-        validation_data.append((phrase, samples, window_sec))
-
-    report = validate_all(validation_data)
-    print(report.summary())
-
-    # Save run to history and print comparison
-    save_run(report, RUN_LABEL, OUTPUT_DIR, song_name=SONG_NAME)
-    print(compare_runs(OUTPUT_DIR, song_name=SONG_NAME))
-
-    # ── 3c. Safety trim — notes already fit by construction, but DiffSinger
-    #    adds head/tail padding that may slightly overshoot the window. ──
-    FADE_OUT_MS: float = 80.0
-    fade_samples = int(FADE_OUT_MS / 1000.0 * SAMPLE_RATE)
-
-    for i, (phrase, beat) in enumerate(VOCAL_PHRASES):
-        samples = vocal_results.get(phrase.phrase_id)
-        if samples is None:
-            continue
-
-        if i + 1 < len(VOCAL_PHRASES):
-            max_seconds = (VOCAL_PHRASES[i + 1][1] - beat) * SECONDS_PER_BEAT
-        else:
-            max_seconds = (TOTAL_BEATS - beat) * SECONDS_PER_BEAT
-
-        max_samples = int(max_seconds * SAMPLE_RATE)
-
-        if len(samples) > max_samples:
-            trimmed = samples[:max_samples].copy()
-            fade_len = min(fade_samples, max_samples)
-            trimmed[-fade_len:] *= np.linspace(1.0, 0.0, fade_len, dtype=np.float32)
-            vocal_results[phrase.phrase_id] = trimmed
-            print(f"  {phrase.phrase_id}: safety-trimmed {len(samples)/SAMPLE_RATE:.2f}s -> {max_samples/SAMPLE_RATE:.2f}s")
-
-    # ── 4. Apply ducking ──
-    print("\nApplying vocal-instrumental ducking (-3dB)...")
-    vocal_durations: dict[str, float] = {}
-    for phrase, _beat in VOCAL_PHRASES:
-        samples = vocal_results.get(phrase.phrase_id)
-        if samples is not None:
-            vocal_durations[phrase.phrase_id] = len(samples) / SAMPLE_RATE
-
-    vocal_placement_seconds: list[tuple[str, float]] = [
-        (phrase.phrase_id, beat * SECONDS_PER_BEAT) for phrase, beat in VOCAL_PHRASES
-    ]
-    ducked_left, ducked_right = apply_ducking(
-        inst_left,
-        inst_right,
-        vocal_placement_seconds,
-        vocal_durations,
-        reduction_db=-3.0,
-        attack_seconds=0.08,
-        release_seconds=0.3,
-    )
-
-    # ── 5. Overlay vocals onto ducked instrumental ──
-    print("Mixing vocals onto instrumental...")
-    VOCAL_GAIN: float = 0.85
-
-    for phrase, beat in VOCAL_PHRASES:
-        samples = vocal_results.get(phrase.phrase_id)
-        if samples is None:
-            continue
-        start_sample = int(beat * SECONDS_PER_BEAT * SAMPLE_RATE)
-        vocal_mono = (samples * VOCAL_GAIN).tolist()
-        overlay_onto(
-            ducked_left,
-            ducked_right,
-            vocal_mono,
-            vocal_mono,
-            start_sample,
-        )
-
-    # ── 6. Normalize and export ──
-    print("Normalizing stereo mix...")
-    final_left, final_right = normalize_stereo(ducked_left, ducked_right)
-
-    print(f"Writing WAV: {WAV_PATH}")
-    write_stereo_wav(WAV_PATH, final_left, final_right)
-
-    print(f"Mastering to MP3: {MP3_PATH}")
-    master_to_mp3(WAV_PATH, MP3_PATH, target_lufs=-14.0, stereo_width=1.2)
-
-    duration_seconds = TOTAL_BEATS * SECONDS_PER_BEAT
-    minutes = int(duration_seconds // 60)
-    seconds = int(duration_seconds % 60)
-    print(f"Done! {MP3_PATH} ({minutes}:{seconds:02d})")
+                inst_left[idx] += sl * l_gain
+                inst_right[idx] += sr * r_gain
 
 
 if __name__ == "__main__":
