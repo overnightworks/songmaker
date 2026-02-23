@@ -103,6 +103,36 @@ def write_lrc(path: Path, title: str, artist: str, album: str,
     path.write_text("\n".join(out), encoding="utf-8")
 
 
+def write_srt(lrc_path: Path) -> None:
+    """Generate an SRT subtitle file from an LRC file.
+
+    VLC auto-loads .srt files with the same name as the media file,
+    displaying lyrics as subtitles over the album cover art.
+    """
+    lines = parse_lrc(lrc_path)
+    if not lines:
+        return
+
+    def _fmt(seconds: float) -> str:
+        h = int(seconds) // 3600
+        m = (int(seconds) % 3600) // 60
+        s = int(seconds) % 60
+        ms = int((seconds - int(seconds)) * 1000)
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+    srt_lines: list[str] = []
+    for i, (start, text) in enumerate(lines):
+        # End time = start of next line, or +5 seconds for last line
+        end = lines[i + 1][0] if i + 1 < len(lines) else start + 5.0
+        srt_lines.append(str(i + 1))
+        srt_lines.append(f"{_fmt(start)} --> {_fmt(end)}")
+        srt_lines.append(text)
+        srt_lines.append("")
+
+    srt_path = lrc_path.with_suffix(".srt")
+    srt_path.write_text("\n".join(srt_lines), encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Whisper transcription
 # ---------------------------------------------------------------------------
@@ -1136,15 +1166,19 @@ def main() -> None:
         sys.exit(1)
     print(f"  {len(tracks_data)} tracks with lyrics\n")
 
-    print("Step 3: Generating HTML...")
+    print("Step 3: Generating HTML + SRT...")
     generate_player_html(folder, meta, tracks_data)
     generate_booklet_html(folder, meta, tracks_data)
+    for lrc in folder.glob("*.lrc"):
+        write_srt(lrc)
+    print(f"  wrote: {sum(1 for _ in folder.glob('*.srt'))} SRT subtitle files")
 
     print("\nStep 4: Embedding lyrics + cover into MP3s...")
     embed_lyrics_in_mp3(folder, meta, tracks_data)
 
     print(f"\nDone! Generated:")
     print(f"  LRC files: {sum(1 for _ in folder.glob('*.lrc'))}")
+    print(f"  SRT files: {sum(1 for _ in folder.glob('*.srt'))}")
     print(f"  lyrics_player.html")
     print(f"  lyrics_booklet.html")
     print(f"  MP3 lyrics embedded: {len(tracks_data)} tracks")
