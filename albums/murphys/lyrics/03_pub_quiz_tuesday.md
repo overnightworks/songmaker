@@ -2,15 +2,16 @@
 title: Pub Quiz Tuesday
 album: murphys
 track: 3
-genre: Britpop / Blur / Oasis
+genre: Irish Folk Punk / Dropkick Murphys
 prompt: >
-  britpop, Blur Song 2 energy, Oasis swagger, Pulp,
-  Supergrass, jangly guitars, driving rhythm section,
-  male vocal, cocky and confident, laddish charm,
-  big singalong chorus, gang vocals, handclaps,
-  90s UK indie rock, pub anthem, catchy melody,
-  Parklife vibes meets pub quiz chaos
-bpm: 138
+  irish folk punk, Dropkick Murphys, Flogging Molly,
+  The Pogues, celtic punk, tin whistle, fiddle, banjo,
+  acoustic guitar mixed with electric, male vocal,
+  rough and rowdy, gang vocals shouting chorus,
+  stomping beat, pub singalong, drinking song energy,
+  Irish rebel meets quiz night madness,
+  fast tempo, raw and joyful, crowd chanting
+bpm: 165
 duration: 180
 key: G
 language: en
