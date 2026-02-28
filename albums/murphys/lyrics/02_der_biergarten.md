@@ -28,46 +28,46 @@ Murphy's has a proper beer garden on the corner — wooden tables, checkered tab
 ## Lyrics
 
 [verse]
-First warm day in April and the tables come out,
-Guinness umbrellas up, flowers all about,
-Murphy's on the corner, wooden chairs in the sun,
-Same pub, different feeling, winter's finally done
+April sun hits Erlangen, tables on the street,
+Umbrellas up and flowers out, winter in retreat,
+Murphy's on the corner and the doors are open wide,
+Grab a chair, grab a cold one, we're drinking outside
 
 [verse]
-Sun is going down slow, golden light on the street,
-Fairy lights are glowing, everybody's got a seat,
-Tom's got sunglasses on, Peter's arguing again,
-But nobody cares tonight, we're all soaking it in
+Golden light on old brick walls, the whole block smells like summer,
+Fairy lights are coming on, every seat's a winner,
+Tom's got shades on, Peter's loud, nobody wants to leave,
+Strangest thing, an Irish pub, best spot on the street
 
 [chorus]
-Murphy's Biergarten, sun is out, we're alive,
-Guinness umbrellas on the Erlangen side,
-Winter was forever but tonight we don't care,
-Cold beer, warm evening, everyone is here
+Biergarten, sun is shining down,
+Coldest beer and warmest night in town,
+Six months of winter, gone, who cares,
+Summer at Murphy's, pull up a chair
 
 [verse]
-Vanessa brings the pizza to the table outside,
-Old buildings in the background, checkered cloth, good vibes,
-The whole neighborhood is walking by and waving at the crew,
-Strangers stopping in because the feeling's pulling through
+Pizza's coming out the door, Vanessa's on a roll,
+Neighbors walking by and waving, strangers join the fold,
+Checkered cloth and candlelight, the sky is turning blue,
+This is what we waited for, the whole damn winter through
 
 [chorus]
-Murphy's Biergarten, sun is out, we're alive,
-Guinness umbrellas on the Erlangen side,
-Winter was forever but tonight we don't care,
-Cold beer, warm evening, everyone is here
+Biergarten, sun is shining down,
+Coldest beer and warmest night in town,
+Six months of winter, gone, who cares,
+Summer at Murphy's, pull up a chair
 
 [bridge]
 September comes too fast, the lights go back inside,
 We talk about the summer like somebody died,
-But next year April first warm day, we'll be right here again,
-Murphy's Biergarten, sunshine with our friends
+But next year April, first warm day, we'll be right here,
+Same table, same corner, same cold beer
 
 [chorus]
-Murphy's Biergarten, sun is out, we're alive,
-Guinness umbrellas on the Erlangen side,
-Doesn't matter what went wrong, tonight it feels alright,
-Cold beer, warm evening, Murphy's summer night
+Biergarten, sun is shining down,
+Coldest beer and warmest night in town,
+Doesn't matter what went wrong today,
+Summer at Murphy's, let it fade away
 
 [outro]
 One more outside, just one more in the sun
