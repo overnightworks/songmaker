@@ -2,14 +2,15 @@
 title: Die beste Pizza
 album: murphys
 track: 4
-genre: Comedy Punk Pop / Blink-182 Silly
+genre: Comedy Punk Pop / Multilingual Chaos
 prompt: >
   comedy punk pop, silly and fun, male vocal,
   Blink-182 humor, Bowling for Soup style,
   bouncy pop punk, catchy and playful, fast,
   handclaps, gang vocals on chorus, laughing energy,
   funny food song, ridiculous and catchy,
-  like a pop punk band singing about pizza,
+  multilingual, German Italian English mixed,
+  like a punk band singing in three languages about pizza,
   tongue-in-cheek, absurd, crowd singalong
 bpm: 155
 duration: 150
@@ -28,46 +29,46 @@ Vanessa is half Italian and makes the best pizza in Erlangen — in an Irish pub
 
 [verse]
 Mittwoch Abend, Murphy's Pub, Vanessa steht am Herd,
-Halb Italienerin, die Frau weiß was ein Teig so wert,
-Keyla hilft in der Küche, rote Haare, Irish Girl,
-Beste Pizza in Erlangen und das in nem Pub, verrückte Welt
+Mezza italiana, die Frau weiß was ein Teig so wert,
+Keyla hilft in der Küche, red hair, Irish Girl,
+Beste Pizza in Erlangen, mamma mia, verrückte Welt
 
 [verse]
 Dünner Boden, dicker Käse, Soße selbst gemacht,
-Vanessa hat das Rezept von ihrer Nonna mitgebracht,
-Kein Lieferdienst, kein Dosen-Zeug, hier ist alles echt,
-Peter sagt es jede Woche, und der Mann hat Recht
+Nonna's Rezept aus Napoli, nach Erlangen gebracht,
+Kein Lieferdienst, kein Dosen-Zeug, everything is real,
+Peter sagt es jede Woche, that's the deal
 
 [chorus]
-Die beste Pizza in der Stadt,
-In nem Irish Pub, ja, ihr habt richtig gehört,
-Die beste Pizza in der Stadt,
-Vanessa, du hast uns alle verzaubert!
+Die beste Pizza in der Stadt, la migliore,
+In an Irish Pub, ja, ihr habt richtig gehört,
+Die beste Pizza in der Stadt, bellissima,
+Vanessa, cheers, salute, du bist ein Star!
 
 [verse]
-Und wenn du denkst das war's, dann kennst du Murphy's nicht,
-Die Nachos mit dem Käse sind ein Gedicht,
-Ein Irish Pub mit Pizza und mit Nachos, was ein Ort,
-Kein Italiener in Erlangen kommt dagegen, Punkt, Rekord
+Und wenn du denkst that's it, dann kennst du Murphy's nicht,
+Die Nachos mit dem Käse, oh mamma, ein Gedicht,
+Irish Pub mit Pizza and Nachos, what a place,
+Kein Italiener kommt dagegen, sorry lads, no chance
 
 [chorus]
-Die beste Pizza in der Stadt,
-In nem Irish Pub, ja, ihr habt richtig gehört,
-Die beste Pizza in der Stadt,
-Vanessa, du hast uns alle verzaubert!
+Die beste Pizza in der Stadt, la migliore,
+In an Irish Pub, ja, ihr habt richtig gehört,
+Die beste Pizza in der Stadt, bellissima,
+Vanessa, cheers, salute, du bist ein Star!
 
 [bridge]
-Halb Italien, halb Murphy's, ganz Erlangen liebt es,
-Keyla streut den Käse drauf, James grinst und gibt es,
-Ofen auf und Ofen zu, der Laden riecht nach Glück,
-Wer hier einmal Pizza isst, kommt immer wieder zurück
+Halb Italia, halb Ireland, ganz Erlangen liebt es,
+Keyla streut den Käse drauf, James grinst, perfetto,
+Ofen auf und Ofen zu, it smells like happiness,
+Wer hier einmal Pizza isst, comes back, no less
 
 [chorus]
-Die beste Pizza in der Stadt,
-In nem Irish Pub, ja, ihr habt richtig gehört,
-Die beste Pizza in der Stadt,
-Guten Appetit, auf Vanessa, guten Appetit!
+Die beste Pizza in der Stadt, la migliore,
+In an Irish Pub, ja, ihr habt richtig gehört,
+Die beste Pizza in der Stadt, bellissima,
+Sláinte, Prost, salute, guten Appetit!
 
 [outro]
 Pizza, Nachos, Murphy's, Prost!
-Guten Appetit!
+Sláinte, salute, guten Appetit!
