@@ -47,7 +47,7 @@ Friday at Murphy's, same table, same crew!
 [verse]
 James just nods, the man has never panicked,
 Regulars on their stools like furniture is planted,
-Hartmut's got his Pils, Gitty's running chat,
+Hartmut's got his Weizen, Gitty's got her Pils,
 Tom walked in at seven, already gone, imagine that
 
 [chorus]
