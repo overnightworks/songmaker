@@ -64,6 +64,7 @@ Chorus lyrics...
 4. **Ducking always active**: Vocals duck instrumentals by -3dB automatically.
 5. **Never commit secrets or API keys.**
 6. **Validate after generation**: Run `songmaker sync` for Whisper transcription + lyrics embedding.
+7. **Commit per version**: Every time lyrics are changed for a new generation, commit the markdown file before generating. Commit message format: `feat(<album>): <song> v<N> — <style>` (e.g. `feat(murphys): pub quiz tuesday v3 — weezer indie rock`). This way any version can be checked out and regenerated.
 
 ## Project Structure
 - `source_files/` — Shared engine code (acestep, bark, instrumental, diffsinger, rvc, xtts, songmaker_cli)
