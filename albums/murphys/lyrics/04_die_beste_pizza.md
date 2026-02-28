@@ -2,18 +2,18 @@
 title: Die beste Pizza
 album: murphys
 track: 4
-genre: Fun Rock / Die Ärzte Style
+genre: Comedy Punk Pop / Blink-182 Silly
 prompt: >
-  fun rock, Die Ärzte style, humorous, male vocal,
-  catchy and playful, punk pop, tongue-in-cheek,
-  acoustic guitar intro then electric, bouncy rhythm,
-  German comedy rock, Farin Urlaub, Bela B,
-  silly and fun, argument song, food song,
-  playful melody, handclaps, crowd singing,
-  like a funny argument set to music
-bpm: 135
+  comedy punk pop, silly and fun, male vocal,
+  Blink-182 humor, Bowling for Soup style,
+  bouncy pop punk, catchy and playful, fast,
+  handclaps, gang vocals on chorus, laughing energy,
+  funny food song, ridiculous and catchy,
+  like a pop punk band singing about pizza,
+  tongue-in-cheek, absurd, crowd singalong
+bpm: 155
 duration: 150
-key: G
+key: A
 language: de
 status: approved
 ---
@@ -22,52 +22,52 @@ status: approved
 
 ## Concept
 
-Vanessa and Keyla make the best pizza in Erlangen — and it's in an Irish pub. Peter will fight anyone who disagrees. Nobody can explain it, nobody questions it. A Die Ärzte style comedy rock anthem to Murphy's pizza.
+Vanessa is half Italian and makes the best pizza in Erlangen — in an Irish pub. That's already absurd. Her helper is Keyla, James's red-haired Irish niece who's twenty. An Irish pub, a half-Italian pizza queen, an Irish girl in the kitchen, and they also make killer nachos with cheese. Peter swears it's the best pizza in town. Nobody can explain it. A silly pop punk food anthem.
 
 ## Lyrics
 
 [verse]
-Freitag Abend, Murphy's Pub, ich brauch nur eins,
-Vanessa steht am Ofen, Käse läuft wie Wein,
-Peter sagt die beste Pizza, keine Diskussion,
-Und der Typ streitet über alles, nur hier hat er Recht, Pardon
+Mittwoch Abend, Murphy's Pub, Vanessa steht am Herd,
+Halb Italienerin, die Frau weiß was ein Teig so wert,
+Keyla hilft in der Küche, rote Haare, Irish Girl,
+Beste Pizza in Erlangen und das in nem Pub, verrückte Welt
 
 [verse]
-Ein Irish Pub, kein Italiener, ich weiß,
-Keyla rollt den Teig und macht die Küche heiß,
-Warum die beste Pizza aus nem Pub hier kommt,
-Fragt keiner, schmeckt einfach, jeder ist besonnt
+Dünner Boden, dicker Käse, Soße selbst gemacht,
+Vanessa hat das Rezept von ihrer Nonna mitgebracht,
+Kein Lieferdienst, kein Dosen-Zeug, hier ist alles echt,
+Peter sagt es jede Woche, und der Mann hat Recht
 
 [chorus]
 Die beste Pizza in der Stadt,
-Egal was der Italiener sagt,
-Murphy's Pub, ihr habt richtig gehört,
-Die beste Pizza, hiermit erklärt!
+In nem Irish Pub, ja, ihr habt richtig gehört,
+Die beste Pizza in der Stadt,
+Vanessa, du hast uns alle verzaubert!
 
 [verse]
-Peter nimmt Margherita, jeden Freitag gleich,
-Ich nehm die mit allem drauf, wird jedes Mal ein Streich,
-Vom Flammkuchen bis zum Burger, kenn die Karte blind,
-Aber Freitag ist nur Pizza, so wie jedes Kind
+Und wenn du denkst das war's, dann kennst du Murphy's nicht,
+Die Nachos mit dem Käse sind ein Gedicht,
+Ein Irish Pub mit Pizza und mit Nachos, was ein Ort,
+Kein Italiener in Erlangen kommt dagegen, Punkt, Rekord
 
 [chorus]
 Die beste Pizza in der Stadt,
-Egal was der Italiener sagt,
-Murphy's Pub, ihr habt richtig gehört,
-Die beste Pizza, hiermit erklärt!
+In nem Irish Pub, ja, ihr habt richtig gehört,
+Die beste Pizza in der Stadt,
+Vanessa, du hast uns alle verzaubert!
 
 [bridge]
-Sag mir es gibt ne bessere, ich sag du liegst falsch,
-Peter hat alles probiert bis runter nach Schwabach,
-Vanessa, Keyla, Ofen an, der Laden riecht nach Glück,
-Die beste Pizza in Erlangen, kein Weg zurück!
+Halb Italien, halb Murphy's, ganz Erlangen liebt es,
+Keyla streut den Käse drauf, James grinst und gibt es,
+Ofen auf und Ofen zu, der Laden riecht nach Glück,
+Wer hier einmal Pizza isst, kommt immer wieder zurück
 
 [chorus]
 Die beste Pizza in der Stadt,
-Egal was der Italiener sagt,
-Der ganze Laden singt es mit,
-Die beste Pizza, guten Appetit!
+In nem Irish Pub, ja, ihr habt richtig gehört,
+Die beste Pizza in der Stadt,
+Guten Appetit, auf Vanessa, guten Appetit!
 
 [outro]
-Pizza! Pizza! Murphy's Pizza!
+Pizza, Nachos, Murphy's, Prost!
 Guten Appetit!

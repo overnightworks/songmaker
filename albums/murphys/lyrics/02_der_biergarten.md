@@ -22,49 +22,49 @@ status: approved
 
 ## Concept
 
-Murphy's has a small beer garden out front. Nothing fancy — a few tables, some chairs, squeezed between the sidewalk and the pub. But the moment the first warm day hits, everyone migrates outside. After months of dark pub winters, suddenly there's sun on your face and a cold beer in your hand. It's the same Murphy's, same people, completely different energy. The summer side of the album.
+Murphy's has a proper beer garden on the corner — wooden tables, checkered tablecloths, Guinness umbrellas, flowers and plants everywhere, fairy lights at night. Old Erlangen buildings in the background. The moment the first warm day hits, the whole pub migrates outside. After months of dark winters, suddenly there's sun on your face under a Guinness umbrella. The evening blue hour with string lights is pure magic. The summer side of the album.
 
 ## Lyrics
 
 [verse]
-First warm day in April and the chairs go outside,
-Murphy's got a beer garden, three tables wide,
-Squeeze in on the sidewalk, grab a spot if you can,
-Same pub, different feeling, winter's finally done man
+First warm day in April and the tables come out,
+Guinness umbrellas up, flowers all about,
+Murphy's on the corner, wooden chairs in the sun,
+Same pub, different feeling, winter's finally done
 
 [verse]
 Sun is going down slow, golden light on the street,
-Everyone is outside, there's no room for your feet,
+Fairy lights are glowing, everybody's got a seat,
 Tom's got sunglasses on, Peter's arguing again,
 But nobody cares tonight, we're all soaking it in
 
 [chorus]
 Murphy's Biergarten, sun is out, we're alive,
-Three little tables on the Erlangen side,
+Guinness umbrellas on the Erlangen side,
 Winter was forever but tonight we don't care,
 Cold beer, warm evening, everyone is here
 
 [verse]
-Somebody drags a chair out from the pub inside,
-Vanessa brings the pizza, now it's paradise,
+Vanessa brings the pizza to the table outside,
+Old buildings in the background, checkered cloth, good vibes,
 The whole neighborhood is walking by and waving at the crew,
-Strangers stopping in because the vibe is pulling through
+Strangers stopping in because the feeling's pulling through
 
 [chorus]
 Murphy's Biergarten, sun is out, we're alive,
-Three little tables on the Erlangen side,
+Guinness umbrellas on the Erlangen side,
 Winter was forever but tonight we don't care,
 Cold beer, warm evening, everyone is here
 
 [bridge]
-September comes too fast, the chairs go back inside,
+September comes too fast, the lights go back inside,
 We talk about the summer like somebody died,
 But next year April first warm day, we'll be right here again,
 Murphy's Biergarten, sunshine with our friends
 
 [chorus]
 Murphy's Biergarten, sun is out, we're alive,
-Three little tables on the Erlangen side,
+Guinness umbrellas on the Erlangen side,
 Doesn't matter what went wrong, tonight it feels alright,
 Cold beer, warm evening, Murphy's summer night
 
