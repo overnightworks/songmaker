@@ -23,53 +23,53 @@ status: approved
 
 ## Concept
 
-Every Tuesday is pub quiz night at Murphy's. Anna runs the quiz. Twenty teams crowd into the pub with names like "Kackspechte", "Drunken Guessers", "Queen's Gambit", and "All Without Rafael." Peter's team — the Kackspechte — are regulars, always close but never quite winning. Felix doesn't play, he just watches from the bar with a Weizen, heckling. The vibe is competitive, nerdy, loud, and ridiculous. Completely different energy from Friday.
+Every Tuesday is pub quiz night at Murphy's. Anna runs the quiz. Twenty-plus teams pack the pub — the regulars: Kackspechte, Chicken Attack, 101, Neuland, Emmy, Wombats, Promotion Square, Adequate Tools, Drunken Quizzers, Roter Keil, Team Bett, Tasmanian Devils. The flipchart scores go up round by round. It's loud, nerdy, competitive, and ridiculous. The best night of the week.
 
 ## Lyrics
 
 [verse]
-Tuesday night at Murphy's and the tables are full,
-Twenty teams are ready and they're sharpening their skulls,
+Tuesday night at Murphy's and the tables are packed,
+Twenty teams are ready and there's no turning back,
 Anna's got the questions, she's the queen of this game,
-Kackspechte in the corner, Peter swears tonight's their fame
+Chicken Attack and 101, every week the same
 
 [verse]
-Drunken Guessers guessing drunk, Queen's Gambit looking smart,
-All Without Rafael, well they're missing half their heart,
-The flipchart's on the wall and the scores are getting tight,
-Every table arguing about who said the answer right
+Drunken Quizzers quizzing drunk, Neuland's lost again,
+Roter Keil is falling fast, Team Bett's in pain,
+Tasmanian Devils howling loud across the room,
+Adequate Tools, they've got the answers, everybody's doomed
 
 [chorus]
 Pub Quiz Tuesday, who knows the most useless facts,
 Pub Quiz Tuesday, twenty teams and zero chill,
-Peter's sure he's got it, but the answer isn't Kant,
+Flipchart on the wall and the numbers going up,
 Pub Quiz Tuesday, Murphy's loudest night!
 
 [verse]
-Round three is geography, the Kackspechte are down,
+Round three is geography, the Kackspechte go down,
 Peter whispers Mozambique, Marc says that's not a town,
-Stefan's on his phone but he swears he's not cheating,
-Lena's doing math and Vanessa's stopped competing
+Promotion Square is leading, Emmy's catching up fast,
+Wombats got a lucky streak but it's never gonna last
 
 [chorus]
 Pub Quiz Tuesday, who knows the most useless facts,
 Pub Quiz Tuesday, twenty teams and zero chill,
-Peter's sure he's got it, but the answer isn't Kant,
+Flipchart on the wall and the numbers going up,
 Pub Quiz Tuesday, Murphy's loudest night!
 
 [bridge]
-I'm just sitting at the bar, I don't play, I just watch,
-Heckling the Kackspechte every time they get one wrong,
-Peter says come join us, I say nah I'm good right here,
-Best seat in the house with my Weizen and a beer
+Anna reads the answers, half the room is going mad,
+Drunken Quizzers got a perfect round, Chicken Attack is sad,
+Roter Keil needs one more point, Emmy's having fun,
+One more round to go and anybody could have won
 
 [chorus]
 Pub Quiz Tuesday, who knows the most useless facts,
 Pub Quiz Tuesday, twenty teams and zero chill,
-Anna reads the scores out and everybody screams,
+Anna reads the scores out and the whole pub screams,
 Pub Quiz Tuesday, Murphy's craziest night!
 
 [outro]
 And the winner is... not the Kackspechte again!
-Forty-one points, close but never close enough,
+Thirty-seven points, close but never close enough,
 See you next Tuesday!
