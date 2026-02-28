@@ -2,18 +2,18 @@
 title: Pub Quiz Tuesday
 album: murphys
 track: 3
-genre: Party Rap / Beastie Boys
+genre: Funk Rock / RHCP
 prompt: >
-  party rap, Beastie Boys, old school hip hop,
-  Run DMC, House of Pain, DJ scratching,
-  boom bap drums, funky bass, turntable scratches,
-  male vocal, energetic rapping, shouting chorus,
-  call and response, party anthem, competitive,
-  90s hip hop golden age, fun braggadocio,
-  quiz night battle rap, crowd hype energy
-bpm: 105
-duration: 180
-key: Em
+  funk rock, Red Hot Chili Peppers, slap bass,
+  Flea style bass, funky guitar riffs, tight groove,
+  male vocal, energetic and playful, Anthony Kiedis style,
+  wah pedal, funk drums, Primus influence,
+  Rage Against the Machine groove, infectious rhythm,
+  California funk meets pub quiz chaos,
+  danceable, groovy, high energy party rock
+bpm: 115
+duration: 210
+key: Am
 language: en
 status: approved
 ---
