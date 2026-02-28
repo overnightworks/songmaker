@@ -2,18 +2,18 @@
 title: Pub Quiz Tuesday
 album: murphys
 track: 3
-genre: 80s Synth Pop / New Wave
+genre: Party Rap / Beastie Boys
 prompt: >
-  80s synth pop, new wave, Depeche Mode, Pet Shop Boys,
-  A-ha, Tears for Fears, analog synthesizers,
-  drum machine, sequenced bass, arpeggiated synths,
-  male vocal, cool and detached, retro futuristic,
-  catchy pop hooks, electronic beats, vocoder harmonies,
-  game show theme meets 80s pop, neon lights energy,
-  polished production, bouncy and fun
-bpm: 128
+  party rap, Beastie Boys, old school hip hop,
+  Run DMC, House of Pain, DJ scratching,
+  boom bap drums, funky bass, turntable scratches,
+  male vocal, energetic rapping, shouting chorus,
+  call and response, party anthem, competitive,
+  90s hip hop golden age, fun braggadocio,
+  quiz night battle rap, crowd hype energy
+bpm: 105
 duration: 180
-key: G
+key: Em
 language: en
 status: approved
 ---
@@ -27,48 +27,48 @@ Every Tuesday is pub quiz night at Murphy's. Anna runs the quiz. Twenty-plus tea
 ## Lyrics
 
 [verse]
-Tuesday night at Murphy's and the tables are packed,
-Twenty teams are ready and there's no turning back,
-Anna's got the questions, she's the queen of this game,
-Chicken Attack and 101, every week the same
+Yo, Tuesday night Murphy's and we're running this game,
+Twenty teams up in here and none of them are tame,
+Anna on the mic with the questions cold and hard,
+Chicken Attack and 101 throwing down their card
 
 [verse]
-Drunken Quizzers quizzing drunk, Neuland's lost again,
-Roter Keil is falling fast, Team Bett's in pain,
-Tasmanian Devils howling loud across the room,
-Adequate Tools, they've got the answers, everybody's doomed
+Drunken Quizzers drinking heavy but they still know facts,
+Neuland getting lost again, can't find their way back,
+Tasmanian Devils spinning wild, Adequate Tools are sharp,
+Roter Keil and Team Bett fighting for the chart
 
 [chorus]
-Pub Quiz Tuesday, who knows the most useless facts,
-Pub Quiz Tuesday, twenty teams and zero chill,
-Flipchart on the wall and the numbers going up,
-Pub Quiz Tuesday, Murphy's loudest night!
+Pub Quiz Tuesday, drop the knowledge, drop the beat,
+Pub Quiz Tuesday, twenty teams can't take the heat,
+Flipchart on the wall, yo, the numbers going up,
+Pub Quiz Tuesday, Murphy's can't shut up!
 
 [verse]
-Round three is geography, the Kackspechte go down,
-Peter whispers Mozambique, Marc says that's not a town,
-Promotion Square is leading, Emmy's catching up fast,
-Wombats got a lucky streak but it's never gonna last
+Round three geography, the Kackspechte going down,
+Peter says Mozambique, Marc says that ain't a town,
+Promotion Square is winning, Emmy right behind,
+Wombats on a lucky streak but running out of time
 
 [chorus]
-Pub Quiz Tuesday, who knows the most useless facts,
-Pub Quiz Tuesday, twenty teams and zero chill,
-Flipchart on the wall and the numbers going up,
-Pub Quiz Tuesday, Murphy's loudest night!
+Pub Quiz Tuesday, drop the knowledge, drop the beat,
+Pub Quiz Tuesday, twenty teams can't take the heat,
+Flipchart on the wall, yo, the numbers going up,
+Pub Quiz Tuesday, Murphy's can't shut up!
 
 [bridge]
-Anna reads the answers, half the room is going mad,
-Drunken Quizzers got a perfect round, Chicken Attack is sad,
-Roter Keil needs one more point, Emmy's having fun,
-One more round to go and anybody could have won
+Anna reads the answers and the room goes wild,
+Drunken Quizzers perfect round, Chicken Attack defiled,
+Emmy climbing up the board, Roter Keil is done,
+Last round coming up and anybody could have won
 
 [chorus]
-Pub Quiz Tuesday, who knows the most useless facts,
-Pub Quiz Tuesday, twenty teams and zero chill,
-Anna reads the scores out and the whole pub screams,
-Pub Quiz Tuesday, Murphy's craziest night!
+Pub Quiz Tuesday, drop the knowledge, drop the beat,
+Pub Quiz Tuesday, twenty teams can't take the heat,
+Anna reads the final scores, the whole pub starts to scream,
+Pub Quiz Tuesday, Murphy's craziest scene!
 
 [outro]
-And the winner is... not the Kackspechte again!
+And the winner is... not the Kackspechte!
 Thirty-seven points, close but never close enough,
-See you next Tuesday!
+See you next Tuesday, peace!
