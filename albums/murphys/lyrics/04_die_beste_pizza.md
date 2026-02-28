@@ -22,51 +22,52 @@ status: approved
 
 ## Concept
 
-A fun, silly song about the ongoing argument: Vanessa's pizza at Murphy's is the best pizza in Erlangen. Peter says so. Felix says so. Everyone says so. But why is the best pizza in an Irish pub? Nobody knows. Nobody cares. It just is. A Die Ärzte style comedy rock song — light, catchy, stupid in the best way.
+Vanessa and Keyla make the best pizza in Erlangen — and it's in an Irish pub. Peter will fight anyone who disagrees. Nobody can explain it, nobody questions it. A Die Ärzte style comedy rock anthem to Murphy's pizza.
 
 ## Lyrics
 
 [verse]
-Die beste Pizza in Erlangen, und das sag nicht nur ich,
-Peter schwört darauf und der Typ streitet sich mit jedem über alles,
-Aber bei der Pizza sind wir uns einig, kein Diskussion,
-Vanessa macht die beste Pizza, Punkt, kein Pardon
+Freitag Abend, Murphy's Pub, ich brauch nur eins,
+Vanessa steht am Ofen, Käse läuft wie Wein,
+Peter sagt die beste Pizza, keine Diskussion,
+Und der Typ streitet über alles, nur hier hat er Recht, Pardon
 
 [verse]
-Es ist ein Irish Pub, kein Italiener, ich weiß,
-Keyla steht in der Küche und macht Teig ganz heiß,
-Warum die beste Pizza aus nem irischen Pub kommt,
-Fragt keiner, schmeckt einfach, jeder der sie kennt ist prompt
+Ein Irish Pub, kein Italiener, ich weiß,
+Keyla rollt den Teig und macht die Küche heiß,
+Warum die beste Pizza aus nem Pub hier kommt,
+Fragt keiner, schmeckt einfach, jeder ist besonnt
 
 [chorus]
-Die beste Pizza, die beste Pizza in der Stadt,
-Die beste Pizza, egal was der Italiener sagt,
-Murphy's Irish Pub, ja genau, ihr habt richtig gehört,
-Die beste Pizza in Erlangen, das ist hiermit erklärt!
+Die beste Pizza in der Stadt,
+Egal was der Italiener sagt,
+Murphy's Pub, ihr habt richtig gehört,
+Die beste Pizza, hiermit erklärt!
 
 [verse]
-Ich hab die ganze Karte durch, vom Flammkuchen bis zum Steak,
-Aber Freitag Abend ist es immer Pizza, no Mistake,
-Peter bestellt die Margherita, ich nehm die mit allem drauf,
-Maria bringt sie an den Tresen und ich mach den Deckel auf
+Peter nimmt Margherita, jeden Freitag gleich,
+Ich nehm die mit allem drauf, wird jedes Mal ein Streich,
+Vom Flammkuchen bis zum Burger, kenn die Karte blind,
+Aber Freitag ist nur Pizza, so wie jedes Kind
 
 [chorus]
-Die beste Pizza, die beste Pizza in der Stadt,
-Die beste Pizza, egal was der Italiener sagt,
-Murphy's Irish Pub, ja genau, ihr habt richtig gehört,
-Die beste Pizza in Erlangen, das ist hiermit erklärt!
+Die beste Pizza in der Stadt,
+Egal was der Italiener sagt,
+Murphy's Pub, ihr habt richtig gehört,
+Die beste Pizza, hiermit erklärt!
 
 [bridge]
-Und wenn du sagst, da gibt's ne bessere, dann liegst du falsch mein Freund,
-Frag Peter, der hat alles probiert von hier bis nach Bayreuth,
-Frag Hartmut, frag Gitty, frag den ganzen Laden,
-Die beste Pizza in Erlangen kommt aus Murphy's, ohne Fragen!
+Sag mir es gibt ne bessere, ich sag du liegst falsch,
+Peter hat alles probiert bis runter nach Schwabach,
+Vanessa, Keyla, Ofen an, der Laden riecht nach Glück,
+Die beste Pizza in Erlangen, kein Weg zurück!
 
 [chorus]
-Die beste Pizza, die beste Pizza in der Stadt,
-Die beste Pizza, egal was der Italiener sagt,
-Murphy's Irish Pub, ja genau, ihr habt richtig gehört,
-Die beste Pizza in Erlangen, das ist hiermit erklärt!
+Die beste Pizza in der Stadt,
+Egal was der Italiener sagt,
+Der ganze Laden singt es mit,
+Die beste Pizza, guten Appetit!
 
 [outro]
-Die beste Pizza... bei Murphy's... Prost und guten Appetit!
+Pizza! Pizza! Murphy's Pizza!
+Guten Appetit!
