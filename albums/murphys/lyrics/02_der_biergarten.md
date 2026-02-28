@@ -2,16 +2,17 @@
 title: Der Biergarten
 album: murphys
 track: 2
-genre: Summer Ska / Reggae Punk
+genre: Surf Rock / Summer Pop Punk
 prompt: >
-  summer ska punk, reggae rock, male vocal, relaxed and fun,
-  Sublime style, Slightly Stoopid, upbeat reggae,
-  offbeat guitar, brass section, trumpet, trombone,
-  sunny and warm, beer garden vibes, lazy afternoon,
-  summer in Germany, cheerful, laid back groove,
-  like sitting outside with a cold beer in the sun,
-  happy and chill, summery, outdoor pub feeling
-bpm: 115
+  surf rock, summer pop punk, male vocal, warm and happy,
+  Beach Boys meets Blink-182, sunny California punk,
+  reverb guitar, twangy surf riffs, bright and shimmery,
+  handclaps, tambourine, warm harmonies on chorus,
+  golden hour feeling, beer garden summer vibes,
+  feel-good anthem, sunshine and cold beer energy,
+  nostalgic summer song, carefree, windows down feeling,
+  like the best day of summer that never ends
+bpm: 130
 duration: 180
 key: G
 language: en
