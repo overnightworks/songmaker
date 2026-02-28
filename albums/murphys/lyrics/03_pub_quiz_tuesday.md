@@ -2,16 +2,16 @@
 title: Pub Quiz Tuesday
 album: murphys
 track: 3
-genre: Irish Folk Punk / Dropkick Murphys
+genre: 80s Synth Pop / New Wave
 prompt: >
-  irish folk punk, Dropkick Murphys, Flogging Molly,
-  The Pogues, celtic punk, tin whistle, fiddle, banjo,
-  acoustic guitar mixed with electric, male vocal,
-  rough and rowdy, gang vocals shouting chorus,
-  stomping beat, pub singalong, drinking song energy,
-  Irish rebel meets quiz night madness,
-  fast tempo, raw and joyful, crowd chanting
-bpm: 165
+  80s synth pop, new wave, Depeche Mode, Pet Shop Boys,
+  A-ha, Tears for Fears, analog synthesizers,
+  drum machine, sequenced bass, arpeggiated synths,
+  male vocal, cool and detached, retro futuristic,
+  catchy pop hooks, electronic beats, vocoder harmonies,
+  game show theme meets 80s pop, neon lights energy,
+  polished production, bouncy and fun
+bpm: 128
 duration: 180
 key: G
 language: en
