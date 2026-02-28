@@ -33,10 +33,10 @@ Murphy's on a Friday is a beautiful war,
 Hundred people screaming and they all want more
 
 [verse]
-Maria's got the bar, Vanessa's got the floor,
-Lucia's pouring doubles and they're still calling for more,
+Maria's at the bar, Big Vanessa's on the floor,
 Keyla's in the kitchen, pizza flying out the door,
-Two behind the counter for a hundred, maybe more
+Two girls and a kitchen for a hundred, maybe more,
+Somehow every pint gets poured, somehow no one's ignored
 
 [chorus]
 Friday at Murphy's, everything's loud,
@@ -46,9 +46,9 @@ Friday at Murphy's, same table, same crew!
 
 [verse]
 James just nods, the man has never panicked,
-Regulars on their stools like the furniture is planted,
-Hartmut's got his Pils, Gitty's got the chat,
-Tom walked in at seven but he's already gone, imagine that
+Regulars on their stools like furniture is planted,
+Hartmut's got his Pils, Gitty's running chat,
+Tom walked in at seven, already gone, imagine that
 
 [chorus]
 Friday at Murphy's, everything's loud,
