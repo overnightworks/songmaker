@@ -22,37 +22,45 @@ status: approved
 
 ## Concept
 
-A 100-second speed punk blast that follows Tom on his nightly pub crawl through Erlangen. He starts at Murphy's, moves on, moves on again — nobody knows how many pubs he hits, nobody knows how he gets home. He just appears and disappears. A legend nobody asked for.
+Tom is a Murphy's institution. IT guy, mid-60s, no family, no kids — just the routine. Shows up at Murphy's around nine, sits at the bar, drinks his beer, scrolls through useless games on his phone. Sarcastic, a bit depressive, gave up on life but won't admit it. Can't keep a secret to save his life. After Murphy's he drifts to Backstage or Beisl, then home for wine and bullshit NTV documentaries. Starts over the next day. Every single day.
 
 ## Lyrics
 
 [verse]
-Tom walks into Murphy's like he does every night,
-Orders half a Guinness, says he can't stay it's tight,
-He's been here thirty minutes and he's already gone,
-Nobody saw him leave but the stool is moving on
-
-[chorus]
-Tom's at the third pub, Tom's at the fourth,
-Tom's walking south but he's heading north,
-Nobody knows where Tom ends up at night,
-But he'll be back at Murphy's come tomorrow, right!
+Tom walks into Murphy's, nine o'clock on the dot,
+Same barstool, same beer, same everything he's got,
+Phone out, scrolling games he's never gonna win,
+Sarcastic comment ready for whoever walks in
 
 [verse]
-Seen him at the Steinbach, seen him at the Kitzmann,
-Seen him talking to a lamp post like it was his man,
-He's got a system and the system is keep walking,
-If you stop at one too long then people start talking
+Used to work in IT, don't ask him when he quit,
+Mid-sixties, no family, he don't talk about it,
+Tell him any secret and the whole pub's gonna know,
+Tom can't keep his mouth shut, that's the Tom show
 
 [chorus]
 Tom's at the third pub, Tom's at the fourth,
-Tom's walking south but he's heading north,
-Nobody knows where Tom ends up at night,
-But he'll be back at Murphy's come tomorrow, right!
+Murphy's, Backstage, Beisl, heading north,
+Same routine every night, he don't need a plan,
+Tom's not living life, but he's a dedicated man
+
+[verse]
+Eleven comes around and Tom is moving on,
+Backstage for another beer before the night is gone,
+Then it's Beisl for a last one, maybe two or three,
+Home by one for cheap red wine and NTV
+
+[chorus]
+Tom's at the third pub, Tom's at the fourth,
+Murphy's, Backstage, Beisl, heading north,
+Same routine every night, he don't need a plan,
+Tom's not living life, but he's a dedicated man
 
 [bridge]
-Seven pubs in four hours, that's commitment, that's a plan,
-Tom's not lost, Tom's not drunk, Tom's a dedicated man!
+Wake up, do it all again, nothing ever changes,
+Same bullshit documentaries, same familiar faces,
+Tom's not sad, Tom's not happy, Tom just doesn't care,
+Buy him one more beer and Tom will always be right there
 
 [outro]
 Tom! Tom! Tom! Tom!
