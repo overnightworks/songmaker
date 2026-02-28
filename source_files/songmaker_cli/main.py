@@ -103,11 +103,120 @@ def cmd_generate(args: argparse.Namespace) -> None:
     print(f"  Time: {elapsed:.0f}s | Duration: {result.duration:.1f}s | Seed: {result.seed}")
     print(f"{'=' * 60}")
 
+    # Regenerate the unified player
+    from songmaker_cli.player import generate_player
+    player_root = output_dir.parent
+    player_path = generate_player(player_root)
+    print(f"  Player updated: {player_path}")
+
     if args.sync:
         final_dir = output_dir / "final"
         if final_dir.exists():
             print(f"\n  Running sync on {final_dir}...")
             _run_sync(str(final_dir), force=False)
+
+
+def cmd_player(args: argparse.Namespace) -> None:
+    """Generate the unified HTML player for all albums."""
+    from songmaker_cli.player import generate_player
+
+    output_dir = Path(args.output).resolve()
+    project_root = Path(args.root).resolve() if args.root else None
+
+    if not output_dir.exists():
+        print(f"  ERROR: {output_dir} not found")
+        sys.exit(1)
+
+    player_path = generate_player(output_dir, project_root)
+    print(f"  Player generated: {player_path}")
+
+
+def cmd_check(args: argparse.Namespace) -> None:
+    """Check lyrics accuracy: transcribe with Whisper, compare to intended."""
+    from difflib import SequenceMatcher
+
+    from songmaker_cli.parser import parse_song_md
+
+    mp3_path = Path(args.path).resolve()
+    if not mp3_path.exists():
+        print(f"  ERROR: {mp3_path} not found")
+        sys.exit(1)
+
+    # Find the markdown source
+    md_path = None
+    if args.source:
+        md_path = Path(args.source).resolve()
+    else:
+        # Auto-detect from filename
+        stem = mp3_path.stem
+        import re
+        base = re.sub(r"_v\d+$", "", stem)
+        for album_dir in Path("albums").iterdir():
+            candidate = album_dir / "lyrics" / f"{base}.md"
+            if candidate.exists():
+                md_path = candidate
+                break
+
+    if not md_path or not md_path.exists():
+        print(f"  ERROR: Could not find lyrics source for {mp3_path.name}")
+        print("  Use --source to specify the .md file")
+        sys.exit(1)
+
+    meta = parse_song_md(md_path)
+    intended = meta.get("lyrics", "")
+    language = meta.get("language", "de")
+
+    # Transcribe with Whisper
+    import whisper
+    print(f"  Loading Whisper model...")
+    model = whisper.load_model("small")
+    print(f"  Transcribing {mp3_path.name}...")
+    result = model.transcribe(
+        str(mp3_path), language=language, fp16=False,
+        condition_on_previous_text=False,
+    )
+    transcribed = result["text"].strip()
+
+    # Clean both texts for comparison
+    import re
+    def clean(text: str) -> str:
+        text = re.sub(r"\[.*?\]", "", text)  # Remove [verse] tags
+        text = re.sub(r"\s+", " ", text).strip()
+        return text.lower()
+
+    clean_intended = clean(intended)
+    clean_transcribed = clean(transcribed)
+
+    # Calculate similarity
+    ratio = SequenceMatcher(None, clean_intended, clean_transcribed).ratio()
+
+    # Line-by-line comparison
+    intended_lines = [l.strip() for l in intended.splitlines() if l.strip() and not l.strip().startswith("[")]
+    trans_lines = [s["text"].strip() for s in result.get("segments", []) if s["text"].strip()]
+
+    print(f"\n{'=' * 60}")
+    print(f"  Lyrics Check: {mp3_path.name}")
+    print(f"  Source: {md_path.name}")
+    print(f"  Overall similarity: {ratio:.0%}")
+    print(f"  Intended lines: {len(intended_lines)}")
+    print(f"  Transcribed segments: {len(trans_lines)}")
+    print(f"{'=' * 60}")
+
+    print(f"\n  INTENDED:")
+    for line in intended_lines:
+        print(f"    {line}")
+
+    print(f"\n  TRANSCRIBED:")
+    for line in trans_lines:
+        print(f"    {line}")
+
+    print(f"\n  SIMILARITY: {ratio:.0%}")
+    if ratio >= 0.8:
+        print("  VERDICT: Good")
+    elif ratio >= 0.5:
+        print("  VERDICT: Needs improvement — consider regenerating")
+    else:
+        print("  VERDICT: Poor — lyrics mostly not understood")
 
 
 def cmd_sync(args: argparse.Namespace) -> None:
@@ -151,6 +260,16 @@ def main() -> None:
     gen.add_argument("--seed", type=int, default=None, help="Random seed (overrides frontmatter)")
     gen.add_argument("--sync", action="store_true", help="Run sync pipeline after generation")
 
+    # player
+    pl = sub.add_parser("player", help="Generate unified HTML player for all albums")
+    pl.add_argument("-o", "--output", default="_output", help="Output directory (default: _output)")
+    pl.add_argument("--root", default=None, help="Project root (default: auto-detect)")
+
+    # check
+    chk = sub.add_parser("check", help="Check lyrics accuracy (Whisper vs intended)")
+    chk.add_argument("path", help="MP3 file to check")
+    chk.add_argument("--source", default=None, help="Lyrics .md file (auto-detected if omitted)")
+
     # sync
     syn = sub.add_parser("sync", help="Sync lyrics: transcribe, LRC, HTML, ID3")
     syn.add_argument("path", help="Album output folder or single MP3")
@@ -160,6 +279,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "generate":
         cmd_generate(args)
+    elif args.command == "player":
+        cmd_player(args)
+    elif args.command == "check":
+        cmd_check(args)
     elif args.command == "sync":
         cmd_sync(args)
 
