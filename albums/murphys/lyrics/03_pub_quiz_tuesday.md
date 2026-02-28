@@ -2,17 +2,16 @@
 title: Pub Quiz Tuesday
 album: murphys
 track: 3
-genre: Indie Rock / Weezer Nerd Rock
+genre: Ska Punk / Madness
 prompt: >
-  indie rock, nerdy and fun, male vocal, Weezer style,
-  Fountains of Wayne, power pop, crunchy guitars,
-  catchy hooks, sing-along, gang vocals,
-  fast and playful, quiz show energy, competitive,
-  Deutschpunk energy, Die Ärzte fun, bar crowd cheering,
-  Tuesday night pub quiz anthem, clever and witty,
-  distorted guitars, tight drums, bass driven,
-  like a nerd anthem for pub quiz champions
-bpm: 140
+  ska punk, The Specials, Madness, Mighty Mighty Bosstones,
+  brass section, trumpet, trombone, saxophone,
+  upbeat skanking rhythm, offbeat guitar chops,
+  male vocal, energetic and cheeky, gang vocals on chorus,
+  bouncy bassline, tight snare, pub crowd energy,
+  fun and chaotic, quiz night party anthem,
+  2-tone ska revival meets punk rock energy
+bpm: 150
 duration: 180
 key: G
 language: en
