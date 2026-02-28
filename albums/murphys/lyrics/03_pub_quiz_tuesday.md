@@ -2,19 +2,20 @@
 title: Pub Quiz Tuesday
 album: murphys
 track: 3
-genre: Deutschpunk / Die Ärzte
+genre: Indie Rock / Weezer Nerd Rock
 prompt: >
-  Deutschpunk, Die Ärzte, Die Toten Hosen,
-  Feine Sahne Fischfilet, German punk rock,
-  fast and loud, male vocal singing in German,
-  catchy punk hooks, power chords, driving drums,
-  gang vocals on chorus, sing-along anthem,
-  fun and irreverent, beer hall punk energy,
-  Wizo, Donots, punk rock party
-bpm: 160
+  indie rock, nerdy and fun, male vocal, Weezer style,
+  Fountains of Wayne, power pop, crunchy guitars,
+  catchy hooks, sing-along, gang vocals,
+  fast and playful, quiz show energy, competitive,
+  Deutschpunk energy, Die Ärzte fun, bar crowd cheering,
+  Tuesday night pub quiz anthem, clever and witty,
+  distorted guitars, tight drums, bass driven,
+  like a nerd anthem for pub quiz champions
+bpm: 140
 duration: 210
-key: D
-language: de
+key: G
+language: en
 status: approved
 ---
 
@@ -27,48 +28,48 @@ Every Tuesday is pub quiz night at Murphy's. Anna runs the quiz. Twenty-plus tea
 ## Lyrics
 
 [verse]
-Dienstagabend Murphy's und die Bude ist voll,
-Zwanzig Teams am Start und jeder dreht am Rad total,
-Anna hat die Fragen, sie regiert den ganzen Saal,
-Chicken Attack und 101, jede Woche diese Qual
+Tuesday night at Murphy's and the tables are packed,
+Twenty teams are ready and there's no turning back,
+Anna's got the questions, she's the queen of this game,
+Chicken Attack and 101, every week the same
 
 [verse]
-Drunken Quizzers trinken viel, Neuland ist schon raus,
-Roter Keil geht unter, Team Bett heult wie'n Maus,
-Tasmanian Devils brüllen laut quer durch den Raum,
-Adequate Tools wissen alles, es ist fast wie ein Traum
+Drunken Quizzers quizzing drunk, Neuland's lost again,
+Roter Keil is falling fast, Team Bett's in pain,
+Tasmanian Devils howling loud across the room,
+Adequate Tools, they've got the answers, everybody's doomed
 
 [chorus]
-Pub Quiz Dienstag, wer weiß den größten Scheiß,
-Pub Quiz Dienstag, zwanzig Teams im Kreis,
-Flipchart an der Wand und die Punkte gehen hoch,
-Pub Quiz Dienstag, Murphy's dreht am Rad!
+Pub Quiz Tuesday, who knows the most useless facts,
+Pub Quiz Tuesday, twenty teams and zero chill,
+Flipchart on the wall and the numbers going up,
+Pub Quiz Tuesday, Murphy's loudest night!
 
 [verse]
-Runde drei Geografie, die Kackspechte geh'n down,
-Peter flüstert Mosambik, Marc sagt das gibt's doch kaum,
-Promotion Square führt, Emmy holt schnell auf,
-Wombats haben Glückssträhne, doch die hört bald auf
+Round three is geography, the Kackspechte go down,
+Peter whispers Mozambique, Marc says that's not a town,
+Promotion Square is leading, Emmy's catching up fast,
+Wombats got a lucky streak but it's never gonna last
 
 [chorus]
-Pub Quiz Dienstag, wer weiß den größten Scheiß,
-Pub Quiz Dienstag, zwanzig Teams im Kreis,
-Flipchart an der Wand und die Punkte gehen hoch,
-Pub Quiz Dienstag, Murphy's dreht am Rad!
+Pub Quiz Tuesday, who knows the most useless facts,
+Pub Quiz Tuesday, twenty teams and zero chill,
+Flipchart on the wall and the numbers going up,
+Pub Quiz Tuesday, Murphy's loudest night!
 
 [bridge]
-Anna liest die Antwort vor, der halbe Raum wird laut,
-Drunken Quizzers perfekte Runde, Chicken Attack schaut blöd,
-Roter Keil braucht noch nen Punkt, Emmy hat schon Spaß,
-Letzte Runde, alles offen, jeder gibt noch Gas
+Anna reads the answers, half the room is going mad,
+Drunken Quizzers got a perfect round, Chicken Attack is sad,
+Roter Keil needs one more point, Emmy's having fun,
+One more round to go and anybody could have won
 
 [chorus]
-Pub Quiz Dienstag, wer weiß den größten Scheiß,
-Pub Quiz Dienstag, zwanzig Teams im Kreis,
-Anna liest die Punkte vor und jeder fängt an zu schrei'n,
-Pub Quiz Dienstag, Murphy's wildste Nacht!
+Pub Quiz Tuesday, who knows the most useless facts,
+Pub Quiz Tuesday, twenty teams and zero chill,
+Anna reads the scores out and the whole pub screams,
+Pub Quiz Tuesday, Murphy's craziest night!
 
 [outro]
-Und der Gewinner ist... nicht die Kackspechte, mal wieder!
-Siebenunddreißig Punkte, knapp aber nicht genug,
-Bis nächsten Dienstag!
+And the winner is... not the Kackspechte again!
+Thirty-seven points, close but never close enough,
+See you next Tuesday!
