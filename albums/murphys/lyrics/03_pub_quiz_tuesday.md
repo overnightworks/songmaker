@@ -2,16 +2,15 @@
 title: Pub Quiz Tuesday
 album: murphys
 track: 3
-genre: Ska Punk / Madness
+genre: Britpop / Blur / Oasis
 prompt: >
-  ska punk, The Specials, Madness, Mighty Mighty Bosstones,
-  brass section, trumpet, trombone, saxophone,
-  upbeat skanking rhythm, offbeat guitar chops,
-  male vocal, energetic and cheeky, gang vocals on chorus,
-  bouncy bassline, tight snare, pub crowd energy,
-  fun and chaotic, quiz night party anthem,
-  2-tone ska revival meets punk rock energy
-bpm: 150
+  britpop, Blur Song 2 energy, Oasis swagger, Pulp,
+  Supergrass, jangly guitars, driving rhythm section,
+  male vocal, cocky and confident, laddish charm,
+  big singalong chorus, gang vocals, handclaps,
+  90s UK indie rock, pub anthem, catchy melody,
+  Parklife vibes meets pub quiz chaos
+bpm: 138
 duration: 180
 key: G
 language: en
