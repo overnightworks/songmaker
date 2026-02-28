@@ -23,51 +23,51 @@ status: approved
 
 ## Concept
 
-The best pizza in Erlangen comes from an Irish pub. That's the joke. That's the whole song. Vanessa's in the kitchen, Keyla's cutting cheese, Italian restaurants nearby are losing customers, a food critic can't believe it, and nobody can explain why it works. Escalating absurdity, trilingual chaos, short dumb chorus everyone screams.
+Peter's pizza obsession. Every Friday, same order, same seat, same ritual. He treats Murphy's pizza like it's sacred — better than Rome, better than Naples, don't even argue. Everyone else is there for beer, Peter's there for the pizza. Vanessa knows his order before he sits down. He's reviewed it on Google, he's told strangers on the street, he once brought his own plate from home. The song is everyone watching Peter lose his mind over pub pizza, told through Felix's amused eyes. Trilingual chaos: German, English, bits of Italian.
 
 ## Lyrics
 
 [verse]
-Mittwoch Abend, Murphy's Pub, Guinness an der Wand,
-Vanessa in der Küche, Teig in ihrer Hand,
-Keyla singt und schneidet Käse, flour on her face,
-Irish pub, Italian food, what a crazy place
-
-[verse]
-Gianni's um die Ecke hat seit Wochen keinen Gast,
-Pizzeria macht zu, too bad, einfach zu krass,
-Ganz Erlangen steht Schlange vor dem Pub am Eck,
-Nessuno lo capisce, ma la pizza schmeckt
-
-[chorus]
-Pizza from an Irish Pub,
-Dumbest thing I've ever heard,
-Aber Jungs, ich schwör euch,
-Best pizza in the world!
+Freitag Abend, Murphy's Pub, Peter's durch die Tür,
+Doesn't even say hello, walks straight past his beer,
+Vanessa sieht ihn kommen, knows exactly what he needs,
+One Margherita, extra cheese, don't change a single thing
 
 [verse]
 Peter says it's besser, besser noch als Rom,
-Vanessa lacht und sagt, I know, grazie, I know,
-Nachos mit dem Käse, mamma mia, what a show,
-Keyla, ancora una, one more, here we go
+I say Peter, it's a pub, he says I wouldn't know,
+Er hat ne Google-Bewertung, five stars, essay long,
+Told a stranger on the street, the man thought something's wrong
 
 [chorus]
-Pizza from an Irish Pub,
-Dumbest thing I've ever heard,
-Aber Jungs, ich schwör euch,
-Best pizza in the world!
+Peter and his pizza, every single week,
+Peter and his pizza, don't you dare critique,
+Irish pub, Italian food, nobody understands,
+Peter's on his third slice with his face in both his hands
+
+[verse]
+He once brought his own plate, Porzellan from home,
+Vanessa said get out, he said the pub plates ruin the tone,
+Keyla's in the kitchen laughing, Alter, he's insane,
+I just sit and drink my Weizen, watching Peter go again
+
+[chorus]
+Peter and his pizza, every single week,
+Peter and his pizza, don't you dare critique,
+Irish pub, Italian food, nobody understands,
+Peter's on his third slice with his face in both his hands
 
 [bridge]
-Food critic came from München, said this can't be right,
-Un'italiana in Irlanda making pizza every night,
-Drei Stück hat er gegessen, gave a ten of ten,
-Doesn't need to make no sense, it just tastes like heaven
+Gianni's um die Ecke, proper Italian place,
+Took Peter there for his birthday, should've seen his face,
+Drei Bissen, put it down, said Vanessa's is better,
+Walked to Murphy's, ordered two, wrote Gianni's a bad letter
 
 [chorus]
-Pizza from an Irish Pub,
-Dumbest thing you've ever heard,
-Sláinte, Prost, salute,
-Best pizza in the world!
+Peter and his pizza, Freitag, immer gleich,
+Peter and his pizza, don't you dare critique,
+Sláinte, Prost, salute, one more Margherita,
+Nobody loves pizza like Peter, no one ever will
 
 [outro]
-Ancora una pizza! Noch eine! One more slice!
+Vanessa! Ancora una! Und mach extra Käse drauf!
