@@ -36,7 +36,7 @@ class AceStepConfig:
     instrumental: bool = False
     seed: int = -1
     inference_steps: int = 8
-    guidance_scale: float = 15.0
+    guidance_scale: float = 7.0
 
 
 @dataclass(frozen=True)

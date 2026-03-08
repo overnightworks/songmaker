@@ -186,6 +186,60 @@ def generate_player(output_dir: Path, project_root: Path | None = None) -> Path:
             "tracks": tracks,
         })
 
+    # Build a "Latest" virtual album: all versions across all albums, newest first
+    latest_tracks = []
+    for album_dir in sorted(output_dir.iterdir()):
+        if not album_dir.is_dir():
+            continue
+        album_name = album_dir.name
+        lyrics_dir = project_root / "albums" / album_name / "lyrics"
+        for mp3 in album_dir.glob("*.mp3"):
+            if mp3.stem.endswith("_raw"):
+                continue
+            stem = mp3.stem
+            num_match = re.match(r"^(\d+)_(.+?)(?:_v(\d+))?$", stem)
+            if num_match:
+                number = num_match.group(1)
+                raw_title = num_match.group(2).replace("_", " ").title()
+                version = num_match.group(3) or "1"
+                title = f"{raw_title} v{version}"
+            else:
+                number = "?"
+                title = stem.replace("_", " ").title()
+
+            raw_lyrics = _find_lyrics_for_track(stem, lyrics_dir)
+            intended_lines = _lyrics_to_lines(raw_lyrics) if raw_lyrics else []
+
+            latest_tracks.append({
+                "file": f"{album_name}/{mp3.name}",
+                "title": title,
+                "number": number,
+                "lines": intended_lines,
+                "intended": intended_lines,
+                "has_sung": False,
+                "mtime": mp3.stat().st_mtime,
+                "album_tag": album_name,
+            })
+
+    # Sort by modification time, newest first
+    latest_tracks.sort(key=lambda t: t["mtime"], reverse=True)
+    # Remove mtime/album_tag before serialization (keep album_tag in title)
+    for t in latest_tracks:
+        t["title"] = f"{t['title']}  [{t['album_tag']}]"
+        del t["mtime"]
+        del t["album_tag"]
+
+    if latest_tracks:
+        albums_data.insert(0, {
+            "id": "_latest",
+            "title": "Latest",
+            "artist": "Flex0r",
+            "subtitle": "All versions, newest first",
+            "year": "2026",
+            "colors": {"primary": "#22cc44", "bg": "#0d0d0d"},
+            "tracks": latest_tracks,
+        })
+
     player_path = output_dir / "player.html"
     player_path.write_text(
         _render_html(albums_data), encoding="utf-8",
