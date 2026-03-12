@@ -4,18 +4,25 @@ album: wake_up
 track: 1
 genre: Hip-Hop / Pop / Conscious Rap
 prompt: >
-  conscious hip-hop, pop, Black Eyed Peas style, male vocal,
+  conscious hip-hop, pop, Black Eyed Peas style,
   emotional and powerful, hip-hop beats with melodic chorus,
-  piano, strings, 808 bass, heartfelt singing on chorus,
-  rap verses, spoken word energy, protest song,
-  Where Is the Love vibe, anthemic, big emotional hook,
+  piano, strings, 808 bass,
+  soulful female singer on chorus only, heartfelt and powerful,
+  multiple male rappers trading verses, hard-hitting and critical,
+  conversational rap, raw and direct, naming names, no filter,
+  protest song, Where Is the Love vibe, anthemic, big emotional hook,
   gang vocals on chorus, building intensity,
-  socially conscious, raw and honest,
+  socially conscious, raw and honest, vulnerable,
   like a 2026 update of Where Is the Love
-bpm: 95
+bpm: 0
 duration: 240
 key: Am
 language: en
+inference_steps: 50
+guidance_scale: 2.5
+shift: 3.0
+lm_temperature: 1.1
+infer_method: ode
 status: approved
 ---
 
@@ -42,7 +49,7 @@ Then ship the bombs on both sides out, tell me how's that gonna heal
 [chorus]
 Where is the love, where did it go,
 We had it once, I swear I know,
-Screens are glowing, hearts are cold,
+We watch it burn and keep on scrolling like before,
 Where is the love, where is the love
 
 [verse]
@@ -53,14 +60,14 @@ But money buys the silence and the justice, that's the proof
 
 [verse]
 They tell you it's democracy, they tell you that you're free,
-While the richest men alive are buying rockets leaving Earth,
+While the richest men alive are building rockets just to flee,
 A billion people hungry but there's yachts that cost a nation,
 And we scroll right past the suffering and call it information
 
 [chorus]
 Where is the love, where did it go,
 We had it once, I swear I know,
-Screens are glowing, hearts are cold,
+They took it from us, now it's something we can't afford,
 Where is the love, where is the love
 
 [verse]
@@ -78,21 +85,20 @@ Seven billion people online and no one is around
 [chorus]
 Where is the love, where did it go,
 We had it once, I swear I know,
-Screens are glowing, hearts are cold,
+A billion voices screaming into nothing anymore,
 Where is the love, where is the love
 
 [bridge]
-Left against the right, we scream like love is something won,
-We used to disagree and still sit down when day was done,
-Now we cut off family over something someone shared,
-One planet, one sky, one life, and nobody seems to care,
-I know this song won't save the world, I'm not that naive,
-But if a machine can ask the question, what's your excuse to leave
+They want us fighting each other so we never fight them,
+Left and right, that's the game, they need us to stay divided,
+I lost my best friend to a post he shared, one-sided,
+Ten years of laughter gone for a take that never mattered,
+Now we pass each other on the street like nothing ever happened
 
 [chorus]
 Where is the love, where did it go,
-One song won't fix it, but I need to know,
-Are we too far gone or can we find the road,
+We had it once, I swear I know,
+If even a machine can ask the question, what's your excuse,
 Where is the love, where is the love
 
 [outro]
