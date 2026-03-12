@@ -15,6 +15,9 @@ bpm: 155
 duration: 180
 key: A
 language: en
+inference_steps: 8
+guidance_scale: 0.0
+shift: 1.0
 status: approved
 ---
 

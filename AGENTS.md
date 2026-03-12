@@ -602,6 +602,51 @@ print(report.summary())
 | Loudness | Post-generation | RMS within range, consistent across phrases |
 | Pronunciation | Post-generation | Whisper STT matches expected lyrics (>80% target) |
 
+## ACE-Step Generation — Tuning Notes (RTX 3090)
+
+Discovered through extensive testing on RTX 3090 (March 2026). These are confirmed best settings.
+
+### Optimal Server Setup
+```bash
+.venv/bin/python scripts/start_acestep.py --config acestep-v15-turbo --lm-model acestep-5Hz-lm-0.6B --lm-backend vllm
+```
+
+### LM Model Comparison
+| LM Model | Effect | Verdict |
+|----------|--------|---------|
+| none | Raw/chaotic, most creative but unpredictable | OK for punk/chaos genres |
+| 0.6B | **Sweet spot** — creative + some structure, feels natural | ✅ Best default |
+| 1.7B | Not tested yet | — |
+| 4B | Over-planned, sterile, too "correct" — kills the vibe | ❌ Avoid |
+
+**Key insight**: On GTX 1660 (6GB VRAM) the 0.6B was the only LM that fit — this is why old results felt more alive. The 4B LM is too smart and kills creativity.
+
+### Shift Parameter
+| Shift | Effect |
+|-------|--------|
+| 0.0 | Not supported — rounds to 1.0 |
+| 1.0 | **Most natural/emotional** — best for ballads, emotional songs ✅ |
+| 3.0 | Default/recommended — accurate lyrics but slightly sterile |
+| 5.0 | Over-structured, conservative |
+
+**Key insight**: `shift: 1.0` with `0.6B LM` = the closest to the GTX 1660 "magic feel".
+
+### Per-Song Recommendations
+- **Emotional ballads** (Bruder, slow songs): `shift: 1.0` + 0.6B LM
+- **Punk/chaotic** (Murphy's): `shift: 1.0` + 0.6B LM (or no LM for extra chaos)
+- **Structured pop**: `shift: 3.0` + 0.6B LM
+
+### Other Parameters
+- `inference_steps: 8` — turbo default, fast and good
+- `guidance_scale: 0.0` — turbo ignores CFG, leave at 0.0
+- `think_mode: false` — CoT planning. **false = more creative/feeling**, true = more structured. GTX 1660 effectively ran false (bug: "think" vs "thinking" field name, now fixed)
+- `lm_temperature: 0.85` — LM sampling temperature. Try `1.1`-`1.2` for more creative/unpredictable LM outputs
+- `infer_method: ode` — diffusion method. `sde` adds stochastic noise = more textured/alive sound, less deterministic
+- `bpm: 0` — let model decide tempo freely (use when BPM feels forced)
+
+### Confirmed Bugs Fixed
+- `think` → `thinking` field name: server only recognizes `"thinking"`, old client sent `"think"` (silently ignored). Now fixed.
+
 ## Technical Notes
 
 - **Sample rate**: 44100 Hz everywhere (Bark resampled from 24000)

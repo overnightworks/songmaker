@@ -5,13 +5,14 @@ track: 5
 genre: Emotional Pop / Indie (Ed Sheeran x Clueso x Bosse)
 prompt: >
   emotional acoustic pop ballad, male vocal, intimate and vulnerable,
-  simple piano, gentle acoustic guitar, soft strings, warm and honest,
-  Ed Sheeran style, Clueso style, German singer songwriter,
-  slow build to emotional climax, heartfelt, raw, like a voicemail at 2am
-bpm: 78
+  simple piano, gentle acoustic guitar, soft strings,
+  slow build to emotional climax, quiet verse to powerful chorus,
+  heartfelt, raw, breathy voice, like a voicemail at 2am
+bpm: 0
 duration: 210
-key: C
 language: de
+shift: 0.0
+think_mode: false
 status: approved
 ---
 

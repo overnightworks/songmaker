@@ -60,12 +60,18 @@ def cmd_generate(args: argparse.Namespace) -> None:
     config = AceStepConfig(
         prompt=prompt,
         lyrics=lyrics,
-        bpm=meta.get("bpm", 120),
+        bpm=meta.get("bpm", 120) or None,  # 0 = let model decide
         duration=meta.get("duration", 60),
-        key=meta.get("key", "Am"),
-        time_signature=meta.get("time_signature", "4/4"),
+        key=meta.get("key", "") or "",
+        time_signature=meta.get("time_signature", "") or "",
         vocal_language=meta.get("language", "en"),
         seed=seed,
+        inference_steps=meta.get("inference_steps", 8),
+        guidance_scale=meta.get("guidance_scale", 0.0),
+        shift=meta.get("shift", 3.0),
+        think_mode=meta.get("think_mode", True),
+        lm_temperature=meta.get("lm_temperature", 0.85),
+        infer_method=meta.get("infer_method", "ode"),
     )
 
     print("=" * 60)
@@ -94,8 +100,27 @@ def cmd_generate(args: argparse.Namespace) -> None:
     wav_path = str(output_dir / f"{versioned}.wav")
     write_wav_file(wav_path, samples)
 
+    # Read album metadata for ID3 tags
+    album_yaml = Path(f"albums/{album}/album.yaml")
+    album_artist = "Flex0r"
+    album_title_tag = album.replace("_", " ").title()
+    if album_yaml.exists():
+        for line in album_yaml.read_text(encoding="utf-8").splitlines():
+            if line.strip().startswith("artist:"):
+                album_artist = line.split(":", 1)[1].strip().strip('"')
+            elif line.strip().startswith("title:"):
+                album_title_tag = line.split(":", 1)[1].strip().strip('"')
+
     mp3_path = str(output_dir / f"{versioned}.mp3")
-    master_to_mp3(wav_path, mp3_path)
+    id3_metadata = {
+        "title": title,
+        "artist": album_artist,
+        "album": album_title_tag,
+        "track": str(meta.get("track", "")),
+        "genre": meta.get("genre", ""),
+        "lyrics": lyrics,
+    }
+    master_to_mp3(wav_path, mp3_path, metadata=id3_metadata)
 
     elapsed = time.time() - start_time
     print(f"\n{'=' * 60}")
@@ -108,6 +133,11 @@ def cmd_generate(args: argparse.Namespace) -> None:
     player_root = output_dir.parent
     player_path = generate_player(player_root)
     print(f"  Player updated: {player_path}")
+
+    if args.check:
+        print(f"\n  Running lyrics check...")
+        check_args = argparse.Namespace(path=str(mp3_path), source=str(md_path))
+        cmd_check(check_args)
 
     if args.sync:
         final_dir = output_dir / "final"
@@ -259,6 +289,7 @@ def main() -> None:
     gen.add_argument("path", help="Path to song .md file")
     gen.add_argument("--seed", type=int, default=None, help="Random seed (overrides frontmatter)")
     gen.add_argument("--sync", action="store_true", help="Run sync pipeline after generation")
+    gen.add_argument("--check", action="store_true", help="Run Whisper lyrics check after generation")
 
     # player
     pl = sub.add_parser("player", help="Generate unified HTML player for all albums")

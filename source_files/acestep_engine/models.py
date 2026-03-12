@@ -23,20 +23,36 @@ class AceStepConfig:
         instrumental: If True, generate without vocals.
         seed: Random seed (-1 = random).
         inference_steps: Denoising steps (8 for turbo, 50 for SFT).
-        guidance_scale: Text adherence strength.
+        guidance_scale: CFG strength. 0.0 for turbo (no CFG), 5-9 for SFT/base.
+        think_mode: Let the LM reason (CoT) before generating. Requires LM
+            to be enabled on the server. Produces more coherent song structure.
     """
 
     prompt: str
     lyrics: str
-    bpm: int = 120
+    bpm: int | None = 120
     duration: int = 60
-    key: str = "Am"
-    time_signature: str = "4/4"
+    key: str = ""
+    time_signature: str = ""
     vocal_language: str = "en"
     instrumental: bool = False
     seed: int = -1
     inference_steps: int = 8
-    guidance_scale: float = 7.0
+    # Turbo model (inference_steps=8) does not use CFG — set to 0.0.
+    # SFT / base models use CFG; typical value 5.0-9.0.
+    guidance_scale: float = 0.0
+    # shift: flow matching shift parameter. 3.0 is recommended for all models.
+    shift: float = 3.0
+    # think_mode: let the LM reason (Chain-of-Thought) before generating.
+    # Produces better-structured songs when the LM is enabled on the server.
+    # Adds a few extra seconds of planning time.
+    think_mode: bool = True
+    # lm_temperature: LM sampling temperature. Higher = more creative/unpredictable.
+    # Default 0.85. Try 1.1-1.2 for more "alive" sounding results.
+    lm_temperature: float = 0.85
+    # infer_method: "ode" (default, deterministic) or "sde" (adds stochastic noise,
+    # more textured and "felt" output, less deterministic).
+    infer_method: str = "ode"
 
 
 @dataclass(frozen=True)

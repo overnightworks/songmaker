@@ -109,13 +109,18 @@ class AceStepClient:
             "lyrics": config.lyrics,
             "bpm": config.bpm,
             "audio_duration": config.duration,
-            "key_scale": config.key,
+            "key_scale": config.key,        # server field name
+            "keyscale": config.key,         # v1.5 alternate field name
             "time_signature": config.time_signature,
             "vocal_language": config.vocal_language,
             "instrumental": config.instrumental,
             "seed": config.seed,
             "inference_steps": config.inference_steps,
             "guidance_scale": config.guidance_scale,
+            "shift": config.shift,
+            "thinking": config.think_mode,   # server field is "thinking" not "think"
+            "lm_temperature": config.lm_temperature,
+            "infer_method": config.infer_method,
             "audio_format": "wav",
             "batch_size": 1,
         }
@@ -323,23 +328,35 @@ def _read_wav_bytes(data: bytes) -> tuple[list[float], int]:
 
 
 def _resample(samples: list[float], src_rate: int, dst_rate: int) -> list[float]:
-    """Resample audio using linear interpolation.
+    """Resample audio from src_rate to dst_rate.
 
-    Good enough for 48000 -> 44100. For higher quality, scipy.signal.resample
-    could be used, but it adds a heavy dependency import.
+    Uses scipy.signal.resample_poly (high quality) when scipy is available,
+    falling back to linear interpolation otherwise.
     """
     if src_rate == dst_rate:
         return samples
 
+    try:
+        import math
+        import numpy as np
+        from scipy.signal import resample_poly
+
+        arr = np.array(samples, dtype=np.float32)
+        gcd = math.gcd(dst_rate, src_rate)
+        up, down = dst_rate // gcd, src_rate // gcd
+        resampled = resample_poly(arr, up, down).tolist()
+        return resampled
+    except ImportError:
+        pass
+
+    # Fallback: linear interpolation
     ratio = dst_rate / src_rate
     out_len = int(len(samples) * ratio)
     result = []
-
     for i in range(out_len):
         src_pos = i / ratio
         idx = int(src_pos)
         frac = src_pos - idx
-
         if idx + 1 < len(samples):
             val = samples[idx] * (1.0 - frac) + samples[idx + 1] * frac
         elif idx < len(samples):
@@ -347,5 +364,4 @@ def _resample(samples: list[float], src_rate: int, dst_rate: int) -> list[float]
         else:
             val = 0.0
         result.append(val)
-
     return result

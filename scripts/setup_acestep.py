@@ -100,11 +100,14 @@ def main() -> None:
     run([*uv, "sync"], cwd=ACESTEP_DIR)
 
     # Step 3: Download models
-    # "main" = bundled package: vae + turbo DiT + 1.7B LM + embeddings (~5 GB)
-    # "acestep-5Hz-lm-0.6B" = smaller LM for 6GB GPUs (optional, saves VRAM)
+    # "main" = bundled package: VAE + turbo DiT + embeddings (~5 GB)
+    # "acestep-5Hz-lm-4B" = best LM for RTX 3090 (24 GB VRAM), strongest composition
     print("\n  [3/3] Downloading model checkpoints...")
-    print("        This may take a while (~5 GB)...")
+    print("        Downloading DiT + VAE + embeddings (~5 GB)...")
     run([*uv, "run", "acestep-download", "--model", "main"],
+        cwd=ACESTEP_DIR)
+    print("        Downloading 4B LM (best quality for RTX 3090, ~8 GB)...")
+    run([*uv, "run", "acestep-download", "--model", "acestep-5Hz-lm-4B"],
         cwd=ACESTEP_DIR)
 
     venv_path = ACESTEP_DIR / ".venv"

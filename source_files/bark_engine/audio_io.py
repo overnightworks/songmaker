@@ -153,6 +153,7 @@ def master_to_mp3(
     target_lufs: float = -14.0,
     stereo_width: float = 1.2,
     bitrate: str = "320k",
+    metadata: dict[str, str] | None = None,
 ) -> bool:
     """Master WAV to MP3 with professional mastering chain.
 
@@ -199,22 +200,30 @@ def master_to_mp3(
     mastered_wav = wav_path.replace(".wav", "_mastered.wav")
     _write_stereo_wav(mastered_wav, mastered_left, mastered_right, sample_rate)
 
+    # Build ffmpeg command with optional ID3 metadata
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        mastered_wav,
+        "-codec:a",
+        "libmp3lame",
+        "-b:a",
+        bitrate,
+    ]
+    if metadata:
+        tag_map = {"title": "title", "artist": "artist", "album": "album",
+                    "track": "track", "genre": "genre", "date": "date"}
+        for key, ffmpeg_key in tag_map.items():
+            if key in metadata and metadata[key]:
+                cmd.extend(["-metadata", f"{ffmpeg_key}={metadata[key]}"])
+        # Write lyrics as the 'lyrics' metadata field (ffmpeg id3v2 USLT)
+        if "lyrics" in metadata and metadata["lyrics"]:
+            cmd.extend(["-metadata", f"lyrics={metadata['lyrics']}"])
+    cmd.append(mp3_path)
+
     try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                mastered_wav,
-                "-codec:a",
-                "libmp3lame",
-                "-b:a",
-                bitrate,
-                mp3_path,
-            ],
-            check=True,
-            capture_output=True,
-        )
+        subprocess.run(cmd, check=True, capture_output=True)
         Path(mastered_wav).unlink(missing_ok=True)
         wav_file.unlink(missing_ok=True)
         logger.info("Mastered to %s", mp3_path)

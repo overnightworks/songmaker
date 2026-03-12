@@ -59,9 +59,29 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Start ACE-Step API server")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--device", default="cuda", help="Device (cuda/cpu)")
+    parser.add_argument(
+        "--lm-model",
+        default="acestep-5Hz-lm-4B",
+        help="LM model for song planning. RTX 3090: 4B (best). 12-16GB: 1.7B. 6-8GB: 0.6B. Use 'none' to disable.",
+    )
+    parser.add_argument(
+        "--lm-backend",
+        default="vllm",
+        choices=["pt", "vllm"],
+        help="LM inference backend (vllm=fast, recommended for 3090; pt=fallback)",
+    )
+    parser.add_argument(
+        "--config",
+        default="acestep-v15-turbo",
+        help="DiT model config (acestep-v15-turbo / acestep-v15-sft / acestep-v15-base)",
+    )
     args = parser.parse_args()
 
-    venv_python = ACESTEP_DIR / ".venv" / "Scripts" / "python.exe"
+    # Platform-aware venv python path
+    if sys.platform == "win32":
+        venv_python = ACESTEP_DIR / ".venv" / "Scripts" / "python.exe"
+    else:
+        venv_python = ACESTEP_DIR / ".venv" / "bin" / "python"
     if not venv_python.exists():
         print(f"Error: {ACESTEP_DIR}/.venv not found. Run: python scripts/setup_acestep.py")
         sys.exit(1)
@@ -76,20 +96,26 @@ def main() -> None:
     env["ACESTEP_API_PORT"] = str(args.port)
     env["ACESTEP_API_HOST"] = "0.0.0.0"
     env["ACESTEP_DEVICE"] = args.device
-    # Use PyTorch LM backend (avoids nano-vllm CUDA/triton issues on Windows)
-    env.setdefault("ACESTEP_LM_BACKEND", "pt")
-    # Enable CPU offloading for low-VRAM GPUs (6GB GTX 1660 Ti)
-    env.setdefault("ACESTEP_OFFLOAD_TO_CPU", "1")
-    env.setdefault("ACESTEP_OFFLOAD_DIT_TO_CPU", "1")
-    # Skip LLM initialization (not enough VRAM for DiT + LM)
-    env.setdefault("ACESTEP_INIT_LLM", "0")
+    # DiT model config (turbo = 8 steps, Very High quality, no CFG)
+    env.setdefault("ACESTEP_CONFIG_PATH", args.config)
+    # LM planner — enables query rewriting + CoT for better song structure
+    if args.lm_model.lower() == "none":
+        env.setdefault("ACESTEP_INIT_LLM", "0")
+    else:
+        env.setdefault("ACESTEP_INIT_LLM", "1")
+        env.setdefault("ACESTEP_LM_MODEL_PATH", args.lm_model)
+        env.setdefault("ACESTEP_LM_BACKEND", args.lm_backend)
+    # RTX 3090 (24GB): no offloading needed — all models fit in VRAM
     # Disable torch.compile (torchao INT8 incompatible with torch 2.7.1)
     env.setdefault("ACESTEP_COMPILE_MODEL", "0")
 
+    lm_status = "disabled" if args.lm_model.lower() == "none" else f"{args.lm_model} ({args.lm_backend})"
     print(f"Starting ACE-Step server on port {args.port}...")
-    print(f"  Device: {args.device}")
-    print(f"  Python: {venv_python.resolve()}")
-    print(f"  Health: http://localhost:{args.port}/health")
+    print(f"  Device:    {args.device}")
+    print(f"  DiT:       {args.config}")
+    print(f"  LM model:  {lm_status}")
+    print(f"  Python:    {venv_python.resolve()}")
+    print(f"  Health:    http://localhost:{args.port}/health")
     print()
 
     # Use uv run from the ACE-Step directory (resolves all paths correctly)

@@ -789,9 +789,11 @@ def build_arrangement() -> Arrangement:
 # ═══════════════════════════════════════════════════════════════════════════
 
 ACESTEP_PROMPT: Final[str] = (
-    "melodic house, female vocal, supersaw synths, four-on-the-floor drums, "
-    "dark pad, sub bass, emotional, euphoric drop, D minor, "
-    "CYRIL style, Avicii inspired"
+    "melodic house, breathy female vocal, detuned supersaw lead, "
+    "four-on-the-floor kick, punchy clap on 2 and 4, offbeat open hihat, "
+    "dark warm pad, driving sub bass, euphoric drop, emotional build, "
+    "atmospheric breakdown, D minor, 120 BPM, CYRIL style, Avicii inspired, "
+    "pristine mixdown, professional master"
 )
 
 ACESTEP_LYRICS: Final[str] = """\
@@ -974,7 +976,7 @@ def _generate_full_mix(seed: int) -> None:
         lyrics=ACESTEP_LYRICS,
         bpm=BPM,
         duration=int(TOTAL_SECONDS),
-        key="Dm",
+        key="D minor",
         time_signature="4/4",
         vocal_language="en",
         seed=seed,
@@ -1016,7 +1018,7 @@ def _generate_demucs_mix(seed: int) -> None:
         lyrics=ACESTEP_LYRICS,
         bpm=BPM,
         duration=int(TOTAL_SECONDS),
-        key="Dm",
+        key="D minor",
         time_signature="4/4",
         vocal_language="en",
         seed=seed,
