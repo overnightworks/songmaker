@@ -6,10 +6,10 @@ multiband compression stability, and stereo widening correctness.
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
-from instrumental_engine.mastering import (
+from numpy.typing import NDArray
+
+from audio_engine.mastering import (
     master_stereo,
     measure_lufs,
     multiband_compress,
@@ -28,48 +28,43 @@ def _generate_sine(
     amplitude: float = 0.5,
     duration: float = DURATION_SECONDS,
     sample_rate: int = SAMPLE_RATE,
-) -> list[float]:
+) -> NDArray[np.float64]:
     """Generate a sine wave test signal."""
     n = int(sample_rate * duration)
-    return [
-        amplitude * math.sin(2.0 * math.pi * frequency * i / sample_rate)
-        for i in range(n)
-    ]
+    t = np.arange(n, dtype=np.float64)
+    return amplitude * np.sin(2.0 * np.pi * frequency * t / sample_rate)
 
 
 def _generate_noise(
     amplitude: float = 0.3,
     duration: float = DURATION_SECONDS,
     sample_rate: int = SAMPLE_RATE,
-) -> list[float]:
+) -> NDArray[np.float64]:
     """Generate white noise test signal (deterministic via seed)."""
     rng = np.random.default_rng(seed=42)
     n = int(sample_rate * duration)
-    return (rng.uniform(-amplitude, amplitude, n)).tolist()
+    return rng.uniform(-amplitude, amplitude, n).astype(np.float64)
 
 
 def _generate_multiband_signal(
     duration: float = DURATION_SECONDS,
     sample_rate: int = SAMPLE_RATE,
-) -> list[float]:
+) -> NDArray[np.float64]:
     """Generate a signal with energy across bass, mid, and treble bands."""
     bass = _generate_sine(80.0, 0.4, duration, sample_rate)
     mid = _generate_sine(1000.0, 0.3, duration, sample_rate)
     treble = _generate_sine(8000.0, 0.2, duration, sample_rate)
-    return [b + m + t for b, m, t in zip(bass, mid, treble)]
+    return bass + mid + treble
 
 
 def test_soft_clip_prevents_hard_clipping() -> None:
     """Verify soft_clip output never exceeds ceiling value."""
-    hot_signal = [
-        2.0 * math.sin(2.0 * math.pi * 440.0 * i / SAMPLE_RATE)
-        for i in range(NUM_SAMPLES)
-    ]
+    hot_signal = _generate_sine(440.0, 2.0)
 
     ceiling = 0.98
     clipped = soft_clip(hot_signal, ceiling=ceiling)
 
-    max_val = max(abs(s) for s in clipped)
+    max_val = float(np.max(np.abs(clipped)))
     assert (
         max_val <= ceiling
     ), f"Soft clip failed: max={max_val:.6f} exceeds ceiling={ceiling}"
@@ -81,7 +76,7 @@ def test_soft_clip_preserves_quiet_signals() -> None:
     quiet = _generate_sine(440.0, 0.1)
     clipped = soft_clip(quiet, ceiling=0.98)
 
-    max_diff = max(abs(a - b) for a, b in zip(quiet, clipped))
+    max_diff = float(np.max(np.abs(quiet - clipped)))
     assert (
         max_diff < 0.005
     ), f"Soft clip altered quiet signal too much: max_diff={max_diff:.6f}"
@@ -90,8 +85,8 @@ def test_soft_clip_preserves_quiet_signals() -> None:
 
 def test_soft_clip_empty() -> None:
     """Verify soft_clip handles empty input."""
-    result = soft_clip([], ceiling=0.98)
-    assert result == [], "Soft clip should return empty list for empty input"
+    result = soft_clip(np.array([], dtype=np.float64), ceiling=0.98)
+    assert result.size == 0, "Soft clip should return empty array for empty input"
     print("  ✅ Empty input handled")
 
 
@@ -101,34 +96,31 @@ def test_multiband_no_nan_inf() -> None:
 
     left, right = multiband_compress(
         signal,
-        list(signal),
+        signal.copy(),
         sample_rate=SAMPLE_RATE,
     )
 
-    left_arr = np.array(left)
-    right_arr = np.array(right)
-
-    assert not np.any(np.isnan(left_arr)), "NaN detected in left channel"
-    assert not np.any(np.isnan(right_arr)), "NaN detected in right channel"
-    assert not np.any(np.isinf(left_arr)), "Inf detected in left channel"
-    assert not np.any(np.isinf(right_arr)), "Inf detected in right channel"
+    assert not np.any(np.isnan(left)), "NaN detected in left channel"
+    assert not np.any(np.isnan(right)), "NaN detected in right channel"
+    assert not np.any(np.isinf(left)), "Inf detected in left channel"
+    assert not np.any(np.isinf(right)), "Inf detected in right channel"
     print(
-        f"  ✅ No NaN/Inf: L range [{left_arr.min():.4f}, {left_arr.max():.4f}], "
-        f"R range [{right_arr.min():.4f}, {right_arr.max():.4f}]"
+        f"  ✅ No NaN/Inf: L range [{left.min():.4f}, {left.max():.4f}], "
+        f"R range [{right.min():.4f}, {right.max():.4f}]"
     )
 
 
 def test_multiband_preserves_energy() -> None:
     """Verify multiband compression doesn't zero-out the signal."""
     signal = _generate_multiband_signal()
-    input_rms = math.sqrt(sum(s**2 for s in signal) / len(signal))
+    input_rms = float(np.sqrt(np.mean(signal**2)))
 
     left, right = multiband_compress(
         signal,
-        list(signal),
+        signal.copy(),
         sample_rate=SAMPLE_RATE,
     )
-    output_rms = math.sqrt(sum(s**2 for s in left) / len(left))
+    output_rms = float(np.sqrt(np.mean(left**2)))
 
     assert (
         output_rms > 0.01
@@ -144,7 +136,7 @@ def test_multiband_mismatched_params_raises() -> None:
     try:
         multiband_compress(
             signal,
-            list(signal),
+            signal.copy(),
             bands=((20, 250), (250, 4000)),
             ratios=(3.0, 2.5, 2.0),
             thresholds=(0.5, 0.6, 0.7),
@@ -162,7 +154,7 @@ def test_lufs_known_signal() -> None:
     With K-weighting boost, actual measurement will be slightly higher.
     """
     full_scale_sine = _generate_sine(997.0, 1.0, 5.0)
-    lufs = measure_lufs(full_scale_sine, list(full_scale_sine), sample_rate=SAMPLE_RATE)
+    lufs = measure_lufs(full_scale_sine, full_scale_sine.copy(), sample_rate=SAMPLE_RATE)
 
     assert (
         -6.0 < lufs < 2.0
@@ -173,7 +165,7 @@ def test_lufs_known_signal() -> None:
 def test_lufs_quiet_signal() -> None:
     """Verify LUFS of a very quiet signal is very negative."""
     quiet = _generate_sine(440.0, 0.001, 3.0)
-    lufs = measure_lufs(quiet, list(quiet), sample_rate=SAMPLE_RATE)
+    lufs = measure_lufs(quiet, quiet.copy(), sample_rate=SAMPLE_RATE)
 
     assert lufs < -50.0, f"Quiet signal LUFS too high: {lufs:.2f}"
     print(f"  ✅ Quiet signal: {lufs:.2f} LUFS (expected < -50)")
@@ -181,7 +173,8 @@ def test_lufs_quiet_signal() -> None:
 
 def test_lufs_empty_signal() -> None:
     """Verify LUFS of empty signal returns -70."""
-    lufs = measure_lufs([], [], sample_rate=SAMPLE_RATE)
+    empty = np.array([], dtype=np.float64)
+    lufs = measure_lufs(empty, empty, sample_rate=SAMPLE_RATE)
     assert lufs == -70.0, f"Empty signal should return -70.0, got {lufs}"
     print("  ✅ Empty signal: -70.0 LUFS")
 
@@ -191,10 +184,10 @@ def test_lufs_normalization() -> None:
     signal = _generate_sine(440.0, 0.1, 5.0)
     target = -14.0
 
-    current = measure_lufs(signal, list(signal), sample_rate=SAMPLE_RATE)
+    current = measure_lufs(signal, signal.copy(), sample_rate=SAMPLE_RATE)
     normalized_l, normalized_r = normalize_to_lufs(
         signal,
-        list(signal),
+        signal.copy(),
         target_lufs=target,
         current_lufs=current,
     )
@@ -218,8 +211,8 @@ def test_stereo_widening_identity() -> None:
 
     out_l, out_r = widen_stereo(left, right, width=1.0)
 
-    max_diff_l = max(abs(a - b) for a, b in zip(left, out_l))
-    max_diff_r = max(abs(a - b) for a, b in zip(right, out_r))
+    max_diff_l = float(np.max(np.abs(left - out_l)))
+    max_diff_r = float(np.max(np.abs(right - out_r)))
 
     assert max_diff_l < 1e-10, f"Width=1.0 changed left channel: diff={max_diff_l}"
     assert max_diff_r < 1e-10, f"Width=1.0 changed right channel: diff={max_diff_r}"
@@ -235,7 +228,7 @@ def test_stereo_widening_mono() -> None:
 
     out_l, out_r = widen_stereo(left, right, width=0.0)
 
-    max_diff = max(abs(a - b) for a, b in zip(out_l, out_r))
+    max_diff = float(np.max(np.abs(out_l - out_r)))
     assert max_diff < 1e-10, f"Width=0.0 should be mono: diff={max_diff}"
     print(f"  ✅ Width=0.0 mono collapse: max_diff={max_diff:.2e}")
 
@@ -245,10 +238,10 @@ def test_stereo_widening_increases_width() -> None:
     left = _generate_sine(440.0, 0.5)
     right = _generate_sine(550.0, 0.5)
 
-    original_diff = sum(abs(a - b) for a, b in zip(left, right))
+    original_diff = float(np.sum(np.abs(left - right)))
 
     out_l, out_r = widen_stereo(left, right, width=1.5)
-    widened_diff = sum(abs(a - b) for a, b in zip(out_l, out_r))
+    widened_diff = float(np.sum(np.abs(out_l - out_r)))
 
     assert widened_diff > original_diff, (
         f"Width=1.5 should increase stereo difference: "
@@ -261,18 +254,18 @@ def test_full_pipeline_no_clipping() -> None:
     """Verify the full mastering pipeline produces no samples > 0.98."""
     signal = _generate_multiband_signal(5.0)
     noise = _generate_noise(0.2, 5.0)
-    mixed = [s + n for s, n in zip(signal, noise)]
+    mixed = signal + noise
 
     mastered_l, mastered_r = master_stereo(
         mixed,
-        list(mixed),
+        mixed.copy(),
         target_lufs=-14.0,
         stereo_width=1.2,
         sample_rate=SAMPLE_RATE,
     )
 
-    max_l = max(abs(s) for s in mastered_l)
-    max_r = max(abs(s) for s in mastered_r)
+    max_l = float(np.max(np.abs(mastered_l)))
+    max_r = float(np.max(np.abs(mastered_r)))
 
     assert max_l <= 0.98, f"Left channel clipping: max={max_l:.6f}"
     assert max_r <= 0.98, f"Right channel clipping: max={max_r:.6f}"
@@ -286,7 +279,7 @@ def test_full_pipeline_lufs_accuracy() -> None:
 
     mastered_l, mastered_r = master_stereo(
         signal,
-        list(signal),
+        signal.copy(),
         target_lufs=target,
         stereo_width=1.2,
         sample_rate=SAMPLE_RATE,
@@ -310,27 +303,25 @@ def test_full_pipeline_no_nan_inf() -> None:
 
     mastered_l, mastered_r = master_stereo(
         signal,
-        list(signal),
+        signal.copy(),
         target_lufs=-14.0,
         stereo_width=1.2,
         sample_rate=SAMPLE_RATE,
     )
 
-    arr_l = np.array(mastered_l)
-    arr_r = np.array(mastered_r)
-
-    assert not np.any(np.isnan(arr_l)), "NaN in mastered left"
-    assert not np.any(np.isnan(arr_r)), "NaN in mastered right"
-    assert not np.any(np.isinf(arr_l)), "Inf in mastered left"
-    assert not np.any(np.isinf(arr_r)), "Inf in mastered right"
+    assert not np.any(np.isnan(mastered_l)), "NaN in mastered left"
+    assert not np.any(np.isnan(mastered_r)), "NaN in mastered right"
+    assert not np.any(np.isinf(mastered_l)), "Inf in mastered left"
+    assert not np.any(np.isinf(mastered_r)), "Inf in mastered right"
     print("  ✅ Full pipeline: no NaN/Inf")
 
 
 def test_full_pipeline_empty() -> None:
     """Verify full pipeline handles empty input gracefully."""
-    mastered_l, mastered_r = master_stereo([], [], target_lufs=-14.0)
-    assert mastered_l == [], "Expected empty left channel"
-    assert mastered_r == [], "Expected empty right channel"
+    empty = np.array([], dtype=np.float64)
+    mastered_l, mastered_r = master_stereo(empty, empty, target_lufs=-14.0)
+    assert mastered_l.size == 0, "Expected empty left channel"
+    assert mastered_r.size == 0, "Expected empty right channel"
     print("  ✅ Empty input handled gracefully")
 
 
@@ -339,64 +330,13 @@ def test_deterministic_output() -> None:
     signal = _generate_multiband_signal(2.0)
 
     result_1 = master_stereo(
-        signal, list(signal), target_lufs=-14.0, sample_rate=SAMPLE_RATE
+        signal, signal.copy(), target_lufs=-14.0, sample_rate=SAMPLE_RATE,
     )
     result_2 = master_stereo(
-        signal, list(signal), target_lufs=-14.0, sample_rate=SAMPLE_RATE
+        signal, signal.copy(), target_lufs=-14.0, sample_rate=SAMPLE_RATE,
     )
 
-    for i, (a, b) in enumerate(zip(result_1[0], result_2[0])):
-        assert a == b, f"Non-deterministic at sample {i}: {a} != {b}"
+    assert np.array_equal(result_1[0], result_2[0]), "Non-deterministic left channel"
+    assert np.array_equal(result_1[1], result_2[1]), "Non-deterministic right channel"
 
     print("  ✅ Deterministic: two runs produce identical output")
-
-
-def main() -> None:
-    """Run all mastering chain tests."""
-    print("\n🎛️  Professional Mastering Chain Tests\n")
-
-    tests = [
-        ("Soft Clip: prevents hard clipping", test_soft_clip_prevents_hard_clipping),
-        ("Soft Clip: preserves quiet signals", test_soft_clip_preserves_quiet_signals),
-        ("Soft Clip: empty input", test_soft_clip_empty),
-        ("Multiband: no NaN/Inf", test_multiband_no_nan_inf),
-        ("Multiband: preserves energy", test_multiband_preserves_energy),
-        ("Multiband: mismatched params", test_multiband_mismatched_params_raises),
-        ("LUFS: known signal", test_lufs_known_signal),
-        ("LUFS: quiet signal", test_lufs_quiet_signal),
-        ("LUFS: empty signal", test_lufs_empty_signal),
-        ("LUFS: normalization", test_lufs_normalization),
-        ("Stereo: width=1.0 identity", test_stereo_widening_identity),
-        ("Stereo: width=0.0 mono", test_stereo_widening_mono),
-        ("Stereo: width>1.0 widens", test_stereo_widening_increases_width),
-        ("Pipeline: no clipping", test_full_pipeline_no_clipping),
-        ("Pipeline: LUFS accuracy", test_full_pipeline_lufs_accuracy),
-        ("Pipeline: no NaN/Inf", test_full_pipeline_no_nan_inf),
-        ("Pipeline: empty input", test_full_pipeline_empty),
-        ("Pipeline: deterministic", test_deterministic_output),
-    ]
-
-    passed = 0
-    failed = 0
-    for name, test_fn in tests:
-        try:
-            test_fn()
-            passed += 1
-        except AssertionError as exc:
-            print(f"  ❌ {name}: {exc}")
-            failed += 1
-        except Exception as exc:
-            print(f"  💥 {name}: {type(exc).__name__}: {exc}")
-            failed += 1
-
-    print(f"\n{'='*60}")
-    print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
-    if failed == 0:
-        print("🎉 All mastering tests passed!")
-    else:
-        print(f"⚠️  {failed} test(s) failed")
-        raise SystemExit(1)
-
-
-if __name__ == "__main__":
-    main()

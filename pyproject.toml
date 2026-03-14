@@ -8,23 +8,21 @@ license = { text = "MIT" }
 requires-python = ">=3.12,<3.13"
 
 dependencies = [
-    # Core audio processing
     "numpy>=1.26",
     "scipy>=1.12",
-
-    # Deep learning runtime (CUDA version resolved via tool.uv index)
-    "torch>=2.2",
-    "torchaudio>=2.2",
-
-    # Audio utilities
-    "soundfile",
-    "librosa",
-    "numba",
-    "pydantic",
+    "pydantic>=2.0",
+    "cyclopts>=4.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-# Development / testing
+whisper = [
+    "torch>=2.2",
+    "torchaudio>=2.2",
+    "soundfile",
+    "librosa",
+    "numba",
+]
 dev = [
     "pytest>=7.0",
     "ruff>=0.4",
@@ -41,11 +39,10 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["source_files"]
+where = ["src"]
 include = [
     "acestep_engine*",
-    "bark_engine*",
-    "instrumental_engine*",
+    "audio_engine*",
     "songmaker_cli*",
 ]
 
@@ -80,13 +77,9 @@ select = ["E", "F", "W", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["source_files"]
+pythonpath = ["src"]
 
 # ---------------------------------------------------------------
 # External tools (must be on system PATH):
-#   ffmpeg      — MP3 encoding, vocal filtering
-#   FluidSynth  — SoundFont instrument rendering (optional)
-#
-# SoundFonts:
-#   python scripts/download_soundfonts.py
+#   ffmpeg      — MP3 encoding
 # ---------------------------------------------------------------

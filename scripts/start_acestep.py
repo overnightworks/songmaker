@@ -15,44 +15,14 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+from common import find_uv
+
 ACESTEP_DIR = Path(__file__).resolve().parent.parent / "_models" / "acestep"
 DEFAULT_PORT = 8001
-
-
-def _find_uv() -> list[str]:
-    """Find a working uv command."""
-    # 1. Try bare `uv` on PATH
-    if shutil.which("uv"):
-        return ["uv"]
-
-    # 2. Try `python -m uv` (pip-installed into current interpreter)
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "uv", "--version"],
-            capture_output=True, check=True,
-        )
-        return [sys.executable, "-m", "uv"]
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
-
-    # 3. Check common install locations on Windows
-    if sys.platform == "win32":
-        home = Path.home()
-        candidates = [
-            home / ".local" / "bin" / "uv.exe",
-            home / ".cargo" / "bin" / "uv.exe",
-            home / "AppData" / "Roaming" / "Python" / "Python312" / "Scripts" / "uv.exe",
-        ]
-        for candidate in candidates:
-            if candidate.exists():
-                return [str(candidate)]
-
-    return []
 
 
 def main() -> None:
@@ -62,7 +32,10 @@ def main() -> None:
     parser.add_argument(
         "--lm-model",
         default="acestep-5Hz-lm-4B",
-        help="LM model for song planning. RTX 3090: 4B (best). 12-16GB: 1.7B. 6-8GB: 0.6B. Use 'none' to disable.",
+        help=(
+            "LM model for song planning. RTX 3090: 4B (best). "
+            "12-16GB: 1.7B. 6-8GB: 0.6B. Use 'none' to disable."
+        ),
     )
     parser.add_argument(
         "--lm-backend",
@@ -86,7 +59,7 @@ def main() -> None:
         print(f"Error: {ACESTEP_DIR}/.venv not found. Run: python scripts/setup_acestep.py")
         sys.exit(1)
 
-    uv = _find_uv()
+    uv = find_uv()
     if not uv:
         print("Error: uv not found. Install with: pip install uv")
         sys.exit(1)
@@ -109,7 +82,10 @@ def main() -> None:
     # Disable torch.compile (torchao INT8 incompatible with torch 2.7.1)
     env.setdefault("ACESTEP_COMPILE_MODEL", "0")
 
-    lm_status = "disabled" if args.lm_model.lower() == "none" else f"{args.lm_model} ({args.lm_backend})"
+    if args.lm_model.lower() == "none":
+        lm_status = "disabled"
+    else:
+        lm_status = f"{args.lm_model} ({args.lm_backend})"
     print(f"Starting ACE-Step server on port {args.port}...")
     print(f"  Device:    {args.device}")
     print(f"  DiT:       {args.config}")

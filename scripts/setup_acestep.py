@@ -20,49 +20,14 @@ After setup, start the server:
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+from common import find_uv
+
 REPO_URL = "https://github.com/ACE-Step/ACE-Step-1.5.git"
 ACESTEP_DIR = Path(__file__).resolve().parent.parent / "_models" / "acestep"
-
-
-def _find_uv() -> list[str]:
-    """Find a working uv command.
-
-    Returns the command prefix as a list (e.g. ["uv"] or
-    [sys.executable, "-m", "uv"]).
-    """
-    # 1. Try bare `uv` on PATH
-    if shutil.which("uv"):
-        return ["uv"]
-
-    # 2. Try `python -m uv` (pip-installed into current interpreter)
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "uv", "--version"],
-            capture_output=True, check=True,
-        )
-        return [sys.executable, "-m", "uv"]
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
-
-    # 3. Check common install locations on Windows
-    if sys.platform == "win32":
-        from pathlib import Path as _Path
-        home = _Path.home()
-        candidates = [
-            home / ".local" / "bin" / "uv.exe",
-            home / ".cargo" / "bin" / "uv.exe",
-            home / "AppData" / "Roaming" / "Python" / "Python312" / "Scripts" / "uv.exe",
-        ]
-        for candidate in candidates:
-            if candidate.exists():
-                return [str(candidate)]
-
-    return []
 
 
 def run(cmd: list[str], cwd: str | Path | None = None) -> None:
@@ -80,7 +45,7 @@ def main() -> None:
     print("=" * 60)
 
     # Find uv
-    uv = _find_uv()
+    uv = find_uv()
     if not uv:
         print("\n  Error: uv not found. Install with: pip install uv")
         sys.exit(1)
