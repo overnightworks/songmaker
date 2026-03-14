@@ -4,24 +4,21 @@ album: wake_up
 track: 1
 genre: Hip-Hop / Pop / Conscious Rap
 prompt: >
-  conscious hip-hop, pop, Black Eyed Peas style,
-  emotional and powerful, hip-hop beats with melodic chorus,
-  piano, strings, 808 bass,
-  soulful female singer on chorus only, heartfelt and powerful,
-  multiple male rappers trading verses, hard-hitting and critical,
-  conversational rap, raw and direct, naming names, no filter,
-  protest song, Where Is the Love vibe, anthemic, big emotional hook,
-  gang vocals on chorus, building intensity,
-  socially conscious, raw and honest, vulnerable,
-  like a 2026 update of Where Is the Love
-bpm: 0
+  conscious hip-hop, 808 beats, piano, strings,
+  male rappers on verses, hard-hitting with meaning,
+  soulful female singer on chorus, emotional and powerful,
+  protest song, anthemic hook, building intensity,
+  varied flow, rhythmic changes between verses
+bpm: 95
 duration: 240
 key: Am
+time_signature: 4/4
 language: en
 inference_steps: 50
 guidance_scale: 2.5
 shift: 3.0
-lm_temperature: 1.1
+think_mode: false
+lm_temperature: 1.0
 infer_method: ode
 status: approved
 ---
@@ -49,16 +46,14 @@ Then ship the bombs on both sides out, tell me how's that gonna heal
 [chorus]
 Where is the love, where did it go,
 We had it once, I swear I know,
-We watch it burn and keep on scrolling like before,
+The children cry but we don't hear them anymore,
 Where is the love, where is the love
 
 [verse]
 Epstein files are open now, the names are on the page,
 Billionaires and politicians, not a single one in cage,
 They flew to that island, everybody knows the truth,
-But money buys the silence and the justice, that's the proof
-
-[verse]
+But money buys the silence and the justice, that's the proof,
 They tell you it's democracy, they tell you that you're free,
 While the richest men alive are building rockets just to flee,
 A billion people hungry but there's yachts that cost a nation,
@@ -74,9 +69,7 @@ Where is the love, where is the love
 Three AM, a billion people scrolling, wide awake,
 Everybody posting, nobody is doing great,
 Algorithm feeds you outrage, keeps the anger on repeat,
-Billion-dollar platforms selling loneliness for free
-
-[verse]
+Billion-dollar platforms selling loneliness for free,
 Got a thousand followers, but nobody calls to check,
 AI writes the article, AI sings the track,
 We replaced our conversations with a notification sound,

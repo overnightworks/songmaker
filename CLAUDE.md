@@ -22,9 +22,9 @@ songmaker generate albums/<album>/lyrics/<NN>_<song>.md --seed 42
 songmaker sync _output/<album>/final/
 ```
 
-### Complex tracks (instrumental engine, Bark, etc.)
+### Complex tracks (instrumental engine + ACE-Step)
 ```bash
-.venv/Scripts/python albums/<album>/tracks/<NN>_<song>.py
+.venv/bin/python albums/<album>/tracks/<NN>_<song>.py
 ```
 
 ## Song Format (markdown with YAML frontmatter)
@@ -67,7 +67,7 @@ Chorus lyrics...
 7. **Commit per version**: Every time lyrics are changed for a new generation, commit the markdown file before generating. Commit message format: `feat(<album>): <song> v<N> — <style>` (e.g. `feat(murphys): pub quiz tuesday v3 — weezer indie rock`). This way any version can be checked out and regenerated.
 
 ## Project Structure
-- `source_files/` — Shared engine code (acestep, bark, instrumental, diffsinger, rvc, xtts, songmaker_cli)
+- `source_files/` — Shared engine code (acestep_engine, bark_engine, instrumental_engine, songmaker_cli)
 - `albums/<album>/lyrics/` — Song markdown files (lyrics + generation config)
 - `albums/<album>/tracks/` — Complex tracks that need Python (instrumental engine, Bark)
 - `albums/<album>/album.yaml` — Album metadata (title, artist, year)

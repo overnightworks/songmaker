@@ -529,6 +529,124 @@ def _render_static_html(manifest_json: str = "null") -> str:
   .diff-line.sung { color: var(--primary); }
   .diff-line.section { color: #555; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 1px; padding-top: 8px; }
 
+  .rating-panel {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 6px;
+    padding: 10px 16px;
+    margin: 8px 0;
+    flex-shrink: 0;
+  }
+
+  .rating-panel h3 {
+    font-family: 'Oswald', sans-serif;
+    font-size: 13px;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  .rating-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .rating-label {
+    font-size: 12px;
+    color: #888;
+    width: 90px;
+    flex-shrink: 0;
+  }
+
+  .stars {
+    display: flex;
+    gap: 2px;
+  }
+
+  .star {
+    font-size: 20px;
+    cursor: pointer;
+    color: #333;
+    transition: color 0.15s;
+    user-select: none;
+  }
+
+  .star:hover, .star.active { color: var(--primary); }
+  .stars:hover .star { color: #333; }
+  .stars:hover .star:hover, .stars:hover .star:hover ~ .star-reverse { color: var(--primary); }
+  .stars .star.active ~ .star:not(.active) { color: #333; }
+
+  .rating-comment {
+    width: 100%;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #ccc;
+    padding: 6px 10px;
+    font-family: 'Open Sans', sans-serif;
+    font-size: 12px;
+    border-radius: 4px;
+    resize: none;
+    margin-top: 4px;
+  }
+
+  .rating-comment:focus { border-color: var(--primary); outline: none; }
+
+  .rating-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    align-items: center;
+  }
+
+  .rating-save {
+    background: var(--primary);
+    border: none;
+    color: #fff;
+    padding: 4px 14px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-radius: 3px;
+  }
+
+  .rating-export {
+    background: none;
+    border: 1px solid #444;
+    color: #888;
+    padding: 4px 14px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-radius: 3px;
+  }
+
+  .rating-export:hover { border-color: var(--primary); color: #ccc; }
+
+  .rating-status {
+    font-size: 11px;
+    color: #4a4;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .rating-status.show { opacity: 1; }
+
+  .track-btn .rating-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
   .footer {
     text-align: center;
     padding: 6px;
@@ -571,6 +689,32 @@ def _render_static_html(manifest_json: str = "null") -> str:
   <audio id="audioPlayer" class="audio-player" controls preload="metadata">
     <source id="audioSource" type="audio/mpeg">
   </audio>
+
+  <div class="rating-panel" id="ratingPanel">
+    <h3>Rate this version</h3>
+    <div class="rating-row">
+      <span class="rating-label">Overall</span>
+      <div class="stars" id="stars-overall"></div>
+    </div>
+    <div class="rating-row">
+      <span class="rating-label">Rhythm</span>
+      <div class="stars" id="stars-rhythm"></div>
+    </div>
+    <div class="rating-row">
+      <span class="rating-label">Text Accuracy</span>
+      <div class="stars" id="stars-text"></div>
+    </div>
+    <div class="rating-row">
+      <span class="rating-label">Vocals</span>
+      <div class="stars" id="stars-vocals"></div>
+    </div>
+    <textarea class="rating-comment" id="ratingComment" rows="2" placeholder="Notes..."></textarea>
+    <div class="rating-actions">
+      <button class="rating-save" onclick="saveRating()">Save</button>
+      <button class="rating-export" onclick="exportRatings()">Export All</button>
+      <span class="rating-status" id="ratingStatus">Saved!</span>
+    </div>
+  </div>
 
   <div class="view-toggle" id="viewToggle" style="display:none">
     <button class="view-btn active" id="btnSung" onclick="switchView('sung')">Sung</button>
@@ -728,7 +872,17 @@ function buildTrackNav(album) {
   album.tracks.forEach((t, i) => {
     const btn = document.createElement('button');
     btn.className = 'track-btn' + (i === 0 ? ' active' : '');
-    btn.textContent = t.number + ' ' + t.title;
+    let label = t.number + ' ' + t.title;
+    // Show rating dot if rated
+    const rKey = 'rating:' + t.file;
+    try {
+      const r = JSON.parse(localStorage.getItem(rKey) || '{}');
+      if (r.overall) {
+        const colors = ['', '#ff3333', '#ff8833', '#ffcc00', '#88cc33', '#33cc33'];
+        label += ' <span class="rating-dot" style="background:' + colors[r.overall] + '"></span>';
+      }
+    } catch(e) {}
+    btn.innerHTML = label;
     btn.onclick = () => loadTrack(i);
     btn.id = 'track-btn-' + i;
     trackNav.appendChild(btn);
@@ -792,6 +946,7 @@ async function loadTrack(index) {
   }
 
   renderCurrentView();
+  loadRating();
 }
 
 // --- Lyrics sync ---
@@ -997,6 +1152,107 @@ function similarity(a, b) {
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+// --- Ratings ---
+
+const RATING_CATEGORIES = ['overall', 'rhythm', 'text', 'vocals'];
+let currentRatings = {};
+
+function initStars() {
+  RATING_CATEGORIES.forEach(cat => {
+    const container = document.getElementById('stars-' + cat);
+    if (!container) return;
+    container.innerHTML = '';
+    for (let i = 1; i <= 5; i++) {
+      const star = document.createElement('span');
+      star.className = 'star';
+      star.textContent = '\u2605';
+      star.dataset.value = i;
+      star.dataset.category = cat;
+      star.onclick = () => setStarRating(cat, i);
+      container.appendChild(star);
+    }
+  });
+}
+
+function setStarRating(category, value) {
+  currentRatings[category] = value;
+  updateStarDisplay(category, value);
+}
+
+function updateStarDisplay(category, value) {
+  const container = document.getElementById('stars-' + category);
+  if (!container) return;
+  container.querySelectorAll('.star').forEach(star => {
+    star.className = 'star' + (parseInt(star.dataset.value) <= value ? ' active' : '');
+  });
+}
+
+function getRatingKey() {
+  const album = ALBUMS[currentAlbum];
+  if (!album) return null;
+  const track = album.tracks[currentTrack];
+  if (!track) return null;
+  return 'rating:' + track.file;
+}
+
+function loadRating() {
+  currentRatings = {};
+  const key = getRatingKey();
+  if (!key) return;
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || '{}');
+    currentRatings = saved;
+    RATING_CATEGORIES.forEach(cat => {
+      updateStarDisplay(cat, saved[cat] || 0);
+    });
+    document.getElementById('ratingComment').value = saved.comment || '';
+  } catch(e) {
+    RATING_CATEGORIES.forEach(cat => updateStarDisplay(cat, 0));
+    document.getElementById('ratingComment').value = '';
+  }
+}
+
+function saveRating() {
+  const key = getRatingKey();
+  if (!key) return;
+  currentRatings.comment = document.getElementById('ratingComment').value;
+  localStorage.setItem(key, JSON.stringify(currentRatings));
+  const status = document.getElementById('ratingStatus');
+  status.className = 'rating-status show';
+  setTimeout(() => { status.className = 'rating-status'; }, 1500);
+}
+
+function exportRatings() {
+  const allRatings = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith('rating:')) {
+      try {
+        allRatings[key.replace('rating:', '')] = JSON.parse(localStorage.getItem(key));
+      } catch(e) {}
+    }
+  }
+
+  // Build markdown table
+  let md = '| Track | Overall | Rhythm | Text | Vocals | Comment |\\n';
+  md += '|-------|---------|--------|------|--------|---------|\\n';
+  Object.entries(allRatings).forEach(([file, r]) => {
+    const name = file.split('/').pop().replace('.mp3', '');
+    md += '| ' + name + ' | ' + (r.overall||'-') + ' | ' + (r.rhythm||'-') + ' | ' + (r.text||'-') + ' | ' + (r.vocals||'-') + ' | ' + (r.comment||'').replace(/\\n/g,' ') + ' |\\n';
+  });
+
+  // Download as file
+  const blob = new Blob([md], {type: 'text/markdown'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ratings_export.md';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+initStars();
 
 // --- Start ---
 init();

@@ -80,20 +80,6 @@ SongSection.label
 Arrangement.time_signature_numerator
 Arrangement.time_signature_denominator
 
-# Public API methods called by track scripts
-from bark_engine.engine import BarkVocalEngine
-BarkVocalEngine.generate_vocals
-BarkVocalEngine.cleanup
-
-from ai_engine.musicgen_renderer import MusicGenRenderer
-MusicGenRenderer.generate_sections
-
-from stem_separator.demucs_separator import DemucsSeparator, SeparatedStems, STEM_NAMES
-DemucsSeparator.separate
-SeparatedStems.drums
-SeparatedStems.other
-_ = STEM_NAMES
-
 from instrumental_engine.soundfont_engine import SoundFontRenderer
 SoundFontRenderer.render_sequence
 
@@ -101,11 +87,3 @@ SoundFontRenderer.render_sequence
 from instrumental_engine.soundfont_validator import SoundFontHealth
 SoundFontHealth.fluidsynth_installed
 SoundFontHealth.render_test_passed
-
-# Pitch correction internals
-from bark_engine.pitch_correction import PitchFrame
-PitchFrame.clarity
-
-# Take selection constants
-from bark_engine.take_selection import MIN_TAKES, MAX_TAKES
-_ = MIN_TAKES, MAX_TAKES

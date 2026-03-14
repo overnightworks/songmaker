@@ -1037,31 +1037,12 @@ def _generate_demucs_mix(seed: int) -> None:
     raw_path = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall_acestep_raw.wav")
     write_wav_file(raw_path, result.samples)
 
-    # Step 2: Extract vocals with Demucs
-    print("\n  Step 2/5: Extracting vocals with Demucs...")
-    try:
-        from stem_separator import DemucsSeparator, is_demucs_available
-
-        if not is_demucs_available():
-            print("    ERROR: Demucs not installed! Run: pip install -e \".[demucs]\"")
-            sys.exit(1)
-
-        separator = DemucsSeparator()
-        stems = separator.separate(raw_path)
-        if stems is None:
-            print("    ERROR: Demucs separation failed!")
-            sys.exit(1)
-
-        vocals = stems.vocals
-        print(f"    Extracted vocals: {len(vocals) / SAMPLE_RATE:.1f}s")
-
-        # Save isolated vocals
-        vocals_path = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall_vocals.wav")
-        write_wav_file(vocals_path, vocals)
-
-    except ImportError:
-        print("    ERROR: stem_separator not available!")
-        sys.exit(1)
+    # Step 2: Use ACE-Step output directly (Demucs stem separation removed)
+    print("\n  Step 2/5: Using ACE-Step vocals directly...")
+    vocals = result.samples
+    print(f"    Vocals: {len(vocals) / SAMPLE_RATE:.1f}s")
+    vocals_path = os.path.join(OUTPUT_DIR, "01_Let_Me_Fall_vocals.wav")
+    write_wav_file(vocals_path, vocals)
 
     # Step 3: Render Songmaker instrumentals
     print("\n  Step 3/5: Rendering Songmaker instrumentals + SFX...")
