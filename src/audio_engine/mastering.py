@@ -16,7 +16,7 @@ from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.signal import butter, lfilter, sosfilt
+from scipy.signal import butter, sosfilt
 
 from audio_engine.constants import TARGET_SAMPLE_RATE
 
@@ -266,25 +266,20 @@ def _compress_signal(
     ratio: float,
     sample_rate: int,
 ) -> NDArray[np.float64]:
-    """Apply single-band compression with envelope following.
-
-    Uses two one-pole IIR filters (fast attack, slow release) combined
-    via element-wise max to approximate a true attack/release envelope
-    follower — fully vectorized via scipy.signal.lfilter.
-    """
+    """Apply single-band compression with peak envelope following."""
     attack_coeff = math.exp(-1.0 / (_COMPRESSOR_ATTACK_SECONDS * sample_rate))
     release_coeff = math.exp(-1.0 / (_COMPRESSOR_RELEASE_SECONDS * sample_rate))
     abs_signal = np.abs(signal)
 
-    b_attack = np.array([1.0 - attack_coeff])
-    a_attack = np.array([1.0, -attack_coeff])
-    env_attack = lfilter(b_attack, a_attack, abs_signal)
-
-    b_release = np.array([1.0 - release_coeff])
-    a_release = np.array([1.0, -release_coeff])
-    env_release = lfilter(b_release, a_release, abs_signal)
-
-    envelope = np.maximum(env_attack, env_release)
+    envelope = np.zeros_like(signal)
+    env_val = 0.0
+    for i in range(len(abs_signal)):
+        sample_val = abs_signal[i]
+        if sample_val > env_val:
+            env_val = attack_coeff * env_val + (1.0 - attack_coeff) * sample_val
+        else:
+            env_val = release_coeff * env_val + (1.0 - release_coeff) * sample_val
+        envelope[i] = env_val
 
     gain = np.ones_like(envelope)
     above_threshold = envelope > threshold

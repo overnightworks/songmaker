@@ -6,6 +6,7 @@ import logging
 import re
 import sys
 import time
+import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Optional
 
@@ -40,6 +41,9 @@ def generate(
     infer_method: Annotated[Optional[str], Parameter(help="ode or sde")] = None,
     think_mode: Annotated[Optional[bool], Parameter(help="LM chain-of-thought")] = None,
     check: Annotated[bool, Parameter(help="Run Whisper check after")] = False,
+    player: Annotated[
+        bool, Parameter(name="--player", help="Open HTML player after generation"),
+    ] = False,
 ) -> None:
     """Generate a song from a markdown file via ACE-Step."""
     md_path = _validate_path(path)
@@ -55,6 +59,7 @@ def generate(
     ace_config = build_ace_config(meta, cli_overrides)
     album_meta = _load_album_meta(md_path)
 
+    player_path = None
     for i in range(count):
         if count > 1:
             log.info("Generation %d/%d", i + 1, count)
@@ -65,10 +70,13 @@ def generate(
         result, elapsed = _run_generation(ace_config)
         _write_output(result, paths, meta, album_meta)
         _log_result_banner(paths, result, elapsed)
-        _update_player(paths)
+        player_path = _update_player(paths)
 
         if check:
             run_check(str(paths.mp3), source=str(md_path))
+
+    if player and player_path:
+        _open_player(player_path)
 
 
 @app.command
@@ -79,6 +87,9 @@ def player(
     root: Annotated[
         Optional[str], Parameter(help="Project root")
     ] = None,
+    open_browser: Annotated[
+        bool, Parameter(name="--open", help="Open player in browser")
+    ] = False,
 ) -> None:
     """Generate the unified HTML player for all albums."""
     from songmaker_cli.player import generate_player
@@ -90,6 +101,9 @@ def player(
     project_root = Path(root).resolve() if root else None
     player_path = generate_player(output_dir, project_root)
     log.info("Player generated: %s", player_path)
+
+    if open_browser:
+        _open_player(player_path)
 
 
 @app.command
@@ -167,11 +181,11 @@ def _write_output(
     meta: SongMeta,
     album_meta: AlbumMeta,
 ) -> None:
-    from audio_engine.audio_io import master_to_mp3, normalize_audio, write_wav_file
+    from audio_engine.audio_io import _write_stereo_wav, master_to_mp3, normalize_audio
 
-    write_wav_file(str(paths.raw_wav), result.samples)
-    samples = normalize_audio(result.samples, NORMALIZE_PEAK)
-    write_wav_file(str(paths.wav), samples)
+    _write_stereo_wav(str(paths.raw_wav), result.left, result.right, result.sample_rate)
+    left = normalize_audio(result.left, NORMALIZE_PEAK)
+    right = normalize_audio(result.right, NORMALIZE_PEAK)
 
     id3_metadata = {
         "title": meta.title,
@@ -181,8 +195,7 @@ def _write_output(
         "genre": meta.genre,
         "lyrics": meta.lyrics,
     }
-    if master_to_mp3(str(paths.wav), str(paths.mp3), metadata=id3_metadata):
-        paths.wav.unlink(missing_ok=True)
+    if master_to_mp3(left, right, str(paths.mp3), sample_rate=result.sample_rate, metadata=id3_metadata):
         paths.raw_wav.unlink(missing_ok=True)
 
 
@@ -198,11 +211,18 @@ def _log_result_banner(
     log.info("=" * 60)
 
 
-def _update_player(paths: OutputPaths) -> None:
+def _update_player(paths: OutputPaths) -> Path:
     from songmaker_cli.player import generate_player
 
     player_path = generate_player(paths.output_dir.parent)
     log.info("Player updated: %s", player_path)
+    return player_path
+
+
+def _open_player(player_path: Path) -> None:
+    url = player_path.resolve().as_uri()
+    log.info("Opening player: %s", url)
+    webbrowser.open(url)
 
 
 def run_check(

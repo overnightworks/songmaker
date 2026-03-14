@@ -6,9 +6,7 @@ import json
 from http.client import HTTPResponse
 from unittest.mock import MagicMock, patch
 
-import numpy as np
-
-from acestep_engine.client import AceStepClient, _resample, is_acestep_available
+from acestep_engine.client import AceStepClient, is_acestep_available
 from acestep_engine.models import AceStepConfig
 
 
@@ -93,15 +91,3 @@ def test_poll_result_failure() -> None:
     assert result is None
 
 
-def test_resample_same_rate() -> None:
-    samples = np.array([0.1, 0.2, 0.3], dtype=np.float64)
-    result = _resample(samples, 44100, 44100)
-    assert np.array_equal(result, samples)
-
-
-def test_resample_different_rate() -> None:
-    n = 48000
-    samples = np.sin(np.linspace(0, 2 * np.pi * 440, n, dtype=np.float64))
-    result = _resample(samples, 48000, 44100)
-    expected_len = int(n * 44100 / 48000)
-    assert abs(len(result) - expected_len) < 10

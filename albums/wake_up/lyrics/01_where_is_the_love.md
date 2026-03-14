@@ -14,8 +14,8 @@ duration: 240
 key: Am
 time_signature: 4/4
 language: en
-inference_steps: 50
-guidance_scale: 2.5
+inference_steps: 8
+guidance_scale: 0.0
 shift: 3.0
 think_mode: false
 lm_temperature: 1.0

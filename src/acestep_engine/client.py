@@ -18,10 +18,7 @@ from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-import numpy as np
-
 from acestep_engine.models import AceStepConfig, AceStepResult
-from audio_engine.constants import TARGET_SAMPLE_RATE
 
 log = logging.getLogger(__name__)
 
@@ -233,9 +230,8 @@ class AceStepClient:
     def _download_audio(
         self, audio_path: str, seed: int,
     ) -> AceStepResult | None:
-        """Download generated audio from the server and convert to samples."""
+        """Download generated audio from the server and return stereo samples."""
         try:
-            # audio_path may be a full URL path (/v1/audio?path=...) or a raw file path
             if audio_path.startswith("/"):
                 url = f"{self.base_url}{audio_path}"
             else:
@@ -246,25 +242,22 @@ class AceStepClient:
                 wav_bytes = resp.read()
 
             from audio_engine.audio_io import read_wav_bytes
-            samples, src_rate = read_wav_bytes(wav_bytes)
-            if len(samples) == 0:
+            left, right, sample_rate = read_wav_bytes(wav_bytes)
+            if len(left) == 0:
                 log.error("Downloaded audio is empty")
                 return None
 
-            # Resample from 48000 to 44100 if needed
-            if src_rate != TARGET_SAMPLE_RATE:
-                samples = _resample(samples, src_rate, TARGET_SAMPLE_RATE)
-
-            duration = len(samples) / TARGET_SAMPLE_RATE
+            duration = len(left) / sample_rate
 
             log.info(
                 "ACE-Step audio downloaded: %.1fs at %d Hz",
-                duration, TARGET_SAMPLE_RATE,
+                duration, sample_rate,
             )
 
             return AceStepResult(
-                samples=samples,
-                sample_rate=TARGET_SAMPLE_RATE,
+                left=left,
+                right=right,
+                sample_rate=sample_rate,
                 duration=duration,
                 seed=seed,
             )
@@ -272,19 +265,3 @@ class AceStepClient:
         except (URLError, OSError) as exc:
             log.error("Failed to download ACE-Step audio: %s", exc)
             return None
-
-
-def _resample(
-    samples: np.ndarray, src_rate: int, dst_rate: int,
-) -> np.ndarray:
-    """Resample audio from src_rate to dst_rate via scipy.signal.resample_poly."""
-    import math
-
-    if src_rate == dst_rate:
-        return samples
-
-    from scipy.signal import resample_poly
-
-    gcd = math.gcd(dst_rate, src_rate)
-    up, down = dst_rate // gcd, src_rate // gcd
-    return resample_poly(samples, up, down).astype(np.float64)

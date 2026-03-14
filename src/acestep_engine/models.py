@@ -33,7 +33,8 @@ class AceStepConfig:
 class AceStepResult:
     """Result from an ACE-Step generation."""
 
-    samples: NDArray[np.float64]
+    left: NDArray[np.float64]
+    right: NDArray[np.float64]
     sample_rate: int
     duration: float
     seed: int

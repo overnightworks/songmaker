@@ -12,7 +12,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from audio_engine.constants import INT16_MAX, TARGET_SAMPLE_RATE
-from audio_engine.mastering import master_mono
+from audio_engine.mastering import master_stereo
 
 log = logging.getLogger(__name__)
 
@@ -70,41 +70,37 @@ def normalize_audio(
 
 
 def master_to_mp3(
-    wav_path: str,
+    left: NDArray[np.float64],
+    right: NDArray[np.float64],
     mp3_path: str,
+    sample_rate: int = TARGET_SAMPLE_RATE,
     target_lufs: float = -14.0,
     stereo_width: float = 1.2,
     bitrate: str = "320k",
     metadata: dict[str, str] | None = None,
 ) -> bool:
-    """Master WAV to MP3 with professional mastering chain.
+    """Master stereo audio to MP3.
 
     Pipeline: multiband compression -> stereo widening ->
     LUFS normalization -> soft clipping -> MP3 encoding (ffmpeg).
     """
-    wav_file = Path(wav_path)
-    if not wav_file.exists():
-        log.error("Mastering failed: WAV file not found: %s", wav_path)
-        return False
-
-    samples, sample_rate = read_wav_file(wav_path)
-    if len(samples) == 0:
-        log.error("Mastering failed: empty WAV file")
+    if len(left) == 0 or len(right) == 0:
+        log.error("Mastering failed: empty audio")
         return False
 
     log.info(
         "Mastering: multiband -> stereo(%.1fx) -> LUFS(%.1f) -> clip",
         stereo_width, target_lufs,
     )
-    mastered_left, mastered_right = master_mono(
-        samples,
+    mastered_left, mastered_right = master_stereo(
+        left, right,
         target_lufs=target_lufs,
         stereo_width=stereo_width,
         sample_rate=sample_rate,
     )
 
-    wav_p = Path(wav_path)
-    mastered_wav = str(wav_p.with_stem(wav_p.stem + "_mastered"))
+    mp3_p = Path(mp3_path)
+    mastered_wav = str(mp3_p.with_suffix(".mastered.wav"))
     _write_stereo_wav(mastered_wav, mastered_left, mastered_right, sample_rate)
 
     cmd = _build_ffmpeg_cmd(mastered_wav, mp3_path, bitrate, metadata)
@@ -145,19 +141,23 @@ def _build_ffmpeg_cmd(
     return cmd
 
 
-_EMPTY_SAMPLES: tuple[NDArray[np.float64], int] = (
-    np.array([], dtype=np.float64), 0,
+_EMPTY_STEREO = (
+    np.array([], dtype=np.float64),
+    np.array([], dtype=np.float64),
+    0,
 )
 
 
-def read_wav_bytes(data: bytes) -> tuple[NDArray[np.float64], int]:
-    """Read WAV bytes into float samples (mono mixdown).
+def read_wav_bytes(
+    data: bytes,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], int]:
+    """Read WAV bytes into stereo float samples (L, R, sample_rate).
 
     Supports PCM int16/int32 (format 1) and IEEE float32 (format 3).
-    Python's wave module doesn't handle format 3, so we parse manually.
+    Mono input is duplicated to both channels.
     """
     if len(data) < 44 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
-        return _EMPTY_SAMPLES
+        return _EMPTY_STEREO
 
     pos = 12
     fmt_data = None
@@ -175,7 +175,7 @@ def read_wav_bytes(data: bytes) -> tuple[NDArray[np.float64], int]:
             pos += 1
 
     if fmt_data is None or audio_data is None:
-        return _EMPTY_SAMPLES
+        return _EMPTY_STEREO
 
     audio_format = struct.unpack_from("<H", fmt_data, 0)[0]
     n_channels = struct.unpack_from("<H", fmt_data, 2)[0]
@@ -195,12 +195,16 @@ def read_wav_bytes(data: bytes) -> tuple[NDArray[np.float64], int]:
             audio_data[:len(audio_data) // 4 * 4], dtype=np.int32,
         ).astype(np.float64) / 2147483648.0
     else:
-        return _EMPTY_SAMPLES
+        return _EMPTY_STEREO
 
-    if n_channels == 2:
-        samples = (samples[0::2] + samples[1::2]) * 0.5
+    if n_channels >= 2:
+        left = samples[0::n_channels]
+        right = samples[1::n_channels]
+    else:
+        left = samples
+        right = samples.copy()
 
-    return samples, framerate
+    return left, right, framerate
 
 
 def _write_stereo_wav(

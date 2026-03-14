@@ -72,10 +72,11 @@ def test_normalize_audio_empty() -> None:
 def test_read_wav_bytes_int16() -> None:
     samples = np.array([16384, -16384, 0], dtype=np.int16)
     data = _make_wav_bytes(samples.tobytes(), n_channels=1, sampwidth=2)
-    result, rate = read_wav_bytes(data)
+    left, right, rate = read_wav_bytes(data)
     assert rate == 44100
-    assert len(result) == 3
-    assert abs(result[0] - 0.5) < 0.01
+    assert len(left) == 3
+    assert abs(left[0] - 0.5) < 0.01
+    assert np.array_equal(left, right)
 
 
 def test_read_wav_bytes_float32() -> None:
@@ -83,31 +84,33 @@ def test_read_wav_bytes_float32() -> None:
     data = _make_wav_bytes(
         samples.tobytes(), n_channels=1, sampwidth=4, audio_format=3,
     )
-    result, rate = read_wav_bytes(data)
+    left, right, rate = read_wav_bytes(data)
     assert rate == 44100
-    assert len(result) == 2
-    assert abs(result[0] - 0.5) < 0.001
+    assert len(left) == 2
+    assert abs(left[0] - 0.5) < 0.001
+    assert np.array_equal(left, right)
 
 
-def test_read_wav_bytes_stereo_mixdown() -> None:
-    left = np.array([0.8, 0.4], dtype=np.float32)
-    right = np.array([0.2, 0.6], dtype=np.float32)
+def test_read_wav_bytes_stereo() -> None:
+    left_in = np.array([0.8, 0.4], dtype=np.float32)
+    right_in = np.array([0.2, 0.6], dtype=np.float32)
     interleaved = np.empty(4, dtype=np.float32)
-    interleaved[0::2] = left
-    interleaved[1::2] = right
+    interleaved[0::2] = left_in
+    interleaved[1::2] = right_in
     data = _make_wav_bytes(
         interleaved.tobytes(), n_channels=2, sampwidth=4, audio_format=3,
     )
-    result, rate = read_wav_bytes(data)
+    left, right, rate = read_wav_bytes(data)
     assert rate == 44100
-    assert len(result) == 2
-    assert abs(result[0] - 0.5) < 0.001
-    assert abs(result[1] - 0.5) < 0.001
+    assert len(left) == 2
+    assert abs(left[0] - 0.8) < 0.001
+    assert abs(right[0] - 0.2) < 0.001
 
 
 def test_read_wav_bytes_invalid() -> None:
-    result, rate = read_wav_bytes(b"not a wav file")
-    assert len(result) == 0
+    left, right, rate = read_wav_bytes(b"not a wav file")
+    assert len(left) == 0
+    assert len(right) == 0
     assert rate == 0
 
 
