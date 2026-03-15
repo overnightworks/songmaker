@@ -21,7 +21,6 @@ from audio_engine.mastering import (
 
 SAMPLE_RATE = 44100
 DURATION_SECONDS = 3.0
-NUM_SAMPLES = int(SAMPLE_RATE * DURATION_SECONDS)
 
 
 def _generate_sine(

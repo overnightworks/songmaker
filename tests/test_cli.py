@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from songmaker_cli.errors import GenerationError, ValidationError
+from songmaker_cli.config import validate_path
 from songmaker_cli.main import (
     DecodedAudio,
     _decode_audio,
@@ -23,7 +24,6 @@ from songmaker_cli.main import (
     collect_overrides,
     load_album_meta_for_song,
     main,
-    validate_path,
     validate_song_meta,
 )
 from songmaker_cli.parser import AlbumMeta, SongMeta

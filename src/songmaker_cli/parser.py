@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TypedDict
 
 import yaml
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from songmaker_cli.constants import DEFAULT_ARTIST
 from songmaker_cli.errors import ValidationError
@@ -50,7 +50,7 @@ class SongMeta(BaseModel):
     lyrics: str = ""
     status: str = ""
     source_path: Path = Path()
-    generation_params: GenerationParams = {}
+    generation_params: GenerationParams = Field(default_factory=dict)
 
     @field_validator("track", mode="before")
     @classmethod

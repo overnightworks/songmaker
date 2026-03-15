@@ -6,6 +6,7 @@ import logging
 import re
 from pathlib import Path
 
+from songmaker_cli.config import validate_path
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import find_lyrics_md, parse_song_md, strip_version_suffix
 
@@ -21,7 +22,6 @@ def run_check(
     from difflib import SequenceMatcher
 
     from songmaker_cli.constants import SIMILARITY_FAIR, SIMILARITY_GOOD
-    from songmaker_cli.main import validate_path
 
     mp3_path = validate_path(path)
     md_path = find_lyrics_source(mp3_path, source)
@@ -40,7 +40,7 @@ def run_check(
     ]
     trans_lines = [s["text"].strip() for s in segments if s["text"].strip()]
 
-    _log_check_results(
+    log_check_results(
         mp3_path, md_path, ratio, intended_lines, trans_lines,
         SIMILARITY_GOOD, SIMILARITY_FAIR,
     )
@@ -98,7 +98,7 @@ def _transcribe(
     return result["text"].strip(), result.get("segments", [])
 
 
-def _log_check_results(
+def log_check_results(
     mp3_path: Path,
     md_path: Path,
     ratio: float,

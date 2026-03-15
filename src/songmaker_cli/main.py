@@ -12,7 +12,12 @@ from typing import TYPE_CHECKING, Annotated, Optional
 
 from cyclopts import App, Parameter
 
-from songmaker_cli.config import OutputPaths, build_ace_config, resolve_output_paths
+from songmaker_cli.config import (
+    OutputPaths,
+    build_ace_config,
+    resolve_output_paths,
+    validate_path,
+)
 from songmaker_cli.errors import GenerationError, SongmakerError, ValidationError
 from songmaker_cli.parser import SongMeta, load_album_meta, parse_song_md
 
@@ -151,13 +156,6 @@ def check(
     from songmaker_cli.check import run_check
 
     run_check(path, source, whisper_model=whisper_model)
-
-
-def validate_path(path: str) -> Path:
-    resolved = Path(path).resolve()
-    if not resolved.exists():
-        raise ValidationError(f"{resolved} not found")
-    return resolved
 
 
 def validate_song_meta(meta: SongMeta) -> None:

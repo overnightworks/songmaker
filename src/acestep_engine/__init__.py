@@ -10,7 +10,6 @@ from acestep_engine.errors import (
     AudioDownloadError,
     GenerationFailedError,
     GenerationTimeoutError,
-    ServerUnavailableError,
     TaskSubmissionError,
 )
 from acestep_engine.models import AceStepConfig, AceStepResult
@@ -23,7 +22,6 @@ __all__ = [
     "AudioDownloadError",
     "GenerationFailedError",
     "GenerationTimeoutError",
-    "ServerUnavailableError",
     "TaskSubmissionError",
     "is_acestep_available",
 ]

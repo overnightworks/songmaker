@@ -10,7 +10,7 @@ import pytest
 
 from acestep_engine.client import (
     AceStepClient,
-    _validate_audio_path,
+    validate_audio_path,
     is_acestep_available,
 )
 from acestep_engine.errors import (
@@ -102,18 +102,18 @@ def test_poll_result_failure() -> None:
 
 
 def test_validate_audio_path_valid() -> None:
-    _validate_audio_path("/v1/audio?path=test.wav")
-    _validate_audio_path("output/song.wav")
+    validate_audio_path("/v1/audio?path=test.wav")
+    validate_audio_path("output/song.wav")
 
 
 def test_validate_audio_path_traversal() -> None:
     with pytest.raises(AudioDownloadError, match="suspicious"):
-        _validate_audio_path("/../../../etc/passwd")
+        validate_audio_path("/../../../etc/passwd")
 
 
 def test_validate_audio_path_dotdot() -> None:
     with pytest.raises(AudioDownloadError, match="suspicious"):
-        _validate_audio_path("/v1/audio/../../secret")
+        validate_audio_path("/v1/audio/../../secret")
 
 
 def test_is_available_property() -> None:

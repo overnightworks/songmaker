@@ -1,4 +1,4 @@
-"""Output path resolution and ACE-Step config building."""
+"""Output path resolution, validation, and ACE-Step config building."""
 
 from __future__ import annotations
 
@@ -17,6 +17,14 @@ log = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from acestep_engine import AceStepConfig
     from songmaker_cli.parser import SongMeta
+
+
+def validate_path(path: str) -> Path:
+    """Resolve and validate that a file path exists."""
+    resolved = Path(path).resolve()
+    if not resolved.exists():
+        raise ValidationError(f"{resolved} not found")
+    return resolved
 
 
 class OutputPaths(BaseModel):

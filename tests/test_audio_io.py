@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 
 from audio_engine.audio_io import (
-    _build_ffmpeg_cmd,
-    _sanitize_metadata,
+    build_ffmpeg_cmd,
+    sanitize_metadata,
     master_to_mp3,
     normalize_audio,
     read_wav_bytes,
@@ -120,7 +120,7 @@ def test_read_wav_bytes_invalid() -> None:
 
 
 def test_build_ffmpeg_cmd_basic() -> None:
-    cmd = _build_ffmpeg_cmd("in.wav", "out.mp3", "320k", None)
+    cmd = build_ffmpeg_cmd("in.wav", "out.mp3", "320k", None)
     assert cmd[0] == "ffmpeg"
     assert "-y" in cmd
     assert "in.wav" in cmd
@@ -130,22 +130,22 @@ def test_build_ffmpeg_cmd_basic() -> None:
 
 def test_build_ffmpeg_cmd_with_metadata() -> None:
     meta = {"title": "Song", "artist": "Me", "lyrics": "Hello"}
-    cmd = _build_ffmpeg_cmd("in.wav", "out.mp3", "320k", meta)
+    cmd = build_ffmpeg_cmd("in.wav", "out.mp3", "320k", meta)
     assert "title=Song" in " ".join(cmd)
     assert "artist=Me" in " ".join(cmd)
     assert "lyrics=Hello" in " ".join(cmd)
 
 
 def test_sanitize_metadata_strips_newlines() -> None:
-    assert _sanitize_metadata("Hello\nWorld\r\n") == "Hello World  "
+    assert sanitize_metadata("Hello\nWorld\r\n") == "Hello World  "
 
 
 def test_sanitize_metadata_strips_null() -> None:
-    assert _sanitize_metadata("Hello\x00World") == "HelloWorld"
+    assert sanitize_metadata("Hello\x00World") == "Hello World"
 
 
 def test_sanitize_metadata_passes_normal_text() -> None:
-    assert _sanitize_metadata('Song "With" Quotes & Stuff') == 'Song "With" Quotes & Stuff'
+    assert sanitize_metadata('Song "With" Quotes & Stuff') == 'Song "With" Quotes & Stuff'
 
 
 def test_read_wav_file_stereo_downmix(tmp_path: Path) -> None:
@@ -195,7 +195,7 @@ def test_master_to_mp3_empty_audio() -> None:
 
 
 def test_build_ffmpeg_cmd_pipe_input() -> None:
-    cmd = _build_ffmpeg_cmd("-", "out.mp3", "320k", None)
+    cmd = build_ffmpeg_cmd("-", "out.mp3", "320k", None)
     assert "pipe:0" in cmd
     assert "-f" in cmd
 

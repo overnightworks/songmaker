@@ -75,7 +75,7 @@ def _setup_project(tmp_path: Path) -> Path:
     return song_md
 
 
-def test_generate_end_to_end(tmp_path: Path, monkeypatch: object) -> None:
+def test_generate_end_to_end(tmp_path: Path) -> None:
     """Full pipeline: markdown -> ACE-Step (mocked) -> mastered MP3 + player."""
     song_md = _setup_project(tmp_path)
     output_dir = tmp_path / "_output"

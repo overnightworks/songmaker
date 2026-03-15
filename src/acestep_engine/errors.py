@@ -7,10 +7,6 @@ class AceStepError(Exception):
     """Base exception for ACE-Step engine errors."""
 
 
-class ServerUnavailableError(AceStepError):
-    """ACE-Step server is not reachable."""
-
-
 class TaskSubmissionError(AceStepError):
     """Failed to submit generation task."""
 

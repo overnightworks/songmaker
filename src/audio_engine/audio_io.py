@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import logging
 import shutil
 import struct
@@ -10,6 +11,7 @@ import wave
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.io import wavfile as scipy_wavfile
 
 from audio_engine.constants import DEFAULT_SAMPLE_RATE, INT16_MAX
 from audio_engine.errors import MasteringError
@@ -35,32 +37,33 @@ def write_wav_file(
 
 
 def read_wav_file(filename: str) -> tuple[NDArray[np.float64], int]:
-    """Read mono WAV file to float samples."""
-    with wave.open(filename, "r") as wf:
-        n_channels = wf.getnchannels()
-        sample_width = wf.getsampwidth()
-        sample_rate = wf.getframerate()
-        n_frames = wf.getnframes()
-        raw = wf.readframes(n_frames)
+    """Read WAV file to mono float samples.
 
-    if sample_width == 2:
-        all_samples = np.frombuffer(raw, dtype=np.int16).astype(np.float64) / INT16_MAX
-    elif sample_width == 1:
-        all_samples = (
-            np.frombuffer(raw, dtype=np.uint8).astype(np.float64) - 128.0
-        ) / 128.0
-    else:
-        return np.array([], dtype=np.float64), sample_rate
+    Uses scipy.io.wavfile which supports PCM int16/int32 and IEEE float32.
+    Multi-channel audio is downmixed to mono (left channel only).
+    """
+    try:
+        sample_rate, raw = scipy_wavfile.read(filename)
+    except (ValueError, struct.error) as exc:
+        log.warning("read_wav_file: failed to parse %s: %s", filename, exc)
+        return np.array([], dtype=np.float64), 0
 
-    if n_channels > 1:
+    samples = _normalize_dtype(raw)
+    if samples is None:
+        log.warning("read_wav_file: unsupported dtype %s", raw.dtype)
+        return np.array([], dtype=np.float64), 0
+
+    if samples.ndim == 2 and samples.shape[1] > 1:
         log.warning(
             "read_wav_file: %d-channel audio downmixed to mono (left channel only) "
             "— use read_wav_bytes() for stereo",
-            n_channels,
+            samples.shape[1],
         )
-        all_samples = all_samples[::n_channels]
+        samples = samples[:, 0]
+    elif samples.ndim == 2:
+        samples = samples[:, 0]
 
-    return all_samples, sample_rate
+    return samples, sample_rate
 
 
 def normalize_audio(
@@ -111,7 +114,7 @@ def master_to_mp3(
     )
 
     wav_bytes = _stereo_to_wav_bytes(mastered_left, mastered_right, sample_rate)
-    cmd = _build_ffmpeg_cmd("-", mp3_path, bitrate, metadata)
+    cmd = build_ffmpeg_cmd("-", mp3_path, bitrate, metadata)
 
     try:
         subprocess.run(cmd, input=wav_bytes, check=True, capture_output=True)
@@ -141,8 +144,6 @@ def _stereo_to_wav_bytes(
     sample_rate: int,
 ) -> bytes:
     """Encode stereo float arrays to WAV bytes in memory."""
-    import io
-
     interleaved = _interleave_to_int16(left, right)
 
     buf = io.BytesIO()
@@ -154,12 +155,18 @@ def _stereo_to_wav_bytes(
     return buf.getvalue()
 
 
-def _sanitize_metadata(value: str) -> str:
-    """Strip characters that can break ffmpeg -metadata parsing."""
-    return str(value).replace("\n", " ").replace("\r", " ").replace("\x00", "")
+def sanitize_metadata(value: str) -> str:
+    """Strip characters that can break ffmpeg -metadata parsing.
+
+    Removes control characters (newlines, null bytes, etc.) that could
+    interfere with ffmpeg's key=value metadata argument parsing.
+    """
+    cleaned = str(value)
+    cleaned = "".join(ch if ch.isprintable() or ch == " " else " " for ch in cleaned)
+    return cleaned
 
 
-def _build_ffmpeg_cmd(
+def build_ffmpeg_cmd(
     input_path: str,
     output_path: str,
     bitrate: str,
@@ -173,18 +180,24 @@ def _build_ffmpeg_cmd(
         cmd.extend(["-i", input_path])
     cmd.extend(["-codec:a", "libmp3lame", "-b:a", bitrate])
     if metadata:
-        tag_map = {
-            "title": "title", "artist": "artist", "album": "album",
-            "track": "track", "genre": "genre", "date": "date",
-            "comment": "comment",
-        }
-        for key, ffmpeg_key in tag_map.items():
+        for key in ("title", "artist", "album", "track", "genre", "date", "comment", "lyrics"):
             if metadata.get(key):
-                cmd.extend(["-metadata", f"{ffmpeg_key}={_sanitize_metadata(metadata[key])}"])
-        if metadata.get("lyrics"):
-            cmd.extend(["-metadata", f"lyrics={_sanitize_metadata(metadata['lyrics'])}"])
+                cmd.extend(["-metadata", f"{key}={sanitize_metadata(metadata[key])}"])
     cmd.append(output_path)
     return cmd
+
+
+def _normalize_dtype(raw: np.ndarray) -> NDArray[np.float64] | None:
+    """Convert WAV sample array to float64 in [-1.0, 1.0]. Returns None on unsupported dtype."""
+    if raw.dtype == np.int16:
+        return raw.astype(np.float64) / INT16_MAX
+    if raw.dtype == np.int32:
+        return raw.astype(np.float64) / 2147483648.0
+    if raw.dtype == np.uint8:
+        return (raw.astype(np.float64) - 128.0) / 128.0
+    if raw.dtype in (np.float32, np.float64):
+        return raw.astype(np.float64)
+    return None
 
 
 def _empty_stereo() -> tuple[NDArray[np.float64], NDArray[np.float64], int]:
@@ -197,68 +210,34 @@ def read_wav_bytes(
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], int]:
     """Read WAV bytes into stereo float samples (L, R, sample_rate).
 
-    Hand-rolls WAV chunk parsing instead of using stdlib wave.open because
-    ACE-Step outputs IEEE float32 (audio_format=3) WAV files, which the
-    stdlib wave module does not support.
-
-    Supports PCM int16/int32 (format 1) and IEEE float32 (format 3).
-    Mono input is duplicated to both channels.
+    Uses scipy.io.wavfile which supports PCM int16/int32 and IEEE float32
+    (the format ACE-Step outputs). Mono input is duplicated to both channels.
     """
     if len(data) < 44 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
         log.warning("read_wav_bytes: not a valid WAV file (%d bytes)", len(data))
         return _empty_stereo()
 
-    pos = 12
-    fmt_data = None
-    audio_data = None
-    while pos < len(data) - 8:
-        chunk_id = data[pos:pos + 4]
-        chunk_size = struct.unpack_from("<I", data, pos + 4)[0]
-        if chunk_id == b"fmt ":
-            fmt_data = data[pos + 8:pos + 8 + chunk_size]
-        elif chunk_id == b"data":
-            audio_data = data[pos + 8:pos + 8 + chunk_size]
-            break
-        pos += 8 + chunk_size
-        if pos % 2 == 1:
-            pos += 1
-
-    if fmt_data is None or audio_data is None:
-        log.warning("read_wav_bytes: missing fmt or data chunk")
+    try:
+        sample_rate, raw = scipy_wavfile.read(io.BytesIO(data))
+    except (ValueError, struct.error) as exc:
+        log.warning("read_wav_bytes: failed to parse WAV data: %s", exc)
         return _empty_stereo()
 
-    audio_format = struct.unpack_from("<H", fmt_data, 0)[0]
-    n_channels = struct.unpack_from("<H", fmt_data, 2)[0]
-    framerate = struct.unpack_from("<I", fmt_data, 4)[0]
-    sampwidth = struct.unpack_from("<H", fmt_data, 14)[0] // 8
-
-    if audio_format == 3 and sampwidth == 4:
-        samples = np.frombuffer(
-            audio_data[:len(audio_data) // 4 * 4], dtype=np.float32,
-        ).astype(np.float64)
-    elif audio_format == 1 and sampwidth == 2:
-        samples = np.frombuffer(
-            audio_data[:len(audio_data) // 2 * 2], dtype=np.int16,
-        ).astype(np.float64) / INT16_MAX
-    elif audio_format == 1 and sampwidth == 4:
-        samples = np.frombuffer(
-            audio_data[:len(audio_data) // 4 * 4], dtype=np.int32,
-        ).astype(np.float64) / 2147483648.0
-    else:
-        log.warning(
-            "read_wav_bytes: unsupported format (audio_format=%d, sample_width=%d bytes)",
-            audio_format, sampwidth,
-        )
+    samples = _normalize_dtype(raw)
+    if samples is None:
+        log.warning("read_wav_bytes: unsupported dtype %s", raw.dtype)
         return _empty_stereo()
 
-    if n_channels >= 2:
-        left = samples[0::n_channels]
-        right = samples[1::n_channels]
+    if samples.ndim == 2 and samples.shape[1] >= 2:
+        left = samples[:, 0]
+        right = samples[:, 1]
     else:
+        if samples.ndim == 2:
+            samples = samples[:, 0]
         left = samples
         right = samples.copy()
 
-    return left, right, framerate
+    return left, right, sample_rate
 
 
 def write_stereo_wav(

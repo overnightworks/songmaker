@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+
+from pydantic import BaseModel, Field
 
 
 @dataclass(frozen=True)
@@ -36,3 +39,50 @@ class AceStepResult:
 
     wav_bytes: bytes
     seed: int
+
+
+class TaskSubmitData(BaseModel):
+    """Inner data from a /release_task response."""
+
+    task_id: str = ""
+    status: str = ""
+
+
+class TaskSubmitResponse(BaseModel):
+    """Top-level /release_task response envelope."""
+
+    data: TaskSubmitData = Field(default_factory=TaskSubmitData)
+    code: int = 200
+
+
+class ResultItem(BaseModel):
+    """A single generation result entry from the server."""
+
+    file: str = ""
+    seed: int = -1
+
+
+class TaskQueryEntry(BaseModel):
+    """One entry in the /query_result data list."""
+
+    task_id: str = ""
+    status: int = 0
+    result: str | list = "[]"
+    progress_text: str = ""
+
+    def parse_result_items(self) -> list[ResultItem]:
+        raw = self.result
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        if isinstance(raw, list):
+            return [ResultItem.model_validate(item) for item in raw if isinstance(item, dict)]
+        return []
+
+
+class TaskQueryResponse(BaseModel):
+    """Top-level /query_result response envelope."""
+
+    data: list[TaskQueryEntry] = Field(default_factory=list)

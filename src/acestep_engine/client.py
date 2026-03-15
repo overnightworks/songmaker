@@ -19,13 +19,20 @@ from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from pydantic import ValidationError as PydanticValidationError
+
 from acestep_engine.errors import (
     AudioDownloadError,
     GenerationFailedError,
     GenerationTimeoutError,
     TaskSubmissionError,
 )
-from acestep_engine.models import AceStepConfig, AceStepResult
+from acestep_engine.models import (
+    AceStepConfig,
+    AceStepResult,
+    TaskQueryResponse,
+    TaskSubmitResponse,
+)
 
 log = logging.getLogger(__name__)
 
@@ -55,12 +62,12 @@ def is_acestep_available(host: str | None = None, port: int | None = None) -> bo
         return False
 
 
-_ALLOWED_AUDIO_PATH_RE = re.compile(r"^(/v1/audio\b|[a-zA-Z0-9_./ -]+$)")
+ALLOWED_AUDIO_PATH_RE = re.compile(r"^(/v1/audio\b|[a-zA-Z0-9_./ -]+$)")
 
 
-def _validate_audio_path(audio_path: str) -> None:
+def validate_audio_path(audio_path: str) -> None:
     """Reject server-returned audio paths that look like path traversal."""
-    if ".." in audio_path or not _ALLOWED_AUDIO_PATH_RE.match(audio_path):
+    if ".." in audio_path or not ALLOWED_AUDIO_PATH_RE.match(audio_path):
         raise AudioDownloadError(
             f"Server returned suspicious audio path: {audio_path!r}"
         )
@@ -107,7 +114,6 @@ class AceStepClient:
             config: Generation parameters.
 
         Raises:
-            ServerUnavailableError: Server is not reachable.
             TaskSubmissionError: Failed to submit the generation task.
             GenerationFailedError: Server reported generation failure.
             GenerationTimeoutError: Polling timed out.
@@ -137,7 +143,7 @@ class AceStepClient:
             "inference_steps": config.inference_steps,
             "guidance_scale": config.guidance_scale,
             "shift": config.shift,
-            "thinking": config.think_mode,   # server field is "thinking" not "think"
+            "thinking": config.think_mode,
             "lm_temperature": config.lm_temperature,
             "infer_method": config.infer_method,
             "audio_format": "wav",
@@ -153,20 +159,19 @@ class AceStepClient:
                 method="POST",
             )
             with urlopen(req, timeout=30) as resp:
-                result = json.loads(resp.read())
+                raw = json.loads(resp.read())
 
-            # Response is wrapped: {"data": {"task_id": ..., "status": "queued"}, "code": 200}
-            inner = result.get("data", result)
-            task_id = inner.get("task_id") if isinstance(inner, dict) else None
+            response = TaskSubmitResponse.model_validate(raw)
+            task_id = response.data.task_id
             if not task_id:
                 raise TaskSubmissionError(
-                    f"ACE-Step returned no task_id: {result}"
+                    f"ACE-Step returned no task_id: {raw}"
                 )
 
             log.info("ACE-Step task submitted: %s", task_id)
             return task_id
 
-        except (URLError, OSError, json.JSONDecodeError) as exc:
+        except (URLError, OSError, json.JSONDecodeError, PydanticValidationError) as exc:
             raise TaskSubmissionError(
                 f"Failed to submit ACE-Step task: {exc}"
             ) from exc
@@ -180,6 +185,7 @@ class AceStepClient:
         Raises:
             GenerationFailedError: Server reported failure.
             GenerationTimeoutError: Polling exceeded POLL_TIMEOUT.
+            KeyboardInterrupt: User cancelled during generation.
         """
         payload = json.dumps({"task_id_list": [task_id]}).encode()
         start = time.monotonic()
@@ -193,58 +199,41 @@ class AceStepClient:
                     method="POST",
                 )
                 with urlopen(req, timeout=10) as resp:
-                    result = json.loads(resp.read())
+                    raw = json.loads(resp.read())
 
-                # Response: {"data": [{"task_id": ..., "result": "<json>", "status": 0|1|2}]}
-                # Status mapping: 0=queued/running, 1=succeeded, 2=failed
-                data_list = result.get("data", [])
-                if not data_list:
+                response = TaskQueryResponse.model_validate(raw)
+                if not response.data:
                     time.sleep(POLL_INTERVAL)
                     continue
 
-                entry = data_list[0]
-                status = entry.get("status", 0)
+                entry = response.data[0]
 
-                if status == 2:
-                    result_str = entry.get("result", "[]")
+                if entry.status == 2:
                     raise GenerationFailedError(
-                        f"ACE-Step generation failed: {result_str}"
+                        f"ACE-Step generation failed: {entry.result}"
                     )
 
-                if status == 1:
-                    result_str = entry.get("result", "[]")
-                    try:
-                        items = (
-                            json.loads(result_str)
-                            if isinstance(result_str, str)
-                            else result_str
-                        )
-                    except json.JSONDecodeError:
-                        items = []
-
-                    if items and isinstance(items, list):
-                        item = items[0]
-                        file_path = item.get("file", "")
-                        if file_path:
-                            elapsed = time.monotonic() - start
-                            seed = item.get("seed", -1)
-                            log.info(
-                                "ACE-Step generation complete (%.1fs)", elapsed,
-                            )
-                            return file_path, seed
+                if entry.status == 1:
+                    items = entry.parse_result_items()
+                    if items and items[0].file:
+                        elapsed = time.monotonic() - start
+                        log.info("ACE-Step generation complete (%.1fs)", elapsed)
+                        return items[0].file, items[0].seed
                     raise GenerationFailedError(
-                        f"ACE-Step completed but no audio returned: {result_str}"
+                        f"ACE-Step completed but no audio returned: {entry.result}"
                     )
 
-                # Still processing
                 elapsed = time.monotonic() - start
-                progress_text = entry.get("progress_text", "")
-                if progress_text:
-                    log.info("ACE-Step: %s (%.0fs)", progress_text, elapsed)
+                if entry.progress_text:
+                    log.info("ACE-Step: %s (%.0fs)", entry.progress_text, elapsed)
                 else:
                     log.info("ACE-Step generating... (%.0fs elapsed)", elapsed)
 
-            except (URLError, OSError, json.JSONDecodeError) as exc:
+            except KeyboardInterrupt:
+                log.warning("Generation cancelled by user (task_id=%s)", task_id)
+                raise
+
+            except (URLError, OSError, json.JSONDecodeError, PydanticValidationError) as exc:
                 log.warning("Poll error (retrying): %s", exc)
 
             time.sleep(POLL_INTERVAL)
@@ -262,7 +251,7 @@ class AceStepClient:
             AudioDownloadError: On network error or empty response.
         """
         try:
-            _validate_audio_path(audio_path)
+            validate_audio_path(audio_path)
             if audio_path.startswith("/"):
                 url = f"{self.base_url}{audio_path}"
             else:

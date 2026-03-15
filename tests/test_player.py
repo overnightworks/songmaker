@@ -5,14 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from songmaker_cli.player import (
-    _build_manifest,
-    _deduplicate_versions,
-    _lyrics_to_lines,
-    _parse_srt,
-    _parse_track_title,
-    _render_static_html,
-    _scan_album_tracks,
+    build_manifest,
+    deduplicate_versions,
     generate_player,
+    lyrics_to_lines,
+    parse_srt,
+    parse_track_title,
+    render_static_html,
+    scan_album_tracks,
 )
 
 
@@ -31,19 +31,19 @@ def _setup_album(tmp_path: Path, album: str = "test_album") -> tuple[Path, Path]
 
 
 def test_parse_track_title_numbered() -> None:
-    number, title = _parse_track_title("01_hello_world_v3")
+    number, title = parse_track_title("01_hello_world_v3")
     assert number == "01"
     assert title == "Hello World"
 
 
 def test_parse_track_title_bonus() -> None:
-    number, title = _parse_track_title("bonus_hidden_gem_v1")
+    number, title = parse_track_title("bonus_hidden_gem_v1")
     assert number == "B"
     assert title == "Hidden Gem"
 
 
 def test_parse_track_title_unknown() -> None:
-    number, title = _parse_track_title("random_file")
+    number, title = parse_track_title("random_file")
     assert number == "?"
     assert title == "Random File"
 
@@ -54,7 +54,7 @@ def test_deduplicate_versions(tmp_path: Path) -> None:
     (tmp_path / "song_v3.mp3").touch()
     (tmp_path / "other_v1.mp3").touch()
     mp3s = sorted(tmp_path.glob("*.mp3"))
-    result = _deduplicate_versions(mp3s)
+    result = deduplicate_versions(mp3s)
     stems = [p.stem for p in result]
     assert "song_v3" in stems
     assert "other_v1" in stems
@@ -65,7 +65,7 @@ def test_deduplicate_versions_skips_raw(tmp_path: Path) -> None:
     (tmp_path / "song_raw.mp3").touch()
     (tmp_path / "song_v1.mp3").touch()
     mp3s = sorted(tmp_path.glob("*.mp3"))
-    result = _deduplicate_versions(mp3s)
+    result = deduplicate_versions(mp3s)
     stems = [p.stem for p in result]
     assert "song_v1" in stems
     assert "song_raw" not in stems
@@ -73,7 +73,7 @@ def test_deduplicate_versions_skips_raw(tmp_path: Path) -> None:
 
 def test_lyrics_to_lines() -> None:
     lyrics = "[verse]\nHello world\nSecond line\n\n[chorus]\nLa la la"
-    lines = _lyrics_to_lines(lyrics)
+    lines = lyrics_to_lines(lyrics)
     assert lines[0] == {"time": -1, "text": "[VERSE]", "section": True}
     assert lines[1] == {"time": -1, "text": "Hello world", "section": False}
     assert lines[3] == {"time": -1, "text": "[CHORUS]", "section": True}
@@ -85,7 +85,7 @@ def test_scan_album_tracks(tmp_path: Path) -> None:
     lyrics_dir = tmp_path / "lyrics"
     lyrics_dir.mkdir()
 
-    tracks = _scan_album_tracks([mp3], "album", lyrics_dir)
+    tracks = scan_album_tracks([mp3], "album", lyrics_dir)
     assert len(tracks) == 1
     assert tracks[0].title == "Test Song"
     assert tracks[0].number == "01"
@@ -96,7 +96,7 @@ def test_build_manifest_empty(tmp_path: Path) -> None:
     output_dir, project_root = _setup_album(tmp_path)
     (output_dir / "test_album").rmdir()
     output_dir.mkdir(parents=True, exist_ok=True)
-    manifest = _build_manifest(output_dir, project_root)
+    manifest = build_manifest(output_dir, project_root)
     assert manifest.albums == []
 
 
@@ -104,7 +104,7 @@ def test_build_manifest_with_tracks(tmp_path: Path) -> None:
     output_dir, project_root = _setup_album(tmp_path)
     (output_dir / "test_album" / "01_hello_v1.mp3").touch()
 
-    manifest = _build_manifest(output_dir, project_root)
+    manifest = build_manifest(output_dir, project_root)
     real_albums = [a for a in manifest.albums if a.id != "_latest"]
     assert len(real_albums) == 1
     assert real_albums[0].id == "test_album"
@@ -115,14 +115,14 @@ def test_build_manifest_latest_album(tmp_path: Path) -> None:
     output_dir, project_root = _setup_album(tmp_path)
     (output_dir / "test_album" / "01_hello_v1.mp3").touch()
 
-    manifest = _build_manifest(output_dir, project_root)
+    manifest = build_manifest(output_dir, project_root)
     latest = [a for a in manifest.albums if a.id == "_latest"]
     assert len(latest) == 1
     assert len(latest[0].tracks) == 1
 
 
 def test_render_static_html_contains_substitutions() -> None:
-    html = _render_static_html("null", artist="TestArtist", year="2099")
+    html = render_static_html("null", artist="TestArtist", year="2099")
     assert "TestArtist" in html
     assert "2099" in html
     assert "<!DOCTYPE html>" in html
@@ -149,7 +149,7 @@ def test_parse_srt(tmp_path: Path) -> None:
         "00:00:04,500 --> 00:00:06,000\n"
         "Second line\n",
     )
-    lines = _parse_srt(srt_path)
+    lines = parse_srt(srt_path)
     assert len(lines) == 2
     assert lines[0] == {"time": 1.0, "text": "Hello world"}
     assert lines[1] == {"time": 4.5, "text": "Second line"}
@@ -158,7 +158,7 @@ def test_parse_srt(tmp_path: Path) -> None:
 def test_parse_srt_empty(tmp_path: Path) -> None:
     srt_path = tmp_path / "empty.srt"
     srt_path.write_text("")
-    assert _parse_srt(srt_path) == []
+    assert parse_srt(srt_path) == []
 
 
 def test_scan_album_tracks_with_srt(tmp_path: Path) -> None:
@@ -171,7 +171,7 @@ def test_scan_album_tracks_with_srt(tmp_path: Path) -> None:
     lyrics_dir = tmp_path / "lyrics"
     lyrics_dir.mkdir()
 
-    tracks = _scan_album_tracks([mp3], "album", lyrics_dir)
+    tracks = scan_album_tracks([mp3], "album", lyrics_dir)
     assert len(tracks) == 1
     assert tracks[0].has_sung is True
     assert len(tracks[0].lines) == 1
@@ -183,7 +183,7 @@ def test_build_manifest_final_dir(tmp_path: Path) -> None:
     final_dir.mkdir(parents=True)
     (final_dir / "01_song.mp3").touch()
 
-    manifest = _build_manifest(output_dir, project_root)
+    manifest = build_manifest(output_dir, project_root)
     real_albums = [a for a in manifest.albums if a.id != "_latest"]
     assert len(real_albums) == 1
     assert real_albums[0].tracks[0].file == "test_album/final/01_song.mp3"

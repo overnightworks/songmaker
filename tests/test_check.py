@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from songmaker_cli.check import (
-    _log_check_results,
+    log_check_results,
     clean_lyrics,
     find_lyrics_source,
     run_check,
@@ -66,7 +66,7 @@ def test_log_check_results_good(caplog: pytest.LogCaptureFixture, tmp_path: Path
     mp3 = tmp_path / "song.mp3"
     md = tmp_path / "song.md"
     with caplog.at_level("INFO"):
-        _log_check_results(mp3, md, 0.9, ["Hello"], ["Hello"], 0.8, 0.5)
+        log_check_results(mp3, md, 0.9, ["Hello"], ["Hello"], 0.8, 0.5)
     assert "Good" in caplog.text
 
 
@@ -74,7 +74,7 @@ def test_log_check_results_fair(caplog: pytest.LogCaptureFixture, tmp_path: Path
     mp3 = tmp_path / "song.mp3"
     md = tmp_path / "song.md"
     with caplog.at_level("INFO"):
-        _log_check_results(mp3, md, 0.6, ["Hello"], ["Hola"], 0.8, 0.5)
+        log_check_results(mp3, md, 0.6, ["Hello"], ["Hola"], 0.8, 0.5)
     assert "Needs improvement" in caplog.text
 
 
@@ -82,7 +82,7 @@ def test_log_check_results_poor(caplog: pytest.LogCaptureFixture, tmp_path: Path
     mp3 = tmp_path / "song.mp3"
     md = tmp_path / "song.md"
     with caplog.at_level("INFO"):
-        _log_check_results(mp3, md, 0.2, ["Hello"], ["???"], 0.8, 0.5)
+        log_check_results(mp3, md, 0.2, ["Hello"], ["???"], 0.8, 0.5)
     assert "Poor" in caplog.text
 
 
