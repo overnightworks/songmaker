@@ -40,6 +40,10 @@ _FALLBACK_HOST: Final[str] = "http://localhost"
 _FALLBACK_PORT: Final[int] = 8001
 POLL_INTERVAL: Final[float] = 3.0
 POLL_TIMEOUT: Final[float] = 1800.0
+SUBMIT_RETRIES: Final[int] = 3
+SUBMIT_RETRY_DELAYS: Final[tuple[float, ...]] = (1.0, 3.0, 10.0)
+_TASK_STATUS_COMPLETE: Final[int] = 1
+_TASK_STATUS_FAILED: Final[int] = 2
 
 
 def _default_host() -> str:
@@ -124,10 +128,12 @@ class AceStepClient:
         return self._download_audio(audio_path, seed)
 
     def _submit_task(self, config: AceStepConfig) -> str:
-        """Submit a generation task to the server.
+        """Submit a generation task to the server with retry.
+
+        Retries up to SUBMIT_RETRIES times on transient network errors.
 
         Raises:
-            TaskSubmissionError: On network error or missing task_id.
+            TaskSubmissionError: On persistent network error or missing task_id.
         """
         payload = {
             "task_type": "text2music",
@@ -150,31 +156,55 @@ class AceStepClient:
             "batch_size": 1,
         }
 
-        try:
-            data = json.dumps(payload).encode()
-            req = Request(
-                f"{self.base_url}/release_task",
-                data=data,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urlopen(req, timeout=30) as resp:
-                raw = json.loads(resp.read())
-
-            response = TaskSubmitResponse.model_validate(raw)
-            task_id = response.data.task_id
-            if not task_id:
+        last_exc: Exception | None = None
+        for attempt in range(SUBMIT_RETRIES):
+            try:
+                return self._send_submit_request(payload)
+            except (URLError, OSError) as exc:
+                last_exc = exc
+                if attempt < SUBMIT_RETRIES - 1:
+                    delay = SUBMIT_RETRY_DELAYS[attempt]
+                    log.warning(
+                        "Submit attempt %d/%d failed (%s), retrying in %.0fs",
+                        attempt + 1, SUBMIT_RETRIES, exc, delay,
+                    )
+                    time.sleep(delay)
+            except (json.JSONDecodeError, PydanticValidationError) as exc:
                 raise TaskSubmissionError(
-                    f"ACE-Step returned no task_id: {raw}"
-                )
+                    f"Failed to submit ACE-Step task: {exc}"
+                ) from exc
 
-            log.info("ACE-Step task submitted: %s", task_id)
-            return task_id
+        raise TaskSubmissionError(
+            f"Failed to submit ACE-Step task after {SUBMIT_RETRIES} attempts: {last_exc}"
+        ) from last_exc
 
-        except (URLError, OSError, json.JSONDecodeError, PydanticValidationError) as exc:
+    def _send_submit_request(self, payload: dict) -> str:
+        """Send one submission request and return the task_id.
+
+        Raises:
+            URLError/OSError: On network error (retryable).
+            json.JSONDecodeError/PydanticValidationError: On bad response (not retryable).
+            TaskSubmissionError: If the server returns no task_id.
+        """
+        data = json.dumps(payload).encode()
+        req = Request(
+            f"{self.base_url}/release_task",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(req, timeout=30) as resp:
+            raw = json.loads(resp.read())
+
+        response = TaskSubmitResponse.model_validate(raw)
+        task_id = response.data.task_id
+        if not task_id:
             raise TaskSubmissionError(
-                f"Failed to submit ACE-Step task: {exc}"
-            ) from exc
+                f"ACE-Step returned no task_id: {raw}"
+            )
+
+        log.info("ACE-Step task submitted: %s", task_id)
+        return task_id
 
     def _poll_result(self, task_id: str) -> tuple[str, int]:
         """Poll until the generation task completes.
@@ -208,12 +238,12 @@ class AceStepClient:
 
                 entry = response.data[0]
 
-                if entry.status == 2:
+                if entry.status == _TASK_STATUS_FAILED:
                     raise GenerationFailedError(
                         f"ACE-Step generation failed: {entry.result}"
                     )
 
-                if entry.status == 1:
+                if entry.status == _TASK_STATUS_COMPLETE:
                     items = entry.parse_result_items()
                     if items and items[0].file:
                         elapsed = time.monotonic() - start

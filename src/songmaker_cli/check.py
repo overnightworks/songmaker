@@ -46,6 +46,15 @@ def run_check(
     )
 
 
+def _find_project_root(start: Path) -> Path | None:
+    """Walk up from start to find the project root (contains pyproject.toml)."""
+    current = start.resolve()
+    for parent in (current, *current.parents):
+        if (parent / "pyproject.toml").exists():
+            return parent
+    return None
+
+
 def find_lyrics_source(mp3_path: Path, source: str | None) -> Path:
     """Find the lyrics markdown file for a given MP3."""
     if source:
@@ -55,10 +64,18 @@ def find_lyrics_source(mp3_path: Path, source: str | None) -> Path:
 
     stem = strip_version_suffix(mp3_path.stem)
 
-    search_roots = []
+    search_roots: list[Path] = []
+
+    project_root = _find_project_root(mp3_path)
+    if project_root and (project_root / "albums").is_dir():
+        search_roots.append(project_root / "albums")
+
     output_parent = mp3_path.resolve().parent.parent
     if (output_parent.parent / "albums").is_dir():
-        search_roots.append(output_parent.parent / "albums")
+        candidate = output_parent.parent / "albums"
+        if candidate not in search_roots:
+            search_roots.append(candidate)
+
     cwd_albums = Path.cwd() / "albums"
     if cwd_albums.is_dir() and cwd_albums not in search_roots:
         search_roots.append(cwd_albums)
@@ -83,13 +100,23 @@ def clean_lyrics(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().lower()
 
 
+_whisper_model_cache: dict[str, object] = {}
+
+
+def _get_whisper_model(model_size: str) -> object:
+    """Return a cached Whisper model, loading it on first use."""
+    import whisper
+
+    if model_size not in _whisper_model_cache:
+        log.info("Loading Whisper model (%s)...", model_size)
+        _whisper_model_cache[model_size] = whisper.load_model(model_size)
+    return _whisper_model_cache[model_size]
+
+
 def _transcribe(
     mp3_path: Path, language: str, model_size: str = "small",
 ) -> tuple[str, list[dict]]:
-    import whisper
-
-    log.info("Loading Whisper model (%s)...", model_size)
-    model = whisper.load_model(model_size)
+    model = _get_whisper_model(model_size)
     log.info("Transcribing %s...", mp3_path.name)
     result = model.transcribe(
         str(mp3_path), language=language, fp16=False,

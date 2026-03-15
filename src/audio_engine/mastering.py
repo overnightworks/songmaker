@@ -18,7 +18,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import butter, lfilter, sosfilt
 
-from audio_engine.constants import DEFAULT_SAMPLE_RATE
+from audio_engine.constants import FALLBACK_SAMPLE_RATE
 
 _REFERENCE_LUFS: Final[float] = -0.691
 _ABSOLUTE_GATE_LUFS: Final[float] = -70.0
@@ -50,7 +50,7 @@ def master_mono(
     samples: NDArray[np.float64],
     target_lufs: float = _DEFAULT_TARGET_LUFS,
     stereo_width: float = _DEFAULT_STEREO_WIDTH,
-    sample_rate: int = DEFAULT_SAMPLE_RATE,
+    sample_rate: int = FALLBACK_SAMPLE_RATE,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Master mono input to stereo output.
 
@@ -72,7 +72,7 @@ def master_stereo(
     right: NDArray[np.float64],
     target_lufs: float = _DEFAULT_TARGET_LUFS,
     stereo_width: float = _DEFAULT_STEREO_WIDTH,
-    sample_rate: int = DEFAULT_SAMPLE_RATE,
+    sample_rate: int = FALLBACK_SAMPLE_RATE,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Apply professional mastering chain to stereo audio.
 
@@ -124,7 +124,7 @@ def multiband_compress(
     bands: tuple[tuple[float, float], ...] = _DEFAULT_CROSSOVER_BANDS,
     ratios: tuple[float, ...] = _DEFAULT_RATIOS,
     thresholds: tuple[float, ...] = _DEFAULT_THRESHOLDS,
-    sample_rate: int = DEFAULT_SAMPLE_RATE,
+    sample_rate: int = FALLBACK_SAMPLE_RATE,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Apply frequency-dependent compression across multiple bands."""
     if len(bands) != len(ratios) or len(bands) != len(thresholds):
@@ -152,7 +152,7 @@ def multiband_compress(
 def measure_lufs(
     left: NDArray[np.float64],
     right: NDArray[np.float64],
-    sample_rate: int = DEFAULT_SAMPLE_RATE,
+    sample_rate: int = FALLBACK_SAMPLE_RATE,
 ) -> float:
     """Measure integrated LUFS following simplified ITU-R BS.1770-4."""
     if len(left) == 0 or len(right) == 0:
@@ -298,11 +298,16 @@ def _compress_signal(
     ratio: float,
     sample_rate: int,
 ) -> NDArray[np.float64]:
-    """Apply single-band compression with peak envelope following.
+    """Apply single-band compression with approximate envelope following.
 
     Uses vectorized lfilter for attack/release envelopes instead of a
-    per-sample Python loop. The envelope is max(attack_env, release_env)
-    which gives fast-attack, slow-release behaviour.
+    per-sample Python loop.  The envelope is max(attack_env, release_env)
+    which approximates fast-attack / slow-release behaviour. A true
+    conditional envelope follower (if x > env: attack else release) would
+    require a per-sample loop that is prohibitively slow in pure Python
+    for multi-minute audio at 48 kHz.  The approximation is sufficient
+    for mastering-level dynamics control and produces musically acceptable
+    results validated by the LUFS and clipping tests.
     """
     attack_coeff = math.exp(-1.0 / (_COMPRESSOR_ATTACK_SECONDS * sample_rate))
     release_coeff = math.exp(-1.0 / (_COMPRESSOR_RELEASE_SECONDS * sample_rate))

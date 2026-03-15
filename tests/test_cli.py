@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.config import validate_path
+from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.main import (
     DecodedAudio,
     _decode_audio,

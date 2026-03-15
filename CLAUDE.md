@@ -82,9 +82,16 @@ Chorus here...
 
 ## Project Structure
 
-- `src/acestep_engine/` — ACE-Step HTTP client, config dataclass
-- `src/audio_engine/` — Mastering chain, WAV/MP3 I/O
-- `src/songmaker_cli/` — CLI commands, markdown parser, config builder, HTML player
+- `src/acestep_engine/` — ACE-Step HTTP client (with retry), config dataclass, response models
+- `src/audio_engine/` — Mastering chain, WAV/MP3 I/O, LUFS measurement
+- `src/songmaker_cli/` — CLI entrypoint and subcommands
+  - `main.py` — CLI commands (`generate`, `check`, `player`)
+  - `parser.py` — Markdown + YAML parsing into pydantic models
+  - `config.py` — Output path resolution, ACE-Step config building
+  - `check.py` — Whisper-based lyrics accuracy checking (model cached)
+  - `scanner.py` — Filesystem scanning, version deduplication
+  - `manifest.py` — Player manifest data model + building
+  - `player.py` — HTML player generation (thin orchestrator)
 - `albums/<album>/lyrics/` — Song markdown files
 - `albums/<album>/album.yaml` — Album metadata (title, artist, year)
 - `_output/` — Generated audio (gitignored)
@@ -107,6 +114,6 @@ pip install -e .
 
 - Commit messages: conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`)
 - Code and docs in English, lyrics can be any language
-- Sample rate: native from ACE-Step (typically 48kHz), default fallback 44100 Hz
+- Sample rate: native from ACE-Step (typically 48kHz), `FALLBACK_SAMPLE_RATE = 48000` in `audio_engine.constants`
 - Output: Stereo WAV -> MP3 320kbps via ffmpeg
 - Mastering: Multiband compression -> Stereo widening -> LUFS -14 -> Soft clipping

@@ -1,144 +1,20 @@
 """Generate a manifest.json and static HTML player for all albums.
 
-The player reads track metadata from manifest.json and ID3 tags from MP3 files
-at runtime using jsmediatags. The HTML is written once and never needs
-regeneration — only manifest.json updates when new songs are generated.
+Thin orchestrator — delegates manifest building to manifest.py,
+filesystem scanning to scanner.py, and just handles HTML rendering
+and file output here.
 """
 
 from __future__ import annotations
 
 import json
-import re
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from string import Template
-from typing import TYPE_CHECKING
 
 from songmaker_cli.constants import DEFAULT_ARTIST, default_year
-
-if TYPE_CHECKING:
-    from songmaker_cli.parser import AlbumMeta
+from songmaker_cli.manifest import build_manifest
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
-
-DEFAULT_COLOR = {"primary": "#ff3220", "bg": "#0d0d0d"}
-
-
-def _extract_version_number(stem: str) -> int:
-    """Extract numeric version from a stem like '01_song_v3' -> 3. Returns 0 if none."""
-    match = re.search(r"_v(\d+)$", stem)
-    return int(match.group(1)) if match else 0
-
-
-@dataclass
-class TrackInfo:
-    """A single track in the manifest."""
-
-    file: str
-    title: str
-    number: str
-    lines: list[dict] = field(default_factory=list)
-    intended: list[dict] = field(default_factory=list)
-    has_sung: bool = False
-
-
-@dataclass
-class AlbumInfo:
-    """An album entry in the manifest."""
-
-    id: str
-    title: str
-    artist: str
-    subtitle: str
-    year: str
-    colors: dict[str, str]
-    tracks: list[TrackInfo]
-
-
-@dataclass
-class Manifest:
-    """Top-level manifest for the HTML player."""
-
-    albums: list[AlbumInfo]
-
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-
-def parse_srt(path: Path) -> list[dict]:
-    """Parse an SRT file into [{time: float, text: str}, ...]."""
-    lines = []
-    text = path.read_text(encoding="utf-8", errors="replace")
-    blocks = re.split(r"\n\n+", text.strip())
-    for block in blocks:
-        parts = block.strip().split("\n")
-        if len(parts) < 3:
-            continue
-        ts_match = re.match(
-            r"(\d+):(\d+):(\d+)[,.](\d+)\s*-->", parts[1],
-        )
-        if not ts_match:
-            continue
-        h, m, s, ms = ts_match.groups()
-        time_sec = int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000
-        txt = " ".join(parts[2:]).strip()
-        if txt:
-            lines.append({"time": round(time_sec, 1), "text": txt})
-    return lines
-
-
-def _load_album_meta(album_dir: Path) -> AlbumMeta:
-    """Load album metadata — delegates to parser module."""
-    from songmaker_cli.parser import load_album_meta
-
-    return load_album_meta(album_dir)
-
-
-def _find_lyrics_for_track(track_stem: str, lyrics_dir: Path) -> str | None:
-    """Find lyrics from a markdown file matching the track stem."""
-    from songmaker_cli.parser import find_lyrics_md
-
-    md_file = find_lyrics_md(track_stem, lyrics_dir)
-    if md_file is None:
-        return None
-    return _extract_lyrics(md_file)
-
-
-def _extract_lyrics(md_path: Path) -> str | None:
-    """Extract lyrics section from a markdown song file."""
-    from songmaker_cli.parser import extract_lyrics
-
-    text = md_path.read_text(encoding="utf-8")
-    return extract_lyrics(text)
-
-
-def lyrics_to_lines(lyrics: str) -> list[dict]:
-    """Convert raw lyrics text to simple display lines (no timestamps)."""
-    lines = []
-    for line in lyrics.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        if re.match(r"^\[.+\]$", line):
-            lines.append({"time": -1, "text": line.upper(), "section": True})
-        else:
-            lines.append({"time": -1, "text": line, "section": False})
-    return lines
-
-
-def deduplicate_versions(mp3s: list[Path]) -> list[Path]:
-    """Keep only the latest version of each track (e.g., v2 over v1)."""
-    from songmaker_cli.parser import strip_version_suffix
-
-    by_base: dict[str, tuple[int, Path]] = {}
-    for mp3 in mp3s:
-        base = strip_version_suffix(mp3.stem)
-        if base.endswith("_raw"):
-            continue
-        version = _extract_version_number(mp3.stem)
-        if base not in by_base or version > by_base[base][0]:
-            by_base[base] = (version, mp3)
-    return sorted(p for _, p in by_base.values())
 
 
 def generate_player(output_dir: Path, project_root: Path | None = None) -> Path:
@@ -171,187 +47,9 @@ def generate_player(output_dir: Path, project_root: Path | None = None) -> Path:
     return player_path
 
 
-def parse_track_title(stem: str) -> tuple[str, str]:
-    """Extract (number, title) from an MP3 stem like '01_song_name_v3'."""
-    num_match = re.match(r"^(\d+)_(.+?)(?:_v\d+)?$", stem)
-    bonus_match = re.match(r"^(bonus)_(.+?)(?:_v\d+)?$", stem)
-    if num_match:
-        return num_match.group(1), num_match.group(2).replace("_", " ").title()
-    if bonus_match:
-        return "B", bonus_match.group(2).replace("_", " ").title()
-    return "?", stem.replace("_", " ").title()
-
-
-def scan_album_tracks(
-    mp3s: list[Path],
-    mp3_base: str,
-    lyrics_dir: Path,
-    lyrics_cache: dict[str, list[dict]] | None = None,
-) -> list[TrackInfo]:
-    """Build track dataclasses from a list of MP3 files."""
-    from songmaker_cli.parser import strip_version_suffix
-
-    tracks = []
-    for mp3 in mp3s:
-        stem = mp3.stem
-        number, title = parse_track_title(stem)
-
-        srt_path = mp3.with_suffix(".srt")
-        sung_lines = parse_srt(srt_path) if srt_path.exists() else []
-
-        base = strip_version_suffix(stem)
-        if lyrics_cache is not None and base in lyrics_cache:
-            intended_lines = lyrics_cache[base]
-        else:
-            raw_lyrics = _find_lyrics_for_track(stem, lyrics_dir)
-            intended_lines = lyrics_to_lines(raw_lyrics) if raw_lyrics else []
-
-        lines = sung_lines if sung_lines else intended_lines
-
-        tracks.append(TrackInfo(
-            file=f"{mp3_base}/{mp3.name}",
-            title=title,
-            number=number,
-            lines=lines,
-            intended=intended_lines,
-            has_sung=bool(sung_lines),
-        ))
-    return tracks
-
-
-@dataclass
-class _AlbumScan:
-    """Result of scanning one album directory for MP3s."""
-
-    album_name: str
-    mp3_base: str
-    mp3s: list[Path]
-    lyrics_dir: Path
-    meta: AlbumMeta
-
-
-def _iter_album_scans(
-    output_dir: Path, project_root: Path,
-) -> list[_AlbumScan]:
-    """Scan all album directories for MP3 files with metadata.
-
-    Returns all versions (no deduplication). Raw intermediate files
-    (stems ending in '_raw') are excluded.
-    """
-    results: list[_AlbumScan] = []
-    for album_dir in sorted(output_dir.iterdir()):
-        if not album_dir.is_dir():
-            continue
-
-        album_name = album_dir.name
-        final_dir = album_dir / "final"
-        if final_dir.exists():
-            mp3s = sorted(final_dir.glob("*.mp3"))
-            mp3_base = f"{album_name}/final"
-        else:
-            mp3s = [m for m in sorted(album_dir.glob("*.mp3")) if not m.stem.endswith("_raw")]
-            mp3_base = album_name
-
-        if not mp3s:
-            continue
-
-        source_album_dir = project_root / "albums" / album_name
-        meta = _load_album_meta(source_album_dir)
-        lyrics_dir = project_root / "albums" / album_name / "lyrics"
-
-        results.append(_AlbumScan(
-            album_name=album_name,
-            mp3_base=mp3_base,
-            mp3s=mp3s,
-            lyrics_dir=lyrics_dir,
-            meta=meta,
-        ))
-    return results
-
-
-def _build_lyrics_cache(mp3s: list[Path], lyrics_dir: Path) -> dict[str, list[dict]]:
-    """Build a cache of stem -> intended_lines for all MP3s in an album."""
-    from songmaker_cli.parser import strip_version_suffix
-
-    cache: dict[str, list[dict]] = {}
-    for mp3 in mp3s:
-        stem = mp3.stem
-        base = strip_version_suffix(stem)
-        if base not in cache:
-            raw_lyrics = _find_lyrics_for_track(stem, lyrics_dir)
-            cache[base] = lyrics_to_lines(raw_lyrics) if raw_lyrics else []
-    return cache
-
-
-def _build_latest_entries(
-    scan: _AlbumScan,
-    lyrics_cache: dict[str, list[dict]],
-) -> list[tuple[float, str, TrackInfo]]:
-    """Build "latest" view entries from all versions of an album's tracks."""
-    from songmaker_cli.parser import strip_version_suffix
-
-    entries: list[tuple[float, str, TrackInfo]] = []
-    for mp3 in scan.mp3s:
-        stem = mp3.stem
-        number, title = parse_track_title(stem)
-        version = _extract_version_number(stem) or 1
-        base = strip_version_suffix(stem)
-        intended_lines = lyrics_cache.get(base, [])
-
-        track = TrackInfo(
-            file=f"{scan.mp3_base}/{mp3.name}",
-            title=f"{title} v{version}  [{scan.album_name}]",
-            number=number,
-            lines=intended_lines,
-            intended=intended_lines,
-            has_sung=False,
-        )
-        entries.append((mp3.stat().st_mtime, scan.album_name, track))
-    return entries
-
-
-def build_manifest(output_dir: Path, project_root: Path) -> Manifest:
-    """Build the manifest data structure from album directories.
-
-    Scans album directories once. Lyrics are cached per album to avoid
-    redundant filesystem lookups across deduplicated and latest views.
-    """
-    all_scans = _iter_album_scans(output_dir, project_root)
-    albums_data: list[AlbumInfo] = []
-    latest_entries: list[tuple[float, str, TrackInfo]] = []
-
-    for scan in all_scans:
-        lyrics_cache = _build_lyrics_cache(scan.mp3s, scan.lyrics_dir)
-
-        deduped_mp3s = deduplicate_versions(scan.mp3s)
-        deduped_tracks = scan_album_tracks(
-            deduped_mp3s, scan.mp3_base, scan.lyrics_dir, lyrics_cache,
-        )
-        albums_data.append(AlbumInfo(
-            id=scan.album_name,
-            title=scan.meta.title,
-            artist=scan.meta.artist,
-            subtitle=scan.meta.subtitle,
-            year=scan.meta.year or default_year(),
-            colors=scan.meta.colors or DEFAULT_COLOR,
-            tracks=deduped_tracks,
-        ))
-
-        latest_entries.extend(_build_latest_entries(scan, lyrics_cache))
-
-    if latest_entries:
-        latest_entries.sort(key=lambda e: e[0], reverse=True)
-        albums_data.insert(0, AlbumInfo(
-            id="_latest",
-            title="Latest",
-            artist=DEFAULT_ARTIST,
-            subtitle="All versions, newest first",
-            year=default_year(),
-            colors={"primary": "#22cc44", "bg": "#0d0d0d"},
-            tracks=[track for _, _, track in latest_entries],
-        ))
-
-    return Manifest(albums=albums_data)
+def _escape_json_for_html(json_str: str) -> str:
+    """Escape JSON for safe embedding inside an HTML <script> tag."""
+    return json_str.replace("</", r"<\/").replace("<!--", r"<\!--")
 
 
 def render_static_html(
@@ -367,5 +65,5 @@ def render_static_html(
     return template.substitute(
         ARTIST=artist,
         YEAR=year,
-        MANIFEST_JSON=manifest_json,
+        MANIFEST_JSON=_escape_json_for_html(manifest_json),
     )

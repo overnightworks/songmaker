@@ -4,16 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from songmaker_cli.player import (
+from songmaker_cli.manifest import (
     build_manifest,
-    deduplicate_versions,
-    generate_player,
     lyrics_to_lines,
     parse_srt,
     parse_track_title,
-    render_static_html,
     scan_album_tracks,
 )
+from songmaker_cli.player import generate_player, render_static_html
+from songmaker_cli.scanner import deduplicate_versions
 
 
 def _setup_album(tmp_path: Path, album: str = "test_album") -> tuple[Path, Path]:
@@ -126,6 +125,13 @@ def test_render_static_html_contains_substitutions() -> None:
     assert "TestArtist" in html
     assert "2099" in html
     assert "<!DOCTYPE html>" in html
+
+
+def test_render_static_html_escapes_script_tags() -> None:
+    dangerous_json = '{"title": "</script><script>alert(1)</script>"}'
+    html = render_static_html(dangerous_json, artist="Test", year="2025")
+    assert "</script><script>" not in html
+    assert r"<\/script>" in html
 
 
 def test_generate_player_creates_files(tmp_path: Path) -> None:

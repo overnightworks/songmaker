@@ -11,11 +11,11 @@ import pytest
 
 from audio_engine.audio_io import (
     build_ffmpeg_cmd,
-    sanitize_metadata,
     master_to_mp3,
     normalize_audio,
     read_wav_bytes,
     read_wav_file,
+    sanitize_metadata,
     write_stereo_wav,
     write_wav_file,
 )

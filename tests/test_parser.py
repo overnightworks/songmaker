@@ -157,6 +157,20 @@ def test_parse_song_md_unknown_key_warns(
     assert "duration" in caplog.text
 
 
+def test_parse_song_md_unknown_key_warns_songmeta_fields(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    md = tmp_path / "lyrics" / "song.md"
+    md.parent.mkdir(parents=True)
+    md.write_text(
+        "---\nprompt: test\npromt: typo\n---\n\n## Lyrics\n\nHello\n",
+    )
+    with caplog.at_level("WARNING"):
+        parse_song_md(md)
+    assert "promt" in caplog.text
+    assert "prompt" in caplog.text
+
+
 def test_find_lyrics_md_with_version(tmp_path: Path) -> None:
     from songmaker_cli.parser import find_lyrics_md
 

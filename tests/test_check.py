@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from songmaker_cli.check import (
-    log_check_results,
     clean_lyrics,
     find_lyrics_source,
+    log_check_results,
     run_check,
 )
 from songmaker_cli.errors import ValidationError
@@ -62,6 +62,21 @@ def test_find_lyrics_source_not_found(tmp_path: Path) -> None:
         find_lyrics_source(mp3, None)
 
 
+def test_find_lyrics_source_via_project_root(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    albums_dir = tmp_path / "albums" / "test_album" / "lyrics"
+    albums_dir.mkdir(parents=True)
+    _make_song_md(albums_dir)
+
+    deep_output = tmp_path / "some" / "deep" / "output"
+    deep_output.mkdir(parents=True)
+    mp3 = deep_output / "01_test_song_v1.mp3"
+    mp3.touch()
+
+    result = find_lyrics_source(mp3, None)
+    assert result.name == "01_test_song.md"
+
+
 def test_log_check_results_good(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
     mp3 = tmp_path / "song.mp3"
     md = tmp_path / "song.md"
@@ -105,4 +120,33 @@ def test_run_check_end_to_end(tmp_path: Path) -> None:
     }
 
     with patch.dict("sys.modules", {"whisper": mock_whisper}):
+        from songmaker_cli.check import _whisper_model_cache
+        _whisper_model_cache.clear()
         run_check(str(mp3), source=str(md))
+
+
+def test_whisper_model_cached(tmp_path: Path) -> None:
+    lyrics_dir = tmp_path / "albums" / "test_album" / "lyrics"
+    lyrics_dir.mkdir(parents=True)
+    md = _make_song_md(lyrics_dir)
+
+    output_dir = tmp_path / "_output" / "test_album"
+    output_dir.mkdir(parents=True)
+    mp3 = output_dir / "01_test_song_v1.mp3"
+    mp3.touch()
+
+    mock_whisper = MagicMock()
+    mock_model = MagicMock()
+    mock_whisper.load_model.return_value = mock_model
+    mock_model.transcribe.return_value = {
+        "text": "Hello world",
+        "segments": [{"text": "Hello world"}],
+    }
+
+    with patch.dict("sys.modules", {"whisper": mock_whisper}):
+        from songmaker_cli.check import _whisper_model_cache
+        _whisper_model_cache.clear()
+        run_check(str(mp3), source=str(md))
+        run_check(str(mp3), source=str(md))
+
+    assert mock_whisper.load_model.call_count == 1

@@ -24,7 +24,7 @@ from acestep_engine.models import TaskSubmitResponse  # noqa: F401
 TaskSubmitResponse.code
 
 # dataclass field — serialized to manifest.json
-from songmaker_cli.player import TrackInfo  # noqa: F401
+from songmaker_cli.manifest import TrackInfo  # noqa: F401
 
 TrackInfo.intended
 

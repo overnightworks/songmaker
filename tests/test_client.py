@@ -10,8 +10,8 @@ import pytest
 
 from acestep_engine.client import (
     AceStepClient,
-    validate_audio_path,
     is_acestep_available,
+    validate_audio_path,
 )
 from acestep_engine.errors import (
     AudioDownloadError,
@@ -65,11 +65,39 @@ def test_submit_task_failure() -> None:
     client = AceStepClient()
     config = AceStepConfig(prompt="test", lyrics="test")
 
-    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+    with (
+        patch("acestep_engine.client.urlopen") as mock_urlopen,
+        patch("acestep_engine.client.time.sleep"),
+    ):
         from urllib.error import URLError
         mock_urlopen.side_effect = URLError("Connection refused")
         with pytest.raises(TaskSubmissionError, match="Connection refused"):
             client._submit_task(config)
+
+
+def test_submit_task_retries_on_transient_error() -> None:
+    client = AceStepClient()
+    config = AceStepConfig(prompt="test", lyrics="[verse]\nHello")
+
+    success_data = json.dumps({
+        "data": {"task_id": "abc123", "status": "queued"},
+        "code": 200,
+    }).encode()
+
+    from urllib.error import URLError
+
+    with (
+        patch("acestep_engine.client.urlopen") as mock_urlopen,
+        patch("acestep_engine.client.time.sleep") as mock_sleep,
+    ):
+        mock_urlopen.side_effect = [
+            URLError("Connection refused"),
+            _mock_response(success_data),
+        ]
+        task_id = client._submit_task(config)
+
+    assert task_id == "abc123"
+    mock_sleep.assert_called_once_with(1.0)
 
 
 def test_poll_result_success() -> None:

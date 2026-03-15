@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
 
+    from acestep_engine.client import AceStepClient
     from acestep_engine.models import AceStepConfig, AceStepResult
     from songmaker_cli.parser import AlbumMeta
 
@@ -92,6 +93,9 @@ def generate(
     ace_config = build_ace_config(meta, cli_overrides)
     album_meta = load_album_meta_for_song(md_path)
 
+    from acestep_engine import AceStepClient
+
+    client = AceStepClient()
     player_path = None
     for i in range(count):
         if count > 1:
@@ -100,7 +104,7 @@ def generate(
         paths = resolve_output_paths(meta.album, md_path.stem)
         _log_generation_banner(meta, paths, ace_config)
 
-        ace_result, elapsed = _run_generation(ace_config)
+        ace_result, elapsed = _run_generation(ace_config, client)
         audio = _decode_audio(ace_result)
         _write_output(audio, ace_result.seed, paths, meta, album_meta)
         _log_result_banner(paths, audio, ace_result.seed, elapsed)
@@ -187,12 +191,16 @@ def _log_generation_banner(
     log.info("=" * 60)
 
 
-def _run_generation(ace_config: AceStepConfig) -> tuple[AceStepResult, float]:
-    from acestep_engine import AceStepClient, AceStepError
+def _run_generation(
+    ace_config: AceStepConfig, client: AceStepClient | None = None,
+) -> tuple[AceStepResult, float]:
+    from acestep_engine import AceStepClient as _Client
+    from acestep_engine import AceStepError
 
     log.info("Generating via ACE-Step...")
     start_time = time.time()
-    client = AceStepClient()
+    if client is None:
+        client = _Client()
     try:
         result: AceStepResult = client.generate(ace_config)
     except AceStepError as exc:

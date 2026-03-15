@@ -111,10 +111,11 @@ def parse_song_md(path: Path) -> SongMeta:
 
 
 def _warn_unknown_key(key: str) -> None:
-    """Warn if a frontmatter key looks like a typo of a known ACE-Step field."""
+    """Warn if a frontmatter key looks like a typo of a known field."""
     from difflib import get_close_matches
 
-    matches = get_close_matches(key, _ACE_STEP_FIELDS, n=1, cutoff=0.6)
+    all_known = _ACE_STEP_FIELDS | set(SongMeta.model_fields)
+    matches = get_close_matches(key, all_known, n=1, cutoff=0.6)
     if matches:
         log.warning("Unknown frontmatter key '%s' — did you mean '%s'?", key, matches[0])
 
