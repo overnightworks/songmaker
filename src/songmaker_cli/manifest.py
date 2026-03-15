@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TypedDict
 
 from songmaker_cli.constants import DEFAULT_ARTIST, default_year
 from songmaker_cli.parser import extract_lyrics, find_lyrics_md, strip_version_suffix
@@ -14,6 +15,21 @@ from songmaker_cli.scanner import (
     extract_version_number,
     iter_album_scans,
 )
+
+
+class SrtLine(TypedDict):
+    """A timed subtitle line from an SRT file."""
+
+    time: float
+    text: str
+
+
+class LyricsLine(TypedDict):
+    """A display line from parsed lyrics (no timestamps)."""
+
+    time: float
+    text: str
+    section: bool
 
 
 def _default_color() -> dict[str, str]:
@@ -27,8 +43,8 @@ class TrackInfo:
     file: str
     title: str
     number: str
-    lines: list[dict] = field(default_factory=list)
-    intended: list[dict] = field(default_factory=list)
+    lines: list[SrtLine | LyricsLine] = field(default_factory=list)
+    intended: list[LyricsLine] = field(default_factory=list)
     has_sung: bool = False
 
 
@@ -55,9 +71,9 @@ class Manifest:
         return asdict(self)
 
 
-def parse_srt(path: Path) -> list[dict]:
+def parse_srt(path: Path) -> list[SrtLine]:
     """Parse an SRT file into [{time: float, text: str}, ...]."""
-    lines = []
+    lines: list[SrtLine] = []
     text = path.read_text(encoding="utf-8", errors="replace")
     blocks = re.split(r"\n\n+", text.strip())
     for block in blocks:
@@ -88,9 +104,9 @@ def parse_track_title(stem: str) -> tuple[str, str]:
     return "?", stem.replace("_", " ").title()
 
 
-def lyrics_to_lines(lyrics: str) -> list[dict]:
+def lyrics_to_lines(lyrics: str) -> list[LyricsLine]:
     """Convert raw lyrics text to simple display lines (no timestamps)."""
-    lines = []
+    lines: list[LyricsLine] = []
     for line in lyrics.splitlines():
         line = line.strip()
         if not line:
@@ -115,7 +131,7 @@ def scan_album_tracks(
     mp3s: list[Path],
     mp3_base: str,
     lyrics_dir: Path,
-    lyrics_cache: dict[str, list[dict]] | None = None,
+    lyrics_cache: dict[str, list[LyricsLine]] | None = None,
 ) -> list[TrackInfo]:
     """Build track dataclasses from a list of MP3 files."""
     tracks = []
@@ -146,9 +162,9 @@ def scan_album_tracks(
     return tracks
 
 
-def _build_lyrics_cache(mp3s: list[Path], lyrics_dir: Path) -> dict[str, list[dict]]:
+def _build_lyrics_cache(mp3s: list[Path], lyrics_dir: Path) -> dict[str, list[LyricsLine]]:
     """Build a cache of stem -> intended_lines for all MP3s in an album."""
-    cache: dict[str, list[dict]] = {}
+    cache: dict[str, list[LyricsLine]] = {}
     for mp3 in mp3s:
         stem = mp3.stem
         base = strip_version_suffix(stem)
@@ -160,7 +176,7 @@ def _build_lyrics_cache(mp3s: list[Path], lyrics_dir: Path) -> dict[str, list[di
 
 def _build_latest_entries(
     scan: AlbumScan,
-    lyrics_cache: dict[str, list[dict]],
+    lyrics_cache: dict[str, list[LyricsLine]],
 ) -> list[tuple[float, str, TrackInfo]]:
     """Build "latest" view entries from all versions of an album's tracks."""
     entries: list[tuple[float, str, TrackInfo]] = []

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from string import Template
 
 from songmaker_cli.constants import DEFAULT_ARTIST, default_year
 from songmaker_cli.manifest import build_manifest
@@ -57,13 +56,16 @@ def render_static_html(
     artist: str = DEFAULT_ARTIST,
     year: str = "",
 ) -> str:
-    """Render the HTML player from template with variable substitution."""
+    """Render the HTML player from template with variable substitution.
+
+    Uses plain str.replace instead of string.Template to avoid $ injection
+    from user-controlled content (song titles, lyrics).
+    """
     if not year:
         year = default_year()
     template_path = _TEMPLATE_DIR / "player.html"
-    template = Template(template_path.read_text(encoding="utf-8"))
-    return template.substitute(
-        ARTIST=artist,
-        YEAR=year,
-        MANIFEST_JSON=_escape_json_for_html(manifest_json),
-    )
+    html = template_path.read_text(encoding="utf-8")
+    html = html.replace("{{MANIFEST_JSON}}", _escape_json_for_html(manifest_json))
+    html = html.replace("{{ARTIST}}", artist)
+    html = html.replace("{{YEAR}}", year)
+    return html

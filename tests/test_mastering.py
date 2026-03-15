@@ -121,6 +121,33 @@ def test_multiband_preserves_energy() -> None:
     ), f"Multiband zeroed signal: input_rms={input_rms:.4f}, output_rms={output_rms:.4f}"
 
 
+def test_multiband_reduces_dynamic_range() -> None:
+    """Verify multiband compression reduces the loud-to-quiet ratio."""
+    n_quiet = int(SAMPLE_RATE * 1.5)
+    n_loud = int(SAMPLE_RATE * 1.5)
+
+    quiet = _generate_sine(1000.0, 0.05, 1.5)
+    loud = _generate_sine(1000.0, 0.9, 1.5)
+    signal = np.concatenate([quiet, loud])
+
+    input_quiet_rms = float(np.sqrt(np.mean(signal[:n_quiet] ** 2)))
+    input_loud_rms = float(np.sqrt(np.mean(signal[n_quiet:n_quiet + n_loud] ** 2)))
+    input_ratio = input_loud_rms / max(input_quiet_rms, 1e-10)
+
+    compressed_l, _ = multiband_compress(
+        signal, signal.copy(), sample_rate=SAMPLE_RATE,
+    )
+
+    output_quiet_rms = float(np.sqrt(np.mean(compressed_l[:n_quiet] ** 2)))
+    output_loud_rms = float(np.sqrt(np.mean(compressed_l[n_quiet:n_quiet + n_loud] ** 2)))
+    output_ratio = output_loud_rms / max(output_quiet_rms, 1e-10)
+
+    assert output_ratio < input_ratio, (
+        f"Compression should reduce loud/quiet ratio: "
+        f"input={input_ratio:.2f}, output={output_ratio:.2f}"
+    )
+
+
 def test_multiband_mismatched_params_raises() -> None:
     """Verify multiband raises ValueError on mismatched parameter lengths."""
     signal = _generate_sine()

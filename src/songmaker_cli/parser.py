@@ -44,7 +44,10 @@ class SongMeta(BaseModel):
 
     title: str = "Untitled"
     album: str = "unknown"
-    track: str = ""
+    track: str = Field(
+        default="",
+        description="Track number as string for ID3 metadata (coerced from int)",
+    )
     genre: str = ""
     prompt: str = ""
     lyrics: str = ""

@@ -8,26 +8,26 @@ import time
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Optional
+from typing import Annotated, Optional
 
+import numpy as np
 from cyclopts import App, Parameter
+from numpy.typing import NDArray
 
+from acestep_engine import AceStepClient, AceStepError
+from acestep_engine.models import AceStepConfig, AceStepResult
+from audio_engine import MasteringError, master_to_mp3, read_wav_bytes, write_stereo_wav
 from songmaker_cli.config import (
     OutputPaths,
     build_ace_config,
+    find_project_root,
     resolve_output_paths,
     validate_path,
 )
+from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import GenerationError, SongmakerError, ValidationError
 from songmaker_cli.parser import AlbumMeta, SongMeta, load_album_meta, parse_song_md
 from songmaker_cli.player import generate_player
-
-if TYPE_CHECKING:
-    import numpy as np
-    from numpy.typing import NDArray
-
-    from acestep_engine.client import AceStepClient
-    from acestep_engine.models import AceStepConfig, AceStepResult
 
 log = logging.getLogger(__name__)
 
@@ -91,30 +91,43 @@ def generate(
         think_mode=think_mode,
     )
     ace_config = build_ace_config(meta, cli_overrides)
-    album_meta = load_album_meta_for_song(md_path)
 
-    from acestep_engine import AceStepClient
+    project_root = find_project_root(md_path)
+    album_meta = load_album_meta_for_song(md_path, meta.album, project_root=project_root)
+    output_root = (project_root / OUTPUT_ROOT) if project_root else None
 
     client = AceStepClient()
-    player_path = None
+    last_paths = None
     for i in range(count):
         if count > 1:
             log.info("Generation %d/%d", i + 1, count)
 
-        paths = resolve_output_paths(meta.album, md_path.stem)
-        player_path = _generate_one(
-            meta, ace_config, client, md_path, paths, album_meta, do_check=check,
-        )
+        paths = resolve_output_paths(meta.album, md_path.stem, output_root=output_root)
+        _log_generation_banner(meta, paths, ace_config)
 
-    if player and player_path:
-        _open_player(player_path)
+        ace_result, elapsed = _run_generation(ace_config, client)
+        audio = _decode_audio(ace_result)
+        _write_output(audio, ace_result.seed, paths, meta, album_meta)
+        _log_result_banner(paths, audio, ace_result.seed, elapsed)
+
+        if check:
+            from songmaker_cli.check import run_check
+
+            run_check(str(paths.mp3), source=str(md_path))
+
+        last_paths = paths
+
+    if last_paths:
+        player_path = _update_player(last_paths)
+        if player:
+            _open_player(player_path)
 
 
 @app.command
 def player(
     output: Annotated[
         str, Parameter(name=["-o", "--output"], help="Output directory")
-    ] = "_output",
+    ] = "",
     root: Annotated[
         Optional[str], Parameter(help="Project root")
     ] = None,
@@ -123,7 +136,13 @@ def player(
     ] = False,
 ) -> None:
     """Generate the unified HTML player for all albums."""
-    output_dir = Path(output).resolve()
+    if output:
+        output_dir = Path(output).resolve()
+    else:
+        project_root_found = find_project_root(Path.cwd())
+        output_dir = (project_root_found / OUTPUT_ROOT if project_root_found
+                      else Path(OUTPUT_ROOT)).resolve()
+
     if not output_dir.exists():
         raise ValidationError(f"{output_dir} not found")
 
@@ -165,35 +184,23 @@ def collect_overrides(**kwargs: object) -> dict:
     return {k: v for k, v in kwargs.items() if v is not None}
 
 
-def load_album_meta_for_song(md_path: Path) -> AlbumMeta:
+def load_album_meta_for_song(
+    md_path: Path,
+    album_name: str = "",
+    project_root: Path | None = None,
+) -> AlbumMeta:
+    """Load album metadata for a song, using album name to locate album.yaml.
+
+    Searches: project_root/albums/<album>/ first, then falls back to
+    md_path.parent.parent (the conventional lyrics dir layout).
+    """
+    if album_name and project_root:
+        candidate = project_root / "albums" / album_name
+        if candidate.is_dir():
+            return load_album_meta(candidate)
+
     album_dir = md_path.parent.parent
     return load_album_meta(album_dir)
-
-
-def _generate_one(
-    meta: SongMeta,
-    ace_config: AceStepConfig,
-    client: AceStepClient,
-    md_path: Path,
-    paths: OutputPaths,
-    album_meta: AlbumMeta,
-    do_check: bool = False,
-) -> Path:
-    """Run a single generation cycle: generate, decode, master, update player."""
-    _log_generation_banner(meta, paths, ace_config)
-
-    ace_result, elapsed = _run_generation(ace_config, client)
-    audio = _decode_audio(ace_result)
-    _write_output(audio, ace_result.seed, paths, meta, album_meta)
-    _log_result_banner(paths, audio, ace_result.seed, elapsed)
-    player_path = _update_player(paths)
-
-    if do_check:
-        from songmaker_cli.check import run_check
-
-        run_check(str(paths.mp3), source=str(md_path))
-
-    return player_path
 
 
 def _log_generation_banner(
@@ -212,8 +219,6 @@ def _log_generation_banner(
 def _run_generation(
     ace_config: AceStepConfig, client: AceStepClient,
 ) -> tuple[AceStepResult, float]:
-    from acestep_engine import AceStepError
-
     log.info("Generating via ACE-Step...")
     start_time = time.time()
     try:
@@ -225,8 +230,6 @@ def _run_generation(
 
 
 def _decode_audio(ace_result: AceStepResult) -> DecodedAudio:
-    from audio_engine import read_wav_bytes
-
     left, right, sample_rate = read_wav_bytes(ace_result.wav_bytes)
     if len(left) == 0:
         raise GenerationError("ACE-Step returned empty or unparseable audio")
@@ -243,8 +246,6 @@ def _write_output(
     meta: SongMeta,
     album_meta: AlbumMeta,
 ) -> None:
-    from audio_engine import MasteringError, master_to_mp3, write_stereo_wav
-
     write_stereo_wav(str(paths.raw_wav), audio.left, audio.right, audio.sample_rate)
 
     id3_metadata = {

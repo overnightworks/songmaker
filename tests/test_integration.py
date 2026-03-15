@@ -1,21 +1,34 @@
 """End-to-end integration test for the generate pipeline.
 
-Mocks only the ACE-Step server (returns a known sine WAV).
-Exercises: parse markdown -> build config -> decode audio -> master -> MP3 + player.
+Mocks only the HTTP boundary (urlopen) so the full path is exercised:
+parse markdown -> build config -> ACE-Step client -> decode audio -> master -> MP3 + player.
 """
 
 from __future__ import annotations
 
+import json
+from http.client import HTTPResponse
 from pathlib import Path
 from typing import Callable
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from acestep_engine.models import AceStepResult
 from songmaker_cli.main import generate
+
+
+def _mock_response(data: bytes, status: int = 200) -> MagicMock:
+    """Build a mock urllib response."""
+    resp = MagicMock(spec=HTTPResponse)
+    resp.status = status
+    resp.read.return_value = data
+    resp.__enter__ = MagicMock(return_value=resp)
+    resp.__exit__ = MagicMock(return_value=False)
+    return resp
 
 
 def _setup_project(tmp_path: Path) -> Path:
     """Create a minimal project layout with one song markdown file."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+
     album_dir = tmp_path / "albums" / "test_album"
     lyrics_dir = album_dir / "lyrics"
     lyrics_dir.mkdir(parents=True)
@@ -48,19 +61,33 @@ def _setup_project(tmp_path: Path) -> Path:
     return song_md
 
 
+def _build_acestep_responses(wav_bytes: bytes) -> list[MagicMock]:
+    """Build the three mock HTTP responses for a full ACE-Step generate cycle."""
+    submit_resp = _mock_response(json.dumps({
+        "data": {"task_id": "test-task-1", "status": "queued"},
+        "code": 200,
+    }).encode())
+
+    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed": 42}])
+    poll_resp = _mock_response(json.dumps({
+        "data": [{"task_id": "test-task-1", "status": 1, "result": result_items}],
+    }).encode())
+
+    audio_resp = _mock_response(wav_bytes)
+
+    return [submit_resp, poll_resp, audio_resp]
+
+
 def test_generate_end_to_end(tmp_path: Path, make_sine_wav_bytes: Callable[..., bytes]) -> None:
-    """Full pipeline: markdown -> ACE-Step (mocked) -> mastered MP3 + player."""
+    """Full pipeline: markdown -> ACE-Step client (HTTP mocked) -> mastered MP3 + player."""
     song_md = _setup_project(tmp_path)
     output_dir = tmp_path / "_output"
 
     wav_bytes = make_sine_wav_bytes()
-    mock_result = AceStepResult(wav_bytes=wav_bytes, seed=42)
+    responses = _build_acestep_responses(wav_bytes)
 
-    with (
-        patch("songmaker_cli.main._run_generation") as mock_gen,
-        patch("songmaker_cli.config.OUTPUT_ROOT", str(output_dir)),
-    ):
-        mock_gen.return_value = (mock_result, 5.0)
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.side_effect = responses
         generate(str(song_md))
 
     album_output = output_dir / "test_album"
@@ -77,6 +104,8 @@ def test_generate_end_to_end(tmp_path: Path, make_sine_wav_bytes: Callable[..., 
     manifest = output_dir / "manifest.json"
     assert manifest.exists(), "Manifest JSON should be generated"
 
+    assert mock_urlopen.call_count == 3
+
 
 def test_generate_multiple_versions(
     tmp_path: Path, make_sine_wav_bytes: Callable[..., bytes],
@@ -86,13 +115,14 @@ def test_generate_multiple_versions(
     output_dir = tmp_path / "_output"
 
     wav_bytes = make_sine_wav_bytes()
-    mock_result = AceStepResult(wav_bytes=wav_bytes, seed=42)
+    responses = (
+        _build_acestep_responses(wav_bytes)
+        + _build_acestep_responses(wav_bytes)
+        + _build_acestep_responses(wav_bytes)
+    )
 
-    with (
-        patch("songmaker_cli.main._run_generation") as mock_gen,
-        patch("songmaker_cli.config.OUTPUT_ROOT", str(output_dir)),
-    ):
-        mock_gen.return_value = (mock_result, 1.0)
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.side_effect = responses
         generate(str(song_md), count=3)
 
     album_output = output_dir / "test_album"
@@ -103,3 +133,5 @@ def test_generate_multiple_versions(
     assert "01_test_song_v1" in stems
     assert "01_test_song_v2" in stems
     assert "01_test_song_v3" in stems
+
+    assert mock_urlopen.call_count == 9

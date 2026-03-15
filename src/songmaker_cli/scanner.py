@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from songmaker_cli.parser import AlbumMeta, load_album_meta, strip_version_suffix
+
+log = logging.getLogger(__name__)
 
 
 def extract_version_number(stem: str) -> int:
@@ -48,18 +51,31 @@ def iter_album_scans(
     (stems ending in '_raw') are excluded.
     """
     results: list[AlbumScan] = []
-    for album_dir in sorted(output_dir.iterdir()):
+    try:
+        entries = sorted(output_dir.iterdir())
+    except (PermissionError, OSError) as exc:
+        log.warning("Cannot scan output directory %s: %s", output_dir, exc)
+        return results
+
+    for album_dir in entries:
         if not album_dir.is_dir():
             continue
 
         album_name = album_dir.name
-        final_dir = album_dir / "final"
-        if final_dir.exists():
-            mp3s = sorted(final_dir.glob("*.mp3"))
-            mp3_base = f"{album_name}/final"
-        else:
-            mp3s = [m for m in sorted(album_dir.glob("*.mp3")) if not m.stem.endswith("_raw")]
-            mp3_base = album_name
+        try:
+            final_dir = album_dir / "final"
+            if final_dir.exists():
+                mp3s = sorted(final_dir.glob("*.mp3"))
+                mp3_base = f"{album_name}/final"
+            else:
+                mp3s = [
+                    m for m in sorted(album_dir.glob("*.mp3"))
+                    if not m.stem.endswith("_raw")
+                ]
+                mp3_base = album_name
+        except (PermissionError, OSError) as exc:
+            log.warning("Cannot scan album directory %s: %s", album_dir, exc)
+            continue
 
         if not mp3s:
             continue

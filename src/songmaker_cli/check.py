@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
+from typing import TypedDict
 
-from songmaker_cli.config import validate_path
+from songmaker_cli.config import find_project_root, validate_path
 from songmaker_cli.constants import SIMILARITY_FAIR, SIMILARITY_GOOD
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import find_lyrics_md, parse_song_md, strip_version_suffix
@@ -14,13 +15,24 @@ from songmaker_cli.parser import find_lyrics_md, parse_song_md, strip_version_su
 log = logging.getLogger(__name__)
 
 
+class TranscriptionSegment(TypedDict):
+    """A single segment from Whisper transcription output."""
+
+    text: str
+
+
 def run_check(
     path: str,
     source: str | None = None,
     project_root: str | None = None,
     whisper_model: str = "small",
+    model: object | None = None,
 ) -> None:
-    """Transcribe with Whisper and compare to intended lyrics."""
+    """Transcribe with Whisper and compare to intended lyrics.
+
+    Args:
+        model: Pre-loaded Whisper model. If None, loads/caches automatically.
+    """
     from difflib import SequenceMatcher
 
     mp3_path = validate_path(path)
@@ -28,7 +40,9 @@ def run_check(
     meta = parse_song_md(md_path)
 
     language = meta.generation_params.get("language", "en")
-    transcribed, segments = _transcribe(mp3_path, language, whisper_model)
+    if model is None:
+        model = _get_whisper_model(whisper_model)
+    transcribed, segments = _transcribe(mp3_path, language, model)
 
     clean_intended = clean_lyrics(meta.lyrics)
     clean_transcribed = clean_lyrics(transcribed)
@@ -38,21 +52,12 @@ def run_check(
         line.strip() for line in meta.lyrics.splitlines()
         if line.strip() and not line.strip().startswith("[")
     ]
-    trans_lines = [s["text"].strip() for s in segments if s["text"].strip()]
+    trans_lines = [s.get("text", "").strip() for s in segments if s.get("text", "").strip()]
 
     log_check_results(
         mp3_path, md_path, ratio, intended_lines, trans_lines,
         SIMILARITY_GOOD, SIMILARITY_FAIR,
     )
-
-
-def _find_project_root(start: Path) -> Path | None:
-    """Walk up from start to find the project root (contains pyproject.toml)."""
-    current = start.resolve()
-    for parent in (current, *current.parents):
-        if (parent / "pyproject.toml").exists():
-            return parent
-    return None
 
 
 def find_lyrics_source(
@@ -76,7 +81,7 @@ def find_lyrics_source(
         if (explicit_root / "albums").is_dir():
             search_roots.append(explicit_root / "albums")
 
-    detected_root = _find_project_root(mp3_path)
+    detected_root = find_project_root(mp3_path)
     if detected_root and (detected_root / "albums").is_dir():
         candidate = detected_root / "albums"
         if candidate not in search_roots:
@@ -135,11 +140,10 @@ def _get_whisper_model(
 
 
 def _transcribe(
-    mp3_path: Path, language: str, model_size: str = "small",
-) -> tuple[str, list[dict]]:
-    model = _get_whisper_model(model_size)
+    mp3_path: Path, language: str, model: object,
+) -> tuple[str, list[TranscriptionSegment]]:
     log.info("Transcribing %s...", mp3_path.name)
-    result = model.transcribe(
+    result = model.transcribe(  # type: ignore[union-attr]
         str(mp3_path), language=language, fp16=False,
         condition_on_previous_text=False,
     )

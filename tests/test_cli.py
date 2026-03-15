@@ -93,6 +93,19 @@ def test_load_album_meta_without_yaml(tmp_path: Path) -> None:
     assert meta.title == "Cool Album"
 
 
+def test_load_album_meta_via_album_name(tmp_path: Path) -> None:
+    album_dir = tmp_path / "albums" / "my_album"
+    lyrics_dir = album_dir / "lyrics"
+    lyrics_dir.mkdir(parents=True)
+    (album_dir / "album.yaml").write_text("title: Found Via Name\nartist: Test\n")
+
+    md_path = lyrics_dir / "song.md"
+    md_path.touch()
+
+    meta = load_album_meta_for_song(md_path, album_name="my_album", project_root=tmp_path)
+    assert meta.title == "Found Via Name"
+
+
 def test_decode_audio_success(make_stereo_wav_bytes: Callable[..., bytes]) -> None:
     from acestep_engine.models import AceStepResult
 

@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
+from acestep_engine.models import AceStepConfig
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import ValidationError
 
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from acestep_engine import AceStepConfig
     from songmaker_cli.parser import SongMeta
 
 
@@ -54,6 +54,15 @@ def next_version(output_dir: Path, base_name: str) -> int:
     return max(versions, default=0) + 1
 
 
+def find_project_root(start: Path) -> Path | None:
+    """Walk up from start to find the project root (contains pyproject.toml)."""
+    current = start.resolve()
+    for parent in (current, *current.parents):
+        if (parent / "pyproject.toml").exists():
+            return parent
+    return None
+
+
 def resolve_output_paths(
     album: str, base_name: str, output_root: Path | None = None,
 ) -> OutputPaths:
@@ -77,13 +86,11 @@ _FIELD_MAPPING = {"language": "vocal_language"}
 def build_ace_config(
     meta: "SongMeta",
     cli_overrides: dict | None = None,
-) -> "AceStepConfig":
+) -> AceStepConfig:
     """Build an AceStepConfig from SongMeta + optional CLI overrides.
 
     Priority: CLI overrides > frontmatter values > AceStepConfig defaults.
     """
-    from acestep_engine import AceStepConfig as _AceStepConfig
-
     fields: dict = {"prompt": meta.prompt, "lyrics": meta.lyrics}
 
     for key, value in meta.generation_params.items():
@@ -97,7 +104,7 @@ def build_ace_config(
                 fields[mapped] = value
 
     fields = _sanitize_params(fields)
-    return _AceStepConfig(**fields)
+    return AceStepConfig(**fields)
 
 
 def _sanitize_params(fields: dict) -> dict:

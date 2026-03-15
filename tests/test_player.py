@@ -134,6 +134,12 @@ def test_render_static_html_escapes_script_tags() -> None:
     assert r"<\/script>" in html
 
 
+def test_render_static_html_dollar_safe() -> None:
+    json_with_dollar = '{"title": "$ARTIST and ${YEAR} should survive"}'
+    html = render_static_html(json_with_dollar, artist="TestArtist", year="2025")
+    assert "$ARTIST and ${YEAR} should survive" in html
+
+
 def test_generate_player_creates_files(tmp_path: Path) -> None:
     output_dir, project_root = _setup_album(tmp_path)
     (output_dir / "test_album" / "01_hello_v1.mp3").touch()

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>$ARTIST — Music Player</title>
+<title>{{ARTIST}} — Music Player</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Open+Sans:wght@400;600&display=swap');
@@ -400,7 +400,7 @@
 <body>
 
 <div class="header">
-  <h1 id="albumTitle">$ARTIST</h1>
+  <h1 id="albumTitle">{{ARTIST}}</h1>
   <div class="subtitle" id="albumSubtitle">Music Player</div>
 </div>
 
@@ -454,11 +454,11 @@
 </div>
 
 <div class="footer">
-  AI Generated &bull; $ARTIST &bull; $YEAR
+  AI Generated &bull; {{ARTIST}} &bull; {{YEAR}}
 </div>
 
 <script>
-const INLINE_MANIFEST = $MANIFEST_JSON;
+const INLINE_MANIFEST = {{MANIFEST_JSON}};
 let ALBUMS = [];
 let currentAlbum = 0;
 let currentTrack = 0;

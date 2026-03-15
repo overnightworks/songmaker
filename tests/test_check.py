@@ -114,19 +114,13 @@ def test_run_check_end_to_end(tmp_path: Path, make_song_md: Callable[..., Path])
     mp3 = output_dir / "01_test_song_v1.mp3"
     mp3.touch()
 
-    mock_whisper = MagicMock()
     mock_model = MagicMock()
-    mock_whisper.load_model.return_value = mock_model
     mock_model.transcribe.return_value = {
         "text": "Hello world second line",
         "segments": [{"text": "Hello world"}, {"text": "second line"}],
     }
 
-    with (
-        patch.dict("sys.modules", {"whisper": mock_whisper}),
-        patch("songmaker_cli.check._get_whisper_model", return_value=mock_model),
-    ):
-        run_check(str(mp3), source=str(md))
+    run_check(str(mp3), source=str(md), model=mock_model)
 
 
 def test_whisper_model_cached() -> None:

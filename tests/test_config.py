@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from songmaker_cli.config import build_ace_config, next_version, resolve_output_paths
+from songmaker_cli.config import (
+    build_ace_config,
+    find_project_root,
+    next_version,
+    resolve_output_paths,
+)
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import SongMeta
 
@@ -113,3 +118,21 @@ def test_build_ace_config_invalid_infer_method_raises() -> None:
     meta = SongMeta(prompt="test", lyrics="test", generation_params={"infer_method": "bad"})
     with pytest.raises(ValidationError, match="infer_method="):
         build_ace_config(meta)
+
+
+def test_find_project_root_found(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    nested = tmp_path / "a" / "b" / "c"
+    nested.mkdir(parents=True)
+    assert find_project_root(nested) == tmp_path
+
+
+def test_find_project_root_not_found(tmp_path: Path) -> None:
+    nested = tmp_path / "isolated"
+    nested.mkdir()
+    assert find_project_root(nested) is None
+
+
+def test_find_project_root_at_root(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    assert find_project_root(tmp_path) == tmp_path
