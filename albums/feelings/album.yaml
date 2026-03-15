@@ -2,3 +2,6 @@ title: Feelings
 artist: Flex0r
 year: 2026
 subtitle: "when the machine learns to cry"
+colors:
+  primary: "#6a9fd8"
+  bg: "#0a0a14"

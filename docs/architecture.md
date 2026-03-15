@@ -40,7 +40,7 @@ src/
 ├── audio_engine/
 │   ├── audio_io.py         WAV/MP3 I/O, master_to_mp3
 │   ├── mastering.py        Multiband compression, LUFS, stereo, soft clip
-│   ├── constants.py        TARGET_SAMPLE_RATE (44100)
+│   ├── constants.py        DEFAULT_SAMPLE_RATE (44100)
 │   └── __init__.py
 │
 └── songmaker_cli/
@@ -54,9 +54,8 @@ src/
 ## Mastering Chain
 
 ```
-Input (mono WAV)
+Input (stereo from ACE-Step, native sample rate)
   │
-  ├── duplicate to stereo
   ▼
 ┌──────────────────────────────────────┐
 │  MULTIBAND COMPRESSION               │

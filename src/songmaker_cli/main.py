@@ -163,14 +163,15 @@ def _log_generation_banner(
 
 
 def _run_generation(ace_config: AceStepConfig) -> tuple[AceStepResult, float]:
-    from acestep_engine import AceStepClient
+    from acestep_engine import AceStepClient, AceStepError
 
     log.info("Generating via ACE-Step...")
     start_time = time.time()
     client = AceStepClient()
-    result: AceStepResult = client.generate(ace_config)
-    if result is None:
-        raise GenerationError("ACE-Step generation failed")
+    try:
+        result: AceStepResult = client.generate(ace_config)
+    except AceStepError as exc:
+        raise GenerationError(str(exc)) from exc
 
     return result, time.time() - start_time
 
@@ -181,9 +182,9 @@ def _write_output(
     meta: SongMeta,
     album_meta: AlbumMeta,
 ) -> None:
-    from audio_engine.audio_io import _write_stereo_wav, master_to_mp3, normalize_audio
+    from audio_engine import master_to_mp3, normalize_audio, write_stereo_wav
 
-    _write_stereo_wav(str(paths.raw_wav), result.left, result.right, result.sample_rate)
+    write_stereo_wav(str(paths.raw_wav), result.left, result.right, result.sample_rate)
     left = normalize_audio(result.left, NORMALIZE_PEAK)
     right = normalize_audio(result.right, NORMALIZE_PEAK)
 
@@ -195,8 +196,12 @@ def _write_output(
         "genre": meta.genre,
         "lyrics": meta.lyrics,
     }
-    if master_to_mp3(left, right, str(paths.mp3), sample_rate=result.sample_rate, metadata=id3_metadata):
-        paths.raw_wav.unlink(missing_ok=True)
+    success = master_to_mp3(
+        left, right, str(paths.mp3), sample_rate=result.sample_rate, metadata=id3_metadata,
+    )
+    if not success:
+        raise GenerationError(f"Mastering failed for {paths.mp3}")
+    paths.raw_wav.unlink(missing_ok=True)
 
 
 def _log_result_banner(
@@ -259,18 +264,32 @@ def run_check(
 
 
 def _find_lyrics_source(mp3_path: Path, source: str | None) -> Path:
+    from songmaker_cli.parser import find_lyrics_md, strip_version_suffix
+
     if source:
         md_path = Path(source).resolve()
         if md_path.exists():
             return md_path
 
-    base = re.sub(r"_v\d+$", "", mp3_path.stem)
-    albums_dir = Path("albums")
-    if albums_dir.is_dir():
+    stem = strip_version_suffix(mp3_path.stem)
+
+    # Search albums/ relative to the MP3 file's output tree, then CWD
+    search_roots = []
+    output_parent = mp3_path.resolve().parent.parent
+    if (output_parent.parent / "albums").is_dir():
+        search_roots.append(output_parent.parent / "albums")
+    cwd_albums = Path.cwd() / "albums"
+    if cwd_albums.is_dir() and cwd_albums not in search_roots:
+        search_roots.append(cwd_albums)
+
+    for albums_dir in search_roots:
         for album_dir in albums_dir.iterdir():
-            candidate = album_dir / "lyrics" / f"{base}.md"
-            if candidate.exists():
-                return candidate
+            lyrics_dir = album_dir / "lyrics"
+            if not lyrics_dir.is_dir():
+                continue
+            found = find_lyrics_md(stem, lyrics_dir)
+            if found:
+                return found
 
     raise ValidationError(
         f"Could not find lyrics source for {mp3_path.name}. Use --source."

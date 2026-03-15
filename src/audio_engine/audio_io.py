@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from audio_engine.constants import INT16_MAX, TARGET_SAMPLE_RATE
+from audio_engine.constants import DEFAULT_SAMPLE_RATE, INT16_MAX
 from audio_engine.mastering import master_stereo
 
 log = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 def write_wav_file(
     filename: str,
     samples: list[float] | np.ndarray,
-    sample_rate: int = TARGET_SAMPLE_RATE,
+    sample_rate: int = DEFAULT_SAMPLE_RATE,
 ) -> None:
     """Write mono WAV file from float samples in [-1.0, 1.0]."""
     arr = np.asarray(samples, dtype=np.float64)
@@ -73,7 +73,7 @@ def master_to_mp3(
     left: NDArray[np.float64],
     right: NDArray[np.float64],
     mp3_path: str,
-    sample_rate: int = TARGET_SAMPLE_RATE,
+    sample_rate: int = DEFAULT_SAMPLE_RATE,
     target_lufs: float = -14.0,
     stereo_width: float = 1.2,
     bitrate: str = "320k",
@@ -101,7 +101,7 @@ def master_to_mp3(
 
     mp3_p = Path(mp3_path)
     mastered_wav = str(mp3_p.with_suffix(".mastered.wav"))
-    _write_stereo_wav(mastered_wav, mastered_left, mastered_right, sample_rate)
+    write_stereo_wav(mastered_wav, mastered_left, mastered_right, sample_rate)
 
     cmd = _build_ffmpeg_cmd(mastered_wav, mp3_path, bitrate, metadata)
 
@@ -207,7 +207,7 @@ def read_wav_bytes(
     return left, right, framerate
 
 
-def _write_stereo_wav(
+def write_stereo_wav(
     filename: str,
     left: NDArray[np.float64],
     right: NDArray[np.float64],

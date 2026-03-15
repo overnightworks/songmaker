@@ -107,6 +107,6 @@ pip install -e .
 
 - Commit messages: conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`)
 - Code and docs in English, lyrics can be any language
-- Sample rate: 44100 Hz
+- Sample rate: native from ACE-Step (typically 48kHz), default fallback 44100 Hz
 - Output: Stereo WAV -> MP3 320kbps via ffmpeg
 - Mastering: Multiband compression -> Stereo widening -> LUFS -14 -> Soft clipping

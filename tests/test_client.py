@@ -6,7 +6,10 @@ import json
 from http.client import HTTPResponse
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from acestep_engine.client import AceStepClient, is_acestep_available
+from acestep_engine.errors import GenerationFailedError, TaskSubmissionError
 from acestep_engine.models import AceStepConfig
 
 
@@ -56,9 +59,8 @@ def test_submit_task_failure() -> None:
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         from urllib.error import URLError
         mock_urlopen.side_effect = URLError("Connection refused")
-        task_id = client._submit_task(config)
-
-    assert task_id is None
+        with pytest.raises(TaskSubmissionError, match="Connection refused"):
+            client._submit_task(config)
 
 
 def test_poll_result_success() -> None:
@@ -86,8 +88,7 @@ def test_poll_result_failure() -> None:
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
-        result = client._poll_result("abc")
-
-    assert result is None
+        with pytest.raises(GenerationFailedError, match="generation failed"):
+            client._poll_result("abc")
 
 

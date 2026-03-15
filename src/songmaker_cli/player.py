@@ -9,12 +9,56 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from string import Template
 
 from songmaker_cli.constants import DEFAULT_ARTIST, DEFAULT_YEAR
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
+
+DEFAULT_COLOR = {"primary": "#ff3220", "bg": "#0d0d0d"}
+
+
+def _extract_version_number(stem: str) -> int:
+    """Extract numeric version from a stem like '01_song_v3' -> 3. Returns 0 if none."""
+    match = re.search(r"_v(\d+)$", stem)
+    return int(match.group(1)) if match else 0
+
+
+@dataclass
+class TrackInfo:
+    """A single track in the manifest."""
+
+    file: str
+    title: str
+    number: str
+    lines: list[dict] = field(default_factory=list)
+    intended: list[dict] = field(default_factory=list)
+    has_sung: bool = False
+
+
+@dataclass
+class AlbumInfo:
+    """An album entry in the manifest."""
+
+    id: str
+    title: str
+    artist: str
+    subtitle: str
+    year: str
+    colors: dict[str, str]
+    tracks: list[TrackInfo]
+
+
+@dataclass
+class Manifest:
+    """Top-level manifest for the HTML player."""
+
+    albums: list[AlbumInfo]
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
 def _parse_srt(path: Path) -> list[dict]:
@@ -49,19 +93,18 @@ def _parse_album_yaml(path: Path) -> dict:
         "artist": meta.artist,
         "subtitle": meta.subtitle,
         "year": meta.year,
+        "colors": meta.colors,
     }
 
 
 def _find_lyrics_for_track(track_stem: str, lyrics_dir: Path) -> str | None:
     """Find lyrics from a markdown file matching the track stem."""
-    for md_file in lyrics_dir.glob("*.md"):
-        if md_file.stem == track_stem:
-            return _extract_lyrics(md_file)
-    base = re.sub(r"_v\d+$", "", track_stem)
-    for md_file in lyrics_dir.glob("*.md"):
-        if md_file.stem == base:
-            return _extract_lyrics(md_file)
-    return None
+    from songmaker_cli.parser import find_lyrics_md
+
+    md_file = find_lyrics_md(track_stem, lyrics_dir)
+    if md_file is None:
+        return None
+    return _extract_lyrics(md_file)
 
 
 def _extract_lyrics(md_path: Path) -> str | None:
@@ -86,26 +129,19 @@ def _lyrics_to_lines(lyrics: str) -> list[dict]:
     return lines
 
 
-# Album theme colors
-ALBUM_COLORS = {
-    "apologiez": {"primary": "#ff3220", "bg": "#0d0d0d"},
-    "feelings": {"primary": "#6a9fd8", "bg": "#0a0a14"},
-    "midnight_frequency": {"primary": "#9b59b6", "bg": "#0d0a14"},
-    "download_days": {"primary": "#e67e22", "bg": "#0d0d0a"},
-}
-DEFAULT_COLOR = {"primary": "#ff3220", "bg": "#0d0d0d"}
-
-
 def _deduplicate_versions(mp3s: list[Path]) -> list[Path]:
     """Keep only the latest version of each track (e.g., v2 over v1)."""
-    by_base: dict[str, Path] = {}
+    from songmaker_cli.parser import strip_version_suffix
+
+    by_base: dict[str, tuple[int, Path]] = {}
     for mp3 in mp3s:
-        base = re.sub(r"_v\d+$", "", mp3.stem)
+        base = strip_version_suffix(mp3.stem)
         if base.endswith("_raw"):
             continue
-        if base not in by_base or mp3.stem > by_base[base].stem:
-            by_base[base] = mp3
-    return sorted(by_base.values())
+        version = _extract_version_number(mp3.stem)
+        if base not in by_base or version > by_base[base][0]:
+            by_base[base] = (version, mp3)
+    return sorted(p for _, p in by_base.values())
 
 
 def generate_player(output_dir: Path, project_root: Path | None = None) -> Path:
@@ -121,17 +157,17 @@ def generate_player(output_dir: Path, project_root: Path | None = None) -> Path:
     if project_root is None:
         project_root = output_dir.parent
 
-    # Write manifest.json (always regenerated)
     manifest = _build_manifest(output_dir, project_root)
+    manifest_dict = manifest.to_dict()
+
     manifest_path = output_dir / "manifest.json"
     manifest_path.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2),
+        json.dumps(manifest_dict, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
-    # Write player.html with inline manifest (always regenerated)
     player_path = output_dir / "player.html"
-    manifest_json = json.dumps(manifest, ensure_ascii=False)
+    manifest_json = json.dumps(manifest_dict, ensure_ascii=False)
     html = _render_static_html(manifest_json, DEFAULT_ARTIST, DEFAULT_YEAR)
     player_path.write_text(html, encoding="utf-8")
 
@@ -153,8 +189,8 @@ def _scan_album_tracks(
     mp3s: list[Path],
     mp3_base: str,
     lyrics_dir: Path,
-) -> list[dict]:
-    """Build track dicts from a list of MP3 files."""
+) -> list[TrackInfo]:
+    """Build track dataclasses from a list of MP3 files."""
     tracks = []
     for mp3 in mp3s:
         stem = mp3.stem
@@ -168,20 +204,20 @@ def _scan_album_tracks(
 
         lines = sung_lines if sung_lines else intended_lines
 
-        tracks.append({
-            "file": f"{mp3_base}/{mp3.name}",
-            "title": title,
-            "number": number,
-            "lines": lines,
-            "intended": intended_lines,
-            "has_sung": bool(sung_lines),
-        })
+        tracks.append(TrackInfo(
+            file=f"{mp3_base}/{mp3.name}",
+            title=title,
+            number=number,
+            lines=lines,
+            intended=intended_lines,
+            has_sung=bool(sung_lines),
+        ))
     return tracks
 
 
-def _build_manifest(output_dir: Path, project_root: Path) -> dict:
+def _build_manifest(output_dir: Path, project_root: Path) -> Manifest:
     """Build the manifest data structure from album directories."""
-    albums_data = []
+    albums_data: list[AlbumInfo] = []
 
     for album_dir in sorted(output_dir.iterdir()):
         if not album_dir.is_dir():
@@ -209,70 +245,67 @@ def _build_manifest(output_dir: Path, project_root: Path) -> dict:
 
         lyrics_dir = project_root / "albums" / album_name / "lyrics"
         tracks = _scan_album_tracks(mp3s, mp3_base, lyrics_dir)
-        colors = ALBUM_COLORS.get(album_name, DEFAULT_COLOR)
+        colors = album_meta.get("colors") or DEFAULT_COLOR
 
-        albums_data.append({
-            "id": album_name,
-            "title": album_meta.get("title", album_name),
-            "artist": album_meta.get("artist", DEFAULT_ARTIST),
-            "subtitle": album_meta.get("subtitle", ""),
-            "year": album_meta.get("year", DEFAULT_YEAR),
-            "colors": colors,
-            "tracks": tracks,
-        })
+        albums_data.append(AlbumInfo(
+            id=album_name,
+            title=album_meta.get("title", album_name),
+            artist=album_meta.get("artist", DEFAULT_ARTIST),
+            subtitle=album_meta.get("subtitle", ""),
+            year=album_meta.get("year", DEFAULT_YEAR),
+            colors=colors,
+            tracks=tracks,
+        ))
 
     latest_tracks = _build_latest_tracks(output_dir, project_root)
     if latest_tracks:
-        albums_data.insert(0, {
-            "id": "_latest",
-            "title": "Latest",
-            "artist": DEFAULT_ARTIST,
-            "subtitle": "All versions, newest first",
-            "year": DEFAULT_YEAR,
-            "colors": {"primary": "#22cc44", "bg": "#0d0d0d"},
-            "tracks": latest_tracks,
-        })
+        albums_data.insert(0, AlbumInfo(
+            id="_latest",
+            title="Latest",
+            artist=DEFAULT_ARTIST,
+            subtitle="All versions, newest first",
+            year=DEFAULT_YEAR,
+            colors={"primary": "#22cc44", "bg": "#0d0d0d"},
+            tracks=latest_tracks,
+        ))
 
-    return {"albums": albums_data}
+    return Manifest(albums=albums_data)
 
 
-def _build_latest_tracks(output_dir: Path, project_root: Path) -> list[dict]:
+def _build_latest_tracks(output_dir: Path, project_root: Path) -> list[TrackInfo]:
     """Collect all tracks across albums sorted by newest first."""
-    latest_tracks = []
+    entries: list[tuple[float, str, TrackInfo]] = []
+
     for album_dir in sorted(output_dir.iterdir()):
         if not album_dir.is_dir():
             continue
         album_name = album_dir.name
         lyrics_dir = project_root / "albums" / album_name / "lyrics"
-        mp3s = [mp3 for mp3 in album_dir.glob("*.mp3") if not mp3.stem.endswith("_raw")]
+
+        final_dir = album_dir / "final"
+        scan_dir = final_dir if final_dir.exists() else album_dir
+        mp3s = [mp3 for mp3 in scan_dir.glob("*.mp3") if not mp3.stem.endswith("_raw")]
         for mp3 in mp3s:
             stem = mp3.stem
             number, title = _parse_track_title(stem)
             version_match = re.search(r"_v(\d+)$", stem)
             version = version_match.group(1) if version_match else "1"
-            title = f"{title} v{version}"
 
             raw_lyrics = _find_lyrics_for_track(stem, lyrics_dir)
             intended_lines = _lyrics_to_lines(raw_lyrics) if raw_lyrics else []
 
-            latest_tracks.append({
-                "file": f"{album_name}/{mp3.name}",
-                "title": title,
-                "number": number,
-                "lines": intended_lines,
-                "intended": intended_lines,
-                "has_sung": False,
-                "mtime": mp3.stat().st_mtime,
-                "album_tag": album_name,
-            })
+            track = TrackInfo(
+                file=f"{album_name}/{mp3.name}",
+                title=f"{title} v{version}  [{album_name}]",
+                number=number,
+                lines=intended_lines,
+                intended=intended_lines,
+                has_sung=False,
+            )
+            entries.append((mp3.stat().st_mtime, album_name, track))
 
-    latest_tracks.sort(key=lambda t: t["mtime"], reverse=True)
-    for t in latest_tracks:
-        t["title"] = f"{t['title']}  [{t['album_tag']}]"
-        del t["mtime"]
-        del t["album_tag"]
-
-    return latest_tracks
+    entries.sort(key=lambda e: e[0], reverse=True)
+    return [track for _, _, track in entries]
 
 
 def _render_static_html(

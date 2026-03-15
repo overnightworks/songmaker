@@ -86,9 +86,9 @@ def test_scan_album_tracks(tmp_path: Path) -> None:
 
     tracks = _scan_album_tracks([mp3], "album", lyrics_dir)
     assert len(tracks) == 1
-    assert tracks[0]["title"] == "Test Song"
-    assert tracks[0]["number"] == "01"
-    assert tracks[0]["file"] == "album/01_test_song_v1.mp3"
+    assert tracks[0].title == "Test Song"
+    assert tracks[0].number == "01"
+    assert tracks[0].file == "album/01_test_song_v1.mp3"
 
 
 def test_build_manifest_empty(tmp_path: Path) -> None:
@@ -96,7 +96,7 @@ def test_build_manifest_empty(tmp_path: Path) -> None:
     (output_dir / "test_album").rmdir()
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest = _build_manifest(output_dir, project_root)
-    assert manifest == {"albums": []}
+    assert manifest.albums == []
 
 
 def test_build_manifest_with_tracks(tmp_path: Path) -> None:
@@ -104,11 +104,10 @@ def test_build_manifest_with_tracks(tmp_path: Path) -> None:
     (output_dir / "test_album" / "01_hello_v1.mp3").touch()
 
     manifest = _build_manifest(output_dir, project_root)
-    albums = manifest["albums"]
-    real_albums = [a for a in albums if a["id"] != "_latest"]
+    real_albums = [a for a in manifest.albums if a.id != "_latest"]
     assert len(real_albums) == 1
-    assert real_albums[0]["id"] == "test_album"
-    assert len(real_albums[0]["tracks"]) == 1
+    assert real_albums[0].id == "test_album"
+    assert len(real_albums[0].tracks) == 1
 
 
 def test_build_manifest_latest_album(tmp_path: Path) -> None:
@@ -116,9 +115,9 @@ def test_build_manifest_latest_album(tmp_path: Path) -> None:
     (output_dir / "test_album" / "01_hello_v1.mp3").touch()
 
     manifest = _build_manifest(output_dir, project_root)
-    latest = [a for a in manifest["albums"] if a["id"] == "_latest"]
+    latest = [a for a in manifest.albums if a.id == "_latest"]
     assert len(latest) == 1
-    assert len(latest[0]["tracks"]) == 1
+    assert len(latest[0].tracks) == 1
 
 
 def test_render_static_html_contains_substitutions() -> None:

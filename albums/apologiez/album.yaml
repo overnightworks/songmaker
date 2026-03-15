@@ -3,3 +3,6 @@ artist: Flex0r
 for: MC Tobbisch
 year: 2026
 subtitle: "sorry for the robot voice"
+colors:
+  primary: "#ff3220"
+  bg: "#0d0d0d"

@@ -18,7 +18,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import butter, sosfilt
 
-from audio_engine.constants import TARGET_SAMPLE_RATE
+from audio_engine.constants import DEFAULT_SAMPLE_RATE
 
 _REFERENCE_LUFS: Final[float] = -0.691
 _ABSOLUTE_GATE_LUFS: Final[float] = -70.0
@@ -50,7 +50,7 @@ def master_mono(
     samples: NDArray[np.float64],
     target_lufs: float = _DEFAULT_TARGET_LUFS,
     stereo_width: float = _DEFAULT_STEREO_WIDTH,
-    sample_rate: int = TARGET_SAMPLE_RATE,
+    sample_rate: int = DEFAULT_SAMPLE_RATE,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Master mono input to stereo output.
 
@@ -69,7 +69,7 @@ def master_stereo(
     right: NDArray[np.float64],
     target_lufs: float = _DEFAULT_TARGET_LUFS,
     stereo_width: float = _DEFAULT_STEREO_WIDTH,
-    sample_rate: int = TARGET_SAMPLE_RATE,
+    sample_rate: int = DEFAULT_SAMPLE_RATE,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Apply professional mastering chain to stereo audio.
 
@@ -112,7 +112,7 @@ def multiband_compress(
     bands: tuple[tuple[float, float], ...] = _DEFAULT_CROSSOVER_BANDS,
     ratios: tuple[float, ...] = _DEFAULT_RATIOS,
     thresholds: tuple[float, ...] = _DEFAULT_THRESHOLDS,
-    sample_rate: int = TARGET_SAMPLE_RATE,
+    sample_rate: int = DEFAULT_SAMPLE_RATE,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Apply frequency-dependent compression across multiple bands."""
     if len(bands) != len(ratios) or len(bands) != len(thresholds):
@@ -140,7 +140,7 @@ def multiband_compress(
 def measure_lufs(
     left: NDArray[np.float64],
     right: NDArray[np.float64],
-    sample_rate: int = TARGET_SAMPLE_RATE,
+    sample_rate: int = DEFAULT_SAMPLE_RATE,
 ) -> float:
     """Measure integrated LUFS following simplified ITU-R BS.1770-4."""
     if len(left) == 0 or len(right) == 0:

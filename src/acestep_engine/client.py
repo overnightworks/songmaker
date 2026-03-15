@@ -18,6 +18,13 @@ from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from acestep_engine.errors import (
+    AudioDownloadError,
+    GenerationFailedError,
+    GenerationTimeoutError,
+    ServerUnavailableError,
+    TaskSubmissionError,
+)
 from acestep_engine.models import AceStepConfig, AceStepResult
 
 log = logging.getLogger(__name__)
@@ -42,17 +49,16 @@ class AceStepClient:
     """HTTP client for the ACE-Step 1.5 REST API.
 
     Submits generation jobs, polls for completion, and downloads
-    the result as audio samples at 44100 Hz mono.
+    the result as stereo audio at the server's native sample rate.
 
     Usage:
         client = AceStepClient()
-        if client.is_available:
-            result = client.generate(AceStepConfig(
-                prompt="female vocal, piano ballad",
-                lyrics="[verse]\\nHello world",
-                bpm=72,
-                duration=30,
-            ))
+        result = client.generate(AceStepConfig(
+            prompt="female vocal, piano ballad",
+            lyrics="[verse]\\nHello world",
+            bpm=72,
+            duration=30,
+        ))
     """
 
     def __init__(
@@ -70,39 +76,37 @@ class AceStepClient:
         port = parsed.port or DEFAULT_PORT
         return is_acestep_available(host=host, port=port)
 
-    def generate(self, config: AceStepConfig) -> AceStepResult | None:
+    def generate(self, config: AceStepConfig) -> AceStepResult:
         """Generate music via ACE-Step and return audio samples.
 
         Submits a generation job, polls until complete, downloads the
-        audio, resamples to 44100 Hz mono, and returns an AceStepResult.
+        audio, and returns an AceStepResult.
 
         Args:
             config: Generation parameters.
 
-        Returns:
-            AceStepResult with audio samples, or None on failure.
+        Raises:
+            ServerUnavailableError: Server is not reachable.
+            TaskSubmissionError: Failed to submit the generation task.
+            GenerationFailedError: Server reported generation failure.
+            GenerationTimeoutError: Polling timed out.
+            AudioDownloadError: Failed to download or parse audio.
         """
         if not self.is_available:
-            log.error("ACE-Step server not available at %s", self.base_url)
-            return None
+            raise ServerUnavailableError(
+                f"ACE-Step server not available at {self.base_url}"
+            )
 
-        # Submit job
         task_id = self._submit_task(config)
-        if task_id is None:
-            return None
-
-        # Poll for completion
-        poll_result = self._poll_result(task_id)
-        if poll_result is None:
-            return None
-
-        audio_path, seed = poll_result
-
-        # Download and convert audio
+        audio_path, seed = self._poll_result(task_id)
         return self._download_audio(audio_path, seed)
 
-    def _submit_task(self, config: AceStepConfig) -> str | None:
-        """Submit a generation task to the server."""
+    def _submit_task(self, config: AceStepConfig) -> str:
+        """Submit a generation task to the server.
+
+        Raises:
+            TaskSubmissionError: On network error or missing task_id.
+        """
         payload = {
             "task_type": "text2music",
             "caption": config.prompt,
@@ -140,21 +144,27 @@ class AceStepClient:
             inner = result.get("data", result)
             task_id = inner.get("task_id") if isinstance(inner, dict) else None
             if not task_id:
-                log.error("ACE-Step returned no task_id: %s", result)
-                return None
+                raise TaskSubmissionError(
+                    f"ACE-Step returned no task_id: {result}"
+                )
 
             log.info("ACE-Step task submitted: %s", task_id)
             return task_id
 
         except (URLError, OSError, json.JSONDecodeError) as exc:
-            log.error("Failed to submit ACE-Step task: %s", exc)
-            return None
+            raise TaskSubmissionError(
+                f"Failed to submit ACE-Step task: {exc}"
+            ) from exc
 
-    def _poll_result(self, task_id: str) -> tuple[str, int] | None:
+    def _poll_result(self, task_id: str) -> tuple[str, int]:
         """Poll until the generation task completes.
 
         Returns:
-            Tuple of (audio_file_path, seed) on success, or None on failure.
+            Tuple of (audio_file_path, seed) on success.
+
+        Raises:
+            GenerationFailedError: Server reported failure.
+            GenerationTimeoutError: Polling exceeded POLL_TIMEOUT.
         """
         payload = json.dumps({"task_id_list": [task_id]}).encode()
         start = time.monotonic()
@@ -181,13 +191,12 @@ class AceStepClient:
                 status = entry.get("status", 0)
 
                 if status == 2:
-                    # Failed
                     result_str = entry.get("result", "[]")
-                    log.error("ACE-Step generation failed: %s", result_str)
-                    return None
+                    raise GenerationFailedError(
+                        f"ACE-Step generation failed: {result_str}"
+                    )
 
                 if status == 1:
-                    # Succeeded — extract audio path from result
                     result_str = entry.get("result", "[]")
                     try:
                         items = (
@@ -208,8 +217,9 @@ class AceStepClient:
                                 "ACE-Step generation complete (%.1fs)", elapsed,
                             )
                             return file_path, seed
-                    log.error("ACE-Step completed but no audio returned: %s", result_str)
-                    return None
+                    raise GenerationFailedError(
+                        f"ACE-Step completed but no audio returned: {result_str}"
+                    )
 
                 # Still processing
                 elapsed = time.monotonic() - start
@@ -224,13 +234,18 @@ class AceStepClient:
 
             time.sleep(POLL_INTERVAL)
 
-        log.error("ACE-Step generation timed out after %.0fs", POLL_TIMEOUT)
-        return None
+        raise GenerationTimeoutError(
+            f"ACE-Step generation timed out after {POLL_TIMEOUT:.0f}s"
+        )
 
     def _download_audio(
         self, audio_path: str, seed: int,
-    ) -> AceStepResult | None:
-        """Download generated audio from the server and return stereo samples."""
+    ) -> AceStepResult:
+        """Download generated audio from the server and return stereo samples.
+
+        Raises:
+            AudioDownloadError: On network error or empty/unparseable audio.
+        """
         try:
             if audio_path.startswith("/"):
                 url = f"{self.base_url}{audio_path}"
@@ -244,8 +259,7 @@ class AceStepClient:
             from audio_engine.audio_io import read_wav_bytes
             left, right, sample_rate = read_wav_bytes(wav_bytes)
             if len(left) == 0:
-                log.error("Downloaded audio is empty")
-                return None
+                raise AudioDownloadError("Downloaded audio is empty")
 
             duration = len(left) / sample_rate
 
@@ -263,5 +277,6 @@ class AceStepClient:
             )
 
         except (URLError, OSError) as exc:
-            log.error("Failed to download ACE-Step audio: %s", exc)
-            return None
+            raise AudioDownloadError(
+                f"Failed to download ACE-Step audio: {exc}"
+            ) from exc

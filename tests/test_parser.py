@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import extract_lyrics, parse_album_yaml, parse_song_md
 
 
@@ -86,7 +87,7 @@ def test_parse_song_md_generation_params(song_md: Path) -> None:
 def test_parse_song_md_no_frontmatter(tmp_path: Path) -> None:
     md = tmp_path / "bad.md"
     md.write_text("Just some text\nNo frontmatter here\n")
-    with pytest.raises(ValueError, match="No YAML frontmatter"):
+    with pytest.raises(ValidationError, match="No YAML frontmatter"):
         parse_song_md(md)
 
 

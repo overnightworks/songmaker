@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 from songmaker_cli.constants import OUTPUT_ROOT
+from songmaker_cli.errors import ValidationError
 
 log = logging.getLogger(__name__)
 
@@ -40,12 +41,13 @@ class OutputPaths(BaseModel):
 
 def next_version(output_dir: Path, base_name: str) -> int:
     """Find the next version number for a track (v1, v2, ...)."""
-    existing = list(output_dir.glob(f"{base_name}_v*.mp3"))
+    import re
+
     versions = []
-    for p in existing:
-        part = p.stem.replace(f"{base_name}_v", "")
-        if part.isdigit():
-            versions.append(int(part))
+    for p in output_dir.glob(f"{base_name}_v*.mp3"):
+        match = re.search(r"_v(\d+)\.mp3$", p.name)
+        if match:
+            versions.append(int(match.group(1)))
     return max(versions, default=0) + 1
 
 
@@ -121,6 +123,8 @@ def _sanitize_params(fields: dict) -> dict:
 
     infer = result.get("infer_method")
     if infer and infer not in ("ode", "sde"):
-        log.warning("infer_method='%s' is not 'ode' or 'sde'", infer)
+        raise ValidationError(
+            f"infer_method='{infer}' is invalid, must be 'ode' or 'sde'"
+        )
 
     return result
