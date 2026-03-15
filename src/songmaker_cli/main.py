@@ -204,12 +204,10 @@ def _write_output(
         "lyrics": meta.lyrics,
         "comment": f"seed={result.seed}",
     }
-    success = master_to_mp3(
+    master_to_mp3(
         result.left, result.right, str(paths.mp3),
         sample_rate=result.sample_rate, metadata=id3_metadata,
     )
-    if not success:
-        raise GenerationError(f"Mastering failed for {paths.mp3}")
     paths.raw_wav.unlink(missing_ok=True)
 
 

@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 whisper = [
+    "openai-whisper",
     "torch>=2.2",
     "torchaudio>=2.2",
     "soundfile",

@@ -78,19 +78,22 @@ def master_to_mp3(
     stereo_width: float = 1.2,
     bitrate: str = "320k",
     metadata: dict[str, str] | None = None,
-) -> bool:
+) -> None:
     """Master stereo audio to MP3.
 
     Pipeline: multiband compression -> stereo widening ->
     LUFS normalization -> soft clipping -> MP3 encoding (ffmpeg).
+
+    Raises:
+        MasteringError: On empty audio, missing ffmpeg, or encoding failure.
     """
+    from songmaker_cli.errors import MasteringError
+
     if len(left) == 0 or len(right) == 0:
-        log.error("Mastering failed: empty audio")
-        return False
+        raise MasteringError("Cannot master empty audio")
 
     if not shutil.which("ffmpeg"):
-        log.error("ffmpeg not found on PATH — install ffmpeg to encode MP3s")
-        return False
+        raise MasteringError("ffmpeg not found on PATH — install ffmpeg to encode MP3s")
 
     log.info(
         "Mastering: multiband -> stereo(%.1fx) -> LUFS(%.1f) -> clip",
@@ -109,10 +112,23 @@ def master_to_mp3(
     try:
         subprocess.run(cmd, input=wav_bytes, check=True, capture_output=True)
         log.info("Mastered to %s", mp3_path)
-        return True
     except subprocess.CalledProcessError as exc:
-        log.error("MP3 encoding failed: %s", exc)
-        return False
+        raise MasteringError(f"MP3 encoding failed: {exc}") from exc
+
+
+def _interleave_to_int16(
+    left: NDArray[np.float64],
+    right: NDArray[np.float64],
+) -> NDArray[np.int16]:
+    """Clip and interleave stereo float arrays to int16."""
+    n = min(len(left), len(right))
+    left_arr = np.clip(left[:n] * INT16_MAX, -INT16_MAX, INT16_MAX - 1).astype(np.int16)
+    right_arr = np.clip(right[:n] * INT16_MAX, -INT16_MAX, INT16_MAX - 1).astype(np.int16)
+
+    interleaved = np.empty(n * 2, dtype=np.int16)
+    interleaved[0::2] = left_arr
+    interleaved[1::2] = right_arr
+    return interleaved
 
 
 def _stereo_to_wav_bytes(
@@ -123,13 +139,7 @@ def _stereo_to_wav_bytes(
     """Encode stereo float arrays to WAV bytes in memory."""
     import io
 
-    n = min(len(left), len(right))
-    left_arr = np.clip(left[:n] * INT16_MAX, -INT16_MAX, INT16_MAX - 1).astype(np.int16)
-    right_arr = np.clip(right[:n] * INT16_MAX, -INT16_MAX, INT16_MAX - 1).astype(np.int16)
-
-    interleaved = np.empty(n * 2, dtype=np.int16)
-    interleaved[0::2] = left_arr
-    interleaved[1::2] = right_arr
+    interleaved = _interleave_to_int16(left, right)
 
     buf = io.BytesIO()
     with wave.open(buf, "w") as wf:
@@ -239,13 +249,7 @@ def write_stereo_wav(
     sample_rate: int,
 ) -> None:
     """Write stereo WAV file from two float channel arrays."""
-    n = min(len(left), len(right))
-    left_arr = np.clip(left[:n] * INT16_MAX, -INT16_MAX, INT16_MAX - 1).astype(np.int16)
-    right_arr = np.clip(right[:n] * INT16_MAX, -INT16_MAX, INT16_MAX - 1).astype(np.int16)
-
-    interleaved = np.empty(n * 2, dtype=np.int16)
-    interleaved[0::2] = left_arr
-    interleaved[1::2] = right_arr
+    interleaved = _interleave_to_int16(left, right)
 
     with wave.open(filename, "w") as wf:
         wf.setnchannels(2)

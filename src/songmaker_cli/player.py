@@ -12,8 +12,12 @@ import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from string import Template
+from typing import TYPE_CHECKING
 
-from songmaker_cli.constants import DEFAULT_ARTIST, DEFAULT_YEAR
+from songmaker_cli.constants import DEFAULT_ARTIST, default_year
+
+if TYPE_CHECKING:
+    from songmaker_cli.parser import AlbumMeta
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
@@ -83,18 +87,11 @@ def _parse_srt(path: Path) -> list[dict]:
     return lines
 
 
-def _load_album_meta(album_dir: Path) -> dict:
+def _load_album_meta(album_dir: Path) -> AlbumMeta:
     """Load album metadata — delegates to parser module."""
-    from songmaker_cli.parser import load_album_meta
+    from songmaker_cli.parser import AlbumMeta, load_album_meta
 
-    meta = load_album_meta(album_dir)
-    return {
-        "title": meta.title,
-        "artist": meta.artist,
-        "subtitle": meta.subtitle,
-        "year": meta.year,
-        "colors": meta.colors,
-    }
+    return load_album_meta(album_dir)
 
 
 def _find_lyrics_for_track(track_stem: str, lyrics_dir: Path) -> str | None:
@@ -168,7 +165,7 @@ def generate_player(output_dir: Path, project_root: Path | None = None) -> Path:
 
     player_path = output_dir / "player.html"
     manifest_json = json.dumps(manifest_dict, ensure_ascii=False)
-    html = _render_static_html(manifest_json, DEFAULT_ARTIST, DEFAULT_YEAR)
+    html = _render_static_html(manifest_json, DEFAULT_ARTIST, default_year())
     player_path.write_text(html, encoding="utf-8")
 
     return player_path
@@ -242,15 +239,14 @@ def _build_manifest(output_dir: Path, project_root: Path) -> Manifest:
 
         lyrics_dir = project_root / "albums" / album_name / "lyrics"
         tracks = _scan_album_tracks(mp3s, mp3_base, lyrics_dir)
-        colors = album_meta.get("colors") or DEFAULT_COLOR
 
         albums_data.append(AlbumInfo(
             id=album_name,
-            title=album_meta.get("title", album_name),
-            artist=album_meta.get("artist", DEFAULT_ARTIST),
-            subtitle=album_meta.get("subtitle", ""),
-            year=album_meta.get("year", DEFAULT_YEAR),
-            colors=colors,
+            title=album_meta.title,
+            artist=album_meta.artist,
+            subtitle=album_meta.subtitle,
+            year=album_meta.year or default_year(),
+            colors=album_meta.colors or DEFAULT_COLOR,
             tracks=tracks,
         ))
 
@@ -261,7 +257,7 @@ def _build_manifest(output_dir: Path, project_root: Path) -> Manifest:
             title="Latest",
             artist=DEFAULT_ARTIST,
             subtitle="All versions, newest first",
-            year=DEFAULT_YEAR,
+            year=default_year(),
             colors={"primary": "#22cc44", "bg": "#0d0d0d"},
             tracks=latest_tracks,
         ))
@@ -312,9 +308,11 @@ def _build_latest_tracks(output_dir: Path, project_root: Path) -> list[TrackInfo
 def _render_static_html(
     manifest_json: str = "null",
     artist: str = DEFAULT_ARTIST,
-    year: str = DEFAULT_YEAR,
+    year: str = "",
 ) -> str:
     """Render the HTML player from template with variable substitution."""
+    if not year:
+        year = default_year()
     template_path = _TEMPLATE_DIR / "player.html"
     template = Template(template_path.read_text(encoding="utf-8"))
     return template.substitute(

@@ -64,6 +64,9 @@ def master_mono(
     return _master_chain(left, right, target_lufs, stereo_width, sample_rate)
 
 
+_CHANNEL_LENGTH_TOLERANCE: Final[int] = 16
+
+
 def master_stereo(
     left: NDArray[np.float64],
     right: NDArray[np.float64],
@@ -81,6 +84,15 @@ def master_stereo(
     """
     if len(left) == 0 or len(right) == 0:
         return left, right
+
+    length_diff = abs(len(left) - len(right))
+    if length_diff > _CHANNEL_LENGTH_TOLERANCE:
+        raise ValueError(
+            f"Left/right channel length mismatch: {len(left)} vs {len(right)} "
+            f"(diff={length_diff}, tolerance={_CHANNEL_LENGTH_TOLERANCE})"
+        )
+    n = min(len(left), len(right))
+    left, right = left[:n], right[:n]
 
     return _master_chain(left, right, target_lufs, stereo_width, sample_rate)
 
@@ -221,12 +233,32 @@ def widen_stereo(
     return mid + side, mid - side
 
 
+_SOFT_CLIP_KNEE: Final[float] = 0.85
+
+
 def soft_clip(
     samples: NDArray[np.float64],
     ceiling: float = _DEFAULT_SOFT_CLIP_CEILING,
 ) -> NDArray[np.float64]:
-    """Apply tanh soft clipping for warmth without hard digital clipping."""
-    return np.tanh(samples) * ceiling
+    """Apply soft clipping: linear below knee, tanh saturation above.
+
+    Signals below the knee pass through unchanged so that LUFS
+    normalization is not undone for well-behaved audio.
+    """
+    if len(samples) == 0:
+        return samples
+
+    knee = _SOFT_CLIP_KNEE * ceiling
+    result = samples.copy()
+    above = np.abs(samples) > knee
+
+    if np.any(above):
+        sign = np.sign(samples[above])
+        magnitude = np.abs(samples[above])
+        scaled = (magnitude - knee) / (ceiling - knee)
+        result[above] = sign * (knee + (ceiling - knee) * np.tanh(scaled))
+
+    return result
 
 
 def _extract_band(
@@ -330,15 +362,14 @@ def _compute_block_energies(
     if n_blocks == 0:
         return np.array([], dtype=np.float64)
 
-    energies = np.empty(n_blocks, dtype=np.float64)
-    for i in range(n_blocks):
-        start = i * hop_size
-        end = start + block_size
-        left_block = left_weighted[start:end]
-        right_block = right_weighted[start:end]
-        energies[i] = float(np.mean(left_block**2) + np.mean(right_block**2))
+    left_view = np.lib.stride_tricks.sliding_window_view(
+        left_weighted[:n], block_size,
+    )[::hop_size]
+    right_view = np.lib.stride_tricks.sliding_window_view(
+        right_weighted[:n], block_size,
+    )[::hop_size]
 
-    return energies
+    return np.mean(left_view**2, axis=1) + np.mean(right_view**2, axis=1)
 
 
 def _mono_to_stereo(
