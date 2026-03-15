@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import wave
-from io import BytesIO
 from pathlib import Path
+from typing import Callable
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -94,25 +93,10 @@ def test_load_album_meta_without_yaml(tmp_path: Path) -> None:
     assert meta.title == "Cool Album"
 
 
-def _make_stereo_wav_bytes(sample_rate: int = 44100, duration: float = 0.1) -> bytes:
-    n = int(sample_rate * duration)
-    signal = np.zeros(n, dtype=np.int16)
-    interleaved = np.empty(n * 2, dtype=np.int16)
-    interleaved[0::2] = signal
-    interleaved[1::2] = signal
-    buf = BytesIO()
-    with wave.open(buf, "w") as wf:
-        wf.setnchannels(2)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(interleaved.tobytes())
-    return buf.getvalue()
-
-
-def test_decode_audio_success() -> None:
+def test_decode_audio_success(make_stereo_wav_bytes: Callable[..., bytes]) -> None:
     from acestep_engine.models import AceStepResult
 
-    wav_bytes = _make_stereo_wav_bytes()
+    wav_bytes = make_stereo_wav_bytes()
     result = AceStepResult(wav_bytes=wav_bytes, seed=1)
     audio = _decode_audio(result)
     assert audio.sample_rate == 44100
@@ -197,7 +181,7 @@ def test_update_player(tmp_path: Path) -> None:
     paths = OutputPaths(
         output_dir=output_dir, base_name="song", version=1, versioned_name="song_v1",
     )
-    with patch("songmaker_cli.player.generate_player") as mock_gen:
+    with patch("songmaker_cli.main.generate_player") as mock_gen:
         mock_gen.return_value = tmp_path / "player.html"
         result = _update_player(paths)
     assert result == tmp_path / "player.html"
@@ -207,9 +191,11 @@ def test_run_generation_success() -> None:
     import json
     from http.client import HTTPResponse
 
+    from acestep_engine.client import AceStepClient
     from acestep_engine.models import AceStepConfig
 
     config = AceStepConfig(prompt="test", lyrics="test")
+    client = AceStepClient()
 
     submit_resp = MagicMock(spec=HTTPResponse)
     submit_resp.status = 200
@@ -236,7 +222,7 @@ def test_run_generation_success() -> None:
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.side_effect = [submit_resp, poll_resp, wav_resp]
-        result, elapsed = _run_generation(config)
+        result, elapsed = _run_generation(config, client)
 
     assert result.seed == 7
     assert elapsed >= 0
@@ -245,14 +231,16 @@ def test_run_generation_success() -> None:
 def test_run_generation_error() -> None:
     from urllib.error import URLError
 
+    from acestep_engine.client import AceStepClient
     from acestep_engine.models import AceStepConfig
 
     config = AceStepConfig(prompt="test", lyrics="test")
+    client = AceStepClient()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.side_effect = URLError("Connection refused")
         with pytest.raises(GenerationError, match="Connection refused"):
-            _run_generation(config)
+            _run_generation(config, client)
 
 
 def test_player_command(tmp_path: Path) -> None:
@@ -261,7 +249,7 @@ def test_player_command(tmp_path: Path) -> None:
     output_dir = tmp_path / "output"
     output_dir.mkdir()
 
-    with patch("songmaker_cli.player.generate_player") as mock_gen:
+    with patch("songmaker_cli.main.generate_player") as mock_gen:
         mock_gen.return_value = output_dir / "player.html"
         player_cmd(output=str(output_dir))
 
@@ -284,7 +272,7 @@ def test_player_command_with_open(tmp_path: Path) -> None:
     player_html.write_text("<html></html>")
 
     with (
-        patch("songmaker_cli.player.generate_player") as mock_gen,
+        patch("songmaker_cli.main.generate_player") as mock_gen,
         patch("songmaker_cli.main.webbrowser.open") as mock_open,
     ):
         mock_gen.return_value = player_html
@@ -299,7 +287,9 @@ def test_check_command(tmp_path: Path) -> None:
     with patch("songmaker_cli.check.run_check") as mock_run:
         check_cmd(path="/some/file.mp3", source="/some/lyrics.md")
 
-    mock_run.assert_called_once_with("/some/file.mp3", "/some/lyrics.md", whisper_model="small")
+    mock_run.assert_called_once_with(
+        "/some/file.mp3", "/some/lyrics.md", project_root=None, whisper_model="small",
+    )
 
 
 def test_write_output_mastering_error(tmp_path: Path) -> None:

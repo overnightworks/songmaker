@@ -20,64 +20,6 @@ from audio_engine.mastering import master_stereo
 log = logging.getLogger(__name__)
 
 
-def write_wav_file(
-    filename: str,
-    samples: list[float] | np.ndarray,
-    sample_rate: int = FALLBACK_SAMPLE_RATE,
-) -> None:
-    """Write mono WAV file from float samples in [-1.0, 1.0]."""
-    arr = np.asarray(samples, dtype=np.float64)
-    int16 = np.clip(arr * INT16_MAX, -INT16_MAX, INT16_MAX - 1).astype(np.int16)
-
-    with wave.open(filename, "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(int16.tobytes())
-
-
-def read_wav_file(filename: str) -> tuple[NDArray[np.float64], int]:
-    """Read WAV file to mono float samples.
-
-    Uses scipy.io.wavfile which supports PCM int16/int32 and IEEE float32.
-    Multi-channel audio is downmixed to mono (left channel only).
-    """
-    try:
-        sample_rate, raw = scipy_wavfile.read(filename)
-    except (ValueError, struct.error) as exc:
-        log.warning("read_wav_file: failed to parse %s: %s", filename, exc)
-        return np.array([], dtype=np.float64), 0
-
-    samples = _normalize_dtype(raw)
-    if samples is None:
-        log.warning("read_wav_file: unsupported dtype %s", raw.dtype)
-        return np.array([], dtype=np.float64), 0
-
-    if samples.ndim == 2 and samples.shape[1] > 1:
-        log.warning(
-            "read_wav_file: %d-channel audio downmixed to mono (left channel only) "
-            "— use read_wav_bytes() for stereo",
-            samples.shape[1],
-        )
-        samples = samples[:, 0]
-    elif samples.ndim == 2:
-        samples = samples[:, 0]
-
-    return samples, sample_rate
-
-
-def normalize_audio(
-    samples: NDArray[np.float64], target_peak: float = 0.95,
-) -> NDArray[np.float64]:
-    """Normalize audio to target peak level."""
-    if len(samples) == 0:
-        return samples
-    peak = float(np.max(np.abs(samples)))
-    if peak < 0.001:
-        return samples
-    return samples * (target_peak / peak)
-
-
 def master_to_mp3(
     left: NDArray[np.float64],
     right: NDArray[np.float64],
@@ -158,11 +100,13 @@ def _stereo_to_wav_bytes(
 def sanitize_metadata(value: str) -> str:
     """Strip characters that can break ffmpeg -metadata parsing.
 
-    Removes control characters (newlines, null bytes, etc.) that could
-    interfere with ffmpeg's key=value metadata argument parsing.
+    Removes control characters (newlines, null bytes, etc.) and escapes
+    backslashes/equals signs that interfere with ffmpeg's key=value
+    metadata argument parsing.
     """
     cleaned = str(value)
     cleaned = "".join(ch if ch.isprintable() or ch == " " else " " for ch in cleaned)
+    cleaned = cleaned.replace("\\", "\\\\").replace("=", "\\=")
     return cleaned
 
 

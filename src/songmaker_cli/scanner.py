@@ -5,10 +5,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from songmaker_cli.parser import AlbumMeta
+from songmaker_cli.parser import AlbumMeta, load_album_meta, strip_version_suffix
 
 
 def extract_version_number(stem: str) -> int:
@@ -19,8 +17,6 @@ def extract_version_number(stem: str) -> int:
 
 def deduplicate_versions(mp3s: list[Path]) -> list[Path]:
     """Keep only the latest version of each track (e.g., v2 over v1)."""
-    from songmaker_cli.parser import strip_version_suffix
-
     by_base: dict[str, tuple[int, Path]] = {}
     for mp3 in mp3s:
         base = strip_version_suffix(mp3.stem)
@@ -41,13 +37,6 @@ class AlbumScan:
     mp3s: list[Path]
     lyrics_dir: Path
     meta: AlbumMeta
-
-
-def _load_album_meta(album_dir: Path) -> AlbumMeta:
-    """Load album metadata — delegates to parser module."""
-    from songmaker_cli.parser import load_album_meta
-
-    return load_album_meta(album_dir)
 
 
 def iter_album_scans(
@@ -76,7 +65,7 @@ def iter_album_scans(
             continue
 
         source_album_dir = project_root / "albums" / album_name
-        meta = _load_album_meta(source_album_dir)
+        meta = load_album_meta(source_album_dir)
         lyrics_dir = project_root / "albums" / album_name / "lyrics"
 
         results.append(AlbumScan(

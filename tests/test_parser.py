@@ -91,6 +91,14 @@ def test_parse_song_md_no_frontmatter(tmp_path: Path) -> None:
         parse_song_md(md)
 
 
+def test_parse_song_md_non_dict_frontmatter(tmp_path: Path) -> None:
+    md = tmp_path / "lyrics" / "list.md"
+    md.parent.mkdir(parents=True)
+    md.write_text("---\n- item1\n- item2\n---\n\n## Lyrics\n\nHello\n")
+    with pytest.raises(ValidationError, match="must be a mapping"):
+        parse_song_md(md)
+
+
 def test_parse_song_md_defaults(tmp_path: Path) -> None:
     md = tmp_path / "lyrics" / "minimal.md"
     md.parent.mkdir(parents=True)
@@ -131,6 +139,13 @@ def test_parse_album_yaml(album_yaml: Path) -> None:
     assert meta.artist == "TestArtist"
     assert meta.subtitle == "The Subtitle"
     assert meta.year == "2025"
+
+
+def test_parse_album_yaml_non_dict(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "album.yaml"
+    yaml_path.write_text("- item1\n- item2\n")
+    with pytest.raises(ValidationError, match="must be a mapping"):
+        parse_album_yaml(yaml_path)
 
 
 def test_parse_album_yaml_defaults(tmp_path: Path) -> None:

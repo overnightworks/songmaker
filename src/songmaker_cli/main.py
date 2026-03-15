@@ -19,7 +19,8 @@ from songmaker_cli.config import (
     validate_path,
 )
 from songmaker_cli.errors import GenerationError, SongmakerError, ValidationError
-from songmaker_cli.parser import SongMeta, load_album_meta, parse_song_md
+from songmaker_cli.parser import AlbumMeta, SongMeta, load_album_meta, parse_song_md
+from songmaker_cli.player import generate_player
 
 if TYPE_CHECKING:
     import numpy as np
@@ -27,7 +28,6 @@ if TYPE_CHECKING:
 
     from acestep_engine.client import AceStepClient
     from acestep_engine.models import AceStepConfig, AceStepResult
-    from songmaker_cli.parser import AlbumMeta
 
 log = logging.getLogger(__name__)
 
@@ -102,18 +102,9 @@ def generate(
             log.info("Generation %d/%d", i + 1, count)
 
         paths = resolve_output_paths(meta.album, md_path.stem)
-        _log_generation_banner(meta, paths, ace_config)
-
-        ace_result, elapsed = _run_generation(ace_config, client)
-        audio = _decode_audio(ace_result)
-        _write_output(audio, ace_result.seed, paths, meta, album_meta)
-        _log_result_banner(paths, audio, ace_result.seed, elapsed)
-        player_path = _update_player(paths)
-
-        if check:
-            from songmaker_cli.check import run_check
-
-            run_check(str(paths.mp3), source=str(md_path))
+        player_path = _generate_one(
+            meta, ace_config, client, md_path, paths, album_meta, do_check=check,
+        )
 
     if player and player_path:
         _open_player(player_path)
@@ -132,8 +123,6 @@ def player(
     ] = False,
 ) -> None:
     """Generate the unified HTML player for all albums."""
-    from songmaker_cli.player import generate_player
-
     output_dir = Path(output).resolve()
     if not output_dir.exists():
         raise ValidationError(f"{output_dir} not found")
@@ -152,6 +141,9 @@ def check(
     source: Annotated[
         Optional[str], Parameter(help="Lyrics .md file")
     ] = None,
+    project_root: Annotated[
+        Optional[str], Parameter(help="Project root for finding lyrics")
+    ] = None,
     whisper_model: Annotated[
         str, Parameter(help="Whisper model size (base/small/medium/large)")
     ] = "small",
@@ -159,7 +151,7 @@ def check(
     """Check lyrics accuracy via Whisper transcription."""
     from songmaker_cli.check import run_check
 
-    run_check(path, source, whisper_model=whisper_model)
+    run_check(path, source, project_root=project_root, whisper_model=whisper_model)
 
 
 def validate_song_meta(meta: SongMeta) -> None:
@@ -178,6 +170,32 @@ def load_album_meta_for_song(md_path: Path) -> AlbumMeta:
     return load_album_meta(album_dir)
 
 
+def _generate_one(
+    meta: SongMeta,
+    ace_config: AceStepConfig,
+    client: AceStepClient,
+    md_path: Path,
+    paths: OutputPaths,
+    album_meta: AlbumMeta,
+    do_check: bool = False,
+) -> Path:
+    """Run a single generation cycle: generate, decode, master, update player."""
+    _log_generation_banner(meta, paths, ace_config)
+
+    ace_result, elapsed = _run_generation(ace_config, client)
+    audio = _decode_audio(ace_result)
+    _write_output(audio, ace_result.seed, paths, meta, album_meta)
+    _log_result_banner(paths, audio, ace_result.seed, elapsed)
+    player_path = _update_player(paths)
+
+    if do_check:
+        from songmaker_cli.check import run_check
+
+        run_check(str(paths.mp3), source=str(md_path))
+
+    return player_path
+
+
 def _log_generation_banner(
     meta: SongMeta, paths: OutputPaths, ace_config: AceStepConfig,
 ) -> None:
@@ -192,15 +210,12 @@ def _log_generation_banner(
 
 
 def _run_generation(
-    ace_config: AceStepConfig, client: AceStepClient | None = None,
+    ace_config: AceStepConfig, client: AceStepClient,
 ) -> tuple[AceStepResult, float]:
-    from acestep_engine import AceStepClient as _Client
     from acestep_engine import AceStepError
 
     log.info("Generating via ACE-Step...")
     start_time = time.time()
-    if client is None:
-        client = _Client()
     try:
         result: AceStepResult = client.generate(ace_config)
     except AceStepError as exc:
@@ -264,8 +279,6 @@ def _log_result_banner(
 
 
 def _update_player(paths: OutputPaths) -> Path:
-    from songmaker_cli.player import generate_player
-
     player_path = generate_player(paths.output_dir.parent)
     log.info("Player updated: %s", player_path)
     return player_path

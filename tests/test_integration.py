@@ -6,39 +6,12 @@ Exercises: parse markdown -> build config -> decode audio -> master -> MP3 + pla
 
 from __future__ import annotations
 
-import wave
-from io import BytesIO
 from pathlib import Path
+from typing import Callable
 from unittest.mock import patch
-
-import numpy as np
 
 from acestep_engine.models import AceStepResult
 from songmaker_cli.main import generate
-
-
-def _make_sine_wav_bytes(
-    frequency: float = 440.0,
-    duration: float = 2.0,
-    sample_rate: int = 44100,
-) -> bytes:
-    """Build a stereo WAV file as bytes containing a sine wave."""
-    n = int(sample_rate * duration)
-    t = np.arange(n, dtype=np.float64)
-    signal = (0.3 * np.sin(2.0 * np.pi * frequency * t / sample_rate))
-    int16 = np.clip(signal * 32768.0, -32768.0, 32767.0).astype(np.int16)
-
-    interleaved = np.empty(n * 2, dtype=np.int16)
-    interleaved[0::2] = int16
-    interleaved[1::2] = int16
-
-    buf = BytesIO()
-    with wave.open(buf, "w") as wf:
-        wf.setnchannels(2)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(interleaved.tobytes())
-    return buf.getvalue()
 
 
 def _setup_project(tmp_path: Path) -> Path:
@@ -75,12 +48,12 @@ def _setup_project(tmp_path: Path) -> Path:
     return song_md
 
 
-def test_generate_end_to_end(tmp_path: Path) -> None:
+def test_generate_end_to_end(tmp_path: Path, make_sine_wav_bytes: Callable[..., bytes]) -> None:
     """Full pipeline: markdown -> ACE-Step (mocked) -> mastered MP3 + player."""
     song_md = _setup_project(tmp_path)
     output_dir = tmp_path / "_output"
 
-    wav_bytes = _make_sine_wav_bytes()
+    wav_bytes = make_sine_wav_bytes()
     mock_result = AceStepResult(wav_bytes=wav_bytes, seed=42)
 
     with (
@@ -105,12 +78,14 @@ def test_generate_end_to_end(tmp_path: Path) -> None:
     assert manifest.exists(), "Manifest JSON should be generated"
 
 
-def test_generate_multiple_versions(tmp_path: Path) -> None:
+def test_generate_multiple_versions(
+    tmp_path: Path, make_sine_wav_bytes: Callable[..., bytes],
+) -> None:
     """Verify count=3 produces three MP3s with incrementing versions."""
     song_md = _setup_project(tmp_path)
     output_dir = tmp_path / "_output"
 
-    wav_bytes = _make_sine_wav_bytes()
+    wav_bytes = make_sine_wav_bytes()
     mock_result = AceStepResult(wav_bytes=wav_bytes, seed=42)
 
     with (

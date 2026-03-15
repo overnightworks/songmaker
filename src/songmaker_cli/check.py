@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from songmaker_cli.config import validate_path
+from songmaker_cli.constants import SIMILARITY_FAIR, SIMILARITY_GOOD
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import find_lyrics_md, parse_song_md, strip_version_suffix
 
@@ -16,15 +17,14 @@ log = logging.getLogger(__name__)
 def run_check(
     path: str,
     source: str | None = None,
+    project_root: str | None = None,
     whisper_model: str = "small",
 ) -> None:
     """Transcribe with Whisper and compare to intended lyrics."""
     from difflib import SequenceMatcher
 
-    from songmaker_cli.constants import SIMILARITY_FAIR, SIMILARITY_GOOD
-
     mp3_path = validate_path(path)
-    md_path = find_lyrics_source(mp3_path, source)
+    md_path = find_lyrics_source(mp3_path, source, project_root=project_root)
     meta = parse_song_md(md_path)
 
     language = meta.generation_params.get("language", "en")
@@ -55,20 +55,32 @@ def _find_project_root(start: Path) -> Path | None:
     return None
 
 
-def find_lyrics_source(mp3_path: Path, source: str | None) -> Path:
+def find_lyrics_source(
+    mp3_path: Path,
+    source: str | None,
+    project_root: str | None = None,
+) -> Path:
     """Find the lyrics markdown file for a given MP3."""
     if source:
         md_path = Path(source).resolve()
-        if md_path.exists():
-            return md_path
+        if not md_path.exists():
+            raise ValidationError(f"Lyrics source not found: {md_path}")
+        return md_path
 
     stem = strip_version_suffix(mp3_path.stem)
 
     search_roots: list[Path] = []
 
-    project_root = _find_project_root(mp3_path)
-    if project_root and (project_root / "albums").is_dir():
-        search_roots.append(project_root / "albums")
+    if project_root:
+        explicit_root = Path(project_root).resolve()
+        if (explicit_root / "albums").is_dir():
+            search_roots.append(explicit_root / "albums")
+
+    detected_root = _find_project_root(mp3_path)
+    if detected_root and (detected_root / "albums").is_dir():
+        candidate = detected_root / "albums"
+        if candidate not in search_roots:
+            search_roots.append(candidate)
 
     output_parent = mp3_path.resolve().parent.parent
     if (output_parent.parent / "albums").is_dir():
@@ -103,14 +115,23 @@ def clean_lyrics(text: str) -> str:
 _whisper_model_cache: dict[str, object] = {}
 
 
-def _get_whisper_model(model_size: str) -> object:
-    """Return a cached Whisper model, loading it on first use."""
+def _get_whisper_model(
+    model_size: str,
+    cache: dict[str, object] | None = None,
+) -> object:
+    """Return a cached Whisper model, loading it on first use.
+
+    Args:
+        cache: Optional cache dict for testing. Uses module-level cache if None.
+    """
     import whisper
 
-    if model_size not in _whisper_model_cache:
+    if cache is None:
+        cache = _whisper_model_cache
+    if model_size not in cache:
         log.info("Loading Whisper model (%s)...", model_size)
-        _whisper_model_cache[model_size] = whisper.load_model(model_size)
-    return _whisper_model_cache[model_size]
+        cache[model_size] = whisper.load_model(model_size)
+    return cache[model_size]
 
 
 def _transcribe(

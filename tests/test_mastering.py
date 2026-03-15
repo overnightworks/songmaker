@@ -7,10 +7,11 @@ multiband compression stability, and stereo widening correctness.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from numpy.typing import NDArray
 
+from audio_engine.errors import MasteringError
 from audio_engine.mastering import (
-    master_mono,
     master_stereo,
     measure_lufs,
     multiband_compress,
@@ -123,7 +124,7 @@ def test_multiband_preserves_energy() -> None:
 def test_multiband_mismatched_params_raises() -> None:
     """Verify multiband raises ValueError on mismatched parameter lengths."""
     signal = _generate_sine()
-    try:
+    with pytest.raises(ValueError, match="Band count mismatch"):
         multiband_compress(
             signal,
             signal.copy(),
@@ -131,9 +132,6 @@ def test_multiband_mismatched_params_raises() -> None:
             ratios=(3.0, 2.5, 2.0),
             thresholds=(0.5, 0.6, 0.7),
         )
-        assert False, "Should have raised ValueError"
-    except ValueError:
-        pass
 
 
 def test_lufs_known_signal() -> None:
@@ -312,35 +310,12 @@ def test_deterministic_output() -> None:
     assert np.array_equal(result_1[1], result_2[1]), "Non-deterministic right channel"
 
 
-def test_master_mono_produces_stereo() -> None:
-    """Verify master_mono creates a stereo image from mono input."""
-    signal = _generate_sine(440.0, 0.5, 3.0)
-    left, right = master_mono(signal, target_lufs=-14.0, sample_rate=SAMPLE_RATE)
-
-    assert len(left) > 0
-    assert len(right) > 0
-    assert len(left) == len(right)
-    diff = float(np.max(np.abs(left - right)))
-    assert diff > 0.001, "Stereo image should differ between channels"
-
-
-def test_master_mono_empty() -> None:
-    """Verify master_mono handles empty input."""
-    empty = np.array([], dtype=np.float64)
-    left, right = master_mono(empty)
-    assert left.size == 0
-    assert right.size == 0
-
-
 def test_master_stereo_channel_length_mismatch() -> None:
     """Verify master_stereo raises on large channel length mismatch."""
     left = _generate_sine(440.0, 0.5, 3.0)
     right = np.concatenate([left, np.zeros(100)])
-    try:
+    with pytest.raises(MasteringError, match="length mismatch"):
         master_stereo(left, right, sample_rate=SAMPLE_RATE)
-        assert False, "Should have raised ValueError"
-    except ValueError:
-        pass
 
 
 def test_normalize_to_lufs_silent_signal() -> None:

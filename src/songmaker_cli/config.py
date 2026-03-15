@@ -40,10 +40,6 @@ class OutputPaths(BaseModel):
         return self.output_dir / f"{self.versioned_name}_raw.wav"
 
     @property
-    def wav(self) -> Path:
-        return self.output_dir / f"{self.versioned_name}.wav"
-
-    @property
     def mp3(self) -> Path:
         return self.output_dir / f"{self.versioned_name}.mp3"
 
@@ -106,28 +102,26 @@ def build_ace_config(
 
 def _sanitize_params(fields: dict) -> dict:
     """Validate ACE-Step params and reject invalid values."""
-    result = dict(fields)
-
-    shift = result.get("shift")
+    shift = fields.get("shift")
     if shift is not None and shift < 0.0:
         raise ValidationError(f"shift={shift} is negative, must be >= 0.0")
 
-    guidance = result.get("guidance_scale")
+    guidance = fields.get("guidance_scale")
     if guidance is not None and guidance < 0.0:
         raise ValidationError(f"guidance_scale={guidance} is negative, must be >= 0.0")
 
-    steps = result.get("inference_steps")
+    steps = fields.get("inference_steps")
     if steps is not None and steps < 1:
         raise ValidationError(f"inference_steps={steps} is < 1, must be >= 1")
 
-    duration = result.get("duration")
+    duration = fields.get("duration")
     if duration is not None and duration < 1:
         raise ValidationError(f"duration={duration} is < 1, must be >= 1")
 
-    infer = result.get("infer_method")
+    infer = fields.get("infer_method")
     if infer and infer not in ("ode", "sde"):
         raise ValidationError(
             f"infer_method='{infer}' is invalid, must be 'ode' or 'sde'"
         )
 
-    return result
+    return fields

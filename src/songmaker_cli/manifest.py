@@ -7,7 +7,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from songmaker_cli.constants import DEFAULT_ARTIST, default_year
-from songmaker_cli.scanner import AlbumScan, deduplicate_versions, extract_version_number
+from songmaker_cli.parser import extract_lyrics, find_lyrics_md, strip_version_suffix
+from songmaker_cli.scanner import (
+    AlbumScan,
+    deduplicate_versions,
+    extract_version_number,
+    iter_album_scans,
+)
 
 
 def _default_color() -> dict[str, str]:
@@ -98,8 +104,6 @@ def lyrics_to_lines(lyrics: str) -> list[dict]:
 
 def _find_lyrics_for_track(track_stem: str, lyrics_dir: Path) -> str | None:
     """Find lyrics from a markdown file matching the track stem."""
-    from songmaker_cli.parser import extract_lyrics, find_lyrics_md
-
     md_file = find_lyrics_md(track_stem, lyrics_dir)
     if md_file is None:
         return None
@@ -114,8 +118,6 @@ def scan_album_tracks(
     lyrics_cache: dict[str, list[dict]] | None = None,
 ) -> list[TrackInfo]:
     """Build track dataclasses from a list of MP3 files."""
-    from songmaker_cli.parser import strip_version_suffix
-
     tracks = []
     for mp3 in mp3s:
         stem = mp3.stem
@@ -146,8 +148,6 @@ def scan_album_tracks(
 
 def _build_lyrics_cache(mp3s: list[Path], lyrics_dir: Path) -> dict[str, list[dict]]:
     """Build a cache of stem -> intended_lines for all MP3s in an album."""
-    from songmaker_cli.parser import strip_version_suffix
-
     cache: dict[str, list[dict]] = {}
     for mp3 in mp3s:
         stem = mp3.stem
@@ -163,8 +163,6 @@ def _build_latest_entries(
     lyrics_cache: dict[str, list[dict]],
 ) -> list[tuple[float, str, TrackInfo]]:
     """Build "latest" view entries from all versions of an album's tracks."""
-    from songmaker_cli.parser import strip_version_suffix
-
     entries: list[tuple[float, str, TrackInfo]] = []
     for mp3 in scan.mp3s:
         stem = mp3.stem
@@ -191,8 +189,6 @@ def build_manifest(output_dir: Path, project_root: Path) -> Manifest:
     Scans album directories once. Lyrics are cached per album to avoid
     redundant filesystem lookups across deduplicated and latest views.
     """
-    from songmaker_cli.scanner import iter_album_scans
-
     all_scans = iter_album_scans(output_dir, project_root)
     albums_data: list[AlbumInfo] = []
     latest_entries: list[tuple[float, str, TrackInfo]] = []

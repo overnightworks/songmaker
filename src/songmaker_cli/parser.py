@@ -83,6 +83,10 @@ def parse_song_md(path: Path) -> SongMeta:
         raise ValidationError(f"No YAML frontmatter found in {path}")
 
     raw = yaml.safe_load(parts[1]) or {}
+    if not isinstance(raw, dict):
+        raise ValidationError(
+            f"YAML frontmatter must be a mapping, got {type(raw).__name__} in {path}"
+        )
 
     body = parts[2]
     lyrics = extract_lyrics(body)
@@ -151,6 +155,10 @@ def load_album_meta(album_dir: Path) -> AlbumMeta:
 def parse_album_yaml(path: Path) -> AlbumMeta:
     """Parse album.yaml into AlbumMeta."""
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(raw, dict):
+        raise ValidationError(
+            f"album.yaml must be a mapping, got {type(raw).__name__} in {path}"
+        )
     return AlbumMeta(
         title=raw.get("title", path.parent.name.replace("_", " ").title()),
         artist=raw.get("artist", DEFAULT_ARTIST),

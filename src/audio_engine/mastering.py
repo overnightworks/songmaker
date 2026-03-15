@@ -19,6 +19,7 @@ from numpy.typing import NDArray
 from scipy.signal import butter, lfilter, sosfilt
 
 from audio_engine.constants import FALLBACK_SAMPLE_RATE
+from audio_engine.errors import MasteringError
 
 _REFERENCE_LUFS: Final[float] = -0.691
 _ABSOLUTE_GATE_LUFS: Final[float] = -70.0
@@ -43,25 +44,6 @@ _K_WEIGHT_HIGH_SHELF_FREQ: Final[float] = 1500.0
 _K_WEIGHT_HIGHPASS_FREQ: Final[float] = 38.0
 _MIN_RMS_FLOOR: Final[float] = 1e-10
 _MAX_GAIN_DB: Final[float] = 24.0
-_HAAS_DELAY_MS: Final[float] = 15.0
-
-
-def master_mono(
-    samples: NDArray[np.float64],
-    target_lufs: float = _DEFAULT_TARGET_LUFS,
-    stereo_width: float = _DEFAULT_STEREO_WIDTH,
-    sample_rate: int = FALLBACK_SAMPLE_RATE,
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Master mono input to stereo output.
-
-    Creates stereo image from mono via Haas-style delay decorrelation,
-    then runs the full mastering chain.
-    """
-    if len(samples) == 0:
-        return np.array([], dtype=np.float64), np.array([], dtype=np.float64)
-
-    left, right = _mono_to_stereo(samples, sample_rate)
-    return _master_chain(left, right, target_lufs, stereo_width, sample_rate)
 
 
 _CHANNEL_LENGTH_TOLERANCE: Final[int] = 16
@@ -87,7 +69,7 @@ def master_stereo(
 
     length_diff = abs(len(left) - len(right))
     if length_diff > _CHANNEL_LENGTH_TOLERANCE:
-        raise ValueError(
+        raise MasteringError(
             f"Left/right channel length mismatch: {len(left)} vs {len(right)} "
             f"(diff={length_diff}, tolerance={_CHANNEL_LENGTH_TOLERANCE})"
         )
@@ -377,15 +359,3 @@ def _compute_block_energies(
     return np.mean(left_view**2, axis=1) + np.mean(right_view**2, axis=1)
 
 
-def _mono_to_stereo(
-    samples: NDArray[np.float64],
-    sample_rate: int,
-) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Create stereo image from mono using Haas-style delay decorrelation."""
-    delay_samples = int(_HAAS_DELAY_MS * sample_rate / 1000.0)
-    left = samples.copy()
-    right = np.concatenate([
-        np.zeros(delay_samples, dtype=np.float64),
-        samples[:-delay_samples],
-    ])
-    return left, right
