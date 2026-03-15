@@ -141,3 +141,37 @@ def test_parse_album_yaml_defaults(tmp_path: Path) -> None:
     assert meta.title == "My Album"
     assert meta.artist == "Flex0r"
     assert meta.year == ""
+
+
+def test_parse_song_md_unknown_key_warns(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+) -> None:
+    md = tmp_path / "lyrics" / "song.md"
+    md.parent.mkdir(parents=True)
+    md.write_text(
+        "---\nprompt: test\nduraton: 60\n---\n\n## Lyrics\n\nHello\n",
+    )
+    with caplog.at_level("WARNING"):
+        parse_song_md(md)
+    assert "duraton" in caplog.text
+    assert "duration" in caplog.text
+
+
+def test_find_lyrics_md_with_version(tmp_path: Path) -> None:
+    from songmaker_cli.parser import find_lyrics_md
+
+    lyrics_dir = tmp_path / "lyrics"
+    lyrics_dir.mkdir()
+    md = lyrics_dir / "01_song.md"
+    md.touch()
+
+    assert find_lyrics_md("01_song_v3", lyrics_dir) == md
+
+
+def test_find_lyrics_md_not_found(tmp_path: Path) -> None:
+    from songmaker_cli.parser import find_lyrics_md
+
+    lyrics_dir = tmp_path / "lyrics"
+    lyrics_dir.mkdir()
+
+    assert find_lyrics_md("nonexistent", lyrics_dir) is None

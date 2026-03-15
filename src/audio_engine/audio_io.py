@@ -53,6 +53,11 @@ def read_wav_file(filename: str) -> tuple[NDArray[np.float64], int]:
         return np.array([], dtype=np.float64), sample_rate
 
     if n_channels > 1:
+        log.warning(
+            "read_wav_file: %d-channel audio downmixed to mono (left channel only) "
+            "— use read_wav_bytes() for stereo",
+            n_channels,
+        )
         all_samples = all_samples[::n_channels]
 
     return all_samples, sample_rate
@@ -149,6 +154,11 @@ def _stereo_to_wav_bytes(
     return buf.getvalue()
 
 
+def _sanitize_metadata(value: str) -> str:
+    """Strip characters that can break ffmpeg -metadata parsing."""
+    return str(value).replace("\n", " ").replace("\r", " ").replace("\x00", "")
+
+
 def _build_ffmpeg_cmd(
     input_path: str,
     output_path: str,
@@ -170,9 +180,9 @@ def _build_ffmpeg_cmd(
         }
         for key, ffmpeg_key in tag_map.items():
             if metadata.get(key):
-                cmd.extend(["-metadata", f"{ffmpeg_key}={metadata[key]}"])
+                cmd.extend(["-metadata", f"{ffmpeg_key}={_sanitize_metadata(metadata[key])}"])
         if metadata.get("lyrics"):
-            cmd.extend(["-metadata", f"lyrics={metadata['lyrics']}"])
+            cmd.extend(["-metadata", f"lyrics={_sanitize_metadata(metadata['lyrics'])}"])
     cmd.append(output_path)
     return cmd
 
@@ -186,6 +196,10 @@ def read_wav_bytes(
     data: bytes,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], int]:
     """Read WAV bytes into stereo float samples (L, R, sample_rate).
+
+    Hand-rolls WAV chunk parsing instead of using stdlib wave.open because
+    ACE-Step outputs IEEE float32 (audio_format=3) WAV files, which the
+    stdlib wave module does not support.
 
     Supports PCM int16/int32 (format 1) and IEEE float32 (format 3).
     Mono input is duplicated to both channels.

@@ -7,14 +7,19 @@ import wave
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from audio_engine.audio_io import (
     _build_ffmpeg_cmd,
+    _sanitize_metadata,
+    master_to_mp3,
     normalize_audio,
     read_wav_bytes,
     read_wav_file,
+    write_stereo_wav,
     write_wav_file,
 )
+from audio_engine.errors import MasteringError
 
 
 def test_write_and_read_wav_roundtrip(tmp_path: Path) -> None:
@@ -129,6 +134,70 @@ def test_build_ffmpeg_cmd_with_metadata() -> None:
     assert "title=Song" in " ".join(cmd)
     assert "artist=Me" in " ".join(cmd)
     assert "lyrics=Hello" in " ".join(cmd)
+
+
+def test_sanitize_metadata_strips_newlines() -> None:
+    assert _sanitize_metadata("Hello\nWorld\r\n") == "Hello World  "
+
+
+def test_sanitize_metadata_strips_null() -> None:
+    assert _sanitize_metadata("Hello\x00World") == "HelloWorld"
+
+
+def test_sanitize_metadata_passes_normal_text() -> None:
+    assert _sanitize_metadata('Song "With" Quotes & Stuff') == 'Song "With" Quotes & Stuff'
+
+
+def test_read_wav_file_stereo_downmix(tmp_path: Path) -> None:
+    wav_path = str(tmp_path / "stereo.wav")
+    left = np.array([0.5, -0.5], dtype=np.float64)
+    right = np.array([0.3, -0.3], dtype=np.float64)
+    write_stereo_wav(wav_path, left, right, 44100)
+
+    samples, rate = read_wav_file(wav_path)
+    assert rate == 44100
+    assert len(samples) == 2
+
+
+def test_read_wav_bytes_int32() -> None:
+    samples = np.array([1073741824, -1073741824], dtype=np.int32)
+    data = _make_wav_bytes(samples.tobytes(), n_channels=1, sampwidth=4, audio_format=1)
+    left, right, rate = read_wav_bytes(data)
+    assert rate == 44100
+    assert len(left) == 2
+    assert abs(left[0] - 0.5) < 0.01
+
+
+def test_read_wav_bytes_unsupported_format() -> None:
+    data = _make_wav_bytes(b"\x00" * 8, n_channels=1, sampwidth=8, audio_format=99)
+    left, right, rate = read_wav_bytes(data)
+    assert len(left) == 0
+    assert rate == 0
+
+
+def test_read_wav_bytes_missing_data_chunk() -> None:
+    buf = bytearray()
+    buf += b"RIFF"
+    buf += struct.pack("<I", 20)
+    buf += b"WAVE"
+    buf += b"fmt "
+    fmt_chunk = struct.pack("<HHIIHH", 1, 1, 44100, 88200, 2, 16)
+    buf += struct.pack("<I", len(fmt_chunk))
+    buf += fmt_chunk
+    left, right, rate = read_wav_bytes(bytes(buf))
+    assert len(left) == 0
+
+
+def test_master_to_mp3_empty_audio() -> None:
+    empty = np.array([], dtype=np.float64)
+    with pytest.raises(MasteringError, match="empty"):
+        master_to_mp3(empty, empty, "/tmp/test.mp3")
+
+
+def test_build_ffmpeg_cmd_pipe_input() -> None:
+    cmd = _build_ffmpeg_cmd("-", "out.mp3", "320k", None)
+    assert "pipe:0" in cmd
+    assert "-f" in cmd
 
 
 def _make_wav_bytes(

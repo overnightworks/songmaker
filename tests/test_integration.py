@@ -103,3 +103,28 @@ def test_generate_end_to_end(tmp_path: Path, monkeypatch: object) -> None:
 
     manifest = output_dir / "manifest.json"
     assert manifest.exists(), "Manifest JSON should be generated"
+
+
+def test_generate_multiple_versions(tmp_path: Path) -> None:
+    """Verify count=3 produces three MP3s with incrementing versions."""
+    song_md = _setup_project(tmp_path)
+    output_dir = tmp_path / "_output"
+
+    wav_bytes = _make_sine_wav_bytes()
+    mock_result = AceStepResult(wav_bytes=wav_bytes, seed=42)
+
+    with (
+        patch("songmaker_cli.main._run_generation") as mock_gen,
+        patch("songmaker_cli.config.OUTPUT_ROOT", str(output_dir)),
+    ):
+        mock_gen.return_value = (mock_result, 1.0)
+        generate(str(song_md), count=3)
+
+    album_output = output_dir / "test_album"
+    mp3s = sorted(album_output.glob("*.mp3"))
+    assert len(mp3s) == 3, f"Expected 3 MP3s, found {len(mp3s)}"
+
+    stems = [mp3.stem for mp3 in mp3s]
+    assert "01_test_song_v1" in stems
+    assert "01_test_song_v2" in stems
+    assert "01_test_song_v3" in stems

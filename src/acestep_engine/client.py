@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from typing import Final
 from urllib.error import URLError
@@ -22,7 +23,6 @@ from acestep_engine.errors import (
     AudioDownloadError,
     GenerationFailedError,
     GenerationTimeoutError,
-    ServerUnavailableError,
     TaskSubmissionError,
 )
 from acestep_engine.models import AceStepConfig, AceStepResult
@@ -51,8 +51,19 @@ def is_acestep_available(host: str | None = None, port: int | None = None) -> bo
         req = Request(f"{host}:{port}/health", method="GET")
         with urlopen(req, timeout=5) as resp:
             return resp.status == 200
-    except (URLError, OSError, TimeoutError):
+    except (URLError, OSError):
         return False
+
+
+_ALLOWED_AUDIO_PATH_RE = re.compile(r"^(/v1/audio\b|[a-zA-Z0-9_./ -]+$)")
+
+
+def _validate_audio_path(audio_path: str) -> None:
+    """Reject server-returned audio paths that look like path traversal."""
+    if ".." in audio_path or not _ALLOWED_AUDIO_PATH_RE.match(audio_path):
+        raise AudioDownloadError(
+            f"Server returned suspicious audio path: {audio_path!r}"
+        )
 
 
 class AceStepClient:
@@ -102,11 +113,6 @@ class AceStepClient:
             GenerationTimeoutError: Polling timed out.
             AudioDownloadError: Failed to download or parse audio.
         """
-        if not self.is_available:
-            raise ServerUnavailableError(
-                f"ACE-Step server not available at {self.base_url}"
-            )
-
         task_id = self._submit_task(config)
         audio_path, seed = self._poll_result(task_id)
         return self._download_audio(audio_path, seed)
@@ -256,6 +262,7 @@ class AceStepClient:
             AudioDownloadError: On network error or empty response.
         """
         try:
+            _validate_audio_path(audio_path)
             if audio_path.startswith("/"):
                 url = f"{self.base_url}{audio_path}"
             else:

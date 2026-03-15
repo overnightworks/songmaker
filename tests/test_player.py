@@ -8,6 +8,7 @@ from songmaker_cli.player import (
     _build_manifest,
     _deduplicate_versions,
     _lyrics_to_lines,
+    _parse_srt,
     _parse_track_title,
     _render_static_html,
     _scan_album_tracks,
@@ -135,3 +136,54 @@ def test_generate_player_creates_files(tmp_path: Path) -> None:
     assert player_path.exists()
     assert (output_dir / "manifest.json").exists()
     assert "<!DOCTYPE html>" in player_path.read_text()
+
+
+def test_parse_srt(tmp_path: Path) -> None:
+    srt_path = tmp_path / "test.srt"
+    srt_path.write_text(
+        "1\n"
+        "00:00:01,000 --> 00:00:03,000\n"
+        "Hello world\n"
+        "\n"
+        "2\n"
+        "00:00:04,500 --> 00:00:06,000\n"
+        "Second line\n",
+    )
+    lines = _parse_srt(srt_path)
+    assert len(lines) == 2
+    assert lines[0] == {"time": 1.0, "text": "Hello world"}
+    assert lines[1] == {"time": 4.5, "text": "Second line"}
+
+
+def test_parse_srt_empty(tmp_path: Path) -> None:
+    srt_path = tmp_path / "empty.srt"
+    srt_path.write_text("")
+    assert _parse_srt(srt_path) == []
+
+
+def test_scan_album_tracks_with_srt(tmp_path: Path) -> None:
+    mp3 = tmp_path / "01_test_song_v1.mp3"
+    mp3.touch()
+    srt = tmp_path / "01_test_song_v1.srt"
+    srt.write_text(
+        "1\n00:00:01,000 --> 00:00:03,000\nHello\n",
+    )
+    lyrics_dir = tmp_path / "lyrics"
+    lyrics_dir.mkdir()
+
+    tracks = _scan_album_tracks([mp3], "album", lyrics_dir)
+    assert len(tracks) == 1
+    assert tracks[0].has_sung is True
+    assert len(tracks[0].lines) == 1
+
+
+def test_build_manifest_final_dir(tmp_path: Path) -> None:
+    output_dir, project_root = _setup_album(tmp_path)
+    final_dir = output_dir / "test_album" / "final"
+    final_dir.mkdir(parents=True)
+    (final_dir / "01_song.mp3").touch()
+
+    manifest = _build_manifest(output_dir, project_root)
+    real_albums = [a for a in manifest.albums if a.id != "_latest"]
+    assert len(real_albums) == 1
+    assert real_albums[0].tracks[0].file == "test_album/final/01_song.mp3"

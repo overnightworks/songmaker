@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from songmaker_cli.config import build_ace_config, next_version, resolve_output_paths
+from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import SongMeta
 
 
@@ -81,3 +84,33 @@ def test_next_version_with_existing(tmp_path: Path) -> None:
     (tmp_path / "song_v1.mp3").touch()
     (tmp_path / "song_v3.mp3").touch()
     assert next_version(tmp_path, "song") == 4
+
+
+def test_build_ace_config_negative_shift_raises() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", generation_params={"shift": -1.0})
+    with pytest.raises(ValidationError, match="shift="):
+        build_ace_config(meta)
+
+
+def test_build_ace_config_negative_guidance_raises() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", generation_params={"guidance_scale": -0.5})
+    with pytest.raises(ValidationError, match="guidance_scale="):
+        build_ace_config(meta)
+
+
+def test_build_ace_config_zero_steps_raises() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", generation_params={"inference_steps": 0})
+    with pytest.raises(ValidationError, match="inference_steps="):
+        build_ace_config(meta)
+
+
+def test_build_ace_config_zero_duration_raises() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", generation_params={"duration": 0})
+    with pytest.raises(ValidationError, match="duration="):
+        build_ace_config(meta)
+
+
+def test_build_ace_config_invalid_infer_method_raises() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", generation_params={"infer_method": "bad"})
+    with pytest.raises(ValidationError, match="infer_method="):
+        build_ace_config(meta)

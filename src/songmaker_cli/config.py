@@ -97,28 +97,24 @@ def build_ace_config(
 
 
 def _sanitize_params(fields: dict) -> dict:
-    """Sanitize ACE-Step params: clamp invalid ranges, log warnings."""
+    """Validate ACE-Step params and reject invalid values."""
     result = dict(fields)
 
     shift = result.get("shift")
     if shift is not None and shift < 0.0:
-        log.warning("shift=%.1f is negative, using 0.0", shift)
-        result["shift"] = 0.0
+        raise ValidationError(f"shift={shift} is negative, must be >= 0.0")
 
     guidance = result.get("guidance_scale")
     if guidance is not None and guidance < 0.0:
-        log.warning("guidance_scale=%.1f is negative, using 0.0", guidance)
-        result["guidance_scale"] = 0.0
+        raise ValidationError(f"guidance_scale={guidance} is negative, must be >= 0.0")
 
     steps = result.get("inference_steps")
     if steps is not None and steps < 1:
-        log.warning("inference_steps=%d is < 1, using 1", steps)
-        result["inference_steps"] = 1
+        raise ValidationError(f"inference_steps={steps} is < 1, must be >= 1")
 
     duration = result.get("duration")
     if duration is not None and duration < 1:
-        log.warning("duration=%d is < 1, using 1", duration)
-        result["duration"] = 1
+        raise ValidationError(f"duration={duration} is < 1, must be >= 1")
 
     infer = result.get("infer_method")
     if infer and infer not in ("ode", "sde"):

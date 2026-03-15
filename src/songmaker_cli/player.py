@@ -89,7 +89,7 @@ def _parse_srt(path: Path) -> list[dict]:
 
 def _load_album_meta(album_dir: Path) -> AlbumMeta:
     """Load album metadata — delegates to parser module."""
-    from songmaker_cli.parser import AlbumMeta, load_album_meta
+    from songmaker_cli.parser import load_album_meta
 
     return load_album_meta(album_dir)
 
@@ -224,9 +224,13 @@ class _AlbumScan:
 
 
 def _iter_album_scans(
-    output_dir: Path, project_root: Path, deduplicate: bool = True,
+    output_dir: Path, project_root: Path,
 ) -> list[_AlbumScan]:
-    """Scan all album directories for MP3 files with metadata."""
+    """Scan all album directories for MP3 files with metadata.
+
+    Returns all versions (no deduplication). Raw intermediate files
+    (stems ending in '_raw') are excluded.
+    """
     results: list[_AlbumScan] = []
     for album_dir in sorted(output_dir.iterdir()):
         if not album_dir.is_dir():
@@ -238,11 +242,7 @@ def _iter_album_scans(
             mp3s = sorted(final_dir.glob("*.mp3"))
             mp3_base = f"{album_name}/final"
         else:
-            mp3s = sorted(album_dir.glob("*.mp3"))
-            if deduplicate:
-                mp3s = _deduplicate_versions(mp3s)
-            else:
-                mp3s = [m for m in mp3s if not m.stem.endswith("_raw")]
+            mp3s = [m for m in sorted(album_dir.glob("*.mp3")) if not m.stem.endswith("_raw")]
             mp3_base = album_name
 
         if not mp3s:
@@ -263,11 +263,18 @@ def _iter_album_scans(
 
 
 def _build_manifest(output_dir: Path, project_root: Path) -> Manifest:
-    """Build the manifest data structure from album directories."""
-    albums_data: list[AlbumInfo] = []
+    """Build the manifest data structure from album directories.
 
-    for scan in _iter_album_scans(output_dir, project_root, deduplicate=True):
-        tracks = _scan_album_tracks(scan.mp3s, scan.mp3_base, scan.lyrics_dir)
+    Scans album directories once and builds both the deduplicated album
+    view and the "latest" (all versions) view from the same scan.
+    """
+    all_scans = _iter_album_scans(output_dir, project_root)
+    albums_data: list[AlbumInfo] = []
+    latest_entries: list[tuple[float, str, TrackInfo]] = []
+
+    for scan in all_scans:
+        deduped_mp3s = _deduplicate_versions(scan.mp3s)
+        deduped_tracks = _scan_album_tracks(deduped_mp3s, scan.mp3_base, scan.lyrics_dir)
         albums_data.append(AlbumInfo(
             id=scan.album_name,
             title=scan.meta.title,
@@ -275,29 +282,9 @@ def _build_manifest(output_dir: Path, project_root: Path) -> Manifest:
             subtitle=scan.meta.subtitle,
             year=scan.meta.year or default_year(),
             colors=scan.meta.colors or DEFAULT_COLOR,
-            tracks=tracks,
+            tracks=deduped_tracks,
         ))
 
-    latest_tracks = _build_latest_tracks(output_dir, project_root)
-    if latest_tracks:
-        albums_data.insert(0, AlbumInfo(
-            id="_latest",
-            title="Latest",
-            artist=DEFAULT_ARTIST,
-            subtitle="All versions, newest first",
-            year=default_year(),
-            colors={"primary": "#22cc44", "bg": "#0d0d0d"},
-            tracks=latest_tracks,
-        ))
-
-    return Manifest(albums=albums_data)
-
-
-def _build_latest_tracks(output_dir: Path, project_root: Path) -> list[TrackInfo]:
-    """Collect all tracks across albums sorted by newest first."""
-    entries: list[tuple[float, str, TrackInfo]] = []
-
-    for scan in _iter_album_scans(output_dir, project_root, deduplicate=False):
         for mp3 in scan.mp3s:
             stem = mp3.stem
             number, title = _parse_track_title(stem)
@@ -314,10 +301,21 @@ def _build_latest_tracks(output_dir: Path, project_root: Path) -> list[TrackInfo
                 intended=intended_lines,
                 has_sung=False,
             )
-            entries.append((mp3.stat().st_mtime, scan.album_name, track))
+            latest_entries.append((mp3.stat().st_mtime, scan.album_name, track))
 
-    entries.sort(key=lambda e: e[0], reverse=True)
-    return [track for _, _, track in entries]
+    if latest_entries:
+        latest_entries.sort(key=lambda e: e[0], reverse=True)
+        albums_data.insert(0, AlbumInfo(
+            id="_latest",
+            title="Latest",
+            artist=DEFAULT_ARTIST,
+            subtitle="All versions, newest first",
+            year=default_year(),
+            colors={"primary": "#22cc44", "bg": "#0d0d0d"},
+            tracks=[track for _, _, track in latest_entries],
+        ))
+
+    return Manifest(albums=albums_data)
 
 
 def _render_static_html(

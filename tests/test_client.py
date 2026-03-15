@@ -8,8 +8,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from acestep_engine.client import AceStepClient, is_acestep_available
-from acestep_engine.errors import GenerationFailedError, TaskSubmissionError
+from acestep_engine.client import (
+    AceStepClient,
+    _validate_audio_path,
+    is_acestep_available,
+)
+from acestep_engine.errors import (
+    AudioDownloadError,
+    GenerationFailedError,
+    GenerationTimeoutError,
+    TaskSubmissionError,
+)
 from acestep_engine.models import AceStepConfig
 
 
@@ -92,3 +101,139 @@ def test_poll_result_failure() -> None:
             client._poll_result("abc")
 
 
+def test_validate_audio_path_valid() -> None:
+    _validate_audio_path("/v1/audio?path=test.wav")
+    _validate_audio_path("output/song.wav")
+
+
+def test_validate_audio_path_traversal() -> None:
+    with pytest.raises(AudioDownloadError, match="suspicious"):
+        _validate_audio_path("/../../../etc/passwd")
+
+
+def test_validate_audio_path_dotdot() -> None:
+    with pytest.raises(AudioDownloadError, match="suspicious"):
+        _validate_audio_path("/v1/audio/../../secret")
+
+
+def test_is_available_property() -> None:
+    client = AceStepClient()
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(b"ok", 200)
+        assert client.is_available is True
+
+
+def test_submit_task_no_task_id() -> None:
+    client = AceStepClient()
+    config = AceStepConfig(prompt="test", lyrics="test")
+    response_data = json.dumps({"data": {"status": "queued"}, "code": 200}).encode()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(response_data)
+        with pytest.raises(TaskSubmissionError, match="no task_id"):
+            client._submit_task(config)
+
+
+def test_poll_result_completed_no_audio() -> None:
+    client = AceStepClient()
+    result_items = json.dumps([{"file": "", "seed": 1}])
+    response_data = json.dumps({
+        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+    }).encode()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(response_data)
+        with pytest.raises(GenerationFailedError, match="no audio returned"):
+            client._poll_result("abc")
+
+
+def test_poll_result_timeout() -> None:
+    client = AceStepClient()
+    response_data = json.dumps({
+        "data": [{"task_id": "abc", "status": 0}],
+    }).encode()
+
+    call_count = 0
+
+    def fake_monotonic() -> float:
+        nonlocal call_count
+        call_count += 1
+        if call_count <= 2:
+            return 0.0
+        return 99999.0
+
+    with (
+        patch("acestep_engine.client.urlopen") as mock_urlopen,
+        patch("acestep_engine.client.time.monotonic", side_effect=fake_monotonic),
+        patch("acestep_engine.client.time.sleep"),
+    ):
+        mock_urlopen.return_value = _mock_response(response_data)
+        with pytest.raises(GenerationTimeoutError, match="timed out"):
+            client._poll_result("abc")
+
+
+def test_download_audio_success() -> None:
+    client = AceStepClient()
+    wav_header = b"RIFF" + b"\x00" * 40 + b"extra_data_here"
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(wav_header)
+        result = client._download_audio("/v1/audio?path=test.wav", 42)
+
+    assert result.seed == 42
+    assert len(result.wav_bytes) > 44
+
+
+def test_download_audio_too_small() -> None:
+    client = AceStepClient()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(b"tiny")
+        with pytest.raises(AudioDownloadError, match="empty or too small"):
+            client._download_audio("/v1/audio?path=test.wav", 1)
+
+
+def test_download_audio_relative_path() -> None:
+    client = AceStepClient()
+    wav_header = b"RIFF" + b"\x00" * 40 + b"extra_data_here"
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(wav_header)
+        result = client._download_audio("output/song.wav", 99)
+
+    assert result.seed == 99
+
+
+def test_download_audio_network_error() -> None:
+    client = AceStepClient()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        from urllib.error import URLError
+        mock_urlopen.side_effect = URLError("Connection refused")
+        with pytest.raises(AudioDownloadError, match="Failed to download"):
+            client._download_audio("/v1/audio?path=test.wav", 1)
+
+
+def test_generate_full_flow() -> None:
+    client = AceStepClient()
+    config = AceStepConfig(prompt="test", lyrics="[verse]\nHello")
+    wav_header = b"RIFF" + b"\x00" * 40 + b"extra_data_here"
+
+    submit_resp = json.dumps({
+        "data": {"task_id": "t1", "status": "queued"}, "code": 200,
+    }).encode()
+    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed": 7}])
+    poll_resp = json.dumps({
+        "data": [{"task_id": "t1", "status": 1, "result": result_items}],
+    }).encode()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.side_effect = [
+            _mock_response(submit_resp),
+            _mock_response(poll_resp),
+            _mock_response(wav_header),
+        ]
+        result = client.generate(config)
+
+    assert result.seed == 7
+    assert len(result.wav_bytes) > 44

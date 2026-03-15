@@ -10,6 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from audio_engine.mastering import (
+    master_mono,
     master_stereo,
     measure_lufs,
     multiband_compress,
@@ -310,3 +311,41 @@ def test_deterministic_output() -> None:
 
     assert np.array_equal(result_1[0], result_2[0]), "Non-deterministic left channel"
     assert np.array_equal(result_1[1], result_2[1]), "Non-deterministic right channel"
+
+
+def test_master_mono_produces_stereo() -> None:
+    """Verify master_mono creates a stereo image from mono input."""
+    signal = _generate_sine(440.0, 0.5, 3.0)
+    left, right = master_mono(signal, target_lufs=-14.0, sample_rate=SAMPLE_RATE)
+
+    assert len(left) > 0
+    assert len(right) > 0
+    assert len(left) == len(right)
+    diff = float(np.max(np.abs(left - right)))
+    assert diff > 0.001, "Stereo image should differ between channels"
+
+
+def test_master_mono_empty() -> None:
+    """Verify master_mono handles empty input."""
+    empty = np.array([], dtype=np.float64)
+    left, right = master_mono(empty)
+    assert left.size == 0
+    assert right.size == 0
+
+
+def test_master_stereo_channel_length_mismatch() -> None:
+    """Verify master_stereo raises on large channel length mismatch."""
+    left = _generate_sine(440.0, 0.5, 3.0)
+    right = np.concatenate([left, np.zeros(100)])
+    try:
+        master_stereo(left, right, sample_rate=SAMPLE_RATE)
+        assert False, "Should have raised ValueError"
+    except ValueError:
+        pass
+
+
+def test_normalize_to_lufs_silent_signal() -> None:
+    """Verify normalize_to_lufs passes through silent signals unchanged."""
+    silent = np.zeros(44100, dtype=np.float64)
+    left, right = normalize_to_lufs(silent, silent.copy(), target_lufs=-14.0, current_lufs=-70.0)
+    assert np.array_equal(left, silent)
