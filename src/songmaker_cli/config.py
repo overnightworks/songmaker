@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -41,8 +42,6 @@ class OutputPaths(BaseModel):
 
 def next_version(output_dir: Path, base_name: str) -> int:
     """Find the next version number for a track (v1, v2, ...)."""
-    import re
-
     versions = []
     for p in output_dir.glob(f"{base_name}_v*.mp3"):
         match = re.search(r"_v(\d+)\.mp3$", p.name)

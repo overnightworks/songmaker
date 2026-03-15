@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
+from typing import TypedDict
 
 import yaml
 from pydantic import BaseModel, field_validator
@@ -11,11 +13,30 @@ from pydantic import BaseModel, field_validator
 from songmaker_cli.constants import DEFAULT_ARTIST
 from songmaker_cli.errors import ValidationError
 
+log = logging.getLogger(__name__)
+
 _ACE_STEP_FIELDS = frozenset({
     "bpm", "duration", "key", "time_signature", "language",
     "seed", "inference_steps", "guidance_scale", "shift",
     "think_mode", "lm_temperature", "infer_method",
 })
+
+
+class GenerationParams(TypedDict, total=False):
+    """Typed dict for ACE-Step generation parameters from song frontmatter."""
+
+    bpm: int
+    duration: int
+    key: str
+    time_signature: str
+    language: str
+    seed: int
+    inference_steps: int
+    guidance_scale: float
+    shift: float
+    think_mode: bool
+    lm_temperature: float
+    infer_method: str
 
 
 class SongMeta(BaseModel):
@@ -29,7 +50,7 @@ class SongMeta(BaseModel):
     lyrics: str = ""
     status: str = ""
     source_path: Path = Path()
-    generation_params: dict = {}
+    generation_params: GenerationParams = {}
 
     @field_validator("track", mode="before")
     @classmethod
@@ -72,7 +93,13 @@ def parse_song_md(path: Path) -> SongMeta:
     raw.setdefault("album", path.parent.parent.name)
     raw["source_path"] = path
 
-    gen_params = {k: v for k, v in raw.items() if k in _ACE_STEP_FIELDS}
+    gen_params: GenerationParams = {}
+    known_fields = set(SongMeta.model_fields) | _ACE_STEP_FIELDS
+    for k, v in raw.items():
+        if k in _ACE_STEP_FIELDS:
+            gen_params[k] = v  # type: ignore[literal-required]
+        elif k not in known_fields:
+            _warn_unknown_key(k)
 
     meta_fields = {
         k: v for k, v in raw.items()
@@ -81,6 +108,15 @@ def parse_song_md(path: Path) -> SongMeta:
     meta_fields["generation_params"] = gen_params
 
     return SongMeta(**meta_fields)
+
+
+def _warn_unknown_key(key: str) -> None:
+    """Warn if a frontmatter key looks like a typo of a known ACE-Step field."""
+    from difflib import get_close_matches
+
+    matches = get_close_matches(key, _ACE_STEP_FIELDS, n=1, cutoff=0.6)
+    if matches:
+        log.warning("Unknown frontmatter key '%s' — did you mean '%s'?", key, matches[0])
 
 
 def strip_version_suffix(stem: str) -> str:
@@ -98,6 +134,17 @@ def find_lyrics_md(stem: str, lyrics_dir: Path) -> Path | None:
     if candidate.exists():
         return candidate
     return None
+
+
+def load_album_meta(album_dir: Path) -> AlbumMeta:
+    """Load album metadata from album.yaml, falling back to directory name."""
+    yaml_path = album_dir / "album.yaml"
+    if yaml_path.exists():
+        return parse_album_yaml(yaml_path)
+    return AlbumMeta(
+        title=album_dir.name.replace("_", " ").title(),
+        artist=DEFAULT_ARTIST,
+    )
 
 
 def parse_album_yaml(path: Path) -> AlbumMeta:

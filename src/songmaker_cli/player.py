@@ -83,11 +83,11 @@ def _parse_srt(path: Path) -> list[dict]:
     return lines
 
 
-def _parse_album_yaml(path: Path) -> dict:
-    """Parse album.yaml — delegates to parser module."""
-    from songmaker_cli.parser import parse_album_yaml
+def _load_album_meta(album_dir: Path) -> dict:
+    """Load album metadata — delegates to parser module."""
+    from songmaker_cli.parser import load_album_meta
 
-    meta = parse_album_yaml(path)
+    meta = load_album_meta(album_dir)
     return {
         "title": meta.title,
         "artist": meta.artist,
@@ -237,11 +237,8 @@ def _build_manifest(output_dir: Path, project_root: Path) -> Manifest:
         if not mp3s:
             continue
 
-        album_yaml = project_root / "albums" / album_name / "album.yaml"
-        if album_yaml.exists():
-            album_meta = _parse_album_yaml(album_yaml)
-        else:
-            album_meta = {"title": album_name.replace("_", " ").title()}
+        source_album_dir = project_root / "albums" / album_name
+        album_meta = _load_album_meta(source_album_dir)
 
         lyrics_dir = project_root / "albums" / album_name / "lyrics"
         tracks = _scan_album_tracks(mp3s, mp3_base, lyrics_dir)
@@ -283,19 +280,23 @@ def _build_latest_tracks(output_dir: Path, project_root: Path) -> list[TrackInfo
         lyrics_dir = project_root / "albums" / album_name / "lyrics"
 
         final_dir = album_dir / "final"
-        scan_dir = final_dir if final_dir.exists() else album_dir
+        if final_dir.exists():
+            scan_dir = final_dir
+            mp3_base = f"{album_name}/final"
+        else:
+            scan_dir = album_dir
+            mp3_base = album_name
         mp3s = [mp3 for mp3 in scan_dir.glob("*.mp3") if not mp3.stem.endswith("_raw")]
         for mp3 in mp3s:
             stem = mp3.stem
             number, title = _parse_track_title(stem)
-            version_match = re.search(r"_v(\d+)$", stem)
-            version = version_match.group(1) if version_match else "1"
+            version = _extract_version_number(stem) or 1
 
             raw_lyrics = _find_lyrics_for_track(stem, lyrics_dir)
             intended_lines = _lyrics_to_lines(raw_lyrics) if raw_lyrics else []
 
             track = TrackInfo(
-                file=f"{album_name}/{mp3.name}",
+                file=f"{mp3_base}/{mp3.name}",
                 title=f"{title} v{version}  [{album_name}]",
                 number=number,
                 lines=intended_lines,

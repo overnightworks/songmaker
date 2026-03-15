@@ -16,7 +16,7 @@ from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.signal import butter, sosfilt
+from scipy.signal import butter, lfilter, sosfilt
 
 from audio_engine.constants import DEFAULT_SAMPLE_RATE
 
@@ -266,20 +266,23 @@ def _compress_signal(
     ratio: float,
     sample_rate: int,
 ) -> NDArray[np.float64]:
-    """Apply single-band compression with peak envelope following."""
+    """Apply single-band compression with peak envelope following.
+
+    Uses vectorized lfilter for attack/release envelopes instead of a
+    per-sample Python loop. The envelope is max(attack_env, release_env)
+    which gives fast-attack, slow-release behaviour.
+    """
     attack_coeff = math.exp(-1.0 / (_COMPRESSOR_ATTACK_SECONDS * sample_rate))
     release_coeff = math.exp(-1.0 / (_COMPRESSOR_RELEASE_SECONDS * sample_rate))
     abs_signal = np.abs(signal)
 
-    envelope = np.zeros_like(signal)
-    env_val = 0.0
-    for i in range(len(abs_signal)):
-        sample_val = abs_signal[i]
-        if sample_val > env_val:
-            env_val = attack_coeff * env_val + (1.0 - attack_coeff) * sample_val
-        else:
-            env_val = release_coeff * env_val + (1.0 - release_coeff) * sample_val
-        envelope[i] = env_val
+    # One-pole IIR smoothers: y[n] = coeff * y[n-1] + (1 - coeff) * x[n]
+    # Attack (fast tracking) and release (slow decay)
+    attack_env = lfilter([1.0 - attack_coeff], [1.0, -attack_coeff], abs_signal)
+    release_env = lfilter([1.0 - release_coeff], [1.0, -release_coeff], abs_signal)
+
+    # Fast attack (tracks rises quickly), slow release (holds during drops)
+    envelope = np.maximum(attack_env, release_env)
 
     gain = np.ones_like(envelope)
     above_threshold = envelope > threshold

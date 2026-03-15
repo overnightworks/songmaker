@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
+import shutil
 import struct
 import subprocess
 import wave
-from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
@@ -88,6 +88,10 @@ def master_to_mp3(
         log.error("Mastering failed: empty audio")
         return False
 
+    if not shutil.which("ffmpeg"):
+        log.error("ffmpeg not found on PATH — install ffmpeg to encode MP3s")
+        return False
+
     log.info(
         "Mastering: multiband -> stereo(%.1fx) -> LUFS(%.1f) -> clip",
         stereo_width, target_lufs,
@@ -99,21 +103,41 @@ def master_to_mp3(
         sample_rate=sample_rate,
     )
 
-    mp3_p = Path(mp3_path)
-    mastered_wav = str(mp3_p.with_suffix(".mastered.wav"))
-    write_stereo_wav(mastered_wav, mastered_left, mastered_right, sample_rate)
-
-    cmd = _build_ffmpeg_cmd(mastered_wav, mp3_path, bitrate, metadata)
+    wav_bytes = _stereo_to_wav_bytes(mastered_left, mastered_right, sample_rate)
+    cmd = _build_ffmpeg_cmd("-", mp3_path, bitrate, metadata)
 
     try:
-        subprocess.run(cmd, check=True, capture_output=True)
-        Path(mastered_wav).unlink(missing_ok=True)
+        subprocess.run(cmd, input=wav_bytes, check=True, capture_output=True)
         log.info("Mastered to %s", mp3_path)
         return True
-    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
-        Path(mastered_wav).unlink(missing_ok=True)
+    except subprocess.CalledProcessError as exc:
         log.error("MP3 encoding failed: %s", exc)
         return False
+
+
+def _stereo_to_wav_bytes(
+    left: NDArray[np.float64],
+    right: NDArray[np.float64],
+    sample_rate: int,
+) -> bytes:
+    """Encode stereo float arrays to WAV bytes in memory."""
+    import io
+
+    n = min(len(left), len(right))
+    left_arr = np.clip(left[:n] * INT16_MAX, -INT16_MAX, INT16_MAX - 1).astype(np.int16)
+    right_arr = np.clip(right[:n] * INT16_MAX, -INT16_MAX, INT16_MAX - 1).astype(np.int16)
+
+    interleaved = np.empty(n * 2, dtype=np.int16)
+    interleaved[0::2] = left_arr
+    interleaved[1::2] = right_arr
+
+    buf = io.BytesIO()
+    with wave.open(buf, "w") as wf:
+        wf.setnchannels(2)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(interleaved.tobytes())
+    return buf.getvalue()
 
 
 def _build_ffmpeg_cmd(
@@ -123,14 +147,17 @@ def _build_ffmpeg_cmd(
     metadata: dict[str, str] | None,
 ) -> list[str]:
     """Build the ffmpeg command for MP3 encoding with ID3 tags."""
-    cmd = [
-        "ffmpeg", "-y", "-i", input_path,
-        "-codec:a", "libmp3lame", "-b:a", bitrate,
-    ]
+    cmd = ["ffmpeg", "-y"]
+    if input_path == "-":
+        cmd.extend(["-f", "wav", "-i", "pipe:0"])
+    else:
+        cmd.extend(["-i", input_path])
+    cmd.extend(["-codec:a", "libmp3lame", "-b:a", bitrate])
     if metadata:
         tag_map = {
             "title": "title", "artist": "artist", "album": "album",
             "track": "track", "genre": "genre", "date": "date",
+            "comment": "comment",
         }
         for key, ffmpeg_key in tag_map.items():
             if metadata.get(key):
@@ -141,11 +168,9 @@ def _build_ffmpeg_cmd(
     return cmd
 
 
-_EMPTY_STEREO = (
-    np.array([], dtype=np.float64),
-    np.array([], dtype=np.float64),
-    0,
-)
+def _empty_stereo() -> tuple[NDArray[np.float64], NDArray[np.float64], int]:
+    """Return a fresh empty stereo tuple (prevents accidental mutation of shared state)."""
+    return np.array([], dtype=np.float64), np.array([], dtype=np.float64), 0
 
 
 def read_wav_bytes(
@@ -157,7 +182,7 @@ def read_wav_bytes(
     Mono input is duplicated to both channels.
     """
     if len(data) < 44 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
-        return _EMPTY_STEREO
+        return _empty_stereo()
 
     pos = 12
     fmt_data = None
@@ -175,7 +200,7 @@ def read_wav_bytes(
             pos += 1
 
     if fmt_data is None or audio_data is None:
-        return _EMPTY_STEREO
+        return _empty_stereo()
 
     audio_format = struct.unpack_from("<H", fmt_data, 0)[0]
     n_channels = struct.unpack_from("<H", fmt_data, 2)[0]
@@ -195,7 +220,7 @@ def read_wav_bytes(
             audio_data[:len(audio_data) // 4 * 4], dtype=np.int32,
         ).astype(np.float64) / 2147483648.0
     else:
-        return _EMPTY_STEREO
+        return _empty_stereo()
 
     if n_channels >= 2:
         left = samples[0::n_channels]

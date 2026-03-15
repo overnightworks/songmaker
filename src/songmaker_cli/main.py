@@ -13,17 +13,32 @@ from typing import TYPE_CHECKING, Annotated, Optional
 from cyclopts import App, Parameter
 
 from songmaker_cli.config import OutputPaths, build_ace_config, resolve_output_paths
-from songmaker_cli.constants import DEFAULT_ARTIST, NORMALIZE_PEAK
 from songmaker_cli.errors import GenerationError, SongmakerError, ValidationError
-from songmaker_cli.parser import AlbumMeta, SongMeta, parse_album_yaml, parse_song_md
+from songmaker_cli.parser import SongMeta, load_album_meta, parse_song_md
 
 if TYPE_CHECKING:
     from acestep_engine.models import AceStepConfig, AceStepResult
+    from songmaker_cli.parser import AlbumMeta
 
-logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
 log = logging.getLogger(__name__)
 
 app = App(name="songmaker", help="Generate songs from markdown files.")
+
+
+@app.meta.default
+def _launcher(
+    *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
+    verbose: Annotated[bool, Parameter(name=["-v", "--verbose"], help="Debug logging")] = False,
+    quiet: Annotated[bool, Parameter(name=["-q", "--quiet"], help="Errors only")] = False,
+) -> None:
+    if quiet:
+        level = logging.ERROR
+    elif verbose:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
+    logging.basicConfig(level=level, format="%(name)s: %(message)s")
+    app(tokens)
 
 
 @app.command
@@ -139,14 +154,8 @@ def _collect_overrides(**kwargs: object) -> dict:
 
 
 def _load_album_meta(md_path: Path) -> AlbumMeta:
-    album_yaml = md_path.parent.parent / "album.yaml"
-    if album_yaml.exists():
-        return parse_album_yaml(album_yaml)
-    album_name = md_path.parent.parent.name
-    return AlbumMeta(
-        title=album_name.replace("_", " ").title(),
-        artist=DEFAULT_ARTIST,
-    )
+    album_dir = md_path.parent.parent
+    return load_album_meta(album_dir)
 
 
 def _log_generation_banner(
@@ -182,11 +191,9 @@ def _write_output(
     meta: SongMeta,
     album_meta: AlbumMeta,
 ) -> None:
-    from audio_engine import master_to_mp3, normalize_audio, write_stereo_wav
+    from audio_engine import master_to_mp3, write_stereo_wav
 
     write_stereo_wav(str(paths.raw_wav), result.left, result.right, result.sample_rate)
-    left = normalize_audio(result.left, NORMALIZE_PEAK)
-    right = normalize_audio(result.right, NORMALIZE_PEAK)
 
     id3_metadata = {
         "title": meta.title,
@@ -195,9 +202,11 @@ def _write_output(
         "track": meta.track,
         "genre": meta.genre,
         "lyrics": meta.lyrics,
+        "comment": f"seed={result.seed}",
     }
     success = master_to_mp3(
-        left, right, str(paths.mp3), sample_rate=result.sample_rate, metadata=id3_metadata,
+        result.left, result.right, str(paths.mp3),
+        sample_rate=result.sample_rate, metadata=id3_metadata,
     )
     if not success:
         raise GenerationError(f"Mastering failed for {paths.mp3}")
