@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
-from numpy.typing import NDArray
-
 
 @dataclass(frozen=True)
 class AceStepConfig:
@@ -31,10 +28,11 @@ class AceStepConfig:
 
 @dataclass(frozen=True)
 class AceStepResult:
-    """Result from an ACE-Step generation."""
+    """Result from an ACE-Step generation.
 
-    left: NDArray[np.float64]
-    right: NDArray[np.float64]
-    sample_rate: int
-    duration: float
+    Contains raw WAV bytes from the server. The caller is responsible
+    for decoding to numpy arrays via audio_engine.read_wav_bytes().
+    """
+
+    wav_bytes: bytes
     seed: int

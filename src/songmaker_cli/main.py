@@ -7,6 +7,7 @@ import re
 import sys
 import time
 import webbrowser
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Optional
 
@@ -17,12 +18,25 @@ from songmaker_cli.errors import GenerationError, SongmakerError, ValidationErro
 from songmaker_cli.parser import SongMeta, load_album_meta, parse_song_md
 
 if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
+
     from acestep_engine.models import AceStepConfig, AceStepResult
     from songmaker_cli.parser import AlbumMeta
 
 log = logging.getLogger(__name__)
 
 app = App(name="songmaker", help="Generate songs from markdown files.")
+
+
+@dataclass(frozen=True)
+class DecodedAudio:
+    """Stereo audio decoded from ACE-Step WAV bytes."""
+
+    left: NDArray[np.float64]
+    right: NDArray[np.float64]
+    sample_rate: int
+    duration: float
 
 
 @app.meta.default
@@ -61,18 +75,18 @@ def generate(
     ] = False,
 ) -> None:
     """Generate a song from a markdown file via ACE-Step."""
-    md_path = _validate_path(path)
+    md_path = validate_path(path)
     meta = parse_song_md(md_path)
-    _validate_song_meta(meta)
+    validate_song_meta(meta)
 
-    cli_overrides = _collect_overrides(
+    cli_overrides = collect_overrides(
         seed=seed, duration=duration, bpm=bpm, key=key, shift=shift,
         guidance_scale=guidance_scale, inference_steps=inference_steps,
         lm_temperature=lm_temperature, infer_method=infer_method,
         think_mode=think_mode,
     )
     ace_config = build_ace_config(meta, cli_overrides)
-    album_meta = _load_album_meta(md_path)
+    album_meta = load_album_meta_for_song(md_path)
 
     player_path = None
     for i in range(count):
@@ -82,9 +96,10 @@ def generate(
         paths = resolve_output_paths(meta.album, md_path.stem)
         _log_generation_banner(meta, paths, ace_config)
 
-        result, elapsed = _run_generation(ace_config)
-        _write_output(result, paths, meta, album_meta)
-        _log_result_banner(paths, result, elapsed)
+        ace_result, elapsed = _run_generation(ace_config)
+        audio = _decode_audio(ace_result)
+        _write_output(audio, ace_result.seed, paths, meta, album_meta)
+        _log_result_banner(paths, audio, ace_result.seed, elapsed)
         player_path = _update_player(paths)
 
         if check:
@@ -135,25 +150,25 @@ def check(
     run_check(path, source, whisper_model=whisper_model)
 
 
-def _validate_path(path: str) -> Path:
+def validate_path(path: str) -> Path:
     resolved = Path(path).resolve()
     if not resolved.exists():
         raise ValidationError(f"{resolved} not found")
     return resolved
 
 
-def _validate_song_meta(meta: SongMeta) -> None:
+def validate_song_meta(meta: SongMeta) -> None:
     if not meta.prompt:
         raise ValidationError("No 'prompt' field in frontmatter")
     if not meta.lyrics:
         raise ValidationError("No '## Lyrics' section found")
 
 
-def _collect_overrides(**kwargs: object) -> dict:
+def collect_overrides(**kwargs: object) -> dict:
     return {k: v for k, v in kwargs.items() if v is not None}
 
 
-def _load_album_meta(md_path: Path) -> AlbumMeta:
+def load_album_meta_for_song(md_path: Path) -> AlbumMeta:
     album_dir = md_path.parent.parent
     return load_album_meta(album_dir)
 
@@ -185,15 +200,28 @@ def _run_generation(ace_config: AceStepConfig) -> tuple[AceStepResult, float]:
     return result, time.time() - start_time
 
 
+def _decode_audio(ace_result: AceStepResult) -> DecodedAudio:
+    from audio_engine import read_wav_bytes
+
+    left, right, sample_rate = read_wav_bytes(ace_result.wav_bytes)
+    if len(left) == 0:
+        raise GenerationError("ACE-Step returned empty or unparseable audio")
+
+    duration = len(left) / sample_rate
+    log.info("Audio decoded: %.1fs at %d Hz", duration, sample_rate)
+    return DecodedAudio(left=left, right=right, sample_rate=sample_rate, duration=duration)
+
+
 def _write_output(
-    result: AceStepResult,
+    audio: DecodedAudio,
+    seed: int,
     paths: OutputPaths,
     meta: SongMeta,
     album_meta: AlbumMeta,
 ) -> None:
-    from audio_engine import master_to_mp3, write_stereo_wav
+    from audio_engine import MasteringError, master_to_mp3, write_stereo_wav
 
-    write_stereo_wav(str(paths.raw_wav), result.left, result.right, result.sample_rate)
+    write_stereo_wav(str(paths.raw_wav), audio.left, audio.right, audio.sample_rate)
 
     id3_metadata = {
         "title": meta.title,
@@ -202,23 +230,26 @@ def _write_output(
         "track": meta.track,
         "genre": meta.genre,
         "lyrics": meta.lyrics,
-        "comment": f"seed={result.seed}",
+        "comment": f"seed={seed}",
     }
-    master_to_mp3(
-        result.left, result.right, str(paths.mp3),
-        sample_rate=result.sample_rate, metadata=id3_metadata,
-    )
+    try:
+        master_to_mp3(
+            audio.left, audio.right, str(paths.mp3),
+            sample_rate=audio.sample_rate, metadata=id3_metadata,
+        )
+    except MasteringError as exc:
+        raise GenerationError(str(exc)) from exc
     paths.raw_wav.unlink(missing_ok=True)
 
 
 def _log_result_banner(
-    paths: OutputPaths, result: AceStepResult, elapsed: float,
+    paths: OutputPaths, audio: DecodedAudio, seed: int, elapsed: float,
 ) -> None:
     log.info("=" * 60)
     log.info("  Done: %s", paths.mp3)
     log.info(
         "  Time: %.0fs | Duration: %.1fs | Seed: %s",
-        elapsed, result.duration, result.seed,
+        elapsed, audio.duration, seed,
     )
     log.info("=" * 60)
 
@@ -247,15 +278,15 @@ def run_check(
 
     from songmaker_cli.constants import SIMILARITY_FAIR, SIMILARITY_GOOD
 
-    mp3_path = _validate_path(path)
-    md_path = _find_lyrics_source(mp3_path, source)
+    mp3_path = validate_path(path)
+    md_path = find_lyrics_source(mp3_path, source)
     meta = parse_song_md(md_path)
 
     language = meta.generation_params.get("language", "en")
     transcribed, segments = _transcribe(mp3_path, language, whisper_model)
 
-    clean_intended = _clean_lyrics(meta.lyrics)
-    clean_transcribed = _clean_lyrics(transcribed)
+    clean_intended = clean_lyrics(meta.lyrics)
+    clean_transcribed = clean_lyrics(transcribed)
     ratio = SequenceMatcher(None, clean_intended, clean_transcribed).ratio()
 
     intended_lines = [
@@ -270,7 +301,7 @@ def run_check(
     )
 
 
-def _find_lyrics_source(mp3_path: Path, source: str | None) -> Path:
+def find_lyrics_source(mp3_path: Path, source: str | None) -> Path:
     from songmaker_cli.parser import find_lyrics_md, strip_version_suffix
 
     if source:
@@ -318,7 +349,7 @@ def _transcribe(
     return result["text"].strip(), result.get("segments", [])
 
 
-def _clean_lyrics(text: str) -> str:
+def clean_lyrics(text: str) -> str:
     text = re.sub(r"\[.*?\]", "", text)
     return re.sub(r"\s+", " ", text).strip().lower()
 

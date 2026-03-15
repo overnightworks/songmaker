@@ -29,14 +29,24 @@ from acestep_engine.models import AceStepConfig, AceStepResult
 
 log = logging.getLogger(__name__)
 
-DEFAULT_HOST: Final[str] = os.environ.get("ACESTEP_HOST", "http://localhost")
-DEFAULT_PORT: Final[int] = int(os.environ.get("ACESTEP_PORT", "8001"))
+_FALLBACK_HOST: Final[str] = "http://localhost"
+_FALLBACK_PORT: Final[int] = 8001
 POLL_INTERVAL: Final[float] = 3.0
 POLL_TIMEOUT: Final[float] = 1800.0
 
 
-def is_acestep_available(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> bool:
+def _default_host() -> str:
+    return os.environ.get("ACESTEP_HOST", _FALLBACK_HOST)
+
+
+def _default_port() -> int:
+    return int(os.environ.get("ACESTEP_PORT", str(_FALLBACK_PORT)))
+
+
+def is_acestep_available(host: str | None = None, port: int | None = None) -> bool:
     """Check if the ACE-Step server is running and healthy."""
+    host = host or _default_host()
+    port = port or _default_port()
     try:
         req = Request(f"{host}:{port}/health", method="GET")
         with urlopen(req, timeout=5) as resp:
@@ -63,17 +73,17 @@ class AceStepClient:
 
     def __init__(
         self,
-        host: str = DEFAULT_HOST,
-        port: int = DEFAULT_PORT,
+        host: str | None = None,
+        port: int | None = None,
     ) -> None:
-        self.base_url = f"{host}:{port}"
+        self.base_url = f"{host or _default_host()}:{port or _default_port()}"
 
     @property
     def is_available(self) -> bool:
         """Whether the ACE-Step server is reachable."""
         parsed = urlparse(self.base_url)
         host = f"{parsed.scheme}://{parsed.hostname}"
-        port = parsed.port or DEFAULT_PORT
+        port = parsed.port or _default_port()
         return is_acestep_available(host=host, port=port)
 
     def generate(self, config: AceStepConfig) -> AceStepResult:
@@ -113,8 +123,7 @@ class AceStepClient:
             "lyrics": config.lyrics,
             "bpm": config.bpm,
             "audio_duration": config.duration,
-            "key_scale": config.key,        # server field name
-            "keyscale": config.key,         # v1.5 alternate field name
+            "key_scale": config.key,
             "time_signature": config.time_signature,
             "vocal_language": config.vocal_language,
             "instrumental": config.instrumental,
@@ -241,10 +250,10 @@ class AceStepClient:
     def _download_audio(
         self, audio_path: str, seed: int,
     ) -> AceStepResult:
-        """Download generated audio from the server and return stereo samples.
+        """Download generated audio from the server and return raw WAV bytes.
 
         Raises:
-            AudioDownloadError: On network error or empty/unparseable audio.
+            AudioDownloadError: On network error or empty response.
         """
         try:
             if audio_path.startswith("/"):
@@ -256,25 +265,12 @@ class AceStepClient:
             with urlopen(req, timeout=60) as resp:
                 wav_bytes = resp.read()
 
-            from audio_engine.audio_io import read_wav_bytes
-            left, right, sample_rate = read_wav_bytes(wav_bytes)
-            if len(left) == 0:
-                raise AudioDownloadError("Downloaded audio is empty")
+            if len(wav_bytes) < 44:
+                raise AudioDownloadError("Downloaded audio is empty or too small")
 
-            duration = len(left) / sample_rate
+            log.info("ACE-Step audio downloaded: %d bytes", len(wav_bytes))
 
-            log.info(
-                "ACE-Step audio downloaded: %.1fs at %d Hz",
-                duration, sample_rate,
-            )
-
-            return AceStepResult(
-                left=left,
-                right=right,
-                sample_rate=sample_rate,
-                duration=duration,
-                seed=seed,
-            )
+            return AceStepResult(wav_bytes=wav_bytes, seed=seed)
 
         except (URLError, OSError) as exc:
             raise AudioDownloadError(

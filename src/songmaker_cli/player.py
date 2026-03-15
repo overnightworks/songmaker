@@ -212,41 +212,69 @@ def _scan_album_tracks(
     return tracks
 
 
-def _build_manifest(output_dir: Path, project_root: Path) -> Manifest:
-    """Build the manifest data structure from album directories."""
-    albums_data: list[AlbumInfo] = []
+@dataclass
+class _AlbumScan:
+    """Result of scanning one album directory for MP3s."""
 
+    album_name: str
+    mp3_base: str
+    mp3s: list[Path]
+    lyrics_dir: Path
+    meta: AlbumMeta
+
+
+def _iter_album_scans(
+    output_dir: Path, project_root: Path, deduplicate: bool = True,
+) -> list[_AlbumScan]:
+    """Scan all album directories for MP3 files with metadata."""
+    results: list[_AlbumScan] = []
     for album_dir in sorted(output_dir.iterdir()):
         if not album_dir.is_dir():
             continue
 
         album_name = album_dir.name
-
         final_dir = album_dir / "final"
         if final_dir.exists():
             mp3s = sorted(final_dir.glob("*.mp3"))
             mp3_base = f"{album_name}/final"
         else:
             mp3s = sorted(album_dir.glob("*.mp3"))
-            mp3s = _deduplicate_versions(mp3s)
+            if deduplicate:
+                mp3s = _deduplicate_versions(mp3s)
+            else:
+                mp3s = [m for m in mp3s if not m.stem.endswith("_raw")]
             mp3_base = album_name
 
         if not mp3s:
             continue
 
         source_album_dir = project_root / "albums" / album_name
-        album_meta = _load_album_meta(source_album_dir)
-
+        meta = _load_album_meta(source_album_dir)
         lyrics_dir = project_root / "albums" / album_name / "lyrics"
-        tracks = _scan_album_tracks(mp3s, mp3_base, lyrics_dir)
 
+        results.append(_AlbumScan(
+            album_name=album_name,
+            mp3_base=mp3_base,
+            mp3s=mp3s,
+            lyrics_dir=lyrics_dir,
+            meta=meta,
+        ))
+    return results
+
+
+def _build_manifest(output_dir: Path, project_root: Path) -> Manifest:
+    """Build the manifest data structure from album directories."""
+    albums_data: list[AlbumInfo] = []
+
+    for scan in _iter_album_scans(output_dir, project_root, deduplicate=True):
+        tracks = _scan_album_tracks(scan.mp3s, scan.mp3_base, scan.lyrics_dir)
         albums_data.append(AlbumInfo(
-            id=album_name,
-            title=album_meta.title,
-            artist=album_meta.artist,
-            subtitle=album_meta.subtitle,
-            year=album_meta.year or default_year(),
-            colors=album_meta.colors or DEFAULT_COLOR,
+            id=scan.album_name,
+            title=scan.meta.title,
+            artist=scan.meta.artist,
+            subtitle=scan.meta.subtitle,
+            year=scan.meta.year or default_year(),
+            colors=scan.meta.colors or DEFAULT_COLOR,
             tracks=tracks,
         ))
 
@@ -269,37 +297,24 @@ def _build_latest_tracks(output_dir: Path, project_root: Path) -> list[TrackInfo
     """Collect all tracks across albums sorted by newest first."""
     entries: list[tuple[float, str, TrackInfo]] = []
 
-    for album_dir in sorted(output_dir.iterdir()):
-        if not album_dir.is_dir():
-            continue
-        album_name = album_dir.name
-        lyrics_dir = project_root / "albums" / album_name / "lyrics"
-
-        final_dir = album_dir / "final"
-        if final_dir.exists():
-            scan_dir = final_dir
-            mp3_base = f"{album_name}/final"
-        else:
-            scan_dir = album_dir
-            mp3_base = album_name
-        mp3s = [mp3 for mp3 in scan_dir.glob("*.mp3") if not mp3.stem.endswith("_raw")]
-        for mp3 in mp3s:
+    for scan in _iter_album_scans(output_dir, project_root, deduplicate=False):
+        for mp3 in scan.mp3s:
             stem = mp3.stem
             number, title = _parse_track_title(stem)
             version = _extract_version_number(stem) or 1
 
-            raw_lyrics = _find_lyrics_for_track(stem, lyrics_dir)
+            raw_lyrics = _find_lyrics_for_track(stem, scan.lyrics_dir)
             intended_lines = _lyrics_to_lines(raw_lyrics) if raw_lyrics else []
 
             track = TrackInfo(
-                file=f"{mp3_base}/{mp3.name}",
-                title=f"{title} v{version}  [{album_name}]",
+                file=f"{scan.mp3_base}/{mp3.name}",
+                title=f"{title} v{version}  [{scan.album_name}]",
                 number=number,
                 lines=intended_lines,
                 intended=intended_lines,
                 has_sung=False,
             )
-            entries.append((mp3.stat().st_mtime, album_name, track))
+            entries.append((mp3.stat().st_mtime, scan.album_name, track))
 
     entries.sort(key=lambda e: e[0], reverse=True)
     return [track for _, _, track in entries]

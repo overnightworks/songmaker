@@ -68,7 +68,6 @@ def test_soft_clip_prevents_hard_clipping() -> None:
     assert (
         max_val <= ceiling
     ), f"Soft clip failed: max={max_val:.6f} exceeds ceiling={ceiling}"
-    print(f"  ✅ Soft clip: max={max_val:.6f} ≤ {ceiling}")
 
 
 def test_soft_clip_preserves_quiet_signals() -> None:
@@ -80,14 +79,12 @@ def test_soft_clip_preserves_quiet_signals() -> None:
     assert (
         max_diff < 0.005
     ), f"Soft clip altered quiet signal too much: max_diff={max_diff:.6f}"
-    print(f"  ✅ Quiet signal preserved: max_diff={max_diff:.6f}")
 
 
 def test_soft_clip_empty() -> None:
     """Verify soft_clip handles empty input."""
     result = soft_clip(np.array([], dtype=np.float64), ceiling=0.98)
     assert result.size == 0, "Soft clip should return empty array for empty input"
-    print("  ✅ Empty input handled")
 
 
 def test_multiband_no_nan_inf() -> None:
@@ -104,10 +101,6 @@ def test_multiband_no_nan_inf() -> None:
     assert not np.any(np.isnan(right)), "NaN detected in right channel"
     assert not np.any(np.isinf(left)), "Inf detected in left channel"
     assert not np.any(np.isinf(right)), "Inf detected in right channel"
-    print(
-        f"  ✅ No NaN/Inf: L range [{left.min():.4f}, {left.max():.4f}], "
-        f"R range [{right.min():.4f}, {right.max():.4f}]"
-    )
 
 
 def test_multiband_preserves_energy() -> None:
@@ -125,9 +118,6 @@ def test_multiband_preserves_energy() -> None:
     assert (
         output_rms > 0.01
     ), f"Multiband zeroed signal: input_rms={input_rms:.4f}, output_rms={output_rms:.4f}"
-    print(
-        f"  ✅ Energy preserved: input_rms={input_rms:.4f}, output_rms={output_rms:.4f}"
-    )
 
 
 def test_multiband_mismatched_params_raises() -> None:
@@ -143,11 +133,11 @@ def test_multiband_mismatched_params_raises() -> None:
         )
         assert False, "Should have raised ValueError"
     except ValueError:
-        print("  ✅ Mismatched params correctly raises ValueError")
+        pass
 
 
 def test_lufs_known_signal() -> None:
-    """Verify LUFS measurement is within ±2 dB of expected value.
+    """Verify LUFS measurement is within +/-2 dB of expected value.
 
     A 997 Hz sine at 0 dBFS should measure approximately -3.01 LUFS
     (due to single-channel RMS of a full-scale sine being -3.01 dBFS).
@@ -159,7 +149,6 @@ def test_lufs_known_signal() -> None:
     assert (
         -6.0 < lufs < 2.0
     ), f"LUFS measurement out of range for full-scale sine: {lufs:.2f} LUFS"
-    print(f"  ✅ Full-scale 997Hz sine: {lufs:.2f} LUFS (expected ~-3 to 0)")
 
 
 def test_lufs_quiet_signal() -> None:
@@ -168,7 +157,6 @@ def test_lufs_quiet_signal() -> None:
     lufs = measure_lufs(quiet, quiet.copy(), sample_rate=SAMPLE_RATE)
 
     assert lufs < -50.0, f"Quiet signal LUFS too high: {lufs:.2f}"
-    print(f"  ✅ Quiet signal: {lufs:.2f} LUFS (expected < -50)")
 
 
 def test_lufs_empty_signal() -> None:
@@ -176,7 +164,6 @@ def test_lufs_empty_signal() -> None:
     empty = np.array([], dtype=np.float64)
     lufs = measure_lufs(empty, empty, sample_rate=SAMPLE_RATE)
     assert lufs == -70.0, f"Empty signal should return -70.0, got {lufs}"
-    print("  ✅ Empty signal: -70.0 LUFS")
 
 
 def test_lufs_normalization() -> None:
@@ -198,10 +185,6 @@ def test_lufs_normalization() -> None:
         f"LUFS normalization error too large: target={target}, "
         f"result={result_lufs:.2f}, error={error:.2f} dB"
     )
-    print(
-        f"  ✅ Normalized: {current:.2f} → {result_lufs:.2f} LUFS "
-        f"(target {target}, error {error:.2f} dB)"
-    )
 
 
 def test_stereo_widening_identity() -> None:
@@ -216,9 +199,6 @@ def test_stereo_widening_identity() -> None:
 
     assert max_diff_l < 1e-10, f"Width=1.0 changed left channel: diff={max_diff_l}"
     assert max_diff_r < 1e-10, f"Width=1.0 changed right channel: diff={max_diff_r}"
-    print(
-        f"  ✅ Width=1.0 identity: max_diff_L={max_diff_l:.2e}, max_diff_R={max_diff_r:.2e}"
-    )
 
 
 def test_stereo_widening_mono() -> None:
@@ -230,7 +210,6 @@ def test_stereo_widening_mono() -> None:
 
     max_diff = float(np.max(np.abs(out_l - out_r)))
     assert max_diff < 1e-10, f"Width=0.0 should be mono: diff={max_diff}"
-    print(f"  ✅ Width=0.0 mono collapse: max_diff={max_diff:.2e}")
 
 
 def test_stereo_widening_increases_width() -> None:
@@ -247,7 +226,6 @@ def test_stereo_widening_increases_width() -> None:
         f"Width=1.5 should increase stereo difference: "
         f"original={original_diff:.2f}, widened={widened_diff:.2f}"
     )
-    print(f"  ✅ Width=1.5 increases diff: {original_diff:.2f} → {widened_diff:.2f}")
 
 
 def test_full_pipeline_no_clipping() -> None:
@@ -269,11 +247,10 @@ def test_full_pipeline_no_clipping() -> None:
 
     assert max_l <= 0.98, f"Left channel clipping: max={max_l:.6f}"
     assert max_r <= 0.98, f"Right channel clipping: max={max_r:.6f}"
-    print(f"  ✅ Full pipeline no clipping: max_L={max_l:.6f}, max_R={max_r:.6f}")
 
 
 def test_full_pipeline_lufs_accuracy() -> None:
-    """Verify full pipeline output is within ±1.5 dB of target LUFS."""
+    """Verify full pipeline output is within +/-1.5 dB of target LUFS."""
     signal = _generate_multiband_signal(5.0)
     target = -14.0
 
@@ -291,9 +268,6 @@ def test_full_pipeline_lufs_accuracy() -> None:
     assert error < 2.0, (
         f"Pipeline LUFS error: target={target}, result={result_lufs:.2f}, "
         f"error={error:.2f} dB"
-    )
-    print(
-        f"  ✅ Pipeline LUFS: {result_lufs:.2f} (target {target}, error {error:.2f} dB)"
     )
 
 
@@ -313,7 +287,6 @@ def test_full_pipeline_no_nan_inf() -> None:
     assert not np.any(np.isnan(mastered_r)), "NaN in mastered right"
     assert not np.any(np.isinf(mastered_l)), "Inf in mastered left"
     assert not np.any(np.isinf(mastered_r)), "Inf in mastered right"
-    print("  ✅ Full pipeline: no NaN/Inf")
 
 
 def test_full_pipeline_empty() -> None:
@@ -322,7 +295,6 @@ def test_full_pipeline_empty() -> None:
     mastered_l, mastered_r = master_stereo(empty, empty, target_lufs=-14.0)
     assert mastered_l.size == 0, "Expected empty left channel"
     assert mastered_r.size == 0, "Expected empty right channel"
-    print("  ✅ Empty input handled gracefully")
 
 
 def test_deterministic_output() -> None:
@@ -338,5 +310,3 @@ def test_deterministic_output() -> None:
 
     assert np.array_equal(result_1[0], result_2[0]), "Non-deterministic left channel"
     assert np.array_equal(result_1[1], result_2[1]), "Non-deterministic right channel"
-
-    print("  ✅ Deterministic: two runs produce identical output")

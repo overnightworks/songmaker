@@ -13,7 +13,3 @@ class ValidationError(SongmakerError):
 
 class GenerationError(SongmakerError):
     """ACE-Step generation failed."""
-
-
-class MasteringError(SongmakerError):
-    """Audio mastering or encoding failed."""

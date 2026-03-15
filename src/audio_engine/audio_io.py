@@ -12,6 +12,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from audio_engine.constants import DEFAULT_SAMPLE_RATE, INT16_MAX
+from audio_engine.errors import MasteringError
 from audio_engine.mastering import master_stereo
 
 log = logging.getLogger(__name__)
@@ -87,8 +88,6 @@ def master_to_mp3(
     Raises:
         MasteringError: On empty audio, missing ffmpeg, or encoding failure.
     """
-    from songmaker_cli.errors import MasteringError
-
     if len(left) == 0 or len(right) == 0:
         raise MasteringError("Cannot master empty audio")
 
@@ -192,6 +191,7 @@ def read_wav_bytes(
     Mono input is duplicated to both channels.
     """
     if len(data) < 44 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        log.warning("read_wav_bytes: not a valid WAV file (%d bytes)", len(data))
         return _empty_stereo()
 
     pos = 12
@@ -210,6 +210,7 @@ def read_wav_bytes(
             pos += 1
 
     if fmt_data is None or audio_data is None:
+        log.warning("read_wav_bytes: missing fmt or data chunk")
         return _empty_stereo()
 
     audio_format = struct.unpack_from("<H", fmt_data, 0)[0]
@@ -230,6 +231,10 @@ def read_wav_bytes(
             audio_data[:len(audio_data) // 4 * 4], dtype=np.int32,
         ).astype(np.float64) / 2147483648.0
     else:
+        log.warning(
+            "read_wav_bytes: unsupported format (audio_format=%d, sample_width=%d bytes)",
+            audio_format, sampwidth,
+        )
         return _empty_stereo()
 
     if n_channels >= 2:

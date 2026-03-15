@@ -8,12 +8,12 @@ import pytest
 
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.main import (
-    _clean_lyrics,
-    _collect_overrides,
-    _find_lyrics_source,
-    _load_album_meta,
-    _validate_path,
-    _validate_song_meta,
+    clean_lyrics,
+    collect_overrides,
+    find_lyrics_source,
+    load_album_meta_for_song,
+    validate_path,
+    validate_song_meta,
 )
 from songmaker_cli.parser import SongMeta
 
@@ -21,39 +21,39 @@ from songmaker_cli.parser import SongMeta
 def test_validate_path_exists(tmp_path: Path) -> None:
     f = tmp_path / "test.md"
     f.touch()
-    result = _validate_path(str(f))
+    result = validate_path(str(f))
     assert result == f.resolve()
 
 
 def test_validate_path_not_found() -> None:
     with pytest.raises(ValidationError, match="not found"):
-        _validate_path("/nonexistent/path.md")
+        validate_path("/nonexistent/path.md")
 
 
 def test_validate_song_meta_no_prompt() -> None:
     meta = SongMeta(prompt="", lyrics="[verse]\nHello")
     with pytest.raises(ValidationError, match="prompt"):
-        _validate_song_meta(meta)
+        validate_song_meta(meta)
 
 
 def test_validate_song_meta_no_lyrics() -> None:
     meta = SongMeta(prompt="rock", lyrics="")
     with pytest.raises(ValidationError, match="Lyrics"):
-        _validate_song_meta(meta)
+        validate_song_meta(meta)
 
 
 def test_validate_song_meta_valid() -> None:
     meta = SongMeta(prompt="rock", lyrics="[verse]\nHello")
-    _validate_song_meta(meta)
+    validate_song_meta(meta)
 
 
 def test_collect_overrides_filters_none() -> None:
-    result = _collect_overrides(seed=42, bpm=None, duration=60)
+    result = collect_overrides(seed=42, bpm=None, duration=60)
     assert result == {"seed": 42, "duration": 60}
 
 
 def test_collect_overrides_empty() -> None:
-    result = _collect_overrides(seed=None, bpm=None)
+    result = collect_overrides(seed=None, bpm=None)
     assert result == {}
 
 
@@ -68,7 +68,7 @@ def test_load_album_meta_with_yaml(tmp_path: Path) -> None:
     md_path = lyrics_dir / "song.md"
     md_path.touch()
 
-    meta = _load_album_meta(md_path)
+    meta = load_album_meta_for_song(md_path)
     assert meta.title == "My Album"
     assert meta.artist == "TestArtist"
 
@@ -79,7 +79,7 @@ def test_load_album_meta_without_yaml(tmp_path: Path) -> None:
     md_path = lyrics_dir / "song.md"
     md_path.touch()
 
-    meta = _load_album_meta(md_path)
+    meta = load_album_meta_for_song(md_path)
     assert meta.title == "Cool Album"
 
 
@@ -88,7 +88,7 @@ def test_find_lyrics_source_explicit(tmp_path: Path) -> None:
     md.write_text("---\nprompt: test\n---\n\n## Lyrics\n\nHello\n")
     mp3 = tmp_path / "song_v1.mp3"
     mp3.touch()
-    result = _find_lyrics_source(mp3, str(md))
+    result = find_lyrics_source(mp3, str(md))
     assert result == md.resolve()
 
 
@@ -96,10 +96,10 @@ def test_find_lyrics_source_not_found(tmp_path: Path) -> None:
     mp3 = tmp_path / "song_v1.mp3"
     mp3.touch()
     with pytest.raises(ValidationError, match="Could not find"):
-        _find_lyrics_source(mp3, None)
+        find_lyrics_source(mp3, None)
 
 
 def test_clean_lyrics_strips_tags() -> None:
     text = "[verse]\nHello World\n[chorus]\nLa La"
-    result = _clean_lyrics(text)
+    result = clean_lyrics(text)
     assert result == "hello world la la"
