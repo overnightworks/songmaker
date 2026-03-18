@@ -53,7 +53,7 @@ Then ship the bombs on both sides out, tell me how's that gonna heal
 [chorus]
 Where is the love, where did it go,
 We had it once, I swear I know,
-We learned to scroll past children's names and not feel anymore,
+We send our thoughts and prayers but we don't pray anymore,
 Where is the love, where is the love
 
 [verse]
@@ -63,7 +63,7 @@ They flew to that island, everybody knows the truth,
 But money buys the silence and the justice, that's the proof,
 They tell you it's democracy, they tell you that you're free,
 While the richest men alive are building rockets just to flee,
-A billion people starving while a yacht costs more than nations,
+A billion people hungry but there's yachts that cost a nation,
 And we scroll right past the suffering and call it information
 
 [chorus]
@@ -73,8 +73,8 @@ They took it from us, now it's something we can't afford,
 Where is the love, where is the love
 
 [verse]
-Three AM, a billion people scrolling through the night,
-Algorithm feeds you outrage, picks the next fight,
+Three AM, a billion people scrolling, wide awake,
+Everybody posting, nobody is doing great,
 Got a thousand followers but nobody calls to check,
 AI writes the article, AI sings the track
 
@@ -85,12 +85,12 @@ We're all connected but we've never been this alone before,
 Where is the love, where is the love
 
 [verse]
-We were at the table, just a normal night, the news came up,
+We were at the table, just a normal night, then Ukraine came up,
 He said they had it coming, I said brother are you nuts,
 It escalated fast, ten years of trust went up in flames,
 By the end we said things that we can never take away,
 I used to say what's on my mind, now silence keeps the peace,
-One opinion at the table and your oldest friend just leaves,
+One wrong word is all it takes for everything to cease,
 Ten years of love don't mean a thing when being right means more,
 We're so busy being right we forgot what right was for
 
