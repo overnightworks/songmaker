@@ -17,7 +17,7 @@ prompt: >
   final chorus adds gospel choir layered behind the female lead,
   production builds from minimal to massive across the song
 bpm: 95
-duration: 210
+duration: 240
 key: Am
 time_signature: 4/4
 language: en
@@ -42,7 +42,7 @@ A 2026 reimagining of "Where Is the Love" by Black Eyed Peas. Not a cover — a 
 Ukraine is still burning, four years deep and counting,
 The world moved on, the feeds refreshed, we stopped the conversation,
 Kids who never saw a morning without sirens in the sky,
-We shared a flag, we posted prayers, and then we swiped right by
+We shared a flag, we posted prayers, and then we let them die
 
 [verse]
 Gaza's just a body count, the names don't fit the headline,
@@ -53,7 +53,7 @@ Then ship the bombs on both sides out, tell me how's that gonna heal
 [chorus]
 Where is the love, where did it go,
 We had it once, not long ago,
-Their names scroll by but we don't read them anymore,
+We learned to scroll past children's names and not feel anymore,
 Where is the love, where is the love
 
 [verse]
@@ -63,7 +63,7 @@ They flew to that island, everybody knows the truth,
 But money buys the silence and the justice, that's the proof,
 They tell you it's democracy, they tell you that you're free,
 While the richest men alive are building rockets just to flee,
-A billion people hungry but there's yachts that cost a nation,
+A billion people starving while a yacht costs more than nations,
 And we scroll right past the suffering and call it information
 
 [chorus]
@@ -73,13 +73,25 @@ They took it from us, now it's something we can't afford,
 Where is the love, where is the love
 
 [verse]
-We were at the table, just a normal night, then Ukraine came up,
+Three AM, a billion people scrolling, wide awake,
+Algorithm feeds you outrage, keeps the anger on repeat,
+Got a thousand followers but nobody calls to check,
+AI writes the article, AI sings the track
+
+[chorus]
+Where is the love, where did it go,
+We had it once, not long ago,
+We're all connected but we've never been this alone before,
+Where is the love, where is the love
+
+[verse]
+We were at the table, just a normal night, the news came up,
 He said they had it coming, I said brother are you nuts,
 It escalated fast, ten years of trust went up in flames,
 By the end we said things that we can never take away,
 I used to say what's on my mind, now silence keeps the peace,
 One opinion at the table and your oldest friend just leaves,
-Ten years of love don't mean a thing when being right feels more,
+Ten years of love don't mean a thing when being right means more,
 We're so busy being right we forgot what right was for
 
 [chorus]
