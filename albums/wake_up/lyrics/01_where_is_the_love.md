@@ -52,7 +52,7 @@ Then ship the bombs on both sides out, tell me how's that gonna heal
 
 [chorus]
 Where is the love, where did it go,
-We had it once, not long ago,
+We had it once, I swear I know,
 We learned to scroll past children's names and not feel anymore,
 Where is the love, where is the love
 
@@ -68,19 +68,19 @@ And we scroll right past the suffering and call it information
 
 [chorus]
 Where is the love, where did it go,
-We had it once, not long ago,
+We had it once, I swear I know,
 They took it from us, now it's something we can't afford,
 Where is the love, where is the love
 
 [verse]
-Three AM, a billion people scrolling, wide awake,
-Algorithm feeds you outrage, keeps the anger on repeat,
+Three AM, a billion people scrolling through the night,
+Algorithm feeds you outrage, picks the next fight,
 Got a thousand followers but nobody calls to check,
 AI writes the article, AI sings the track
 
 [chorus]
 Where is the love, where did it go,
-We had it once, not long ago,
+We had it once, I swear I know,
 We're all connected but we've never been this alone before,
 Where is the love, where is the love
 
@@ -96,7 +96,7 @@ We're so busy being right we forgot what right was for
 
 [chorus]
 Where is the love, where did it go,
-We had it once, not long ago,
+We had it once, I swear I know,
 I broke the only thing I swore that I'd protect before,
 Where is the love, where is the love
 
