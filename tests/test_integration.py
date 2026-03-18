@@ -61,6 +61,18 @@ def _setup_project(tmp_path: Path) -> Path:
     return song_md
 
 
+def _health_response() -> MagicMock:
+    """Build a mock /health response."""
+    return _mock_response(json.dumps({
+        "data": {
+            "status": "ok", "version": "1.0",
+            "loaded_model": "acestep-v15-turbo",
+            "loaded_lm_model": "acestep-5Hz-lm-4B",
+        },
+        "code": 200,
+    }).encode())
+
+
 def _build_acestep_responses(wav_bytes: bytes) -> list[MagicMock]:
     """Build the three mock HTTP responses for a full ACE-Step generate cycle."""
     submit_resp = _mock_response(json.dumps({
@@ -84,7 +96,7 @@ def test_generate_end_to_end(tmp_path: Path, make_sine_wav_bytes: Callable[..., 
     output_dir = tmp_path / "_output"
 
     wav_bytes = make_sine_wav_bytes()
-    responses = _build_acestep_responses(wav_bytes)
+    responses = [_health_response()] + _build_acestep_responses(wav_bytes)
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.side_effect = responses
@@ -98,13 +110,18 @@ def test_generate_end_to_end(tmp_path: Path, make_sine_wav_bytes: Callable[..., 
     assert mp3s[0].stat().st_size > 0, "MP3 should not be empty"
     assert "01_test_song_v1" in mp3s[0].name
 
+    snapshot_md = album_output / "01_test_song_v1.md"
+    assert snapshot_md.exists(), "Snapshot .md should be generated"
+    snapshot_text = snapshot_md.read_text()
+    assert "acestep_model: acestep-v15-turbo" in snapshot_text
+
     player_html = output_dir / "player.html"
     assert player_html.exists(), "Player HTML should be generated"
 
     manifest = output_dir / "manifest.json"
     assert manifest.exists(), "Manifest JSON should be generated"
 
-    assert mock_urlopen.call_count == 3
+    assert mock_urlopen.call_count == 4
 
 
 def test_generate_multiple_versions(
@@ -115,7 +132,7 @@ def test_generate_multiple_versions(
     output_dir = tmp_path / "_output"
 
     wav_bytes = make_sine_wav_bytes()
-    responses = (
+    responses = [_health_response()] + (
         _build_acestep_responses(wav_bytes)
         + _build_acestep_responses(wav_bytes)
         + _build_acestep_responses(wav_bytes)
@@ -134,4 +151,4 @@ def test_generate_multiple_versions(
     assert "01_test_song_v2" in stems
     assert "01_test_song_v3" in stems
 
-    assert mock_urlopen.call_count == 9
+    assert mock_urlopen.call_count == 10

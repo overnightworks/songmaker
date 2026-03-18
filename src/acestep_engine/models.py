@@ -41,6 +41,15 @@ class AceStepResult:
     seed: int
 
 
+@dataclass(frozen=True)
+class ServerInfo:
+    """ACE-Step server identity returned by /health."""
+
+    model: str
+    lm_model: str
+    version: str
+
+
 class TaskSubmitData(BaseModel):
     """Inner data from a /release_task response."""
 

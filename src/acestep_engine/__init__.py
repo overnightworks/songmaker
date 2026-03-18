@@ -12,13 +12,14 @@ from acestep_engine.errors import (
     GenerationTimeoutError,
     TaskSubmissionError,
 )
-from acestep_engine.models import AceStepConfig, AceStepResult
+from acestep_engine.models import AceStepConfig, AceStepResult, ServerInfo
 
 __all__ = [
     "AceStepClient",
     "AceStepConfig",
     "AceStepError",
     "AceStepResult",
+    "ServerInfo",
     "AudioDownloadError",
     "GenerationFailedError",
     "GenerationTimeoutError",

@@ -28,6 +28,12 @@
     flex-direction: column;
   }
 
+  .nav-area {
+    flex-shrink: 0;
+    max-height: 30vh;
+    overflow-y: auto;
+  }
+
   .header {
     text-align: center;
     padding: 12px 20px 8px;
@@ -90,7 +96,6 @@
     gap: 4px;
     padding: 6px 20px;
     background: #0f0f0f;
-    flex-shrink: 0;
   }
 
   .track-btn {
@@ -166,7 +171,7 @@
     flex: 1;
     overflow-y: auto;
     scroll-behavior: smooth;
-    min-height: 0;
+    min-height: 120px;
   }
 
   .lyric-line {
@@ -179,6 +184,15 @@
     border-left: 3px solid transparent;
     cursor: pointer;
   }
+
+  .lyrics-container.static .lyric-line {
+    color: #ccc;
+    cursor: default;
+  }
+
+  .lyrics-container.static .lyric-line:hover { color: #fff; }
+
+  .lyrics-container.static .lyric-line.section-tag { opacity: 0.8; }
 
   .lyric-line:hover { color: #999; }
 
@@ -264,6 +278,50 @@
     padding: 10px 16px;
     margin: 8px 0;
     flex-shrink: 0;
+  }
+
+  .rating-panel.collapsed > *:not(h3) { display: none; }
+
+  .rating-panel h3 { cursor: pointer; user-select: none; }
+
+  .rating-panel.collapsed h3::first-letter { display: inline; }
+  .rating-panel:not(.collapsed) h3 .arrow { transform: rotate(180deg); }
+
+  .gen-info {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 6px;
+    padding: 10px 16px;
+    margin: 4px 0 8px;
+    flex-shrink: 0;
+  }
+
+  .gen-info.collapsed > *:not(h3) { display: none; }
+
+  .gen-info h3 {
+    font-family: 'Oswald', sans-serif;
+    font-size: 13px;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .gen-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 4px 16px;
+    margin-top: 6px;
+  }
+
+  .gen-info-item {
+    font-size: 11px;
+    color: #888;
+  }
+
+  .gen-info-item span {
+    color: #ccc;
   }
 
   .rating-panel h3 {
@@ -404,8 +462,10 @@
   <div class="subtitle" id="albumSubtitle">Music Player</div>
 </div>
 
-<div class="album-nav" id="albumNav"></div>
-<div class="track-nav" id="trackNav"></div>
+<div class="nav-area">
+  <div class="album-nav" id="albumNav"></div>
+  <div class="track-nav" id="trackNav"></div>
+</div>
 
 <div class="player-area">
   <div class="now-playing">
@@ -418,8 +478,8 @@
     <source id="audioSource" type="audio/mpeg">
   </audio>
 
-  <div class="rating-panel" id="ratingPanel">
-    <h3>Rate this version</h3>
+  <div class="rating-panel collapsed" id="ratingPanel">
+    <h3 onclick="this.parentElement.classList.toggle('collapsed')">&#9662; Rate this version</h3>
     <div class="rating-row">
       <span class="rating-label">Overall</span>
       <div class="stars" id="stars-overall"></div>
@@ -442,6 +502,11 @@
       <button class="rating-export" onclick="exportRatings()">Export All</button>
       <span class="rating-status" id="ratingStatus">Saved!</span>
     </div>
+  </div>
+
+  <div class="gen-info collapsed" id="genInfo" style="display:none">
+    <h3 onclick="this.parentElement.classList.toggle('collapsed')">&#9662; Generation Info</h3>
+    <div class="gen-info-grid" id="genInfoGrid"></div>
   </div>
 
   <div class="view-toggle" id="viewToggle" style="display:none">
@@ -519,7 +584,7 @@ async function init() {
 
 // --- Auto-refresh: poll manifest.json every 3s ---
 
-setInterval(async () => {
+if (location.protocol !== 'file:') setInterval(async () => {
   const wasPlaying = audioEl && !audioEl.paused;
   const currentTime = audioEl ? audioEl.currentTime : 0;
   const prevAlbumId = ALBUMS[currentAlbum] ? ALBUMS[currentAlbum].id : null;
@@ -563,10 +628,14 @@ function readID3(trackUrl) {
       resolve(null);
       return;
     }
-    jsmediatags.read(trackUrl, {
-      onSuccess: (result) => resolve(result.tags),
-      onError: () => resolve(null),
-    });
+    try {
+      jsmediatags.read(trackUrl, {
+        onSuccess: (result) => resolve(result.tags),
+        onError: () => resolve(null),
+      });
+    } catch(e) {
+      resolve(null);
+    }
   });
 }
 
@@ -674,7 +743,40 @@ async function loadTrack(index) {
   }
 
   renderCurrentView();
+  renderGenInfo(t);
   loadRating();
+}
+
+// --- Generation info ---
+
+const GEN_LABELS = {
+  seed: 'Seed', acestep_model: 'Model', acestep_lm_model: 'LM Model',
+  bpm: 'BPM', duration: 'Duration', key: 'Key',
+  guidance_scale: 'Guidance', inference_steps: 'Steps', shift: 'Shift',
+  think_mode: 'Think', lm_temperature: 'LM Temp', infer_method: 'Method',
+  songmaker_version: 'Songmaker', generated_at: 'Generated',
+};
+
+function renderGenInfo(track) {
+  const panel = document.getElementById('genInfo');
+  const grid = document.getElementById('genInfoGrid');
+  grid.innerHTML = '';
+  if (!track.generation) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+  for (const [key, label] of Object.entries(GEN_LABELS)) {
+    const val = track.generation[key];
+    if (val === undefined || val === null || val === '') continue;
+    const div = document.createElement('div');
+    div.className = 'gen-info-item';
+    let display = val;
+    if (key === 'duration') display = val + 's';
+    if (key === 'think_mode') display = val ? 'on' : 'off';
+    div.innerHTML = label + ': <span>' + escHtml(String(display)) + '</span>';
+    grid.appendChild(div);
+  }
 }
 
 // --- Lyrics sync ---
@@ -765,6 +867,7 @@ function renderLyrics(lines, withTimestamps) {
     return;
   }
   const hasTs = withTimestamps && lines.some(l => l.time >= 0);
+  lyricsContainer.classList.toggle('static', !hasTs);
   lines.forEach((line, i) => {
     const div = document.createElement('div');
     if (line.section) {

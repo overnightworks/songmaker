@@ -265,3 +265,35 @@ def test_generate_full_flow() -> None:
 
     assert result.seed == 7
     assert len(result.wav_bytes) > 44
+
+
+def test_server_info_success() -> None:
+    client = AceStepClient()
+    health_data = json.dumps({
+        "data": {
+            "loaded_model": "acestep-v15-turbo",
+            "loaded_lm_model": "acestep-5Hz-lm-4B",
+            "version": "1.0",
+        },
+        "code": 200,
+    }).encode()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(health_data)
+        info = client.server_info()
+
+    assert info is not None
+    assert info.model == "acestep-v15-turbo"
+    assert info.lm_model == "acestep-5Hz-lm-4B"
+    assert info.version == "1.0"
+
+
+def test_server_info_unavailable() -> None:
+    client = AceStepClient()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        from urllib.error import URLError
+        mock_urlopen.side_effect = URLError("Connection refused")
+        info = client.server_info()
+
+    assert info is None

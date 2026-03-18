@@ -28,6 +28,7 @@ from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import GenerationError, SongmakerError, ValidationError
 from songmaker_cli.parser import AlbumMeta, SongMeta, load_album_meta, parse_song_md
 from songmaker_cli.player import generate_player
+from songmaker_cli.snapshot import write_snapshot
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ def generate(
     output_root = (project_root / OUTPUT_ROOT) if project_root else None
 
     client = AceStepClient()
+    server_info = client.server_info()
     last_paths = None
     for i in range(count):
         if count > 1:
@@ -108,6 +110,7 @@ def generate(
         ace_result, elapsed = _run_generation(ace_config, client)
         audio = _decode_audio(ace_result)
         _write_output(audio, ace_result.seed, paths, meta, album_meta)
+        write_snapshot(md_path, paths, ace_config, ace_result.seed, server_info)
         _log_result_banner(paths, audio, ace_result.seed, elapsed)
 
         if check:
@@ -293,7 +296,7 @@ def _open_player(player_path: Path) -> None:
 
 def main() -> None:
     try:
-        app()
+        app.meta()
     except SongmakerError as exc:
         log.error("%s", exc)
         sys.exit(1)

@@ -325,7 +325,7 @@ def test_write_output_mastering_error(tmp_path: Path) -> None:
 
 def test_main_error_handling() -> None:
     with (
-        patch("songmaker_cli.main.app", side_effect=ValidationError("test error")),
+        patch("songmaker_cli.main._launcher", side_effect=ValidationError("test error")),
         pytest.raises(SystemExit),
     ):
         main()

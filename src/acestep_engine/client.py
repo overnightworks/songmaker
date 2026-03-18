@@ -30,6 +30,7 @@ from acestep_engine.errors import (
 from acestep_engine.models import (
     AceStepConfig,
     AceStepResult,
+    ServerInfo,
     TaskQueryResponse,
     TaskSubmitResponse,
 )
@@ -107,6 +108,20 @@ class AceStepClient:
         host = f"{parsed.scheme}://{parsed.hostname}"
         port = parsed.port or _default_port()
         return is_acestep_available(host=host, port=port)
+
+    def server_info(self) -> ServerInfo | None:
+        """Fetch model and version info from the /health endpoint."""
+        try:
+            req = Request(f"{self.base_url}/health", method="GET")
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read()).get("data", {})
+            return ServerInfo(
+                model=data.get("loaded_model", ""),
+                lm_model=data.get("loaded_lm_model", ""),
+                version=data.get("version", ""),
+            )
+        except (URLError, OSError, json.JSONDecodeError):
+            return None
 
     def generate(self, config: AceStepConfig) -> AceStepResult:
         """Generate music via ACE-Step and return audio samples.
