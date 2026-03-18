@@ -4,13 +4,20 @@ album: wake_up
 track: 1
 genre: Hip-Hop / Pop / Conscious Rap
 prompt: >
-  conscious hip-hop, 808 beats, piano, strings,
-  male rappers on verses, hard-hitting with meaning,
-  soulful female singer on chorus, emotional and powerful,
-  protest song, anthemic hook, building intensity,
-  varied flow, rhythmic changes between verses
+  Black Eyed Peas "Where Is The Love" spiritual successor,
+  dark piano loop driving the whole track, minor key, haunting and sparse,
+  male rapper on verses, raw and urgent, voice cracking with real anger,
+  rapid-fire delivery like early Eminem, every word hits like a fist,
+  verses build tension with just piano and minimal drums,
+  then chorus EXPLODES — powerful soulful female singer,
+  woman's voice soaring over lush strings and choir,
+  chorus is pure goosebumps, emotional and anthemic,
+  huge dynamic contrast: dark angry verses vs luminous hopeful chorus,
+  strings swell on every chorus like a wave of emotion,
+  final chorus adds gospel choir layered behind the female lead,
+  production builds from minimal to massive across the song
 bpm: 95
-duration: 240
+duration: 210
 key: Am
 time_signature: 4/4
 language: en
@@ -27,7 +34,7 @@ status: approved
 
 ## Concept
 
-A 2026 reimagining of "Where Is the Love" by Black Eyed Peas. Not a cover — a spiritual successor. The same big question, but for today's world. Wars that nobody stops (Ukraine, Gaza, Sudan), the Epstein files proving the powerful are untouchable, AI replacing human connection, social media selling loneliness, political division tearing families apart. The verses are rap — specific, naming things, not hiding behind metaphors. The chorus is emotional and melodic — the universal cry. The bridge is the meta-moment: this song is made by AI, which is part of the problem, but if even a machine can ask the question, maybe we should listen. Not preachy — personal. Not hopeless — questioning.
+A 2026 reimagining of "Where Is the Love" by Black Eyed Peas. Not a cover — a spiritual successor. The same big question, but for today's world. Wars that nobody stops (Ukraine, Gaza, Sudan, Iran/Israel), the Epstein files proving the powerful are untouchable, and the way all of this poison seeps into our personal lives — dinner tables, friendships, families torn apart by taking sides. The verses funnel from global to personal: wars → corruption → the war at your own table → the silence after. The chorus is emotional and melodic — the universal cry. The bridge is the quiet aftermath. The final chorus flips the question: love never left, we just stopped choosing it. Not preachy — personal. Not hopeless — questioning.
 
 ## Lyrics
 
@@ -45,8 +52,8 @@ Then ship the bombs on both sides out, tell me how's that gonna heal
 
 [chorus]
 Where is the love, where did it go,
-We had it once, I swear I know,
-The children cry but we don't hear them anymore,
+We had it once, not long ago,
+Their names scroll by but we don't read them anymore,
 Where is the love, where is the love
 
 [verse]
@@ -61,38 +68,34 @@ And we scroll right past the suffering and call it information
 
 [chorus]
 Where is the love, where did it go,
-We had it once, I swear I know,
+We had it once, not long ago,
 They took it from us, now it's something we can't afford,
 Where is the love, where is the love
 
 [verse]
-Three AM, a billion people scrolling, wide awake,
-Everybody posting, nobody is doing great,
-Algorithm feeds you outrage, keeps the anger on repeat,
-Billion-dollar platforms selling loneliness for free,
-Got a thousand followers, but nobody calls to check,
-AI writes the article, AI sings the track,
-We replaced our conversations with a notification sound,
-Seven billion people online and no one is around
+We were at the table, just a normal night, then Ukraine came up,
+He said they had it coming, I said brother are you nuts,
+It escalated fast, ten years of trust went up in flames,
+By the end we said things that we can never take away,
+I used to say what's on my mind, now silence keeps the peace,
+One opinion at the table and your oldest friend just leaves,
+Ten years of love don't mean a thing when being right feels more,
+We're so busy being right we forgot what right was for
 
 [chorus]
 Where is the love, where did it go,
-We had it once, I swear I know,
-A billion voices screaming into nothing anymore,
+We had it once, not long ago,
+I broke the only thing I swore that I'd protect before,
 Where is the love, where is the love
 
 [bridge]
-They want us fighting each other so we never fight them,
-Left and right, that's the game, they need us to stay divided,
-I lost my best friend to a post he shared, one-sided,
-Ten years of laughter gone for a take that never mattered,
-Now we pass each other on the street like nothing ever happened
+I tried to reach him once, he wrote me back one line,
+Said he can't be friends with me no more and that was fine,
+That's the word he used — fine — like all of it meant nothing after all,
+If that's what the world does to love, no wonder that we fall
 
 [chorus]
-Where is the love, where did it go,
-We had it once, I swear I know,
+Where is the love — it never left,
+It's in the call you haven't made yet,
 If even a machine can ask the question, what's your excuse,
 Where is the love, where is the love
-
-[outro]
-Where is the love... where is the love...
