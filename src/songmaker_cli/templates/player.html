@@ -529,7 +529,7 @@
 
 <script>
 const INLINE_MANIFEST = {{MANIFEST_JSON}};
-const IS_SERVER = location.port === '8080' || location.pathname === '/';
+const IS_SERVER = location.protocol !== 'file:';
 const AUDIO_BASE = IS_SERVER ? '/audio/' : '';
 const API_BASE = IS_SERVER ? '' : null;
 const API_KEY = new URLSearchParams(location.search).get('key') || '';
