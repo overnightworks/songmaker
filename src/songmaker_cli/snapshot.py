@@ -97,6 +97,22 @@ def _build_generation_section(
     return "\n".join(lines)
 
 
+def append_scores_section(snapshot_path: Path, scores: object) -> None:
+    """Append a ## Scores section to an existing snapshot .md file."""
+    score_dict = scores.to_dict()  # type: ignore[union-attr]
+    if not score_dict:
+        return
+
+    lines = ["## Scores", ""]
+    for key, value in score_dict.items():
+        lines.append(f"- {key}: {value}")
+
+    text = snapshot_path.read_text(encoding="utf-8").rstrip()
+    text += "\n\n" + "\n".join(lines) + "\n"
+    snapshot_path.write_text(text, encoding="utf-8")
+    log.info("Scores appended to %s", snapshot_path.name)
+
+
 def _write_raw(
     paths: OutputPaths,
     source_text: str,

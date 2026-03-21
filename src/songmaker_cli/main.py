@@ -28,7 +28,8 @@ from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import GenerationError, SongmakerError, ValidationError
 from songmaker_cli.parser import AlbumMeta, SongMeta, load_album_meta, parse_song_md
 from songmaker_cli.player import generate_player
-from songmaker_cli.snapshot import write_snapshot
+from songmaker_cli.scoring import SongScores, available_scorers, run_scoring_pipeline
+from songmaker_cli.snapshot import append_scores_section, write_snapshot
 
 log = logging.getLogger(__name__)
 
@@ -76,6 +77,7 @@ def generate(
     infer_method: Annotated[Optional[str], Parameter(help="ode or sde")] = None,
     think_mode: Annotated[Optional[bool], Parameter(help="LM chain-of-thought")] = None,
     check: Annotated[bool, Parameter(help="Run Whisper check after")] = False,
+    score: Annotated[bool, Parameter(help="Run scoring pipeline after")] = False,
     player: Annotated[
         bool, Parameter(name="--player", help="Open HTML player after generation"),
     ] = False,
@@ -110,8 +112,13 @@ def generate(
         ace_result, elapsed = _run_generation(ace_config, client)
         audio = _decode_audio(ace_result)
         _write_output(audio, ace_result.seed, paths, meta, album_meta)
-        write_snapshot(md_path, paths, ace_config, ace_result.seed, server_info)
+        snapshot_path = write_snapshot(md_path, paths, ace_config, ace_result.seed, server_info)
         _log_result_banner(paths, audio, ace_result.seed, elapsed)
+
+        if score:
+            scores = run_scoring_pipeline(paths.mp3, meta=meta)
+            append_scores_section(snapshot_path, scores)
+            _log_scores(scores)
 
         if check:
             from songmaker_cli.check import run_check
@@ -155,6 +162,31 @@ def player(
 
     if open_browser:
         _open_player(player_path)
+
+
+@app.command
+def score(
+    path: Annotated[str, Parameter(help="MP3 file to score")],
+    source: Annotated[
+        Optional[str], Parameter(help="Lyrics .md file for text accuracy")
+    ] = None,
+    scorers: Annotated[
+        Optional[str], Parameter(help="Comma-separated scorer names, or 'all'")
+    ] = None,
+) -> None:
+    """Score a generated song on quality dimensions."""
+    mp3_path = validate_path(path)
+
+    meta = None
+    if source:
+        meta = parse_song_md(validate_path(source))
+
+    scorer_list = None
+    if scorers and scorers != "all":
+        scorer_list = [s.strip() for s in scorers.split(",")]
+
+    scores = run_scoring_pipeline(mp3_path, meta=meta, scorers=scorer_list)
+    _log_scores(scores)
 
 
 @app.command
@@ -204,6 +236,15 @@ def load_album_meta_for_song(
 
     album_dir = md_path.parent.parent
     return load_album_meta(album_dir)
+
+
+def _log_scores(scores: SongScores) -> None:
+    log.info("=" * 60)
+    log.info("  Scores (overall: %.0f)", scores.overall)
+    for name, value in scores.to_dict().items():
+        if name != "overall":
+            log.info("    %s: %.1f", name, value)
+    log.info("=" * 60)
 
 
 def _log_generation_banner(
