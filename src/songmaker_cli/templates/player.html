@@ -563,23 +563,28 @@ const trackNav = document.getElementById('trackNav');
 // --- Load manifest.json and initialize ---
 
 async function loadManifest() {
+  // Try inline manifest first (always works, no network needed)
+  if (INLINE_MANIFEST && !manifestHash) {
+    ALBUMS = INLINE_MANIFEST.albums || [];
+    if (ALBUMS.length > 0) {
+      manifestHash = 'inline';
+      return true;
+    }
+  }
+  // Then try fetching fresh manifest from server
   try {
     const resp = await apiFetch('manifest.json', {cache: 'no-store'});
+    if (!resp.ok) return false;
     const text = await resp.text();
+    if (!text.startsWith('{')) return false; // Not JSON (ngrok interstitial)
     const hash = simpleHash(text);
-    if (hash === manifestHash) return false; // No change
+    if (hash === manifestHash) return false;
     manifestHash = hash;
     const data = JSON.parse(text);
     ALBUMS = data.albums || [];
     return true;
   } catch(e) {
-    // file:// protocol: fall back to inline manifest
-    if (INLINE_MANIFEST && !manifestHash) {
-      ALBUMS = INLINE_MANIFEST.albums || [];
-      manifestHash = 'inline';
-      return true;
-    }
-    return false;
+    return ALBUMS.length > 0; // Already have inline data
   }
 }
 
