@@ -103,17 +103,24 @@ songmaker generate <path> --score   # runs scoring after generation
 
 ---
 
-### Phase 2 — Preference Model (future)
+### Phase 2 — Preference Model (future side project)
 
 **Prerequisites:** 100+ user-rated songs via player
 
-1. Extract CLAP embeddings per MP3, cache as .npy
-2. Player persists star ratings to snapshot .md
-3. `songmaker train-preference` — trains MLP on CLAP embeddings + features → user rating
-4. `PreferenceScorer` predicts user rating for new generations
+1. Add 1-5 star rating persistence in player → snapshot .md files
+2. **Important: don't delete bad songs — rate them low instead.** Bad examples
+   are as valuable as good ones. Binary kept/deleted loses nuance.
+   ~40 currently kept songs are NOT all good — they need proper 1-5 ratings.
+3. Extract CLAP embeddings per MP3, cache as .npy
+4. `songmaker train-preference` — trains MLP on CLAP embeddings + scoring
+   features → user rating (1-5 regression, not binary classification)
+5. `PreferenceScorer` predicts user rating for new generations
+6. Recalibrate scoring thresholds based on rated data
 
 **Hardware:** RTX 3090 (24GB) — overkill for this, training takes seconds
 **Approach:** Linear probe on frozen CLAP embeddings (laion/larger_clap_music, 512-dim)
+**Data note:** ~100 songs were deleted before this system existed. Lost data.
+Going forward, rate everything and keep all files.
 
 ---
 
