@@ -188,7 +188,9 @@ def score(
     if scorers and scorers != "all":
         scorer_list = [s.strip() for s in scorers.split(",")]
 
-    config = {"whisper_model": whisper_model}
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    config = PipelineConfig(whisper_model=whisper_model)
     scores = run_scoring_pipeline(mp3_path, meta=meta, scorers=scorer_list, config=config)
     _log_scores(scores)
 

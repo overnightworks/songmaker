@@ -27,8 +27,16 @@ class TextAccuracyScore:
     """Whisper transcription vs intended lyrics."""
 
     similarity_ratio: float
-    intended_lines: int
-    transcribed_lines: int
+    intended_line_texts: tuple[str, ...]
+    transcribed_line_texts: tuple[str, ...]
+
+    @property
+    def intended_lines(self) -> int:
+        return len(self.intended_line_texts)
+
+    @property
+    def transcribed_lines(self) -> int:
+        return len(self.transcribed_line_texts)
 
 
 @dataclass(frozen=True)

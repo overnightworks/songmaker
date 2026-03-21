@@ -78,7 +78,9 @@ def test_song_scores_to_dict_dynamics() -> None:
 def test_song_scores_to_dict_all_scorers() -> None:
     scores = SongScores(
         text_accuracy=TextAccuracyScore(
-            similarity_ratio=0.8, intended_lines=10, transcribed_lines=9,
+            similarity_ratio=0.8,
+            intended_line_texts=tuple(f"line{i}" for i in range(10)),
+            transcribed_line_texts=tuple(f"line{i}" for i in range(9)),
         ),
         emotional_dynamics=EmotionalDynamicsScore(
             pitch_cv=0.3, rms_contrast=2.0, onset_rate_cv=0.2,

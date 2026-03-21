@@ -24,7 +24,12 @@ class AudioData:
     sr: int
 
 
-PipelineConfig = dict[str, object]
+@dataclass(frozen=True)
+class PipelineConfig:
+    """Configuration passed to all scorers."""
+
+    whisper_model: str = "medium"
+
 
 ScorerFunc = Callable[[Path, SongMeta | None, AudioData | None, PipelineConfig], object]
 
@@ -92,14 +97,12 @@ def run_scoring_pipeline(
 
     Audio is loaded once and shared across all scorers.
     Each scorer runs independently — one failure does not block others.
-    Config dict is passed to all scorers for scorer-specific settings
-    (e.g. {"whisper_model": "large-v3"}).
     """
     _ensure_scorers_registered()
     if scorers is None:
         scorers = list(_SCORERS.keys())
     if config is None:
-        config = {}
+        config = PipelineConfig()
 
     audio_data = load_audio(mp3_path)
 

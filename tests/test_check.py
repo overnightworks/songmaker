@@ -112,7 +112,9 @@ def test_run_check_calls_scorer(tmp_path: Path, make_song_md: Callable[..., Path
         from songmaker_cli.scoring.models import TextAccuracyScore
 
         mock_scorer.return_value = TextAccuracyScore(
-            similarity_ratio=0.85, intended_lines=5, transcribed_lines=4,
+            similarity_ratio=0.85,
+            intended_line_texts=("a", "b", "c", "d", "e"),
+            transcribed_line_texts=("a", "b", "c", "d"),
         )
         run_check(str(mp3), source=str(md))
 

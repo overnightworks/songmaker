@@ -31,7 +31,10 @@ def score_text_accuracy(
     if meta is None or not meta.lyrics:
         raise ValueError("No lyrics metadata — cannot score text accuracy")
 
-    whisper_size = str((config or {}).get("whisper_model", DEFAULT_WHISPER_MODEL))
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
+    whisper_size = effective_config.whisper_model
     language = meta.generation_params.get("language", "en")
     model = _get_whisper_model(whisper_size)
     transcribed, segments = _transcribe(mp3_path, language, model)
@@ -40,19 +43,21 @@ def score_text_accuracy(
     clean_transcribed = clean_lyrics(transcribed)
     ratio = SequenceMatcher(None, clean_intended, clean_transcribed).ratio()
 
-    intended_lines = [
+    intended_lines = tuple(
         line.strip() for line in meta.lyrics.splitlines()
         if line.strip() and not line.strip().startswith("[")
-    ]
-    trans_lines = [s.get("text", "").strip() for s in segments if s.get("text", "").strip()]
+    )
+    trans_lines = tuple(
+        s.get("text", "").strip() for s in segments if s.get("text", "").strip()
+    )
 
     log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
              ratio * 100, len(intended_lines), len(trans_lines))
 
     return TextAccuracyScore(
         similarity_ratio=round(ratio, 3),
-        intended_lines=len(intended_lines),
-        transcribed_lines=len(trans_lines),
+        intended_line_texts=intended_lines,
+        transcribed_line_texts=trans_lines,
     )
 
 
