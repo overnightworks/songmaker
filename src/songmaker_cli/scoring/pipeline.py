@@ -24,7 +24,9 @@ class AudioData:
     sr: int
 
 
-ScorerFunc = Callable[[Path, SongMeta | None, AudioData | None], object]
+PipelineConfig = dict[str, object]
+
+ScorerFunc = Callable[[Path, SongMeta | None, AudioData | None, PipelineConfig], object]
 
 _VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
 _SCORERS: dict[str, ScorerFunc] = {}
@@ -84,15 +86,20 @@ def run_scoring_pipeline(
     mp3_path: Path,
     meta: SongMeta | None = None,
     scorers: list[str] | None = None,
+    config: PipelineConfig | None = None,
 ) -> SongScores:
     """Run all (or selected) scorers on an MP3 and return aggregated scores.
 
     Audio is loaded once and shared across all scorers.
     Each scorer runs independently — one failure does not block others.
+    Config dict is passed to all scorers for scorer-specific settings
+    (e.g. {"whisper_model": "large-v3"}).
     """
     _ensure_scorers_registered()
     if scorers is None:
         scorers = list(_SCORERS.keys())
+    if config is None:
+        config = {}
 
     audio_data = load_audio(mp3_path)
 
@@ -103,7 +110,7 @@ def run_scoring_pipeline(
             continue
         try:
             log.info("Running scorer: %s", name)
-            results[name] = _SCORERS[name](mp3_path, meta, audio_data)
+            results[name] = _SCORERS[name](mp3_path, meta, audio_data, config)
         except Exception:
             log.exception("Scorer '%s' failed", name)
 

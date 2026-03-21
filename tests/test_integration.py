@@ -7,22 +7,12 @@ parse markdown -> build config -> ACE-Step client -> decode audio -> master -> M
 from __future__ import annotations
 
 import json
-from http.client import HTTPResponse
 from pathlib import Path
 from typing import Callable
 from unittest.mock import MagicMock, patch
 
+from conftest import mock_http_response as _mock_response
 from songmaker_cli.main import generate
-
-
-def _mock_response(data: bytes, status: int = 200) -> MagicMock:
-    """Build a mock urllib response."""
-    resp = MagicMock(spec=HTTPResponse)
-    resp.status = status
-    resp.read.return_value = data
-    resp.__enter__ = MagicMock(return_value=resp)
-    resp.__exit__ = MagicMock(return_value=False)
-    return resp
 
 
 def _setup_project(tmp_path: Path) -> Path:
@@ -152,3 +142,27 @@ def test_generate_multiple_versions(
     assert "01_test_song_v3" in stems
 
     assert mock_urlopen.call_count == 10
+
+
+def test_generate_with_score_flag(
+    tmp_path: Path, make_sine_wav_bytes: Callable[..., bytes],
+) -> None:
+    """Verify --score triggers scoring and writes scores to snapshot."""
+    song_md = _setup_project(tmp_path)
+    output_dir = tmp_path / "_output"
+
+    wav_bytes = make_sine_wav_bytes()
+    responses = [_health_response()] + _build_acestep_responses(wav_bytes)
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.side_effect = responses
+        generate(str(song_md), score=True)
+
+    album_output = output_dir / "test_album"
+    snapshot_md = album_output / "01_test_song_v1.md"
+    assert snapshot_md.exists()
+
+    text = snapshot_md.read_text()
+    assert "## Scores" in text
+    assert "dynamics" in text
+    assert "silence_ok" in text

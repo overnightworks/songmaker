@@ -1,18 +1,51 @@
-"""Write generation snapshot markdown files alongside MP3 output."""
+"""Read and write generation snapshot markdown files alongside MP3 output."""
 
 from __future__ import annotations
 
 import datetime
 import importlib.metadata
 import logging
+import re
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any, TypedDict
 
 import yaml
 
 from acestep_engine.models import AceStepConfig, ServerInfo
 from songmaker_cli.config import OutputPaths
 from songmaker_cli.scoring.models import SongScores
+
+
+class GenerationInfo(TypedDict, total=False):
+    """Generation metadata from a sidecar snapshot .md."""
+
+    seed: int
+    acestep_model: str
+    acestep_lm_model: str
+    songmaker_version: str
+    source: str
+    generated_at: str
+    bpm: int
+    duration: int
+    key: str
+    guidance_scale: float
+    inference_steps: int
+    shift: float
+    think_mode: bool
+    lm_temperature: float
+    infer_method: str
+
+
+_GENERATION_KEYS = frozenset({
+    "seed", "acestep_model", "acestep_lm_model", "songmaker_version",
+    "source", "generated_at",
+})
+
+_FRONTMATTER_GEN_KEYS = frozenset({
+    "bpm", "duration", "key", "guidance_scale", "inference_steps",
+    "shift", "think_mode", "lm_temperature", "infer_method",
+})
 
 log = logging.getLogger(__name__)
 
@@ -119,6 +152,72 @@ def append_scores_section(snapshot_path: Path, scores: SongScores) -> None:
     text = text.rstrip() + "\n\n" + scores_block + "\n"
     snapshot_path.write_text(text, encoding="utf-8")
     log.info("Scores written to %s", snapshot_path.name)
+
+
+def read_generation_info(snapshot_path: Path) -> GenerationInfo | None:
+    """Read generation metadata from a sidecar snapshot .md file."""
+    if not snapshot_path.exists():
+        return None
+
+    text = snapshot_path.read_text(encoding="utf-8")
+    info: GenerationInfo = {}
+
+    parts = text.split("---", 2)
+    if len(parts) >= 3:
+        try:
+            front = yaml.safe_load(parts[1]) or {}
+        except yaml.YAMLError:
+            front = {}
+        if isinstance(front, dict):
+            for key in _FRONTMATTER_GEN_KEYS:
+                if key in front:
+                    info[key] = front[key]  # type: ignore[literal-required]
+
+    gen_match = re.search(r"## Generation\s*\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
+    if gen_match:
+        for line in gen_match.group(1).splitlines():
+            line = line.strip()
+            if line.startswith("- ") and ": " in line:
+                key, _, value = line[2:].partition(": ")
+                if key in _GENERATION_KEYS:
+                    info[key] = _coerce_value(value)  # type: ignore[literal-required]
+
+    return info if info else None
+
+
+def read_scores(snapshot_path: Path) -> dict[str, object] | None:
+    """Read the ## Scores section from a snapshot .md file."""
+    if not snapshot_path.exists():
+        return None
+
+    text = snapshot_path.read_text(encoding="utf-8")
+    score_match = re.search(r"## Scores\s*\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
+    if not score_match:
+        return None
+
+    scores: dict[str, object] = {}
+    for line in score_match.group(1).splitlines():
+        line = line.strip()
+        if line.startswith("- ") and ": " in line:
+            key, _, value = line[2:].partition(": ")
+            scores[key] = _coerce_value(value)
+
+    return scores if scores else None
+
+
+def _coerce_value(value: str) -> Any:
+    """Try to parse a string value as int/float/bool."""
+    if value.lower() in ("true", "false"):
+        return value.lower() == "true"
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    return value
 
 
 def _write_raw(

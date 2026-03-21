@@ -1,7 +1,8 @@
 """Lyrics accuracy checking via Whisper transcription.
 
-Thin CLI wrapper around scoring.text_accuracy. This module handles source
-file discovery and verbose logging; the scorer does the actual analysis.
+Thin CLI wrapper around scoring.text_accuracy. Provides verbose output
+with side-by-side intended vs transcribed lines. For programmatic use,
+call scoring.text_accuracy.score_text_accuracy() directly.
 """
 
 from __future__ import annotations
@@ -13,11 +14,6 @@ from songmaker_cli.config import find_project_root, validate_path
 from songmaker_cli.constants import SIMILARITY_FAIR, SIMILARITY_GOOD
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import find_lyrics_md, parse_song_md, strip_version_suffix
-from songmaker_cli.scoring.text_accuracy import (
-    _get_whisper_model,
-    _transcribe,
-    clean_lyrics,
-)
 
 log = logging.getLogger(__name__)
 
@@ -26,37 +22,26 @@ def run_check(
     path: str,
     source: str | None = None,
     project_root: str | None = None,
-    whisper_model: str = "small",
+    whisper_model: str = "medium",
     model: object | None = None,
 ) -> None:
-    """Transcribe with Whisper and compare to intended lyrics.
-
-    This is the verbose CLI version — logs intended vs transcribed lines.
-    For programmatic use, call scoring.text_accuracy.score_text_accuracy().
-    """
-    from difflib import SequenceMatcher
+    """Transcribe with Whisper and compare to intended lyrics."""
+    from songmaker_cli.scoring.text_accuracy import score_text_accuracy
 
     mp3_path = validate_path(path)
     md_path = find_lyrics_source(mp3_path, source, project_root=project_root)
     meta = parse_song_md(md_path)
 
-    language = meta.generation_params.get("language", "en")
-    if model is None:
-        model = _get_whisper_model(whisper_model)
-    transcribed, segments = _transcribe(mp3_path, language, model)
-
-    clean_intended = clean_lyrics(meta.lyrics)
-    clean_transcribed = clean_lyrics(transcribed)
-    ratio = SequenceMatcher(None, clean_intended, clean_transcribed).ratio()
+    result = score_text_accuracy(mp3_path, meta=meta, config={"whisper_model": whisper_model})
 
     intended_lines = [
         line.strip() for line in meta.lyrics.splitlines()
         if line.strip() and not line.strip().startswith("[")
     ]
-    trans_lines = [s.get("text", "").strip() for s in segments if s.get("text", "").strip()]
 
     log_check_results(
-        mp3_path, md_path, ratio, intended_lines, trans_lines,
+        mp3_path, md_path, result.similarity_ratio,
+        intended_lines, result.transcribed_lines,
         SIMILARITY_GOOD, SIMILARITY_FAIR,
     )
 
@@ -117,7 +102,7 @@ def log_check_results(
     md_path: Path,
     ratio: float,
     intended_lines: list[str],
-    trans_lines: list[str],
+    transcribed_count: int,
     good_threshold: float,
     fair_threshold: float,
 ) -> None:
@@ -126,15 +111,11 @@ def log_check_results(
     log.info("  Source: %s", md_path.name)
     log.info("  Overall similarity: %.0f%%", ratio * 100)
     log.info("  Intended lines: %d", len(intended_lines))
-    log.info("  Transcribed segments: %d", len(trans_lines))
+    log.info("  Transcribed segments: %d", transcribed_count)
     log.info("=" * 60)
 
     log.info("  INTENDED:")
     for line in intended_lines:
-        log.info("    %s", line)
-
-    log.info("  TRANSCRIBED:")
-    for line in trans_lines:
         log.info("    %s", line)
 
     log.info("  SIMILARITY: %.0f%%", ratio * 100)

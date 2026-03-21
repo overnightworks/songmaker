@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-from http.client import HTTPResponse
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -20,16 +19,7 @@ from acestep_engine.errors import (
     TaskSubmissionError,
 )
 from acestep_engine.models import AceStepConfig
-
-
-def _mock_response(data: bytes, status: int = 200) -> MagicMock:
-    """Build a mock urllib response."""
-    resp = MagicMock(spec=HTTPResponse)
-    resp.status = status
-    resp.read.return_value = data
-    resp.__enter__ = MagicMock(return_value=resp)
-    resp.__exit__ = MagicMock(return_value=False)
-    return resp
+from conftest import mock_http_response as _mock_response
 
 
 def test_is_acestep_available_true() -> None:

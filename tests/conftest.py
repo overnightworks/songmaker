@@ -4,11 +4,23 @@ from __future__ import annotations
 
 import struct
 import wave
+from http.client import HTTPResponse
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+
+
+def mock_http_response(data: bytes, status: int = 200) -> MagicMock:
+    """Build a mock urllib HTTPResponse for ACE-Step client tests."""
+    resp = MagicMock(spec=HTTPResponse)
+    resp.status = status
+    resp.read.return_value = data
+    resp.__enter__ = MagicMock(return_value=resp)
+    resp.__exit__ = MagicMock(return_value=False)
+    return resp
 
 
 @pytest.fixture

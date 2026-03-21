@@ -8,13 +8,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from songmaker_cli.check import (
-    clean_lyrics,
-    find_lyrics_source,
-    log_check_results,
-    run_check,
-)
+from songmaker_cli.check import find_lyrics_source, log_check_results, run_check
 from songmaker_cli.errors import ValidationError
+from songmaker_cli.scoring.text_accuracy import clean_lyrics, _get_whisper_model
 
 
 def test_clean_lyrics_strips_tags() -> None:
@@ -84,7 +80,7 @@ def test_log_check_results_good(caplog: pytest.LogCaptureFixture, tmp_path: Path
     mp3 = tmp_path / "song.mp3"
     md = tmp_path / "song.md"
     with caplog.at_level("INFO"):
-        log_check_results(mp3, md, 0.9, ["Hello"], ["Hello"], 0.8, 0.5)
+        log_check_results(mp3, md, 0.9, ["Hello"], 1, 0.8, 0.5)
     assert "Good" in caplog.text
 
 
@@ -92,7 +88,7 @@ def test_log_check_results_fair(caplog: pytest.LogCaptureFixture, tmp_path: Path
     mp3 = tmp_path / "song.mp3"
     md = tmp_path / "song.md"
     with caplog.at_level("INFO"):
-        log_check_results(mp3, md, 0.6, ["Hello"], ["Hola"], 0.8, 0.5)
+        log_check_results(mp3, md, 0.6, ["Hello"], 1, 0.8, 0.5)
     assert "Needs improvement" in caplog.text
 
 
@@ -100,32 +96,30 @@ def test_log_check_results_poor(caplog: pytest.LogCaptureFixture, tmp_path: Path
     mp3 = tmp_path / "song.mp3"
     md = tmp_path / "song.md"
     with caplog.at_level("INFO"):
-        log_check_results(mp3, md, 0.2, ["Hello"], ["???"], 0.8, 0.5)
+        log_check_results(mp3, md, 0.2, ["Hello"], 1, 0.8, 0.5)
     assert "Poor" in caplog.text
 
 
-def test_run_check_end_to_end(tmp_path: Path, make_song_md: Callable[..., Path]) -> None:
+def test_run_check_calls_scorer(tmp_path: Path, make_song_md: Callable[..., Path]) -> None:
     lyrics_dir = tmp_path / "albums" / "test_album" / "lyrics"
     lyrics_dir.mkdir(parents=True)
     md = make_song_md(lyrics_dir)
 
-    output_dir = tmp_path / "_output" / "test_album"
-    output_dir.mkdir(parents=True)
-    mp3 = output_dir / "01_test_song_v1.mp3"
+    mp3 = tmp_path / "test.mp3"
     mp3.touch()
 
-    mock_model = MagicMock()
-    mock_model.transcribe.return_value = {
-        "text": "Hello world second line",
-        "segments": [{"text": "Hello world"}, {"text": "second line"}],
-    }
+    with patch("songmaker_cli.scoring.text_accuracy.score_text_accuracy") as mock_scorer:
+        from songmaker_cli.scoring.models import TextAccuracyScore
 
-    run_check(str(mp3), source=str(md), model=mock_model)
+        mock_scorer.return_value = TextAccuracyScore(
+            similarity_ratio=0.85, intended_lines=5, transcribed_lines=4,
+        )
+        run_check(str(mp3), source=str(md))
+
+    mock_scorer.assert_called_once()
 
 
 def test_whisper_model_cached() -> None:
-    from songmaker_cli.check import _get_whisper_model
-
     mock_whisper = MagicMock()
     mock_model = MagicMock()
     mock_whisper.load_model.return_value = mock_model

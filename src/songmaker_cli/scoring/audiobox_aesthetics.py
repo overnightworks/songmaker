@@ -14,7 +14,7 @@ from pathlib import Path
 
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import AudioBoxScore
-from songmaker_cli.scoring.pipeline import AudioData, register
+from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ _predictor_cache: dict[str, object] = {}
 @register("audiobox")
 def score_audiobox(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
+    config: PipelineConfig | None = None,
 ) -> AudioBoxScore:
     """Score audio quality using Meta's AudioBox Aesthetics model.
 

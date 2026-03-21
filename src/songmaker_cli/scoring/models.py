@@ -4,6 +4,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# Snapshot serialization keys — used by to_dict() and read back by manifest.read_scores().
+# Player SCORE_LABELS must match these keys.
+SCORE_KEY_DYNAMICS = "dynamics"
+SCORE_KEY_DYNAMICS_PITCH_CV = "dynamics_pitch_cv"
+SCORE_KEY_DYNAMICS_RMS_CONTRAST = "dynamics_rms_contrast"
+SCORE_KEY_DYNAMICS_ONSET_CV = "dynamics_onset_cv"
+SCORE_KEY_TEXT_ACCURACY = "text_accuracy"
+SCORE_KEY_AUDIOBOX_ENJOYMENT = "audiobox_enjoyment"
+SCORE_KEY_AUDIOBOX_UNDERSTANDING = "audiobox_understanding"
+SCORE_KEY_AUDIOBOX_COMPLEXITY = "audiobox_complexity"
+SCORE_KEY_AUDIOBOX_QUALITY = "audiobox_quality"
+SCORE_KEY_BPM_DETECTED = "bpm_detected"
+SCORE_KEY_BPM_DEVIATION = "bpm_deviation"
+SCORE_KEY_SILENCE_GAPS = "silence_gaps"
+SCORE_KEY_SILENCE_LONGEST = "silence_longest"
+SCORE_KEY_SILENCE_OK = "silence_ok"
+
 
 @dataclass(frozen=True)
 class TextAccuracyScore:
@@ -84,27 +101,27 @@ class SongScores:
         result: dict[str, object] = {}
 
         if self.emotional_dynamics:
-            result["dynamics"] = round(min(self.emotional_dynamics.overall_expressiveness * 100, 100.0), 1)
-            result["dynamics_pitch_cv"] = self.emotional_dynamics.pitch_cv
-            result["dynamics_rms_contrast"] = self.emotional_dynamics.rms_contrast
-            result["dynamics_onset_cv"] = self.emotional_dynamics.onset_rate_cv
+            result[SCORE_KEY_DYNAMICS] = round(min(self.emotional_dynamics.overall_expressiveness * 100, 100.0), 1)
+            result[SCORE_KEY_DYNAMICS_PITCH_CV] = self.emotional_dynamics.pitch_cv
+            result[SCORE_KEY_DYNAMICS_RMS_CONTRAST] = self.emotional_dynamics.rms_contrast
+            result[SCORE_KEY_DYNAMICS_ONSET_CV] = self.emotional_dynamics.onset_rate_cv
 
         if self.text_accuracy:
-            result["text_accuracy"] = round(self.text_accuracy.similarity_ratio * 100, 1)
+            result[SCORE_KEY_TEXT_ACCURACY] = round(self.text_accuracy.similarity_ratio * 100, 1)
 
         if self.audiobox:
-            result["audiobox_enjoyment"] = self.audiobox.content_enjoyment
-            result["audiobox_understanding"] = self.audiobox.content_understanding
-            result["audiobox_complexity"] = self.audiobox.production_complexity
-            result["audiobox_quality"] = self.audiobox.production_quality
+            result[SCORE_KEY_AUDIOBOX_ENJOYMENT] = self.audiobox.content_enjoyment
+            result[SCORE_KEY_AUDIOBOX_UNDERSTANDING] = self.audiobox.content_understanding
+            result[SCORE_KEY_AUDIOBOX_COMPLEXITY] = self.audiobox.production_complexity
+            result[SCORE_KEY_AUDIOBOX_QUALITY] = self.audiobox.production_quality
 
         if self.bpm_accuracy:
-            result["bpm_detected"] = self.bpm_accuracy.detected_bpm
-            result["bpm_deviation"] = self.bpm_accuracy.deviation_percent
+            result[SCORE_KEY_BPM_DETECTED] = self.bpm_accuracy.detected_bpm
+            result[SCORE_KEY_BPM_DEVIATION] = self.bpm_accuracy.deviation_percent
 
         if self.silence:
-            result["silence_gaps"] = self.silence.gap_count
-            result["silence_longest"] = self.silence.longest_gap_seconds
-            result["silence_ok"] = not self.silence.has_problems
+            result[SCORE_KEY_SILENCE_GAPS] = self.silence.gap_count
+            result[SCORE_KEY_SILENCE_LONGEST] = self.silence.longest_gap_seconds
+            result[SCORE_KEY_SILENCE_OK] = not self.silence.has_problems
 
         return result

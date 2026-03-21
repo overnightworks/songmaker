@@ -9,7 +9,7 @@ from pathlib import Path
 
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import TextAccuracyScore
-from songmaker_cli.scoring.pipeline import AudioData, register
+from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
 
@@ -17,19 +17,11 @@ _whisper_model_cache: dict[str, object] = {}
 
 DEFAULT_WHISPER_MODEL = "medium"
 
-# Module-level override, set via configure_whisper_model() before scoring
-_whisper_model_size: str = DEFAULT_WHISPER_MODEL
-
-
-def configure_whisper_model(model_size: str) -> None:
-    """Set the Whisper model size for text accuracy scoring."""
-    global _whisper_model_size
-    _whisper_model_size = model_size
-
 
 @register("text_accuracy")
 def score_text_accuracy(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
+    config: PipelineConfig | None = None,
 ) -> TextAccuracyScore:
     """Transcribe with Whisper and compare to intended lyrics.
 
@@ -39,8 +31,9 @@ def score_text_accuracy(
     if meta is None or not meta.lyrics:
         raise ValueError("No lyrics metadata — cannot score text accuracy")
 
+    whisper_size = str((config or {}).get("whisper_model", DEFAULT_WHISPER_MODEL))
     language = meta.generation_params.get("language", "en")
-    model = _get_whisper_model(_whisper_model_size)
+    model = _get_whisper_model(whisper_size)
     transcribed, segments = _transcribe(mp3_path, language, model)
 
     clean_intended = clean_lyrics(meta.lyrics)

@@ -178,10 +178,7 @@ def score(
     ] = "medium",
 ) -> None:
     """Score a generated song on quality dimensions."""
-    from songmaker_cli.scoring.text_accuracy import configure_whisper_model
-
     mp3_path = validate_path(path)
-    configure_whisper_model(whisper_model)
 
     meta = None
     if source:
@@ -191,7 +188,8 @@ def score(
     if scorers and scorers != "all":
         scorer_list = [s.strip() for s in scorers.split(",")]
 
-    scores = run_scoring_pipeline(mp3_path, meta=meta, scorers=scorer_list)
+    config = {"whisper_model": whisper_model}
+    scores = run_scoring_pipeline(mp3_path, meta=meta, scorers=scorer_list, config=config)
     _log_scores(scores)
 
 

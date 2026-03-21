@@ -34,7 +34,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import EmotionalDynamicsScore
-from songmaker_cli.scoring.pipeline import AudioData, register
+from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ log = logging.getLogger(__name__)
 @register("emotional_dynamics")
 def score_emotional_dynamics(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
+    config: PipelineConfig | None = None,
 ) -> EmotionalDynamicsScore:
     """Score vocal expressiveness by analyzing pitch, energy, and rhythm variance."""
     if audio_data is None:
@@ -102,7 +103,7 @@ def _pitch_coefficient_of_variation(
     use_parallel = all(len(s) >= min_parallel_samples for s in sections)
 
     if use_parallel:
-        with ProcessPoolExecutor() as pool:
+        with ProcessPoolExecutor(max_workers=len(sections)) as pool:
             futures = [pool.submit(_section_median_pitch, section, sr) for section in sections]
             medians = [m for f in futures if (m := f.result()) is not None]
     else:

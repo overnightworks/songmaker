@@ -31,10 +31,16 @@ _FAKE_AUDIO = AudioData(audio=np.zeros(22050, dtype=np.float32), sr=22050)
 
 @pytest.fixture()
 def clean_registry() -> Generator[dict[str, object], None, None]:
-    """Temporarily clear the scorer registry, restore after test."""
+    """Temporarily replace the scorer registry, restore after test.
+
+    Clears all registered scorers so tests control exactly which scorers run.
+    Also resets _scorers_loaded so _ensure_scorers_registered won't re-import
+    real scorers during the test.
+    """
     saved = dict(_SCORERS)
     saved_loaded = scoring_pipeline._scorers_loaded
     _SCORERS.clear()
+    scoring_pipeline._scorers_loaded = True  # Prevent re-import of real scorers
     yield _SCORERS
     _SCORERS.clear()
     _SCORERS.update(saved)
@@ -123,7 +129,7 @@ def test_emotional_dynamics_expressiveness_capped() -> None:
 
 def test_register_valid_name(clean_registry: dict) -> None:
     @register("silence")
-    def my_scorer(mp3_path: Path, meta: object = None, audio_data: object = None) -> SilenceScore:
+    def my_scorer(mp3_path: Path, meta: object = None, audio_data: object = None, config: object = None) -> SilenceScore:
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
     assert "silence" in clean_registry
@@ -132,7 +138,7 @@ def test_register_valid_name(clean_registry: dict) -> None:
 def test_register_invalid_name_raises() -> None:
     with pytest.raises(ValueError, match="does not match any SongScores field"):
         @register("bogus_name")
-        def bad_scorer(mp3_path: Path, meta: object = None, audio_data: object = None) -> None:
+        def bad_scorer(mp3_path: Path, meta: object = None, audio_data: object = None, config: object = None) -> None:
             pass
 
 
@@ -144,6 +150,7 @@ def test_run_pipeline(mock_load: object, clean_registry: dict, fake_mp3: Path) -
     @register("silence")
     def mock_silence(
         mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.5, longest_gap_seconds=0.3, gap_count=1,
@@ -162,12 +169,14 @@ def test_pipeline_handles_scorer_failure(
     @register("text_accuracy")
     def broken_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None,
     ) -> None:
         raise RuntimeError("boom")
 
     @register("silence")
     def ok_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
@@ -185,6 +194,7 @@ def test_pipeline_filters_by_name(
     @register("silence")
     def scorer_a(
         mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
@@ -193,6 +203,7 @@ def test_pipeline_filters_by_name(
     @register("bpm_accuracy")
     def scorer_b(
         mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None,
     ) -> BpmAccuracyScore:
         return BpmAccuracyScore(
             detected_bpm=120, requested_bpm=120,
@@ -407,7 +418,7 @@ def test_audiobox_with_mock_predictor(tmp_path: Path) -> None:
 
 
 def test_read_scores_from_snapshot(tmp_path: Path) -> None:
-    from songmaker_cli.manifest import read_scores
+    from songmaker_cli.snapshot import read_scores
 
     snapshot = tmp_path / "song_v1.md"
     snapshot.write_text(
@@ -422,7 +433,7 @@ def test_read_scores_from_snapshot(tmp_path: Path) -> None:
 
 
 def test_read_scores_missing_section(tmp_path: Path) -> None:
-    from songmaker_cli.manifest import read_scores
+    from songmaker_cli.snapshot import read_scores
 
     snapshot = tmp_path / "song_v1.md"
     snapshot.write_text("---\ntitle: Test\n---\n\n## Generation\n\n- seed: 123\n")
@@ -430,14 +441,14 @@ def test_read_scores_missing_section(tmp_path: Path) -> None:
 
 
 def test_read_scores_missing_file(tmp_path: Path) -> None:
-    from songmaker_cli.manifest import read_scores
+    from songmaker_cli.snapshot import read_scores
 
     assert read_scores(tmp_path / "nonexistent.md") is None
 
 
 def test_scores_roundtrip(tmp_path: Path) -> None:
     """Write scores via append_scores_section, read back via read_scores."""
-    from songmaker_cli.manifest import read_scores
+    from songmaker_cli.snapshot import read_scores
 
     snapshot = tmp_path / "song_v1.md"
     snapshot.write_text("---\ntitle: Test\n---\n\n## Generation\n\n- seed: 42\n")

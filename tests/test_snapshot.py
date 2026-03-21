@@ -6,7 +6,7 @@ from pathlib import Path
 
 from acestep_engine.models import AceStepConfig, ServerInfo
 from songmaker_cli.config import OutputPaths
-from songmaker_cli.manifest import read_generation_info
+from songmaker_cli.snapshot import read_generation_info
 from songmaker_cli.snapshot import write_snapshot
 
 
