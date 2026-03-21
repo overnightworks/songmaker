@@ -12,7 +12,7 @@ from cyclopts import App, Parameter
 from songmaker_cli.config import find_project_root, validate_path
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import SongmakerError, ValidationError
-from songmaker_cli.generate import open_player, run_generate
+from songmaker_cli.generate import GenerationOptions, open_player, run_generate
 from songmaker_cli.player import generate_player
 
 log = logging.getLogger(__name__)
@@ -60,13 +60,14 @@ def generate(
     ] = False,
 ) -> None:
     """Generate a song from a markdown file via ACE-Step."""
-    run_generate(
-        path, seed=seed, count=count, duration=duration, bpm=bpm, key=key,
+    opts = GenerationOptions(
+        seed=seed, count=count, duration=duration, bpm=bpm, key=key,
         shift=shift, guidance_scale=guidance_scale,
         inference_steps=inference_steps, lm_temperature=lm_temperature,
         infer_method=infer_method, think_mode=think_mode,
         check=check, score=score, best=best, player=player,
     )
+    run_generate(path, opts)
 
 
 @app.command

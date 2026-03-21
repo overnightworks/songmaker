@@ -53,8 +53,38 @@ def validate_song_meta(meta: SongMeta) -> None:
         raise ValidationError("No '## Lyrics' section found")
 
 
-def collect_overrides(**kwargs: object) -> dict:
-    return {k: v for k, v in kwargs.items() if v is not None}
+@dataclass(frozen=True)
+class GenerationOptions:
+    """CLI-level options for a generation run."""
+
+    seed: int | None = None
+    count: int = 1
+    duration: int | None = None
+    bpm: int | None = None
+    key: str | None = None
+    shift: float | None = None
+    guidance_scale: float | None = None
+    inference_steps: int | None = None
+    lm_temperature: float | None = None
+    infer_method: str | None = None
+    think_mode: bool | None = None
+    check: bool = False
+    score: bool = False
+    best: int | None = None
+    player: bool = False
+
+    def ace_overrides(self) -> dict:
+        """Return non-None ACE-Step parameter overrides."""
+        return {
+            k: v for k, v in {
+                "seed": self.seed, "duration": self.duration, "bpm": self.bpm,
+                "key": self.key, "shift": self.shift,
+                "guidance_scale": self.guidance_scale,
+                "inference_steps": self.inference_steps,
+                "lm_temperature": self.lm_temperature,
+                "infer_method": self.infer_method, "think_mode": self.think_mode,
+            }.items() if v is not None
+        }
 
 
 def load_album_meta_for_song(
@@ -76,40 +106,22 @@ def load_album_meta_for_song(
     return load_album_meta(album_dir)
 
 
-def run_generate(
-    path: str,
-    seed: int | None = None,
-    count: int = 1,
-    duration: int | None = None,
-    bpm: int | None = None,
-    key: str | None = None,
-    shift: float | None = None,
-    guidance_scale: float | None = None,
-    inference_steps: int | None = None,
-    lm_temperature: float | None = None,
-    infer_method: str | None = None,
-    think_mode: bool | None = None,
-    check: bool = False,
-    score: bool = False,
-    best: int | None = None,
-    player: bool = False,
-) -> None:
+def run_generate(path: str, opts: GenerationOptions | None = None) -> None:
     """Generate a song from a markdown file via ACE-Step."""
+    if opts is None:
+        opts = GenerationOptions()
+
     md_path = validate_path(path)
     meta = parse_song_md(md_path)
     validate_song_meta(meta)
 
-    if best is not None:
-        count = best
-        score = True
+    count = opts.count
+    do_score = opts.score
+    if opts.best is not None:
+        count = opts.best
+        do_score = True
 
-    cli_overrides = collect_overrides(
-        seed=seed, duration=duration, bpm=bpm, key=key, shift=shift,
-        guidance_scale=guidance_scale, inference_steps=inference_steps,
-        lm_temperature=lm_temperature, infer_method=infer_method,
-        think_mode=think_mode,
-    )
-    ace_config = build_ace_config(meta, cli_overrides)
+    ace_config = build_ace_config(meta, opts.ace_overrides())
 
     project_root = find_project_root(md_path)
     album_meta = load_album_meta_for_song(md_path, meta.album, project_root=project_root)
@@ -117,16 +129,16 @@ def run_generate(
 
     generated = _generate_versions(
         count, md_path, meta, album_meta, ace_config, output_root,
-        score_each=(score and not best), check_each=check,
+        score_each=(do_score and opts.best is None), check_each=opts.check,
     )
 
-    if best is not None:
+    if opts.best is not None:
         _score_and_rank(generated, meta)
 
     if generated:
         last_paths = generated[-1][0]
         player_path = _update_player(last_paths)
-        if player:
+        if opts.player:
             open_player(player_path)
 
 

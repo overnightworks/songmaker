@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from conftest import mock_http_response as _mock_response
 
+from songmaker_cli.generate import GenerationOptions
 from songmaker_cli.generate import run_generate as generate
 
 
@@ -132,7 +133,7 @@ def test_generate_multiple_versions(
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.side_effect = responses
-        generate(str(song_md), count=3)
+        generate(str(song_md), GenerationOptions(count=3))
 
     album_output = output_dir / "test_album"
     mp3s = sorted(album_output.glob("*.mp3"))
@@ -158,7 +159,7 @@ def test_generate_with_score_flag(
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.side_effect = responses
-        generate(str(song_md), score=True)
+        generate(str(song_md), GenerationOptions(score=True))
 
     album_output = output_dir / "test_album"
     snapshot_md = album_output / "01_test_song_v1.md"
@@ -189,7 +190,7 @@ def test_generate_best_flag(
     with caplog.at_level(logging.INFO):
         with patch("acestep_engine.client.urlopen") as mock_urlopen:
             mock_urlopen.side_effect = responses
-            generate(str(song_md), best=2)
+            generate(str(song_md), GenerationOptions(best=2))
 
     album_output = output_dir / "test_album"
     mp3s = list(album_output.glob("*.mp3"))

@@ -145,9 +145,10 @@ def _run_scoring(mp3_path: Path, output_dir: Path, project_root: Path) -> None:
 
 def _run_generation(md_path: Path, count: int, best: int | None, score: bool) -> None:
     """Run generation in background."""
-    from songmaker_cli.generate import run_generate
+    from songmaker_cli.generate import GenerationOptions, run_generate
 
-    run_generate(str(md_path), count=count, best=best, score=score)
+    opts = GenerationOptions(count=count, best=best, score=score)
+    run_generate(str(md_path), opts)
     log.info("Generation complete: %s", md_path.name)
 
 

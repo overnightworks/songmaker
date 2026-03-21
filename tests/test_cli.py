@@ -13,13 +13,13 @@ from songmaker_cli.config import validate_path
 from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.generate import (
     DecodedAudio,
+    GenerationOptions,
     _decode_audio,
     _log_generation_banner,
     _log_result_banner,
     _run_generation,
     _update_player,
     _write_output,
-    collect_overrides,
     load_album_meta_for_song,
     open_player,
     validate_song_meta,
@@ -57,14 +57,24 @@ def test_validate_song_meta_valid() -> None:
     validate_song_meta(meta)
 
 
-def test_collect_overrides_filters_none() -> None:
-    result = collect_overrides(seed=42, bpm=None, duration=60)
+def test_generation_options_ace_overrides_filters_none() -> None:
+    opts = GenerationOptions(seed=42, duration=60)
+    result = opts.ace_overrides()
     assert result == {"seed": 42, "duration": 60}
 
 
-def test_collect_overrides_empty() -> None:
-    result = collect_overrides(seed=None, bpm=None)
+def test_generation_options_ace_overrides_empty() -> None:
+    opts = GenerationOptions()
+    result = opts.ace_overrides()
     assert result == {}
+
+
+def test_generation_options_excludes_workflow_flags() -> None:
+    opts = GenerationOptions(seed=42, check=True, score=True, best=3, player=True)
+    result = opts.ace_overrides()
+    assert result == {"seed": 42}
+    assert "check" not in result
+    assert "score" not in result
 
 
 def test_load_album_meta_with_yaml(tmp_path: Path) -> None:
