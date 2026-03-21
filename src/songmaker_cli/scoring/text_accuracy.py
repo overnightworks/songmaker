@@ -36,10 +36,6 @@ def score_text_accuracy(
     model = _get_whisper_model(whisper_size)
     transcribed, segments = _transcribe(mp3_path, language, model)
 
-    clean_intended = clean_lyrics(meta.lyrics)
-    clean_transcribed = clean_lyrics(transcribed)
-    ratio = SequenceMatcher(None, clean_intended, clean_transcribed).ratio()
-
     intended_lines = tuple(
         line.strip() for line in meta.lyrics.splitlines()
         if line.strip() and not line.strip().startswith("[")
@@ -47,6 +43,8 @@ def score_text_accuracy(
     trans_lines = tuple(
         s.get("text", "").strip() for s in segments if s.get("text", "").strip()
     )
+
+    ratio = _per_line_accuracy(intended_lines, trans_lines)
 
     log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
              ratio * 100, len(intended_lines), len(trans_lines))
@@ -56,6 +54,36 @@ def score_text_accuracy(
         intended_line_texts=intended_lines,
         transcribed_line_texts=trans_lines,
     )
+
+
+def _per_line_accuracy(
+    intended: tuple[str, ...], transcribed: tuple[str, ...],
+) -> float:
+    """Compute average best-match similarity per intended line.
+
+    For each intended line, finds the transcribed line with the highest
+    SequenceMatcher ratio. This is fairer than full-text comparison because
+    a skipped section doesn't destroy the score for correctly sung sections.
+    """
+    if not intended:
+        return 0.0
+    if not transcribed:
+        return 0.0
+
+    clean_trans = [clean_lyrics(t) for t in transcribed]
+    line_scores = []
+
+    for line in intended:
+        clean_line = clean_lyrics(line)
+        if not clean_line:
+            continue
+        best = max(
+            SequenceMatcher(None, clean_line, ct).ratio()
+            for ct in clean_trans
+        ) if clean_trans else 0.0
+        line_scores.append(best)
+
+    return sum(line_scores) / len(line_scores) if line_scores else 0.0
 
 
 def clean_lyrics(text: str) -> str:
