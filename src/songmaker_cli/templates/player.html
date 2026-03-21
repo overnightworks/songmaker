@@ -529,6 +529,9 @@
 
 <script>
 const INLINE_MANIFEST = {{MANIFEST_JSON}};
+const IS_SERVER = location.port === '8080' || location.pathname === '/';
+const AUDIO_BASE = IS_SERVER ? '/audio/' : '';
+const API_BASE = IS_SERVER ? '' : null;
 let ALBUMS = [];
 let currentAlbum = 0;
 let currentTrack = 0;
@@ -724,7 +727,7 @@ async function loadTrack(index) {
   trackTitle.textContent = t.title;
   trackMeta.textContent = '';
 
-  sourceEl.src = t.file;
+  sourceEl.src = AUDIO_BASE + t.file;
   audioEl.load();
 
   // Try to read ID3 tags for richer metadata
@@ -1078,17 +1081,27 @@ function loadRating() {
   currentRatings = {};
   const key = getRatingKey();
   if (!key) return;
+
+  // Try localStorage first
   try {
     const saved = JSON.parse(localStorage.getItem(key) || '{}');
-    currentRatings = saved;
-    RATING_CATEGORIES.forEach(cat => {
-      updateStarDisplay(cat, saved[cat] || 0);
-    });
-    document.getElementById('ratingComment').value = saved.comment || '';
-  } catch(e) {
-    RATING_CATEGORIES.forEach(cat => updateStarDisplay(cat, 0));
-    document.getElementById('ratingComment').value = '';
+    if (Object.keys(saved).length > 0) {
+      currentRatings = saved;
+    }
+  } catch(e) {}
+
+  // If no local rating, check manifest scores for server-persisted rating
+  if (!currentRatings.overall) {
+    const track = ALBUMS[currentAlbum]?.tracks[currentTrack];
+    if (track?.scores?.user_rating) {
+      currentRatings.overall = track.scores.user_rating;
+    }
   }
+
+  RATING_CATEGORIES.forEach(cat => {
+    updateStarDisplay(cat, currentRatings[cat] || 0);
+  });
+  document.getElementById('ratingComment').value = currentRatings.comment || '';
 }
 
 function saveRating() {
@@ -1096,6 +1109,26 @@ function saveRating() {
   if (!key) return;
   currentRatings.comment = document.getElementById('ratingComment').value;
   localStorage.setItem(key, JSON.stringify(currentRatings));
+
+  // Persist to server if available
+  if (API_BASE !== null) {
+    const track = ALBUMS[currentAlbum].tracks[currentTrack];
+    const fileParts = track.file.split('/');
+    const album = fileParts[0];
+    const version = fileParts[fileParts.length - 1].replace('.mp3', '');
+    fetch('/rate/' + album + '/' + version, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        rating: currentRatings.overall || 0,
+        notes: (currentRatings.comment || '') +
+          (currentRatings.rhythm ? ' | rhythm:' + currentRatings.rhythm : '') +
+          (currentRatings.text ? ' | text:' + currentRatings.text : '') +
+          (currentRatings.vocals ? ' | vocals:' + currentRatings.vocals : ''),
+      }),
+    }).catch(e => console.warn('Rating save failed:', e));
+  }
+
   const status = document.getElementById('ratingStatus');
   status.className = 'rating-status show';
   setTimeout(() => { status.className = 'rating-status'; }, 1500);
