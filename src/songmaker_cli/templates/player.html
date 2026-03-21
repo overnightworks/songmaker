@@ -599,7 +599,13 @@ function simpleHash(str) {
 async function init() {
   const loaded = await loadManifest();
   if (!loaded || ALBUMS.length === 0) {
-    lyricsContainer.innerHTML = '<div class="no-lyrics">No manifest.json found. Generate a song first.</div>';
+    lyricsContainer.innerHTML = '<div class="no-lyrics">'
+      + 'No manifest loaded.<br>'
+      + 'IS_SERVER: ' + IS_SERVER + '<br>'
+      + 'API_KEY: ' + (API_KEY ? API_KEY.substring(0,4) + '...' : 'none') + '<br>'
+      + 'INLINE albums: ' + (INLINE_MANIFEST ? INLINE_MANIFEST.albums.length : 'null') + '<br>'
+      + 'Protocol: ' + location.protocol + '<br>'
+      + '</div>';
     return;
   }
   buildAlbumNav();
@@ -743,19 +749,11 @@ async function loadTrack(index) {
   trackTitle.textContent = t.title;
   trackMeta.textContent = '';
 
-  // Fetch audio via JS to send ngrok-skip-browser-warning header
-  const audioUrl = AUDIO_BASE + t.file + (API_KEY ? '?api_key=' + API_KEY : '');
-  try {
-    const resp = await apiFetch(audioUrl);
-    if (resp.ok) {
-      const blob = await resp.blob();
-      sourceEl.src = URL.createObjectURL(blob);
-    } else {
-      sourceEl.src = audioUrl;
-    }
-  } catch(e) {
-    sourceEl.src = audioUrl;
-  }
+  const audioUrl = AUDIO_BASE + t.file
+    + (API_KEY ? '?api_key=' + API_KEY + '&ngrok-skip-browser-warning=true' : '');
+  sourceEl.src = audioUrl;
+  // Mobile Chrome requires preload hint for streaming audio
+  audioEl.preload = 'auto';
   audioEl.load();
 
   // Try to read ID3 tags for richer metadata
