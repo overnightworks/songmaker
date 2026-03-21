@@ -51,6 +51,48 @@ log = logging.getLogger(__name__)
 
 _FIELD_REVERSE_MAPPING = {"vocal_language": "language"}
 
+_SCORES_HEADER = "## Scores"
+
+
+# ── Section helpers ──────────────────────────────────────────────────
+
+
+def _split_at_scores(text: str) -> tuple[str, dict[str, object]]:
+    """Split snapshot text into (before_scores, scores_dict).
+
+    Returns the text before ## Scores (stripped) and a dict of parsed
+    score key-value pairs. Returns empty dict if no ## Scores section.
+    """
+    match = re.search(r"## Scores\s*\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
+    if not match:
+        return text.rstrip(), {}
+
+    before = text[:match.start()].rstrip()
+    scores: dict[str, object] = {}
+    for line in match.group(1).splitlines():
+        line = line.strip()
+        if line.startswith("- ") and ": " in line:
+            key, _, value = line[2:].partition(": ")
+            scores[key] = _coerce_value(value)
+
+    return before, scores
+
+
+def _format_scores_section(scores: dict[str, object]) -> str:
+    """Format a scores dict as a ## Scores markdown section."""
+    lines = [_SCORES_HEADER, ""]
+    lines.extend(f"- {key}: {value}" for key, value in scores.items())
+    return "\n".join(lines)
+
+
+def _write_scores(snapshot_path: Path, before: str, scores: dict[str, object]) -> None:
+    """Write a snapshot file with before-text + scores section."""
+    text = before + "\n\n" + _format_scores_section(scores) + "\n"
+    snapshot_path.write_text(text, encoding="utf-8")
+
+
+# ── Snapshot writing ─────────────────────────────────────────────────
+
 
 def write_snapshot(
     source_path: Path,
@@ -66,8 +108,6 @@ def write_snapshot(
     plus a ## Generation section with runtime-only metadata.
     """
     source_text = source_path.read_text(encoding="utf-8")
-    # Split on first two --- delimiters only. Any --- in the body (e.g.
-    # horizontal rules in lyrics) stays in parts[2] and is preserved.
     parts = source_text.split("---", 2)
     if len(parts) < 3:
         return _write_raw(paths, source_text, ace_config, seed, server_info)
@@ -133,6 +173,9 @@ def _build_generation_section(
     return "\n".join(lines)
 
 
+# ── Scores section read/write ────────────────────────────────────────
+
+
 def append_scores_section(snapshot_path: Path, scores: SongScores) -> None:
     """Write a ## Scores section to a snapshot .md file.
 
@@ -143,16 +186,9 @@ def append_scores_section(snapshot_path: Path, scores: SongScores) -> None:
     if not score_dict:
         return
 
-    scores_block = "## Scores\n\n"
-    scores_block += "\n".join(f"- {key}: {value}" for key, value in score_dict.items())
-
     text = snapshot_path.read_text(encoding="utf-8")
-
-    if "## Scores" in text:
-        text = text[:text.index("## Scores")].rstrip()
-
-    text = text.rstrip() + "\n\n" + scores_block + "\n"
-    snapshot_path.write_text(text, encoding="utf-8")
+    before, _ = _split_at_scores(text)
+    _write_scores(snapshot_path, before, score_dict)
     log.info("Scores written to %s", snapshot_path.name)
 
 
@@ -163,29 +199,29 @@ def save_rating(snapshot_path: Path, rating: int, notes: str = "") -> None:
     Creates ## Scores section if none exists.
     """
     text = snapshot_path.read_text(encoding="utf-8")
+    before, existing = _split_at_scores(text)
 
-    if "## Scores" in text:
-        before = text[:text.index("## Scores")].rstrip()
-        scores_text = text[text.index("## Scores"):]
-    else:
-        before = text.rstrip()
-        scores_text = ""
-
-    lines = scores_text.splitlines() if scores_text else []
-    kept = [
-        ln for ln in lines
-        if not ln.startswith("- user_rating:") and not ln.startswith("- user_notes:")
-    ]
-
-    if not kept:
-        kept = ["## Scores", ""]
-    kept.append(f"- user_rating: {rating}")
+    existing.pop("user_rating", None)
+    existing.pop("user_notes", None)
+    existing["user_rating"] = rating
     if notes:
-        kept.append(f"- user_notes: {notes}")
+        existing["user_notes"] = notes
 
-    result = before + "\n\n" + "\n".join(kept) + "\n"
-    snapshot_path.write_text(result, encoding="utf-8")
+    _write_scores(snapshot_path, before, existing)
     log.info("Rating saved: %s = %d stars", snapshot_path.name, rating)
+
+
+def read_scores(snapshot_path: Path) -> dict[str, object] | None:
+    """Read the ## Scores section from a snapshot .md file."""
+    if not snapshot_path.exists():
+        return None
+
+    text = snapshot_path.read_text(encoding="utf-8")
+    _, scores = _split_at_scores(text)
+    return scores if scores else None
+
+
+# ── Generation info reading ──────────────────────────────────────────
 
 
 def read_generation_info(snapshot_path: Path) -> GenerationInfo | None:
@@ -196,7 +232,6 @@ def read_generation_info(snapshot_path: Path) -> GenerationInfo | None:
     text = snapshot_path.read_text(encoding="utf-8")
     info: GenerationInfo = {}
 
-    # maxsplit=2: safe even if body contains --- (horizontal rules)
     parts = text.split("---", 2)
     if len(parts) >= 3:
         try:
@@ -220,24 +255,7 @@ def read_generation_info(snapshot_path: Path) -> GenerationInfo | None:
     return info if info else None
 
 
-def read_scores(snapshot_path: Path) -> dict[str, object] | None:
-    """Read the ## Scores section from a snapshot .md file."""
-    if not snapshot_path.exists():
-        return None
-
-    text = snapshot_path.read_text(encoding="utf-8")
-    score_match = re.search(r"## Scores\s*\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
-    if not score_match:
-        return None
-
-    scores: dict[str, object] = {}
-    for line in score_match.group(1).splitlines():
-        line = line.strip()
-        if line.startswith("- ") and ": " in line:
-            key, _, value = line[2:].partition(": ")
-            scores[key] = _coerce_value(value)
-
-    return scores if scores else None
+# ── Helpers ──────────────────────────────────────────────────────────
 
 
 def _coerce_value(value: str) -> Any:

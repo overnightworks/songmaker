@@ -300,7 +300,7 @@ def test_append_scores_idempotent(tmp_path: Path) -> None:
 def test_log_scores(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
-    from songmaker_cli.generate import log_scores as _log_scores
+    from songmaker_cli.batch import log_scores as _log_scores
 
     scores = SongScores(
         silence=SilenceScore(
@@ -321,8 +321,8 @@ def test_log_scores(caplog: pytest.LogCaptureFixture) -> None:
 def test_log_ranking(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
+    from songmaker_cli.batch import log_ranking as _log_ranking_by_dynamics
     from songmaker_cli.config import OutputPaths
-    from songmaker_cli.generate import _log_ranking_by_dynamics
 
     paths_a = OutputPaths(
         output_dir=Path("/tmp"), base_name="song", version=1, versioned_name="song_v1",
@@ -359,7 +359,7 @@ def test_log_ranking(caplog: pytest.LogCaptureFixture) -> None:
 def test_log_scores_warns_on_silence_problems(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
-    from songmaker_cli.generate import log_scores as _log_scores
+    from songmaker_cli.batch import log_scores as _log_scores
 
     scores = SongScores(
         silence=SilenceScore(

@@ -1,19 +1,95 @@
-"""Batch scoring — score all MP3s in _output/."""
+"""Scoring orchestration — single, batch, and ranked scoring."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
-from songmaker_cli.config import find_project_root, validate_path
+from songmaker_cli.config import OutputPaths, find_project_root, validate_path
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import ValidationError
-from songmaker_cli.generate import log_scores
 from songmaker_cli.scoring import run_scoring_pipeline
+from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import PipelineConfig
 from songmaker_cli.snapshot import append_scores_section, read_scores
 
 log = logging.getLogger(__name__)
+
+
+# ── Score logging ────────────────────────────────────────────────────
+
+
+def log_scores(scores: SongScores) -> None:
+    log.info("=" * 60)
+    log.info("  Scores")
+    for name, value in scores.to_dict().items():
+        log.info("    %s: %s", name, value)
+    if scores.silence and scores.silence.has_problems:
+        log.warning(
+            "  Silence gaps detected (%d gaps, longest %.1fs)",
+            scores.silence.gap_count, scores.silence.longest_gap_seconds,
+        )
+    log.info("=" * 60)
+
+
+def log_ranking(ranked: list[tuple[OutputPaths, SongScores]]) -> None:
+    """Log a ranked table of scored versions, sorted by emotional dynamics."""
+
+    def _sort_key(entry: tuple[OutputPaths, SongScores]) -> float:
+        _, scores = entry
+        if scores.emotional_dynamics:
+            return scores.emotional_dynamics.overall_expressiveness
+        return 0.0
+
+    sorted_entries = sorted(ranked, key=_sort_key, reverse=True)
+
+    log.info("")
+    log.info("=" * 70)
+    log.info("  RANKING (%d versions)", len(sorted_entries))
+    log.info("  %-30s %10s %10s %10s", "Version", "Dynamics", "AB Quality", "Silence")
+    log.info("  " + "-" * 66)
+
+    for i, (paths, scores) in enumerate(sorted_entries):
+        dynamics = (
+            round(scores.emotional_dynamics.overall_expressiveness * 100, 1)
+            if scores.emotional_dynamics else "-"
+        )
+        ab_quality = round(scores.audiobox.production_quality, 1) if scores.audiobox else "-"
+        has_gaps = scores.silence.has_problems if scores.silence else False
+        flag = " [gaps]" if has_gaps else ""
+        marker = " <-- best" if i == 0 else ""
+        log.info(
+            "  %-30s %10s %10s %10s%s",
+            paths.versioned_name, dynamics, ab_quality, not has_gaps, flag + marker,
+        )
+
+    log.info("=" * 70)
+    best_paths = sorted_entries[0][0]
+    log.info("  Best: %s", best_paths.mp3)
+    log.info("")
+
+
+# ── Score and rank (used by --best) ──────────────────────────────────
+
+
+def score_and_rank(
+    generated: list[tuple[OutputPaths, Path]], meta: object,
+) -> None:
+    """Score all generated versions and log a ranked table."""
+    from songmaker_cli.parser import SongMeta
+
+    log.info("")
+    log.info("Scoring %d versions...", len(generated))
+    ranked: list[tuple[OutputPaths, SongScores]] = []
+    for paths, snapshot_path in generated:
+        scores = run_scoring_pipeline(paths.mp3, meta=meta if isinstance(meta, SongMeta) else None)
+        append_scores_section(snapshot_path, scores)
+        log_scores(scores)
+        ranked.append((paths, scores))
+    log_ranking(ranked)
+
+
+# ── Single and batch scoring ─────────────────────────────────────────
 
 
 def score_single(
