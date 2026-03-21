@@ -17,7 +17,6 @@ loud one with the same relative dynamics.
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import librosa
@@ -97,22 +96,8 @@ def _pitch_coefficient_of_variation(
     """Compute CV of median pitch across sections using pyin.
 
     Sections with no detected pitch (e.g. instrumental breaks) are excluded.
-    Parallelized across CPU cores when sections are long enough to justify
-    the process spawning overhead (>5s per section).
     """
-    min_parallel_samples = 5 * sr
-    use_parallel = all(len(s) >= min_parallel_samples for s in sections)
-
-    if use_parallel:
-        import os
-
-        max_workers = min(len(sections), os.cpu_count() or 4)
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
-            futures = [pool.submit(_section_median_pitch, section, sr) for section in sections]
-            medians = [m for f in futures if (m := f.result()) is not None]
-    else:
-        medians = [m for s in sections if (m := _section_median_pitch(s, sr)) is not None]
-
+    medians = [m for s in sections if (m := _section_median_pitch(s, sr)) is not None]
     return _safe_cv(medians)
 
 

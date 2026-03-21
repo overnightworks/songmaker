@@ -9,9 +9,10 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 
-def archive_file(mp3_path: Path, archive_dir: Path) -> None:
+def archive_file(mp3_path: Path, archive_dir: Path, album: str = "") -> None:
     """Move a single MP3 + snapshot to the archive."""
-    album = mp3_path.parent.name
+    if not album:
+        album = mp3_path.parent.name
     dest_dir = archive_dir / album
     dest_dir.mkdir(parents=True, exist_ok=True)
 

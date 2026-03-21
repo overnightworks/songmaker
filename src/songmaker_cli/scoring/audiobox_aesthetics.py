@@ -31,6 +31,8 @@ def _force_cpu_env() -> Iterator[None]:
     """Temporarily hide CUDA devices to force CPU model loading.
 
     Must be used under _predictor_lock for thread safety.
+    IMPORTANT: Scoring must remain sequential — the lock only protects
+    against Songmaker threads, not other processes reading CUDA_VISIBLE_DEVICES.
     """
     saved = os.environ.get("CUDA_VISIBLE_DEVICES")
     os.environ["CUDA_VISIBLE_DEVICES"] = ""

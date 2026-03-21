@@ -89,7 +89,7 @@ def test_generate_end_to_end(tmp_path: Path, make_sine_wav_bytes: Callable[..., 
     output_dir = tmp_path / "_output"
 
     wav_bytes = make_sine_wav_bytes()
-    responses = [_health_response()] + _build_acestep_responses(wav_bytes)
+    responses = [_health_response(), _health_response()] + _build_acestep_responses(wav_bytes)
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.side_effect = responses
@@ -114,7 +114,7 @@ def test_generate_end_to_end(tmp_path: Path, make_sine_wav_bytes: Callable[..., 
     manifest = output_dir / "manifest.json"
     assert manifest.exists(), "Manifest JSON should be generated"
 
-    assert mock_urlopen.call_count == 4
+    assert mock_urlopen.call_count == 5
 
 
 def test_generate_multiple_versions(
@@ -125,7 +125,7 @@ def test_generate_multiple_versions(
     output_dir = tmp_path / "_output"
 
     wav_bytes = make_sine_wav_bytes()
-    responses = [_health_response()] + (
+    responses = [_health_response(), _health_response()] + (
         _build_acestep_responses(wav_bytes)
         + _build_acestep_responses(wav_bytes)
         + _build_acestep_responses(wav_bytes)
@@ -144,7 +144,7 @@ def test_generate_multiple_versions(
     assert "01_test_song_v2" in stems
     assert "01_test_song_v3" in stems
 
-    assert mock_urlopen.call_count == 10
+    assert mock_urlopen.call_count == 11
 
 
 def test_generate_with_score_flag(
@@ -155,7 +155,7 @@ def test_generate_with_score_flag(
     output_dir = tmp_path / "_output"
 
     wav_bytes = make_sine_wav_bytes()
-    responses = [_health_response()] + _build_acestep_responses(wav_bytes)
+    responses = [_health_response(), _health_response()] + _build_acestep_responses(wav_bytes)
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.side_effect = responses
@@ -182,7 +182,7 @@ def test_generate_best_flag(
     output_dir = tmp_path / "_output"
 
     wav_bytes = make_sine_wav_bytes()
-    responses = [_health_response()] + (
+    responses = [_health_response(), _health_response()] + (
         _build_acestep_responses(wav_bytes)
         + _build_acestep_responses(wav_bytes)
     )

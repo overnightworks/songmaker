@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from difflib import get_close_matches
 from pathlib import Path
 from typing import TypedDict
 
@@ -119,8 +120,6 @@ def parse_song_md(path: Path) -> SongMeta:
 
 def _warn_unknown_key(key: str) -> None:
     """Warn if a frontmatter key looks like a typo of a known field."""
-    from difflib import get_close_matches
-
     all_known = _ACE_STEP_FIELDS | set(SongMeta.model_fields)
     matches = get_close_matches(key, all_known, n=1, cutoff=0.6)
     if matches:

@@ -18,7 +18,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import OUTPUT_ROOT
@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 class RatingRequest(BaseModel):
     """Star rating from the player UI."""
 
-    rating: int
+    rating: int = Field(ge=1, le=5)
     notes: str = ""
 
 
@@ -50,7 +50,6 @@ def create_app(output_dir: Path, project_root: Path) -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:*", "http://127.0.0.1:*"],
         allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
         allow_methods=["*"],
         allow_headers=["*"],
@@ -101,6 +100,9 @@ def create_app(output_dir: Path, project_root: Path) -> FastAPI:
         req: GenerateRequest, background_tasks: BackgroundTasks,
     ) -> dict[str, str]:
         md_path = Path(req.path).resolve()
+        albums_dir = (project_root / "albums").resolve()
+        if not md_path.is_relative_to(albums_dir):
+            raise HTTPException(403, "Path must be under albums/")
         if not md_path.exists():
             raise HTTPException(404, f"Song file not found: {req.path}")
 
@@ -193,4 +195,4 @@ def run_server(
         import webbrowser
         webbrowser.open(f"http://localhost:{port}")
 
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")

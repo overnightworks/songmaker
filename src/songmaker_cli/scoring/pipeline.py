@@ -56,10 +56,11 @@ _VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
 class ScorerRegistry:
     """Registry of scorer functions. Supports lazy loading and test isolation."""
 
+    _EXPECTED_SCORER_COUNT = 6
+
     def __init__(self) -> None:
         self._scorers: dict[str, ScorerFunc] = {}
         self._needs_audio: dict[str, bool] = {}
-        self._loaded: bool = False
 
     def register(
         self, name: str, needs_audio: bool = True,
@@ -96,10 +97,13 @@ class ScorerRegistry:
         return list(self._scorers.keys())
 
     def ensure_loaded(self) -> None:
-        """Lazily import scorer modules to trigger @register decorators."""
-        if self._loaded:
+        """Lazily import scorer modules to trigger @register decorators.
+
+        Re-entrant: checks scorer count instead of a boolean flag, so
+        re-importing after reset_for_testing works correctly.
+        """
+        if len(self._scorers) >= self._EXPECTED_SCORER_COUNT:
             return
-        self._loaded = True
         import songmaker_cli.scoring.audiobox_aesthetics  # noqa: F401
         import songmaker_cli.scoring.bpm_accuracy  # noqa: F401
         import songmaker_cli.scoring.emotional_dynamics  # noqa: F401
@@ -108,10 +112,9 @@ class ScorerRegistry:
         import songmaker_cli.scoring.text_accuracy  # noqa: F401
 
     def reset_for_testing(self) -> None:
-        """Clear all scorers and prevent lazy re-import. For tests only."""
+        """Clear all scorers for test isolation."""
         self._scorers.clear()
         self._needs_audio.clear()
-        self._loaded = True
 
 
 default_registry = ScorerRegistry()

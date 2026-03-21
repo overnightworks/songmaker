@@ -150,6 +150,8 @@ def _generate_versions(
 ) -> list[tuple[OutputPaths, Path]]:
     """Run N generation cycles and return (paths, snapshot_path) per version."""
     client = AceStepClient()
+    if not client.is_available:
+        raise GenerationError("ACE-Step server is not reachable")
     server_info = client.server_info()
     generated: list[tuple[OutputPaths, Path]] = []
 
