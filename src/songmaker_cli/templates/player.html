@@ -757,8 +757,7 @@ async function loadTrack(index) {
   trackTitle.textContent = t.title;
   trackMeta.textContent = '';
 
-  const audioUrl = AUDIO_BASE + t.file
-    + (API_KEY ? '?api_key=' + API_KEY : '');
+  const audioUrl = AUDIO_BASE + t.file;
   dbg('Fetching audio: ' + audioUrl);
   try {
     const resp = await apiFetch(audioUrl);
