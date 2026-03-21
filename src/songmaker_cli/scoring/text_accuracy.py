@@ -31,8 +31,9 @@ def score_text_accuracy(
 
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
     whisper_size = effective_config.whisper_model
+    device = effective_config.device
     language = meta.generation_params.get("language", "en")
-    model = _get_whisper_model(whisper_size)
+    model = _get_whisper_model(whisper_size, device=device)
     transcribed, segments = _transcribe(mp3_path, language, model)
 
     intended_lines = tuple(
@@ -100,6 +101,7 @@ def clean_lyrics(text: str) -> str:
 
 def _get_whisper_model(
     model_size: str,
+    device: str = "cpu",
     cache: dict[str, object] | None = None,
 ) -> object:
     """Return a cached Whisper model, loading it on first use."""
@@ -107,10 +109,11 @@ def _get_whisper_model(
 
     if cache is None:
         cache = _whisper_model_cache
-    if model_size not in cache:
-        log.info("Loading Whisper model (%s) on CPU...", model_size)
-        cache[model_size] = whisper.load_model(model_size, device="cpu")
-    return cache[model_size]
+    cache_key = f"{model_size}:{device}"
+    if cache_key not in cache:
+        log.info("Loading Whisper model (%s) on %s...", model_size, device)
+        cache[cache_key] = whisper.load_model(model_size, device=device)
+    return cache[cache_key]
 
 
 def _transcribe(
