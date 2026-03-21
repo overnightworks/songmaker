@@ -54,9 +54,19 @@ def _get_predictor(
     """Return a cached AudioBox predictor, loading on first use."""
     from audiobox_aesthetics.infer import AesPredictor
 
+    import os
+
     if cache is None:
         cache = _predictor_cache
     if "default" not in cache:
-        log.info("Loading AudioBox Aesthetics model...")
-        cache["default"] = AesPredictor(checkpoint_pth="default")
+        log.info("Loading AudioBox Aesthetics model on CPU...")
+        saved = os.environ.get("CUDA_VISIBLE_DEVICES")
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+        try:
+            cache["default"] = AesPredictor(checkpoint_pth="default")
+        finally:
+            if saved is None:
+                os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+            else:
+                os.environ["CUDA_VISIBLE_DEVICES"] = saved
     return cache["default"]

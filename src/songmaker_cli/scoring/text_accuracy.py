@@ -77,12 +77,8 @@ def _get_whisper_model(
     if cache is None:
         cache = _whisper_model_cache
     if model_size not in cache:
-        log.info("Loading Whisper model (%s)...", model_size)
-        try:
-            cache[model_size] = whisper.load_model(model_size)
-        except RuntimeError:
-            log.info("GPU unavailable, loading Whisper on CPU...")
-            cache[model_size] = whisper.load_model(model_size, device="cpu")
+        log.info("Loading Whisper model (%s) on CPU...", model_size)
+        cache[model_size] = whisper.load_model(model_size, device="cpu")
     return cache[model_size]
 
 
