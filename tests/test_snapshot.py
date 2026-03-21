@@ -6,8 +6,7 @@ from pathlib import Path
 
 from acestep_engine.models import AceStepConfig, ServerInfo
 from songmaker_cli.config import OutputPaths
-from songmaker_cli.snapshot import read_generation_info
-from songmaker_cli.snapshot import write_snapshot
+from songmaker_cli.snapshot import read_generation_info, write_snapshot
 
 
 def _make_song_md(path: Path) -> Path:
@@ -138,3 +137,39 @@ def test_read_generation_info_no_generation_section(tmp_path: Path) -> None:
 
     assert gen is not None
     assert gen["bpm"] == 120
+
+
+def test_read_generation_info_with_iso_timestamp(tmp_path: Path) -> None:
+    """Values containing colons (ISO timestamps) are preserved correctly."""
+    md = tmp_path / "snapshot.md"
+    md.write_text(
+        "---\nbpm: 120\n---\n\n## Lyrics\n\nHello\n\n"
+        "## Generation\n\n"
+        "- seed: 42\n"
+        "- generated_at: 2025-01-15T14:30:00\n"
+    )
+
+    gen = read_generation_info(md)
+
+    assert gen is not None
+    assert gen["seed"] == 42
+    assert gen["generated_at"] == "2025-01-15T14:30:00"
+
+
+def test_read_scores_with_colons_in_values(tmp_path: Path) -> None:
+    """Score values that happen to contain colons are handled correctly."""
+    from songmaker_cli.snapshot import read_scores
+
+    md = tmp_path / "snapshot.md"
+    md.write_text(
+        "---\ntitle: Test\n---\n\n"
+        "## Scores\n\n"
+        "- dynamics: 48.9\n"
+        "- silence_ok: True\n"
+    )
+
+    scores = read_scores(md)
+
+    assert scores is not None
+    assert scores["dynamics"] == 48.9
+    assert scores["silence_ok"] is True

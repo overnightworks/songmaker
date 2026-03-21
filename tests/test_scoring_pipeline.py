@@ -17,12 +17,9 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
-from songmaker_cli.scoring import pipeline as scoring_pipeline
 from songmaker_cli.scoring.pipeline import (
     AudioData,
-    _SCORERS,
-    _SCORERS_NEEDS_AUDIO,
-    register,
+    ScorerRegistry,
     run_scoring_pipeline,
 )
 from songmaker_cli.snapshot import append_scores_section
@@ -31,25 +28,11 @@ _FAKE_AUDIO = AudioData(audio=np.zeros(22050, dtype=np.float32), sr=22050)
 
 
 @pytest.fixture()
-def clean_registry() -> Generator[dict[str, object], None, None]:
-    """Temporarily replace the scorer registry, restore after test.
-
-    Clears all registered scorers so tests control exactly which scorers run.
-    Also resets _scorers_loaded so _ensure_scorers_registered won't re-import
-    real scorers during the test.
-    """
-    saved = dict(_SCORERS)
-    saved_audio = dict(_SCORERS_NEEDS_AUDIO)
-    saved_loaded = scoring_pipeline._scorers_loaded
-    _SCORERS.clear()
-    _SCORERS_NEEDS_AUDIO.clear()
-    scoring_pipeline._scorers_loaded = True  # Prevent re-import of real scorers
-    yield _SCORERS
-    _SCORERS.clear()
-    _SCORERS.update(saved)
-    _SCORERS_NEEDS_AUDIO.clear()
-    _SCORERS_NEEDS_AUDIO.update(saved_audio)
-    scoring_pipeline._scorers_loaded = saved_loaded
+def clean_registry() -> Generator[ScorerRegistry, None, None]:
+    """Provide an isolated scorer registry for testing."""
+    registry = ScorerRegistry()
+    registry.reset_for_testing()
+    yield registry
 
 
 @pytest.fixture()
@@ -134,18 +117,24 @@ def test_emotional_dynamics_expressiveness_capped() -> None:
 # ── Registry tests ───────────────────────────────────────────────────
 
 
-def test_register_valid_name(clean_registry: dict) -> None:
-    @register("silence")
-    def my_scorer(mp3_path: Path, meta: object = None, audio_data: object = None, config: object = None) -> SilenceScore:
+def test_register_valid_name(clean_registry: ScorerRegistry) -> None:
+    @clean_registry.register("silence")
+    def my_scorer(
+        mp3_path: Path, meta: object = None,
+        audio_data: object = None, config: object = None,
+    ) -> SilenceScore:
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
-    assert "silence" in clean_registry
+    assert clean_registry.get("silence") is not None
 
 
-def test_register_invalid_name_raises() -> None:
+def test_register_invalid_name_raises(clean_registry: ScorerRegistry) -> None:
     with pytest.raises(ValueError, match="does not match any SongScores field"):
-        @register("bogus_name")
-        def bad_scorer(mp3_path: Path, meta: object = None, audio_data: object = None, config: object = None) -> None:
+        @clean_registry.register("bogus_name")
+        def bad_scorer(
+            mp3_path: Path, meta: object = None,
+            audio_data: object = None, config: object = None,
+        ) -> None:
             pass
 
 
@@ -153,8 +142,8 @@ def test_register_invalid_name_raises() -> None:
 
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
-def test_run_pipeline(mock_load: object, clean_registry: dict, fake_mp3: Path) -> None:
-    @register("silence")
+def test_run_pipeline(mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path) -> None:
+    @clean_registry.register("silence")
     def mock_silence(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None,
@@ -163,7 +152,7 @@ def test_run_pipeline(mock_load: object, clean_registry: dict, fake_mp3: Path) -
             total_silence_seconds=0.5, longest_gap_seconds=0.3, gap_count=1,
         )
 
-    scores = run_scoring_pipeline(fake_mp3)
+    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
     assert scores.silence is not None
     assert scores.silence.gap_count == 1
     assert scores.text_accuracy is None
@@ -171,16 +160,16 @@ def test_run_pipeline(mock_load: object, clean_registry: dict, fake_mp3: Path) -
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
 def test_pipeline_handles_scorer_failure(
-    mock_load: object, clean_registry: dict, fake_mp3: Path,
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
 ) -> None:
-    @register("text_accuracy")
+    @clean_registry.register("text_accuracy")
     def broken_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None,
     ) -> None:
         raise RuntimeError("boom")
 
-    @register("silence")
+    @clean_registry.register("silence")
     def ok_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None,
@@ -189,16 +178,16 @@ def test_pipeline_handles_scorer_failure(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
         )
 
-    scores = run_scoring_pipeline(fake_mp3)
+    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
     assert scores.silence is not None
     assert scores.text_accuracy is None
 
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
 def test_pipeline_filters_by_name(
-    mock_load: object, clean_registry: dict, fake_mp3: Path,
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
 ) -> None:
-    @register("silence")
+    @clean_registry.register("silence")
     def scorer_a(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None,
@@ -207,7 +196,7 @@ def test_pipeline_filters_by_name(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
         )
 
-    @register("bpm_accuracy")
+    @clean_registry.register("bpm_accuracy")
     def scorer_b(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None,
@@ -217,20 +206,20 @@ def test_pipeline_filters_by_name(
             deviation_percent=0.0, octave_corrected=False,
         )
 
-    scores = run_scoring_pipeline(fake_mp3, scorers=["silence"])
+    scores = run_scoring_pipeline(fake_mp3, scorers=["silence"], registry=clean_registry)
     assert scores.silence is not None
     assert scores.bpm_accuracy is None
 
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
 def test_pipeline_warns_on_unknown_scorer(
-    mock_load: object, clean_registry: dict, fake_mp3: Path,
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     import logging
 
     with caplog.at_level(logging.WARNING):
-        run_scoring_pipeline(fake_mp3, scorers=["nonexistent"])
+        run_scoring_pipeline(fake_mp3, scorers=["nonexistent"], registry=clean_registry)
     assert "Unknown scorer" in caplog.text
 
 
@@ -311,7 +300,7 @@ def test_append_scores_idempotent(tmp_path: Path) -> None:
 def test_log_scores(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
-    from songmaker_cli.main import _log_scores
+    from songmaker_cli.generate import log_scores as _log_scores
 
     scores = SongScores(
         silence=SilenceScore(
@@ -333,7 +322,7 @@ def test_log_ranking(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
     from songmaker_cli.config import OutputPaths
-    from songmaker_cli.main import _log_ranking_by_dynamics
+    from songmaker_cli.generate import _log_ranking_by_dynamics
 
     paths_a = OutputPaths(
         output_dir=Path("/tmp"), base_name="song", version=1, versioned_name="song_v1",
@@ -362,7 +351,7 @@ def test_log_ranking(caplog: pytest.LogCaptureFixture) -> None:
     assert "song_v2" in caplog.text
     # v1 has higher expressiveness, should be first (marked best)
     lines = caplog.text.split("\n")
-    ranking_lines = [l for l in lines if "song_v" in l]
+    ranking_lines = [line for line in lines if "song_v" in line]
     assert "song_v1" in ranking_lines[0]
     assert "best" in ranking_lines[0]
 
@@ -370,7 +359,7 @@ def test_log_ranking(caplog: pytest.LogCaptureFixture) -> None:
 def test_log_scores_warns_on_silence_problems(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
-    from songmaker_cli.main import _log_scores
+    from songmaker_cli.generate import log_scores as _log_scores
 
     scores = SongScores(
         silence=SilenceScore(
@@ -438,7 +427,7 @@ def test_text_accuracy_with_mock_whisper(tmp_path: Path) -> None:
 def test_audiobox_with_mock_predictor(tmp_path: Path) -> None:
     from unittest.mock import MagicMock
 
-    from songmaker_cli.scoring.audiobox_aesthetics import score_audiobox, _predictor_cache
+    from songmaker_cli.scoring.audiobox_aesthetics import _predictor_cache, score_audiobox
 
     mp3 = tmp_path / "test.mp3"
     mp3.write_bytes(b"fake")
@@ -513,3 +502,42 @@ def test_scores_roundtrip(tmp_path: Path) -> None:
     assert read_back is not None
     assert read_back["dynamics"] == 50.0
     assert read_back["silence_ok"] is True
+
+
+# ── Type validation tests ─────────────────────────────────────────
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_pipeline_rejects_wrong_return_type(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A scorer returning the wrong type gets logged and treated as None."""
+    import logging
+
+    @clean_registry.register("silence")
+    def wrong_type_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None,
+    ) -> str:
+        return "not a SilenceScore"  # type: ignore[return-value]
+
+    with caplog.at_level(logging.WARNING):
+        scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+
+    assert scores.silence is None
+    assert "expected SilenceScore" in caplog.text
+
+
+# ── Greedy text alignment tests ───────────────────────────────────
+
+
+def test_greedy_alignment_consumes_candidates() -> None:
+    """One transcribed line should only match one intended line."""
+    from songmaker_cli.scoring.text_accuracy import _per_line_accuracy
+
+    intended = ("hello world", "goodbye moon", "third line")
+    transcribed = ("hello world",)
+
+    ratio = _per_line_accuracy(intended, transcribed)
+    assert ratio < 0.5

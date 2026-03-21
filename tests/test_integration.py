@@ -12,9 +12,9 @@ from typing import Callable
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from conftest import mock_http_response as _mock_response
-from songmaker_cli.main import generate
+
+from songmaker_cli.generate import run_generate as generate
 
 
 def _setup_project(tmp_path: Path) -> Path:

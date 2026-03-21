@@ -277,6 +277,3 @@ def _compress_signal(
 
     return signal * gain
 
-
-
-

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -210,8 +211,22 @@ def _build_latest_entries(
             generation=generation,
             scores=track_scores,
         )
-        entries.append((mp3.stat().st_mtime, scan.album_name, track))
+        sort_key = _generation_timestamp(generation) or mp3.stat().st_mtime
+        entries.append((sort_key, scan.album_name, track))
     return entries
+
+
+def _generation_timestamp(generation: GenerationInfo | None) -> float | None:
+    """Extract a sortable timestamp from snapshot metadata, falling back to None."""
+    if generation is None:
+        return None
+    generated_at = generation.get("generated_at")
+    if not generated_at:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(str(generated_at)).timestamp()
+    except (ValueError, TypeError):
+        return None
 
 
 def build_manifest(output_dir: Path, project_root: Path) -> Manifest:

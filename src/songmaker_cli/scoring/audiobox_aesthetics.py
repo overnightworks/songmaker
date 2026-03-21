@@ -10,6 +10,10 @@ Scores audio on four dimensions (1-10 each):
 from __future__ import annotations
 
 import logging
+import os
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from songmaker_cli.parser import SongMeta
@@ -19,6 +23,24 @@ from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 log = logging.getLogger(__name__)
 
 _predictor_cache: dict[str, object] = {}
+_cpu_env_lock = threading.Lock()
+
+
+@contextmanager
+def _force_cpu_env() -> Iterator[None]:
+    """Temporarily hide CUDA devices to force CPU model loading.
+
+    Must be used under _cpu_env_lock for thread safety.
+    """
+    saved = os.environ.get("CUDA_VISIBLE_DEVICES")
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    try:
+        yield
+    finally:
+        if saved is None:
+            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+        else:
+            os.environ["CUDA_VISIBLE_DEVICES"] = saved
 
 
 @register("audiobox", needs_audio=False)
@@ -26,11 +48,7 @@ def score_audiobox(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
     config: PipelineConfig | None = None,
 ) -> AudioBoxScore:
-    """Score audio quality using Meta's AudioBox Aesthetics model.
-
-    Note: audio_data is unused — AudioBox requires a file path, not a numpy array.
-    The parameter exists to satisfy the scorer function signature.
-    """
+    """Score audio quality using Meta's AudioBox Aesthetics model."""
     predictor = _get_predictor()
     result = predictor.forward([{"path": str(mp3_path)}])  # type: ignore[union-attr]
 
@@ -51,24 +69,17 @@ def score_audiobox(
 def _get_predictor(
     cache: dict[str, object] | None = None,
 ) -> object:
-    """Return a cached AudioBox predictor, loading on first use."""
-    from audiobox_aesthetics.infer import AesPredictor
+    """Return a cached AudioBox predictor, loading on first use.
 
-    import os
+    Uses a threading lock around CUDA_VISIBLE_DEVICES mutation
+    to prevent race conditions with concurrent scorers.
+    """
+    from audiobox_aesthetics.infer import AesPredictor
 
     if cache is None:
         cache = _predictor_cache
     if "default" not in cache:
-        # Force CPU: AudioBox has no device parameter, so we hide CUDA temporarily.
-        # Not thread-safe — acceptable for a single-threaded CLI tool.
         log.info("Loading AudioBox Aesthetics model on CPU...")
-        saved = os.environ.get("CUDA_VISIBLE_DEVICES")
-        os.environ["CUDA_VISIBLE_DEVICES"] = ""
-        try:
+        with _cpu_env_lock, _force_cpu_env():
             cache["default"] = AesPredictor(checkpoint_pth="default")
-        finally:
-            if saved is None:
-                os.environ.pop("CUDA_VISIBLE_DEVICES", None)
-            else:
-                os.environ["CUDA_VISIBLE_DEVICES"] = saved
     return cache["default"]
