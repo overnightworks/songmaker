@@ -509,6 +509,11 @@
     <div class="gen-info-grid" id="genInfoGrid"></div>
   </div>
 
+  <div class="gen-info" id="scoresPanel" style="display:none">
+    <h3>Scores</h3>
+    <div class="gen-info-grid" id="scoresGrid"></div>
+  </div>
+
   <div class="view-toggle" id="viewToggle" style="display:none">
     <button class="view-btn active" id="btnSung" onclick="switchView('sung')">Sung</button>
     <button class="view-btn" id="btnIntended" onclick="switchView('intended')">Intended</button>
@@ -744,6 +749,7 @@ async function loadTrack(index) {
 
   renderCurrentView();
   renderGenInfo(t);
+  renderScores(t);
   loadRating();
 }
 
@@ -774,6 +780,45 @@ function renderGenInfo(track) {
     let display = val;
     if (key === 'duration') display = val + 's';
     if (key === 'think_mode') display = val ? 'on' : 'off';
+    div.innerHTML = label + ': <span>' + escHtml(String(display)) + '</span>';
+    grid.appendChild(div);
+  }
+}
+
+// --- Scores ---
+
+const SCORE_LABELS = {
+  dynamics: 'Dynamics',
+  text_accuracy: 'Text Accuracy',
+  audiobox_enjoyment: 'Enjoyment',
+  audiobox_quality: 'Production Quality',
+  bpm_detected: 'BPM Detected',
+  bpm_deviation: 'BPM Deviation',
+  silence_ok: 'Silence OK',
+  silence_gaps: 'Silence Gaps',
+};
+
+function renderScores(track) {
+  const panel = document.getElementById('scoresPanel');
+  const grid = document.getElementById('scoresGrid');
+  grid.innerHTML = '';
+  if (!track.scores) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+  for (const [key, label] of Object.entries(SCORE_LABELS)) {
+    const val = track.scores[key];
+    if (val === undefined || val === null) continue;
+    const div = document.createElement('div');
+    div.className = 'gen-info-item';
+    let display = val;
+    if (key === 'silence_ok') display = val ? '✓' : '✗';
+    if (key === 'bpm_deviation') display = val + '%';
+    if (typeof val === 'number' && key !== 'silence_gaps' && key !== 'bpm_detected') {
+      display = val.toFixed(1);
+      if (key === 'bpm_deviation') display += '%';
+    }
     div.innerHTML = label + ': <span>' + escHtml(String(display)) + '</span>';
     grid.appendChild(div);
   }

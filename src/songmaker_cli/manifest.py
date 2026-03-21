@@ -69,6 +69,7 @@ class TrackInfo:
     intended: list[LyricsLine] = field(default_factory=list)
     has_sung: bool = False
     generation: GenerationInfo | None = None
+    scores: dict[str, object] | None = None
 
 
 @dataclass
@@ -192,6 +193,26 @@ def read_generation_info(snapshot_path: Path) -> GenerationInfo | None:
     return info if info else None
 
 
+def read_scores(snapshot_path: Path) -> dict[str, object] | None:
+    """Read the ## Scores section from a snapshot .md file."""
+    if not snapshot_path.exists():
+        return None
+
+    text = snapshot_path.read_text(encoding="utf-8")
+    score_match = re.search(r"## Scores\s*\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
+    if not score_match:
+        return None
+
+    scores: dict[str, object] = {}
+    for line in score_match.group(1).splitlines():
+        line = line.strip()
+        if line.startswith("- ") and ": " in line:
+            key, _, value = line[2:].partition(": ")
+            scores[key] = _coerce_value(value)
+
+    return scores if scores else None
+
+
 def _coerce_value(value: str) -> Any:
     """Try to parse a string value as int/float/bool."""
     if value.lower() in ("true", "false"):
@@ -231,7 +252,9 @@ def scan_album_tracks(
 
         lines = sung_lines if sung_lines else intended_lines
 
-        generation = read_generation_info(mp3.with_suffix(".md"))
+        snapshot_path = mp3.with_suffix(".md")
+        generation = read_generation_info(snapshot_path)
+        track_scores = read_scores(snapshot_path)
 
         tracks.append(TrackInfo(
             file=f"{mp3_base}/{mp3.name}",
@@ -241,6 +264,7 @@ def scan_album_tracks(
             intended=intended_lines,
             has_sung=bool(sung_lines),
             generation=generation,
+            scores=track_scores,
         ))
     return tracks
 
@@ -270,7 +294,9 @@ def _build_latest_entries(
         base = strip_version_suffix(stem)
         intended_lines = lyrics_cache.get(base, [])
 
-        generation = read_generation_info(mp3.with_suffix(".md"))
+        snapshot_path = mp3.with_suffix(".md")
+        generation = read_generation_info(snapshot_path)
+        track_scores = read_scores(snapshot_path)
 
         track = TrackInfo(
             file=f"{scan.mp3_base}/{mp3.name}",
@@ -280,6 +306,7 @@ def _build_latest_entries(
             intended=intended_lines,
             has_sung=False,
             generation=generation,
+            scores=track_scores,
         )
         entries.append((mp3.stat().st_mtime, scan.album_name, track))
     return entries
