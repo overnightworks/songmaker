@@ -743,7 +743,19 @@ async function loadTrack(index) {
   trackTitle.textContent = t.title;
   trackMeta.textContent = '';
 
-  sourceEl.src = AUDIO_BASE + t.file + (API_KEY ? '?api_key=' + API_KEY : '');
+  // Fetch audio via JS to send ngrok-skip-browser-warning header
+  const audioUrl = AUDIO_BASE + t.file + (API_KEY ? '?api_key=' + API_KEY : '');
+  try {
+    const resp = await apiFetch(audioUrl);
+    if (resp.ok) {
+      const blob = await resp.blob();
+      sourceEl.src = URL.createObjectURL(blob);
+    } else {
+      sourceEl.src = audioUrl;
+    }
+  } catch(e) {
+    sourceEl.src = audioUrl;
+  }
   audioEl.load();
 
   // Try to read ID3 tags for richer metadata
