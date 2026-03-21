@@ -204,6 +204,73 @@ def _score_all(
 
 
 @app.command
+def archive(
+    path: Annotated[Optional[str], Parameter(help="MP3 file to archive")] = None,
+    below: Annotated[
+        Optional[float], Parameter(help="Archive all versions with dynamics below this value")
+    ] = None,
+) -> None:
+    """Move bad versions to _archive/ instead of deleting.
+
+    Preserves MP3 + snapshot .md for future preference model training.
+    """
+    from songmaker_cli.snapshot import read_scores
+
+    project_root = find_project_root(Path.cwd()) or Path.cwd()
+    output_dir = project_root / OUTPUT_ROOT
+    archive_dir = project_root / "_archive"
+
+    if path:
+        mp3_path = validate_path(path)
+        _archive_file(mp3_path, output_dir, archive_dir)
+    elif below is not None:
+        _archive_below_threshold(below, output_dir, archive_dir, read_scores)
+    else:
+        raise ValidationError("Provide an MP3 path or use --below <threshold>")
+
+    from songmaker_cli.player import generate_player
+
+    generate_player(output_dir, project_root)
+    log.info("Player updated")
+
+
+def _archive_file(mp3_path: Path, output_dir: Path, archive_dir: Path) -> None:
+    """Move a single MP3 + snapshot to the archive."""
+    album = mp3_path.parent.name
+    dest_dir = archive_dir / album
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    for suffix in [".mp3", ".md"]:
+        src = mp3_path.with_suffix(suffix)
+        if src.exists():
+            dest = dest_dir / src.name
+            src.rename(dest)
+            log.info("Archived: %s → %s", src.name, dest)
+
+
+def _archive_below_threshold(
+    threshold: float, output_dir: Path, archive_dir: Path,
+    read_scores_fn: object,
+) -> None:
+    """Archive all versions with dynamics below a threshold."""
+    mp3s = sorted(output_dir.rglob("*.mp3"))
+    archived = 0
+    for mp3 in mp3s:
+        snapshot = mp3.with_suffix(".md")
+        if not snapshot.exists():
+            continue
+        scores = read_scores_fn(snapshot)  # type: ignore[operator]
+        if scores is None:
+            continue
+        dynamics = scores.get("dynamics")
+        if dynamics is not None and float(dynamics) < threshold:
+            _archive_file(mp3, output_dir, archive_dir)
+            archived += 1
+
+    log.info("Archived %d versions with dynamics < %.0f", archived, threshold)
+
+
+@app.command
 def check(
     path: Annotated[str, Parameter(help="MP3 file to check")],
     source: Annotated[
