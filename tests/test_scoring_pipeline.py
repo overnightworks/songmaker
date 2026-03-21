@@ -17,6 +17,7 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
+from songmaker_cli.scoring import pipeline as scoring_pipeline
 from songmaker_cli.scoring.pipeline import (
     AudioData,
     _SCORERS,
@@ -32,10 +33,12 @@ _FAKE_AUDIO = AudioData(audio=np.zeros(22050, dtype=np.float32), sr=22050)
 def clean_registry() -> Generator[dict[str, object], None, None]:
     """Temporarily clear the scorer registry, restore after test."""
     saved = dict(_SCORERS)
+    saved_loaded = scoring_pipeline._scorers_loaded
     _SCORERS.clear()
     yield _SCORERS
     _SCORERS.clear()
     _SCORERS.update(saved)
+    scoring_pipeline._scorers_loaded = saved_loaded
 
 
 @pytest.fixture()

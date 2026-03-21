@@ -51,6 +51,7 @@ def register(name: str) -> Callable[[ScorerFunc], ScorerFunc]:
 
 def available_scorers() -> list[str]:
     """Return names of all registered scorers."""
+    _ensure_scorers_registered()
     return list(_SCORERS.keys())
 
 
@@ -58,6 +59,20 @@ def load_audio(mp3_path: Path) -> AudioData:
     """Load and resample audio once for all scorers."""
     audio, sr = librosa.load(mp3_path, sr=SCORING_SAMPLE_RATE, mono=True)
     return AudioData(audio=audio, sr=sr)
+
+
+_scorers_loaded = False
+
+
+def _ensure_scorers_registered() -> None:
+    """Lazily import scorer modules to trigger @register decorators."""
+    global _scorers_loaded
+    if _scorers_loaded:
+        return
+    _scorers_loaded = True
+    import songmaker_cli.scoring.bpm_accuracy  # noqa: F401
+    import songmaker_cli.scoring.emotional_dynamics  # noqa: F401
+    import songmaker_cli.scoring.silence_detection  # noqa: F401
 
 
 def run_scoring_pipeline(
@@ -70,6 +85,7 @@ def run_scoring_pipeline(
     Audio is loaded once and shared across all scorers.
     Each scorer runs independently — one failure does not block others.
     """
+    _ensure_scorers_registered()
     if scorers is None:
         scorers = list(_SCORERS.keys())
 
