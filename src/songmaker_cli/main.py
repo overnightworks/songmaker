@@ -214,6 +214,10 @@ def server(
     open_browser: Annotated[
         bool, Parameter(name="--open", help="Open browser on start")
     ] = False,
+    api_key: Annotated[
+        Optional[str],
+        Parameter(help="API key for remote access (or set SONGMAKER_API_KEY)"),
+    ] = None,
 ) -> None:
     """Start the songmaker web server for the player UI."""
     from songmaker_cli.server import run_server
@@ -222,7 +226,7 @@ def server(
     project_root = Path(root).resolve() if root else None
     run_server(
         output_dir=output_dir, project_root=project_root,
-        port=port, open_browser=open_browser,
+        port=port, open_browser=open_browser, api_key=api_key,
     )
 
 

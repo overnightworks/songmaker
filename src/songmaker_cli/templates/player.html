@@ -532,6 +532,14 @@ const INLINE_MANIFEST = {{MANIFEST_JSON}};
 const IS_SERVER = location.port === '8080' || location.pathname === '/';
 const AUDIO_BASE = IS_SERVER ? '/audio/' : '';
 const API_BASE = IS_SERVER ? '' : null;
+const API_KEY = new URLSearchParams(location.search).get('key') || '';
+
+function apiFetch(url, options = {}) {
+  if (API_KEY) {
+    options.headers = { ...(options.headers || {}), 'X-API-Key': API_KEY };
+  }
+  return fetch(url, options);
+}
 let ALBUMS = [];
 let currentAlbum = 0;
 let currentTrack = 0;
@@ -553,7 +561,7 @@ const trackNav = document.getElementById('trackNav');
 
 async function loadManifest() {
   try {
-    const resp = await fetch('manifest.json', {cache: 'no-store'});
+    const resp = await apiFetch('manifest.json', {cache: 'no-store'});
     const text = await resp.text();
     const hash = simpleHash(text);
     if (hash === manifestHash) return false; // No change
@@ -727,7 +735,7 @@ async function loadTrack(index) {
   trackTitle.textContent = t.title;
   trackMeta.textContent = '';
 
-  sourceEl.src = AUDIO_BASE + t.file;
+  sourceEl.src = AUDIO_BASE + t.file + (API_KEY ? '?api_key=' + API_KEY : '');
   audioEl.load();
 
   // Try to read ID3 tags for richer metadata
@@ -1116,7 +1124,7 @@ function saveRating() {
     const fileParts = track.file.split('/');
     const album = fileParts[0];
     const version = fileParts[fileParts.length - 1].replace('.mp3', '');
-    fetch('/rate/' + album + '/' + version, {
+    apiFetch('/rate/' + album + '/' + version, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({

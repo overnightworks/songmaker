@@ -11,14 +11,18 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import secrets
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import OUTPUT_ROOT
@@ -47,9 +51,52 @@ class GenerateRequest(BaseModel):
     score: bool = False
 
 
-def create_app(output_dir: Path, project_root: Path) -> FastAPI:
+class AccessLogMiddleware(BaseHTTPMiddleware):
+    """Log every request with IP, method, path, and status."""
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        start = datetime.now()
+        response = await call_next(request)
+        ip = request.client.host if request.client else "unknown"
+        log.info(
+            "ACCESS %s %s %s %d (%.0fms)",
+            ip, request.method, request.url.path,
+            response.status_code,
+            (datetime.now() - start).total_seconds() * 1000,
+        )
+        return response
+
+
+class ApiKeyMiddleware(BaseHTTPMiddleware):
+    """Require X-API-Key header on all requests when api_key is set."""
+
+    def __init__(self, app: FastAPI, api_key: str) -> None:
+        super().__init__(app)
+        self.api_key = api_key
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        # Allow the player HTML itself to load without key (it sends the key in JS)
+        if request.url.path == "/" or request.url.path.startswith("/static"):
+            return await call_next(request)
+
+        key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
+        if not secrets.compare_digest(key or "", self.api_key):
+            ip = request.client.host if request.client else "unknown"
+            log.warning("REJECTED %s %s %s (bad API key)", ip, request.method, request.url.path)
+            return JSONResponse({"error": "Invalid API key"}, status_code=403)
+        return await call_next(request)
+
+
+def create_app(
+    output_dir: Path, project_root: Path, api_key: str | None = None,
+) -> FastAPI:
     """Create the FastAPI app with routes bound to the given directories."""
     app = FastAPI(title="Songmaker", docs_url=None, redoc_url=None)
+
+    app.add_middleware(AccessLogMiddleware)
+
+    if api_key:
+        app.add_middleware(ApiKeyMiddleware, api_key=api_key)
 
     app.add_middleware(
         CORSMiddleware,
@@ -177,6 +224,7 @@ def run_server(
     project_root: Path | None = None,
     port: int = 8080,
     open_browser: bool = False,
+    api_key: str | None = None,
 ) -> None:
     """Start the songmaker server."""
     import uvicorn
@@ -185,17 +233,25 @@ def run_server(
         project_root = find_project_root(Path.cwd()) or Path.cwd()
     if output_dir is None:
         output_dir = project_root / OUTPUT_ROOT
+    if api_key is None:
+        api_key = os.environ.get("SONGMAKER_API_KEY")
 
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
 
     generate_player(output_dir, project_root)
 
-    app = create_app(output_dir, project_root)
+    app = create_app(output_dir, project_root, api_key=api_key)
     log.info("Songmaker server: http://localhost:%d", port)
+    if api_key:
+        log.info("API key required: %s...%s", api_key[:4], api_key[-4:])
+    else:
+        log.info("No API key — server is open (local use only)")
 
     if open_browser:
         import webbrowser
         webbrowser.open(f"http://localhost:{port}")
 
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+    # Bind to 0.0.0.0 when API key is set (ngrok needs it), else localhost only
+    host = "0.0.0.0" if api_key else "127.0.0.1"
+    uvicorn.run(app, host=host, port=port, log_level="info")
