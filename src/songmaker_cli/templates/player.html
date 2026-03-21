@@ -751,10 +751,10 @@ async function loadTrack(index) {
 
   const audioUrl = AUDIO_BASE + t.file
     + (API_KEY ? '?api_key=' + API_KEY + '&ngrok-skip-browser-warning=true' : '');
-  sourceEl.src = audioUrl;
-  // Mobile Chrome requires preload hint for streaming audio
+  audioEl.src = audioUrl;
   audioEl.preload = 'auto';
   audioEl.load();
+  audioEl.onerror = () => { trackMeta.textContent = 'Audio error: ' + (audioEl.error ? audioEl.error.message : 'unknown'); };
 
   // Try to read ID3 tags for richer metadata
   const tags = await readID3(t.file);
