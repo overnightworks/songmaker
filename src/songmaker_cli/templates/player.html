@@ -539,6 +539,8 @@ function apiFetch(url, options = {}) {
     const sep = url.includes('?') ? '&' : '?';
     url = url + sep + 'api_key=' + API_KEY;
   }
+  // ngrok free tier shows an interstitial page unless this header is set
+  options.headers = { ...(options.headers || {}), 'ngrok-skip-browser-warning': 'true' };
   return fetch(url, options);
 }
 let ALBUMS = [];
