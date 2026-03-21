@@ -159,6 +159,27 @@ def check(
     run_check(path, source, project_root=project_root, whisper_model=whisper_model)
 
 
+@app.command
+def server(
+    port: Annotated[int, Parameter(help="Server port")] = 8080,
+    output: Annotated[
+        str, Parameter(name=["-o", "--output"], help="Output directory")
+    ] = "",
+    root: Annotated[
+        Optional[str], Parameter(help="Project root")
+    ] = None,
+    open_browser: Annotated[
+        bool, Parameter(name="--open", help="Open browser on start")
+    ] = False,
+) -> None:
+    """Start the songmaker web server for the player UI."""
+    from songmaker_cli.server import run_server
+
+    output_dir = Path(output).resolve() if output else None
+    project_root = Path(root).resolve() if root else None
+    run_server(output_dir=output_dir, project_root=project_root, port=port, open_browser=open_browser)
+
+
 def main() -> None:
     try:
         app.meta()
