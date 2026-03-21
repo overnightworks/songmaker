@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 _predictor_cache: dict[str, object] = {}
 
 
-@register("audiobox")
+@register("audiobox", needs_audio=False)
 def score_audiobox(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
     config: PipelineConfig | None = None,
@@ -59,6 +59,8 @@ def _get_predictor(
     if cache is None:
         cache = _predictor_cache
     if "default" not in cache:
+        # Force CPU: AudioBox has no device parameter, so we hide CUDA temporarily.
+        # Not thread-safe — acceptable for a single-threaded CLI tool.
         log.info("Loading AudioBox Aesthetics model on CPU...")
         saved = os.environ.get("CUDA_VISIBLE_DEVICES")
         os.environ["CUDA_VISIBLE_DEVICES"] = ""

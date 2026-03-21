@@ -17,7 +17,7 @@ _whisper_model_cache: dict[str, object] = {}
 
 
 
-@register("text_accuracy")
+@register("text_accuracy", needs_audio=False)
 def score_text_accuracy(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
     config: PipelineConfig | None = None,

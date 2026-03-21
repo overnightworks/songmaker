@@ -21,6 +21,7 @@ from songmaker_cli.scoring import pipeline as scoring_pipeline
 from songmaker_cli.scoring.pipeline import (
     AudioData,
     _SCORERS,
+    _SCORERS_NEEDS_AUDIO,
     register,
     run_scoring_pipeline,
 )
@@ -38,12 +39,16 @@ def clean_registry() -> Generator[dict[str, object], None, None]:
     real scorers during the test.
     """
     saved = dict(_SCORERS)
+    saved_audio = dict(_SCORERS_NEEDS_AUDIO)
     saved_loaded = scoring_pipeline._scorers_loaded
     _SCORERS.clear()
+    _SCORERS_NEEDS_AUDIO.clear()
     scoring_pipeline._scorers_loaded = True  # Prevent re-import of real scorers
     yield _SCORERS
     _SCORERS.clear()
     _SCORERS.update(saved)
+    _SCORERS_NEEDS_AUDIO.clear()
+    _SCORERS_NEEDS_AUDIO.update(saved_audio)
     scoring_pipeline._scorers_loaded = saved_loaded
 
 

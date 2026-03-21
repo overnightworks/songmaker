@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import signal
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -24,11 +25,15 @@ class AudioData:
     sr: int
 
 
+SCORER_TIMEOUT_SECONDS = 300
+
+
 @dataclass(frozen=True)
 class PipelineConfig:
     """Configuration passed to all scorers."""
 
     whisper_model: str = "medium"
+    scorer_timeout: int = SCORER_TIMEOUT_SECONDS
 
 
 ScorerFunc = Callable[[Path, SongMeta | None, AudioData | None, PipelineConfig], object]
@@ -37,10 +42,14 @@ _VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
 _SCORERS: dict[str, ScorerFunc] = {}
 
 
-def register(name: str) -> Callable[[ScorerFunc], ScorerFunc]:
+_SCORERS_NEEDS_AUDIO: dict[str, bool] = {}
+
+
+def register(name: str, needs_audio: bool = True) -> Callable[[ScorerFunc], ScorerFunc]:
     """Decorator to register a scorer function.
 
     The name must match a field on SongScores (e.g. "silence", "bpm_accuracy").
+    Set needs_audio=False for scorers that use file paths (e.g. Whisper, AudioBox).
     """
 
     def decorator(func: ScorerFunc) -> ScorerFunc:
@@ -50,6 +59,7 @@ def register(name: str) -> Callable[[ScorerFunc], ScorerFunc]:
                 f"Valid names: {sorted(_VALID_SCORER_NAMES)}"
             )
         _SCORERS[name] = func
+        _SCORERS_NEEDS_AUDIO[name] = needs_audio
         return func
 
     return decorator
@@ -69,6 +79,32 @@ def load_audio(mp3_path: Path) -> AudioData:
 
     audio, sr = librosa.load(mp3_path, sr=SCORING_SAMPLE_RATE, mono=True)
     return AudioData(audio=audio, sr=sr)
+
+
+class _ScorerTimeout(Exception):
+    """Raised when a scorer exceeds its time limit."""
+
+
+def _run_with_timeout(
+    func: ScorerFunc, mp3_path: Path, meta: SongMeta | None,
+    audio_data: AudioData | None, config: PipelineConfig,
+    timeout: int, name: str,
+) -> object:
+    """Run a scorer with a timeout. Uses SIGALRM on Linux."""
+    if timeout <= 0 or not hasattr(signal, "SIGALRM"):
+        return func(mp3_path, meta, audio_data, config)
+
+    def _handler(signum: int, frame: object) -> None:
+        raise _ScorerTimeout(f"Scorer '{name}' timed out after {timeout}s")
+
+    old_handler = signal.signal(signal.SIGALRM, _handler)
+    signal.alarm(timeout)
+    try:
+        result = func(mp3_path, meta, audio_data, config)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
+    return result
 
 
 _scorers_loaded = False
@@ -104,7 +140,8 @@ def run_scoring_pipeline(
     if config is None:
         config = PipelineConfig()
 
-    audio_data = load_audio(mp3_path)
+    any_needs_audio = any(_SCORERS_NEEDS_AUDIO.get(s, True) for s in scorers if s in _SCORERS)
+    audio_data = load_audio(mp3_path) if any_needs_audio else None
 
     results: dict[str, object] = {}
     for name in scorers:
@@ -113,7 +150,10 @@ def run_scoring_pipeline(
             continue
         try:
             log.info("Running scorer: %s", name)
-            results[name] = _SCORERS[name](mp3_path, meta, audio_data, config)
+            results[name] = _run_with_timeout(
+                _SCORERS[name], mp3_path, meta, audio_data, config,
+                timeout=config.scorer_timeout, name=name,
+            )
         except Exception:
             log.exception("Scorer '%s' failed", name)
 

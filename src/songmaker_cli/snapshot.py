@@ -66,6 +66,8 @@ def write_snapshot(
     plus a ## Generation section with runtime-only metadata.
     """
     source_text = source_path.read_text(encoding="utf-8")
+    # Split on first two --- delimiters only. Any --- in the body (e.g.
+    # horizontal rules in lyrics) stays in parts[2] and is preserved.
     parts = source_text.split("---", 2)
     if len(parts) < 3:
         return _write_raw(paths, source_text, ace_config, seed, server_info)
@@ -162,6 +164,7 @@ def read_generation_info(snapshot_path: Path) -> GenerationInfo | None:
     text = snapshot_path.read_text(encoding="utf-8")
     info: GenerationInfo = {}
 
+    # maxsplit=2: safe even if body contains --- (horizontal rules)
     parts = text.split("---", 2)
     if len(parts) >= 3:
         try:

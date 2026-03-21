@@ -245,3 +245,19 @@ class TestEmotionalDynamics:
 
     def test_normalize_contrast_midpoint(self) -> None:
         assert _normalize_contrast(2.0, max_contrast=3.0) == pytest.approx(0.5)
+
+    def test_parallel_pyin_path(self, wav_file: Callable[..., Path]) -> None:
+        """Exercise the ProcessPoolExecutor path (>5s per section)."""
+        sections = [
+            _sine(220, 6.0) * 0.2,
+            _sine(440, 6.0) * 0.8,
+            _sine(330, 6.0) * 0.1,
+            _sine(550, 6.0) * 0.9,
+            _sine(220, 6.0) * 0.3,
+            _sine(440, 6.0) * 0.7,
+        ]
+        audio = np.concatenate(sections)
+        path = wav_file(audio)
+        result = score_emotional_dynamics(path)
+        assert result.overall_expressiveness > 0
+        assert result.pitch_cv > 0

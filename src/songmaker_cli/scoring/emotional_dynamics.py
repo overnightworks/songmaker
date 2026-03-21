@@ -103,7 +103,10 @@ def _pitch_coefficient_of_variation(
     use_parallel = all(len(s) >= min_parallel_samples for s in sections)
 
     if use_parallel:
-        with ProcessPoolExecutor(max_workers=len(sections)) as pool:
+        import os
+
+        max_workers = min(len(sections), os.cpu_count() or 4)
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = [pool.submit(_section_median_pitch, section, sr) for section in sections]
             medians = [m for f in futures if (m := f.result()) is not None]
     else:
