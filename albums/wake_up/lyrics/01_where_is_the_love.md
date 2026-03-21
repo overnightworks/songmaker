@@ -4,27 +4,27 @@ album: wake_up
 track: 1
 genre: Hip-Hop / Pop / Conscious Rap
 prompt: >
-  Black Eyed Peas "Where Is The Love" spiritual successor,
-  dark piano loop driving the whole track, minor key, haunting and sparse,
-  male rapper on verses, raw and urgent, voice cracking with real anger,
-  rapid-fire delivery like early Eminem, every word hits like a fist,
-  verses build tension with just piano and minimal drums,
-  then chorus EXPLODES — powerful soulful female singer,
-  woman's voice soaring over lush strings and choir,
-  chorus is pure goosebumps, emotional and anthemic,
-  huge dynamic contrast: dark angry verses vs luminous hopeful chorus,
-  strings swell on every chorus like a wave of emotion,
-  final chorus adds gospel choir layered behind the female lead,
-  production builds from minimal to massive across the song
-bpm: 95
+  dark emotional hip-hop, haunting piano loop in A minor,
+  heavy 808 drums with punchy kick and clap snare,
+  male rapper with attitude and pain, switches between whisper and shout,
+  flow changes speed constantly, sometimes slow and deliberate then rapid fire,
+  strings build tension underneath the verses,
+  chorus explodes with powerful soulful female singer,
+  woman's voice soaring and full of pain like she's about to cry,
+  chorus has lush orchestral strings and choir behind the vocals,
+  massive dynamic contrast between dark verses and emotional chorus,
+  bridge is quiet and broken, just piano and voice,
+  final chorus is the biggest with full gospel choir,
+  this song should make you feel something real
+bpm: 94
 duration: 240
 key: Am
 time_signature: 4/4
 language: en
-inference_steps: 50
-guidance_scale: 2.5
+inference_steps: 60
+guidance_scale: 3.5
 shift: 3.0
-think_mode: false
+think_mode: true
 lm_temperature: 1.0
 infer_method: ode
 status: approved
@@ -75,8 +75,12 @@ Where is the love, where is the love
 [verse]
 Three AM, a billion people scrolling, wide awake,
 Everybody posting, nobody is doing great,
+We used to talk for hours now we barely talk at all,
+Sitting right next to each other staring at the wall,
 Got a thousand followers but nobody calls to check,
-AI writes the article, AI sings the track
+AI writes the article, AI sings the track,
+We let machines write words we're too ashamed to say direct,
+If a robot has to love for us we're never coming back
 
 [chorus]
 Where is the love, where did it go,

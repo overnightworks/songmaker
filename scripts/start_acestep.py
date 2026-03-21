@@ -45,8 +45,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--config",
-        default="acestep-v15-turbo",
-        help="DiT model config (acestep-v15-turbo / acestep-v15-sft / acestep-v15-base)",
+        default="acestep-v15-sft",
+        help="DiT model config (acestep-v15-sft / acestep-v15-turbo / acestep-v15-base)",
     )
     args = parser.parse_args()
 
