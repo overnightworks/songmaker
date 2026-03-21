@@ -25,13 +25,8 @@ from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.parser import AlbumMeta, SongMeta, load_album_meta, parse_song_md
 from songmaker_cli.player import generate_player
+from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.snapshot import append_scores_section, write_snapshot
-
-if __name__ != "__main__":
-    from typing import TYPE_CHECKING
-
-    if TYPE_CHECKING:
-        from songmaker_cli.scoring import SongScores
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +68,7 @@ class GenerationOptions:
     best: int | None = None
     player: bool = False
 
-    def ace_overrides(self) -> dict:
+    def ace_overrides(self) -> dict[str, object]:
         """Return non-None ACE-Step parameter overrides."""
         return {
             k: v for k, v in {

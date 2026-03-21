@@ -188,7 +188,7 @@ def test_log_result_banner(caplog: pytest.LogCaptureFixture) -> None:
     assert "42" in caplog.text
 
 
-def testopen_player(tmp_path: Path) -> None:
+def test_open_player(tmp_path: Path) -> None:
     player_html = tmp_path / "player.html"
     player_html.write_text("<html></html>")
     with patch("songmaker_cli.generate.webbrowser.open") as mock_open:

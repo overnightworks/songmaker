@@ -173,3 +173,53 @@ def test_read_scores_with_colons_in_values(tmp_path: Path) -> None:
     assert scores is not None
     assert scores["dynamics"] == 48.9
     assert scores["silence_ok"] is True
+
+
+def test_save_rating_creates_scores_section(tmp_path: Path) -> None:
+    from songmaker_cli.snapshot import read_scores, save_rating
+
+    md = tmp_path / "snapshot.md"
+    md.write_text("---\ntitle: Test\n---\n\n## Lyrics\n\nHello\n")
+
+    save_rating(md, 4, "great song")
+
+    scores = read_scores(md)
+    assert scores is not None
+    assert scores["user_rating"] == 4
+    assert scores["user_notes"] == "great song"
+
+
+def test_save_rating_preserves_existing_scores(tmp_path: Path) -> None:
+    from songmaker_cli.snapshot import read_scores, save_rating
+
+    md = tmp_path / "snapshot.md"
+    md.write_text(
+        "---\ntitle: Test\n---\n\n## Scores\n\n- dynamics: 48.9\n- silence_ok: True\n"
+    )
+
+    save_rating(md, 5)
+
+    scores = read_scores(md)
+    assert scores is not None
+    assert scores["dynamics"] == 48.9
+    assert scores["silence_ok"] is True
+    assert scores["user_rating"] == 5
+    assert "user_notes" not in scores
+
+
+def test_save_rating_overwrites_existing_rating(tmp_path: Path) -> None:
+    from songmaker_cli.snapshot import read_scores, save_rating
+
+    md = tmp_path / "snapshot.md"
+    md.write_text(
+        "---\ntitle: Test\n---\n\n## Scores\n\n"
+        "- dynamics: 48.9\n- user_rating: 2\n- user_notes: meh\n"
+    )
+
+    save_rating(md, 5, "actually great")
+
+    scores = read_scores(md)
+    assert scores is not None
+    assert scores["user_rating"] == 5
+    assert scores["user_notes"] == "actually great"
+    assert scores["dynamics"] == 48.9
