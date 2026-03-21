@@ -88,7 +88,8 @@ Chorus here...
 - `src/acestep_engine/` — ACE-Step HTTP client (with retry), config dataclass, response models
 - `src/audio_engine/` — Mastering chain, WAV/MP3 I/O, LUFS measurement
 - `src/songmaker_cli/` — CLI entrypoint and subcommands
-  - `main.py` — CLI commands (`generate`, `check`, `player`)
+  - `main.py` — Thin CLI adapter (cyclopts commands → generate/score/check/player)
+  - `generate.py` — Generation orchestration (generate, decode, master, score, rank)
   - `parser.py` — Markdown + YAML parsing into pydantic models
   - `config.py` — Output path resolution, ACE-Step config building
   - `check.py` — Verbose lyrics check CLI (thin wrapper over scoring.text_accuracy)
@@ -96,7 +97,7 @@ Chorus here...
   - `manifest.py` — Player manifest data model + building
   - `player.py` — HTML player generation (thin orchestrator)
   - `snapshot.py` — Generation snapshot read/write (frontmatter, scores, generation info)
-  - `scoring/` — Scoring pipeline with decorator-based scorer registry
+  - `scoring/` — Scoring pipeline with ScorerRegistry class + decorator registration
 - `albums/<album>/lyrics/` — Song markdown files
 - `albums/<album>/album.yaml` — Album metadata (title, artist, year)
 - `_output/` — Generated audio (gitignored)
@@ -114,6 +115,11 @@ pip install -e .
 # ffmpeg must be on PATH
 # ACE-Step server: python scripts/start_acestep.py
 ```
+
+## Workflow
+
+- **Commit before reviewing**: After completing a batch of changes, always commit first, then review. This ensures work is safe and reviewable as a clean diff.
+- **Run tests before committing**: `pytest tests/ -q` must pass. Run `ruff check` on changed files.
 
 ## Conventions
 
