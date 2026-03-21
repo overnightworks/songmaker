@@ -75,8 +75,11 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
         self.api_key = api_key
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        # Allow the player HTML itself to load without key (it sends the key in JS)
-        if request.url.path == "/" or request.url.path.startswith("/static"):
+        # Allow public paths: player HTML, audio files, manifest (read-only)
+        if (request.url.path == "/"
+            or request.url.path.startswith("/static")
+            or request.url.path.startswith("/audio/")
+            or (request.url.path == "/manifest.json" and request.method == "GET")):
             return await call_next(request)
 
         key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
