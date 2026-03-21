@@ -48,6 +48,11 @@ def test_song_scores_overall_empty() -> None:
     assert scores.overall == 0.0
 
 
+def test_song_scores_to_dict_empty() -> None:
+    scores = SongScores()
+    assert scores.to_dict() == {}
+
+
 def test_song_scores_overall_averages() -> None:
     scores = SongScores(
         text_accuracy=TextAccuracyScore(
@@ -256,7 +261,7 @@ def test_append_scores_to_snapshot(tmp_path: Path) -> None:
     assert "overall:" in text
 
 
-def test_append_scores_empty_dict(tmp_path: Path) -> None:
+def test_append_scores_empty_is_noop(tmp_path: Path) -> None:
     snapshot = tmp_path / "song_v1.md"
     original = "---\ntitle: Test\n---\n\nLyrics\n"
     snapshot.write_text(original)
@@ -264,9 +269,40 @@ def test_append_scores_empty_dict(tmp_path: Path) -> None:
     scores = SongScores()
     append_scores_section(snapshot, scores)
 
-    # SongScores() still has overall: 0.0 in to_dict, so it should append
     text = snapshot.read_text()
-    assert "## Scores" in text
+    assert "## Scores" not in text
+    assert text == original
+
+
+def test_append_scores_idempotent(tmp_path: Path) -> None:
+    snapshot = tmp_path / "song_v1.md"
+    snapshot.write_text(
+        "---\ntitle: Test\n---\n\n## Lyrics\n\nHello\n\n"
+        "## Generation\n\n- seed: 123\n"
+    )
+
+    scores_v1 = SongScores(
+        silence=SilenceScore(
+            total_silence_seconds=1.0, longest_gap_seconds=0.5, gap_count=2,
+        ),
+    )
+    append_scores_section(snapshot, scores_v1)
+
+    scores_v2 = SongScores(
+        silence=SilenceScore(
+            total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
+        ),
+        bpm_accuracy=BpmAccuracyScore(
+            detected_bpm=120, requested_bpm=120,
+            deviation_percent=0.0, octave_corrected=False,
+        ),
+    )
+    append_scores_section(snapshot, scores_v2)
+
+    text = snapshot.read_text()
+    assert text.count("## Scores") == 1
+    assert "bpm_accuracy:" in text
+    assert "silence: 100.0" in text
 
 
 # ── CLI tests ────────────────────────────────────────────────────────

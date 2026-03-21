@@ -99,19 +99,26 @@ def _build_generation_section(
 
 
 def append_scores_section(snapshot_path: Path, scores: SongScores) -> None:
-    """Append a ## Scores section to an existing snapshot .md file."""
+    """Write a ## Scores section to a snapshot .md file.
+
+    Idempotent — replaces an existing ## Scores section if present.
+    Does nothing if all scorers returned None.
+    """
     score_dict = scores.to_dict()
     if not score_dict:
         return
 
-    lines = ["## Scores", ""]
-    for key, value in score_dict.items():
-        lines.append(f"- {key}: {value}")
+    scores_block = "## Scores\n\n"
+    scores_block += "\n".join(f"- {key}: {value}" for key, value in score_dict.items())
 
-    text = snapshot_path.read_text(encoding="utf-8").rstrip()
-    text += "\n\n" + "\n".join(lines) + "\n"
+    text = snapshot_path.read_text(encoding="utf-8")
+
+    if "## Scores" in text:
+        text = text[:text.index("## Scores")].rstrip()
+
+    text = text.rstrip() + "\n\n" + scores_block + "\n"
     snapshot_path.write_text(text, encoding="utf-8")
-    log.info("Scores appended to %s", snapshot_path.name)
+    log.info("Scores written to %s", snapshot_path.name)
 
 
 def _write_raw(

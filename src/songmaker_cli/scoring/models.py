@@ -116,10 +116,15 @@ class SongScores:
         return sum(scores) / len(scores) if scores else 0.0
 
     def to_dict(self) -> dict[str, float]:
-        """Flat dict of all scores (0-100 scale) for snapshot persistence."""
-        result: dict[str, float] = {"overall": round(self.overall, 1)}
+        """Flat dict of all scores (0-100 scale) for snapshot persistence.
+
+        Returns empty dict if no scorers produced results.
+        """
+        per_scorer: dict[str, float] = {}
         for field in fields(self):
             value = getattr(self, field.name)
             if value is not None:
-                result[field.name] = round(value.summary, 1)
-        return result
+                per_scorer[field.name] = round(value.summary, 1)
+        if not per_scorer:
+            return {}
+        return {"overall": round(self.overall, 1), **per_scorer}
