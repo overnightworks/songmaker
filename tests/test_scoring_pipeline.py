@@ -328,7 +328,7 @@ def test_log_ranking(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 
     from songmaker_cli.config import OutputPaths
-    from songmaker_cli.main import _log_ranking
+    from songmaker_cli.main import _log_ranking_by_dynamics
 
     paths_a = OutputPaths(
         output_dir=Path("/tmp"), base_name="song", version=1, versioned_name="song_v1",
@@ -350,7 +350,7 @@ def test_log_ranking(caplog: pytest.LogCaptureFixture) -> None:
     )
 
     with caplog.at_level(logging.INFO):
-        _log_ranking([(paths_b, scores_b), (paths_a, scores_a)])
+        _log_ranking_by_dynamics([(paths_b, scores_b), (paths_a, scores_a)])
 
     assert "RANKING" in caplog.text
     assert "song_v1" in caplog.text

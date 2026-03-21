@@ -144,7 +144,7 @@ def generate(
             append_scores_section(snapshot_path, scores)
             _log_scores(scores)
             ranked.append((paths, scores))
-        _log_ranking(ranked)
+        _log_ranking_by_dynamics(ranked)
 
     if last_paths:
         player_path = _update_player(last_paths)
@@ -274,8 +274,8 @@ def _log_scores(scores: SongScores) -> None:
     log.info("=" * 60)
 
 
-def _log_ranking(ranked: list[tuple[OutputPaths, SongScores]]) -> None:
-    """Log a ranked table of scored versions, sorted by dynamics."""
+def _log_ranking_by_dynamics(ranked: list[tuple[OutputPaths, SongScores]]) -> None:
+    """Log a ranked table of scored versions, sorted by emotional dynamics."""
 
     def _sort_key(entry: tuple[OutputPaths, SongScores]) -> float:
         _, scores = entry
@@ -292,14 +292,13 @@ def _log_ranking(ranked: list[tuple[OutputPaths, SongScores]]) -> None:
     log.info("  " + "-" * 66)
 
     for i, (paths, scores) in enumerate(sorted_entries):
-        d = scores.to_dict()
-        dynamics = d.get("dynamics", "-")
-        ab_quality = d.get("audiobox_quality", "-")
-        silence_ok = d.get("silence_ok", True)
-        flag = "" if silence_ok else " [gaps]"
+        dynamics = round(scores.emotional_dynamics.overall_expressiveness * 100, 1) if scores.emotional_dynamics else "-"
+        ab_quality = round(scores.audiobox.production_quality, 1) if scores.audiobox else "-"
+        has_gaps = scores.silence.has_problems if scores.silence else False
+        flag = " [gaps]" if has_gaps else ""
         marker = " <-- best" if i == 0 else ""
         log.info("  %-30s %10s %10s %10s%s",
-                 paths.versioned_name, dynamics, ab_quality, silence_ok, flag + marker)
+                 paths.versioned_name, dynamics, ab_quality, not has_gaps, flag + marker)
 
     log.info("=" * 70)
     best_paths = sorted_entries[0][0]

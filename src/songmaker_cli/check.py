@@ -25,13 +25,12 @@ def run_check(
     whisper_model: str = "medium",
 ) -> None:
     """Transcribe with Whisper and compare to intended lyrics."""
+    from songmaker_cli.scoring.pipeline import PipelineConfig
     from songmaker_cli.scoring.text_accuracy import score_text_accuracy
 
     mp3_path = validate_path(path)
     md_path = find_lyrics_source(mp3_path, source, project_root=project_root)
     meta = parse_song_md(md_path)
-
-    from songmaker_cli.scoring.pipeline import PipelineConfig
 
     result = score_text_accuracy(mp3_path, meta=meta, config=PipelineConfig(whisper_model=whisper_model))
 

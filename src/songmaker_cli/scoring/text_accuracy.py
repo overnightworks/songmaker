@@ -15,7 +15,6 @@ log = logging.getLogger(__name__)
 
 _whisper_model_cache: dict[str, object] = {}
 
-DEFAULT_WHISPER_MODEL = "medium"
 
 
 @register("text_accuracy")
@@ -30,8 +29,6 @@ def score_text_accuracy(
     """
     if meta is None or not meta.lyrics:
         raise ValueError("No lyrics metadata — cannot score text accuracy")
-
-    from songmaker_cli.scoring.pipeline import PipelineConfig
 
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
     whisper_size = effective_config.whisper_model
