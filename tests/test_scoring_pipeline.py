@@ -324,7 +324,7 @@ def test_log_scores_warns_on_silence_problems(caplog: pytest.LogCaptureFixture) 
     with caplog.at_level(logging.WARNING):
         _log_scores(scores)
 
-    assert "gaps detected" in caplog.text
+    assert "Silence gaps detected" in caplog.text
 
 
 # ── Text accuracy scorer tests ───────────────────────────────────────

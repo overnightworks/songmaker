@@ -15,7 +15,16 @@ log = logging.getLogger(__name__)
 
 _whisper_model_cache: dict[str, object] = {}
 
-WHISPER_MODEL_SIZE = "small"
+DEFAULT_WHISPER_MODEL = "medium"
+
+# Module-level override, set via configure_whisper_model() before scoring
+_whisper_model_size: str = DEFAULT_WHISPER_MODEL
+
+
+def configure_whisper_model(model_size: str) -> None:
+    """Set the Whisper model size for text accuracy scoring."""
+    global _whisper_model_size
+    _whisper_model_size = model_size
 
 
 @register("text_accuracy")
@@ -31,7 +40,7 @@ def score_text_accuracy(
         raise ValueError("No lyrics metadata — cannot score text accuracy")
 
     language = meta.generation_params.get("language", "en")
-    model = _get_whisper_model(WHISPER_MODEL_SIZE)
+    model = _get_whisper_model(_whisper_model_size)
     transcribed, segments = _transcribe(mp3_path, language, model)
 
     clean_intended = clean_lyrics(meta.lyrics)

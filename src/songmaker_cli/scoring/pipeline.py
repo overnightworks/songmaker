@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
-import librosa
-import numpy as np
+if TYPE_CHECKING:
+    import numpy as np
 
-from songmaker_cli.constants import SCORING_SAMPLE_RATE
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SongScores
 
@@ -57,6 +56,10 @@ def available_scorers() -> list[str]:
 
 def load_audio(mp3_path: Path) -> AudioData:
     """Load and resample audio once for all scorers."""
+    import librosa
+
+    from songmaker_cli.constants import SCORING_SAMPLE_RATE
+
     audio, sr = librosa.load(mp3_path, sr=SCORING_SAMPLE_RATE, mono=True)
     return AudioData(audio=audio, sr=sr)
 

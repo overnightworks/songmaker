@@ -104,7 +104,7 @@ def _pitch_coefficient_of_variation(
     if use_parallel:
         with ProcessPoolExecutor() as pool:
             futures = [pool.submit(_section_median_pitch, section, sr) for section in sections]
-            medians = [f.result() for f in futures if f.result() is not None]
+            medians = [m for f in futures if (m := f.result()) is not None]
     else:
         medians = [m for s in sections if (m := _section_median_pitch(s, sr)) is not None]
 

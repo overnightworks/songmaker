@@ -173,9 +173,15 @@ def score(
     scorers: Annotated[
         Optional[str], Parameter(help="Comma-separated scorer names, or 'all'")
     ] = None,
+    whisper_model: Annotated[
+        str, Parameter(help="Whisper model size (base/small/medium/large)")
+    ] = "medium",
 ) -> None:
     """Score a generated song on quality dimensions."""
+    from songmaker_cli.scoring.text_accuracy import configure_whisper_model
+
     mp3_path = validate_path(path)
+    configure_whisper_model(whisper_model)
 
     meta = None
     if source:
@@ -200,7 +206,7 @@ def check(
     ] = None,
     whisper_model: Annotated[
         str, Parameter(help="Whisper model size (base/small/medium/large)")
-    ] = "small",
+    ] = "medium",
 ) -> None:
     """Check lyrics accuracy via Whisper transcription."""
     from songmaker_cli.check import run_check
@@ -244,7 +250,7 @@ def _log_scores(scores: SongScores) -> None:
     for name, value in scores.to_dict().items():
         log.info("    %s: %s", name, value)
     if scores.silence and scores.silence.has_problems:
-        log.warning("  ⚠ Silence gaps detected (%d gaps, longest %.1fs)",
+        log.warning("  Silence gaps detected (%d gaps, longest %.1fs)",
                      scores.silence.gap_count, scores.silence.longest_gap_seconds)
     log.info("=" * 60)
 

@@ -301,7 +301,7 @@ def test_check_command(tmp_path: Path) -> None:
         check_cmd(path="/some/file.mp3", source="/some/lyrics.md")
 
     mock_run.assert_called_once_with(
-        "/some/file.mp3", "/some/lyrics.md", project_root=None, whisper_model="small",
+        "/some/file.mp3", "/some/lyrics.md", project_root=None, whisper_model="medium",
     )
 
 

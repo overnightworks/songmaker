@@ -94,6 +94,8 @@ class SongScores:
 
         if self.audiobox:
             result["audiobox_enjoyment"] = self.audiobox.content_enjoyment
+            result["audiobox_understanding"] = self.audiobox.content_understanding
+            result["audiobox_complexity"] = self.audiobox.production_complexity
             result["audiobox_quality"] = self.audiobox.production_quality
 
         if self.bpm_accuracy:
