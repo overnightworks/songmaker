@@ -12,10 +12,8 @@ from cyclopts import App, Parameter
 from songmaker_cli.config import find_project_root, validate_path
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import SongmakerError, ValidationError
-from songmaker_cli.generate import log_scores, open_player, run_generate
-from songmaker_cli.parser import parse_song_md
+from songmaker_cli.generate import open_player, run_generate
 from songmaker_cli.player import generate_player
-from songmaker_cli.scoring import run_scoring_pipeline
 
 log = logging.getLogger(__name__)
 
@@ -133,90 +131,32 @@ def score(
     config = PipelineConfig(whisper_model=whisper_model, device=device)
 
     if all:
-        _score_all(scorer_list, config, force)
+        from songmaker_cli.batch import score_all
+
+        score_all(scorer_list, config, force)
         return
 
     if path is None:
         raise ValidationError("Provide an MP3 path or use --all")
 
-    mp3_path = validate_path(path)
-    meta = None
-    if source:
-        meta = parse_song_md(validate_path(source))
+    from songmaker_cli.batch import score_single
 
-    scores = run_scoring_pipeline(mp3_path, meta=meta, scorers=scorer_list, config=config)
-    log_scores(scores)
-
-
-def _score_all(
-    scorer_list: list[str] | None,
-    config: object,
-    force: bool,
-) -> None:
-    """Score all MP3s in _output/, skipping already-scored unless --force."""
-    from songmaker_cli.check import find_lyrics_source
-    from songmaker_cli.parser import parse_song_md
-    from songmaker_cli.snapshot import append_scores_section, read_scores
-
-    project_root = find_project_root(Path.cwd()) or Path.cwd()
-    output_dir = project_root / OUTPUT_ROOT
-
-    if not output_dir.exists():
-        raise ValidationError(f"No output directory: {output_dir}")
-
-    mp3s = sorted(output_dir.rglob("*.mp3"))
-    if not mp3s:
-        log.info("No MP3s found in %s", output_dir)
-        return
-
-    log.info("Scoring %d MP3s...", len(mp3s))
-    scored = 0
-    skipped = 0
-
-    for mp3 in mp3s:
-        snapshot_path = mp3.with_suffix(".md")
-
-        if not force and snapshot_path.exists():
-            existing = read_scores(snapshot_path)
-            if existing and "dynamics" in existing:
-                skipped += 1
-                continue
-
-        meta = None
-        try:
-            md_path = find_lyrics_source(mp3, None, project_root=str(project_root))
-            meta = parse_song_md(md_path)
-        except Exception:
-            pass
-
-        log.info("[%d/%d] %s", scored + skipped + 1, len(mp3s), mp3.name)
-        scores = run_scoring_pipeline(mp3, meta=meta, scorers=scorer_list, config=config)
-
-        if snapshot_path.exists():
-            append_scores_section(snapshot_path, scores)
-
-        log_scores(scores)
-        scored += 1
-
-    log.info("Done: %d scored, %d skipped (already scored)", scored, skipped)
-
-    from songmaker_cli.player import generate_player
-
-    generate_player(output_dir, project_root)
-    log.info("Player updated")
+    score_single(path, source, scorer_list, config)
 
 
 @app.command
 def archive(
     path: Annotated[Optional[str], Parameter(help="MP3 file to archive")] = None,
     below: Annotated[
-        Optional[float], Parameter(help="Archive all versions with dynamics below this value")
+        Optional[float],
+        Parameter(help="Archive all versions with dynamics below this value"),
     ] = None,
 ) -> None:
     """Move bad versions to _archive/ instead of deleting.
 
     Preserves MP3 + snapshot .md for future preference model training.
     """
+    from songmaker_cli.archive import archive_below_threshold, archive_file
     from songmaker_cli.snapshot import read_scores
 
     project_root = find_project_root(Path.cwd()) or Path.cwd()
@@ -225,52 +165,14 @@ def archive(
 
     if path:
         mp3_path = validate_path(path)
-        _archive_file(mp3_path, output_dir, archive_dir)
+        archive_file(mp3_path, archive_dir)
     elif below is not None:
-        _archive_below_threshold(below, output_dir, archive_dir, read_scores)
+        archive_below_threshold(below, output_dir, archive_dir, read_scores)
     else:
         raise ValidationError("Provide an MP3 path or use --below <threshold>")
 
-    from songmaker_cli.player import generate_player
-
     generate_player(output_dir, project_root)
     log.info("Player updated")
-
-
-def _archive_file(mp3_path: Path, output_dir: Path, archive_dir: Path) -> None:
-    """Move a single MP3 + snapshot to the archive."""
-    album = mp3_path.parent.name
-    dest_dir = archive_dir / album
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    for suffix in [".mp3", ".md"]:
-        src = mp3_path.with_suffix(suffix)
-        if src.exists():
-            dest = dest_dir / src.name
-            src.rename(dest)
-            log.info("Archived: %s → %s", src.name, dest)
-
-
-def _archive_below_threshold(
-    threshold: float, output_dir: Path, archive_dir: Path,
-    read_scores_fn: object,
-) -> None:
-    """Archive all versions with dynamics below a threshold."""
-    mp3s = sorted(output_dir.rglob("*.mp3"))
-    archived = 0
-    for mp3 in mp3s:
-        snapshot = mp3.with_suffix(".md")
-        if not snapshot.exists():
-            continue
-        scores = read_scores_fn(snapshot)  # type: ignore[operator]
-        if scores is None:
-            continue
-        dynamics = scores.get("dynamics")
-        if dynamics is not None and float(dynamics) < threshold:
-            _archive_file(mp3, output_dir, archive_dir)
-            archived += 1
-
-    log.info("Archived %d versions with dynamics < %.0f", archived, threshold)
 
 
 @app.command

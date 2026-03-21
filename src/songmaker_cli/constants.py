@@ -24,6 +24,11 @@ DYNAMICS_PITCH_CV_CEILING = 0.5
 DYNAMICS_RMS_CONTRAST_CEILING = 3.0
 DYNAMICS_ONSET_CV_CEILING = 0.5
 
+# Spectral quality scorer
+SPECTRAL_WINDOW_SECONDS = 5.0
+SPECTRAL_ARTIFACT_MULTIPLIER = 2.0
+SPECTRAL_ABSOLUTE_THRESHOLD = 0.1
+
 
 def default_year() -> str:
     return str(datetime.date.today().year)

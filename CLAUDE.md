@@ -93,14 +93,17 @@ Chorus here...
 - `src/acestep_engine/` — ACE-Step HTTP client (with retry), config dataclass, response models
 - `src/audio_engine/` — Mastering chain, WAV/MP3 I/O, LUFS measurement
 - `src/songmaker_cli/` — CLI entrypoint and subcommands
-  - `main.py` — Thin CLI adapter (cyclopts commands → generate/score/check/player)
+  - `main.py` — Thin CLI adapter (cyclopts commands → engine modules, no business logic)
   - `generate.py` — Generation orchestration (generate, decode, master, score, rank)
+  - `batch.py` — Batch scoring (score --all, score single MP3)
+  - `archive.py` — Archive bad versions (move to _archive/, threshold filtering)
   - `parser.py` — Markdown + YAML parsing into pydantic models
   - `config.py` — Output path resolution, ACE-Step config building
   - `check.py` — Verbose lyrics check CLI (thin wrapper over scoring.text_accuracy)
   - `scanner.py` — Filesystem scanning, version deduplication
   - `manifest.py` — Player manifest data model + building
   - `player.py` — HTML player generation (thin orchestrator)
+  - `server.py` — FastAPI backend for player UI (ratings, scoring, generation)
   - `snapshot.py` — Generation snapshot read/write (frontmatter, scores, generation info)
   - `scoring/` — Scoring pipeline with ScorerRegistry class + decorator registration
 - `albums/<album>/lyrics/` — Song markdown files

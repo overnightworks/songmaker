@@ -25,8 +25,13 @@ from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.parser import AlbumMeta, SongMeta, load_album_meta, parse_song_md
 from songmaker_cli.player import generate_player
-from songmaker_cli.scoring import SongScores, run_scoring_pipeline
 from songmaker_cli.snapshot import append_scores_section, write_snapshot
+
+if __name__ != "__main__":
+    from typing import TYPE_CHECKING
+
+    if TYPE_CHECKING:
+        from songmaker_cli.scoring import SongScores
 
 log = logging.getLogger(__name__)
 
@@ -154,6 +159,8 @@ def _generate_versions(
         _log_result_banner(paths, audio, ace_result.seed, elapsed)
 
         if score_each:
+            from songmaker_cli.scoring import run_scoring_pipeline
+
             scores = run_scoring_pipeline(paths.mp3, meta=meta)
             append_scores_section(snapshot_path, scores)
             log_scores(scores)
@@ -174,6 +181,8 @@ def _score_and_rank(
     """Score all generated versions and log a ranked table."""
     log.info("")
     log.info("Scoring %d versions...", len(generated))
+    from songmaker_cli.scoring import SongScores, run_scoring_pipeline
+
     ranked: list[tuple[OutputPaths, SongScores]] = []
     for paths, snapshot_path in generated:
         scores = run_scoring_pipeline(paths.mp3, meta=meta)

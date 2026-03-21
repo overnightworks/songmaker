@@ -187,13 +187,16 @@ def _run_generation(
 
 def _load_meta_for_mp3(mp3_path: Path, project_root: Path) -> Any:
     """Try to find and parse the lyrics source for an MP3."""
+    import yaml
+
     from songmaker_cli.check import find_lyrics_source
+    from songmaker_cli.errors import ValidationError
     from songmaker_cli.parser import parse_song_md
 
     try:
         md_path = find_lyrics_source(mp3_path, None, project_root=str(project_root))
         return parse_song_md(md_path)
-    except Exception:
+    except (ValidationError, FileNotFoundError, yaml.YAMLError):
         return None
 
 

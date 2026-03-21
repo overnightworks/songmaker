@@ -23,14 +23,14 @@ from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 log = logging.getLogger(__name__)
 
 _predictor_cache: dict[str, object] = {}
-_cpu_env_lock = threading.Lock()
+_predictor_lock = threading.Lock()
 
 
 @contextmanager
 def _force_cpu_env() -> Iterator[None]:
     """Temporarily hide CUDA devices to force CPU model loading.
 
-    Must be used under _cpu_env_lock for thread safety.
+    Must be used under _predictor_lock for thread safety.
     """
     saved = os.environ.get("CUDA_VISIBLE_DEVICES")
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -81,12 +81,13 @@ def _get_predictor(
     if cache is None:
         cache = _predictor_cache
     cache_key = device
-    if cache_key not in cache:
-        if device == "cpu":
-            log.info("Loading AudioBox Aesthetics model on CPU...")
-            with _cpu_env_lock, _force_cpu_env():
+    with _predictor_lock:
+        if cache_key not in cache:
+            if device == "cpu":
+                log.info("Loading AudioBox Aesthetics model on CPU...")
+                with _force_cpu_env():
+                    cache[cache_key] = AesPredictor(checkpoint_pth="default")
+            else:
+                log.info("Loading AudioBox Aesthetics model on %s...", device)
                 cache[cache_key] = AesPredictor(checkpoint_pth="default")
-        else:
-            log.info("Loading AudioBox Aesthetics model on %s...", device)
-            cache[cache_key] = AesPredictor(checkpoint_pth="default")
     return cache[cache_key]

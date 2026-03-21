@@ -425,9 +425,7 @@ def test_text_accuracy_with_mock_whisper(tmp_path: Path) -> None:
 
 
 def test_audiobox_with_mock_predictor(tmp_path: Path) -> None:
-    from unittest.mock import MagicMock
-
-    from songmaker_cli.scoring.audiobox_aesthetics import _predictor_cache, score_audiobox
+    from unittest.mock import MagicMock, patch
 
     mp3 = tmp_path / "test.mp3"
     mp3.write_bytes(b"fake")
@@ -437,15 +435,15 @@ def test_audiobox_with_mock_predictor(tmp_path: Path) -> None:
         {"CE": 7.5, "CU": 8.0, "PC": 6.0, "PQ": 8.5},
     ]
 
-    saved = dict(_predictor_cache)
-    _predictor_cache["default"] = mock_predictor
-    try:
+    with patch(
+        "songmaker_cli.scoring.audiobox_aesthetics._get_predictor",
+        return_value=mock_predictor,
+    ):
+        from songmaker_cli.scoring.audiobox_aesthetics import score_audiobox
+
         result = score_audiobox(mp3)
         assert result.content_enjoyment == 7.5
         assert result.production_quality == 8.5
-    finally:
-        _predictor_cache.clear()
-        _predictor_cache.update(saved)
 
 
 # ── Manifest read_scores tests ───────────────────────────────────────

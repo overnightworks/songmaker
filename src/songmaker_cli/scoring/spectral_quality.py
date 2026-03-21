@@ -14,14 +14,16 @@ from pathlib import Path
 import librosa
 import numpy as np
 
+from songmaker_cli.constants import (
+    SPECTRAL_ABSOLUTE_THRESHOLD,
+    SPECTRAL_ARTIFACT_MULTIPLIER,
+    SPECTRAL_WINDOW_SECONDS,
+)
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SpectralQualityScore
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
-
-WINDOW_SECONDS = 5.0
-ARTIFACT_THRESHOLD_MULTIPLIER = 2.0
 
 
 @register("spectral_quality")
@@ -36,7 +38,7 @@ def score_spectral_quality(
         audio_data = load_audio(mp3_path)
     audio, sr = audio_data.audio, audio_data.sr
 
-    window_samples = int(WINDOW_SECONDS * sr)
+    window_samples = int(SPECTRAL_WINDOW_SECONDS * sr)
     n_windows = max(1, len(audio) // window_samples)
 
     flatness_values = []
@@ -51,19 +53,19 @@ def score_spectral_quality(
 
     if not flatness_values:
         return SpectralQualityScore(
-            mean_flatness=0.0, max_flatness=0.0, artifact_count=0, artifact_windows=[],
+            mean_flatness=0.0, max_flatness=0.0, artifact_count=0, artifact_windows=(),
         )
 
     flat_values = [f for _, f in flatness_values]
     median_flat = float(np.median(flat_values))
-    threshold = median_flat * ARTIFACT_THRESHOLD_MULTIPLIER
+    relative_threshold = median_flat * SPECTRAL_ARTIFACT_MULTIPLIER
+    threshold = max(relative_threshold, SPECTRAL_ABSOLUTE_THRESHOLD)
 
-    absolute_threshold = 0.1
-    artifacts = [
+    artifacts = tuple(
         (round(t, 1), round(f, 4))
         for t, f in flatness_values
-        if (f > threshold or f > absolute_threshold) and f > 0.01
-    ]
+        if f > threshold
+    )
 
     mean_flat = float(np.mean(flat_values))
     max_flat = float(np.max(flat_values))
@@ -77,5 +79,5 @@ def score_spectral_quality(
         mean_flatness=round(mean_flat, 4),
         max_flatness=round(max_flat, 4),
         artifact_count=len(artifacts),
-        artifact_windows=tuple(artifacts),
+        artifact_windows=artifacts,
     )
