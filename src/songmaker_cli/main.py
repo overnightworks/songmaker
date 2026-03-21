@@ -240,10 +240,12 @@ def load_album_meta_for_song(
 
 def _log_scores(scores: SongScores) -> None:
     log.info("=" * 60)
-    log.info("  Scores (overall: %.0f)", scores.overall)
+    log.info("  Scores")
     for name, value in scores.to_dict().items():
-        if name != "overall":
-            log.info("    %s: %.1f", name, value)
+        log.info("    %s: %s", name, value)
+    if scores.silence and scores.silence.has_problems:
+        log.warning("  ⚠ Silence gaps detected (%d gaps, longest %.1fs)",
+                     scores.silence.gap_count, scores.silence.longest_gap_seconds)
     log.info("=" * 60)
 
 

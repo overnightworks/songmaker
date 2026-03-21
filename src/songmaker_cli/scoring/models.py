@@ -4,13 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields
 
-from songmaker_cli.constants import (
-    BPM_DEVIATION_PENALTY,
-    SILENCE_GAP_COUNT_MAX_PENALTY,
-    SILENCE_GAP_COUNT_PENALTY,
-    SILENCE_LONGEST_GAP_MAX_PENALTY,
-    SILENCE_LONGEST_GAP_PENALTY,
-)
+from songmaker_cli.constants import SILENCE_MIN_GAP_SECONDS
 
 
 @dataclass(frozen=True)
@@ -20,10 +14,6 @@ class TextAccuracyScore:
     similarity_ratio: float
     intended_lines: int
     transcribed_lines: int
-
-    @property
-    def summary(self) -> float:
-        return self.similarity_ratio * 100
 
 
 @dataclass(frozen=True)
@@ -35,10 +25,6 @@ class EmotionalDynamicsScore:
     onset_rate_cv: float
     overall_expressiveness: float
 
-    @property
-    def summary(self) -> float:
-        return min(self.overall_expressiveness * 100, 100.0)
-
 
 @dataclass(frozen=True)
 class AudioBoxScore:
@@ -49,55 +35,42 @@ class AudioBoxScore:
     production_complexity: float
     production_quality: float
 
-    @property
-    def summary(self) -> float:
-        mean = (
-            self.content_enjoyment
-            + self.content_understanding
-            + self.production_complexity
-            + self.production_quality
-        ) / 4
-        return mean * 10
-
 
 @dataclass(frozen=True)
 class BpmAccuracyScore:
-    """Detected vs requested BPM."""
+    """Detected vs requested BPM. Informational — not a quality indicator."""
 
     detected_bpm: float
     requested_bpm: int
     deviation_percent: float
     octave_corrected: bool
 
-    @property
-    def summary(self) -> float:
-        return max(0.0, 100.0 - self.deviation_percent * BPM_DEVIATION_PENALTY)
-
 
 @dataclass(frozen=True)
 class SilenceScore:
-    """Problematic silence gaps in the audio."""
+    """Silence gap detection. Used as a pass/fail flag, not a quality score."""
 
     total_silence_seconds: float
     longest_gap_seconds: float
     gap_count: int
 
     @property
-    def summary(self) -> float:
-        penalty = min(
-            self.longest_gap_seconds * SILENCE_LONGEST_GAP_PENALTY,
-            SILENCE_LONGEST_GAP_MAX_PENALTY,
-        )
-        penalty += min(
-            self.gap_count * SILENCE_GAP_COUNT_PENALTY,
-            SILENCE_GAP_COUNT_MAX_PENALTY,
-        )
-        return max(0.0, 100.0 - penalty)
+    def has_problems(self) -> bool:
+        """True if any gap exceeds the minimum threshold."""
+        return self.gap_count > 0
 
 
 @dataclass(frozen=True)
 class SongScores:
-    """Aggregated scores from all scorers."""
+    """Aggregated results from all scorers.
+
+    No overall score — individual metrics serve different purposes:
+    - silence: pass/fail flag (problematic gaps?)
+    - bpm_accuracy: informational (what BPM was detected?)
+    - emotional_dynamics: relative comparison (sort versions, listen to top N)
+    - text_accuracy: quality signal (did the model sing the right words?)
+    - audiobox: quality signal (production quality from Meta's model)
+    """
 
     text_accuracy: TextAccuracyScore | None = None
     emotional_dynamics: EmotionalDynamicsScore | None = None
@@ -105,26 +78,32 @@ class SongScores:
     bpm_accuracy: BpmAccuracyScore | None = None
     silence: SilenceScore | None = None
 
-    @property
-    def overall(self) -> float:
-        """Unweighted average of available scorer summaries (0-100)."""
-        scores = []
-        for field in fields(self):
-            value = getattr(self, field.name)
-            if value is not None:
-                scores.append(value.summary)
-        return sum(scores) / len(scores) if scores else 0.0
-
-    def to_dict(self) -> dict[str, float]:
-        """Flat dict of all scores (0-100 scale) for snapshot persistence.
+    def to_dict(self) -> dict[str, object]:
+        """Structured dict for snapshot persistence.
 
         Returns empty dict if no scorers produced results.
         """
-        per_scorer: dict[str, float] = {}
-        for field in fields(self):
-            value = getattr(self, field.name)
-            if value is not None:
-                per_scorer[field.name] = round(value.summary, 1)
-        if not per_scorer:
-            return {}
-        return {"overall": round(self.overall, 1), **per_scorer}
+        result: dict[str, object] = {}
+
+        if self.emotional_dynamics:
+            result["dynamics"] = round(min(self.emotional_dynamics.overall_expressiveness * 100, 100.0), 1)
+            result["dynamics_pitch_cv"] = self.emotional_dynamics.pitch_cv
+            result["dynamics_rms_contrast"] = self.emotional_dynamics.rms_contrast
+
+        if self.text_accuracy:
+            result["text_accuracy"] = round(self.text_accuracy.similarity_ratio * 100, 1)
+
+        if self.audiobox:
+            result["audiobox_enjoyment"] = self.audiobox.content_enjoyment
+            result["audiobox_quality"] = self.audiobox.production_quality
+
+        if self.bpm_accuracy:
+            result["bpm_detected"] = self.bpm_accuracy.detected_bpm
+            result["bpm_deviation"] = self.bpm_accuracy.deviation_percent
+
+        if self.silence:
+            result["silence_gaps"] = self.silence.gap_count
+            result["silence_longest"] = self.silence.longest_gap_seconds
+            result["silence_ok"] = not self.silence.has_problems
+
+        return result

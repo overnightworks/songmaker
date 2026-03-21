@@ -107,11 +107,17 @@ class TestSilenceDetection:
         assert len(gaps) == 1
         assert gaps[0][1] == 1.0
 
-    def test_summary_score_clean(self) -> None:
+    def test_has_problems_clean(self) -> None:
         from songmaker_cli.scoring.models import SilenceScore
 
         score = SilenceScore(total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0)
-        assert score.summary == 100.0
+        assert score.has_problems is False
+
+    def test_has_problems_with_gaps(self) -> None:
+        from songmaker_cli.scoring.models import SilenceScore
+
+        score = SilenceScore(total_silence_seconds=4.0, longest_gap_seconds=4.0, gap_count=1)
+        assert score.has_problems is True
 
 
 # ── BPM accuracy ─────────────────────────────────────────────────────
