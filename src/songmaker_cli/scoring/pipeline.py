@@ -3,16 +3,29 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import fields
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Callable
 
+import librosa
+import numpy as np
+
+from songmaker_cli.constants import SCORING_SAMPLE_RATE
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SongScores
 
 log = logging.getLogger(__name__)
 
-ScorerFunc = Callable[[Path, SongMeta | None], object]
+
+@dataclass(frozen=True)
+class AudioData:
+    """Pre-loaded audio shared across scorers to avoid redundant decoding."""
+
+    audio: np.ndarray
+    sr: int
+
+
+ScorerFunc = Callable[[Path, SongMeta | None, AudioData | None], object]
 
 _VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
 _SCORERS: dict[str, ScorerFunc] = {}
@@ -41,6 +54,12 @@ def available_scorers() -> list[str]:
     return list(_SCORERS.keys())
 
 
+def load_audio(mp3_path: Path) -> AudioData:
+    """Load and resample audio once for all scorers."""
+    audio, sr = librosa.load(mp3_path, sr=SCORING_SAMPLE_RATE, mono=True)
+    return AudioData(audio=audio, sr=sr)
+
+
 def run_scoring_pipeline(
     mp3_path: Path,
     meta: SongMeta | None = None,
@@ -48,10 +67,13 @@ def run_scoring_pipeline(
 ) -> SongScores:
     """Run all (or selected) scorers on an MP3 and return aggregated scores.
 
+    Audio is loaded once and shared across all scorers.
     Each scorer runs independently — one failure does not block others.
     """
     if scorers is None:
         scorers = list(_SCORERS.keys())
+
+    audio_data = load_audio(mp3_path)
 
     results: dict[str, object] = {}
     for name in scorers:
@@ -60,7 +82,7 @@ def run_scoring_pipeline(
             continue
         try:
             log.info("Running scorer: %s", name)
-            results[name] = _SCORERS[name](mp3_path=mp3_path, meta=meta)
+            results[name] = _SCORERS[name](mp3_path, meta, audio_data)
         except Exception:
             log.exception("Scorer '%s' failed", name)
 

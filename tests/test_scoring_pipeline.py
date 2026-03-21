@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Generator
+from unittest.mock import patch
 
+import numpy as np
 import pytest
 
 from songmaker_cli.scoring.models import (
@@ -16,11 +18,14 @@ from songmaker_cli.scoring.models import (
     TextAccuracyScore,
 )
 from songmaker_cli.scoring.pipeline import (
+    AudioData,
     _SCORERS,
     register,
     run_scoring_pipeline,
 )
 from songmaker_cli.snapshot import append_scores_section
+
+_FAKE_AUDIO = AudioData(audio=np.zeros(22050, dtype=np.float32), sr=22050)
 
 
 @pytest.fixture()
@@ -159,7 +164,7 @@ def test_to_dict_uses_field_names() -> None:
 
 def test_register_valid_name(clean_registry: dict) -> None:
     @register("silence")
-    def my_scorer(mp3_path: Path, meta: object = None) -> SilenceScore:
+    def my_scorer(mp3_path: Path, meta: object = None, audio_data: object = None) -> SilenceScore:
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
     assert "silence" in clean_registry
@@ -168,16 +173,19 @@ def test_register_valid_name(clean_registry: dict) -> None:
 def test_register_invalid_name_raises() -> None:
     with pytest.raises(ValueError, match="does not match any SongScores field"):
         @register("bogus_name")
-        def bad_scorer(mp3_path: Path, meta: object = None) -> None:
+        def bad_scorer(mp3_path: Path, meta: object = None, audio_data: object = None) -> None:
             pass
 
 
 # ── Pipeline runner tests ────────────────────────────────────────────
 
 
-def test_run_pipeline(clean_registry: dict, fake_mp3: Path) -> None:
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_run_pipeline(mock_load: object, clean_registry: dict, fake_mp3: Path) -> None:
     @register("silence")
-    def mock_silence(mp3_path: Path, meta: object = None) -> SilenceScore:
+    def mock_silence(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+    ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.5, longest_gap_seconds=0.3, gap_count=1,
         )
@@ -188,13 +196,20 @@ def test_run_pipeline(clean_registry: dict, fake_mp3: Path) -> None:
     assert scores.text_accuracy is None
 
 
-def test_pipeline_handles_scorer_failure(clean_registry: dict, fake_mp3: Path) -> None:
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_pipeline_handles_scorer_failure(
+    mock_load: object, clean_registry: dict, fake_mp3: Path,
+) -> None:
     @register("text_accuracy")
-    def broken_scorer(mp3_path: Path, meta: object = None) -> None:
+    def broken_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+    ) -> None:
         raise RuntimeError("boom")
 
     @register("silence")
-    def ok_scorer(mp3_path: Path, meta: object = None) -> SilenceScore:
+    def ok_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+    ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
         )
@@ -204,15 +219,22 @@ def test_pipeline_handles_scorer_failure(clean_registry: dict, fake_mp3: Path) -
     assert scores.text_accuracy is None
 
 
-def test_pipeline_filters_by_name(clean_registry: dict, fake_mp3: Path) -> None:
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_pipeline_filters_by_name(
+    mock_load: object, clean_registry: dict, fake_mp3: Path,
+) -> None:
     @register("silence")
-    def scorer_a(mp3_path: Path, meta: object = None) -> SilenceScore:
+    def scorer_a(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+    ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
         )
 
     @register("bpm_accuracy")
-    def scorer_b(mp3_path: Path, meta: object = None) -> BpmAccuracyScore:
+    def scorer_b(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+    ) -> BpmAccuracyScore:
         return BpmAccuracyScore(
             detected_bpm=120, requested_bpm=120,
             deviation_percent=0.0, octave_corrected=False,
@@ -223,8 +245,10 @@ def test_pipeline_filters_by_name(clean_registry: dict, fake_mp3: Path) -> None:
     assert scores.bpm_accuracy is None
 
 
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
 def test_pipeline_warns_on_unknown_scorer(
-    clean_registry: dict, fake_mp3: Path, caplog: pytest.LogCaptureFixture,
+    mock_load: object, clean_registry: dict, fake_mp3: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     import logging
 

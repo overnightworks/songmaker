@@ -23,25 +23,31 @@ import librosa
 import numpy as np
 
 from songmaker_cli.constants import (
+    DYNAMICS_ONSET_CV_CEILING,
     DYNAMICS_ONSET_WEIGHT,
+    DYNAMICS_PITCH_CV_CEILING,
     DYNAMICS_PITCH_WEIGHT,
+    DYNAMICS_RMS_CONTRAST_CEILING,
     DYNAMICS_RMS_WEIGHT,
     SCORING_NUM_SECTIONS,
-    SCORING_SAMPLE_RATE,
 )
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import EmotionalDynamicsScore
-from songmaker_cli.scoring.pipeline import register
+from songmaker_cli.scoring.pipeline import AudioData, register
 
 log = logging.getLogger(__name__)
 
 
 @register("emotional_dynamics")
 def score_emotional_dynamics(
-    mp3_path: Path, meta: SongMeta | None = None,
+    mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
 ) -> EmotionalDynamicsScore:
     """Score vocal expressiveness by analyzing pitch, energy, and rhythm variance."""
-    audio, sr = librosa.load(mp3_path, sr=SCORING_SAMPLE_RATE, mono=True)
+    if audio_data is None:
+        from songmaker_cli.scoring.pipeline import load_audio
+
+        audio_data = load_audio(mp3_path)
+    audio, sr = audio_data.audio, audio_data.sr
     sections = _split_into_sections(audio, SCORING_NUM_SECTIONS)
 
     pitch_cv = _pitch_coefficient_of_variation(sections, sr)
@@ -49,9 +55,9 @@ def score_emotional_dynamics(
     onset_cv = _onset_rate_coefficient_of_variation(sections, sr)
 
     expressiveness = (
-        DYNAMICS_PITCH_WEIGHT * _normalize_cv(pitch_cv, max_cv=1.0)
-        + DYNAMICS_RMS_WEIGHT * _normalize_contrast(rms_contrast, max_contrast=10.0)
-        + DYNAMICS_ONSET_WEIGHT * _normalize_cv(onset_cv, max_cv=1.5)
+        DYNAMICS_PITCH_WEIGHT * _normalize_cv(pitch_cv, max_cv=DYNAMICS_PITCH_CV_CEILING)
+        + DYNAMICS_RMS_WEIGHT * _normalize_contrast(rms_contrast, max_contrast=DYNAMICS_RMS_CONTRAST_CEILING)
+        + DYNAMICS_ONSET_WEIGHT * _normalize_cv(onset_cv, max_cv=DYNAMICS_ONSET_CV_CEILING)
     )
 
     log.info(
@@ -70,9 +76,16 @@ def score_emotional_dynamics(
 def _split_into_sections(
     audio: np.ndarray, num_sections: int,
 ) -> list[np.ndarray]:
-    """Split audio into equal-length sections."""
+    """Split audio into equal-length sections.
+
+    Trailing samples (< one section length) are appended to the last section.
+    """
     section_len = len(audio) // num_sections
-    return [audio[i * section_len: (i + 1) * section_len] for i in range(num_sections)]
+    sections = [audio[i * section_len: (i + 1) * section_len] for i in range(num_sections)]
+    remainder = len(audio) - section_len * num_sections
+    if remainder > 0:
+        sections[-1] = np.concatenate([sections[-1], audio[-remainder:]])
+    return sections
 
 
 def _pitch_coefficient_of_variation(

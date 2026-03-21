@@ -6,24 +6,29 @@ import logging
 from pathlib import Path
 
 import librosa
+import numpy as np
 
-from songmaker_cli.constants import BPM_OCTAVE_ERROR_TOLERANCE, SCORING_SAMPLE_RATE
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import BpmAccuracyScore
-from songmaker_cli.scoring.pipeline import register
+from songmaker_cli.scoring.pipeline import AudioData, register
 
 log = logging.getLogger(__name__)
 
 
 @register("bpm_accuracy")
-def score_bpm(mp3_path: Path, meta: SongMeta | None = None) -> BpmAccuracyScore:
+def score_bpm(
+    mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
+) -> BpmAccuracyScore:
     """Detect BPM and compare to requested value from song metadata."""
     requested_bpm = _extract_requested_bpm(meta)
     if requested_bpm is None or requested_bpm == 0:
         raise ValueError("No BPM in metadata — cannot score BPM accuracy")
 
-    audio, sr = librosa.load(mp3_path, sr=SCORING_SAMPLE_RATE, mono=True)
-    detected_bpm = _detect_bpm(audio, sr)
+    if audio_data is None:
+        from songmaker_cli.scoring.pipeline import load_audio
+
+        audio_data = load_audio(mp3_path)
+    detected_bpm = _detect_bpm(audio_data.audio, audio_data.sr)
 
     best_bpm, octave_corrected = _closest_octave_match(detected_bpm, requested_bpm)
     deviation = abs(best_bpm - requested_bpm) / requested_bpm * 100
@@ -48,7 +53,7 @@ def _extract_requested_bpm(meta: SongMeta | None) -> int | None:
     return meta.generation_params.get("bpm")
 
 
-def _detect_bpm(audio: librosa.core.audio, sr: int) -> float:
+def _detect_bpm(audio: np.ndarray, sr: int) -> float:
     tempo, _ = librosa.beat.beat_track(y=audio, sr=sr)
     if hasattr(tempo, "__len__"):
         return float(tempo[0])
@@ -60,13 +65,12 @@ def _closest_octave_match(
 ) -> tuple[float, bool]:
     """Handle octave errors — librosa often detects half or double BPM.
 
-    Returns (best_matching_bpm, was_octave_corrected).
+    Always returns the candidate closest to the requested BPM.
+    Reports octave_corrected=True if the best match is half or double.
     """
     candidates = [detected, detected * 2, detected / 2]
     deviations = [(abs(c - requested) / requested, c) for c in candidates]
-    best_deviation, best_bpm = min(deviations)
+    _, best_bpm = min(deviations)
 
-    octave_corrected = best_bpm != detected and best_deviation < BPM_OCTAVE_ERROR_TOLERANCE
-    if not octave_corrected:
-        return detected, False
-    return best_bpm, True
+    octave_corrected = best_bpm != detected
+    return best_bpm, octave_corrected

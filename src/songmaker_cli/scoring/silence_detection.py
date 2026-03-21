@@ -7,22 +7,22 @@ from pathlib import Path
 import librosa
 import numpy as np
 
-from songmaker_cli.constants import (
-    SCORING_SAMPLE_RATE,
-    SILENCE_MIN_GAP_SECONDS,
-    SILENCE_TOP_DB,
-    SILENCE_TRIM_SECONDS,
-)
+from songmaker_cli.constants import SILENCE_MIN_GAP_SECONDS, SILENCE_TOP_DB, SILENCE_TRIM_SECONDS
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SilenceScore
-from songmaker_cli.scoring.pipeline import register
+from songmaker_cli.scoring.pipeline import AudioData, register
 
 
 @register("silence")
-def score_silence(mp3_path: Path, meta: SongMeta | None = None) -> SilenceScore:
+def score_silence(
+    mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
+) -> SilenceScore:
     """Detect problematic silence gaps in the interior of a song."""
-    audio, sr = librosa.load(mp3_path, sr=SCORING_SAMPLE_RATE, mono=True)
-    duration = len(audio) / sr
+    if audio_data is None:
+        from songmaker_cli.scoring.pipeline import load_audio
+
+        audio_data = load_audio(mp3_path)
+    audio, sr = audio_data.audio, audio_data.sr
 
     trim_samples = int(SILENCE_TRIM_SECONDS * sr)
     interior = audio[trim_samples: len(audio) - trim_samples]

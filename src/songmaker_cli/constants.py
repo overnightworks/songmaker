@@ -24,6 +24,11 @@ SCORING_NUM_SECTIONS = 6
 DYNAMICS_PITCH_WEIGHT = 0.4
 DYNAMICS_RMS_WEIGHT = 0.3
 DYNAMICS_ONSET_WEIGHT = 0.3
+# Calibrated against real song data (v32, v108, v109, v112):
+# pitch_cv range: 0.03–0.49, rms_contrast: 1.47–1.93, onset_cv: 0.10–0.28
+DYNAMICS_PITCH_CV_CEILING = 0.5
+DYNAMICS_RMS_CONTRAST_CEILING = 3.0
+DYNAMICS_ONSET_CV_CEILING = 0.5
 
 
 def default_year() -> str:
