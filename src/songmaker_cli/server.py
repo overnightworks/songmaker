@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.player import generate_player
-from songmaker_cli.snapshot import append_scores_section
+from songmaker_cli.snapshot import append_scores_section, save_rating
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +50,8 @@ def create_app(output_dir: Path, project_root: Path) -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=["http://localhost:*", "http://127.0.0.1:*"],
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -80,7 +81,7 @@ def create_app(output_dir: Path, project_root: Path) -> FastAPI:
         if not snapshot_path.exists():
             raise HTTPException(404, f"Snapshot not found: {album}/{version}.md")
 
-        _save_rating(snapshot_path, req.rating, req.notes)
+        save_rating(snapshot_path, req.rating, req.notes)
         _rebuild_manifest(output_dir, project_root)
         return {"status": "ok", "version": version, "rating": req.rating}
 
@@ -105,7 +106,6 @@ def create_app(output_dir: Path, project_root: Path) -> FastAPI:
 
         background_tasks.add_task(
             _run_generation, md_path, req.count, req.best, req.score,
-            output_dir, project_root,
         )
         return {"status": "started", "path": req.path}
 
@@ -120,35 +120,6 @@ def create_app(output_dir: Path, project_root: Path) -> FastAPI:
     )
 
     return app
-
-
-def _save_rating(snapshot_path: Path, rating: int, notes: str) -> None:
-    """Append or update user_rating in the snapshot's ## Scores section."""
-    text = snapshot_path.read_text(encoding="utf-8")
-
-    if "## Scores" in text:
-        before_scores = text[:text.index("## Scores")].rstrip()
-        scores_section = text[text.index("## Scores"):]
-    else:
-        before_scores = text.rstrip()
-        scores_section = ""
-
-    lines = scores_section.splitlines() if scores_section else []
-    new_lines = [
-        ln for ln in lines
-        if not ln.startswith("- user_rating:")
-        and not ln.startswith("- user_notes:")
-    ]
-
-    if not new_lines:
-        new_lines = ["## Scores", ""]
-    new_lines.append(f"- user_rating: {rating}")
-    if notes:
-        new_lines.append(f"- user_notes: {notes}")
-
-    result = before_scores + "\n\n" + "\n".join(new_lines) + "\n"
-    snapshot_path.write_text(result, encoding="utf-8")
-    log.info("Rating saved: %s = %d stars", snapshot_path.name, rating)
 
 
 def _rebuild_manifest(output_dir: Path, project_root: Path) -> None:
@@ -172,16 +143,11 @@ def _run_scoring(mp3_path: Path, output_dir: Path, project_root: Path) -> None:
     log.info("Scored: %s", mp3_path.name)
 
 
-def _run_generation(
-    md_path: Path, count: int, best: int | None, score: bool,
-    output_dir: Path, project_root: Path,
-) -> None:
+def _run_generation(md_path: Path, count: int, best: int | None, score: bool) -> None:
     """Run generation in background."""
     from songmaker_cli.generate import run_generate
 
-    run_generate(
-        str(md_path), count=count, best=best, score=score,
-    )
+    run_generate(str(md_path), count=count, best=best, score=score)
     log.info("Generation complete: %s", md_path.name)
 
 

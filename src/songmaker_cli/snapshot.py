@@ -156,6 +156,38 @@ def append_scores_section(snapshot_path: Path, scores: SongScores) -> None:
     log.info("Scores written to %s", snapshot_path.name)
 
 
+def save_rating(snapshot_path: Path, rating: int, notes: str = "") -> None:
+    """Write user_rating (and optional notes) into the ## Scores section.
+
+    Idempotent — replaces existing user_rating/user_notes if present.
+    Creates ## Scores section if none exists.
+    """
+    text = snapshot_path.read_text(encoding="utf-8")
+
+    if "## Scores" in text:
+        before = text[:text.index("## Scores")].rstrip()
+        scores_text = text[text.index("## Scores"):]
+    else:
+        before = text.rstrip()
+        scores_text = ""
+
+    lines = scores_text.splitlines() if scores_text else []
+    kept = [
+        ln for ln in lines
+        if not ln.startswith("- user_rating:") and not ln.startswith("- user_notes:")
+    ]
+
+    if not kept:
+        kept = ["## Scores", ""]
+    kept.append(f"- user_rating: {rating}")
+    if notes:
+        kept.append(f"- user_notes: {notes}")
+
+    result = before + "\n\n" + "\n".join(kept) + "\n"
+    snapshot_path.write_text(result, encoding="utf-8")
+    log.info("Rating saved: %s = %d stars", snapshot_path.name, rating)
+
+
 def read_generation_info(snapshot_path: Path) -> GenerationInfo | None:
     """Read generation metadata from a sidecar snapshot .md file."""
     if not snapshot_path.exists():

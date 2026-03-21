@@ -72,7 +72,7 @@ Chorus here...
 - 100% coverage goal
 - pytest fixtures, no test inheritance
 - Mock external services (ACE-Step server, ffmpeg, Whisper)
-- Tests must be fast (full suite < 10 seconds)
+- Unit tests must be fast (< 10 seconds); integration tests with audio processing are slower
 
 ### General
 - Type hints on all function signatures

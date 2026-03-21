@@ -10,6 +10,7 @@ from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.generate import log_scores
 from songmaker_cli.scoring import run_scoring_pipeline
+from songmaker_cli.scoring.pipeline import PipelineConfig
 from songmaker_cli.snapshot import append_scores_section, read_scores
 
 log = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ def score_single(
     path: str,
     source: str | None,
     scorer_list: list[str] | None,
-    config: object,
+    config: PipelineConfig,
 ) -> None:
     """Score a single MP3 file."""
     from songmaker_cli.parser import parse_song_md
@@ -35,7 +36,7 @@ def score_single(
 
 def score_all(
     scorer_list: list[str] | None,
-    config: object,
+    config: PipelineConfig,
     force: bool,
 ) -> None:
     """Score all MP3s in _output/, skipping already-scored unless force=True."""
@@ -70,8 +71,8 @@ def score_all(
         try:
             md_path = find_lyrics_source(mp3, None, project_root=str(project_root))
             meta = parse_song_md(md_path)
-        except Exception:
-            pass
+        except (ValidationError, FileNotFoundError):
+            log.debug("No lyrics found for %s, scoring without metadata", mp3.name)
 
         log.info("[%d/%d] %s", scored + skipped + 1, len(mp3s), mp3.name)
         scores = run_scoring_pipeline(mp3, meta=meta, scorers=scorer_list, config=config)

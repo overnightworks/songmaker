@@ -179,10 +179,10 @@ def _score_and_rank(
     generated: list[tuple[OutputPaths, Path]], meta: SongMeta,
 ) -> None:
     """Score all generated versions and log a ranked table."""
+    from songmaker_cli.scoring import run_scoring_pipeline
+
     log.info("")
     log.info("Scoring %d versions...", len(generated))
-    from songmaker_cli.scoring import SongScores, run_scoring_pipeline
-
     ranked: list[tuple[OutputPaths, SongScores]] = []
     for paths, snapshot_path in generated:
         scores = run_scoring_pipeline(paths.mp3, meta=meta)
