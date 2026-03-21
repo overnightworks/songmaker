@@ -95,12 +95,18 @@ def _pitch_coefficient_of_variation(
     """Compute CV of median pitch across sections using pyin.
 
     Sections with no detected pitch (e.g. instrumental breaks) are excluded.
-    Sections are analyzed in parallel across CPU cores to mitigate pyin's
-    high computational cost.
+    Parallelized across CPU cores when sections are long enough to justify
+    the process spawning overhead (>5s per section).
     """
-    with ProcessPoolExecutor() as pool:
-        futures = [pool.submit(_section_median_pitch, section, sr) for section in sections]
-        medians = [f.result() for f in futures if f.result() is not None]
+    min_parallel_samples = 5 * sr
+    use_parallel = all(len(s) >= min_parallel_samples for s in sections)
+
+    if use_parallel:
+        with ProcessPoolExecutor() as pool:
+            futures = [pool.submit(_section_median_pitch, section, sr) for section in sections]
+            medians = [f.result() for f in futures if f.result() is not None]
+    else:
+        medians = [m for s in sections if (m := _section_median_pitch(s, sr)) is not None]
 
     return _safe_cv(medians)
 
@@ -121,14 +127,7 @@ def _rms_contrast_ratio(sections: list[np.ndarray]) -> float:
 
     A high ratio means big dynamic contrast (e.g. quiet verse → loud chorus).
     """
-    rms_values = []
-    for section in sections:
-        rms = float(np.sqrt(np.mean(section ** 2)))
-        rms_values.append(max(rms, 1e-10))
-
-    if not rms_values:
-        return 1.0
-
+    rms_values = [max(float(np.sqrt(np.mean(s ** 2))), 1e-10) for s in sections]
     return max(rms_values) / min(rms_values)
 
 
@@ -169,4 +168,6 @@ def _normalize_cv(cv: float, max_cv: float) -> float:
 
 def _normalize_contrast(ratio: float, max_contrast: float) -> float:
     """Normalize contrast ratio to 0-1. Ratio of 1.0 = no contrast = 0 score."""
-    return min((ratio - 1.0) / (max_contrast - 1.0), 1.0) if ratio > 1.0 else 0.0
+    if max_contrast <= 1.0 or ratio <= 1.0:
+        return 0.0
+    return min((ratio - 1.0) / (max_contrast - 1.0), 1.0)

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
-
-from songmaker_cli.constants import SILENCE_MIN_GAP_SECONDS
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -89,6 +87,7 @@ class SongScores:
             result["dynamics"] = round(min(self.emotional_dynamics.overall_expressiveness * 100, 100.0), 1)
             result["dynamics_pitch_cv"] = self.emotional_dynamics.pitch_cv
             result["dynamics_rms_contrast"] = self.emotional_dynamics.rms_contrast
+            result["dynamics_onset_cv"] = self.emotional_dynamics.onset_rate_cv
 
         if self.text_accuracy:
             result["text_accuracy"] = round(self.text_accuracy.similarity_ratio * 100, 1)

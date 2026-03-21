@@ -50,7 +50,8 @@ def score_bpm(
 def _extract_requested_bpm(meta: SongMeta | None) -> int | None:
     if meta is None:
         return None
-    return meta.generation_params.get("bpm")
+    bpm = meta.generation_params.get("bpm")
+    return int(bpm) if bpm is not None else None
 
 
 def _detect_bpm(audio: np.ndarray, sr: int) -> float:
@@ -69,8 +70,7 @@ def _closest_octave_match(
     Reports octave_corrected=True if the best match is half or double.
     """
     candidates = [(detected, False), (detected * 2, True), (detected / 2, True)]
-    _, (best_bpm, octave_corrected) = min(
-        (abs(bpm - requested) / requested, (bpm, corrected))
-        for bpm, corrected in candidates
+    best_bpm, octave_corrected = min(
+        candidates, key=lambda c: abs(c[0] - requested),
     )
     return best_bpm, octave_corrected

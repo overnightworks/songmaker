@@ -28,7 +28,7 @@ from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import GenerationError, SongmakerError, ValidationError
 from songmaker_cli.parser import AlbumMeta, SongMeta, load_album_meta, parse_song_md
 from songmaker_cli.player import generate_player
-from songmaker_cli.scoring import SongScores, available_scorers, run_scoring_pipeline
+from songmaker_cli.scoring import SongScores, run_scoring_pipeline
 from songmaker_cli.snapshot import append_scores_section, write_snapshot
 
 log = logging.getLogger(__name__)

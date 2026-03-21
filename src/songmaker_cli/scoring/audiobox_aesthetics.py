@@ -25,7 +25,11 @@ _predictor_cache: dict[str, object] = {}
 def score_audiobox(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
 ) -> AudioBoxScore:
-    """Score audio quality using Meta's AudioBox Aesthetics model."""
+    """Score audio quality using Meta's AudioBox Aesthetics model.
+
+    Note: audio_data is unused — AudioBox requires a file path, not a numpy array.
+    The parameter exists to satisfy the scorer function signature.
+    """
     predictor = _get_predictor()
     result = predictor.forward([{"path": str(mp3_path)}])  # type: ignore[union-attr]
 

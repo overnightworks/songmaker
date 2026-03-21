@@ -15,17 +15,23 @@ log = logging.getLogger(__name__)
 
 _whisper_model_cache: dict[str, object] = {}
 
+WHISPER_MODEL_SIZE = "small"
+
 
 @register("text_accuracy")
 def score_text_accuracy(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
 ) -> TextAccuracyScore:
-    """Transcribe with Whisper and compare to intended lyrics."""
+    """Transcribe with Whisper and compare to intended lyrics.
+
+    Note: audio_data is unused — Whisper requires a file path, not a numpy array.
+    The parameter exists to satisfy the scorer function signature.
+    """
     if meta is None or not meta.lyrics:
         raise ValueError("No lyrics metadata — cannot score text accuracy")
 
     language = meta.generation_params.get("language", "en")
-    model = _get_whisper_model("small")
+    model = _get_whisper_model(WHISPER_MODEL_SIZE)
     transcribed, segments = _transcribe(mp3_path, language, model)
 
     clean_intended = clean_lyrics(meta.lyrics)

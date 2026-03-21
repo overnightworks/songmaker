@@ -325,3 +325,135 @@ def test_log_scores_warns_on_silence_problems(caplog: pytest.LogCaptureFixture) 
         _log_scores(scores)
 
     assert "gaps detected" in caplog.text
+
+
+# ── Text accuracy scorer tests ───────────────────────────────────────
+
+
+def test_text_accuracy_no_meta() -> None:
+    from songmaker_cli.scoring.text_accuracy import score_text_accuracy
+
+    with pytest.raises(ValueError, match="No lyrics"):
+        score_text_accuracy(Path("fake.mp3"), meta=None)
+
+
+def test_text_accuracy_no_lyrics() -> None:
+    from songmaker_cli.parser import SongMeta
+    from songmaker_cli.scoring.text_accuracy import score_text_accuracy
+
+    meta = SongMeta(title="Test", album="test", prompt="test", lyrics="")
+    with pytest.raises(ValueError, match="No lyrics"):
+        score_text_accuracy(Path("fake.mp3"), meta=meta)
+
+
+def test_text_accuracy_with_mock_whisper(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock, patch
+
+    from songmaker_cli.parser import SongMeta
+    from songmaker_cli.scoring.text_accuracy import score_text_accuracy
+
+    mp3 = tmp_path / "test.mp3"
+    mp3.write_bytes(b"fake")
+    meta = SongMeta(
+        title="Test", album="test", prompt="test",
+        lyrics="[verse]\nHello world\nGoodbye moon",
+        generation_params={"language": "en"},
+    )
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = {
+        "text": "Hello world goodbye moon",
+        "segments": [{"text": "Hello world"}, {"text": "goodbye moon"}],
+    }
+
+    with patch(
+        "songmaker_cli.scoring.text_accuracy._get_whisper_model",
+        return_value=mock_model,
+    ):
+        result = score_text_accuracy(mp3, meta=meta)
+        assert result.similarity_ratio > 0.5
+        assert result.intended_lines == 2
+        assert result.transcribed_lines == 2
+
+
+# ── AudioBox scorer tests ────────────────────────────────────────────
+
+
+def test_audiobox_with_mock_predictor(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock
+
+    from songmaker_cli.scoring.audiobox_aesthetics import score_audiobox, _predictor_cache
+
+    mp3 = tmp_path / "test.mp3"
+    mp3.write_bytes(b"fake")
+
+    mock_predictor = MagicMock()
+    mock_predictor.forward.return_value = [
+        {"CE": 7.5, "CU": 8.0, "PC": 6.0, "PQ": 8.5},
+    ]
+
+    saved = dict(_predictor_cache)
+    _predictor_cache["default"] = mock_predictor
+    try:
+        result = score_audiobox(mp3)
+        assert result.content_enjoyment == 7.5
+        assert result.production_quality == 8.5
+    finally:
+        _predictor_cache.clear()
+        _predictor_cache.update(saved)
+
+
+# ── Manifest read_scores tests ───────────────────────────────────────
+
+
+def test_read_scores_from_snapshot(tmp_path: Path) -> None:
+    from songmaker_cli.manifest import read_scores
+
+    snapshot = tmp_path / "song_v1.md"
+    snapshot.write_text(
+        "---\ntitle: Test\n---\n\n## Generation\n\n- seed: 123\n\n"
+        "## Scores\n\n- dynamics: 48.9\n- silence_ok: True\n- bpm_detected: 94\n"
+    )
+    scores = read_scores(snapshot)
+    assert scores is not None
+    assert scores["dynamics"] == 48.9
+    assert scores["silence_ok"] is True
+    assert scores["bpm_detected"] == 94
+
+
+def test_read_scores_missing_section(tmp_path: Path) -> None:
+    from songmaker_cli.manifest import read_scores
+
+    snapshot = tmp_path / "song_v1.md"
+    snapshot.write_text("---\ntitle: Test\n---\n\n## Generation\n\n- seed: 123\n")
+    assert read_scores(snapshot) is None
+
+
+def test_read_scores_missing_file(tmp_path: Path) -> None:
+    from songmaker_cli.manifest import read_scores
+
+    assert read_scores(tmp_path / "nonexistent.md") is None
+
+
+def test_scores_roundtrip(tmp_path: Path) -> None:
+    """Write scores via append_scores_section, read back via read_scores."""
+    from songmaker_cli.manifest import read_scores
+
+    snapshot = tmp_path / "song_v1.md"
+    snapshot.write_text("---\ntitle: Test\n---\n\n## Generation\n\n- seed: 42\n")
+
+    scores = SongScores(
+        emotional_dynamics=EmotionalDynamicsScore(
+            pitch_cv=0.3, rms_contrast=2.0, onset_rate_cv=0.2,
+            overall_expressiveness=0.5,
+        ),
+        silence=SilenceScore(
+            total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
+        ),
+    )
+    append_scores_section(snapshot, scores)
+
+    read_back = read_scores(snapshot)
+    assert read_back is not None
+    assert read_back["dynamics"] == 50.0
+    assert read_back["silence_ok"] is True
