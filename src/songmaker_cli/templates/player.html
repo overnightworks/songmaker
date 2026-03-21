@@ -457,7 +457,8 @@
 </head>
 <body>
 
-<div id="debugPanel" style="background:#300;color:#faa;padding:8px;font-size:11px;word-break:break-all;max-height:150px;overflow-y:auto;display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999"></div>
+<div id="debugToggle" style="position:fixed;bottom:0;right:0;z-index:10000;background:#300;color:#faa;padding:4px 8px;font-size:10px;cursor:pointer;opacity:0.5" onclick="const p=document.getElementById('debugPanel');p.style.display=p.style.display==='none'?'block':'none'">DBG</div>
+<div id="debugPanel" style="background:#300;color:#faa;padding:8px;font-size:11px;word-break:break-all;max-height:150px;overflow-y:auto;display:none;position:fixed;bottom:20px;left:0;right:0;z-index:9999"></div>
 
 <div class="header">
   <h1 id="albumTitle">{{ARTIST}}</h1>
