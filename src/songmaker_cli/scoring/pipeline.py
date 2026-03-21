@@ -19,6 +19,7 @@ from songmaker_cli.scoring.models import (
     EmotionalDynamicsScore,
     SilenceScore,
     SongScores,
+    SpectralQualityScore,
     TextAccuracyScore,
 )
 
@@ -102,6 +103,7 @@ class ScorerRegistry:
         import songmaker_cli.scoring.bpm_accuracy  # noqa: F401
         import songmaker_cli.scoring.emotional_dynamics  # noqa: F401
         import songmaker_cli.scoring.silence_detection  # noqa: F401
+        import songmaker_cli.scoring.spectral_quality  # noqa: F401
         import songmaker_cli.scoring.text_accuracy  # noqa: F401
 
     def reset_for_testing(self) -> None:
@@ -216,4 +218,5 @@ def run_scoring_pipeline(
         audiobox=_validated(results, "audiobox", AudioBoxScore),
         bpm_accuracy=_validated(results, "bpm_accuracy", BpmAccuracyScore),
         silence=_validated(results, "silence", SilenceScore),
+        spectral_quality=_validated(results, "spectral_quality", SpectralQualityScore),
     )

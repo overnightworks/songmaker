@@ -60,6 +60,20 @@ class AudioBoxScore:
 
 
 @dataclass(frozen=True)
+class SpectralQualityScore:
+    """Spectral artifact detection — flags noise, distortion, glitches."""
+
+    mean_flatness: float
+    max_flatness: float
+    artifact_count: int
+    artifact_windows: tuple[tuple[float, float], ...]
+
+    @property
+    def has_artifacts(self) -> bool:
+        return self.artifact_count > 0
+
+
+@dataclass(frozen=True)
 class BpmAccuracyScore:
     """Detected vs requested BPM. Informational — not a quality indicator."""
 
@@ -93,6 +107,7 @@ class SongScores:
     - emotional_dynamics: relative comparison (sort versions, listen to top N)
     - text_accuracy: quality signal (did the model sing the right words?)
     - audiobox: quality signal (production quality from Meta's model)
+    - spectral_quality: pass/fail flag (noise artifacts?)
     """
 
     text_accuracy: TextAccuracyScore | None = None
@@ -100,6 +115,7 @@ class SongScores:
     audiobox: AudioBoxScore | None = None
     bpm_accuracy: BpmAccuracyScore | None = None
     silence: SilenceScore | None = None
+    spectral_quality: SpectralQualityScore | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Structured dict for snapshot persistence.
@@ -131,5 +147,9 @@ class SongScores:
             result[SCORE_KEY_SILENCE_GAPS] = self.silence.gap_count
             result[SCORE_KEY_SILENCE_LONGEST] = self.silence.longest_gap_seconds
             result[SCORE_KEY_SILENCE_OK] = not self.silence.has_problems
+
+        if self.spectral_quality:
+            result["spectral_artifacts"] = self.spectral_quality.artifact_count
+            result["spectral_ok"] = not self.spectral_quality.has_artifacts
 
         return result
