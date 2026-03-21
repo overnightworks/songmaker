@@ -536,7 +536,8 @@ const API_KEY = new URLSearchParams(location.search).get('key') || '';
 
 function apiFetch(url, options = {}) {
   if (API_KEY) {
-    options.headers = { ...(options.headers || {}), 'X-API-Key': API_KEY };
+    const sep = url.includes('?') ? '&' : '?';
+    url = url + sep + 'api_key=' + API_KEY;
   }
   return fetch(url, options);
 }
