@@ -17,6 +17,7 @@ loud one with the same relative dynamics.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import librosa
@@ -94,17 +95,25 @@ def _pitch_coefficient_of_variation(
     """Compute CV of median pitch across sections using pyin.
 
     Sections with no detected pitch (e.g. instrumental breaks) are excluded.
+    Sections are analyzed in parallel across CPU cores to mitigate pyin's
+    high computational cost.
     """
-    medians = []
-    for section in sections:
-        f0, voiced_flag, _ = librosa.pyin(
-            section, fmin=librosa.note_to_hz("C2"), fmax=librosa.note_to_hz("C7"), sr=sr,
-        )
-        voiced_f0 = f0[voiced_flag] if voiced_flag is not None else f0[~np.isnan(f0)]
-        if len(voiced_f0) > 0:
-            medians.append(float(np.median(voiced_f0)))
+    with ProcessPoolExecutor() as pool:
+        futures = [pool.submit(_section_median_pitch, section, sr) for section in sections]
+        medians = [f.result() for f in futures if f.result() is not None]
 
     return _safe_cv(medians)
+
+
+def _section_median_pitch(section: np.ndarray, sr: int) -> float | None:
+    """Compute median voiced pitch for a single section. Runs in a subprocess."""
+    fmin = librosa.note_to_hz("C2")
+    fmax = librosa.note_to_hz("C7")
+    f0, voiced_flag, _ = librosa.pyin(section, fmin=fmin, fmax=fmax, sr=sr)
+    voiced_f0 = f0[voiced_flag] if voiced_flag is not None else f0[~np.isnan(f0)]
+    if len(voiced_f0) > 0:
+        return float(np.median(voiced_f0))
+    return None
 
 
 def _rms_contrast_ratio(sections: list[np.ndarray]) -> float:
