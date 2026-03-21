@@ -4,6 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields
 
+from songmaker_cli.constants import (
+    BPM_DEVIATION_PENALTY,
+    SILENCE_GAP_COUNT_MAX_PENALTY,
+    SILENCE_GAP_COUNT_PENALTY,
+    SILENCE_LONGEST_GAP_MAX_PENALTY,
+    SILENCE_LONGEST_GAP_PENALTY,
+)
+
 
 @dataclass(frozen=True)
 class TextAccuracyScore:
@@ -63,7 +71,7 @@ class BpmAccuracyScore:
 
     @property
     def summary(self) -> float:
-        return max(0.0, 100.0 - self.deviation_percent * 5)
+        return max(0.0, 100.0 - self.deviation_percent * BPM_DEVIATION_PENALTY)
 
 
 @dataclass(frozen=True)
@@ -76,8 +84,14 @@ class SilenceScore:
 
     @property
     def summary(self) -> float:
-        penalty = min(self.longest_gap_seconds * 10, 50.0)
-        penalty += min(self.gap_count * 5, 30.0)
+        penalty = min(
+            self.longest_gap_seconds * SILENCE_LONGEST_GAP_PENALTY,
+            SILENCE_LONGEST_GAP_MAX_PENALTY,
+        )
+        penalty += min(
+            self.gap_count * SILENCE_GAP_COUNT_PENALTY,
+            SILENCE_GAP_COUNT_MAX_PENALTY,
+        )
         return max(0.0, 100.0 - penalty)
 
 
@@ -93,7 +107,7 @@ class SongScores:
 
     @property
     def overall(self) -> float:
-        """Weighted average of available scores (0-100)."""
+        """Unweighted average of available scorer summaries (0-100)."""
         scores = []
         for field in fields(self):
             value = getattr(self, field.name)
@@ -102,17 +116,10 @@ class SongScores:
         return sum(scores) / len(scores) if scores else 0.0
 
     def to_dict(self) -> dict[str, float]:
-        """Flat dict of all scores for snapshot persistence."""
+        """Flat dict of all scores (0-100 scale) for snapshot persistence."""
         result: dict[str, float] = {"overall": round(self.overall, 1)}
-        if self.text_accuracy:
-            result["text_accuracy"] = round(self.text_accuracy.summary, 1)
-        if self.emotional_dynamics:
-            result["emotional_dynamics"] = round(self.emotional_dynamics.summary, 1)
-        if self.audiobox:
-            result["audiobox_enjoyment"] = round(self.audiobox.content_enjoyment, 1)
-            result["audiobox_quality"] = round(self.audiobox.production_quality, 1)
-        if self.bpm_accuracy:
-            result["bpm_accuracy"] = round(self.bpm_accuracy.summary, 1)
-        if self.silence:
-            result["silence"] = round(self.silence.summary, 1)
+        for field in fields(self):
+            value = getattr(self, field.name)
+            if value is not None:
+                result[field.name] = round(value.summary, 1)
         return result

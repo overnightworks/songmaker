@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import fields
 from pathlib import Path
 from typing import Callable
 
@@ -11,15 +12,24 @@ from songmaker_cli.scoring.models import SongScores
 
 log = logging.getLogger(__name__)
 
-ScorerFunc = Callable[..., object]
+ScorerFunc = Callable[[Path, SongMeta | None], object]
 
+_VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
 _SCORERS: dict[str, ScorerFunc] = {}
 
 
 def register(name: str) -> Callable[[ScorerFunc], ScorerFunc]:
-    """Decorator to register a scorer function."""
+    """Decorator to register a scorer function.
+
+    The name must match a field on SongScores (e.g. "silence", "bpm_accuracy").
+    """
 
     def decorator(func: ScorerFunc) -> ScorerFunc:
+        if name not in _VALID_SCORER_NAMES:
+            raise ValueError(
+                f"Scorer name '{name}' does not match any SongScores field. "
+                f"Valid names: {sorted(_VALID_SCORER_NAMES)}"
+            )
         _SCORERS[name] = func
         return func
 

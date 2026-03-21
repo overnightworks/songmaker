@@ -12,6 +12,7 @@ import yaml
 
 from acestep_engine.models import AceStepConfig, ServerInfo
 from songmaker_cli.config import OutputPaths
+from songmaker_cli.scoring.models import SongScores
 
 log = logging.getLogger(__name__)
 
@@ -97,9 +98,9 @@ def _build_generation_section(
     return "\n".join(lines)
 
 
-def append_scores_section(snapshot_path: Path, scores: object) -> None:
+def append_scores_section(snapshot_path: Path, scores: SongScores) -> None:
     """Append a ## Scores section to an existing snapshot .md file."""
-    score_dict = scores.to_dict()  # type: ignore[union-attr]
+    score_dict = scores.to_dict()
     if not score_dict:
         return
 
