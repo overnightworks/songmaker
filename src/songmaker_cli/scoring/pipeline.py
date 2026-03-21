@@ -44,6 +44,7 @@ class PipelineConfig:
     """Configuration passed to all scorers."""
 
     whisper_model: str = "medium"
+    device: str = "cpu"
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
 
 

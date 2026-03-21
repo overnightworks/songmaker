@@ -120,6 +120,9 @@ def score(
     force: Annotated[
         bool, Parameter(help="Re-score even if already scored")
     ] = False,
+    device: Annotated[
+        str, Parameter(help="Device for scoring models (cpu/cuda)")
+    ] = "cpu",
 ) -> None:
     """Score a generated song on quality dimensions."""
     from songmaker_cli.scoring.pipeline import PipelineConfig
@@ -127,7 +130,7 @@ def score(
     scorer_list = None
     if scorers and scorers != "all":
         scorer_list = [s.strip() for s in scorers.split(",")]
-    config = PipelineConfig(whisper_model=whisper_model)
+    config = PipelineConfig(whisper_model=whisper_model, device=device)
 
     if all:
         _score_all(scorer_list, config, force)

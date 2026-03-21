@@ -132,4 +132,4 @@ def test_whisper_model_cached() -> None:
         _get_whisper_model("small", cache=cache)
 
     assert mock_whisper.load_model.call_count == 1
-    assert "small" in cache
+    assert "small:cpu" in cache
