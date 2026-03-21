@@ -107,7 +107,7 @@ def generate(
     client = AceStepClient()
     server_info = client.server_info()
     last_paths = None
-    ranked: list[tuple[OutputPaths, SongScores]] = []
+    generated: list[tuple[OutputPaths, Path]] = []
 
     for i in range(count):
         if count > 1:
@@ -122,20 +122,28 @@ def generate(
         snapshot_path = write_snapshot(md_path, paths, ace_config, ace_result.seed, server_info)
         _log_result_banner(paths, audio, ace_result.seed, elapsed)
 
-        if score:
+        if score and not best:
             scores = run_scoring_pipeline(paths.mp3, meta=meta)
             append_scores_section(snapshot_path, scores)
             _log_scores(scores)
-            ranked.append((paths, scores))
 
         if check:
             from songmaker_cli.check import run_check
 
             run_check(str(paths.mp3), source=str(md_path))
 
+        generated.append((paths, snapshot_path))
         last_paths = paths
 
-    if ranked and best is not None:
+    if best is not None:
+        log.info("")
+        log.info("Scoring %d versions...", len(generated))
+        ranked: list[tuple[OutputPaths, SongScores]] = []
+        for paths, snapshot_path in generated:
+            scores = run_scoring_pipeline(paths.mp3, meta=meta)
+            append_scores_section(snapshot_path, scores)
+            _log_scores(scores)
+            ranked.append((paths, scores))
         _log_ranking(ranked)
 
     if last_paths:
