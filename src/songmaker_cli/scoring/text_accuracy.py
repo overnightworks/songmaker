@@ -59,31 +59,38 @@ def score_text_accuracy(
 def _per_line_accuracy(
     intended: tuple[str, ...], transcribed: tuple[str, ...],
 ) -> float:
-    """Compute average best-match similarity per intended line.
+    """Compute average best-match similarity per intended line using greedy alignment.
 
-    For each intended line, finds the transcribed line with the highest
-    SequenceMatcher ratio. This is fairer than full-text comparison because
-    a skipped section doesn't destroy the score for correctly sung sections.
+    Each transcribed line can only match one intended line (consumed after use).
+    This prevents a single good transcribed line from inflating scores for
+    multiple intended lines.
     """
-    if not intended:
-        return 0.0
-    if not transcribed:
+    if not intended or not transcribed:
         return 0.0
 
-    clean_trans = [clean_lyrics(t) for t in transcribed]
-    line_scores = []
+    clean_intended = [clean_lyrics(line) for line in intended]
+    clean_intended = [c for c in clean_intended if c]
+    if not clean_intended:
+        return 0.0
 
-    for line in intended:
-        clean_line = clean_lyrics(line)
-        if not clean_line:
+    candidates = [clean_lyrics(t) for t in transcribed]
+    candidates = [c for c in candidates if c]
+    if not candidates:
+        return 0.0
+
+    line_scores: list[float] = []
+    for line in clean_intended:
+        if not candidates:
+            line_scores.append(0.0)
             continue
-        best = max(
-            SequenceMatcher(None, clean_line, ct).ratio()
-            for ct in clean_trans
-        ) if clean_trans else 0.0
-        line_scores.append(best)
+        best_idx, best_ratio = max(
+            ((i, SequenceMatcher(None, line, c).ratio()) for i, c in enumerate(candidates)),
+            key=lambda pair: pair[1],
+        )
+        line_scores.append(best_ratio)
+        candidates.pop(best_idx)
 
-    return sum(line_scores) / len(line_scores) if line_scores else 0.0
+    return sum(line_scores) / len(line_scores)
 
 
 def clean_lyrics(text: str) -> str:
