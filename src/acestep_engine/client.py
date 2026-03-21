@@ -16,7 +16,7 @@ import re
 import time
 from typing import Final
 from urllib.error import URLError
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from pydantic import ValidationError as PydanticValidationError
@@ -52,7 +52,7 @@ def _default_host() -> str:
 
 
 def _default_port() -> int:
-    return int(os.environ.get("ACESTEP_PORT", str(_FALLBACK_PORT)))
+    return int(os.environ.get("ACESTEP_PORT", _FALLBACK_PORT))
 
 
 def is_acestep_available(host: str | None = None, port: int | None = None) -> bool:
@@ -300,7 +300,6 @@ class AceStepClient:
             if audio_path.startswith("/"):
                 url = f"{self.base_url}{audio_path}"
             else:
-                from urllib.parse import quote
                 url = f"{self.base_url}/v1/audio?path={quote(audio_path)}"
             req = Request(url, method="GET")
             with urlopen(req, timeout=60) as resp:

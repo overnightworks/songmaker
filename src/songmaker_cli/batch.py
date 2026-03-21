@@ -8,6 +8,7 @@ from pathlib import Path
 from songmaker_cli.config import OutputPaths, find_project_root, validate_path
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import ValidationError
+from songmaker_cli.parser import SongMeta, parse_song_md
 from songmaker_cli.scoring import run_scoring_pipeline
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import PipelineConfig
@@ -73,11 +74,9 @@ def log_ranking(ranked: list[tuple[OutputPaths, SongScores]]) -> None:
 
 
 def score_and_rank(
-    generated: list[tuple[OutputPaths, Path]], meta: object,
+    generated: list[tuple[OutputPaths, Path]], meta: SongMeta | None,
 ) -> None:
     """Score all generated versions and log a ranked table."""
-    from songmaker_cli.parser import SongMeta
-
     log.info("")
     log.info("Scoring %d versions...", len(generated))
     ranked: list[tuple[OutputPaths, SongScores]] = []
@@ -99,8 +98,6 @@ def score_single(
     config: PipelineConfig,
 ) -> None:
     """Score a single MP3 file."""
-    from songmaker_cli.parser import parse_song_md
-
     mp3_path = validate_path(path)
     meta = None
     if source:
@@ -110,14 +107,33 @@ def score_single(
     log_scores(scores)
 
 
+def _already_scored(snapshot_path: Path) -> bool:
+    """Check whether a snapshot already has dynamics scores."""
+    if not snapshot_path.exists():
+        return False
+    existing = read_scores(snapshot_path)
+    return bool(existing and "dynamics" in existing)
+
+
+def _find_meta(mp3: Path, project_root: Path) -> SongMeta | None:
+    """Try to locate and parse lyrics metadata for an MP3."""
+    from songmaker_cli.check import find_lyrics_source
+
+    try:
+        md_path = find_lyrics_source(mp3, None, project_root=str(project_root))
+        return parse_song_md(md_path)
+    except (ValidationError, FileNotFoundError):
+        log.debug("No lyrics found for %s, scoring without metadata", mp3.name)
+        return None
+
+
 def score_all(
     scorer_list: list[str] | None,
     config: PipelineConfig,
     force: bool,
 ) -> None:
     """Score all MP3s in _output/, skipping already-scored unless force=True."""
-    from songmaker_cli.check import find_lyrics_source
-    from songmaker_cli.parser import parse_song_md
+    from songmaker_cli.player import generate_player
 
     project_root = find_project_root(Path.cwd()) or Path.cwd()
     output_dir = project_root / OUTPUT_ROOT
@@ -137,19 +153,11 @@ def score_all(
     for mp3 in mp3s:
         snapshot_path = mp3.with_suffix(".md")
 
-        if not force and snapshot_path.exists():
-            existing = read_scores(snapshot_path)
-            if existing and "dynamics" in existing:
-                skipped += 1
-                continue
+        if not force and _already_scored(snapshot_path):
+            skipped += 1
+            continue
 
-        meta = None
-        try:
-            md_path = find_lyrics_source(mp3, None, project_root=str(project_root))
-            meta = parse_song_md(md_path)
-        except (ValidationError, FileNotFoundError):
-            log.debug("No lyrics found for %s, scoring without metadata", mp3.name)
-
+        meta = _find_meta(mp3, project_root)
         log.info("[%d/%d] %s", scored + skipped + 1, len(mp3s), mp3.name)
         scores = run_scoring_pipeline(mp3, meta=meta, scorers=scorer_list, config=config)
 
@@ -160,8 +168,5 @@ def score_all(
         scored += 1
 
     log.info("Done: %d scored, %d skipped (already scored)", scored, skipped)
-
-    from songmaker_cli.player import generate_player
-
     generate_player(output_dir, project_root)
     log.info("Player updated")

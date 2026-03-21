@@ -11,15 +11,19 @@ K-weighting pre-filter, 400ms gated blocks, and absolute/relative gating.
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import Final
 
 import numpy as np
+import pyloudnorm as pyln
 from numpy.typing import NDArray
 from scipy.signal import butter, lfilter, sosfilt
 
 from audio_engine.constants import FALLBACK_SAMPLE_RATE
 from audio_engine.errors import MasteringError
+
+log = logging.getLogger(__name__)
 
 _DEFAULT_TARGET_LUFS: Final[float] = -14.0
 _DEFAULT_STEREO_WIDTH: Final[float] = 1.2
@@ -129,9 +133,8 @@ def measure_lufs(
     sample_rate: int = FALLBACK_SAMPLE_RATE,
 ) -> float:
     """Measure integrated LUFS using pyloudnorm (ITU-R BS.1770-4)."""
-    import pyloudnorm as pyln
-
     if len(left) == 0 or len(right) == 0:
+        log.warning("LUFS measurement skipped: empty audio channel")
         return -70.0
 
     stereo = np.column_stack([left, right])
@@ -139,6 +142,7 @@ def measure_lufs(
     lufs = meter.integrated_loudness(stereo)
 
     if lufs == float("-inf") or np.isnan(lufs):
+        log.warning("LUFS measurement returned %s, falling back to -70.0", lufs)
         return -70.0
 
     return float(lufs)

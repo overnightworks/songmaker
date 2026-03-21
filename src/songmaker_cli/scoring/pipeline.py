@@ -213,7 +213,7 @@ def run_scoring_pipeline(
                 func, mp3_path, meta, audio_data, config,
                 timeout=config.scorer_timeout, name=name,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 — broad catch is intentional: scorer failures must not block others
             log.exception("Scorer '%s' failed", name)
 
     return SongScores(

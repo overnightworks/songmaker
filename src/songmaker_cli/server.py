@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +24,9 @@ from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.player import generate_player
 from songmaker_cli.snapshot import append_scores_section, save_rating
+
+if TYPE_CHECKING:
+    from songmaker_cli.parser import SongMeta
 
 log = logging.getLogger(__name__)
 
@@ -154,7 +157,7 @@ def _run_generation(md_path: Path, count: int, best: int | None, score: bool) ->
     log.info("Generation complete: %s", md_path.name)
 
 
-def _load_meta_for_mp3(mp3_path: Path, project_root: Path) -> Any:
+def _load_meta_for_mp3(mp3_path: Path, project_root: Path) -> SongMeta | None:
     """Try to find and parse the lyrics source for an MP3."""
     import yaml
 
