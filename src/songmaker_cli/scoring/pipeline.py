@@ -70,6 +70,7 @@ def _ensure_scorers_registered() -> None:
     if _scorers_loaded:
         return
     _scorers_loaded = True
+    import songmaker_cli.scoring.audiobox_aesthetics  # noqa: F401
     import songmaker_cli.scoring.bpm_accuracy  # noqa: F401
     import songmaker_cli.scoring.emotional_dynamics  # noqa: F401
     import songmaker_cli.scoring.silence_detection  # noqa: F401
