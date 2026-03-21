@@ -19,6 +19,7 @@ from songmaker_cli.config import (
     build_ace_config,
     find_project_root,
     resolve_output_paths,
+    validate_path,
 )
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import GenerationError, ValidationError
@@ -89,8 +90,6 @@ def run_generate(
     player: bool = False,
 ) -> None:
     """Generate a song from a markdown file via ACE-Step."""
-    from songmaker_cli.config import validate_path
-
     md_path = validate_path(path)
     meta = parse_song_md(md_path)
     validate_song_meta(meta)
