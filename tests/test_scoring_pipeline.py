@@ -324,6 +324,44 @@ def test_log_scores(caplog: pytest.LogCaptureFixture) -> None:
     assert "silence_ok" in caplog.text
 
 
+def test_log_ranking(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    from songmaker_cli.config import OutputPaths
+    from songmaker_cli.main import _log_ranking
+
+    paths_a = OutputPaths(
+        output_dir=Path("/tmp"), base_name="song", version=1, versioned_name="song_v1",
+    )
+    paths_b = OutputPaths(
+        output_dir=Path("/tmp"), base_name="song", version=2, versioned_name="song_v2",
+    )
+    scores_a = SongScores(
+        emotional_dynamics=EmotionalDynamicsScore(
+            pitch_cv=0.4, rms_contrast=2.0, onset_rate_cv=0.2,
+            overall_expressiveness=0.6,
+        ),
+    )
+    scores_b = SongScores(
+        emotional_dynamics=EmotionalDynamicsScore(
+            pitch_cv=0.1, rms_contrast=1.2, onset_rate_cv=0.1,
+            overall_expressiveness=0.3,
+        ),
+    )
+
+    with caplog.at_level(logging.INFO):
+        _log_ranking([(paths_b, scores_b), (paths_a, scores_a)])
+
+    assert "RANKING" in caplog.text
+    assert "song_v1" in caplog.text
+    assert "song_v2" in caplog.text
+    # v1 has higher expressiveness, should be first (marked best)
+    lines = caplog.text.split("\n")
+    ranking_lines = [l for l in lines if "song_v" in l]
+    assert "song_v1" in ranking_lines[0]
+    assert "best" in ranking_lines[0]
+
+
 def test_log_scores_warns_on_silence_problems(caplog: pytest.LogCaptureFixture) -> None:
     import logging
 

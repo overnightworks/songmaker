@@ -78,6 +78,7 @@ def generate(
     think_mode: Annotated[Optional[bool], Parameter(help="LM chain-of-thought")] = None,
     check: Annotated[bool, Parameter(help="Run Whisper check after")] = False,
     score: Annotated[bool, Parameter(help="Run scoring pipeline after")] = False,
+    best: Annotated[Optional[int], Parameter(help="Generate N versions, score all, rank by dynamics")] = None,
     player: Annotated[
         bool, Parameter(name="--player", help="Open HTML player after generation"),
     ] = False,
@@ -86,6 +87,10 @@ def generate(
     md_path = validate_path(path)
     meta = parse_song_md(md_path)
     validate_song_meta(meta)
+
+    if best is not None:
+        count = best
+        score = True
 
     cli_overrides = collect_overrides(
         seed=seed, duration=duration, bpm=bpm, key=key, shift=shift,
@@ -102,6 +107,8 @@ def generate(
     client = AceStepClient()
     server_info = client.server_info()
     last_paths = None
+    ranked: list[tuple[OutputPaths, SongScores]] = []
+
     for i in range(count):
         if count > 1:
             log.info("Generation %d/%d", i + 1, count)
@@ -119,6 +126,7 @@ def generate(
             scores = run_scoring_pipeline(paths.mp3, meta=meta)
             append_scores_section(snapshot_path, scores)
             _log_scores(scores)
+            ranked.append((paths, scores))
 
         if check:
             from songmaker_cli.check import run_check
@@ -126,6 +134,9 @@ def generate(
             run_check(str(paths.mp3), source=str(md_path))
 
         last_paths = paths
+
+    if ranked and best is not None:
+        _log_ranking(ranked)
 
     if last_paths:
         player_path = _update_player(last_paths)
@@ -253,6 +264,39 @@ def _log_scores(scores: SongScores) -> None:
         log.warning("  Silence gaps detected (%d gaps, longest %.1fs)",
                      scores.silence.gap_count, scores.silence.longest_gap_seconds)
     log.info("=" * 60)
+
+
+def _log_ranking(ranked: list[tuple[OutputPaths, SongScores]]) -> None:
+    """Log a ranked table of scored versions, sorted by dynamics."""
+
+    def _sort_key(entry: tuple[OutputPaths, SongScores]) -> float:
+        _, scores = entry
+        if scores.emotional_dynamics:
+            return scores.emotional_dynamics.overall_expressiveness
+        return 0.0
+
+    sorted_entries = sorted(ranked, key=_sort_key, reverse=True)
+
+    log.info("")
+    log.info("=" * 70)
+    log.info("  RANKING (%d versions)", len(sorted_entries))
+    log.info("  %-30s %10s %10s %10s", "Version", "Dynamics", "AB Quality", "Silence")
+    log.info("  " + "-" * 66)
+
+    for i, (paths, scores) in enumerate(sorted_entries):
+        d = scores.to_dict()
+        dynamics = d.get("dynamics", "-")
+        ab_quality = d.get("audiobox_quality", "-")
+        silence_ok = d.get("silence_ok", True)
+        flag = "" if silence_ok else " [gaps]"
+        marker = " <-- best" if i == 0 else ""
+        log.info("  %-30s %10s %10s %10s%s",
+                 paths.versioned_name, dynamics, ab_quality, silence_ok, flag + marker)
+
+    log.info("=" * 70)
+    best_paths = sorted_entries[0][0]
+    log.info("  Best: %s", best_paths.mp3)
+    log.info("")
 
 
 def _log_generation_banner(

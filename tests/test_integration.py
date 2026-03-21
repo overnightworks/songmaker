@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Callable
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from conftest import mock_http_response as _mock_response
 from songmaker_cli.main import generate
 
@@ -166,3 +168,35 @@ def test_generate_with_score_flag(
     assert "## Scores" in text
     assert "dynamics" in text
     assert "silence_ok" in text
+
+
+def test_generate_best_flag(
+    tmp_path: Path, make_sine_wav_bytes: Callable[..., bytes],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Verify --best N generates N versions, scores all, and prints ranking."""
+    import logging
+
+    song_md = _setup_project(tmp_path)
+    output_dir = tmp_path / "_output"
+
+    wav_bytes = make_sine_wav_bytes()
+    responses = [_health_response()] + (
+        _build_acestep_responses(wav_bytes)
+        + _build_acestep_responses(wav_bytes)
+    )
+
+    with caplog.at_level(logging.INFO):
+        with patch("acestep_engine.client.urlopen") as mock_urlopen:
+            mock_urlopen.side_effect = responses
+            generate(str(song_md), best=2)
+
+    album_output = output_dir / "test_album"
+    mp3s = list(album_output.glob("*.mp3"))
+    assert len(mp3s) == 2
+
+    snapshots = list(album_output.glob("*.md"))
+    assert all("## Scores" in s.read_text() for s in snapshots)
+
+    assert "RANKING" in caplog.text
+    assert "best" in caplog.text
