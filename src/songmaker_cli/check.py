@@ -1,24 +1,25 @@
-"""Lyrics accuracy checking via Whisper transcription."""
+"""Lyrics accuracy checking via Whisper transcription.
+
+Thin CLI wrapper around scoring.text_accuracy. This module handles source
+file discovery and verbose logging; the scorer does the actual analysis.
+"""
 
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
-from typing import TypedDict
 
 from songmaker_cli.config import find_project_root, validate_path
 from songmaker_cli.constants import SIMILARITY_FAIR, SIMILARITY_GOOD
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import find_lyrics_md, parse_song_md, strip_version_suffix
+from songmaker_cli.scoring.text_accuracy import (
+    _get_whisper_model,
+    _transcribe,
+    clean_lyrics,
+)
 
 log = logging.getLogger(__name__)
-
-
-class TranscriptionSegment(TypedDict):
-    """A single segment from Whisper transcription output."""
-
-    text: str
 
 
 def run_check(
@@ -30,8 +31,8 @@ def run_check(
 ) -> None:
     """Transcribe with Whisper and compare to intended lyrics.
 
-    Args:
-        model: Pre-loaded Whisper model. If None, loads/caches automatically.
+    This is the verbose CLI version — logs intended vs transcribed lines.
+    For programmatic use, call scoring.text_accuracy.score_text_accuracy().
     """
     from difflib import SequenceMatcher
 
@@ -109,45 +110,6 @@ def find_lyrics_source(
     raise ValidationError(
         f"Could not find lyrics source for {mp3_path.name}. Use --source."
     )
-
-
-def clean_lyrics(text: str) -> str:
-    """Strip section tags and normalize whitespace for comparison."""
-    text = re.sub(r"\[.*?\]", "", text)
-    return re.sub(r"\s+", " ", text).strip().lower()
-
-
-_whisper_model_cache: dict[str, object] = {}
-
-
-def _get_whisper_model(
-    model_size: str,
-    cache: dict[str, object] | None = None,
-) -> object:
-    """Return a cached Whisper model, loading it on first use.
-
-    Args:
-        cache: Optional cache dict for testing. Uses module-level cache if None.
-    """
-    import whisper
-
-    if cache is None:
-        cache = _whisper_model_cache
-    if model_size not in cache:
-        log.info("Loading Whisper model (%s)...", model_size)
-        cache[model_size] = whisper.load_model(model_size)
-    return cache[model_size]
-
-
-def _transcribe(
-    mp3_path: Path, language: str, model: object,
-) -> tuple[str, list[TranscriptionSegment]]:
-    log.info("Transcribing %s...", mp3_path.name)
-    result = model.transcribe(  # type: ignore[union-attr]
-        str(mp3_path), language=language, fp16=False,
-        condition_on_previous_text=False,
-    )
-    return result["text"].strip(), result.get("segments", [])
 
 
 def log_check_results(

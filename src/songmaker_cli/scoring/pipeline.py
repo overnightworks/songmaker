@@ -73,6 +73,7 @@ def _ensure_scorers_registered() -> None:
     import songmaker_cli.scoring.bpm_accuracy  # noqa: F401
     import songmaker_cli.scoring.emotional_dynamics  # noqa: F401
     import songmaker_cli.scoring.silence_detection  # noqa: F401
+    import songmaker_cli.scoring.text_accuracy  # noqa: F401
 
 
 def run_scoring_pipeline(
