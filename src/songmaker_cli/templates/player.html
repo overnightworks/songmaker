@@ -457,6 +457,8 @@
 </head>
 <body>
 
+<div id="debugPanel" style="background:#300;color:#faa;padding:8px;font-size:11px;word-break:break-all;max-height:150px;overflow-y:auto;display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999"></div>
+
 <div class="header">
   <h1 id="albumTitle">{{ARTIST}}</h1>
   <div class="subtitle" id="albumSubtitle">Music Player</div>
@@ -533,6 +535,12 @@ const IS_SERVER = location.protocol !== 'file:';
 const AUDIO_BASE = IS_SERVER ? '/audio/' : '';
 const API_BASE = IS_SERVER ? '' : null;
 const API_KEY = new URLSearchParams(location.search).get('key') || '';
+
+function dbg(msg) {
+  const el = document.getElementById('debugPanel');
+  if (el) { el.style.display = 'block'; el.innerHTML += msg + '<br>'; el.scrollTop = el.scrollHeight; }
+  console.log('[DBG]', msg);
+}
 
 function apiFetch(url, options = {}) {
   if (API_KEY) {
@@ -750,11 +758,30 @@ async function loadTrack(index) {
   trackMeta.textContent = '';
 
   const audioUrl = AUDIO_BASE + t.file
-    + (API_KEY ? '?api_key=' + API_KEY + '&ngrok-skip-browser-warning=true' : '');
-  audioEl.src = audioUrl;
-  audioEl.preload = 'auto';
+    + (API_KEY ? '?api_key=' + API_KEY : '');
+  dbg('Fetching audio: ' + audioUrl);
+  try {
+    const resp = await apiFetch(audioUrl);
+    dbg('Audio resp: status=' + resp.status + ' type=' + resp.headers.get('content-type'));
+    if (resp.ok && (resp.headers.get('content-type') || '').includes('audio')) {
+      const blob = await resp.blob();
+      dbg('Audio blob: ' + blob.size + ' bytes, type=' + blob.type);
+      if (audioEl._blobUrl) URL.revokeObjectURL(audioEl._blobUrl);
+      audioEl._blobUrl = URL.createObjectURL(blob);
+      audioEl.src = audioEl._blobUrl;
+    } else {
+      dbg('Audio fallback to direct URL');
+      audioEl.src = audioUrl;
+    }
+  } catch(e) {
+    dbg('Audio fetch error: ' + e.message);
+    audioEl.src = audioUrl;
+  }
   audioEl.load();
-  audioEl.onerror = () => { trackMeta.textContent = 'Audio error: ' + (audioEl.error ? audioEl.error.message : 'unknown'); };
+  audioEl.onerror = () => {
+    dbg('Audio ERROR: ' + (audioEl.error ? audioEl.error.message : 'unknown'));
+  };
+  audioEl.onloadedmetadata = () => { dbg('Audio OK: ' + audioEl.duration + 's'); };
 
   // Try to read ID3 tags for richer metadata
   const tags = await readID3(t.file);
