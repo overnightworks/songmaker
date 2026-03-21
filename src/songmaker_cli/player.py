@@ -27,7 +27,9 @@ def generate_player(output_dir: Path, project_root: Path | None = None) -> Path:
         Path to the player.html.
     """
     if project_root is None:
-        project_root = output_dir.parent
+        from songmaker_cli.config import find_project_root
+
+        project_root = find_project_root(output_dir) or output_dir.parent
 
     manifest = build_manifest(output_dir, project_root)
     manifest_dict = manifest.to_dict()

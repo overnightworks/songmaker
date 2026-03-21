@@ -50,3 +50,4 @@ plans/
 .ruff_cache/
 albums/*/legacy_sources/
 albums/*/legacy_output/
+_reference/

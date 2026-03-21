@@ -1,4 +1,4 @@
-"""Tests for CLI helper functions in main.py."""
+"""Tests for CLI helper functions."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 
 from songmaker_cli.config import validate_path
 from songmaker_cli.errors import GenerationError, ValidationError
-from songmaker_cli.main import (
+from songmaker_cli.generate import (
     DecodedAudio,
     _decode_audio,
     _log_generation_banner,
@@ -22,9 +22,9 @@ from songmaker_cli.main import (
     _write_output,
     collect_overrides,
     load_album_meta_for_song,
-    main,
     validate_song_meta,
 )
+from songmaker_cli.main import main
 from songmaker_cli.parser import AlbumMeta, SongMeta
 
 
@@ -181,7 +181,7 @@ def test_log_result_banner(caplog: pytest.LogCaptureFixture) -> None:
 def test_open_player(tmp_path: Path) -> None:
     player_html = tmp_path / "player.html"
     player_html.write_text("<html></html>")
-    with patch("songmaker_cli.main.webbrowser.open") as mock_open:
+    with patch("songmaker_cli.generate.webbrowser.open") as mock_open:
         _open_player(player_html)
     mock_open.assert_called_once()
 
@@ -194,7 +194,7 @@ def test_update_player(tmp_path: Path) -> None:
     paths = OutputPaths(
         output_dir=output_dir, base_name="song", version=1, versioned_name="song_v1",
     )
-    with patch("songmaker_cli.main.generate_player") as mock_gen:
+    with patch("songmaker_cli.generate.generate_player") as mock_gen:
         mock_gen.return_value = tmp_path / "player.html"
         result = _update_player(paths)
     assert result == tmp_path / "player.html"
@@ -286,7 +286,7 @@ def test_player_command_with_open(tmp_path: Path) -> None:
 
     with (
         patch("songmaker_cli.main.generate_player") as mock_gen,
-        patch("songmaker_cli.main.webbrowser.open") as mock_open,
+        patch("songmaker_cli.generate.webbrowser.open") as mock_open,
     ):
         mock_gen.return_value = player_html
         player_cmd(output=str(output_dir), open_browser=True)
@@ -301,7 +301,7 @@ def test_check_command(tmp_path: Path) -> None:
         check_cmd(path="/some/file.mp3", source="/some/lyrics.md")
 
     mock_run.assert_called_once_with(
-        "/some/file.mp3", "/some/lyrics.md", project_root=None, whisper_model="small",
+        "/some/file.mp3", "/some/lyrics.md", project_root=None, whisper_model="medium",
     )
 
 

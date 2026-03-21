@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import datetime
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, TypedDict
-
-import yaml
+from typing import TypedDict
 
 from songmaker_cli.constants import DEFAULT_ARTIST, default_year
 from songmaker_cli.parser import extract_lyrics, find_lyrics_md, strip_version_suffix
@@ -17,6 +16,7 @@ from songmaker_cli.scanner import (
     extract_version_number,
     iter_album_scans,
 )
+from songmaker_cli.snapshot import GenerationInfo, read_generation_info, read_scores
 
 
 class SrtLine(TypedDict):
@@ -38,26 +38,6 @@ def _default_color() -> dict[str, str]:
     return {"primary": "#ff3220", "bg": "#0d0d0d"}
 
 
-class GenerationInfo(TypedDict, total=False):
-    """Generation metadata from a sidecar snapshot .md."""
-
-    seed: int
-    acestep_model: str
-    acestep_lm_model: str
-    songmaker_version: str
-    source: str
-    generated_at: str
-    bpm: int
-    duration: int
-    key: str
-    guidance_scale: float
-    inference_steps: int
-    shift: float
-    think_mode: bool
-    lm_temperature: float
-    infer_method: str
-
-
 @dataclass
 class TrackInfo:
     """A single track in the manifest."""
@@ -69,6 +49,7 @@ class TrackInfo:
     intended: list[LyricsLine] = field(default_factory=list)
     has_sung: bool = False
     generation: GenerationInfo | None = None
+    scores: dict[str, object] | None = None
 
 
 @dataclass
@@ -150,63 +131,6 @@ def _find_lyrics_for_track(track_stem: str, lyrics_dir: Path) -> str | None:
     return extract_lyrics(text)
 
 
-_GENERATION_KEYS = frozenset({
-    "seed", "acestep_model", "acestep_lm_model", "songmaker_version",
-    "source", "generated_at",
-})
-
-_FRONTMATTER_GEN_KEYS = frozenset({
-    "bpm", "duration", "key", "guidance_scale", "inference_steps",
-    "shift", "think_mode", "lm_temperature", "infer_method",
-})
-
-
-def read_generation_info(snapshot_path: Path) -> GenerationInfo | None:
-    """Read generation metadata from a sidecar snapshot .md file."""
-    if not snapshot_path.exists():
-        return None
-
-    text = snapshot_path.read_text(encoding="utf-8")
-    info: GenerationInfo = {}
-
-    parts = text.split("---", 2)
-    if len(parts) >= 3:
-        try:
-            front = yaml.safe_load(parts[1]) or {}
-        except yaml.YAMLError:
-            front = {}
-        if isinstance(front, dict):
-            for key in _FRONTMATTER_GEN_KEYS:
-                if key in front:
-                    info[key] = front[key]  # type: ignore[literal-required]
-
-    gen_match = re.search(r"## Generation\s*\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
-    if gen_match:
-        for line in gen_match.group(1).splitlines():
-            line = line.strip()
-            if line.startswith("- ") and ": " in line:
-                key, _, value = line[2:].partition(": ")
-                if key in _GENERATION_KEYS:
-                    info[key] = _coerce_value(value)  # type: ignore[literal-required]
-
-    return info if info else None
-
-
-def _coerce_value(value: str) -> Any:
-    """Try to parse a string value as int/float/bool."""
-    if value.lower() in ("true", "false"):
-        return value.lower() == "true"
-    try:
-        return int(value)
-    except ValueError:
-        pass
-    try:
-        return float(value)
-    except ValueError:
-        pass
-    return value
-
-
 def scan_album_tracks(
     mp3s: list[Path],
     mp3_base: str,
@@ -231,7 +155,9 @@ def scan_album_tracks(
 
         lines = sung_lines if sung_lines else intended_lines
 
-        generation = read_generation_info(mp3.with_suffix(".md"))
+        snapshot_path = mp3.with_suffix(".md")
+        generation = read_generation_info(snapshot_path)
+        track_scores = read_scores(snapshot_path)
 
         tracks.append(TrackInfo(
             file=f"{mp3_base}/{mp3.name}",
@@ -241,6 +167,7 @@ def scan_album_tracks(
             intended=intended_lines,
             has_sung=bool(sung_lines),
             generation=generation,
+            scores=track_scores,
         ))
     return tracks
 
@@ -270,7 +197,9 @@ def _build_latest_entries(
         base = strip_version_suffix(stem)
         intended_lines = lyrics_cache.get(base, [])
 
-        generation = read_generation_info(mp3.with_suffix(".md"))
+        snapshot_path = mp3.with_suffix(".md")
+        generation = read_generation_info(snapshot_path)
+        track_scores = read_scores(snapshot_path)
 
         track = TrackInfo(
             file=f"{scan.mp3_base}/{mp3.name}",
@@ -280,9 +209,24 @@ def _build_latest_entries(
             intended=intended_lines,
             has_sung=False,
             generation=generation,
+            scores=track_scores,
         )
-        entries.append((mp3.stat().st_mtime, scan.album_name, track))
+        sort_key = _generation_timestamp(generation) or mp3.stat().st_mtime
+        entries.append((sort_key, scan.album_name, track))
     return entries
+
+
+def _generation_timestamp(generation: GenerationInfo | None) -> float | None:
+    """Extract a sortable timestamp from snapshot metadata, falling back to None."""
+    if generation is None:
+        return None
+    generated_at = generation.get("generated_at")
+    if not generated_at:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(str(generated_at)).timestamp()
+    except (ValueError, TypeError):
+        return None
 
 
 def build_manifest(output_dir: Path, project_root: Path) -> Manifest:

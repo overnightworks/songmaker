@@ -1,17 +1,51 @@
-"""Write generation snapshot markdown files alongside MP3 output."""
+"""Read and write generation snapshot markdown files alongside MP3 output."""
 
 from __future__ import annotations
 
 import datetime
 import importlib.metadata
 import logging
+import re
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any, TypedDict
 
 import yaml
 
 from acestep_engine.models import AceStepConfig, ServerInfo
 from songmaker_cli.config import OutputPaths
+from songmaker_cli.scoring.models import SongScores
+
+
+class GenerationInfo(TypedDict, total=False):
+    """Generation metadata from a sidecar snapshot .md."""
+
+    seed: int
+    acestep_model: str
+    acestep_lm_model: str
+    songmaker_version: str
+    source: str
+    generated_at: str
+    bpm: int
+    duration: int
+    key: str
+    guidance_scale: float
+    inference_steps: int
+    shift: float
+    think_mode: bool
+    lm_temperature: float
+    infer_method: str
+
+
+_GENERATION_KEYS = frozenset({
+    "seed", "acestep_model", "acestep_lm_model", "songmaker_version",
+    "source", "generated_at",
+})
+
+_FRONTMATTER_GEN_KEYS = frozenset({
+    "bpm", "duration", "key", "guidance_scale", "inference_steps",
+    "shift", "think_mode", "lm_temperature", "infer_method",
+})
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +66,8 @@ def write_snapshot(
     plus a ## Generation section with runtime-only metadata.
     """
     source_text = source_path.read_text(encoding="utf-8")
+    # Split on first two --- delimiters only. Any --- in the body (e.g.
+    # horizontal rules in lyrics) stays in parts[2] and is preserved.
     parts = source_text.split("---", 2)
     if len(parts) < 3:
         return _write_raw(paths, source_text, ace_config, seed, server_info)
@@ -95,6 +131,96 @@ def _build_generation_section(
     lines.append(f"- generated_at: {datetime.datetime.now().isoformat(timespec='seconds')}")
 
     return "\n".join(lines)
+
+
+def append_scores_section(snapshot_path: Path, scores: SongScores) -> None:
+    """Write a ## Scores section to a snapshot .md file.
+
+    Idempotent — replaces an existing ## Scores section if present.
+    Does nothing if all scorers returned None.
+    """
+    score_dict = scores.to_dict()
+    if not score_dict:
+        return
+
+    scores_block = "## Scores\n\n"
+    scores_block += "\n".join(f"- {key}: {value}" for key, value in score_dict.items())
+
+    text = snapshot_path.read_text(encoding="utf-8")
+
+    if "## Scores" in text:
+        text = text[:text.index("## Scores")].rstrip()
+
+    text = text.rstrip() + "\n\n" + scores_block + "\n"
+    snapshot_path.write_text(text, encoding="utf-8")
+    log.info("Scores written to %s", snapshot_path.name)
+
+
+def read_generation_info(snapshot_path: Path) -> GenerationInfo | None:
+    """Read generation metadata from a sidecar snapshot .md file."""
+    if not snapshot_path.exists():
+        return None
+
+    text = snapshot_path.read_text(encoding="utf-8")
+    info: GenerationInfo = {}
+
+    # maxsplit=2: safe even if body contains --- (horizontal rules)
+    parts = text.split("---", 2)
+    if len(parts) >= 3:
+        try:
+            front = yaml.safe_load(parts[1]) or {}
+        except yaml.YAMLError:
+            front = {}
+        if isinstance(front, dict):
+            for key in _FRONTMATTER_GEN_KEYS:
+                if key in front:
+                    info[key] = front[key]  # type: ignore[literal-required]
+
+    gen_match = re.search(r"## Generation\s*\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
+    if gen_match:
+        for line in gen_match.group(1).splitlines():
+            line = line.strip()
+            if line.startswith("- ") and ": " in line:
+                key, _, value = line[2:].partition(": ")
+                if key in _GENERATION_KEYS:
+                    info[key] = _coerce_value(value)  # type: ignore[literal-required]
+
+    return info if info else None
+
+
+def read_scores(snapshot_path: Path) -> dict[str, object] | None:
+    """Read the ## Scores section from a snapshot .md file."""
+    if not snapshot_path.exists():
+        return None
+
+    text = snapshot_path.read_text(encoding="utf-8")
+    score_match = re.search(r"## Scores\s*\n(.*?)(?=\n## |\Z)", text, re.DOTALL)
+    if not score_match:
+        return None
+
+    scores: dict[str, object] = {}
+    for line in score_match.group(1).splitlines():
+        line = line.strip()
+        if line.startswith("- ") and ": " in line:
+            key, _, value = line[2:].partition(": ")
+            scores[key] = _coerce_value(value)
+
+    return scores if scores else None
+
+
+def _coerce_value(value: str) -> Any:
+    """Try to parse a string value as int/float/bool."""
+    if value.lower() in ("true", "false"):
+        return value.lower() == "true"
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    return value
 
 
 def _write_raw(
