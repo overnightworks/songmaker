@@ -19,8 +19,11 @@
     background: var(--bg);
     color: #e0e0e0;
     font-family: 'Open Sans', Arial, sans-serif;
-    height: 100vh;
-    overflow: hidden;
+  }
+
+  /* Desktop: fixed viewport. Mobile: scrollable. */
+  @media (min-width: 769px) {
+    html, body { height: 100vh; overflow: hidden; }
   }
 
   body {
