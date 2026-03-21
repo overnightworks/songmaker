@@ -104,7 +104,7 @@ def player(
 
 @app.command
 def score(
-    path: Annotated[str, Parameter(help="MP3 file to score")],
+    path: Annotated[Optional[str], Parameter(help="MP3 file to score")] = None,
     source: Annotated[
         Optional[str], Parameter(help="Lyrics .md file for text accuracy")
     ] = None,
@@ -114,23 +114,93 @@ def score(
     whisper_model: Annotated[
         str, Parameter(help="Whisper model size (base/small/medium/large)")
     ] = "medium",
+    all: Annotated[
+        bool, Parameter(name="--all", help="Score all MP3s in _output/")
+    ] = False,
+    force: Annotated[
+        bool, Parameter(help="Re-score even if already scored")
+    ] = False,
 ) -> None:
     """Score a generated song on quality dimensions."""
-    mp3_path = validate_path(path)
-
-    meta = None
-    if source:
-        meta = parse_song_md(validate_path(source))
+    from songmaker_cli.scoring.pipeline import PipelineConfig
 
     scorer_list = None
     if scorers and scorers != "all":
         scorer_list = [s.strip() for s in scorers.split(",")]
-
-    from songmaker_cli.scoring.pipeline import PipelineConfig
-
     config = PipelineConfig(whisper_model=whisper_model)
+
+    if all:
+        _score_all(scorer_list, config, force)
+        return
+
+    if path is None:
+        raise ValidationError("Provide an MP3 path or use --all")
+
+    mp3_path = validate_path(path)
+    meta = None
+    if source:
+        meta = parse_song_md(validate_path(source))
+
     scores = run_scoring_pipeline(mp3_path, meta=meta, scorers=scorer_list, config=config)
     log_scores(scores)
+
+
+def _score_all(
+    scorer_list: list[str] | None,
+    config: object,
+    force: bool,
+) -> None:
+    """Score all MP3s in _output/, skipping already-scored unless --force."""
+    from songmaker_cli.check import find_lyrics_source
+    from songmaker_cli.parser import parse_song_md
+    from songmaker_cli.snapshot import append_scores_section, read_scores
+
+    project_root = find_project_root(Path.cwd()) or Path.cwd()
+    output_dir = project_root / OUTPUT_ROOT
+
+    if not output_dir.exists():
+        raise ValidationError(f"No output directory: {output_dir}")
+
+    mp3s = sorted(output_dir.rglob("*.mp3"))
+    if not mp3s:
+        log.info("No MP3s found in %s", output_dir)
+        return
+
+    log.info("Scoring %d MP3s...", len(mp3s))
+    scored = 0
+    skipped = 0
+
+    for mp3 in mp3s:
+        snapshot_path = mp3.with_suffix(".md")
+
+        if not force and snapshot_path.exists():
+            existing = read_scores(snapshot_path)
+            if existing and "dynamics" in existing:
+                skipped += 1
+                continue
+
+        meta = None
+        try:
+            md_path = find_lyrics_source(mp3, None, project_root=str(project_root))
+            meta = parse_song_md(md_path)
+        except Exception:
+            pass
+
+        log.info("[%d/%d] %s", scored + skipped + 1, len(mp3s), mp3.name)
+        scores = run_scoring_pipeline(mp3, meta=meta, scorers=scorer_list, config=config)
+
+        if snapshot_path.exists():
+            append_scores_section(snapshot_path, scores)
+
+        log_scores(scores)
+        scored += 1
+
+    log.info("Done: %d scored, %d skipped (already scored)", scored, skipped)
+
+    from songmaker_cli.player import generate_player
+
+    generate_player(output_dir, project_root)
+    log.info("Player updated")
 
 
 @app.command
