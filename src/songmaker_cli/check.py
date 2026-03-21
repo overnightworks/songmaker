@@ -32,7 +32,8 @@ def run_check(
     md_path = find_lyrics_source(mp3_path, source, project_root=project_root)
     meta = parse_song_md(md_path)
 
-    result = score_text_accuracy(mp3_path, meta=meta, config=PipelineConfig(whisper_model=whisper_model))
+    config = PipelineConfig(whisper_model=whisper_model)
+    result = score_text_accuracy(mp3_path, meta=meta, config=config)
 
     log_check_results(
         mp3_path, md_path, result.similarity_ratio,

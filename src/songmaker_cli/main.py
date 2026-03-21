@@ -12,7 +12,7 @@ from cyclopts import App, Parameter
 from songmaker_cli.config import find_project_root, validate_path
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import SongmakerError, ValidationError
-from songmaker_cli.generate import _open_player, log_scores, run_generate
+from songmaker_cli.generate import log_scores, open_player, run_generate
 from songmaker_cli.parser import parse_song_md
 from songmaker_cli.player import generate_player
 from songmaker_cli.scoring import run_scoring_pipeline
@@ -99,7 +99,7 @@ def player(
     log.info("Player generated: %s", player_path)
 
     if open_browser:
-        _open_player(player_path)
+        open_player(player_path)
 
 
 @app.command
@@ -317,7 +317,10 @@ def server(
 
     output_dir = Path(output).resolve() if output else None
     project_root = Path(root).resolve() if root else None
-    run_server(output_dir=output_dir, project_root=project_root, port=port, open_browser=open_browser)
+    run_server(
+        output_dir=output_dir, project_root=project_root,
+        port=port, open_browser=open_browser,
+    )
 
 
 def main() -> None:

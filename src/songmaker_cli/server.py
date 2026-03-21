@@ -9,7 +9,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from pathlib import Path
@@ -24,7 +23,7 @@ from pydantic import BaseModel
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.player import generate_player
-from songmaker_cli.snapshot import append_scores_section, read_scores
+from songmaker_cli.snapshot import append_scores_section
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +75,7 @@ def create_app(output_dir: Path, project_root: Path) -> FastAPI:
         return FileResponse(audio_path, media_type="audio/mpeg")
 
     @app.post("/rate/{album}/{version}")
-    async def rate_version(album: str, version: str, req: RatingRequest) -> dict[str, str]:
+    async def rate_version(album: str, version: str, req: RatingRequest) -> dict[str, object]:
         snapshot_path = output_dir / album / f"{version}.md"
         if not snapshot_path.exists():
             raise HTTPException(404, f"Snapshot not found: {album}/{version}.md")
@@ -135,7 +134,11 @@ def _save_rating(snapshot_path: Path, rating: int, notes: str) -> None:
         scores_section = ""
 
     lines = scores_section.splitlines() if scores_section else []
-    new_lines = [l for l in lines if not l.startswith("- user_rating:") and not l.startswith("- user_notes:")]
+    new_lines = [
+        ln for ln in lines
+        if not ln.startswith("- user_rating:")
+        and not ln.startswith("- user_notes:")
+    ]
 
     if not new_lines:
         new_lines = ["## Scores", ""]

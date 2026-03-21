@@ -125,7 +125,8 @@ class SongScores:
         result: dict[str, object] = {}
 
         if self.emotional_dynamics:
-            result[SCORE_KEY_DYNAMICS] = round(min(self.emotional_dynamics.overall_expressiveness * 100, 100.0), 1)
+            expr = self.emotional_dynamics.overall_expressiveness
+            result[SCORE_KEY_DYNAMICS] = round(min(expr * 100, 100.0), 1)
             result[SCORE_KEY_DYNAMICS_PITCH_CV] = self.emotional_dynamics.pitch_cv
             result[SCORE_KEY_DYNAMICS_RMS_CONTRAST] = self.emotional_dynamics.rms_contrast
             result[SCORE_KEY_DYNAMICS_ONSET_CV] = self.emotional_dynamics.onset_rate_cv

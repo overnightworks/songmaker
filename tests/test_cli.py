@@ -16,12 +16,12 @@ from songmaker_cli.generate import (
     _decode_audio,
     _log_generation_banner,
     _log_result_banner,
-    _open_player,
     _run_generation,
     _update_player,
     _write_output,
     collect_overrides,
     load_album_meta_for_song,
+    open_player,
     validate_song_meta,
 )
 from songmaker_cli.main import main
@@ -178,11 +178,11 @@ def test_log_result_banner(caplog: pytest.LogCaptureFixture) -> None:
     assert "42" in caplog.text
 
 
-def test_open_player(tmp_path: Path) -> None:
+def testopen_player(tmp_path: Path) -> None:
     player_html = tmp_path / "player.html"
     player_html.write_text("<html></html>")
     with patch("songmaker_cli.generate.webbrowser.open") as mock_open:
-        _open_player(player_html)
+        open_player(player_html)
     mock_open.assert_called_once()
 
 

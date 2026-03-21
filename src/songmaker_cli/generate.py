@@ -122,7 +122,7 @@ def run_generate(
         last_paths = generated[-1][0]
         player_path = _update_player(last_paths)
         if player:
-            _open_player(player_path)
+            open_player(player_path)
 
 
 def _generate_versions(
@@ -311,7 +311,7 @@ def _update_player(paths: OutputPaths) -> Path:
     return player_path
 
 
-def _open_player(player_path: Path) -> None:
+def open_player(player_path: Path) -> None:
     url = player_path.resolve().as_uri()
     log.info("Opening player: %s", url)
     webbrowser.open(url)

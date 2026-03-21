@@ -13,9 +13,16 @@ dependencies = [
     "pydantic>=2.0",
     "cyclopts>=4.0",
     "pyyaml>=6.0",
+    "pyloudnorm>=0.1",
 ]
 
 [project.optional-dependencies]
+scoring = [
+    "librosa>=0.10",
+    "soundfile",
+    "audiobox-aesthetics>=0.0.4",
+    "torch>=2.2",
+]
 whisper = [
     "openai-whisper",
     "torch>=2.2",
@@ -24,9 +31,14 @@ whisper = [
     "librosa",
     "numba",
 ]
+server = [
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+]
 dev = [
     "pytest>=7.0",
     "ruff>=0.4",
+    "httpx",
 ]
 
 [project.scripts]

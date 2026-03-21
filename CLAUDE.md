@@ -13,13 +13,18 @@ AI-powered song generation CLI. Markdown files with lyrics and YAML frontmatter 
 songmaker generate <path> [--seed N] [--count N] [--duration N] [--bpm N]
     [--key KEY] [--shift F] [--guidance-scale F] [--inference-steps N]
     [--lm-temperature F] [--infer-method STR] [--think-mode/--no-think-mode]
-    [--check]
+    [--check] [--score] [--best N]
 
 songmaker check <mp3> [--source <lyrics.md>] [--whisper-model STR]
 
-songmaker score <mp3> [--source <lyrics.md>] [--scorers STR] [--whisper-model STR]
+songmaker score [<mp3>] [--source <lyrics.md>] [--scorers STR]
+    [--whisper-model STR] [--all] [--force] [--device cpu|cuda]
+
+songmaker archive [<mp3>] [--below THRESHOLD]
 
 songmaker player [-o output_dir] [--root project_root]
+
+songmaker server [--port 8080] [--open] [-o output_dir] [--root project_root]
 ```
 
 ## Song Format

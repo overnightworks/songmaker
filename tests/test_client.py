@@ -6,6 +6,7 @@ import json
 from unittest.mock import patch
 
 import pytest
+from conftest import mock_http_response as _mock_response
 
 from acestep_engine.client import (
     AceStepClient,
@@ -19,7 +20,6 @@ from acestep_engine.errors import (
     TaskSubmissionError,
 )
 from acestep_engine.models import AceStepConfig
-from conftest import mock_http_response as _mock_response
 
 
 def test_is_acestep_available_true() -> None:

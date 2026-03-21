@@ -10,7 +10,7 @@ import pytest
 
 from songmaker_cli.check import find_lyrics_source, log_check_results, run_check
 from songmaker_cli.errors import ValidationError
-from songmaker_cli.scoring.text_accuracy import clean_lyrics, _get_whisper_model
+from songmaker_cli.scoring.text_accuracy import _get_whisper_model, clean_lyrics
 
 
 def test_clean_lyrics_strips_tags() -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 log = logging.getLogger(__name__)
 
 _whisper_model_cache: dict[str, object] = {}
+_whisper_cache_lock = threading.Lock()
 
 
 @register("text_accuracy", needs_audio=False)
@@ -110,9 +112,10 @@ def _get_whisper_model(
     if cache is None:
         cache = _whisper_model_cache
     cache_key = f"{model_size}:{device}"
-    if cache_key not in cache:
-        log.info("Loading Whisper model (%s) on %s...", model_size, device)
-        cache[cache_key] = whisper.load_model(model_size, device=device)
+    with _whisper_cache_lock:
+        if cache_key not in cache:
+            log.info("Loading Whisper model (%s) on %s...", model_size, device)
+            cache[cache_key] = whisper.load_model(model_size, device=device)
     return cache[cache_key]
 
 

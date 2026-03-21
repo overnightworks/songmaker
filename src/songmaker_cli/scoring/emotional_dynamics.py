@@ -58,7 +58,8 @@ def score_emotional_dynamics(
 
     expressiveness = (
         DYNAMICS_PITCH_WEIGHT * _normalize_cv(pitch_cv, max_cv=DYNAMICS_PITCH_CV_CEILING)
-        + DYNAMICS_RMS_WEIGHT * _normalize_contrast(rms_contrast, max_contrast=DYNAMICS_RMS_CONTRAST_CEILING)
+        + DYNAMICS_RMS_WEIGHT * _normalize_contrast(
+            rms_contrast, max_contrast=DYNAMICS_RMS_CONTRAST_CEILING)
         + DYNAMICS_ONSET_WEIGHT * _normalize_cv(onset_cv, max_cv=DYNAMICS_ONSET_CV_CEILING)
     )
 
