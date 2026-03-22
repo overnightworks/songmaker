@@ -44,7 +44,7 @@ SCORER_TIMEOUT_SECONDS = 300
 class PipelineConfig:
     """Configuration passed to all scorers."""
 
-    whisper_model: str = "large-v3"
+    whisper_model: str = "large-v3"  # turbo is faster but hallucinates on ~5% of songs
     device: str = "cpu"
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
 
