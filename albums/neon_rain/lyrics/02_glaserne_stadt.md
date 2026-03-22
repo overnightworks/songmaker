@@ -11,6 +11,10 @@ bpm: 118
 duration: 180
 key: Am
 language: de
+inference_steps: 50
+guidance_scale: 5.5
+think_mode: true
+lm_temperature: 0.8
 ---
 
 ## Lyrics

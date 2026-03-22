@@ -13,6 +13,10 @@ bpm: 120
 duration: 200
 key: C
 language: en
+inference_steps: 50
+guidance_scale: 5.5
+think_mode: true
+lm_temperature: 0.8
 ---
 
 # Waves

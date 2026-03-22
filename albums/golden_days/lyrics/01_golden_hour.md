@@ -12,6 +12,10 @@ bpm: 115
 duration: 210
 key: G
 language: en
+inference_steps: 50
+guidance_scale: 5.5
+think_mode: true
+lm_temperature: 0.8
 ---
 
 # Golden Hour

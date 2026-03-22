@@ -13,6 +13,10 @@ bpm: 128
 duration: 210
 key: Bb
 language: en
+inference_steps: 50
+guidance_scale: 5.5
+think_mode: true
+lm_temperature: 0.8
 ---
 
 # Feel Alive

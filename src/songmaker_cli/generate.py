@@ -115,7 +115,10 @@ def run_generate(path: str, opts: GenerationOptions | None = None) -> None:
         count = opts.best
         do_score = True
 
-    ace_config = build_ace_config(meta, opts.ace_overrides())
+    client = AceStepClient()
+    server_info = client.server_info()
+    model_name = server_info.model if server_info else None
+    ace_config = build_ace_config(meta, opts.ace_overrides(), model_name=model_name)
 
     project_root = find_project_root(md_path)
     album_meta = load_album_meta_for_song(md_path, meta.album, project_root=project_root)
@@ -124,6 +127,7 @@ def run_generate(path: str, opts: GenerationOptions | None = None) -> None:
     generated = _generate_versions(
         count, md_path, meta, album_meta, ace_config, output_root,
         score_each=(do_score and opts.best is None), check_each=opts.check,
+        client=client, server_info=server_info,
     )
 
     if opts.best is not None:
@@ -147,12 +151,16 @@ def _generate_versions(
     output_root: Path | None,
     score_each: bool,
     check_each: bool,
+    client: AceStepClient | None = None,
+    server_info: object = None,
 ) -> list[tuple[OutputPaths, Path]]:
     """Run N generation cycles and return (paths, snapshot_path) per version."""
-    client = AceStepClient()
+    if client is None:
+        client = AceStepClient()
     if not client.is_available:
         raise GenerationError("ACE-Step server is not reachable")
-    server_info = client.server_info()
+    if server_info is None:
+        server_info = client.server_info()
     generated: list[tuple[OutputPaths, Path]] = []
 
     for i in range(count):

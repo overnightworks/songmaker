@@ -14,6 +14,10 @@ bpm: 108
 duration: 210
 key: Dm
 language: en
+inference_steps: 50
+guidance_scale: 5.5
+think_mode: true
+lm_temperature: 0.8
 ---
 
 # Chrome and Rain

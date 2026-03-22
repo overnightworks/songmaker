@@ -83,15 +83,35 @@ def resolve_output_paths(
 _FIELD_MAPPING = {"language": "vocal_language"}
 
 
+_SFT_DEFAULTS = {
+    "inference_steps": 50,
+    "guidance_scale": 5.5,
+}
+
+_TURBO_DEFAULTS = {
+    "inference_steps": 8,
+    "guidance_scale": 0.0,
+}
+
+
 def build_ace_config(
     meta: "SongMeta",
     cli_overrides: dict | None = None,
+    model_name: str | None = None,
 ) -> AceStepConfig:
     """Build an AceStepConfig from SongMeta + optional CLI overrides.
 
-    Priority: CLI overrides > frontmatter values > AceStepConfig defaults.
+    Priority: CLI overrides > frontmatter values > model defaults > AceStepConfig defaults.
+    When using SFT model, applies SFT-appropriate defaults (50 steps, guidance 5.5)
+    unless the frontmatter or CLI explicitly sets them.
     """
+    model_defaults = _SFT_DEFAULTS if model_name and "sft" in model_name else _TURBO_DEFAULTS
+
     fields: dict = {"prompt": meta.prompt, "lyrics": meta.lyrics}
+
+    for key, value in model_defaults.items():
+        if key not in meta.generation_params:
+            fields[key] = value
 
     for key, value in meta.generation_params.items():
         mapped = _FIELD_MAPPING.get(key, key)
