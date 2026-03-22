@@ -74,6 +74,15 @@ class SpectralQualityScore:
 
 
 @dataclass(frozen=True)
+class VocalQualityScore:
+    """Claude LLM judge — rates vocal performance 1-10 with issues."""
+
+    score: int
+    issues: tuple[str, ...]
+    summary: str
+
+
+@dataclass(frozen=True)
 class BpmAccuracyScore:
     """Detected vs requested BPM. Informational — not a quality indicator."""
 
@@ -108,9 +117,11 @@ class SongScores:
     - text_accuracy: quality signal (did the model sing the right words?)
     - audiobox: quality signal (production quality from Meta's model)
     - spectral_quality: pass/fail flag (noise artifacts?)
+    - vocal_quality: LLM judge (is it worth listening?)
     """
 
     text_accuracy: TextAccuracyScore | None = None
+    vocal_quality: VocalQualityScore | None = None
     emotional_dynamics: EmotionalDynamicsScore | None = None
     audiobox: AudioBoxScore | None = None
     bpm_accuracy: BpmAccuracyScore | None = None
@@ -152,5 +163,9 @@ class SongScores:
         if self.spectral_quality:
             result["spectral_artifacts"] = self.spectral_quality.artifact_count
             result["spectral_ok"] = not self.spectral_quality.has_artifacts
+
+        if self.vocal_quality:
+            result["vocal_quality"] = self.vocal_quality.score
+            result["vocal_summary"] = self.vocal_quality.summary
 
         return result

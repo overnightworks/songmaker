@@ -21,6 +21,7 @@ from songmaker_cli.scoring.models import (
     SongScores,
     SpectralQualityScore,
     TextAccuracyScore,
+    VocalQualityScore,
 )
 
 log = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ _VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
 class ScorerRegistry:
     """Registry of scorer functions. Supports lazy loading and test isolation."""
 
-    _EXPECTED_SCORER_COUNT = 6
+    _EXPECTED_SCORER_COUNT = 7
 
     def __init__(self) -> None:
         self._scorers: dict[str, ScorerFunc] = {}
@@ -110,6 +111,7 @@ class ScorerRegistry:
         import songmaker_cli.scoring.silence_detection  # noqa: F401
         import songmaker_cli.scoring.spectral_quality  # noqa: F401
         import songmaker_cli.scoring.text_accuracy  # noqa: F401
+        import songmaker_cli.scoring.vocal_quality  # noqa: F401
 
     def reset_for_testing(self) -> None:
         """Clear all scorers for test isolation."""
@@ -223,4 +225,5 @@ def run_scoring_pipeline(
         bpm_accuracy=_validated(results, "bpm_accuracy", BpmAccuracyScore),
         silence=_validated(results, "silence", SilenceScore),
         spectral_quality=_validated(results, "spectral_quality", SpectralQualityScore),
+        vocal_quality=_validated(results, "vocal_quality", VocalQualityScore),
     )
