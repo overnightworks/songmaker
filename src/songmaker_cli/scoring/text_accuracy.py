@@ -61,11 +61,13 @@ def score_text_accuracy(
 def _per_line_accuracy(
     intended: tuple[str, ...], transcribed: tuple[str, ...],
 ) -> float:
-    """Compute average best-match similarity per intended line using greedy alignment.
+    """Compute average best-match similarity per intended line.
 
-    Each transcribed line can only match one intended line (consumed after use).
-    This prevents a single good transcribed line from inflating scores for
-    multiple intended lines.
+    Each intended line finds its best match among ALL transcribed lines
+    (no consumption). This handles songs correctly where:
+    - Whisper produces fewer segments than intended lines
+    - Choruses repeat (same transcribed line matches multiple intended lines)
+    - Whisper splits/merges lines differently than the lyrics
     """
     if not intended or not transcribed:
         return 0.0
@@ -75,22 +77,18 @@ def _per_line_accuracy(
     if not clean_intended:
         return 0.0
 
-    candidates = [clean_lyrics(t) for t in transcribed]
-    candidates = [c for c in candidates if c]
-    if not candidates:
+    clean_trans = [clean_lyrics(t) for t in transcribed]
+    clean_trans = [c for c in clean_trans if c]
+    if not clean_trans:
         return 0.0
 
     line_scores: list[float] = []
     for line in clean_intended:
-        if not candidates:
-            line_scores.append(0.0)
-            continue
-        best_idx, best_ratio = max(
-            ((i, SequenceMatcher(None, line, c).ratio()) for i, c in enumerate(candidates)),
-            key=lambda pair: pair[1],
+        best_ratio = max(
+            SequenceMatcher(None, line, ct).ratio()
+            for ct in clean_trans
         )
         line_scores.append(best_ratio)
-        candidates.pop(best_idx)
 
     return sum(line_scores) / len(line_scores)
 

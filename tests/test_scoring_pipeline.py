@@ -530,12 +530,19 @@ def test_pipeline_rejects_wrong_return_type(
 # ── Greedy text alignment tests ───────────────────────────────────
 
 
-def test_greedy_alignment_consumes_candidates() -> None:
-    """One transcribed line should only match one intended line."""
+def test_best_match_per_line() -> None:
+    """Each intended line finds its best match independently."""
     from songmaker_cli.scoring.text_accuracy import _per_line_accuracy
 
+    # One transcribed line matches first intended perfectly, others poorly
     intended = ("hello world", "goodbye moon", "third line")
     transcribed = ("hello world",)
-
     ratio = _per_line_accuracy(intended, transcribed)
-    assert ratio < 0.5
+    # "hello world" matches itself at 1.0, others ~0.2 → avg ~0.4
+    assert 0.3 < ratio < 0.6
+
+    # Repeated chorus: same transcribed line correctly matches all
+    intended = ("stay in the golden hour", "stay in the golden hour", "stay in the golden hour")
+    transcribed = ("stay in the golden hour",)
+    ratio = _per_line_accuracy(intended, transcribed)
+    assert ratio > 0.95
