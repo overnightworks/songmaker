@@ -127,6 +127,22 @@ def _find_meta(mp3: Path, project_root: Path) -> SongMeta | None:
         return None
 
 
+def _create_minimal_snapshot(
+    snapshot_path: Path, mp3: Path, meta: SongMeta | None,
+) -> None:
+    """Create a minimal snapshot .md for old songs that don't have one."""
+    album = mp3.parent.name
+    title = meta.title if meta else mp3.stem
+    lyrics = meta.lyrics if meta else ""
+
+    content = f"---\ntitle: {title}\nalbum: {album}\n---\n"
+    if lyrics:
+        content += f"\n## Lyrics\n\n{lyrics}\n"
+
+    snapshot_path.write_text(content, encoding="utf-8")
+    log.info("Created snapshot: %s", snapshot_path.name)
+
+
 def score_all(
     scorer_list: list[str] | None,
     config: PipelineConfig,
@@ -161,8 +177,9 @@ def score_all(
         log.info("[%d/%d] %s", scored + skipped + 1, len(mp3s), mp3.name)
         scores = run_scoring_pipeline(mp3, meta=meta, scorers=scorer_list, config=config)
 
-        if snapshot_path.exists():
-            append_scores_section(snapshot_path, scores)
+        if not snapshot_path.exists():
+            _create_minimal_snapshot(snapshot_path, mp3, meta)
+        append_scores_section(snapshot_path, scores)
 
         log_scores(scores)
         scored += 1
