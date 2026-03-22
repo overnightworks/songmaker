@@ -51,6 +51,11 @@ def score_text_accuracy(
     log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
              ratio * 100, len(intended_lines), len(trans_lines))
 
+    # Detect Whisper hallucinations (repeated "Thank you", "Goodbye", etc.)
+    if _is_hallucination(trans_lines):
+        log.warning("Whisper hallucination detected — no real vocals in %s", mp3_path.name)
+        trans_lines = ()
+
     # Save transcription alongside MP3 for player diff view
     whisper_path = mp3_path.with_suffix(".whisper")
     whisper_path.write_text("\n".join(trans_lines), encoding="utf-8")
@@ -105,6 +110,29 @@ def _word_level_accuracy(
     char_ratio = SequenceMatcher(None, "".join(intended_words), "".join(trans_words)).ratio()
     word_ratio = SequenceMatcher(None, intended_words, trans_words).ratio()
     return max(char_ratio, word_ratio)
+
+
+_HALLUCINATION_PHRASES = frozenset({
+    "thank you", "thanks for watching", "goodbye", "you're welcome",
+    "please subscribe", "like and subscribe", "music playing",
+    "music", "applause", "laughter",
+})
+
+
+def _is_hallucination(lines: tuple[str, ...]) -> bool:
+    """Detect Whisper hallucinations — repeated filler phrases with no real content."""
+    if len(lines) < 3:
+        return False
+    cleaned = [clean_lyrics(l) for l in lines if clean_lyrics(l)]
+    if not cleaned:
+        return True
+    unique = set(cleaned)
+    # If >80% of lines are the same phrase, it's hallucination
+    if len(unique) <= 2 and len(cleaned) >= 5:
+        return True
+    # If most lines match known hallucination phrases
+    hallucinated = sum(1 for c in cleaned if c in _HALLUCINATION_PHRASES)
+    return hallucinated > len(cleaned) * 0.5
 
 
 def _per_line_accuracy(
