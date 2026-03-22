@@ -99,11 +99,12 @@ def _word_level_accuracy(
     if not trans_words:
         return 0.0
 
-    # Compare as joined character sequences — handles compound word
-    # splits like "streetlights" vs "street lights"
-    intended_str = "".join(intended_words)
-    trans_str = "".join(trans_words)
-    return SequenceMatcher(None, intended_str, trans_str).ratio()
+    # Two comparisons — take the higher score:
+    # 1. Character-level (handles compound words like streetlights/street lights)
+    # 2. Word-level (handles partial transcriptions where Whisper misses sections)
+    char_ratio = SequenceMatcher(None, "".join(intended_words), "".join(trans_words)).ratio()
+    word_ratio = SequenceMatcher(None, intended_words, trans_words).ratio()
+    return max(char_ratio, word_ratio)
 
 
 def _per_line_accuracy(
