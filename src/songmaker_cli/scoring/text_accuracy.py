@@ -46,7 +46,7 @@ def score_text_accuracy(
         s.get("text", "").strip() for s in segments if s.get("text", "").strip()
     )
 
-    ratio = _per_line_accuracy(intended_lines, trans_lines)
+    ratio = _word_level_accuracy(intended_lines, trans_lines)
 
     log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
              ratio * 100, len(intended_lines), len(trans_lines))
@@ -61,6 +61,49 @@ def score_text_accuracy(
         intended_line_texts=intended_lines,
         transcribed_line_texts=trans_lines,
     )
+
+
+_VOCALIZATION_PATTERN = re.compile(
+    r"^(oh|ah|la|na|da|hey|yeah|oo+h?|hm+|mm+|wo+h?|eh)[\s,]*$",
+    re.IGNORECASE,
+)
+
+
+def _is_vocalization(line: str) -> bool:
+    """Check if a line is only non-lyric vocalizations (oh, ah, la la, etc.)."""
+    words = clean_lyrics(line).split()
+    return all(_VOCALIZATION_PATTERN.match(w) for w in words) if words else True
+
+
+def _word_level_accuracy(
+    intended: tuple[str, ...], transcribed: tuple[str, ...],
+) -> float:
+    """Compare intended vs transcribed at word level.
+
+    Joins all lines into word sequences, filtering out vocalizations
+    (oh, ah, la la). Ignores line boundaries entirely — only words matter.
+    This handles Whisper merging/splitting lines and intro/outro vocalizations.
+    """
+    if not intended or not transcribed:
+        return 0.0
+
+    intended_words = " ".join(
+        clean_lyrics(line) for line in intended if not _is_vocalization(line)
+    ).split()
+    trans_words = " ".join(
+        clean_lyrics(t) for t in transcribed if not _is_vocalization(t)
+    ).split()
+
+    if not intended_words:
+        return 0.0
+    if not trans_words:
+        return 0.0
+
+    # Compare as joined character sequences — handles compound word
+    # splits like "streetlights" vs "street lights"
+    intended_str = "".join(intended_words)
+    trans_str = "".join(trans_words)
+    return SequenceMatcher(None, intended_str, trans_str).ratio()
 
 
 def _per_line_accuracy(
@@ -99,9 +142,24 @@ def _per_line_accuracy(
 
 
 def clean_lyrics(text: str) -> str:
-    """Strip section tags and normalize whitespace for comparison."""
+    """Strip section tags and normalize for comparison.
+
+    Normalizes contractions, compound words, and whitespace so that
+    'streetlights' == 'street lights' and "I'll" == "I" don't
+    count as errors.
+    """
     text = re.sub(r"\[.*?\]", "", text)
-    return re.sub(r"\s+", " ", text).strip().lower()
+    text = text.lower()
+    # Normalize contractions: I'll -> i will, don't -> do not, etc.
+    text = re.sub(r"'ll\b", " will", text)
+    text = re.sub(r"n't\b", " not", text)
+    text = re.sub(r"'re\b", " are", text)
+    text = re.sub(r"'ve\b", " have", text)
+    text = re.sub(r"'m\b", " am", text)
+    text = re.sub(r"'s\b", "", text)  # possessive/is — remove
+    # Remove remaining apostrophes and hyphens
+    text = text.replace("'", "").replace("-", " ")
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _get_whisper_model(
