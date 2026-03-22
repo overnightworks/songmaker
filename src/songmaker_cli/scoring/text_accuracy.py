@@ -51,6 +51,11 @@ def score_text_accuracy(
     log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
              ratio * 100, len(intended_lines), len(trans_lines))
 
+    # Save transcription alongside MP3 for player diff view
+    whisper_path = mp3_path.with_suffix(".whisper")
+    whisper_path.write_text("\n".join(trans_lines), encoding="utf-8")
+    log.info("Whisper transcription saved: %s", whisper_path.name)
+
     return TextAccuracyScore(
         similarity_ratio=round(ratio, 3),
         intended_line_texts=intended_lines,
@@ -123,6 +128,6 @@ def _transcribe(
     log.info("Transcribing %s...", mp3_path.name)
     result = model.transcribe(  # type: ignore[union-attr]
         str(mp3_path), language=language, fp16=False,
-        condition_on_previous_text=False,
+        condition_on_previous_text=True,
     )
     return result["text"].strip(), result.get("segments", [])

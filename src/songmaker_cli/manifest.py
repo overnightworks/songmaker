@@ -146,6 +146,15 @@ def scan_album_tracks(
         srt_path = mp3.with_suffix(".srt")
         sung_lines = parse_srt(srt_path) if srt_path.exists() else []
 
+        whisper_path = mp3.with_suffix(".whisper")
+        whisper_lines: list[LyricsLine] = []
+        if whisper_path.exists():
+            whisper_text = whisper_path.read_text(encoding="utf-8").strip()
+            whisper_lines = [
+                {"time": -1, "text": line.strip(), "section": False}
+                for line in whisper_text.splitlines() if line.strip()
+            ]
+
         base = strip_version_suffix(stem)
         if lyrics_cache is not None and base in lyrics_cache:
             intended_lines = lyrics_cache[base]
@@ -153,7 +162,9 @@ def scan_album_tracks(
             raw_lyrics = _find_lyrics_for_track(stem, lyrics_dir)
             intended_lines = lyrics_to_lines(raw_lyrics) if raw_lyrics else []
 
-        lines = sung_lines if sung_lines else intended_lines
+        # Priority: SRT > Whisper transcription > intended lyrics
+        lines = sung_lines or whisper_lines or intended_lines
+        has_transcription = bool(sung_lines or whisper_lines)
 
         snapshot_path = mp3.with_suffix(".md")
         generation = read_generation_info(snapshot_path)
@@ -165,7 +176,7 @@ def scan_album_tracks(
             number=number,
             lines=lines,
             intended=intended_lines,
-            has_sung=bool(sung_lines),
+            has_sung=has_transcription,
             generation=generation,
             scores=track_scores,
         ))
@@ -197,6 +208,18 @@ def _build_latest_entries(
         base = strip_version_suffix(stem)
         intended_lines = lyrics_cache.get(base, [])
 
+        whisper_path = mp3.with_suffix(".whisper")
+        whisper_lines: list[LyricsLine] = []
+        if whisper_path.exists():
+            whisper_text = whisper_path.read_text(encoding="utf-8").strip()
+            whisper_lines = [
+                {"time": -1, "text": line.strip(), "section": False}
+                for line in whisper_text.splitlines() if line.strip()
+            ]
+
+        lines = whisper_lines or intended_lines
+        has_transcription = bool(whisper_lines)
+
         snapshot_path = mp3.with_suffix(".md")
         generation = read_generation_info(snapshot_path)
         track_scores = read_scores(snapshot_path)
@@ -205,9 +228,9 @@ def _build_latest_entries(
             file=f"{scan.mp3_base}/{mp3.name}",
             title=f"{title} v{version}  [{scan.album_name}]",
             number=number,
-            lines=intended_lines,
+            lines=lines,
             intended=intended_lines,
-            has_sung=False,
+            has_sung=has_transcription,
             generation=generation,
             scores=track_scores,
         )
