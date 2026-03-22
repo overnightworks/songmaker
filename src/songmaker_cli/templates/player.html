@@ -19,22 +19,139 @@
     background: var(--bg);
     color: #e0e0e0;
     font-family: 'Open Sans', Arial, sans-serif;
-  }
-
-  /* Desktop: fixed viewport. Mobile: scrollable. */
-  @media (min-width: 769px) {
-    html, body { height: 100vh; overflow: hidden; }
+    height: 100vh;
+    overflow: hidden;
   }
 
   body {
+    display: flex;
+    flex-direction: row;
+  }
+
+  /* Sidebar — song list with filters */
+  .sidebar {
+    width: 320px;
+    min-width: 280px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #333;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 12px;
+    border-bottom: 2px solid var(--primary);
+    flex-shrink: 0;
+  }
+
+  .sidebar-header h1 {
+    font-family: 'Oswald', Impact, sans-serif;
+    font-size: 24px;
+    color: var(--primary);
+    letter-spacing: 6px;
+  }
+
+  .sidebar-filters {
+    padding: 8px 12px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+
+  .filter-btn {
+    background: #222;
+    border: 1px solid #444;
+    color: #ccc;
+    padding: 4px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  .filter-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .filter-btn:hover { border-color: var(--primary); }
+
+  .sort-select {
+    background: #222;
+    border: 1px solid #444;
+    color: #ccc;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+
+  .sidebar-albums {
+    padding: 4px 12px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+
+  .song-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+
+  .song-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #1a1a1a;
+    font-size: 12px;
+  }
+  .song-item:hover { background: #1a1a1a; }
+  .song-item.active { background: #1a2a1a; border-left: 3px solid var(--primary); }
+
+  .song-score {
+    font-weight: 700;
+    min-width: 28px;
+    text-align: center;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .song-score.good { background: #1a3a1a; color: #4f4; }
+  .song-score.ok { background: #3a3a1a; color: #ff4; }
+  .song-score.bad { background: #3a1a1a; color: #f44; }
+
+  .song-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .song-album {
+    font-size: 10px;
+    color: #666;
+  }
+
+  /* Main content — scrollable */
+  .main-content {
+    flex: 1;
+    height: 100vh;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
   }
 
   .nav-area {
-    flex-shrink: 0;
-    max-height: 30vh;
-    overflow-y: auto;
+    display: none; /* replaced by sidebar */
+  }
+
+  /* Mobile: stack vertically */
+  @media (max-width: 768px) {
+    body { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; max-height: 40vh; min-width: unset; border-right: none; border-bottom: 1px solid #333; }
+    .main-content { height: auto; overflow-y: visible; }
+    html, body { height: auto; overflow: auto; }
   }
 
   .header {
@@ -463,13 +580,32 @@
 <div id="debugToggle" style="position:fixed;bottom:0;right:0;z-index:10000;background:#300;color:#faa;padding:4px 8px;font-size:10px;cursor:pointer;opacity:0.5" onclick="const p=document.getElementById('debugPanel');p.style.display=p.style.display==='none'?'block':'none'">DBG</div>
 <div id="debugPanel" style="background:#300;color:#faa;padding:8px;font-size:11px;word-break:break-all;max-height:150px;overflow-y:auto;display:none;position:fixed;bottom:20px;left:0;right:0;z-index:9999"></div>
 
-<div class="header">
-  <h1 id="albumTitle">{{ARTIST}}</h1>
-  <div class="subtitle" id="albumSubtitle">Music Player</div>
+<!-- Sidebar: song list with filters -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <h1 id="albumTitle">{{ARTIST}}</h1>
+  </div>
+  <div class="sidebar-filters">
+    <span style="font-size:10px;color:#888">Filter:</span>
+    <button class="filter-btn active" onclick="filterByScore(0)">All</button>
+    <button class="filter-btn" onclick="filterByScore(7)">7+</button>
+    <button class="filter-btn" onclick="filterByScore(5)">5+</button>
+    <select class="sort-select" onchange="sortSongs(this.value)">
+      <option value="vocal">Sort: Vocal Quality</option>
+      <option value="latest">Sort: Latest</option>
+      <option value="dynamics">Sort: Dynamics</option>
+      <option value="name">Sort: Name</option>
+    </select>
+  </div>
+  <div class="sidebar-albums" id="albumNav"></div>
+  <div class="song-list" id="songList"></div>
 </div>
 
-<div class="nav-area">
-  <div class="album-nav" id="albumNav"></div>
+<!-- Main content: player + details -->
+<div class="main-content">
+
+<!-- Hidden legacy nav (JS still references it) -->
+<div class="nav-area" style="display:none">
   <div class="track-nav" id="trackNav"></div>
 </div>
 
@@ -532,6 +668,8 @@
 <div class="footer">
   AI Generated &bull; {{ARTIST}} &bull; {{YEAR}}
 </div>
+
+</div><!-- end main-content -->
 
 <script>
 const INLINE_MANIFEST = {{MANIFEST_JSON}};
@@ -1178,8 +1316,103 @@ function exportRatings() {
 
 initStars();
 
+// --- Sidebar: song list with filter/sort ---
+
+let currentFilter = 0;
+let currentSort = 'vocal';
+
+function getVocalScore(track) {
+  return track.scores?.vocal_quality || 0;
+}
+
+function getDynamics(track) {
+  return track.scores?.dynamics || 0;
+}
+
+function renderSongList() {
+  const list = document.getElementById('songList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  const album = ALBUMS[currentAlbum];
+  if (!album) return;
+
+  let tracks = album.tracks.map((t, i) => ({ track: t, index: i }));
+
+  // Filter
+  if (currentFilter > 0) {
+    tracks = tracks.filter(({ track }) => getVocalScore(track) >= currentFilter);
+  }
+
+  // Sort
+  if (currentSort === 'vocal') {
+    tracks.sort((a, b) => getVocalScore(b.track) - getVocalScore(a.track));
+  } else if (currentSort === 'dynamics') {
+    tracks.sort((a, b) => getDynamics(b.track) - getDynamics(a.track));
+  } else if (currentSort === 'name') {
+    tracks.sort((a, b) => a.track.title.localeCompare(b.track.title));
+  }
+  // 'latest' = default order (already sorted by newest)
+
+  tracks.forEach(({ track, index }) => {
+    const item = document.createElement('div');
+    item.className = 'song-item' + (index === currentTrack ? ' active' : '');
+    item.onclick = () => { loadTrack(index); renderSongList(); };
+
+    const vq = getVocalScore(track);
+    const scoreClass = vq >= 7 ? 'good' : vq >= 4 ? 'ok' : 'bad';
+    const scoreHtml = vq > 0 ? '<span class="song-score ' + scoreClass + '">' + vq + '</span>' : '<span class="song-score" style="color:#555">-</span>';
+
+    const dyn = getDynamics(track);
+    const dynHtml = dyn > 0 ? '<span style="font-size:10px;color:#888">' + Math.round(dyn) + '</span>' : '';
+
+    item.innerHTML = scoreHtml +
+      '<span class="song-name">' + escHtml(track.title) + '</span>' +
+      dynHtml;
+
+    list.appendChild(item);
+  });
+
+  if (tracks.length === 0) {
+    list.innerHTML = '<div style="padding:20px;color:#666;text-align:center">No songs match filter</div>';
+  }
+}
+
+function filterByScore(min) {
+  currentFilter = min;
+  document.querySelectorAll('.filter-btn').forEach(b => b.className = 'filter-btn');
+  event.target.className = 'filter-btn active';
+  renderSongList();
+}
+
+function sortSongs(by) {
+  currentSort = by;
+  renderSongList();
+}
+
+// Hook into existing loadAlbum to also render song list
+const _originalLoadAlbum = typeof loadAlbum === 'function' ? loadAlbum : null;
+if (_originalLoadAlbum) {
+  const _origFn = loadAlbum;
+  loadAlbum = function(albumIdx, trackIdx) {
+    _origFn(albumIdx, trackIdx);
+    renderSongList();
+  };
+}
+
+// Also render on track change
+const _originalLoadTrack = typeof loadTrack === 'function' ? loadTrack : null;
+if (_originalLoadTrack) {
+  const _origTrackFn = loadTrack;
+  loadTrack = function(idx) {
+    _origTrackFn(idx);
+    setTimeout(renderSongList, 50);
+  };
+}
+
 // --- Start ---
 init();
+setTimeout(renderSongList, 100);
 </script>
 
 </body>
