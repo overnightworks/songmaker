@@ -112,7 +112,7 @@ def score(
     ] = None,
     whisper_model: Annotated[
         str, Parameter(help="Whisper model size (base/small/medium/large)")
-    ] = "medium",
+    ] = "large-v3",
     all: Annotated[
         bool, Parameter(name="--all", help="Score all MP3s in _output/")
     ] = False,
@@ -187,7 +187,7 @@ def check(
     ] = None,
     whisper_model: Annotated[
         str, Parameter(help="Whisper model size (base/small/medium/large)")
-    ] = "medium",
+    ] = "large-v3",
 ) -> None:
     """Check lyrics accuracy via Whisper transcription.
 

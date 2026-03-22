@@ -22,7 +22,7 @@ def run_check(
     path: str,
     source: str | None = None,
     project_root: str | None = None,
-    whisper_model: str = "medium",
+    whisper_model: str = "large-v3",
 ) -> None:
     """Transcribe with Whisper and compare to intended lyrics."""
     from songmaker_cli.scoring.pipeline import PipelineConfig

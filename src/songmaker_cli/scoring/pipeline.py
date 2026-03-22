@@ -43,7 +43,7 @@ SCORER_TIMEOUT_SECONDS = 300
 class PipelineConfig:
     """Configuration passed to all scorers."""
 
-    whisper_model: str = "medium"
+    whisper_model: str = "large-v3"
     device: str = "cpu"
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
 
