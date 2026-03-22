@@ -975,7 +975,14 @@ function renderScores(track) {
       display = val.toFixed(1);
       if (key === 'bpm_deviation') display += '%';
     }
-    div.innerHTML = label + ': <span>' + escHtml(String(display)) + '</span>';
+    // Vocal summary: truncated, click to expand
+    if (key === 'vocal_summary' && typeof val === 'string' && val.length > 40) {
+      const short = escHtml(val.substring(0, 40)) + '...';
+      const full = escHtml(val);
+      div.innerHTML = label + ': <span class="vocal-summary-text" onclick="this.textContent = this.dataset.expanded === \'1\' ? \'' + short.replace(/'/g, "\\'") + '\' : \'' + full.replace(/'/g, "\\'") + '\'; this.dataset.expanded = this.dataset.expanded === \'1\' ? \'0\' : \'1\'" style="cursor:pointer">' + short + '</span>';
+    } else {
+      div.innerHTML = label + ': <span>' + escHtml(String(display)) + '</span>';
+    }
     grid.appendChild(div);
   }
 }
@@ -1320,6 +1327,7 @@ initStars();
 
 let currentFilter = 0;
 let currentSort = 'vocal';
+let currentAlbumFilter = null; // null = show current album
 
 function getVocalScore(track) {
   return track.scores?.vocal_quality || 0;
@@ -1338,6 +1346,11 @@ function renderSongList() {
   if (!album) return;
 
   let tracks = album.tracks.map((t, i) => ({ track: t, index: i }));
+
+  // Highlight active album in sidebar
+  document.querySelectorAll('.album-btn').forEach(b => {
+    b.classList.toggle('active', ALBUMS[parseInt(b.dataset.idx)]?.id === album.id);
+  });
 
   // Filter
   if (currentFilter > 0) {
