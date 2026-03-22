@@ -799,6 +799,8 @@ function renderGenInfo(track) {
 // --- Scores ---
 
 const SCORE_LABELS = {
+  vocal_quality: 'Vocal Quality',
+  vocal_summary: 'Vocal Summary',
   dynamics: 'Dynamics',
   text_accuracy: 'Text Accuracy',
   audiobox_enjoyment: 'Enjoyment',
@@ -809,6 +811,8 @@ const SCORE_LABELS = {
   bpm_deviation: 'BPM Deviation',
   silence_ok: 'Silence OK',
   silence_gaps: 'Silence Gaps',
+  spectral_ok: 'No Artifacts',
+  spectral_artifacts: 'Artifact Count',
 };
 
 function renderScores(track) {
@@ -826,7 +830,8 @@ function renderScores(track) {
     const div = document.createElement('div');
     div.className = 'gen-info-item';
     let display = val;
-    if (key === 'silence_ok') display = val ? '✓' : '✗';
+    if (key === 'vocal_quality') display = val + '/10';
+    if (key === 'silence_ok' || key === 'spectral_ok') display = val ? '✓' : '✗';
     if (key === 'bpm_deviation') display = val + '%';
     if (typeof val === 'number' && key !== 'silence_gaps' && key !== 'bpm_detected') {
       display = val.toFixed(1);
