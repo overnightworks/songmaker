@@ -626,41 +626,8 @@ async function init() {
 
 // --- Auto-refresh: poll manifest.json every 3s ---
 
-if (location.protocol !== 'file:') setInterval(async () => {
-  const wasPlaying = audioEl && !audioEl.paused;
-  const currentTime = audioEl ? audioEl.currentTime : 0;
-  const prevAlbumId = ALBUMS[currentAlbum] ? ALBUMS[currentAlbum].id : null;
-  const prevTrackFile = ALBUMS[currentAlbum] && ALBUMS[currentAlbum].tracks[currentTrack]
-    ? ALBUMS[currentAlbum].tracks[currentTrack].file : null;
-
-  const changed = await loadManifest();
-  if (!changed) return;
-
-  // Rebuild UI
-  buildAlbumNav();
-
-  // Try to restore position
-  let restoredAlbum = 0;
-  let restoredTrack = 0;
-  if (prevAlbumId) {
-    const ai = ALBUMS.findIndex(a => a.id === prevAlbumId);
-    if (ai >= 0) {
-      restoredAlbum = ai;
-      if (prevTrackFile) {
-        const ti = ALBUMS[ai].tracks.findIndex(t => t.file === prevTrackFile);
-        if (ti >= 0) restoredTrack = ti;
-      }
-    }
-  }
-
-  loadAlbum(restoredAlbum, restoredTrack);
-
-  // Restore playback if was playing
-  if (wasPlaying && prevTrackFile === (ALBUMS[restoredAlbum]?.tracks[restoredTrack]?.file)) {
-    audioEl.currentTime = currentTime;
-    audioEl.play().catch(() => {});
-  }
-}, 3000);
+// No auto-polling — saves bandwidth. Pull down to refresh on mobile,
+// or the page reloads automatically when the server rebuilds the manifest.
 
 // --- Read ID3 tags from MP3 via jsmediatags ---
 
@@ -762,24 +729,9 @@ async function loadTrack(index) {
   trackMeta.textContent = '';
 
   const audioUrl = AUDIO_BASE + t.file;
-  dbg('Fetching audio: ' + audioUrl);
-  try {
-    const resp = await apiFetch(audioUrl);
-    dbg('Audio resp: status=' + resp.status + ' type=' + resp.headers.get('content-type'));
-    if (resp.ok && (resp.headers.get('content-type') || '').includes('audio')) {
-      const blob = await resp.blob();
-      dbg('Audio blob: ' + blob.size + ' bytes, type=' + blob.type);
-      if (audioEl._blobUrl) URL.revokeObjectURL(audioEl._blobUrl);
-      audioEl._blobUrl = URL.createObjectURL(blob);
-      audioEl.src = audioEl._blobUrl;
-    } else {
-      dbg('Audio fallback to direct URL');
-      audioEl.src = audioUrl;
-    }
-  } catch(e) {
-    dbg('Audio fetch error: ' + e.message);
-    audioEl.src = audioUrl;
-  }
+  dbg('Audio: ' + audioUrl);
+  audioEl.src = audioUrl;
+  audioEl.preload = 'auto';
   audioEl.load();
   audioEl.onerror = () => {
     dbg('Audio ERROR: ' + (audioEl.error ? audioEl.error.message : 'unknown'));
