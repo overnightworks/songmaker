@@ -102,7 +102,7 @@ def _pitch_coefficient_of_variation(
 
 
 def _section_median_pitch(section: np.ndarray, sr: int) -> float | None:
-    """Compute median voiced pitch for a single section. Runs in a subprocess."""
+    """Compute median voiced pitch for a single section."""
     fmin = librosa.note_to_hz("C2")
     fmax = librosa.note_to_hz("C7")
     f0, voiced_flag, _ = librosa.pyin(section, fmin=fmin, fmax=fmax, sr=sr)

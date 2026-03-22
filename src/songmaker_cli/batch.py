@@ -143,12 +143,94 @@ def _create_minimal_snapshot(
     log.info("Created snapshot: %s", snapshot_path.name)
 
 
+def _auto_detect_device(config: PipelineConfig) -> PipelineConfig:
+    """Auto-detect GPU if available and ACE-Step isn't hogging VRAM."""
+    if config.device != "cpu":
+        return config
+
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return config
+
+        free_gb = (torch.cuda.get_device_properties(0).total_mem
+                   - torch.cuda.memory_reserved(0)) / 1e9
+        if free_gb > 5.0:
+            log.info("GPU detected with %.1fGB free — using CUDA", free_gb)
+            return PipelineConfig(
+                whisper_model=config.whisper_model,
+                device="cuda",
+                scorer_timeout=config.scorer_timeout,
+            )
+        log.info("GPU has only %.1fGB free (ACE-Step running?) — using CPU", free_gb)
+    except Exception:
+        pass
+    return config
+
+
+def _whisper_pass(
+    mp3s: list[Path], config: PipelineConfig, project_root: Path, force: bool,
+) -> None:
+    """Run Whisper transcription on all songs in a single pass.
+
+    Loads the model once, transcribes all songs, then unloads.
+    This is separate from the scoring pipeline to manage GPU memory.
+    """
+    # Only run if text_accuracy or vocal_quality would need it
+    songs_needing_whisper = [
+        mp3 for mp3 in mp3s
+        if force or not mp3.with_suffix(".whisper").exists()
+    ]
+    if not songs_needing_whisper:
+        log.info("All songs already have Whisper transcriptions")
+        return
+
+    log.info("Whisper pass: %d songs with %s on %s",
+             len(songs_needing_whisper), config.whisper_model, config.device)
+
+    import whisper
+
+    model = whisper.load_model(config.whisper_model, device=config.device)
+    fp16 = config.device == "cuda"
+
+    for i, mp3 in enumerate(songs_needing_whisper):
+        log.info("[%d/%d] Whisper: %s", i + 1, len(songs_needing_whisper), mp3.name)
+        result = model.transcribe(
+            str(mp3), language="en", fp16=fp16,
+            condition_on_previous_text=True,
+        )
+        lines = [
+            s["text"].strip()
+            for s in result.get("segments", [])
+            if s.get("text", "").strip()
+        ]
+        mp3.with_suffix(".whisper").write_text("\n".join(lines), encoding="utf-8")
+
+    # Free GPU memory
+    del model
+    try:
+        import torch
+
+        torch.cuda.empty_cache()
+    except Exception:
+        pass
+    log.info("Whisper pass complete")
+
+
 def score_all(
     scorer_list: list[str] | None,
     config: PipelineConfig,
     force: bool,
 ) -> None:
-    """Score all MP3s in _output/, skipping already-scored unless force=True."""
+    """Score all MP3s in _output/.
+
+    Pipeline:
+    1. Auto-detect GPU if available
+    2. Whisper transcription pass (loads model once, transcribes all, unloads)
+    3. Score each song with remaining scorers
+    4. Rebuild player
+    """
     from songmaker_cli.player import generate_player
 
     project_root = find_project_root(Path.cwd()) or Path.cwd()
@@ -158,10 +240,21 @@ def score_all(
         raise ValidationError(f"No output directory: {output_dir}")
 
     mp3s = sorted(output_dir.rglob("*.mp3"))
+    mp3s = [m for m in mp3s if "test_" not in m.stem]
     if not mp3s:
         log.info("No MP3s found in %s", output_dir)
         return
 
+    config = _auto_detect_device(config)
+
+    # Step 1: Whisper pass — single model load, all songs
+    needs_whisper = scorer_list is None or any(
+        s in (scorer_list or []) for s in ("text_accuracy", "vocal_quality")
+    )
+    if needs_whisper:
+        _whisper_pass(mp3s, config, project_root, force)
+
+    # Step 2: Score each song
     log.info("Scoring %d MP3s...", len(mp3s))
     scored = 0
     skipped = 0
@@ -173,14 +266,15 @@ def score_all(
             skipped += 1
             continue
 
-        meta = _find_meta(mp3, project_root)
+        if not snapshot_path.exists():
+            meta = _find_meta(mp3, project_root)
+            _create_minimal_snapshot(snapshot_path, mp3, meta)
+        else:
+            meta = _find_meta(mp3, project_root)
+
         log.info("[%d/%d] %s", scored + skipped + 1, len(mp3s), mp3.name)
         scores = run_scoring_pipeline(mp3, meta=meta, scorers=scorer_list, config=config)
-
-        if not snapshot_path.exists():
-            _create_minimal_snapshot(snapshot_path, mp3, meta)
         append_scores_section(snapshot_path, scores)
-
         log_scores(scores)
         scored += 1
 
