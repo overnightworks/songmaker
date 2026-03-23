@@ -5,27 +5,27 @@ track: 1
 genre: Hip-Hop / Pop / Conscious Rap
 prompt: >
   dark emotional hip-hop, haunting piano loop in A minor,
-  heavy 808 drums with punchy kick and clap snare,
-  male rapper with attitude and pain, switches between whisper and shout,
-  flow changes speed constantly, sometimes slow and deliberate then rapid fire,
-  strings build tension underneath the verses,
-  chorus explodes with powerful soulful female singer,
-  woman's voice soaring and full of pain like she's about to cry,
-  chorus has lush orchestral strings and choir behind the vocals,
-  massive dynamic contrast between dark verses and emotional chorus,
-  bridge is quiet and broken, just piano and voice,
-  final chorus is the biggest with full gospel choir,
-  this song should make you feel something real
+    heavy 808 drums with punchy kick and clap snare,
+    male rapper with attitude and pain, switches between whisper and shout,
+    flow changes speed constantly, sometimes slow and deliberate then rapid fire,
+    strings build tension underneath the verses,
+    chorus explodes with powerful soulful female singer,
+    woman's voice soaring and full of pain like she's about to cry,
+    chorus has lush orchestral strings and choir behind the vocals,
+    massive dynamic contrast between dark verses and emotional chorus,
+    bridge is quiet and broken, just piano and voice,
+    final chorus is the biggest with full gospel choir,
+    this song should make you feel something real
 bpm: 94
 duration: 220
 key: Am
 time_signature: 4/4
 language: en
-inference_steps: 60
+inference_steps: 50
 guidance_scale: 0
 shift: 3.0
 think_mode: true
-lm_temperature: 1.0
+lm_temperature: 0.85
 infer_method: ode
 status: approved
 ---

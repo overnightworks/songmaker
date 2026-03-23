@@ -587,8 +587,8 @@
     <div class="gen-info-grid" id="genInfoGrid"></div>
   </div>
 
-  <div class="gen-info" id="scoresPanel" style="display:none">
-    <h3>Scores</h3>
+  <div class="gen-info collapsed" id="scoresPanel" style="display:none">
+    <h3 onclick="this.parentElement.classList.toggle('collapsed')">&#9662; Scores</h3>
     <div class="gen-info-grid" id="scoresGrid"></div>
   </div>
 
@@ -616,7 +616,7 @@ const API_KEY = new URLSearchParams(location.search).get('key') || '';
 
 function dbg(msg) {
   const el = document.getElementById('debugPanel');
-  if (el) { el.style.display = 'block'; el.innerHTML += msg + '<br>'; el.scrollTop = el.scrollHeight; }
+  if (el) { el.innerHTML += msg + '<br>'; el.scrollTop = el.scrollHeight; }
   console.log('[DBG]', msg);
 }
 
