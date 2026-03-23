@@ -163,7 +163,8 @@ def archive(
         mp3_path = validate_path(path)
         archive_file(mp3_path, archive_dir)
     elif below is not None:
-        archive_below_threshold(below, output_dir, archive_dir, read_scores)
+        count = archive_below_threshold(below, output_dir, archive_dir, read_scores)
+        log.info("Archived %d versions", count)
     else:
         raise ValidationError("Provide an MP3 path or use --below <threshold>")
 

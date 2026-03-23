@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import secrets
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -108,6 +109,8 @@ def create_app(
 
     manifest_path = output_dir / "manifest.json"
     player_html = output_dir / "player.html"
+    _scoring_lock = threading.Lock()
+    _generation_lock = threading.Lock()
 
     @app.get("/manifest.json")
     async def get_manifest() -> JSONResponse:
@@ -143,7 +146,9 @@ def create_app(
         if not mp3_path.exists():
             raise HTTPException(404, f"MP3 not found: {album}/{version}.mp3")
 
-        background_tasks.add_task(_run_scoring, mp3_path, output_dir, project_root)
+        if not _scoring_lock.acquire(blocking=False):
+            raise HTTPException(409, "Scoring already in progress")
+        background_tasks.add_task(_run_scoring, mp3_path, output_dir, project_root, _scoring_lock)
         return {"status": "started", "version": version}
 
     @app.post("/generate")
@@ -157,9 +162,9 @@ def create_app(
         if not md_path.exists():
             raise HTTPException(404, f"Song file not found: {req.path}")
 
-        background_tasks.add_task(
-            _run_generation, md_path, req.count,
-        )
+        if not _generation_lock.acquire(blocking=False):
+            raise HTTPException(409, "Generation already in progress")
+        background_tasks.add_task(_run_generation, md_path, req.count, _generation_lock)
         return {"status": "started", "path": req.path}
 
     @app.get("/")
@@ -181,28 +186,36 @@ def _rebuild_manifest(output_dir: Path, project_root: Path) -> None:
     log.info("Manifest rebuilt")
 
 
-def _run_scoring(mp3_path: Path, output_dir: Path, project_root: Path) -> None:
+def _run_scoring(
+    mp3_path: Path, output_dir: Path, project_root: Path, lock: threading.Lock,
+) -> None:
     """Run scoring pipeline on a single MP3."""
-    from songmaker_cli.scoring import run_scoring_pipeline
+    try:
+        from songmaker_cli.scoring import run_scoring_pipeline
 
-    snapshot_path = mp3_path.with_suffix(".md")
-    meta = _load_meta_for_mp3(mp3_path, project_root)
+        snapshot_path = mp3_path.with_suffix(".md")
+        meta = _load_meta_for_mp3(mp3_path, project_root)
 
-    scores = run_scoring_pipeline(mp3_path, meta=meta)
-    if snapshot_path.exists():
-        append_scores_section(snapshot_path, scores)
+        scores = run_scoring_pipeline(mp3_path, meta=meta)
+        if snapshot_path.exists():
+            append_scores_section(snapshot_path, scores)
 
-    _rebuild_manifest(output_dir, project_root)
-    log.info("Scored: %s", mp3_path.name)
+        _rebuild_manifest(output_dir, project_root)
+        log.info("Scored: %s", mp3_path.name)
+    finally:
+        lock.release()
 
 
-def _run_generation(md_path: Path, count: int) -> None:
+def _run_generation(md_path: Path, count: int, lock: threading.Lock) -> None:
     """Run generation in background."""
-    from songmaker_cli.generate import GenerationOptions, run_generate
+    try:
+        from songmaker_cli.generate import GenerationOptions, run_generate
 
-    opts = GenerationOptions(count=count)
-    run_generate(str(md_path), opts)
-    log.info("Generation complete: %s", md_path.name)
+        opts = GenerationOptions(count=count)
+        run_generate(str(md_path), opts)
+        log.info("Generation complete: %s", md_path.name)
+    finally:
+        lock.release()
 
 
 def _load_meta_for_mp3(mp3_path: Path, project_root: Path) -> SongMeta | None:

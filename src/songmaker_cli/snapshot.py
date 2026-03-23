@@ -168,7 +168,7 @@ def _build_generation_section(
         version = "dev"
     lines.append(f"- songmaker_version: {version}")
     lines.append(f"- source: {source_path.name}")
-    lines.append(f"- generated_at: {datetime.datetime.now().isoformat(timespec='seconds')}")
+    lines.append(f"- generated_at: {datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')}")
 
     return "\n".join(lines)
 
