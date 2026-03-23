@@ -3,10 +3,12 @@
 
 	interface Props {
 		generation: GenerationItem;
+		scoring?: boolean;
 		onversionclick?: (versionId: string) => void;
+		onscore?: (genId: string) => void;
 	}
 
-	let { generation, onversionclick }: Props = $props();
+	let { generation, scoring = false, onversionclick, onscore }: Props = $props();
 
 	const scores = $derived(generation.scores);
 	const params = $derived(generation.generation_params);
@@ -98,7 +100,14 @@
 	</div>
 
 	<section class="section">
-		<h5 class="section-title">Scores</h5>
+		<div class="section-header">
+			<h5 class="section-title">Scores</h5>
+			{#if onscore}
+				<button class="score-btn" onclick={() => onscore(generation.id)} disabled={scoring}>
+					{scoring ? 'Scoring...' : 'Re-score'}
+				</button>
+			{/if}
+		</div>
 		{#if scoreEntries.length > 0}
 			<div class="scores-grid">
 				{#each scoreEntries as entry (entry.label)}
@@ -242,12 +251,40 @@
 		border-radius: 6px;
 	}
 
+	.section-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
 	.section-title {
 		font-family: var(--font-display);
 		font-size: 11px;
 		color: var(--text-dim);
 		text-transform: uppercase;
 		letter-spacing: 1px;
+	}
+
+	.score-btn {
+		padding: 3px 12px;
+		border: 1px solid var(--primary);
+		border-radius: 10px;
+		background: none;
+		color: var(--primary);
+		font-size: 10px;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		cursor: pointer;
+	}
+
+	.score-btn:hover:not(:disabled) {
+		background: var(--primary);
+		color: #fff;
+	}
+
+	.score-btn:disabled {
+		opacity: 0.4;
 	}
 
 	.scores-grid {

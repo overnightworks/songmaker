@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy.orm import Session, joinedload
 
-from songmaker_cli.db.models import Album, Generation, Rating, Song, Version
+from songmaker_cli.db.models import Album, Generation, Job, Rating, Score, Song, Version
 
 
 def list_albums(session: Session) -> list[Album]:
@@ -177,6 +179,86 @@ def delete_generation(session: Session, generation_id: str) -> None:
     if not gen:
         raise ValueError(f"Generation not found: {generation_id}")
     session.delete(gen)
+    session.flush()
+
+
+# ── Jobs ─────────────────────────────────────────────────────────────
+
+
+def create_job(session: Session, job_type: str) -> Job:
+    job = Job(type=job_type)
+    session.add(job)
+    session.flush()
+    return job
+
+
+def update_job_status(
+    session: Session, job_id: str, status: str,
+    progress: float = 0.0, error: str | None = None,
+) -> None:
+    job = session.query(Job).filter_by(id=job_id).first()
+    if not job:
+        return
+    job.status = status
+    job.progress = progress
+    job.error = error
+    if status in ("completed", "failed"):
+        job.completed_at = datetime.utcnow()
+    session.flush()
+
+
+def get_job(session: Session, job_id: str) -> Job | None:
+    return session.query(Job).filter_by(id=job_id).first()
+
+
+def job_to_dict(job: Job) -> dict:
+    return {
+        "id": job.id,
+        "type": job.type,
+        "status": job.status,
+        "progress": job.progress,
+        "error": job.error,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+    }
+
+
+# ── Generation creation ─────────────────────────────────────────────
+
+
+def create_generation(
+    session: Session,
+    song_id: str,
+    version_id: str | None,
+    mp3_path: str,
+    seed: int | None = None,
+    generation_params: dict | None = None,
+) -> Generation:
+    max_num = (
+        session.query(Generation.generation_number)
+        .filter_by(song_id=song_id)
+        .order_by(Generation.generation_number.desc())
+        .first()
+    )
+    gen_number = (max_num[0] + 1) if max_num else 1
+
+    gen = Generation(
+        song_id=song_id,
+        version_id=version_id,
+        generation_number=gen_number,
+        mp3_path=mp3_path,
+        seed=seed,
+        generation_params=generation_params,
+        status="completed",
+    )
+    session.add(gen)
+    session.flush()
+    return gen
+
+
+def save_scores(session: Session, generation_id: str, scores: dict) -> None:
+    score = Score(generation_id=generation_id, scorer="batch", value=scores)
+    session.add(score)
     session.flush()
 
 

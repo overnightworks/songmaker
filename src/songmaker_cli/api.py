@@ -18,6 +18,7 @@ from songmaker_cli.claude.provider import (
 from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
     album_to_dict,
+    create_job,
     create_song,
     delete_generation,
     delete_version,
@@ -25,7 +26,9 @@ from songmaker_cli.db.queries import (
     get_album,
     get_generation,
     get_generation_by_path,
+    get_job,
     get_song,
+    job_to_dict,
     list_albums,
     list_songs,
     save_rating,
@@ -197,6 +200,81 @@ def api_delete_generation(
         raise HTTPException(404, "Generation not found")
     session.commit()
     return {"status": "ok"}
+
+
+# ── Generation + Scoring ─────────────────────────────────────────────
+
+
+class GenerateRequest(BaseModel):
+    count: int = Field(1, ge=1, le=10)
+
+
+class ScoreRequest(BaseModel):
+    scorers: list[str] | None = None
+
+
+@router.post("/songs/{song_id}/generate")
+def api_generate_song(
+    song_id: str,
+    req: GenerateRequest,
+    session: Session = Depends(_get_session),
+) -> dict:
+    song = get_song(session, song_id)
+    if not song:
+        raise HTTPException(404, "Song not found")
+    version = song.latest_version
+    if not version or not version.lyrics or not version.prompt:
+        raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
+
+    job = create_job(session, "generate")
+    session.commit()
+
+    import threading
+
+    from songmaker_cli.jobs import run_generation_job
+    threading.Thread(
+        target=run_generation_job,
+        args=(job.id, song_id, version.id, req.count),
+        daemon=True,
+    ).start()
+
+    return job_to_dict(job)
+
+
+@router.post("/generations/{gen_id}/score")
+def api_score_generation(
+    gen_id: str,
+    req: ScoreRequest,
+    session: Session = Depends(_get_session),
+) -> dict:
+    gen = get_generation(session, gen_id)
+    if not gen:
+        raise HTTPException(404, "Generation not found")
+
+    job = create_job(session, "score")
+    session.commit()
+
+    import threading
+
+    from songmaker_cli.jobs import run_scoring_job
+    threading.Thread(
+        target=run_scoring_job,
+        args=(job.id, gen_id, req.scorers),
+        daemon=True,
+    ).start()
+
+    return job_to_dict(job)
+
+
+# ── Jobs ────────────────────────────────────────────────────────────
+
+
+@router.get("/jobs/{job_id}")
+def api_get_job(job_id: str, session: Session = Depends(_get_session)) -> dict:
+    job = get_job(session, job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    return job_to_dict(job)
 
 
 # ── Ratings ──────────────────────────────────────────────────────────

@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fetchAlbums, fetchSongs, createSong } from '$lib/api/client';
+	import {
+		fetchAlbums,
+		fetchSongs,
+		createSong,
+		generateSong,
+		scoreGeneration
+	} from '$lib/api/client';
+	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import {
 		albumList,
 		songList,
@@ -57,6 +64,14 @@
 	const diff = $derived($activeDiff);
 	const isDiffMode = $derived($diffMode);
 	const isAppliedDiff = $derived($appliedDiffMode);
+	const jobs = $derived($activeJobs);
+
+	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
+	const isGenerating = $derived(
+		songJobs.some((j) => j.job.type === 'generate' && j.job.status === 'running')
+	);
+
+	let genCount = $state(1);
 
 	$effect(() => {
 		if (song) loadSongData(song);
@@ -80,6 +95,26 @@
 
 	function onDeleteVersion(versionId: string, deleteGenerations: boolean): void {
 		if (song) handleDeleteVersion(song.id, versionId, deleteGenerations);
+	}
+
+	async function onGenerate(): Promise<void> {
+		if (!song) return;
+		try {
+			const job = await generateSong(song.id, genCount);
+			trackJob(job, { songId: song.id });
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Generation failed';
+		}
+	}
+
+	async function onScore(genId: string): Promise<void> {
+		if (!song) return;
+		try {
+			const job = await scoreGeneration(genId);
+			trackJob(job, { songId: song.id, genId });
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Scoring failed';
+		}
 	}
 
 	function onVersionClick(versionId: string): void {
@@ -182,7 +217,15 @@
 				</div>
 
 				{#if activeGen}
-					<GenerationDetail generation={activeGen} onversionclick={onVersionClick} />
+					{@const genScoring = jobs.some(
+						(j) => j.genId === activeGen.id && j.job.type === 'score' && j.job.status === 'running'
+					)}
+					<GenerationDetail
+						generation={activeGen}
+						scoring={genScoring}
+						onversionclick={onVersionClick}
+						onscore={onScore}
+					/>
 				{:else}
 					<div class="lyrics-edit">
 						{#if vers.length > 0}
@@ -195,6 +238,38 @@
 								ondelete={onDeleteVersion}
 							/>
 						{/if}
+
+						<div class="generate-bar">
+							<div class="gen-controls">
+								<button
+									class="generate-btn"
+									onclick={onGenerate}
+									disabled={isGenerating || dirty}
+									title={dirty ? 'Save changes before generating' : ''}
+								>
+									{isGenerating ? 'Generating...' : 'Generate'}
+								</button>
+								<select class="gen-count-select" bind:value={genCount}>
+									{#each [1, 2, 3, 5, 10] as n (n)}
+										<option value={n}>×{n}</option>
+									{/each}
+								</select>
+							</div>
+							{#each songJobs as j (j.job.id)}
+								<div class="job-status" class:failed={j.job.status === 'failed'}>
+									<span class="job-type">{j.job.type}</span>
+									{#if j.job.status === 'running'}
+										<span class="job-progress">{Math.round(j.job.progress * 100)}%</span>
+									{:else if j.job.status === 'completed'}
+										<span class="job-done">Done</span>
+									{:else if j.job.status === 'failed'}
+										<span class="job-error">{j.job.error || 'Failed'}</span>
+									{:else}
+										<span class="job-queued">Queued</span>
+									{/if}
+								</div>
+							{/each}
+						</div>
 
 						{#if isAppliedDiff && !isDiffMode}
 							<div class="diff-banner">
@@ -435,6 +510,83 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
+	}
+
+	.generate-bar {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.gen-controls {
+		display: flex;
+		gap: 6px;
+		align-items: center;
+	}
+
+	.generate-btn {
+		padding: 6px 16px;
+		border: 2px solid var(--score-good);
+		border-radius: 16px;
+		background: var(--score-good);
+		color: #000;
+		font-family: var(--font-display);
+		font-size: 11px;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.generate-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.gen-count-select {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		color: var(--text-light);
+		padding: 4px 8px;
+		border-radius: 4px;
+		font-size: 11px;
+	}
+
+	.job-status {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 10px;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.job-status.failed {
+		color: var(--score-bad);
+	}
+
+	.job-type {
+		color: var(--text-dim);
+	}
+
+	.job-progress {
+		color: var(--score-ok);
+	}
+
+	.job-done {
+		color: var(--score-good);
+	}
+
+	.job-error {
+		color: var(--score-bad);
+		font-family: var(--font-body);
+		text-transform: none;
+	}
+
+	.job-queued {
+		color: var(--text-dim);
 	}
 
 	.diff-banner {

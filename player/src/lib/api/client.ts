@@ -73,6 +73,36 @@ export async function deleteGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}`, { method: 'DELETE' });
 }
 
+export interface JobStatus {
+	id: string;
+	type: string;
+	status: string;
+	progress: number;
+	error: string | null;
+	started_at: string | null;
+	completed_at: string | null;
+}
+
+export async function generateSong(songId: string, count: number = 1): Promise<JobStatus> {
+	return apiFetch<JobStatus>(`/api/songs/${songId}/generate`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ count })
+	});
+}
+
+export async function scoreGeneration(genId: string): Promise<JobStatus> {
+	return apiFetch<JobStatus>(`/api/generations/${genId}/score`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({})
+	});
+}
+
+export async function fetchJob(jobId: string): Promise<JobStatus> {
+	return apiFetch<JobStatus>(`/api/jobs/${jobId}`);
+}
+
 export async function rateGeneration(
 	album: string,
 	genName: string,
