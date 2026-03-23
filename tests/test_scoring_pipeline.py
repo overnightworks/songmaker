@@ -376,9 +376,6 @@ def test_text_accuracy_with_mock_whisper(tmp_path: Path) -> None:
     with patch(
         "songmaker_cli.scoring.text_accuracy._get_whisper_model",
         return_value=mock_model,
-    ), patch(
-        "songmaker_cli.scoring.text_accuracy._vocal_preprocess",
-        return_value=str(mp3),
     ):
         result = score_text_accuracy(mp3, meta=meta)
         assert result.similarity_ratio > 0.5

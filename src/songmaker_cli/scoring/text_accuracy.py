@@ -264,33 +264,6 @@ def _get_whisper_model(
     return cache[cache_key]
 
 
-def _vocal_preprocess(mp3_path: Path) -> str:
-    """Pre-emphasis + vocal frequency boost to help Whisper hear vocals over music.
-
-    Returns path to a temporary 16kHz mono WAV optimized for speech recognition.
-    """
-    import tempfile
-
-    import librosa
-    import numpy as np
-    import soundfile as sf
-    from scipy.signal import butter, sosfilt
-
-    y, sr = librosa.load(str(mp3_path), sr=16000, mono=True)
-    # Pre-emphasis: boost higher frequencies where consonants live
-    y = np.append(y[0], y[1:] - 0.97 * y[:-1])
-    # Bandpass vocal range and boost by +6dB
-    sos = butter(4, [200, 5000], btype="band", fs=sr, output="sos")
-    vocals = sosfilt(sos, y)
-    y = y + vocals * (10 ** (6 / 20) - 1)
-    peak = np.max(np.abs(y))
-    if peak > 1e-10:
-        y = y / peak * 0.95
-    tmp_path = tempfile.mktemp(suffix=".wav")
-    sf.write(tmp_path, y, sr)
-    return tmp_path
-
-
 def _transcribe(
     mp3_path: Path, language: str, model: object,
     initial_prompt: str | None = None,
@@ -299,7 +272,6 @@ def _transcribe(
     kwargs: dict[str, object] = {
         "language": language, "fp16": True,
         "condition_on_previous_text": False,
-        "word_timestamps": True,
         "beam_size": 5,
         "best_of": 5,
         "temperature": 0,

@@ -168,9 +168,18 @@ def run_scoring_job(
         song_scores = run_scoring_pipeline(mp3_full, meta=meta, scorers=scorers, config=config)
         scores_dict = song_scores.to_dict()
 
+        whisper_text = None
+        if song_scores.text_accuracy:
+            whisper_text = "\n".join(song_scores.text_accuracy.transcribed_line_texts)
+
         with factory() as session:
+            from songmaker_cli.db.models import Generation as GenModel
             from songmaker_cli.db.queries import save_scores
             save_scores(session, gen_id, scores_dict)
+            if whisper_text is not None:
+                gen_record = session.query(GenModel).filter_by(id=gen_id).first()
+                if gen_record:
+                    gen_record.whisper_text = whisper_text
             session.commit()
 
         log.info("Scored: %s (%d metrics)", mp3_path_rel, len(scores_dict))
