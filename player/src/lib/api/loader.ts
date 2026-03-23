@@ -66,8 +66,10 @@ function versionToTrack(v: VersionItem): Track {
 				.map((line) => {
 					const trimmed = line.trim();
 					if (trimmed.includes('|') && trimmed.split('|', 1)[0].replace('.', '').match(/^\d+$/)) {
-						const [confStr, text] = trimmed.split('|', 2);
-						return { time: -1, text: text.trim(), section: false, confidence: parseFloat(confStr) };
+						const parts = trimmed.split('|', 2);
+						const text = parts[1] ?? '';
+						const conf = parseFloat(parts[0]) || 0;
+						return { time: -1, text: text.trim(), section: false, confidence: conf };
 					}
 					return { time: -1, text: trimmed, section: false };
 				})

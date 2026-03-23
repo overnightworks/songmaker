@@ -144,8 +144,8 @@
 					min="0"
 					max="100"
 					step="0.1"
-					bind:value={rating}
-					oninput={() => onRatingChange(rating)}
+					value={rating}
+					oninput={(e: Event) => onRatingChange(parseFloat((e.target as HTMLInputElement).value))}
 					aria-label="Your rating"
 				/>
 				<span class="rating-value">{touched ? rating.toFixed(1) : '-'}</span>
@@ -155,7 +155,11 @@
 				rows="2"
 				placeholder="What stands out? Voice, groove, lyrics, production..."
 				bind:value={comment}
-				onblur={save}
+				oninput={() => {
+					touched = true;
+					clearTimeout(saveTimeout);
+					saveTimeout = setTimeout(save, 500);
+				}}
 			></textarea>
 			{#if saveStatus}
 				<span class="save-status">{saveStatus}</span>
