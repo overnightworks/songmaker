@@ -70,10 +70,13 @@
 		if (currentSortKey === 'name') {
 			tracks.sort((a, b) => a.track.title.localeCompare(b.track.title));
 		} else if (currentSortKey !== 'latest') {
-			tracks.sort(
-				(a, b) =>
-					(sortMetric.getValue(b.track) as number) - (sortMetric.getValue(a.track) as number)
-			);
+			tracks.sort((a, b) => {
+				const va = sortMetric.getValue(a.track);
+				const vb = sortMetric.getValue(b.track);
+				const na = typeof va === 'number' ? va : -1;
+				const nb = typeof vb === 'number' ? vb : -1;
+				return nb - na;
+			});
 		}
 
 		return tracks;
@@ -83,11 +86,11 @@
 		return pb?.albumIndex === albumIdx && pb?.trackIndex === index;
 	}
 
-	function displayValue(track: Track): string {
-		if (currentSortKey === 'latest' || currentSortKey === 'name') return '';
+	const showSortBadge = $derived(currentSortKey !== 'latest' && currentSortKey !== 'name');
+
+	function sortBadgeValue(track: Track): number {
 		const val = sortMetric.getValue(track);
-		if (typeof val !== 'number' || val === 0) return '';
-		return sortMetric.max <= 10 ? String(val) : val.toFixed(1);
+		return typeof val === 'number' ? val : 0;
 	}
 </script>
 
@@ -205,8 +208,8 @@
 				{/if}
 			</button>
 			<button class="song-body" onclick={() => selectTrack(index)}>
-				{#if displayValue(track)}
-					<ScoresBadge value={sortMetric.getValue(track) as number} />
+				{#if showSortBadge}
+					<ScoresBadge value={sortBadgeValue(track)} />
 				{/if}
 				<span class="song-name">{track.title}</span>
 				{#if track.scores?.user_rating}

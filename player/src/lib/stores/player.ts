@@ -63,6 +63,10 @@ export function updateTrackScores(file: string, update: Record<string, number | 
 	);
 }
 
+// --- Playback time (shared with lyrics sync) ---
+export const playbackTime = writable(0);
+export const playbackDuration = writable(0);
+
 export function nextTrack(): boolean {
 	const pb = get(playback);
 	if (!pb) return false;

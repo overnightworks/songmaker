@@ -8,7 +8,8 @@
 		playBrowsingTrack,
 		playback,
 		browsingAlbumIndex,
-		browsingTrackIndex
+		browsingTrackIndex,
+		playbackTime
 	} from '$lib/stores/player';
 	import AlbumNav from '$lib/components/AlbumNav.svelte';
 	import SongList from '$lib/components/SongList.svelte';
@@ -27,6 +28,7 @@
 	const isBrowsedTrackPlaying = $derived(
 		pb?.albumIndex === albumIdx && pb?.trackIndex === trackIdx
 	);
+	const lyricsTime = $derived(isBrowsedTrackPlaying ? $playbackTime : 0);
 
 	onMount(async () => {
 		try {
@@ -75,7 +77,7 @@
 				<GenInfoPanel generation={track.generation} />
 				<ScoresPanel scores={track.scores} />
 
-				<SyncedLyrics lines={track.lines} />
+				<SyncedLyrics lines={track.lines} currentTime={lyricsTime} />
 			</div>
 		{:else}
 			<div class="empty">Select a track to start</div>

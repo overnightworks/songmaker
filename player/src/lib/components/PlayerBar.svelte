@@ -1,8 +1,19 @@
 <script lang="ts">
-	import { playingTrack, playback, playBrowsingTrack, nextTrack, albums } from '$lib/stores/player';
+	import { onDestroy } from 'svelte';
+	import {
+		playingTrack,
+		playback,
+		playBrowsingTrack,
+		nextTrack,
+		albums,
+		playbackTime,
+		playbackDuration
+	} from '$lib/stores/player';
 	import { formatTime } from '$lib/utils/format';
+	import WaveSurfer from 'wavesurfer.js';
 
-	let audioEl: HTMLAudioElement | undefined = $state();
+	let waveContainer: HTMLDivElement | undefined = $state();
+	let wavesurfer: WaveSurfer | undefined = $state();
 	let isPlaying = $state(false);
 	let currentTime = $state(0);
 	let duration = $state(0);
@@ -14,61 +25,71 @@
 
 	let prevFile = $state('');
 
+	function createWavesurfer(): void {
+		if (!waveContainer) return;
+		wavesurfer?.destroy();
+		wavesurfer = WaveSurfer.create({
+			container: waveContainer,
+			height: 40,
+			waveColor: '#444',
+			progressColor: '#ff3220',
+			cursorColor: '#ff3220',
+			cursorWidth: 1,
+			barWidth: 2,
+			barGap: 1,
+			barRadius: 1,
+			normalize: true,
+			hideScrollbar: true,
+			interact: true
+		});
+
+		wavesurfer.on('timeupdate', (time: number) => {
+			currentTime = time;
+			playbackTime.set(time);
+		});
+
+		wavesurfer.on('ready', () => {
+			duration = wavesurfer?.getDuration() ?? 0;
+			playbackDuration.set(duration);
+		});
+
+		wavesurfer.on('finish', handleEnded);
+		wavesurfer.on('play', () => (isPlaying = true));
+		wavesurfer.on('pause', () => (isPlaying = false));
+	}
+
 	$effect(() => {
-		if (!audioEl || !track) return;
+		if (!track || !waveContainer) return;
 		if (track.file !== prevFile) {
 			prevFile = track.file;
-			audioEl.src = `/audio/${track.file}`;
-			audioEl.load();
-			audioEl.play();
+			if (!wavesurfer) createWavesurfer();
+			wavesurfer?.load(`/audio/${track.file}`);
+			wavesurfer?.once('ready', () => wavesurfer?.play());
 		}
 	});
 
+	onDestroy(() => {
+		wavesurfer?.destroy();
+	});
+
 	function togglePlay(): void {
-		if (!audioEl) return;
 		if (!track) {
 			playBrowsingTrack();
 			return;
 		}
-		if (isPlaying) {
-			audioEl.pause();
-		} else {
-			audioEl.play();
-		}
-	}
-
-	function seek(e: Event): void {
-		if (!audioEl) return;
-		const input = e.target as HTMLInputElement;
-		audioEl.currentTime = parseFloat(input.value);
+		if (!wavesurfer) return;
+		wavesurfer.playPause();
 	}
 
 	function handleEnded(): void {
 		const advanced = nextTrack();
-		if (advanced && audioEl) {
-			audioEl.addEventListener('canplay', function onCanPlay() {
-				audioEl?.removeEventListener('canplay', onCanPlay);
-				audioEl?.play();
-			});
+		if (advanced && wavesurfer) {
+			wavesurfer.once('ready', () => wavesurfer?.play());
 		}
 	}
 </script>
 
 <footer class="player-bar">
-	<audio
-		bind:this={audioEl}
-		onplay={() => (isPlaying = true)}
-		onpause={() => (isPlaying = false)}
-		ontimeupdate={() => {
-			if (audioEl) currentTime = audioEl.currentTime;
-		}}
-		onloadedmetadata={() => {
-			if (audioEl) duration = audioEl.duration;
-		}}
-		onended={handleEnded}
-		preload="auto"
-	></audio>
-
 	<button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
 		{isPlaying ? '⏸' : '▶'}
 	</button>
@@ -82,20 +103,9 @@
 		{/if}
 	</div>
 
-	<div class="progress-group">
-		<span class="time">{formatTime(currentTime)}</span>
-		<input
-			type="range"
-			class="progress-bar"
-			min="0"
-			max={duration || 0}
-			step="0.1"
-			value={currentTime}
-			oninput={seek}
-			aria-label="Seek"
-		/>
-		<span class="time">{formatTime(duration)}</span>
-	</div>
+	<span class="time">{formatTime(currentTime)}</span>
+	<div class="waveform" bind:this={waveContainer}></div>
+	<span class="time">{formatTime(duration)}</span>
 </footer>
 
 <style>
@@ -157,38 +167,19 @@
 		color: var(--text-muted);
 	}
 
-	.progress-group {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-
 	.time {
 		font-family: var(--font-display);
 		font-size: 12px;
 		color: var(--text-muted);
 		min-width: 36px;
 		text-align: center;
+		flex-shrink: 0;
 	}
 
-	.progress-bar {
+	.waveform {
 		flex: 1;
-		-webkit-appearance: none;
-		appearance: none;
-		height: 4px;
-		background: var(--border);
-		border-radius: 2px;
-		outline: none;
-	}
-
-	.progress-bar::-webkit-slider-thumb {
-		-webkit-appearance: none;
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
-		background: var(--primary);
-		cursor: pointer;
+		min-width: 100px;
+		height: 40px;
 	}
 
 	@media (max-width: 600px) {
