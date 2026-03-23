@@ -2,7 +2,7 @@
 
 ## Overview
 
-Song generation CLI that takes markdown files (lyrics + YAML config) and produces mastered MP3s via ACE-Step.
+Song generation platform: CLI + web app. Takes markdown files (lyrics + YAML config) and produces mastered MP3s via ACE-Step. SvelteKit frontend provides the UI for creating, generating, reviewing, and listening.
 
 ## Architecture
 
@@ -105,6 +105,67 @@ Input (mono WAV) → Stereo duplicate
   → MP3 (320 kbps, ffmpeg)
 ```
 
+## Frontend (SvelteKit + TypeScript)
+
+Located in `player/`. Communicates with FastAPI backend via REST + WebSocket.
+
+### Source Structure
+
+```
+player/src/
+  routes/                     Pages and layouts
+    +layout.svelte            Persistent PlayerBar + nav
+    +page.svelte              Dashboard (recent, in-progress)
+    create/+page.svelte       Lyrics editor + generation form
+    library/+page.svelte      All songs, filter/sort/search
+    album/[id]/+page.svelte   Album view
+    song/[id]/+page.svelte    Song detail, versions, scores
+
+  lib/
+    components/               Svelte components (PlayerBar, Lyrics, etc.)
+    stores/                   Svelte stores (player, jobs, websocket)
+    api/
+      client.ts               Typed fetch wrapper for all endpoints
+      types.ts                Shared types (must match Python pydantic models)
+```
+
+### Frontend Code Standards
+
+- Same KISS principles as Python — small components, single responsibility
+- Components max ~80 lines of script — extract logic into `lib/` if larger
+- No `any` — strict TypeScript, no escape hatches
+- Props are typed interfaces, not inline types
+- Reactive state via Svelte stores/runes, no global mutable variables
+- No inline styles — use scoped CSS in `<style>` blocks
+- Semantic HTML, proper ARIA labels for accessibility
+
+### API Endpoints
+
+```
+POST   /api/songs                Create song (lyrics + meta)
+GET    /api/songs/:id            Song detail
+PUT    /api/songs/:id            Update lyrics/meta
+GET    /api/songs/:id/versions   List all versions
+POST   /api/songs/:id/generate   Enqueue generation
+POST   /api/versions/:id/rate    Rate a version
+POST   /api/versions/:id/score   Trigger scoring
+GET    /api/albums               List albums
+GET    /api/library              Paginated, filtered, sorted
+GET    /api/jobs                 Active jobs
+WS     /ws                      Real-time generation/scoring progress
+```
+
+### Dev Commands
+
+```bash
+cd player
+pnpm dev          # dev server (proxies /api to FastAPI)
+pnpm build        # production build
+pnpm check        # svelte-check + tsc
+pnpm lint         # eslint + prettier --check
+pnpm test         # vitest
+```
+
 ## Self-Review (required for refactors and multi-file changes)
 
 After completing a refactor, bug fix that touches multiple files, or any structural change, do a self-review before presenting the result:
@@ -115,9 +176,9 @@ After completing a refactor, bug fix that touches multiple files, or any structu
 
 3. **Check for half-measures** — did you solve each issue in isolation, or did you step back and ask whether the overall result makes sense? Fixing a checklist of issues point-by-point without considering how the fixes interact is how you end up with incoherent code that satisfies every requirement but reads like patches.
 
-4. **Run the tests** — `pytest tests/` must pass. If tests had to change, verify the new tests are testing behavior, not implementation details. If you changed a public interface, make sure tests cover the new contract.
+4. **Run the tests** — `pytest tests/` must pass. For frontend: `pnpm test` must pass. If tests had to change, verify the new tests are testing behavior, not implementation details. If you changed a public interface, make sure tests cover the new contract.
 
-5. **Verify no regressions** — `ruff check src/ tests/` must pass. No new type: ignore annotations unless genuinely unavoidable.
+5. **Verify no regressions** — `ruff check src/ tests/` must pass. For frontend: `pnpm check && pnpm lint` must pass. No new type: ignore or @ts-ignore annotations unless genuinely unavoidable.
 
 Skip this for trivial single-file changes (typo fixes, adding a constant, etc.).
 
@@ -126,6 +187,13 @@ Skip this for trivial single-file changes (typo fixes, adding a constant, etc.).
 See [docs/testing.md](docs/testing.md) for test structure, fixtures, and coverage targets.
 
 ```bash
+# Backend
 pytest tests/
 ruff check src/ tests/
+
+# Frontend
+cd player
+pnpm check
+pnpm lint
+pnpm test
 ```

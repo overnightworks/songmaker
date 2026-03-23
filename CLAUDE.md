@@ -2,10 +2,13 @@
 
 ## Project
 
-AI-powered song generation CLI. Markdown files with lyrics and YAML frontmatter go in, mastered MP3s come out.
+AI-powered song generation and playback platform. Markdown files with lyrics and YAML frontmatter go in, mastered MP3s come out. A SvelteKit web app provides the UI for creating, generating, reviewing, and listening.
 
 **Python**: 3.12 (pinned — AI backends require <=3.12)
 **Venv**: `.venv/`
+**Node**: 22 LTS
+**Package manager**: pnpm
+**Frontend**: SvelteKit + TypeScript (strict) in `player/`
 
 ## CLI (cyclopts)
 
@@ -73,11 +76,32 @@ Chorus here...
 - Mock external services (ACE-Step server, ffmpeg, Whisper)
 - Unit tests must be fast (< 10 seconds); integration tests with audio processing are slower
 
-### General
+### General (Python)
 - Type hints on all function signatures
 - Prefer dataclasses/pydantic/TypedDict over untyped dicts for structured data
 - Functions return values, don't mutate arguments
 - No dead parameters, no unused imports, no stale docstrings — if you move or remove code, clean up all traces
+
+### Frontend Code Standards (SvelteKit + TypeScript)
+- Same KISS principles as Python — small components, single responsibility
+- Components max ~80 lines of script — extract logic into `lib/` if larger
+- No `any` — strict TypeScript, no escape hatches
+- Props are typed interfaces, not inline types
+- Reactive state via Svelte stores/runes, no global mutable variables
+- No inline styles — use scoped CSS in `<style>` blocks
+- Semantic HTML — use proper elements, not div soup
+- Accessibility: all interactive elements keyboard-navigable, proper ARIA labels
+
+### Frontend Testing
+- Vitest for unit tests, Testing Library for component tests
+- Test logic in `lib/` (stores, API client, utils) — high coverage
+- Test components that contain logic (forms, player controls)
+- Mock API calls, never hit real backend in tests
+
+### Frontend Linting
+- ESLint + eslint-plugin-svelte
+- Prettier with svelte plugin
+- `pnpm check` must pass before committing (svelte-check + tsc --noEmit)
 
 ## Key Rules
 
@@ -112,8 +136,16 @@ Chorus here...
 - `scripts/` — Server setup/start
 - `tests/` — pytest suite
 - `docs/` — Architecture and testing docs
+- `player/` — SvelteKit frontend app
+  - `src/routes/` — SvelteKit pages and layouts
+  - `src/lib/components/` — Svelte components
+  - `src/lib/stores/` — Svelte stores (player state, WebSocket, jobs)
+  - `src/lib/api/` — Typed API client and shared types
+- `plans/` — Architecture plans and design docs
 
 ## Setup
+
+### Backend (Python)
 
 ```bash
 python3.12 -m venv .venv
@@ -123,10 +155,30 @@ pip install -e .
 # ACE-Step server: python scripts/start_acestep.py
 ```
 
+### Frontend (SvelteKit)
+
+```bash
+cd player
+pnpm install
+pnpm dev          # dev server with HMR (proxies /api to FastAPI)
+pnpm build        # production build
+pnpm check        # svelte-check + tsc
+pnpm lint         # eslint + prettier --check
+pnpm test         # vitest
+```
+
 ## Workflow
 
 - **Commit before reviewing**: After completing a batch of changes, always commit first, then review. This ensures work is safe and reviewable as a clean diff.
 - **Run tests before committing**: `pytest tests/ -q` must pass. Run `ruff check` on changed files.
+- **Frontend changes**: `pnpm check` and `pnpm lint` must pass before committing. Run `pnpm test` for changed modules.
+
+## API Contract
+
+- Backend serves API at `/api/*`, frontend proxied in dev via Vite
+- All API types defined in `player/src/lib/api/types.ts`
+- Types must match Python pydantic models — keep in sync manually
+- WebSocket at `/ws` for real-time generation/scoring progress
 
 ## Conventions
 

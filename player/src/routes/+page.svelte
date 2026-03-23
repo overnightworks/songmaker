@@ -1,0 +1,160 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { fetchManifest } from '$lib/api/client';
+	import { albums, currentTrack, currentAlbum } from '$lib/stores/player';
+	import AlbumNav from '$lib/components/AlbumNav.svelte';
+	import SongList from '$lib/components/SongList.svelte';
+	import SyncedLyrics from '$lib/components/SyncedLyrics.svelte';
+	import ScoresPanel from '$lib/components/ScoresPanel.svelte';
+	import GenInfoPanel from '$lib/components/GenInfoPanel.svelte';
+	import RatingWidget from '$lib/components/RatingWidget.svelte';
+
+	let loading = $state(true);
+	let error = $state('');
+
+	const track = $derived($currentTrack);
+	const album = $derived($currentAlbum);
+
+	onMount(async () => {
+		try {
+			const manifest = await fetchManifest();
+			albums.set(manifest.albums);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load manifest';
+		} finally {
+			loading = false;
+		}
+	});
+</script>
+
+{#if loading}
+	<div class="loading">Loading...</div>
+{:else if error}
+	<div class="error">{error}</div>
+{:else}
+	<aside class="sidebar">
+		<header class="sidebar-header">
+			<h1>{album?.title ?? 'Songmaker'}</h1>
+		</header>
+		<AlbumNav />
+		<SongList />
+	</aside>
+
+	<main class="main-content">
+		{#if track}
+			<div class="player-area">
+				<div class="now-playing">
+					<span class="track-number">{track.number}</span>
+					<h2 class="track-title">{track.title}</h2>
+					{#if album}
+						<span class="track-meta">{album.artist}</span>
+					{/if}
+				</div>
+
+				<GenInfoPanel generation={track.generation} />
+				<ScoresPanel scores={track.scores} />
+				<RatingWidget />
+
+				<SyncedLyrics lines={track.lines} />
+			</div>
+		{:else}
+			<div class="empty">Select a track to start</div>
+		{/if}
+	</main>
+{/if}
+
+<style>
+	.sidebar {
+		width: 320px;
+		min-width: 280px;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		border-right: 1px solid var(--border);
+		flex-shrink: 0;
+	}
+
+	.sidebar-header {
+		padding: 12px;
+		border-bottom: 2px solid var(--primary);
+		flex-shrink: 0;
+	}
+
+	.sidebar-header h1 {
+		font-family: var(--font-display);
+		font-size: 24px;
+		color: var(--primary);
+		letter-spacing: 6px;
+		text-transform: uppercase;
+	}
+
+	.main-content {
+		flex: 1;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.player-area {
+		max-width: 800px;
+		margin: 0 auto;
+		padding: 8px 20px;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		width: 100%;
+	}
+
+	.now-playing {
+		text-align: center;
+		margin-bottom: 6px;
+		flex-shrink: 0;
+	}
+
+	.track-number {
+		font-family: var(--font-display);
+		color: var(--primary);
+		font-size: 16px;
+	}
+
+	.track-title {
+		font-family: var(--font-display);
+		color: #fff;
+		font-size: 24px;
+		text-transform: uppercase;
+		letter-spacing: 2px;
+	}
+
+	.track-meta {
+		color: #666;
+		font-size: 12px;
+		margin-top: 2px;
+	}
+
+	.loading,
+	.error,
+	.empty {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: 1;
+		color: var(--text-muted);
+		font-style: italic;
+	}
+
+	.error {
+		color: #f44;
+	}
+
+	@media (max-width: 768px) {
+		.sidebar {
+			width: 100%;
+			height: auto;
+			max-height: 40vh;
+			min-width: unset;
+			border-right: none;
+			border-bottom: 1px solid var(--border);
+		}
+	}
+</style>

@@ -44,6 +44,11 @@ Thumbs.db
 *.pth
 *.ckpt
 
+# ── Frontend ──
+player/node_modules/
+player/.svelte-kit/
+player/build/
+
 # ── Misc ──
 plans/
 .pytest_cache/

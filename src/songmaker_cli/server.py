@@ -167,11 +167,23 @@ def create_app(
         background_tasks.add_task(_run_generation, md_path, req.count, _generation_lock)
         return {"status": "started", "path": req.path}
 
+    # SvelteKit build directory (player/build/)
+    sveltekit_dir = project_root / "player" / "build"
+    sveltekit_app_dir = sveltekit_dir / "_app"
+
     @app.get("/")
     async def serve_player() -> FileResponse:
+        sk_index = sveltekit_dir / "index.html"
+        if sk_index.exists():
+            return FileResponse(sk_index, media_type="text/html")
         if not player_html.exists():
             generate_player(output_dir, project_root)
         return FileResponse(player_html, media_type="text/html")
+
+    if sveltekit_app_dir.exists():
+        app.mount(
+            "/_app", StaticFiles(directory=str(sveltekit_app_dir)), name="sveltekit-app",
+        )
 
     app.mount(
         "/static", StaticFiles(directory=str(output_dir)), name="static",
