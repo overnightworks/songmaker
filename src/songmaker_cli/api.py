@@ -1,0 +1,140 @@
+"""REST API endpoints backed by the database.
+
+Mounted on the FastAPI app at /api/*. Replaces manifest.json for the frontend.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from songmaker_cli.db.engine import get_session_factory
+from songmaker_cli.db.queries import (
+    album_to_dict,
+    get_album,
+    get_version,
+    get_version_by_path,
+    list_albums,
+    list_library,
+    list_versions,
+    save_rating,
+    version_to_dict,
+)
+
+log = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api")
+
+
+def _get_session() -> Session:
+    factory = get_session_factory()
+    session = factory()
+    try:
+        yield session  # type: ignore[misc]
+    finally:
+        session.close()
+
+
+class RateRequest(BaseModel):
+    rating: float = Field(ge=0, le=100)
+    notes: str = ""
+
+
+class PaginatedResponse(BaseModel):
+    items: list[dict[str, Any]]
+    total: int
+    offset: int
+    limit: int
+
+
+@router.get("/albums")
+def api_list_albums(session: Session = Depends(_get_session)) -> list[dict]:
+    albums = list_albums(session)
+    return [album_to_dict(a) for a in albums]
+
+
+@router.get("/albums/{album_id}")
+def api_get_album(album_id: str, session: Session = Depends(_get_session)) -> dict:
+    album = get_album(session, album_id)
+    if not album:
+        raise HTTPException(404, f"Album not found: {album_id}")
+    return album_to_dict(album)
+
+
+@router.get("/albums/{album_id}/versions")
+def api_album_versions(
+    album_id: str,
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    session: Session = Depends(_get_session),
+) -> PaginatedResponse:
+    versions, total = list_library(session, album_id=album_id, limit=limit, offset=offset)
+    return PaginatedResponse(
+        items=[version_to_dict(v) for v in versions],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get("/library")
+def api_library(
+    album_id: str | None = Query(None),
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    session: Session = Depends(_get_session),
+) -> PaginatedResponse:
+    versions, total = list_library(session, album_id=album_id, limit=limit, offset=offset)
+    return PaginatedResponse(
+        items=[version_to_dict(v) for v in versions],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get("/versions/{version_id}")
+def api_get_version(version_id: str, session: Session = Depends(_get_session)) -> dict:
+    version = get_version(session, version_id)
+    if not version:
+        raise HTTPException(404, f"Version not found: {version_id}")
+    return version_to_dict(version)
+
+
+@router.get("/songs/{song_id}/versions")
+def api_song_versions(song_id: str, session: Session = Depends(_get_session)) -> list[dict]:
+    versions = list_versions(session, song_id)
+    return [version_to_dict(v) for v in versions]
+
+
+@router.post("/versions/{version_id}/rate")
+def api_rate_version(
+    version_id: str, req: RateRequest, session: Session = Depends(_get_session),
+) -> dict:
+    version = get_version(session, version_id)
+    if not version:
+        raise HTTPException(404, f"Version not found: {version_id}")
+
+    save_rating(session, version_id, req.rating, req.notes)
+    session.commit()
+    return {"status": "ok", "version_id": version_id, "rating": req.rating}
+
+
+@router.post("/rate/{album}/{version_name}")
+def api_rate_by_path(
+    album: str, version_name: str, req: RateRequest,
+    session: Session = Depends(_get_session),
+) -> dict:
+    """Legacy-compatible rating endpoint using mp3 path convention."""
+    mp3_path = f"{album}/{version_name}.mp3"
+    version = get_version_by_path(session, mp3_path)
+    if not version:
+        raise HTTPException(404, f"Version not found: {mp3_path}")
+
+    save_rating(session, version.id, req.rating, req.notes)
+    session.commit()
+    return {"status": "ok", "version": version_name, "rating": req.rating}

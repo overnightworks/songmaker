@@ -30,6 +30,8 @@ from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.player import generate_player
 from songmaker_cli.snapshot import append_scores_section, save_rating
 
+DB_FILENAME = "songmaker.db"
+
 if TYPE_CHECKING:
     from songmaker_cli.parser import SongMeta
 
@@ -106,6 +108,10 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    from songmaker_cli.api import router as api_router
+
+    app.include_router(api_router)
 
     manifest_path = output_dir / "manifest.json"
     player_html = output_dir / "player.html"
@@ -264,6 +270,15 @@ def run_server(
 
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
+
+    # Initialize database and run migration
+    from songmaker_cli.db.engine import init_db
+    from songmaker_cli.db.migrate import migrate_filesystem
+
+    db_path = output_dir / DB_FILENAME
+    session_factory = init_db(db_path)
+    with session_factory() as session:
+        migrate_filesystem(session, output_dir, project_root)
 
     generate_player(output_dir, project_root)
 

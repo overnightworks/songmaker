@@ -34,6 +34,7 @@ whisper = [
 server = [
     "fastapi>=0.100",
     "uvicorn>=0.20",
+    "sqlalchemy>=2.0",
 ]
 dev = [
     "pytest>=7.0",

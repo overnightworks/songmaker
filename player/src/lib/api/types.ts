@@ -1,16 +1,4 @@
-/** Matches Python manifest.py data model (Phase 1: manifest-based). */
-
-export interface LyricsLine {
-	time: number;
-	text: string;
-	section: boolean;
-	confidence?: number;
-}
-
-export interface SrtLine {
-	time: number;
-	text: string;
-}
+/** API response types — match Python DB models. */
 
 export interface GenerationInfo {
 	seed?: number;
@@ -44,6 +32,57 @@ export interface TrackScores {
 	user_notes?: string;
 }
 
+/** A version from the DB API — each generation attempt. */
+export interface VersionItem {
+	id: string;
+	song_id: string;
+	version_number: number;
+	mp3_path: string;
+	title: string;
+	album_id: string;
+	album_title: string;
+	artist: string;
+	track_number: number;
+	seed: number | null;
+	status: string;
+	is_archived: boolean;
+	whisper_text: string | null;
+	scores: TrackScores | null;
+	generation: GenerationInfo | null;
+	created_at: string | null;
+}
+
+export interface AlbumItem {
+	id: string;
+	title: string;
+	artist: string;
+	subtitle: string;
+	year: string;
+	colors: { primary: string; bg: string };
+	song_count: number;
+}
+
+export interface PaginatedResponse {
+	items: VersionItem[];
+	total: number;
+	offset: number;
+	limit: number;
+}
+
+/** Internal UI types — used by store and components. */
+
+export interface LyricsLine {
+	time: number;
+	text: string;
+	section: boolean;
+	confidence?: number;
+}
+
+export interface SrtLine {
+	time: number;
+	text: string;
+}
+
 export interface Track {
 	file: string;
 	title: string;
@@ -63,8 +102,4 @@ export interface Album {
 	year: string;
 	colors: { primary: string; bg: string };
 	tracks: Track[];
-}
-
-export interface Manifest {
-	albums: Album[];
 }

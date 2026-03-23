@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fetchManifest } from '$lib/api/client';
+	import { loadFromApi } from '$lib/api/loader';
 	import {
 		albums,
 		browsingTrack,
@@ -32,10 +32,10 @@
 
 	onMount(async () => {
 		try {
-			const manifest = await fetchManifest();
-			albums.set(manifest.albums);
+			const loaded = await loadFromApi();
+			albums.set(loaded);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load manifest';
+			error = e instanceof Error ? e.message : 'Failed to load data';
 		} finally {
 			loading = false;
 		}
