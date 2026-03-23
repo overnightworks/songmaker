@@ -133,10 +133,13 @@
 		return pb?.generation.id === gen.id;
 	}
 
-	function badgeValue(song: SongItem): string {
-		const val = sortMetric.getValue(song);
+	function genSortValue(gen: GenerationItem): string {
+		if (!gen.scores || currentSortKey === 'name' || currentSortKey === 'generation_count')
+			return '';
+		const key = currentSortKey as keyof typeof gen.scores;
+		const val = gen.scores[key];
 		if (typeof val !== 'number') return '';
-		return sortMetric.max <= 10 ? String(val) : val.toFixed(1);
+		return sortMetric.max <= 10 ? val.toFixed(1) : val.toFixed(0);
 	}
 
 	function handleSongClick(song: SongItem): void {
@@ -297,17 +300,11 @@
 					{expanded.has(song.id) ? '▾' : '▸'}
 				</button>
 				<button class="song-name-btn" onclick={() => handleSongClick(song)}>
-					{#if badgeValue(song)}
-						<span class="song-badge">{badgeValue(song)}</span>
-					{/if}
 					<span class="song-name">{song.title}</span>
 				</button>
 				<span class="song-meta">
 					{song.generation_count} gen{song.generation_count !== 1 ? 's' : ''}
 				</span>
-				{#if song.best_rating}
-					<span class="song-rating">★{song.best_rating.toFixed(0)}</span>
-				{/if}
 			</div>
 
 			{#if expanded.has(song.id)}
@@ -342,11 +339,8 @@
 										{/if}
 									</button>
 									<span class="gen-num">gen{gen.generation_number}</span>
-									{#if gen.scores?.user_rating}
-										<span class="gen-rating">★{gen.scores.user_rating.toFixed(0)}</span>
-									{/if}
-									{#if gen.scores?.audiobox_enjoyment}
-										<span class="gen-score">E:{gen.scores.audiobox_enjoyment.toFixed(1)}</span>
+									{#if genSortValue(gen)}
+										<span class="gen-badge">{genSortValue(gen)}</span>
 									{/if}
 									{#if gen.seed}
 										<span class="gen-seed">seed:{gen.seed}</span>
@@ -627,18 +621,6 @@
 		text-align: left;
 	}
 
-	.song-badge {
-		font-weight: 700;
-		min-width: 28px;
-		text-align: center;
-		padding: 2px 4px;
-		border-radius: 4px;
-		font-size: 11px;
-		background: var(--score-good-bg);
-		color: var(--score-good);
-		flex-shrink: 0;
-	}
-
 	.song-name {
 		flex: 1;
 		overflow: hidden;
@@ -649,13 +631,6 @@
 	.song-meta {
 		font-size: 10px;
 		color: var(--text-dim);
-		flex-shrink: 0;
-	}
-
-	.song-rating {
-		font-size: 10px;
-		font-family: var(--font-display);
-		color: var(--score-ok);
 		flex-shrink: 0;
 	}
 
@@ -727,18 +702,14 @@
 		min-width: 32px;
 	}
 
-	.gen-score {
-		font-size: 9px;
-		color: var(--text-dim);
-		background: var(--surface);
-		padding: 1px 4px;
+	.gen-badge {
+		font-size: 10px;
+		font-weight: 700;
+		color: var(--score-good);
+		background: var(--score-good-bg);
+		padding: 1px 6px;
 		border-radius: 3px;
-	}
-
-	.gen-rating {
-		font-size: 9px;
 		font-family: var(--font-display);
-		color: var(--score-ok);
 	}
 
 	.gen-seed {

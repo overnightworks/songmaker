@@ -53,6 +53,10 @@ export function selectGenerationInSidebar(gen: GenerationItem, song: SongItem): 
 	selectedGenerationId.set(gen.id);
 }
 
+export function clearGenerationSelection(): void {
+	selectedGenerationId.set(null);
+}
+
 // --- Playback state ---
 interface PlaybackState {
 	generation: GenerationItem;

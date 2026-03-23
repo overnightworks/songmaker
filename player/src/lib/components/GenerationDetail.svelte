@@ -3,9 +3,10 @@
 
 	interface Props {
 		generation: GenerationItem;
+		onversionclick?: (versionId: string) => void;
 	}
 
-	let { generation }: Props = $props();
+	let { generation, onversionclick }: Props = $props();
 
 	const scores = $derived(generation.scores);
 	const params = $derived(generation.generation_params);
@@ -73,43 +74,69 @@
 </script>
 
 <div class="gen-detail">
-	<h4 class="gen-heading">
-		Generation {generation.generation_number}
-		{#if generation.seed}
-			<span class="seed">seed:{generation.seed}</span>
+	<div class="gen-header">
+		<h4 class="gen-heading">
+			Generation {generation.generation_number}
+		</h4>
+		<div class="gen-meta">
+			{#if generation.version_number !== null}
+				{#if onversionclick && generation.version_id}
+					{@const vid = generation.version_id}
+					<button class="version-link" onclick={() => onversionclick(vid)}>
+						v{generation.version_number}
+					</button>
+				{:else}
+					<span class="version-tag">v{generation.version_number}</span>
+				{/if}
+			{:else}
+				<span class="version-tag unknown">unknown version</span>
+			{/if}
+			{#if generation.seed}
+				<span class="seed">seed:{generation.seed}</span>
+			{/if}
+		</div>
+	</div>
+
+	<section class="section">
+		<h5 class="section-title">Scores</h5>
+		{#if scoreEntries.length > 0}
+			<div class="scores-grid">
+				{#each scoreEntries as entry (entry.label)}
+					<div class="score-cell {entry.color}">
+						<span class="score-label">{entry.label}</span>
+						<span class="score-value">{entry.value}</span>
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<p class="no-scores">No scores yet</p>
 		{/if}
-	</h4>
 
-	{#if scoreEntries.length > 0}
-		<div class="scores-grid">
-			{#each scoreEntries as entry (entry.label)}
-				<div class="score-cell {entry.color}">
-					<span class="score-label">{entry.label}</span>
-					<span class="score-value">{entry.value}</span>
-				</div>
-			{/each}
-		</div>
-	{:else}
-		<p class="no-scores">No scores yet</p>
-	{/if}
+		{#if scores?.lyrical_summary}
+			<div class="summary">
+				<span class="summary-label">Summary</span>
+				<p class="summary-text">{scores.lyrical_summary}</p>
+			</div>
+		{/if}
 
-	{#if scores?.lyrical_summary}
-		<div class="summary">
-			<span class="summary-label">Summary</span>
-			<p class="summary-text">{scores.lyrical_summary}</p>
-		</div>
-	{/if}
+		{#if scores?.user_notes}
+			<div class="summary">
+				<span class="summary-label">Notes</span>
+				<p class="summary-text">{scores.user_notes}</p>
+			</div>
+		{/if}
+	</section>
 
-	{#if scores?.user_notes}
-		<div class="summary">
-			<span class="summary-label">Notes</span>
-			<p class="summary-text">{scores.user_notes}</p>
-		</div>
+	{#if generation.whisper_text}
+		<section class="section">
+			<h5 class="section-title">Transcript</h5>
+			<pre class="whisper-text">{generation.whisper_text}</pre>
+		</section>
 	{/if}
 
 	{#if params}
-		<details class="params-section">
-			<summary class="params-toggle">Generation params</summary>
+		<section class="section">
+			<h5 class="section-title">Parameters</h5>
 			<div class="params-grid">
 				{#if params.acestep_model}
 					<span class="param">model: {params.acestep_model}</span>
@@ -133,14 +160,7 @@
 					<span class="param">think: {params.think_mode ? 'on' : 'off'}</span>
 				{/if}
 			</div>
-		</details>
-	{/if}
-
-	{#if generation.whisper_text}
-		<details class="params-section">
-			<summary class="params-toggle">Whisper transcript</summary>
-			<pre class="whisper-text">{generation.whisper_text}</pre>
-		</details>
+		</section>
 	{/if}
 </div>
 
@@ -148,7 +168,13 @@
 	.gen-detail {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 16px;
+	}
+
+	.gen-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
 		padding: 12px;
 		background: var(--surface);
 		border: 1px solid var(--border);
@@ -157,13 +183,47 @@
 
 	.gen-heading {
 		font-family: var(--font-display);
-		font-size: 14px;
+		font-size: 18px;
 		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 1px;
+	}
+
+	.gen-meta {
 		display: flex;
 		align-items: center;
 		gap: 8px;
+	}
+
+	.version-link {
+		background: none;
+		border: 1px solid var(--primary);
+		color: var(--primary);
+		padding: 2px 10px;
+		border-radius: 10px;
+		font-size: 11px;
+		cursor: pointer;
+		font-family: var(--font-display);
+		letter-spacing: 0.5px;
+	}
+
+	.version-link:hover {
+		background: var(--primary);
+		color: #fff;
+	}
+
+	.version-tag {
+		font-size: 11px;
+		color: var(--text-muted);
+		background: var(--surface);
+		padding: 2px 10px;
+		border-radius: 10px;
+		border: 1px solid var(--border);
+		font-family: var(--font-display);
+	}
+
+	.version-tag.unknown {
+		color: var(--text-dim);
 	}
 
 	.seed {
@@ -172,16 +232,34 @@
 		font-family: var(--font-body);
 	}
 
+	.section {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 12px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+	}
+
+	.section-title {
+		font-family: var(--font-display);
+		font-size: 11px;
+		color: var(--text-dim);
+		text-transform: uppercase;
+		letter-spacing: 1px;
+	}
+
 	.scores-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-		gap: 6px;
+		grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+		gap: 8px;
 	}
 
 	.score-cell {
 		display: flex;
 		flex-direction: column;
-		padding: 6px 8px;
+		padding: 8px 10px;
 		border-radius: 4px;
 		background: var(--bg);
 	}
@@ -207,7 +285,7 @@
 	}
 
 	.score-value {
-		font-size: 16px;
+		font-size: 18px;
 		font-family: var(--font-display);
 		color: var(--text);
 	}
@@ -222,6 +300,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		margin-top: 4px;
 	}
 
 	.summary-label {
@@ -235,48 +314,31 @@
 	.summary-text {
 		font-size: 12px;
 		color: var(--text-muted);
-		line-height: 1.4;
-	}
-
-	.params-section {
-		font-size: 11px;
-	}
-
-	.params-toggle {
-		color: var(--text-dim);
-		cursor: pointer;
-		font-size: 10px;
-		text-transform: uppercase;
-		font-family: var(--font-display);
-		letter-spacing: 0.5px;
-	}
-
-	.params-toggle:hover {
-		color: var(--text-muted);
+		line-height: 1.5;
 	}
 
 	.params-grid {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 6px;
-		margin-top: 6px;
 	}
 
 	.param {
-		font-size: 10px;
+		font-size: 11px;
 		color: var(--text-muted);
 		background: var(--bg);
-		padding: 2px 6px;
+		padding: 3px 8px;
 		border-radius: 3px;
 	}
 
 	.whisper-text {
 		white-space: pre-wrap;
 		font-family: 'Courier New', monospace;
-		font-size: 11px;
+		font-size: 13px;
+		line-height: 1.6;
 		color: var(--text-muted);
-		margin-top: 6px;
-		max-height: 200px;
+		margin: 0;
+		max-height: 400px;
 		overflow-y: auto;
 	}
 </style>

@@ -14,7 +14,8 @@
 		songList,
 		selectedSong,
 		selectSong,
-		selectedGeneration
+		selectedGeneration,
+		clearGenerationSelection
 	} from '$lib/stores/player';
 	import type { SongItem, VersionItem } from '$lib/api/types';
 	import AlbumNav from '$lib/components/AlbumNav.svelte';
@@ -63,14 +64,6 @@
 
 	$effect(() => {
 		if (song) loadSongData(song);
-	});
-
-	$effect(() => {
-		if (!activeGen?.version_id || versions.length === 0) return;
-		const idx = versions.findIndex((v) => v.id === activeGen.version_id);
-		if (idx !== -1 && idx !== currentVersionIndex) {
-			loadVersion(idx);
-		}
 	});
 
 	function setSavedState(
@@ -189,6 +182,12 @@
 		}
 	}
 
+	function handleVersionClick(versionId: string): void {
+		const idx = versions.findIndex((v) => v.id === versionId);
+		if (idx !== -1) loadVersion(idx);
+		clearGenerationSelection();
+	}
+
 	// --- Diff state (version compare or Claude apply) ---
 	let diffBase: VersionItem | null = $state(null);
 	let diffTarget: VersionItem | null = $state(null);
@@ -295,11 +294,13 @@
 			<div class="detail-panel">
 				<div class="detail-header">
 					<div>
-						<h2 class="song-title">{song.title}</h2>
+						<button class="song-title-btn" onclick={clearGenerationSelection}>
+							<h2 class="song-title">{song.title}</h2>
+						</button>
 						<span class="song-album">{song.album_title} · {song.artist}</span>
 					</div>
 					<div class="detail-actions">
-						{#if isDirty}
+						{#if isDirty && !activeGen}
 							<button class="save-btn" onclick={handleSave} disabled={saving}>
 								{saving ? 'Saving...' : 'Save'}
 							</button>
@@ -307,118 +308,121 @@
 						{#if status}
 							<span class="status-msg">{status}</span>
 						{/if}
-						<button
-							class="action-btn chat-btn"
-							class:active={showChat}
-							onclick={() => (showChat = !showChat)}
-							aria-label="Toggle chat"
-						>
-							💬
-						</button>
+						{#if !activeGen}
+							<button
+								class="action-btn chat-btn"
+								class:active={showChat}
+								onclick={() => (showChat = !showChat)}
+								aria-label="Toggle chat"
+							>
+								💬
+							</button>
+						{/if}
 					</div>
 				</div>
 
 				{#if activeGen}
-					<GenerationDetail generation={activeGen} />
+					<GenerationDetail generation={activeGen} onversionclick={handleVersionClick} />
+				{:else}
+					<div class="lyrics-edit">
+						{#if versions.length > 0}
+							<VersionTimeline
+								{versions}
+								currentIndex={currentVersionIndex}
+								dirty={isDirty}
+								onselect={loadVersion}
+								ondiff={handleDiffChange}
+								ondelete={handleDeleteVersion}
+							/>
+						{/if}
+
+						{#if appliedDiffMode && !diffMode}
+							<div class="diff-banner">
+								<span>Claude applied changes</span>
+							</div>
+						{/if}
+
+						{#if activeDiff}
+							{@const d = activeDiff}
+							{@const isVer = diffMode}
+							{@const oldLabel = isVer ? `v${d.old.version_number}` : 'Before'}
+							{@const newLabel = isVer ? `v${d.new.version_number}` : 'After'}
+
+							<div class="edit-field">
+								<span>Style Prompt {d.old.prompt !== d.new.prompt ? '●' : ''}</span>
+								{#if d.old.prompt !== d.new.prompt}
+									<LyricsDiff oldText={d.old.prompt} newText={d.new.prompt} {oldLabel} {newLabel} />
+								{:else}
+									<div class="diff-readonly">{d.new.prompt || '—'}</div>
+								{/if}
+							</div>
+
+							<div class="params-diff">
+								<span class="param-change">
+									BPM:
+									{#if d.old.bpm !== d.new.bpm}
+										<span class="old">{d.old.bpm}</span> →
+										<span class="new">{d.new.bpm}</span>
+									{:else}
+										{d.new.bpm}
+									{/if}
+								</span>
+								<span class="param-change">
+									Duration:
+									{#if d.old.duration !== d.new.duration}
+										<span class="old">{d.old.duration}</span> →
+										<span class="new">{d.new.duration}</span>
+									{:else}
+										{d.new.duration}
+									{/if}
+								</span>
+								<span class="param-change">
+									Key:
+									{#if d.old.key !== d.new.key}
+										<span class="old">{d.old.key || '—'}</span> →
+										<span class="new">{d.new.key || '—'}</span>
+									{:else}
+										{d.new.key || '—'}
+									{/if}
+								</span>
+							</div>
+
+							<div class="edit-field">
+								<span>Lyrics {d.old.lyrics !== d.new.lyrics ? '●' : ''}</span>
+								{#if d.old.lyrics !== d.new.lyrics}
+									<LyricsDiff oldText={d.old.lyrics} newText={d.new.lyrics} {oldLabel} {newLabel} />
+								{:else}
+									<pre class="diff-readonly lyrics-readonly">{d.new.lyrics || '—'}</pre>
+								{/if}
+							</div>
+						{:else}
+							<label class="edit-field" class:changed={editPrompt !== savedPrompt}>
+								<span>Style Prompt {editPrompt !== savedPrompt ? '●' : ''}</span>
+								<textarea rows="4" bind:value={editPrompt}></textarea>
+							</label>
+
+							<div class="params-row">
+								<label class="edit-field small" class:changed={editBpm !== savedBpm}>
+									<span>BPM {editBpm !== savedBpm ? '●' : ''}</span>
+									<input type="number" bind:value={editBpm} />
+								</label>
+								<label class="edit-field small" class:changed={editDuration !== savedDuration}>
+									<span>Duration {editDuration !== savedDuration ? '●' : ''}</span>
+									<input type="number" bind:value={editDuration} />
+								</label>
+								<label class="edit-field small" class:changed={editKey !== savedKey}>
+									<span>Key {editKey !== savedKey ? '●' : ''}</span>
+									<input type="text" bind:value={editKey} />
+								</label>
+							</div>
+
+							<label class="edit-field" class:changed={editLyrics !== savedLyrics}>
+								<span>Lyrics {editLyrics !== savedLyrics ? '●' : ''}</span>
+								<textarea class="lyrics-area" rows="15" bind:value={editLyrics}></textarea>
+							</label>
+						{/if}
+					</div>
 				{/if}
-
-				<div class="lyrics-edit">
-					{#if versions.length > 0}
-						<VersionTimeline
-							{versions}
-							currentIndex={currentVersionIndex}
-							dirty={isDirty}
-							onselect={loadVersion}
-							ondiff={handleDiffChange}
-							ondelete={handleDeleteVersion}
-						/>
-					{/if}
-
-					{#if appliedDiffMode && !diffMode}
-						<div class="diff-banner">
-							<span>Claude applied changes</span>
-						</div>
-					{/if}
-
-					{#if activeDiff}
-						{@const d = activeDiff}
-						{@const isVer = diffMode}
-						{@const oldLabel = isVer ? `v${d.old.version_number}` : 'Before'}
-						{@const newLabel = isVer ? `v${d.new.version_number}` : 'After'}
-
-						<div class="edit-field">
-							<span>Style Prompt {d.old.prompt !== d.new.prompt ? '●' : ''}</span>
-							{#if d.old.prompt !== d.new.prompt}
-								<LyricsDiff oldText={d.old.prompt} newText={d.new.prompt} {oldLabel} {newLabel} />
-							{:else}
-								<div class="diff-readonly">{d.new.prompt || '—'}</div>
-							{/if}
-						</div>
-
-						<div class="params-diff">
-							<span class="param-change">
-								BPM:
-								{#if d.old.bpm !== d.new.bpm}
-									<span class="old">{d.old.bpm}</span> → <span class="new">{d.new.bpm}</span>
-								{:else}
-									{d.new.bpm}
-								{/if}
-							</span>
-							<span class="param-change">
-								Duration:
-								{#if d.old.duration !== d.new.duration}
-									<span class="old">{d.old.duration}</span> →
-									<span class="new">{d.new.duration}</span>
-								{:else}
-									{d.new.duration}
-								{/if}
-							</span>
-							<span class="param-change">
-								Key:
-								{#if d.old.key !== d.new.key}
-									<span class="old">{d.old.key || '—'}</span> →
-									<span class="new">{d.new.key || '—'}</span>
-								{:else}
-									{d.new.key || '—'}
-								{/if}
-							</span>
-						</div>
-
-						<div class="edit-field">
-							<span>Lyrics {d.old.lyrics !== d.new.lyrics ? '●' : ''}</span>
-							{#if d.old.lyrics !== d.new.lyrics}
-								<LyricsDiff oldText={d.old.lyrics} newText={d.new.lyrics} {oldLabel} {newLabel} />
-							{:else}
-								<pre class="diff-readonly lyrics-readonly">{d.new.lyrics || '—'}</pre>
-							{/if}
-						</div>
-					{:else}
-						<label class="edit-field" class:changed={editPrompt !== savedPrompt}>
-							<span>Style Prompt {editPrompt !== savedPrompt ? '●' : ''}</span>
-							<textarea rows="2" bind:value={editPrompt}></textarea>
-						</label>
-
-						<div class="params-row">
-							<label class="edit-field small" class:changed={editBpm !== savedBpm}>
-								<span>BPM {editBpm !== savedBpm ? '●' : ''}</span>
-								<input type="number" bind:value={editBpm} />
-							</label>
-							<label class="edit-field small" class:changed={editDuration !== savedDuration}>
-								<span>Duration {editDuration !== savedDuration ? '●' : ''}</span>
-								<input type="number" bind:value={editDuration} />
-							</label>
-							<label class="edit-field small" class:changed={editKey !== savedKey}>
-								<span>Key {editKey !== savedKey ? '●' : ''}</span>
-								<input type="text" bind:value={editKey} />
-							</label>
-						</div>
-
-						<label class="edit-field" class:changed={editLyrics !== savedLyrics}>
-							<span>Lyrics {editLyrics !== savedLyrics ? '●' : ''}</span>
-							<textarea class="lyrics-area" rows="15" bind:value={editLyrics}></textarea>
-						</label>
-					{/if}
-				</div>
 			</div>
 		{:else}
 			<div class="empty-state">Select a song or create a new one</div>
@@ -498,12 +502,23 @@
 		align-items: flex-start;
 	}
 
+	.song-title-btn {
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+	}
+
 	.song-title {
 		font-family: var(--font-display);
 		font-size: 22px;
 		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 2px;
+	}
+
+	.song-title-btn:hover .song-title {
+		color: var(--primary);
 	}
 
 	.song-album {
