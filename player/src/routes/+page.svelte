@@ -31,6 +31,31 @@
 	let editDuration = $state(180);
 	let editKey = $state('');
 
+	// Saved state (for dirty tracking)
+	let savedLyrics = $state('');
+	let savedPrompt = $state('');
+	let savedBpm = $state(0);
+	let savedDuration = $state(180);
+	let savedKey = $state('');
+
+	const isDirty = $derived(
+		editLyrics !== savedLyrics ||
+			editPrompt !== savedPrompt ||
+			editBpm !== savedBpm ||
+			editDuration !== savedDuration ||
+			editKey !== savedKey
+	);
+
+	const changedFields = $derived.by(() => {
+		const fields: string[] = [];
+		if (editLyrics !== savedLyrics) fields.push('Lyrics');
+		if (editPrompt !== savedPrompt) fields.push('Prompt');
+		if (editBpm !== savedBpm) fields.push('BPM');
+		if (editDuration !== savedDuration) fields.push('Duration');
+		if (editKey !== savedKey) fields.push('Key');
+		return fields;
+	});
+
 	// New song form
 	let newTitle = $state('');
 	let newAlbumId = $state('');
@@ -44,12 +69,27 @@
 		if (song) loadSongData(song);
 	});
 
+	function setSavedState(
+		lyrics: string,
+		prompt: string,
+		bpm: number,
+		dur: number,
+		key: string
+	): void {
+		savedLyrics = lyrics;
+		savedPrompt = prompt;
+		savedBpm = bpm;
+		savedDuration = dur;
+		savedKey = key;
+	}
+
 	function loadSongData(s: SongItem): void {
 		editLyrics = s.lyrics;
 		editPrompt = s.prompt;
 		editBpm = s.bpm;
 		editDuration = s.duration;
 		editKey = s.key;
+		setSavedState(s.lyrics, s.prompt, s.bpm, s.duration, s.key);
 		loadVersions(s.id);
 	}
 
@@ -67,6 +107,7 @@
 		editBpm = v.bpm;
 		editDuration = v.duration;
 		editKey = v.key;
+		setSavedState(v.lyrics, v.prompt, v.bpm, v.duration, v.key);
 	}
 
 	onMount(async () => {
@@ -92,6 +133,7 @@
 				duration: editDuration,
 				key: editKey
 			});
+			setSavedState(editLyrics, editPrompt, editBpm, editDuration, editKey);
 			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
 			await loadVersions(song.id);
 			status = `Saved version ${updated.version_count}`;
@@ -279,33 +321,39 @@
 							</div>
 						{/if}
 
-						<label class="edit-field">
-							<span>Style Prompt</span>
+						<label class="edit-field" class:changed={editPrompt !== savedPrompt}>
+							<span>Style Prompt {editPrompt !== savedPrompt ? '●' : ''}</span>
 							<textarea rows="2" bind:value={editPrompt}></textarea>
 						</label>
 
 						<div class="params-row">
-							<label class="edit-field small">
-								<span>BPM</span>
+							<label class="edit-field small" class:changed={editBpm !== savedBpm}>
+								<span>BPM {editBpm !== savedBpm ? '●' : ''}</span>
 								<input type="number" bind:value={editBpm} />
 							</label>
-							<label class="edit-field small">
-								<span>Duration</span>
+							<label class="edit-field small" class:changed={editDuration !== savedDuration}>
+								<span>Duration {editDuration !== savedDuration ? '●' : ''}</span>
 								<input type="number" bind:value={editDuration} />
 							</label>
-							<label class="edit-field small">
-								<span>Key</span>
+							<label class="edit-field small" class:changed={editKey !== savedKey}>
+								<span>Key {editKey !== savedKey ? '●' : ''}</span>
 								<input type="text" bind:value={editKey} />
 							</label>
 						</div>
 
-						<label class="edit-field">
-							<span>Lyrics</span>
+						<label class="edit-field" class:changed={editLyrics !== savedLyrics}>
+							<span>Lyrics {editLyrics !== savedLyrics ? '●' : ''}</span>
 							<textarea class="lyrics-area" rows="15" bind:value={editLyrics}></textarea>
 						</label>
 
-						<button class="save-btn" onclick={handleSave} disabled={saving}>
-							{saving ? 'Saving...' : 'Save New Version'}
+						{#if isDirty}
+							<div class="change-indicator">
+								Changed: {changedFields.join(', ')}
+							</div>
+						{/if}
+
+						<button class="save-btn" onclick={handleSave} disabled={saving || !isDirty}>
+							{saving ? 'Saving...' : isDirty ? 'Save New Version' : 'No changes'}
 						</button>
 					</div>
 				{/if}
@@ -605,6 +653,23 @@
 		line-height: 1.6;
 		min-height: 200px;
 		resize: vertical;
+	}
+
+	.edit-field.changed span {
+		color: var(--score-ok);
+	}
+
+	.edit-field.changed input,
+	.edit-field.changed textarea {
+		border-color: var(--score-ok);
+	}
+
+	.change-indicator {
+		font-size: 11px;
+		color: var(--score-ok);
+		padding: 4px 0;
+		font-family: var(--font-display);
+		letter-spacing: 0.5px;
 	}
 
 	.save-btn {
