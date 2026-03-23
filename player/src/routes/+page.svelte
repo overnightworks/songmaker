@@ -53,16 +53,6 @@
 			editKey !== savedKey
 	);
 
-	const changedFields = $derived.by(() => {
-		const fields: string[] = [];
-		if (editLyrics !== savedLyrics) fields.push('Lyrics');
-		if (editPrompt !== savedPrompt) fields.push('Prompt');
-		if (editBpm !== savedBpm) fields.push('BPM');
-		if (editDuration !== savedDuration) fields.push('Duration');
-		if (editKey !== savedKey) fields.push('Key');
-		return fields;
-	});
-
 	let newTitle = $state('');
 	let newAlbumId = $state('');
 	let showNewSong = $state(false);
@@ -309,6 +299,14 @@
 						<span class="song-album">{song.album_title} · {song.artist}</span>
 					</div>
 					<div class="detail-actions">
+						{#if isDirty}
+							<button class="save-btn" onclick={handleSave} disabled={saving}>
+								{saving ? 'Saving...' : 'Save'}
+							</button>
+						{/if}
+						{#if status}
+							<span class="status-msg">{status}</span>
+						{/if}
 						<button
 							class="action-btn chat-btn"
 							class:active={showChat}
@@ -319,10 +317,6 @@
 						</button>
 					</div>
 				</div>
-
-				{#if status}
-					<div class="status-msg">{status}</div>
-				{/if}
 
 				{#if activeGen}
 					<GenerationDetail generation={activeGen} />
@@ -424,16 +418,6 @@
 							<textarea class="lyrics-area" rows="15" bind:value={editLyrics}></textarea>
 						</label>
 					{/if}
-
-					{#if isDirty}
-						<div class="change-indicator">
-							Changed: {changedFields.join(', ')}
-						</div>
-					{/if}
-
-					<button class="save-btn" onclick={handleSave} disabled={saving || !isDirty}>
-						{saving ? 'Saving...' : isDirty ? 'Save New Version' : 'No changes'}
-					</button>
 				</div>
 			</div>
 		{:else}
@@ -527,11 +511,6 @@
 		color: var(--text-muted);
 	}
 
-	.detail-actions {
-		display: flex;
-		gap: 6px;
-	}
-
 	.action-btn {
 		width: 36px;
 		height: 36px;
@@ -548,8 +527,14 @@
 	}
 
 	.status-msg {
-		font-size: 12px;
+		font-size: 11px;
 		color: var(--success);
+	}
+
+	.detail-actions {
+		display: flex;
+		gap: 8px;
+		align-items: center;
 	}
 
 	/* Lyrics editor */
@@ -675,26 +660,18 @@
 		border-color: var(--score-ok);
 	}
 
-	.change-indicator {
-		font-size: 11px;
-		color: var(--score-ok);
-		padding: 4px 0;
-		font-family: var(--font-display);
-		letter-spacing: 0.5px;
-	}
-
 	.save-btn {
-		padding: 8px 24px;
+		padding: 6px 16px;
 		border: 2px solid var(--primary);
-		border-radius: 20px;
+		border-radius: 16px;
 		background: var(--primary);
 		color: #fff;
 		font-family: var(--font-display);
-		font-size: 13px;
+		font-size: 11px;
 		letter-spacing: 1px;
 		text-transform: uppercase;
 		cursor: pointer;
-		align-self: flex-start;
+		white-space: nowrap;
 	}
 
 	.save-btn:disabled {
