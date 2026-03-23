@@ -170,15 +170,15 @@
 	}
 
 	.conf-high {
-		color: #4a4;
+		color: var(--score-good);
 	}
 
 	.conf-mid {
-		color: #a84;
+		color: var(--score-ok);
 	}
 
 	.conf-low {
-		color: #a44;
+		color: var(--score-bad);
 		background: rgba(170, 68, 68, 0.15);
 	}
 

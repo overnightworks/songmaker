@@ -142,14 +142,14 @@
 
 	.track-title {
 		font-family: var(--font-display);
-		color: #fff;
+		color: var(--text);
 		font-size: 24px;
 		text-transform: uppercase;
 		letter-spacing: 2px;
 	}
 
 	.track-meta {
-		color: #666;
+		color: var(--text-muted);
 		font-size: 12px;
 		margin-top: 2px;
 		display: block;
@@ -197,7 +197,7 @@
 	}
 
 	.error {
-		color: #f44;
+		color: var(--score-bad);
 	}
 
 	@media (max-width: 768px) {
