@@ -6,12 +6,18 @@ Mounted on the FastAPI app at /api/*. Replaces manifest.json for the frontend.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from songmaker_cli.claude.provider import (
+    UnavailableError,
+    call_claude,
+    is_available,
+)
 from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
     album_to_dict,
@@ -142,3 +148,57 @@ def api_rate_by_path(
     save_rating(session, version.id, req.rating, req.notes)
     session.commit()
     return {"status": "ok", "version": version_name, "rating": req.rating}
+
+
+# ── Capabilities ─────────────────────────────────────────────────────
+
+
+def _resolve_claude_key(header_key: str | None) -> str | None:
+    """Get Claude API key: header (BYOK) > env var > None (fall back to CLI)."""
+    if header_key:
+        return header_key
+    return os.environ.get("ANTHROPIC_API_KEY")
+
+
+@router.get("/capabilities")
+def api_capabilities() -> dict:
+    """Report which features are available based on server config."""
+    env_key = os.environ.get("ANTHROPIC_API_KEY")
+    return {
+        "claude_api": bool(env_key),
+        "claude_cli": is_available(api_key=None),
+        "generation": True,
+        "scoring": True,
+    }
+
+
+# ── Claude chat ──────────────────────────────────────────────────────
+
+
+class ChatRequest(BaseModel):
+    message: str
+    system: str = ""
+    context: str = ""
+
+
+@router.post("/chat")
+def api_chat(
+    req: ChatRequest,
+    x_claude_key: str | None = Header(None),
+) -> dict:
+    """Chat with Claude for lyrics co-writing.
+
+    Uses BYOK key from header, env var, or falls back to CLI.
+    """
+    api_key = _resolve_claude_key(x_claude_key)
+
+    prompt = req.message
+    if req.context:
+        prompt = f"Song context:\n{req.context}\n\n{req.message}"
+
+    try:
+        response = call_claude(prompt, api_key=api_key, system=req.system or None)
+    except UnavailableError as e:
+        raise HTTPException(503, str(e))
+
+    return {"response": response.text}
