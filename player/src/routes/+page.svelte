@@ -1,37 +1,44 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fetchAlbums, fetchSongs, createSong, updateSong, fetchVersions } from '$lib/api/client';
+	import {
+		fetchAlbums,
+		fetchSongs,
+		createSong,
+		updateSong,
+		fetchVersions,
+		deleteVersion as apiDeleteVersion,
+		fetchSong
+	} from '$lib/api/client';
 	import {
 		albumList,
 		songList,
 		selectedSong,
 		selectSong,
-		playGeneration,
-		playback
+		selectedGeneration
 	} from '$lib/stores/player';
-	import type { GenerationItem, SongItem, VersionItem } from '$lib/api/types';
+	import type { SongItem, VersionItem } from '$lib/api/types';
 	import AlbumNav from '$lib/components/AlbumNav.svelte';
 	import SongList from '$lib/components/SongList.svelte';
 	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
+	import GenerationDetail from '$lib/components/GenerationDetail.svelte';
+	import LyricsDiff from '$lib/components/LyricsDiff.svelte';
+	import VersionTimeline from '$lib/components/VersionTimeline.svelte';
 	import type { ApplyData } from '$lib/components/ClaudeChat.svelte';
 
 	let loading = $state(true);
 	let error = $state('');
-	let activeTab: 'lyrics' | 'generations' = $state('generations');
 	let showChat = $state(false);
 	let saving = $state(false);
 	let status = $state('');
 	let versions: VersionItem[] = $state([]);
 	let currentVersionIndex = $state(0);
 
-	// Editable fields
 	let editLyrics = $state('');
 	let editPrompt = $state('');
 	let editBpm = $state(0);
 	let editDuration = $state(180);
 	let editKey = $state('');
 
-	// Saved state (for dirty tracking)
 	let savedLyrics = $state('');
 	let savedPrompt = $state('');
 	let savedBpm = $state(0);
@@ -56,17 +63,24 @@
 		return fields;
 	});
 
-	// New song form
 	let newTitle = $state('');
 	let newAlbumId = $state('');
 	let showNewSong = $state(false);
 
 	const song = $derived($selectedSong);
-	const pb = $derived($playback);
+	const activeGen = $derived($selectedGeneration);
 	const albums = $derived($albumList);
 
 	$effect(() => {
 		if (song) loadSongData(song);
+	});
+
+	$effect(() => {
+		if (!activeGen?.version_id || versions.length === 0) return;
+		const idx = versions.findIndex((v) => v.id === activeGen.version_id);
+		if (idx !== -1 && idx !== currentVersionIndex) {
+			loadVersion(idx);
+		}
 	});
 
 	function setSavedState(
@@ -91,6 +105,19 @@
 		editKey = s.key;
 		setSavedState(s.lyrics, s.prompt, s.bpm, s.duration, s.key);
 		loadVersions(s.id);
+	}
+
+	async function handleDeleteVersion(versionId: string, deleteGenerations: boolean): Promise<void> {
+		if (!song) return;
+		try {
+			await apiDeleteVersion(versionId, deleteGenerations);
+			const updated = await fetchSong(song.id);
+			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+			await loadVersions(song.id);
+		} catch {
+			status = 'Delete failed';
+			setTimeout(() => (status = ''), 3000);
+		}
 	}
 
 	async function loadVersions(songId: string): Promise<void> {
@@ -136,6 +163,7 @@
 			setSavedState(editLyrics, editPrompt, editBpm, editDuration, editKey);
 			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
 			await loadVersions(song.id);
+			dismissAppliedDiff();
 			status = `Saved version ${updated.version_count}`;
 		} catch (e) {
 			status = e instanceof Error ? e.message : 'Save failed';
@@ -171,17 +199,69 @@
 		}
 	}
 
+	// --- Diff state (version compare or Claude apply) ---
+	let diffBase: VersionItem | null = $state(null);
+	let diffTarget: VersionItem | null = $state(null);
+
+	const diffMode = $derived(diffBase !== null && diffTarget !== null);
+
+	function handleDiffChange(pair: [VersionItem, VersionItem] | null): void {
+		if (pair) {
+			[diffBase, diffTarget] = pair;
+		} else {
+			diffBase = null;
+			diffTarget = null;
+		}
+	}
+
+	// Applied diff from Claude (synthetic version-like objects)
+	let appliedDiffBase: VersionItem | null = $state(null);
+	let appliedDiffTarget: VersionItem | null = $state(null);
+
+	const appliedDiffMode = $derived(appliedDiffBase !== null && appliedDiffTarget !== null);
+
 	function handleApply(data: ApplyData): void {
+		const before: VersionItem = {
+			id: 'before',
+			version_number: 0,
+			lyrics: editLyrics,
+			prompt: editPrompt,
+			bpm: editBpm,
+			duration: editDuration,
+			key: editKey,
+			created_at: null
+		};
 		if (data.lyrics !== undefined) editLyrics = data.lyrics;
 		if (data.prompt !== undefined) editPrompt = data.prompt;
 		if (data.bpm !== undefined) editBpm = data.bpm;
 		if (data.duration !== undefined) editDuration = data.duration;
 		if (data.key !== undefined) editKey = data.key;
+		const after: VersionItem = {
+			id: 'after',
+			version_number: 0,
+			lyrics: editLyrics,
+			prompt: editPrompt,
+			bpm: editBpm,
+			duration: editDuration,
+			key: editKey,
+			created_at: null
+		};
+		appliedDiffBase = before;
+		appliedDiffTarget = after;
 	}
 
-	function handlePlayGen(gen: GenerationItem): void {
-		if (song) playGeneration(gen, song);
+	function dismissAppliedDiff(): void {
+		appliedDiffBase = null;
+		appliedDiffTarget = null;
 	}
+
+	// Active diff source (version compare takes priority over applied)
+	const activeDiff = $derived.by((): { old: VersionItem; new: VersionItem } | null => {
+		if (diffBase && diffTarget) return { old: diffBase, new: diffTarget };
+		if (appliedDiffBase && appliedDiffTarget)
+			return { old: appliedDiffBase, new: appliedDiffTarget };
+		return null;
+	});
 
 	const songContext = $derived(
 		song
@@ -233,6 +313,7 @@
 							class="action-btn chat-btn"
 							class:active={showChat}
 							onclick={() => (showChat = !showChat)}
+							aria-label="Toggle chat"
 						>
 							💬
 						</button>
@@ -243,84 +324,81 @@
 					<div class="status-msg">{status}</div>
 				{/if}
 
-				<div class="tabs">
-					<button
-						class="tab"
-						class:active={activeTab === 'generations'}
-						onclick={() => (activeTab = 'generations')}
-					>
-						Generations ({song.generation_count})
-					</button>
-					<button
-						class="tab"
-						class:active={activeTab === 'lyrics'}
-						onclick={() => (activeTab = 'lyrics')}
-					>
-						Lyrics
-					</button>
-				</div>
+				{#if activeGen}
+					<GenerationDetail generation={activeGen} />
+				{/if}
 
-				{#if activeTab === 'generations'}
-					<div class="gen-list">
-						{#each song.generations as gen (gen.id)}
-							<div class="gen-item" class:playing={pb?.generation.id === gen.id}>
-								<button
-									class="gen-play"
-									onclick={() => handlePlayGen(gen)}
-									aria-label="Play generation {gen.generation_number}"
-								>
-									{pb?.generation.id === gen.id ? '🔊' : '▶'}
-								</button>
-								<span class="gen-num">gen{gen.generation_number}</span>
-								{#if gen.scores?.dynamics}
-									<span class="gen-score">D:{gen.scores.dynamics.toFixed(0)}</span>
-								{/if}
-								{#if gen.scores?.lyrical_coherence}
-									<span class="gen-score">L:{gen.scores.lyrical_coherence}</span>
-								{/if}
-								{#if gen.scores?.audiobox_enjoyment}
-									<span class="gen-score">E:{gen.scores.audiobox_enjoyment.toFixed(1)}</span>
-								{/if}
-								{#if gen.scores?.user_rating}
-									<span class="gen-rating">★{gen.scores.user_rating.toFixed(0)}</span>
-								{/if}
-								{#if gen.seed}
-									<span class="gen-seed">seed:{gen.seed}</span>
-								{/if}
-							</div>
-						{:else}
-							<p class="empty-gens">No generations yet. Edit lyrics and generate!</p>
-						{/each}
-					</div>
-				{:else}
-					<div class="lyrics-edit">
-						{#if versions.length > 1}
-							<div class="version-nav">
-								<button
-									onclick={() =>
-										loadVersion(Math.min(currentVersionIndex + 1, versions.length - 1))}
-									disabled={currentVersionIndex >= versions.length - 1}
-								>
-									◄
-								</button>
-								<span>
-									v{versions[currentVersionIndex]?.version_number} / {versions.length}
-									{#if currentVersionIndex > 0}
-										<span class="old-tag">(old)</span>
-									{/if}
-								</span>
-								<button
-									onclick={() => loadVersion(Math.max(currentVersionIndex - 1, 0))}
-									disabled={currentVersionIndex <= 0}
-								>
-									►
-								</button>
-								{#if currentVersionIndex > 0}
-									<button class="latest-btn" onclick={() => loadVersion(0)}>Latest</button>
-								{/if}
-							</div>
-						{/if}
+				<div class="lyrics-edit">
+					{#if versions.length > 0}
+						<VersionTimeline
+							{versions}
+							currentIndex={currentVersionIndex}
+							dirty={isDirty}
+							onselect={loadVersion}
+							ondiff={handleDiffChange}
+							ondelete={handleDeleteVersion}
+						/>
+					{/if}
 
+					{#if appliedDiffMode && !diffMode}
+						<div class="diff-banner">
+							<span>Claude applied changes</span>
+						</div>
+					{/if}
+
+					{#if activeDiff}
+						{@const d = activeDiff}
+						{@const isVer = diffMode}
+						{@const oldLabel = isVer ? `v${d.old.version_number}` : 'Before'}
+						{@const newLabel = isVer ? `v${d.new.version_number}` : 'After'}
+
+						<div class="edit-field">
+							<span>Style Prompt {d.old.prompt !== d.new.prompt ? '●' : ''}</span>
+							{#if d.old.prompt !== d.new.prompt}
+								<LyricsDiff oldText={d.old.prompt} newText={d.new.prompt} {oldLabel} {newLabel} />
+							{:else}
+								<div class="diff-readonly">{d.new.prompt || '—'}</div>
+							{/if}
+						</div>
+
+						<div class="params-diff">
+							<span class="param-change">
+								BPM:
+								{#if d.old.bpm !== d.new.bpm}
+									<span class="old">{d.old.bpm}</span> → <span class="new">{d.new.bpm}</span>
+								{:else}
+									{d.new.bpm}
+								{/if}
+							</span>
+							<span class="param-change">
+								Duration:
+								{#if d.old.duration !== d.new.duration}
+									<span class="old">{d.old.duration}</span> →
+									<span class="new">{d.new.duration}</span>
+								{:else}
+									{d.new.duration}
+								{/if}
+							</span>
+							<span class="param-change">
+								Key:
+								{#if d.old.key !== d.new.key}
+									<span class="old">{d.old.key || '—'}</span> →
+									<span class="new">{d.new.key || '—'}</span>
+								{:else}
+									{d.new.key || '—'}
+								{/if}
+							</span>
+						</div>
+
+						<div class="edit-field">
+							<span>Lyrics {d.old.lyrics !== d.new.lyrics ? '●' : ''}</span>
+							{#if d.old.lyrics !== d.new.lyrics}
+								<LyricsDiff oldText={d.old.lyrics} newText={d.new.lyrics} {oldLabel} {newLabel} />
+							{:else}
+								<pre class="diff-readonly lyrics-readonly">{d.new.lyrics || '—'}</pre>
+							{/if}
+						</div>
+					{:else}
 						<label class="edit-field" class:changed={editPrompt !== savedPrompt}>
 							<span>Style Prompt {editPrompt !== savedPrompt ? '●' : ''}</span>
 							<textarea rows="2" bind:value={editPrompt}></textarea>
@@ -345,18 +423,18 @@
 							<span>Lyrics {editLyrics !== savedLyrics ? '●' : ''}</span>
 							<textarea class="lyrics-area" rows="15" bind:value={editLyrics}></textarea>
 						</label>
+					{/if}
 
-						{#if isDirty}
-							<div class="change-indicator">
-								Changed: {changedFields.join(', ')}
-							</div>
-						{/if}
+					{#if isDirty}
+						<div class="change-indicator">
+							Changed: {changedFields.join(', ')}
+						</div>
+					{/if}
 
-						<button class="save-btn" onclick={handleSave} disabled={saving || !isDirty}>
-							{saving ? 'Saving...' : isDirty ? 'Save New Version' : 'No changes'}
-						</button>
-					</div>
-				{/if}
+					<button class="save-btn" onclick={handleSave} disabled={saving || !isDirty}>
+						{saving ? 'Saving...' : isDirty ? 'Save New Version' : 'No changes'}
+					</button>
+				</div>
 			</div>
 		{:else}
 			<div class="empty-state">Select a song or create a new one</div>
@@ -420,7 +498,7 @@
 	}
 
 	.detail-panel {
-		padding: 16px 20px;
+		padding: 16px 20px calc(var(--player-height) + 16px);
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
@@ -474,138 +552,71 @@
 		color: var(--success);
 	}
 
-	.tabs {
-		display: flex;
-		gap: 0;
-		border-bottom: 1px solid var(--border);
-	}
-
-	.tab {
-		padding: 8px 20px;
-		background: none;
-		border: none;
-		border-bottom: 2px solid transparent;
-		color: var(--text-muted);
-		font-family: var(--font-display);
-		font-size: 12px;
-		text-transform: uppercase;
-		letter-spacing: 1px;
-		cursor: pointer;
-	}
-
-	.tab:hover {
-		color: var(--text);
-	}
-
-	.tab.active {
-		color: var(--primary);
-		border-bottom-color: var(--primary);
-	}
-
-	/* Generations tab */
-	.gen-list {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.gen-item {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 12px;
-		border-radius: 4px;
-		font-size: 12px;
-	}
-
-	.gen-item:hover {
-		background: var(--surface-hover);
-	}
-
-	.gen-item.playing {
-		background: #1a1a2a;
-	}
-
-	.gen-play {
-		background: none;
-		border: none;
-		cursor: pointer;
-		font-size: 14px;
-	}
-
-	.gen-num {
-		font-family: var(--font-display);
-		color: var(--text);
-		min-width: 40px;
-	}
-
-	.gen-score {
-		font-size: 10px;
-		color: var(--text-muted);
-		background: var(--surface);
-		padding: 1px 6px;
-		border-radius: 3px;
-	}
-
-	.gen-rating {
-		font-size: 10px;
-		color: var(--score-ok);
-		font-family: var(--font-display);
-	}
-
-	.gen-seed {
-		font-size: 9px;
-		color: var(--text-dim);
-		margin-left: auto;
-	}
-
-	.empty-gens {
-		color: var(--text-dim);
-		font-style: italic;
-		padding: 20px;
-		text-align: center;
-	}
-
-	/* Lyrics tab */
+	/* Lyrics editor */
 	.lyrics-edit {
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
 	}
 
-	.version-nav {
+	.diff-banner {
 		display: flex;
+		justify-content: space-between;
 		align-items: center;
-		gap: 8px;
-		padding: 6px 12px;
+		padding: 6px 10px;
 		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		font-size: 11px;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.params-diff {
+		display: flex;
+		gap: 12px;
+		flex-wrap: wrap;
+		padding: 6px 10px;
+		background: var(--surface);
+		border: 1px solid var(--border);
 		border-radius: 4px;
 		font-size: 12px;
-		color: var(--text-muted);
 	}
 
-	.version-nav button {
-		background: none;
+	.param-change {
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 11px;
+	}
+
+	.param-change .old {
+		color: var(--score-bad);
+		text-decoration: line-through;
+	}
+
+	.param-change .new {
+		color: var(--score-good);
+	}
+
+	.diff-readonly {
+		padding: 6px 10px;
+		background: var(--surface);
 		border: 1px solid var(--border);
+		border-radius: 4px;
 		color: var(--text-muted);
-		padding: 2px 8px;
-		border-radius: 3px;
-		cursor: pointer;
+		font-size: 13px;
 	}
 
-	.version-nav button:disabled {
-		opacity: 0.3;
-	}
-
-	.old-tag {
-		color: var(--score-ok);
-		font-size: 10px;
-	}
-
-	.latest-btn {
-		margin-left: auto;
-		border-color: var(--score-ok) !important;
-		color: var(--score-ok) !important;
+	.lyrics-readonly {
+		font-family: 'Courier New', monospace;
+		font-size: 14px;
+		line-height: 1.6;
+		white-space: pre-wrap;
+		margin: 0;
+		max-height: 300px;
+		overflow-y: auto;
 	}
 
 	.edit-field {

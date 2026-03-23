@@ -63,6 +63,16 @@ export async function fetchVersions(songId: string): Promise<VersionItem[]> {
 	return apiFetch<VersionItem[]>(`/api/songs/${songId}/versions`);
 }
 
+export async function deleteVersion(versionId: string, deleteGenerations: boolean): Promise<void> {
+	await apiFetch(`/api/versions/${versionId}?delete_generations=${deleteGenerations}`, {
+		method: 'DELETE'
+	});
+}
+
+export async function deleteGeneration(genId: string): Promise<void> {
+	await apiFetch(`/api/generations/${genId}`, { method: 'DELETE' });
+}
+
 export async function rateGeneration(
 	album: string,
 	genName: string,

@@ -40,6 +40,7 @@ export interface GenerationItem {
 	id: string;
 	song_id: string;
 	version_id: string | null;
+	version_number: number | null;
 	generation_number: number;
 	mp3_path: string;
 	seed: number | null;

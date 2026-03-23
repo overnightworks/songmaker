@@ -151,6 +151,35 @@ def update_song(
     return version
 
 
+# ── Deletion ─────────────────────────────────────────────────────────
+
+
+def delete_version(
+    session: Session, version_id: str, *, delete_generations: bool = False,
+) -> None:
+    version = session.query(Version).filter_by(id=version_id).first()
+    if not version:
+        raise ValueError(f"Version not found: {version_id}")
+
+    if delete_generations:
+        for gen in version.generations:
+            session.delete(gen)
+    else:
+        for gen in version.generations:
+            gen.version_id = None
+
+    session.delete(version)
+    session.flush()
+
+
+def delete_generation(session: Session, generation_id: str) -> None:
+    gen = session.query(Generation).filter_by(id=generation_id).first()
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    session.delete(gen)
+    session.flush()
+
+
 # ── Serialization ────────────────────────────────────────────────────
 
 
@@ -168,6 +197,7 @@ def generation_to_dict(gen: Generation) -> dict:
         "id": gen.id,
         "song_id": gen.song_id,
         "version_id": gen.version_id,
+        "version_number": gen.version.version_number if gen.version else None,
         "generation_number": gen.generation_number,
         "mp3_path": gen.mp3_path,
         "seed": gen.seed,

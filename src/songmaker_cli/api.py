@@ -19,6 +19,8 @@ from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
     album_to_dict,
     create_song,
+    delete_generation,
+    delete_version,
     generation_to_dict,
     get_album,
     get_generation,
@@ -155,6 +157,23 @@ def api_song_versions(
     return [version_to_dict(v) for v in reversed(song.versions)]
 
 
+# ── Versions (delete) ────────────────────────────────────────────────
+
+
+@router.delete("/versions/{version_id}")
+def api_delete_version(
+    version_id: str,
+    delete_generations: bool = Query(False),
+    session: Session = Depends(_get_session),
+) -> dict:
+    try:
+        delete_version(session, version_id, delete_generations=delete_generations)
+    except ValueError:
+        raise HTTPException(404, "Version not found")
+    session.commit()
+    return {"status": "ok"}
+
+
 # ── Generations ──────────────────────────────────────────────────────
 
 
@@ -166,6 +185,18 @@ def api_get_generation(
     if not gen:
         raise HTTPException(404, "Generation not found")
     return generation_to_dict(gen)
+
+
+@router.delete("/generations/{gen_id}")
+def api_delete_generation(
+    gen_id: str, session: Session = Depends(_get_session),
+) -> dict:
+    try:
+        delete_generation(session, gen_id)
+    except ValueError:
+        raise HTTPException(404, "Generation not found")
+    session.commit()
+    return {"status": "ok"}
 
 
 # ── Ratings ──────────────────────────────────────────────────────────

@@ -5,7 +5,9 @@
 		playback,
 		playbackTime,
 		playbackDuration,
-		navigateToPlaying
+		navigateToPlaying,
+		isAudioPlaying,
+		requestTogglePlay
 	} from '$lib/stores/player';
 	import { formatTime } from '$lib/utils/format';
 	import WaveSurfer from 'wavesurfer.js';
@@ -13,6 +15,7 @@
 	let waveContainer: HTMLDivElement | undefined = $state();
 	let wavesurfer: WaveSurfer | undefined = $state();
 	let isPlaying = $state(false);
+	const toggleRequest = $derived($requestTogglePlay);
 	let currentTime = $state(0);
 	let duration = $state(0);
 
@@ -50,8 +53,14 @@
 		});
 
 		wavesurfer.on('finish', handleEnded);
-		wavesurfer.on('play', () => (isPlaying = true));
-		wavesurfer.on('pause', () => (isPlaying = false));
+		wavesurfer.on('play', () => {
+			isPlaying = true;
+			isAudioPlaying.set(true);
+		});
+		wavesurfer.on('pause', () => {
+			isPlaying = false;
+			isAudioPlaying.set(false);
+		});
 	}
 
 	$effect(() => {
@@ -61,6 +70,14 @@
 			if (!wavesurfer) createWavesurfer();
 			wavesurfer?.load(`/audio/${gen.mp3_path}`);
 			wavesurfer?.once('ready', () => wavesurfer?.play());
+		}
+	});
+
+	let prevToggle = 0;
+	$effect(() => {
+		if (toggleRequest !== prevToggle) {
+			prevToggle = toggleRequest;
+			if (wavesurfer) wavesurfer.playPause();
 		}
 	});
 
