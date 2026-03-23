@@ -4,13 +4,24 @@
 
 	interface Props {
 		songContext?: string;
+		onapply?: (data: ApplyData) => void;
 	}
 
-	let { songContext = '' }: Props = $props();
+	export interface ApplyData {
+		lyrics?: string;
+		prompt?: string;
+		bpm?: number;
+		duration?: number;
+		key?: string;
+	}
+
+	let { songContext = '', onapply }: Props = $props();
 
 	interface Message {
 		role: 'user' | 'assistant';
 		text: string;
+		applied?: boolean;
+		applyData?: ApplyData;
 	}
 
 	let messages: Message[] = $state([]);
@@ -22,9 +33,28 @@
 	const hasKey = $derived(!!$claudeApiKey);
 
 	const SYSTEM_PROMPT =
-		'You are a songwriting assistant. Help the user write, improve, and refine song lyrics. ' +
-		'Be creative but respect the style and theme. When suggesting lyrics, format them with ' +
-		'section tags like [verse], [chorus], [bridge]. Keep responses concise.';
+		'You are a songwriting assistant. Help write, improve, and refine song lyrics. ' +
+		'Be creative but respect the style and theme.\n\n' +
+		'When suggesting lyrics or song parameters, ALWAYS include a ```songmaker block ' +
+		'at the end of your response with the applicable fields as JSON:\n' +
+		'```songmaker\n{"lyrics": "[verse]\\n...", "prompt": "style...", "bpm": 120, "key": "Am"}\n```\n\n' +
+		'Only include fields you are suggesting changes for. The lyrics field should use ' +
+		'section tags like [verse], [chorus], [bridge]. Use \\n for newlines in lyrics.\n' +
+		'If the user just asks a question without needing changes, skip the songmaker block.';
+
+	function extractApplyData(text: string): ApplyData | undefined {
+		const match = text.match(/```songmaker\s*\n([\s\S]*?)```/);
+		if (!match) return undefined;
+		try {
+			return JSON.parse(match[1].trim());
+		} catch {
+			return undefined;
+		}
+	}
+
+	function cleanDisplayText(text: string): string {
+		return text.replace(/```songmaker\s*\n[\s\S]*?```/, '').trim();
+	}
 
 	async function send(): Promise<void> {
 		const msg = input.trim();
@@ -37,13 +67,26 @@
 
 		try {
 			const response = await chatWithClaude(msg, songContext, SYSTEM_PROMPT);
-			messages = [...messages, { role: 'assistant', text: response }];
+			const applyData = extractApplyData(response);
+			messages = [...messages, { role: 'assistant', text: response, applyData }];
+
+			if (applyData && onapply) {
+				onapply(applyData);
+				messages[messages.length - 1].applied = true;
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Chat failed';
 		} finally {
 			loading = false;
 			scrollToBottom();
 		}
+	}
+
+	function applyMessage(index: number): void {
+		const msg = messages[index];
+		if (!msg?.applyData || !onapply) return;
+		onapply(msg.applyData);
+		messages[index] = { ...msg, applied: true };
 	}
 
 	function scrollToBottom(): void {
@@ -93,7 +136,8 @@
 	<div class="messages" bind:this={container}>
 		{#if messages.length === 0}
 			<p class="empty-hint">
-				Ask Claude to help write lyrics, brainstorm ideas, or refine your song.
+				Ask Claude to write lyrics, brainstorm ideas, or refine your song. Suggestions auto-apply to
+				the editor.
 			</p>
 		{/if}
 		{#each messages as msg, i (i)}
@@ -102,7 +146,16 @@
 				class:user={msg.role === 'user'}
 				class:assistant={msg.role === 'assistant'}
 			>
-				<pre class="message-text">{msg.text}</pre>
+				<pre class="message-text">{cleanDisplayText(msg.text)}</pre>
+				{#if msg.role === 'assistant' && msg.applyData}
+					<div class="apply-row">
+						{#if msg.applied}
+							<span class="applied-badge">✓ Applied</span>
+						{:else}
+							<button class="apply-btn" onclick={() => applyMessage(i)}>Apply to editor</button>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		{/each}
 		{#if loading}
@@ -231,6 +284,32 @@
 		font-family: var(--font-body);
 		font-size: 12px;
 		margin: 0;
+	}
+
+	.apply-row {
+		margin-top: 6px;
+		padding-top: 6px;
+		border-top: 1px solid var(--border);
+	}
+
+	.apply-btn {
+		background: none;
+		border: 1px solid var(--primary);
+		color: var(--primary);
+		padding: 3px 12px;
+		border-radius: 12px;
+		font-size: 10px;
+		cursor: pointer;
+	}
+
+	.apply-btn:hover {
+		background: var(--primary);
+		color: #fff;
+	}
+
+	.applied-badge {
+		color: var(--success);
+		font-size: 10px;
 	}
 
 	.typing {

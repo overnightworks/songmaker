@@ -210,6 +210,29 @@ def update_song(
     return revision
 
 
+def list_revisions(session: Session, song_id: str) -> list[SongRevision]:
+    return (
+        session.query(SongRevision)
+        .filter_by(song_id=song_id)
+        .order_by(SongRevision.created_at.desc())
+        .all()
+    )
+
+
+def revision_to_dict(rev: SongRevision, index: int, total: int) -> dict:
+    return {
+        "id": rev.id,
+        "index": index,
+        "total": total,
+        "lyrics": rev.lyrics,
+        "prompt": rev.prompt,
+        "bpm": rev.bpm,
+        "duration": rev.duration,
+        "key": rev.key,
+        "created_at": rev.created_at.isoformat() if rev.created_at else None,
+    }
+
+
 def song_to_dict(song: Song) -> dict:
     """Serialize a Song with its latest revision."""
     rev = song.latest_revision

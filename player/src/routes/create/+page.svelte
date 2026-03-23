@@ -4,6 +4,7 @@
 	import { createSong, updateSong, type SongDetail } from '$lib/api/songs';
 	import type { AlbumItem } from '$lib/api/types';
 	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
+	import type { ApplyData } from '$lib/components/ClaudeChat.svelte';
 
 	let albums: AlbumItem[] = $state([]);
 	let showChat = $state(false);
@@ -20,6 +21,21 @@
 	let key = $state('');
 	let language = $state('');
 
+	interface RevisionItem {
+		id: string;
+		index: number;
+		total: number;
+		lyrics: string;
+		prompt: string;
+		bpm: number;
+		duration: number;
+		key: string;
+		created_at: string | null;
+	}
+
+	let revisions: RevisionItem[] = $state([]);
+	let currentRevIndex = $state(0);
+
 	onMount(async () => {
 		albums = await fetchAlbums();
 		if (albums.length > 0) albumId = albums[0].id;
@@ -32,7 +48,7 @@
 		try {
 			if (song) {
 				song = await updateSong(song.id, { lyrics, prompt, bpm, duration, key });
-				status = 'Saved (new revision)';
+				status = `Saved revision ${song.revision_count}`;
 			} else {
 				song = await createSong({
 					title,
@@ -46,6 +62,7 @@
 				});
 				status = 'Created!';
 			}
+			await loadRevisions();
 		} catch (e) {
 			status = e instanceof Error ? e.message : 'Save failed';
 		} finally {
@@ -54,15 +71,45 @@
 		}
 	}
 
+	async function loadRevisions(): Promise<void> {
+		if (!song) return;
+		const resp = await fetch(`/api/songs/${song.id}/revisions`);
+		if (resp.ok) {
+			revisions = await resp.json();
+			currentRevIndex = 0;
+		}
+	}
+
+	function loadRevision(index: number): void {
+		const rev = revisions[index];
+		if (!rev) return;
+		currentRevIndex = index;
+		lyrics = rev.lyrics;
+		prompt = rev.prompt;
+		bpm = rev.bpm;
+		duration = rev.duration;
+		key = rev.key;
+	}
+
+	function handleApply(data: ApplyData): void {
+		if (data.lyrics !== undefined) lyrics = data.lyrics;
+		if (data.prompt !== undefined) prompt = data.prompt;
+		if (data.bpm !== undefined) bpm = data.bpm;
+		if (data.duration !== undefined) duration = data.duration;
+		if (data.key !== undefined) key = data.key;
+	}
+
 	const songContext = $derived(
 		`Song: ${title}\nAlbum: ${albumId}\nStyle: ${prompt}\nKey: ${key}\nBPM: ${bpm}\n\nLyrics:\n${lyrics}`
 	);
+
+	const isLatestRevision = $derived(currentRevIndex === 0);
 </script>
 
 <div class="create-page">
 	<div class="editor-panel">
 		<header class="editor-header">
-			<h1>Create Song</h1>
+			<h1>{song ? 'Edit Song' : 'Create Song'}</h1>
 			<div class="header-actions">
 				<button class="save-btn" onclick={save} disabled={saving || !title.trim()}>
 					{saving ? 'Saving...' : song ? 'Save Revision' : 'Create'}
@@ -75,6 +122,36 @@
 
 		{#if status}
 			<div class="status">{status}</div>
+		{/if}
+
+		{#if revisions.length > 1}
+			<div class="revision-nav">
+				<button
+					class="rev-btn"
+					onclick={() => loadRevision(Math.min(currentRevIndex + 1, revisions.length - 1))}
+					disabled={currentRevIndex >= revisions.length - 1}
+					aria-label="Older revision"
+				>
+					◄
+				</button>
+				<span class="rev-label">
+					Rev {revisions[currentRevIndex]?.index ?? '?'} / {revisions[0]?.total ?? '?'}
+					{#if !isLatestRevision}
+						<span class="rev-old">(old)</span>
+					{/if}
+				</span>
+				<button
+					class="rev-btn"
+					onclick={() => loadRevision(Math.max(currentRevIndex - 1, 0))}
+					disabled={currentRevIndex <= 0}
+					aria-label="Newer revision"
+				>
+					►
+				</button>
+				{#if !isLatestRevision}
+					<button class="restore-btn" onclick={() => loadRevision(0)}> Back to latest </button>
+				{/if}
+			</div>
 		{/if}
 
 		<div class="form-grid">
@@ -138,7 +215,7 @@
 
 	{#if showChat}
 		<aside class="chat-panel">
-			<ClaudeChat {songContext} />
+			<ClaudeChat {songContext} onapply={handleApply} />
 		</aside>
 	{/if}
 </div>
@@ -218,6 +295,63 @@
 		font-size: 12px;
 		color: var(--success);
 		padding: 4px 0;
+	}
+
+	.revision-nav {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 12px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+	}
+
+	.rev-btn {
+		background: none;
+		border: 1px solid var(--border);
+		color: var(--text-muted);
+		padding: 2px 8px;
+		border-radius: 3px;
+		font-size: 12px;
+		cursor: pointer;
+	}
+
+	.rev-btn:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+
+	.rev-btn:hover:not(:disabled) {
+		border-color: var(--primary);
+		color: var(--text);
+	}
+
+	.rev-label {
+		font-size: 12px;
+		font-family: var(--font-display);
+		color: var(--text-muted);
+	}
+
+	.rev-old {
+		color: var(--score-ok);
+		font-size: 10px;
+	}
+
+	.restore-btn {
+		background: none;
+		border: 1px solid var(--score-ok);
+		color: var(--score-ok);
+		padding: 2px 10px;
+		border-radius: 3px;
+		font-size: 10px;
+		cursor: pointer;
+		margin-left: auto;
+	}
+
+	.restore-btn:hover {
+		background: var(--score-ok);
+		color: #000;
 	}
 
 	.form-grid {

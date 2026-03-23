@@ -28,7 +28,9 @@ from songmaker_cli.db.queries import (
     get_version_by_path,
     list_albums,
     list_library,
+    list_revisions,
     list_versions,
+    revision_to_dict,
     save_rating,
     song_to_dict,
     update_song,
@@ -222,6 +224,15 @@ def api_update_song(
     session.commit()
     song = get_song(session, song_id)
     return song_to_dict(song)
+
+
+@router.get("/songs/{song_id}/revisions")
+def api_list_revisions(
+    song_id: str, session: Session = Depends(_get_session),
+) -> list[dict]:
+    revisions = list_revisions(session, song_id)
+    total = len(revisions)
+    return [revision_to_dict(r, total - i, total) for i, r in enumerate(revisions)]
 
 
 # ── Capabilities ─────────────────────────────────────────────────────
