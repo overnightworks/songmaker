@@ -160,9 +160,12 @@ def run_scoring_job(
 
         from songmaker_cli.parser import SongMeta
         from songmaker_cli.scoring import run_scoring_pipeline
+        from songmaker_cli.scoring.pipeline import PipelineConfig
 
+        device = _detect_device()
+        config = PipelineConfig(device=device)
         meta = SongMeta(**meta_kwargs) if meta_kwargs else None
-        song_scores = run_scoring_pipeline(mp3_full, meta=meta, scorers=scorers)
+        song_scores = run_scoring_pipeline(mp3_full, meta=meta, scorers=scorers, config=config)
         scores_dict = song_scores.to_dict()
 
         with factory() as session:
@@ -176,6 +179,16 @@ def run_scoring_job(
     except Exception as exc:
         log.exception("Scoring job failed: %s", exc)
         _update_job(factory, job_id, "failed", error=str(exc))
+
+
+def _detect_device() -> str:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+    except ImportError:
+        pass
+    return "cpu"
 
 
 def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
