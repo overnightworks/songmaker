@@ -48,7 +48,6 @@ def score_text_accuracy(
     trans_lines = tuple(
         s.get("text", "").strip() for s in segments if s.get("text", "").strip()
     )
-
     ratio = _word_level_accuracy(intended_lines, trans_lines)
 
     log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
@@ -297,9 +296,8 @@ def _transcribe(
     initial_prompt: str | None = None,
 ) -> tuple[str, list[dict]]:
     log.info("Transcribing %s...", mp3_path.name)
-    preprocessed = _vocal_preprocess(mp3_path)
     kwargs: dict[str, object] = {
-        "language": language, "fp16": False,
+        "language": language, "fp16": True,
         "condition_on_previous_text": False,
         "word_timestamps": True,
         "beam_size": 5,
@@ -310,8 +308,5 @@ def _transcribe(
     }
     if initial_prompt:
         kwargs["initial_prompt"] = initial_prompt
-    try:
-        result = model.transcribe(preprocessed, **kwargs)  # type: ignore[union-attr]
-    finally:
-        Path(preprocessed).unlink(missing_ok=True)
+    result = model.transcribe(str(mp3_path), **kwargs)  # type: ignore[union-attr]
     return result["text"].strip(), result.get("segments", [])
