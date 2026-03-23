@@ -171,7 +171,17 @@
 	<main class="main-content">
 		{#if showNewSong}
 			<div class="new-song-form">
-				<h2>New Song</h2>
+				<div class="new-song-header">
+					<h2>New Song</h2>
+					<button
+						class="action-btn chat-btn"
+						class:active={showChat}
+						onclick={() => (showChat = !showChat)}
+						aria-label="Toggle chat"
+					>
+						💬
+					</button>
+				</div>
 				<div class="new-song-fields">
 					<input type="text" bind:value={newTitle} placeholder="Song title" />
 					<select bind:value={newAlbumId}>
@@ -195,11 +205,38 @@
 						<span class="song-album">{song.album_title} · {song.artist}</span>
 					</div>
 					<div class="detail-actions">
-						{#if dirty && !activeGen}
-							<button class="save-btn" onclick={onSave} disabled={isSaving}>
-								{isSaving ? 'Saving...' : 'Save'}
-							</button>
+						{#if !activeGen}
+							{#if dirty}
+								<button class="save-btn" onclick={onSave} disabled={isSaving}>
+									{isSaving ? 'Saving...' : 'Save'}
+								</button>
+							{:else}
+								<button
+									class="generate-btn"
+									onclick={onGenerate}
+									disabled={isGenerating || !song?.lyrics || !song?.prompt}
+									title={!song?.lyrics || !song?.prompt ? 'Add lyrics and style prompt first' : ''}
+								>
+									{isGenerating ? 'Generating...' : 'Generate'}
+								</button>
+								<select class="gen-count-select" bind:value={genCount}>
+									{#each [1, 2, 3, 5, 10] as n (n)}
+										<option value={n}>×{n}</option>
+									{/each}
+								</select>
+							{/if}
 						{/if}
+						{#each songJobs as j (j.job.id)}
+							<span class="job-indicator" class:failed={j.job.status === 'failed'}>
+								{#if j.job.status === 'running'}
+									{j.job.type} {Math.round(j.job.progress * 100)}%
+								{:else if j.job.status === 'completed'}
+									Done
+								{:else if j.job.status === 'failed'}
+									{j.job.error || 'Failed'}
+								{/if}
+							</span>
+						{/each}
 						{#if statusMsg}
 							<span class="status-msg">{statusMsg}</span>
 						{/if}
@@ -238,42 +275,6 @@
 								ondelete={onDeleteVersion}
 							/>
 						{/if}
-
-						<div class="generate-bar">
-							<div class="gen-controls">
-								<button
-									class="generate-btn"
-									onclick={onGenerate}
-									disabled={isGenerating || dirty || !song?.lyrics || !song?.prompt}
-									title={dirty
-										? 'Save changes before generating'
-										: !song?.lyrics || !song?.prompt
-											? 'Add lyrics and style prompt first'
-											: ''}
-								>
-									{isGenerating ? 'Generating...' : 'Generate'}
-								</button>
-								<select class="gen-count-select" bind:value={genCount}>
-									{#each [1, 2, 3, 5, 10] as n (n)}
-										<option value={n}>×{n}</option>
-									{/each}
-								</select>
-							</div>
-							{#each songJobs as j (j.job.id)}
-								<div class="job-status" class:failed={j.job.status === 'failed'}>
-									<span class="job-type">{j.job.type}</span>
-									{#if j.job.status === 'running'}
-										<span class="job-progress">{Math.round(j.job.progress * 100)}%</span>
-									{:else if j.job.status === 'completed'}
-										<span class="job-done">Done</span>
-									{:else if j.job.status === 'failed'}
-										<span class="job-error">{j.job.error || 'Failed'}</span>
-									{:else}
-										<span class="job-queued">Queued</span>
-									{/if}
-								</div>
-							{/each}
-						</div>
 
 						{#if isAppliedDiff && !isDiffMode}
 							<div class="diff-banner">
@@ -368,9 +369,9 @@
 		{/if}
 	</main>
 
-	{#if showChat && song && !activeGen}
+	{#if showChat && !activeGen}
 		<aside class="chat-panel">
-			<ClaudeChat songId={song.id} {songContext} onapply={handleApply} />
+			<ClaudeChat songId={song?.id ?? ''} {songContext} onapply={handleApply} />
 		</aside>
 	{/if}
 {/if}
@@ -516,18 +517,6 @@
 		gap: 10px;
 	}
 
-	.generate-bar {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-
-	.gen-controls {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-	}
-
 	.generate-btn {
 		padding: 6px 16px;
 		border: 2px solid var(--score-good);
@@ -556,41 +545,16 @@
 		font-size: 11px;
 	}
 
-	.job-status {
-		display: flex;
-		align-items: center;
-		gap: 6px;
+	.job-indicator {
 		font-size: 10px;
-		color: var(--text-muted);
+		color: var(--score-ok);
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 	}
 
-	.job-status.failed {
+	.job-indicator.failed {
 		color: var(--score-bad);
-	}
-
-	.job-type {
-		color: var(--text-dim);
-	}
-
-	.job-progress {
-		color: var(--score-ok);
-	}
-
-	.job-done {
-		color: var(--score-good);
-	}
-
-	.job-error {
-		color: var(--score-bad);
-		font-family: var(--font-body);
-		text-transform: none;
-	}
-
-	.job-queued {
-		color: var(--text-dim);
 	}
 
 	.diff-banner {
@@ -708,7 +672,15 @@
 		padding: 20px;
 	}
 
+	.new-song-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+
 	.new-song-form h2 {
+		margin-bottom: 0;
 		font-family: var(--font-display);
 		color: var(--primary);
 		font-size: 20px;

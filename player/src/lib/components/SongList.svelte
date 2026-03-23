@@ -165,6 +165,9 @@
 
 	function handleGenSelect(gen: GenerationItem, song: SongItem): void {
 		selectGenerationInSidebar(gen, song);
+		if (!isGenPlaying(gen)) {
+			playGeneration(gen, song);
+		}
 	}
 
 	let confirmDeleteGenId: string | null = $state(null);
@@ -285,7 +288,14 @@
 	</div>
 </div>
 
-<div class="song-list" role="tree" aria-label="Song list">
+<div
+	class="song-list"
+	role="tree"
+	aria-label="Song list"
+	onclick={() => (confirmDeleteGenId = null)}
+	onkeydown={(e) => e.key === 'Escape' && (confirmDeleteGenId = null)}
+	tabindex="-1"
+>
 	{#each displaySongs as song (song.id)}
 		<div class="song-group" class:active={song.id === activeSongId}>
 			<div
