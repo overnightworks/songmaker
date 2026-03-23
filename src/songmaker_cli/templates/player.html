@@ -403,22 +403,6 @@
   .diff-line.sung { color: var(--primary); }
   .diff-line.section { color: #555; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 1px; padding-top: 8px; }
 
-  .rating-panel {
-    background: #111;
-    border: 1px solid #222;
-    border-radius: 6px;
-    padding: 10px 16px;
-    margin: 8px 0;
-    flex-shrink: 0;
-  }
-
-  .rating-panel.collapsed > *:not(h3) { display: none; }
-
-  .rating-panel h3 { cursor: pointer; user-select: none; }
-
-  .rating-panel.collapsed h3::first-letter { display: inline; }
-  .rating-panel:not(.collapsed) h3 .arrow { transform: rotate(180deg); }
-
   .gen-info {
     background: #111;
     border: 1px solid #222;
@@ -454,15 +438,6 @@
 
   .gen-info-item span {
     color: #ccc;
-  }
-
-  .rating-panel h3 {
-    font-family: 'Oswald', sans-serif;
-    font-size: 13px;
-    color: var(--primary);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
   }
 
   .rating-row {
@@ -578,7 +553,7 @@
     <button class="filter-btn" onclick="filterByScore(7)">7+</button>
     <button class="filter-btn" onclick="filterByScore(5)">5+</button>
     <select class="sort-select" onchange="sortSongs(this.value)">
-      <option value="vocal">Sort: Vocal Quality</option>
+      <option value="vocal">Sort: Lyrical Coherence</option>
       <option value="latest">Sort: Latest</option>
       <option value="dynamics">Sort: Dynamics</option>
       <option value="name">Sort: Name</option>
@@ -606,17 +581,6 @@
   <audio id="audioPlayer" class="audio-player" controls preload="metadata">
     <source id="audioSource" type="audio/mpeg">
   </audio>
-
-  <div class="rating-panel collapsed" id="ratingPanel">
-    <h3 onclick="this.parentElement.classList.toggle('collapsed')">&#9662; Rate this version</h3>
-    <div class="rating-row">
-      <span class="rating-label">Score</span>
-      <input type="range" class="rating-slider" id="ratingSlider" min="0" max="100" step="0.1" value="0" oninput="onSliderChange(this.value)">
-      <span class="rating-value" id="ratingValue">-</span>
-    </div>
-    <textarea class="rating-comment" id="ratingComment" rows="3" placeholder="What stands out? Voice, groove, lyrics, production..." onblur="saveRating()"></textarea>
-    <span class="rating-status" id="ratingStatus">Saved!</span>
-  </div>
 
   <div class="gen-info collapsed" id="genInfo" style="display:none">
     <h3 onclick="this.parentElement.classList.toggle('collapsed')">&#9662; Generation Info</h3>
@@ -929,31 +893,42 @@ function renderScores(track) {
   const panel = document.getElementById('scoresPanel');
   const grid = document.getElementById('scoresGrid');
   grid.innerHTML = '';
-  if (!track.scores) {
-    panel.style.display = 'none';
-    return;
-  }
   panel.style.display = 'block';
-  for (const [key, label] of Object.entries(SCORE_LABELS)) {
-    const val = track.scores[key];
-    if (val === undefined || val === null) continue;
-    const div = document.createElement('div');
-    div.className = 'gen-info-item';
-    let display = val;
-    if (key === 'lyrical_coherence') display = val + '/10';
-    if (typeof val === 'number' && key !== 'silence_gaps' && key !== 'spectral_artifacts') {
-      display = val.toFixed(1);
+
+  if (track.scores) {
+    for (const [key, label] of Object.entries(SCORE_LABELS)) {
+      const val = track.scores[key];
+      if (val === undefined || val === null) continue;
+      const div = document.createElement('div');
+      div.className = 'gen-info-item';
+      let display = val;
+      if (key === 'lyrical_coherence') display = val + '/10';
+      if (typeof val === 'number' && key !== 'silence_gaps' && key !== 'spectral_artifacts') {
+        display = val.toFixed(1);
+      }
+      if (key === 'lyrical_summary' && typeof val === 'string' && val.length > 40) {
+        const short = escHtml(val.substring(0, 40)) + '...';
+        const full = escHtml(val);
+        div.innerHTML = label + ': <span class="vocal-summary-text" onclick="this.textContent = this.dataset.expanded === \'1\' ? \'' + short.replace(/'/g, "\\'") + '\' : \'' + full.replace(/'/g, "\\'") + '\'; this.dataset.expanded = this.dataset.expanded === \'1\' ? \'0\' : \'1\'" style="cursor:pointer">' + short + '</span>';
+      } else {
+        div.innerHTML = label + ': <span>' + escHtml(String(display)) + '</span>';
+      }
+      grid.appendChild(div);
     }
-    // Vocal summary: truncated, click to expand
-    if (key === 'lyrical_summary' && typeof val === 'string' && val.length > 40) {
-      const short = escHtml(val.substring(0, 40)) + '...';
-      const full = escHtml(val);
-      div.innerHTML = label + ': <span class="vocal-summary-text" onclick="this.textContent = this.dataset.expanded === \'1\' ? \'' + short.replace(/'/g, "\\'") + '\' : \'' + full.replace(/'/g, "\\'") + '\'; this.dataset.expanded = this.dataset.expanded === \'1\' ? \'0\' : \'1\'" style="cursor:pointer">' + short + '</span>';
-    } else {
-      div.innerHTML = label + ': <span>' + escHtml(String(display)) + '</span>';
-    }
-    grid.appendChild(div);
   }
+
+  // Rating UI integrated into scores
+  const ratingHtml = document.createElement('div');
+  ratingHtml.style.cssText = 'grid-column: 1 / -1; margin-top: 8px; border-top: 1px solid #222; padding-top: 8px;';
+  ratingHtml.innerHTML =
+    '<div class="rating-row">' +
+      '<span class="rating-label">Rating</span>' +
+      '<input type="range" class="rating-slider" id="ratingSlider" min="0" max="100" step="0.1" value="0" oninput="onSliderChange(this.value)">' +
+      '<span class="rating-value" id="ratingValue">-</span>' +
+    '</div>' +
+    '<textarea class="rating-comment" id="ratingComment" rows="2" placeholder="What stands out? Voice, groove, lyrics, production..." onblur="saveRating()"></textarea>' +
+    '<span class="rating-status" id="ratingStatus">Saved!</span>';
+  grid.appendChild(ratingHtml);
 }
 
 // --- Lyrics sync ---
