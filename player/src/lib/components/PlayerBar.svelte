@@ -69,7 +69,9 @@
 			prevFile = gen.mp3_path;
 			if (!wavesurfer) createWavesurfer();
 			wavesurfer?.load(`/audio/${gen.mp3_path}`);
-			wavesurfer?.once('ready', () => wavesurfer?.play());
+			if (pb?.autoplay) {
+				wavesurfer?.once('ready', () => wavesurfer?.play());
+			}
 		}
 	});
 

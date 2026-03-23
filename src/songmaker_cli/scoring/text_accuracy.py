@@ -42,7 +42,7 @@ def score_text_accuracy(
         if line.strip() and not line.strip().startswith("[")
     )
 
-    initial_prompt = _build_vocabulary_prompt(intended_lines)
+    initial_prompt = " ".join(intended_lines)
     transcribed, segments = _transcribe(mp3_path, language, model, initial_prompt)
 
     trans_lines = tuple(
