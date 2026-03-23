@@ -21,13 +21,17 @@ from songmaker_cli.claude.provider import (
 from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
     album_to_dict,
+    create_song,
     get_album,
+    get_song,
     get_version,
     get_version_by_path,
     list_albums,
     list_library,
     list_versions,
     save_rating,
+    song_to_dict,
+    update_song,
     version_to_dict,
 )
 
@@ -52,6 +56,25 @@ def _get_session() -> Session:  # type: ignore[misc]
 class RateRequest(BaseModel):
     rating: float = Field(ge=0, le=100)
     notes: str = ""
+
+
+class SongCreateRequest(BaseModel):
+    title: str
+    album_id: str
+    lyrics: str = ""
+    prompt: str = ""
+    bpm: int = 0
+    duration: int = 180
+    key: str = ""
+    language: str = ""
+
+
+class SongUpdateRequest(BaseModel):
+    lyrics: str | None = None
+    prompt: str | None = None
+    bpm: int | None = None
+    duration: int | None = None
+    key: str | None = None
 
 
 class PaginatedResponse(BaseModel):
@@ -148,6 +171,57 @@ def api_rate_by_path(
     save_rating(session, version.id, req.rating, req.notes)
     session.commit()
     return {"status": "ok", "version": version_name, "rating": req.rating}
+
+
+# ── Song CRUD ────────────────────────────────────────────────────────
+
+
+@router.post("/songs")
+def api_create_song(
+    req: SongCreateRequest, session: Session = Depends(_get_session),
+) -> dict:
+    song = create_song(
+        session,
+        title=req.title,
+        album_id=req.album_id,
+        lyrics=req.lyrics,
+        prompt=req.prompt,
+        bpm=req.bpm,
+        duration=req.duration,
+        key=req.key,
+        language=req.language,
+    )
+    session.commit()
+    return song_to_dict(song)
+
+
+@router.get("/songs/{song_id}")
+def api_get_song(song_id: str, session: Session = Depends(_get_session)) -> dict:
+    song = get_song(session, song_id)
+    if not song:
+        raise HTTPException(404, "Song not found")
+    return song_to_dict(song)
+
+
+@router.put("/songs/{song_id}")
+def api_update_song(
+    song_id: str, req: SongUpdateRequest, session: Session = Depends(_get_session),
+) -> dict:
+    try:
+        update_song(
+            session,
+            song_id,
+            lyrics=req.lyrics,
+            prompt=req.prompt,
+            bpm=req.bpm,
+            duration=req.duration,
+            key=req.key,
+        )
+    except ValueError:
+        raise HTTPException(404, "Song not found")
+    session.commit()
+    song = get_song(session, song_id)
+    return song_to_dict(song)
 
 
 # ── Capabilities ─────────────────────────────────────────────────────

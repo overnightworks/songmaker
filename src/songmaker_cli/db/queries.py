@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session, joinedload
 
-from songmaker_cli.db.models import Album, Rating, Song, Version
+from songmaker_cli.db.models import Album, Rating, Song, SongRevision, Version
 
 
 def list_albums(session: Session) -> list[Album]:
@@ -132,6 +132,101 @@ def version_to_dict(version: Version) -> dict:
         "scores": scores_dict if scores_dict else None,
         "generation": gen_params if gen_params else None,
         "created_at": version.created_at.isoformat() if version.created_at else None,
+    }
+
+
+def create_song(
+    session: Session,
+    title: str,
+    album_id: str,
+    lyrics: str = "",
+    prompt: str = "",
+    bpm: int = 0,
+    duration: int = 180,
+    key: str = "",
+    language: str = "",
+) -> Song:
+    """Create a song with its first revision."""
+    album = session.query(Album).filter_by(id=album_id).first()
+    if not album:
+        raise ValueError(f"Album not found: {album_id}")
+
+    max_track = (
+        session.query(Song.track_number)
+        .filter_by(album_id=album_id)
+        .order_by(Song.track_number.desc())
+        .first()
+    )
+    track_number = (max_track[0] + 1) if max_track else 1
+
+    song = Song(
+        title=title,
+        album_id=album_id,
+        language=language,
+        track_number=track_number,
+    )
+    session.add(song)
+    session.flush()
+
+    revision = SongRevision(
+        song_id=song.id,
+        lyrics=lyrics,
+        prompt=prompt,
+        bpm=bpm,
+        duration=duration,
+        key=key,
+    )
+    session.add(revision)
+    session.flush()
+
+    return song
+
+
+def update_song(
+    session: Session,
+    song_id: str,
+    lyrics: str | None = None,
+    prompt: str | None = None,
+    bpm: int | None = None,
+    duration: int | None = None,
+    key: str | None = None,
+) -> SongRevision:
+    """Update a song by creating a new revision."""
+    song = get_song(session, song_id)
+    if not song:
+        raise ValueError(f"Song not found: {song_id}")
+
+    prev = song.latest_revision
+    revision = SongRevision(
+        song_id=song_id,
+        lyrics=lyrics if lyrics is not None else (prev.lyrics if prev else ""),
+        prompt=prompt if prompt is not None else (prev.prompt if prev else ""),
+        bpm=bpm if bpm is not None else (prev.bpm if prev else 0),
+        duration=duration if duration is not None else (prev.duration if prev else 180),
+        key=key if key is not None else (prev.key if prev else ""),
+    )
+    session.add(revision)
+    session.flush()
+    return revision
+
+
+def song_to_dict(song: Song) -> dict:
+    """Serialize a Song with its latest revision."""
+    rev = song.latest_revision
+    return {
+        "id": song.id,
+        "title": song.title,
+        "album_id": song.album_id,
+        "track_number": song.track_number,
+        "language": song.language,
+        "lyrics": rev.lyrics if rev else "",
+        "prompt": rev.prompt if rev else "",
+        "bpm": rev.bpm if rev else 0,
+        "duration": rev.duration if rev else 180,
+        "key": rev.key if rev else "",
+        "revision_count": len(song.revisions),
+        "version_count": len(song.versions),
+        "created_at": song.created_at.isoformat() if song.created_at else None,
     }
 
 
