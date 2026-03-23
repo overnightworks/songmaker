@@ -165,16 +165,16 @@
 				{#if params.acestep_model}
 					<span class="param">model: {params.acestep_model}</span>
 				{/if}
-				{#if params.guidance_scale}
+				{#if params.guidance_scale !== undefined && params.guidance_scale !== null}
 					<span class="param">cfg: {params.guidance_scale}</span>
 				{/if}
-				{#if params.inference_steps}
+				{#if params.inference_steps !== undefined && params.inference_steps !== null}
 					<span class="param">steps: {params.inference_steps}</span>
 				{/if}
-				{#if params.shift}
+				{#if params.shift !== undefined && params.shift !== null}
 					<span class="param">shift: {params.shift}</span>
 				{/if}
-				{#if params.lm_temperature}
+				{#if params.lm_temperature !== undefined && params.lm_temperature !== null}
 					<span class="param">temp: {params.lm_temperature}</span>
 				{/if}
 				{#if params.infer_method}
