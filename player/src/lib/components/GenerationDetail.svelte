@@ -166,7 +166,7 @@
 					<span class="param">model: {params.acestep_model}</span>
 				{/if}
 				{#if params.guidance_scale !== undefined && params.guidance_scale !== null}
-					<span class="param">cfg: {params.guidance_scale}</span>
+					<span class="param">guidance: {params.guidance_scale}</span>
 				{/if}
 				{#if params.inference_steps !== undefined && params.inference_steps !== null}
 					<span class="param">steps: {params.inference_steps}</span>
