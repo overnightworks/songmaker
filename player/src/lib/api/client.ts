@@ -1,4 +1,5 @@
-import type { AlbumItem, PaginatedResponse, VersionItem } from './types';
+import type { AlbumItem, Capabilities, PaginatedResponse, VersionItem } from './types';
+import { getClaudeKey } from '$lib/stores/settings';
 
 const API_KEY =
 	typeof window !== 'undefined'
@@ -49,4 +50,32 @@ export async function rateVersion(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ rating, notes })
 	});
+}
+
+export async function fetchCapabilities(): Promise<Capabilities> {
+	return apiFetch<Capabilities>('/api/capabilities');
+}
+
+export async function chatWithClaude(
+	message: string,
+	context: string = '',
+	system: string = ''
+): Promise<string> {
+	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+	const claudeKey = getClaudeKey();
+	if (claudeKey) {
+		headers['X-Claude-Key'] = claudeKey;
+	}
+	const resp = await fetch(apiUrl('/api/chat'), {
+		method: 'POST',
+		headers,
+		body: JSON.stringify({ message, context, system })
+	});
+	if (!resp.ok) {
+		if (resp.status === 503)
+			throw new Error('Claude is not available. Add an API key in settings.');
+		throw new Error(`Chat failed: ${resp.status}`);
+	}
+	const data = await resp.json();
+	return data.response;
 }

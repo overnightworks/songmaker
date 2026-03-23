@@ -16,9 +16,11 @@
 	import SyncedLyrics from '$lib/components/SyncedLyrics.svelte';
 	import ScoresPanel from '$lib/components/ScoresPanel.svelte';
 	import GenInfoPanel from '$lib/components/GenInfoPanel.svelte';
+	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
 
 	let loading = $state(true);
 	let error = $state('');
+	let showChat = $state(false);
 
 	const track = $derived($browsingTrack);
 	const album = $derived($browsingAlbum);
@@ -64,14 +66,24 @@
 					{#if album}
 						<span class="track-meta">{album.artist}</span>
 					{/if}
-					<button
-						class="play-track-btn"
-						class:is-playing={isBrowsedTrackPlaying}
-						onclick={playBrowsingTrack}
-						aria-label={isBrowsedTrackPlaying ? 'Now playing' : 'Play this track'}
-					>
-						{isBrowsedTrackPlaying ? '🔊 Playing' : '▶ Play'}
-					</button>
+					<div class="now-playing-actions">
+						<button
+							class="play-track-btn"
+							class:is-playing={isBrowsedTrackPlaying}
+							onclick={playBrowsingTrack}
+							aria-label={isBrowsedTrackPlaying ? 'Now playing' : 'Play this track'}
+						>
+							{isBrowsedTrackPlaying ? '🔊 Playing' : '▶ Play'}
+						</button>
+						<button
+							class="chat-toggle-btn"
+							class:active={showChat}
+							onclick={() => (showChat = !showChat)}
+							aria-label="Toggle Claude chat"
+						>
+							💬 Claude
+						</button>
+					</div>
 				</div>
 
 				<GenInfoPanel generation={track.generation} />
@@ -83,6 +95,16 @@
 			<div class="empty">Select a track to start</div>
 		{/if}
 	</main>
+
+	{#if showChat}
+		<aside class="chat-panel">
+			<ClaudeChat
+				songContext={track
+					? `Song: ${track.title}\nLyrics:\n${track.lines.map((l) => l.text).join('\n')}`
+					: ''}
+			/>
+		</aside>
+	{/if}
 {/if}
 
 <style>
@@ -155,6 +177,13 @@
 		display: block;
 	}
 
+	.now-playing-actions {
+		display: flex;
+		gap: 8px;
+		justify-content: center;
+		margin-top: 8px;
+	}
+
 	.play-track-btn {
 		margin-top: 8px;
 		padding: 6px 20px;
@@ -183,6 +212,37 @@
 	.play-track-btn.is-playing:hover {
 		background: var(--success);
 		color: #fff;
+	}
+
+	.chat-toggle-btn {
+		padding: 6px 20px;
+		border: 2px solid var(--border);
+		border-radius: 20px;
+		background: transparent;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 13px;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.chat-toggle-btn:hover {
+		border-color: var(--primary);
+		color: var(--text);
+	}
+
+	.chat-toggle-btn.active {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.chat-panel {
+		width: 350px;
+		min-width: 300px;
+		height: 100%;
+		flex-shrink: 0;
 	}
 
 	.loading,

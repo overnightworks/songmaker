@@ -69,6 +69,13 @@ export interface PaginatedResponse {
 	limit: number;
 }
 
+export interface Capabilities {
+	claude_api: boolean;
+	claude_cli: boolean;
+	generation: boolean;
+	scoring: boolean;
+}
+
 /** Internal UI types — used by store and components. */
 
 export interface LyricsLine {
