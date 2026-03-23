@@ -11,16 +11,27 @@ from songmaker_cli.db.engine import init_db, reset_engine
 from songmaker_cli.db.models import Album, Generation, Rating, Score, Song, Version
 from songmaker_cli.db.queries import (
     album_to_dict,
+    cleanup_album,
+    create_generation,
+    create_job,
     create_song,
+    delete_generation,
+    delete_version,
     generation_to_dict,
     get_album,
     get_generation,
     get_generation_by_path,
+    get_job,
     get_song,
+    job_to_dict,
     list_albums,
     list_songs,
+    pick_generation,
     save_rating,
+    save_scores,
     song_to_dict,
+    unpick_generation,
+    update_job_status,
     update_song,
 )
 
@@ -158,3 +169,170 @@ def test_album_to_dict(seeded_session: Session) -> None:
     album = get_album(seeded_session, "test")
     d = album_to_dict(album)
     assert d["song_count"] == 1
+
+
+# ── Delete tests ─────────────────────────────────────────────────────
+
+
+def test_delete_generation(seeded_session: Session) -> None:
+    delete_generation(seeded_session, "g2")
+    seeded_session.commit()
+    assert get_generation(seeded_session, "g2") is None
+    song = get_song(seeded_session, "s1")
+    assert len(song.generations) == 1
+
+
+def test_delete_generation_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="not found"):
+        delete_generation(seeded_session, "nonexistent")
+
+
+def test_delete_version_keep_generations(seeded_session: Session) -> None:
+    delete_version(seeded_session, "v1", delete_generations=False)
+    seeded_session.commit()
+    gen = get_generation(seeded_session, "g1")
+    assert gen is not None
+    assert gen.version_id is None
+
+
+def test_delete_version_with_generations(seeded_session: Session) -> None:
+    delete_version(seeded_session, "v1", delete_generations=True)
+    seeded_session.commit()
+    assert get_generation(seeded_session, "g1") is None
+    assert get_generation(seeded_session, "g2") is None
+
+
+def test_delete_version_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="not found"):
+        delete_version(seeded_session, "nonexistent")
+
+
+# ── Pick tests ───────────────────────────────────────────────────────
+
+
+def test_pick_generation(seeded_session: Session) -> None:
+    pick_generation(seeded_session, "g1")
+    seeded_session.commit()
+    gen = get_generation(seeded_session, "g1")
+    assert gen.is_picked is True
+
+
+def test_pick_unpicks_previous(seeded_session: Session) -> None:
+    pick_generation(seeded_session, "g1")
+    seeded_session.commit()
+    pick_generation(seeded_session, "g2")
+    seeded_session.commit()
+    assert get_generation(seeded_session, "g1").is_picked is False
+    assert get_generation(seeded_session, "g2").is_picked is True
+
+
+def test_unpick_generation(seeded_session: Session) -> None:
+    pick_generation(seeded_session, "g1")
+    seeded_session.commit()
+    unpick_generation(seeded_session, "g1")
+    seeded_session.commit()
+    assert get_generation(seeded_session, "g1").is_picked is False
+
+
+def test_cleanup_album_deletes_unpicked(seeded_session: Session) -> None:
+    pick_generation(seeded_session, "g1")
+    seeded_session.commit()
+    deleted = cleanup_album(seeded_session, "test")
+    seeded_session.commit()
+    assert deleted == 1
+    assert get_generation(seeded_session, "g1") is not None
+    assert get_generation(seeded_session, "g2") is None
+
+
+def test_cleanup_album_no_picks_deletes_all(seeded_session: Session) -> None:
+    deleted = cleanup_album(seeded_session, "test")
+    seeded_session.commit()
+    assert deleted == 2
+
+
+# ── Job tests ────────────────────────────────────────────────────────
+
+
+def test_create_job(seeded_session: Session) -> None:
+    job = create_job(seeded_session, "generate")
+    seeded_session.commit()
+    assert job.type == "generate"
+    assert job.status == "queued"
+    assert job.progress == 0.0
+
+
+def test_update_job_status(seeded_session: Session) -> None:
+    job = create_job(seeded_session, "score")
+    seeded_session.commit()
+    update_job_status(seeded_session, job.id, "running", progress=0.5)
+    seeded_session.commit()
+    fetched = get_job(seeded_session, job.id)
+    assert fetched.status == "running"
+    assert fetched.progress == 0.5
+
+
+def test_update_job_completed(seeded_session: Session) -> None:
+    job = create_job(seeded_session, "score")
+    seeded_session.commit()
+    update_job_status(seeded_session, job.id, "completed", progress=1.0)
+    seeded_session.commit()
+    fetched = get_job(seeded_session, job.id)
+    assert fetched.status == "completed"
+    assert fetched.completed_at is not None
+
+
+def test_update_job_failed(seeded_session: Session) -> None:
+    job = create_job(seeded_session, "generate")
+    seeded_session.commit()
+    update_job_status(seeded_session, job.id, "failed", error="ACE-Step down")
+    seeded_session.commit()
+    fetched = get_job(seeded_session, job.id)
+    assert fetched.status == "failed"
+    assert fetched.error == "ACE-Step down"
+
+
+def test_job_to_dict(seeded_session: Session) -> None:
+    job = create_job(seeded_session, "generate")
+    seeded_session.commit()
+    d = job_to_dict(job)
+    assert d["type"] == "generate"
+    assert d["status"] == "queued"
+    assert "id" in d
+
+
+# ── Create generation + scores tests ─────────────────────────────────
+
+
+def test_create_generation(seeded_session: Session) -> None:
+    gen = create_generation(
+        seeded_session, "s1", "v1", "test/new_gen.mp3", seed=123,
+        generation_params={"bpm": 140},
+    )
+    seeded_session.commit()
+    assert gen.generation_number == 3
+    assert gen.seed == 123
+    assert gen.mp3_path == "test/new_gen.mp3"
+
+
+def test_save_scores_create(seeded_session: Session) -> None:
+    save_scores(seeded_session, "g2", {"dynamics": 77.0, "enjoyment": 8.5})
+    seeded_session.commit()
+    gen = get_generation(seeded_session, "g2")
+    scores = {s.scorer: s.value for s in gen.scores}
+    assert scores["batch"]["dynamics"] == 77.0
+
+
+def test_save_scores_upsert(seeded_session: Session) -> None:
+    save_scores(seeded_session, "g1", {"dynamics": 99.0})
+    seeded_session.commit()
+    gen = get_generation(seeded_session, "g1")
+    batch_scores = [s for s in gen.scores if s.scorer == "batch"]
+    assert len(batch_scores) == 1
+    assert batch_scores[0].value["dynamics"] == 99.0
+
+
+def test_generation_to_dict_has_is_picked(seeded_session: Session) -> None:
+    gen = get_generation(seeded_session, "g1")
+    d = generation_to_dict(gen)
+    assert d["is_picked"] is False
+    assert "version_number" in d

@@ -125,3 +125,75 @@ def test_capabilities(client: TestClient) -> None:
     resp = client.get("/api/capabilities")
     assert resp.status_code == 200
     assert "generation" in resp.json()
+
+
+# ── Delete endpoints ─────────────────────────────────────────────────
+
+
+def test_delete_generation_api(client: TestClient) -> None:
+    resp = client.delete("/api/generations/g2")
+    assert resp.status_code == 200
+    resp = client.get("/api/generations/g2")
+    assert resp.status_code == 404
+
+
+def test_delete_generation_not_found(client: TestClient) -> None:
+    resp = client.delete("/api/generations/nonexistent")
+    assert resp.status_code == 404
+
+
+def test_delete_version_keep_gens(client: TestClient) -> None:
+    resp = client.delete("/api/versions/v1?delete_generations=false")
+    assert resp.status_code == 200
+    resp = client.get("/api/generations/g1")
+    assert resp.status_code == 200
+    assert resp.json()["version_id"] is None
+
+
+def test_delete_version_with_gens(client: TestClient) -> None:
+    resp = client.delete("/api/versions/v1?delete_generations=true")
+    assert resp.status_code == 200
+    resp = client.get("/api/generations/g1")
+    assert resp.status_code == 404
+
+
+# ── Pick endpoints ───────────────────────────────────────────────────
+
+
+def test_pick_generation_api(client: TestClient) -> None:
+    resp = client.post("/api/generations/g1/pick")
+    assert resp.status_code == 200
+    resp = client.get("/api/generations/g1")
+    assert resp.json()["is_picked"] is True
+
+
+def test_pick_replaces_previous(client: TestClient) -> None:
+    client.post("/api/generations/g1/pick")
+    client.post("/api/generations/g2/pick")
+    resp = client.get("/api/generations/g1")
+    assert resp.json()["is_picked"] is False
+    resp = client.get("/api/generations/g2")
+    assert resp.json()["is_picked"] is True
+
+
+def test_unpick_generation_api(client: TestClient) -> None:
+    client.post("/api/generations/g1/pick")
+    resp = client.post("/api/generations/g1/unpick")
+    assert resp.status_code == 200
+    resp = client.get("/api/generations/g1")
+    assert resp.json()["is_picked"] is False
+
+
+def test_cleanup_album_api(client: TestClient) -> None:
+    client.post("/api/generations/g1/pick")
+    resp = client.post("/api/albums/rock/cleanup")
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] == 1
+
+
+# ── Job endpoints ────────────────────────────────────────────────────
+
+
+def test_get_job_not_found(client: TestClient) -> None:
+    resp = client.get("/api/jobs/nonexistent")
+    assert resp.status_code == 404
