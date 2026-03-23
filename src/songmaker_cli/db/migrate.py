@@ -44,9 +44,13 @@ def migrate_filesystem(
     counts = {"albums": 0, "songs": 0, "versions": 0, "scores": 0, "ratings": 0, "skipped": 0}
     scans = iter_album_scans(output_dir, project_root)
 
+    seen_albums: set[str] = set()
+
     for scan in scans:
+        is_new = scan.album_name not in seen_albums
         album = _ensure_album(session, scan.album_name, scan.meta)
-        if album.id not in [a.id for a in session.query(Album).all()]:
+        if is_new:
+            seen_albums.add(scan.album_name)
             counts["albums"] += 1
 
         song_cache: dict[str, Song] = {}

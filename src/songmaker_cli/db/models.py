@@ -49,7 +49,7 @@ class Song(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     title: Mapped[str] = mapped_column(String(200))
-    album_id: Mapped[str] = mapped_column(ForeignKey("albums.id"))
+    album_id: Mapped[str] = mapped_column(ForeignKey("albums.id"), index=True)
     language: Mapped[str] = mapped_column(String(10), default="")
     track_number: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -91,11 +91,11 @@ class Version(Base):
     __tablename__ = "versions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    song_id: Mapped[str] = mapped_column(ForeignKey("songs.id"))
+    song_id: Mapped[str] = mapped_column(ForeignKey("songs.id"), index=True)
     revision_id: Mapped[str | None] = mapped_column(ForeignKey("song_revisions.id"), nullable=True)
     version_number: Mapped[int] = mapped_column(Integer, default=1)
     seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    mp3_path: Mapped[str] = mapped_column(String(500))
+    mp3_path: Mapped[str] = mapped_column(String(500), index=True)
     whisper_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="completed")

@@ -30,11 +30,15 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
-def _get_session() -> Session:
+def _get_session() -> Session:  # type: ignore[misc]
+    """FastAPI dependency that provides a DB session with rollback on error."""
     factory = get_session_factory()
     session = factory()
     try:
-        yield session  # type: ignore[misc]
+        yield session
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
