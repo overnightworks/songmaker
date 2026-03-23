@@ -1,12 +1,5 @@
 <script lang="ts">
-	import {
-		browsingAlbum,
-		browsingAlbumIndex,
-		browsingTrackIndex,
-		playback,
-		selectTrack,
-		playTrack
-	} from '$lib/stores/player';
+	import { filteredSongs, selectedSongId, selectSong, playback } from '$lib/stores/player';
 	import {
 		sortKey,
 		searchQuery,
@@ -20,12 +13,10 @@
 		updateFilterSelect,
 		applyFilters
 	} from '$lib/stores/filter';
-	import ScoresBadge from './ScoresBadge.svelte';
-	import type { Track } from '$lib/api/types';
+	import type { SongItem } from '$lib/api/types';
 
-	const album = $derived($browsingAlbum);
-	const activeTrackIdx = $derived($browsingTrackIndex);
-	const albumIdx = $derived($browsingAlbumIndex);
+	const songs = $derived($filteredSongs);
+	const activeSongId = $derived($selectedSongId);
 	const pb = $derived($playback);
 	const currentSortKey = $derived($sortKey);
 	const search = $derived($searchQuery);
@@ -34,63 +25,51 @@
 
 	let showFilterMenu = $state(false);
 
-	interface IndexedTrack {
-		track: Track;
-		index: number;
-	}
-
 	const availableMetrics = $derived(
 		METRICS.filter((m) => !filters.some((f) => f.metric.key === m.key))
 	);
 
-	const selectOptionsForKey = $derived.by(() => {
-		if (!album) return [];
+	const availableKeys = $derived.by(() => {
 		const seen: Record<string, boolean> = {};
-		for (const t of album.tracks) {
-			const k = t.generation?.key;
-			if (k) seen[k] = true;
+		for (const s of songs) {
+			if (s.key) seen[s.key] = true;
 		}
 		return Object.keys(seen).sort();
 	});
 
-	const filteredTracks = $derived.by(() => {
-		if (!album) return [];
-		let tracks: IndexedTrack[] = album.tracks.map((t, i) => ({ track: t, index: i }));
+	const displaySongs = $derived.by(() => {
+		let result = [...songs];
 
 		if (search) {
 			const q = search.toLowerCase();
-			tracks = tracks.filter(({ track }) => track.title.toLowerCase().includes(q));
+			result = result.filter((s) => s.title.toLowerCase().includes(q));
 		}
 
-		const rawTracks = tracks.map((t) => t.track);
-		const passedTracks = applyFilters(rawTracks, filters);
-		const passedFiles = new Set(passedTracks.map((t) => t.file));
-		tracks = tracks.filter(({ track }) => passedFiles.has(track.file));
+		result = applyFilters(result, filters);
 
 		if (currentSortKey === 'name') {
-			tracks.sort((a, b) => a.track.title.localeCompare(b.track.title));
-		} else if (currentSortKey !== 'latest') {
-			tracks.sort((a, b) => {
-				const va = sortMetric.getValue(a.track);
-				const vb = sortMetric.getValue(b.track);
+			result.sort((a, b) => a.title.localeCompare(b.title));
+		} else {
+			result.sort((a, b) => {
+				const va = sortMetric.getValue(a);
+				const vb = sortMetric.getValue(b);
 				const na = typeof va === 'number' ? va : -1;
 				const nb = typeof vb === 'number' ? vb : -1;
 				return nb - na;
 			});
 		}
 
-		return tracks;
+		return result;
 	});
 
-	function isPlaying(index: number): boolean {
-		return pb?.albumIndex === albumIdx && pb?.trackIndex === index;
+	function isPlaying(song: SongItem): boolean {
+		return pb?.songId === song.id;
 	}
 
-	const showSortBadge = $derived(currentSortKey !== 'latest' && currentSortKey !== 'name');
-
-	function sortBadgeValue(track: Track): number {
-		const val = sortMetric.getValue(track);
-		return typeof val === 'number' ? val : 0;
+	function badgeValue(song: SongItem): string {
+		const val = sortMetric.getValue(song);
+		if (typeof val !== 'number') return '';
+		return sortMetric.max <= 10 ? String(val) : val.toFixed(1);
 	}
 </script>
 
@@ -110,7 +89,6 @@
 		onchange={(e: Event) => sortKey.set((e.target as HTMLSelectElement).value)}
 		aria-label="Sort by"
 	>
-		<option value="latest">Sort: Latest</option>
 		<option value="name">Sort: Name</option>
 		{#each SORT_OPTIONS as opt (opt.key)}
 			<option value={opt.key}>Sort: {opt.label}</option>
@@ -129,7 +107,7 @@
 							updateFilterSelect(f.metric.key, (e.target as HTMLSelectElement).value)}
 					>
 						<option value="">any</option>
-						{#each selectOptionsForKey as k (k)}
+						{#each availableKeys as k (k)}
 							<option value={k}>{k}</option>
 						{/each}
 					</select>
@@ -150,7 +128,7 @@
 				<button
 					class="chip-remove"
 					onclick={() => removeFilter(f.metric.key)}
-					aria-label="Remove {f.metric.label} filter"
+					aria-label="Remove filter"
 				>
 					✕
 				</button>
@@ -185,38 +163,26 @@
 </div>
 
 <div class="song-list" role="listbox" aria-label="Song list">
-	{#each filteredTracks as { track, index } (index)}
-		<div
+	{#each displaySongs as song (song.id)}
+		<button
 			class="song-item"
-			class:active={index === activeTrackIdx}
-			class:playing={isPlaying(index)}
+			class:active={song.id === activeSongId}
+			class:playing={isPlaying(song)}
+			onclick={() => selectSong(song.id)}
 			role="option"
-			aria-selected={index === activeTrackIdx}
+			aria-selected={song.id === activeSongId}
 		>
-			<button
-				class="play-icon"
-				onclick={(e: MouseEvent) => {
-					e.stopPropagation();
-					playTrack(albumIdx, index);
-				}}
-				aria-label="Play {track.title}"
-			>
-				{#if isPlaying(index)}
-					<span class="icon-playing">🔊</span>
-				{:else}
-					<span class="icon-play">▶</span>
-				{/if}
-			</button>
-			<button class="song-body" onclick={() => selectTrack(index)}>
-				{#if showSortBadge}
-					<ScoresBadge value={sortBadgeValue(track)} />
-				{/if}
-				<span class="song-name">{track.title}</span>
-				{#if track.scores?.user_rating}
-					<span class="user-rating">★{track.scores.user_rating.toFixed(1)}</span>
-				{/if}
-			</button>
-		</div>
+			{#if badgeValue(song)}
+				<span class="song-badge">{badgeValue(song)}</span>
+			{/if}
+			<span class="song-name">{song.title}</span>
+			<span class="song-meta">
+				{song.generation_count} gen{song.generation_count !== 1 ? 's' : ''}
+			</span>
+			{#if song.best_rating}
+				<span class="song-rating">★{song.best_rating.toFixed(0)}</span>
+			{/if}
+		</button>
 	{:else}
 		<p class="empty">No songs match</p>
 	{/each}
@@ -281,7 +247,6 @@
 	.chip-label {
 		color: var(--text-muted);
 		flex-shrink: 0;
-		min-width: 40px;
 	}
 
 	.chip-op {
@@ -396,9 +361,18 @@
 	}
 
 	.song-item {
+		width: 100%;
 		display: flex;
 		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		border: none;
 		border-bottom: 1px solid #1a1a1a;
+		background: transparent;
+		color: var(--text);
+		font-size: 12px;
+		text-align: left;
+		cursor: pointer;
 	}
 
 	.song-item:hover {
@@ -414,51 +388,16 @@
 		background: #1a1a2a;
 	}
 
-	.play-icon {
-		width: 32px;
-		height: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: none;
-		border: none;
-		color: var(--text-dim);
-		font-size: 10px;
-		cursor: pointer;
+	.song-badge {
+		font-weight: 700;
+		min-width: 28px;
+		text-align: center;
+		padding: 2px 4px;
+		border-radius: 4px;
+		font-size: 11px;
+		background: var(--score-good-bg);
+		color: var(--score-good);
 		flex-shrink: 0;
-		padding: 8px 4px 8px 8px;
-	}
-
-	.song-item:hover .play-icon .icon-play {
-		color: var(--primary);
-	}
-
-	.icon-playing {
-		font-size: 12px;
-	}
-
-	.icon-play {
-		opacity: 0;
-		transition: opacity 0.15s;
-	}
-
-	.song-item:hover .icon-play {
-		opacity: 1;
-	}
-
-	.song-body {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 12px 8px 0;
-		background: none;
-		border: none;
-		color: var(--text);
-		font-size: 12px;
-		text-align: left;
-		cursor: pointer;
-		min-width: 0;
 	}
 
 	.song-name {
@@ -468,12 +407,17 @@
 		white-space: nowrap;
 	}
 
-	.user-rating {
+	.song-meta {
+		font-size: 10px;
+		color: var(--text-dim);
+		flex-shrink: 0;
+	}
+
+	.song-rating {
 		font-size: 10px;
 		font-family: var(--font-display);
 		color: var(--score-ok);
 		flex-shrink: 0;
-		white-space: nowrap;
 	}
 
 	.empty {

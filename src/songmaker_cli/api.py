@@ -1,7 +1,4 @@
-"""REST API endpoints backed by the database.
-
-Mounted on the FastAPI app at /api/*. Replaces manifest.json for the frontend.
-"""
+"""REST API endpoints backed by the database."""
 
 from __future__ import annotations
 
@@ -22,16 +19,13 @@ from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
     album_to_dict,
     create_song,
+    generation_to_dict,
     get_album,
+    get_generation,
+    get_generation_by_path,
     get_song,
-    get_version,
-    get_version_by_path,
     list_albums,
-    list_library,
-    list_revisions,
     list_songs,
-    list_versions,
-    revision_to_dict,
     save_rating,
     song_to_dict,
     update_song,
@@ -44,7 +38,6 @@ router = APIRouter(prefix="/api")
 
 
 def _get_session() -> Session:  # type: ignore[misc]
-    """FastAPI dependency that provides a DB session with rollback on error."""
     factory = get_session_factory()
     session = factory()
     try:
@@ -87,115 +80,23 @@ class PaginatedResponse(BaseModel):
     limit: int
 
 
+# ── Albums ───────────────────────────────────────────────────────────
+
+
 @router.get("/albums")
 def api_list_albums(session: Session = Depends(_get_session)) -> list[dict]:
-    albums = list_albums(session)
-    return [album_to_dict(a) for a in albums]
+    return [album_to_dict(a) for a in list_albums(session)]
 
 
 @router.get("/albums/{album_id}")
 def api_get_album(album_id: str, session: Session = Depends(_get_session)) -> dict:
     album = get_album(session, album_id)
     if not album:
-        raise HTTPException(404, f"Album not found: {album_id}")
+        raise HTTPException(404, "Album not found")
     return album_to_dict(album)
 
 
-@router.get("/albums/{album_id}/versions")
-def api_album_versions(
-    album_id: str,
-    limit: int = Query(200, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
-    session: Session = Depends(_get_session),
-) -> PaginatedResponse:
-    versions, total = list_library(session, album_id=album_id, limit=limit, offset=offset)
-    return PaginatedResponse(
-        items=[version_to_dict(v) for v in versions],
-        total=total,
-        offset=offset,
-        limit=limit,
-    )
-
-
-@router.get("/library")
-def api_library(
-    album_id: str | None = Query(None),
-    limit: int = Query(200, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
-    session: Session = Depends(_get_session),
-) -> PaginatedResponse:
-    versions, total = list_library(session, album_id=album_id, limit=limit, offset=offset)
-    return PaginatedResponse(
-        items=[version_to_dict(v) for v in versions],
-        total=total,
-        offset=offset,
-        limit=limit,
-    )
-
-
-@router.get("/versions/{version_id}")
-def api_get_version(version_id: str, session: Session = Depends(_get_session)) -> dict:
-    version = get_version(session, version_id)
-    if not version:
-        raise HTTPException(404, f"Version not found: {version_id}")
-    return version_to_dict(version)
-
-
-@router.get("/songs/{song_id}/versions")
-def api_song_versions(song_id: str, session: Session = Depends(_get_session)) -> list[dict]:
-    versions = list_versions(session, song_id)
-    return [version_to_dict(v) for v in versions]
-
-
-@router.post("/versions/{version_id}/rate")
-def api_rate_version(
-    version_id: str, req: RateRequest, session: Session = Depends(_get_session),
-) -> dict:
-    version = get_version(session, version_id)
-    if not version:
-        raise HTTPException(404, f"Version not found: {version_id}")
-
-    save_rating(session, version_id, req.rating, req.notes)
-    session.commit()
-    return {"status": "ok", "version_id": version_id, "rating": req.rating}
-
-
-@router.post("/rate/{album}/{version_name}")
-def api_rate_by_path(
-    album: str, version_name: str, req: RateRequest,
-    session: Session = Depends(_get_session),
-) -> dict:
-    """Legacy-compatible rating endpoint using mp3 path convention."""
-    mp3_path = f"{album}/{version_name}.mp3"
-    version = get_version_by_path(session, mp3_path)
-    if not version:
-        raise HTTPException(404, f"Version not found: {mp3_path}")
-
-    save_rating(session, version.id, req.rating, req.notes)
-    session.commit()
-    return {"status": "ok", "version": version_name, "rating": req.rating}
-
-
-# ── Song CRUD ────────────────────────────────────────────────────────
-
-
-@router.post("/songs")
-def api_create_song(
-    req: SongCreateRequest, session: Session = Depends(_get_session),
-) -> dict:
-    song = create_song(
-        session,
-        title=req.title,
-        album_id=req.album_id,
-        lyrics=req.lyrics,
-        prompt=req.prompt,
-        bpm=req.bpm,
-        duration=req.duration,
-        key=req.key,
-        language=req.language,
-    )
-    session.commit()
-    return song_to_dict(song)
+# ── Songs ────────────────────────────────────────────────────────────
 
 
 @router.get("/songs")
@@ -203,8 +104,7 @@ def api_list_songs(
     album_id: str | None = Query(None),
     session: Session = Depends(_get_session),
 ) -> list[dict]:
-    songs = list_songs(session, album_id=album_id)
-    return [song_to_dict(s) for s in songs]
+    return [song_to_dict(s) for s in list_songs(session, album_id=album_id)]
 
 
 @router.get("/songs/{song_id}")
@@ -215,19 +115,28 @@ def api_get_song(song_id: str, session: Session = Depends(_get_session)) -> dict
     return song_to_dict(song)
 
 
+@router.post("/songs")
+def api_create_song(
+    req: SongCreateRequest, session: Session = Depends(_get_session),
+) -> dict:
+    song = create_song(
+        session, title=req.title, album_id=req.album_id,
+        lyrics=req.lyrics, prompt=req.prompt, bpm=req.bpm,
+        duration=req.duration, key=req.key, language=req.language,
+    )
+    session.commit()
+    return song_to_dict(song)
+
+
 @router.put("/songs/{song_id}")
 def api_update_song(
     song_id: str, req: SongUpdateRequest, session: Session = Depends(_get_session),
 ) -> dict:
     try:
         update_song(
-            session,
-            song_id,
-            lyrics=req.lyrics,
-            prompt=req.prompt,
-            bpm=req.bpm,
-            duration=req.duration,
-            key=req.key,
+            session, song_id,
+            lyrics=req.lyrics, prompt=req.prompt,
+            bpm=req.bpm, duration=req.duration, key=req.key,
         )
     except ValueError:
         raise HTTPException(404, "Song not found")
@@ -236,20 +145,62 @@ def api_update_song(
     return song_to_dict(song)
 
 
-@router.get("/songs/{song_id}/revisions")
-def api_list_revisions(
+@router.get("/songs/{song_id}/versions")
+def api_song_versions(
     song_id: str, session: Session = Depends(_get_session),
 ) -> list[dict]:
-    revisions = list_revisions(session, song_id)
-    total = len(revisions)
-    return [revision_to_dict(r, total - i, total) for i, r in enumerate(revisions)]
+    song = get_song(session, song_id)
+    if not song:
+        raise HTTPException(404, "Song not found")
+    return [version_to_dict(v) for v in reversed(song.versions)]
+
+
+# ── Generations ──────────────────────────────────────────────────────
+
+
+@router.get("/generations/{gen_id}")
+def api_get_generation(
+    gen_id: str, session: Session = Depends(_get_session),
+) -> dict:
+    gen = get_generation(session, gen_id)
+    if not gen:
+        raise HTTPException(404, "Generation not found")
+    return generation_to_dict(gen)
+
+
+# ── Ratings ──────────────────────────────────────────────────────────
+
+
+@router.post("/generations/{gen_id}/rate")
+def api_rate_generation(
+    gen_id: str, req: RateRequest, session: Session = Depends(_get_session),
+) -> dict:
+    gen = get_generation(session, gen_id)
+    if not gen:
+        raise HTTPException(404, "Generation not found")
+    save_rating(session, gen_id, req.rating, req.notes)
+    session.commit()
+    return {"status": "ok", "generation_id": gen_id, "rating": req.rating}
+
+
+@router.post("/rate/{album}/{gen_name}")
+def api_rate_by_path(
+    album: str, gen_name: str, req: RateRequest,
+    session: Session = Depends(_get_session),
+) -> dict:
+    mp3_path = f"{album}/{gen_name}.mp3"
+    gen = get_generation_by_path(session, mp3_path)
+    if not gen:
+        raise HTTPException(404, "Generation not found")
+    save_rating(session, gen.id, req.rating, req.notes)
+    session.commit()
+    return {"status": "ok", "generation": gen_name, "rating": req.rating}
 
 
 # ── Capabilities ─────────────────────────────────────────────────────
 
 
 def _resolve_claude_key(header_key: str | None) -> str | None:
-    """Get Claude API key: header (BYOK) > env var > None (fall back to CLI)."""
     if header_key:
         return header_key
     return os.environ.get("ANTHROPIC_API_KEY")
@@ -257,7 +208,6 @@ def _resolve_claude_key(header_key: str | None) -> str | None:
 
 @router.get("/capabilities")
 def api_capabilities() -> dict:
-    """Report which features are available based on server config."""
     env_key = os.environ.get("ANTHROPIC_API_KEY")
     return {
         "claude_api": bool(env_key),
@@ -281,12 +231,7 @@ def api_chat(
     req: ChatRequest,
     x_claude_key: str | None = Header(None),
 ) -> dict:
-    """Chat with Claude for lyrics co-writing.
-
-    Uses BYOK key from header, env var, or falls back to CLI.
-    """
     api_key = _resolve_claude_key(x_claude_key)
-
     prompt = req.message
     if req.context:
         prompt = f"Song context:\n{req.context}\n\n{req.message}"

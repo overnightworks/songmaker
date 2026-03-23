@@ -1,4 +1,4 @@
-"""Tests for the database layer — models, engine, queries, and migration."""
+"""Tests for the database layer — models, engine, queries."""
 
 from __future__ import annotations
 
@@ -8,23 +8,25 @@ import pytest
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.engine import init_db, reset_engine
-from songmaker_cli.db.models import Album, Rating, Score, Song, SongRevision, Version
+from songmaker_cli.db.models import Album, Generation, Rating, Score, Song, Version
 from songmaker_cli.db.queries import (
     album_to_dict,
+    create_song,
+    generation_to_dict,
     get_album,
-    get_version,
-    get_version_by_path,
+    get_generation,
+    get_generation_by_path,
+    get_song,
     list_albums,
-    list_library,
-    list_versions,
+    list_songs,
     save_rating,
-    version_to_dict,
+    song_to_dict,
+    update_song,
 )
 
 
 @pytest.fixture()
 def db_session(tmp_path: Path) -> Session:
-    """Create a fresh in-memory-like SQLite DB and return a session."""
     reset_engine()
     factory = init_db(tmp_path / "test.db")
     session = factory()
@@ -35,157 +37,124 @@ def db_session(tmp_path: Path) -> Session:
 
 @pytest.fixture()
 def seeded_session(db_session: Session) -> Session:
-    """Session with sample data: 1 album, 2 songs, 3 versions, 1 score, 1 rating."""
-    album = Album(id="test_album", title="Test Album", artist="TestArtist")
+    album = Album(id="test", title="Test Album", artist="TestArtist")
     db_session.add(album)
 
-    song1 = Song(id="song1", title="Song One", album_id="test_album", track_number=1)
-    song2 = Song(id="song2", title="Song Two", album_id="test_album", track_number=2)
-    db_session.add_all([song1, song2])
+    song = Song(id="s1", title="Song One", album_id="test", track_number=1)
+    db_session.add(song)
 
-    rev = SongRevision(id="rev1", song_id="song1", lyrics="verse one", prompt="rock", bpm=120)
-    db_session.add(rev)
+    ver = Version(id="v1", song_id="s1", version_number=1, lyrics="verse one", prompt="rock")
+    db_session.add(ver)
 
-    v1 = Version(
-        id="v1", song_id="song1", revision_id="rev1", version_number=1,
-        mp3_path="test_album/01_song_one_v1.mp3", seed=42,
+    gen1 = Generation(
+        id="g1", song_id="s1", version_id="v1", generation_number=1,
+        mp3_path="test/01_song_one_v1.mp3", seed=42,
         generation_params={"bpm": 120, "key": "Am"},
     )
-    v2 = Version(
-        id="v2", song_id="song1", revision_id="rev1", version_number=2,
-        mp3_path="test_album/01_song_one_v2.mp3", seed=99,
+    gen2 = Generation(
+        id="g2", song_id="s1", version_id="v1", generation_number=2,
+        mp3_path="test/01_song_one_v2.mp3", seed=99,
     )
-    v3 = Version(
-        id="v3", song_id="song2", version_number=1,
-        mp3_path="test_album/02_song_two_v1.mp3",
-    )
-    db_session.add_all([v1, v2, v3])
+    db_session.add_all([gen1, gen2])
 
-    score = Score(id="s1", version_id="v1", scorer="batch", value={"dynamics": 55.0, "lyrical_coherence": 7})
+    score = Score(id="sc1", generation_id="g1", scorer="batch", value={"dynamics": 55.0})
     db_session.add(score)
 
-    rating = Rating(id="r1", version_id="v1", rating=82.5, notes="great groove")
+    rating = Rating(id="r1", generation_id="g1", rating=82.5, notes="great groove")
     db_session.add(rating)
 
     db_session.commit()
     return db_session
 
 
-# ── Model tests ──────────────────────────────────────────────────────
+def test_song_latest_version(seeded_session: Session) -> None:
+    song = seeded_session.query(Song).filter_by(id="s1").one()
+    assert song.latest_version is not None
+    assert song.latest_version.lyrics == "verse one"
 
 
-def test_album_songs_relationship(seeded_session: Session) -> None:
-    album = seeded_session.query(Album).filter_by(id="test_album").one()
-    assert len(album.songs) == 2
+def test_generation_scores(seeded_session: Session) -> None:
+    gen = get_generation(seeded_session, "g1")
+    assert gen is not None
+    assert len(gen.scores) == 1
+    assert gen.scores[0].value["dynamics"] == 55.0
 
 
-def test_song_latest_revision(seeded_session: Session) -> None:
-    song = seeded_session.query(Song).filter_by(id="song1").one()
-    assert song.latest_revision is not None
-    assert song.latest_revision.lyrics == "verse one"
-
-
-def test_version_scores_relationship(seeded_session: Session) -> None:
-    version = seeded_session.query(Version).filter_by(id="v1").one()
-    assert len(version.scores) == 1
-    assert version.scores[0].value["dynamics"] == 55.0
-
-
-def test_version_rating_relationship(seeded_session: Session) -> None:
-    version = seeded_session.query(Version).filter_by(id="v1").one()
-    assert version.rating is not None
-    assert version.rating.rating == 82.5
-
-
-# ── Query tests ──────────────────────────────────────────────────────
+def test_generation_rating(seeded_session: Session) -> None:
+    gen = get_generation(seeded_session, "g1")
+    assert gen is not None
+    assert gen.rating is not None
+    assert gen.rating.rating == 82.5
 
 
 def test_list_albums(seeded_session: Session) -> None:
-    albums = list_albums(seeded_session)
-    assert len(albums) == 1
-    assert albums[0].id == "test_album"
+    assert len(list_albums(seeded_session)) == 1
 
 
-def test_get_album(seeded_session: Session) -> None:
-    album = get_album(seeded_session, "test_album")
-    assert album is not None
-    assert album.title == "Test Album"
+def test_list_songs(seeded_session: Session) -> None:
+    songs = list_songs(seeded_session)
+    assert len(songs) == 1
+    assert songs[0].title == "Song One"
 
 
-def test_get_album_not_found(seeded_session: Session) -> None:
-    assert get_album(seeded_session, "nonexistent") is None
+def test_get_song(seeded_session: Session) -> None:
+    song = get_song(seeded_session, "s1")
+    assert song is not None
+    assert len(song.generations) == 2
 
 
-def test_list_versions(seeded_session: Session) -> None:
-    versions = list_versions(seeded_session, "song1")
-    assert len(versions) == 2
-    assert versions[0].version_number == 2  # desc order
-
-
-def test_get_version(seeded_session: Session) -> None:
-    version = get_version(seeded_session, "v1")
-    assert version is not None
-    assert version.seed == 42
-
-
-def test_get_version_by_path(seeded_session: Session) -> None:
-    version = get_version_by_path(seeded_session, "test_album/01_song_one_v1.mp3")
-    assert version is not None
-    assert version.id == "v1"
-
-
-def test_get_version_by_path_not_found(seeded_session: Session) -> None:
-    assert get_version_by_path(seeded_session, "nonexistent.mp3") is None
-
-
-def test_list_library(seeded_session: Session) -> None:
-    versions, total = list_library(seeded_session)
-    assert total == 3
-    assert len(versions) == 3
-
-
-def test_list_library_filtered_by_album(seeded_session: Session) -> None:
-    versions, total = list_library(seeded_session, album_id="test_album")
-    assert total == 3
-
-
-def test_list_library_pagination(seeded_session: Session) -> None:
-    versions, total = list_library(seeded_session, limit=2, offset=0)
-    assert len(versions) == 2
-    assert total == 3
+def test_get_generation_by_path(seeded_session: Session) -> None:
+    gen = get_generation_by_path(seeded_session, "test/01_song_one_v1.mp3")
+    assert gen is not None
+    assert gen.id == "g1"
 
 
 def test_save_rating_create(seeded_session: Session) -> None:
-    rating = save_rating(seeded_session, "v2", 75.0, "decent")
+    save_rating(seeded_session, "g2", 75.0, "decent")
     seeded_session.commit()
-    assert rating.rating == 75.0
-    assert rating.notes == "decent"
+    gen = get_generation(seeded_session, "g2")
+    assert gen.rating.rating == 75.0
 
 
 def test_save_rating_update(seeded_session: Session) -> None:
-    save_rating(seeded_session, "v1", 90.0, "updated")
+    save_rating(seeded_session, "g1", 90.0, "updated")
     seeded_session.commit()
-    version = get_version(seeded_session, "v1")
-    assert version.rating.rating == 90.0
-    assert version.rating.notes == "updated"
+    gen = get_generation(seeded_session, "g1")
+    assert gen.rating.rating == 90.0
 
 
-# ── Serialization tests ──────────────────────────────────────────────
+def test_create_song(seeded_session: Session) -> None:
+    song = create_song(seeded_session, "Song Two", "test", lyrics="hello", bpm=140)
+    seeded_session.commit()
+    assert song.track_number == 2
+    assert song.latest_version.lyrics == "hello"
 
 
-def test_version_to_dict(seeded_session: Session) -> None:
-    version = get_version(seeded_session, "v1")
-    d = version_to_dict(version)
-    assert d["id"] == "v1"
-    assert d["title"] == "Song One"
-    assert d["album_id"] == "test_album"
+def test_update_song(seeded_session: Session) -> None:
+    ver = update_song(seeded_session, "s1", lyrics="new lyrics")
+    seeded_session.commit()
+    assert ver.version_number == 2
+    assert ver.lyrics == "new lyrics"
+
+
+def test_generation_to_dict(seeded_session: Session) -> None:
+    gen = get_generation(seeded_session, "g1")
+    d = generation_to_dict(gen)
+    assert d["seed"] == 42
     assert d["scores"]["dynamics"] == 55.0
     assert d["scores"]["user_rating"] == 82.5
-    assert d["generation"]["bpm"] == 120
+
+
+def test_song_to_dict(seeded_session: Session) -> None:
+    song = get_song(seeded_session, "s1")
+    d = song_to_dict(song)
+    assert d["title"] == "Song One"
+    assert d["generation_count"] == 2
+    assert d["best_rating"] == 82.5
+    assert len(d["generations"]) == 2
 
 
 def test_album_to_dict(seeded_session: Session) -> None:
-    album = get_album(seeded_session, "test_album")
+    album = get_album(seeded_session, "test")
     d = album_to_dict(album)
-    assert d["id"] == "test_album"
-    assert d["song_count"] == 2
+    assert d["song_count"] == 1

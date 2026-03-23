@@ -1,15 +1,11 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import {
-		playingTrack,
+		playingGeneration,
 		playback,
-		playBrowsingTrack,
-		nextTrack,
-		albums,
 		playbackTime,
 		playbackDuration,
-		selectAlbum,
-		selectTrack
+		navigateToPlaying
 	} from '$lib/stores/player';
 	import { formatTime } from '$lib/utils/format';
 	import WaveSurfer from 'wavesurfer.js';
@@ -20,10 +16,8 @@
 	let currentTime = $state(0);
 	let duration = $state(0);
 
-	const track = $derived($playingTrack);
+	const gen = $derived($playingGeneration);
 	const pb = $derived($playback);
-	const allAlbums = $derived($albums);
-	const albumArtist = $derived(pb ? (allAlbums[pb.albumIndex]?.artist ?? '') : '');
 
 	let prevFile = $state('');
 
@@ -61,11 +55,11 @@
 	}
 
 	$effect(() => {
-		if (!track || !waveContainer) return;
-		if (track.file !== prevFile) {
-			prevFile = track.file;
+		if (!gen || !waveContainer) return;
+		if (gen.mp3_path !== prevFile) {
+			prevFile = gen.mp3_path;
 			if (!wavesurfer) createWavesurfer();
-			wavesurfer?.load(`/audio/${track.file}`);
+			wavesurfer?.load(`/audio/${gen.mp3_path}`);
 			wavesurfer?.once('ready', () => wavesurfer?.play());
 		}
 	});
@@ -75,25 +69,12 @@
 	});
 
 	function togglePlay(): void {
-		if (!track) {
-			playBrowsingTrack();
-			return;
-		}
-		if (!wavesurfer) return;
+		if (!gen || !wavesurfer) return;
 		wavesurfer.playPause();
 	}
 
-	function navigateToPlaying(): void {
-		if (!pb) return;
-		selectAlbum(pb.albumIndex);
-		selectTrack(pb.trackIndex);
-	}
-
 	function handleEnded(): void {
-		const advanced = nextTrack();
-		if (advanced && wavesurfer) {
-			wavesurfer.once('ready', () => wavesurfer?.play());
-		}
+		// Could auto-advance to next generation
 	}
 </script>
 
@@ -102,10 +83,10 @@
 		{isPlaying ? '⏸' : '▶'}
 	</button>
 
-	<button class="track-info" onclick={navigateToPlaying} aria-label="Go to playing track">
-		{#if track}
-			<span class="track-title">{track.title}</span>
-			<span class="track-artist">{albumArtist}</span>
+	<button class="track-info" onclick={navigateToPlaying} aria-label="Go to playing song">
+		{#if pb}
+			<span class="track-title">{pb.songTitle}</span>
+			<span class="track-artist">{pb.artist}</span>
 		{:else}
 			<span class="track-title">No track selected</span>
 		{/if}

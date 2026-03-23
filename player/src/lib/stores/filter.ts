@@ -1,12 +1,12 @@
 import { writable } from 'svelte/store';
-import type { Track } from '$lib/api/types';
+import type { SongItem } from '$lib/api/types';
 
 export interface MetricDef {
 	key: string;
 	label: string;
 	max: number;
 	step: number;
-	getValue: (t: Track) => number | string | undefined;
+	getValue: (s: SongItem) => number | string | undefined;
 	type: 'number' | 'select';
 }
 
@@ -16,7 +16,7 @@ export const METRICS: MetricDef[] = [
 		label: 'Lyrical Coherence',
 		max: 10,
 		step: 0.5,
-		getValue: (t) => t.scores?.lyrical_coherence,
+		getValue: (s) => s.best_scores?.lyrical_coherence,
 		type: 'number'
 	},
 	{
@@ -24,7 +24,7 @@ export const METRICS: MetricDef[] = [
 		label: 'Dynamics',
 		max: 100,
 		step: 5,
-		getValue: (t) => t.scores?.dynamics,
+		getValue: (s) => s.best_scores?.dynamics,
 		type: 'number'
 	},
 	{
@@ -32,7 +32,7 @@ export const METRICS: MetricDef[] = [
 		label: 'Text Accuracy',
 		max: 100,
 		step: 5,
-		getValue: (t) => t.scores?.text_accuracy,
+		getValue: (s) => s.best_scores?.text_accuracy,
 		type: 'number'
 	},
 	{
@@ -40,23 +40,7 @@ export const METRICS: MetricDef[] = [
 		label: 'Enjoyment',
 		max: 10,
 		step: 0.5,
-		getValue: (t) => t.scores?.audiobox_enjoyment,
-		type: 'number'
-	},
-	{
-		key: 'audiobox_understanding',
-		label: 'Understanding',
-		max: 10,
-		step: 0.5,
-		getValue: (t) => t.scores?.audiobox_understanding,
-		type: 'number'
-	},
-	{
-		key: 'audiobox_complexity',
-		label: 'Complexity',
-		max: 10,
-		step: 0.5,
-		getValue: (t) => t.scores?.audiobox_complexity,
+		getValue: (s) => s.best_scores?.audiobox_enjoyment,
 		type: 'number'
 	},
 	{
@@ -64,7 +48,7 @@ export const METRICS: MetricDef[] = [
 		label: 'Production Quality',
 		max: 10,
 		step: 0.5,
-		getValue: (t) => t.scores?.audiobox_quality,
+		getValue: (s) => s.best_scores?.audiobox_quality,
 		type: 'number'
 	},
 	{
@@ -72,15 +56,15 @@ export const METRICS: MetricDef[] = [
 		label: 'User Rating',
 		max: 100,
 		step: 5,
-		getValue: (t) => t.scores?.user_rating,
+		getValue: (s) => s.best_rating ?? undefined,
 		type: 'number'
 	},
 	{
-		key: 'bpm',
-		label: 'BPM',
-		max: 200,
-		step: 5,
-		getValue: (t) => t.generation?.bpm,
+		key: 'generation_count',
+		label: 'Generations',
+		max: 50,
+		step: 1,
+		getValue: (s) => s.generation_count,
 		type: 'number'
 	},
 	{
@@ -88,7 +72,7 @@ export const METRICS: MetricDef[] = [
 		label: 'Key',
 		max: 0,
 		step: 0,
-		getValue: (t) => t.generation?.key,
+		getValue: (s) => s.key,
 		type: 'select'
 	}
 ];
@@ -135,15 +119,15 @@ export function updateFilterSelect(key: string, value: string): void {
 	);
 }
 
-export function applyFilters(tracks: Track[], filters: ActiveFilter[]): Track[] {
-	return tracks.filter((t) =>
+export function applyFilters(songs: SongItem[], filters: ActiveFilter[]): SongItem[] {
+	return songs.filter((s) =>
 		filters.every((f) => {
 			if (f.metric.type === 'select') {
 				if (!f.selectValue) return true;
-				return f.metric.getValue(t) === f.selectValue;
+				return f.metric.getValue(s) === f.selectValue;
 			}
 			if (f.min <= 0) return true;
-			const val = f.metric.getValue(t);
+			const val = f.metric.getValue(s);
 			return typeof val === 'number' && val >= f.min;
 		})
 	);

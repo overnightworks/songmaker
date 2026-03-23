@@ -1,81 +1,79 @@
 import { writable, derived, get } from 'svelte/store';
-import type { Album, Track } from '$lib/api/types';
+import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 
-// --- Browsing state (what the user is looking at) ---
-export const albums = writable<Album[]>([]);
-export const browsingAlbumIndex = writable(0);
-export const browsingTrackIndex = writable(0);
+// --- Data ---
+export const albumList = writable<AlbumItem[]>([]);
+export const songList = writable<SongItem[]>([]);
 
-export const browsingAlbum = derived(
-	[albums, browsingAlbumIndex],
-	([$albums, $idx]) => $albums[$idx] ?? null
+// --- Browsing state ---
+export const selectedAlbumId = writable<string | null>(null);
+export const selectedSongId = writable<string | null>(null);
+
+export const selectedSong = derived(
+	[songList, selectedSongId],
+	([$songs, $id]) => $songs.find((s) => s.id === $id) ?? null
 );
 
-export const browsingTrack = derived(
-	[browsingAlbum, browsingTrackIndex],
-	([$album, $idx]) => $album?.tracks[$idx] ?? null
+export const filteredSongs = derived([songList, selectedAlbumId], ([$songs, $albumId]) =>
+	$albumId ? $songs.filter((s) => s.album_id === $albumId) : $songs
 );
 
-// --- Playback state (what's actually playing) ---
+export function selectAlbum(albumId: string | null): void {
+	selectedAlbumId.set(albumId);
+	selectedSongId.set(null);
+}
+
+export function selectSong(songId: string): void {
+	selectedSongId.set(songId);
+}
+
+// --- Playback state ---
 interface PlaybackState {
-	track: Track;
-	albumIndex: number;
-	trackIndex: number;
+	generation: GenerationItem;
+	songId: string;
+	songTitle: string;
+	artist: string;
 }
 
 export const playback = writable<PlaybackState | null>(null);
+export const playingGeneration = derived(playback, ($pb) => $pb?.generation ?? null);
 
-export const playingTrack = derived(playback, ($pb) => $pb?.track ?? null);
-
-export function selectAlbum(index: number): void {
-	browsingAlbumIndex.set(index);
-	browsingTrackIndex.set(0);
+export function playGeneration(gen: GenerationItem, song: SongItem): void {
+	playback.set({
+		generation: gen,
+		songId: song.id,
+		songTitle: song.title,
+		artist: song.artist
+	});
 }
 
-export function selectTrack(index: number): void {
-	browsingTrackIndex.set(index);
+export function navigateToPlaying(): void {
+	const pb = get(playback);
+	if (!pb) return;
+	const songs = get(songList);
+	const song = songs.find((s) => s.id === pb.songId);
+	if (song) {
+		selectedAlbumId.set(song.album_id);
+		selectedSongId.set(song.id);
+	}
 }
 
-export function playTrack(albumIndex: number, trackIndex: number): void {
-	const allAlbums = get(albums);
-	const album = allAlbums[albumIndex];
-	if (!album) return;
-	const track = album.tracks[trackIndex];
-	if (!track) return;
-	browsingAlbumIndex.set(albumIndex);
-	browsingTrackIndex.set(trackIndex);
-	playback.set({ track, albumIndex, trackIndex });
-}
-
-export function playBrowsingTrack(): void {
-	playTrack(get(browsingAlbumIndex), get(browsingTrackIndex));
-}
-
-export function updateTrackScores(file: string, update: Record<string, number | string>): void {
-	albums.update((allAlbums) =>
-		allAlbums.map((album) => ({
-			...album,
-			tracks: album.tracks.map((track) => {
-				if (track.file !== file) return track;
-				return { ...track, scores: { ...track.scores, ...update } };
-			})
-		}))
-	);
-}
-
-// --- Playback time (shared with lyrics sync) ---
+// --- Playback time ---
 export const playbackTime = writable(0);
 export const playbackDuration = writable(0);
 
-export function nextTrack(): boolean {
-	const pb = get(playback);
-	if (!pb) return false;
-	const allAlbums = get(albums);
-	const album = allAlbums[pb.albumIndex];
-	if (!album) return false;
-	if (pb.trackIndex < album.tracks.length - 1) {
-		playTrack(pb.albumIndex, pb.trackIndex + 1);
-		return true;
-	}
-	return false;
+// --- Update scores in memory ---
+export function updateGenerationScores(
+	genId: string,
+	update: Record<string, number | string>
+): void {
+	songList.update((songs) =>
+		songs.map((song) => ({
+			...song,
+			generations: song.generations.map((gen) => {
+				if (gen.id !== genId) return gen;
+				return { ...gen, scores: { ...gen.scores, ...update } };
+			})
+		}))
+	);
 }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session, joinedload
 
-from songmaker_cli.db.models import Album, Rating, Song, SongRevision, Version
+from songmaker_cli.db.models import Album, Generation, Rating, Song, Version
 
 
 def list_albums(session: Session) -> list[Album]:
@@ -18,7 +18,12 @@ def get_album(session: Session, album_id: str) -> Album | None:
 def list_songs(session: Session, album_id: str | None = None) -> list[Song]:
     query = (
         session.query(Song)
-        .options(joinedload(Song.revisions), joinedload(Song.album))
+        .options(
+            joinedload(Song.versions),
+            joinedload(Song.generations).joinedload(Generation.scores),
+            joinedload(Song.generations).joinedload(Generation.rating),
+            joinedload(Song.album),
+        )
         .order_by(Song.album_id, Song.track_number)
     )
     if album_id:
@@ -29,121 +34,53 @@ def list_songs(session: Session, album_id: str | None = None) -> list[Song]:
 def get_song(session: Session, song_id: str) -> Song | None:
     return (
         session.query(Song)
-        .options(joinedload(Song.revisions), joinedload(Song.album))
+        .options(
+            joinedload(Song.versions),
+            joinedload(Song.generations).joinedload(Generation.scores),
+            joinedload(Song.generations).joinedload(Generation.rating),
+            joinedload(Song.album),
+        )
         .filter_by(id=song_id)
         .first()
     )
 
 
-def list_versions(session: Session, song_id: str) -> list[Version]:
+def get_generation(session: Session, gen_id: str) -> Generation | None:
     return (
-        session.query(Version)
-        .filter_by(song_id=song_id)
-        .options(joinedload(Version.scores), joinedload(Version.rating))
-        .order_by(Version.version_number.desc())
-        .all()
-    )
-
-
-def get_version(session: Session, version_id: str) -> Version | None:
-    return (
-        session.query(Version)
+        session.query(Generation)
         .options(
-            joinedload(Version.scores),
-            joinedload(Version.rating),
-            joinedload(Version.song).joinedload(Song.album),
+            joinedload(Generation.scores),
+            joinedload(Generation.rating),
+            joinedload(Generation.song).joinedload(Song.album),
         )
-        .filter_by(id=version_id)
+        .filter_by(id=gen_id)
         .first()
     )
 
 
-def get_version_by_path(session: Session, mp3_path: str) -> Version | None:
+def get_generation_by_path(session: Session, mp3_path: str) -> Generation | None:
     return (
-        session.query(Version)
-        .options(joinedload(Version.scores), joinedload(Version.rating))
+        session.query(Generation)
+        .options(joinedload(Generation.scores), joinedload(Generation.rating))
         .filter_by(mp3_path=mp3_path)
         .first()
     )
 
 
-def list_library(
-    session: Session,
-    album_id: str | None = None,
-    limit: int = 100,
-    offset: int = 0,
-) -> tuple[list[Version], int]:
-    """List versions with scores, optionally filtered by album.
-
-    Returns (versions, total_count).
-    """
-    query = (
-        session.query(Version)
-        .join(Song)
-        .options(
-            joinedload(Version.scores),
-            joinedload(Version.rating),
-            joinedload(Version.song).joinedload(Song.album),
-        )
-        .filter(Version.is_archived == False)  # noqa: E712
-    )
-
-    if album_id:
-        query = query.filter(Song.album_id == album_id)
-
-    total = query.count()
-    versions = query.order_by(Version.created_at.desc()).offset(offset).limit(limit).all()
-    return versions, total
-
-
 def save_rating(
-    session: Session, version_id: str, rating_value: float, notes: str = "",
+    session: Session, generation_id: str, rating_value: float, notes: str = "",
 ) -> Rating:
-    """Create or update a rating for a version."""
-    existing = session.query(Rating).filter_by(version_id=version_id).first()
+    existing = session.query(Rating).filter_by(generation_id=generation_id).first()
     if existing:
         existing.rating = rating_value
         existing.notes = notes
         session.flush()
         return existing
 
-    rating = Rating(version_id=version_id, rating=rating_value, notes=notes)
+    rating = Rating(generation_id=generation_id, rating=rating_value, notes=notes)
     session.add(rating)
     session.flush()
     return rating
-
-
-def version_to_dict(version: Version) -> dict:
-    """Serialize a Version to a dict for the API response."""
-    scores_dict: dict[str, object] = {}
-    for score in version.scores:
-        if isinstance(score.value, dict):
-            scores_dict.update(score.value)
-
-    if version.rating:
-        scores_dict["user_rating"] = version.rating.rating
-        scores_dict["user_notes"] = version.rating.notes
-
-    gen_params = version.generation_params or {}
-
-    return {
-        "id": version.id,
-        "song_id": version.song_id,
-        "version_number": version.version_number,
-        "mp3_path": version.mp3_path,
-        "title": version.song.title if version.song else "",
-        "album_id": version.song.album_id if version.song else "",
-        "album_title": version.song.album.title if version.song and version.song.album else "",
-        "artist": version.song.album.artist if version.song and version.song.album else "",
-        "track_number": version.song.track_number if version.song else 0,
-        "seed": version.seed,
-        "status": version.status,
-        "is_archived": version.is_archived,
-        "whisper_text": version.whisper_text,
-        "scores": scores_dict if scores_dict else None,
-        "generation": gen_params if gen_params else None,
-        "created_at": version.created_at.isoformat() if version.created_at else None,
-    }
 
 
 def create_song(
@@ -157,7 +94,6 @@ def create_song(
     key: str = "",
     language: str = "",
 ) -> Song:
-    """Create a song with its first revision."""
     album = session.query(Album).filter_by(id=album_id).first()
     if not album:
         raise ValueError(f"Album not found: {album_id}")
@@ -171,25 +107,17 @@ def create_song(
     track_number = (max_track[0] + 1) if max_track else 1
 
     song = Song(
-        title=title,
-        album_id=album_id,
-        language=language,
-        track_number=track_number,
+        title=title, album_id=album_id, language=language, track_number=track_number,
     )
     session.add(song)
     session.flush()
 
-    revision = SongRevision(
-        song_id=song.id,
-        lyrics=lyrics,
-        prompt=prompt,
-        bpm=bpm,
-        duration=duration,
-        key=key,
+    version = Version(
+        song_id=song.id, version_number=1,
+        lyrics=lyrics, prompt=prompt, bpm=bpm, duration=duration, key=key,
     )
-    session.add(revision)
+    session.add(version)
     session.flush()
-
     return song
 
 
@@ -201,71 +129,96 @@ def update_song(
     bpm: int | None = None,
     duration: int | None = None,
     key: str | None = None,
-) -> SongRevision:
-    """Update a song by creating a new revision."""
+) -> Version:
     song = get_song(session, song_id)
     if not song:
         raise ValueError(f"Song not found: {song_id}")
 
-    prev = song.latest_revision
-    revision = SongRevision(
+    prev = song.latest_version
+    next_num = (prev.version_number + 1) if prev else 1
+
+    version = Version(
         song_id=song_id,
+        version_number=next_num,
         lyrics=lyrics if lyrics is not None else (prev.lyrics if prev else ""),
         prompt=prompt if prompt is not None else (prev.prompt if prev else ""),
         bpm=bpm if bpm is not None else (prev.bpm if prev else 0),
         duration=duration if duration is not None else (prev.duration if prev else 180),
         key=key if key is not None else (prev.key if prev else ""),
     )
-    session.add(revision)
+    session.add(version)
     session.flush()
-    return revision
+    return version
 
 
-def list_revisions(session: Session, song_id: str) -> list[SongRevision]:
-    return (
-        session.query(SongRevision)
-        .filter_by(song_id=song_id)
-        .order_by(SongRevision.created_at.desc())
-        .all()
-    )
+# ── Serialization ────────────────────────────────────────────────────
 
 
-def revision_to_dict(rev: SongRevision, index: int, total: int) -> dict:
+def generation_to_dict(gen: Generation) -> dict:
+    scores_dict: dict[str, object] = {}
+    for score in gen.scores:
+        if isinstance(score.value, dict):
+            scores_dict.update(score.value)
+
+    if gen.rating:
+        scores_dict["user_rating"] = gen.rating.rating
+        scores_dict["user_notes"] = gen.rating.notes
+
     return {
-        "id": rev.id,
-        "index": index,
-        "total": total,
-        "lyrics": rev.lyrics,
-        "prompt": rev.prompt,
-        "bpm": rev.bpm,
-        "duration": rev.duration,
-        "key": rev.key,
-        "created_at": rev.created_at.isoformat() if rev.created_at else None,
+        "id": gen.id,
+        "song_id": gen.song_id,
+        "version_id": gen.version_id,
+        "generation_number": gen.generation_number,
+        "mp3_path": gen.mp3_path,
+        "seed": gen.seed,
+        "status": gen.status,
+        "is_archived": gen.is_archived,
+        "whisper_text": gen.whisper_text,
+        "scores": scores_dict if scores_dict else None,
+        "generation_params": gen.generation_params,
+        "created_at": gen.created_at.isoformat() if gen.created_at else None,
     }
 
 
 def song_to_dict(song: Song) -> dict:
-    """Serialize a Song with its latest revision."""
-    rev = song.latest_revision
+    ver = song.latest_version
+    best_gen = _best_generation(song.generations)
     return {
         "id": song.id,
         "title": song.title,
         "album_id": song.album_id,
+        "album_title": song.album.title if song.album else "",
+        "artist": song.album.artist if song.album else "",
         "track_number": song.track_number,
         "language": song.language,
-        "lyrics": rev.lyrics if rev else "",
-        "prompt": rev.prompt if rev else "",
-        "bpm": rev.bpm if rev else 0,
-        "duration": rev.duration if rev else 180,
-        "key": rev.key if rev else "",
-        "revision_count": len(song.revisions),
+        "lyrics": ver.lyrics if ver else "",
+        "prompt": ver.prompt if ver else "",
+        "bpm": ver.bpm if ver else 0,
+        "duration": ver.duration if ver else 180,
+        "key": ver.key if ver else "",
         "version_count": len(song.versions),
+        "generation_count": len(song.generations),
+        "best_scores": _extract_scores(best_gen) if best_gen else None,
+        "best_rating": best_gen.rating.rating if best_gen and best_gen.rating else None,
+        "generations": [generation_to_dict(g) for g in song.generations],
         "created_at": song.created_at.isoformat() if song.created_at else None,
     }
 
 
+def version_to_dict(ver: Version) -> dict:
+    return {
+        "id": ver.id,
+        "version_number": ver.version_number,
+        "lyrics": ver.lyrics,
+        "prompt": ver.prompt,
+        "bpm": ver.bpm,
+        "duration": ver.duration,
+        "key": ver.key,
+        "created_at": ver.created_at.isoformat() if ver.created_at else None,
+    }
+
+
 def album_to_dict(album: Album) -> dict:
-    """Serialize an Album to a dict for the API response."""
     return {
         "id": album.id,
         "title": album.title,
@@ -275,3 +228,20 @@ def album_to_dict(album: Album) -> dict:
         "colors": album.colors,
         "song_count": len(album.songs) if album.songs else 0,
     }
+
+
+def _best_generation(generations: list[Generation]) -> Generation | None:
+    """Find the generation with the highest user rating, or most recent."""
+    rated = [g for g in generations if g.rating and not g.is_archived]
+    if rated:
+        return max(rated, key=lambda g: g.rating.rating)
+    active = [g for g in generations if not g.is_archived]
+    return active[0] if active else None
+
+
+def _extract_scores(gen: Generation) -> dict[str, object]:
+    scores: dict[str, object] = {}
+    for s in gen.scores:
+        if isinstance(s.value, dict):
+            scores.update(s.value)
+    return scores
