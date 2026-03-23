@@ -15,7 +15,7 @@
 
 <nav class="top-nav">
 	<a href={resolve('/')} class="nav-link" class:active={currentPath === '/'}>Library</a>
-	<a href={resolve('/create')} class="nav-link" class:active={currentPath === '/create'}>Create</a>
+	<a href={resolve('/studio')} class="nav-link" class:active={currentPath === '/studio'}>Studio</a>
 </nav>
 
 <div class="app-shell">

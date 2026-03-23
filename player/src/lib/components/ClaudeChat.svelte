@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { chatWithClaude } from '$lib/api/client';
 	import { claudeApiKey } from '$lib/stores/settings';
+	import { getClaudeKey } from '$lib/stores/settings';
 
 	interface Props {
+		songId?: string;
 		songContext?: string;
 		onapply?: (data: ApplyData) => void;
 	}
@@ -15,7 +16,7 @@
 		key?: string;
 	}
 
-	let { songContext = '', onapply }: Props = $props();
+	let { songId = '', songContext = '', onapply }: Props = $props();
 
 	interface Message {
 		role: 'user' | 'assistant';
@@ -42,6 +43,53 @@
 		'section tags like [verse], [chorus], [bridge]. Use \\n for newlines in lyrics.\n' +
 		'If the user just asks a question without needing changes, skip the songmaker block.';
 
+	let prevSongId = $state('');
+
+	$effect(() => {
+		if (songId !== prevSongId) {
+			prevSongId = songId;
+			loadHistory();
+		}
+	});
+
+	function storageKey(): string {
+		return songId ? `songmaker:chat:${songId}` : 'songmaker:chat:new';
+	}
+
+	function loadHistory(): void {
+		try {
+			const saved = localStorage.getItem(storageKey());
+			messages = saved ? JSON.parse(saved) : [];
+		} catch {
+			messages = [];
+		}
+	}
+
+	function saveHistory(): void {
+		const toSave = messages.map(({ role, text, applied, applyData }) => ({
+			role,
+			text,
+			applied,
+			applyData
+		}));
+		localStorage.setItem(storageKey(), JSON.stringify(toSave));
+	}
+
+	function buildConversation(newMessage: string): string {
+		const parts: string[] = [];
+		for (const msg of messages) {
+			const prefix = msg.role === 'user' ? 'User' : 'Assistant';
+			parts.push(`${prefix}: ${cleanDisplayText(msg.text)}`);
+		}
+		parts.push(`User: ${newMessage}`);
+
+		let fullPrompt = parts.join('\n\n');
+		if (songContext) {
+			fullPrompt = `Song context:\n${songContext}\n\n---\n\n${fullPrompt}`;
+		}
+		return fullPrompt;
+	}
+
 	function extractApplyData(text: string): ApplyData | undefined {
 		const match = text.match(/```songmaker\s*\n([\s\S]*?)```/);
 		if (!match) return undefined;
@@ -66,14 +114,36 @@
 		loading = true;
 
 		try {
-			const response = await chatWithClaude(msg, songContext, SYSTEM_PROMPT);
-			const applyData = extractApplyData(response);
-			messages = [...messages, { role: 'assistant', text: response, applyData }];
+			const fullPrompt = buildConversation(msg);
+			const claudeKey = getClaudeKey();
+
+			const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+			if (claudeKey) headers['X-Claude-Key'] = claudeKey;
+
+			const resp = await fetch('/api/chat', {
+				method: 'POST',
+				headers,
+				body: JSON.stringify({ message: fullPrompt, system: SYSTEM_PROMPT })
+			});
+
+			if (!resp.ok) {
+				if (resp.status === 503)
+					throw new Error('Claude is not available. Add an API key in settings.');
+				throw new Error(`Chat failed: ${resp.status}`);
+			}
+
+			const data = await resp.json();
+			const responseText = data.response;
+			const applyData = extractApplyData(responseText);
+			const newMsg: Message = { role: 'assistant', text: responseText, applyData };
 
 			if (applyData && onapply) {
 				onapply(applyData);
-				messages[messages.length - 1].applied = true;
+				newMsg.applied = true;
 			}
+
+			messages = [...messages, newMsg];
+			saveHistory();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Chat failed';
 		} finally {
@@ -87,6 +157,12 @@
 		if (!msg?.applyData || !onapply) return;
 		onapply(msg.applyData);
 		messages[index] = { ...msg, applied: true };
+		saveHistory();
+	}
+
+	function clearHistory(): void {
+		messages = [];
+		localStorage.removeItem(storageKey());
 	}
 
 	function scrollToBottom(): void {
@@ -106,13 +182,18 @@
 <div class="chat">
 	<div class="chat-header">
 		<h3>Claude Co-Writer</h3>
-		<button
-			class="key-toggle"
-			onclick={() => (showKeyInput = !showKeyInput)}
-			aria-label="API key settings"
-		>
-			{hasKey ? '🔑' : '⚙️'}
-		</button>
+		<div class="header-actions">
+			{#if messages.length > 0}
+				<button class="clear-btn" onclick={clearHistory} aria-label="Clear chat">✕</button>
+			{/if}
+			<button
+				class="key-toggle"
+				onclick={() => (showKeyInput = !showKeyInput)}
+				aria-label="API key settings"
+			>
+				{hasKey ? '🔑' : '⚙️'}
+			</button>
+		</div>
 	</div>
 
 	{#if showKeyInput}
@@ -152,7 +233,7 @@
 						{#if msg.applied}
 							<span class="applied-badge">✓ Applied</span>
 						{:else}
-							<button class="apply-btn" onclick={() => applyMessage(i)}>Apply to editor</button>
+							<button class="apply-btn" onclick={() => applyMessage(i)}> Apply to editor </button>
 						{/if}
 					</div>
 				{/if}
@@ -205,6 +286,25 @@
 		color: var(--primary);
 		text-transform: uppercase;
 		letter-spacing: 1px;
+	}
+
+	.header-actions {
+		display: flex;
+		gap: 4px;
+		align-items: center;
+	}
+
+	.clear-btn {
+		background: none;
+		border: none;
+		color: var(--text-dim);
+		font-size: 12px;
+		cursor: pointer;
+		padding: 2px 6px;
+	}
+
+	.clear-btn:hover {
+		color: var(--score-bad);
 	}
 
 	.key-toggle {

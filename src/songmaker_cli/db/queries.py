@@ -15,6 +15,17 @@ def get_album(session: Session, album_id: str) -> Album | None:
     return session.query(Album).filter_by(id=album_id).first()
 
 
+def list_songs(session: Session, album_id: str | None = None) -> list[Song]:
+    query = (
+        session.query(Song)
+        .options(joinedload(Song.revisions), joinedload(Song.album))
+        .order_by(Song.album_id, Song.track_number)
+    )
+    if album_id:
+        query = query.filter_by(album_id=album_id)
+    return query.all()
+
+
 def get_song(session: Session, song_id: str) -> Song | None:
     return (
         session.query(Song)

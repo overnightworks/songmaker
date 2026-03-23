@@ -35,6 +35,14 @@ export interface CreateSongParams {
 	language?: string;
 }
 
+export async function listSongs(albumId?: string): Promise<SongDetail[]> {
+	let path = '/api/songs';
+	if (albumId) path += `?album_id=${albumId}`;
+	const resp = await fetch(apiUrl(path));
+	if (!resp.ok) throw new Error(`List songs failed: ${resp.status}`);
+	return resp.json();
+}
+
 export async function createSong(params: CreateSongParams): Promise<SongDetail> {
 	const resp = await fetch(apiUrl('/api/songs'), {
 		method: 'POST',

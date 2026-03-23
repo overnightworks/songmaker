@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { fetchAlbums } from '$lib/api/client';
-	import { createSong, updateSong, type SongDetail } from '$lib/api/songs';
+	import { listSongs, createSong, updateSong, getSong, type SongDetail } from '$lib/api/songs';
 	import type { AlbumItem } from '$lib/api/types';
 	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
 	import type { ApplyData } from '$lib/components/ClaudeChat.svelte';
 
 	let albums: AlbumItem[] = $state([]);
+	let songs: SongDetail[] = $state([]);
 	let showChat = $state(false);
 	let saving = $state(false);
 	let status = $state('');
@@ -38,8 +39,36 @@
 
 	onMount(async () => {
 		albums = await fetchAlbums();
+		songs = await listSongs();
 		if (albums.length > 0) albumId = albums[0].id;
 	});
+
+	async function selectSong(songId: string): Promise<void> {
+		const loaded = await getSong(songId);
+		song = loaded;
+		title = loaded.title;
+		albumId = loaded.album_id;
+		lyrics = loaded.lyrics;
+		prompt = loaded.prompt;
+		bpm = loaded.bpm;
+		duration = loaded.duration;
+		key = loaded.key;
+		language = loaded.language;
+		await loadRevisions();
+	}
+
+	function newSong(): void {
+		song = null;
+		title = '';
+		lyrics = '';
+		prompt = '';
+		bpm = 120;
+		duration = 180;
+		key = '';
+		language = '';
+		revisions = [];
+		currentRevIndex = 0;
+	}
 
 	async function save(): Promise<void> {
 		if (!title.trim() || !albumId) return;
@@ -61,6 +90,7 @@
 					language
 				});
 				status = 'Created!';
+				songs = await listSongs();
 			}
 			await loadRevisions();
 		} catch (e) {
@@ -106,10 +136,10 @@
 	const isLatestRevision = $derived(currentRevIndex === 0);
 </script>
 
-<div class="create-page">
+<div class="studio-page">
 	<div class="editor-panel">
 		<header class="editor-header">
-			<h1>{song ? 'Edit Song' : 'Create Song'}</h1>
+			<h1>Studio</h1>
 			<div class="header-actions">
 				<button class="save-btn" onclick={save} disabled={saving || !title.trim()}>
 					{saving ? 'Saving...' : song ? 'Save Revision' : 'Create'}
@@ -123,6 +153,23 @@
 		{#if status}
 			<div class="status">{status}</div>
 		{/if}
+
+		<div class="song-selector">
+			<select
+				class="song-select"
+				value={song?.id ?? ''}
+				onchange={(e: Event) => {
+					const val = (e.target as HTMLSelectElement).value;
+					if (val) selectSong(val);
+				}}
+			>
+				<option value="" disabled>— Select a song to edit —</option>
+				{#each songs as s (s.id)}
+					<option value={s.id}>{s.title} ({s.album_id})</option>
+				{/each}
+			</select>
+			<button class="new-btn" onclick={newSong}>+ New Song</button>
+		</div>
 
 		{#if revisions.length > 1}
 			<div class="revision-nav">
@@ -215,13 +262,13 @@
 
 	{#if showChat}
 		<aside class="chat-panel">
-			<ClaudeChat {songContext} onapply={handleApply} />
+			<ClaudeChat songId={song?.id ?? 'new'} {songContext} onapply={handleApply} />
 		</aside>
 	{/if}
 </div>
 
 <style>
-	.create-page {
+	.studio-page {
 		display: flex;
 		height: 100%;
 		overflow: hidden;
@@ -295,6 +342,37 @@
 		font-size: 12px;
 		color: var(--success);
 		padding: 4px 0;
+	}
+
+	.song-selector {
+		display: flex;
+		gap: 8px;
+	}
+
+	.song-select {
+		flex: 1;
+		padding: 8px 12px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text);
+		font-size: 13px;
+	}
+
+	.new-btn {
+		padding: 8px 16px;
+		border: 1px dashed var(--border);
+		border-radius: 4px;
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 12px;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.new-btn:hover {
+		border-color: var(--primary);
+		color: var(--primary);
 	}
 
 	.revision-nav {

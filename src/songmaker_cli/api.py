@@ -29,6 +29,7 @@ from songmaker_cli.db.queries import (
     list_albums,
     list_library,
     list_revisions,
+    list_songs,
     list_versions,
     revision_to_dict,
     save_rating,
@@ -195,6 +196,15 @@ def api_create_song(
     )
     session.commit()
     return song_to_dict(song)
+
+
+@router.get("/songs")
+def api_list_songs(
+    album_id: str | None = Query(None),
+    session: Session = Depends(_get_session),
+) -> list[dict]:
+    songs = list_songs(session, album_id=album_id)
+    return [song_to_dict(s) for s in songs]
 
 
 @router.get("/songs/{song_id}")
