@@ -45,12 +45,12 @@ when you roll the windows down and stop caring.
 [verse]
 I been living in my head too long
 reading articles on how to breathe
-they got an app for every feeling now
+they got a cure for every feeling now
 but none of them can set me free
 I been quiet, I been careful
-I been doing what they say
-but there's a fire in my chest tonight
-and I'm done keeping it away
+I been swallowing what they say
+but something's clawing at my ribs tonight
+and I'm done keeping it at bay
 
 [chorus]
 I'm burning through
@@ -66,8 +66,8 @@ I kissed a stranger in the parking lot
 no filter, no disclaimer signed
 I ran barefoot through the sprinklers
 and I left my phone behind
-they say be mindful, be intentional
-optimize your joy
+they say be careful, be intentional
+package up your joy
 but the best things that I ever felt
 were the ones I couldn't control
 
@@ -81,12 +81,12 @@ I'm burning through
 I'm burning through
 
 [bridge]
-I don't want another notification
-I don't want another self-help guide
-I want rain on my skin
-I want dirt on my hands
-I want something real or nothing at all
-I want something I can't understand
+no more notifications
+no more self-help guides
+give me rain on my skin
+give me dirt on my hands
+give me something real or nothing at all
+don't need a screen to tell me I'm alive
 
 [chorus]
 I'm burning through
@@ -100,5 +100,5 @@ I'm burning through
 burning through
 (guitar solo, fading)
 burning through
-I'm alive, I'm alive
+I'm alive, I'm alive, I'm alive
 burning through
