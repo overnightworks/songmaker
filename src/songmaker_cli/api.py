@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -15,6 +16,8 @@ from songmaker_cli.claude.provider import (
     call_claude,
     is_available,
 )
+from songmaker_cli.config import find_project_root
+from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
     album_to_dict,
@@ -43,6 +46,11 @@ from songmaker_cli.db.queries import (
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
+
+
+def _resolve_output_dir() -> Path:
+    root = find_project_root(Path.cwd())
+    return (root / OUTPUT_ROOT) if root else Path(OUTPUT_ROOT)
 
 
 def _get_session() -> Session:  # type: ignore[misc]
@@ -173,7 +181,11 @@ def api_delete_version(
     session: Session = Depends(_get_session),
 ) -> dict:
     try:
-        delete_version(session, version_id, delete_generations=delete_generations)
+        delete_version(
+            session, version_id,
+            delete_generations=delete_generations,
+            output_dir=_resolve_output_dir(),
+        )
     except ValueError:
         raise HTTPException(404, "Version not found")
     session.commit()
@@ -198,7 +210,7 @@ def api_delete_generation(
     gen_id: str, session: Session = Depends(_get_session),
 ) -> dict:
     try:
-        delete_generation(session, gen_id)
+        delete_generation(session, gen_id, output_dir=_resolve_output_dir())
     except ValueError:
         raise HTTPException(404, "Generation not found")
     session.commit()
@@ -341,7 +353,7 @@ def api_cleanup_album(
     album = get_album(session, album_id)
     if not album:
         raise HTTPException(404, "Album not found")
-    count = cleanup_album(session, album_id)
+    count = cleanup_album(session, album_id, output_dir=_resolve_output_dir())
     session.commit()
     return {"status": "ok", "deleted": count}
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -157,7 +158,8 @@ def update_song(
 
 
 def delete_version(
-    session: Session, version_id: str, *, delete_generations: bool = False,
+    session: Session, version_id: str, *,
+    delete_generations: bool = False, output_dir: Path | None = None,
 ) -> None:
     version = session.query(Version).filter_by(id=version_id).first()
     if not version:
@@ -165,6 +167,8 @@ def delete_version(
 
     if delete_generations:
         for gen in version.generations:
+            if output_dir and gen.mp3_path:
+                _delete_generation_files(output_dir, gen.mp3_path)
             session.delete(gen)
     else:
         for gen in version.generations:
@@ -174,12 +178,31 @@ def delete_version(
     session.flush()
 
 
-def delete_generation(session: Session, generation_id: str) -> None:
+def delete_generation(
+    session: Session, generation_id: str, output_dir: Path | None = None,
+) -> None:
     gen = session.query(Generation).filter_by(id=generation_id).first()
     if not gen:
         raise ValueError(f"Generation not found: {generation_id}")
+
+    if output_dir and gen.mp3_path:
+        _delete_generation_files(output_dir, gen.mp3_path)
+
     session.delete(gen)
     session.flush()
+
+
+def _delete_generation_files(output_dir: Path, mp3_rel: str) -> None:
+    """Remove MP3 and related files (.md snapshot, .whisper) from disk."""
+    import logging
+    log = logging.getLogger(__name__)
+
+    mp3 = output_dir / mp3_rel
+    for suffix in [".mp3", ".md", ".whisper"]:
+        path = mp3.with_suffix(suffix)
+        if path.exists():
+            path.unlink()
+            log.info("Deleted: %s", path)
 
 
 # ── Jobs ─────────────────────────────────────────────────────────────
@@ -292,7 +315,9 @@ def unpick_generation(session: Session, generation_id: str) -> None:
     session.flush()
 
 
-def cleanup_album(session: Session, album_id: str) -> int:
+def cleanup_album(
+    session: Session, album_id: str, output_dir: Path | None = None,
+) -> int:
     """Delete all non-picked generations for an album. Returns count deleted."""
     gens = (
         session.query(Generation)
@@ -302,6 +327,8 @@ def cleanup_album(session: Session, album_id: str) -> int:
     )
     count = len(gens)
     for gen in gens:
+        if output_dir and gen.mp3_path:
+            _delete_generation_files(output_dir, gen.mp3_path)
         session.delete(gen)
     session.flush()
     return count
