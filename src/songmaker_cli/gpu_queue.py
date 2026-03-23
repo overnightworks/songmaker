@@ -103,29 +103,56 @@ class GpuQueue:
         try:
             if mode == "generate":
                 self._clear_scoring_models()
+                self._verify_vram_freed()
                 self._ensure_acestep()
             elif mode == "score":
                 self._stop_acestep()
                 self._gc_gpu()
+                self._verify_vram_freed()
         except Exception:
             log.exception("Failed to prepare GPU mode: %s", mode)
 
     def _clear_scoring_models(self) -> None:
         try:
             import songmaker_cli.scoring.text_accuracy as ta
-            ta._whisper_model_cache.clear()
+            for key in list(ta._whisper_model_cache.keys()):
+                model = ta._whisper_model_cache.pop(key)
+                del model
             log.info("Cleared Whisper model cache")
         except (ImportError, AttributeError):
             pass
 
         try:
             import songmaker_cli.scoring.audiobox_aesthetics as ab
-            ab._predictor_cache.clear()
+            for key in list(ab._predictor_cache.keys()):
+                predictor = ab._predictor_cache.pop(key)
+                del predictor
             log.info("Cleared AudioBox model cache")
         except (ImportError, AttributeError):
             pass
 
         self._gc_gpu()
+
+    def _verify_vram_freed(self, max_wait: int = 10) -> None:
+        """Wait for VRAM to be released after model clearing."""
+        try:
+            import torch
+            if not torch.cuda.is_available():
+                return
+            for i in range(max_wait):
+                allocated = torch.cuda.memory_allocated() / 1024 / 1024
+                if allocated < 100:
+                    log.info("VRAM freed: %.0f MB allocated", allocated)
+                    return
+                log.info("Waiting for VRAM release... %.0f MB still allocated", allocated)
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
+                time.sleep(1)
+            log.warning("VRAM not fully freed after %ds (%.0f MB remaining)",
+                        max_wait, torch.cuda.memory_allocated() / 1024 / 1024)
+        except ImportError:
+            pass
 
     # ── ACE-Step server lifecycle ────────────────────────────────────
 
