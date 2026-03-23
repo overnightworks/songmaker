@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { currentTrack } from '$lib/stores/player';
 	import { rateVersion } from '$lib/api/client';
 	import { trackFileToRoute } from '$lib/utils/html';
@@ -8,15 +9,25 @@
 	let touched = $state(false);
 	let saveStatus = $state('');
 	let saveTimeout: ReturnType<typeof setTimeout> | undefined;
+	let statusTimeout: ReturnType<typeof setTimeout> | undefined;
 
 	const track = $derived($currentTrack);
 
 	$effect(() => {
 		if (!track) return;
-		loadRating(track.file);
+		loadRating(track.file, track.scores?.user_rating, track.scores?.user_notes);
 	});
 
-	function loadRating(file: string): void {
+	onDestroy(() => {
+		clearTimeout(saveTimeout);
+		clearTimeout(statusTimeout);
+	});
+
+	function loadRating(
+		file: string,
+		serverRating: number | undefined,
+		serverNotes: string | undefined
+	): void {
 		rating = 0;
 		comment = '';
 		touched = false;
@@ -30,12 +41,12 @@
 				touched = true;
 			}
 		} catch {
-			// ignore
+			// ignore corrupt localStorage
 		}
 
-		if (!touched && track?.scores?.user_rating !== undefined) {
-			rating = track.scores.user_rating;
-			comment = track.scores.user_notes ?? '';
+		if (!touched && serverRating !== undefined) {
+			rating = serverRating;
+			comment = serverNotes ?? '';
 			touched = true;
 		}
 	}
@@ -50,7 +61,6 @@
 
 	function save(): void {
 		if (!track) return;
-		comment = comment;
 		const key = `rating:${track.file}`;
 		localStorage.setItem(key, JSON.stringify({ rating, comment }));
 
@@ -58,7 +68,8 @@
 		rateVersion(album, version, rating, comment).catch(() => {});
 
 		saveStatus = 'Saved!';
-		setTimeout(() => (saveStatus = ''), 1500);
+		clearTimeout(statusTimeout);
+		statusTimeout = setTimeout(() => (saveStatus = ''), 1500);
 	}
 </script>
 
@@ -92,7 +103,7 @@
 <style>
 	.rating-widget {
 		margin-top: 8px;
-		border-top: 1px solid #222;
+		border-top: 1px solid var(--border);
 		padding-top: 8px;
 	}
 
@@ -132,7 +143,7 @@
 	.value {
 		font-size: 13px;
 		font-family: var(--font-display);
-		color: #ccc;
+		color: var(--text-light);
 		width: 32px;
 		text-align: right;
 	}
@@ -141,7 +152,7 @@
 		width: 100%;
 		background: var(--surface-hover);
 		border: 1px solid var(--border);
-		color: #ccc;
+		color: var(--text-light);
 		padding: 6px 10px;
 		font-family: var(--font-body);
 		font-size: 12px;
@@ -157,6 +168,6 @@
 
 	.status {
 		font-size: 11px;
-		color: #4a4;
+		color: var(--success);
 	}
 </style>

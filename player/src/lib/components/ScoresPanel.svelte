@@ -38,7 +38,12 @@
 
 {#if scores}
 	<section class="panel" class:collapsed>
-		<button class="panel-header" onclick={() => (collapsed = !collapsed)}>
+		<button
+			class="panel-header"
+			onclick={() => (collapsed = !collapsed)}
+			aria-expanded={!collapsed}
+			aria-label="Toggle scores"
+		>
 			<h3>{collapsed ? '▸' : '▾'} Scores</h3>
 		</button>
 		{#if !collapsed}

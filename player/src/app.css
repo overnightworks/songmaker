@@ -17,6 +17,14 @@
 	--text: #e0e0e0;
 	--text-muted: #888;
 	--text-dim: #444;
+	--text-light: #ccc;
+	--score-good-bg: #1a3a1a;
+	--score-good: #4f4;
+	--score-ok-bg: #3a3a1a;
+	--score-ok: #ff4;
+	--score-bad-bg: #3a1a1a;
+	--score-bad: #f44;
+	--success: #4a4;
 	--font-display: 'Oswald', Impact, sans-serif;
 	--font-body: 'Open Sans', Arial, sans-serif;
 	--player-height: 72px;

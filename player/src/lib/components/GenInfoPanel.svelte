@@ -44,7 +44,12 @@
 
 {#if generation}
 	<section class="panel" class:collapsed>
-		<button class="panel-header" onclick={() => (collapsed = !collapsed)}>
+		<button
+			class="panel-header"
+			onclick={() => (collapsed = !collapsed)}
+			aria-expanded={!collapsed}
+			aria-label="Toggle generation info"
+		>
 			<h3>{collapsed ? '▸' : '▾'} Generation Info</h3>
 		</button>
 		{#if !collapsed}

@@ -35,21 +35,21 @@
 	}
 
 	.good {
-		background: #1a3a1a;
-		color: #4f4;
+		background: var(--score-good-bg);
+		color: var(--score-good);
 	}
 
 	.ok {
-		background: #3a3a1a;
-		color: #ff4;
+		background: var(--score-ok-bg);
+		color: var(--score-ok);
 	}
 
 	.bad {
-		background: #3a1a1a;
-		color: #f44;
+		background: var(--score-bad-bg);
+		color: var(--score-bad);
 	}
 
 	.empty {
-		color: #555;
+		color: var(--text-dim);
 	}
 </style>

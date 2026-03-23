@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import type { Album } from '$lib/api/types';
 
 export const albums = writable<Album[]>([]);
@@ -25,16 +25,12 @@ export function selectTrack(index: number): void {
 }
 
 export function nextTrack(): boolean {
-	let advanced = false;
-	currentAlbum.subscribe(($album) => {
-		if (!$album) return;
-		currentTrackIndex.update((i) => {
-			if (i < $album.tracks.length - 1) {
-				advanced = true;
-				return i + 1;
-			}
-			return i;
-		});
-	})();
-	return advanced;
+	const album = get(currentAlbum);
+	if (!album) return false;
+	const idx = get(currentTrackIndex);
+	if (idx < album.tracks.length - 1) {
+		currentTrackIndex.set(idx + 1);
+		return true;
+	}
+	return false;
 }
