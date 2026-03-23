@@ -17,12 +17,12 @@ prompt: >
   final chorus is the biggest with full gospel choir,
   this song should make you feel something real
 bpm: 94
-duration: 240
+duration: 220
 key: Am
 time_signature: 4/4
 language: en
 inference_steps: 60
-guidance_scale: 3.5
+guidance_scale: 0
 shift: 3.0
 think_mode: true
 lm_temperature: 1.0

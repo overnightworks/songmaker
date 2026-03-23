@@ -85,7 +85,7 @@ _FIELD_MAPPING = {"language": "vocal_language"}
 
 _SFT_DEFAULTS = {
     "inference_steps": 50,
-    "guidance_scale": 5.5,
+    "guidance_scale": 0.0,
 }
 
 _TURBO_DEFAULTS = {

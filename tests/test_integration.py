@@ -73,7 +73,7 @@ def _build_acestep_responses(wav_bytes: bytes) -> list[MagicMock]:
         "code": 200,
     }).encode())
 
-    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed": 42}])
+    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "42"}])
     poll_resp = _mock_response(json.dumps({
         "data": [{"task_id": "test-task-1", "status": 1, "result": result_items}],
     }).encode())
@@ -147,57 +147,3 @@ def test_generate_multiple_versions(
     assert mock_urlopen.call_count == 11
 
 
-def test_generate_with_score_flag(
-    tmp_path: Path, make_sine_wav_bytes: Callable[..., bytes],
-) -> None:
-    """Verify --score triggers scoring and writes scores to snapshot."""
-    song_md = _setup_project(tmp_path)
-    output_dir = tmp_path / "_output"
-
-    wav_bytes = make_sine_wav_bytes()
-    responses = [_health_response(), _health_response()] + _build_acestep_responses(wav_bytes)
-
-    with patch("acestep_engine.client.urlopen") as mock_urlopen:
-        mock_urlopen.side_effect = responses
-        generate(str(song_md), GenerationOptions(score=True))
-
-    album_output = output_dir / "test_album"
-    snapshot_md = album_output / "01_test_song_v1.md"
-    assert snapshot_md.exists()
-
-    text = snapshot_md.read_text()
-    assert "## Scores" in text
-    assert "dynamics" in text
-    assert "silence_ok" in text
-
-
-def test_generate_best_flag(
-    tmp_path: Path, make_sine_wav_bytes: Callable[..., bytes],
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Verify --best N generates N versions, scores all, and prints ranking."""
-    import logging
-
-    song_md = _setup_project(tmp_path)
-    output_dir = tmp_path / "_output"
-
-    wav_bytes = make_sine_wav_bytes()
-    responses = [_health_response(), _health_response()] + (
-        _build_acestep_responses(wav_bytes)
-        + _build_acestep_responses(wav_bytes)
-    )
-
-    with caplog.at_level(logging.INFO):
-        with patch("acestep_engine.client.urlopen") as mock_urlopen:
-            mock_urlopen.side_effect = responses
-            generate(str(song_md), GenerationOptions(best=2))
-
-    album_output = output_dir / "test_album"
-    mp3s = list(album_output.glob("*.mp3"))
-    assert len(mp3s) == 2
-
-    snapshots = list(album_output.glob("*.md"))
-    assert all("## Scores" in s.read_text() for s in snapshots)
-
-    assert "RANKING" in caplog.text
-    assert "best" in caplog.text

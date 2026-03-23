@@ -47,8 +47,6 @@ class GenerateRequest(BaseModel):
 
     path: str
     count: int = 1
-    best: int | None = None
-    score: bool = False
 
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
@@ -160,7 +158,7 @@ def create_app(
             raise HTTPException(404, f"Song file not found: {req.path}")
 
         background_tasks.add_task(
-            _run_generation, md_path, req.count, req.best, req.score,
+            _run_generation, md_path, req.count,
         )
         return {"status": "started", "path": req.path}
 
@@ -198,11 +196,11 @@ def _run_scoring(mp3_path: Path, output_dir: Path, project_root: Path) -> None:
     log.info("Scored: %s", mp3_path.name)
 
 
-def _run_generation(md_path: Path, count: int, best: int | None, score: bool) -> None:
+def _run_generation(md_path: Path, count: int) -> None:
     """Run generation in background."""
     from songmaker_cli.generate import GenerationOptions, run_generate
 
-    opts = GenerationOptions(count=count, best=best, score=score)
+    opts = GenerationOptions(count=count)
     run_generate(str(md_path), opts)
     log.info("Generation complete: %s", md_path.name)
 

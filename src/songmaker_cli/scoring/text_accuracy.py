@@ -36,12 +36,15 @@ def score_text_accuracy(
     device = effective_config.device
     language = meta.generation_params.get("language", "en")
     model = _get_whisper_model(whisper_size, device=device)
-    transcribed, segments = _transcribe(mp3_path, language, model)
 
     intended_lines = tuple(
         line.strip() for line in meta.lyrics.splitlines()
         if line.strip() and not line.strip().startswith("[")
     )
+
+    initial_prompt = _build_vocabulary_prompt(intended_lines)
+    transcribed, segments = _transcribe(mp3_path, language, model, initial_prompt)
+
     trans_lines = tuple(
         s.get("text", "").strip() for s in segments if s.get("text", "").strip()
     )
@@ -56,9 +59,9 @@ def score_text_accuracy(
         log.warning("Whisper hallucination detected — no real vocals in %s", mp3_path.name)
         trans_lines = ()
 
-    # Save transcription alongside MP3 for player diff view
+    # Save transcription with confidence: "0.85|text" per line
     whisper_path = mp3_path.with_suffix(".whisper")
-    whisper_path.write_text("\n".join(trans_lines), encoding="utf-8")
+    _save_whisper_with_confidence(whisper_path, segments)
     log.info("Whisper transcription saved: %s", whisper_path.name)
 
     return TextAccuracyScore(
@@ -66,6 +69,57 @@ def score_text_accuracy(
         intended_line_texts=intended_lines,
         transcribed_line_texts=trans_lines,
     )
+
+
+def _build_vocabulary_prompt(lines: tuple[str, ...] | list[str]) -> str | None:
+    """Build a Whisper initial_prompt from lyrics as vocabulary hints.
+
+    Uses unique uncommon words rather than full lyrics — Whisper treats
+    initial_prompt as "previously spoken text" so full lyrics cause it
+    to skip matching lines.
+    """
+    if not lines:
+        return None
+    all_words = " ".join(lines).split()
+    seen: set[str] = set()
+    unique: list[str] = []
+    for word in all_words:
+        lower = word.lower().strip(".,!?;:")
+        if lower not in seen and len(lower) > 3:
+            seen.add(lower)
+            unique.append(word)
+    return ", ".join(unique[:50]) if unique else None
+
+
+def _segment_confidence(segment: dict) -> float:
+    """Derive a 0-1 confidence score from Whisper segment metadata.
+
+    Uses avg_logprob (higher = more confident) and no_speech_prob (lower = more
+    likely speech). Combined via: sigmoid(logprob) * (1 - no_speech).
+    """
+    import math
+
+    avg_logprob = segment.get("avg_logprob", -1.0)
+    no_speech = segment.get("no_speech_prob", 0.0)
+    # avg_logprob is typically -0.2 (good) to -1.5 (bad)
+    # Map to 0-1 via sigmoid shifted so -0.5 -> ~0.5
+    sig = 1.0 / (1.0 + math.exp(-(avg_logprob + 0.5) * 4))
+    return round(sig * (1.0 - no_speech), 2)
+
+
+def _save_whisper_with_confidence(whisper_path: Path, segments: list[dict]) -> None:
+    """Save Whisper transcription with per-line confidence scores.
+
+    Format: "0.85|The actual transcribed text" per line.
+    """
+    lines = []
+    for s in segments:
+        text = s.get("text", "").strip()
+        if not text:
+            continue
+        conf = _segment_confidence(s)
+        lines.append(f"{conf}|{text}")
+    whisper_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 _VOCALIZATION_PATTERN = re.compile(
@@ -123,7 +177,7 @@ def _is_hallucination(lines: tuple[str, ...]) -> bool:
     """Detect Whisper hallucinations — repeated filler phrases with no real content."""
     if len(lines) < 3:
         return False
-    cleaned = [clean_lyrics(l) for l in lines if clean_lyrics(l)]
+    cleaned = [clean_lyrics(line) for line in lines if clean_lyrics(line)]
     if not cleaned:
         return True
     unique = set(cleaned)
@@ -186,8 +240,9 @@ def clean_lyrics(text: str) -> str:
     text = re.sub(r"'ve\b", " have", text)
     text = re.sub(r"'m\b", " am", text)
     text = re.sub(r"'s\b", "", text)  # possessive/is — remove
-    # Remove remaining apostrophes and hyphens
+    # Remove remaining apostrophes, hyphens, and punctuation
     text = text.replace("'", "").replace("-", " ")
+    text = re.sub(r"[,.\?!;:\"()—]", "", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -209,12 +264,53 @@ def _get_whisper_model(
     return cache[cache_key]
 
 
+def _vocal_preprocess(mp3_path: Path) -> str:
+    """Pre-emphasis + vocal frequency boost to help Whisper hear vocals over music.
+
+    Returns path to a temporary 16kHz mono WAV optimized for speech recognition.
+    """
+    import tempfile
+
+    import librosa
+    import numpy as np
+    import soundfile as sf
+    from scipy.signal import butter, sosfilt
+
+    y, sr = librosa.load(str(mp3_path), sr=16000, mono=True)
+    # Pre-emphasis: boost higher frequencies where consonants live
+    y = np.append(y[0], y[1:] - 0.97 * y[:-1])
+    # Bandpass vocal range and boost by +6dB
+    sos = butter(4, [200, 5000], btype="band", fs=sr, output="sos")
+    vocals = sosfilt(sos, y)
+    y = y + vocals * (10 ** (6 / 20) - 1)
+    peak = np.max(np.abs(y))
+    if peak > 1e-10:
+        y = y / peak * 0.95
+    tmp_path = tempfile.mktemp(suffix=".wav")
+    sf.write(tmp_path, y, sr)
+    return tmp_path
+
+
 def _transcribe(
     mp3_path: Path, language: str, model: object,
+    initial_prompt: str | None = None,
 ) -> tuple[str, list[dict]]:
     log.info("Transcribing %s...", mp3_path.name)
-    result = model.transcribe(  # type: ignore[union-attr]
-        str(mp3_path), language=language, fp16=False,
-        condition_on_previous_text=True,
-    )
+    preprocessed = _vocal_preprocess(mp3_path)
+    kwargs: dict[str, object] = {
+        "language": language, "fp16": False,
+        "condition_on_previous_text": False,
+        "word_timestamps": True,
+        "beam_size": 5,
+        "best_of": 5,
+        "temperature": 0,
+        "compression_ratio_threshold": 1.8,
+        "logprob_threshold": -0.5,
+    }
+    if initial_prompt:
+        kwargs["initial_prompt"] = initial_prompt
+    try:
+        result = model.transcribe(preprocessed, **kwargs)  # type: ignore[union-attr]
+    finally:
+        Path(preprocessed).unlink(missing_ok=True)
     return result["text"].strip(), result.get("segments", [])

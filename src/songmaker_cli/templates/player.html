@@ -343,6 +343,18 @@
     opacity: 0.5;
   }
 
+  .conf-badge {
+    font-size: 9px;
+    font-family: 'Oswald', sans-serif;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .conf-high { color: #4a4; }
+  .conf-mid { color: #a84; }
+  .conf-low { color: #a44; background: rgba(170,68,68,0.15); }
+
   .no-lyrics {
     text-align: center;
     color: #444;
@@ -866,15 +878,19 @@ async function loadTrack(index) {
   trackTitle.textContent = t.title;
   trackMeta.textContent = '';
 
+  // Only swap audio source if it changed (preserves playback while browsing)
   const audioUrl = AUDIO_BASE + t.file;
-  dbg('Audio: ' + audioUrl);
-  audioEl.src = audioUrl;
-  audioEl.preload = 'auto';
-  audioEl.load();
-  audioEl.onerror = () => {
-    dbg('Audio ERROR: ' + (audioEl.error ? audioEl.error.message : 'unknown'));
-  };
-  audioEl.onloadedmetadata = () => { dbg('Audio OK: ' + audioEl.duration + 's'); };
+  if (audioEl.dataset.currentFile !== t.file) {
+    dbg('Audio: ' + audioUrl);
+    audioEl.dataset.currentFile = t.file;
+    audioEl.src = audioUrl;
+    audioEl.preload = 'auto';
+    audioEl.load();
+    audioEl.onerror = () => {
+      dbg('Audio ERROR: ' + (audioEl.error ? audioEl.error.message : 'unknown'));
+    };
+    audioEl.onloadedmetadata = () => { dbg('Audio OK: ' + audioEl.duration + 's'); };
+  }
 
   // Try to read ID3 tags for richer metadata
   const tags = await readID3(t.file);
@@ -937,20 +953,16 @@ function renderGenInfo(track) {
 // --- Scores ---
 
 const SCORE_LABELS = {
-  vocal_quality: 'Vocal Quality',
-  vocal_summary: 'Vocal Summary',
+  lyrical_coherence: 'Lyrical Coherence',
+  lyrical_summary: 'Lyrical Summary',
   dynamics: 'Dynamics',
   text_accuracy: 'Text Accuracy',
   audiobox_enjoyment: 'Enjoyment',
   audiobox_understanding: 'Understanding',
   audiobox_complexity: 'Complexity',
   audiobox_quality: 'Production Quality',
-  bpm_detected: 'BPM Detected',
-  bpm_deviation: 'BPM Deviation',
-  silence_ok: 'Silence OK',
   silence_gaps: 'Silence Gaps',
-  spectral_ok: 'No Artifacts',
-  spectral_artifacts: 'Artifact Count',
+  spectral_artifacts: 'Artifacts',
 };
 
 function renderScores(track) {
@@ -968,15 +980,12 @@ function renderScores(track) {
     const div = document.createElement('div');
     div.className = 'gen-info-item';
     let display = val;
-    if (key === 'vocal_quality') display = val + '/10';
-    if (key === 'silence_ok' || key === 'spectral_ok') display = val ? '✓' : '✗';
-    if (key === 'bpm_deviation') display = val + '%';
-    if (typeof val === 'number' && key !== 'silence_gaps' && key !== 'bpm_detected') {
+    if (key === 'lyrical_coherence') display = val + '/10';
+    if (typeof val === 'number' && key !== 'silence_gaps' && key !== 'spectral_artifacts') {
       display = val.toFixed(1);
-      if (key === 'bpm_deviation') display += '%';
     }
     // Vocal summary: truncated, click to expand
-    if (key === 'vocal_summary' && typeof val === 'string' && val.length > 40) {
+    if (key === 'lyrical_summary' && typeof val === 'string' && val.length > 40) {
       const short = escHtml(val.substring(0, 40)) + '...';
       const full = escHtml(val);
       div.innerHTML = label + ': <span class="vocal-summary-text" onclick="this.textContent = this.dataset.expanded === \'1\' ? \'' + short.replace(/'/g, "\\'") + '\' : \'' + full.replace(/'/g, "\\'") + '\'; this.dataset.expanded = this.dataset.expanded === \'1\' ? \'0\' : \'1\'" style="cursor:pointer">' + short + '</span>';
@@ -1084,9 +1093,17 @@ function renderLyrics(lines, withTimestamps) {
     } else {
       div.className = 'lyric-line';
       div.id = 'line-' + i;
+      if (line.confidence !== undefined && line.confidence < 0.5) {
+        div.style.opacity = Math.max(0.25, line.confidence / 0.5).toFixed(2);
+      }
       let html = '';
       if (hasTs && line.time >= 0) {
         html += '<span class="timestamp">' + formatTime(line.time) + '</span>';
+      }
+      if (line.confidence !== undefined) {
+        const pct = Math.round(line.confidence * 100);
+        const cls = line.confidence >= 0.7 ? 'conf-high' : line.confidence >= 0.4 ? 'conf-mid' : 'conf-low';
+        html += '<span class="conf-badge ' + cls + '">' + pct + '</span>';
       }
       html += escHtml(line.text);
       div.innerHTML = html;
@@ -1330,7 +1347,7 @@ let currentSort = 'vocal';
 let currentAlbumFilter = null; // null = show current album
 
 function getVocalScore(track) {
-  return track.scores?.vocal_quality || 0;
+  return track.scores?.lyrical_coherence || 0;
 }
 
 function getDynamics(track) {

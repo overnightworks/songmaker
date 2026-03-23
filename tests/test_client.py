@@ -93,7 +93,7 @@ def test_submit_task_retries_on_transient_error() -> None:
 def test_poll_result_success() -> None:
     client = AceStepClient()
 
-    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed": 42}])
+    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "42"}])
     response_data = json.dumps({
         "data": [{"task_id": "abc", "status": 1, "result": result_items}],
     }).encode()
@@ -154,7 +154,7 @@ def test_submit_task_no_task_id() -> None:
 
 def test_poll_result_completed_no_audio() -> None:
     client = AceStepClient()
-    result_items = json.dumps([{"file": "", "seed": 1}])
+    result_items = json.dumps([{"file": "", "seed_value": "1"}])
     response_data = json.dumps({
         "data": [{"task_id": "abc", "status": 1, "result": result_items}],
     }).encode()
@@ -240,7 +240,7 @@ def test_generate_full_flow() -> None:
     submit_resp = json.dumps({
         "data": {"task_id": "t1", "status": "queued"}, "code": 200,
     }).encode()
-    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed": 7}])
+    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "7"}])
     poll_resp = json.dumps({
         "data": [{"task_id": "t1", "status": 1, "result": result_items}],
     }).encode()

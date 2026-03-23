@@ -26,12 +26,16 @@ class SrtLine(TypedDict):
     text: str
 
 
-class LyricsLine(TypedDict):
-    """A display line from parsed lyrics (no timestamps)."""
-
+class _LyricsLineRequired(TypedDict):
     time: float
     text: str
     section: bool
+
+
+class LyricsLine(_LyricsLineRequired, total=False):
+    """A display line from parsed lyrics (no timestamps)."""
+
+    confidence: float
 
 
 def _default_color() -> dict[str, str]:
@@ -97,6 +101,22 @@ def parse_srt(path: Path) -> list[SrtLine]:
     return lines
 
 
+def _parse_whisper_file(whisper_path: Path) -> list[LyricsLine]:
+    """Parse a .whisper file, supporting both old (plain text) and new (confidence|text) formats."""
+    lines: list[LyricsLine] = []
+    for raw in whisper_path.read_text(encoding="utf-8").strip().splitlines():
+        raw = raw.strip()
+        if not raw:
+            continue
+        if "|" in raw and raw.split("|", 1)[0].replace(".", "", 1).isdigit():
+            conf_str, text = raw.split("|", 1)
+            lines.append({"time": -1, "text": text.strip(), "section": False,
+                          "confidence": float(conf_str)})
+        else:
+            lines.append({"time": -1, "text": raw, "section": False})
+    return lines
+
+
 def parse_track_title(stem: str) -> tuple[str, str]:
     """Extract (number, title) from an MP3 stem like '01_song_name_v3'."""
     num_match = re.match(r"^(\d+)_(.+?)(?:_v\d+)?$", stem)
@@ -149,11 +169,7 @@ def scan_album_tracks(
         whisper_path = mp3.with_suffix(".whisper")
         whisper_lines: list[LyricsLine] = []
         if whisper_path.exists():
-            whisper_text = whisper_path.read_text(encoding="utf-8").strip()
-            whisper_lines = [
-                {"time": -1, "text": line.strip(), "section": False}
-                for line in whisper_text.splitlines() if line.strip()
-            ]
+            whisper_lines = _parse_whisper_file(whisper_path)
 
         base = strip_version_suffix(stem)
         if lyrics_cache is not None and base in lyrics_cache:
@@ -211,11 +227,7 @@ def _build_latest_entries(
         whisper_path = mp3.with_suffix(".whisper")
         whisper_lines: list[LyricsLine] = []
         if whisper_path.exists():
-            whisper_text = whisper_path.read_text(encoding="utf-8").strip()
-            whisper_lines = [
-                {"time": -1, "text": line.strip(), "section": False}
-                for line in whisper_text.splitlines() if line.strip()
-            ]
+            whisper_lines = _parse_whisper_file(whisper_path)
 
         lines = whisper_lines or intended_lines
         has_transcription = bool(whisper_lines)

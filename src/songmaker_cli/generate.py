@@ -25,7 +25,7 @@ from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.parser import AlbumMeta, SongMeta, load_album_meta, parse_song_md
 from songmaker_cli.player import generate_player
-from songmaker_cli.snapshot import append_scores_section, write_snapshot
+from songmaker_cli.snapshot import write_snapshot
 
 log = logging.getLogger(__name__)
 
@@ -62,9 +62,6 @@ class GenerationOptions:
     lm_temperature: float | None = None
     infer_method: str | None = None
     think_mode: bool | None = None
-    check: bool = False
-    score: bool = False
-    best: int | None = None
     player: bool = False
 
     def ace_overrides(self) -> dict[str, object]:
@@ -109,12 +106,6 @@ def run_generate(path: str, opts: GenerationOptions | None = None) -> None:
     meta = parse_song_md(md_path)
     validate_song_meta(meta)
 
-    count = opts.count
-    do_score = opts.score
-    if opts.best is not None:
-        count = opts.best
-        do_score = True
-
     client = AceStepClient()
     server_info = client.server_info()
     model_name = server_info.model if server_info else None
@@ -125,15 +116,9 @@ def run_generate(path: str, opts: GenerationOptions | None = None) -> None:
     output_root = (project_root / OUTPUT_ROOT) if project_root else None
 
     generated = _generate_versions(
-        count, md_path, meta, album_meta, ace_config, output_root,
-        score_each=(do_score and opts.best is None), check_each=opts.check,
+        opts.count, md_path, meta, album_meta, ace_config, output_root,
         client=client, server_info=server_info,
     )
-
-    if opts.best is not None:
-        from songmaker_cli.batch import score_and_rank
-
-        score_and_rank(generated, meta)
 
     if generated:
         last_paths = generated[-1][0]
@@ -149,8 +134,6 @@ def _generate_versions(
     album_meta: AlbumMeta,
     ace_config: AceStepConfig,
     output_root: Path | None,
-    score_each: bool,
-    check_each: bool,
     client: AceStepClient | None = None,
     server_info: object = None,
 ) -> list[tuple[OutputPaths, Path]]:
@@ -173,23 +156,10 @@ def _generate_versions(
         ace_result, elapsed = _run_generation(ace_config, client)
         audio = _decode_audio(ace_result)
         _write_output(audio, ace_result.seed, paths, meta, album_meta)
-        snapshot_path = write_snapshot(md_path, paths, ace_config, ace_result.seed, server_info)
+        write_snapshot(md_path, paths, ace_config, ace_result.seed, server_info)
         _log_result_banner(paths, audio, ace_result.seed, elapsed)
 
-        if score_each:
-            from songmaker_cli.batch import log_scores
-            from songmaker_cli.scoring import run_scoring_pipeline
-
-            scores = run_scoring_pipeline(paths.mp3, meta=meta)
-            append_scores_section(snapshot_path, scores)
-            log_scores(scores)
-
-        if check_each:
-            from songmaker_cli.check import run_check
-
-            run_check(str(paths.mp3), source=str(md_path))
-
-        generated.append((paths, snapshot_path))
+        generated.append((paths, paths.mp3.with_suffix(".md")))
 
     return generated
 

@@ -70,11 +70,10 @@ def test_generation_options_ace_overrides_empty() -> None:
 
 
 def test_generation_options_excludes_workflow_flags() -> None:
-    opts = GenerationOptions(seed=42, check=True, score=True, best=3, player=True)
+    opts = GenerationOptions(seed=42, player=True)
     result = opts.ace_overrides()
     assert result == {"seed": 42}
-    assert "check" not in result
-    assert "score" not in result
+    assert "player" not in result
 
 
 def test_load_album_meta_with_yaml(tmp_path: Path) -> None:
@@ -228,7 +227,7 @@ def test_run_generation_success() -> None:
     submit_resp.__enter__ = MagicMock(return_value=submit_resp)
     submit_resp.__exit__ = MagicMock(return_value=False)
 
-    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed": 7}])
+    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "7"}])
     poll_resp = MagicMock(spec=HTTPResponse)
     poll_resp.status = 200
     poll_resp.read.return_value = json.dumps(

@@ -1,11 +1,11 @@
-"""Scoring orchestration — single, batch, and ranked scoring."""
+"""Scoring orchestration — single and batch scoring."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
-from songmaker_cli.config import OutputPaths, find_project_root, validate_path
+from songmaker_cli.config import find_project_root, validate_path
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import SongMeta, parse_song_md
@@ -31,61 +31,6 @@ def log_scores(scores: SongScores) -> None:
             scores.silence.gap_count, scores.silence.longest_gap_seconds,
         )
     log.info("=" * 60)
-
-
-def log_ranking(ranked: list[tuple[OutputPaths, SongScores]]) -> None:
-    """Log a ranked table of scored versions, sorted by emotional dynamics."""
-
-    def _sort_key(entry: tuple[OutputPaths, SongScores]) -> float:
-        _, scores = entry
-        if scores.emotional_dynamics:
-            return scores.emotional_dynamics.overall_expressiveness
-        return 0.0
-
-    sorted_entries = sorted(ranked, key=_sort_key, reverse=True)
-
-    log.info("")
-    log.info("=" * 70)
-    log.info("  RANKING (%d versions)", len(sorted_entries))
-    log.info("  %-30s %10s %10s %10s", "Version", "Dynamics", "AB Quality", "Silence")
-    log.info("  " + "-" * 66)
-
-    for i, (paths, scores) in enumerate(sorted_entries):
-        dynamics = (
-            round(scores.emotional_dynamics.overall_expressiveness * 100, 1)
-            if scores.emotional_dynamics else "-"
-        )
-        ab_quality = round(scores.audiobox.production_quality, 1) if scores.audiobox else "-"
-        has_gaps = scores.silence.has_problems if scores.silence else False
-        flag = " [gaps]" if has_gaps else ""
-        marker = " <-- best" if i == 0 else ""
-        log.info(
-            "  %-30s %10s %10s %10s%s",
-            paths.versioned_name, dynamics, ab_quality, not has_gaps, flag + marker,
-        )
-
-    log.info("=" * 70)
-    best_paths = sorted_entries[0][0]
-    log.info("  Best: %s", best_paths.mp3)
-    log.info("")
-
-
-# ── Score and rank (used by --best) ──────────────────────────────────
-
-
-def score_and_rank(
-    generated: list[tuple[OutputPaths, Path]], meta: SongMeta | None,
-) -> None:
-    """Score all generated versions and log a ranked table."""
-    log.info("")
-    log.info("Scoring %d versions...", len(generated))
-    ranked: list[tuple[OutputPaths, SongScores]] = []
-    for paths, snapshot_path in generated:
-        scores = run_scoring_pipeline(paths.mp3, meta=meta if isinstance(meta, SongMeta) else None)
-        append_scores_section(snapshot_path, scores)
-        log_scores(scores)
-        ranked.append((paths, scores))
-    log_ranking(ranked)
 
 
 # ── Single and batch scoring ─────────────────────────────────────────
@@ -143,6 +88,19 @@ def _create_minimal_snapshot(
     log.info("Created snapshot: %s", snapshot_path.name)
 
 
+def _lyrics_prompt(meta: SongMeta | None) -> str | None:
+    """Build Whisper vocabulary prompt from lyrics."""
+    if not meta or not meta.lyrics:
+        return None
+    from songmaker_cli.scoring.text_accuracy import _build_vocabulary_prompt
+
+    lines = [
+        line.strip() for line in meta.lyrics.splitlines()
+        if line.strip() and not line.strip().startswith("[")
+    ]
+    return _build_vocabulary_prompt(lines)
+
+
 def _auto_detect_device(config: PipelineConfig) -> PipelineConfig:
     """Auto-detect GPU if available and ACE-Step isn't hogging VRAM."""
     if config.device != "cpu":
@@ -177,7 +135,7 @@ def _whisper_pass(
     Loads the model once, transcribes all songs, then unloads.
     This is separate from the scoring pipeline to manage GPU memory.
     """
-    # Only run if text_accuracy or vocal_quality would need it
+    # Only run if text_accuracy or lyrical_coherence would need it
     songs_needing_whisper = [
         mp3 for mp3 in mp3s
         if force or not mp3.with_suffix(".whisper").exists()
@@ -194,18 +152,36 @@ def _whisper_pass(
     model = whisper.load_model(config.whisper_model, device=config.device)
     fp16 = config.device == "cuda"
 
+    from songmaker_cli.scoring.text_accuracy import (
+        _save_whisper_with_confidence,
+        _vocal_preprocess,
+    )
+
     for i, mp3 in enumerate(songs_needing_whisper):
         log.info("[%d/%d] Whisper: %s", i + 1, len(songs_needing_whisper), mp3.name)
-        result = model.transcribe(
-            str(mp3), language="en", fp16=fp16,
-            condition_on_previous_text=True,
+        meta = _find_meta(mp3, project_root)
+        initial_prompt = _lyrics_prompt(meta)
+        preprocessed = _vocal_preprocess(mp3)
+        kwargs: dict[str, object] = {
+            "language": meta.generation_params.get("language", "en") if meta else "en",
+            "fp16": fp16,
+            "condition_on_previous_text": False,
+            "word_timestamps": True,
+            "beam_size": 5,
+            "best_of": 5,
+            "temperature": 0,
+            "compression_ratio_threshold": 1.8,
+            "logprob_threshold": -0.5,
+        }
+        if initial_prompt:
+            kwargs["initial_prompt"] = initial_prompt
+        try:
+            result = model.transcribe(preprocessed, **kwargs)
+        finally:
+            Path(preprocessed).unlink(missing_ok=True)
+        _save_whisper_with_confidence(
+            mp3.with_suffix(".whisper"), result.get("segments", []),
         )
-        lines = [
-            s["text"].strip()
-            for s in result.get("segments", [])
-            if s.get("text", "").strip()
-        ]
-        mp3.with_suffix(".whisper").write_text("\n".join(lines), encoding="utf-8")
 
     # Free GPU memory
     del model
@@ -249,7 +225,7 @@ def score_all(
 
     # Step 1: Whisper pass — single model load, all songs
     needs_whisper = scorer_list is None or any(
-        s in (scorer_list or []) for s in ("text_accuracy", "vocal_quality")
+        s in (scorer_list or []) for s in ("text_accuracy", "lyrical_coherence")
     )
     if needs_whisper:
         _whisper_pass(mp3s, config, project_root, force)

@@ -50,11 +50,6 @@ def generate(
     lm_temperature: Annotated[Optional[float], Parameter(help="LM temperature")] = None,
     infer_method: Annotated[Optional[str], Parameter(help="ode or sde")] = None,
     think_mode: Annotated[Optional[bool], Parameter(help="LM chain-of-thought")] = None,
-    check: Annotated[bool, Parameter(help="Run Whisper check after")] = False,
-    score: Annotated[bool, Parameter(help="Run scoring pipeline after")] = False,
-    best: Annotated[
-        Optional[int], Parameter(help="Generate N, score all, rank by dynamics"),
-    ] = None,
     player: Annotated[
         bool, Parameter(name="--player", help="Open HTML player after generation"),
     ] = False,
@@ -65,7 +60,7 @@ def generate(
         shift=shift, guidance_scale=guidance_scale,
         inference_steps=inference_steps, lm_temperature=lm_temperature,
         infer_method=infer_method, think_mode=think_mode,
-        check=check, score=score, best=best, player=player,
+        player=player,
     )
     run_generate(path, opts)
 

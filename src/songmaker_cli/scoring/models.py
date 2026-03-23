@@ -19,7 +19,6 @@ SCORE_KEY_BPM_DETECTED = "bpm_detected"
 SCORE_KEY_BPM_DEVIATION = "bpm_deviation"
 SCORE_KEY_SILENCE_GAPS = "silence_gaps"
 SCORE_KEY_SILENCE_LONGEST = "silence_longest"
-SCORE_KEY_SILENCE_OK = "silence_ok"
 
 
 @dataclass(frozen=True)
@@ -74,8 +73,8 @@ class SpectralQualityScore:
 
 
 @dataclass(frozen=True)
-class VocalQualityScore:
-    """Claude LLM judge — rates vocal performance 1-10 with issues."""
+class LyricalCoherenceScore:
+    """Claude LLM judge — rates lyrical coherence 1-10 with issues."""
 
     score: int
     issues: tuple[str, ...]
@@ -117,11 +116,11 @@ class SongScores:
     - text_accuracy: quality signal (did the model sing the right words?)
     - audiobox: quality signal (production quality from Meta's model)
     - spectral_quality: pass/fail flag (noise artifacts?)
-    - vocal_quality: LLM judge (is it worth listening?)
+    - lyrical_coherence: LLM judge (do the sung lyrics make sense?)
     """
 
     text_accuracy: TextAccuracyScore | None = None
-    vocal_quality: VocalQualityScore | None = None
+    lyrical_coherence: LyricalCoherenceScore | None = None
     emotional_dynamics: EmotionalDynamicsScore | None = None
     audiobox: AudioBoxScore | None = None
     bpm_accuracy: BpmAccuracyScore | None = None
@@ -158,14 +157,12 @@ class SongScores:
         if self.silence:
             result[SCORE_KEY_SILENCE_GAPS] = self.silence.gap_count
             result[SCORE_KEY_SILENCE_LONGEST] = self.silence.longest_gap_seconds
-            result[SCORE_KEY_SILENCE_OK] = not self.silence.has_problems
 
         if self.spectral_quality:
             result["spectral_artifacts"] = self.spectral_quality.artifact_count
-            result["spectral_ok"] = not self.spectral_quality.has_artifacts
 
-        if self.vocal_quality:
-            result["vocal_quality"] = self.vocal_quality.score
-            result["vocal_summary"] = self.vocal_quality.summary
+        if self.lyrical_coherence:
+            result["lyrical_coherence"] = self.lyrical_coherence.score
+            result["lyrical_summary"] = self.lyrical_coherence.summary
 
         return result

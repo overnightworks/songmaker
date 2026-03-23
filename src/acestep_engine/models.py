@@ -68,7 +68,15 @@ class ResultItem(BaseModel):
     """A single generation result entry from the server."""
 
     file: str = ""
-    seed: int = -1
+    seed_value: str = ""
+
+    @property
+    def seed(self) -> int:
+        """Parse seed from server's seed_value string (e.g. '12345' or '')."""
+        try:
+            return int(self.seed_value)
+        except (ValueError, TypeError):
+            return -1
 
 
 class TaskQueryEntry(BaseModel):

@@ -94,7 +94,7 @@ def test_song_scores_to_dict_all_scorers() -> None:
     assert d["bpm_detected"] == 118
     assert d["bpm_deviation"] == 1.7
     assert d["silence_gaps"] == 0
-    assert d["silence_ok"] is True
+    assert "silence_ok" not in d
 
 
 def test_silence_has_problems() -> None:
@@ -291,7 +291,7 @@ def test_append_scores_idempotent(tmp_path: Path) -> None:
     text = snapshot.read_text()
     assert text.count("## Scores") == 1
     assert "dynamics:" in text
-    assert "silence_ok: True" in text
+    assert "silence_gaps: 0" in text
 
 
 # ── CLI tests ────────────────────────────────────────────────────────
@@ -315,45 +315,7 @@ def test_log_scores(caplog: pytest.LogCaptureFixture) -> None:
         _log_scores(scores)
 
     assert "dynamics" in caplog.text
-    assert "silence_ok" in caplog.text
-
-
-def test_log_ranking(caplog: pytest.LogCaptureFixture) -> None:
-    import logging
-
-    from songmaker_cli.batch import log_ranking as _log_ranking_by_dynamics
-    from songmaker_cli.config import OutputPaths
-
-    paths_a = OutputPaths(
-        output_dir=Path("/tmp"), base_name="song", version=1, versioned_name="song_v1",
-    )
-    paths_b = OutputPaths(
-        output_dir=Path("/tmp"), base_name="song", version=2, versioned_name="song_v2",
-    )
-    scores_a = SongScores(
-        emotional_dynamics=EmotionalDynamicsScore(
-            pitch_cv=0.4, rms_contrast=2.0, onset_rate_cv=0.2,
-            overall_expressiveness=0.6,
-        ),
-    )
-    scores_b = SongScores(
-        emotional_dynamics=EmotionalDynamicsScore(
-            pitch_cv=0.1, rms_contrast=1.2, onset_rate_cv=0.1,
-            overall_expressiveness=0.3,
-        ),
-    )
-
-    with caplog.at_level(logging.INFO):
-        _log_ranking_by_dynamics([(paths_b, scores_b), (paths_a, scores_a)])
-
-    assert "RANKING" in caplog.text
-    assert "song_v1" in caplog.text
-    assert "song_v2" in caplog.text
-    # v1 has higher expressiveness, should be first (marked best)
-    lines = caplog.text.split("\n")
-    ranking_lines = [line for line in lines if "song_v" in line]
-    assert "song_v1" in ranking_lines[0]
-    assert "best" in ranking_lines[0]
+    assert "silence_gaps" in caplog.text
 
 
 def test_log_scores_warns_on_silence_problems(caplog: pytest.LogCaptureFixture) -> None:
@@ -414,6 +376,9 @@ def test_text_accuracy_with_mock_whisper(tmp_path: Path) -> None:
     with patch(
         "songmaker_cli.scoring.text_accuracy._get_whisper_model",
         return_value=mock_model,
+    ), patch(
+        "songmaker_cli.scoring.text_accuracy._vocal_preprocess",
+        return_value=str(mp3),
     ):
         result = score_text_accuracy(mp3, meta=meta)
         assert result.similarity_ratio > 0.5
@@ -499,7 +464,7 @@ def test_scores_roundtrip(tmp_path: Path) -> None:
     read_back = read_scores(snapshot)
     assert read_back is not None
     assert read_back["dynamics"] == 50.0
-    assert read_back["silence_ok"] is True
+    assert read_back["silence_gaps"] == 0
 
 
 # ── Type validation tests ─────────────────────────────────────────
