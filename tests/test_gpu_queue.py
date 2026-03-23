@@ -8,8 +8,15 @@ import time
 from songmaker_cli.gpu_queue import GpuQueue
 
 
-def test_queue_executes_jobs_sequentially() -> None:
+def _make_queue() -> GpuQueue:
+    """Create a queue with _prepare_mode stubbed out (no real GPU ops)."""
     queue = GpuQueue()
+    queue._prepare_mode = lambda mode: None  # type: ignore[method-assign]
+    return queue
+
+
+def test_queue_executes_jobs_sequentially() -> None:
+    queue = _make_queue()
     queue.start()
     results: list[str] = []
     lock = threading.Lock()
@@ -35,18 +42,12 @@ def test_queue_executes_jobs_sequentially() -> None:
     ]
 
 
-def test_queue_mode_switch_calls_clear() -> None:
+def test_queue_mode_switch_calls_prepare() -> None:
     queue = GpuQueue()
     queue.start()
-    cleared: list[str] = []
+    prepared: list[str] = []
 
-    original_clear = queue._clear_models
-
-    def mock_clear(mode: str) -> None:
-        cleared.append(mode)
-        original_clear(mode)
-
-    queue._clear_models = mock_clear  # type: ignore[method-assign]
+    queue._prepare_mode = lambda mode: prepared.append(mode)  # type: ignore[method-assign]
 
     def noop() -> None:
         pass
@@ -58,11 +59,11 @@ def test_queue_mode_switch_calls_clear() -> None:
     time.sleep(0.3)
     queue.shutdown()
 
-    assert cleared == ["generate", "score"]
+    assert prepared == ["generate", "score", "generate"]
 
 
 def test_queue_handles_job_exception() -> None:
-    queue = GpuQueue()
+    queue = _make_queue()
     queue.start()
     results: list[str] = []
 
@@ -82,7 +83,7 @@ def test_queue_handles_job_exception() -> None:
 
 
 def test_queue_shutdown() -> None:
-    queue = GpuQueue()
+    queue = _make_queue()
     queue.start()
     queue.shutdown()
     assert not queue._running
