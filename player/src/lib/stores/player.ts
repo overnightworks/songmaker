@@ -51,7 +51,6 @@ export function toggleSongExpanded(songId: string): void {
 export function selectGenerationInSidebar(gen: GenerationItem, song: SongItem): void {
 	selectedSongId.set(song.id);
 	selectedGenerationId.set(gen.id);
-	loadGeneration(gen, song);
 }
 
 export function clearGenerationSelection(): void {
@@ -80,17 +79,6 @@ export function playGeneration(gen: GenerationItem, song: SongItem): void {
 	});
 }
 
-export function loadGeneration(gen: GenerationItem, song: SongItem): void {
-	const current = get(playback);
-	if (current?.generation.id === gen.id) return;
-	playback.set({
-		generation: gen,
-		songId: song.id,
-		songTitle: song.title,
-		artist: song.artist,
-		autoplay: false
-	});
-}
 
 export function navigateToPlaying(): void {
 	const pb = get(playback);
