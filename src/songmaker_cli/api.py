@@ -232,14 +232,13 @@ def api_generate_song(
     job = create_job(session, "generate")
     session.commit()
 
-    import threading
-
+    from songmaker_cli.gpu_queue import get_gpu_queue
     from songmaker_cli.jobs import run_generation_job
-    threading.Thread(
-        target=run_generation_job,
+
+    get_gpu_queue().submit(
+        job.id, "generate", run_generation_job,
         args=(job.id, song_id, version.id, req.count),
-        daemon=True,
-    ).start()
+    )
 
     return job_to_dict(job)
 
@@ -257,14 +256,13 @@ def api_score_generation(
     job = create_job(session, "score")
     session.commit()
 
-    import threading
-
+    from songmaker_cli.gpu_queue import get_gpu_queue
     from songmaker_cli.jobs import run_scoring_job
-    threading.Thread(
-        target=run_scoring_job,
+
+    get_gpu_queue().submit(
+        job.id, "score", run_scoring_job,
         args=(job.id, gen_id, req.scorers),
-        daemon=True,
-    ).start()
+    )
 
     return job_to_dict(job)
 
