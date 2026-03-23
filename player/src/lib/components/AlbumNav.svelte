@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { albums, currentAlbumIndex, selectAlbum } from '$lib/stores/player';
+	import { albums, browsingAlbumIndex, selectAlbum } from '$lib/stores/player';
 
 	const albumList = $derived($albums);
-	const activeIndex = $derived($currentAlbumIndex);
+	const activeIndex = $derived($browsingAlbumIndex);
 </script>
 
 <nav class="album-nav" aria-label="Albums">
 	{#each albumList as album, i (album.id)}
 		<button class="album-btn" class:active={i === activeIndex} onclick={() => selectAlbum(i)}>
-			{album.title}
+			{album.title} <span class="count">({album.tracks.length})</span>
 		</button>
 	{/each}
 </nav>
@@ -44,5 +44,10 @@
 		background: var(--primary);
 		border-color: var(--primary);
 		color: #fff;
+	}
+
+	.count {
+		font-size: 10px;
+		opacity: 0.7;
 	}
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { currentTrack, currentAlbum, nextTrack } from '$lib/stores/player';
+	import { playingTrack, playback, playBrowsingTrack, nextTrack, albums } from '$lib/stores/player';
 	import { formatTime } from '$lib/utils/format';
 
 	let audioEl: HTMLAudioElement | undefined = $state();
@@ -7,10 +7,10 @@
 	let currentTime = $state(0);
 	let duration = $state(0);
 
-	const track = $derived($currentTrack);
-	const album = $derived($currentAlbum);
-
-	let audioSrc = $derived(track ? `/audio/${track.file}` : '');
+	const track = $derived($playingTrack);
+	const pb = $derived($playback);
+	const allAlbums = $derived($albums);
+	const albumArtist = $derived(pb ? (allAlbums[pb.albumIndex]?.artist ?? '') : '');
 
 	let prevFile = $state('');
 
@@ -18,13 +18,18 @@
 		if (!audioEl || !track) return;
 		if (track.file !== prevFile) {
 			prevFile = track.file;
-			audioEl.src = audioSrc;
+			audioEl.src = `/audio/${track.file}`;
 			audioEl.load();
+			audioEl.play();
 		}
 	});
 
 	function togglePlay(): void {
 		if (!audioEl) return;
+		if (!track) {
+			playBrowsingTrack();
+			return;
+		}
 		if (isPlaying) {
 			audioEl.pause();
 		} else {
@@ -71,7 +76,7 @@
 	<div class="track-info">
 		{#if track}
 			<span class="track-title">{track.title}</span>
-			<span class="track-artist">{album?.artist ?? ''}</span>
+			<span class="track-artist">{albumArtist}</span>
 		{:else}
 			<span class="track-title">No track selected</span>
 		{/if}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { currentTrack } from '$lib/stores/player';
+	import { browsingTrack } from '$lib/stores/player';
 	import { rateVersion } from '$lib/api/client';
 	import { trackFileToRoute } from '$lib/utils/html';
 
@@ -11,7 +11,7 @@
 	let saveTimeout: ReturnType<typeof setTimeout> | undefined;
 	let statusTimeout: ReturnType<typeof setTimeout> | undefined;
 
-	const track = $derived($currentTrack);
+	const track = $derived($browsingTrack);
 
 	$effect(() => {
 		if (!track) return;

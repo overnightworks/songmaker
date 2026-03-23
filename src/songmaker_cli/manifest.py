@@ -296,8 +296,8 @@ def build_manifest(output_dir: Path, project_root: Path) -> Manifest:
     if latest_entries:
         latest_entries.sort(key=lambda e: e[0], reverse=True)
         albums_data.insert(0, AlbumInfo(
-            id="_latest",
-            title="Latest",
+            id="_all",
+            title="All",
             artist=DEFAULT_ARTIST,
             subtitle="All versions, newest first",
             year=default_year(),

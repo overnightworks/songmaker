@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { fetchManifest } from '$lib/api/client';
-	import { albums, currentTrack, currentAlbum } from '$lib/stores/player';
+	import {
+		albums,
+		browsingTrack,
+		browsingAlbum,
+		playBrowsingTrack,
+		playback,
+		browsingAlbumIndex,
+		browsingTrackIndex
+	} from '$lib/stores/player';
 	import AlbumNav from '$lib/components/AlbumNav.svelte';
 	import SongList from '$lib/components/SongList.svelte';
 	import SyncedLyrics from '$lib/components/SyncedLyrics.svelte';
@@ -12,8 +20,14 @@
 	let loading = $state(true);
 	let error = $state('');
 
-	const track = $derived($currentTrack);
-	const album = $derived($currentAlbum);
+	const track = $derived($browsingTrack);
+	const album = $derived($browsingAlbum);
+	const pb = $derived($playback);
+	const albumIdx = $derived($browsingAlbumIndex);
+	const trackIdx = $derived($browsingTrackIndex);
+	const isBrowsedTrackPlaying = $derived(
+		pb?.albumIndex === albumIdx && pb?.trackIndex === trackIdx
+	);
 
 	onMount(async () => {
 		try {
@@ -49,6 +63,14 @@
 					{#if album}
 						<span class="track-meta">{album.artist}</span>
 					{/if}
+					<button
+						class="play-track-btn"
+						class:is-playing={isBrowsedTrackPlaying}
+						onclick={playBrowsingTrack}
+						aria-label={isBrowsedTrackPlaying ? 'Now playing' : 'Play this track'}
+					>
+						{isBrowsedTrackPlaying ? '🔊 Playing' : '▶ Play'}
+					</button>
 				</div>
 
 				<GenInfoPanel generation={track.generation} />
@@ -130,6 +152,37 @@
 		color: #666;
 		font-size: 12px;
 		margin-top: 2px;
+		display: block;
+	}
+
+	.play-track-btn {
+		margin-top: 8px;
+		padding: 6px 20px;
+		border: 2px solid var(--primary);
+		border-radius: 20px;
+		background: transparent;
+		color: var(--primary);
+		font-family: var(--font-display);
+		font-size: 13px;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.play-track-btn:hover {
+		background: var(--primary);
+		color: #fff;
+	}
+
+	.play-track-btn.is-playing {
+		border-color: var(--success);
+		color: var(--success);
+	}
+
+	.play-track-btn.is-playing:hover {
+		background: var(--success);
+		color: #fff;
 	}
 
 	.loading,
