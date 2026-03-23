@@ -538,10 +538,10 @@
 
 	.generate-btn {
 		padding: 6px 16px;
-		border: 2px solid var(--score-good);
+		border: 2px solid var(--primary);
 		border-radius: 16px;
-		background: var(--score-good);
-		color: #000;
+		background: var(--primary);
+		color: #fff;
 		font-family: var(--font-display);
 		font-size: 11px;
 		letter-spacing: 1px;
