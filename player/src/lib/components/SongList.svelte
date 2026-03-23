@@ -174,8 +174,11 @@
 		confirmDeleteGenId = confirmDeleteGenId === genId ? null : genId;
 	}
 
+	let deleteError = $state('');
+
 	async function handleGenDeleteConfirm(e: Event, gen: GenerationItem): Promise<void> {
 		e.stopPropagation();
+		deleteError = '';
 		try {
 			await deleteGeneration(gen.id);
 			songList.update((songs) =>
@@ -185,8 +188,9 @@
 					generation_count: s.generations.filter((g) => g.id !== gen.id).length
 				}))
 			);
-		} catch {
-			// silently fail
+		} catch (err) {
+			deleteError = err instanceof Error ? err.message : 'Delete failed';
+			setTimeout(() => (deleteError = ''), 3000);
 		}
 		confirmDeleteGenId = null;
 	}
@@ -384,6 +388,9 @@
 	{:else}
 		<p class="empty">No songs match</p>
 	{/each}
+	{#if deleteError}
+		<div class="delete-error">{deleteError}</div>
+	{/if}
 </div>
 
 <style>
@@ -771,6 +778,12 @@
 
 	.show-all-btn:hover {
 		color: var(--primary);
+	}
+
+	.delete-error {
+		font-size: 10px;
+		color: var(--score-bad);
+		padding: 4px 12px;
 	}
 
 	.empty {

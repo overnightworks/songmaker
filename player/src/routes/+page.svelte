@@ -1,14 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import {
-		fetchAlbums,
-		fetchSongs,
-		createSong,
-		updateSong,
-		fetchVersions,
-		deleteVersion as apiDeleteVersion,
-		fetchSong
-	} from '$lib/api/client';
+	import { fetchAlbums, fetchSongs, createSong } from '$lib/api/client';
 	import {
 		albumList,
 		songList,
@@ -17,108 +9,58 @@
 		selectedGeneration,
 		clearGenerationSelection
 	} from '$lib/stores/player';
-	import type { SongItem, VersionItem } from '$lib/api/types';
+	import {
+		editLyrics,
+		editPrompt,
+		editBpm,
+		editDuration,
+		editKey,
+		isDirty,
+		versions,
+		currentVersionIndex,
+		saving,
+		status,
+		diffMode,
+		appliedDiffMode,
+		activeDiff,
+		loadSongData,
+		loadVersion,
+		handleSave,
+		handleDeleteVersion,
+		handleDiffChange,
+		handleApply
+	} from '$lib/stores/editor';
 	import AlbumNav from '$lib/components/AlbumNav.svelte';
 	import SongList from '$lib/components/SongList.svelte';
 	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
 	import GenerationDetail from '$lib/components/GenerationDetail.svelte';
 	import LyricsDiff from '$lib/components/LyricsDiff.svelte';
 	import VersionTimeline from '$lib/components/VersionTimeline.svelte';
-	import type { ApplyData } from '$lib/components/ClaudeChat.svelte';
 
 	let loading = $state(true);
 	let error = $state('');
 	let showChat = $state(false);
-	let saving = $state(false);
-	let status = $state('');
-	let versions: VersionItem[] = $state([]);
-	let currentVersionIndex = $state(0);
-
-	let editLyrics = $state('');
-	let editPrompt = $state('');
-	let editBpm = $state(0);
-	let editDuration = $state(180);
-	let editKey = $state('');
-
-	let savedLyrics = $state('');
-	let savedPrompt = $state('');
-	let savedBpm = $state(0);
-	let savedDuration = $state(180);
-	let savedKey = $state('');
-
-	const isDirty = $derived(
-		editLyrics !== savedLyrics ||
-			editPrompt !== savedPrompt ||
-			editBpm !== savedBpm ||
-			editDuration !== savedDuration ||
-			editKey !== savedKey
-	);
 
 	let newTitle = $state('');
 	let newAlbumId = $state('');
 	let showNewSong = $state(false);
+	let creating = $state(false);
 
 	const song = $derived($selectedSong);
 	const activeGen = $derived($selectedGeneration);
 	const albums = $derived($albumList);
+	const dirty = $derived($isDirty);
+	const isSaving = $derived($saving);
+	const statusMsg = $derived($status);
+	const vers = $derived($versions);
+	const verIndex = $derived($currentVersionIndex);
+	const diff = $derived($activeDiff);
+	const isDiffMode = $derived($diffMode);
+	const isAppliedDiff = $derived($appliedDiffMode);
 
 	$effect(() => {
 		if (song) loadSongData(song);
 	});
-
-	function setSavedState(
-		lyrics: string,
-		prompt: string,
-		bpm: number,
-		dur: number,
-		key: string
-	): void {
-		savedLyrics = lyrics;
-		savedPrompt = prompt;
-		savedBpm = bpm;
-		savedDuration = dur;
-		savedKey = key;
-	}
-
-	function loadSongData(s: SongItem): void {
-		editLyrics = s.lyrics;
-		editPrompt = s.prompt;
-		editBpm = s.bpm;
-		editDuration = s.duration;
-		editKey = s.key;
-		setSavedState(s.lyrics, s.prompt, s.bpm, s.duration, s.key);
-		loadVersions(s.id);
-	}
-
-	async function handleDeleteVersion(versionId: string, deleteGenerations: boolean): Promise<void> {
-		if (!song) return;
-		try {
-			await apiDeleteVersion(versionId, deleteGenerations);
-			const updated = await fetchSong(song.id);
-			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
-			await loadVersions(song.id);
-		} catch {
-			status = 'Delete failed';
-			setTimeout(() => (status = ''), 3000);
-		}
-	}
-
-	async function loadVersions(songId: string): Promise<void> {
-		versions = await fetchVersions(songId);
-		currentVersionIndex = 0;
-	}
-
-	function loadVersion(index: number): void {
-		const v = versions[index];
-		if (!v) return;
-		currentVersionIndex = index;
-		editLyrics = v.lyrics;
-		editPrompt = v.prompt;
-		editBpm = v.bpm;
-		editDuration = v.duration;
-		editKey = v.key;
-		setSavedState(v.lyrics, v.prompt, v.bpm, v.duration, v.key);
-	}
 
 	onMount(async () => {
 		try {
@@ -132,129 +74,47 @@
 		}
 	});
 
-	async function handleSave(): Promise<void> {
-		if (!song) return;
-		saving = true;
-		try {
-			const updated = await updateSong(song.id, {
-				lyrics: editLyrics,
-				prompt: editPrompt,
-				bpm: editBpm,
-				duration: editDuration,
-				key: editKey
-			});
-			setSavedState(editLyrics, editPrompt, editBpm, editDuration, editKey);
-			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
-			await loadVersions(song.id);
-			dismissAppliedDiff();
-			status = `Saved version ${updated.version_count}`;
-		} catch (e) {
-			status = e instanceof Error ? e.message : 'Save failed';
-		} finally {
-			saving = false;
-			setTimeout(() => (status = ''), 3000);
-		}
+	function onSave(): void {
+		if (song) handleSave(song.id);
+	}
+
+	function onDeleteVersion(versionId: string, deleteGenerations: boolean): void {
+		if (song) handleDeleteVersion(song.id, versionId, deleteGenerations);
+	}
+
+	function onVersionClick(versionId: string): void {
+		const idx = $versions.findIndex((v) => v.id === versionId);
+		if (idx !== -1) loadVersion(idx);
+		clearGenerationSelection();
 	}
 
 	async function handleCreate(): Promise<void> {
 		if (!newTitle.trim() || !newAlbumId) return;
-		saving = true;
+		creating = true;
 		try {
 			const created = await createSong({
 				title: newTitle,
 				album_id: newAlbumId,
-				lyrics: editLyrics,
-				prompt: editPrompt,
-				bpm: editBpm,
-				duration: editDuration,
-				key: editKey
+				lyrics: $editLyrics,
+				prompt: $editPrompt,
+				bpm: $editBpm,
+				duration: $editDuration,
+				key: $editKey
 			});
 			songList.update((songs) => [...songs, created]);
 			selectSong(created.id);
 			showNewSong = false;
 			newTitle = '';
-			status = 'Created!';
 		} catch (e) {
-			status = e instanceof Error ? e.message : 'Create failed';
+			error = e instanceof Error ? e.message : 'Create failed';
 		} finally {
-			saving = false;
-			setTimeout(() => (status = ''), 3000);
+			creating = false;
 		}
 	}
-
-	function handleVersionClick(versionId: string): void {
-		const idx = versions.findIndex((v) => v.id === versionId);
-		if (idx !== -1) loadVersion(idx);
-		clearGenerationSelection();
-	}
-
-	// --- Diff state (version compare or Claude apply) ---
-	let diffBase: VersionItem | null = $state(null);
-	let diffTarget: VersionItem | null = $state(null);
-
-	const diffMode = $derived(diffBase !== null && diffTarget !== null);
-
-	function handleDiffChange(pair: [VersionItem, VersionItem] | null): void {
-		if (pair) {
-			[diffBase, diffTarget] = pair;
-		} else {
-			diffBase = null;
-			diffTarget = null;
-		}
-	}
-
-	// Applied diff from Claude (synthetic version-like objects)
-	let appliedDiffBase: VersionItem | null = $state(null);
-	let appliedDiffTarget: VersionItem | null = $state(null);
-
-	const appliedDiffMode = $derived(appliedDiffBase !== null && appliedDiffTarget !== null);
-
-	function handleApply(data: ApplyData): void {
-		const before: VersionItem = {
-			id: 'before',
-			version_number: 0,
-			lyrics: editLyrics,
-			prompt: editPrompt,
-			bpm: editBpm,
-			duration: editDuration,
-			key: editKey,
-			created_at: null
-		};
-		if (data.lyrics !== undefined) editLyrics = data.lyrics;
-		if (data.prompt !== undefined) editPrompt = data.prompt;
-		if (data.bpm !== undefined) editBpm = data.bpm;
-		if (data.duration !== undefined) editDuration = data.duration;
-		if (data.key !== undefined) editKey = data.key;
-		const after: VersionItem = {
-			id: 'after',
-			version_number: 0,
-			lyrics: editLyrics,
-			prompt: editPrompt,
-			bpm: editBpm,
-			duration: editDuration,
-			key: editKey,
-			created_at: null
-		};
-		appliedDiffBase = before;
-		appliedDiffTarget = after;
-	}
-
-	function dismissAppliedDiff(): void {
-		appliedDiffBase = null;
-		appliedDiffTarget = null;
-	}
-
-	// Active diff source (version compare takes priority over applied)
-	const activeDiff = $derived.by((): { old: VersionItem; new: VersionItem } | null => {
-		if (diffBase && diffTarget) return { old: diffBase, new: diffTarget };
-		if (appliedDiffBase && appliedDiffTarget)
-			return { old: appliedDiffBase, new: appliedDiffTarget };
-		return null;
-	});
 
 	const songContext = $derived(
 		song
-			? `Song: ${song.title}\nAlbum: ${song.album_title}\nStyle: ${editPrompt}\nKey: ${editKey}\nBPM: ${editBpm}\n\nLyrics:\n${editLyrics}`
+			? `Song: ${song.title}\nAlbum: ${song.album_title}\nStyle: ${$editPrompt}\nKey: ${$editKey}\nBPM: ${$editBpm}\n\nLyrics:\n${$editLyrics}`
 			: ''
 	);
 </script>
@@ -285,8 +145,8 @@
 							<option value={a.id}>{a.title}</option>
 						{/each}
 					</select>
-					<button onclick={handleCreate} disabled={saving || !newTitle.trim() || !newAlbumId}>
-						{saving ? 'Creating...' : 'Create'}
+					<button onclick={handleCreate} disabled={creating || !newTitle.trim() || !newAlbumId}>
+						{creating ? 'Creating...' : 'Create'}
 					</button>
 				</div>
 			</div>
@@ -300,13 +160,13 @@
 						<span class="song-album">{song.album_title} · {song.artist}</span>
 					</div>
 					<div class="detail-actions">
-						{#if isDirty && !activeGen}
-							<button class="save-btn" onclick={handleSave} disabled={saving}>
-								{saving ? 'Saving...' : 'Save'}
+						{#if dirty && !activeGen}
+							<button class="save-btn" onclick={onSave} disabled={isSaving}>
+								{isSaving ? 'Saving...' : 'Save'}
 							</button>
 						{/if}
-						{#if status}
-							<span class="status-msg">{status}</span>
+						{#if statusMsg}
+							<span class="status-msg">{statusMsg}</span>
 						{/if}
 						{#if !activeGen}
 							<button
@@ -322,29 +182,29 @@
 				</div>
 
 				{#if activeGen}
-					<GenerationDetail generation={activeGen} onversionclick={handleVersionClick} />
+					<GenerationDetail generation={activeGen} onversionclick={onVersionClick} />
 				{:else}
 					<div class="lyrics-edit">
-						{#if versions.length > 0}
+						{#if vers.length > 0}
 							<VersionTimeline
-								{versions}
-								currentIndex={currentVersionIndex}
-								dirty={isDirty}
+								versions={vers}
+								currentIndex={verIndex}
+								{dirty}
 								onselect={loadVersion}
 								ondiff={handleDiffChange}
-								ondelete={handleDeleteVersion}
+								ondelete={onDeleteVersion}
 							/>
 						{/if}
 
-						{#if appliedDiffMode && !diffMode}
+						{#if isAppliedDiff && !isDiffMode}
 							<div class="diff-banner">
 								<span>Claude applied changes</span>
 							</div>
 						{/if}
 
-						{#if activeDiff}
-							{@const d = activeDiff}
-							{@const isVer = diffMode}
+						{#if diff}
+							{@const d = diff}
+							{@const isVer = isDiffMode}
 							{@const oldLabel = isVer ? `v${d.old.version_number}` : 'Before'}
 							{@const newLabel = isVer ? `v${d.new.version_number}` : 'After'}
 
@@ -396,29 +256,29 @@
 								{/if}
 							</div>
 						{:else}
-							<label class="edit-field" class:changed={editPrompt !== savedPrompt}>
-								<span>Style Prompt {editPrompt !== savedPrompt ? '●' : ''}</span>
-								<textarea rows="4" bind:value={editPrompt}></textarea>
+							<label class="edit-field" class:changed={$editPrompt !== $editPrompt}>
+								<span>Style Prompt</span>
+								<textarea rows="4" bind:value={$editPrompt}></textarea>
 							</label>
 
 							<div class="params-row">
-								<label class="edit-field small" class:changed={editBpm !== savedBpm}>
-									<span>BPM {editBpm !== savedBpm ? '●' : ''}</span>
-									<input type="number" bind:value={editBpm} />
+								<label class="edit-field small">
+									<span>BPM</span>
+									<input type="number" bind:value={$editBpm} />
 								</label>
-								<label class="edit-field small" class:changed={editDuration !== savedDuration}>
-									<span>Duration {editDuration !== savedDuration ? '●' : ''}</span>
-									<input type="number" bind:value={editDuration} />
+								<label class="edit-field small">
+									<span>Duration</span>
+									<input type="number" bind:value={$editDuration} />
 								</label>
-								<label class="edit-field small" class:changed={editKey !== savedKey}>
-									<span>Key {editKey !== savedKey ? '●' : ''}</span>
-									<input type="text" bind:value={editKey} />
+								<label class="edit-field small">
+									<span>Key</span>
+									<input type="text" bind:value={$editKey} />
 								</label>
 							</div>
 
-							<label class="edit-field" class:changed={editLyrics !== savedLyrics}>
-								<span>Lyrics {editLyrics !== savedLyrics ? '●' : ''}</span>
-								<textarea class="lyrics-area" rows="15" bind:value={editLyrics}></textarea>
+							<label class="edit-field">
+								<span>Lyrics</span>
+								<textarea class="lyrics-area" rows="15" bind:value={$editLyrics}></textarea>
 							</label>
 						{/if}
 					</div>
@@ -429,7 +289,7 @@
 		{/if}
 	</main>
 
-	{#if showChat && song}
+	{#if showChat && song && !activeGen}
 		<aside class="chat-panel">
 			<ClaudeChat songId={song.id} {songContext} onapply={handleApply} />
 		</aside>
@@ -526,6 +386,12 @@
 		color: var(--text-muted);
 	}
 
+	.detail-actions {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+	}
+
 	.action-btn {
 		width: 36px;
 		height: 36px;
@@ -546,10 +412,22 @@
 		color: var(--success);
 	}
 
-	.detail-actions {
-		display: flex;
-		gap: 8px;
-		align-items: center;
+	.save-btn {
+		padding: 6px 16px;
+		border: 2px solid var(--primary);
+		border-radius: 16px;
+		background: var(--primary);
+		color: #fff;
+		font-family: var(--font-display);
+		font-size: 11px;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.save-btn:disabled {
+		opacity: 0.4;
 	}
 
 	/* Lyrics editor */
@@ -560,9 +438,6 @@
 	}
 
 	.diff-banner {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
 		padding: 6px 10px;
 		background: var(--surface);
 		border: 1px solid var(--border);
@@ -664,33 +539,6 @@
 		line-height: 1.6;
 		min-height: 200px;
 		resize: vertical;
-	}
-
-	.edit-field.changed span {
-		color: var(--score-ok);
-	}
-
-	.edit-field.changed input,
-	.edit-field.changed textarea {
-		border-color: var(--score-ok);
-	}
-
-	.save-btn {
-		padding: 6px 16px;
-		border: 2px solid var(--primary);
-		border-radius: 16px;
-		background: var(--primary);
-		color: #fff;
-		font-family: var(--font-display);
-		font-size: 11px;
-		letter-spacing: 1px;
-		text-transform: uppercase;
-		cursor: pointer;
-		white-space: nowrap;
-	}
-
-	.save-btn:disabled {
-		opacity: 0.4;
 	}
 
 	.chat-panel {

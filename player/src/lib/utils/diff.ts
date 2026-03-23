@@ -3,9 +3,16 @@ export interface DiffLine {
 	text: string;
 }
 
+function trimTrailingEmpty(lines: string[]): string[] {
+	while (lines.length > 0 && lines[lines.length - 1] === '') {
+		lines.pop();
+	}
+	return lines;
+}
+
 export function computeDiff(oldText: string, newText: string): DiffLine[] {
-	const oldLines = oldText.split('\n');
-	const newLines = newText.split('\n');
+	const oldLines = trimTrailingEmpty(oldText.split('\n'));
+	const newLines = trimTrailingEmpty(newText.split('\n'));
 
 	const lcs = lcsMatrix(oldLines, newLines);
 	return buildDiff(oldLines, newLines, lcs);

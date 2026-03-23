@@ -91,7 +91,8 @@
 	}
 
 	function handleEnded(): void {
-		// Could auto-advance to next generation
+		isPlaying = false;
+		isAudioPlaying.set(false);
 	}
 </script>
 
