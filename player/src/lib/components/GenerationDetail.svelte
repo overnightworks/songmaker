@@ -6,9 +6,10 @@
 		scoring?: boolean;
 		onversionclick?: (versionId: string) => void;
 		onscore?: (genId: string) => void;
+		onpick?: (genId: string, picked: boolean) => void;
 	}
 
-	let { generation, scoring = false, onversionclick, onscore }: Props = $props();
+	let { generation, scoring = false, onversionclick, onscore, onpick }: Props = $props();
 
 	const scores = $derived(generation.scores);
 	const params = $derived(generation.generation_params);
@@ -77,9 +78,23 @@
 
 <div class="gen-detail">
 	<div class="gen-header">
-		<h4 class="gen-heading">
-			Generation {generation.generation_number}
-		</h4>
+		<div class="gen-header-left">
+			<h4 class="gen-heading">
+				Generation {generation.generation_number}
+			</h4>
+			{#if onpick}
+				<button
+					class="pick-btn"
+					class:picked={generation.is_picked}
+					onclick={() => onpick(generation.id, !generation.is_picked)}
+					aria-label={generation.is_picked ? 'Unpick as album version' : 'Pick as album version'}
+				>
+					{generation.is_picked ? '★ Album Pick' : '☆ Pick for Album'}
+				</button>
+			{:else if generation.is_picked}
+				<span class="picked-badge">★ Album Pick</span>
+			{/if}
+		</div>
 		<div class="gen-meta">
 			{#if generation.version_number !== null}
 				{#if onversionclick && generation.version_id}
@@ -188,6 +203,41 @@
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 6px;
+	}
+
+	.gen-header-left {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+
+	.pick-btn {
+		padding: 3px 12px;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: none;
+		color: var(--text-dim);
+		font-size: 11px;
+		font-family: var(--font-display);
+		cursor: pointer;
+		letter-spacing: 0.5px;
+	}
+
+	.pick-btn:hover {
+		border-color: var(--score-ok);
+		color: var(--score-ok);
+	}
+
+	.pick-btn.picked {
+		border-color: var(--score-ok);
+		background: var(--score-ok-bg);
+		color: var(--score-ok);
+	}
+
+	.picked-badge {
+		font-size: 11px;
+		color: var(--score-ok);
+		font-family: var(--font-display);
 	}
 
 	.gen-heading {

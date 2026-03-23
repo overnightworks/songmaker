@@ -18,6 +18,7 @@ from songmaker_cli.claude.provider import (
 from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
     album_to_dict,
+    cleanup_album,
     create_job,
     create_song,
     delete_generation,
@@ -31,8 +32,10 @@ from songmaker_cli.db.queries import (
     job_to_dict,
     list_albums,
     list_songs,
+    pick_generation,
     save_rating,
     song_to_dict,
+    unpick_generation,
     update_song,
     version_to_dict,
 )
@@ -304,6 +307,45 @@ def api_rate_by_path(
     save_rating(session, gen.id, req.rating, req.notes)
     session.commit()
     return {"status": "ok", "generation": gen_name, "rating": req.rating}
+
+
+# ── Pick ─────────────────────────────────────────────────────────────
+
+
+@router.post("/generations/{gen_id}/pick")
+def api_pick_generation(
+    gen_id: str, session: Session = Depends(_get_session),
+) -> dict:
+    try:
+        pick_generation(session, gen_id)
+    except ValueError:
+        raise HTTPException(404, "Generation not found")
+    session.commit()
+    return {"status": "ok"}
+
+
+@router.post("/generations/{gen_id}/unpick")
+def api_unpick_generation(
+    gen_id: str, session: Session = Depends(_get_session),
+) -> dict:
+    try:
+        unpick_generation(session, gen_id)
+    except ValueError:
+        raise HTTPException(404, "Generation not found")
+    session.commit()
+    return {"status": "ok"}
+
+
+@router.post("/albums/{album_id}/cleanup")
+def api_cleanup_album(
+    album_id: str, session: Session = Depends(_get_session),
+) -> dict:
+    album = get_album(session, album_id)
+    if not album:
+        raise HTTPException(404, "Album not found")
+    count = cleanup_album(session, album_id)
+    session.commit()
+    return {"status": "ok", "deleted": count}
 
 
 # ── Capabilities ─────────────────────────────────────────────────────

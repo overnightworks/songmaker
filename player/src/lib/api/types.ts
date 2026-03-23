@@ -46,6 +46,7 @@ export interface GenerationItem {
 	seed: number | null;
 	status: string;
 	is_archived: boolean;
+	is_picked: boolean;
 	whisper_text: string | null;
 	scores: TrackScores | null;
 	generation_params: GenerationParams | null;

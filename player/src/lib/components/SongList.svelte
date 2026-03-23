@@ -352,7 +352,10 @@
 											▶
 										{/if}
 									</button>
-									<span class="gen-num">gen{gen.generation_number}</span>
+									<span class="gen-num"
+										>{#if gen.is_picked}<span class="gen-picked">★</span
+											>{/if}gen{gen.generation_number}</span
+									>
 									{#if genSortValue(gen)}
 										<span class="gen-badge">{genSortValue(gen)}</span>
 									{/if}
@@ -717,6 +720,10 @@
 		font-family: var(--font-display);
 		color: var(--text-muted);
 		min-width: 32px;
+	}
+
+	.gen-picked {
+		color: var(--score-ok);
 	}
 
 	.gen-badge {

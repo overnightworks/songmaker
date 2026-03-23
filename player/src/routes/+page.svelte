@@ -3,9 +3,12 @@
 	import {
 		fetchAlbums,
 		fetchSongs,
+		fetchSong,
 		createSong,
 		generateSong,
-		scoreGeneration
+		scoreGeneration,
+		pickGeneration,
+		unpickGeneration
 	} from '$lib/api/client';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import {
@@ -104,6 +107,21 @@
 			trackJob(job, { songId: song.id });
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Generation failed';
+		}
+	}
+
+	async function onPick(genId: string, picked: boolean): Promise<void> {
+		if (!song) return;
+		try {
+			if (picked) {
+				await pickGeneration(genId);
+			} else {
+				await unpickGeneration(genId);
+			}
+			const updated = await fetchSong(song.id);
+			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Pick failed';
 		}
 	}
 
@@ -262,6 +280,7 @@
 						scoring={genScoring}
 						onversionclick={onVersionClick}
 						onscore={onScore}
+						onpick={onPick}
 					/>
 				{:else}
 					<div class="lyrics-edit">

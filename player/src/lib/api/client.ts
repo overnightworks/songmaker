@@ -103,6 +103,18 @@ export async function fetchJob(jobId: string): Promise<JobStatus> {
 	return apiFetch<JobStatus>(`/api/jobs/${jobId}`);
 }
 
+export async function pickGeneration(genId: string): Promise<void> {
+	await apiFetch(`/api/generations/${genId}/pick`, { method: 'POST' });
+}
+
+export async function unpickGeneration(genId: string): Promise<void> {
+	await apiFetch(`/api/generations/${genId}/unpick`, { method: 'POST' });
+}
+
+export async function cleanupAlbum(albumId: string): Promise<{ deleted: number }> {
+	return apiFetch<{ deleted: number }>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
+}
+
 export async function rateGeneration(
 	album: string,
 	genName: string,

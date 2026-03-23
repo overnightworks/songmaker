@@ -109,6 +109,7 @@ class Generation(Base):
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="completed")
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_picked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     song: Mapped[Song] = relationship(back_populates="generations")

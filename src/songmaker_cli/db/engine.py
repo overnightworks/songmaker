@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.db.models import Base
@@ -28,10 +28,21 @@ def init_db(db_path: Path) -> sessionmaker[Session]:
     url = f"sqlite:///{db_path}"
     engine = create_engine(url, echo=False)
     Base.metadata.create_all(engine)
+    _migrate_schema(engine)
     _session_factory = sessionmaker(bind=engine)
 
     log.info("Database initialized: %s", db_path)
     return _session_factory
+
+
+def _migrate_schema(engine) -> None:
+    """Add columns that may be missing from older databases."""
+    inspector = inspect(engine)
+    columns = {c["name"] for c in inspector.get_columns("generations")}
+    if "is_picked" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE generations ADD COLUMN is_picked BOOLEAN DEFAULT 0"))
+        log.info("Migration: added is_picked column to generations")
 
 
 def get_session_factory() -> sessionmaker[Session]:

@@ -269,6 +269,41 @@ def save_scores(session: Session, generation_id: str, scores: dict) -> None:
     session.flush()
 
 
+# ── Pick ─────────────────────────────────────────────────────────────
+
+
+def pick_generation(session: Session, generation_id: str) -> None:
+    gen = session.query(Generation).filter_by(id=generation_id).first()
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    session.query(Generation).filter_by(song_id=gen.song_id).update({"is_picked": False})
+    gen.is_picked = True
+    session.flush()
+
+
+def unpick_generation(session: Session, generation_id: str) -> None:
+    gen = session.query(Generation).filter_by(id=generation_id).first()
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    gen.is_picked = False
+    session.flush()
+
+
+def cleanup_album(session: Session, album_id: str) -> int:
+    """Delete all non-picked generations for an album. Returns count deleted."""
+    gens = (
+        session.query(Generation)
+        .join(Song)
+        .filter(Song.album_id == album_id, Generation.is_picked == False)  # noqa: E712
+        .all()
+    )
+    count = len(gens)
+    for gen in gens:
+        session.delete(gen)
+    session.flush()
+    return count
+
+
 # ── Serialization ────────────────────────────────────────────────────
 
 
@@ -292,6 +327,7 @@ def generation_to_dict(gen: Generation) -> dict:
         "seed": gen.seed,
         "status": gen.status,
         "is_archived": gen.is_archived,
+        "is_picked": gen.is_picked,
         "whisper_text": gen.whisper_text,
         "scores": scores_dict if scores_dict else None,
         "generation_params": gen.generation_params,
