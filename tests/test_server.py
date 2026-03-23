@@ -74,10 +74,10 @@ def test_get_audio_path_traversal(server_app: TestClient) -> None:
 def test_rate_version(server_app: TestClient) -> None:
     resp = server_app.post(
         "/rate/test_album/01_song_v1",
-        json={"rating": 4, "notes": "great song"},
+        json={"rating": 72.5, "notes": "great groove, voice a bit robotic"},
     )
     assert resp.status_code == 200
-    assert resp.json()["rating"] == 4
+    assert resp.json()["rating"] == 72.5
 
 
 def test_rate_version_not_found(server_app: TestClient) -> None:

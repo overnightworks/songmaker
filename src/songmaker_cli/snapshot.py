@@ -192,8 +192,8 @@ def append_scores_section(snapshot_path: Path, scores: SongScores) -> None:
     log.info("Scores written to %s", snapshot_path.name)
 
 
-def save_rating(snapshot_path: Path, rating: int, notes: str = "") -> None:
-    """Write user_rating (and optional notes) into the ## Scores section.
+def save_rating(snapshot_path: Path, rating: float, notes: str = "") -> None:
+    """Write user_rating (0-100) and optional notes into the ## Scores section.
 
     Idempotent — replaces existing user_rating/user_notes if present.
     Creates ## Scores section if none exists.
@@ -208,7 +208,7 @@ def save_rating(snapshot_path: Path, rating: int, notes: str = "") -> None:
         existing["user_notes"] = notes
 
     _write_scores(snapshot_path, before, existing)
-    log.info("Rating saved: %s = %d stars", snapshot_path.name, rating)
+    log.info("Rating saved: %s = %.1f/100", snapshot_path.name, rating)
 
 
 def read_scores(snapshot_path: Path) -> dict[str, object] | None:

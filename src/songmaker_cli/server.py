@@ -37,9 +37,9 @@ log = logging.getLogger(__name__)
 
 
 class RatingRequest(BaseModel):
-    """Star rating from the player UI."""
+    """Rating from the player UI (0-100 scale)."""
 
-    rating: int = Field(ge=1, le=5)
+    rating: float = Field(ge=0, le=100)
     notes: str = ""
 
 
