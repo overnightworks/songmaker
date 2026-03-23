@@ -159,6 +159,44 @@ def _generate_versions(
     return generated
 
 
+@dataclass(frozen=True)
+class GenerationResult:
+    """Result of a single generation cycle."""
+
+    mp3_path: Path
+    seed: int
+    duration: float
+    output_paths: OutputPaths
+
+
+def generate_single(
+    meta: SongMeta,
+    album_meta: AlbumMeta,
+    ace_config: AceStepConfig,
+    output_root: Path,
+    client: AceStepClient | None = None,
+) -> GenerationResult:
+    """Generate a single MP3 from config. Returns paths and metadata."""
+    if client is None:
+        client = AceStepClient()
+    if not client.is_available:
+        raise GenerationError("ACE-Step server is not reachable")
+
+    base_name = meta.title.lower().replace(" ", "_")
+    paths = resolve_output_paths(meta.album, base_name, output_root=output_root)
+    ace_result, elapsed = _run_generation(ace_config, client)
+    audio = _decode_audio(ace_result)
+    _write_output(audio, ace_result.seed, paths, meta, album_meta)
+
+    log.info("Generated: %s (seed=%s, %.0fs)", paths.mp3.name, ace_result.seed, elapsed)
+    return GenerationResult(
+        mp3_path=paths.mp3,
+        seed=ace_result.seed,
+        duration=audio.duration,
+        output_paths=paths,
+    )
+
+
 def _log_generation_banner(
     meta: SongMeta, paths: OutputPaths, ace_config: AceStepConfig,
 ) -> None:

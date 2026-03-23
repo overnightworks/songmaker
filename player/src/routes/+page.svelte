@@ -244,8 +244,12 @@
 								<button
 									class="generate-btn"
 									onclick={onGenerate}
-									disabled={isGenerating || dirty}
-									title={dirty ? 'Save changes before generating' : ''}
+									disabled={isGenerating || dirty || !song?.lyrics || !song?.prompt}
+									title={dirty
+										? 'Save changes before generating'
+										: !song?.lyrics || !song?.prompt
+											? 'Add lyrics and style prompt first'
+											: ''}
 								>
 									{isGenerating ? 'Generating...' : 'Generate'}
 								</button>

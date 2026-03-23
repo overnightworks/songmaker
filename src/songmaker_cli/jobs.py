@@ -37,8 +37,6 @@ def run_generation_job(
             album_artist = album.artist if album else ""
             song_title = song.title
             track_number = song.track_number
-            base_name = song_title.lower().replace(" ", "_")
-
             lyrics = version.lyrics
             prompt = version.prompt
             bpm = version.bpm
@@ -47,7 +45,7 @@ def run_generation_job(
             language = song.language
 
         from acestep_engine import AceStepClient
-        from songmaker_cli.config import build_ace_config, find_project_root, resolve_output_paths
+        from songmaker_cli.config import build_ace_config, find_project_root
         from songmaker_cli.parser import SongMeta
 
         meta = SongMeta(
@@ -75,21 +73,18 @@ def run_generation_job(
         project_root = find_project_root(Path.cwd())
         output_root = (project_root / OUTPUT_ROOT) if project_root else Path(OUTPUT_ROOT)
 
+        from songmaker_cli.generate import generate_single
+        from songmaker_cli.parser import AlbumMeta
+
+        album_meta = AlbumMeta(title=album_name, artist=album_artist)
+
         for i in range(count):
             progress = i / count
             _update_job(factory, job_id, "running", progress=progress)
 
-            paths = resolve_output_paths(album_name, base_name, output_root=output_root)
+            result = generate_single(meta, album_meta, ace_config, output_root, client=client)
 
-            from songmaker_cli.generate import _decode_audio, _run_generation, _write_output
-            from songmaker_cli.parser import AlbumMeta
-
-            album_meta = AlbumMeta(title=album_name, artist=album_artist)
-            ace_result, elapsed = _run_generation(ace_config, client)
-            audio = _decode_audio(ace_result)
-            _write_output(audio, ace_result.seed, paths, meta, album_meta)
-
-            mp3_rel = f"{album_name}/{paths.mp3.name}"
+            mp3_rel = f"{album_name}/{result.mp3_path.name}"
             gen_params = {
                 "acestep_model": model_name,
                 "bpm": bpm,
@@ -110,12 +105,12 @@ def run_generation_job(
                     song_id=song_id,
                     version_id=version_id,
                     mp3_path=mp3_rel,
-                    seed=ace_result.seed,
+                    seed=result.seed,
                     generation_params=gen_params,
                 )
                 session.commit()
 
-            log.info("Generated %d/%d: %s (seed=%s)", i + 1, count, mp3_rel, ace_result.seed)
+            log.info("Generated %d/%d: %s (seed=%s)", i + 1, count, mp3_rel, result.seed)
 
         _update_job(factory, job_id, "completed", progress=1.0)
 
@@ -167,12 +162,8 @@ def run_scoring_job(
         from songmaker_cli.scoring import run_scoring_pipeline
 
         meta = SongMeta(**meta_kwargs) if meta_kwargs else None
-        scores = run_scoring_pipeline(mp3_full, meta=meta, scorers=scorers)
-
-        scores_dict = {}
-        for scorer_name, scorer_scores in scores.items():
-            if isinstance(scorer_scores, dict):
-                scores_dict.update(scorer_scores)
+        song_scores = run_scoring_pipeline(mp3_full, meta=meta, scorers=scorers)
+        scores_dict = song_scores.to_dict()
 
         with factory() as session:
             from songmaker_cli.db.queries import save_scores
@@ -188,7 +179,10 @@ def run_scoring_job(
 
 
 def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
-    with factory() as session:
-        from songmaker_cli.db.queries import update_job_status
-        update_job_status(session, job_id, status, **kwargs)
-        session.commit()
+    try:
+        with factory() as session:
+            from songmaker_cli.db.queries import update_job_status
+            update_job_status(session, job_id, status, **kwargs)
+            session.commit()
+    except Exception:
+        log.exception("Failed to update job %s to %s", job_id, status)

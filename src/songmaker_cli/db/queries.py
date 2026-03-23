@@ -257,8 +257,15 @@ def create_generation(
 
 
 def save_scores(session: Session, generation_id: str, scores: dict) -> None:
-    score = Score(generation_id=generation_id, scorer="batch", value=scores)
-    session.add(score)
+    existing = (
+        session.query(Score)
+        .filter_by(generation_id=generation_id, scorer="batch")
+        .first()
+    )
+    if existing:
+        existing.value = scores
+    else:
+        session.add(Score(generation_id=generation_id, scorer="batch", value=scores))
     session.flush()
 
 
