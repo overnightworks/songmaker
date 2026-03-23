@@ -257,6 +257,8 @@ def create_generation(
 
 
 def save_scores(session: Session, generation_id: str, scores: dict) -> None:
+    from sqlalchemy.orm.attributes import flag_modified
+
     existing = (
         session.query(Score)
         .filter_by(generation_id=generation_id, scorer="batch")
@@ -264,6 +266,7 @@ def save_scores(session: Session, generation_id: str, scores: dict) -> None:
     )
     if existing:
         existing.value = scores
+        flag_modified(existing, "value")
     else:
         session.add(Score(generation_id=generation_id, scorer="batch", value=scores))
     session.flush()

@@ -331,6 +331,38 @@ def test_save_scores_upsert(seeded_session: Session) -> None:
     assert batch_scores[0].value["dynamics"] == 99.0
 
 
+def test_save_scores_upsert_persists(db_session: Session) -> None:
+    """Verify score upsert actually persists to DB (not just in-memory)."""
+    from songmaker_cli.db.engine import get_session_factory
+
+    album = Album(id="t2", title="T2", artist="A")
+    db_session.add(album)
+    song = Song(id="s2", title="S2", album_id="t2", track_number=1)
+    db_session.add(song)
+    ver = Version(id="v2", song_id="s2", version_number=1, lyrics="x", prompt="y")
+    db_session.add(ver)
+    gen = Generation(
+        id="gx", song_id="s2", version_id="v2", generation_number=1,
+        mp3_path="t2/test.mp3",
+    )
+    db_session.add(gen)
+    score = Score(id="scx", generation_id="gx", scorer="batch", value={"old": 1.0})
+    db_session.add(score)
+    db_session.commit()
+    db_session.close()
+
+    factory = get_session_factory()
+    with factory() as s2:
+        save_scores(s2, "gx", {"new": 99.0})
+        s2.commit()
+
+    with factory() as s3:
+        reloaded = get_generation(s3, "gx")
+        batch = [s for s in reloaded.scores if s.scorer == "batch"]
+        assert len(batch) == 1
+        assert batch[0].value == {"new": 99.0}
+
+
 def test_generation_to_dict_has_is_picked(seeded_session: Session) -> None:
     gen = get_generation(seeded_session, "g1")
     d = generation_to_dict(gen)
