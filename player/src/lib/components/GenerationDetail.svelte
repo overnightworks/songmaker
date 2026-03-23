@@ -159,32 +159,17 @@
 	{/if}
 
 	{#if params}
-		<section class="section">
-			<h5 class="section-title">Parameters</h5>
-			<div class="params-grid">
-				{#if params.acestep_model}
-					<span class="param">model: {params.acestep_model}</span>
-				{/if}
-				{#if params.guidance_scale !== undefined && params.guidance_scale !== null}
-					<span class="param">guidance: {params.guidance_scale}</span>
-				{/if}
-				{#if params.inference_steps !== undefined && params.inference_steps !== null}
-					<span class="param">steps: {params.inference_steps}</span>
-				{/if}
-				{#if params.shift !== undefined && params.shift !== null}
-					<span class="param">shift: {params.shift}</span>
-				{/if}
-				{#if params.lm_temperature !== undefined && params.lm_temperature !== null}
-					<span class="param">temp: {params.lm_temperature}</span>
-				{/if}
-				{#if params.infer_method}
-					<span class="param">method: {params.infer_method}</span>
-				{/if}
-				{#if params.think_mode !== undefined}
-					<span class="param">think: {params.think_mode ? 'on' : 'off'}</span>
-				{/if}
-			</div>
-		</section>
+		{@const entries = Object.entries(params).filter(([, v]) => v !== null && v !== undefined)}
+		{#if entries.length > 0}
+			<section class="section">
+				<h5 class="section-title">Parameters</h5>
+				<div class="params-grid">
+					{#each entries as [key, value] (key)}
+						<span class="param">{key}: {typeof value === 'boolean' ? (value ? 'on' : 'off') : value}</span>
+					{/each}
+				</div>
+			</section>
+		{/if}
 	{/if}
 </div>
 
