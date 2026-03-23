@@ -188,6 +188,7 @@ class GpuQueue:
         env.setdefault("ACESTEP_INIT_LLM", "1")
         env.setdefault("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-4B")
         env.setdefault("ACESTEP_LM_BACKEND", "vllm")
+        env.setdefault("MAX_CUDA_VRAM", "20")
         env.setdefault("ACESTEP_COMPILE_MODEL", "0")
 
         cmd = [*uv, "run", "acestep-api", "--port", str(ACESTEP_PORT)]
