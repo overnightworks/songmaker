@@ -137,11 +137,12 @@ def _is_vocalization(line: str) -> bool:
 def _word_level_accuracy(
     intended: tuple[str, ...], transcribed: tuple[str, ...],
 ) -> float:
-    """Compare intended vs transcribed at word level.
+    """Measure what fraction of intended lyrics were correctly sung.
 
-    Joins all lines into word sequences, filtering out vocalizations
-    (oh, ah, la la). Ignores line boundaries entirely — only words matter.
-    This handles Whisper merging/splitting lines and intro/outro vocalizations.
+    Joins all lines into word sequences, filtering out vocalizations.
+    Uses SequenceMatcher to find matching blocks, then calculates
+    coverage of intended words. Extra sung words (ad-libs, improvisation)
+    are NOT penalized — only missing or misheard intended words count.
     """
     if not intended or not transcribed:
         return 0.0
@@ -158,12 +159,12 @@ def _word_level_accuracy(
     if not trans_words:
         return 0.0
 
-    # Two comparisons — take the higher score:
-    # 1. Character-level (handles compound words like streetlights/street lights)
-    # 2. Word-level (handles partial transcriptions where Whisper misses sections)
-    char_ratio = SequenceMatcher(None, "".join(intended_words), "".join(trans_words)).ratio()
-    word_ratio = SequenceMatcher(None, intended_words, trans_words).ratio()
-    return max(char_ratio, word_ratio)
+    # Count how many intended words were found in the transcription
+    # (order-preserving match via SequenceMatcher)
+    sm = SequenceMatcher(None, intended_words, trans_words)
+    matched_intended = sum(size for _, _, size in sm.get_matching_blocks())
+
+    return matched_intended / len(intended_words)
 
 
 _HALLUCINATION_PHRASES = frozenset({

@@ -165,9 +165,6 @@
 
 	function handleGenSelect(gen: GenerationItem, song: SongItem): void {
 		selectGenerationInSidebar(gen, song);
-		if (!isGenPlaying(gen)) {
-			playGeneration(gen, song);
-		}
 	}
 
 	let confirmDeleteGenId: string | null = $state(null);
