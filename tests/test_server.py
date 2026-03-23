@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from songmaker_cli.db.engine import init_db, reset_engine
+from songmaker_cli.db.models import Album, Score, Song, SongRevision, Version
 from songmaker_cli.server import create_app
 
 
 @pytest.fixture()
 def server_app(tmp_path: Path) -> TestClient:
-    """Create a test server with a minimal project layout."""
+    """Create a test server with DB and a minimal project layout."""
+    reset_engine()
     output_dir = tmp_path / "_output"
     album_dir = output_dir / "test_album"
     album_dir.mkdir(parents=True)
@@ -28,31 +30,38 @@ def server_app(tmp_path: Path) -> TestClient:
     mp3 = album_dir / "01_song_v1.mp3"
     mp3.write_bytes(b"\xff\xfb\x90\x00" * 100)
 
-    snapshot = album_dir / "01_song_v1.md"
-    snapshot.write_text(
-        "---\ntitle: Test\n---\n\n## Lyrics\n\nHello\n\n"
-        "## Generation\n\n- seed: 42\n\n"
-        "## Scores\n\n- dynamics: 48.9\n- silence_ok: True\n"
-    )
+    # SvelteKit build placeholder
+    sk_dir = project_root / "player" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>SvelteKit Player</html>")
 
-    manifest = {"albums": [{"id": "test_album", "title": "Test", "tracks": []}]}
-    (output_dir / "manifest.json").write_text(json.dumps(manifest))
-    (output_dir / "player.html").write_text("<html>player</html>")
+    # Init DB with test data
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        album = Album(id="test_album", title="Test", artist="Test")
+        session.add(album)
+        song = Song(id="s1", title="Song", album_id="test_album", track_number=1)
+        session.add(song)
+        rev = SongRevision(id="r1", song_id="s1", lyrics="Hello")
+        session.add(rev)
+        version = Version(
+            id="v1", song_id="s1", revision_id="r1", version_number=1,
+            mp3_path="test_album/01_song_v1.mp3", seed=42,
+        )
+        session.add(version)
+        score = Score(id="sc1", version_id="v1", scorer="batch", value={"dynamics": 48.9})
+        session.add(score)
+        session.commit()
 
     app = create_app(output_dir, project_root)
-    return TestClient(app)
-
-
-def test_get_manifest(server_app: TestClient) -> None:
-    resp = server_app.get("/manifest.json")
-    assert resp.status_code == 200
-    assert "albums" in resp.json()
+    yield TestClient(app)
+    reset_engine()
 
 
 def test_get_player(server_app: TestClient) -> None:
     resp = server_app.get("/")
     assert resp.status_code == 200
-    assert "player" in resp.text
+    assert "SvelteKit" in resp.text
 
 
 def test_get_audio(server_app: TestClient) -> None:
@@ -71,18 +80,26 @@ def test_get_audio_path_traversal(server_app: TestClient) -> None:
     assert resp.status_code in (403, 404, 422)
 
 
-def test_rate_version(server_app: TestClient) -> None:
+def test_api_albums(server_app: TestClient) -> None:
+    resp = server_app.get("/api/albums")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["id"] == "test_album"
+
+
+def test_api_rate_version(server_app: TestClient) -> None:
     resp = server_app.post(
-        "/rate/test_album/01_song_v1",
-        json={"rating": 72.5, "notes": "great groove, voice a bit robotic"},
+        "/api/rate/test_album/01_song_v1",
+        json={"rating": 72.5, "notes": "great groove"},
     )
     assert resp.status_code == 200
     assert resp.json()["rating"] == 72.5
 
 
-def test_rate_version_not_found(server_app: TestClient) -> None:
+def test_api_rate_not_found(server_app: TestClient) -> None:
     resp = server_app.post(
-        "/rate/test_album/nonexistent",
+        "/api/rate/test_album/nonexistent",
         json={"rating": 3},
     )
     assert resp.status_code == 404

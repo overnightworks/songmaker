@@ -12,8 +12,7 @@ from cyclopts import App, Parameter
 from songmaker_cli.config import find_project_root, validate_path
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import SongmakerError, ValidationError
-from songmaker_cli.generate import GenerationOptions, open_player, run_generate
-from songmaker_cli.player import generate_player
+from songmaker_cli.generate import GenerationOptions, run_generate
 
 log = logging.getLogger(__name__)
 
@@ -67,33 +66,28 @@ def generate(
 
 @app.command
 def player(
-    output: Annotated[
-        str, Parameter(name=["-o", "--output"], help="Output directory")
-    ] = "",
     root: Annotated[
         Optional[str], Parameter(help="Project root")
     ] = None,
-    open_browser: Annotated[
-        bool, Parameter(name="--open", help="Open player in browser")
-    ] = False,
 ) -> None:
-    """Generate the unified HTML player for all albums."""
-    if output:
-        output_dir = Path(output).resolve()
+    """Build the SvelteKit player frontend."""
+    import subprocess
+
+    if root:
+        project_root_path = Path(root).resolve()
     else:
-        project_root_found = find_project_root(Path.cwd())
-        output_dir = (project_root_found / OUTPUT_ROOT if project_root_found
-                      else Path(OUTPUT_ROOT)).resolve()
+        project_root_path = find_project_root(Path.cwd()) or Path.cwd()
+    player_dir = project_root_path / "player"
+    if not player_dir.exists():
+        raise ValidationError(f"Player directory not found: {player_dir}")
 
-    if not output_dir.exists():
-        raise ValidationError(f"{output_dir} not found")
-
-    project_root = Path(root).resolve() if root else None
-    player_path = generate_player(output_dir, project_root)
-    log.info("Player generated: %s", player_path)
-
-    if open_browser:
-        open_player(player_path)
+    log.info("Building SvelteKit player...")
+    result = subprocess.run(
+        ["pnpm", "build"], cwd=str(player_dir), capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValidationError(f"Player build failed:\n{result.stderr}")
+    log.info("Player built: %s/build/", player_dir)
 
 
 @app.command
@@ -168,8 +162,7 @@ def archive(
     else:
         raise ValidationError("Provide an MP3 path or use --below <threshold>")
 
-    generate_player(output_dir, project_root)
-    log.info("Player updated")
+    log.info("Archive complete")
 
 
 @app.command

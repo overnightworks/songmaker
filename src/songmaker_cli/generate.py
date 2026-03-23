@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,7 +23,6 @@ from songmaker_cli.config import (
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.parser import AlbumMeta, SongMeta, load_album_meta, parse_song_md
-from songmaker_cli.player import generate_player
 from songmaker_cli.snapshot import write_snapshot
 
 log = logging.getLogger(__name__)
@@ -121,10 +119,7 @@ def run_generate(path: str, opts: GenerationOptions | None = None) -> None:
     )
 
     if generated:
-        last_paths = generated[-1][0]
-        player_path = _update_player(last_paths)
-        if opts.player:
-            open_player(player_path)
+        log.info("Generation complete — %d version(s)", len(generated))
 
 
 def _generate_versions(
@@ -240,13 +235,3 @@ def _log_result_banner(
     log.info("=" * 60)
 
 
-def _update_player(paths: OutputPaths) -> Path:
-    player_path = generate_player(paths.output_dir.parent)
-    log.info("Player updated: %s", player_path)
-    return player_path
-
-
-def open_player(player_path: Path) -> None:
-    url = player_path.resolve().as_uri()
-    log.info("Opening player: %s", url)
-    webbrowser.open(url)

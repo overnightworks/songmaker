@@ -18,10 +18,8 @@ from songmaker_cli.generate import (
     _log_generation_banner,
     _log_result_banner,
     _run_generation,
-    _update_player,
     _write_output,
     load_album_meta_for_song,
-    open_player,
     validate_song_meta,
 )
 from songmaker_cli.main import main
@@ -187,27 +185,6 @@ def test_log_result_banner(caplog: pytest.LogCaptureFixture) -> None:
     assert "42" in caplog.text
 
 
-def test_open_player(tmp_path: Path) -> None:
-    player_html = tmp_path / "player.html"
-    player_html.write_text("<html></html>")
-    with patch("songmaker_cli.generate.webbrowser.open") as mock_open:
-        open_player(player_html)
-    mock_open.assert_called_once()
-
-
-def test_update_player(tmp_path: Path) -> None:
-    from songmaker_cli.config import OutputPaths
-
-    output_dir = tmp_path / "album"
-    output_dir.mkdir()
-    paths = OutputPaths(
-        output_dir=output_dir, base_name="song", version=1, versioned_name="song_v1",
-    )
-    with patch("songmaker_cli.generate.generate_player") as mock_gen:
-        mock_gen.return_value = tmp_path / "player.html"
-        result = _update_player(paths)
-    assert result == tmp_path / "player.html"
-
 
 def test_run_generation_success() -> None:
     import json
@@ -265,42 +242,11 @@ def test_run_generation_error() -> None:
             _run_generation(config, client)
 
 
-def test_player_command(tmp_path: Path) -> None:
-    from songmaker_cli.main import player as player_cmd
-
-    output_dir = tmp_path / "output"
-    output_dir.mkdir()
-
-    with patch("songmaker_cli.main.generate_player") as mock_gen:
-        mock_gen.return_value = output_dir / "player.html"
-        player_cmd(output=str(output_dir))
-
-    mock_gen.assert_called_once()
-
-
 def test_player_command_not_found() -> None:
     from songmaker_cli.main import player as player_cmd
 
     with pytest.raises(ValidationError, match="not found"):
-        player_cmd(output="/nonexistent/path")
-
-
-def test_player_command_with_open(tmp_path: Path) -> None:
-    from songmaker_cli.main import player as player_cmd
-
-    output_dir = tmp_path / "output"
-    output_dir.mkdir()
-    player_html = output_dir / "player.html"
-    player_html.write_text("<html></html>")
-
-    with (
-        patch("songmaker_cli.main.generate_player") as mock_gen,
-        patch("songmaker_cli.generate.webbrowser.open") as mock_open,
-    ):
-        mock_gen.return_value = player_html
-        player_cmd(output=str(output_dir), open_browser=True)
-
-    mock_open.assert_called_once()
+        player_cmd(root="/nonexistent/path")
 
 
 def test_check_command(tmp_path: Path) -> None:

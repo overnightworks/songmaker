@@ -205,10 +205,7 @@ def score_all(
     1. Auto-detect GPU if available
     2. Whisper transcription pass (loads model once, transcribes all, unloads)
     3. Score each song with remaining scorers
-    4. Rebuild player
     """
-    from songmaker_cli.player import generate_player
-
     project_root = find_project_root(Path.cwd()) or Path.cwd()
     output_dir = project_root / OUTPUT_ROOT
 
@@ -255,5 +252,3 @@ def score_all(
         scored += 1
 
     log.info("Done: %d scored, %d skipped (already scored)", scored, skipped)
-    generate_player(output_dir, project_root)
-    log.info("Player updated")

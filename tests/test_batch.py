@@ -49,7 +49,6 @@ def test_score_all_skips_already_scored(tmp_path: Path) -> None:
     with (
         patch("songmaker_cli.batch.find_project_root", return_value=tmp_path),
         patch("songmaker_cli.batch.run_scoring_pipeline", return_value=mock_scores) as mock_run,
-        patch("songmaker_cli.player.generate_player"),
     ):
         from songmaker_cli.batch import score_all
 
@@ -70,7 +69,6 @@ def test_score_all_force_rescores(tmp_path: Path) -> None:
         patch("songmaker_cli.batch.find_project_root", return_value=tmp_path),
         patch("songmaker_cli.batch.run_scoring_pipeline", return_value=mock_scores) as mock_run,
         patch("songmaker_cli.batch.append_scores_section"),
-        patch("songmaker_cli.player.generate_player"),
     ):
         from songmaker_cli.batch import score_all
 
