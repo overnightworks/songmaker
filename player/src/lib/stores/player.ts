@@ -51,6 +51,18 @@ export function playBrowsingTrack(): void {
 	playTrack(get(browsingAlbumIndex), get(browsingTrackIndex));
 }
 
+export function updateTrackScores(file: string, update: Record<string, number | string>): void {
+	albums.update((allAlbums) =>
+		allAlbums.map((album) => ({
+			...album,
+			tracks: album.tracks.map((track) => {
+				if (track.file !== file) return track;
+				return { ...track, scores: { ...track.scores, ...update } };
+			})
+		}))
+	);
+}
+
 export function nextTrack(): boolean {
 	const pb = get(playback);
 	if (!pb) return false;

@@ -209,6 +209,9 @@
 					<ScoresBadge value={sortMetric.getValue(track) as number} />
 				{/if}
 				<span class="song-name">{track.title}</span>
+				{#if track.scores?.user_rating}
+					<span class="user-rating">★{track.scores.user_rating.toFixed(1)}</span>
+				{/if}
 			</button>
 		</div>
 	{:else}
@@ -459,6 +462,14 @@
 		flex: 1;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.user-rating {
+		font-size: 10px;
+		font-family: var(--font-display);
+		color: var(--score-ok);
+		flex-shrink: 0;
 		white-space: nowrap;
 	}
 

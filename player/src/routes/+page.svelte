@@ -15,7 +15,6 @@
 	import SyncedLyrics from '$lib/components/SyncedLyrics.svelte';
 	import ScoresPanel from '$lib/components/ScoresPanel.svelte';
 	import GenInfoPanel from '$lib/components/GenInfoPanel.svelte';
-	import RatingWidget from '$lib/components/RatingWidget.svelte';
 
 	let loading = $state(true);
 	let error = $state('');
@@ -75,7 +74,6 @@
 
 				<GenInfoPanel generation={track.generation} />
 				<ScoresPanel scores={track.scores} />
-				<RatingWidget />
 
 				<SyncedLyrics lines={track.lines} />
 			</div>
