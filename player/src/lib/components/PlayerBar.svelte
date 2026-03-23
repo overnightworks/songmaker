@@ -7,7 +7,9 @@
 		nextTrack,
 		albums,
 		playbackTime,
-		playbackDuration
+		playbackDuration,
+		selectAlbum,
+		selectTrack
 	} from '$lib/stores/player';
 	import { formatTime } from '$lib/utils/format';
 	import WaveSurfer from 'wavesurfer.js';
@@ -81,6 +83,12 @@
 		wavesurfer.playPause();
 	}
 
+	function navigateToPlaying(): void {
+		if (!pb) return;
+		selectAlbum(pb.albumIndex);
+		selectTrack(pb.trackIndex);
+	}
+
 	function handleEnded(): void {
 		const advanced = nextTrack();
 		if (advanced && wavesurfer) {
@@ -94,14 +102,14 @@
 		{isPlaying ? '⏸' : '▶'}
 	</button>
 
-	<div class="track-info">
+	<button class="track-info" onclick={navigateToPlaying} aria-label="Go to playing track">
 		{#if track}
 			<span class="track-title">{track.title}</span>
 			<span class="track-artist">{albumArtist}</span>
 		{:else}
 			<span class="track-title">No track selected</span>
 		{/if}
-	</div>
+	</button>
 
 	<span class="time">{formatTime(currentTime)}</span>
 	<div class="waveform" bind:this={waveContainer}></div>
@@ -149,6 +157,16 @@
 		min-width: 120px;
 		max-width: 200px;
 		overflow: hidden;
+		background: none;
+		border: none;
+		cursor: pointer;
+		text-align: left;
+		padding: 4px 8px;
+		border-radius: 4px;
+	}
+
+	.track-info:hover {
+		background: var(--surface-hover);
 	}
 
 	.track-title {
