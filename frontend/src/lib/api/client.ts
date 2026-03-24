@@ -7,6 +7,7 @@ import type {
 } from './types';
 import { getClaudeKey } from '$lib/stores/settings';
 
+/* v8 ignore next 4 -- SSR guard, untestable in jsdom */
 const API_KEY =
 	typeof window !== 'undefined'
 		? (new URLSearchParams(window.location.search).get('key') ?? '')
