@@ -51,9 +51,15 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
+_cached_output_dir: Path | None = None
+
+
 def _resolve_output_dir() -> Path:
-    root = find_project_root(Path.cwd())
-    return (root / OUTPUT_ROOT) if root else Path(OUTPUT_ROOT)
+    global _cached_output_dir
+    if _cached_output_dir is None:
+        root = find_project_root(Path.cwd())
+        _cached_output_dir = (root / OUTPUT_ROOT) if root else Path(OUTPUT_ROOT)
+    return _cached_output_dir
 
 
 def _get_session() -> Session:  # type: ignore[misc]

@@ -88,13 +88,22 @@
 		editDefaults = { ...(globalDefaults[model] ?? {}) };
 	}
 
-	function setDefault(key: keyof VersionGenerationParams, raw: string): void {
+	function setDefaultNum(key: keyof VersionGenerationParams, raw: string): void {
 		if (raw === '') {
 			const { [key]: _, ...rest } = editDefaults;
 			editDefaults = rest;
 		} else {
 			const num = Number(raw);
 			if (!isNaN(num)) editDefaults = { ...editDefaults, [key]: num };
+		}
+	}
+
+	function setDefaultVal(key: keyof VersionGenerationParams, val: unknown): void {
+		if (val === undefined || val === '') {
+			const { [key]: _, ...rest } = editDefaults;
+			editDefaults = rest;
+		} else {
+			editDefaults = { ...editDefaults, [key]: val };
 		}
 	}
 
@@ -245,7 +254,7 @@
 							max="200"
 							value={editDefaults.inference_steps ?? ''}
 							placeholder={String(BUILTIN_DEFAULTS[editModel].inference_steps)}
-							oninput={(e) => setDefault('inference_steps', e.currentTarget.value)}
+							oninput={(e) => setDefaultNum('inference_steps', e.currentTarget.value)}
 						/>
 					</label>
 					<label class="setting">
@@ -256,7 +265,7 @@
 							step="0.5"
 							value={editDefaults.guidance_scale ?? ''}
 							placeholder={String(BUILTIN_DEFAULTS[editModel].guidance_scale)}
-							oninput={(e) => setDefault('guidance_scale', e.currentTarget.value)}
+							oninput={(e) => setDefaultNum('guidance_scale', e.currentTarget.value)}
 						/>
 					</label>
 					<label class="setting">
@@ -267,7 +276,7 @@
 							step="0.5"
 							value={editDefaults.shift ?? ''}
 							placeholder={String(BUILTIN_DEFAULTS[editModel].shift)}
-							oninput={(e) => setDefault('shift', e.currentTarget.value)}
+							oninput={(e) => setDefaultNum('shift', e.currentTarget.value)}
 						/>
 					</label>
 					<label class="setting">
@@ -279,8 +288,34 @@
 							step="0.05"
 							value={editDefaults.lm_temperature ?? ''}
 							placeholder={String(BUILTIN_DEFAULTS[editModel].lm_temperature)}
-							oninput={(e) => setDefault('lm_temperature', e.currentTarget.value)}
+							oninput={(e) => setDefaultNum('lm_temperature', e.currentTarget.value)}
 						/>
+					</label>
+					<label class="setting">
+						<span>Infer Method</span>
+						<select
+							value={editDefaults.infer_method ?? ''}
+							onchange={(e) => setDefaultVal('infer_method', e.currentTarget.value || undefined)}
+						>
+							<option value="">default ({BUILTIN_DEFAULTS[editModel].infer_method})</option>
+							<option value="ode">ode</option>
+							<option value="sde">sde</option>
+						</select>
+					</label>
+					<label class="setting checkbox">
+						<input
+							type="checkbox"
+							checked={editDefaults.think_mode ?? BUILTIN_DEFAULTS[editModel].think_mode}
+							onchange={(e) => {
+								const val = e.currentTarget.checked;
+								if (val === BUILTIN_DEFAULTS[editModel].think_mode) {
+									setDefaultVal('think_mode', undefined);
+								} else {
+									setDefaultVal('think_mode', val);
+								}
+							}}
+						/>
+						<span>Think Mode</span>
 					</label>
 				</div>
 
