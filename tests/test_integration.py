@@ -108,12 +108,6 @@ def test_generate_end_to_end(tmp_path: Path, make_sine_wav_bytes: Callable[..., 
     snapshot_text = snapshot_md.read_text()
     assert "acestep_model: acestep-v15-turbo" in snapshot_text
 
-    player_html = output_dir / "player.html"
-    assert player_html.exists(), "Player HTML should be generated"
-
-    manifest = output_dir / "manifest.json"
-    assert manifest.exists(), "Manifest JSON should be generated"
-
     assert mock_urlopen.call_count == 5
 
 

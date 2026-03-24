@@ -60,10 +60,18 @@ JUDGE_PROMPT = (  # noqa: E501
 
 
 def _read_whisper_text(whisper_path: Path) -> str:
-    from songmaker_cli.manifest import _parse_whisper_file
-
-    lines = _parse_whisper_file(whisper_path)
-    return "\n".join(line["text"] for line in lines if line.get("text"))
+    text = whisper_path.read_text(encoding="utf-8").strip()
+    lines: list[str] = []
+    for raw in text.splitlines():
+        raw = raw.strip()
+        if not raw:
+            continue
+        if "|" in raw and raw.split("|", 1)[0].replace(".", "", 1).isdigit():
+            _, line_text = raw.split("|", 1)
+            lines.append(line_text.strip())
+        else:
+            lines.append(raw)
+    return "\n".join(lines)
 
 
 @register("lyrical_coherence", needs_audio=False)

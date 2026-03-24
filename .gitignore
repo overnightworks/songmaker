@@ -45,9 +45,9 @@ Thumbs.db
 *.ckpt
 
 # ── Frontend ──
-player/node_modules/
-player/.svelte-kit/
-player/build/
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
 
 # ── Misc ──
 plans/

@@ -49,9 +49,6 @@ def generate(
     lm_temperature: Annotated[Optional[float], Parameter(help="LM temperature")] = None,
     infer_method: Annotated[Optional[str], Parameter(help="ode or sde")] = None,
     think_mode: Annotated[Optional[bool], Parameter(help="LM chain-of-thought")] = None,
-    player: Annotated[
-        bool, Parameter(name="--player", help="Open HTML player after generation"),
-    ] = False,
 ) -> None:
     """Generate a song from a markdown file via ACE-Step."""
     opts = GenerationOptions(
@@ -59,35 +56,9 @@ def generate(
         shift=shift, guidance_scale=guidance_scale,
         inference_steps=inference_steps, lm_temperature=lm_temperature,
         infer_method=infer_method, think_mode=think_mode,
-        player=player,
     )
     run_generate(path, opts)
 
-
-@app.command
-def player(
-    root: Annotated[
-        Optional[str], Parameter(help="Project root")
-    ] = None,
-) -> None:
-    """Build the SvelteKit player frontend."""
-    import subprocess
-
-    if root:
-        project_root_path = Path(root).resolve()
-    else:
-        project_root_path = find_project_root(Path.cwd()) or Path.cwd()
-    player_dir = project_root_path / "player"
-    if not player_dir.exists():
-        raise ValidationError(f"Player directory not found: {player_dir}")
-
-    log.info("Building SvelteKit player...")
-    result = subprocess.run(
-        ["pnpm", "build"], cwd=str(player_dir), capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        raise ValidationError(f"Player build failed:\n{result.stderr}")
-    log.info("Player built: %s/build/", player_dir)
 
 
 @app.command

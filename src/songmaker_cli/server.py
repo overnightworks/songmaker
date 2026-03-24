@@ -140,7 +140,7 @@ def create_app(
         return {"status": "started", "path": req.path}
 
     # SvelteKit build directory
-    sveltekit_dir = project_root / "player" / "build"
+    sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"
 
     @app.get("/")
@@ -229,12 +229,9 @@ def run_server(
         output_dir.mkdir(parents=True)
 
     from songmaker_cli.db.engine import init_db
-    from songmaker_cli.db.migrate import migrate_filesystem
 
     db_path = output_dir / DB_FILENAME
-    session_factory = init_db(db_path)
-    with session_factory() as session:
-        migrate_filesystem(session, output_dir, project_root)
+    init_db(db_path)
 
     app = create_app(output_dir, project_root, api_key=api_key)
     log.info("Songmaker server: http://localhost:%d", port)

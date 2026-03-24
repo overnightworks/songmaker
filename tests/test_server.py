@@ -21,7 +21,7 @@ def server_app(tmp_path: Path) -> TestClient:
 
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
-    sk_dir = project_root / "player" / "build"
+    sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 

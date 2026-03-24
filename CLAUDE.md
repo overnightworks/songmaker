@@ -8,7 +8,7 @@ AI-powered song generation and playback platform. Markdown files with lyrics and
 **Venv**: `.venv/`
 **Node**: 22 LTS
 **Package manager**: pnpm
-**Frontend**: SvelteKit + TypeScript (strict) in `player/`
+**Frontend**: SvelteKit + TypeScript (strict) in `frontend/`
 
 ## CLI (cyclopts)
 
@@ -136,7 +136,7 @@ Chorus here...
 - `scripts/` — Server setup/start
 - `tests/` — pytest suite
 - `docs/` — Architecture and testing docs
-- `player/` — SvelteKit frontend app
+- `frontend/` — SvelteKit frontend app
   - `src/routes/` — SvelteKit pages and layouts
   - `src/lib/components/` — Svelte components
   - `src/lib/stores/` — Svelte stores (player state, WebSocket, jobs)
@@ -176,7 +176,7 @@ pnpm test         # vitest
 ## API Contract
 
 - Backend serves API at `/api/*`, frontend proxied in dev via Vite
-- All API types defined in `player/src/lib/api/types.ts`
+- All API types defined in `frontend/src/lib/api/types.ts`
 - Types must match Python pydantic models — keep in sync manually
 - WebSocket at `/ws` for real-time generation/scoring progress
 

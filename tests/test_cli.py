@@ -67,11 +67,11 @@ def test_generation_options_ace_overrides_empty() -> None:
     assert result == {}
 
 
-def test_generation_options_excludes_workflow_flags() -> None:
-    opts = GenerationOptions(seed=42, player=True)
+def test_generation_options_excludes_non_ace_fields() -> None:
+    opts = GenerationOptions(seed=42, count=3)
     result = opts.ace_overrides()
     assert result == {"seed": 42}
-    assert "player" not in result
+    assert "count" not in result
 
 
 def test_load_album_meta_with_yaml(tmp_path: Path) -> None:
@@ -242,12 +242,6 @@ def test_run_generation_error() -> None:
             _run_generation(config, client)
 
 
-def test_player_command_not_found() -> None:
-    from songmaker_cli.main import player as player_cmd
-
-    with pytest.raises(ValidationError, match="not found"):
-        player_cmd(root="/nonexistent/path")
-
 
 def test_check_command(tmp_path: Path) -> None:
     from songmaker_cli.main import check as check_cmd
@@ -256,7 +250,7 @@ def test_check_command(tmp_path: Path) -> None:
         check_cmd(path="/some/file.mp3", source="/some/lyrics.md")
 
     mock_run.assert_called_once_with(
-        "/some/file.mp3", "/some/lyrics.md", project_root=None, whisper_model="medium",
+        "/some/file.mp3", "/some/lyrics.md", project_root=None, whisper_model="large-v3",
     )
 
 

@@ -107,12 +107,12 @@ Input (mono WAV) → Stereo duplicate
 
 ## Frontend (SvelteKit + TypeScript)
 
-Located in `player/`. Communicates with FastAPI backend via REST + WebSocket.
+Located in `frontend/`. Communicates with FastAPI backend via REST + WebSocket.
 
 ### Source Structure
 
 ```
-player/src/
+frontend/src/
   routes/                     Pages and layouts
     +layout.svelte            Persistent PlayerBar + nav
     +page.svelte              Dashboard (recent, in-progress)

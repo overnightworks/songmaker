@@ -60,7 +60,6 @@ class GenerationOptions:
     lm_temperature: float | None = None
     infer_method: str | None = None
     think_mode: bool | None = None
-    player: bool = False
 
     def ace_overrides(self) -> dict[str, object]:
         """Return non-None ACE-Step parameter overrides."""
