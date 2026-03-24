@@ -448,55 +448,7 @@ def test_song_to_dict_includes_generation_params(seeded_session: Session) -> Non
     assert d["generation_params"] == params
 
 
-# ── Engine: migrate_schema + init_db ────────────────────────────────
-
-
-def test_migrate_schema_adds_missing_columns(tmp_path: Path) -> None:
-    from sqlalchemy import create_engine, text
-    from sqlalchemy import inspect as sa_inspect
-
-    from songmaker_cli.db.engine import _migrate_schema
-
-    db_path = tmp_path / "old.db"
-    engine = create_engine(f"sqlite:///{db_path}")
-    with engine.begin() as conn:
-        conn.execute(text(
-            "CREATE TABLE generations (id TEXT PRIMARY KEY, is_archived BOOLEAN)"
-        ))
-        conn.execute(text(
-            "CREATE TABLE versions (id TEXT PRIMARY KEY, lyrics TEXT)"
-        ))
-
-    _migrate_schema(engine)
-
-    inspector = sa_inspect(engine)
-    gen_cols = {c["name"] for c in inspector.get_columns("generations")}
-    ver_cols = {c["name"] for c in inspector.get_columns("versions")}
-    assert "is_picked" in gen_cols
-    assert "generation_params" in ver_cols
-
-
-def test_migrate_schema_noop_when_columns_exist(tmp_path: Path) -> None:
-    from sqlalchemy import create_engine, text
-    from sqlalchemy import inspect as sa_inspect
-
-    from songmaker_cli.db.engine import _migrate_schema
-
-    db_path = tmp_path / "current.db"
-    engine = create_engine(f"sqlite:///{db_path}")
-    with engine.begin() as conn:
-        conn.execute(text(
-            "CREATE TABLE generations (id TEXT PRIMARY KEY, is_picked BOOLEAN)"
-        ))
-        conn.execute(text(
-            "CREATE TABLE versions (id TEXT PRIMARY KEY, generation_params JSON)"
-        ))
-
-    _migrate_schema(engine)
-
-    inspector = sa_inspect(engine)
-    gen_cols = {c["name"] for c in inspector.get_columns("generations")}
-    assert "is_picked" in gen_cols
+# ── Engine: init_db ─────────────────────────────────────────────────
 
 
 def test_init_db_idempotent(tmp_path: Path) -> None:

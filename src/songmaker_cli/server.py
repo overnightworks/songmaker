@@ -1,4 +1,4 @@
-"""Songmaker server — FastAPI backend for the player UI.
+"""Songmaker server — FastAPI backend for the web UI.
 
 Serves the SvelteKit frontend, audio files, and REST API backed by SQLite.
 
@@ -11,32 +11,21 @@ from __future__ import annotations
 import logging
 import os
 import secrets
-import threading
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import OUTPUT_ROOT
 
-if TYPE_CHECKING:
-    from songmaker_cli.parser import SongMeta
-
 log = logging.getLogger(__name__)
 
 DB_FILENAME = "songmaker.db"
-
-
-class GenerateRequest(BaseModel):
-    path: str
-    count: int = 1
 
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
@@ -77,7 +66,6 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
 def create_app(
     output_dir: Path, project_root: Path, api_key: str | None = None,
 ) -> FastAPI:
-    """Create the FastAPI app with routes bound to the given directories."""
     app = FastAPI(title="Songmaker", docs_url=None, redoc_url=None)
 
     app.add_middleware(AccessLogMiddleware)
@@ -96,9 +84,6 @@ def create_app(
 
     app.include_router(api_router)
 
-    _scoring_lock = threading.Lock()
-    _generation_lock = threading.Lock()
-
     @app.get("/audio/{album}/{filename}")
     async def get_audio(album: str, filename: str) -> FileResponse:
         audio_path = (output_dir / album / filename).resolve()
@@ -108,38 +93,6 @@ def create_app(
             raise HTTPException(404, f"Not found: {album}/{filename}")
         return FileResponse(audio_path, media_type="audio/mpeg")
 
-    @app.post("/score/{album}/{version}")
-    async def score_version(
-        album: str, version: str, background_tasks: BackgroundTasks,
-    ) -> dict[str, str]:
-        mp3_path = output_dir / album / f"{version}.mp3"
-        if not mp3_path.exists():
-            raise HTTPException(404, f"MP3 not found: {album}/{version}.mp3")
-
-        if not _scoring_lock.acquire(blocking=False):
-            raise HTTPException(409, "Scoring already in progress")
-        background_tasks.add_task(
-            _run_scoring, mp3_path, output_dir, project_root, _scoring_lock,
-        )
-        return {"status": "started", "version": version}
-
-    @app.post("/generate")
-    async def trigger_generate(
-        req: GenerateRequest, background_tasks: BackgroundTasks,
-    ) -> dict[str, str]:
-        md_path = Path(req.path).resolve()
-        albums_dir = (project_root / "albums").resolve()
-        if not md_path.is_relative_to(albums_dir):
-            raise HTTPException(403, "Path must be under albums/")
-        if not md_path.exists():
-            raise HTTPException(404, f"Song file not found: {req.path}")
-
-        if not _generation_lock.acquire(blocking=False):
-            raise HTTPException(409, "Generation already in progress")
-        background_tasks.add_task(_run_generation, md_path, req.count, _generation_lock)
-        return {"status": "started", "path": req.path}
-
-    # SvelteKit build directory
     sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"
 
@@ -148,7 +101,7 @@ def create_app(
         sk_index = sveltekit_dir / "index.html"
         if not sk_index.exists():
             raise HTTPException(
-                500, "SvelteKit build not found — run 'cd player && pnpm build'",
+                500, "SvelteKit build not found — run 'cd frontend && pnpm build'",
             )
         return FileResponse(sk_index, media_type="text/html")
 
@@ -164,50 +117,6 @@ def create_app(
     return app
 
 
-def _run_scoring(
-    mp3_path: Path, output_dir: Path, project_root: Path, lock: threading.Lock,
-) -> None:
-    try:
-        from songmaker_cli.scoring import run_scoring_pipeline
-        from songmaker_cli.snapshot import append_scores_section
-
-        snapshot_path = mp3_path.with_suffix(".md")
-        meta = _load_meta_for_mp3(mp3_path, project_root)
-
-        scores = run_scoring_pipeline(mp3_path, meta=meta)
-        if snapshot_path.exists():
-            append_scores_section(snapshot_path, scores)
-
-        log.info("Scored: %s", mp3_path.name)
-    finally:
-        lock.release()
-
-
-def _run_generation(md_path: Path, count: int, lock: threading.Lock) -> None:
-    try:
-        from songmaker_cli.generate import GenerationOptions, run_generate
-
-        opts = GenerationOptions(count=count)
-        run_generate(str(md_path), opts)
-        log.info("Generation complete: %s", md_path.name)
-    finally:
-        lock.release()
-
-
-def _load_meta_for_mp3(mp3_path: Path, project_root: Path) -> SongMeta | None:
-    import yaml
-
-    from songmaker_cli.check import find_lyrics_source
-    from songmaker_cli.errors import ValidationError
-    from songmaker_cli.parser import parse_song_md
-
-    try:
-        md_path = find_lyrics_source(mp3_path, None, project_root=str(project_root))
-        return parse_song_md(md_path)
-    except (ValidationError, FileNotFoundError, yaml.YAMLError):
-        return None
-
-
 def run_server(
     output_dir: Path | None = None,
     project_root: Path | None = None,
@@ -215,7 +124,6 @@ def run_server(
     open_browser: bool = False,
     api_key: str | None = None,
 ) -> None:
-    """Start the songmaker server."""
     import uvicorn
 
     if project_root is None:
