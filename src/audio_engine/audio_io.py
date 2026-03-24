@@ -144,10 +144,6 @@ def _normalize_dtype(raw: np.ndarray) -> NDArray[np.float64] | None:
     return None
 
 
-def _empty_stereo() -> tuple[NDArray[np.float64], NDArray[np.float64], int]:
-    """Return a fresh empty stereo tuple (prevents accidental mutation of shared state)."""
-    return np.array([], dtype=np.float64), np.array([], dtype=np.float64), 0
-
 
 def read_wav_bytes(
     data: bytes,
@@ -157,20 +153,19 @@ def read_wav_bytes(
     Uses scipy.io.wavfile which supports PCM int16/int32 and IEEE float32
     (the format ACE-Step outputs). Mono input is duplicated to both channels.
     """
+    from audio_engine.errors import AudioDecodeError
+
     if len(data) < 44 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
-        log.warning("read_wav_bytes: not a valid WAV file (%d bytes)", len(data))
-        return _empty_stereo()
+        raise AudioDecodeError(f"Not a valid WAV file ({len(data)} bytes)")
 
     try:
         sample_rate, raw = scipy_wavfile.read(io.BytesIO(data))
     except (ValueError, struct.error) as exc:
-        log.warning("read_wav_bytes: failed to parse WAV data: %s", exc)
-        return _empty_stereo()
+        raise AudioDecodeError(f"Failed to parse WAV data: {exc}") from exc
 
     samples = _normalize_dtype(raw)
     if samples is None:
-        log.warning("read_wav_bytes: unsupported dtype %s", raw.dtype)
-        return _empty_stereo()
+        raise AudioDecodeError(f"Unsupported WAV dtype: {raw.dtype}")
 
     if samples.ndim == 2 and samples.shape[1] >= 2:
         left = samples[:, 0]

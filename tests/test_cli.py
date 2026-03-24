@@ -48,7 +48,7 @@ def test_decode_audio_empty() -> None:
     from acestep_engine.models import AceStepResult
 
     result = AceStepResult(wav_bytes=b"not wav", seed=1)
-    with pytest.raises(GenerationError, match="empty"):
+    with pytest.raises(GenerationError, match="decode failed"):
         _decode_audio(result)
 
 

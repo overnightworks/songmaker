@@ -76,9 +76,12 @@ def _run_generation(
 
 
 def _decode_audio(ace_result: AceStepResult) -> DecodedAudio:
-    left, right, sample_rate = read_wav_bytes(ace_result.wav_bytes)
-    if len(left) == 0:
-        raise GenerationError("ACE-Step returned empty or unparseable audio")
+    from audio_engine.errors import AudioDecodeError
+
+    try:
+        left, right, sample_rate = read_wav_bytes(ace_result.wav_bytes)
+    except AudioDecodeError as exc:
+        raise GenerationError(f"ACE-Step audio decode failed: {exc}") from exc
     duration = len(left) / sample_rate
     log.info("Audio decoded: %.1fs at %d Hz", duration, sample_rate)
     return DecodedAudio(left=left, right=right, sample_rate=sample_rate, duration=duration)

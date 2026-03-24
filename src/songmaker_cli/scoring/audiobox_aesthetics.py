@@ -26,6 +26,12 @@ _predictor_cache: dict[str, object] = {}
 _predictor_lock = threading.Lock()
 
 
+def clear_cache() -> None:
+    with _predictor_lock:
+        _predictor_cache.clear()
+    log.info("Cleared AudioBox model cache")
+
+
 @contextmanager
 def _force_cpu_env() -> Iterator[None]:
     """Temporarily hide CUDA devices to force CPU model loading.

@@ -18,6 +18,12 @@ _whisper_model_cache: dict[str, object] = {}
 _whisper_cache_lock = threading.Lock()
 
 
+def clear_cache() -> None:
+    with _whisper_cache_lock:
+        _whisper_model_cache.clear()
+    log.info("Cleared Whisper model cache")
+
+
 @register("text_accuracy", needs_audio=False)
 def score_text_accuracy(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,

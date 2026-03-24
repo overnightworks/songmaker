@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from songmaker_cli.gpu_queue import GpuQueue, get_gpu_queue
+from songmaker_cli.gpu_queue import GpuJob, GpuQueue, get_gpu_queue
 
 
 def _make_queue() -> GpuQueue:
@@ -105,36 +105,29 @@ def test_queue_start_idempotent() -> None:
 # ── _clear_scoring_models ───────────────────────────────────────────
 
 
-def test_clear_scoring_models_clears_caches() -> None:
-    import songmaker_cli.scoring.audiobox_aesthetics as ab
-    import songmaker_cli.scoring.text_accuracy as ta
-
+def test_clear_scoring_models_calls_clear_cache() -> None:
     queue = GpuQueue()
-    ta._whisper_model_cache["test"] = MagicMock()
-    ab._predictor_cache["test"] = MagicMock()
-
-    with patch.object(queue, "_gc_gpu"):
+    with (
+        patch("songmaker_cli.scoring.text_accuracy.clear_cache") as mock_whisper,
+        patch("songmaker_cli.scoring.audiobox_aesthetics.clear_cache") as mock_audiobox,
+        patch.object(queue, "_gc_gpu"),
+    ):
         queue._clear_scoring_models()
 
-    assert "test" not in ta._whisper_model_cache
-    assert "test" not in ab._predictor_cache
+    mock_whisper.assert_called_once()
+    mock_audiobox.assert_called_once()
 
 
-def test_clear_scoring_models_handles_missing_cache_attr() -> None:
-    import songmaker_cli.scoring.audiobox_aesthetics as ab
-    import songmaker_cli.scoring.text_accuracy as ta
-
+def test_clear_scoring_models_handles_import_error() -> None:
     queue = GpuQueue()
-    orig_ta = ta._whisper_model_cache
-    orig_ab = ab._predictor_cache
-    try:
-        del ta._whisper_model_cache
-        del ab._predictor_cache
-        with patch.object(queue, "_gc_gpu"):
-            queue._clear_scoring_models()
-    finally:
-        ta._whisper_model_cache = orig_ta
-        ab._predictor_cache = orig_ab
+    with (
+        patch(
+            "songmaker_cli.gpu_queue.GpuQueue._clear_scoring_models",
+            wraps=queue._clear_scoring_models,
+        ),
+        patch.object(queue, "_gc_gpu"),
+    ):
+        queue._clear_scoring_models()
 
 
 # ── _verify_vram_freed ──────────────────────────────────────────────
@@ -377,10 +370,22 @@ def test_prepare_mode_score() -> None:
         queue._prepare_mode("score")
 
 
-def test_prepare_mode_exception_swallowed() -> None:
+def test_prepare_mode_exception_propagates() -> None:
     queue = GpuQueue()
     with patch.object(queue, "_stop_acestep", side_effect=RuntimeError("boom")):
-        queue._prepare_mode("score")
+        with pytest.raises(RuntimeError, match="boom"):
+            queue._prepare_mode("score")
+
+
+def test_execute_skips_job_on_mode_failure() -> None:
+    queue = GpuQueue()
+    results: list[str] = []
+
+    with patch.object(queue, "_prepare_mode", side_effect=RuntimeError("gpu fail")):
+        queue._execute(GpuJob(job_id="j1", job_type="generate", fn=lambda: results.append("ran")))
+
+    assert results == []
+    assert queue._current_mode is None
 
 
 # ── get_gpu_queue singleton ─────────────────────────────────────────

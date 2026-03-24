@@ -56,10 +56,10 @@ def test_read_wav_bytes_stereo(make_wav_bytes: Callable[..., bytes]) -> None:
 
 
 def test_read_wav_bytes_invalid() -> None:
-    left, right, rate = read_wav_bytes(b"not a wav file")
-    assert len(left) == 0
-    assert len(right) == 0
-    assert rate == 0
+    from audio_engine.errors import AudioDecodeError
+
+    with pytest.raises(AudioDecodeError, match="Not a valid WAV"):
+        read_wav_bytes(b"not a wav file")
 
 
 def test_build_ffmpeg_cmd_basic() -> None:
@@ -110,13 +110,16 @@ def test_read_wav_bytes_int32(make_wav_bytes: Callable[..., bytes]) -> None:
 
 
 def test_read_wav_bytes_unsupported_format(make_wav_bytes: Callable[..., bytes]) -> None:
+    from audio_engine.errors import AudioDecodeError
+
     data = make_wav_bytes(b"\x00" * 8, n_channels=1, sampwidth=8, audio_format=99)
-    left, right, rate = read_wav_bytes(data)
-    assert len(left) == 0
-    assert rate == 0
+    with pytest.raises(AudioDecodeError):
+        read_wav_bytes(data)
 
 
 def test_read_wav_bytes_missing_data_chunk() -> None:
+    from audio_engine.errors import AudioDecodeError
+
     buf = bytearray()
     buf += b"RIFF"
     buf += struct.pack("<I", 20)
@@ -125,8 +128,8 @@ def test_read_wav_bytes_missing_data_chunk() -> None:
     fmt_chunk = struct.pack("<HHIIHH", 1, 1, 44100, 88200, 2, 16)
     buf += struct.pack("<I", len(fmt_chunk))
     buf += fmt_chunk
-    left, right, rate = read_wav_bytes(bytes(buf))
-    assert len(left) == 0
+    with pytest.raises(AudioDecodeError):
+        read_wav_bytes(bytes(buf))
 
 
 def test_master_to_mp3_empty_audio() -> None:

@@ -88,9 +88,13 @@ class GpuQueue:
         if self._current_mode != job.job_type:
             if self._current_mode:
                 log.info("Switching GPU mode: %s → %s", self._current_mode, job.job_type)
-            self._prepare_mode(job.job_type)
+            try:
+                self._prepare_mode(job.job_type)
+                self._current_mode = job.job_type
+            except Exception:
+                log.exception("Failed to prepare GPU mode: %s", job.job_type)
+                return
 
-        self._current_mode = job.job_type
         log.info("GPU queue: running %s job %s", job.job_type, job.job_id)
 
         try:
@@ -100,35 +104,26 @@ class GpuQueue:
 
     def _prepare_mode(self, mode: str) -> None:
         """Prepare GPU for the given mode — clear old models, start services."""
-        try:
-            if mode == "generate":
-                self._clear_scoring_models()
-                self._verify_vram_freed()
-                self._ensure_acestep()
-            elif mode == "score":
-                self._stop_acestep()
-                self._gc_gpu()
-                self._verify_vram_freed()
-        except Exception:
-            log.exception("Failed to prepare GPU mode: %s", mode)
+        if mode == "generate":
+            self._clear_scoring_models()
+            self._verify_vram_freed()
+            self._ensure_acestep()
+        elif mode == "score":
+            self._stop_acestep()
+            self._gc_gpu()
+            self._verify_vram_freed()
 
     def _clear_scoring_models(self) -> None:
         try:
-            import songmaker_cli.scoring.text_accuracy as ta
-            for key in list(ta._whisper_model_cache.keys()):
-                model = ta._whisper_model_cache.pop(key)
-                del model
-            log.info("Cleared Whisper model cache")
-        except (ImportError, AttributeError):
+            from songmaker_cli.scoring.text_accuracy import clear_cache as clear_whisper
+            clear_whisper()
+        except ImportError:
             pass
 
         try:
-            import songmaker_cli.scoring.audiobox_aesthetics as ab
-            for key in list(ab._predictor_cache.keys()):
-                predictor = ab._predictor_cache.pop(key)
-                del predictor
-            log.info("Cleared AudioBox model cache")
-        except (ImportError, AttributeError):
+            from songmaker_cli.scoring.audiobox_aesthetics import clear_cache as clear_audiobox
+            clear_audiobox()
+        except ImportError:
             pass
 
         self._gc_gpu()

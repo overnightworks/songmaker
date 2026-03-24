@@ -39,23 +39,24 @@ class GenerationContext:
     base_params: dict = field(default_factory=dict)
 
 
+class GenerationSetupError(Exception):
+    pass
+
+
 def _build_generation_context(
     song_id: str, version_id: str,
-) -> GenerationContext | str:
-    """Load song/version from DB and build all config needed for generation.
-
-    Returns GenerationContext on success, or an error string on failure.
-    """
+) -> GenerationContext:
+    """Load song/version from DB and build all config needed for generation."""
     factory = get_session_factory()
 
     with factory() as session:
         song = get_song(session, song_id)
         if not song:
-            return "Song not found"
+            raise GenerationSetupError("Song not found")
 
         version = next((v for v in song.versions if v.id == version_id), None)
         if not version:
-            return "Version not found"
+            raise GenerationSetupError("Version not found")
 
         album = song.album
         album_name = album.title.lower().replace(" ", "_") if album else "unknown"
@@ -93,7 +94,7 @@ def _build_generation_context(
 
     client = AceStepClient()
     if not client.is_available:
-        return "ACE-Step server not reachable"
+        raise GenerationSetupError("ACE-Step server not reachable")
 
     server_info = client.server_info()
     model_name = server_info.model if server_info else None
@@ -130,9 +131,10 @@ def run_generation_job(
     try:
         _update_job(factory, job_id, "running")
 
-        ctx = _build_generation_context(song_id, version_id)
-        if isinstance(ctx, str):
-            _update_job(factory, job_id, "failed", error=ctx)
+        try:
+            ctx = _build_generation_context(song_id, version_id)
+        except GenerationSetupError as exc:
+            _update_job(factory, job_id, "failed", error=str(exc))
             return
 
         for i in range(count):
