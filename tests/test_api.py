@@ -291,3 +291,205 @@ def test_generation_defaults_roundtrip(client: TestClient, tmp_path: Path) -> No
         assert resp.json()["turbo"]["inference_steps"] == 12
     finally:
         config_mod._defaults_path = original
+
+
+# ── 404 error branches ──────────────────────────────────────────────
+
+
+def test_get_album_not_found(client: TestClient) -> None:
+    resp = client.get("/api/albums/nonexistent")
+    assert resp.status_code == 404
+
+
+def test_get_song_not_found(client: TestClient) -> None:
+    resp = client.get("/api/songs/nonexistent")
+    assert resp.status_code == 404
+
+
+def test_update_song_not_found(client: TestClient) -> None:
+    resp = client.put("/api/songs/nonexistent", json={"lyrics": "x"})
+    assert resp.status_code == 404
+
+
+def test_song_versions_not_found(client: TestClient) -> None:
+    resp = client.get("/api/songs/nonexistent/versions")
+    assert resp.status_code == 404
+
+
+def test_delete_version_not_found(client: TestClient) -> None:
+    resp = client.delete("/api/versions/nonexistent")
+    assert resp.status_code == 404
+
+
+def test_get_generation_not_found(client: TestClient) -> None:
+    resp = client.get("/api/generations/nonexistent")
+    assert resp.status_code == 404
+
+
+def test_pick_generation_not_found(client: TestClient) -> None:
+    resp = client.post("/api/generations/nonexistent/pick")
+    assert resp.status_code == 404
+
+
+def test_unpick_generation_not_found(client: TestClient) -> None:
+    resp = client.post("/api/generations/nonexistent/unpick")
+    assert resp.status_code == 404
+
+
+def test_cleanup_album_not_found(client: TestClient) -> None:
+    resp = client.post("/api/albums/nonexistent/cleanup")
+    assert resp.status_code == 404
+
+
+def test_rate_generation_not_found(client: TestClient) -> None:
+    resp = client.post(
+        "/api/generations/nonexistent/rate",
+        json={"rating": 50},
+    )
+    assert resp.status_code == 404
+
+
+# ── Generate + Score endpoints ──────────────────────────────────────
+
+
+def test_generate_song_not_found(client: TestClient) -> None:
+    resp = client.post(
+        "/api/songs/nonexistent/generate",
+        json={"count": 1},
+    )
+    assert resp.status_code == 404
+
+
+def test_generate_song_no_lyrics(client: TestClient) -> None:
+    from songmaker_cli.db.engine import get_session_factory
+    from songmaker_cli.db.models import Song, Version
+
+    factory = get_session_factory()
+    with factory() as session:
+        session.add(Song(
+            id="s_empty", title="Empty", album_id="rock",
+        ))
+        session.add(Version(
+            id="v_empty", song_id="s_empty",
+            version_number=1, lyrics="", prompt="",
+        ))
+        session.commit()
+
+    resp = client.post(
+        "/api/songs/s_empty/generate",
+        json={"count": 1},
+    )
+    assert resp.status_code == 400
+
+
+def test_generate_song_submits_job(client: TestClient) -> None:
+    from unittest.mock import MagicMock, patch
+
+    mock_queue = MagicMock()
+
+    with patch("songmaker_cli.gpu_queue.get_gpu_queue", return_value=mock_queue):
+        resp = client.post(
+            "/api/songs/s1/generate",
+            json={"count": 2},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["type"] == "generate"
+    mock_queue.submit.assert_called_once()
+
+
+def test_score_generation_not_found(client: TestClient) -> None:
+    resp = client.post(
+        "/api/generations/nonexistent/score",
+        json={},
+    )
+    assert resp.status_code == 404
+
+
+def test_score_generation_submits_job(client: TestClient) -> None:
+    from unittest.mock import MagicMock, patch
+
+    mock_queue = MagicMock()
+
+    with patch("songmaker_cli.gpu_queue.get_gpu_queue", return_value=mock_queue):
+        resp = client.post(
+            "/api/generations/g1/score",
+            json={},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["type"] == "score"
+    mock_queue.submit.assert_called_once()
+
+
+# ── Chat endpoint ───────────────────────────────────────────────────
+
+
+def test_chat_success(client: TestClient) -> None:
+    from unittest.mock import MagicMock, patch
+
+    mock_response = MagicMock()
+    mock_response.text = "Hello from Claude"
+
+    with patch("songmaker_cli.api.call_claude", return_value=mock_response):
+        resp = client.post("/api/chat", json={
+            "message": "hi",
+            "context": "Song: Test",
+        })
+
+    assert resp.status_code == 200
+    assert resp.json()["response"] == "Hello from Claude"
+
+
+def test_chat_with_claude_key_header(client: TestClient) -> None:
+    from unittest.mock import MagicMock, patch
+
+    mock_response = MagicMock()
+    mock_response.text = "ok"
+
+    with patch("songmaker_cli.api.call_claude", return_value=mock_response) as mock:
+        resp = client.post(
+            "/api/chat",
+            json={"message": "hi"},
+            headers={"X-Claude-Key": "sk-test-123"},
+        )
+
+    assert resp.status_code == 200
+    call_kwargs = mock.call_args
+    assert call_kwargs[1]["api_key"] == "sk-test-123"
+
+
+def test_chat_unavailable(client: TestClient) -> None:
+    from unittest.mock import patch
+
+    from songmaker_cli.claude.provider import UnavailableError
+
+    with patch(
+        "songmaker_cli.api.call_claude",
+        side_effect=UnavailableError("no backend"),
+    ):
+        resp = client.post("/api/chat", json={"message": "hi"})
+
+    assert resp.status_code == 503
+
+
+def test_get_album(client: TestClient) -> None:
+    resp = client.get("/api/albums/rock")
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "Rock Album"
+
+
+def test_get_job_found(client: TestClient) -> None:
+    from unittest.mock import MagicMock, patch
+
+    mock_queue = MagicMock()
+
+    with patch("songmaker_cli.gpu_queue.get_gpu_queue", return_value=mock_queue):
+        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+    job_id = resp.json()["id"]
+
+    resp = client.get(f"/api/jobs/{job_id}")
+    assert resp.status_code == 200
+    assert resp.json()["id"] == job_id
+
+

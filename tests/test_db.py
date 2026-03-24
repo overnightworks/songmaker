@@ -446,3 +446,124 @@ def test_song_to_dict_includes_generation_params(seeded_session: Session) -> Non
     song = get_song(seeded_session, "s1")
     d = song_to_dict(song)
     assert d["generation_params"] == params
+
+
+# ── Engine: migrate_schema + init_db ────────────────────────────────
+
+
+def test_migrate_schema_adds_missing_columns(tmp_path: Path) -> None:
+    from sqlalchemy import create_engine, text
+    from sqlalchemy import inspect as sa_inspect
+
+    from songmaker_cli.db.engine import _migrate_schema
+
+    db_path = tmp_path / "old.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE generations (id TEXT PRIMARY KEY, is_archived BOOLEAN)"
+        ))
+        conn.execute(text(
+            "CREATE TABLE versions (id TEXT PRIMARY KEY, lyrics TEXT)"
+        ))
+
+    _migrate_schema(engine)
+
+    inspector = sa_inspect(engine)
+    gen_cols = {c["name"] for c in inspector.get_columns("generations")}
+    ver_cols = {c["name"] for c in inspector.get_columns("versions")}
+    assert "is_picked" in gen_cols
+    assert "generation_params" in ver_cols
+
+
+def test_migrate_schema_noop_when_columns_exist(tmp_path: Path) -> None:
+    from sqlalchemy import create_engine, text
+    from sqlalchemy import inspect as sa_inspect
+
+    from songmaker_cli.db.engine import _migrate_schema
+
+    db_path = tmp_path / "current.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE generations (id TEXT PRIMARY KEY, is_picked BOOLEAN)"
+        ))
+        conn.execute(text(
+            "CREATE TABLE versions (id TEXT PRIMARY KEY, generation_params JSON)"
+        ))
+
+    _migrate_schema(engine)
+
+    inspector = sa_inspect(engine)
+    gen_cols = {c["name"] for c in inspector.get_columns("generations")}
+    assert "is_picked" in gen_cols
+
+
+def test_init_db_idempotent(tmp_path: Path) -> None:
+    reset_engine()
+    f1 = init_db(tmp_path / "test.db")
+    f2 = init_db(tmp_path / "test.db")
+    assert f1 is f2
+    reset_engine()
+
+
+def test_get_session_factory_before_init() -> None:
+    from songmaker_cli.db.engine import get_session_factory
+    reset_engine()
+    with pytest.raises(RuntimeError, match="not initialized"):
+        get_session_factory()
+    reset_engine()
+
+
+# ── queries.py gap coverage ─────────────────────────────────────────
+
+
+def test_list_songs_with_album_filter(seeded_session: Session) -> None:
+    result = list_songs(seeded_session, album_id="test")
+    assert len(result) >= 1
+    assert all(s.album_id == "test" for s in result)
+
+
+def test_list_songs_with_unknown_album_filter(seeded_session: Session) -> None:
+    result = list_songs(seeded_session, album_id="nonexistent")
+    assert result == []
+
+
+def test_create_song_album_not_found(db_session: Session) -> None:
+    with pytest.raises(ValueError, match="Album not found"):
+        create_song(db_session, "Test", "nonexistent")
+
+
+def test_update_song_not_found(db_session: Session) -> None:
+    with pytest.raises(ValueError, match="Song not found"):
+        update_song(db_session, "nonexistent", lyrics="x")
+
+
+def test_update_job_status_missing_job(db_session: Session) -> None:
+    update_job_status(db_session, "nonexistent", "running")
+
+
+def test_pick_generation_not_found(db_session: Session) -> None:
+    with pytest.raises(ValueError, match="Generation not found"):
+        pick_generation(db_session, "nonexistent")
+
+
+def test_unpick_generation_not_found(db_session: Session) -> None:
+    with pytest.raises(ValueError, match="Generation not found"):
+        unpick_generation(db_session, "nonexistent")
+
+
+def test_delete_generation_files_exist(seeded_session: Session, tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    album_dir = output_dir / "test"
+    album_dir.mkdir(parents=True)
+    mp3 = album_dir / "01_song_one_v1.mp3"
+    mp3.write_bytes(b"fake")
+    md = album_dir / "01_song_one_v1.md"
+    md.write_text("snapshot")
+
+    delete_generation(seeded_session, "g1", output_dir=output_dir)
+    seeded_session.commit()
+
+    assert not mp3.exists()
+    assert not md.exists()

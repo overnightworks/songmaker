@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import datetime
-
 OUTPUT_ROOT = "_output"
 DEFAULT_ARTIST = "Flex0r"
 SIMILARITY_GOOD = 0.8
@@ -28,7 +26,3 @@ DYNAMICS_ONSET_CV_CEILING = 0.5
 SPECTRAL_WINDOW_SECONDS = 5.0
 SPECTRAL_ARTIFACT_MULTIPLIER = 2.0
 SPECTRAL_ABSOLUTE_THRESHOLD = 0.1
-
-
-def default_year() -> str:
-    return str(datetime.date.today().year)
