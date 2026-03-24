@@ -11,7 +11,16 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from songmaker_cli.db.models import Album, Generation, Job, Song, Version
+    from songmaker_cli.db.models import (
+        Album,
+        Generation,
+        Job,
+        LoginAttempt,
+        Song,
+        User,
+        UserSession,
+        Version,
+    )
 
 
 # ── Album ───────────────────────────────────────────────────────────
@@ -283,3 +292,101 @@ class CapabilitiesResponse(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+
+# ── Auth ───────────────────────────────────────────────────────────
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=3)
+    password: str = Field(min_length=8)
+
+
+class SetupRequest(BaseModel):
+    username: str = Field(min_length=3)
+    password: str = Field(min_length=8)
+
+
+class ChangePasswordRequest(BaseModel):
+    current: str
+    new: str = Field(min_length=8, alias="new_password")
+
+
+class CreateUserRequest(BaseModel):
+    username: str = Field(min_length=3)
+    password: str = Field(min_length=8)
+    role: str = "user"
+
+
+class UpdateUserRequest(BaseModel):
+    role: str | None = None
+    is_active: bool | None = None
+    password: str | None = Field(None, min_length=8)
+
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    role: str
+    is_active: bool
+    created_at: str | None = None
+
+    @classmethod
+    def from_orm(cls, user: User) -> UserResponse:
+        return cls(
+            id=user.id,
+            username=user.username,
+            role=user.role,
+            is_active=user.is_active,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+        )
+
+
+class AuthMeResponse(BaseModel):
+    id: str
+    username: str
+    role: str
+
+
+class SetupRequiredResponse(BaseModel):
+    required: bool
+
+
+class SessionResponse(BaseModel):
+    id: str
+    user_id: str
+    username: str
+    created_at: str | None = None
+    expires_at: str | None = None
+    ip_address: str = ""
+    user_agent: str = ""
+
+    @classmethod
+    def from_orm(cls, sess: UserSession) -> SessionResponse:
+        return cls(
+            id=sess.id,
+            user_id=sess.user_id,
+            username=sess.user.username,
+            created_at=sess.created_at.isoformat() if sess.created_at else None,
+            expires_at=sess.expires_at.isoformat() if sess.expires_at else None,
+            ip_address=sess.ip_address,
+            user_agent=sess.user_agent,
+        )
+
+
+class LoginAttemptResponse(BaseModel):
+    id: str
+    ip_address: str
+    username: str
+    success: bool
+    attempted_at: str | None = None
+
+    @classmethod
+    def from_orm(cls, attempt: LoginAttempt) -> LoginAttemptResponse:
+        return cls(
+            id=attempt.id,
+            ip_address=attempt.ip_address,
+            username=attempt.username,
+            success=attempt.success,
+            attempted_at=attempt.attempted_at.isoformat() if attempt.attempted_at else None,
+        )

@@ -10,13 +10,12 @@ from __future__ import annotations
 
 import logging
 import os
-import secrets
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -42,42 +41,29 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         return response
 
 
-class ApiKeyMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: FastAPI, api_key: str) -> None:
-        super().__init__(app)
-        self.api_key = api_key
-
+class SessionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        if (request.url.path == "/"
-            or request.url.path.startswith("/static")
-            or request.url.path.startswith("/audio/")
-            or request.url.path.startswith("/_app")
-            or (request.url.path.startswith("/api/") and request.method == "GET")):
-            return await call_next(request)
+        from songmaker_cli.middleware import session_auth_middleware
 
-        key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
-        if not secrets.compare_digest(key or "", self.api_key):
-            ip = request.client.host if request.client else "unknown"
-            log.warning("REJECTED %s %s %s (bad API key)", ip, request.method, request.url.path)
-            return JSONResponse({"error": "Invalid API key"}, status_code=403)
-        return await call_next(request)
+        return await session_auth_middleware(request, call_next)
 
 
 def create_app(
-    output_dir: Path, project_root: Path, api_key: str | None = None,
+    output_dir: Path, project_root: Path, *, auth_enabled: bool = True,
 ) -> FastAPI:
     app = FastAPI(title="Songmaker", docs_url=None, redoc_url=None)
 
     app.add_middleware(AccessLogMiddleware)
 
-    if api_key:
-        app.add_middleware(ApiKeyMiddleware, api_key=api_key)
+    if auth_enabled:
+        app.add_middleware(SessionMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
         allow_methods=["*"],
         allow_headers=["*"],
+        allow_credentials=True,
     )
 
     from songmaker_cli.api import router as api_router
@@ -122,7 +108,6 @@ def run_server(
     project_root: Path | None = None,
     port: int = 8080,
     open_browser: bool = False,
-    api_key: str | None = None,
 ) -> None:
     import uvicorn
 
@@ -130,8 +115,6 @@ def run_server(
         project_root = find_project_root(Path.cwd()) or Path.cwd()
     if output_dir is None:
         output_dir = project_root / OUTPUT_ROOT
-    if api_key is None:
-        api_key = os.environ.get("SONGMAKER_API_KEY")
 
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
@@ -141,16 +124,19 @@ def run_server(
     db_path = output_dir / DB_FILENAME
     init_db(db_path)
 
-    app = create_app(output_dir, project_root, api_key=api_key)
+    session_secret = os.environ.get("SESSION_SECRET", "")
+    auth_enabled = bool(session_secret)
+
+    app = create_app(output_dir, project_root, auth_enabled=auth_enabled)
     log.info("Songmaker server: http://localhost:%d", port)
-    if api_key:
-        log.info("API key required: %s...%s", api_key[:4], api_key[-4:])
+    if auth_enabled:
+        log.info("Auth enabled (session-based)")
     else:
-        log.info("No API key — server is open (local use only)")
+        log.info("Auth disabled — set SESSION_SECRET to enable")
 
     if open_browser:
         import webbrowser
         webbrowser.open(f"http://localhost:{port}")
 
-    host = "0.0.0.0" if api_key else "127.0.0.1"
+    host = "0.0.0.0" if auth_enabled else "127.0.0.1"
     uvicorn.run(app, host=host, port=port, log_level="info")

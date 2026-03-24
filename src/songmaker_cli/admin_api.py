@@ -1,0 +1,146 @@
+"""Admin API endpoints — user management, sessions, login attempts."""
+
+from __future__ import annotations
+
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from songmaker_cli.api_models import (
+    CreateUserRequest,
+    LoginAttemptResponse,
+    SessionResponse,
+    StatusResponse,
+    UpdateUserRequest,
+    UserResponse,
+)
+from songmaker_cli.auth import hash_password
+from songmaker_cli.db.engine import get_session_factory
+from songmaker_cli.db.queries import (
+    create_user,
+    delete_session,
+    get_user,
+    get_user_by_username,
+    list_active_sessions,
+    list_login_attempts,
+    list_users,
+    update_user,
+)
+from songmaker_cli.middleware import AuthenticatedUser, require_admin
+
+log = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _get_session() -> Session:  # type: ignore[misc]
+    factory = get_session_factory()
+    session = factory()
+    try:
+        yield session
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+@router.get("/users")
+def list_users_endpoint(
+    db: Session = Depends(_get_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> list[UserResponse]:
+    return [UserResponse.from_orm(u) for u in list_users(db)]
+
+
+@router.post("/users")
+def create_user_endpoint(
+    req: CreateUserRequest,
+    db: Session = Depends(_get_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> UserResponse:
+    if req.role not in ("admin", "user"):
+        raise HTTPException(422, "Role must be 'admin' or 'user'")
+
+    existing = get_user_by_username(db, req.username)
+    if existing:
+        raise HTTPException(409, f"Username '{req.username}' already exists")
+
+    user = create_user(db, req.username, hash_password(req.password), role=req.role)
+    db.commit()
+    return UserResponse.from_orm(user)
+
+
+@router.put("/users/{user_id}")
+def update_user_endpoint(
+    user_id: str,
+    req: UpdateUserRequest,
+    db: Session = Depends(_get_session),
+    admin: AuthenticatedUser = Depends(require_admin),
+) -> UserResponse:
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if req.role is not None and req.role not in ("admin", "user"):
+        raise HTTPException(422, "Role must be 'admin' or 'user'")
+
+    if user_id == admin.id and req.is_active is False:
+        raise HTTPException(400, "Cannot deactivate your own account")
+
+    if user_id == admin.id and req.role is not None and req.role != "admin":
+        raise HTTPException(400, "Cannot demote your own admin account")
+
+    password_hash = hash_password(req.password) if req.password else None
+    updated = update_user(
+        db, user_id, role=req.role, is_active=req.is_active, password_hash=password_hash,
+    )
+    db.commit()
+    return UserResponse.from_orm(updated)
+
+
+@router.delete("/users/{user_id}")
+def deactivate_user_endpoint(
+    user_id: str,
+    db: Session = Depends(_get_session),
+    admin: AuthenticatedUser = Depends(require_admin),
+) -> StatusResponse:
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if user_id == admin.id:
+        raise HTTPException(400, "Cannot deactivate your own account")
+
+    update_user(db, user_id, is_active=False)
+    db.commit()
+    return StatusResponse(status="ok")
+
+
+@router.get("/login-attempts")
+def login_attempts_endpoint(
+    limit: int = 100,
+    db: Session = Depends(_get_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> list[LoginAttemptResponse]:
+    return [LoginAttemptResponse.from_orm(a) for a in list_login_attempts(db, limit=limit)]
+
+
+@router.get("/sessions")
+def sessions_endpoint(
+    db: Session = Depends(_get_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> list[SessionResponse]:
+    return [SessionResponse.from_orm(s) for s in list_active_sessions(db)]
+
+
+@router.delete("/sessions/{session_id}")
+def force_logout_endpoint(
+    session_id: str,
+    db: Session = Depends(_get_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> StatusResponse:
+    delete_session(db, session_id)
+    db.commit()
+    return StatusResponse(status="ok")

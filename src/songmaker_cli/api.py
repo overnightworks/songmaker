@@ -6,9 +6,10 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
+from songmaker_cli.admin_api import router as admin_router
 from songmaker_cli.api_models import (
     AlbumResponse,
     CapabilitiesResponse,
@@ -28,6 +29,15 @@ from songmaker_cli.api_models import (
     StatusResponse,
     VersionResponse,
 )
+from songmaker_cli.auth import (
+    GENERATION_RATE_LIMIT_USER,
+    MAX_QUEUE_DEPTH,
+    MAX_USER_ACTIVE_JOBS,
+    RATE_LIMIT_WINDOW_SECONDS,
+    ROLE_ADMIN,
+    SCORING_RATE_LIMIT_USER,
+)
+from songmaker_cli.auth_api import router as auth_router
 from songmaker_cli.claude.provider import (
     UnavailableError,
     call_claude,
@@ -42,6 +52,9 @@ from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
     cleanup_album,
+    count_total_queued_jobs,
+    count_user_active_jobs,
+    count_user_jobs_in_window,
     create_job,
     create_song,
     delete_generation,
@@ -60,10 +73,13 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.gpu_queue import get_gpu_queue
 from songmaker_cli.jobs import run_generation_job, run_scoring_job
+from songmaker_cli.middleware import AuthenticatedUser
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
+router.include_router(auth_router)
+router.include_router(admin_router)
 
 
 _cached_output_dir: Path | None = None
@@ -75,6 +91,28 @@ def _resolve_output_dir() -> Path:
         root = find_project_root(Path.cwd())
         _cached_output_dir = (root / OUTPUT_ROOT) if root else Path(OUTPUT_ROOT)
     return _cached_output_dir
+
+
+def _get_optional_user(request: Request) -> AuthenticatedUser | None:
+    return getattr(request.state, "user", None)
+
+
+def _check_rate_limit(
+    session: Session, user: AuthenticatedUser | None, job_type: str,
+) -> None:
+    if not user or user.role == ROLE_ADMIN:
+        return
+
+    if count_total_queued_jobs(session) >= MAX_QUEUE_DEPTH:
+        raise HTTPException(429, "Queue is full. Try again later.")
+
+    if count_user_active_jobs(session, user.id) >= MAX_USER_ACTIVE_JOBS:
+        raise HTTPException(429, "You already have an active job. Wait for it to finish.")
+
+    limit = GENERATION_RATE_LIMIT_USER if job_type == "generate" else SCORING_RATE_LIMIT_USER
+    count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
+    if count >= limit:
+        raise HTTPException(429, f"Rate limit reached ({limit}/{job_type}s per hour).")
 
 
 def _get_session() -> Session:  # type: ignore[misc]
@@ -240,8 +278,12 @@ def api_delete_generation(
 def api_generate_song(
     song_id: str,
     req: GenerateRequest,
+    request: Request,
     session: Session = Depends(_get_session),
 ) -> JobResponse:
+    user = _get_optional_user(request)
+    _check_rate_limit(session, user, "generate")
+
     song = get_song(session, song_id)
     if not song:
         raise HTTPException(404, "Song not found")
@@ -249,7 +291,7 @@ def api_generate_song(
     if not version or not version.lyrics or not version.prompt:
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
-    job = create_job(session, "generate")
+    job = create_job(session, "generate", user_id=user.id if user else None)
     session.commit()
     log.info("Generate: song='%s', count=%d, job=%s", song.title, req.count, job.id)
 
@@ -265,13 +307,17 @@ def api_generate_song(
 def api_score_generation(
     gen_id: str,
     req: ScoreRequest,
+    request: Request,
     session: Session = Depends(_get_session),
 ) -> JobResponse:
+    user = _get_optional_user(request)
+    _check_rate_limit(session, user, "score")
+
     gen = get_generation(session, gen_id)
     if not gen:
         raise HTTPException(404, "Generation not found")
 
-    job = create_job(session, "score")
+    job = create_job(session, "score", user_id=user.id if user else None)
     session.commit()
 
     get_gpu_queue().submit(

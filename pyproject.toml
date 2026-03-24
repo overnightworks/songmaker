@@ -36,6 +36,7 @@ server = [
     "uvicorn>=0.20",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
+    "bcrypt>=4.0",
 ]
 claude = [
     "anthropic>=0.20",

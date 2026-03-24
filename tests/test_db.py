@@ -7,36 +7,65 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import Session
 
-from songmaker_cli.db.engine import init_db, reset_engine
-from songmaker_cli.db.models import Album, Generation, Rating, Score, Song, Version
 from songmaker_cli.api_models import (
     AlbumResponse,
     GenerationResponse,
     JobResponse,
+    LoginAttemptResponse,
+    SessionResponse,
     SongResponse,
+    UserResponse,
     VersionResponse,
+)
+from songmaker_cli.db.engine import init_db, reset_engine
+from songmaker_cli.db.models import (
+    Album,
+    Generation,
+    LoginAttempt,
+    Rating,
+    Score,
+    Song,
+    User,
+    Version,
 )
 from songmaker_cli.db.queries import (
     _UNSET,
     cleanup_album,
+    count_recent_failed_attempts,
+    count_total_queued_jobs,
+    count_user_active_jobs,
+    count_user_jobs_in_window,
     create_generation,
     create_job,
+    create_session,
     create_song,
+    create_user,
+    delete_expired_sessions,
     delete_generation,
+    delete_session,
     delete_version,
     get_album,
     get_generation,
     get_generation_by_path,
     get_job,
+    get_session_with_user,
     get_song,
+    get_user,
+    get_user_by_username,
+    list_active_sessions,
     list_albums,
+    list_login_attempts,
     list_songs,
+    list_users,
     pick_generation,
+    record_login_attempt,
     save_rating,
     save_scores,
     unpick_generation,
     update_job_status,
     update_song,
+    update_user,
+    user_count,
 )
 
 
@@ -521,3 +550,338 @@ def test_delete_generation_files_exist(seeded_session: Session, tmp_path: Path) 
 
     assert not mp3.exists()
     assert not md.exists()
+
+
+# ── User queries ────────────────────────────────────────────────────
+
+
+def test_create_user(db_session: Session) -> None:
+    user = create_user(db_session, "alice", "hash123", role="admin")
+    db_session.commit()
+    assert user.username == "alice"
+    assert user.role == "admin"
+    assert user.is_active is True
+    assert user.created_at is not None
+
+
+def test_get_user_by_username(db_session: Session) -> None:
+    create_user(db_session, "bob", "hash456")
+    db_session.commit()
+    user = get_user_by_username(db_session, "bob")
+    assert user is not None
+    assert user.username == "bob"
+
+
+def test_get_user_by_username_not_found(db_session: Session) -> None:
+    assert get_user_by_username(db_session, "nobody") is None
+
+
+def test_get_user(db_session: Session) -> None:
+    user = create_user(db_session, "carol", "hash789")
+    db_session.commit()
+    fetched = get_user(db_session, user.id)
+    assert fetched is not None
+    assert fetched.username == "carol"
+
+
+def test_get_user_not_found(db_session: Session) -> None:
+    assert get_user(db_session, "nonexistent") is None
+
+
+def test_list_users(db_session: Session) -> None:
+    create_user(db_session, "alice", "h1", role="admin")
+    create_user(db_session, "bob", "h2")
+    db_session.commit()
+    users = list_users(db_session)
+    assert len(users) == 2
+    assert users[0].username == "alice"
+    assert users[1].username == "bob"
+
+
+def test_user_count(db_session: Session) -> None:
+    assert user_count(db_session) == 0
+    create_user(db_session, "alice", "h1")
+    db_session.flush()
+    assert user_count(db_session) == 1
+
+
+def test_update_user_role(db_session: Session) -> None:
+    user = create_user(db_session, "alice", "h1")
+    db_session.commit()
+    updated = update_user(db_session, user.id, role="admin")
+    db_session.commit()
+    assert updated.role == "admin"
+
+
+def test_update_user_deactivate(db_session: Session) -> None:
+    user = create_user(db_session, "alice", "h1")
+    db_session.commit()
+    updated = update_user(db_session, user.id, is_active=False)
+    db_session.commit()
+    assert updated.is_active is False
+
+
+def test_update_user_password(db_session: Session) -> None:
+    user = create_user(db_session, "alice", "old_hash")
+    db_session.commit()
+    updated = update_user(db_session, user.id, password_hash="new_hash")
+    db_session.commit()
+    assert updated.password_hash == "new_hash"
+
+
+def test_update_user_not_found(db_session: Session) -> None:
+    with pytest.raises(ValueError, match="User not found"):
+        update_user(db_session, "nonexistent", role="admin")
+
+
+# ── Session queries ─────────────────────────────────────────────────
+
+
+def _make_user(db_session: Session, username: str = "testuser") -> User:
+    user = create_user(db_session, username, "hash")
+    db_session.flush()
+    return user
+
+
+def test_create_and_get_session(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = _make_user(db_session)
+    expires = datetime.now(timezone.utc) + timedelta(days=30)
+    sess = create_session(db_session, user.id, expires, ip_address="127.0.0.1", user_agent="test")
+    db_session.commit()
+
+    fetched = get_session_with_user(db_session, sess.id)
+    assert fetched is not None
+    assert fetched.user.username == "testuser"
+    assert fetched.ip_address == "127.0.0.1"
+
+
+def test_get_session_not_found(db_session: Session) -> None:
+    assert get_session_with_user(db_session, "nonexistent") is None
+
+
+def test_delete_session(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = _make_user(db_session)
+    expires = datetime.now(timezone.utc) + timedelta(days=30)
+    sess = create_session(db_session, user.id, expires)
+    db_session.commit()
+
+    delete_session(db_session, sess.id)
+    db_session.commit()
+    assert get_session_with_user(db_session, sess.id) is None
+
+
+def test_delete_session_not_found(db_session: Session) -> None:
+    delete_session(db_session, "nonexistent")
+
+
+def test_list_active_sessions(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = _make_user(db_session)
+    now = datetime.now(timezone.utc)
+    create_session(db_session, user.id, now + timedelta(days=30))
+    create_session(db_session, user.id, now - timedelta(days=1))
+    db_session.commit()
+
+    active = list_active_sessions(db_session)
+    assert len(active) == 1
+
+
+def test_delete_expired_sessions(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = _make_user(db_session)
+    now = datetime.now(timezone.utc)
+    create_session(db_session, user.id, now + timedelta(days=30))
+    create_session(db_session, user.id, now - timedelta(days=1))
+    db_session.commit()
+
+    deleted = delete_expired_sessions(db_session)
+    db_session.commit()
+    assert deleted == 1
+
+
+# ── Login attempt queries ───────────────────────────────────────────
+
+
+def test_record_login_attempt(db_session: Session) -> None:
+    attempt = record_login_attempt(db_session, "192.168.1.1", "alice", success=True)
+    db_session.commit()
+    assert attempt.ip_address == "192.168.1.1"
+    assert attempt.success is True
+
+
+def test_count_recent_failed_attempts(db_session: Session) -> None:
+    record_login_attempt(db_session, "10.0.0.1", "alice", success=False)
+    record_login_attempt(db_session, "10.0.0.1", "alice", success=False)
+    record_login_attempt(db_session, "10.0.0.1", "alice", success=True)
+    record_login_attempt(db_session, "10.0.0.2", "bob", success=False)
+    db_session.commit()
+
+    count = count_recent_failed_attempts(db_session, "10.0.0.1")
+    assert count == 2
+
+
+def test_count_recent_failed_attempts_outside_window(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    old = LoginAttempt(
+        ip_address="10.0.0.1", username="alice", success=False,
+        attempted_at=datetime.now(timezone.utc) - timedelta(seconds=600),
+    )
+    db_session.add(old)
+    db_session.commit()
+
+    count = count_recent_failed_attempts(db_session, "10.0.0.1", window_seconds=300)
+    assert count == 0
+
+
+def test_list_login_attempts(db_session: Session) -> None:
+    record_login_attempt(db_session, "10.0.0.1", "alice", success=False)
+    record_login_attempt(db_session, "10.0.0.1", "alice", success=True)
+    db_session.commit()
+
+    attempts = list_login_attempts(db_session, limit=10)
+    assert len(attempts) == 2
+    assert attempts[0].attempted_at >= attempts[1].attempted_at
+
+
+def test_list_login_attempts_limit(db_session: Session) -> None:
+    for i in range(5):
+        record_login_attempt(db_session, "10.0.0.1", f"user{i}", success=False)
+    db_session.commit()
+
+    attempts = list_login_attempts(db_session, limit=3)
+    assert len(attempts) == 3
+
+
+# ── Auth API models ─────────────────────────────────────────────────
+
+
+def test_user_response_from_orm(db_session: Session) -> None:
+    user = create_user(db_session, "alice", "hash", role="admin")
+    db_session.commit()
+    resp = UserResponse.from_orm(user)
+    assert resp.id == user.id
+    assert resp.username == "alice"
+    assert resp.role == "admin"
+    assert resp.is_active is True
+    assert resp.created_at is not None
+
+
+def test_session_response_from_orm(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = _make_user(db_session, "alice")
+    expires = datetime.now(timezone.utc) + timedelta(days=30)
+    sess = create_session(
+        db_session, user.id, expires, ip_address="127.0.0.1", user_agent="Mozilla/5.0",
+    )
+    db_session.commit()
+
+    fetched = get_session_with_user(db_session, sess.id)
+    resp = SessionResponse.from_orm(fetched)
+    assert resp.user_id == user.id
+    assert resp.username == "alice"
+    assert resp.ip_address == "127.0.0.1"
+    assert resp.user_agent == "Mozilla/5.0"
+
+
+def test_login_attempt_response_from_orm(db_session: Session) -> None:
+    attempt = record_login_attempt(db_session, "10.0.0.1", "alice", success=False)
+    db_session.commit()
+    resp = LoginAttemptResponse.from_orm(attempt)
+    assert resp.ip_address == "10.0.0.1"
+    assert resp.username == "alice"
+    assert resp.success is False
+    assert resp.attempted_at is not None
+
+
+# ── User model cascade ──────────────────────────────────────────────
+
+
+def test_delete_user_cascades_sessions(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = _make_user(db_session)
+    expires = datetime.now(timezone.utc) + timedelta(days=30)
+    sess = create_session(db_session, user.id, expires)
+    db_session.commit()
+
+    db_session.delete(user)
+    db_session.commit()
+    assert get_session_with_user(db_session, sess.id) is None
+
+
+# ── Rate limit queries ──────────────────────────────────────────────
+
+
+def test_create_job_with_user_id(db_session: Session) -> None:
+    job = create_job(db_session, "generate", user_id="u1")
+    db_session.commit()
+    assert job.user_id == "u1"
+
+
+def test_create_job_without_user_id(db_session: Session) -> None:
+    job = create_job(db_session, "generate")
+    db_session.commit()
+    assert job.user_id is None
+
+
+def test_count_user_jobs_in_window(db_session: Session) -> None:
+    create_job(db_session, "generate", user_id="u1")
+    create_job(db_session, "generate", user_id="u1")
+    create_job(db_session, "score", user_id="u1")
+    create_job(db_session, "generate", user_id="u2")
+    db_session.commit()
+
+    assert count_user_jobs_in_window(db_session, "u1", "generate") == 2
+    assert count_user_jobs_in_window(db_session, "u1", "score") == 1
+    assert count_user_jobs_in_window(db_session, "u2", "generate") == 1
+
+
+def test_count_user_jobs_outside_window(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from songmaker_cli.db.models import Job
+
+    old_job = Job(
+        type="generate", user_id="u1",
+        started_at=datetime.now(timezone.utc) - timedelta(hours=2),
+    )
+    db_session.add(old_job)
+    db_session.commit()
+
+    assert count_user_jobs_in_window(db_session, "u1", "generate", window_seconds=3600) == 0
+
+
+def test_count_user_active_jobs(db_session: Session) -> None:
+    from songmaker_cli.db.queries import update_job_status
+
+    create_job(db_session, "generate", user_id="u1")
+    j2 = create_job(db_session, "generate", user_id="u1")
+    create_job(db_session, "generate", user_id="u1")
+    db_session.commit()
+
+    update_job_status(db_session, j2.id, "completed", progress=1.0)
+    db_session.commit()
+
+    assert count_user_active_jobs(db_session, "u1") == 2
+
+
+def test_count_total_queued_jobs(db_session: Session) -> None:
+    from songmaker_cli.db.queries import update_job_status
+
+    create_job(db_session, "generate", user_id="u1")
+    create_job(db_session, "score", user_id="u2")
+    j3 = create_job(db_session, "generate")
+    db_session.commit()
+
+    update_job_status(db_session, j3.id, "completed", progress=1.0)
+    db_session.commit()
+
+    assert count_total_queued_jobs(db_session) == 2

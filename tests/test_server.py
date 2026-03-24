@@ -45,7 +45,7 @@ def server_app(tmp_path: Path) -> TestClient:
         session.add(score)
         session.commit()
 
-    app = create_app(output_dir, project_root)
+    app = create_app(output_dir, project_root, auth_enabled=False)
     yield TestClient(app)
     reset_engine()
 
