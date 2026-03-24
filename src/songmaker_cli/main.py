@@ -1,7 +1,8 @@
-"""Songmaker CLI — thin adapter between cyclopts and engine modules."""
+"""Songmaker CLI — thin HTTP client that talks to the songmaker API."""
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 from pathlib import Path
@@ -9,14 +10,20 @@ from typing import Annotated, Optional
 
 from cyclopts import App, Parameter
 
-from songmaker_cli.config import find_project_root, validate_path
-from songmaker_cli.constants import OUTPUT_ROOT
-from songmaker_cli.errors import SongmakerError, ValidationError
-from songmaker_cli.generate import GenerationOptions, run_generate
+from songmaker_cli.cli_client import (
+    DEFAULT_SERVER,
+    ServerError,
+    api_get,
+    api_post,
+    api_put,
+    poll_job,
+    resolve_song,
+)
+from songmaker_cli.errors import SongmakerError
 
 log = logging.getLogger(__name__)
 
-app = App(name="songmaker", help="Generate songs from markdown files.")
+app = App(name="songmaker", help="AI-powered song generation platform.")
 
 
 @app.meta.default
@@ -24,6 +31,9 @@ def _launcher(
     *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
     verbose: Annotated[bool, Parameter(name=["-v", "--verbose"], help="Debug logging")] = False,
     quiet: Annotated[bool, Parameter(name=["-q", "--quiet"], help="Errors only")] = False,
+    server: Annotated[
+        str, Parameter(name=["-s", "--server"], help="Server URL"),
+    ] = DEFAULT_SERVER,
 ) -> None:
     if quiet:
         level = logging.ERROR
@@ -32,154 +42,37 @@ def _launcher(
     else:
         level = logging.INFO
     logging.basicConfig(level=level, format="%(name)s: %(message)s")
+    global _server_url
+    _server_url = server
     app(tokens)
 
 
-@app.command
-def generate(
-    path: Annotated[str, Parameter(help="Path to song .md file")],
-    seed: Annotated[Optional[int], Parameter(help="Random seed")] = None,
-    count: Annotated[int, Parameter(help="Number of versions to generate")] = 1,
-    duration: Annotated[Optional[int], Parameter(help="Duration in seconds")] = None,
-    bpm: Annotated[Optional[int], Parameter(help="Tempo in BPM")] = None,
-    key: Annotated[Optional[str], Parameter(help="Musical key")] = None,
-    shift: Annotated[Optional[float], Parameter(help="Flow matching shift")] = None,
-    guidance_scale: Annotated[Optional[float], Parameter(help="CFG strength")] = None,
-    inference_steps: Annotated[Optional[int], Parameter(help="Denoising steps")] = None,
-    lm_temperature: Annotated[Optional[float], Parameter(help="LM temperature")] = None,
-    infer_method: Annotated[Optional[str], Parameter(help="ode or sde")] = None,
-    think_mode: Annotated[Optional[bool], Parameter(help="LM chain-of-thought")] = None,
-) -> None:
-    """Generate a song from a markdown file via ACE-Step."""
-    opts = GenerationOptions(
-        seed=seed, count=count, duration=duration, bpm=bpm, key=key,
-        shift=shift, guidance_scale=guidance_scale,
-        inference_steps=inference_steps, lm_temperature=lm_temperature,
-        infer_method=infer_method, think_mode=think_mode,
-    )
-    run_generate(path, opts)
+_server_url: str = DEFAULT_SERVER
 
 
-
-@app.command
-def score(
-    path: Annotated[Optional[str], Parameter(help="MP3 file to score")] = None,
-    source: Annotated[
-        Optional[str], Parameter(help="Lyrics .md file for text accuracy")
-    ] = None,
-    scorers: Annotated[
-        Optional[str], Parameter(help="Comma-separated scorer names, or 'all'")
-    ] = None,
-    whisper_model: Annotated[
-        str, Parameter(help="Whisper model size (base/small/medium/large)")
-    ] = "large-v3",
-    all: Annotated[
-        bool, Parameter(name="--all", help="Score all MP3s in _output/")
-    ] = False,
-    force: Annotated[
-        bool, Parameter(help="Re-score even if already scored")
-    ] = False,
-    device: Annotated[
-        str, Parameter(help="Device for scoring models (cpu/cuda)")
-    ] = "cpu",
-) -> None:
-    """Score a generated song on quality dimensions."""
-    from songmaker_cli.scoring.pipeline import PipelineConfig
-
-    scorer_list = None
-    if scorers and scorers != "all":
-        scorer_list = [s.strip() for s in scorers.split(",")]
-    config = PipelineConfig(whisper_model=whisper_model, device=device)
-
-    if all:
-        from songmaker_cli.batch import score_all
-
-        score_all(scorer_list, config, force)
-        return
-
-    if path is None:
-        raise ValidationError("Provide an MP3 path or use --all")
-
-    from songmaker_cli.batch import score_single
-
-    score_single(path, source, scorer_list, config)
+def _server() -> str:
+    return _server_url
 
 
-@app.command
-def archive(
-    path: Annotated[Optional[str], Parameter(help="MP3 file to archive")] = None,
-    below: Annotated[
-        Optional[float],
-        Parameter(help="Archive all versions with dynamics below this value"),
-    ] = None,
-) -> None:
-    """Move bad versions to _archive/ instead of deleting.
-
-    Preserves MP3 + snapshot .md for future preference model training.
-    """
-    from songmaker_cli.archive import archive_below_threshold, archive_file
-    from songmaker_cli.snapshot import read_scores
-
-    project_root = find_project_root(Path.cwd()) or Path.cwd()
-    output_dir = project_root / OUTPUT_ROOT
-    archive_dir = project_root / "_archive"
-
-    if path:
-        mp3_path = validate_path(path)
-        archive_file(mp3_path, archive_dir)
-    elif below is not None:
-        count = archive_below_threshold(below, output_dir, archive_dir, read_scores)
-        log.info("Archived %d versions", count)
-    else:
-        raise ValidationError("Provide an MP3 path or use --below <threshold>")
-
-    log.info("Archive complete")
-
-
-@app.command
-def check(
-    path: Annotated[str, Parameter(help="MP3 file to check")],
-    source: Annotated[
-        Optional[str], Parameter(help="Lyrics .md file")
-    ] = None,
-    project_root: Annotated[
-        Optional[str], Parameter(help="Project root for finding lyrics")
-    ] = None,
-    whisper_model: Annotated[
-        str, Parameter(help="Whisper model size (base/small/medium/large)")
-    ] = "large-v3",
-) -> None:
-    """Check lyrics accuracy via Whisper transcription.
-
-    Without --source, searches for lyrics in order:
-    1. --project-root/albums/*/lyrics/
-    2. Detected project root (via pyproject.toml) albums/*/lyrics/
-    3. MP3 parent's grandparent/albums/*/lyrics/
-    4. cwd/albums/*/lyrics/
-    """
-    from songmaker_cli.check import run_check
-
-    run_check(path, source, project_root=project_root, whisper_model=whisper_model)
+# ── Server ──────────────────────────────────────────────────────────
 
 
 @app.command
 def server(
     port: Annotated[int, Parameter(help="Server port")] = 8080,
     output: Annotated[
-        str, Parameter(name=["-o", "--output"], help="Output directory")
+        str, Parameter(name=["-o", "--output"], help="Output directory"),
     ] = "",
-    root: Annotated[
-        Optional[str], Parameter(help="Project root")
-    ] = None,
+    root: Annotated[Optional[str], Parameter(help="Project root")] = None,
     open_browser: Annotated[
-        bool, Parameter(name="--open", help="Open browser on start")
+        bool, Parameter(name="--open", help="Open browser on start"),
     ] = False,
     api_key: Annotated[
         Optional[str],
         Parameter(help="API key for remote access (or set SONGMAKER_API_KEY)"),
     ] = None,
 ) -> None:
-    """Start the songmaker web server for the player UI."""
+    """Start the songmaker web server."""
     from songmaker_cli.server import run_server
 
     output_dir = Path(output).resolve() if output else None
@@ -190,10 +83,165 @@ def server(
     )
 
 
+# ── Albums ──────────────────────────────────────────────────────────
+
+
+@app.command
+def albums() -> None:
+    """List all albums."""
+    data = api_get(_server(), "/api/albums")
+    for album in data:
+        count = album.get("song_count", 0)
+        print(f"  {album['title']} ({album['artist']}) — {count} songs")
+
+
+# ── Songs ───────────────────────────────────────────────────────────
+
+
+@app.command
+def songs(
+    album: Annotated[Optional[str], Parameter(help="Filter by album title")] = None,
+) -> None:
+    """List all songs, optionally filtered by album."""
+    s = _server()
+    path = "/api/songs"
+    if album:
+        albums_data = api_get(s, "/api/albums")
+        match = next((a for a in albums_data if album.lower() in a["title"].lower()), None)
+        if not match:
+            raise ServerError(f"Album not found: '{album}'")
+        path += f"?album_id={match['id']}"
+
+    data = api_get(s, path)
+    for song in data:
+        gens = song.get("generation_count", 0)
+        print(f"  {song['title']} [{song['album_title']}] — {gens} generations")
+
+
+@app.command
+def song(
+    query: Annotated[str, Parameter(help="Song title (fuzzy match)")],
+) -> None:
+    """Show details for a song."""
+    s = _server()
+    matched = resolve_song(s, query)
+    print(f"Title:    {matched['title']}")
+    print(f"Album:    {matched['album_title']} ({matched['artist']})")
+    print(f"BPM:      {matched['bpm']}")
+    print(f"Duration: {matched['duration']}s")
+    print(f"Key:      {matched['key']}")
+    print(f"Versions: {matched['version_count']}")
+    print(f"Gens:     {matched['generation_count']}")
+    if matched.get("generation_params"):
+        print(f"Params:   {json.dumps(matched['generation_params'])}")
+    if matched.get("best_scores"):
+        for k, v in matched["best_scores"].items():
+            if isinstance(v, (int, float)):
+                print(f"  {k}: {v}")
+
+
+# ── Generate ────────────────────────────────────────────────────────
+
+
+@app.command
+def generate(
+    query: Annotated[str, Parameter(help="Song title (fuzzy match)")],
+    count: Annotated[int, Parameter(name=["-n", "--count"], help="Number of generations")] = 1,
+) -> None:
+    """Queue a generation job for a song."""
+    s = _server()
+    matched = resolve_song(s, query)
+    log.info("Generating %dx for '%s'...", count, matched["title"])
+
+    job = api_post(s, f"/api/songs/{matched['id']}/generate", {"count": count})
+    poll_job(s, job["id"])
+    log.info("Done.")
+
+
+# ── Score ───────────────────────────────────────────────────────────
+
+
+@app.command
+def score(
+    query: Annotated[str, Parameter(help="Song title (fuzzy match)")],
+    generation: Annotated[
+        Optional[int], Parameter(name=["-g", "--generation"], help="Generation number"),
+    ] = None,
+) -> None:
+    """Score a generation. Defaults to the latest."""
+    s = _server()
+    matched = resolve_song(s, query)
+    gens = matched.get("generations", [])
+    if not gens:
+        raise ServerError(f"No generations for '{matched['title']}'")
+
+    if generation is not None:
+        gen = next((g for g in gens if g["generation_number"] == generation), None)
+        if not gen:
+            raise ServerError(f"Generation #{generation} not found")
+    else:
+        gen = gens[0]
+
+    log.info("Scoring generation #%d of '%s'...", gen["generation_number"], matched["title"])
+    job = api_post(s, f"/api/generations/{gen['id']}/score")
+    poll_job(s, job["id"])
+    log.info("Done.")
+
+
+# ── Edit ────────────────────────────────────────────────────────────
+
+
+@app.command
+def edit(
+    query: Annotated[str, Parameter(help="Song title (fuzzy match)")],
+    lyrics: Annotated[Optional[str], Parameter(help="New lyrics (or @file.txt)")] = None,
+    prompt: Annotated[Optional[str], Parameter(help="New style prompt")] = None,
+    bpm: Annotated[Optional[int], Parameter(help="BPM")] = None,
+    duration: Annotated[Optional[int], Parameter(help="Duration in seconds")] = None,
+    key: Annotated[Optional[str], Parameter(help="Musical key")] = None,
+) -> None:
+    """Edit a song's content (creates a new version)."""
+    s = _server()
+    matched = resolve_song(s, query)
+
+    params: dict = {}
+    if lyrics is not None:
+        if lyrics.startswith("@"):
+            params["lyrics"] = Path(lyrics[1:]).read_text(encoding="utf-8")
+        else:
+            params["lyrics"] = lyrics
+    if prompt is not None:
+        params["prompt"] = prompt
+    if bpm is not None:
+        params["bpm"] = bpm
+    if duration is not None:
+        params["duration"] = duration
+    if key is not None:
+        params["key"] = key
+
+    if not params:
+        raise ServerError("No changes specified")
+
+    updated = api_put(s, f"/api/songs/{matched['id']}", params)
+    log.info("Updated '%s' → v%d", updated["title"], updated["version_count"])
+
+
+# ── Jobs ────────────────────────────────────────────────────────────
+
+
+@app.command
+def jobs() -> None:
+    """List recent jobs (requires GET /api/jobs endpoint)."""
+    raise ServerError("Not yet implemented — use the web UI to monitor jobs")
+
+
+# ── Main ────────────────────────────────────────────────────────────
+
+
 def main() -> None:
     try:
         app.meta()
-    except SongmakerError as exc:
+    except (SongmakerError, ServerError) as exc:
         log.error("%s", exc)
         sys.exit(1)
 

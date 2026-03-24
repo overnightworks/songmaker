@@ -243,16 +243,6 @@ def test_run_generation_error() -> None:
 
 
 
-def test_check_command(tmp_path: Path) -> None:
-    from songmaker_cli.main import check as check_cmd
-
-    with patch("songmaker_cli.check.run_check") as mock_run:
-        check_cmd(path="/some/file.mp3", source="/some/lyrics.md")
-
-    mock_run.assert_called_once_with(
-        "/some/file.mp3", "/some/lyrics.md", project_root=None, whisper_model="large-v3",
-    )
-
 
 def test_write_output_mastering_error(tmp_path: Path) -> None:
     from songmaker_cli.config import OutputPaths
