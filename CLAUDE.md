@@ -2,7 +2,7 @@
 
 ## Project
 
-AI-powered song generation and playback platform. Markdown files with lyrics and YAML frontmatter go in, mastered MP3s come out. A SvelteKit web app provides the UI for creating, generating, reviewing, and listening.
+AI-powered song generation and playback platform. A SvelteKit web app provides the UI for creating, generating, reviewing, and listening. All song data lives in SQLite. The CLI is a thin HTTP client that talks to the same API.
 
 **Python**: 3.12 (pinned — AI backends require <=3.12)
 **Venv**: `.venv/`
@@ -10,48 +10,33 @@ AI-powered song generation and playback platform. Markdown files with lyrics and
 **Package manager**: pnpm
 **Frontend**: SvelteKit + TypeScript (strict) in `frontend/`
 
-## CLI (cyclopts)
+## CLI (cyclopts + httpx)
+
+The CLI requires the server to be running (`songmaker server`).
 
 ```bash
-songmaker generate <path> [--seed N] [--count N] [--duration N] [--bpm N]
-    [--key KEY] [--shift F] [--guidance-scale F] [--inference-steps N]
-    [--lm-temperature F] [--infer-method STR] [--think-mode/--no-think-mode]
-
-songmaker check <mp3> [--source <lyrics.md>] [--whisper-model STR]
-
-songmaker score [<mp3>] [--source <lyrics.md>] [--scorers STR]
-    [--whisper-model STR] [--all] [--force] [--device cpu|cuda]
-
-songmaker archive [<mp3>] [--below THRESHOLD]
-
-songmaker player [-o output_dir] [--root project_root]
-
 songmaker server [--port 8080] [--open] [-o output_dir] [--root project_root]
+
+songmaker albums
+songmaker songs [--album TITLE]
+songmaker song <title>
+
+songmaker generate <title> [-n COUNT]
+songmaker score <title> [-g GENERATION_NUMBER]
+songmaker edit <title> [--lyrics @file.txt] [--prompt STR] [--bpm N] [--duration N] [--key STR]
 ```
 
-## Song Format
+Global options: `--server URL` (default: http://localhost:8080), `-v`/`-q` for verbosity.
 
-```markdown
----
-title: Song Title
-album: album_name
-track: 1
-prompt: >
-  style description for ACE-Step
-bpm: 120
-duration: 180
-key: Am
-language: de
----
+## Data Model
 
-## Lyrics
-
-[verse]
-Lyrics here...
-
-[chorus]
-Chorus here...
 ```
+Song (identity: title + album)
+  └── Version (content snapshot: lyrics, prompt, BPM, key, duration, generation_params)
+        └── Generation (MP3 output: seed, scores, rating, whisper text)
+```
+
+All data in SQLite (`_output/songmaker.db`). Songs created/edited via web UI or CLI.
 
 ## Code Standards
 
@@ -71,16 +56,16 @@ Chorus here...
 - No business logic in CLI handlers — delegate to engine modules
 
 ### Testing
-- 100% coverage goal
+- 100% coverage goal (achieved on all core modules)
 - pytest fixtures, no test inheritance
 - Mock external services (ACE-Step server, ffmpeg, Whisper)
-- Unit tests must be fast (< 10 seconds); integration tests with audio processing are slower
+- Unit tests must be fast (< 10 seconds)
 
 ### General (Python)
 - Type hints on all function signatures
 - Prefer dataclasses/pydantic/TypedDict over untyped dicts for structured data
 - Functions return values, don't mutate arguments
-- No dead parameters, no unused imports, no stale docstrings — if you move or remove code, clean up all traces
+- No dead parameters, no unused imports, no stale docstrings
 
 ### Frontend Code Standards (SvelteKit + TypeScript)
 - Same KISS principles as Python — small components, single responsibility
@@ -90,12 +75,10 @@ Chorus here...
 - Reactive state via Svelte stores/runes, no global mutable variables
 - No inline styles — use scoped CSS in `<style>` blocks
 - Semantic HTML — use proper elements, not div soup
-- Accessibility: all interactive elements keyboard-navigable, proper ARIA labels
 
 ### Frontend Testing
-- Vitest for unit tests, Testing Library for component tests
-- Test logic in `lib/` (stores, API client, utils) — high coverage
-- Test components that contain logic (forms, player controls)
+- Vitest + @vitest/coverage-v8 for unit tests, Testing Library for components
+- 100% statement coverage on lib/ (stores, API client, utils)
 - Mock API calls, never hit real backend in tests
 
 ### Frontend Linting
@@ -105,43 +88,40 @@ Chorus here...
 
 ## Key Rules
 
-1. **Lyrics-first workflow**: Songs start as markdown in `albums/<album>/lyrics/`. Finalize lyrics before generating.
-2. **One song = one markdown file**: YAML frontmatter + lyrics section.
+1. **Database is the source of truth**: All song data lives in SQLite, not in files.
+2. **One code path**: CLI and web UI both use the same REST API.
 3. **Engine reuse**: All engines live in `src/` — never duplicate engine code.
 4. **Never commit secrets or API keys.**
-5. **Commit per version**: Commit lyrics before each generation. Format: `feat(<album>): <song> v<N> — <style>`
 
 ## Project Structure
 
 - `src/acestep_engine/` — ACE-Step HTTP client (with retry), config dataclass, response models
 - `src/audio_engine/` — Mastering chain, WAV/MP3 I/O, LUFS measurement
-- `src/songmaker_cli/` — CLI entrypoint and subcommands
-  - `main.py` — Thin CLI adapter (cyclopts commands → engine modules, no business logic)
-  - `generate.py` — Generation orchestration (generate, decode, master, score, rank)
-  - `batch.py` — Batch scoring (score --all, score single MP3)
-  - `archive.py` — Archive bad versions (move to _archive/, threshold filtering)
-  - `parser.py` — Markdown + YAML parsing into pydantic models
-  - `config.py` — Output path resolution, ACE-Step config building
-  - `check.py` — Verbose lyrics check CLI (thin wrapper over scoring.text_accuracy)
-  - `scanner.py` — Filesystem scanning, version deduplication
-  - `manifest.py` — Player manifest data model + building
-  - `player.py` — HTML player generation (thin orchestrator)
-  - `server.py` — FastAPI backend for player UI (ratings, scoring, generation)
-  - `snapshot.py` — Generation snapshot read/write (frontmatter, scores, generation info)
-  - `scoring/` — Scoring pipeline with ScorerRegistry class + decorator registration
-- `albums/<album>/lyrics/` — Song markdown files
-- `albums/<album>/album.yaml` — Album metadata (title, artist, year)
-- `_output/` — Generated audio (gitignored)
+- `src/songmaker_cli/` — CLI + server
+  - `main.py` — CLI commands (thin HTTP client via httpx)
+  - `cli_client.py` — HTTP helpers (api_get/post/put, resolve_song, poll_job)
+  - `server.py` — FastAPI app setup, static files, startup
+  - `api.py` — REST API endpoints (CRUD, generation, scoring, chat)
+  - `jobs.py` — Background job runners (generation + scoring)
+  - `gpu_queue.py` — GPU job queue with ACE-Step lifecycle management
+  - `config.py` — ACE-Step config building, output path resolution, generation defaults
+  - `generate.py` — Generation engine (decode, master, write MP3)
+  - `parser.py` — Data models (SongMeta, AlbumMeta, GenerationParams)
+  - `db/` — SQLAlchemy models, queries, engine
+  - `scoring/` — Scoring pipeline with ScorerRegistry + individual scorers
+  - `claude/` — Claude provider (API + CLI backends)
+  - `constants.py` — Shared constants
+  - `errors.py` — Error types
+- `_output/` — Generated audio + SQLite DB (gitignored)
 - `_models/` — AI model weights (gitignored)
 - `scripts/` — Server setup/start
-- `tests/` — pytest suite
-- `docs/` — Architecture and testing docs
-- `frontend/` — SvelteKit frontend app
+- `tests/` — pytest suite (382 tests)
+- `frontend/` — SvelteKit frontend app (108 tests)
   - `src/routes/` — SvelteKit pages and layouts
   - `src/lib/components/` — Svelte components
-  - `src/lib/stores/` — Svelte stores (player state, WebSocket, jobs)
+  - `src/lib/stores/` — Svelte stores (player, editor, filter, jobs, settings)
   - `src/lib/api/` — Typed API client and shared types
-- `plans/` — Architecture plans and design docs
+  - `src/lib/utils/` — Diff, formatting utilities
 
 ## Setup
 
@@ -150,26 +130,26 @@ Chorus here...
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[server,scoring,whisper,dev]"
 # ffmpeg must be on PATH
-# ACE-Step server: python scripts/start_acestep.py
 ```
 
 ### Frontend (SvelteKit)
 
 ```bash
-cd player
+cd frontend
 pnpm install
-pnpm dev          # dev server with HMR (proxies /api to FastAPI)
-pnpm build        # production build
-pnpm check        # svelte-check + tsc
-pnpm lint         # eslint + prettier --check
-pnpm test         # vitest
+pnpm dev              # dev server with HMR (proxies /api to FastAPI)
+pnpm build            # production build
+pnpm check            # svelte-check + tsc
+pnpm lint             # eslint + prettier --check
+pnpm test             # vitest
+pnpm test:coverage    # vitest with v8 coverage
 ```
 
 ## Workflow
 
-- **Commit before reviewing**: After completing a batch of changes, always commit first, then review. This ensures work is safe and reviewable as a clean diff.
+- **Commit before reviewing**: After completing a batch of changes, always commit first, then review.
 - **Run tests before committing**: `pytest tests/ -q` must pass. Run `ruff check` on changed files.
 - **Frontend changes**: `pnpm check` and `pnpm lint` must pass before committing. Run `pnpm test` for changed modules.
 
@@ -178,7 +158,7 @@ pnpm test         # vitest
 - Backend serves API at `/api/*`, frontend proxied in dev via Vite
 - All API types defined in `frontend/src/lib/api/types.ts`
 - Types must match Python pydantic models — keep in sync manually
-- WebSocket at `/ws` for real-time generation/scoring progress
+- CLI uses the same `/api/*` endpoints via httpx
 
 ## Conventions
 
