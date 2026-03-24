@@ -44,8 +44,12 @@ Thumbs.db
 *.pth
 *.ckpt
 
+# ── Frontend ──
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+
 # ── Misc ──
-plans/
 .pytest_cache/
 .ruff_cache/
 albums/*/legacy_sources/

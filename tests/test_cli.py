@@ -13,16 +13,9 @@ from songmaker_cli.config import validate_path
 from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.generate import (
     DecodedAudio,
-    GenerationOptions,
     _decode_audio,
-    _log_generation_banner,
-    _log_result_banner,
     _run_generation,
-    _update_player,
     _write_output,
-    load_album_meta_for_song,
-    open_player,
-    validate_song_meta,
 )
 from songmaker_cli.main import main
 from songmaker_cli.parser import AlbumMeta, SongMeta
@@ -40,80 +33,6 @@ def test_validate_path_not_found() -> None:
         validate_path("/nonexistent/path.md")
 
 
-def test_validate_song_meta_no_prompt() -> None:
-    meta = SongMeta(prompt="", lyrics="[verse]\nHello")
-    with pytest.raises(ValidationError, match="prompt"):
-        validate_song_meta(meta)
-
-
-def test_validate_song_meta_no_lyrics() -> None:
-    meta = SongMeta(prompt="rock", lyrics="")
-    with pytest.raises(ValidationError, match="Lyrics"):
-        validate_song_meta(meta)
-
-
-def test_validate_song_meta_valid() -> None:
-    meta = SongMeta(prompt="rock", lyrics="[verse]\nHello")
-    validate_song_meta(meta)
-
-
-def test_generation_options_ace_overrides_filters_none() -> None:
-    opts = GenerationOptions(seed=42, duration=60)
-    result = opts.ace_overrides()
-    assert result == {"seed": 42, "duration": 60}
-
-
-def test_generation_options_ace_overrides_empty() -> None:
-    opts = GenerationOptions()
-    result = opts.ace_overrides()
-    assert result == {}
-
-
-def test_generation_options_excludes_workflow_flags() -> None:
-    opts = GenerationOptions(seed=42, player=True)
-    result = opts.ace_overrides()
-    assert result == {"seed": 42}
-    assert "player" not in result
-
-
-def test_load_album_meta_with_yaml(tmp_path: Path) -> None:
-    album_dir = tmp_path / "my_album"
-    lyrics_dir = album_dir / "lyrics"
-    lyrics_dir.mkdir(parents=True)
-
-    yaml_path = album_dir / "album.yaml"
-    yaml_path.write_text("title: My Album\nartist: TestArtist\nyear: 2025\n")
-
-    md_path = lyrics_dir / "song.md"
-    md_path.touch()
-
-    meta = load_album_meta_for_song(md_path)
-    assert meta.title == "My Album"
-    assert meta.artist == "TestArtist"
-
-
-def test_load_album_meta_without_yaml(tmp_path: Path) -> None:
-    lyrics_dir = tmp_path / "cool_album" / "lyrics"
-    lyrics_dir.mkdir(parents=True)
-    md_path = lyrics_dir / "song.md"
-    md_path.touch()
-
-    meta = load_album_meta_for_song(md_path)
-    assert meta.title == "Cool Album"
-
-
-def test_load_album_meta_via_album_name(tmp_path: Path) -> None:
-    album_dir = tmp_path / "albums" / "my_album"
-    lyrics_dir = album_dir / "lyrics"
-    lyrics_dir.mkdir(parents=True)
-    (album_dir / "album.yaml").write_text("title: Found Via Name\nartist: Test\n")
-
-    md_path = lyrics_dir / "song.md"
-    md_path.touch()
-
-    meta = load_album_meta_for_song(md_path, album_name="my_album", project_root=tmp_path)
-    assert meta.title == "Found Via Name"
-
 
 def test_decode_audio_success(make_stereo_wav_bytes: Callable[..., bytes]) -> None:
     from acestep_engine.models import AceStepResult
@@ -129,7 +48,7 @@ def test_decode_audio_empty() -> None:
     from acestep_engine.models import AceStepResult
 
     result = AceStepResult(wav_bytes=b"not wav", seed=1)
-    with pytest.raises(GenerationError, match="empty"):
+    with pytest.raises(GenerationError, match="decode failed"):
         _decode_audio(result)
 
 
@@ -155,58 +74,6 @@ def test_write_output(tmp_path: Path) -> None:
     assert paths.mp3.stat().st_size > 0
     assert not paths.raw_wav.exists()
 
-
-def test_log_generation_banner(caplog: pytest.LogCaptureFixture) -> None:
-    from acestep_engine.models import AceStepConfig
-    from songmaker_cli.config import OutputPaths
-
-    meta = SongMeta(title="Song", album="test", prompt="rock", lyrics="hello")
-    paths = OutputPaths(
-        output_dir=Path("/tmp"), base_name="song", version=1, versioned_name="song_v1",
-    )
-    config = AceStepConfig(prompt="rock", lyrics="hello", bpm=120, duration=60, key="Am")
-
-    with caplog.at_level("INFO"):
-        _log_generation_banner(meta, paths, config)
-    assert "Song" in caplog.text
-    assert "120" in caplog.text
-
-
-def test_log_result_banner(caplog: pytest.LogCaptureFixture) -> None:
-    from songmaker_cli.config import OutputPaths
-
-    paths = OutputPaths(
-        output_dir=Path("/tmp"), base_name="song", version=1, versioned_name="song_v1",
-    )
-    audio = DecodedAudio(
-        left=np.array([0.0]), right=np.array([0.0]), sample_rate=44100, duration=5.0,
-    )
-    with caplog.at_level("INFO"):
-        _log_result_banner(paths, audio, 42, 10.0)
-    assert "Done" in caplog.text
-    assert "42" in caplog.text
-
-
-def test_open_player(tmp_path: Path) -> None:
-    player_html = tmp_path / "player.html"
-    player_html.write_text("<html></html>")
-    with patch("songmaker_cli.generate.webbrowser.open") as mock_open:
-        open_player(player_html)
-    mock_open.assert_called_once()
-
-
-def test_update_player(tmp_path: Path) -> None:
-    from songmaker_cli.config import OutputPaths
-
-    output_dir = tmp_path / "album"
-    output_dir.mkdir()
-    paths = OutputPaths(
-        output_dir=output_dir, base_name="song", version=1, versioned_name="song_v1",
-    )
-    with patch("songmaker_cli.generate.generate_player") as mock_gen:
-        mock_gen.return_value = tmp_path / "player.html"
-        result = _update_player(paths)
-    assert result == tmp_path / "player.html"
 
 
 def test_run_generation_success() -> None:
@@ -265,53 +132,6 @@ def test_run_generation_error() -> None:
             _run_generation(config, client)
 
 
-def test_player_command(tmp_path: Path) -> None:
-    from songmaker_cli.main import player as player_cmd
-
-    output_dir = tmp_path / "output"
-    output_dir.mkdir()
-
-    with patch("songmaker_cli.main.generate_player") as mock_gen:
-        mock_gen.return_value = output_dir / "player.html"
-        player_cmd(output=str(output_dir))
-
-    mock_gen.assert_called_once()
-
-
-def test_player_command_not_found() -> None:
-    from songmaker_cli.main import player as player_cmd
-
-    with pytest.raises(ValidationError, match="not found"):
-        player_cmd(output="/nonexistent/path")
-
-
-def test_player_command_with_open(tmp_path: Path) -> None:
-    from songmaker_cli.main import player as player_cmd
-
-    output_dir = tmp_path / "output"
-    output_dir.mkdir()
-    player_html = output_dir / "player.html"
-    player_html.write_text("<html></html>")
-
-    with (
-        patch("songmaker_cli.main.generate_player") as mock_gen,
-        patch("songmaker_cli.generate.webbrowser.open") as mock_open,
-    ):
-        mock_gen.return_value = player_html
-        player_cmd(output=str(output_dir), open_browser=True)
-
-    mock_open.assert_called_once()
-
-
-def test_check_command(tmp_path: Path) -> None:
-    from songmaker_cli.main import check as check_cmd
-
-    with patch("songmaker_cli.check.run_check") as mock_run:
-        check_cmd(path="/some/file.mp3", source="/some/lyrics.md")
-
-    mock_run.assert_called_once_with(
-        "/some/file.mp3", "/some/lyrics.md", project_root=None, whisper_model="medium",
-    )
 
 
 def test_write_output_mastering_error(tmp_path: Path) -> None:

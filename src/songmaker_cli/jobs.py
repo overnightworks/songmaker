@@ -1,0 +1,260 @@
+"""Background job runners for generation and scoring."""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from acestep_engine import AceStepClient
+from acestep_engine.models import AceStepConfig
+from songmaker_cli.config import build_ace_config, find_project_root, load_generation_defaults
+from songmaker_cli.constants import OUTPUT_ROOT
+from songmaker_cli.db.engine import get_session_factory
+from songmaker_cli.db.queries import (
+    create_generation,
+    get_generation,
+    get_song,
+    save_scores,
+    update_job_status,
+)
+from songmaker_cli.generate import generate_single
+from songmaker_cli.parser import AlbumMeta, SongMeta
+from songmaker_cli.scoring import run_scoring_pipeline
+from songmaker_cli.scoring.pipeline import PipelineConfig
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class GenerationContext:
+    song_id: str
+    version_id: str
+    meta: SongMeta
+    album_meta: AlbumMeta
+    ace_config: AceStepConfig
+    output_root: Path
+    model_name: str | None
+    client: AceStepClient
+    base_params: dict = field(default_factory=dict)
+
+
+class GenerationSetupError(Exception):
+    pass
+
+
+def _build_generation_context(
+    song_id: str, version_id: str,
+) -> GenerationContext:
+    """Load song/version from DB and build all config needed for generation."""
+    factory = get_session_factory()
+
+    with factory() as session:
+        song = get_song(session, song_id)
+        if not song:
+            raise GenerationSetupError("Song not found")
+
+        version = next((v for v in song.versions if v.id == version_id), None)
+        if not version:
+            raise GenerationSetupError("Version not found")
+
+        album = song.album
+        album_name = album.title.lower().replace(" ", "_") if album else "unknown"
+        album_artist = album.artist if album else ""
+        song_title = song.title
+        track_number = song.track_number
+        lyrics = version.lyrics
+        prompt = version.prompt
+        bpm = version.bpm
+        duration = version.duration
+        key = version.key
+        language = song.language
+        version_gen_params = version.generation_params or {}
+
+    log.debug(
+        "Song: '%s' (album=%s, bpm=%s, duration=%s, key=%s, version_params=%s)",
+        song_title, album_name, bpm, duration, key, version_gen_params or "none",
+    )
+
+    base_params: dict = {
+        k: v for k, v in {
+            "bpm": bpm, "duration": duration, "key": key, "language": language,
+        }.items() if v
+    }
+    base_params.update(version_gen_params)
+
+    meta = SongMeta(
+        title=song_title,
+        album=album_name,
+        track=str(track_number),
+        prompt=prompt,
+        lyrics=lyrics,
+        generation_params=base_params,
+    )
+
+    client = AceStepClient()
+    if not client.is_available:
+        raise GenerationSetupError("ACE-Step server not reachable")
+
+    server_info = client.server_info()
+    model_name = server_info.model if server_info else None
+    log.debug("ACE-Step model: %s", model_name)
+
+    global_defaults = load_generation_defaults()
+    ace_config = build_ace_config(
+        meta, model_name=model_name, global_defaults=global_defaults,
+    )
+
+    project_root = find_project_root(Path.cwd())
+    output_root = (project_root / OUTPUT_ROOT) if project_root else Path(OUTPUT_ROOT)
+
+    return GenerationContext(
+        song_id=song_id,
+        version_id=version_id,
+        meta=meta,
+        album_meta=AlbumMeta(title=album_name, artist=album_artist),
+        ace_config=ace_config,
+        output_root=output_root,
+        model_name=model_name,
+        client=client,
+        base_params=base_params,
+    )
+
+
+def run_generation_job(
+    job_id: str, song_id: str, version_id: str, count: int,
+) -> None:
+    """Run generation in a background thread, updating DB status."""
+    factory = get_session_factory()
+    log.info("Generation job %s: song=%s, count=%d", job_id, song_id, count)
+
+    try:
+        _update_job(factory, job_id, "running")
+
+        try:
+            ctx = _build_generation_context(song_id, version_id)
+        except GenerationSetupError as exc:
+            _update_job(factory, job_id, "failed", error=str(exc))
+            return
+
+        for i in range(count):
+            _update_job(factory, job_id, "running", progress=i / count)
+
+            result = generate_single(
+                ctx.meta, ctx.album_meta, ctx.ace_config, ctx.output_root, client=ctx.client,
+            )
+
+            mp3_rel = f"{ctx.meta.album}/{result.mp3_path.name}"
+            gen_params = {
+                "acestep_model": ctx.model_name,
+                "bpm": ctx.ace_config.bpm,
+                "duration": ctx.ace_config.duration,
+                "key": ctx.meta.generation_params.get("key", ""),
+                "guidance_scale": ctx.ace_config.guidance_scale,
+                "inference_steps": ctx.ace_config.inference_steps,
+                "shift": ctx.ace_config.shift,
+                "lm_temperature": ctx.ace_config.lm_temperature,
+                "infer_method": ctx.ace_config.infer_method,
+                "think_mode": ctx.ace_config.think_mode,
+            }
+
+            with factory() as session:
+                create_generation(
+                    session,
+                    song_id=song_id,
+                    version_id=version_id,
+                    mp3_path=mp3_rel,
+                    seed=result.seed,
+                    generation_params=gen_params,
+                )
+                session.commit()
+
+            log.info("Generated %d/%d: %s (seed=%s)", i + 1, count, mp3_rel, result.seed)
+
+        _update_job(factory, job_id, "completed", progress=1.0)
+
+    except Exception as exc:
+        log.exception("Generation job failed: %s", exc)
+        _update_job(factory, job_id, "failed", error=str(exc))
+
+
+def run_scoring_job(
+    job_id: str, gen_id: str, scorers: list[str] | None,
+) -> None:
+    """Run scoring in a background thread, updating DB status."""
+    log.info("Scoring job %s: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
+    factory = get_session_factory()
+
+    try:
+        _update_job(factory, job_id, "running")
+
+        with factory() as session:
+            gen = get_generation(session, gen_id)
+            if not gen:
+                _update_job(factory, job_id, "failed", error="Generation not found")
+                return
+            mp3_path_rel = gen.mp3_path
+            song = gen.song
+
+            meta_kwargs: dict = {}
+            if song:
+                ver = song.latest_version
+                if ver:
+                    meta_kwargs = {
+                        "title": song.title,
+                        "prompt": ver.prompt,
+                        "lyrics": ver.lyrics,
+                    }
+
+        project_root = find_project_root(Path.cwd())
+        output_root = (project_root / OUTPUT_ROOT) if project_root else Path(OUTPUT_ROOT)
+        mp3_full = output_root / mp3_path_rel
+
+        if not mp3_full.exists():
+            _update_job(factory, job_id, "failed", error=f"MP3 not found: {mp3_path_rel}")
+            return
+
+        device = _detect_device()
+        config = PipelineConfig(device=device)
+        meta = SongMeta(**meta_kwargs) if meta_kwargs else None
+        song_scores = run_scoring_pipeline(mp3_full, meta=meta, scorers=scorers, config=config)
+        scores_dict = song_scores.to_dict()
+
+        whisper_text = None
+        if song_scores.text_accuracy:
+            whisper_text = "\n".join(song_scores.text_accuracy.transcribed_line_texts)
+
+        with factory() as session:
+            from songmaker_cli.db.models import Generation as GenModel
+            save_scores(session, gen_id, scores_dict)
+            if whisper_text is not None:
+                gen_record = session.query(GenModel).filter_by(id=gen_id).first()
+                if gen_record:
+                    gen_record.whisper_text = whisper_text
+            session.commit()
+
+        log.info("Scored: %s (%d metrics)", mp3_path_rel, len(scores_dict))
+        _update_job(factory, job_id, "completed", progress=1.0)
+
+    except Exception as exc:
+        log.exception("Scoring job failed: %s", exc)
+        _update_job(factory, job_id, "failed", error=str(exc))
+
+
+def _detect_device() -> str:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+    except ImportError:
+        pass
+    return "cpu"
+
+
+def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
+    try:
+        with factory() as session:
+            update_job_status(session, job_id, status, **kwargs)
+            session.commit()
+    except Exception:
+        log.exception("Failed to update job %s to %s", job_id, status)

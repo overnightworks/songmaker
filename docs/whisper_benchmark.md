@@ -29,28 +29,26 @@ ACE-Step SFT model, 220s duration
 | 1 | Full lyrics prompt, beam=5, condition=False | 94.9% | Gets "Ukraine" correct |
 | 2 | + Pre-emphasis + vocal boost +6dB | **96.7%** | Best overall |
 
-## Optimal Pipeline
+## Optimal Pipeline (Updated 2026-03-23)
 
 ```
-Audio preprocessing:
-  1. Pre-emphasis filter (coeff=0.97) — boosts consonant frequencies
-  2. Vocal band boost +6dB (200-5000 Hz) — emphasizes speech over music
-  3. Peak normalize to 0.95
+Audio preprocessing: NONE (raw MP3 — see findings below)
 
 Whisper settings:
   - model: large-v3
-  - initial_prompt: full lyrics from markdown (we always have them)
+  - initial_prompt: full lyrics text (not keywords — gives cleaner segmentation)
   - condition_on_previous_text: False (prevents error cascade)
   - beam_size: 5 (explores multiple hypotheses)
   - best_of: 5 (samples multiple candidates)
   - temperature: 0 (deterministic)
-  - word_timestamps: True (proper segmentation)
   - compression_ratio_threshold: 1.8 (stricter hallucination filter)
   - logprob_threshold: -0.5 (drops low-confidence segments)
+  - fp16: True (faster on GPU, same quality)
 
 Accuracy measurement:
   - clean_lyrics() strips ALL punctuation (,. ? ! ; : " — etc.)
-  - Word-level comparison (max of char-level and word-level SequenceMatcher)
+  - Coverage-based: what % of intended words were found (order-preserving)
+  - Extra sung content (ad-libs, improvised bridges) NOT penalized
 ```
 
 ## Key Findings
@@ -58,18 +56,30 @@ Accuracy measurement:
 1. **Punctuation normalization** was the biggest accuracy blocker — stripping punctuation jumped 75.4% → 90.8%
 2. **`condition_on_previous_text=False`** is critical for songs — prevents error cascade
 3. **`beam_size=5`** significantly improves over greedy decoding
-4. **Full lyrics as prompt** is better than key-word prompt (92.3% vs 90.8%) and is fully automatic
-5. **Pre-emphasis + vocal boost** gives consistent +1-2% improvement with no downsides
+4. **Full lyrics as prompt** is better than key-word prompt and gives cleaner segmentation (no comma-separated words)
+5. **Pre-emphasis + vocal boost HURTS** songs with instrumental intros — causes "I, I, I, I" hallucination loops. Raw MP3 is better.
 6. **Demucs vocal separation hurts** AI-generated audio — introduces artifacts
 7. **VAD filter too aggressive** for music — cuts real vocals during quiet passages
 8. **16kHz WAV** does not help over MP3
 9. **HPSS, spectral gating, compression** — no meaningful improvement
-10. Remaining errors are genuinely unclear ACE-Step pronunciation (v124 sings "Ukraine" clearly, v130 doesn't)
+10. **word_timestamps=True** causes comma-separated word segments that confuse coherence scoring
+11. Remaining errors are genuinely unclear ACE-Step pronunciation
+
+### Results with current pipeline (no preprocessing, full lyrics prompt)
+
+| Song | Version | Rating | Text Accuracy | Coherence | Notes |
+|------|---------|--------|---------------|-----------|-------|
+| With A Little Help | v3 | 81 | **91%** | **10** | Clean transcription, no hallucination |
+| Where Is The Love | v124 | high | **92.8%** | — | Best vocal quality |
+| Where Is The Love | v130 | mid | **80.1%** | — | Misses some words |
+| Where Is The Love | v148 | 16.7 | **44.4%** | — | Genuinely bad vocals |
 
 ## What Doesn't Work for AI-Generated Music
 
+- Pre-emphasis + vocal boost (causes hallucination on instrumental intros)
 - Demucs/source separation (designed for real instruments, distorts AI audio)
 - Silero VAD (too aggressive on sung vocals)
 - HPSS harmonic extraction (destroys vocal timbre)
 - Spectral gating (removes too much vocal information)
+- word_timestamps (causes comma-separated segments)
 - Lower no_speech_threshold (more hallucination, not less)

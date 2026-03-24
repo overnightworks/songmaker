@@ -1,0 +1,285 @@
+"""Pydantic models for API requests and responses.
+
+These define the exact contract between backend and frontend.
+FastAPI auto-generates OpenAPI docs from these models.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from songmaker_cli.db.models import Album, Generation, Job, Song, Version
+
+
+# ── Album ───────────────────────────────────────────────────────────
+
+
+class AlbumResponse(BaseModel):
+    id: str
+    title: str
+    artist: str
+    subtitle: str = ""
+    year: str = ""
+    colors: dict[str, str] = Field(default_factory=dict)
+    song_count: int = 0
+
+    @classmethod
+    def from_orm(cls, album: Album) -> AlbumResponse:
+        return cls(
+            id=album.id,
+            title=album.title,
+            artist=album.artist,
+            subtitle=album.subtitle,
+            year=album.year,
+            colors=album.colors or {},
+            song_count=len(album.songs) if album.songs else 0,
+        )
+
+
+# ── Generation ──────────────────────────────────────────────────────
+
+
+class GenerationResponse(BaseModel):
+    id: str
+    song_id: str
+    version_id: str | None
+    version_number: int | None
+    generation_number: int
+    mp3_path: str
+    seed: int | None
+    status: str
+    is_archived: bool
+    is_picked: bool
+    whisper_text: str | None
+    scores: dict | None
+    generation_params: dict | None
+    created_at: str | None
+
+    @classmethod
+    def from_orm(cls, gen: Generation) -> GenerationResponse:
+        scores: dict[str, object] = {}
+        for score in gen.scores:
+            if isinstance(score.value, dict):
+                scores.update(score.value)
+        if gen.rating:
+            scores["user_rating"] = gen.rating.rating
+            scores["user_notes"] = gen.rating.notes
+
+        return cls(
+            id=gen.id,
+            song_id=gen.song_id,
+            version_id=gen.version_id,
+            version_number=gen.version.version_number if gen.version else None,
+            generation_number=gen.generation_number,
+            mp3_path=gen.mp3_path,
+            seed=gen.seed,
+            status=gen.status,
+            is_archived=gen.is_archived,
+            is_picked=gen.is_picked,
+            whisper_text=gen.whisper_text,
+            scores=scores if scores else None,
+            generation_params=gen.generation_params,
+            created_at=gen.created_at.isoformat() if gen.created_at else None,
+        )
+
+
+# ── Version ─────────────────────────────────────────────────────────
+
+
+class VersionResponse(BaseModel):
+    id: str
+    version_number: int
+    lyrics: str
+    prompt: str
+    bpm: int
+    duration: int
+    key: str
+    generation_params: dict | None
+    created_at: str | None
+
+    @classmethod
+    def from_orm(cls, ver: Version) -> VersionResponse:
+        return cls(
+            id=ver.id,
+            version_number=ver.version_number,
+            lyrics=ver.lyrics,
+            prompt=ver.prompt,
+            bpm=ver.bpm,
+            duration=ver.duration,
+            key=ver.key,
+            generation_params=ver.generation_params,
+            created_at=ver.created_at.isoformat() if ver.created_at else None,
+        )
+
+
+# ── Song ────────────────────────────────────────────────────────────
+
+
+class SongResponse(BaseModel):
+    id: str
+    title: str
+    album_id: str
+    album_title: str = ""
+    artist: str = ""
+    track_number: int
+    language: str = ""
+    lyrics: str = ""
+    prompt: str = ""
+    bpm: int = 0
+    duration: int = 180
+    key: str = ""
+    generation_params: dict | None = None
+    version_count: int = 0
+    generation_count: int = 0
+    best_scores: dict | None = None
+    best_rating: float | None = None
+    generations: list[GenerationResponse] = Field(default_factory=list)
+    created_at: str | None = None
+
+    @classmethod
+    def from_orm(cls, song: Song) -> SongResponse:
+        ver = song.latest_version
+        best_gen = _best_generation(song.generations)
+
+        best_scores: dict[str, object] | None = None
+        if best_gen:
+            best_scores = {}
+            for s in best_gen.scores:
+                if isinstance(s.value, dict):
+                    best_scores.update(s.value)
+
+        return cls(
+            id=song.id,
+            title=song.title,
+            album_id=song.album_id,
+            album_title=song.album.title if song.album else "",
+            artist=song.album.artist if song.album else "",
+            track_number=song.track_number,
+            language=song.language,
+            lyrics=ver.lyrics if ver else "",
+            prompt=ver.prompt if ver else "",
+            bpm=ver.bpm if ver else 0,
+            duration=ver.duration if ver else 180,
+            key=ver.key if ver else "",
+            generation_params=ver.generation_params if ver else None,
+            version_count=len(song.versions),
+            generation_count=len(song.generations),
+            best_scores=best_scores if best_scores else None,
+            best_rating=best_gen.rating.rating if best_gen and best_gen.rating else None,
+            generations=[GenerationResponse.from_orm(g) for g in song.generations],
+            created_at=song.created_at.isoformat() if song.created_at else None,
+        )
+
+
+def _best_generation(generations: list) -> object | None:
+    rated = [g for g in generations if g.rating and not g.is_archived]
+    if rated:
+        return max(rated, key=lambda g: g.rating.rating)
+    active = [g for g in generations if not g.is_archived]
+    return active[0] if active else None
+
+
+# ── Job ─────────────────────────────────────────────────────────────
+
+
+class JobResponse(BaseModel):
+    id: str
+    type: str
+    status: str
+    progress: float = 0.0
+    error: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+
+    @classmethod
+    def from_orm(cls, job: Job) -> JobResponse:
+        return cls(
+            id=job.id,
+            type=job.type,
+            status=job.status,
+            progress=job.progress,
+            error=job.error,
+            started_at=job.started_at.isoformat() if job.started_at else None,
+            completed_at=job.completed_at.isoformat() if job.completed_at else None,
+        )
+
+
+# ── Requests ────────────────────────────────────────────────────────
+
+
+class SongCreateRequest(BaseModel):
+    title: str
+    album_id: str
+    lyrics: str = ""
+    prompt: str = ""
+    bpm: int = 0
+    duration: int = 180
+    key: str = ""
+    language: str = ""
+    generation_params: dict | None = None
+
+
+class SongUpdateRequest(BaseModel):
+    lyrics: str | None = None
+    prompt: str | None = None
+    bpm: int | None = None
+    duration: int | None = None
+    key: str | None = None
+    generation_params: dict | None = None
+
+
+class GenerateRequest(BaseModel):
+    count: int = Field(1, ge=1, le=10)
+
+
+class ScoreRequest(BaseModel):
+    scorers: list[str] | None = None
+
+
+class RateRequest(BaseModel):
+    rating: float = Field(ge=0, le=100)
+    notes: str = ""
+
+
+class GenerationDefaultsRequest(BaseModel):
+    turbo: dict | None = None
+    sft: dict | None = None
+
+
+class ChatRequest(BaseModel):
+    message: str
+    system: str = ""
+    context: str = ""
+
+
+# ── Simple responses ────────────────────────────────────────────────
+
+
+class StatusResponse(BaseModel):
+    status: str = "ok"
+
+
+class RateResponse(BaseModel):
+    status: str = "ok"
+    generation_id: str | None = None
+    generation: str | None = None
+    rating: float
+
+
+class CleanupResponse(BaseModel):
+    status: str = "ok"
+    deleted: int
+
+
+class CapabilitiesResponse(BaseModel):
+    claude_api: bool
+    claude_cli: bool
+    generation: bool
+    scoring: bool
+
+
+class ChatResponse(BaseModel):
+    response: str

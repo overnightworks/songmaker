@@ -18,6 +18,12 @@ _whisper_model_cache: dict[str, object] = {}
 _whisper_cache_lock = threading.Lock()
 
 
+def clear_cache() -> None:
+    with _whisper_cache_lock:
+        _whisper_model_cache.clear()
+    log.info("Cleared Whisper model cache")
+
+
 @register("text_accuracy", needs_audio=False)
 def score_text_accuracy(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
@@ -42,13 +48,12 @@ def score_text_accuracy(
         if line.strip() and not line.strip().startswith("[")
     )
 
-    initial_prompt = _build_vocabulary_prompt(intended_lines)
+    initial_prompt = " ".join(intended_lines)
     transcribed, segments = _transcribe(mp3_path, language, model, initial_prompt)
 
     trans_lines = tuple(
         s.get("text", "").strip() for s in segments if s.get("text", "").strip()
     )
-
     ratio = _word_level_accuracy(intended_lines, trans_lines)
 
     log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
@@ -70,25 +75,6 @@ def score_text_accuracy(
         transcribed_line_texts=trans_lines,
     )
 
-
-def _build_vocabulary_prompt(lines: tuple[str, ...] | list[str]) -> str | None:
-    """Build a Whisper initial_prompt from lyrics as vocabulary hints.
-
-    Uses unique uncommon words rather than full lyrics — Whisper treats
-    initial_prompt as "previously spoken text" so full lyrics cause it
-    to skip matching lines.
-    """
-    if not lines:
-        return None
-    all_words = " ".join(lines).split()
-    seen: set[str] = set()
-    unique: list[str] = []
-    for word in all_words:
-        lower = word.lower().strip(".,!?;:")
-        if lower not in seen and len(lower) > 3:
-            seen.add(lower)
-            unique.append(word)
-    return ", ".join(unique[:50]) if unique else None
 
 
 def _segment_confidence(segment: dict) -> float:
@@ -137,11 +123,12 @@ def _is_vocalization(line: str) -> bool:
 def _word_level_accuracy(
     intended: tuple[str, ...], transcribed: tuple[str, ...],
 ) -> float:
-    """Compare intended vs transcribed at word level.
+    """Measure what fraction of intended lyrics were correctly sung.
 
-    Joins all lines into word sequences, filtering out vocalizations
-    (oh, ah, la la). Ignores line boundaries entirely — only words matter.
-    This handles Whisper merging/splitting lines and intro/outro vocalizations.
+    Joins all lines into word sequences, filtering out vocalizations.
+    Uses SequenceMatcher to find matching blocks, then calculates
+    coverage of intended words. Extra sung words (ad-libs, improvisation)
+    are NOT penalized — only missing or misheard intended words count.
     """
     if not intended or not transcribed:
         return 0.0
@@ -158,12 +145,12 @@ def _word_level_accuracy(
     if not trans_words:
         return 0.0
 
-    # Two comparisons — take the higher score:
-    # 1. Character-level (handles compound words like streetlights/street lights)
-    # 2. Word-level (handles partial transcriptions where Whisper misses sections)
-    char_ratio = SequenceMatcher(None, "".join(intended_words), "".join(trans_words)).ratio()
-    word_ratio = SequenceMatcher(None, intended_words, trans_words).ratio()
-    return max(char_ratio, word_ratio)
+    # Count how many intended words were found in the transcription
+    # (order-preserving match via SequenceMatcher)
+    sm = SequenceMatcher(None, intended_words, trans_words)
+    matched_intended = sum(size for _, _, size in sm.get_matching_blocks())
+
+    return matched_intended / len(intended_words)
 
 
 _HALLUCINATION_PHRASES = frozenset({
@@ -188,40 +175,6 @@ def _is_hallucination(lines: tuple[str, ...]) -> bool:
     hallucinated = sum(1 for c in cleaned if c in _HALLUCINATION_PHRASES)
     return hallucinated > len(cleaned) * 0.5
 
-
-def _per_line_accuracy(
-    intended: tuple[str, ...], transcribed: tuple[str, ...],
-) -> float:
-    """Compute average best-match similarity per intended line.
-
-    Each intended line finds its best match among ALL transcribed lines
-    (no consumption). This handles songs correctly where:
-    - Whisper produces fewer segments than intended lines
-    - Choruses repeat (same transcribed line matches multiple intended lines)
-    - Whisper splits/merges lines differently than the lyrics
-    """
-    if not intended or not transcribed:
-        return 0.0
-
-    clean_intended = [clean_lyrics(line) for line in intended]
-    clean_intended = [c for c in clean_intended if c]
-    if not clean_intended:
-        return 0.0
-
-    clean_trans = [clean_lyrics(t) for t in transcribed]
-    clean_trans = [c for c in clean_trans if c]
-    if not clean_trans:
-        return 0.0
-
-    line_scores: list[float] = []
-    for line in clean_intended:
-        best_ratio = max(
-            SequenceMatcher(None, line, ct).ratio()
-            for ct in clean_trans
-        )
-        line_scores.append(best_ratio)
-
-    return sum(line_scores) / len(line_scores)
 
 
 def clean_lyrics(text: str) -> str:
@@ -264,43 +217,14 @@ def _get_whisper_model(
     return cache[cache_key]
 
 
-def _vocal_preprocess(mp3_path: Path) -> str:
-    """Pre-emphasis + vocal frequency boost to help Whisper hear vocals over music.
-
-    Returns path to a temporary 16kHz mono WAV optimized for speech recognition.
-    """
-    import tempfile
-
-    import librosa
-    import numpy as np
-    import soundfile as sf
-    from scipy.signal import butter, sosfilt
-
-    y, sr = librosa.load(str(mp3_path), sr=16000, mono=True)
-    # Pre-emphasis: boost higher frequencies where consonants live
-    y = np.append(y[0], y[1:] - 0.97 * y[:-1])
-    # Bandpass vocal range and boost by +6dB
-    sos = butter(4, [200, 5000], btype="band", fs=sr, output="sos")
-    vocals = sosfilt(sos, y)
-    y = y + vocals * (10 ** (6 / 20) - 1)
-    peak = np.max(np.abs(y))
-    if peak > 1e-10:
-        y = y / peak * 0.95
-    tmp_path = tempfile.mktemp(suffix=".wav")
-    sf.write(tmp_path, y, sr)
-    return tmp_path
-
-
 def _transcribe(
     mp3_path: Path, language: str, model: object,
     initial_prompt: str | None = None,
 ) -> tuple[str, list[dict]]:
     log.info("Transcribing %s...", mp3_path.name)
-    preprocessed = _vocal_preprocess(mp3_path)
     kwargs: dict[str, object] = {
-        "language": language, "fp16": False,
+        "language": language, "fp16": True,
         "condition_on_previous_text": False,
-        "word_timestamps": True,
         "beam_size": 5,
         "best_of": 5,
         "temperature": 0,
@@ -309,8 +233,5 @@ def _transcribe(
     }
     if initial_prompt:
         kwargs["initial_prompt"] = initial_prompt
-    try:
-        result = model.transcribe(preprocessed, **kwargs)  # type: ignore[union-attr]
-    finally:
-        Path(preprocessed).unlink(missing_ok=True)
+    result = model.transcribe(str(mp3_path), **kwargs)  # type: ignore[union-attr]
     return result["text"].strip(), result.get("segments", [])

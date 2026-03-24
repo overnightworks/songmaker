@@ -1,73 +1,77 @@
-# Songmaker — Testing Guide
-
-## Goal
-100% test coverage on all `src/` modules.
+# Testing Guide
 
 ## Running Tests
+
 ```bash
-.venv/bin/pytest
+# Backend (from project root)
+pytest tests/ -q                    # all tests
+pytest tests/ -q --tb=short         # with short tracebacks
+pytest tests/test_api.py -v         # single file, verbose
+pytest tests/ --cov=songmaker_cli --cov-report=term-missing  # coverage
 
-.venv/bin/pytest --cov=src --cov-report=term-missing
-
-.venv/bin/pytest tests/test_mastering.py -v
-```
-
-## Structure
-Tests mirror `src/` layout:
-```
-tests/
-├── acestep_engine/
-│   ├── test_client.py          # HTTP client, task polling
-│   └── test_models.py          # AceStepConfig validation
-├── audio_engine/
-│   ├── test_audio_io.py        # WAV/MP3 read/write, mastering
-│   ├── test_mastering.py       # Mastering chain (LUFS, compression)
-│   └── test_constants.py       # Sample rate constants
-├── songmaker_cli/
-│   ├── test_generate.py        # Generate command
-│   ├── test_parser.py          # Markdown/YAML parsing, SongMeta
-│   ├── test_config.py          # OutputPaths, build_ace_config
-│   └── test_player.py          # HTML player generation
-└── conftest.py                 # Shared fixtures
-```
-
-## Rules
-
-1. **Every public function gets a test.** No exceptions.
-2. **Mock external services.** ACE-Step server, ffmpeg, Whisper — never call real services in tests.
-3. **Tests must be fast.** Full suite < 10 seconds.
-4. **No test inheritance.** Use pytest fixtures and parametrize.
-5. **Arrange-Act-Assert pattern.** Three clear sections per test.
-6. **Descriptive test names.** `test_master_to_mp3_applies_lufs_normalization` not `test_master`.
-7. **Test edge cases.** Empty input, zero duration, missing files, invalid config.
-8. **Use fixtures for audio data.** Create small numpy arrays (0.1s), not real audio files.
-
-## Fixtures (conftest.py)
-
-```python
-@pytest.fixture
-def silence_mono():
-    """0.1s of silence at 44100 Hz."""
-    return np.zeros(4410, dtype=np.float32)
-
-@pytest.fixture
-def sine_wave():
-    """0.1s 440Hz sine wave at 44100 Hz."""
-    t = np.linspace(0, 0.1, 4410, endpoint=False)
-    return np.sin(2 * np.pi * 440 * t).astype(np.float32)
-
-@pytest.fixture
-def tmp_wav(tmp_path, sine_wave):
-    """Write a temporary WAV file."""
-    path = tmp_path / "test.wav"
-    sf.write(str(path), sine_wave, 44100)
-    return path
+# Frontend (from frontend/)
+pnpm test                           # all tests
+pnpm test:coverage                  # with v8 coverage report
 ```
 
 ## Coverage Targets
 
-| Module | Current | Target |
-|--------|---------|--------|
-| acestep_engine | 0% | 100% |
-| audio_engine | ~10% | 100% |
-| songmaker_cli | 0% | 100% |
+- **Python**: 100% on all core modules (currently 377 tests, 92% overall)
+- **Frontend**: 100% statement coverage on `lib/` (currently 107 tests)
+- Doomed/legacy modules excluded from coverage requirements
+
+## Test Structure
+
+```
+tests/
+├── conftest.py              Shared fixtures (WAV generators, song file factory)
+├── test_api.py              API endpoint tests (FastAPI TestClient)
+├── test_cli.py              CLI helper function tests (generate, decode, write)
+├── test_cli_client.py       HTTP client tests (resolve_song, api_get/post/put)
+├── test_claude_provider.py  Claude API/CLI backend tests
+├── test_config.py           ACE-Step config building, path resolution
+├── test_db.py               DB models, queries, engine, migrations
+├── test_gpu_queue.py        GPU queue, ACE-Step lifecycle, VRAM management
+├── test_jobs.py             Background generation + scoring job runners
+├── test_parser.py           SongMeta/AlbumMeta data model tests
+├── test_audio_io.py         WAV read/write, mastering, MP3 encoding
+├── test_scorers.py          Silence, BPM, dynamics scorers
+├── test_scorers_extended.py Spectral, audiobox, text accuracy, coherence
+├── test_scoring_pipeline.py Pipeline registry, runner, type validation
+└── test_server.py           Server app creation, static files, audio routes
+
+frontend/src/
+├── lib/api/client.test.ts          API client (all endpoints, error handling)
+├── lib/stores/editor.test.ts       Editor store (dirty tracking, save, diff)
+├── lib/stores/filter.test.ts       Filter store (metrics, add/remove, apply)
+├── lib/stores/jobs.test.ts         Job polling, completion, error retry
+├── lib/stores/player.test.ts       Browsing, playback, score updates
+├── lib/stores/settings.test.ts     Claude key persistence
+├── lib/utils/diff.test.ts          LCS diff algorithm
+└── lib/utils/format.test.ts        Number/time formatting
+```
+
+## Testing Patterns
+
+### Python
+
+- **Real SQLite** for DB tests (`tmp_path` per test, `reset_engine()` in fixtures)
+- **Synthesized audio** for mastering/scoring tests (sine waves via numpy)
+- **Mock external services**: ACE-Step client, Whisper model, Claude API, ffmpeg
+- **Patch at the import location**, not the source: `patch("songmaker_cli.jobs.AceStepClient")`
+- **Factory fixtures** in conftest.py for WAV bytes, stereo audio, song files
+
+### Frontend
+
+- **jsdom** environment for all tests
+- **Mock fetch** globally for API client tests
+- **Mock stores** for component isolation
+- **`vi.useFakeTimers()`** for job polling tests
+- **Svelte store tests** use `get()` to read reactive values
+
+## Adding Tests for New Features
+
+1. Add unit tests for new functions/modules
+2. Add API tests if new endpoints are added (use `TestClient` fixture in test_api.py)
+3. Run `pytest --cov` to verify no gaps in new code
+4. Frontend: add store tests for new state, component tests for new UI logic

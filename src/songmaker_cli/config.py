@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from pathlib import Path
@@ -80,6 +81,29 @@ def resolve_output_paths(
     )
 
 
+def _defaults_path() -> Path:
+    root = find_project_root(Path.cwd())
+    base = (root / OUTPUT_ROOT) if root else Path(OUTPUT_ROOT)
+    return base / "generation_defaults.json"
+
+
+def load_generation_defaults() -> dict:
+    path = _defaults_path()
+    if path.exists():
+        defaults = json.loads(path.read_text(encoding="utf-8"))
+        log.debug("Loaded generation defaults from %s: %s", path, list(defaults.keys()))
+        return defaults
+    log.debug("No generation defaults file at %s", path)
+    return {}
+
+
+def save_generation_defaults(data: dict) -> None:
+    path = _defaults_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    log.info("Saved generation defaults: %s", path)
+
+
 _FIELD_MAPPING = {"language": "vocal_language"}
 
 
@@ -98,20 +122,34 @@ def build_ace_config(
     meta: "SongMeta",
     cli_overrides: dict | None = None,
     model_name: str | None = None,
+    global_defaults: dict | None = None,
 ) -> AceStepConfig:
     """Build an AceStepConfig from SongMeta + optional CLI overrides.
 
-    Priority: CLI overrides > frontmatter values > model defaults > AceStepConfig defaults.
+    Priority: CLI overrides > frontmatter > global defaults > model defaults.
     When using SFT model, applies SFT-appropriate defaults (50 steps, guidance 5.5)
     unless the frontmatter or CLI explicitly sets them.
     """
-    model_defaults = _SFT_DEFAULTS if model_name and "sft" in model_name else _TURBO_DEFAULTS
+    is_sft = model_name and "sft" in model_name
+    model_defaults = _SFT_DEFAULTS if is_sft else _TURBO_DEFAULTS
+
+    model_key = "sft" if is_sft else "turbo"
+    user_defaults = (global_defaults or {}).get(model_key, {})
+    log.debug(
+        "build_ace_config: model=%s (%s), user_defaults=%s, song_params=%s",
+        model_name, model_key, user_defaults or "none", meta.generation_params or "none",
+    )
 
     fields: dict = {"prompt": meta.prompt, "lyrics": meta.lyrics}
 
     for key, value in model_defaults.items():
-        if key not in meta.generation_params:
+        if key not in user_defaults and key not in meta.generation_params:
             fields[key] = value
+
+    for key, value in user_defaults.items():
+        if key not in meta.generation_params:
+            mapped = _FIELD_MAPPING.get(key, key)
+            fields[mapped] = value
 
     for key, value in meta.generation_params.items():
         mapped = _FIELD_MAPPING.get(key, key)

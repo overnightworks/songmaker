@@ -1,4 +1,4 @@
-"""Lyrical coherence scorer — uses Claude API to judge sung lyrics.
+"""Lyrical coherence scorer — uses Claude to judge sung lyrics.
 
 Sends intended lyrics + Whisper transcription to Claude and asks:
 does the sung result make sense as a song? Creative deviations from
@@ -7,11 +7,10 @@ intended lyrics are fine as long as the output is coherent.
 
 from __future__ import annotations
 
-import json
 import logging
-import subprocess
 from pathlib import Path
 
+from songmaker_cli.claude.provider import call_claude, parse_json_response
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import LyricalCoherenceScore
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
@@ -61,11 +60,18 @@ JUDGE_PROMPT = (  # noqa: E501
 
 
 def _read_whisper_text(whisper_path: Path) -> str:
-    """Read .whisper file, stripping confidence prefixes if present."""
-    from songmaker_cli.manifest import _parse_whisper_file
-
-    lines = _parse_whisper_file(whisper_path)
-    return "\n".join(line["text"] for line in lines if line.get("text"))
+    text = whisper_path.read_text(encoding="utf-8").strip()
+    lines: list[str] = []
+    for raw in text.splitlines():
+        raw = raw.strip()
+        if not raw:
+            continue
+        if "|" in raw and raw.split("|", 1)[0].replace(".", "", 1).isdigit():
+            _, line_text = raw.split("|", 1)
+            lines.append(line_text.strip())
+        else:
+            lines.append(raw)
+    return "\n".join(lines)
 
 
 @register("lyrical_coherence", needs_audio=False)
@@ -73,7 +79,7 @@ def score_lyrical_coherence(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
     config: PipelineConfig | None = None,
 ) -> LyricalCoherenceScore:
-    """Judge lyrical coherence using Claude API."""
+    """Judge lyrical coherence using Claude (CLI or API)."""
     if meta is None or not meta.lyrics:
         raise ValueError("No lyrics metadata — cannot judge lyrical coherence")
 
@@ -90,69 +96,17 @@ def score_lyrical_coherence(
     )
 
     prompt = JUDGE_PROMPT.format(intended=intended, transcribed=transcribed)
-    result = _call_claude(prompt)
+    n_intended = len(intended.splitlines())
+    n_transcribed = len(transcribed.splitlines())
+    log.debug("Sending %d intended + %d transcribed lines to Claude", n_intended, n_transcribed)
+    response = call_claude(prompt)
+    log.debug("Claude response: %d chars", len(response.text))
+    data = parse_json_response(response.text)
 
-    log.info(
-        "Lyrical coherence: %d/10 — %s",
-        result.score, result.summary,
-    )
-    return result
-
-
-def _find_claude_binary() -> str:
-    """Find the Claude CLI binary."""
-    import shutil
-    from pathlib import Path
-
-    found = shutil.which("claude")
-    if found:
-        return found
-
-    ext_dir = Path.home() / ".vscode" / "extensions"
-    if ext_dir.is_dir():
-        for ext in sorted(ext_dir.glob("anthropic.claude-code-*"), reverse=True):
-            candidate = ext / "resources" / "native-binary" / "claude"
-            if candidate.is_file():
-                return str(candidate)
-
-    raise RuntimeError("Claude CLI not found. Install Claude Code or set PATH.")
-
-
-def _call_claude(prompt: str) -> LyricalCoherenceScore:
-    """Call Claude CLI and parse the JSON response."""
-    claude_bin = _find_claude_binary()
-    try:
-        proc = subprocess.run(
-            [claude_bin, "-p", prompt, "--output-format", "json"],
-            capture_output=True, text=True, timeout=60,
-        )
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("Claude CLI timed out after 60s")
-
-    if proc.returncode != 0:
-        raise RuntimeError(f"Claude CLI error: {proc.stderr[:200]}")
-
-    try:
-        outer = json.loads(proc.stdout)
-        response_text = outer.get("result", proc.stdout)
-    except json.JSONDecodeError:
-        response_text = proc.stdout
-
-    # Extract JSON from response (might have markdown wrapping)
-    json_str = response_text.strip()
-    if "```" in json_str:
-        json_str = json_str.split("```")[1]
-        if json_str.startswith("json"):
-            json_str = json_str[4:]
-        json_str = json_str.strip()
-
-    try:
-        data = json.loads(json_str)
-    except json.JSONDecodeError:
-        raise RuntimeError(f"Claude returned invalid JSON: {json_str[:200]}")
-
-    return LyricalCoherenceScore(
+    result = LyricalCoherenceScore(
         score=int(data.get("score", 0)),
         issues=tuple(data.get("issues", [])),
         summary=data.get("summary", ""),
     )
+    log.info("Lyrical coherence: %d/10 — %s", result.score, result.summary)
+    return result

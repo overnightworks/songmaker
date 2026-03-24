@@ -1,0 +1,359 @@
+"""Tests for background job runners (generation + scoring)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from songmaker_cli.db.engine import init_db, reset_engine
+from songmaker_cli.db.models import Album, Generation, Job, Score, Song, Version
+from songmaker_cli.db.queries import get_generation, get_job
+from songmaker_cli.jobs import _detect_device, _update_job, run_generation_job, run_scoring_job
+
+
+@pytest.fixture()
+def db_factory(tmp_path: Path):
+    reset_engine()
+    factory = init_db(tmp_path / "test.db")
+    yield factory
+    reset_engine()
+
+
+@pytest.fixture()
+def seeded_db(db_factory, tmp_path: Path):
+    with db_factory() as session:
+        session.add(Album(id="rock", title="Rock", artist="Band"))
+        session.add(Song(id="s1", title="Song One", album_id="rock", track_number=1, language="en"))
+        session.add(Version(
+            id="v1", song_id="s1", version_number=1,
+            lyrics="Hello world", prompt="rock style", bpm=120, duration=60, key="Am",
+        ))
+        session.add(Job(id="j1", type="generate", status="queued"))
+        session.add(Job(id="j2", type="score", status="queued"))
+        session.commit()
+
+    mp3_dir = tmp_path / "_output" / "rock"
+    mp3_dir.mkdir(parents=True)
+    mp3 = mp3_dir / "01_song_one_v1.mp3"
+    mp3.write_bytes(b"\xff\xfb\x90\x00" * 100)
+
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    return db_factory
+
+
+# ── _update_job ─────────────────────────────────────────────────────
+
+
+def test_update_job_success(seeded_db) -> None:
+    _update_job(seeded_db, "j1", "running", progress=0.5)
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "running"
+        assert job.progress == 0.5
+
+
+def test_update_job_swallows_exception(db_factory) -> None:
+    broken_factory = MagicMock(side_effect=RuntimeError("db broken"))
+    _update_job(broken_factory, "j1", "running")
+
+
+# ── _detect_device ──────────────────────────────────────────────────
+
+
+def test_detect_device_cuda() -> None:
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = True
+    with patch.dict("sys.modules", {"torch": mock_torch}):
+        assert _detect_device() == "cuda"
+
+
+def test_detect_device_no_cuda() -> None:
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = False
+    with patch.dict("sys.modules", {"torch": mock_torch}):
+        assert _detect_device() == "cpu"
+
+
+def test_detect_device_no_torch() -> None:
+    with patch.dict("sys.modules", {"torch": None}):
+        assert _detect_device() == "cpu"
+
+
+# ── run_generation_job ──────────────────────────────────────────────
+
+
+def _mock_generate_result(mp3_name: str = "01_song_one_v1.mp3", seed: int = 42):
+    result = MagicMock()
+    result.mp3_path = Path(f"/output/rock/{mp3_name}")
+    result.seed = seed
+    return result
+
+
+def _mock_server_info(model: str = "acestep-v15-turbo"):
+    info = MagicMock()
+    info.model = model
+    return info
+
+
+def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
+    result = _mock_generate_result()
+    client = MagicMock()
+    client.is_available = True
+    client.server_info.return_value = _mock_server_info()
+
+    with (
+        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
+        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
+        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+        patch("songmaker_cli.jobs.generate_single", return_value=result),
+    ):
+        run_generation_job("j1", "s1", "v1", 1)
+
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "completed"
+        assert job.progress == 1.0
+
+        gens = session.query(Generation).filter_by(song_id="s1").all()
+        assert len(gens) == 1
+        assert gens[0].seed == 42
+        assert gens[0].generation_params["acestep_model"] == "acestep-v15-turbo"
+
+
+def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
+    results = [_mock_generate_result(f"song_v{i}.mp3", seed=100 + i) for i in range(3)]
+    client = MagicMock()
+    client.is_available = True
+    client.server_info.return_value = _mock_server_info()
+
+    with (
+        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
+        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
+        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+        patch("songmaker_cli.jobs.generate_single", side_effect=results),
+    ):
+        run_generation_job("j1", "s1", "v1", 3)
+
+    with seeded_db() as session:
+        gens = session.query(Generation).filter_by(song_id="s1").all()
+        assert len(gens) == 3
+
+
+def test_generation_job_song_not_found(seeded_db) -> None:
+    with patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db):
+        run_generation_job("j1", "nonexistent", "v1", 1)
+
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "failed"
+        assert "Song not found" in job.error
+
+
+def test_generation_job_version_not_found(seeded_db) -> None:
+    with patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db):
+        run_generation_job("j1", "s1", "nonexistent", 1)
+
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "failed"
+        assert "Version not found" in job.error
+
+
+def test_generation_job_acestep_not_reachable(seeded_db) -> None:
+    client = MagicMock()
+    client.is_available = False
+
+    with (
+        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
+        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
+    ):
+        run_generation_job("j1", "s1", "v1", 1)
+
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "failed"
+        assert "not reachable" in job.error
+
+
+def test_generation_job_exception(seeded_db) -> None:
+    client = MagicMock()
+    client.is_available = True
+    client.server_info.return_value = _mock_server_info()
+
+    with (
+        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
+        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
+        patch("songmaker_cli.jobs.find_project_root", return_value=Path("/tmp")),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+        patch("songmaker_cli.jobs.generate_single", side_effect=RuntimeError("GPU error")),
+    ):
+        run_generation_job("j1", "s1", "v1", 1)
+
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "failed"
+        assert "GPU error" in job.error
+
+
+def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> None:
+    with seeded_db() as session:
+        ver = session.query(Version).filter_by(id="v1").first()
+        ver.generation_params = {"inference_steps": 50, "shift": 2.0}
+        session.commit()
+
+    result = _mock_generate_result()
+    client = MagicMock()
+    client.is_available = True
+    client.server_info.return_value = _mock_server_info()
+
+    with (
+        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
+        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
+        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+        patch("songmaker_cli.jobs.generate_single", return_value=result),
+    ):
+        run_generation_job("j1", "s1", "v1", 1)
+
+    with seeded_db() as session:
+        gen = session.query(Generation).filter_by(song_id="s1").first()
+        assert gen.generation_params["inference_steps"] == 50
+        assert gen.generation_params["shift"] == 2.0
+
+
+def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> None:
+    result = _mock_generate_result()
+    client = MagicMock()
+    client.is_available = True
+    client.server_info.return_value = _mock_server_info()
+
+    with (
+        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
+        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
+        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={"turbo": {"shift": 7.0}}) as mock_load,
+        patch("songmaker_cli.jobs.generate_single", return_value=result),
+    ):
+        run_generation_job("j1", "s1", "v1", 1)
+
+    mock_load.assert_called_once()
+
+
+# ── run_scoring_job ─────────────────────────────────────────────────
+
+
+def _mock_scores(with_whisper: bool = False):
+    scores = MagicMock()
+    scores.to_dict.return_value = {"dynamics": 55.0}
+    if with_whisper:
+        ta = MagicMock()
+        ta.transcribed_line_texts = ["hello", "world"]
+        scores.text_accuracy = ta
+    else:
+        scores.text_accuracy = None
+    return scores
+
+
+def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
+    with seeded_db() as session:
+        session.add(Generation(
+            id="g1", song_id="s1", version_id="v1", generation_number=1,
+            mp3_path="rock/01_song_one_v1.mp3", seed=42,
+        ))
+        session.commit()
+
+    mock_result = _mock_scores()
+
+    with (
+        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
+        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
+        patch("songmaker_cli.jobs.run_scoring_pipeline", return_value=mock_result),
+    ):
+        run_scoring_job("j2", "g1", None)
+
+    with seeded_db() as session:
+        job = get_job(session, "j2")
+        assert job.status == "completed"
+        scores = session.query(Score).filter_by(generation_id="g1").all()
+        assert len(scores) == 1
+        assert scores[0].value["dynamics"] == 55.0
+
+
+def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
+    with seeded_db() as session:
+        session.add(Generation(
+            id="g1", song_id="s1", version_id="v1", generation_number=1,
+            mp3_path="rock/01_song_one_v1.mp3", seed=42,
+        ))
+        session.commit()
+
+    mock_result = _mock_scores(with_whisper=True)
+
+    with (
+        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
+        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
+        patch("songmaker_cli.jobs.run_scoring_pipeline", return_value=mock_result),
+    ):
+        run_scoring_job("j2", "g1", None)
+
+    with seeded_db() as session:
+        gen = get_generation(session, "g1")
+        assert gen.whisper_text == "hello\nworld"
+
+
+def test_scoring_job_generation_not_found(seeded_db) -> None:
+    with patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db):
+        run_scoring_job("j2", "nonexistent", None)
+
+    with seeded_db() as session:
+        job = get_job(session, "j2")
+        assert job.status == "failed"
+        assert "Generation not found" in job.error
+
+
+def test_scoring_job_mp3_not_found(seeded_db, tmp_path: Path) -> None:
+    with seeded_db() as session:
+        session.add(Generation(
+            id="g1", song_id="s1", version_id="v1", generation_number=1,
+            mp3_path="rock/missing.mp3", seed=42,
+        ))
+        session.commit()
+
+    with (
+        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
+        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+    ):
+        run_scoring_job("j2", "g1", None)
+
+    with seeded_db() as session:
+        job = get_job(session, "j2")
+        assert job.status == "failed"
+        assert "MP3 not found" in job.error
+
+
+def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
+    with seeded_db() as session:
+        session.add(Generation(
+            id="g1", song_id="s1", version_id="v1", generation_number=1,
+            mp3_path="rock/01_song_one_v1.mp3", seed=42,
+        ))
+        session.commit()
+
+    with (
+        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
+        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
+        patch("songmaker_cli.jobs.run_scoring_pipeline", side_effect=RuntimeError("scorer crash")),
+    ):
+        run_scoring_job("j2", "g1", None)
+
+    with seeded_db() as session:
+        job = get_job(session, "j2")
+        assert job.status == "failed"
+        assert "scorer crash" in job.error
