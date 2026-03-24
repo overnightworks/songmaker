@@ -115,7 +115,6 @@ All data in SQLite (`_output/songmaker.db`). Songs created/edited via web UI or 
   - `errors.py` — Error types
 - `_output/` — Generated audio + SQLite DB (gitignored)
 - `_models/` — AI model weights (gitignored)
-- `scripts/` — Server setup/start
 - `tests/` — pytest suite (377 tests)
 - `frontend/` — SvelteKit frontend app (107 tests)
   - `src/routes/` — SvelteKit pages and layouts
@@ -153,6 +152,16 @@ pnpm test:coverage    # vitest with v8 coverage
 - **Commit before reviewing**: After completing a batch of changes, always commit first, then review.
 - **Run tests before committing**: `pytest tests/ -q` must pass. Run `ruff check` on changed files.
 - **Frontend changes**: `pnpm check` and `pnpm lint` must pass before committing. Run `pnpm test` for changed modules.
+
+## Self-Review (for refactors and multi-file changes)
+
+1. **Re-read changed files in full** — does each module still read as a coherent whole? Did you remove all traces of moved/deleted code (dead params, unused imports, stale references)?
+2. **Question your abstractions** — can you explain each new type/pattern in one sentence? If not, simplify.
+3. **Check for half-measures** — did fixes interact well, or is it patches on patches?
+4. **Run tests** — `pytest tests/` + `pnpm test` must pass.
+5. **Lint** — `ruff check src/ tests/` + `pnpm check && pnpm lint` must pass.
+
+Skip for trivial single-file changes.
 
 ## API Contract
 
