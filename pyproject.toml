@@ -35,6 +35,7 @@ server = [
     "fastapi>=0.100",
     "uvicorn>=0.20",
     "sqlalchemy>=2.0",
+    "alembic>=1.13",
 ]
 claude = [
     "anthropic>=0.20",
