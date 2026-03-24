@@ -232,36 +232,6 @@ def test_word_level_accuracy_empty() -> None:
     assert _word_level_accuracy(("hello",), ()) == 0.0
 
 
-def test_per_line_accuracy() -> None:
-    from songmaker_cli.scoring.text_accuracy import _per_line_accuracy
-
-    intended = ("hello world",)
-    transcribed = ("hello world",)
-    assert _per_line_accuracy(intended, transcribed) == pytest.approx(1.0)
-
-
-def test_per_line_accuracy_empty() -> None:
-    from songmaker_cli.scoring.text_accuracy import _per_line_accuracy
-
-    assert _per_line_accuracy((), ("hello",)) == 0.0
-    assert _per_line_accuracy(("hello",), ()) == 0.0
-
-
-def test_build_vocabulary_prompt() -> None:
-    from songmaker_cli.scoring.text_accuracy import _build_vocabulary_prompt
-
-    lines = ("hello beautiful world", "lovely morning sunshine")
-    result = _build_vocabulary_prompt(lines)
-    assert result is not None
-    assert "hello" in result
-    assert "beautiful" in result
-
-
-def test_build_vocabulary_prompt_empty() -> None:
-    from songmaker_cli.scoring.text_accuracy import _build_vocabulary_prompt
-
-    assert _build_vocabulary_prompt(()) is None
-
 
 def test_segment_confidence() -> None:
     from songmaker_cli.scoring.text_accuracy import _segment_confidence
@@ -449,12 +419,6 @@ def test_is_hallucination_all_empty_after_clean() -> None:
     lines = ("...", "!!!", "???", "---")
     assert _is_hallucination(lines) is True
 
-
-def test_per_line_accuracy_empty_after_clean() -> None:
-    from songmaker_cli.scoring.text_accuracy import _per_line_accuracy
-
-    assert _per_line_accuracy(("...",), ("hello",)) == 0.0
-    assert _per_line_accuracy(("hello",), ("...",)) == 0.0
 
 
 def test_spectral_quality_loads_audio_fallback(tmp_path: Path) -> None:

@@ -3,12 +3,121 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from acestep_engine import AceStepClient
+from acestep_engine.models import AceStepConfig
+from songmaker_cli.config import build_ace_config, find_project_root, load_generation_defaults
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.db.engine import get_session_factory
+from songmaker_cli.db.queries import (
+    create_generation,
+    get_generation,
+    get_song,
+    save_scores,
+    update_job_status,
+)
+from songmaker_cli.generate import generate_single
+from songmaker_cli.parser import AlbumMeta, SongMeta
+from songmaker_cli.scoring import run_scoring_pipeline
+from songmaker_cli.scoring.pipeline import PipelineConfig
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class GenerationContext:
+    song_id: str
+    version_id: str
+    meta: SongMeta
+    album_meta: AlbumMeta
+    ace_config: AceStepConfig
+    output_root: Path
+    model_name: str | None
+    client: AceStepClient
+    base_params: dict = field(default_factory=dict)
+
+
+def _build_generation_context(
+    song_id: str, version_id: str,
+) -> GenerationContext | str:
+    """Load song/version from DB and build all config needed for generation.
+
+    Returns GenerationContext on success, or an error string on failure.
+    """
+    factory = get_session_factory()
+
+    with factory() as session:
+        song = get_song(session, song_id)
+        if not song:
+            return "Song not found"
+
+        version = next((v for v in song.versions if v.id == version_id), None)
+        if not version:
+            return "Version not found"
+
+        album = song.album
+        album_name = album.title.lower().replace(" ", "_") if album else "unknown"
+        album_artist = album.artist if album else ""
+        song_title = song.title
+        track_number = song.track_number
+        lyrics = version.lyrics
+        prompt = version.prompt
+        bpm = version.bpm
+        duration = version.duration
+        key = version.key
+        language = song.language
+        version_gen_params = version.generation_params or {}
+
+    log.debug(
+        "Song: '%s' (album=%s, bpm=%s, duration=%s, key=%s, version_params=%s)",
+        song_title, album_name, bpm, duration, key, version_gen_params or "none",
+    )
+
+    base_params: dict = {
+        k: v for k, v in {
+            "bpm": bpm, "duration": duration, "key": key, "language": language,
+        }.items() if v
+    }
+    base_params.update(version_gen_params)
+
+    meta = SongMeta(
+        title=song_title,
+        album=album_name,
+        track=str(track_number),
+        prompt=prompt,
+        lyrics=lyrics,
+        generation_params=base_params,
+    )
+
+    client = AceStepClient()
+    if not client.is_available:
+        return "ACE-Step server not reachable"
+
+    server_info = client.server_info()
+    model_name = server_info.model if server_info else None
+    log.debug("ACE-Step model: %s", model_name)
+
+    global_defaults = load_generation_defaults()
+    ace_config = build_ace_config(
+        meta, model_name=model_name, global_defaults=global_defaults,
+    )
+
+    project_root = find_project_root(Path.cwd())
+    output_root = (project_root / OUTPUT_ROOT) if project_root else Path(OUTPUT_ROOT)
+
+    return GenerationContext(
+        song_id=song_id,
+        version_id=version_id,
+        meta=meta,
+        album_meta=AlbumMeta(title=album_name, artist=album_artist),
+        ace_config=ace_config,
+        output_root=output_root,
+        model_name=model_name,
+        client=client,
+        base_params=base_params,
+    )
 
 
 def run_generation_job(
@@ -16,108 +125,38 @@ def run_generation_job(
 ) -> None:
     """Run generation in a background thread, updating DB status."""
     factory = get_session_factory()
-
     log.info("Generation job %s: song=%s, count=%d", job_id, song_id, count)
 
     try:
         _update_job(factory, job_id, "running")
 
-        with factory() as session:
-            from songmaker_cli.db.queries import get_song
-            song = get_song(session, song_id)
-            if not song:
-                _update_job(factory, job_id, "failed", error="Song not found")
-                return
-
-            version = next((v for v in song.versions if v.id == version_id), None)
-            if not version:
-                _update_job(factory, job_id, "failed", error="Version not found")
-                return
-
-            album = song.album
-            album_name = album.title.lower().replace(" ", "_") if album else "unknown"
-            album_artist = album.artist if album else ""
-            song_title = song.title
-            track_number = song.track_number
-            lyrics = version.lyrics
-            prompt = version.prompt
-            bpm = version.bpm
-            duration = version.duration
-            key = version.key
-            language = song.language
-            version_gen_params = version.generation_params or {}
-
-        log.debug(
-            "Song: '%s' (album=%s, bpm=%s, duration=%s, key=%s, version_params=%s)",
-            song_title, album_name, bpm, duration, key, version_gen_params or "none",
-        )
-
-        from acestep_engine import AceStepClient
-        from songmaker_cli.config import build_ace_config, find_project_root
-        from songmaker_cli.parser import SongMeta
-
-        base_params: dict = {
-            k: v for k, v in {
-                "bpm": bpm, "duration": duration, "key": key, "language": language,
-            }.items() if v
-        }
-        base_params.update(version_gen_params)
-
-        meta = SongMeta(
-            title=song_title,
-            album=album_name,
-            track=str(track_number),
-            prompt=prompt,
-            lyrics=lyrics,
-            generation_params=base_params,
-        )
-
-        client = AceStepClient()
-        if not client.is_available:
-            _update_job(factory, job_id, "failed", error="ACE-Step server not reachable")
+        ctx = _build_generation_context(song_id, version_id)
+        if isinstance(ctx, str):
+            _update_job(factory, job_id, "failed", error=ctx)
             return
 
-        server_info = client.server_info()
-        model_name = server_info.model if server_info else None
-        log.debug("ACE-Step model: %s", model_name)
-
-        from songmaker_cli.config import load_generation_defaults
-        global_defaults = load_generation_defaults()
-
-        ace_config = build_ace_config(
-            meta, model_name=model_name, global_defaults=global_defaults,
-        )
-
-        project_root = find_project_root(Path.cwd())
-        output_root = (project_root / OUTPUT_ROOT) if project_root else Path(OUTPUT_ROOT)
-
-        from songmaker_cli.generate import generate_single
-        from songmaker_cli.parser import AlbumMeta
-
-        album_meta = AlbumMeta(title=album_name, artist=album_artist)
-
         for i in range(count):
-            progress = i / count
-            _update_job(factory, job_id, "running", progress=progress)
+            _update_job(factory, job_id, "running", progress=i / count)
 
-            result = generate_single(meta, album_meta, ace_config, output_root, client=client)
+            result = generate_single(
+                ctx.meta, ctx.album_meta, ctx.ace_config, ctx.output_root, client=ctx.client,
+            )
 
-            mp3_rel = f"{album_name}/{result.mp3_path.name}"
+            mp3_rel = f"{ctx.meta.album}/{result.mp3_path.name}"
             gen_params = {
-                "acestep_model": model_name,
-                "bpm": bpm,
-                "duration": duration,
-                "key": key,
-                "guidance_scale": ace_config.guidance_scale,
-                "inference_steps": ace_config.inference_steps,
-                "shift": ace_config.shift,
-                "lm_temperature": ace_config.lm_temperature,
-                "infer_method": ace_config.infer_method,
-                "think_mode": ace_config.think_mode,
+                "acestep_model": ctx.model_name,
+                "bpm": ctx.ace_config.bpm,
+                "duration": ctx.ace_config.duration,
+                "key": ctx.meta.generation_params.get("key", ""),
+                "guidance_scale": ctx.ace_config.guidance_scale,
+                "inference_steps": ctx.ace_config.inference_steps,
+                "shift": ctx.ace_config.shift,
+                "lm_temperature": ctx.ace_config.lm_temperature,
+                "infer_method": ctx.ace_config.infer_method,
+                "think_mode": ctx.ace_config.think_mode,
             }
 
             with factory() as session:
-                from songmaker_cli.db.queries import create_generation
                 create_generation(
                     session,
                     song_id=song_id,
@@ -141,14 +180,13 @@ def run_scoring_job(
     job_id: str, gen_id: str, scorers: list[str] | None,
 ) -> None:
     """Run scoring in a background thread, updating DB status."""
-    log.info("Scoring job %s started: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
+    log.info("Scoring job %s: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
     factory = get_session_factory()
 
     try:
         _update_job(factory, job_id, "running")
 
         with factory() as session:
-            from songmaker_cli.db.queries import get_generation
             gen = get_generation(session, gen_id)
             if not gen:
                 _update_job(factory, job_id, "failed", error="Generation not found")
@@ -166,9 +204,6 @@ def run_scoring_job(
                         "lyrics": ver.lyrics,
                     }
 
-        from songmaker_cli.config import find_project_root
-        from songmaker_cli.constants import OUTPUT_ROOT
-
         project_root = find_project_root(Path.cwd())
         output_root = (project_root / OUTPUT_ROOT) if project_root else Path(OUTPUT_ROOT)
         mp3_full = output_root / mp3_path_rel
@@ -176,10 +211,6 @@ def run_scoring_job(
         if not mp3_full.exists():
             _update_job(factory, job_id, "failed", error=f"MP3 not found: {mp3_path_rel}")
             return
-
-        from songmaker_cli.parser import SongMeta
-        from songmaker_cli.scoring import run_scoring_pipeline
-        from songmaker_cli.scoring.pipeline import PipelineConfig
 
         device = _detect_device()
         config = PipelineConfig(device=device)
@@ -193,7 +224,6 @@ def run_scoring_job(
 
         with factory() as session:
             from songmaker_cli.db.models import Generation as GenModel
-            from songmaker_cli.db.queries import save_scores
             save_scores(session, gen_id, scores_dict)
             if whisper_text is not None:
                 gen_record = session.query(GenModel).filter_by(id=gen_id).first()
@@ -222,7 +252,6 @@ def _detect_device() -> str:
 def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
     try:
         with factory() as session:
-            from songmaker_cli.db.queries import update_job_status
             update_job_status(session, job_id, status, **kwargs)
             session.commit()
     except Exception:

@@ -387,7 +387,7 @@ def test_generate_song_submits_job(client: TestClient) -> None:
 
     mock_queue = MagicMock()
 
-    with patch("songmaker_cli.gpu_queue.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 2},
@@ -411,7 +411,7 @@ def test_score_generation_submits_job(client: TestClient) -> None:
 
     mock_queue = MagicMock()
 
-    with patch("songmaker_cli.gpu_queue.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
         resp = client.post(
             "/api/generations/g1/score",
             json={},
@@ -484,7 +484,7 @@ def test_get_job_found(client: TestClient) -> None:
 
     mock_queue = MagicMock()
 
-    with patch("songmaker_cli.gpu_queue.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
         resp = client.post("/api/songs/s1/generate", json={"count": 1})
     job_id = resp.json()["id"]
 

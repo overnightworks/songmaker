@@ -45,6 +45,8 @@ from songmaker_cli.db.queries import (
     update_song,
     version_to_dict,
 )
+from songmaker_cli.gpu_queue import get_gpu_queue
+from songmaker_cli.jobs import run_generation_job, run_scoring_job
 
 log = logging.getLogger(__name__)
 
@@ -273,9 +275,6 @@ def api_generate_song(
     session.commit()
     log.info("Generate: song='%s', count=%d, job=%s", song.title, req.count, job.id)
 
-    from songmaker_cli.gpu_queue import get_gpu_queue
-    from songmaker_cli.jobs import run_generation_job
-
     get_gpu_queue().submit(
         job.id, "generate", run_generation_job,
         args=(job.id, song_id, version.id, req.count),
@@ -296,9 +295,6 @@ def api_score_generation(
 
     job = create_job(session, "score")
     session.commit()
-
-    from songmaker_cli.gpu_queue import get_gpu_queue
-    from songmaker_cli.jobs import run_scoring_job
 
     get_gpu_queue().submit(
         job.id, "score", run_scoring_job,

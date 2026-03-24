@@ -70,25 +70,6 @@ def score_text_accuracy(
     )
 
 
-def _build_vocabulary_prompt(lines: tuple[str, ...] | list[str]) -> str | None:
-    """Build a Whisper initial_prompt from lyrics as vocabulary hints.
-
-    Uses unique uncommon words rather than full lyrics — Whisper treats
-    initial_prompt as "previously spoken text" so full lyrics cause it
-    to skip matching lines.
-    """
-    if not lines:
-        return None
-    all_words = " ".join(lines).split()
-    seen: set[str] = set()
-    unique: list[str] = []
-    for word in all_words:
-        lower = word.lower().strip(".,!?;:")
-        if lower not in seen and len(lower) > 3:
-            seen.add(lower)
-            unique.append(word)
-    return ", ".join(unique[:50]) if unique else None
-
 
 def _segment_confidence(segment: dict) -> float:
     """Derive a 0-1 confidence score from Whisper segment metadata.
@@ -188,40 +169,6 @@ def _is_hallucination(lines: tuple[str, ...]) -> bool:
     hallucinated = sum(1 for c in cleaned if c in _HALLUCINATION_PHRASES)
     return hallucinated > len(cleaned) * 0.5
 
-
-def _per_line_accuracy(
-    intended: tuple[str, ...], transcribed: tuple[str, ...],
-) -> float:
-    """Compute average best-match similarity per intended line.
-
-    Each intended line finds its best match among ALL transcribed lines
-    (no consumption). This handles songs correctly where:
-    - Whisper produces fewer segments than intended lines
-    - Choruses repeat (same transcribed line matches multiple intended lines)
-    - Whisper splits/merges lines differently than the lyrics
-    """
-    if not intended or not transcribed:
-        return 0.0
-
-    clean_intended = [clean_lyrics(line) for line in intended]
-    clean_intended = [c for c in clean_intended if c]
-    if not clean_intended:
-        return 0.0
-
-    clean_trans = [clean_lyrics(t) for t in transcribed]
-    clean_trans = [c for c in clean_trans if c]
-    if not clean_trans:
-        return 0.0
-
-    line_scores: list[float] = []
-    for line in clean_intended:
-        best_ratio = max(
-            SequenceMatcher(None, line, ct).ratio()
-            for ct in clean_trans
-        )
-        line_scores.append(best_ratio)
-
-    return sum(line_scores) / len(line_scores)
 
 
 def clean_lyrics(text: str) -> str:

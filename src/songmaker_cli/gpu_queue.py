@@ -266,3 +266,11 @@ def get_gpu_queue() -> GpuQueue:
         _instance = GpuQueue()
         _instance.start()
     return _instance
+
+
+def reset_gpu_queue() -> None:
+    """Shutdown and reset the GPU queue singleton (for testing)."""
+    global _instance
+    if _instance is not None:
+        _instance.shutdown()
+        _instance = None

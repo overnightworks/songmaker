@@ -12,7 +12,6 @@ dependencies = [
     "scipy>=1.12",
     "pydantic>=2.0",
     "cyclopts>=4.0",
-    "pyyaml>=6.0",
     "pyloudnorm>=0.1",
     "httpx>=0.27",
 ]
