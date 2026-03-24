@@ -81,7 +81,7 @@ alembic upgrade head
 
 ## Current State
 
-- **Branch**: `feat/player-rewrite`
+- **Branch**: `feat/auth-system`
 - **Tests**: 377 Python + 107 frontend, all passing
 - **Next**: Phase 7 — Auth system (see `plans/auth-system.md`)
 - **Deferred**: B6 (pagination), B8 (client caching), B9 (E2E tests), Playwright
