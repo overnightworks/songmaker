@@ -1,4 +1,5 @@
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { onMount } from 'svelte';
 	import {
 		fetchAlbums,
@@ -41,6 +42,7 @@
 		handleApply
 	} from '$lib/stores/editor';
 	import type { VersionGenerationParams } from '$lib/api/types';
+	import { currentUser, isAdmin, logout } from '$lib/stores/auth';
 	import AlbumNav from '$lib/components/AlbumNav.svelte';
 	import SongList from '$lib/components/SongList.svelte';
 	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
@@ -70,6 +72,13 @@
 	const isDiffMode = $derived($diffMode);
 	const isAppliedDiff = $derived($appliedDiffMode);
 	const jobs = $derived($activeJobs);
+	const me = $derived($currentUser);
+	const admin = $derived($isAdmin);
+
+	async function handleLogout() {
+		await logout();
+		window.location.href = '/login';
+	}
 
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
 	const isGenerating = $derived(
@@ -217,6 +226,15 @@
 		<AlbumNav />
 		<SongList />
 		<button class="new-song-btn" onclick={() => (showNewSong = !showNewSong)}> + New Song </button>
+		<div class="user-menu">
+			<span class="user-name" title={me?.username}>{me?.username}</span>
+			<span class="user-spacer"></span>
+			<a href="/settings/account">Account</a>
+			{#if admin}
+				<a href="/settings/users">Admin</a>
+			{/if}
+			<button class="logout-btn" onclick={handleLogout}>Logout</button>
+		</div>
 	</aside>
 
 	<main class="main-content">
@@ -477,6 +495,54 @@
 	.new-song-btn:hover {
 		border-color: var(--primary);
 		color: var(--primary);
+	}
+
+	.user-menu {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 8px 12px;
+		border-top: 1px solid var(--border);
+		flex-shrink: 0;
+		font-size: 0.8rem;
+		flex-wrap: wrap;
+	}
+
+	.user-name {
+		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 120px;
+	}
+
+	.user-spacer {
+		flex: 1;
+	}
+
+	.user-menu a {
+		color: var(--text-muted);
+		text-decoration: none;
+	}
+
+	.user-menu a:hover {
+		color: var(--text);
+	}
+
+	.logout-btn {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 3px;
+		color: var(--text-muted);
+		padding: 2px 8px;
+		cursor: pointer;
+		font-size: 0.75rem;
+		font-family: var(--font-body);
+	}
+
+	.logout-btn:hover {
+		color: var(--score-bad);
+		border-color: var(--score-bad);
 	}
 
 	.main-content {

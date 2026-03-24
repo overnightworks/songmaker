@@ -1,7 +1,12 @@
 import type {
 	AlbumItem,
+	AuthUser,
 	Capabilities,
+	LoginAttemptItem,
+	SessionItem,
+	SetupRequired,
 	SongItem,
+	UserItem,
 	VersionGenerationParams,
 	VersionItem
 } from './types';
@@ -19,7 +24,7 @@ function apiUrl(path: string): string {
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-	const resp = await fetch(apiUrl(path), init);
+	const resp = await fetch(apiUrl(path), { credentials: 'include', ...init });
 	if (!resp.ok) throw new Error(`API ${path}: ${resp.status}`);
 	return resp.json() as Promise<T>;
 }
@@ -149,6 +154,36 @@ export async function updateGenerationDefaults(
 	});
 }
 
+// ── Auth ──────────────────────────────────────────────────────────
+
+export async function checkSetupRequired(): Promise<SetupRequired> {
+	return apiFetch<SetupRequired>('/api/auth/setup-required');
+}
+
+export async function setupAdmin(username: string, password: string): Promise<AuthUser> {
+	return apiFetch<AuthUser>('/api/auth/setup', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ username, password })
+	});
+}
+
+export async function login(username: string, password: string): Promise<AuthUser> {
+	return apiFetch<AuthUser>('/api/auth/login', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ username, password })
+	});
+}
+
+export async function logout(): Promise<void> {
+	await apiFetch('/api/auth/session', { method: 'DELETE' });
+}
+
+export async function fetchMe(): Promise<AuthUser> {
+	return apiFetch<AuthUser>('/api/auth/me');
+}
+
 export async function chatWithClaude(
 	message: string,
 	context: string = '',
@@ -169,4 +204,57 @@ export async function chatWithClaude(
 	}
 	const data = await resp.json();
 	return data.response;
+}
+
+// ── Admin ─────────────────────────────────────────────────────────
+
+export async function fetchUsers(): Promise<UserItem[]> {
+	return apiFetch<UserItem[]>('/api/admin/users');
+}
+
+export async function createUser(
+	username: string,
+	password: string,
+	role: string = 'user'
+): Promise<UserItem> {
+	return apiFetch<UserItem>('/api/admin/users', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ username, password, role })
+	});
+}
+
+export async function updateUser(
+	userId: string,
+	data: { role?: string; is_active?: boolean; password?: string }
+): Promise<UserItem> {
+	return apiFetch<UserItem>(`/api/admin/users/${userId}`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+}
+
+export async function deactivateUser(userId: string): Promise<void> {
+	await apiFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+}
+
+export async function fetchSessions(): Promise<SessionItem[]> {
+	return apiFetch<SessionItem[]>('/api/admin/sessions');
+}
+
+export async function forceLogout(sessionId: string): Promise<void> {
+	await apiFetch(`/api/admin/sessions/${sessionId}`, { method: 'DELETE' });
+}
+
+export async function fetchLoginAttempts(limit: number = 100): Promise<LoginAttemptItem[]> {
+	return apiFetch<LoginAttemptItem[]>(`/api/admin/login-attempts?limit=${limit}`);
+}
+
+export async function changePassword(current: string, newPassword: string): Promise<void> {
+	await apiFetch('/api/auth/password', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ current, new_password: newPassword })
+	});
 }

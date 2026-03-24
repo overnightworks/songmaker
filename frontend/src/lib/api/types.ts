@@ -118,3 +118,39 @@ export interface Capabilities {
 	generation: boolean;
 	scoring: boolean;
 }
+
+export interface AuthUser {
+	id: string;
+	username: string;
+	role: 'admin' | 'user';
+}
+
+export interface SetupRequired {
+	required: boolean;
+}
+
+export interface UserItem {
+	id: string;
+	username: string;
+	role: string;
+	is_active: boolean;
+	created_at: string | null;
+}
+
+export interface SessionItem {
+	id: string;
+	user_id: string;
+	username: string;
+	created_at: string | null;
+	expires_at: string | null;
+	ip_address: string;
+	user_agent: string;
+}
+
+export interface LoginAttemptItem {
+	id: string;
+	ip_address: string;
+	username: string;
+	success: boolean;
+	attempted_at: string | null;
+}

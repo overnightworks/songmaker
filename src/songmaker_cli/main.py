@@ -79,6 +79,78 @@ def server(
     )
 
 
+# ── Auth (local DB commands) ────────────────────────────────────────
+
+
+@app.command(name="reset-password")
+def reset_password(
+    username: Annotated[str, Parameter(help="Username to reset")],
+    password: Annotated[str, Parameter(help="New password (min 8 chars)")],
+    output: Annotated[
+        str, Parameter(name=["-o", "--output"], help="Output directory"),
+    ] = "",
+) -> None:
+    """Reset a user's password (requires local DB access)."""
+    from songmaker_cli.auth import MIN_PASSWORD_LENGTH, hash_password
+    from songmaker_cli.config import find_project_root
+    from songmaker_cli.constants import OUTPUT_ROOT
+    from songmaker_cli.db.engine import init_db
+    from songmaker_cli.db.queries import get_user_by_username
+
+    if len(password) < MIN_PASSWORD_LENGTH:
+        print(f"Error: password must be at least {MIN_PASSWORD_LENGTH} characters")
+        sys.exit(1)
+
+    root = find_project_root(Path.cwd()) or Path.cwd()
+    output_dir = Path(output).resolve() if output else root / OUTPUT_ROOT
+    db_path = output_dir / "songmaker.db"
+
+    if not db_path.exists():
+        print(f"Error: database not found at {db_path}")
+        sys.exit(1)
+
+    factory = init_db(db_path)
+    with factory() as session:
+        user = get_user_by_username(session, username)
+        if not user:
+            print(f"Error: user '{username}' not found")
+            sys.exit(1)
+        user.password_hash = hash_password(password)
+        session.commit()
+        print(f"Password reset for '{username}' (role={user.role})")
+
+
+@app.command(name="list-users")
+def list_users_cmd(
+    output: Annotated[
+        str, Parameter(name=["-o", "--output"], help="Output directory"),
+    ] = "",
+) -> None:
+    """List all users (requires local DB access)."""
+    from songmaker_cli.config import find_project_root
+    from songmaker_cli.constants import OUTPUT_ROOT
+    from songmaker_cli.db.engine import init_db
+    from songmaker_cli.db.queries import list_users
+
+    root = find_project_root(Path.cwd()) or Path.cwd()
+    output_dir = Path(output).resolve() if output else root / OUTPUT_ROOT
+    db_path = output_dir / "songmaker.db"
+
+    if not db_path.exists():
+        print(f"Error: database not found at {db_path}")
+        sys.exit(1)
+
+    factory = init_db(db_path)
+    with factory() as session:
+        users = list_users(session)
+        if not users:
+            print("No users found. Run the server and visit /setup to create an admin.")
+            return
+        for u in users:
+            status = "active" if u.is_active else "disabled"
+            print(f"  {u.username}  role={u.role}  {status}")
+
+
 # ── Albums ──────────────────────────────────────────────────────────
 
 

@@ -25,7 +25,20 @@ import {
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
-	chatWithClaude
+	chatWithClaude,
+	checkSetupRequired,
+	setupAdmin,
+	login,
+	logout,
+	fetchMe,
+	fetchUsers,
+	createUser,
+	updateUser,
+	deactivateUser,
+	fetchSessions,
+	forceLogout,
+	fetchLoginAttempts,
+	changePassword
 } from './client';
 
 function mockOk(data: unknown) {
@@ -51,19 +64,19 @@ describe('API client', () => {
 		mockOk([{ id: 'a1', title: 'Album' }]);
 		const result = await fetchAlbums();
 		expect(result).toHaveLength(1);
-		expect(mockFetch).toHaveBeenCalledWith('/api/albums', undefined);
+		expect(mockFetch).toHaveBeenCalledWith('/api/albums', { credentials: 'include' });
 	});
 
 	it('fetchSongs without album', async () => {
 		mockOk([]);
 		await fetchSongs();
-		expect(mockFetch).toHaveBeenCalledWith('/api/songs', undefined);
+		expect(mockFetch).toHaveBeenCalledWith('/api/songs', { credentials: 'include' });
 	});
 
 	it('fetchSongs with album filter', async () => {
 		mockOk([]);
 		await fetchSongs('a1');
-		expect(mockFetch).toHaveBeenCalledWith('/api/songs?album_id=a1', undefined);
+		expect(mockFetch).toHaveBeenCalledWith('/api/songs?album_id=a1', { credentials: 'include' });
 	});
 
 	it('fetchSong by id', async () => {
@@ -94,7 +107,7 @@ describe('API client', () => {
 	it('fetchVersions calls correct URL', async () => {
 		mockOk([]);
 		await fetchVersions('s1');
-		expect(mockFetch).toHaveBeenCalledWith('/api/songs/s1/versions', undefined);
+		expect(mockFetch).toHaveBeenCalledWith('/api/songs/s1/versions', { credentials: 'include' });
 	});
 
 	it('deleteVersion sends DELETE', async () => {
@@ -195,5 +208,103 @@ describe('chatWithClaude', () => {
 	it('throws on other errors', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 		await expect(chatWithClaude('hi')).rejects.toThrow('Chat failed: 500');
+	});
+});
+
+describe('Auth API', () => {
+	it('checkSetupRequired', async () => {
+		mockOk({ required: true });
+		const result = await checkSetupRequired();
+		expect(result.required).toBe(true);
+	});
+
+	it('setupAdmin sends POST', async () => {
+		mockOk({ id: 'u1', username: 'admin', role: 'admin' });
+		const result = await setupAdmin('admin', 'password123');
+		expect(result.username).toBe('admin');
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/auth/setup');
+		expect(init.method).toBe('POST');
+		expect(JSON.parse(init.body)).toEqual({ username: 'admin', password: 'password123' });
+	});
+
+	it('login sends POST', async () => {
+		mockOk({ id: 'u1', username: 'alice', role: 'user' });
+		const result = await login('alice', 'password123');
+		expect(result.username).toBe('alice');
+		expect(mockFetch.mock.calls[0][0]).toBe('/api/auth/login');
+	});
+
+	it('logout sends DELETE', async () => {
+		mockOk({ status: 'ok' });
+		await logout();
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/auth/session');
+		expect(init.method).toBe('DELETE');
+	});
+
+	it('fetchMe calls GET /api/auth/me', async () => {
+		mockOk({ id: 'u1', username: 'admin', role: 'admin' });
+		const result = await fetchMe();
+		expect(result.role).toBe('admin');
+	});
+
+	it('changePassword sends PUT', async () => {
+		mockOk({ status: 'ok' });
+		await changePassword('old', 'newpass123');
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/auth/password');
+		expect(init.method).toBe('PUT');
+		expect(JSON.parse(init.body)).toEqual({ current: 'old', new_password: 'newpass123' });
+	});
+});
+
+describe('Admin API', () => {
+	it('fetchUsers', async () => {
+		mockOk([{ id: 'u1', username: 'admin' }]);
+		const result = await fetchUsers();
+		expect(result).toHaveLength(1);
+	});
+
+	it('createUser sends POST', async () => {
+		mockOk({ id: 'u2', username: 'bob', role: 'user' });
+		const result = await createUser('bob', 'password123', 'user');
+		expect(result.username).toBe('bob');
+		expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+	});
+
+	it('updateUser sends PUT', async () => {
+		mockOk({ id: 'u1', role: 'admin' });
+		await updateUser('u1', { role: 'admin' });
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/admin/users/u1');
+		expect(init.method).toBe('PUT');
+	});
+
+	it('deactivateUser sends DELETE', async () => {
+		mockOk({ status: 'ok' });
+		await deactivateUser('u1');
+		expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+	});
+
+	it('fetchSessions', async () => {
+		mockOk([{ id: 's1', username: 'admin' }]);
+		const result = await fetchSessions();
+		expect(result).toHaveLength(1);
+	});
+
+	it('forceLogout sends DELETE', async () => {
+		mockOk({ status: 'ok' });
+		await forceLogout('s1');
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/admin/sessions/s1');
+		expect(init.method).toBe('DELETE');
+	});
+
+	it('fetchLoginAttempts', async () => {
+		mockOk([{ id: 'a1', success: false }]);
+		const result = await fetchLoginAttempts(50);
+		expect(result).toHaveLength(1);
+		expect(mockFetch.mock.calls[0][0]).toBe('/api/admin/login-attempts?limit=50');
 	});
 });

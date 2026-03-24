@@ -15,7 +15,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -82,23 +82,28 @@ def create_app(
     sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"
 
-    @app.get("/")
-    async def serve_player() -> FileResponse:
-        sk_index = sveltekit_dir / "index.html"
-        if not sk_index.exists():
-            raise HTTPException(
-                500, "SvelteKit build not found — run 'cd frontend && pnpm build'",
-            )
-        return FileResponse(sk_index, media_type="text/html")
+    app.mount(
+        "/static", StaticFiles(directory=str(output_dir)), name="static",
+    )
 
     if sveltekit_app_dir.exists():
         app.mount(
             "/_app", StaticFiles(directory=str(sveltekit_app_dir)), name="sveltekit-app",
         )
 
-    app.mount(
-        "/static", StaticFiles(directory=str(output_dir)), name="static",
-    )
+    sk_index = sveltekit_dir / "index.html"
+
+    @app.exception_handler(404)
+    async def spa_fallback(request: Request, exc: HTTPException) -> FileResponse:
+        if (
+            not request.url.path.startswith("/api/")
+            and not request.url.path.startswith("/audio/")
+            and not request.url.path.startswith("/static/")
+            and not request.url.path.startswith("/_app/")
+            and sk_index.exists()
+        ):
+            return FileResponse(sk_index, media_type="text/html")
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
 
     return app
 
