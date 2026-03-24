@@ -6,7 +6,6 @@
 export interface GenerationParams {
 	seed?: number;
 	acestep_model?: string;
-	acestep_lm_model?: string;
 	bpm?: number;
 	duration?: number;
 	key?: string;
@@ -16,20 +15,24 @@ export interface GenerationParams {
 	think_mode?: boolean;
 	lm_temperature?: number;
 	infer_method?: string;
-	songmaker_version?: string;
-	generated_at?: string;
 }
 
 export interface TrackScores {
 	lyrical_coherence?: number;
 	lyrical_summary?: string;
 	dynamics?: number;
+	dynamics_pitch_cv?: number;
+	dynamics_rms_contrast?: number;
+	dynamics_onset_cv?: number;
 	text_accuracy?: number;
 	audiobox_enjoyment?: number;
 	audiobox_understanding?: number;
 	audiobox_complexity?: number;
 	audiobox_quality?: number;
+	bpm_detected?: number;
+	bpm_deviation?: number;
 	silence_gaps?: number;
+	silence_longest?: number;
 	spectral_artifacts?: number;
 	user_rating?: number;
 	user_notes?: string;
@@ -105,7 +108,7 @@ export interface AlbumItem {
 	artist: string;
 	subtitle: string;
 	year: string;
-	colors: { primary: string; bg: string };
+	colors: Record<string, string>;
 	song_count: number;
 }
 

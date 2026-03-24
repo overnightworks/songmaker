@@ -127,7 +127,7 @@ class Score(Base):
     __tablename__ = "scores"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    generation_id: Mapped[str] = mapped_column(ForeignKey("generations.id"))
+    generation_id: Mapped[str] = mapped_column(ForeignKey("generations.id"), index=True)
     scorer: Mapped[str] = mapped_column(String(50))
     value: Mapped[dict] = mapped_column(JSON)
     scored_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -152,9 +152,6 @@ class Job(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     type: Mapped[str] = mapped_column(String(20))
-    generation_id: Mapped[str | None] = mapped_column(
-        ForeignKey("generations.id"), nullable=True,
-    )
     status: Mapped[str] = mapped_column(String(20), default="queued")
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

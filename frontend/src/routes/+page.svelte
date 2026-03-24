@@ -104,6 +104,7 @@
 
 	async function onGenerate(): Promise<void> {
 		if (!song) return;
+		error = '';
 		try {
 			const job = await generateSong(song.id, genCount);
 			trackJob(job, { songId: song.id });
@@ -394,7 +395,7 @@
 								{/if}
 							</div>
 						{:else}
-							<label class="edit-field" class:changed={$editPrompt !== $editPrompt}>
+							<label class="edit-field">
 								<span>Style Prompt</span>
 								<textarea rows="4" bind:value={$editPrompt}></textarea>
 							</label>
@@ -740,7 +741,6 @@
 	}
 
 	.new-song-form h2 {
-		margin-bottom: 0;
 		font-family: var(--font-display);
 		color: var(--primary);
 		font-size: 20px;

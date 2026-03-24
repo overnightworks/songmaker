@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Snapshot serialization keys — used by to_dict() and read back by manifest.read_scores().
-# Player SCORE_LABELS must match these keys.
+# Score serialization keys — used by to_dict() and returned in API responses.
 SCORE_KEY_DYNAMICS = "dynamics"
 SCORE_KEY_DYNAMICS_PITCH_CV = "dynamics_pitch_cv"
 SCORE_KEY_DYNAMICS_RMS_CONTRAST = "dynamics_rms_contrast"

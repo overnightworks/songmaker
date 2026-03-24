@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy.orm import Session, joinedload
@@ -16,7 +16,12 @@ _UNSET = object()
 
 
 def list_albums(session: Session) -> list[Album]:
-    return session.query(Album).order_by(Album.title).all()
+    return (
+        session.query(Album)
+        .options(joinedload(Album.songs))
+        .order_by(Album.title)
+        .all()
+    )
 
 
 def get_album(session: Session, album_id: str) -> Album | None:
@@ -243,7 +248,7 @@ def update_job_status(
     job.progress = progress
     job.error = error
     if status in ("completed", "failed"):
-        job.completed_at = datetime.utcnow()
+        job.completed_at = datetime.now(timezone.utc)
     session.flush()
 
 
@@ -340,6 +345,7 @@ def cleanup_album(
     gens = (
         session.query(Generation)
         .join(Song)
+        .options(joinedload(Generation.scores), joinedload(Generation.rating))
         .filter(Song.album_id == album_id, Generation.is_picked == False)  # noqa: E712
         .all()
     )

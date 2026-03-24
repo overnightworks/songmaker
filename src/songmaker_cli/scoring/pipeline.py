@@ -17,11 +17,11 @@ from songmaker_cli.scoring.models import (
     AudioBoxScore,
     BpmAccuracyScore,
     EmotionalDynamicsScore,
+    LyricalCoherenceScore,
     SilenceScore,
     SongScores,
     SpectralQualityScore,
     TextAccuracyScore,
-    LyricalCoherenceScore,
 )
 
 log = logging.getLogger(__name__)
@@ -108,10 +108,10 @@ class ScorerRegistry:
         import songmaker_cli.scoring.audiobox_aesthetics  # noqa: F401
         import songmaker_cli.scoring.bpm_accuracy  # noqa: F401
         import songmaker_cli.scoring.emotional_dynamics  # noqa: F401
+        import songmaker_cli.scoring.lyrical_coherence  # noqa: F401
         import songmaker_cli.scoring.silence_detection  # noqa: F401
         import songmaker_cli.scoring.spectral_quality  # noqa: F401
         import songmaker_cli.scoring.text_accuracy  # noqa: F401
-        import songmaker_cli.scoring.lyrical_coherence  # noqa: F401
 
     def reset_for_testing(self) -> None:
         """Clear all scorers for test isolation."""

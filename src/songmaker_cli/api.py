@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -112,12 +111,6 @@ class SongUpdateRequest(BaseModel):
     generation_params: dict | None = None
 
 
-class PaginatedResponse(BaseModel):
-    items: list[dict[str, Any]]
-    total: int
-    offset: int
-    limit: int
-
 
 # ── Albums ───────────────────────────────────────────────────────────
 
@@ -183,12 +176,11 @@ def api_update_song(
     if "generation_params" in req.model_fields_set:
         kwargs["generation_params"] = req.generation_params
     try:
-        update_song(session, song_id, **kwargs)
+        version = update_song(session, song_id, **kwargs)
     except ValueError:
         raise HTTPException(404, "Song not found")
     session.commit()
-    song = get_song(session, song_id)
-    return song_to_dict(song)
+    return song_to_dict(version.song)
 
 
 @router.get("/songs/{song_id}/versions")

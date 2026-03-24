@@ -4,8 +4,6 @@ from __future__ import annotations
 
 OUTPUT_ROOT = "_output"
 DEFAULT_ARTIST = "Flex0r"
-SIMILARITY_GOOD = 0.8
-SIMILARITY_FAIR = 0.5
 
 # Scoring pipeline
 SILENCE_TOP_DB = 40

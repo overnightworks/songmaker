@@ -37,10 +37,12 @@ server = [
     "uvicorn>=0.20",
     "sqlalchemy>=2.0",
 ]
+claude = [
+    "anthropic>=0.20",
+]
 dev = [
     "pytest>=7.0",
     "ruff>=0.4",
-    "httpx",
 ]
 
 [project.scripts]

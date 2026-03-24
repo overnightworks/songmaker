@@ -84,7 +84,6 @@ def resolve_output_paths(
 def _defaults_path() -> Path:
     root = find_project_root(Path.cwd())
     base = (root / OUTPUT_ROOT) if root else Path(OUTPUT_ROOT)
-    base.mkdir(parents=True, exist_ok=True)
     return base / "generation_defaults.json"
 
 
@@ -100,6 +99,7 @@ def load_generation_defaults() -> dict:
 
 def save_generation_defaults(data: dict) -> None:
     path = _defaults_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     log.info("Saved generation defaults: %s", path)
 

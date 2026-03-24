@@ -129,18 +129,7 @@ export async function cleanupAlbum(albumId: string): Promise<{ deleted: number }
 	return apiFetch<{ deleted: number }>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
 }
 
-export async function rateGeneration(
-	album: string,
-	genName: string,
-	rating: number,
-	notes: string
-): Promise<void> {
-	await apiFetch(`/api/rate/${album}/${genName}`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ rating, notes })
-	});
-}
+
 
 export async function fetchCapabilities(): Promise<Capabilities> {
 	return apiFetch<Capabilities>('/api/capabilities');

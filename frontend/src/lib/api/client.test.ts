@@ -22,7 +22,6 @@ import {
 	pickGeneration,
 	unpickGeneration,
 	cleanupAlbum,
-	rateGeneration,
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
@@ -152,15 +151,7 @@ describe('API client', () => {
 		expect(result.deleted).toBe(5);
 	});
 
-	it('rateGeneration sends rating', async () => {
-		mockOk({});
-		await rateGeneration('album1', 'song_v1', 85, 'great');
-		const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-		expect(body.rating).toBe(85);
-		expect(body.notes).toBe('great');
-	});
-
-	it('fetchCapabilities', async () => {
+it('fetchCapabilities', async () => {
 		mockOk({ generation: true, scoring: true });
 		const result = await fetchCapabilities();
 		expect(result.generation).toBe(true);
