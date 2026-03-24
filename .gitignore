@@ -50,7 +50,6 @@ frontend/.svelte-kit/
 frontend/build/
 
 # ── Misc ──
-plans/
 .pytest_cache/
 .ruff_cache/
 albums/*/legacy_sources/
