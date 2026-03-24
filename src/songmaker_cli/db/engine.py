@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.db.models import Base
@@ -34,11 +34,19 @@ def init_db(db_path: Path) -> sessionmaker[Session]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     url = f"sqlite:///{db_path}"
     engine = create_engine(url, echo=False)
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(engine)
     _session_factory = sessionmaker(bind=engine)
     _db_path = db_path
 
-    log.info("Database initialized: %s", db_path)
+    log.info("Database initialized: %s (WAL mode)", db_path)
     return _session_factory
 
 
