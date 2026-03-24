@@ -15,7 +15,12 @@
 			shift: 3.0,
 			think_mode: true,
 			lm_temperature: 0.85,
-			infer_method: 'ode'
+			lm_top_k: 0,
+			lm_top_p: 0.9,
+			lm_cfg_scale: 2.0,
+			lm_negative_prompt: '',
+			infer_method: 'ode',
+			batch_size: 1
 		},
 		sft: {
 			inference_steps: 50,
@@ -23,7 +28,12 @@
 			shift: 3.0,
 			think_mode: true,
 			lm_temperature: 0.85,
-			infer_method: 'ode'
+			lm_top_k: 0,
+			lm_top_p: 0.9,
+			lm_cfg_scale: 2.0,
+			lm_negative_prompt: '',
+			infer_method: 'ode',
+			batch_size: 1
 		}
 	};
 
@@ -212,6 +222,69 @@
 				/>
 				<span>Think Mode</span>
 			</label>
+
+			<label class="setting">
+				<span>LM Top-K</span>
+				<input
+					type="number"
+					min="0"
+					max="200"
+					value={getParam('lm_top_k') ?? ''}
+					placeholder={String(effectiveDefaults.lm_top_k)}
+					oninput={(e) => handleNumber('lm_top_k', e.currentTarget.value)}
+				/>
+			</label>
+
+			<label class="setting">
+				<span>LM Top-P</span>
+				<input
+					type="number"
+					min="0"
+					max="1"
+					step="0.05"
+					value={getParam('lm_top_p') ?? ''}
+					placeholder={String(effectiveDefaults.lm_top_p)}
+					oninput={(e) => handleNumber('lm_top_p', e.currentTarget.value)}
+				/>
+			</label>
+
+			<label class="setting">
+				<span>LM CFG Scale</span>
+				<input
+					type="number"
+					min="0"
+					max="10"
+					step="0.5"
+					value={getParam('lm_cfg_scale') ?? ''}
+					placeholder={String(effectiveDefaults.lm_cfg_scale)}
+					oninput={(e) => handleNumber('lm_cfg_scale', e.currentTarget.value)}
+				/>
+			</label>
+
+			<label class="setting">
+				<span>Batch Size</span>
+				<input
+					type="number"
+					min="1"
+					max="8"
+					value={getParam('batch_size') ?? ''}
+					placeholder={String(effectiveDefaults.batch_size)}
+					oninput={(e) => handleNumber('batch_size', e.currentTarget.value)}
+				/>
+			</label>
+
+			<label class="setting full-width">
+				<span>LM Negative Prompt</span>
+				<input
+					type="text"
+					value={getParam('lm_negative_prompt') ?? ''}
+					placeholder="e.g. bad quality, noise"
+					oninput={(e) => {
+						const val = e.currentTarget.value;
+						setParam('lm_negative_prompt', val || undefined);
+					}}
+				/>
+			</label>
 		</div>
 
 		<div class="actions-row">
@@ -317,6 +390,38 @@
 						/>
 						<span>Think Mode</span>
 					</label>
+					<label class="setting">
+						<span>LM Top-K</span>
+						<input type="number" min="0" max="200"
+							value={editDefaults.lm_top_k ?? ''}
+							placeholder={String(BUILTIN_DEFAULTS[editModel].lm_top_k)}
+							oninput={(e) => setDefaultNum('lm_top_k', e.currentTarget.value)}
+						/>
+					</label>
+					<label class="setting">
+						<span>LM Top-P</span>
+						<input type="number" min="0" max="1" step="0.05"
+							value={editDefaults.lm_top_p ?? ''}
+							placeholder={String(BUILTIN_DEFAULTS[editModel].lm_top_p)}
+							oninput={(e) => setDefaultNum('lm_top_p', e.currentTarget.value)}
+						/>
+					</label>
+					<label class="setting">
+						<span>LM CFG Scale</span>
+						<input type="number" min="0" max="10" step="0.5"
+							value={editDefaults.lm_cfg_scale ?? ''}
+							placeholder={String(BUILTIN_DEFAULTS[editModel].lm_cfg_scale)}
+							oninput={(e) => setDefaultNum('lm_cfg_scale', e.currentTarget.value)}
+						/>
+					</label>
+					<label class="setting">
+						<span>Batch Size</span>
+						<input type="number" min="1" max="8"
+							value={editDefaults.batch_size ?? ''}
+							placeholder={String(BUILTIN_DEFAULTS[editModel].batch_size)}
+							oninput={(e) => setDefaultNum('batch_size', e.currentTarget.value)}
+						/>
+					</label>
 				</div>
 
 				<div class="actions-row">
@@ -390,6 +495,11 @@
 		letter-spacing: 0.5px;
 	}
 
+	.setting.full-width {
+		grid-column: 1 / -1;
+	}
+
+	.setting input[type='text'],
 	.setting input[type='number'],
 	.setting select {
 		padding: 5px 8px;

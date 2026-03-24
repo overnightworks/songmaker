@@ -63,7 +63,12 @@ export interface VersionGenerationParams {
 	shift?: number;
 	think_mode?: boolean;
 	lm_temperature?: number;
+	lm_top_k?: number;
+	lm_top_p?: number;
+	lm_cfg_scale?: number;
+	lm_negative_prompt?: string;
 	infer_method?: string;
+	batch_size?: number;
 }
 
 /** A content snapshot — lyrics, prompt, params. */

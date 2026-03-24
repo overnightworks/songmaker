@@ -26,7 +26,12 @@ class AceStepConfig:
     shift: float = 3.0
     think_mode: bool = True
     lm_temperature: float = 0.85
+    lm_top_k: int = 0
+    lm_top_p: float = 0.9
+    lm_cfg_scale: float = 2.0
+    lm_negative_prompt: str = ""
     infer_method: str = "ode"
+    batch_size: int = 1
 
 
 @dataclass(frozen=True)

@@ -144,3 +144,52 @@ def force_logout_endpoint(
     delete_session(db, session_id)
     db.commit()
     return StatusResponse(status="ok")
+
+
+@router.post("/acestep/reinitialize")
+def reinitialize_acestep(
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> StatusResponse:
+    import json
+    from urllib.request import Request, urlopen
+
+    acestep_url = "http://localhost:8001/v1/reinitialize"
+    try:
+        req = Request(
+            acestep_url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST",
+        )
+        with urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+        if data.get("code") == 200:
+            return StatusResponse(status="ok")
+        raise HTTPException(502, f"ACE-Step error: {data}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"ACE-Step unreachable: {exc}") from exc
+
+
+@router.get("/acestep/status")
+def acestep_status(
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> dict:
+    import json
+    from urllib.request import Request, urlopen
+
+    try:
+        req = Request("http://localhost:8001/health", method="GET")
+        with urlopen(req, timeout=5) as resp:
+            health = json.loads(resp.read())
+
+        req2 = Request("http://localhost:8001/v1/stats", method="GET")
+        with urlopen(req2, timeout=5) as resp:
+            stats = json.loads(resp.read())
+
+        return {
+            "online": True,
+            "model": health.get("data", {}).get("loaded_model", "unknown"),
+            "lm_model": health.get("data", {}).get("loaded_lm_model", "unknown"),
+            "jobs": stats.get("data", {}).get("jobs", {}),
+        }
+    except Exception:
+        return {"online": False, "model": None, "lm_model": None, "jobs": {}}

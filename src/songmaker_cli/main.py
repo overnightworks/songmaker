@@ -151,6 +151,31 @@ def list_users_cmd(
             print(f"  {u.username}  role={u.role}  {status}")
 
 
+@app.command(name="reinit-acestep")
+def reinit_acestep() -> None:
+    """Reinitialize the ACE-Step model (fixes generation failures)."""
+    import json
+    from urllib.request import Request, urlopen
+
+    try:
+        req = Request(
+            "http://localhost:8001/v1/reinitialize",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read())
+        if data.get("code") == 200:
+            print("ACE-Step reinitialized successfully.")
+        else:
+            print(f"ACE-Step error: {data}")
+            sys.exit(1)
+    except Exception as exc:
+        print(f"ACE-Step unreachable: {exc}")
+        sys.exit(1)
+
+
 # ── Albums ──────────────────────────────────────────────────────────
 
 

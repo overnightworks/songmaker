@@ -7,7 +7,9 @@
 		updateUser,
 		fetchSessions,
 		forceLogout,
-		fetchLoginAttempts
+		fetchLoginAttempts,
+		getAceStepStatus,
+		reinitializeAceStep
 	} from '$lib/api/client';
 	import type { UserItem, SessionItem, LoginAttemptItem } from '$lib/api/types';
 	import { currentUser, isAdmin } from '$lib/stores/auth';
@@ -15,8 +17,10 @@
 	let users = $state<UserItem[]>([]);
 	let sessions = $state<SessionItem[]>([]);
 	let attempts = $state<LoginAttemptItem[]>([]);
+	let aceStatus = $state<{ online: boolean; model: string | null; lm_model: string | null; jobs: Record<string, number> } | null>(null);
 	let error = $state('');
-	let tab = $state<'users' | 'sessions' | 'attempts'>('users');
+	let tab = $state<'users' | 'sessions' | 'attempts' | 'acestep'>('users');
+	let reinitializing = $state(false);
 
 	let newUsername = $state('');
 	let newPassword = $state('');
@@ -30,16 +34,31 @@
 
 	async function loadAll() {
 		try {
-			const [u, s, a] = await Promise.all([
+			const [u, s, a, ace] = await Promise.all([
 				fetchUsers(),
 				fetchSessions(),
-				fetchLoginAttempts(50)
+				fetchLoginAttempts(50),
+				getAceStepStatus()
 			]);
 			users = u;
 			sessions = s;
 			attempts = a;
+			aceStatus = ace;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
+		}
+	}
+
+	async function handleReinitialize() {
+		reinitializing = true;
+		error = '';
+		try {
+			await reinitializeAceStep();
+			aceStatus = await getAceStepStatus();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Reinitialize failed';
+		} finally {
+			reinitializing = false;
 		}
 	}
 
@@ -108,6 +127,7 @@
 			<button class:active={tab === 'attempts'} onclick={() => (tab = 'attempts')}
 				>Login Attempts</button
 			>
+			<button class:active={tab === 'acestep'} onclick={() => (tab = 'acestep')}>ACE-Step</button>
 		</div>
 
 		{#if error}
@@ -238,6 +258,50 @@
 						{/each}
 					</tbody>
 				</table>
+			</section>
+		{/if}
+
+		{#if tab === 'acestep'}
+			<section>
+				<h2>ACE-Step Server</h2>
+				{#if aceStatus}
+					<div class="ace-status">
+						<div class="ace-row">
+							<span class="ace-label">Status</span>
+							<span class:online={aceStatus.online} class:offline={!aceStatus.online}>
+								{aceStatus.online ? 'Online' : 'Offline'}
+							</span>
+						</div>
+						{#if aceStatus.online}
+							<div class="ace-row">
+								<span class="ace-label">Model</span>
+								<span>{aceStatus.model}</span>
+							</div>
+							<div class="ace-row">
+								<span class="ace-label">LM Model</span>
+								<span>{aceStatus.lm_model}</span>
+							</div>
+							<div class="ace-row">
+								<span class="ace-label">Jobs Total</span>
+								<span>{aceStatus.jobs.total ?? 0}</span>
+							</div>
+							<div class="ace-row">
+								<span class="ace-label">Jobs Failed</span>
+								<span>{aceStatus.jobs.failed ?? 0}</span>
+							</div>
+						{/if}
+					</div>
+					<button
+						class="reinit-btn"
+						onclick={handleReinitialize}
+						disabled={reinitializing}
+					>
+						{reinitializing ? 'Reinitializing...' : 'Reinitialize ACE-Step'}
+					</button>
+					<p class="hint">Use this if generations fail. Resets the model without restarting the server.</p>
+				{:else}
+					<p>Loading...</p>
+				{/if}
 			</section>
 		{/if}
 	</div>
@@ -430,5 +494,59 @@
 
 	.fail {
 		color: var(--score-bad);
+	}
+
+	.ace-status {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.ace-row {
+		display: flex;
+		gap: 1rem;
+		font-size: 0.85rem;
+	}
+
+	.ace-label {
+		color: var(--text-muted);
+		min-width: 100px;
+	}
+
+	.online {
+		color: var(--score-good);
+		font-weight: 600;
+	}
+
+	.offline {
+		color: var(--score-bad);
+		font-weight: 600;
+	}
+
+	.reinit-btn {
+		background: var(--primary);
+		color: white;
+		border: none;
+		border-radius: 4px;
+		padding: 0.5rem 1rem;
+		font-size: 0.85rem;
+		cursor: pointer;
+		font-family: var(--font-body);
+	}
+
+	.reinit-btn:hover:not(:disabled) {
+		filter: brightness(1.1);
+	}
+
+	.reinit-btn:disabled {
+		opacity: 0.5;
+		cursor: wait;
+	}
+
+	.hint {
+		color: var(--text-dim);
+		font-size: 0.75rem;
+		margin-top: 0.5rem;
 	}
 </style>

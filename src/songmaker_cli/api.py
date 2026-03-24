@@ -129,7 +129,8 @@ def _get_session() -> Session:  # type: ignore[misc]
 
 _VALID_GEN_PARAM_KEYS = frozenset({
     "inference_steps", "guidance_scale", "shift",
-    "think_mode", "lm_temperature", "infer_method",
+    "think_mode", "lm_temperature", "lm_top_k", "lm_top_p",
+    "lm_cfg_scale", "lm_negative_prompt", "infer_method", "batch_size",
 })
 
 

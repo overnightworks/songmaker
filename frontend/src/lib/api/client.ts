@@ -251,6 +251,19 @@ export async function fetchLoginAttempts(limit: number = 100): Promise<LoginAtte
 	return apiFetch<LoginAttemptItem[]>(`/api/admin/login-attempts?limit=${limit}`);
 }
 
+export async function getAceStepStatus(): Promise<{
+	online: boolean;
+	model: string | null;
+	lm_model: string | null;
+	jobs: Record<string, number>;
+}> {
+	return apiFetch('/api/admin/acestep/status');
+}
+
+export async function reinitializeAceStep(): Promise<void> {
+	await apiFetch('/api/admin/acestep/reinitialize', { method: 'POST' });
+}
+
 export async function changePassword(current: string, newPassword: string): Promise<void> {
 	await apiFetch('/api/auth/password', {
 		method: 'PUT',

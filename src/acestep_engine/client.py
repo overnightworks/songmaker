@@ -166,10 +166,15 @@ class AceStepClient:
             "shift": config.shift,
             "thinking": config.think_mode,
             "lm_temperature": config.lm_temperature,
+            "lm_top_k": config.lm_top_k,
+            "lm_top_p": config.lm_top_p,
+            "lm_cfg_scale": config.lm_cfg_scale,
             "infer_method": config.infer_method,
             "audio_format": "wav",
-            "batch_size": 1,
+            "batch_size": config.batch_size,
         }
+        if config.lm_negative_prompt:
+            payload["lm_negative_prompt"] = config.lm_negative_prompt
 
         last_exc: Exception | None = None
         for attempt in range(SUBMIT_RETRIES):
