@@ -9,32 +9,34 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.db.engine import init_db, reset_engine
 from songmaker_cli.db.models import Album, Generation, Rating, Score, Song, Version
+from songmaker_cli.api_models import (
+    AlbumResponse,
+    GenerationResponse,
+    JobResponse,
+    SongResponse,
+    VersionResponse,
+)
 from songmaker_cli.db.queries import (
     _UNSET,
-    album_to_dict,
     cleanup_album,
     create_generation,
     create_job,
     create_song,
     delete_generation,
     delete_version,
-    generation_to_dict,
     get_album,
     get_generation,
     get_generation_by_path,
     get_job,
     get_song,
-    job_to_dict,
     list_albums,
     list_songs,
     pick_generation,
     save_rating,
     save_scores,
-    song_to_dict,
     unpick_generation,
     update_job_status,
     update_song,
-    version_to_dict,
 )
 
 
@@ -152,7 +154,7 @@ def test_update_song(seeded_session: Session) -> None:
 
 def test_generation_to_dict(seeded_session: Session) -> None:
     gen = get_generation(seeded_session, "g1")
-    d = generation_to_dict(gen)
+    d = GenerationResponse.from_orm(gen).model_dump()
     assert d["seed"] == 42
     assert d["scores"]["dynamics"] == 55.0
     assert d["scores"]["user_rating"] == 82.5
@@ -160,7 +162,7 @@ def test_generation_to_dict(seeded_session: Session) -> None:
 
 def test_song_to_dict(seeded_session: Session) -> None:
     song = get_song(seeded_session, "s1")
-    d = song_to_dict(song)
+    d = SongResponse.from_orm(song).model_dump()
     assert d["title"] == "Song One"
     assert d["generation_count"] == 2
     assert d["best_rating"] == 82.5
@@ -169,7 +171,7 @@ def test_song_to_dict(seeded_session: Session) -> None:
 
 def test_album_to_dict(seeded_session: Session) -> None:
     album = get_album(seeded_session, "test")
-    d = album_to_dict(album)
+    d = AlbumResponse.from_orm(album).model_dump()
     assert d["song_count"] == 1
 
 
@@ -296,7 +298,7 @@ def test_update_job_failed(seeded_session: Session) -> None:
 def test_job_to_dict(seeded_session: Session) -> None:
     job = create_job(seeded_session, "generate")
     seeded_session.commit()
-    d = job_to_dict(job)
+    d = JobResponse.from_orm(job).model_dump()
     assert d["type"] == "generate"
     assert d["status"] == "queued"
     assert "id" in d
@@ -367,7 +369,7 @@ def test_save_scores_upsert_persists(db_session: Session) -> None:
 
 def test_generation_to_dict_has_is_picked(seeded_session: Session) -> None:
     gen = get_generation(seeded_session, "g1")
-    d = generation_to_dict(gen)
+    d = GenerationResponse.from_orm(gen).model_dump()
     assert d["is_picked"] is False
     assert "version_number" in d
 
@@ -435,7 +437,7 @@ def test_version_to_dict_includes_generation_params(seeded_session: Session) -> 
     update_song(seeded_session, "s1", generation_params=params)
     seeded_session.commit()
     song = get_song(seeded_session, "s1")
-    d = version_to_dict(song.latest_version)
+    d = VersionResponse.from_orm(song.latest_version).model_dump()
     assert d["generation_params"] == params
 
 
@@ -444,7 +446,7 @@ def test_song_to_dict_includes_generation_params(seeded_session: Session) -> Non
     update_song(seeded_session, "s1", generation_params=params)
     seeded_session.commit()
     song = get_song(seeded_session, "s1")
-    d = song_to_dict(song)
+    d = SongResponse.from_orm(song).model_dump()
     assert d["generation_params"] == params
 
 

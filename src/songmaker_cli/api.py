@@ -41,27 +41,22 @@ from songmaker_cli.config import (
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
-    album_to_dict,
     cleanup_album,
     create_job,
     create_song,
     delete_generation,
     delete_version,
-    generation_to_dict,
     get_album,
     get_generation,
     get_generation_by_path,
     get_job,
     get_song,
-    job_to_dict,
     list_albums,
     list_songs,
     pick_generation,
     save_rating,
-    song_to_dict,
     unpick_generation,
     update_song,
-    version_to_dict,
 )
 from songmaker_cli.gpu_queue import get_gpu_queue
 from songmaker_cli.jobs import run_generation_job, run_scoring_job
@@ -116,7 +111,7 @@ def _validate_generation_params(params: dict | None) -> dict | None:
 
 @router.get("/albums")
 def api_list_albums(session: Session = Depends(_get_session)) -> list[AlbumResponse]:
-    return [AlbumResponse(**album_to_dict(a)) for a in list_albums(session)]
+    return [AlbumResponse.from_orm(a) for a in list_albums(session)]
 
 
 @router.get("/albums/{album_id}")
@@ -124,7 +119,7 @@ def api_get_album(album_id: str, session: Session = Depends(_get_session)) -> Al
     album = get_album(session, album_id)
     if not album:
         raise HTTPException(404, "Album not found")
-    return AlbumResponse(**album_to_dict(album))
+    return AlbumResponse.from_orm(album)
 
 
 # ── Songs ────────────────────────────────────────────────────────────
@@ -135,7 +130,7 @@ def api_list_songs(
     album_id: str | None = Query(None),
     session: Session = Depends(_get_session),
 ) -> list[SongResponse]:
-    return [SongResponse(**song_to_dict(s)) for s in list_songs(session, album_id=album_id)]
+    return [SongResponse.from_orm(s) for s in list_songs(session, album_id=album_id)]
 
 
 @router.get("/songs/{song_id}")
@@ -143,7 +138,7 @@ def api_get_song(song_id: str, session: Session = Depends(_get_session)) -> Song
     song = get_song(session, song_id)
     if not song:
         raise HTTPException(404, "Song not found")
-    return SongResponse(**song_to_dict(song))
+    return SongResponse.from_orm(song)
 
 
 @router.post("/songs")
@@ -159,7 +154,7 @@ def api_create_song(
         generation_params=req.generation_params,
     )
     session.commit()
-    return SongResponse(**song_to_dict(song))
+    return SongResponse.from_orm(song)
 
 
 @router.put("/songs/{song_id}")
@@ -179,7 +174,7 @@ def api_update_song(
     except ValueError:
         raise HTTPException(404, "Song not found")
     session.commit()
-    return SongResponse(**song_to_dict(version.song))
+    return SongResponse.from_orm(version.song)
 
 
 @router.get("/songs/{song_id}/versions")
@@ -189,7 +184,7 @@ def api_song_versions(
     song = get_song(session, song_id)
     if not song:
         raise HTTPException(404, "Song not found")
-    return [VersionResponse(**version_to_dict(v)) for v in reversed(song.versions)]
+    return [VersionResponse.from_orm(v) for v in reversed(song.versions)]
 
 
 # ── Versions (delete) ────────────────────────────────────────────────
@@ -223,7 +218,7 @@ def api_get_generation(
     gen = get_generation(session, gen_id)
     if not gen:
         raise HTTPException(404, "Generation not found")
-    return GenerationResponse(**generation_to_dict(gen))
+    return GenerationResponse.from_orm(gen)
 
 
 @router.delete("/generations/{gen_id}")
@@ -263,7 +258,7 @@ def api_generate_song(
         args=(job.id, song_id, version.id, req.count),
     )
 
-    return JobResponse(**job_to_dict(job))
+    return JobResponse.from_orm(job)
 
 
 @router.post("/generations/{gen_id}/score")
@@ -284,7 +279,7 @@ def api_score_generation(
         args=(job.id, gen_id, req.scorers),
     )
 
-    return JobResponse(**job_to_dict(job))
+    return JobResponse.from_orm(job)
 
 
 # ── Jobs ────────────────────────────────────────────────────────────
@@ -295,7 +290,7 @@ def api_get_job(job_id: str, session: Session = Depends(_get_session)) -> JobRes
     job = get_job(session, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    return JobResponse(**job_to_dict(job))
+    return JobResponse.from_orm(job)
 
 
 # ── Ratings ──────────────────────────────────────────────────────────
