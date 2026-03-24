@@ -7,9 +7,27 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from songmaker_cli.api_models import (
+    AlbumResponse,
+    CapabilitiesResponse,
+    ChatRequest,
+    ChatResponse,
+    CleanupResponse,
+    GenerateRequest,
+    GenerationDefaultsRequest,
+    GenerationResponse,
+    JobResponse,
+    RateRequest,
+    RateResponse,
+    ScoreRequest,
+    SongCreateRequest,
+    SongResponse,
+    SongUpdateRequest,
+    StatusResponse,
+    VersionResponse,
+)
 from songmaker_cli.claude.provider import (
     UnavailableError,
     call_claude,
@@ -76,23 +94,6 @@ def _get_session() -> Session:  # type: ignore[misc]
         session.close()
 
 
-class RateRequest(BaseModel):
-    rating: float = Field(ge=0, le=100)
-    notes: str = ""
-
-
-class SongCreateRequest(BaseModel):
-    title: str
-    album_id: str
-    lyrics: str = ""
-    prompt: str = ""
-    bpm: int = 0
-    duration: int = 180
-    key: str = ""
-    language: str = ""
-    generation_params: dict | None = None
-
-
 _VALID_GEN_PARAM_KEYS = frozenset({
     "inference_steps", "guidance_scale", "shift",
     "think_mode", "lm_temperature", "infer_method",
@@ -110,30 +111,20 @@ def _validate_generation_params(params: dict | None) -> dict | None:
     return params
 
 
-class SongUpdateRequest(BaseModel):
-    lyrics: str | None = None
-    prompt: str | None = None
-    bpm: int | None = None
-    duration: int | None = None
-    key: str | None = None
-    generation_params: dict | None = None
-
-
-
 # ── Albums ───────────────────────────────────────────────────────────
 
 
 @router.get("/albums")
-def api_list_albums(session: Session = Depends(_get_session)) -> list[dict]:
-    return [album_to_dict(a) for a in list_albums(session)]
+def api_list_albums(session: Session = Depends(_get_session)) -> list[AlbumResponse]:
+    return [AlbumResponse(**album_to_dict(a)) for a in list_albums(session)]
 
 
 @router.get("/albums/{album_id}")
-def api_get_album(album_id: str, session: Session = Depends(_get_session)) -> dict:
+def api_get_album(album_id: str, session: Session = Depends(_get_session)) -> AlbumResponse:
     album = get_album(session, album_id)
     if not album:
         raise HTTPException(404, "Album not found")
-    return album_to_dict(album)
+    return AlbumResponse(**album_to_dict(album))
 
 
 # ── Songs ────────────────────────────────────────────────────────────
@@ -143,22 +134,22 @@ def api_get_album(album_id: str, session: Session = Depends(_get_session)) -> di
 def api_list_songs(
     album_id: str | None = Query(None),
     session: Session = Depends(_get_session),
-) -> list[dict]:
-    return [song_to_dict(s) for s in list_songs(session, album_id=album_id)]
+) -> list[SongResponse]:
+    return [SongResponse(**song_to_dict(s)) for s in list_songs(session, album_id=album_id)]
 
 
 @router.get("/songs/{song_id}")
-def api_get_song(song_id: str, session: Session = Depends(_get_session)) -> dict:
+def api_get_song(song_id: str, session: Session = Depends(_get_session)) -> SongResponse:
     song = get_song(session, song_id)
     if not song:
         raise HTTPException(404, "Song not found")
-    return song_to_dict(song)
+    return SongResponse(**song_to_dict(song))
 
 
 @router.post("/songs")
 def api_create_song(
     req: SongCreateRequest, session: Session = Depends(_get_session),
-) -> dict:
+) -> SongResponse:
     log.debug("POST /songs: title='%s', album='%s'", req.title, req.album_id)
     _validate_generation_params(req.generation_params)
     song = create_song(
@@ -168,13 +159,13 @@ def api_create_song(
         generation_params=req.generation_params,
     )
     session.commit()
-    return song_to_dict(song)
+    return SongResponse(**song_to_dict(song))
 
 
 @router.put("/songs/{song_id}")
 def api_update_song(
     song_id: str, req: SongUpdateRequest, session: Session = Depends(_get_session),
-) -> dict:
+) -> SongResponse:
     log.debug("PUT /songs/%s: fields_set=%s", song_id, req.model_fields_set)
     _validate_generation_params(req.generation_params)
     kwargs: dict = dict(
@@ -188,17 +179,17 @@ def api_update_song(
     except ValueError:
         raise HTTPException(404, "Song not found")
     session.commit()
-    return song_to_dict(version.song)
+    return SongResponse(**song_to_dict(version.song))
 
 
 @router.get("/songs/{song_id}/versions")
 def api_song_versions(
     song_id: str, session: Session = Depends(_get_session),
-) -> list[dict]:
+) -> list[VersionResponse]:
     song = get_song(session, song_id)
     if not song:
         raise HTTPException(404, "Song not found")
-    return [version_to_dict(v) for v in reversed(song.versions)]
+    return [VersionResponse(**version_to_dict(v)) for v in reversed(song.versions)]
 
 
 # ── Versions (delete) ────────────────────────────────────────────────
@@ -209,7 +200,7 @@ def api_delete_version(
     version_id: str,
     delete_generations: bool = Query(False),
     session: Session = Depends(_get_session),
-) -> dict:
+) -> StatusResponse:
     try:
         delete_version(
             session, version_id,
@@ -219,7 +210,7 @@ def api_delete_version(
     except ValueError:
         raise HTTPException(404, "Version not found")
     session.commit()
-    return {"status": "ok"}
+    return StatusResponse()
 
 
 # ── Generations ──────────────────────────────────────────────────────
@@ -228,34 +219,26 @@ def api_delete_version(
 @router.get("/generations/{gen_id}")
 def api_get_generation(
     gen_id: str, session: Session = Depends(_get_session),
-) -> dict:
+) -> GenerationResponse:
     gen = get_generation(session, gen_id)
     if not gen:
         raise HTTPException(404, "Generation not found")
-    return generation_to_dict(gen)
+    return GenerationResponse(**generation_to_dict(gen))
 
 
 @router.delete("/generations/{gen_id}")
 def api_delete_generation(
     gen_id: str, session: Session = Depends(_get_session),
-) -> dict:
+) -> StatusResponse:
     try:
         delete_generation(session, gen_id, output_dir=_resolve_output_dir())
     except ValueError:
         raise HTTPException(404, "Generation not found")
     session.commit()
-    return {"status": "ok"}
+    return StatusResponse()
 
 
 # ── Generation + Scoring ─────────────────────────────────────────────
-
-
-class GenerateRequest(BaseModel):
-    count: int = Field(1, ge=1, le=10)
-
-
-class ScoreRequest(BaseModel):
-    scorers: list[str] | None = None
 
 
 @router.post("/songs/{song_id}/generate")
@@ -263,7 +246,7 @@ def api_generate_song(
     song_id: str,
     req: GenerateRequest,
     session: Session = Depends(_get_session),
-) -> dict:
+) -> JobResponse:
     song = get_song(session, song_id)
     if not song:
         raise HTTPException(404, "Song not found")
@@ -280,7 +263,7 @@ def api_generate_song(
         args=(job.id, song_id, version.id, req.count),
     )
 
-    return job_to_dict(job)
+    return JobResponse(**job_to_dict(job))
 
 
 @router.post("/generations/{gen_id}/score")
@@ -288,7 +271,7 @@ def api_score_generation(
     gen_id: str,
     req: ScoreRequest,
     session: Session = Depends(_get_session),
-) -> dict:
+) -> JobResponse:
     gen = get_generation(session, gen_id)
     if not gen:
         raise HTTPException(404, "Generation not found")
@@ -301,18 +284,18 @@ def api_score_generation(
         args=(job.id, gen_id, req.scorers),
     )
 
-    return job_to_dict(job)
+    return JobResponse(**job_to_dict(job))
 
 
 # ── Jobs ────────────────────────────────────────────────────────────
 
 
 @router.get("/jobs/{job_id}")
-def api_get_job(job_id: str, session: Session = Depends(_get_session)) -> dict:
+def api_get_job(job_id: str, session: Session = Depends(_get_session)) -> JobResponse:
     job = get_job(session, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    return job_to_dict(job)
+    return JobResponse(**job_to_dict(job))
 
 
 # ── Ratings ──────────────────────────────────────────────────────────
@@ -321,27 +304,27 @@ def api_get_job(job_id: str, session: Session = Depends(_get_session)) -> dict:
 @router.post("/generations/{gen_id}/rate")
 def api_rate_generation(
     gen_id: str, req: RateRequest, session: Session = Depends(_get_session),
-) -> dict:
+) -> RateResponse:
     gen = get_generation(session, gen_id)
     if not gen:
         raise HTTPException(404, "Generation not found")
     save_rating(session, gen_id, req.rating, req.notes)
     session.commit()
-    return {"status": "ok", "generation_id": gen_id, "rating": req.rating}
+    return RateResponse(generation_id=gen_id, rating=req.rating)
 
 
 @router.post("/rate/{album}/{gen_name}")
 def api_rate_by_path(
     album: str, gen_name: str, req: RateRequest,
     session: Session = Depends(_get_session),
-) -> dict:
+) -> RateResponse:
     mp3_path = f"{album}/{gen_name}.mp3"
     gen = get_generation_by_path(session, mp3_path)
     if not gen:
         raise HTTPException(404, "Generation not found")
     save_rating(session, gen.id, req.rating, req.notes)
     session.commit()
-    return {"status": "ok", "generation": gen_name, "rating": req.rating}
+    return RateResponse(generation=gen_name, rating=req.rating)
 
 
 # ── Pick ─────────────────────────────────────────────────────────────
@@ -350,37 +333,37 @@ def api_rate_by_path(
 @router.post("/generations/{gen_id}/pick")
 def api_pick_generation(
     gen_id: str, session: Session = Depends(_get_session),
-) -> dict:
+) -> StatusResponse:
     try:
         pick_generation(session, gen_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
     session.commit()
-    return {"status": "ok"}
+    return StatusResponse()
 
 
 @router.post("/generations/{gen_id}/unpick")
 def api_unpick_generation(
     gen_id: str, session: Session = Depends(_get_session),
-) -> dict:
+) -> StatusResponse:
     try:
         unpick_generation(session, gen_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
     session.commit()
-    return {"status": "ok"}
+    return StatusResponse()
 
 
 @router.post("/albums/{album_id}/cleanup")
 def api_cleanup_album(
     album_id: str, session: Session = Depends(_get_session),
-) -> dict:
+) -> CleanupResponse:
     album = get_album(session, album_id)
     if not album:
         raise HTTPException(404, "Album not found")
     count = cleanup_album(session, album_id, output_dir=_resolve_output_dir())
     session.commit()
-    return {"status": "ok", "deleted": count}
+    return CleanupResponse(deleted=count)
 
 
 # ── Generation Defaults ──────────────────────────────────────────────
@@ -389,11 +372,6 @@ def api_cleanup_album(
 @router.get("/settings/generation-defaults")
 def api_get_generation_defaults() -> dict:
     return load_generation_defaults()
-
-
-class GenerationDefaultsRequest(BaseModel):
-    turbo: dict | None = None
-    sft: dict | None = None
 
 
 @router.put("/settings/generation-defaults")
@@ -417,30 +395,24 @@ def _resolve_claude_key(header_key: str | None) -> str | None:
 
 
 @router.get("/capabilities")
-def api_capabilities() -> dict:
+def api_capabilities() -> CapabilitiesResponse:
     env_key = os.environ.get("ANTHROPIC_API_KEY")
-    return {
-        "claude_api": bool(env_key),
-        "claude_cli": is_available(api_key=None),
-        "generation": True,
-        "scoring": True,
-    }
+    return CapabilitiesResponse(
+        claude_api=bool(env_key),
+        claude_cli=is_available(api_key=None),
+        generation=True,
+        scoring=True,
+    )
 
 
 # ── Claude chat ──────────────────────────────────────────────────────
-
-
-class ChatRequest(BaseModel):
-    message: str
-    system: str = ""
-    context: str = ""
 
 
 @router.post("/chat")
 def api_chat(
     req: ChatRequest,
     x_claude_key: str | None = Header(None),
-) -> dict:
+) -> ChatResponse:
     api_key = _resolve_claude_key(x_claude_key)
     prompt = req.message
     if req.context:
@@ -451,4 +423,4 @@ def api_chat(
     except UnavailableError as e:
         raise HTTPException(503, str(e))
 
-    return {"response": response.text}
+    return ChatResponse(response=response.text)
