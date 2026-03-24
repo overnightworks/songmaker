@@ -6,7 +6,7 @@ import {
 	fetchSong
 } from '$lib/api/client';
 import { songList } from '$lib/stores/player';
-import type { SongItem, VersionItem } from '$lib/api/types';
+import type { SongItem, VersionGenerationParams, VersionItem } from '$lib/api/types';
 import type { ApplyData } from '$lib/components/ClaudeChat.svelte';
 
 // --- Editable fields ---
@@ -15,6 +15,7 @@ export const editPrompt = writable('');
 export const editBpm = writable(0);
 export const editDuration = writable(180);
 export const editKey = writable('');
+export const editGenParams = writable<VersionGenerationParams | null>(null);
 
 // --- Saved state (for dirty tracking) ---
 const savedLyrics = writable('');
@@ -22,6 +23,22 @@ const savedPrompt = writable('');
 const savedBpm = writable(0);
 const savedDuration = writable(180);
 const savedKey = writable('');
+const savedGenParams = writable<VersionGenerationParams | null>(null);
+
+function genParamsEqual(
+	a: VersionGenerationParams | null,
+	b: VersionGenerationParams | null
+): boolean {
+	const objA = a ?? {};
+	const objB = b ?? {};
+	const keys = new Set([...Object.keys(objA), ...Object.keys(objB)]);
+	for (const k of keys) {
+		if ((objA as Record<string, unknown>)[k] !== (objB as Record<string, unknown>)[k]) {
+			return false;
+		}
+	}
+	return true;
+}
 
 export const isDirty = derived(
 	[
@@ -30,14 +47,21 @@ export const isDirty = derived(
 		editBpm,
 		editDuration,
 		editKey,
+		editGenParams,
 		savedLyrics,
 		savedPrompt,
 		savedBpm,
 		savedDuration,
-		savedKey
+		savedKey,
+		savedGenParams
 	],
-	([$el, $ep, $eb, $ed, $ek, $sl, $sp, $sb, $sd, $sk]) =>
-		$el !== $sl || $ep !== $sp || $eb !== $sb || $ed !== $sd || $ek !== $sk
+	([$el, $ep, $eb, $ed, $ek, $egp, $sl, $sp, $sb, $sd, $sk, $sgp]) =>
+		$el !== $sl ||
+		$ep !== $sp ||
+		$eb !== $sb ||
+		$ed !== $sd ||
+		$ek !== $sk ||
+		!genParamsEqual($egp, $sgp)
 );
 
 // --- Versions ---
@@ -82,13 +106,15 @@ function setSavedState(
 	prompt: string,
 	bpm: number,
 	dur: number,
-	key: string
+	key: string,
+	genParams: VersionGenerationParams | null
 ): void {
 	savedLyrics.set(lyrics);
 	savedPrompt.set(prompt);
 	savedBpm.set(bpm);
 	savedDuration.set(dur);
 	savedKey.set(key);
+	savedGenParams.set(genParams);
 }
 
 export function loadSongData(s: SongItem): void {
@@ -97,7 +123,8 @@ export function loadSongData(s: SongItem): void {
 	editBpm.set(s.bpm);
 	editDuration.set(s.duration);
 	editKey.set(s.key);
-	setSavedState(s.lyrics, s.prompt, s.bpm, s.duration, s.key);
+	editGenParams.set(s.generation_params);
+	setSavedState(s.lyrics, s.prompt, s.bpm, s.duration, s.key, s.generation_params);
 	loadVersions(s.id);
 }
 
@@ -116,7 +143,8 @@ export function loadVersion(index: number): void {
 	editBpm.set(v.bpm);
 	editDuration.set(v.duration);
 	editKey.set(v.key);
-	setSavedState(v.lyrics, v.prompt, v.bpm, v.duration, v.key);
+	editGenParams.set(v.generation_params);
+	setSavedState(v.lyrics, v.prompt, v.bpm, v.duration, v.key, v.generation_params);
 }
 
 export async function handleSave(songId: string): Promise<void> {
@@ -127,9 +155,17 @@ export async function handleSave(songId: string): Promise<void> {
 			prompt: get(editPrompt),
 			bpm: get(editBpm),
 			duration: get(editDuration),
-			key: get(editKey)
+			key: get(editKey),
+			generation_params: get(editGenParams)
 		});
-		setSavedState(get(editLyrics), get(editPrompt), get(editBpm), get(editDuration), get(editKey));
+		setSavedState(
+			get(editLyrics),
+			get(editPrompt),
+			get(editBpm),
+			get(editDuration),
+			get(editKey),
+			get(editGenParams)
+		);
 		songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
 		await loadVersions(songId);
 		dismissAppliedDiff();
@@ -175,6 +211,7 @@ export function handleApply(data: ApplyData): void {
 		bpm: get(editBpm),
 		duration: get(editDuration),
 		key: get(editKey),
+		generation_params: get(editGenParams),
 		created_at: null
 	};
 	if (data.lyrics !== undefined) editLyrics.set(data.lyrics);
@@ -190,6 +227,7 @@ export function handleApply(data: ApplyData): void {
 		bpm: get(editBpm),
 		duration: get(editDuration),
 		key: get(editKey),
+		generation_params: get(editGenParams),
 		created_at: null
 	};
 	appliedDiffBase.set(before);

@@ -38,11 +38,18 @@ def init_db(db_path: Path) -> sessionmaker[Session]:
 def _migrate_schema(engine) -> None:
     """Add columns that may be missing from older databases."""
     inspector = inspect(engine)
-    columns = {c["name"] for c in inspector.get_columns("generations")}
-    if "is_picked" not in columns:
+
+    gen_columns = {c["name"] for c in inspector.get_columns("generations")}
+    if "is_picked" not in gen_columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE generations ADD COLUMN is_picked BOOLEAN DEFAULT 0"))
         log.info("Migration: added is_picked column to generations")
+
+    ver_columns = {c["name"] for c in inspector.get_columns("versions")}
+    if "generation_params" not in ver_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE versions ADD COLUMN generation_params JSON"))
+        log.info("Migration: added generation_params column to versions")
 
 
 def get_session_factory() -> sessionmaker[Session]:

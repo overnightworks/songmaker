@@ -9,8 +9,10 @@ import pytest
 from songmaker_cli.config import (
     build_ace_config,
     find_project_root,
+    load_generation_defaults,
     next_version,
     resolve_output_paths,
+    save_generation_defaults,
 )
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import SongMeta
@@ -136,3 +138,56 @@ def test_find_project_root_not_found(tmp_path: Path) -> None:
 def test_find_project_root_at_root(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     assert find_project_root(tmp_path) == tmp_path
+
+
+# ── Global defaults ─────────────────────────────────────────────────
+
+
+def test_load_defaults_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text("")
+    assert load_generation_defaults() == {}
+
+
+def test_save_and_load_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text("")
+    data = {"turbo": {"inference_steps": 12}, "sft": {"inference_steps": 60}}
+    save_generation_defaults(data)
+    loaded = load_generation_defaults()
+    assert loaded == data
+
+
+# ── build_ace_config with global_defaults ────────────────────────────
+
+
+def test_build_ace_config_global_defaults_applied() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", generation_params={"bpm": 120})
+    defaults = {"turbo": {"shift": 5.0, "lm_temperature": 0.5}}
+    config = build_ace_config(meta, global_defaults=defaults)
+    assert config.shift == 5.0
+    assert config.lm_temperature == 0.5
+
+
+def test_build_ace_config_song_overrides_global_defaults() -> None:
+    meta = SongMeta(
+        prompt="test", lyrics="test",
+        generation_params={"bpm": 120, "shift": 2.0},
+    )
+    defaults = {"turbo": {"shift": 5.0}}
+    config = build_ace_config(meta, global_defaults=defaults)
+    assert config.shift == 2.0
+
+
+def test_build_ace_config_sft_global_defaults() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", generation_params={"bpm": 120})
+    defaults = {"sft": {"inference_steps": 60}}
+    config = build_ace_config(meta, model_name="ace-sft-v1", global_defaults=defaults)
+    assert config.inference_steps == 60
+
+
+def test_build_ace_config_cli_overrides_global_defaults() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", generation_params={"bpm": 120})
+    defaults = {"turbo": {"shift": 5.0}}
+    config = build_ace_config(meta, cli_overrides={"shift": 1.0}, global_defaults=defaults)
+    assert config.shift == 1.0

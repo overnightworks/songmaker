@@ -53,6 +53,16 @@ export interface GenerationItem {
 	created_at: string | null;
 }
 
+/** ACE-Step generation settings stored per version (null = use global default). */
+export interface VersionGenerationParams {
+	inference_steps?: number;
+	guidance_scale?: number;
+	shift?: number;
+	think_mode?: boolean;
+	lm_temperature?: number;
+	infer_method?: string;
+}
+
 /** A content snapshot — lyrics, prompt, params. */
 export interface VersionItem {
 	id: string;
@@ -62,6 +72,7 @@ export interface VersionItem {
 	bpm: number;
 	duration: number;
 	key: string;
+	generation_params: VersionGenerationParams | null;
 	created_at: string | null;
 }
 
@@ -79,6 +90,7 @@ export interface SongItem {
 	bpm: number;
 	duration: number;
 	key: string;
+	generation_params: VersionGenerationParams | null;
 	version_count: number;
 	generation_count: number;
 	best_scores: TrackScores | null;

@@ -74,6 +74,22 @@ export const METRICS: MetricDef[] = [
 		step: 0,
 		getValue: (s) => s.key,
 		type: 'select'
+	},
+	{
+		key: 'bpm',
+		label: 'BPM',
+		max: 300,
+		step: 10,
+		getValue: (s) => s.bpm || undefined,
+		type: 'number'
+	},
+	{
+		key: 'duration',
+		label: 'Duration',
+		max: 600,
+		step: 30,
+		getValue: (s) => s.duration || undefined,
+		type: 'number'
 	}
 ];
 

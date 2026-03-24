@@ -1,4 +1,10 @@
-import type { AlbumItem, Capabilities, SongItem, VersionItem } from './types';
+import type {
+	AlbumItem,
+	Capabilities,
+	SongItem,
+	VersionGenerationParams,
+	VersionItem
+} from './types';
 import { getClaudeKey } from '$lib/stores/settings';
 
 const API_KEY =
@@ -50,7 +56,14 @@ export async function createSong(params: {
 
 export async function updateSong(
 	songId: string,
-	params: { lyrics?: string; prompt?: string; bpm?: number; duration?: number; key?: string }
+	params: {
+		lyrics?: string;
+		prompt?: string;
+		bpm?: number;
+		duration?: number;
+		key?: string;
+		generation_params?: VersionGenerationParams | null;
+	}
 ): Promise<SongItem> {
 	return apiFetch<SongItem>(`/api/songs/${songId}`, {
 		method: 'PUT',
@@ -130,6 +143,20 @@ export async function rateGeneration(
 
 export async function fetchCapabilities(): Promise<Capabilities> {
 	return apiFetch<Capabilities>('/api/capabilities');
+}
+
+export async function fetchGenerationDefaults(): Promise<Record<string, VersionGenerationParams>> {
+	return apiFetch<Record<string, VersionGenerationParams>>('/api/settings/generation-defaults');
+}
+
+export async function updateGenerationDefaults(
+	data: Record<string, VersionGenerationParams>
+): Promise<Record<string, VersionGenerationParams>> {
+	return apiFetch<Record<string, VersionGenerationParams>>('/api/settings/generation-defaults', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
 }
 
 export async function chatWithClaude(

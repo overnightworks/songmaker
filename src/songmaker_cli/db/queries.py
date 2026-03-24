@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import Album, Generation, Job, Rating, Score, Song, Version
 
+_UNSET = object()
+
 
 def list_albums(session: Session) -> list[Album]:
     return session.query(Album).order_by(Album.title).all()
@@ -96,6 +98,7 @@ def create_song(
     duration: int = 180,
     key: str = "",
     language: str = "",
+    generation_params: dict | None = None,
 ) -> Song:
     album = session.query(Album).filter_by(id=album_id).first()
     if not album:
@@ -118,6 +121,7 @@ def create_song(
     version = Version(
         song_id=song.id, version_number=1,
         lyrics=lyrics, prompt=prompt, bpm=bpm, duration=duration, key=key,
+        generation_params=generation_params,
     )
     session.add(version)
     session.flush()
@@ -132,6 +136,7 @@ def update_song(
     bpm: int | None = None,
     duration: int | None = None,
     key: str | None = None,
+    generation_params: dict | None | object = _UNSET,
 ) -> Version:
     song = get_song(session, song_id)
     if not song:
@@ -139,6 +144,11 @@ def update_song(
 
     prev = song.latest_version
     next_num = (prev.version_number + 1) if prev else 1
+
+    if generation_params is _UNSET:
+        new_gen_params = prev.generation_params if prev else None
+    else:
+        new_gen_params = generation_params or None
 
     version = Version(
         song_id=song_id,
@@ -148,6 +158,7 @@ def update_song(
         bpm=bpm if bpm is not None else (prev.bpm if prev else 0),
         duration=duration if duration is not None else (prev.duration if prev else 180),
         key=key if key is not None else (prev.key if prev else ""),
+        generation_params=new_gen_params,
     )
     session.add(version)
     session.flush()
@@ -381,6 +392,7 @@ def song_to_dict(song: Song) -> dict:
         "bpm": ver.bpm if ver else 0,
         "duration": ver.duration if ver else 180,
         "key": ver.key if ver else "",
+        "generation_params": ver.generation_params if ver else None,
         "version_count": len(song.versions),
         "generation_count": len(song.generations),
         "best_scores": _extract_scores(best_gen) if best_gen else None,
@@ -399,6 +411,7 @@ def version_to_dict(ver: Version) -> dict:
         "bpm": ver.bpm,
         "duration": ver.duration,
         "key": ver.key,
+        "generation_params": ver.generation_params,
         "created_at": ver.created_at.isoformat() if ver.created_at else None,
     }
 

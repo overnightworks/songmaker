@@ -86,6 +86,7 @@ class Version(Base):
     bpm: Mapped[int] = mapped_column(Integer, default=0)
     duration: Mapped[int] = mapped_column(Integer, default=0)
     key: Mapped[str] = mapped_column(String(10), default="")
+    generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     song: Mapped[Song] = relationship(back_populates="versions")

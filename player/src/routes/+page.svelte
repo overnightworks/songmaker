@@ -40,10 +40,12 @@
 		handleDiffChange,
 		handleApply
 	} from '$lib/stores/editor';
+	import type { VersionGenerationParams } from '$lib/api/types';
 	import AlbumNav from '$lib/components/AlbumNav.svelte';
 	import SongList from '$lib/components/SongList.svelte';
 	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
 	import GenerationDetail from '$lib/components/GenerationDetail.svelte';
+	import GenerationSettings from '$lib/components/GenerationSettings.svelte';
 	import LyricsDiff from '$lib/components/LyricsDiff.svelte';
 	import VersionTimeline from '$lib/components/VersionTimeline.svelte';
 
@@ -163,6 +165,36 @@
 		} finally {
 			creating = false;
 		}
+	}
+
+	const GEN_PARAM_LABELS: Record<string, string> = {
+		inference_steps: 'Steps',
+		guidance_scale: 'Guidance',
+		shift: 'Shift',
+		think_mode: 'Think',
+		lm_temperature: 'LM Temp',
+		infer_method: 'Method'
+	};
+
+	function genParamChanges(
+		a: VersionGenerationParams | null,
+		b: VersionGenerationParams | null
+	): { key: string; label: string; oldVal: string; newVal: string }[] {
+		const allKeys = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})]);
+		const changes: { key: string; label: string; oldVal: string; newVal: string }[] = [];
+		for (const k of allKeys) {
+			const oldV = (a as Record<string, unknown>)?.[k];
+			const newV = (b as Record<string, unknown>)?.[k];
+			if (String(oldV ?? '') !== String(newV ?? '')) {
+				changes.push({
+					key: k,
+					label: GEN_PARAM_LABELS[k] ?? k,
+					oldVal: oldV !== undefined ? String(oldV) : '—',
+					newVal: newV !== undefined ? String(newV) : '—'
+				});
+			}
+		}
+		return changes;
 	}
 
 	const songContext = $derived(
@@ -344,6 +376,13 @@
 										{d.new.key || '—'}
 									{/if}
 								</span>
+								{#each genParamChanges(d.old.generation_params, d.new.generation_params) as change (change.key)}
+									<span class="param-change">
+										{change.label}:
+										<span class="old">{change.oldVal}</span> →
+										<span class="new">{change.newVal}</span>
+									</span>
+								{/each}
 							</div>
 
 							<div class="edit-field">
@@ -374,6 +413,8 @@
 									<input type="text" bind:value={$editKey} />
 								</label>
 							</div>
+
+							<GenerationSettings />
 
 							<label class="edit-field">
 								<span>Lyrics</span>

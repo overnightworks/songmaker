@@ -16,7 +16,11 @@ from songmaker_cli.claude.provider import (
     call_claude,
     is_available,
 )
-from songmaker_cli.config import find_project_root
+from songmaker_cli.config import (
+    find_project_root,
+    load_generation_defaults,
+    save_generation_defaults,
+)
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
@@ -79,6 +83,24 @@ class SongCreateRequest(BaseModel):
     duration: int = 180
     key: str = ""
     language: str = ""
+    generation_params: dict | None = None
+
+
+_VALID_GEN_PARAM_KEYS = frozenset({
+    "inference_steps", "guidance_scale", "shift",
+    "think_mode", "lm_temperature", "infer_method",
+})
+
+
+def _validate_generation_params(params: dict | None) -> dict | None:
+    if params is None:
+        return None
+    invalid = set(params.keys()) - _VALID_GEN_PARAM_KEYS
+    if invalid:
+        raise HTTPException(
+            422, f"Unknown generation_params keys: {', '.join(sorted(invalid))}",
+        )
+    return params
 
 
 class SongUpdateRequest(BaseModel):
@@ -87,6 +109,7 @@ class SongUpdateRequest(BaseModel):
     bpm: int | None = None
     duration: int | None = None
     key: str | None = None
+    generation_params: dict | None = None
 
 
 class PaginatedResponse(BaseModel):
@@ -135,10 +158,12 @@ def api_get_song(song_id: str, session: Session = Depends(_get_session)) -> dict
 def api_create_song(
     req: SongCreateRequest, session: Session = Depends(_get_session),
 ) -> dict:
+    _validate_generation_params(req.generation_params)
     song = create_song(
         session, title=req.title, album_id=req.album_id,
         lyrics=req.lyrics, prompt=req.prompt, bpm=req.bpm,
         duration=req.duration, key=req.key, language=req.language,
+        generation_params=req.generation_params,
     )
     session.commit()
     return song_to_dict(song)
@@ -148,12 +173,15 @@ def api_create_song(
 def api_update_song(
     song_id: str, req: SongUpdateRequest, session: Session = Depends(_get_session),
 ) -> dict:
+    _validate_generation_params(req.generation_params)
+    kwargs: dict = dict(
+        lyrics=req.lyrics, prompt=req.prompt,
+        bpm=req.bpm, duration=req.duration, key=req.key,
+    )
+    if "generation_params" in req.model_fields_set:
+        kwargs["generation_params"] = req.generation_params
     try:
-        update_song(
-            session, song_id,
-            lyrics=req.lyrics, prompt=req.prompt,
-            bpm=req.bpm, duration=req.duration, key=req.key,
-        )
+        update_song(session, song_id, **kwargs)
     except ValueError:
         raise HTTPException(404, "Song not found")
     session.commit()
@@ -356,6 +384,30 @@ def api_cleanup_album(
     count = cleanup_album(session, album_id, output_dir=_resolve_output_dir())
     session.commit()
     return {"status": "ok", "deleted": count}
+
+
+# ── Generation Defaults ──────────────────────────────────────────────
+
+
+@router.get("/settings/generation-defaults")
+def api_get_generation_defaults() -> dict:
+    return load_generation_defaults()
+
+
+class GenerationDefaultsRequest(BaseModel):
+    turbo: dict | None = None
+    sft: dict | None = None
+
+
+@router.put("/settings/generation-defaults")
+def api_set_generation_defaults(req: GenerationDefaultsRequest) -> dict:
+    data: dict = {}
+    if req.turbo is not None:
+        data["turbo"] = req.turbo
+    if req.sft is not None:
+        data["sft"] = req.sft
+    save_generation_defaults(data)
+    return data
 
 
 # ── Capabilities ─────────────────────────────────────────────────────

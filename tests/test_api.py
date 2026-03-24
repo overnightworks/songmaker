@@ -18,8 +18,9 @@ def client(tmp_path: Path) -> TestClient:
     with factory() as session:
         _seed_db(session)
 
-    from songmaker_cli.api import router
     from fastapi import FastAPI
+
+    from songmaker_cli.api import router
     app = FastAPI()
     app.include_router(router)
     yield TestClient(app)
@@ -197,3 +198,96 @@ def test_cleanup_album_api(client: TestClient) -> None:
 def test_get_job_not_found(client: TestClient) -> None:
     resp = client.get("/api/jobs/nonexistent")
     assert resp.status_code == 404
+
+
+# ── Generation params ───────────────────────────────────────────────
+
+
+def test_create_song_with_generation_params(client: TestClient) -> None:
+    resp = client.post("/api/songs", json={
+        "title": "Bolt", "album_id": "rock",
+        "generation_params": {"inference_steps": 50, "shift": 2.0},
+    })
+    assert resp.status_code == 200
+    assert resp.json()["generation_params"] == {"inference_steps": 50, "shift": 2.0}
+
+
+def test_create_song_invalid_generation_params(client: TestClient) -> None:
+    resp = client.post("/api/songs", json={
+        "title": "Bad", "album_id": "rock",
+        "generation_params": {"bad_key": 1},
+    })
+    assert resp.status_code == 422
+
+
+def test_update_song_sets_generation_params(client: TestClient) -> None:
+    resp = client.put("/api/songs/s1", json={
+        "generation_params": {"guidance_scale": 5.5},
+    })
+    assert resp.status_code == 200
+    assert resp.json()["generation_params"] == {"guidance_scale": 5.5}
+
+
+def test_update_song_clears_generation_params(client: TestClient) -> None:
+    client.put("/api/songs/s1", json={
+        "generation_params": {"inference_steps": 25},
+    })
+    resp = client.put("/api/songs/s1", json={
+        "generation_params": None,
+    })
+    assert resp.status_code == 200
+    assert resp.json()["generation_params"] is None
+
+
+def test_update_song_omit_keeps_generation_params(client: TestClient) -> None:
+    client.put("/api/songs/s1", json={
+        "generation_params": {"shift": 4.0},
+    })
+    resp = client.put("/api/songs/s1", json={"lyrics": "new lyrics"})
+    assert resp.status_code == 200
+    assert resp.json()["generation_params"] == {"shift": 4.0}
+
+
+def test_update_song_invalid_generation_params(client: TestClient) -> None:
+    resp = client.put("/api/songs/s1", json={
+        "generation_params": {"typo_key": 1},
+    })
+    assert resp.status_code == 422
+
+
+def test_version_includes_generation_params(client: TestClient) -> None:
+    client.put("/api/songs/s1", json={
+        "generation_params": {"lm_temperature": 0.5},
+    })
+    resp = client.get("/api/songs/s1/versions")
+    assert resp.status_code == 200
+    latest = resp.json()[0]
+    assert latest["generation_params"] == {"lm_temperature": 0.5}
+
+
+# ── Generation defaults ─────────────────────────────────────────────
+
+
+def test_generation_defaults_roundtrip(client: TestClient, tmp_path: Path) -> None:
+    from songmaker_cli import config as config_mod
+    original = config_mod._defaults_path
+
+    config_mod._defaults_path = lambda: tmp_path / "gen_defaults.json"
+    try:
+        resp = client.get("/api/settings/generation-defaults")
+        assert resp.status_code == 200
+        assert resp.json() == {}
+
+        resp = client.put("/api/settings/generation-defaults", json={
+            "turbo": {"inference_steps": 12},
+            "sft": {"inference_steps": 60},
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["turbo"] == {"inference_steps": 12}
+        assert data["sft"] == {"inference_steps": 60}
+
+        resp = client.get("/api/settings/generation-defaults")
+        assert resp.json()["turbo"]["inference_steps"] == 12
+    finally:
+        config_mod._defaults_path = original

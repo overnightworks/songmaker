@@ -43,10 +43,18 @@ def run_generation_job(
             duration = version.duration
             key = version.key
             language = song.language
+            version_gen_params = version.generation_params or {}
 
         from acestep_engine import AceStepClient
         from songmaker_cli.config import build_ace_config, find_project_root
         from songmaker_cli.parser import SongMeta
+
+        base_params: dict = {
+            k: v for k, v in {
+                "bpm": bpm, "duration": duration, "key": key, "language": language,
+            }.items() if v
+        }
+        base_params.update(version_gen_params)
 
         meta = SongMeta(
             title=song_title,
@@ -54,11 +62,7 @@ def run_generation_job(
             track=str(track_number),
             prompt=prompt,
             lyrics=lyrics,
-            generation_params={
-                k: v for k, v in {
-                    "bpm": bpm, "duration": duration, "key": key, "language": language,
-                }.items() if v
-            },
+            generation_params=base_params,
         )
 
         client = AceStepClient()
@@ -68,7 +72,13 @@ def run_generation_job(
 
         server_info = client.server_info()
         model_name = server_info.model if server_info else None
-        ace_config = build_ace_config(meta, model_name=model_name)
+
+        from songmaker_cli.config import load_generation_defaults
+        global_defaults = load_generation_defaults()
+
+        ace_config = build_ace_config(
+            meta, model_name=model_name, global_defaults=global_defaults,
+        )
 
         project_root = find_project_root(Path.cwd())
         output_root = (project_root / OUTPUT_ROOT) if project_root else Path(OUTPUT_ROOT)

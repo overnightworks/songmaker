@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli.db.engine import init_db, reset_engine
 from songmaker_cli.db.models import Album, Generation, Rating, Score, Song, Version
 from songmaker_cli.db.queries import (
+    _UNSET,
     album_to_dict,
     cleanup_album,
     create_generation,
@@ -33,6 +34,7 @@ from songmaker_cli.db.queries import (
     unpick_generation,
     update_job_status,
     update_song,
+    version_to_dict,
 )
 
 
@@ -368,3 +370,79 @@ def test_generation_to_dict_has_is_picked(seeded_session: Session) -> None:
     d = generation_to_dict(gen)
     assert d["is_picked"] is False
     assert "version_number" in d
+
+
+# ── Generation params on Version ────────────────────────────────────
+
+
+def test_create_song_with_generation_params(db_session: Session) -> None:
+    db_session.add(Album(id="a1", title="A", artist="X"))
+    db_session.flush()
+    params = {"inference_steps": 50, "guidance_scale": 5.5}
+    song = create_song(db_session, "S", "a1", generation_params=params)
+    db_session.commit()
+    ver = song.latest_version
+    assert ver.generation_params == params
+
+
+def test_create_song_without_generation_params(db_session: Session) -> None:
+    db_session.add(Album(id="a1", title="A", artist="X"))
+    db_session.flush()
+    song = create_song(db_session, "S", "a1")
+    db_session.commit()
+    assert song.latest_version.generation_params is None
+
+
+def test_update_song_sets_generation_params(seeded_session: Session) -> None:
+    params = {"inference_steps": 25, "shift": 2.0}
+    update_song(seeded_session, "s1", generation_params=params)
+    seeded_session.commit()
+    song = get_song(seeded_session, "s1")
+    assert song.latest_version.generation_params == params
+
+
+def test_update_song_carries_forward_params(seeded_session: Session) -> None:
+    params = {"inference_steps": 25}
+    update_song(seeded_session, "s1", generation_params=params)
+    seeded_session.commit()
+    update_song(seeded_session, "s1", lyrics="new lyrics")
+    seeded_session.commit()
+    song = get_song(seeded_session, "s1")
+    assert song.latest_version.generation_params == params
+    assert song.latest_version.lyrics == "new lyrics"
+
+
+def test_update_song_clears_generation_params(seeded_session: Session) -> None:
+    update_song(seeded_session, "s1", generation_params={"inference_steps": 25})
+    seeded_session.commit()
+    update_song(seeded_session, "s1", generation_params=None)
+    seeded_session.commit()
+    song = get_song(seeded_session, "s1")
+    assert song.latest_version.generation_params is None
+
+
+def test_update_song_unset_keeps_previous(seeded_session: Session) -> None:
+    update_song(seeded_session, "s1", generation_params={"shift": 5.0})
+    seeded_session.commit()
+    update_song(seeded_session, "s1", lyrics="changed", generation_params=_UNSET)
+    seeded_session.commit()
+    song = get_song(seeded_session, "s1")
+    assert song.latest_version.generation_params == {"shift": 5.0}
+
+
+def test_version_to_dict_includes_generation_params(seeded_session: Session) -> None:
+    params = {"guidance_scale": 3.0}
+    update_song(seeded_session, "s1", generation_params=params)
+    seeded_session.commit()
+    song = get_song(seeded_session, "s1")
+    d = version_to_dict(song.latest_version)
+    assert d["generation_params"] == params
+
+
+def test_song_to_dict_includes_generation_params(seeded_session: Session) -> None:
+    params = {"lm_temperature": 0.5}
+    update_song(seeded_session, "s1", generation_params=params)
+    seeded_session.commit()
+    song = get_song(seeded_session, "s1")
+    d = song_to_dict(song)
+    assert d["generation_params"] == params
