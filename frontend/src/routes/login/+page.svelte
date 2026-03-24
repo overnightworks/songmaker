@@ -5,6 +5,7 @@
 
 	let username = $state('');
 	let password = $state('');
+	let showPassword = $state(false);
 	let submitting = $state(false);
 
 	async function handleSubmit(e: SubmitEvent) {
@@ -38,14 +39,19 @@
 			</label>
 			<label>
 				Password
-				<input
-					type="password"
-					bind:value={password}
-					minlength={8}
-					required
-					autocomplete="current-password"
-					disabled={submitting}
-				/>
+				<div class="pw-field">
+					<input
+						type={showPassword ? 'text' : 'password'}
+						bind:value={password}
+						minlength={8}
+						required
+						autocomplete="current-password"
+						disabled={submitting}
+					/>
+					<button type="button" class="pw-toggle" onclick={() => (showPassword = !showPassword)} tabindex="-1">
+						{showPassword ? '🙈' : '👁'}
+					</button>
+				</div>
 			</label>
 			{#if $authError}
 				<p class="error">{$authError}</p>
@@ -106,6 +112,7 @@
 		padding: 0.6rem 0.8rem;
 		font-size: 0.95rem;
 		font-family: var(--font-body);
+		width: 100%;
 	}
 
 	input:focus {
@@ -117,7 +124,28 @@
 		opacity: 0.5;
 	}
 
-	button {
+	.pw-field {
+		position: relative;
+	}
+
+	.pw-field input {
+		padding-right: 2.5rem;
+	}
+
+	.pw-toggle {
+		position: absolute;
+		right: 6px;
+		top: 50%;
+		transform: translateY(-50%);
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-size: 1rem;
+		padding: 2px 4px;
+		color: var(--text-muted);
+	}
+
+	button[type='submit'] {
 		background: var(--primary);
 		color: white;
 		border: none;
@@ -130,11 +158,11 @@
 		font-family: var(--font-body);
 	}
 
-	button:hover:not(:disabled) {
+	button[type='submit']:hover:not(:disabled) {
 		filter: brightness(1.1);
 	}
 
-	button:disabled {
+	button[type='submit']:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}

@@ -63,14 +63,14 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _set_session_cookie(response: Response, session_id: str) -> None:
+def _set_session_cookie(response: Response, session_id: str, secure: bool = False) -> None:
     response.set_cookie(
         SESSION_COOKIE,
         session_id,
         max_age=SESSION_MAX_AGE_SECONDS,
         httponly=True,
-        samesite="strict",
-        secure=False,
+        samesite="lax",
+        secure=secure,
         path="/",
     )
 

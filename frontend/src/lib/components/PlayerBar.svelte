@@ -7,7 +7,15 @@
 		playbackDuration,
 		navigateToPlaying,
 		isAudioPlaying,
-		requestTogglePlay
+		requestTogglePlay,
+		playNextGeneration,
+		playPrevGeneration,
+		playNextSong,
+		playPrevSong,
+		canPlayPrevGen,
+		canPlayNextGen,
+		canPlayPrevSong,
+		canPlayNextSong
 	} from '$lib/stores/player';
 	import { formatTime } from '$lib/utils/format';
 	import WaveSurfer from 'wavesurfer.js';
@@ -15,12 +23,17 @@
 	let waveContainer: HTMLDivElement | undefined = $state();
 	let wavesurfer: WaveSurfer | undefined = $state();
 	let isPlaying = $state(false);
+	let isLoading = $state(false);
 	const toggleRequest = $derived($requestTogglePlay);
 	let currentTime = $state(0);
 	let duration = $state(0);
 
 	const gen = $derived($playingGeneration);
 	const pb = $derived($playback);
+	const prevGen = $derived($canPlayPrevGen);
+	const nextGen = $derived($canPlayNextGen);
+	const prevSong = $derived($canPlayPrevSong);
+	const nextSong = $derived($canPlayNextSong);
 
 	let prevFile = $state('');
 
@@ -42,14 +55,19 @@
 			interact: true
 		});
 
-		wavesurfer.on('timeupdate', (time: number) => {
-			currentTime = time;
-			playbackTime.set(time);
+		wavesurfer.on('loading', () => {
+			isLoading = true;
 		});
 
 		wavesurfer.on('ready', () => {
+			isLoading = false;
 			duration = wavesurfer?.getDuration() ?? 0;
 			playbackDuration.set(duration);
+		});
+
+		wavesurfer.on('timeupdate', (time: number) => {
+			currentTime = time;
+			playbackTime.set(time);
 		});
 
 		wavesurfer.on('finish', handleEnded);
@@ -67,8 +85,13 @@
 		if (!gen || !waveContainer) return;
 		if (gen.mp3_path !== prevFile) {
 			prevFile = gen.mp3_path;
+			isLoading = true;
 			if (!wavesurfer) createWavesurfer();
-			wavesurfer?.load(`/audio/${gen.mp3_path}`);
+			try {
+				wavesurfer?.load(`/audio/${gen.mp3_path}`);
+			} catch {
+				// AbortError when rapidly switching tracks — harmless
+			}
 			if (pb?.autoplay) {
 				wavesurfer?.once('ready', () => wavesurfer?.play());
 			}
@@ -88,27 +111,39 @@
 	});
 
 	function togglePlay(): void {
-		if (!gen || !wavesurfer) return;
+		if (!gen || !wavesurfer || isLoading) return;
 		wavesurfer.playPause();
 	}
 
 	function handleEnded(): void {
 		isPlaying = false;
 		isAudioPlaying.set(false);
+		playNextGeneration();
 	}
 </script>
 
 <footer class="player-bar">
-	<button class="play-btn" onclick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
-		{isPlaying ? '⏸' : '▶'}
-	</button>
+	<div class="player-controls">
+		<button class="nav-btn" onclick={playPrevSong} disabled={!prevSong} aria-label="Previous song" title="Previous song">⏮</button>
+		<button class="nav-btn" onclick={playPrevGeneration} disabled={!prevGen} aria-label="Previous generation" title="Previous generation">⏪</button>
+		<button class="play-btn" class:loading={isLoading} onclick={togglePlay} disabled={isLoading} aria-label={isPlaying ? 'Pause' : 'Play'}>
+			{#if isLoading}
+				<span class="spinner"></span>
+			{:else}
+				{isPlaying ? '⏸' : '▶'}
+			{/if}
+		</button>
+		<button class="nav-btn" onclick={playNextGeneration} disabled={!nextGen} aria-label="Next generation" title="Next generation">⏩</button>
+		<button class="nav-btn" onclick={playNextSong} disabled={!nextSong} aria-label="Next song" title="Next song">⏭</button>
+	</div>
 
 	<button class="track-info" onclick={navigateToPlaying} aria-label="Go to playing song">
 		{#if pb}
 			<span class="track-title">{pb.songTitle}</span>
-			<span class="track-artist">{pb.artist}</span>
-		{:else}
-			<span class="track-title">No track selected</span>
+			<span class="track-detail">
+				{pb.artist} · gen{gen?.generation_number}
+				{#if isLoading}<span class="loading-text">Loading...</span>{/if}
+			</span>
 		{/if}
 	</button>
 
@@ -133,6 +168,13 @@
 		z-index: 100;
 	}
 
+	.player-controls {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		flex-shrink: 0;
+	}
+
 	.play-btn {
 		width: 40px;
 		height: 40px;
@@ -145,17 +187,64 @@
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
+		cursor: pointer;
 	}
 
-	.play-btn:hover {
+	.play-btn:hover:not(:disabled) {
 		background: var(--primary);
 		color: #fff;
+	}
+
+	.play-btn:disabled {
+		opacity: 0.5;
+		cursor: wait;
+	}
+
+	.play-btn.loading {
+		border-color: var(--text-dim);
+	}
+
+	.spinner {
+		width: 16px;
+		height: 16px;
+		border: 2px solid var(--text-dim);
+		border-top-color: var(--primary);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
+	}
+
+	.nav-btn {
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 14px;
+		cursor: pointer;
+		padding: 6px;
+		display: flex;
+		align-items: center;
+		min-width: 32px;
+		min-height: 32px;
+		justify-content: center;
+	}
+
+	.nav-btn:hover:not(:disabled) {
+		color: var(--text);
+	}
+
+	.nav-btn:disabled {
+		color: var(--text-dim);
+		cursor: default;
+		opacity: 0.3;
 	}
 
 	.track-info {
 		display: flex;
 		flex-direction: column;
-		min-width: 120px;
+		min-width: 100px;
 		max-width: 200px;
 		overflow: hidden;
 		background: none;
@@ -164,6 +253,7 @@
 		text-align: left;
 		padding: 4px 8px;
 		border-radius: 4px;
+		flex-shrink: 0;
 	}
 
 	.track-info:hover {
@@ -172,7 +262,7 @@
 
 	.track-title {
 		font-family: var(--font-display);
-		font-size: 14px;
+		font-size: 13px;
 		color: #fff;
 		text-transform: uppercase;
 		letter-spacing: 1px;
@@ -181,9 +271,17 @@
 		text-overflow: ellipsis;
 	}
 
-	.track-artist {
-		font-size: 11px;
+	.track-detail {
+		font-size: 10px;
 		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.loading-text {
+		color: var(--primary);
+		margin-left: 4px;
 	}
 
 	.time {
@@ -197,13 +295,30 @@
 
 	.waveform {
 		flex: 1;
-		min-width: 100px;
+		min-width: 80px;
 		height: 40px;
 	}
 
-	@media (max-width: 600px) {
+	@media (max-width: 768px) {
+		.player-bar {
+			gap: 8px;
+			padding: 0 8px;
+		}
+
 		.track-info {
 			display: none;
+		}
+
+		.nav-btn {
+			font-size: 12px;
+			min-width: 28px;
+			min-height: 28px;
+			padding: 4px;
+		}
+
+		.time {
+			font-size: 10px;
+			min-width: 28px;
 		}
 	}
 </style>

@@ -117,14 +117,15 @@
 		{#if tab === 'users'}
 			<section>
 				<h2>Create User</h2>
-				<form class="create-form" onsubmit={(e) => { e.preventDefault(); handleCreate(); }}>
-					<input bind:value={newUsername} placeholder="Username" minlength={3} required />
+			<form class="create-form" onsubmit={(e) => { e.preventDefault(); handleCreate(); }} autocomplete="off">
+					<input bind:value={newUsername} placeholder="Username" minlength={3} required autocomplete="off" />
 					<input
 						type="password"
 						bind:value={newPassword}
 						placeholder="Password"
 						minlength={8}
 						required
+						autocomplete="new-password"
 					/>
 					<select bind:value={newRole}>
 						<option value="user">User</option>

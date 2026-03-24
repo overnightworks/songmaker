@@ -42,8 +42,7 @@
 		handleApply
 	} from '$lib/stores/editor';
 	import type { VersionGenerationParams } from '$lib/api/types';
-	import { currentUser, isAdmin, logout } from '$lib/stores/auth';
-	import AlbumNav from '$lib/components/AlbumNav.svelte';
+	import { sidebarOpen, closeSidebar } from '$lib/stores/ui';
 	import SongList from '$lib/components/SongList.svelte';
 	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
 	import GenerationDetail from '$lib/components/GenerationDetail.svelte';
@@ -72,13 +71,7 @@
 	const isDiffMode = $derived($diffMode);
 	const isAppliedDiff = $derived($appliedDiffMode);
 	const jobs = $derived($activeJobs);
-	const me = $derived($currentUser);
-	const admin = $derived($isAdmin);
-
-	async function handleLogout() {
-		await logout();
-		window.location.href = '/login';
-	}
+	const sbOpen = $derived($sidebarOpen);
 
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
 	const isGenerating = $derived(
@@ -219,22 +212,8 @@
 {:else if error}
 	<div class="error">{error}</div>
 {:else}
-	<aside class="sidebar">
-		<header class="sidebar-header">
-			<h1>Songmaker</h1>
-		</header>
-		<AlbumNav />
-		<SongList />
-		<button class="new-song-btn" onclick={() => (showNewSong = !showNewSong)}> + New Song </button>
-		<div class="user-menu">
-			<span class="user-name" title={me?.username}>{me?.username}</span>
-			<span class="user-spacer"></span>
-			<a href="/settings/account">Account</a>
-			{#if admin}
-				<a href="/settings/users">Admin</a>
-			{/if}
-			<button class="logout-btn" onclick={handleLogout}>Logout</button>
-		</div>
+	<aside class="sidebar" class:open={sbOpen}>
+		<SongList onNewSong={() => { showNewSong = !showNewSong; closeSidebar(); }} />
 	</aside>
 
 	<main class="main-content">
@@ -466,83 +445,22 @@
 		flex-shrink: 0;
 	}
 
-	.sidebar-header {
-		padding: 12px;
-		border-bottom: 2px solid var(--primary);
-		flex-shrink: 0;
-	}
+	@media (max-width: 768px) {
+		.sidebar {
+			position: fixed;
+			top: var(--header-height);
+			left: 0;
+			bottom: 0;
+			width: 300px;
+			z-index: 160;
+			background: var(--bg);
+			transform: translateX(-100%);
+			transition: transform 0.2s ease;
+		}
 
-	.sidebar-header h1 {
-		font-family: var(--font-display);
-		font-size: 24px;
-		color: var(--primary);
-		letter-spacing: 6px;
-		text-transform: uppercase;
-	}
-
-	.new-song-btn {
-		margin: 8px 12px;
-		padding: 8px;
-		border: 1px dashed var(--border);
-		border-radius: 4px;
-		background: transparent;
-		color: var(--text-muted);
-		font-size: 12px;
-		cursor: pointer;
-		flex-shrink: 0;
-	}
-
-	.new-song-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.user-menu {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 8px 12px;
-		border-top: 1px solid var(--border);
-		flex-shrink: 0;
-		font-size: 0.8rem;
-		flex-wrap: wrap;
-	}
-
-	.user-name {
-		color: var(--text-muted);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		max-width: 120px;
-	}
-
-	.user-spacer {
-		flex: 1;
-	}
-
-	.user-menu a {
-		color: var(--text-muted);
-		text-decoration: none;
-	}
-
-	.user-menu a:hover {
-		color: var(--text);
-	}
-
-	.logout-btn {
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 3px;
-		color: var(--text-muted);
-		padding: 2px 8px;
-		cursor: pointer;
-		font-size: 0.75rem;
-		font-family: var(--font-body);
-	}
-
-	.logout-btn:hover {
-		color: var(--score-bad);
-		border-color: var(--score-bad);
+		.sidebar.open {
+			transform: translateX(0);
+		}
 	}
 
 	.main-content {
@@ -862,15 +780,6 @@
 	}
 
 	@media (max-width: 768px) {
-		.sidebar {
-			width: 100%;
-			height: auto;
-			max-height: 40vh;
-			min-width: unset;
-			border-right: none;
-			border-bottom: 1px solid var(--border);
-		}
-
 		.chat-panel {
 			display: none;
 		}

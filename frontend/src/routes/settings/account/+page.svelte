@@ -6,6 +6,7 @@
 	let current = $state('');
 	let newPass = $state('');
 	let confirm = $state('');
+	let showPassword = $state(false);
 	let submitting = $state(false);
 	let error = $state('');
 	let success = $state('');
@@ -58,18 +59,23 @@
 		<form onsubmit={handleSubmit}>
 			<label>
 				Current Password
-				<input
-					type="password"
-					bind:value={current}
-					required
-					autocomplete="current-password"
-					disabled={submitting}
-				/>
+				<div class="pw-field">
+					<input
+						type={showPassword ? 'text' : 'password'}
+						bind:value={current}
+						required
+						autocomplete="current-password"
+						disabled={submitting}
+					/>
+					<button type="button" class="pw-toggle" onclick={() => (showPassword = !showPassword)} tabindex="-1">
+						{showPassword ? '🙈' : '👁'}
+					</button>
+				</div>
 			</label>
 			<label>
 				New Password
 				<input
-					type="password"
+					type={showPassword ? 'text' : 'password'}
 					bind:value={newPass}
 					minlength={8}
 					required
@@ -80,7 +86,7 @@
 			<label>
 				Confirm New Password
 				<input
-					type="password"
+					type={showPassword ? 'text' : 'password'}
 					bind:value={confirm}
 					minlength={8}
 					required
@@ -171,7 +177,29 @@
 		color: var(--text);
 		padding: 0.6rem 0.8rem;
 		font-size: 0.95rem;
+		width: 100%;
 		font-family: var(--font-body);
+	}
+
+	.pw-field {
+		position: relative;
+	}
+
+	.pw-field input {
+		padding-right: 2.5rem;
+	}
+
+	.pw-toggle {
+		position: absolute;
+		right: 6px;
+		top: 50%;
+		transform: translateY(-50%);
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-size: 1rem;
+		padding: 2px 4px;
+		color: var(--text-muted);
 	}
 
 	input:focus {

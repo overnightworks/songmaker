@@ -7,6 +7,7 @@
 	let username = $state('');
 	let password = $state('');
 	let confirmPassword = $state('');
+	let showPassword = $state(false);
 	let submitting = $state(false);
 	let error = $state('');
 
@@ -54,19 +55,24 @@
 			</label>
 			<label>
 				Password
-				<input
-					type="password"
-					bind:value={password}
-					minlength={8}
-					required
-					autocomplete="new-password"
-					disabled={submitting}
-				/>
+				<div class="pw-field">
+					<input
+						type={showPassword ? 'text' : 'password'}
+						bind:value={password}
+						minlength={8}
+						required
+						autocomplete="new-password"
+						disabled={submitting}
+					/>
+					<button type="button" class="pw-toggle" onclick={() => (showPassword = !showPassword)} tabindex="-1">
+						{showPassword ? '🙈' : '👁'}
+					</button>
+				</div>
 			</label>
 			<label>
 				Confirm Password
 				<input
-					type="password"
+					type={showPassword ? 'text' : 'password'}
 					bind:value={confirmPassword}
 					minlength={8}
 					required
@@ -140,6 +146,28 @@
 		padding: 0.6rem 0.8rem;
 		font-size: 0.95rem;
 		font-family: var(--font-body);
+		width: 100%;
+	}
+
+	.pw-field {
+		position: relative;
+	}
+
+	.pw-field input {
+		padding-right: 2.5rem;
+	}
+
+	.pw-toggle {
+		position: absolute;
+		right: 6px;
+		top: 50%;
+		transform: translateY(-50%);
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-size: 1rem;
+		padding: 2px 4px;
+		color: var(--text-muted);
 	}
 
 	input:focus {

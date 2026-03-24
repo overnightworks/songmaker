@@ -80,6 +80,109 @@ export function playGeneration(gen: GenerationItem, song: SongItem): void {
 }
 
 
+export const canPlayPrevGen = derived([playback, songList], ([$pb, $songs]) => {
+	if (!$pb) return false;
+	const song = $songs.find((s) => s.id === $pb.songId);
+	if (!song) return false;
+	const idx = song.generations.findIndex((g) => g.id === $pb.generation.id);
+	return idx > 0;
+});
+
+export const canPlayNextGen = derived([playback, songList], ([$pb, $songs]) => {
+	if (!$pb) return false;
+	const song = $songs.find((s) => s.id === $pb.songId);
+	if (!song) return false;
+	const idx = song.generations.findIndex((g) => g.id === $pb.generation.id);
+	return idx < song.generations.length - 1;
+});
+
+export const canPlayPrevSong = derived([playback, songList], ([$pb, $songs]) => {
+	if (!$pb) return false;
+	const idx = $songs.findIndex((s) => s.id === $pb.songId);
+	for (let i = idx - 1; i >= 0; i--) {
+		if ($songs[i].generations.length > 0) return true;
+	}
+	return false;
+});
+
+export const canPlayNextSong = derived([playback, songList], ([$pb, $songs]) => {
+	if (!$pb) return false;
+	const idx = $songs.findIndex((s) => s.id === $pb.songId);
+	for (let i = idx + 1; i < $songs.length; i++) {
+		if ($songs[i].generations.length > 0) return true;
+	}
+	return false;
+});
+
+export function playNextGeneration(): void {
+	const pb = get(playback);
+	if (!pb) return;
+	const songs = get(songList);
+	const song = songs.find((s) => s.id === pb.songId);
+	if (!song) return;
+	const gens = song.generations;
+	const idx = gens.findIndex((g) => g.id === pb.generation.id);
+	if (idx < gens.length - 1) {
+		playGeneration(gens[idx + 1], song);
+	}
+}
+
+export function playPrevGeneration(): void {
+	const pb = get(playback);
+	if (!pb) return;
+	const songs = get(songList);
+	const song = songs.find((s) => s.id === pb.songId);
+	if (!song) return;
+	const gens = song.generations;
+	const idx = gens.findIndex((g) => g.id === pb.generation.id);
+	if (idx > 0) {
+		playGeneration(gens[idx - 1], song);
+	}
+}
+
+function bestGen(song: SongItem): GenerationItem | undefined {
+	return song.generations.find((g) => g.is_picked) ?? song.generations[0];
+}
+
+export function playNextSong(): void {
+	const pb = get(playback);
+	if (!pb) return;
+	const songs = get(songList);
+	const idx = songs.findIndex((s) => s.id === pb.songId);
+	for (let i = idx + 1; i < songs.length; i++) {
+		const gen = bestGen(songs[i]);
+		if (gen) {
+			playGeneration(gen, songs[i]);
+			return;
+		}
+	}
+}
+
+export function playPrevSong(): void {
+	const pb = get(playback);
+	if (!pb) return;
+	const songs = get(songList);
+	const idx = songs.findIndex((s) => s.id === pb.songId);
+	for (let i = idx - 1; i >= 0; i--) {
+		const gen = bestGen(songs[i]);
+		if (gen) {
+			playGeneration(gen, songs[i]);
+			return;
+		}
+	}
+}
+
+export function playAlbum(albumId: string): void {
+	const songs = get(songList).filter((s) => s.album_id === albumId);
+	for (const song of songs) {
+		const gen = bestGen(song);
+		if (gen) {
+			playGeneration(gen, song);
+			return;
+		}
+	}
+}
+
 export function navigateToPlaying(): void {
 	const pb = get(playback);
 	if (!pb) return;
