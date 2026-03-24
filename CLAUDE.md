@@ -6,7 +6,7 @@ AI-powered song generation platform. SvelteKit web UI + FastAPI backend + SQLite
 
 **Python**: 3.12 | **Venv**: `.venv/` | **Node**: 22 LTS | **Package manager**: pnpm | **Frontend**: `frontend/`
 
-Architecture details: [docs/architecture.md](docs/architecture.md)
+Architecture: [docs/architecture.md](docs/architecture.md) | Testing: [docs/testing.md](docs/testing.md)
 
 ## Setup & Run
 
