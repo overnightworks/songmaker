@@ -25,10 +25,17 @@ AI-powered song generation platform. Songs are created, generated, scored, and r
 ## Data Model
 
 ```
-Song (title + album)
-  └── Version (lyrics, prompt, BPM, key, duration, generation_params)
-        └── Generation (MP3, seed, scores, rating, whisper text)
+User (username, role: admin|user, bcrypt password)
+  └── Album (title, artist — owned by created_by user)
+        └── Song (title, track_number)
+              └── Version (lyrics, prompt, BPM, key, duration, generation_params)
+                    └── Generation (MP3, seed, scores, rating, whisper text)
 ```
+
+**Ownership**: Albums have `created_by` → User. Songs inherit ownership from their album.
+Users see only their own albums. Admin sees all.
+
+**Auth**: Session cookies (HttpOnly, SameSite=Lax), bcrypt passwords, brute-force protection.
 
 All in SQLite with SQLAlchemy ORM. Alembic for migrations.
 
@@ -46,6 +53,10 @@ src/
     ├── api_models.py    Pydantic models with from_orm()
     ├── jobs.py          Background generation + scoring
     ├── gpu_queue.py     GPU job queue, ACE-Step lifecycle
+    ├── auth.py          Password hashing, session config, constants
+    ├── auth_api.py      Auth endpoints (login, setup, logout, password)
+    ├── admin_api.py     Admin endpoints (user CRUD, sessions, ACE-Step)
+    ├── middleware.py     Session auth middleware, require_admin dependency
     ├── config.py        ACE-Step config, path resolution
     ├── generate.py      Generation engine (decode, master, MP3)
     ├── parser.py        Data models (SongMeta, AlbumMeta)
@@ -84,7 +95,8 @@ tests/                  377 Python tests
 | Pydantic from_orm() | Response models serialize ORM objects | No manual dict layer to maintain |
 | GPU queue | Single-threaded, in-process | One GPU (3090), ACE-Step + scoring share VRAM |
 | Scoring isolation | One crash doesn't block others | try/except per scorer in pipeline |
-| Session auth (planned) | Cookies, not JWT | Revocable, HttpOnly, simpler for monolith |
+| Session auth | Cookies, not JWT | Revocable, HttpOnly, simpler for monolith |
+| Album ownership | `created_by` on Album | Users see own data, admin sees all, future-proof for sharing |
 | SQLite + WAL | Good enough for single-server | No Redis/Postgres overhead |
 | Alembic | Schema migrations tracked | Safe schema evolution |
 

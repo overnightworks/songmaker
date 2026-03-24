@@ -71,12 +71,24 @@ def create_app(
     app.include_router(api_router)
 
     @app.get("/audio/{album}/{filename}")
-    async def get_audio(album: str, filename: str) -> FileResponse:
+    async def get_audio(album: str, filename: str, request: Request) -> FileResponse:
         audio_path = (output_dir / album / filename).resolve()
         if not audio_path.is_relative_to(output_dir.resolve()):
             raise HTTPException(403, "Path traversal denied")
         if not audio_path.exists():
             raise HTTPException(404, f"Not found: {album}/{filename}")
+
+        user = getattr(request.state, "user", None)
+        if user and user.role != "admin":
+            from songmaker_cli.db.engine import get_session_factory
+            from songmaker_cli.db.queries import get_album
+
+            factory = get_session_factory()
+            with factory() as session:
+                db_album = get_album(session, album)
+                if db_album and db_album.created_by != user.id:
+                    raise HTTPException(404, f"Not found: {album}/{filename}")
+
         return FileResponse(audio_path, media_type="audio/mpeg")
 
     sveltekit_dir = project_root / "frontend" / "build"

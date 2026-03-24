@@ -7,9 +7,8 @@ Create Date: 2026-03-24 14:45:04.373658
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '323807790c5d'
@@ -29,7 +28,9 @@ def upgrade() -> None:
     sa.Column('attempted_at', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_login_attempts_ip_address'), 'login_attempts', ['ip_address'], unique=False)
+    op.create_index(
+        op.f('ix_login_attempts_ip_address'), 'login_attempts', ['ip_address'], unique=False,
+    )
     op.create_table('users',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('username', sa.String(length=100), nullable=False),

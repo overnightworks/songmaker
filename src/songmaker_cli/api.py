@@ -50,11 +50,13 @@ from songmaker_cli.config import (
 )
 from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.db.engine import get_session_factory
+from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     cleanup_album,
     count_total_queued_jobs,
     count_user_active_jobs,
     count_user_jobs_in_window,
+    create_album,
     create_job,
     create_song,
     delete_generation,
@@ -148,16 +150,58 @@ def _validate_generation_params(params: dict | None) -> dict | None:
 # ── Albums ───────────────────────────────────────────────────────────
 
 
+def _owner_filter(user: AuthenticatedUser | None) -> str | None:
+    if not user or user.role == ROLE_ADMIN:
+        return None
+    return user.id
+
+
+def _check_album_access(album: Album | None, user: AuthenticatedUser | None) -> Album:
+    if not album:
+        raise HTTPException(404, "Album not found")
+    if user and user.role != ROLE_ADMIN and album.created_by != user.id:
+        raise HTTPException(404, "Album not found")
+    return album
+
+
 @router.get("/albums")
-def api_list_albums(session: Session = Depends(_get_session)) -> list[AlbumResponse]:
-    return [AlbumResponse.from_orm(a) for a in list_albums(session)]
+def api_list_albums(
+    request: Request, session: Session = Depends(_get_session),
+) -> list[AlbumResponse]:
+    user = _get_optional_user(request)
+    return [AlbumResponse.from_orm(a) for a in list_albums(session, user_id=_owner_filter(user))]
 
 
 @router.get("/albums/{album_id}")
-def api_get_album(album_id: str, session: Session = Depends(_get_session)) -> AlbumResponse:
+def api_get_album(
+    album_id: str, request: Request, session: Session = Depends(_get_session),
+) -> AlbumResponse:
+    user = _get_optional_user(request)
     album = get_album(session, album_id)
-    if not album:
-        raise HTTPException(404, "Album not found")
+    _check_album_access(album, user)
+    return AlbumResponse.from_orm(album)
+
+
+@router.post("/albums")
+def api_create_album(
+    request: Request,
+    data: dict,
+    session: Session = Depends(_get_session),
+) -> AlbumResponse:
+    user = _get_optional_user(request)
+    title = data.get("title", "").strip()
+    if not title:
+        raise HTTPException(422, "Title is required")
+    album_id = title.lower().replace(" ", "-").replace("'", "")
+    existing = get_album(session, album_id)
+    if existing:
+        raise HTTPException(409, f"Album '{title}' already exists")
+    album = create_album(
+        session, album_id, title,
+        artist=data.get("artist", ""),
+        created_by=user.id if user else None,
+    )
+    session.commit()
     return AlbumResponse.from_orm(album)
 
 
@@ -166,16 +210,26 @@ def api_get_album(album_id: str, session: Session = Depends(_get_session)) -> Al
 
 @router.get("/songs")
 def api_list_songs(
+    request: Request,
     album_id: str | None = Query(None),
     session: Session = Depends(_get_session),
 ) -> list[SongResponse]:
-    return [SongResponse.from_orm(s) for s in list_songs(session, album_id=album_id)]
+    user = _get_optional_user(request)
+    return [
+        SongResponse.from_orm(s)
+        for s in list_songs(session, album_id=album_id, user_id=_owner_filter(user))
+    ]
 
 
 @router.get("/songs/{song_id}")
-def api_get_song(song_id: str, session: Session = Depends(_get_session)) -> SongResponse:
+def api_get_song(
+    song_id: str, request: Request, session: Session = Depends(_get_session),
+) -> SongResponse:
+    user = _get_optional_user(request)
     song = get_song(session, song_id)
     if not song:
+        raise HTTPException(404, "Song not found")
+    if user and user.role != ROLE_ADMIN and song.album and song.album.created_by != user.id:
         raise HTTPException(404, "Song not found")
     return SongResponse.from_orm(song)
 

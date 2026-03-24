@@ -273,21 +273,66 @@ Load from `.server.env` file (gitignored) or environment variables.
 
 ---
 
+## Step 10: Album Ownership (Per-User Isolation)
+
+### Goal
+
+Users only see their own albums and songs. Admin sees everything.
+
+### Data Model Change
+
+```python
+class Album(Base):
+    # ... existing fields ...
+    created_by: str | None  # FK → User.id, nullable for migration
+```
+
+Songs inherit ownership from their album — no `created_by` on Song.
+
+### Access Rules
+
+| Role | Albums visible | Can create | Can edit/delete |
+|------|---------------|------------|----------------|
+| Admin | All albums | Yes | Any album |
+| User | Own albums only | Yes | Own albums only |
+
+### Implementation
+
+- [ ] Add `created_by` to Album model + Alembic migration
+- [ ] Migration: assign existing albums to first admin user
+- [ ] Add `POST /api/albums` endpoint (users can create albums)
+- [ ] Update `list_albums`, `list_songs` queries to filter by user
+- [ ] Update API endpoints to pass current user to queries
+- [ ] Update `/audio/` endpoint to check album ownership
+- [ ] Frontend: add "New Album" UI
+
+### Audio Security
+
+`/audio/{album}/{filename}` must verify the user owns the album before serving the MP3. Without this, users could guess paths and listen to others' generations.
+
+### Future Extensions (additive, no schema rewrite)
+
+| Phase | Feature | Schema Change |
+|-------|---------|--------------|
+| Now | Private per user | `Album.created_by` |
+| Future | Share with specific users | New `AlbumShare(album_id, user_id, permission)` table |
+| Future | Public albums (all users) | `Album.is_public: bool` |
+
+---
+
 ## What This Does NOT Include (Future)
 
 - OAuth2/OIDC (Google/GitHub login) — add as additional login method
-- Multi-tenancy (per-user song isolation) — all users see all songs for now
+- Album sharing between users — see Step 10 future extensions
 - API tokens for programmatic access — add for CI/CD later
 - 2FA/TOTP — add when deploying publicly
 - Email verification — not needed for invite-only use
-- Password reset flow — admin can reset via admin panel
 
 ---
 
 ## Migration Notes
 
-- Existing server.env with SONGMAKER_API_KEY continues to work during migration
 - Add SESSION_SECRET to .server.env
 - On first startup after migration: /setup page appears
-- Old ApiKeyMiddleware removed after auth is live
-- Existing DB gets User + UserSession + LoginAttempt tables via create_all
+- Existing albums are assigned to the first admin user
+- CLI commands (`list-users`, `reset-password`, `reinit-acestep`) work without auth

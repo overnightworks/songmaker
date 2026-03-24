@@ -42,6 +42,7 @@ class Album(Base):
     subtitle: Mapped[str] = mapped_column(String(400), default="")
     year: Mapped[str] = mapped_column(String(10), default="")
     colors: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     songs: Mapped[list[Song]] = relationship(back_populates="album", cascade="all, delete-orphan")

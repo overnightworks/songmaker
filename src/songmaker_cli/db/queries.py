@@ -26,20 +26,34 @@ log = logging.getLogger(__name__)
 _UNSET = object()
 
 
-def list_albums(session: Session) -> list[Album]:
-    return (
-        session.query(Album)
-        .options(joinedload(Album.songs))
-        .order_by(Album.title)
-        .all()
-    )
+def list_albums(session: Session, user_id: str | None = None) -> list[Album]:
+    query = session.query(Album).options(joinedload(Album.songs))
+    if user_id:
+        query = query.filter_by(created_by=user_id)
+    return query.order_by(Album.title).all()
 
 
 def get_album(session: Session, album_id: str) -> Album | None:
     return session.query(Album).filter_by(id=album_id).first()
 
 
-def list_songs(session: Session, album_id: str | None = None) -> list[Song]:
+def create_album(
+    session: Session,
+    album_id: str,
+    title: str,
+    artist: str = "",
+    created_by: str | None = None,
+) -> Album:
+    album = Album(id=album_id, title=title, artist=artist, created_by=created_by)
+    session.add(album)
+    session.flush()
+    log.info("Created album '%s' (id=%s, owner=%s)", title, album_id, created_by)
+    return album
+
+
+def list_songs(
+    session: Session, album_id: str | None = None, user_id: str | None = None,
+) -> list[Song]:
     query = (
         session.query(Song)
         .options(
@@ -52,6 +66,8 @@ def list_songs(session: Session, album_id: str | None = None) -> list[Song]:
     )
     if album_id:
         query = query.filter_by(album_id=album_id)
+    if user_id:
+        query = query.join(Album).filter(Album.created_by == user_id)
     return query.all()
 
 
