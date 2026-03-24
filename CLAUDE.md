@@ -102,12 +102,13 @@ All data in SQLite (`_output/songmaker.db`). Songs created/edited via web UI or 
   - `cli_client.py` — HTTP helpers (api_get/post/put, resolve_song, poll_job)
   - `server.py` — FastAPI app setup, static files, startup
   - `api.py` — REST API endpoints (CRUD, generation, scoring, chat)
+  - `api_models.py` — Pydantic request/response models with from_orm() serialization
   - `jobs.py` — Background job runners (generation + scoring)
   - `gpu_queue.py` — GPU job queue with ACE-Step lifecycle management
   - `config.py` — ACE-Step config building, output path resolution, generation defaults
   - `generate.py` — Generation engine (decode, master, write MP3)
   - `parser.py` — Data models (SongMeta, AlbumMeta, GenerationParams)
-  - `db/` — SQLAlchemy models, queries, engine
+  - `db/` — SQLAlchemy models, queries, engine, Alembic migrations
   - `scoring/` — Scoring pipeline with ScorerRegistry + individual scorers
   - `claude/` — Claude provider (API + CLI backends)
   - `constants.py` — Shared constants
@@ -115,8 +116,8 @@ All data in SQLite (`_output/songmaker.db`). Songs created/edited via web UI or 
 - `_output/` — Generated audio + SQLite DB (gitignored)
 - `_models/` — AI model weights (gitignored)
 - `scripts/` — Server setup/start
-- `tests/` — pytest suite (382 tests)
-- `frontend/` — SvelteKit frontend app (108 tests)
+- `tests/` — pytest suite (377 tests)
+- `frontend/` — SvelteKit frontend app (107 tests)
   - `src/routes/` — SvelteKit pages and layouts
   - `src/lib/components/` — Svelte components
   - `src/lib/stores/` — Svelte stores (player, editor, filter, jobs, settings)
