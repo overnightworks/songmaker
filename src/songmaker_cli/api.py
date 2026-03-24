@@ -158,6 +158,7 @@ def api_get_song(song_id: str, session: Session = Depends(_get_session)) -> dict
 def api_create_song(
     req: SongCreateRequest, session: Session = Depends(_get_session),
 ) -> dict:
+    log.debug("POST /songs: title='%s', album='%s'", req.title, req.album_id)
     _validate_generation_params(req.generation_params)
     song = create_song(
         session, title=req.title, album_id=req.album_id,
@@ -173,6 +174,7 @@ def api_create_song(
 def api_update_song(
     song_id: str, req: SongUpdateRequest, session: Session = Depends(_get_session),
 ) -> dict:
+    log.debug("PUT /songs/%s: fields_set=%s", song_id, req.model_fields_set)
     _validate_generation_params(req.generation_params)
     kwargs: dict = dict(
         lyrics=req.lyrics, prompt=req.prompt,
@@ -271,6 +273,7 @@ def api_generate_song(
 
     job = create_job(session, "generate")
     session.commit()
+    log.info("Generate: song='%s', count=%d, job=%s", song.title, req.count, job.id)
 
     from songmaker_cli.gpu_queue import get_gpu_queue
     from songmaker_cli.jobs import run_generation_job

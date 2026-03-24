@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import Album, Generation, Job, Rating, Score, Song, Version
+
+log = logging.getLogger(__name__)
 
 _UNSET = object()
 
@@ -125,6 +128,7 @@ def create_song(
     )
     session.add(version)
     session.flush()
+    log.info("Created song '%s' (id=%s) in album '%s'", title, song.id, album_id)
     return song
 
 
@@ -147,6 +151,8 @@ def update_song(
 
     if generation_params is _UNSET:
         new_gen_params = prev.generation_params if prev else None
+        prev_num = prev.version_number if prev else 0
+        log.debug("generation_params not provided, carrying forward from v%d", prev_num)
     else:
         new_gen_params = generation_params or None
 
@@ -162,6 +168,7 @@ def update_song(
     )
     session.add(version)
     session.flush()
+    log.info("Updated song %s → v%d", song_id, next_num)
     return version
 
 
@@ -187,6 +194,7 @@ def delete_version(
 
     session.delete(version)
     session.flush()
+    log.info("Deleted version %s (delete_generations=%s)", version_id, delete_generations)
 
 
 def delete_generation(
@@ -201,13 +209,11 @@ def delete_generation(
 
     session.delete(gen)
     session.flush()
+    log.info("Deleted generation %s", generation_id)
 
 
 def _delete_generation_files(output_dir: Path, mp3_rel: str) -> None:
     """Remove MP3 and related files (.md snapshot, .whisper) from disk."""
-    import logging
-    log = logging.getLogger(__name__)
-
     mp3 = output_dir / mp3_rel
     for suffix in [".mp3", ".md", ".whisper"]:
         path = mp3.with_suffix(suffix)
@@ -287,6 +293,7 @@ def create_generation(
     )
     session.add(gen)
     session.flush()
+    log.info("Created generation #%d for song %s (seed=%s)", gen_number, song_id, seed)
     return gen
 
 

@@ -17,6 +17,8 @@ def run_generation_job(
     """Run generation in a background thread, updating DB status."""
     factory = get_session_factory()
 
+    log.info("Generation job %s: song=%s, count=%d", job_id, song_id, count)
+
     try:
         _update_job(factory, job_id, "running")
 
@@ -45,6 +47,11 @@ def run_generation_job(
             language = song.language
             version_gen_params = version.generation_params or {}
 
+        log.debug(
+            "Song: '%s' (album=%s, bpm=%s, duration=%s, key=%s, version_params=%s)",
+            song_title, album_name, bpm, duration, key, version_gen_params or "none",
+        )
+
         from acestep_engine import AceStepClient
         from songmaker_cli.config import build_ace_config, find_project_root
         from songmaker_cli.parser import SongMeta
@@ -72,6 +79,7 @@ def run_generation_job(
 
         server_info = client.server_info()
         model_name = server_info.model if server_info else None
+        log.debug("ACE-Step model: %s", model_name)
 
         from songmaker_cli.config import load_generation_defaults
         global_defaults = load_generation_defaults()
@@ -133,6 +141,7 @@ def run_scoring_job(
     job_id: str, gen_id: str, scorers: list[str] | None,
 ) -> None:
     """Run scoring in a background thread, updating DB status."""
+    log.info("Scoring job %s started: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
     factory = get_session_factory()
 
     try:

@@ -96,7 +96,11 @@ def score_lyrical_coherence(
     )
 
     prompt = JUDGE_PROMPT.format(intended=intended, transcribed=transcribed)
+    n_intended = len(intended.splitlines())
+    n_transcribed = len(transcribed.splitlines())
+    log.debug("Sending %d intended + %d transcribed lines to Claude", n_intended, n_transcribed)
     response = call_claude(prompt)
+    log.debug("Claude response: %d chars", len(response.text))
     data = parse_json_response(response.text)
 
     result = LyricalCoherenceScore(

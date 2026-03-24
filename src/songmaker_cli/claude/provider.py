@@ -49,7 +49,9 @@ def call_claude(
         ClaudeResponse with the text response.
     """
     if api_key:
+        log.info("Claude: using API backend (model=%s)", model)
         return _call_api(prompt, api_key, system, model, max_tokens)
+    log.info("Claude: using CLI backend")
     return _call_cli(prompt, system)
 
 
@@ -87,6 +89,7 @@ def _call_api(
 
     response = client.messages.create(**kwargs)
     text = response.content[0].text if response.content else ""
+    log.debug("Claude API response: %d chars", len(text))
     return ClaudeResponse(text=text)
 
 
@@ -118,6 +121,7 @@ def _call_cli(prompt: str, system: str | None = None) -> ClaudeResponse:
     except json.JSONDecodeError:
         text = proc.stdout
 
+    log.debug("Claude CLI response: %d chars", len(text))
     return ClaudeResponse(text=text.strip())
 
 
@@ -125,6 +129,7 @@ def _find_claude_binary() -> str | None:
     """Find the Claude CLI binary on PATH or in VS Code extensions."""
     found = shutil.which("claude")
     if found:
+        log.debug("Found claude binary on PATH: %s", found)
         return found
 
     ext_dir = Path.home() / ".vscode" / "extensions"

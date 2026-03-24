@@ -91,12 +91,17 @@ def _defaults_path() -> Path:
 def load_generation_defaults() -> dict:
     path = _defaults_path()
     if path.exists():
-        return json.loads(path.read_text(encoding="utf-8"))
+        defaults = json.loads(path.read_text(encoding="utf-8"))
+        log.debug("Loaded generation defaults from %s: %s", path, list(defaults.keys()))
+        return defaults
+    log.debug("No generation defaults file at %s", path)
     return {}
 
 
 def save_generation_defaults(data: dict) -> None:
-    _defaults_path().write_text(json.dumps(data, indent=2), encoding="utf-8")
+    path = _defaults_path()
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    log.info("Saved generation defaults: %s", path)
 
 
 _FIELD_MAPPING = {"language": "vocal_language"}
@@ -130,6 +135,10 @@ def build_ace_config(
 
     model_key = "sft" if is_sft else "turbo"
     user_defaults = (global_defaults or {}).get(model_key, {})
+    log.debug(
+        "build_ace_config: model=%s (%s), user_defaults=%s, song_params=%s",
+        model_name, model_key, user_defaults or "none", meta.generation_params or "none",
+    )
 
     fields: dict = {"prompt": meta.prompt, "lyrics": meta.lyrics}
 
