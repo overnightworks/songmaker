@@ -781,7 +781,14 @@
 
 	@media (max-width: 768px) {
 		.chat-panel {
-			display: none;
+			position: fixed;
+			top: var(--header-height);
+			left: 0;
+			right: 0;
+			bottom: 0;
+			width: 100%;
+			z-index: 170;
+			background: var(--bg);
 		}
 	}
 </style>
