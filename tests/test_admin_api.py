@@ -184,7 +184,36 @@ def test_cannot_demote_self(client: TestClient) -> None:
     me = client.get("/api/auth/me").json()
     resp = client.put(f"/api/admin/users/{me['id']}", json={"role": "user"})
     assert resp.status_code == 400
-    assert "own admin" in resp.json()["detail"]
+    assert "last active admin" in resp.json()["detail"]
+
+
+def test_cannot_demote_last_admin_even_different_user(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "admin2", "password": "t3stP@ssw0rd", "role": "admin"},
+    )
+    admin2_id = resp.json()["id"]
+
+    client.put(f"/api/admin/users/{admin2_id}", json={"is_active": False})
+
+    me = client.get("/api/auth/me").json()
+    resp = client.put(f"/api/admin/users/{me['id']}", json={"role": "user"})
+    assert resp.status_code == 400
+    assert "last active admin" in resp.json()["detail"]
+
+
+def test_demote_admin_allowed_when_multiple(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "admin2", "password": "t3stP@ssw0rd", "role": "admin"},
+    )
+    admin2_id = resp.json()["id"]
+
+    resp = client.put(f"/api/admin/users/{admin2_id}", json={"role": "user"})
+    assert resp.status_code == 200
+    assert resp.json()["role"] == "user"
 
 
 # ── Delete (deactivate) user ────────────────────────────────────────
@@ -217,6 +246,53 @@ def test_cannot_deactivate_self_via_delete(client: TestClient) -> None:
     me = client.get("/api/auth/me").json()
     resp = client.delete(f"/api/admin/users/{me['id']}")
     assert resp.status_code == 400
+
+
+def test_deactivate_admin_via_delete_allowed_when_multiple(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "admin2", "password": "t3stP@ssw0rd", "role": "admin"},
+    )
+    admin2_id = resp.json()["id"]
+
+    resp = client.delete(f"/api/admin/users/{admin2_id}")
+    assert resp.status_code == 200
+
+    factory = get_session_factory()
+    with factory() as session:
+        from songmaker_cli.db.queries import get_user
+        admin2_user = get_user(session, admin2_id)
+        assert admin2_user.is_active is False
+
+
+def test_cannot_deactivate_sole_active_admin_via_delete(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "admin2", "password": "t3stP@ssw0rd", "role": "admin"},
+    )
+    admin2_id = resp.json()["id"]
+
+    resp = client.delete(f"/api/admin/users/{admin2_id}")
+    assert resp.status_code == 200
+
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "admin3", "password": "t3stP@ssw0rd", "role": "admin"},
+    )
+    admin3_id = resp.json()["id"]
+
+    client.put(f"/api/admin/users/{admin3_id}", json={"is_active": False})
+
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "bob", "password": "t3stP@ssw0rd", "role": "user"},
+    )
+    bob_id = resp.json()["id"]
+
+    resp = client.delete(f"/api/admin/users/{bob_id}")
+    assert resp.status_code == 200
 
 
 # ── Login attempts ──────────────────────────────────────────────────

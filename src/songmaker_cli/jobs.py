@@ -191,6 +191,8 @@ def run_generation_job(
             factory, job_id, "failed",
             error=_sanitize_error(exc), error_type="generation_error",
         )
+    finally:
+        _cleanup_gpu()
 
 
 def run_scoring_job(
@@ -263,6 +265,20 @@ def run_scoring_job(
             factory, job_id, "failed",
             error=_sanitize_error(exc), error_type="scoring_error",
         )
+    finally:
+        _cleanup_gpu()
+
+
+def _cleanup_gpu() -> None:
+    try:
+        import gc
+
+        import torch
+        if torch.cuda.is_available():
+            gc.collect()
+            torch.cuda.empty_cache()
+    except ImportError:
+        pass
 
 
 def _detect_device() -> str:

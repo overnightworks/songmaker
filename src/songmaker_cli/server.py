@@ -10,15 +10,17 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from songmaker_cli.config import find_project_root, set_output_dir
@@ -32,30 +34,65 @@ DB_FILENAME = "songmaker.db"
 MAX_REQUEST_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", 1_048_576))
 
 
-class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    """Fast-reject via Content-Length, then verify actual body size."""
+class BodySizeLimitMiddleware:
+    """Raw ASGI middleware: reject requests exceeding the body size limit.
 
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        content_length = request.headers.get("content-length")
-        if content_length:
+    Checks Content-Length for fast rejection, then wraps the ASGI receive
+    channel to track bytes as they stream in — aborting with 413 if the
+    limit is exceeded, without buffering the entire body into memory first.
+    """
+
+    def __init__(self, app):  # type: ignore[no-untyped-def]
+        self.app = app
+
+    async def __call__(self, scope, receive, send):  # type: ignore[no-untyped-def]
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = {k.lower(): v for k, v in (
+            (k.decode("latin-1"), v.decode("latin-1"))
+            for k, v in scope.get("headers", [])
+        )}
+        cl = headers.get("content-length")
+        if cl:
             try:
-                if int(content_length) > MAX_REQUEST_BODY_BYTES:
-                    return JSONResponse(
-                        {"detail": "Request body too large"}, status_code=413,
-                    )
+                if int(cl) > MAX_REQUEST_BODY_BYTES:
+                    resp = JSONResponse({"detail": "Request body too large"}, status_code=413)
+                    await resp(scope, receive, send)
+                    return
             except ValueError:
                 pass
-        body = await request.body()
-        if len(body) > MAX_REQUEST_BODY_BYTES:
-            return JSONResponse(
-                {"detail": "Request body too large"}, status_code=413,
-            )
-        return await call_next(request)
+
+        received = 0
+        rejected = False
+
+        async def guarded_receive():  # type: ignore[no-untyped-def]
+            nonlocal received, rejected
+            msg = await receive()
+            if msg.get("type") == "http.request":
+                received += len(msg.get("body", b""))
+                if received > MAX_REQUEST_BODY_BYTES:
+                    rejected = True
+                    raise _BodyTooLarge
+            return msg
+
+        try:
+            await self.app(scope, guarded_receive, send)
+        except _BodyTooLarge:
+            resp = JSONResponse({"detail": "Request body too large"}, status_code=413)
+            await resp(scope, receive, send)
+
+
+class _BodyTooLarge(Exception):
+    pass
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         response = await call_next(request)
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
@@ -91,14 +128,25 @@ _FORM_CONTENT_TYPES = frozenset({
 })
 
 
+ALLOWED_HOSTS: frozenset[str] = frozenset(
+    h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()
+)
+
+_LOCALHOST_PATTERN = re.compile(r"^(localhost|127\.0\.0\.1)(:\d+)?$")
+
+
+def _is_allowed_host(netloc: str) -> bool:
+    if ALLOWED_HOSTS:
+        return netloc in ALLOWED_HOSTS
+    return bool(_LOCALHOST_PATTERN.match(netloc))
+
+
 class CsrfOriginMiddleware(BaseHTTPMiddleware):
     """Reject cross-origin state-changing API requests as CSRF defense-in-depth.
 
-    When Origin/Referer is present, verify it matches the Host header.
-    When absent, reject requests with form-like Content-Types (the only
-    types an HTML form can produce). This blocks CSRF from older browsers
-    that don't enforce SameSite=Strict, while allowing JSON API clients
-    and DELETE requests without a body.
+    When Origin/Referer is present, verify it matches ALLOWED_HOSTS (env var)
+    or localhost (default). When absent, reject requests with form-like
+    Content-Types (the only types an HTML form can produce).
     """
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
@@ -110,9 +158,8 @@ class CsrfOriginMiddleware(BaseHTTPMiddleware):
             if origin:
                 from urllib.parse import urlparse
                 parsed = urlparse(origin)
-                server_host = request.headers.get("host", "")
                 origin_host = parsed.netloc
-                if origin_host and origin_host != server_host:
+                if origin_host and not _is_allowed_host(origin_host):
                     return JSONResponse(
                         {"detail": "Cross-origin request rejected"},
                         status_code=403,
@@ -140,7 +187,9 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
         self._limiter = IpRateLimiter(IP_RATE_LIMIT, IP_RATE_WINDOW)
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        ip = request.client.host if request.client else "unknown"
+        from songmaker_cli.auth import get_client_ip
+        direct_ip = request.client.host if request.client else "unknown"
+        ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"))
         if not self._limiter.is_allowed(ip):
             return JSONResponse(
                 {"detail": "Too many requests"}, status_code=429,
@@ -148,12 +197,6 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
             )
         return await call_next(request)
 
-
-class SessionMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        from songmaker_cli.middleware import session_auth_middleware
-
-        return await session_auth_middleware(request, call_next)
 
 
 @asynccontextmanager
@@ -185,7 +228,6 @@ def create_app(
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(CsrfOriginMiddleware)
-    app.add_middleware(SessionMiddleware)
     app.add_middleware(IpRateLimitMiddleware)
     app.add_middleware(BodySizeLimitMiddleware)
 
@@ -205,26 +247,27 @@ def create_app(
 
     app.include_router(api_router)
 
+    from songmaker_cli.db.engine import get_db_session
+    from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+
     @app.get("/audio/{album}/{filename}")
-    async def get_audio(album: str, filename: str, request: Request) -> FileResponse:
+    async def get_audio(
+        album: str, filename: str,
+        user: AuthenticatedUser = Depends(get_current_user),
+        db: Session = Depends(get_db_session),
+    ) -> FileResponse:
         audio_path = (output_dir / album / filename).resolve()
         if not audio_path.is_relative_to(output_dir.resolve()):
             raise HTTPException(403, "Path traversal denied")
         if not audio_path.exists():
             raise HTTPException(404, "Audio file not found")
 
-        user = getattr(request.state, "user", None)
-        if not user:
-            raise HTTPException(401, "Authentication required")
         if user.role != "admin":
-            from songmaker_cli.db.engine import get_session_factory
-            from songmaker_cli.db.queries import get_album
+            from songmaker_cli.db.queries import get_album as get_album_query
 
-            factory = get_session_factory()
-            with factory() as session:
-                db_album = get_album(session, album)
-                if db_album and db_album.created_by != user.id:
-                    raise HTTPException(404, "Audio file not found")
+            db_album = get_album_query(db, album)
+            if db_album and db_album.created_by != user.id:
+                raise HTTPException(404, "Audio file not found")
 
         return FileResponse(audio_path, media_type="audio/mpeg")
 

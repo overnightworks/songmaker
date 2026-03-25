@@ -9,27 +9,28 @@ Session-based auth with bcrypt password hashing (12 rounds).
 - **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected via `X-Forwarded-Proto`)
 - **Session lifetime**: 30-day sliding window, 90-day absolute max
 - **Session fixation**: All old sessions deleted on login and password change
+- **Logout**: `DELETE /session` invalidates the session in the database (not just the cookie). The session ID is passed via `request.state` from the auth dependency.
 - **Session anomaly detection**: IP and user-agent changes are logged to the audit trail
-- **Brute-force protection**: 5 failed attempts per 5 minutes, per IP + per username
+- **Brute-force protection**: 5 failed attempts per 5 minutes, per IP + per username. Also applies to password change endpoint.
 - **Constant-time login**: bcrypt always runs against a dummy hash when the user doesn't exist, preventing timing-based username enumeration
 - **Login attempt cleanup**: Records older than 90 days are pruned at startup
-- **Password strength**: Common passwords (top ~50 list) and low-entropy passwords (< 4 unique chars) are rejected on setup, user creation, and password change
+- **Password strength**: Common passwords (~200 entries including seasonal/year variants) and low-entropy passwords (< 4 unique chars) are rejected on setup, user creation, and password change
 
 ## Authorization
 
 Two-layer defense:
 
-1. **Middleware** (`middleware.py`): Blocks unauthenticated requests to all non-public paths. Returns 401 before reaching any endpoint.
-2. **Endpoint** (`api.py`): Every endpoint uses `Depends(get_current_user)` — returns 401 independently of middleware. Ownership checks enforce default-deny: access is blocked unless `album.created_by == user.id` (or user is admin). Missing album → denied.
+1. **Dependency-based auth** (`middleware.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session — all in the same DB transaction as the endpoint.
+2. **Endpoint** (`api.py`): Every endpoint uses `Depends(get_current_user)` — returns 401 if unauthenticated. Ownership checks enforce default-deny: access is blocked unless `album.created_by == user.id` (or user is admin). Missing album → denied.
 
-Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API.
+Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. Demotion or deactivation of the last active admin is blocked to prevent lockout.
 
 ## CSRF Protection
 
 Three-layer defense:
 
 1. **`SameSite=Strict` cookies**: Prevents cross-site cookie transmission in modern browsers
-2. **Origin verification**: Mutating requests to `/api/` with an `Origin`/`Referer` header that doesn't match `Host` are rejected (403)
+2. **Origin verification**: Mutating requests to `/api/` with an `Origin`/`Referer` header that doesn't match `ALLOWED_HOSTS` (or localhost by default) are rejected (403). Uses a server-side allowlist instead of the request's `Host` header to prevent header-spoofing bypasses.
 3. **Form-submit blocking**: Mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (CLI, fetch).
 
 ## Rate Limiting
@@ -47,7 +48,7 @@ Three-layer defense:
 
 ### Per-IP (global middleware)
 
-All requests are subject to a global per-IP rate limit (default: 120 requests/minute). This prevents multi-account abuse and unauthenticated request floods. Configurable via `IP_RATE_LIMIT` env var.
+All requests are subject to a global per-IP rate limit (default: 120 requests/minute). This prevents multi-account abuse and unauthenticated request floods. The rate limiter is memory-bounded (max 10k tracked IPs with automatic eviction of stale entries). Configurable via `IP_RATE_LIMIT` env var. When `TRUSTED_PROXIES` is configured, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), matching the login rate limiter's behavior.
 
 Configure via env vars: `LOGIN_RATE_LIMIT`, `GENERATION_RATE_LIMIT_USER`, `GENERATION_RATE_LIMIT_ADMIN`, `SCORING_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_ADMIN`, `CHAT_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_ADMIN`, `MAX_QUEUE_DEPTH`, `IP_RATE_LIMIT`.
 
@@ -61,6 +62,7 @@ All responses include:
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only)
+- `Cache-Control: no-store` (API responses only — prevents caching of authenticated data)
 
 ## CORS
 
@@ -79,7 +81,7 @@ All responses include:
 
 ## Request Size Limits
 
-`BodySizeLimitMiddleware` first checks the `Content-Length` header for fast rejection, then reads and verifies the actual body size. Requests > 1 MB are rejected (HTTP 413). Configurable via `MAX_REQUEST_BODY_BYTES` env var.
+`BodySizeLimitMiddleware` (raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Requests > 1 MB are rejected (HTTP 413). Configurable via `MAX_REQUEST_BODY_BYTES` env var.
 
 **Note**: For production deployments exposed to the internet, use a reverse proxy (e.g., nginx `client_max_body_size 1m`) to reject oversized requests at the network edge before they reach the application.
 
@@ -110,7 +112,8 @@ All mutating operations are logged to the `audit_log` table:
 | HTTPS termination | Reverse proxy (nginx/caddy) with TLS. Set `X-Forwarded-Proto: https` so `Secure` cookie flag and HSTS header activate. |
 | Session secret | Set `SESSION_SECRET` env var (min 32 chars) for stable HMAC signing across restarts. If not set, auto-generated and stored in `<output_dir>/.session_secret`. |
 | CORS origin | Set `CORS_ORIGIN=https://yourdomain.com`. Defaults to `localhost` regex for dev. |
-| Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1` (comma-separated). Only these IPs are trusted for `X-Forwarded-For`. Without this, the client's direct IP is always used for rate limiting. |
+| Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1` (comma-separated). Only these IPs are trusted for `X-Forwarded-For`. Uses the rightmost untrusted entry to prevent spoofing. Without this, the client's direct IP is always used for rate limiting. |
+| Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). |
 | Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). Also set in reverse proxy for defense-in-depth. |
 | IP rate limit | `IP_RATE_LIMIT` (default 120/min). Adjust based on expected traffic. |
@@ -139,11 +142,16 @@ All request models use Pydantic with strict constraints:
 
 Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. Slug generation strips all non-alphanumeric characters. The rate-by-path endpoint validates that album and generation name parameters contain no `..` or `/`.
 
+## GPU Resource Safety
+
+- **Per-job cleanup**: Both generation and scoring jobs call `gc.collect()` + `torch.cuda.empty_cache()` in a `finally` block, ensuring VRAM is released even on failure.
+- **Mode-switch cleanup**: The GPU queue clears scoring models before generation and vice versa, with VRAM verification (waits up to 10s for release).
+- **ACE-Step lifecycle**: The server manages the ACE-Step subprocess, sending SIGTERM (with SIGKILL fallback) on mode switch or shutdown.
+
 ## Known Limitations
 
 - **Claude CLI tool denylist**: Uses `--disallowedTools` (denylist, not allowlist) because `--tools ""` doesn't reliably block tools. New Claude Code tools require updating the list in `provider.py`.
 - **Frontend API key in localStorage**: When users provide their own Anthropic API key (BYOK), it's stored in `localStorage`. This is readable by any JavaScript on the same origin. CSP headers mitigate XSS risk, but browser extensions could potentially access it. The key is sent directly to Anthropic's API, never to the songmaker server.
 - **No IP binding on sessions**: A stolen session cookie works from any IP. IP/UA changes are logged to the audit trail but not blocked, to avoid breaking mobile users who switch networks.
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
-- **Body size buffering**: The body size middleware reads the full body into memory after the Content-Length pre-check passes. A reverse proxy should enforce limits at the network edge for internet-facing deployments.
 - **ACE-Step reinitialize**: No cooldown on `POST /api/admin/acestep/reinitialize`. Repeated calls by a compromised admin could cause GPU disruption.

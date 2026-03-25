@@ -24,7 +24,7 @@ from songmaker_cli.auth import (
     LOGIN_RATE_WINDOW_SECONDS,
     ROLE_ADMIN,
     SESSION_MAX_AGE_SECONDS,
-    TRUSTED_PROXIES,
+    get_client_ip,
     hash_password,
     sign_session_id,
     verify_password,
@@ -61,11 +61,7 @@ _MAX_USER_AGENT_LENGTH = 500
 
 def _client_ip(request: Request) -> str:
     direct_ip = request.client.host if request.client else "unknown"
-    if TRUSTED_PROXIES and direct_ip in TRUSTED_PROXIES:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-    return direct_ip
+    return get_client_ip(direct_ip, request.headers.get("x-forwarded-for"))
 
 
 def _client_user_agent(request: Request) -> str:
@@ -216,8 +212,20 @@ def change_password(
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> StatusResponse:
     user = get_user(db, current_user.id)
+    ip = _client_ip(request)
+
+    ip_failures = count_recent_failed_attempts(
+        db, ip, LOGIN_RATE_WINDOW_SECONDS, username=f"__pwchange__{current_user.username}",
+    )
+    if ip_failures >= LOGIN_RATE_LIMIT:
+        raise HTTPException(
+            429, "Too many password change attempts. Try again later.",
+            headers={"Retry-After": str(LOGIN_RATE_WINDOW_SECONDS)},
+        )
 
     if not verify_password(req.current, user.password_hash):
+        record_login_attempt(db, ip, f"__pwchange__{current_user.username}", success=False)
+        db.commit()
         raise HTTPException(401, "Current password is incorrect")
 
     user.password_hash = hash_password(req.new)

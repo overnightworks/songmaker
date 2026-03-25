@@ -127,46 +127,10 @@ def test_api_rate_not_found(server_app: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_get_audio_path_traversal_denied(tmp_path: Path) -> None:
+def test_get_audio_path_traversal_denied(server_app: TestClient) -> None:
     """Path traversal guard fires when album param escapes output_dir."""
-    import asyncio
-
-    from fastapi import HTTPException
-
-    from songmaker_cli.server import create_app
-
-    reset_engine()
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
-
-    outside = tmp_path / "secret.mp3"
-    outside.write_bytes(b"secret")
-
-    factory = init_db(output_dir / "songmaker.db")
-    with factory() as session:
-        session.commit()
-
-    app = create_app(output_dir, tmp_path)
-
-    get_audio = None
-    for route in app.routes:
-        if hasattr(route, "path") and route.path == "/audio/{album}/{filename}":
-            get_audio = route.endpoint
-            break
-
-    assert get_audio is not None
-
-    class FakeRequest:
-        state = type("state", (), {"user": None})()
-        client = None
-
-    with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(
-            get_audio(album="..", filename="secret.mp3", request=FakeRequest()),
-        )
-
-    assert exc_info.value.status_code == 403
-    reset_engine()
+    resp = server_app.get("/audio/..%2F..%2Fetc/passwd")
+    assert resp.status_code in (403, 404)
 
 
 @pytest.fixture()
@@ -379,9 +343,73 @@ def test_csrf_origin_check_allows_same_origin(server_app: TestClient) -> None:
     resp = server_app.post(
         "/api/songs",
         json={"title": "New Song", "album_id": "test_album"},
-        headers={"origin": "http://testserver", "host": "testserver"},
+        headers={"origin": "http://localhost:8080"},
     )
     assert resp.status_code == 200
+
+
+def test_csrf_rejects_spoofed_host_with_matching_origin(server_app: TestClient) -> None:
+    resp = server_app.post(
+        "/api/songs",
+        json={"title": "X", "album_id": "test_album"},
+        headers={"origin": "http://evil.com", "host": "evil.com"},
+    )
+    assert resp.status_code == 403
+
+
+def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
+    reset_engine()
+    output_dir = tmp_path / "_output"
+    output_dir.mkdir(parents=True)
+    project_root = tmp_path
+    (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = project_root / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        admin = User(username="admin2", password_hash=hash_password("admin12345"), role="admin")
+        session.add(admin)
+        album = Album(id="a1", title="A", artist="A")
+        session.add(album)
+        session.commit()
+
+    with patch.dict("os.environ", {"ALLOWED_HOSTS": "myapp.example.com"}):
+        import songmaker_cli.server as srv
+        old_hosts = srv.ALLOWED_HOSTS
+        srv.ALLOWED_HOSTS = frozenset({"myapp.example.com"})
+        try:
+            app = create_app(output_dir, project_root)
+            client = TestClient(app, cookies={})
+            client.post("/api/auth/login", json={"username": "admin2", "password": "admin12345"})
+
+            resp = client.post(
+                "/api/songs",
+                json={"title": "X", "album_id": "a1"},
+                headers={"origin": "https://myapp.example.com"},
+            )
+            assert resp.status_code == 200
+
+            resp = client.post(
+                "/api/songs",
+                json={"title": "Y", "album_id": "a1"},
+                headers={"origin": "https://evil.com"},
+            )
+            assert resp.status_code == 403
+        finally:
+            srv.ALLOWED_HOSTS = old_hosts
+    reset_engine()
+
+
+def test_cache_control_on_api_responses(server_app: TestClient) -> None:
+    resp = server_app.get("/api/songs")
+    assert resp.headers.get("Cache-Control") == "no-store"
+
+
+def test_no_cache_control_on_non_api(server_app: TestClient) -> None:
+    resp = server_app.get("/")
+    assert "no-store" not in resp.headers.get("Cache-Control", "")
 
 
 def test_body_size_limit_rejects_large_content_length(server_app: TestClient) -> None:

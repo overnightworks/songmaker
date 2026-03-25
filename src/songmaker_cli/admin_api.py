@@ -19,6 +19,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.auth import hash_password
 from songmaker_cli.db.engine import get_db_session
+from songmaker_cli.db.models import User as UserModel
 from songmaker_cli.db.queries import (
     create_user,
     delete_session,
@@ -79,8 +80,10 @@ def update_user_endpoint(
     if user_id == admin.id and req.is_active is False:
         raise HTTPException(400, "Cannot deactivate your own account")
 
-    if user_id == admin.id and req.role is not None and req.role != "admin":
-        raise HTTPException(400, "Cannot demote your own admin account")
+    if req.role is not None and req.role != "admin" and user.role == "admin":
+        admin_count = db.query(UserModel).filter_by(role="admin", is_active=True).count()
+        if admin_count <= 1:
+            raise HTTPException(400, "Cannot demote the last active admin")
 
     password_hash = hash_password(req.password) if req.password else None
     updated = update_user(
@@ -110,6 +113,11 @@ def deactivate_user_endpoint(
 
     if user_id == admin.id:
         raise HTTPException(400, "Cannot deactivate your own account")
+
+    if user.role == "admin":
+        admin_count = db.query(UserModel).filter_by(role="admin", is_active=True).count()
+        if admin_count <= 1:
+            raise HTTPException(400, "Cannot deactivate the last active admin")
 
     update_user(db, user_id, is_active=False)
     record_audit(db, admin.id, "deactivate", "user", user_id)

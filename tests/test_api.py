@@ -5,27 +5,20 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from songmaker_cli.db.engine import init_db, reset_engine
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
-from songmaker_cli.middleware import AuthenticatedUser
+from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 _DEFAULT_USER_ID = "u-test"
 
 
-class _FakeAuthMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, user_id: str, username: str, role: str):
-        super().__init__(app)
-        self._user = AuthenticatedUser(
-            id=user_id, username=username, role=role, is_active=True,
-        )
-
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        request.state.user = self._user
-        return await call_next(request)
+def _fake_user(user_id: str, username: str, role: str):
+    """Return a dependency override for get_current_user."""
+    user = AuthenticatedUser(id=user_id, username=username, role=role, is_active=True)
+    return lambda: user
 
 
 @pytest.fixture()
@@ -42,9 +35,8 @@ def client(tmp_path: Path) -> TestClient:
 
     from songmaker_cli.api import router
     app = FastAPI()
-    app.add_middleware(
-        _FakeAuthMiddleware,
-        user_id=_DEFAULT_USER_ID, username="test_user", role="user",
+    app.dependency_overrides[get_current_user] = _fake_user(
+        _DEFAULT_USER_ID, "test_user", "user",
     )
     app.include_router(router)
     yield TestClient(app)
@@ -82,9 +74,8 @@ def _make_authed_client(
     from songmaker_cli.api import router
 
     app = FastAPI()
-    app.add_middleware(
-        _FakeAuthMiddleware,
-        user_id=user_id, username=f"test_{role}", role=role,
+    app.dependency_overrides[get_current_user] = _fake_user(
+        user_id, f"test_{role}", role,
     )
     app.include_router(router)
     return TestClient(app)
@@ -963,10 +954,7 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     from songmaker_cli.api import router
     from songmaker_cli.server import BodySizeLimitMiddleware
     app = FastAPI()
-    app.add_middleware(
-        _FakeAuthMiddleware,
-        user_id="u-test", username="test", role="user",
-    )
+    app.dependency_overrides[get_current_user] = _fake_user("u-test", "test", "user")
     app.add_middleware(BodySizeLimitMiddleware)
     app.include_router(router)
 

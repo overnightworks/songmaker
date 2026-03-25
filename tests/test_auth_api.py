@@ -138,15 +138,19 @@ def test_login_brute_force_lockout(client: TestClient) -> None:
 
 
 def test_client_ip_trusted_proxy(client: TestClient) -> None:
-    from unittest.mock import patch
+    import songmaker_cli.auth as auth_mod
+    original = auth_mod.TRUSTED_PROXIES
 
     _seed_admin()
-    with patch("songmaker_cli.auth_api.TRUSTED_PROXIES", frozenset({"testclient"})):
+    auth_mod.TRUSTED_PROXIES = frozenset({"testclient", "10.0.0.1"})
+    try:
         resp = client.post(
             "/api/auth/login",
             json={"username": "admin", "password": "admin12345"},
             headers={"x-forwarded-for": "203.0.113.1, 10.0.0.1"},
         )
+    finally:
+        auth_mod.TRUSTED_PROXIES = original
     assert resp.status_code == 200
 
     factory = get_session_factory()
@@ -165,6 +169,19 @@ def test_logout(client: TestClient) -> None:
     resp = client.delete("/api/auth/session")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+def test_logout_invalidates_session_in_db(client: TestClient) -> None:
+    _seed_admin()
+    _login(client, "admin", "admin12345")
+    cookie = client.cookies.get(SESSION_COOKIE)
+    resp = client.delete("/api/auth/session")
+    assert resp.status_code == 200
+
+    other = TestClient(client.app, cookies={})
+    other.cookies.set(SESSION_COOKIE, cookie)
+    resp = other.get("/api/auth/me")
+    assert resp.status_code == 401
 
 
 def test_logout_without_session(client: TestClient) -> None:
@@ -226,6 +243,22 @@ def test_change_password_too_short(client: TestClient) -> None:
         json={"current": "admin12345", "new_password": "short"},
     )
     assert resp.status_code == 422
+
+
+def test_change_password_brute_force_lockout(client: TestClient) -> None:
+    _seed_admin()
+    _login(client, "admin", "admin12345")
+    for _ in range(5):
+        client.put(
+            "/api/auth/password",
+            json={"current": "wrongpass1", "new_password": "newpassword1"},
+        )
+    resp = client.put(
+        "/api/auth/password",
+        json={"current": "admin12345", "new_password": "newpassword1"},
+    )
+    assert resp.status_code == 429
+    assert "Retry-After" in resp.headers
 
 
 def test_change_password_unauthenticated(client: TestClient) -> None:
