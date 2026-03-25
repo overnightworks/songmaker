@@ -12,19 +12,8 @@ import type {
 } from './types';
 import { getClaudeKey } from '$lib/stores/settings';
 
-/* v8 ignore next 4 -- SSR guard, untestable in jsdom */
-const API_KEY =
-	typeof window !== 'undefined'
-		? (new URLSearchParams(window.location.search).get('key') ?? '')
-		: '';
-
-function apiUrl(path: string): string {
-	const sep = path.includes('?') ? '&' : '?';
-	return API_KEY ? `${path}${sep}api_key=${API_KEY}` : path;
-}
-
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-	const resp = await fetch(apiUrl(path), { credentials: 'include', ...init });
+	const resp = await fetch(path, { credentials: 'include', ...init });
 	if (!resp.ok) throw new Error(`API ${path}: ${resp.status}`);
 	return resp.json() as Promise<T>;
 }
@@ -192,18 +181,46 @@ export async function fetchMe(): Promise<AuthUser> {
 	return apiFetch<AuthUser>('/api/auth/me');
 }
 
+async function chatDirect(message: string, system: string, apiKey: string): Promise<string> {
+	const resp = await fetch('https://api.anthropic.com/v1/messages', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'x-api-key': apiKey,
+			'anthropic-version': '2023-06-01',
+			'anthropic-dangerous-direct-browser-access': 'true'
+		},
+		body: JSON.stringify({
+			model: 'claude-sonnet-4-20250514',
+			max_tokens: 4096,
+			system,
+			messages: [{ role: 'user', content: message }]
+		})
+	});
+	if (!resp.ok) {
+		const err = await resp.json().catch(() => ({}));
+		throw new Error(err.error?.message ?? `Anthropic API error: ${resp.status}`);
+	}
+	const data = await resp.json();
+	return data.content?.[0]?.text ?? '';
+}
+
 export async function chatWithClaude(
 	message: string,
 	context: string = '',
 	system: string = ''
 ): Promise<string> {
-	const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 	const claudeKey = getClaudeKey();
-	if (claudeKey) headers['X-Claude-Key'] = claudeKey;
+	const fullMessage = context ? `Song context:\n${context}\n\n${message}` : message;
 
-	const resp = await fetch(apiUrl('/api/chat'), {
+	if (claudeKey) {
+		return chatDirect(fullMessage, system, claudeKey);
+	}
+
+	const resp = await fetch('/api/chat', {
 		method: 'POST',
-		headers,
+		headers: { 'Content-Type': 'application/json' },
+		credentials: 'include',
 		body: JSON.stringify({ message, context, system })
 	});
 	if (!resp.ok) {

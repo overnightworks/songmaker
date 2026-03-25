@@ -26,7 +26,7 @@ def client(tmp_path: Path) -> TestClient:
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
     init_db(output_dir / "songmaker.db")
-    app = create_app(output_dir, project_root, auth_enabled=True)
+    app = create_app(output_dir, project_root)
     yield TestClient(app, cookies={})
     reset_engine()
 
@@ -215,3 +215,45 @@ def test_change_password_unauthenticated(client: TestClient) -> None:
         json={"current": "admin12345", "new_password": "newpassword1"},
     )
     assert resp.status_code == 401
+
+
+# ── Setup race-condition and integrity error guards ──────────────────
+
+
+def test_setup_race_condition_second_user_created(client: TestClient) -> None:
+    """After flush, user_count > 1 means another request won the race — must 403."""
+    from unittest.mock import patch
+
+    call_count = 0
+
+    def _user_count_side_effect(db):
+        nonlocal call_count
+        call_count += 1
+        # First call: pre-check passes (0 users), second call: race detected (2 users)
+        return 0 if call_count == 1 else 2
+
+    with patch("songmaker_cli.auth_api.user_count", side_effect=_user_count_side_effect):
+        resp = client.post(
+            "/api/auth/setup", json={"username": "racing", "password": "password123"},
+        )
+
+    assert resp.status_code == 403
+    assert "already completed" in resp.json()["detail"]
+
+
+def test_setup_integrity_error_returns_403(client: TestClient) -> None:
+    """IntegrityError from create_user (duplicate username) must return 403."""
+    from unittest.mock import patch
+
+    from sqlalchemy.exc import IntegrityError
+
+    with patch(
+        "songmaker_cli.auth_api.create_user",
+        side_effect=IntegrityError("duplicate", {}, Exception()),
+    ):
+        resp = client.post(
+            "/api/auth/setup", json={"username": "admin", "password": "password123"},
+        )
+
+    assert resp.status_code == 403
+    assert "already completed" in resp.json()["detail"]

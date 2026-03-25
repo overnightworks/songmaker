@@ -8,12 +8,13 @@ import re
 import unicodedata
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from songmaker_cli.admin_api import router as admin_router
 from songmaker_cli.api_models import (
+    AlbumCreateRequest,
     AlbumResponse,
     CapabilitiesResponse,
     ChatRequest,
@@ -122,6 +123,8 @@ _VALID_GEN_PARAM_KEYS = frozenset({
     "lm_cfg_scale", "lm_negative_prompt", "infer_method", "batch_size",
 })
 
+_GEN_PARAM_STRING_KEYS = frozenset({"lm_negative_prompt", "infer_method", "think_mode"})
+_GEN_PARAM_MAX_STRING_LENGTH = 2000
 
 _GEN_PARAM_LIMITS: dict[str, tuple[float, float]] = {
     "inference_steps": (1, 200),
@@ -143,9 +146,18 @@ def _validate_generation_params(params: dict | None) -> dict | None:
         raise HTTPException(
             422, f"Unknown generation_params keys: {', '.join(sorted(invalid))}",
         )
-    for key, (lo, hi) in _GEN_PARAM_LIMITS.items():
-        val = params.get(key)
-        if val is not None and isinstance(val, (int, float)):
+    for key, val in params.items():
+        if key in _GEN_PARAM_STRING_KEYS:
+            if not isinstance(val, str):
+                raise HTTPException(422, f"{key} must be a string")
+            if len(val) > _GEN_PARAM_MAX_STRING_LENGTH:
+                raise HTTPException(
+                    422, f"{key} exceeds max length ({_GEN_PARAM_MAX_STRING_LENGTH})",
+                )
+        elif key in _GEN_PARAM_LIMITS:
+            if not isinstance(val, (int, float)):
+                raise HTTPException(422, f"{key} must be a number")
+            lo, hi = _GEN_PARAM_LIMITS[key]
             if val < lo or val > hi:
                 raise HTTPException(422, f"{key}={val} out of range [{lo}, {hi}]")
     return params
@@ -235,18 +247,18 @@ def api_get_album(
 @router.post("/albums")
 def api_create_album(
     request: Request,
-    data: dict,
+    data: AlbumCreateRequest,
     session: Session = Depends(_get_session),
 ) -> AlbumResponse:
     user = _get_optional_user(request)
-    title = data.get("title", "").strip()
+    title = data.title.strip()
     if not title:
         raise HTTPException(422, "Title is required")
     album_id = _unique_album_id(session, _slugify(title))
     try:
         album = create_album(
             session, album_id, title,
-            artist=data.get("artist", ""),
+            artist=data.artist,
             created_by=user.id if user else None,
         )
         session.commit()
@@ -447,9 +459,14 @@ def api_score_generation(
 
 
 @router.get("/jobs/{job_id}")
-def api_get_job(job_id: str, session: Session = Depends(_get_session)) -> JobResponse:
+def api_get_job(
+    job_id: str, request: Request, session: Session = Depends(_get_session),
+) -> JobResponse:
+    user = _get_optional_user(request)
     job = get_job(session, job_id)
     if not job:
+        raise HTTPException(404, "Job not found")
+    if user and user.role != ROLE_ADMIN and job.user_id != user.id:
         raise HTTPException(404, "Job not found")
     return JobResponse.from_orm(job)
 
@@ -472,12 +489,15 @@ def api_rate_generation(
 @router.post("/rate/{album}/{gen_name}")
 def api_rate_by_path(
     album: str, gen_name: str, req: RateRequest,
+    request: Request,
     session: Session = Depends(_get_session),
 ) -> RateResponse:
+    user = _get_optional_user(request)
     mp3_path = f"{album}/{gen_name}.mp3"
     gen = get_generation_by_path(session, mp3_path)
     if not gen:
         raise HTTPException(404, "Generation not found")
+    _check_generation_access(session, gen.id, user)
     save_rating(session, gen.id, req.rating, req.notes)
     session.commit()
     return RateResponse(generation=gen_name, rating=req.rating)
@@ -553,12 +573,6 @@ def api_set_generation_defaults(
 # ── Capabilities ─────────────────────────────────────────────────────
 
 
-def _resolve_claude_key(header_key: str | None) -> str | None:
-    if header_key:
-        return header_key
-    return os.environ.get("ANTHROPIC_API_KEY")
-
-
 @router.get("/capabilities")
 def api_capabilities() -> CapabilitiesResponse:
     env_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -574,11 +588,8 @@ def api_capabilities() -> CapabilitiesResponse:
 
 
 @router.post("/chat")
-def api_chat(
-    req: ChatRequest,
-    x_claude_key: str | None = Header(None),
-) -> ChatResponse:
-    api_key = _resolve_claude_key(x_claude_key)
+def api_chat(req: ChatRequest) -> ChatResponse:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
     prompt = req.message
     if req.context:
         prompt = f"Song context:\n{req.context}\n\n{req.message}"

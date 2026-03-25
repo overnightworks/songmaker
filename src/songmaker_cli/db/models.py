@@ -5,6 +5,7 @@ Hierarchy: Song → Version (content snapshot) → Generation (MP3 output)
 
 from __future__ import annotations
 
+import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -23,6 +24,10 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 def _uuid() -> str:
     return str(uuid.uuid4())
+
+
+def _session_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def _utcnow() -> datetime:
@@ -188,7 +193,7 @@ class User(Base):
 class UserSession(Base):
     __tablename__ = "user_sessions"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    id: Mapped[str] = mapped_column(String(43), primary_key=True, default=_session_token)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime)

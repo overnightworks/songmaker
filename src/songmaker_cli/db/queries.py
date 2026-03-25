@@ -573,18 +573,21 @@ def record_login_attempt(
 
 
 def count_recent_failed_attempts(
-    session: Session, ip_address: str, window_seconds: int = 300,
+    session: Session,
+    ip_address: str,
+    window_seconds: int = 300,
+    username: str | None = None,
 ) -> int:
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
-    return (
-        session.query(LoginAttempt)
-        .filter(
-            LoginAttempt.ip_address == ip_address,
-            LoginAttempt.success == False,  # noqa: E712
-            LoginAttempt.attempted_at >= cutoff,
-        )
-        .count()
+    query = session.query(LoginAttempt).filter(
+        LoginAttempt.success == False,  # noqa: E712
+        LoginAttempt.attempted_at >= cutoff,
     )
+    if username:
+        query = query.filter(LoginAttempt.username == username)
+    else:
+        query = query.filter(LoginAttempt.ip_address == ip_address)
+    return query.count()
 
 
 def list_login_attempts(

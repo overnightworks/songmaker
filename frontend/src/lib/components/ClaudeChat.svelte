@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { claudeApiKey } from '$lib/stores/settings';
-	import { getClaudeKey } from '$lib/stores/settings';
+	import { chatWithClaude } from '$lib/api/client';
 
 	interface Props {
 		songId?: string;
@@ -115,25 +115,7 @@
 
 		try {
 			const fullPrompt = buildConversation(msg);
-			const claudeKey = getClaudeKey();
-
-			const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-			if (claudeKey) headers['X-Claude-Key'] = claudeKey;
-
-			const resp = await fetch('/api/chat', {
-				method: 'POST',
-				headers,
-				body: JSON.stringify({ message: fullPrompt, system: SYSTEM_PROMPT })
-			});
-
-			if (!resp.ok) {
-				if (resp.status === 503)
-					throw new Error('Claude is not available. Add an API key in settings.');
-				throw new Error(`Chat failed: ${resp.status}`);
-			}
-
-			const data = await resp.json();
-			const responseText = data.response;
+			const responseText = await chatWithClaude(fullPrompt, '', SYSTEM_PROMPT);
 			const applyData = extractApplyData(responseText);
 			const newMsg: Message = { role: 'assistant', text: responseText, applyData };
 

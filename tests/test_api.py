@@ -475,23 +475,6 @@ def test_chat_success(client: TestClient) -> None:
     assert resp.json()["response"] == "Hello from Claude"
 
 
-def test_chat_with_claude_key_header(client: TestClient) -> None:
-    from unittest.mock import MagicMock, patch
-
-    mock_response = MagicMock()
-    mock_response.text = "ok"
-
-    with patch("songmaker_cli.api.call_claude", return_value=mock_response) as mock:
-        resp = client.post(
-            "/api/chat",
-            json={"message": "hi"},
-            headers={"X-Claude-Key": "sk-test-123"},
-        )
-
-    assert resp.status_code == 200
-    call_kwargs = mock.call_args
-    assert call_kwargs[1]["api_key"] == "sk-test-123"
-
 
 def test_chat_unavailable(client: TestClient) -> None:
     from unittest.mock import patch
@@ -668,5 +651,151 @@ def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:
         assert album is not None
         assert album.created_by == "u-test"
     reset_engine()
+
+
+def test_job_ownership_blocks_other_user(tmp_path: Path) -> None:
+    from songmaker_cli.db.engine import get_session_factory
+    from songmaker_cli.db.models import User
+    from songmaker_cli.db.queries import create_job
+
+    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+
+    factory = get_session_factory()
+    with factory() as session:
+        other = User(
+            id="u-other", username="other", password_hash="unused", role="user",
+        )
+        session.add(other)
+        session.flush()
+        job = create_job(session, "generate", user_id="u-other")
+        session.commit()
+        job_id = job.id
+
+    resp = c.get(f"/api/jobs/{job_id}")
+    assert resp.status_code == 404
+    reset_engine()
+
+
+def test_rate_by_path_ownership_check(tmp_path: Path) -> None:
+    from songmaker_cli.db.engine import get_session_factory
+    from songmaker_cli.db.models import User
+    from songmaker_cli.db.queries import get_album
+
+    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+    resp = c.post("/api/rate/rock/01_thunder_v2", json={"rating": 72.0})
+    assert resp.status_code == 200
+
+    factory = get_session_factory()
+    with factory() as session:
+        other = User(
+            id="u-other", username="other", password_hash="unused", role="user",
+        )
+        session.add(other)
+        session.flush()
+        album = get_album(session, "rock")
+        album.created_by = "u-other"
+        session.commit()
+
+    resp2 = c.post("/api/rate/rock/01_thunder_v2", json={"rating": 10.0})
+    assert resp2.status_code == 404
+    reset_engine()
+
+
+# ── Coverage gap tests ───────────────────────────────────────────────
+
+
+def test_create_song_gen_param_out_of_range(client: TestClient) -> None:
+    """Line 151: _validate_generation_params raises 422 for out-of-range value."""
+    resp = client.post("/api/songs", json={
+        "title": "Bad Params",
+        "album_id": "rock",
+        "generation_params": {"inference_steps": 500},
+    })
+    assert resp.status_code == 422
+    assert "out of range" in resp.json()["detail"]
+
+
+def test_check_song_access_ownership_denied(tmp_path: Path) -> None:
+    """Line 200: _check_song_access raises 404 when song belongs to another user's album."""
+    from songmaker_cli.db.engine import get_session_factory
+
+    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+
+    factory = get_session_factory()
+    with factory() as session:
+        session.add(User(
+            id="u-other", username="other", password_hash="unused", role="user",
+        ))
+        session.flush()
+        session.add(Album(id="private", title="Private", artist="X", created_by="u-other"))
+        session.add(Song(id="s-private", title="Hidden", album_id="private", track_number=1))
+        session.commit()
+
+    resp = c.get("/api/songs/s-private/versions")
+    assert resp.status_code == 404
+    reset_engine()
+
+
+def test_create_album_integrity_error(client: TestClient) -> None:
+    """Lines 254-256: IntegrityError in create_album triggers 409 response."""
+    from unittest.mock import patch
+
+    with patch("songmaker_cli.api._unique_album_id", return_value="rock"):
+        resp = client.post("/api/albums", json={"title": "Rock Album"})
+
+    assert resp.status_code == 409
+    assert "already exists" in resp.json()["detail"]
+
+
+def test_update_song_value_error(client: TestClient) -> None:
+    """Lines 324-325: ValueError from update_song raises 404."""
+    from unittest.mock import patch
+
+    with patch("songmaker_cli.api.update_song", side_effect=ValueError("Song not found")):
+        resp = client.put("/api/songs/s1", json={"lyrics": "x"})
+
+    assert resp.status_code == 404
+
+
+def test_delete_version_value_error(client: TestClient) -> None:
+    """Lines 362-363: ValueError from delete_version raises 404."""
+    from unittest.mock import patch
+
+    with patch("songmaker_cli.api.delete_version", side_effect=ValueError("Version not found")):
+        resp = client.delete("/api/versions/v1")
+
+    assert resp.status_code == 404
+
+
+def test_delete_generation_value_error(client: TestClient) -> None:
+    """Lines 388-389: ValueError from delete_generation raises 404."""
+    from unittest.mock import patch
+
+    err = ValueError("Generation not found")
+    with patch("songmaker_cli.api.delete_generation", side_effect=err):
+        resp = client.delete("/api/generations/g1")
+
+    assert resp.status_code == 404
+
+
+def test_pick_generation_value_error(client: TestClient) -> None:
+    """Lines 506-507: ValueError from pick_generation raises 404."""
+    from unittest.mock import patch
+
+    with patch("songmaker_cli.api.pick_generation", side_effect=ValueError("Generation not found")):
+        resp = client.post("/api/generations/g1/pick")
+
+    assert resp.status_code == 404
+
+
+def test_unpick_generation_value_error(client: TestClient) -> None:
+    """Lines 520-521: ValueError from unpick_generation raises 404."""
+    from unittest.mock import patch
+
+    err = ValueError("Generation not found")
+    with patch("songmaker_cli.api.unpick_generation", side_effect=err):
+        resp = client.post("/api/generations/g1/unpick")
+
+    assert resp.status_code == 404
 
 

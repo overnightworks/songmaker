@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+from songmaker_cli.auth import hash_password
 from songmaker_cli.db.engine import init_db, reset_engine
-from songmaker_cli.db.models import Album, Generation, Score, Song, Version
-from songmaker_cli.server import create_app
+from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
+from songmaker_cli.server import create_app, run_server
 
 
 @pytest.fixture()
@@ -43,10 +45,14 @@ def server_app(tmp_path: Path) -> TestClient:
         session.add(gen)
         score = Score(id="sc1", generation_id="g1", scorer="batch", value={"dynamics": 48.9})
         session.add(score)
+        admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+        session.add(admin)
         session.commit()
 
-    app = create_app(output_dir, project_root, auth_enabled=False)
-    yield TestClient(app)
+    app = create_app(output_dir, project_root)
+    client = TestClient(app, cookies={})
+    client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
+    yield client
     reset_engine()
 
 
@@ -80,9 +86,236 @@ def test_api_rate(server_app: TestClient) -> None:
     assert resp.status_code == 200
 
 
+def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
+    reset_engine()
+    output_dir = tmp_path / "_output"
+    output_dir.mkdir(parents=True)
+
+    project_root = tmp_path
+    sk_dir = project_root / "frontend" / "build"
+    sk_app_dir = sk_dir / "_app"
+    sk_app_dir.mkdir(parents=True)
+    (sk_app_dir / "dummy.js").write_text("// chunk")
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        session.commit()
+
+    app = create_app(output_dir, project_root)
+    client = TestClient(app)
+    resp = client.get("/_app/dummy.js")
+    assert resp.status_code == 200
+    reset_engine()
+
+
 def test_api_rate_not_found(server_app: TestClient) -> None:
     resp = server_app.post(
         "/api/rate/test_album/nonexistent",
         json={"rating": 3},
     )
     assert resp.status_code == 404
+
+
+def test_get_audio_path_traversal_denied(tmp_path: Path) -> None:
+    """Path traversal guard fires when album param escapes output_dir."""
+    import asyncio
+
+    from fastapi import HTTPException
+
+    from songmaker_cli.server import create_app
+
+    reset_engine()
+    output_dir = tmp_path / "_output"
+    output_dir.mkdir(parents=True)
+
+    outside = tmp_path / "secret.mp3"
+    outside.write_bytes(b"secret")
+
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        session.commit()
+
+    app = create_app(output_dir, tmp_path)
+
+    get_audio = None
+    for route in app.routes:
+        if hasattr(route, "path") and route.path == "/audio/{album}/{filename}":
+            get_audio = route.endpoint
+            break
+
+    assert get_audio is not None
+
+    class FakeRequest:
+        state = type("state", (), {"user": None})()
+        client = None
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            get_audio(album="..", filename="secret.mp3", request=FakeRequest()),
+        )
+
+    assert exc_info.value.status_code == 403
+    reset_engine()
+
+
+@pytest.fixture()
+def auth_server_app(tmp_path: Path):
+    from datetime import datetime, timedelta, timezone
+
+    from songmaker_cli.db.queries import create_album, create_session, create_user
+    from songmaker_cli.middleware import SESSION_COOKIE
+
+    reset_engine()
+    output_dir = tmp_path / "_output"
+    album_dir = output_dir / "owned_album"
+    album_dir.mkdir(parents=True)
+    (album_dir / "song.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+
+    other_album_dir = output_dir / "other_album"
+    other_album_dir.mkdir(parents=True)
+    (other_album_dir / "other.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+
+    project_root = tmp_path
+    (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = project_root / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
+
+    from songmaker_cli.auth import hash_password
+
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        owner = create_user(session, "owner", hash_password("pass1234"))
+        other = create_user(session, "other_user", hash_password("pass1234"))
+        session.flush()
+
+        create_album(session, "owned_album", "Owned Album", created_by=owner.id)
+        create_album(session, "other_album", "Other Album", created_by=other.id)
+        session.flush()
+
+        expires = datetime.now(timezone.utc) + timedelta(days=30)
+        owner_session = create_session(session, owner.id, expires)
+        other_session = create_session(session, other.id, expires)
+        session.commit()
+        owner_sid = owner_session.id
+        other_sid = other_session.id
+
+    app = create_app(output_dir, project_root)
+    client = TestClient(app, cookies={})
+    yield client, owner_sid, other_sid, SESSION_COOKIE
+    reset_engine()
+
+
+def test_get_audio_owned_album_allowed(auth_server_app) -> None:
+    client, owner_sid, _other_sid, cookie_name = auth_server_app
+    client.cookies.set(cookie_name, owner_sid)
+    resp = client.get("/audio/owned_album/song.mp3")
+    assert resp.status_code == 200
+
+
+def test_get_audio_other_users_album_denied(auth_server_app) -> None:
+    client, owner_sid, _other_sid, cookie_name = auth_server_app
+    client.cookies.set(cookie_name, owner_sid)
+    resp = client.get("/audio/other_album/other.mp3")
+    assert resp.status_code == 404
+
+
+# ── run_server ──────────────────────────────────────────────────────
+
+
+def test_run_server_calls_uvicorn(tmp_path: Path) -> None:
+    output_dir = tmp_path / "_output"
+
+    with (
+        patch("uvicorn.run") as mock_uvicorn,
+        patch("songmaker_cli.db.engine.init_db"),
+        patch("songmaker_cli.config.set_output_dir"),
+        patch.dict("os.environ", {"SESSION_SECRET": "testsecret"}),
+    ):
+        run_server(output_dir=output_dir, project_root=tmp_path, port=9999)
+
+    mock_uvicorn.assert_called_once()
+    call_kwargs = mock_uvicorn.call_args
+    assert call_kwargs.kwargs.get("port") == 9999
+
+
+def test_run_server_no_session_secret_raises(tmp_path: Path) -> None:
+    output_dir = tmp_path / "_output"
+
+    with (
+        patch("uvicorn.run"),
+        patch("songmaker_cli.db.engine.init_db"),
+        patch("songmaker_cli.config.set_output_dir"),
+        patch.dict("os.environ", {}, clear=True),
+    ):
+        with pytest.raises(RuntimeError, match="SESSION_SECRET"):
+            run_server(output_dir=output_dir, project_root=tmp_path)
+
+
+def test_run_server_uses_all_interfaces(tmp_path: Path) -> None:
+    output_dir = tmp_path / "_output"
+
+    with (
+        patch("uvicorn.run") as mock_uvicorn,
+        patch("songmaker_cli.db.engine.init_db"),
+        patch("songmaker_cli.config.set_output_dir"),
+        patch.dict("os.environ", {"SESSION_SECRET": "mysecret"}),
+    ):
+        run_server(output_dir=output_dir, project_root=tmp_path, port=8080)
+
+    _, kwargs = mock_uvicorn.call_args
+    assert kwargs.get("host") == "0.0.0.0"
+
+
+def test_run_server_opens_browser(tmp_path: Path) -> None:
+    output_dir = tmp_path / "_output"
+
+    with (
+        patch("uvicorn.run"),
+        patch("songmaker_cli.db.engine.init_db"),
+        patch("songmaker_cli.config.set_output_dir"),
+        patch("webbrowser.open") as mock_browser,
+        patch.dict("os.environ", {"SESSION_SECRET": "secret"}),
+    ):
+        run_server(output_dir=output_dir, project_root=tmp_path, open_browser=True)
+
+    mock_browser.assert_called_once()
+
+
+def test_run_server_creates_output_dir(tmp_path: Path) -> None:
+    output_dir = tmp_path / "_output" / "nested"
+
+    with (
+        patch("uvicorn.run"),
+        patch("songmaker_cli.db.engine.init_db"),
+        patch("songmaker_cli.config.set_output_dir"),
+        patch.dict("os.environ", {"SESSION_SECRET": "secret"}),
+    ):
+        run_server(output_dir=output_dir, project_root=tmp_path)
+
+    assert output_dir.exists()
+
+
+def test_run_server_infers_output_dir_from_project_root(tmp_path: Path) -> None:
+    with (
+        patch("uvicorn.run"),
+        patch("songmaker_cli.db.engine.init_db"),
+        patch("songmaker_cli.config.set_output_dir"),
+        patch("songmaker_cli.server.find_project_root", return_value=tmp_path),
+        patch.dict("os.environ", {"SESSION_SECRET": "secret"}),
+    ):
+        run_server(output_dir=None, project_root=None)
+
+
+def test_run_server_infers_project_root(tmp_path: Path) -> None:
+    output_dir = tmp_path / "_output"
+
+    with (
+        patch("uvicorn.run"),
+        patch("songmaker_cli.db.engine.init_db"),
+        patch("songmaker_cli.config.set_output_dir"),
+        patch("songmaker_cli.server.find_project_root", return_value=None),
+        patch.dict("os.environ", {"SESSION_SECRET": "secret"}),
+    ):
+        run_server(output_dir=output_dir, project_root=None)

@@ -20,13 +20,6 @@ if TYPE_CHECKING:
     from songmaker_cli.parser import SongMeta
 
 
-def validate_path(path: str) -> Path:
-    """Resolve and validate that a file path exists."""
-    resolved = Path(path).resolve()
-    if not resolved.exists():
-        raise ValidationError(f"{resolved} not found")
-    return resolved
-
 
 class OutputPaths(BaseModel):
     """Resolved output file paths for a generation run."""

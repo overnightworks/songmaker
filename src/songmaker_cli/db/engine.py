@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import stat
 from pathlib import Path
 
 from sqlalchemy import create_engine, event
@@ -36,13 +38,21 @@ def init_db(db_path: Path) -> sessionmaker[Session]:
     engine = create_engine(url, echo=False)
 
     @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_conn, connection_record):
+    def _set_sqlite_pragma(dbapi_conn, _connection_record):
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
     Base.metadata.create_all(engine)
+
+    if db_path.exists():
+        os.chmod(db_path, stat.S_IRUSR | stat.S_IWUSR)
+    for suffix in ("-wal", "-shm"):
+        wal_path = db_path.parent / (db_path.name + suffix)
+        if wal_path.exists():
+            os.chmod(wal_path, stat.S_IRUSR | stat.S_IWUSR)
+
     _session_factory = sessionmaker(bind=engine)
     _db_path = db_path
 

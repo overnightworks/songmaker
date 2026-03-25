@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import (
@@ -250,8 +250,13 @@ class JobResponse(BaseModel):
 # ── Requests ────────────────────────────────────────────────────────
 
 
+class AlbumCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    artist: str = Field("", max_length=200)
+
+
 class SongCreateRequest(BaseModel):
-    title: str = Field(max_length=200)
+    title: str = Field(min_length=1, max_length=200)
     album_id: str = Field(max_length=64)
     lyrics: str = Field("", max_length=50_000)
     prompt: str = Field("", max_length=5_000)
@@ -276,7 +281,17 @@ class GenerateRequest(BaseModel):
 
 
 class ScoreRequest(BaseModel):
-    scorers: list[str] | None = None
+    scorers: list[str] | None = Field(None, max_length=20)
+
+    @field_validator("scorers")
+    @classmethod
+    def validate_scorer_items(cls, v: list[str] | None) -> list[str] | None:
+        if v:
+            for item in v:
+                if len(item) > 100:
+                    msg = "Scorer name exceeds 100 characters"
+                    raise ValueError(msg)
+        return v
 
 
 class RateRequest(BaseModel):
@@ -285,8 +300,8 @@ class RateRequest(BaseModel):
 
 
 class GenerationDefaultsRequest(BaseModel):
-    turbo: dict | None = None
-    sft: dict | None = None
+    turbo: dict | None = Field(None, max_length=50)
+    sft: dict | None = Field(None, max_length=50)
 
 
 class ChatRequest(BaseModel):
@@ -329,30 +344,30 @@ class ChatResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=3)
-    password: str = Field(min_length=8)
+    username: str = Field(min_length=3, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
 
 
 class SetupRequest(BaseModel):
-    username: str = Field(min_length=3)
-    password: str = Field(min_length=8)
+    username: str = Field(min_length=3, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
 
 
 class ChangePasswordRequest(BaseModel):
-    current: str
-    new: str = Field(min_length=8, alias="new_password")
+    current: str = Field(min_length=1, max_length=128)
+    new: str = Field(min_length=8, max_length=128, alias="new_password")
 
 
 class CreateUserRequest(BaseModel):
-    username: str = Field(min_length=3)
-    password: str = Field(min_length=8)
+    username: str = Field(min_length=3, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
     role: str = "user"
 
 
 class UpdateUserRequest(BaseModel):
     role: str | None = None
     is_active: bool | None = None
-    password: str | None = Field(None, min_length=8)
+    password: str | None = Field(None, min_length=8, max_length=128)
 
 
 class UserResponse(BaseModel):

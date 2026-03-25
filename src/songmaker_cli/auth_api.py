@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -52,8 +53,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _get_session = get_db_session
 
 
+_MAX_USER_AGENT_LENGTH = 500
+
+
 def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
+
+
+def _client_user_agent(request: Request) -> str:
+    return request.headers.get("user-agent", "")[:_MAX_USER_AGENT_LENGTH]
 
 
 def _set_session_cookie(
@@ -68,7 +76,7 @@ def _set_session_cookie(
         session_id,
         max_age=SESSION_MAX_AGE_SECONDS,
         httponly=True,
-        samesite="lax",
+        samesite="strict",
         secure=secure,
         path="/",
     )
@@ -86,16 +94,21 @@ def setup(
     response: Response,
     db: Session = Depends(_get_session),
 ) -> UserResponse:
+    db.execute(text("BEGIN IMMEDIATE"))
     if user_count(db) > 0:
         raise HTTPException(403, "Setup already completed")
 
     try:
         user = create_user(db, req.username, hash_password(req.password), role=ROLE_ADMIN)
+        db.flush()
+        if user_count(db) > 1:
+            db.rollback()
+            raise HTTPException(403, "Setup already completed")
         expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
         user_session = create_session(
             db, user.id, expires,
             ip_address=_client_ip(request),
-            user_agent=request.headers.get("user-agent", ""),
+            user_agent=_client_user_agent(request),
         )
         db.commit()
     except IntegrityError:
@@ -116,10 +129,11 @@ def login(
 ) -> UserResponse:
     ip = _client_ip(request)
 
-    failed_count = count_recent_failed_attempts(db, ip, LOGIN_RATE_WINDOW_SECONDS)
-    if failed_count >= LOGIN_RATE_LIMIT:
-        record_login_attempt(db, ip, req.username, success=False)
-        db.commit()
+    ip_failures = count_recent_failed_attempts(db, ip, LOGIN_RATE_WINDOW_SECONDS)
+    user_failures = count_recent_failed_attempts(
+        db, ip, LOGIN_RATE_WINDOW_SECONDS, username=req.username,
+    )
+    if ip_failures >= LOGIN_RATE_LIMIT or user_failures >= LOGIN_RATE_LIMIT:
         raise HTTPException(
             429,
             "Too many login attempts. Try again later.",
@@ -144,7 +158,7 @@ def login(
     user_session = create_session(
         db, user.id, expires,
         ip_address=ip,
-        user_agent=request.headers.get("user-agent", ""),
+        user_agent=_client_user_agent(request),
     )
     db.commit()
 
@@ -182,6 +196,8 @@ def me(
 @router.put("/password")
 def change_password(
     req: ChangePasswordRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(_get_session),
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> StatusResponse:
@@ -192,5 +208,14 @@ def change_password(
 
     user.password_hash = hash_password(req.new)
     delete_user_sessions(db, current_user.id)
+
+    expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
+    new_session = create_session(
+        db, current_user.id, expires,
+        ip_address=_client_ip(request),
+        user_agent=_client_user_agent(request),
+    )
     db.commit()
+
+    _set_session_cookie(response, new_session.id, request)
     return StatusResponse(status="ok")

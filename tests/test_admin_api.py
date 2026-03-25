@@ -26,7 +26,7 @@ def client(tmp_path: Path) -> TestClient:
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
     init_db(output_dir / "songmaker.db")
-    app = create_app(output_dir, project_root, auth_enabled=True)
+    app = create_app(output_dir, project_root)
     yield TestClient(app, cookies={})
     reset_engine()
 
@@ -261,3 +261,133 @@ def test_force_logout(client: TestClient) -> None:
     other_client.cookies.set(SESSION_COOKIE, victim_cookie)
     resp = other_client.get("/api/auth/me")
     assert resp.status_code == 401
+
+
+# ── ACE-Step reinitialize ────────────────────────────────────────────
+
+
+def _make_urlopen_mock(payloads: list[bytes]):
+    """Return a side_effect list of context-manager mocks, one per urlopen call."""
+    from unittest.mock import MagicMock
+
+    mocks = []
+    for payload in payloads:
+        cm = MagicMock()
+        cm.__enter__ = lambda self, p=payload: _make_read_mock(p)
+        cm.__exit__ = MagicMock(return_value=False)
+        mocks.append(cm)
+    return mocks
+
+
+def _make_read_mock(payload: bytes):
+    from unittest.mock import MagicMock
+
+    m = MagicMock()
+    m.read.return_value = payload
+    return m
+
+
+def test_reinitialize_acestep_success(client: TestClient) -> None:
+    import json
+    from unittest.mock import MagicMock, patch
+
+    _login_as_admin(client)
+
+    cm = MagicMock()
+    cm.__enter__ = lambda self: _make_read_mock(json.dumps({"code": 200}).encode())
+    cm.__exit__ = MagicMock(return_value=False)
+
+    with patch("urllib.request.urlopen", return_value=cm):
+        resp = client.post("/api/admin/acestep/reinitialize")
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+
+
+def test_reinitialize_acestep_error_response(client: TestClient) -> None:
+    import json
+    from unittest.mock import MagicMock, patch
+
+    _login_as_admin(client)
+
+    cm = MagicMock()
+    cm.__enter__ = lambda self: _make_read_mock(
+        json.dumps({"code": 500, "error": "model not loaded"}).encode()
+    )
+    cm.__exit__ = MagicMock(return_value=False)
+
+    with patch("urllib.request.urlopen", return_value=cm):
+        resp = client.post("/api/admin/acestep/reinitialize")
+
+    assert resp.status_code == 502
+    assert "ACE-Step error" in resp.json()["detail"]
+
+
+def test_reinitialize_acestep_connection_failure(client: TestClient) -> None:
+    from unittest.mock import patch
+
+    _login_as_admin(client)
+
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=OSError("connection refused"),
+    ):
+        resp = client.post("/api/admin/acestep/reinitialize")
+
+    assert resp.status_code == 502
+    assert "unreachable" in resp.json()["detail"]
+
+
+# ── ACE-Step status ──────────────────────────────────────────────────
+
+
+def test_acestep_status_online(client: TestClient) -> None:
+    import json
+    from unittest.mock import MagicMock, patch
+
+    _login_as_admin(client)
+
+    health_payload = json.dumps(
+        {"data": {"loaded_model": "turbo", "loaded_lm_model": "small"}}
+    ).encode()
+    stats_payload = json.dumps({"data": {"jobs": {"pending": 0, "running": 1}}}).encode()
+
+    call_count = 0
+
+    def fake_urlopen(req, timeout=None):
+        nonlocal call_count
+        payload = health_payload if call_count == 0 else stats_payload
+        call_count += 1
+        cm = MagicMock()
+        cm.__enter__ = lambda self, p=payload: _make_read_mock(p)
+        cm.__exit__ = MagicMock(return_value=False)
+        return cm
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        resp = client.get("/api/admin/acestep/status")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["online"] is True
+    assert data["model"] == "turbo"
+    assert data["lm_model"] == "small"
+    assert data["jobs"] == {"pending": 0, "running": 1}
+
+
+def test_acestep_status_offline(client: TestClient) -> None:
+    from unittest.mock import patch
+
+    _login_as_admin(client)
+
+    with patch(
+        "urllib.request.urlopen",
+        side_effect=OSError("connection refused"),
+    ):
+        resp = client.get("/api/admin/acestep/status")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["online"] is False
+    assert data["model"] is None
+    assert data["lm_model"] is None
+    assert data["jobs"] == {}

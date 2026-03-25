@@ -39,7 +39,7 @@ def auth_app(tmp_path: Path, _db) -> TestClient:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    app = create_app(output_dir, project_root, auth_enabled=True)
+    app = create_app(output_dir, project_root)
     return TestClient(app, cookies={})
 
 
@@ -79,8 +79,8 @@ def test_static_requires_auth() -> None:
     assert _is_public("/static/foo.js") is False
 
 
-def test_is_public_audio() -> None:
-    assert _is_public("/audio/album/song.mp3") is True
+def test_audio_is_not_public() -> None:
+    assert _is_public("/audio/album/song.mp3") is False
 
 
 def test_is_public_app_assets() -> None:
@@ -158,6 +158,25 @@ def test_protected_route_valid_session(auth_app: TestClient) -> None:
     auth_app.cookies.set(SESSION_COOKIE, session_id)
     resp = auth_app.get("/api/songs")
     assert resp.status_code == 200
+
+
+def test_absolute_session_lifetime_expired(auth_app: TestClient) -> None:
+    from songmaker_cli.auth import hash_password
+    from songmaker_cli.db.engine import get_session_factory
+
+    factory = get_session_factory()
+    with factory() as session:
+        user = create_user(session, "old_user", hash_password("password123"))
+        expires = datetime.now(timezone.utc) + timedelta(days=30)
+        user_session = create_session(session, user.id, expires)
+        user_session.created_at = datetime.now(timezone.utc) - timedelta(days=91)
+        session.commit()
+        session_id = user_session.id
+
+    auth_app.cookies.set(SESSION_COOKIE, session_id)
+    resp = auth_app.get("/api/songs")
+    assert resp.status_code == 401
+    assert resp.json()["error"] == "Session expired"
 
 
 def test_session_sliding_window(auth_app: TestClient) -> None:

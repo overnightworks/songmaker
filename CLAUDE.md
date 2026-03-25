@@ -87,6 +87,12 @@ alembic upgrade head
 - CLI: `songmaker list-users`, `songmaker reset-password`, `songmaker reinit-acestep`
 - Requires `SESSION_SECRET` env var (generate with `openssl rand -hex 32`)
 
+## Claude Chat
+
+- **User has own API key** → browser calls Anthropic Messages API directly (key never hits server)
+- **No user key** → server's `/api/chat` uses `ANTHROPIC_API_KEY` env var (available to all authenticated users)
+- Server-side chat is intentional for now; may be removed in future once all users provide their own keys
+
 ## Current State
 
 - **Branch**: `feat/auth-system`

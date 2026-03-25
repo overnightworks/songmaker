@@ -334,6 +334,43 @@ def test_score_text_accuracy_no_meta() -> None:
         score_text_accuracy(Path("test.mp3"), meta=None)
 
 
+# ── TextAccuracyScore properties ────────────────────────────────────
+
+
+def test_text_accuracy_score_intended_lines() -> None:
+    from songmaker_cli.scoring.models import TextAccuracyScore
+
+    score = TextAccuracyScore(
+        similarity_ratio=0.9,
+        intended_line_texts=("hello world", "goodbye moon", "third line"),
+        transcribed_line_texts=("hello world",),
+    )
+    assert score.intended_lines == 3
+
+
+def test_text_accuracy_score_transcribed_lines() -> None:
+    from songmaker_cli.scoring.models import TextAccuracyScore
+
+    score = TextAccuracyScore(
+        similarity_ratio=0.8,
+        intended_line_texts=("line one",),
+        transcribed_line_texts=("line one", "extra line"),
+    )
+    assert score.transcribed_lines == 2
+
+
+def test_text_accuracy_score_empty_lines() -> None:
+    from songmaker_cli.scoring.models import TextAccuracyScore
+
+    score = TextAccuracyScore(
+        similarity_ratio=0.0,
+        intended_line_texts=(),
+        transcribed_line_texts=(),
+    )
+    assert score.intended_lines == 0
+    assert score.transcribed_lines == 0
+
+
 # ── lyrical_coherence ──────────────────────────────────────────────
 
 

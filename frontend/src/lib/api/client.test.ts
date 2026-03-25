@@ -190,7 +190,7 @@ describe('API client', () => {
 });
 
 describe('chatWithClaude', () => {
-	it('sends message and returns response', async () => {
+	it('uses server endpoint when no user key', async () => {
 		mockFetch.mockResolvedValueOnce({
 			ok: true,
 			status: 200,
@@ -198,16 +198,55 @@ describe('chatWithClaude', () => {
 		});
 		const result = await chatWithClaude('hi', 'context');
 		expect(result).toBe('Hello from Claude');
+		expect(mockFetch).toHaveBeenCalledWith(
+			expect.stringContaining('/api/chat'),
+			expect.objectContaining({ method: 'POST' })
+		);
 	});
 
-	it('throws on 503 unavailable', async () => {
+	it('calls Anthropic API directly when user has key', async () => {
+		const { getClaudeKey } = await import('$lib/stores/settings');
+		vi.mocked(getClaudeKey).mockReturnValue('sk-ant-test');
+
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			json: () => Promise.resolve({ content: [{ type: 'text', text: 'Direct response' }] })
+		});
+		const result = await chatWithClaude('hi', '', 'system');
+		expect(result).toBe('Direct response');
+		expect(mockFetch).toHaveBeenCalledWith(
+			'https://api.anthropic.com/v1/messages',
+			expect.objectContaining({
+				method: 'POST',
+				headers: expect.objectContaining({ 'x-api-key': 'sk-ant-test' })
+			})
+		);
+
+		vi.mocked(getClaudeKey).mockReturnValue('');
+	});
+
+	it('throws on 503 unavailable from server', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
 		await expect(chatWithClaude('hi')).rejects.toThrow('Claude unavailable');
 	});
 
-	it('throws on other errors', async () => {
+	it('throws on other server errors', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 		await expect(chatWithClaude('hi')).rejects.toThrow('Chat failed: 500');
+	});
+
+	it('throws on Anthropic API error with message', async () => {
+		const { getClaudeKey } = await import('$lib/stores/settings');
+		vi.mocked(getClaudeKey).mockReturnValue('sk-ant-bad');
+
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 401,
+			json: () => Promise.resolve({ error: { message: 'Invalid API key' } })
+		});
+		await expect(chatWithClaude('hi')).rejects.toThrow('Invalid API key');
+
+		vi.mocked(getClaudeKey).mockReturnValue('');
 	});
 });
 

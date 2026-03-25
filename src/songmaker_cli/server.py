@@ -49,14 +49,12 @@ class SessionMiddleware(BaseHTTPMiddleware):
 
 
 def create_app(
-    output_dir: Path, project_root: Path, *, auth_enabled: bool = True,
+    output_dir: Path, project_root: Path,
 ) -> FastAPI:
     app = FastAPI(title="Songmaker", docs_url=None, redoc_url=None, openapi_url=None)
 
     app.add_middleware(AccessLogMiddleware)
-
-    if auth_enabled:
-        app.add_middleware(SessionMiddleware)
+    app.add_middleware(SessionMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
@@ -138,21 +136,18 @@ def run_server(
     init_db(db_path)
 
     session_secret = os.environ.get("SESSION_SECRET", "")
-    auth_enabled = bool(session_secret)
-
-    app = create_app(output_dir, project_root, auth_enabled=auth_enabled)
-    log.info("Songmaker server: http://localhost:%d", port)
-    if auth_enabled:
-        log.info("Auth enabled (session-based)")
-    else:
-        log.warning(
-            "Auth disabled — server bound to localhost only. "
-            "Set SESSION_SECRET to enable auth and network access.",
+    if not session_secret:
+        raise RuntimeError(
+            "SESSION_SECRET env var is required. "
+            "Generate one with: openssl rand -hex 32"
         )
+
+    app = create_app(output_dir, project_root)
+    log.info("Songmaker server: http://localhost:%d", port)
+    log.info("Auth enabled (session-based)")
 
     if open_browser:
         import webbrowser
         webbrowser.open(f"http://localhost:{port}")
 
-    host = "0.0.0.0" if auth_enabled else "127.0.0.1"
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

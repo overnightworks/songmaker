@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from songmaker_cli.gpu_queue import GpuJob, GpuQueue, get_gpu_queue
+from songmaker_cli.gpu_queue import GpuJob, GpuQueue, get_gpu_queue, reset_gpu_queue
 
 
 def _make_queue() -> GpuQueue:
@@ -402,3 +402,108 @@ def test_get_gpu_queue_singleton() -> None:
         assert q1 is q2
     finally:
         mod._instance = old
+
+
+# ── reset_gpu_queue ─────────────────────────────────────────────────
+
+
+def test_reset_gpu_queue_shuts_down_instance() -> None:
+    import songmaker_cli.gpu_queue as mod
+
+    old = mod._instance
+    mock_queue = MagicMock(spec=GpuQueue)
+    mod._instance = mock_queue
+    try:
+        reset_gpu_queue()
+        mock_queue.shutdown.assert_called_once()
+        assert mod._instance is None
+    finally:
+        mod._instance = old
+
+
+def test_reset_gpu_queue_noop_when_none() -> None:
+    import songmaker_cli.gpu_queue as mod
+
+    old = mod._instance
+    mod._instance = None
+    try:
+        reset_gpu_queue()
+        assert mod._instance is None
+    finally:
+        mod._instance = old
+
+
+# ── _recover_stale_jobs ─────────────────────────────────────────────
+
+
+def test_recover_stale_jobs_success() -> None:
+    queue = GpuQueue()
+    mock_factory = MagicMock()
+    mock_session = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+
+    with (
+        patch("songmaker_cli.db.engine.get_session_factory", return_value=mock_factory),
+        patch("songmaker_cli.db.queries.recover_stale_jobs"),
+        patch("songmaker_cli.db.queries.delete_expired_sessions", return_value=3),
+    ):
+        queue._recover_stale_jobs()
+
+    mock_session.commit.assert_called_once()
+
+
+def test_recover_stale_jobs_no_expired_sessions() -> None:
+    queue = GpuQueue()
+    mock_factory = MagicMock()
+    mock_session = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+
+    with (
+        patch("songmaker_cli.db.engine.get_session_factory", return_value=mock_factory),
+        patch("songmaker_cli.db.queries.recover_stale_jobs"),
+        patch("songmaker_cli.db.queries.delete_expired_sessions", return_value=0),
+    ):
+        queue._recover_stale_jobs()
+
+    mock_session.commit.assert_called_once()
+
+
+def test_recover_stale_jobs_ignores_runtime_error() -> None:
+    queue = GpuQueue()
+
+    with patch(
+        "songmaker_cli.db.engine.get_session_factory",
+        side_effect=RuntimeError("DB not initialized"),
+    ):
+        queue._recover_stale_jobs()
+
+
+# ── _clear_scoring_models import errors ─────────────────────────────
+
+
+def test_clear_scoring_models_whisper_import_error() -> None:
+    queue = GpuQueue()
+    with (
+        patch.dict("sys.modules", {"songmaker_cli.scoring.text_accuracy": None}),
+        patch.object(queue, "_gc_gpu"),
+    ):
+        queue._clear_scoring_models()
+
+
+def test_clear_scoring_models_audiobox_import_error() -> None:
+    queue = GpuQueue()
+
+    def raise_on_clear_whisper():
+        raise ImportError
+
+    with (
+        patch(
+            "songmaker_cli.scoring.text_accuracy.clear_cache",
+            side_effect=ImportError,
+        ),
+        patch.dict("sys.modules", {"songmaker_cli.scoring.audiobox_aesthetics": None}),
+        patch.object(queue, "_gc_gpu"),
+    ):
+        queue._clear_scoring_models()

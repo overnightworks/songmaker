@@ -39,7 +39,7 @@ def client(tmp_path: Path) -> TestClient:
         ))
         session.commit()
 
-    app = create_app(output_dir, project_root, auth_enabled=True)
+    app = create_app(output_dir, project_root)
     yield TestClient(app, cookies={})
     reset_engine()
 

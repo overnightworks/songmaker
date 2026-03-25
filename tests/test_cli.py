@@ -9,29 +9,17 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from songmaker_cli.config import validate_path
 from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.generate import (
     DecodedAudio,
+    GenerationResult,
     _decode_audio,
     _run_generation,
     _write_output,
+    generate_single,
 )
 from songmaker_cli.main import main
 from songmaker_cli.parser import AlbumMeta, SongMeta
-
-
-def test_validate_path_exists(tmp_path: Path) -> None:
-    f = tmp_path / "test.md"
-    f.touch()
-    result = validate_path(str(f))
-    assert result == f.resolve()
-
-
-def test_validate_path_not_found() -> None:
-    with pytest.raises(ValidationError, match="not found"):
-        validate_path("/nonexistent/path.md")
-
 
 
 def test_decode_audio_success(make_stereo_wav_bytes: Callable[..., bytes]) -> None:
@@ -158,3 +146,100 @@ def test_main_error_handling() -> None:
         pytest.raises(SystemExit),
     ):
         main()
+
+
+# ── generate_single ─────────────────────────────────────────────────
+
+
+def test_generate_single_success(tmp_path: Path, make_stereo_wav_bytes) -> None:
+    from acestep_engine.client import AceStepClient
+    from acestep_engine.models import AceStepConfig, AceStepResult
+    from songmaker_cli.generate import generate_single
+
+    wav_bytes = make_stereo_wav_bytes()
+    ace_result = AceStepResult(wav_bytes=wav_bytes, seed=99)
+
+    mock_client = MagicMock(spec=AceStepClient)
+    mock_client.is_available = True
+    mock_client.generate.return_value = ace_result
+
+    meta = SongMeta(title="Test Song", prompt="rock", lyrics="hello", album="test_album")
+    album_meta = AlbumMeta(title="Test Album", artist="Test Artist")
+    ace_config = AceStepConfig(prompt="rock", lyrics="hello")
+
+    with patch("songmaker_cli.generate.master_to_mp3") as mock_master:
+        mock_master.return_value = None
+
+        def write_mp3_side_effect(left, right, mp3_path, **kwargs):
+            Path(mp3_path).write_bytes(b"\xff\xfb" * 100)
+
+        mock_master.side_effect = write_mp3_side_effect
+
+        result = generate_single(
+            meta=meta,
+            album_meta=album_meta,
+            ace_config=ace_config,
+            output_root=tmp_path,
+            client=mock_client,
+        )
+
+    assert isinstance(result, GenerationResult)
+    assert result.seed == 99
+    assert result.duration > 0
+
+
+def test_generate_single_creates_client_when_none(tmp_path: Path, make_stereo_wav_bytes) -> None:
+    from acestep_engine.client import AceStepClient
+    from acestep_engine.models import AceStepConfig, AceStepResult
+
+    wav_bytes = make_stereo_wav_bytes()
+    ace_result = AceStepResult(wav_bytes=wav_bytes, seed=7)
+
+    mock_client = MagicMock(spec=AceStepClient)
+    mock_client.is_available = True
+    mock_client.generate.return_value = ace_result
+
+    meta = SongMeta(title="Auto Client", prompt="pop", lyrics="la la la", album="my_album")
+    album_meta = AlbumMeta(title="My Album", artist="Artist")
+    ace_config = AceStepConfig(prompt="pop", lyrics="la la la")
+
+    with (
+        patch("songmaker_cli.generate.AceStepClient", return_value=mock_client),
+        patch("songmaker_cli.generate.master_to_mp3") as mock_master,
+    ):
+        def write_mp3_side_effect(left, right, mp3_path, **kwargs):
+            Path(mp3_path).write_bytes(b"\xff\xfb" * 100)
+
+        mock_master.side_effect = write_mp3_side_effect
+
+        result = generate_single(
+            meta=meta,
+            album_meta=album_meta,
+            ace_config=ace_config,
+            output_root=tmp_path,
+            client=None,
+        )
+
+    assert result.seed == 7
+
+
+def test_generate_single_server_not_available(tmp_path: Path) -> None:
+    from acestep_engine.client import AceStepClient
+    from acestep_engine.models import AceStepConfig
+    from songmaker_cli.errors import GenerationError
+
+    mock_client = MagicMock(spec=AceStepClient)
+    mock_client.is_available = False
+
+    meta = SongMeta(title="Test", prompt="rock", lyrics="words", album="album")
+    album_meta = AlbumMeta(title="Album", artist="Artist")
+    ace_config = AceStepConfig(prompt="rock", lyrics="words")
+
+    with pytest.raises(GenerationError, match="not reachable"):
+        generate_single(
+            meta=meta,
+            album_meta=album_meta,
+            ace_config=ace_config,
+            output_root=tmp_path,
+            client=mock_client,
+        )
