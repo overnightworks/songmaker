@@ -93,15 +93,29 @@ def _call_api(
     return ClaudeResponse(text=text)
 
 
+_DISALLOWED_TOOLS = (
+    "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,"
+    "Agent,NotebookEdit,TodoWrite,EnterPlanMode"
+)
+
+
 def _call_cli(prompt: str, system: str | None = None) -> ClaudeResponse:
-    """Call Claude via the Claude Code CLI (uses Max subscription)."""
+    """Call Claude via the Claude Code CLI (uses Max subscription).
+
+    All tools are disabled — Claude can only process text, no file access
+    or command execution. Safe for user-facing chat.
+    """
     binary = _find_claude_binary()
     if not binary:
         raise UnavailableError(
             "Claude CLI not found. Install Claude Code or provide an API key."
         )
 
-    cmd = [binary, "-p", prompt, "--output-format", "json"]
+    cmd = [
+        binary, "-p", prompt,
+        "--output-format", "json",
+        "--disallowedTools", _DISALLOWED_TOOLS,
+    ]
     if system:
         cmd.extend(["--system-prompt", system])
 

@@ -33,6 +33,14 @@ export async function fetchAlbums(): Promise<AlbumItem[]> {
 	return apiFetch<AlbumItem[]>('/api/albums');
 }
 
+export async function createAlbum(title: string, artist: string = ''): Promise<AlbumItem> {
+	return apiFetch<AlbumItem>('/api/albums', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ title, artist })
+	});
+}
+
 export async function fetchSongs(albumId?: string): Promise<SongItem[]> {
 	let path = '/api/songs';
 	if (albumId) path += `?album_id=${albumId}`;
