@@ -1,5 +1,7 @@
 # Mobile Polish + E2E Testing
 
+> **Status: PARTIALLY DONE** — basic mobile layout works (chat overlay, sidebar toggle). E2E tests not started.
+
 ## Goal
 
 Production-quality mobile experience + automated E2E tests that catch regressions across devices and auth flows.

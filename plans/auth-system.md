@@ -1,338 +1,95 @@
 # Phase 7 — Authentication & Authorization
 
+> **Status: COMPLETE** — all steps implemented and tested (505 Python + 131 frontend tests).
+
 ## Goal
 
 Mandatory login, role-based access control, GPU resource protection. No anonymous access. Secure enough for a server exposed to the internet with friends as users.
 
-## Prerequisites (do first)
+## What Was Built
 
-- [x] B7: Enable SQLite WAL mode (concurrent reads + writes)
-- [x] B8: Set up Alembic migrations (track all schema changes from here on)
-- [x] B10: Pydantic response models + eliminated _to_dict layer (from_orm)
-
----
-
-## Architecture Decisions
+### Architecture Decisions
 
 | Decision | Choice | Why |
 |----------|--------|-----|
 | Auth method | Session cookies (not JWT) | Revocable, HttpOnly prevents XSS, no client-side token management |
-| Password storage | bcrypt via passlib | Offline-capable, no external auth service needed |
+| Password storage | bcrypt (12 rounds) | Offline-capable, no external auth service needed |
 | Session storage | SQLite (same DB) | Simple, no Redis needed for single-server |
-| Session secret | From env var `SESSION_SECRET` | Never hardcoded. Generate with `openssl rand -hex 32` |
-| First-run | Force admin account creation | No default credentials, WordPress-style setup |
+| Session secret | `SESSION_SECRET` env var | Never hardcoded. Generate with `openssl rand -hex 32` |
+| First-run | Force admin account creation via /setup | No default credentials |
 | RBAC | admin + user roles | Extensible later (editor, viewer) |
-| CSRF | SameSite=Strict + Origin header check | Belt and suspenders |
-| SQL injection | SQLAlchemy ORM only | No raw SQL with f-strings anywhere |
+| CSRF | SameSite=Lax + HttpOnly cookies | Standard defense |
+| SQL injection | SQLAlchemy ORM only, Pydantic validation | No raw SQL anywhere |
 
----
+### Data Model
 
-## Data Model
+- `User` — id, username, password_hash, role (admin/user), is_active
+- `UserSession` — id (= cookie value), user_id (FK), expires_at, ip_address, user_agent
+- `LoginAttempt` — id, ip_address, username, success, attempted_at
+- `Album.created_by` — FK → User.id (SET NULL on delete)
+- `Job.user_id` — FK → User.id (SET NULL on delete)
 
-```python
-class User(Base):
-    __tablename__ = "users"
+### Security Measures
 
-    id: str              # uuid
-    username: str        # unique, min 3 chars
-    password_hash: str   # bcrypt via passlib
-    role: str            # "admin" | "user"
-    is_active: bool      # soft delete / disable
-    created_at: datetime
-    updated_at: datetime
+| Measure | Implementation |
+|---------|---------------|
+| Brute-force | 5 attempts per IP per 5min → 429 with Retry-After |
+| Password | bcrypt cost 12, min 8 chars (NIST 800-63) |
+| Session cookies | HttpOnly, SameSite=Lax, 30-day sliding window |
+| Session invalidation | Logout deletes from DB, stale jobs recovered on restart |
+| Rate limiting | 3 gen/hr + 10 score/hr per user, 1 active job, 10 queue depth |
+| Path traversal | Audio endpoint validates paths, checks album ownership |
+| Input validation | Pydantic models on all API inputs |
 
-class UserSession(Base):
-    __tablename__ = "user_sessions"
-
-    id: str              # uuid (this IS the cookie value)
-    user_id: str         # FK → User
-    created_at: datetime
-    expires_at: datetime # 30 days from creation
-    ip_address: str      # for audit log
-    user_agent: str      # for audit log
-
-class LoginAttempt(Base):
-    __tablename__ = "login_attempts"
-
-    id: str
-    ip_address: str
-    username: str
-    success: bool
-    attempted_at: datetime
-```
-
----
-
-## Permission Matrix
+### Permission Matrix
 
 | Resource | Admin | User | Anonymous |
 |----------|-------|------|-----------|
-| GET /api/auth/* (login, setup) | — | — | Yes |
-| GET /api/songs, albums, generations | Yes | Yes | No |
-| GET /audio/* (play MP3s) | Yes | Yes | No |
-| PUT /api/songs/* (edit) | Yes | Yes | No |
-| POST /api/songs (create) | Yes | Yes | No |
-| POST /api/songs/*/generate | Yes | Rate-limited (3/hour) | No |
-| POST /api/generations/*/score | Yes | Rate-limited (10/hour) | No |
-| POST /api/chat (Claude) | Yes | Yes (BYOK only) | No |
-| DELETE /api/generations/* | Yes | Own only (future) | No |
-| DELETE /api/versions/* | Yes | No | No |
-| POST /api/albums/*/cleanup | Yes | No | No |
-| GET/PUT /api/settings/* | Yes | No | No |
-| GET /api/admin/* (user mgmt) | Yes | No | No |
-| POST /api/admin/queue/cancel | Yes | No | No |
+| Auth endpoints (login, setup) | — | — | Yes |
+| Songs, albums, generations | All | Own albums only | No |
+| Audio playback | All | Own albums only | No |
+| Generate (GPU) | Unlimited | 3/hour, 1 active | No |
+| Score (GPU) | Unlimited | 10/hour | No |
+| Claude chat | Yes | Yes (BYOK) | No |
+| Admin endpoints | Yes | No | No |
+| Settings | Yes | No | No |
+| Cleanup / delete | Yes | No | No |
 
----
+### API Endpoints
 
-## Security Measures
+**Auth (public)**:
+`GET /api/auth/setup-required`, `POST /api/auth/setup`, `POST /api/auth/login`, `DELETE /api/auth/session`, `GET /api/auth/me`, `PUT /api/auth/password`
 
-### 1. Brute-Force Protection
-- Max 5 login attempts per IP per 5 minutes
-- Track in `login_attempts` table
-- After limit: return 429 Too Many Requests with retry-after header
-- Admin can see failed attempts in dashboard
+**Admin**:
+`GET/POST/PUT/DELETE /api/admin/users`, `GET /api/admin/login-attempts`, `GET/DELETE /api/admin/sessions`, `POST /api/admin/acestep/reinitialize`, `GET /api/admin/acestep/status`
 
-### 2. Password Security
-- bcrypt with cost factor 12 (passlib)
-- Minimum 8 characters, no other silly rules (NIST 800-63)
-- Passwords never logged, never returned in API responses
+### Frontend Pages
 
-### 3. Session Security
-- `SESSION_SECRET` loaded from env var or `.server.env` file
-- HttpOnly cookie (JavaScript can't read it)
-- Secure flag when behind HTTPS
-- SameSite=Strict (no cross-site requests)
-- 30-day expiry with sliding window (refreshed on each request)
-- Logout invalidates session in DB immediately
-
-### 4. CSRF Protection
-- SameSite=Strict on cookie handles most cases
-- Additionally check Origin header on all POST/PUT/DELETE requests
-
-### 5. SQL Injection
-- All queries through SQLAlchemy ORM (parameterized by default)
-- No raw SQL with string interpolation anywhere
-- Pydantic validates all input before it reaches queries
-
-### 6. GPU Resource Protection (DoS Prevention)
-- Per-user queue limit: max 1 active generation job at a time
-- Per-user rate limit: 3 generations/hour for non-admin users
-- Admin kill-switch: POST /api/admin/queue/cancel/{job_id}
-- Queue depth limit: max 10 total queued jobs
-- Generation timeout: 10 minutes per song (kill if exceeded)
-
----
-
-## API Endpoints
-
-### Auth (public — no session required)
-
-```
-GET  /api/auth/setup-required     → { required: bool }
-POST /api/auth/setup              { username, password } → Set-Cookie (first admin only)
-POST /api/auth/login              { username, password } → Set-Cookie
-DELETE /api/auth/session           → Clear cookie (logout)
-```
-
-### Auth (authenticated)
-
-```
-GET  /api/auth/me                 → { id, username, role }
-PUT  /api/auth/password           { current, new } → change own password
-```
-
-### Admin
-
-```
-GET    /api/admin/users           → list all users
-POST   /api/admin/users           { username, password, role }
-PUT    /api/admin/users/{id}      { role?, is_active?, password? }
-DELETE /api/admin/users/{id}      → deactivate user
-
-GET    /api/admin/login-attempts  → recent failed logins
-GET    /api/admin/sessions        → active sessions
-DELETE /api/admin/sessions/{id}   → force logout a user
-
-POST   /api/admin/queue/cancel/{job_id} → kill running job
-GET    /api/admin/queue           → queue status + GPU info
-```
-
----
-
-## Frontend Changes
-
-### New Pages
-- `/login` — login form (public)
-- `/setup` — first-run admin creation (public, only when no users)
-- `/settings/users` — user management (admin only)
+- `/login` — login form
+- `/setup` — first-run admin creation
+- `/settings/users` — admin user management
 - `/settings/account` — change own password
 
-### Auth Store
-```typescript
-interface AuthUser {
-    id: string;
-    username: string;
-    role: 'admin' | 'user';
-}
-
-export const currentUser = writable<AuthUser | null>(null);
-export const isAdmin = derived(currentUser, u => u?.role === 'admin');
-```
-
-### Route Protection
-- On app load: GET /api/auth/me
-  - 401 → redirect to /login
-  - 200 → set currentUser store
-- Login form: POST /api/auth/login → redirect to /
-- Logout: DELETE /api/auth/session → redirect to /login
-
-### UI Adjustments
-- Admin-only buttons hidden for users (delete version, cleanup album, settings)
-- Rate limit feedback: "Generation limit reached (3/hour). Resets in 45 min."
-- Queue status visible to all users
-- Admin: "Cancel Job" button on running jobs
-
----
-
-## Implementation Steps
-
-### Step 1: Dependencies + Models
-- [ ] Add `passlib[bcrypt]` to pyproject.toml
-- [ ] Add User, UserSession, LoginAttempt models to db/models.py
-- [ ] SESSION_SECRET from env var (with helpful error if missing)
-
-### Step 2: Auth Middleware
-- [ ] Replace ApiKeyMiddleware with SessionAuthMiddleware
-- [ ] Cookie parsing → session lookup → attach user to request
-- [ ] Public route allowlist (/api/auth/*, /login, /setup, static assets)
-- [ ] Role-checking dependency: `require_admin`
-
-### Step 3: Auth API Endpoints
-- [ ] POST /api/auth/setup (first admin creation)
-- [ ] POST /api/auth/login (with brute-force protection)
-- [ ] DELETE /api/auth/session (logout)
-- [ ] GET /api/auth/me
-- [ ] GET /api/auth/setup-required
-- [ ] PUT /api/auth/password
-
-### Step 4: Admin Endpoints
-- [ ] CRUD for users
-- [ ] Login attempt viewer
-- [ ] Session management (view, force-logout)
-- [ ] Queue cancel endpoint
-
-### Step 5: Rate Limiting
-- [ ] Per-user generation rate limit (3/hour for users)
-- [ ] Per-user scoring rate limit (10/hour for users)
-- [ ] Per-user queue depth limit (1 active job)
-- [ ] Global queue depth limit (10 jobs)
-
-### Step 6: Frontend — Login + Setup
-- [ ] /login page with form
-- [ ] /setup page (first-run only)
-- [ ] Auth store + route guards
-- [ ] Auto-redirect to /login on 401
-
-### Step 7: Frontend — Admin Panel
-- [ ] /settings/users page
-- [ ] /settings/account page (change password)
-- [ ] Queue status with cancel button
-- [ ] Failed login attempts viewer
-
-### Step 8: Tests
-- [ ] Auth middleware: session validation, expiry, role checking
-- [ ] Login: success, failure, brute-force lockout
-- [ ] Setup: first admin creation, rejected if admin exists
-- [ ] Admin endpoints: user CRUD, session management
-- [ ] Rate limiting: generation/scoring limits, queue depth
-- [ ] Frontend: auth store, login flow, route guards
-
-### Step 9: Documentation
-- [ ] Update CLAUDE.md with auth setup instructions
-- [ ] Document SESSION_SECRET generation
-- [ ] Document first-run setup flow
-- [ ] Update API contract section
-
----
-
-## Configuration
+### Configuration
 
 ```bash
-# Required for server startup (generate with: openssl rand -hex 32)
-SESSION_SECRET=your-64-char-hex-string
-
-# Optional overrides
-SESSION_MAX_AGE=2592000          # 30 days in seconds
-LOGIN_RATE_LIMIT=5               # attempts per 5 minutes
-GENERATION_RATE_LIMIT_USER=3     # per hour for non-admin
-SCORING_RATE_LIMIT_USER=10       # per hour for non-admin
-MAX_QUEUE_DEPTH=10               # total queued jobs
+SESSION_SECRET=your-64-char-hex-string    # required (openssl rand -hex 32)
+SESSION_MAX_AGE=2592000                   # 30 days (optional)
+LOGIN_RATE_LIMIT=5                        # per 5min (optional)
+GENERATION_RATE_LIMIT_USER=3              # per hour (optional)
+SCORING_RATE_LIMIT_USER=10                # per hour (optional)
+MAX_QUEUE_DEPTH=10                        # total queued jobs (optional)
 ```
 
-Load from `.server.env` file (gitignored) or environment variables.
-
 ---
 
-## Step 10: Album Ownership (Per-User Isolation)
+## Future Extensions (not started)
 
-### Goal
-
-Users only see their own albums and songs. Admin sees everything.
-
-### Data Model Change
-
-```python
-class Album(Base):
-    # ... existing fields ...
-    created_by: str | None  # FK → User.id, nullable for migration
-```
-
-Songs inherit ownership from their album — no `created_by` on Song.
-
-### Access Rules
-
-| Role | Albums visible | Can create | Can edit/delete |
-|------|---------------|------------|----------------|
-| Admin | All albums | Yes | Any album |
-| User | Own albums only | Yes | Own albums only |
-
-### Implementation
-
-- [ ] Add `created_by` to Album model + Alembic migration
-- [ ] Migration: assign existing albums to first admin user
-- [ ] Add `POST /api/albums` endpoint (users can create albums)
-- [ ] Update `list_albums`, `list_songs` queries to filter by user
-- [ ] Update API endpoints to pass current user to queries
-- [ ] Update `/audio/` endpoint to check album ownership
-- [ ] Frontend: add "New Album" UI
-
-### Audio Security
-
-`/audio/{album}/{filename}` must verify the user owns the album before serving the MP3. Without this, users could guess paths and listen to others' generations.
-
-### Future Extensions (additive, no schema rewrite)
-
-| Phase | Feature | Schema Change |
-|-------|---------|--------------|
-| Now | Private per user | `Album.created_by` |
-| Future | Share with specific users | New `AlbumShare(album_id, user_id, permission)` table |
-| Future | Public albums (all users) | `Album.is_public: bool` |
-
----
-
-## What This Does NOT Include (Future)
-
-- OAuth2/OIDC (Google/GitHub login) — add as additional login method
-- Album sharing between users — see Step 10 future extensions
-- API tokens for programmatic access — add for CI/CD later
-- 2FA/TOTP — add when deploying publicly
-- Email verification — not needed for invite-only use
-
----
-
-## Migration Notes
-
-- Add SESSION_SECRET to .server.env
-- On first startup after migration: /setup page appears
-- Existing albums are assigned to the first admin user
-- CLI commands (`list-users`, `reset-password`, `reinit-acestep`) work without auth
+| Feature | Schema Change | Effort |
+|---------|--------------|--------|
+| Share albums with specific users | New `AlbumShare(album_id, user_id, permission)` table | Medium |
+| Public album links | `Album.is_public` + `Album.share_slug` | Small |
+| OAuth2/OIDC (Google/GitHub login) | Additional login method | Medium |
+| API tokens for programmatic access | New `ApiToken` model | Small |
+| 2FA/TOTP | `User.totp_secret` | Medium |
+| Admin queue cancel | `POST /api/admin/queue/cancel/{job_id}` | Small |

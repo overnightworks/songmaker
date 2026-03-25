@@ -1,5 +1,7 @@
 # ACE-Step 2.0 — Advanced Generation Modes
 
+> **Status: NOT STARTED** — Phase 1 (reference audio) is the next priority.
+
 ## Goal
 
 Expose ACE-Step 1.5's full capabilities beyond text2music: cover, repaint, reference audio, lego, extract, complete. Enable human-centered iterative workflows where users refine generations, not just roll the dice.
@@ -7,9 +9,10 @@ Expose ACE-Step 1.5's full capabilities beyond text2music: cover, repaint, refer
 ## Current State
 
 - **text2music only** — prompt + lyrics → audio
-- All LM params now exposed (temperature, top_k, top_p, cfg_scale, negative_prompt)
+- All LM params exposed (temperature, top_k, top_p, cfg_scale, negative_prompt)
 - batch_size configurable (1-8)
 - Turbo + SFT model switching works
+- Generation settings UI complete with per-version param storage
 
 ## Architecture: What ACE-Step Supports
 

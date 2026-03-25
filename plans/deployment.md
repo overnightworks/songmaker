@@ -1,5 +1,7 @@
 # Deployment Plan
 
+> **Status: NOT STARTED** — running locally on bare metal with RTX 3090.
+
 ## Goal
 
 Docker-based deployment that works both privately (friends only, no public access) and could go public later if wanted. The default is private.
