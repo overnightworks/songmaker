@@ -49,7 +49,7 @@ class PipelineConfig:
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
 
 
-ScorerFunc = Callable[[Path, SongMeta | None, AudioData | None, PipelineConfig], object]
+ScorerFunc = Callable[[Path, SongMeta | None, AudioData | None, PipelineConfig, dict], object]
 
 _VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
 
@@ -145,7 +145,7 @@ class _ScorerTimeout(Exception):
 def _run_with_timeout(
     func: ScorerFunc, mp3_path: Path, meta: SongMeta | None,
     audio_data: AudioData | None, config: PipelineConfig,
-    timeout: int, name: str,
+    shared_data: dict, timeout: int, name: str,
 ) -> object:
     """Run a scorer with a thread-based timeout.
 
@@ -153,10 +153,10 @@ def _run_with_timeout(
     with C extensions (numpy, torch, librosa) that hold the GIL.
     """
     if timeout <= 0:
-        return func(mp3_path, meta, audio_data, config)
+        return func(mp3_path, meta, audio_data, config, shared_data)
 
     with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(func, mp3_path, meta, audio_data, config)
+        future = pool.submit(func, mp3_path, meta, audio_data, config, shared_data)
         try:
             return future.result(timeout=timeout)
         except FuturesTimeout:
@@ -203,6 +203,7 @@ def run_scoring_pipeline(
     )
     audio_data = load_audio(mp3_path) if any_needs_audio else None
 
+    shared_data: dict = {}
     results: dict[str, object] = {}
     for name in scorers:
         func = reg.get(name)
@@ -213,7 +214,7 @@ def run_scoring_pipeline(
             log.info("Running scorer: %s", name)
             results[name] = _run_with_timeout(
                 func, mp3_path, meta, audio_data, config,
-                timeout=config.scorer_timeout, name=name,
+                shared_data, timeout=config.scorer_timeout, name=name,
             )
         except Exception:  # noqa: BLE001 — broad catch is intentional: scorer failures must not block others
             log.exception("Scorer '%s' failed", name)

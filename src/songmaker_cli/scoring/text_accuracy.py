@@ -27,12 +27,13 @@ def clear_cache() -> None:
 @register("text_accuracy", needs_audio=False)
 def score_text_accuracy(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None,
+    config: PipelineConfig | None = None, shared_data: dict | None = None,
 ) -> TextAccuracyScore:
     """Transcribe with Whisper and compare to intended lyrics.
 
-    Note: audio_data is unused — Whisper requires a file path, not a numpy array.
-    The parameter exists to satisfy the scorer function signature.
+    Stores the transcription in shared_data["whisper_text"] so that
+    downstream scorers (lyrical_coherence) can access it without
+    going through the filesystem.
     """
     if meta is None or not meta.lyrics:
         raise ValueError("No lyrics metadata — cannot score text accuracy")
@@ -59,15 +60,12 @@ def score_text_accuracy(
     log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
              ratio * 100, len(intended_lines), len(trans_lines))
 
-    # Detect Whisper hallucinations (repeated "Thank you", "Goodbye", etc.)
     if _is_hallucination(trans_lines):
         log.warning("Whisper hallucination detected — no real vocals in %s", mp3_path.name)
         trans_lines = ()
 
-    # Save transcription with confidence: "0.85|text" per line
-    whisper_path = mp3_path.with_suffix(".whisper")
-    _save_whisper_with_confidence(whisper_path, segments)
-    log.info("Whisper transcription saved: %s", whisper_path.name)
+    if shared_data is not None:
+        shared_data["whisper_text"] = "\n".join(trans_lines)
 
     return TextAccuracyScore(
         similarity_ratio=round(ratio, 3),
@@ -75,37 +73,6 @@ def score_text_accuracy(
         transcribed_line_texts=trans_lines,
     )
 
-
-
-def _segment_confidence(segment: dict) -> float:
-    """Derive a 0-1 confidence score from Whisper segment metadata.
-
-    Uses avg_logprob (higher = more confident) and no_speech_prob (lower = more
-    likely speech). Combined via: sigmoid(logprob) * (1 - no_speech).
-    """
-    import math
-
-    avg_logprob = segment.get("avg_logprob", -1.0)
-    no_speech = segment.get("no_speech_prob", 0.0)
-    # avg_logprob is typically -0.2 (good) to -1.5 (bad)
-    # Map to 0-1 via sigmoid shifted so -0.5 -> ~0.5
-    sig = 1.0 / (1.0 + math.exp(-(avg_logprob + 0.5) * 4))
-    return round(sig * (1.0 - no_speech), 2)
-
-
-def _save_whisper_with_confidence(whisper_path: Path, segments: list[dict]) -> None:
-    """Save Whisper transcription with per-line confidence scores.
-
-    Format: "0.85|The actual transcribed text" per line.
-    """
-    lines = []
-    for s in segments:
-        text = s.get("text", "").strip()
-        if not text:
-            continue
-        conf = _segment_confidence(s)
-        lines.append(f"{conf}|{text}")
-    whisper_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 _VOCALIZATION_PATTERN = re.compile(

@@ -816,7 +816,7 @@ def test_create_album_integrity_error(client: TestClient) -> None:
         resp = client.post("/api/albums", json={"title": "Rock Album"})
 
     assert resp.status_code == 409
-    assert "already exists" in resp.json()["detail"]
+    assert "conflict" in resp.json()["detail"].lower()
 
 
 def test_update_song_value_error(client: TestClient) -> None:

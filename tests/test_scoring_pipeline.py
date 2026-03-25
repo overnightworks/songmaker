@@ -145,7 +145,7 @@ def test_run_pipeline(mock_load: object, clean_registry: ScorerRegistry, fake_mp
     @clean_registry.register("silence")
     def mock_silence(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None,
+        config: object = None, shared_data: object = None,
     ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.5, longest_gap_seconds=0.3, gap_count=1,
@@ -164,14 +164,14 @@ def test_pipeline_handles_scorer_failure(
     @clean_registry.register("text_accuracy")
     def broken_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None,
+        config: object = None, shared_data: object = None,
     ) -> None:
         raise RuntimeError("boom")
 
     @clean_registry.register("silence")
     def ok_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None,
+        config: object = None, shared_data: object = None,
     ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
@@ -189,7 +189,7 @@ def test_pipeline_filters_by_name(
     @clean_registry.register("silence")
     def scorer_a(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None,
+        config: object = None, shared_data: object = None,
     ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
@@ -198,7 +198,7 @@ def test_pipeline_filters_by_name(
     @clean_registry.register("bpm_accuracy")
     def scorer_b(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None,
+        config: object = None, shared_data: object = None,
     ) -> BpmAccuracyScore:
         return BpmAccuracyScore(
             detected_bpm=120, requested_bpm=120,
@@ -236,7 +236,7 @@ def test_pipeline_rejects_wrong_return_type(
     @clean_registry.register("silence")
     def wrong_type_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None,
+        config: object = None, shared_data: object = None,
     ) -> str:
         return "not a SilenceScore"  # type: ignore[return-value]
 

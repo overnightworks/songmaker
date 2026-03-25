@@ -83,7 +83,7 @@ def test_create_user(client: TestClient) -> None:
     _login_as_admin(client)
     resp = client.post(
         "/api/admin/users",
-        json={"username": "newuser", "password": "password123", "role": "user"},
+        json={"username": "newuser", "password": "t3stP@ssw0rd", "role": "user"},
     )
     assert resp.status_code == 200
     assert resp.json()["username"] == "newuser"
@@ -94,11 +94,11 @@ def test_create_user_duplicate(client: TestClient) -> None:
     _login_as_admin(client)
     client.post(
         "/api/admin/users",
-        json={"username": "dup", "password": "password123"},
+        json={"username": "dup", "password": "t3stP@ssw0rd"},
     )
     resp = client.post(
         "/api/admin/users",
-        json={"username": "dup", "password": "password123"},
+        json={"username": "dup", "password": "t3stP@ssw0rd"},
     )
     assert resp.status_code == 409
 
@@ -107,7 +107,7 @@ def test_create_user_invalid_role(client: TestClient) -> None:
     _login_as_admin(client)
     resp = client.post(
         "/api/admin/users",
-        json={"username": "bob", "password": "password123", "role": "superadmin"},
+        json={"username": "bob", "password": "t3stP@ssw0rd", "role": "superadmin"},
     )
     assert resp.status_code == 422
 
@@ -119,7 +119,7 @@ def test_update_user_role(client: TestClient) -> None:
     _login_as_admin(client)
     resp = client.post(
         "/api/admin/users",
-        json={"username": "bob", "password": "password123"},
+        json={"username": "bob", "password": "t3stP@ssw0rd"},
     )
     user_id = resp.json()["id"]
 
@@ -132,7 +132,7 @@ def test_update_user_deactivate(client: TestClient) -> None:
     _login_as_admin(client)
     resp = client.post(
         "/api/admin/users",
-        json={"username": "bob", "password": "password123"},
+        json={"username": "bob", "password": "t3stP@ssw0rd"},
     )
     user_id = resp.json()["id"]
 
@@ -145,7 +145,7 @@ def test_update_user_password(client: TestClient) -> None:
     _login_as_admin(client)
     resp = client.post(
         "/api/admin/users",
-        json={"username": "bob", "password": "password123"},
+        json={"username": "bob", "password": "t3stP@ssw0rd"},
     )
     user_id = resp.json()["id"]
 
@@ -163,7 +163,7 @@ def test_update_user_invalid_role(client: TestClient) -> None:
     _login_as_admin(client)
     resp = client.post(
         "/api/admin/users",
-        json={"username": "bob", "password": "password123"},
+        json={"username": "bob", "password": "t3stP@ssw0rd"},
     )
     user_id = resp.json()["id"]
 
@@ -194,7 +194,7 @@ def test_deactivate_user(client: TestClient) -> None:
     _login_as_admin(client)
     resp = client.post(
         "/api/admin/users",
-        json={"username": "bob", "password": "password123"},
+        json={"username": "bob", "password": "t3stP@ssw0rd"},
     )
     user_id = resp.json()["id"]
 
@@ -248,11 +248,11 @@ def test_force_logout(client: TestClient) -> None:
 
     factory = get_session_factory()
     with factory() as session:
-        create_user(session, "victim", hash_password("password123"))
+        create_user(session, "victim", hash_password("t3stP@ssw0rd"))
         session.commit()
 
     other_client = TestClient(client.app, cookies={})
-    other_client.post("/api/auth/login", json={"username": "victim", "password": "password123"})
+    other_client.post("/api/auth/login", json={"username": "victim", "password": "t3stP@ssw0rd"})
     victim_cookie = other_client.cookies.get(SESSION_COOKIE)
 
     sessions_resp = client.get("/api/admin/sessions")

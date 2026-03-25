@@ -33,9 +33,18 @@ MAX_REQUEST_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", 1_048_576)
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
-    """Checks actual body size, not just Content-Length header."""
+    """Fast-reject via Content-Length, then verify actual body size."""
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_REQUEST_BODY_BYTES:
+                    return JSONResponse(
+                        {"detail": "Request body too large"}, status_code=413,
+                    )
+            except ValueError:
+                pass
         body = await request.body()
         if len(body) > MAX_REQUEST_BODY_BYTES:
             return JSONResponse(
@@ -75,8 +84,22 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
+_FORM_CONTENT_TYPES = frozenset({
+    "application/x-www-form-urlencoded",
+    "multipart/form-data",
+    "text/plain",
+})
+
+
 class CsrfOriginMiddleware(BaseHTTPMiddleware):
-    """Reject cross-origin state-changing API requests as CSRF defense-in-depth."""
+    """Reject cross-origin state-changing API requests as CSRF defense-in-depth.
+
+    When Origin/Referer is present, verify it matches the Host header.
+    When absent, reject requests with form-like Content-Types (the only
+    types an HTML form can produce). This blocks CSRF from older browsers
+    that don't enforce SameSite=Strict, while allowing JSON API clients
+    and DELETE requests without a body.
+    """
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         if (
@@ -94,6 +117,35 @@ class CsrfOriginMiddleware(BaseHTTPMiddleware):
                         {"detail": "Cross-origin request rejected"},
                         status_code=403,
                     )
+            else:
+                content_type = (request.headers.get("content-type") or "").split(";")[0].strip()
+                if content_type in _FORM_CONTENT_TYPES:
+                    return JSONResponse(
+                        {"detail": "Missing Origin header on form submission"},
+                        status_code=403,
+                    )
+        return await call_next(request)
+
+
+IP_RATE_LIMIT = int(os.environ.get("IP_RATE_LIMIT", 120))
+IP_RATE_WINDOW = 60
+
+
+class IpRateLimitMiddleware(BaseHTTPMiddleware):
+    """Global per-IP rate limiter — defense against multi-account abuse."""
+
+    def __init__(self, app, **kwargs):  # type: ignore[no-untyped-def]
+        super().__init__(app, **kwargs)
+        from songmaker_cli.middleware import IpRateLimiter
+        self._limiter = IpRateLimiter(IP_RATE_LIMIT, IP_RATE_WINDOW)
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        ip = request.client.host if request.client else "unknown"
+        if not self._limiter.is_allowed(ip):
+            return JSONResponse(
+                {"detail": "Too many requests"}, status_code=429,
+                headers={"Retry-After": str(IP_RATE_WINDOW)},
+            )
         return await call_next(request)
 
 
@@ -134,12 +186,13 @@ def create_app(
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(CsrfOriginMiddleware)
     app.add_middleware(SessionMiddleware)
+    app.add_middleware(IpRateLimitMiddleware)
     app.add_middleware(BodySizeLimitMiddleware)
 
     cors_origin = os.environ.get("CORS_ORIGIN")
     cors_kwargs: dict = {
-        "allow_methods": ["*"],
-        "allow_headers": ["*"],
+        "allow_methods": ["GET", "POST", "PUT", "DELETE"],
+        "allow_headers": ["Content-Type", "Cookie"],
         "allow_credentials": True,
     }
     if cors_origin:
@@ -215,11 +268,13 @@ def run_server(
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
 
+    from songmaker_cli.auth import ensure_session_secret
     from songmaker_cli.db.engine import init_db
 
     set_output_dir(output_dir)
     db_path = output_dir / DB_FILENAME
     init_db(db_path)
+    ensure_session_secret(output_dir)
 
     app = create_app(output_dir, project_root)
     log.info("Songmaker server: http://localhost:%d", port)

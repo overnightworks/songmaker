@@ -109,6 +109,7 @@ class GpuQueue:
                 self._current_mode = job.job_type
             except Exception:
                 log.exception("Failed to prepare GPU mode: %s", job.job_type)
+                self._fail_job(job.job_id, "GPU mode preparation failed")
                 return
 
         log.info("GPU queue: running %s job %s", job.job_type, job.job_id)
@@ -117,6 +118,18 @@ class GpuQueue:
             job.fn(*job.args, **job.kwargs)
         except Exception:
             log.exception("GPU job %s failed", job.job_id)
+
+    def _fail_job(self, job_id: str, error: str) -> None:
+        try:
+            from songmaker_cli.db.engine import get_session_factory
+            from songmaker_cli.db.queries import update_job_status
+
+            factory = get_session_factory()
+            with factory() as session:
+                update_job_status(session, job_id, "failed", error=error, error_type="gpu_error")
+                session.commit()
+        except Exception:
+            log.exception("Failed to mark job %s as failed", job_id)
 
     def _prepare_mode(self, mode: str) -> None:
         """Prepare GPU for the given mode — clear old models, start services."""

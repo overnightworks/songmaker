@@ -41,7 +41,7 @@ def _seed_admin() -> None:
 def _seed_user(username: str = "alice", active: bool = True) -> None:
     factory = get_session_factory()
     with factory() as session:
-        user = create_user(session, username, hash_password("password123"), role="user")
+        user = create_user(session, username, hash_password("t3stP@ssw0rd"), role="user")
         user.is_active = active
         session.flush()
         session.commit()
@@ -80,13 +80,13 @@ def test_setup_creates_admin(client: TestClient) -> None:
 
 def test_setup_rejected_when_admin_exists(client: TestClient) -> None:
     _seed_admin()
-    resp = client.post("/api/auth/setup", json={"username": "hacker", "password": "password123"})
+    resp = client.post("/api/auth/setup", json={"username": "hacker", "password": "t3stP@ssw0rd"})
     assert resp.status_code == 403
     assert "already completed" in resp.json()["detail"]
 
 
 def test_setup_validates_short_username(client: TestClient) -> None:
-    resp = client.post("/api/auth/setup", json={"username": "ab", "password": "password123"})
+    resp = client.post("/api/auth/setup", json={"username": "ab", "password": "t3stP@ssw0rd"})
     assert resp.status_code == 422
 
 
@@ -114,14 +114,14 @@ def test_login_wrong_password(client: TestClient) -> None:
 
 
 def test_login_nonexistent_user(client: TestClient) -> None:
-    resp = client.post("/api/auth/login", json={"username": "nobody", "password": "password123"})
+    resp = client.post("/api/auth/login", json={"username": "nobody", "password": "t3stP@ssw0rd"})
     assert resp.status_code == 401
 
 
 def test_login_disabled_user(client: TestClient) -> None:
     _seed_user("disabled_user", active=False)
     resp = client.post(
-        "/api/auth/login", json={"username": "disabled_user", "password": "password123"},
+        "/api/auth/login", json={"username": "disabled_user", "password": "t3stP@ssw0rd"},
     )
     assert resp.status_code == 403
     assert "disabled" in resp.json()["detail"]
@@ -253,7 +253,7 @@ def test_setup_race_condition_second_user_created(client: TestClient) -> None:
 
     with patch("songmaker_cli.auth_api.user_count", side_effect=_user_count_side_effect):
         resp = client.post(
-            "/api/auth/setup", json={"username": "racing", "password": "password123"},
+            "/api/auth/setup", json={"username": "racing", "password": "t3stP@ssw0rd"},
         )
 
     assert resp.status_code == 403
@@ -271,7 +271,7 @@ def test_setup_integrity_error_returns_403(client: TestClient) -> None:
         side_effect=IntegrityError("duplicate", {}, Exception()),
     ):
         resp = client.post(
-            "/api/auth/setup", json={"username": "admin", "password": "password123"},
+            "/api/auth/setup", json={"username": "admin", "password": "t3stP@ssw0rd"},
         )
 
     assert resp.status_code == 403

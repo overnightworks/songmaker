@@ -9,6 +9,7 @@ import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
+from songmaker_cli.auth import sign_session_id
 from songmaker_cli.db.engine import init_db, reset_engine
 from songmaker_cli.db.queries import create_session, create_user
 from songmaker_cli.middleware import (
@@ -50,7 +51,7 @@ def _create_user_and_session(role: str = "user", active: bool = True) -> str:
     factory = get_session_factory()
     with factory() as session:
         user = create_user(
-            session, f"testuser_{role}_{active}", hash_password("password123"), role=role,
+            session, f"testuser_{role}_{active}", hash_password("t3stP@ssw0rd"), role=role,
         )
         user.is_active = active
         session.flush()
@@ -122,7 +123,7 @@ def test_protected_route_no_cookie(auth_app: TestClient) -> None:
 
 
 def test_protected_route_invalid_session(auth_app: TestClient) -> None:
-    auth_app.cookies.set(SESSION_COOKIE, "nonexistent-session-id")
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id("nonexistent-session-id"))
     resp = auth_app.get("/api/songs")
     assert resp.status_code == 401
 
@@ -133,13 +134,13 @@ def test_protected_route_expired_session(auth_app: TestClient) -> None:
 
     factory = get_session_factory()
     with factory() as session:
-        user = create_user(session, "expired_user", hash_password("password123"))
+        user = create_user(session, "expired_user", hash_password("t3stP@ssw0rd"))
         expires = datetime.now(timezone.utc) - timedelta(days=1)
         user_session = create_session(session, user.id, expires)
         session.commit()
         session_id = user_session.id
 
-    auth_app.cookies.set(SESSION_COOKIE, session_id)
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(session_id))
     resp = auth_app.get("/api/songs")
     assert resp.status_code == 401
     assert resp.json()["error"] == "Session expired"
@@ -147,7 +148,7 @@ def test_protected_route_expired_session(auth_app: TestClient) -> None:
 
 def test_protected_route_disabled_user(auth_app: TestClient) -> None:
     session_id = _create_user_and_session(active=False)
-    auth_app.cookies.set(SESSION_COOKIE, session_id)
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(session_id))
     resp = auth_app.get("/api/songs")
     assert resp.status_code == 403
     assert resp.json()["error"] == "Account disabled"
@@ -155,7 +156,7 @@ def test_protected_route_disabled_user(auth_app: TestClient) -> None:
 
 def test_protected_route_valid_session(auth_app: TestClient) -> None:
     session_id = _create_user_and_session()
-    auth_app.cookies.set(SESSION_COOKIE, session_id)
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(session_id))
     resp = auth_app.get("/api/songs")
     assert resp.status_code == 200
 
@@ -166,14 +167,14 @@ def test_absolute_session_lifetime_expired(auth_app: TestClient) -> None:
 
     factory = get_session_factory()
     with factory() as session:
-        user = create_user(session, "old_user", hash_password("password123"))
+        user = create_user(session, "old_user", hash_password("t3stP@ssw0rd"))
         expires = datetime.now(timezone.utc) + timedelta(days=30)
         user_session = create_session(session, user.id, expires)
         user_session.created_at = datetime.now(timezone.utc) - timedelta(days=91)
         session.commit()
         session_id = user_session.id
 
-    auth_app.cookies.set(SESSION_COOKIE, session_id)
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(session_id))
     resp = auth_app.get("/api/songs")
     assert resp.status_code == 401
     assert resp.json()["error"] == "Session expired"
@@ -190,7 +191,7 @@ def test_session_sliding_window(auth_app: TestClient) -> None:
         old_session = get_session_with_user(db, session_id)
         old_expires = old_session.expires_at
 
-    auth_app.cookies.set(SESSION_COOKIE, session_id)
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(session_id))
     auth_app.get("/api/songs")
 
     with factory() as db:
@@ -250,3 +251,94 @@ def test_dependency_injection_in_endpoint(_db) -> None:
 
     resp = client.get("/test-admin")
     assert resp.status_code == 401
+
+
+# ── HMAC rejection ────────────────────────────────────────────────
+
+
+def test_unsigned_cookie_rejected(auth_app: TestClient) -> None:
+    auth_app.cookies.set(SESSION_COOKIE, "raw-session-id-no-hmac")
+    resp = auth_app.get("/api/songs")
+    assert resp.status_code == 401
+    assert resp.json()["error"] == "Invalid session"
+
+
+# ── IP/UA audit logging ──────────────────────────────────────────
+
+
+def test_ua_change_creates_audit_entry(auth_app: TestClient) -> None:
+    from songmaker_cli.db.engine import get_session_factory
+    from songmaker_cli.db.models import AuditLog
+
+    session_id = _create_user_and_session()
+    factory = get_session_factory()
+
+    with factory() as db:
+        from songmaker_cli.db.queries import get_session_with_user
+        sess = get_session_with_user(db, session_id)
+        sess.user_agent = "OldBrowser/1.0"
+        db.commit()
+
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(session_id))
+    auth_app.get("/api/songs", headers={"user-agent": "NewBrowser/2.0"})
+
+    with factory() as db:
+        entry = (
+            db.query(AuditLog)
+            .filter(AuditLog.action == "session_ua_change")
+            .first()
+        )
+        assert entry is not None
+
+
+def test_ip_change_creates_audit_entry(auth_app: TestClient) -> None:
+    from songmaker_cli.db.engine import get_session_factory
+    from songmaker_cli.db.models import AuditLog
+
+    session_id = _create_user_and_session()
+    factory = get_session_factory()
+
+    with factory() as db:
+        from songmaker_cli.db.queries import get_session_with_user
+        sess = get_session_with_user(db, session_id)
+        sess.ip_address = "1.2.3.4"
+        db.commit()
+
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(session_id))
+    auth_app.get("/api/songs")
+
+    with factory() as db:
+        entry = (
+            db.query(AuditLog)
+            .filter(AuditLog.action == "session_ip_change")
+            .first()
+        )
+        assert entry is not None
+        assert "1.2.3.4" in entry.detail
+
+
+# ── IpRateLimiter ────────────────────────────────────────────────
+
+
+def test_ip_rate_limiter_allows_within_limit() -> None:
+    from songmaker_cli.middleware import IpRateLimiter
+    limiter = IpRateLimiter(max_requests=3, window_seconds=60)
+    assert limiter.is_allowed("10.0.0.1") is True
+    assert limiter.is_allowed("10.0.0.1") is True
+    assert limiter.is_allowed("10.0.0.1") is True
+
+
+def test_ip_rate_limiter_blocks_over_limit() -> None:
+    from songmaker_cli.middleware import IpRateLimiter
+    limiter = IpRateLimiter(max_requests=2, window_seconds=60)
+    limiter.is_allowed("10.0.0.1")
+    limiter.is_allowed("10.0.0.1")
+    assert limiter.is_allowed("10.0.0.1") is False
+
+
+def test_ip_rate_limiter_different_ips_independent() -> None:
+    from songmaker_cli.middleware import IpRateLimiter
+    limiter = IpRateLimiter(max_requests=1, window_seconds=60)
+    assert limiter.is_allowed("10.0.0.1") is True
+    assert limiter.is_allowed("10.0.0.2") is True
+    assert limiter.is_allowed("10.0.0.1") is False

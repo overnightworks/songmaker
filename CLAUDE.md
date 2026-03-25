@@ -25,11 +25,9 @@ cd frontend && pnpm install && pnpm dev
 Run after every change. After refactors, also check coverage.
 
 ```bash
-# Backend
-pytest tests/ -q
-ruff check src/ tests/
-# + coverage after refactors:
+# Backend (always run with coverage)
 pytest tests/ -q --cov=songmaker_cli --cov-report=term-missing
+ruff check src/ tests/
 
 # Frontend
 cd frontend
@@ -69,6 +67,14 @@ alembic upgrade head
 3. **Pydantic models define the API contract** — `api_models.py` (Python) ↔ `types.ts` (frontend)
 4. **Never commit secrets** — `.server.env` is gitignored
 5. **Commit messages**: conventional commits (`feat:`, `fix:`, `refactor:`, `test:`)
+
+## Workflow — Speed
+
+- **Batch changes, test once.** Make all code edits first, fix all tests, then run the suite once at the end. Don't run tests after every single file edit.
+- **Parallel edits.** When changing a function signature across N files, edit them all in parallel — not one by one.
+- **Don't re-read files** you just read in the same conversation.
+- **Trust the linter.** `ruff` catches unused imports, syntax errors, etc. Don't run the full test suite to verify trivial changes.
+- **One coverage check per task.** Run `--cov` once at the end, not after each intermediate step.
 
 ## Self-Review (multi-file changes)
 

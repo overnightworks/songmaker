@@ -41,7 +41,7 @@ log = logging.getLogger(__name__)
 @register("emotional_dynamics")
 def score_emotional_dynamics(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None,
+    config: PipelineConfig | None = None, shared_data: dict | None = None,
 ) -> EmotionalDynamicsScore:
     """Score vocal expressiveness by analyzing pitch, energy, and rhythm variance."""
     if audio_data is None:

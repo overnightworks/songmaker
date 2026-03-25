@@ -1,8 +1,11 @@
-"""Authentication utilities — password hashing, session config, constants."""
+"""Authentication utilities — password hashing, session signing, constants."""
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
+import secrets
 
 import bcrypt
 
@@ -46,3 +49,113 @@ def verify_password(password: str, password_hash: str) -> bool:
 def verify_password_constant_time(password: str, password_hash: str | None) -> bool:
     """Verify password, using a dummy hash if None to prevent timing oracle."""
     return bcrypt.checkpw(password.encode(), (password_hash or _DUMMY_HASH).encode())
+
+
+# ── Password strength ──────────────────────────────────────────────
+
+_COMMON_PASSWORDS = frozenset({
+    "password", "12345678", "123456789", "1234567890", "qwerty123",
+    "password1", "iloveyou", "sunshine1", "princess1", "football1",
+    "trustno1", "letmein1", "baseball1", "abc12345", "monkey123",
+    "dragon12", "michael1", "jennifer1", "superman1", "shadow12",
+    "password123", "admin123", "welcome1", "changeme1", "passw0rd",
+    "p@ssw0rd", "p@ssword", "abcd1234", "1q2w3e4r", "qwer1234",
+    "asdfghjk", "zxcvbnm1", "11111111", "00000000", "12341234",
+    "abcdefgh", "87654321", "master12", "access14", "charlie1",
+    "qwerty12", "iloveu12", "starwars", "whatever", "computer",
+    "corvette", "maverick", "steelers",
+})
+
+MIN_UNIQUE_CHARS = 4
+
+
+def check_password_strength(cls_or_value: str, *_args: object) -> str:
+    """Pydantic-compatible validator: reject common and low-entropy passwords.
+
+    Works both as a standalone function and as a Pydantic field_validator
+    (which passes `cls` as first arg in classmethod mode, but we accept
+    the value in either position via the *_args fallback).
+    """
+    password = cls_or_value
+    if password is None:
+        return password
+    if password.lower() in _COMMON_PASSWORDS:
+        raise ValueError("Password is too common — choose something less predictable")
+    if len(set(password)) < MIN_UNIQUE_CHARS:
+        raise ValueError(
+            f"Password must contain at least {MIN_UNIQUE_CHARS} unique characters"
+        )
+    return password
+
+
+# ── HMAC session signing ───────────────────────────────────────────
+
+_session_secret: str | None = None
+
+
+def _get_session_secret() -> str:
+    global _session_secret
+    if _session_secret is not None:
+        return _session_secret
+    secret = os.environ.get("SESSION_SECRET", "")
+    if not secret or len(secret) < 32:
+        raise RuntimeError(
+            "SESSION_SECRET not set. The server generates one automatically at startup."
+        )
+    _session_secret = secret
+    return secret
+
+
+def reset_session_secret() -> None:
+    """Clear cached session secret (for testing)."""
+    global _session_secret
+    _session_secret = None
+
+
+def ensure_session_secret(output_dir_path: str | os.PathLike) -> str:
+    """Generate or load a persistent session signing secret.
+
+    Called once at server startup. Stores the secret in
+    ``<output_dir>/.session_secret`` with 0600 permissions.
+    """
+    from pathlib import Path
+
+    secret = os.environ.get("SESSION_SECRET")
+    if secret and len(secret) >= 32:
+        os.environ["SESSION_SECRET"] = secret
+        return secret
+
+    secret_file = Path(output_dir_path) / ".session_secret"
+    if secret_file.exists():
+        secret = secret_file.read_text().strip()
+        if len(secret) >= 32:
+            os.environ["SESSION_SECRET"] = secret
+            return secret
+
+    secret = secrets.token_hex(32)
+    secret_file.parent.mkdir(parents=True, exist_ok=True)
+    secret_file.write_text(secret)
+    os.chmod(secret_file, 0o600)
+    os.environ["SESSION_SECRET"] = secret
+    return secret
+
+
+def sign_session_id(session_id: str) -> str:
+    """Return ``session_id.hmac_hex`` for use as a cookie value."""
+    secret = _get_session_secret()
+    sig = hmac.new(secret.encode(), session_id.encode(), hashlib.sha256).hexdigest()
+    return f"{session_id}.{sig}"
+
+
+def verify_session_cookie(cookie_value: str) -> str | None:
+    """Verify the HMAC signature and return the raw session_id, or None."""
+    if "." not in cookie_value:
+        return None
+    session_id, sig = cookie_value.rsplit(".", 1)
+    if not session_id or not sig:
+        return None
+    secret = _get_session_secret()
+    expected = hmac.new(secret.encode(), session_id.encode(), hashlib.sha256).hexdigest()
+    if hmac.compare_digest(sig, expected):
+        return session_id
+    return None

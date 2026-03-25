@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 @register("bpm_accuracy")
 def score_bpm(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None,
+    config: PipelineConfig | None = None, shared_data: dict | None = None,
 ) -> BpmAccuracyScore:
     """Detect BPM and compare to requested value from song metadata."""
     requested_bpm = _extract_requested_bpm(meta)

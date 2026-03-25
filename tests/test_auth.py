@@ -1,6 +1,11 @@
-"""Tests for auth utilities — password hashing, constants."""
+"""Tests for auth utilities — password hashing, HMAC signing, password strength."""
 
 from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import pytest
 
 from songmaker_cli.auth import (
     BCRYPT_ROUNDS,
@@ -14,8 +19,13 @@ from songmaker_cli.auth import (
     SCORING_RATE_LIMIT_USER,
     SESSION_ABSOLUTE_MAX_AGE_SECONDS,
     SESSION_MAX_AGE_SECONDS,
+    check_password_strength,
+    ensure_session_secret,
     hash_password,
+    reset_session_secret,
+    sign_session_id,
     verify_password,
+    verify_session_cookie,
 )
 
 
@@ -48,3 +58,93 @@ def test_constants() -> None:
     assert RATE_LIMIT_WINDOW_SECONDS == 3600
     assert MAX_QUEUE_DEPTH == 10
     assert MAX_USER_ACTIVE_JOBS == 1
+
+
+# ── HMAC session signing ───────────────────────────────────────────
+
+
+def test_sign_and_verify_session() -> None:
+    signed = sign_session_id("my-session-token")
+    assert "." in signed
+    assert verify_session_cookie(signed) == "my-session-token"
+
+
+def test_verify_rejects_tampered_signature() -> None:
+    signed = sign_session_id("my-session-token")
+    tampered = signed[:-4] + "XXXX"
+    assert verify_session_cookie(tampered) is None
+
+
+def test_verify_rejects_no_dot() -> None:
+    assert verify_session_cookie("no-dot-here") is None
+
+
+def test_verify_rejects_empty_parts() -> None:
+    assert verify_session_cookie(".abc") is None
+    assert verify_session_cookie("abc.") is None
+
+
+def test_ensure_session_secret_generates_file(tmp_path: Path) -> None:
+    reset_session_secret()
+    old = os.environ.pop("SESSION_SECRET", None)
+    try:
+        result = ensure_session_secret(tmp_path)
+        assert len(result) >= 32
+        assert os.environ["SESSION_SECRET"] == result
+        secret_file = tmp_path / ".session_secret"
+        assert secret_file.exists()
+        assert secret_file.read_text().strip() == result
+    finally:
+        if old:
+            os.environ["SESSION_SECRET"] = old
+        reset_session_secret()
+
+
+def test_ensure_session_secret_reads_existing_file(tmp_path: Path) -> None:
+    reset_session_secret()
+    old = os.environ.pop("SESSION_SECRET", None)
+    try:
+        secret_file = tmp_path / ".session_secret"
+        secret_file.write_text("b" * 64)
+        result = ensure_session_secret(tmp_path)
+        assert result == "b" * 64
+    finally:
+        if old:
+            os.environ["SESSION_SECRET"] = old
+        reset_session_secret()
+
+
+def test_ensure_session_secret_prefers_env_var(tmp_path: Path) -> None:
+    reset_session_secret()
+    old = os.environ.get("SESSION_SECRET")
+    try:
+        os.environ["SESSION_SECRET"] = "c" * 64
+        result = ensure_session_secret(tmp_path)
+        assert result == "c" * 64
+    finally:
+        if old:
+            os.environ["SESSION_SECRET"] = old
+        else:
+            os.environ.pop("SESSION_SECRET", None)
+        reset_session_secret()
+
+
+# ── Password strength ──────────────────────────────────────────────
+
+
+def test_common_password_rejected() -> None:
+    with pytest.raises(ValueError, match="too common"):
+        check_password_strength("password")
+
+
+def test_low_entropy_rejected() -> None:
+    with pytest.raises(ValueError, match="unique characters"):
+        check_password_strength("aaaaaaaa")
+
+
+def test_strong_password_accepted() -> None:
+    assert check_password_strength("s3cur3P@ss!") == "s3cur3P@ss!"
+
+
+def test_none_password_passes() -> None:
+    assert check_password_strength(None) is None

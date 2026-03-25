@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 @register("spectral_quality")
 def score_spectral_quality(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None,
+    config: PipelineConfig | None = None, shared_data: dict | None = None,
 ) -> SpectralQualityScore:
     """Detect noise artifacts by analyzing spectral flatness across the song."""
     if audio_data is None:

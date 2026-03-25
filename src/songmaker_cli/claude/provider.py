@@ -95,15 +95,20 @@ def _call_api(
 
 _DISALLOWED_TOOLS = (
     "Bash,Edit,Write,Read,Glob,Grep,WebFetch,WebSearch,"
-    "Agent,NotebookEdit,TodoWrite,EnterPlanMode"
+    "Agent,NotebookEdit,TodoWrite,EnterPlanMode,"
+    "CronCreate,CronDelete,CronList,RemoteTrigger,"
+    "EnterWorktree,ExitWorktree,ExitPlanMode,Skill,"
+    "TaskOutput,TaskStop,SendMessage,AskUserQuestion"
 )
 
 
 def _call_cli(prompt: str, system: str | None = None) -> ClaudeResponse:
     """Call Claude via the Claude Code CLI (uses Max subscription).
 
-    All tools are disabled — Claude can only process text, no file access
-    or command execution. Safe for user-facing chat.
+    All known tools are denied via --disallowedTools. This is a denylist
+    (not ideal), but --tools "" and --allowedTools "" don't actually block
+    tool use in current Claude CLI versions. The list should be updated
+    when new tools are added to Claude Code.
     """
     binary = _find_claude_binary()
     if not binary:

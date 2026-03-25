@@ -26,6 +26,7 @@ from songmaker_cli.auth import (
     SESSION_MAX_AGE_SECONDS,
     TRUSTED_PROXIES,
     hash_password,
+    sign_session_id,
     verify_password,
     verify_password_constant_time,
 )
@@ -78,9 +79,10 @@ def _set_session_cookie(
     if request:
         forwarded = request.headers.get("x-forwarded-proto", "")
         secure = forwarded == "https" or request.url.scheme == "https"
+    signed = sign_session_id(session_id)
     response.set_cookie(
         SESSION_COOKIE,
-        session_id,
+        signed,
         max_age=SESSION_MAX_AGE_SECONDS,
         httponly=True,
         samesite="strict",
@@ -162,6 +164,8 @@ def login(
         raise HTTPException(403, "Account disabled")
 
     record_login_attempt(db, ip, req.username, success=True)
+    # Security: wipe all existing sessions on login to prevent session accumulation.
+    # Tradeoff: logging in from a new device logs out all others.
     delete_user_sessions(db, user.id)
 
     expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)

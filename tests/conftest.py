@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import struct
 import wave
 from http.client import HTTPResponse
@@ -11,6 +12,23 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+
+_TEST_SESSION_SECRET = "a" * 64
+
+
+@pytest.fixture(autouse=True)
+def _set_session_secret():
+    """Ensure SESSION_SECRET is set for all tests."""
+    old = os.environ.get("SESSION_SECRET")
+    os.environ["SESSION_SECRET"] = _TEST_SESSION_SECRET
+    from songmaker_cli.auth import reset_session_secret
+    reset_session_secret()
+    yield
+    if old is None:
+        os.environ.pop("SESSION_SECRET", None)
+    else:
+        os.environ["SESSION_SECRET"] = old
+    reset_session_secret()
 
 
 def mock_http_response(data: bytes, status: int = 200) -> MagicMock:

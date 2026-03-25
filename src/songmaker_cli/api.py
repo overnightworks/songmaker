@@ -6,7 +6,6 @@ import logging
 import os
 import re
 import unicodedata
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
@@ -93,10 +92,6 @@ router.include_router(auth_router)
 router.include_router(admin_router)
 
 
-def _resolve_output_dir() -> Path:
-    return get_output_dir()
-
-
 _RATE_LIMITS: dict[str, tuple[int, int]] = {
     "generate": (GENERATION_RATE_LIMIT_USER, GENERATION_RATE_LIMIT_ADMIN),
     "score": (SCORING_RATE_LIMIT_USER, SCORING_RATE_LIMIT_ADMIN),
@@ -176,7 +171,7 @@ def _check_song_access(
         raise HTTPException(404, "Song not found")
     if user.role != ROLE_ADMIN:
         album = song.album
-        if album and album.created_by != user.id:
+        if not album or album.created_by != user.id:
             raise HTTPException(404, "Song not found")
     return song
 
@@ -190,7 +185,7 @@ def _check_generation_access(
         raise HTTPException(404, "Generation not found")
     if user.role != ROLE_ADMIN:
         album = gen.song.album if gen.song else None
-        if album and album.created_by != user.id:
+        if not album or album.created_by != user.id:
             raise HTTPException(404, "Generation not found")
     return gen
 
@@ -234,7 +229,7 @@ def api_create_album(
         session.commit()
     except IntegrityError:
         session.rollback()
-        raise HTTPException(409, f"Album '{title}' already exists")
+        raise HTTPException(409, f"Album ID conflict for '{title}'. Try a different title.")
     return AlbumResponse.from_orm(album)
 
 
@@ -334,7 +329,7 @@ def api_delete_version(
         delete_version(
             session, version_id,
             delete_generations=delete_generations,
-            output_dir=_resolve_output_dir(),
+            output_dir=get_output_dir(),
         )
     except ValueError:
         raise HTTPException(404, "Version not found")
@@ -364,7 +359,7 @@ def api_delete_generation(
 ) -> StatusResponse:
     _check_generation_access(session, gen_id, user)
     try:
-        delete_generation(session, gen_id, output_dir=_resolve_output_dir())
+        delete_generation(session, gen_id, output_dir=get_output_dir())
     except ValueError:
         raise HTTPException(404, "Generation not found")
     record_audit(session, user.id, "delete", "generation", gen_id)
@@ -463,6 +458,8 @@ def api_rate_by_path(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> RateResponse:
+    if ".." in album or ".." in gen_name or "/" in album or "/" in gen_name:
+        raise HTTPException(400, "Invalid path")
     mp3_path = f"{album}/{gen_name}.mp3"
     gen = get_generation_by_path(session, mp3_path)
     if not gen:
@@ -514,7 +511,7 @@ def api_cleanup_album(
 ) -> CleanupResponse:
     album = get_album(session, album_id)
     _check_album_access(album, user)
-    count = cleanup_album(session, album_id, output_dir=_resolve_output_dir())
+    count = cleanup_album(session, album_id, output_dir=get_output_dir())
     record_audit(session, user.id, "cleanup", "album", album_id, f"deleted={count}")
     session.commit()
     return CleanupResponse(deleted=count)

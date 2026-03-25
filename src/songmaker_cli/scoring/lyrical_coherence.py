@@ -59,37 +59,21 @@ JUDGE_PROMPT = (  # noqa: E501
 )
 
 
-def _read_whisper_text(whisper_path: Path) -> str:
-    text = whisper_path.read_text(encoding="utf-8").strip()
-    lines: list[str] = []
-    for raw in text.splitlines():
-        raw = raw.strip()
-        if not raw:
-            continue
-        if "|" in raw and raw.split("|", 1)[0].replace(".", "", 1).isdigit():
-            _, line_text = raw.split("|", 1)
-            lines.append(line_text.strip())
-        else:
-            lines.append(raw)
-    return "\n".join(lines)
-
-
 @register("lyrical_coherence", needs_audio=False)
 def score_lyrical_coherence(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None,
+    config: PipelineConfig | None = None, shared_data: dict | None = None,
 ) -> LyricalCoherenceScore:
-    """Judge lyrical coherence using Claude (CLI or API)."""
+    """Judge lyrical coherence using Claude (CLI or API).
+
+    Requires text_accuracy to run first — reads transcription from shared_data.
+    """
     if meta is None or not meta.lyrics:
         raise ValueError("No lyrics metadata — cannot judge lyrical coherence")
 
-    whisper_path = mp3_path.with_suffix(".whisper")
-    if not whisper_path.exists():
-        raise ValueError(
-            f"No Whisper transcription: {whisper_path.name}. Run text_accuracy first."
-        )
-
-    transcribed = _read_whisper_text(whisper_path)
+    transcribed = (shared_data or {}).get("whisper_text", "")
+    if not transcribed:
+        raise ValueError("No Whisper transcription in pipeline. Run text_accuracy first.")
     intended = "\n".join(
         line.strip() for line in meta.lyrics.splitlines()
         if line.strip() and not line.strip().startswith("[")

@@ -218,15 +218,17 @@ def auth_server_app(tmp_path: Path):
 
 
 def test_get_audio_owned_album_allowed(auth_server_app) -> None:
+    from songmaker_cli.auth import sign_session_id
     client, owner_sid, _other_sid, cookie_name = auth_server_app
-    client.cookies.set(cookie_name, owner_sid)
+    client.cookies.set(cookie_name, sign_session_id(owner_sid))
     resp = client.get("/audio/owned_album/song.mp3")
     assert resp.status_code == 200
 
 
 def test_get_audio_other_users_album_denied(auth_server_app) -> None:
+    from songmaker_cli.auth import sign_session_id
     client, owner_sid, _other_sid, cookie_name = auth_server_app
-    client.cookies.set(cookie_name, owner_sid)
+    client.cookies.set(cookie_name, sign_session_id(owner_sid))
     resp = client.get("/audio/other_album/other.mp3")
     assert resp.status_code == 404
 
@@ -277,6 +279,7 @@ def test_run_server_calls_uvicorn(tmp_path: Path) -> None:
         patch("uvicorn.run") as mock_uvicorn,
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
+        patch("songmaker_cli.auth.ensure_session_secret"),
 
     ):
         run_server(output_dir=output_dir, project_root=tmp_path, port=9999)
@@ -293,6 +296,7 @@ def test_run_server_defaults_to_localhost(tmp_path: Path) -> None:
         patch("uvicorn.run") as mock_uvicorn,
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
+        patch("songmaker_cli.auth.ensure_session_secret"),
     ):
         run_server(output_dir=output_dir, project_root=tmp_path, port=8080)
 
@@ -307,6 +311,7 @@ def test_run_server_opens_browser(tmp_path: Path) -> None:
         patch("uvicorn.run"),
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
+        patch("songmaker_cli.auth.ensure_session_secret"),
         patch("webbrowser.open") as mock_browser,
 
     ):
@@ -322,6 +327,7 @@ def test_run_server_creates_output_dir(tmp_path: Path) -> None:
         patch("uvicorn.run"),
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
+        patch("songmaker_cli.auth.ensure_session_secret"),
 
     ):
         run_server(output_dir=output_dir, project_root=tmp_path)
@@ -334,6 +340,7 @@ def test_run_server_infers_output_dir_from_project_root(tmp_path: Path) -> None:
         patch("uvicorn.run"),
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
+        patch("songmaker_cli.auth.ensure_session_secret"),
         patch("songmaker_cli.server.find_project_root", return_value=tmp_path),
 
     ):
@@ -350,6 +357,24 @@ def test_csrf_origin_check_rejects_cross_origin(server_app: TestClient) -> None:
     assert "Cross-origin" in resp.json()["detail"]
 
 
+def test_csrf_rejects_form_submit_without_origin(server_app: TestClient) -> None:
+    resp = server_app.post(
+        "/api/songs",
+        content=b"title=X&album_id=test_album",
+        headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert resp.status_code == 403
+    assert "Missing Origin" in resp.json()["detail"]
+
+
+def test_csrf_allows_json_without_origin(server_app: TestClient) -> None:
+    resp = server_app.post(
+        "/api/songs",
+        json={"title": "X", "album_id": "test_album"},
+    )
+    assert resp.status_code == 200
+
+
 def test_csrf_origin_check_allows_same_origin(server_app: TestClient) -> None:
     resp = server_app.post(
         "/api/songs",
@@ -357,6 +382,15 @@ def test_csrf_origin_check_allows_same_origin(server_app: TestClient) -> None:
         headers={"origin": "http://testserver", "host": "testserver"},
     )
     assert resp.status_code == 200
+
+
+def test_body_size_limit_rejects_large_content_length(server_app: TestClient) -> None:
+    resp = server_app.post(
+        "/api/songs",
+        content=b"{}",
+        headers={"content-type": "application/json", "content-length": "999999999"},
+    )
+    assert resp.status_code == 413
 
 
 def test_hsts_header_on_https(server_app: TestClient) -> None:
@@ -372,6 +406,7 @@ def test_run_server_infers_project_root(tmp_path: Path) -> None:
         patch("uvicorn.run"),
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
+        patch("songmaker_cli.auth.ensure_session_secret"),
         patch("songmaker_cli.server.find_project_root", return_value=None),
 
     ):

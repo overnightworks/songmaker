@@ -381,11 +381,15 @@ def test_execute_skips_job_on_mode_failure() -> None:
     queue = GpuQueue()
     results: list[str] = []
 
-    with patch.object(queue, "_prepare_mode", side_effect=RuntimeError("gpu fail")):
+    with (
+        patch.object(queue, "_prepare_mode", side_effect=RuntimeError("gpu fail")),
+        patch.object(queue, "_fail_job") as mock_fail,
+    ):
         queue._execute(GpuJob(job_id="j1", job_type="generate", fn=lambda: results.append("ran")))
 
     assert results == []
     assert queue._current_mode is None
+    mock_fail.assert_called_once_with("j1", "GPU mode preparation failed")
 
 
 # ── get_gpu_queue singleton ─────────────────────────────────────────
@@ -507,3 +511,38 @@ def test_clear_scoring_models_audiobox_import_error() -> None:
         patch.object(queue, "_gc_gpu"),
     ):
         queue._clear_scoring_models()
+
+
+# ── _fail_job ──────────────────────────────────────────────────────
+
+
+def test_fail_job_updates_db() -> None:
+    queue = GpuQueue()
+    mock_session = MagicMock()
+    mock_factory = MagicMock(
+        return_value=MagicMock(
+            __enter__=MagicMock(return_value=mock_session),
+            __exit__=MagicMock(return_value=False),
+        ),
+    )
+
+    with (
+        patch("songmaker_cli.db.engine.get_session_factory", return_value=mock_factory),
+        patch("songmaker_cli.db.queries.update_job_status") as mock_update,
+    ):
+        queue._fail_job("j1", "something broke")
+
+    mock_update.assert_called_once_with(
+        mock_session, "j1", "failed", error="something broke", error_type="gpu_error",
+    )
+    mock_session.commit.assert_called_once()
+
+
+def test_fail_job_handles_db_error() -> None:
+    queue = GpuQueue()
+
+    with patch(
+        "songmaker_cli.db.engine.get_session_factory",
+        side_effect=RuntimeError("no db"),
+    ):
+        queue._fail_job("j1", "error")

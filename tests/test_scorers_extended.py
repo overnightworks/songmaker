@@ -233,30 +233,6 @@ def test_word_level_accuracy_empty() -> None:
 
 
 
-def test_segment_confidence() -> None:
-    from songmaker_cli.scoring.text_accuracy import _segment_confidence
-
-    good = {"avg_logprob": -0.2, "no_speech_prob": 0.01}
-    bad = {"avg_logprob": -1.5, "no_speech_prob": 0.9}
-    assert _segment_confidence(good) > _segment_confidence(bad)
-
-
-def test_save_whisper_with_confidence(tmp_path: Path) -> None:
-    from songmaker_cli.scoring.text_accuracy import _save_whisper_with_confidence
-
-    segments = [
-        {"text": "hello", "avg_logprob": -0.3, "no_speech_prob": 0.01},
-        {"text": "world", "avg_logprob": -0.5, "no_speech_prob": 0.1},
-        {"text": "", "avg_logprob": -1.0, "no_speech_prob": 0.9},
-    ]
-    path = tmp_path / "test.whisper"
-    _save_whisper_with_confidence(path, segments)
-
-    lines = path.read_text().splitlines()
-    assert len(lines) == 2
-    assert "|hello" in lines[0]
-    assert "|world" in lines[1]
-
 
 def test_get_whisper_model_caches() -> None:
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
@@ -320,11 +296,16 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
     }
     config = PipelineConfig(device="cpu", whisper_model="base")
 
+    shared_data: dict = {}
     with patch("songmaker_cli.scoring.text_accuracy._get_whisper_model", return_value=mock_model):
-        result = score_text_accuracy(tmp_path / "test.mp3", meta=meta, config=config)
+        result = score_text_accuracy(
+            tmp_path / "test.mp3", meta=meta, config=config, shared_data=shared_data,
+        )
 
     assert isinstance(result, TextAccuracyScore)
     assert result.similarity_ratio > 0
+    assert "whisper_text" in shared_data
+    assert "hello world" in shared_data["whisper_text"]
 
 
 def test_score_text_accuracy_no_meta() -> None:
@@ -374,32 +355,6 @@ def test_text_accuracy_score_empty_lines() -> None:
 # ── lyrical_coherence ──────────────────────────────────────────────
 
 
-def test_read_whisper_text_plain(tmp_path: Path) -> None:
-    from songmaker_cli.scoring.lyrical_coherence import _read_whisper_text
-
-    whisper = tmp_path / "test.whisper"
-    whisper.write_text("hello world\ngoodbye moon\n")
-    result = _read_whisper_text(whisper)
-    assert result == "hello world\ngoodbye moon"
-
-
-def test_read_whisper_text_confidence_format(tmp_path: Path) -> None:
-    from songmaker_cli.scoring.lyrical_coherence import _read_whisper_text
-
-    whisper = tmp_path / "test.whisper"
-    whisper.write_text("0.85|hello world\n0.72|goodbye moon\n")
-    result = _read_whisper_text(whisper)
-    assert result == "hello world\ngoodbye moon"
-
-
-def test_read_whisper_text_empty_lines(tmp_path: Path) -> None:
-    from songmaker_cli.scoring.lyrical_coherence import _read_whisper_text
-
-    whisper = tmp_path / "test.whisper"
-    whisper.write_text("hello\n\n\nworld\n")
-    result = _read_whisper_text(whisper)
-    assert result == "hello\nworld"
-
 
 def test_score_lyrical_coherence_no_meta() -> None:
     from songmaker_cli.scoring.lyrical_coherence import score_lyrical_coherence
@@ -416,7 +371,7 @@ def test_score_lyrical_coherence_no_whisper(tmp_path: Path) -> None:
     mp3.write_bytes(b"fake")
 
     with pytest.raises(ValueError, match="No Whisper transcription"):
-        score_lyrical_coherence(mp3, meta=meta)
+        score_lyrical_coherence(mp3, meta=meta, shared_data={})
 
 
 def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:
@@ -567,16 +522,16 @@ def test_scorer_timeout() -> None:
         return None
 
     with pytest.raises(_ScorerTimeout):
-        _run_with_timeout(slow_fn, Path("x"), None, None, None, timeout=1, name="slow")
+        _run_with_timeout(slow_fn, Path("x"), None, None, None, {}, timeout=1, name="slow")
 
 
 def test_scorer_no_timeout() -> None:
     from songmaker_cli.scoring.pipeline import _run_with_timeout
 
-    def fast_fn(mp3_path, meta, audio_data, config):
+    def fast_fn(mp3_path, meta, audio_data, config, shared_data):
         return "result"
 
-    result = _run_with_timeout(fast_fn, Path("x"), None, None, None, timeout=0, name="fast")
+    result = _run_with_timeout(fast_fn, Path("x"), None, None, None, {}, timeout=0, name="fast")
     assert result == "result"
 
 
@@ -586,14 +541,13 @@ def test_score_lyrical_coherence_happy_path(tmp_path: Path) -> None:
 
     mp3 = tmp_path / "test.mp3"
     mp3.write_bytes(b"fake")
-    whisper = tmp_path / "test.whisper"
-    whisper.write_text("0.9|hello world\n0.8|goodbye moon\n")
 
     meta = SongMeta(prompt="test", lyrics="[verse]\nhello world\ngoodbye moon")
+    shared_data = {"whisper_text": "hello world\ngoodbye moon"}
     mock_response = ClaudeResponse(text='{"score": 9, "issues": [], "summary": "great"}')
 
     with patch("songmaker_cli.scoring.lyrical_coherence.call_claude", return_value=mock_response):
-        result = score_lyrical_coherence(mp3, meta=meta)
+        result = score_lyrical_coherence(mp3, meta=meta, shared_data=shared_data)
 
     assert result.score == 9
     assert result.summary == "great"

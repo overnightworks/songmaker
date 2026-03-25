@@ -39,6 +39,10 @@ def _force_cpu_env() -> Iterator[None]:
     Must be used under _predictor_lock for thread safety.
     IMPORTANT: Scoring must remain sequential — the lock only protects
     against Songmaker threads, not other processes reading CUDA_VISIBLE_DEVICES.
+
+    Known limitation: AesPredictor has no explicit device parameter, so
+    env mutation is the only way to force CPU. If upstream adds device
+    support, replace this with direct device passing.
     """
     saved = os.environ.get("CUDA_VISIBLE_DEVICES")
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
@@ -54,7 +58,7 @@ def _force_cpu_env() -> Iterator[None]:
 @register("audiobox", needs_audio=False)
 def score_audiobox(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None,
+    config: PipelineConfig | None = None, shared_data: dict | None = None,
 ) -> AudioBoxScore:
     """Score audio quality using Meta's AudioBox Aesthetics model."""
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()

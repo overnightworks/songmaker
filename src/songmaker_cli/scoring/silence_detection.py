@@ -16,7 +16,7 @@ from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 @register("silence")
 def score_silence(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None,
+    config: PipelineConfig | None = None, shared_data: dict | None = None,
 ) -> SilenceScore:
     """Detect problematic silence gaps in the interior of a song."""
     if audio_data is None:

@@ -55,9 +55,6 @@ def create_user_endpoint(
     db: Session = Depends(_get_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> UserResponse:
-    if req.role not in ("admin", "user"):
-        raise HTTPException(422, "Role must be 'admin' or 'user'")
-
     existing = get_user_by_username(db, req.username)
     if existing:
         raise HTTPException(409, f"Username '{req.username}' already exists")
@@ -78,9 +75,6 @@ def update_user_endpoint(
     user = get_user(db, user_id)
     if not user:
         raise HTTPException(404, "User not found")
-
-    if req.role is not None and req.role not in ("admin", "user"):
-        raise HTTPException(422, "Role must be 'admin' or 'user'")
 
     if user_id == admin.id and req.is_active is False:
         raise HTTPException(400, "Cannot deactivate your own account")
