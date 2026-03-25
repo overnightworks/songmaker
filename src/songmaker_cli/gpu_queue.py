@@ -65,11 +65,14 @@ class GpuQueue:
     def _recover_stale_jobs(self) -> None:
         try:
             from songmaker_cli.db.engine import get_session_factory
-            from songmaker_cli.db.queries import recover_stale_jobs
+            from songmaker_cli.db.queries import delete_expired_sessions, recover_stale_jobs
 
             factory = get_session_factory()
             with factory() as session:
                 recover_stale_jobs(session)
+                expired = delete_expired_sessions(session)
+                if expired:
+                    log.info("Cleaned up %d expired sessions", expired)
                 session.commit()
         except RuntimeError:
             pass
@@ -190,7 +193,7 @@ class GpuQueue:
 
         env = os.environ.copy()
         env["ACESTEP_API_PORT"] = str(ACESTEP_PORT)
-        env["ACESTEP_API_HOST"] = "0.0.0.0"
+        env["ACESTEP_API_HOST"] = "127.0.0.1"
         env["ACESTEP_DEVICE"] = "cuda"
         env.setdefault("ACESTEP_CONFIG_PATH", "acestep-v15-sft")
         env.setdefault("ACESTEP_INIT_LLM", "1")

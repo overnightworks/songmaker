@@ -47,7 +47,10 @@ def client(tmp_path: Path) -> TestClient:
 def _login_as(client: TestClient, role: str) -> None:
     factory = get_session_factory()
     with factory() as session:
-        create_user(session, f"test_{role}", hash_password("password123"), role=role)
+        user = create_user(session, f"test_{role}", hash_password("password123"), role=role)
+        album = session.query(Album).filter_by(id="rock").first()
+        if album and not album.created_by:
+            album.created_by = user.id
         session.commit()
     resp = client.post(
         "/api/auth/login", json={"username": f"test_{role}", "password": "password123"},

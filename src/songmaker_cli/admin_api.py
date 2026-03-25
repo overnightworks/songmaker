@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_models import (
@@ -111,7 +111,7 @@ def deactivate_user_endpoint(
 
 @router.get("/login-attempts")
 def login_attempts_endpoint(
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(_get_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> list[LoginAttemptResponse]:
@@ -157,7 +157,7 @@ def reinitialize_acestep(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(502, f"ACE-Step unreachable: {exc}") from exc
+        raise HTTPException(502, "ACE-Step server is unreachable") from exc
 
 
 @router.get("/acestep/status")

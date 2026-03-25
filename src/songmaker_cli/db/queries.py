@@ -260,7 +260,10 @@ def delete_generation(
 
 def _delete_generation_files(output_dir: Path, mp3_rel: str) -> None:
     """Remove MP3 and related files (.md snapshot, .whisper) from disk."""
-    mp3 = output_dir / mp3_rel
+    mp3 = (output_dir / mp3_rel).resolve()
+    if not mp3.is_relative_to(output_dir.resolve()):
+        log.warning("Path traversal blocked in delete: %s", mp3_rel)
+        return
     for suffix in [".mp3", ".md", ".whisper"]:
         path = mp3.with_suffix(suffix)
         if path.exists():
@@ -539,6 +542,13 @@ def list_active_sessions(session: Session) -> list[UserSession]:
         .order_by(UserSession.created_at.desc())
         .all()
     )
+
+
+def delete_user_sessions(session: Session, user_id: str) -> int:
+    """Delete all sessions for a user. Returns count deleted."""
+    count = session.query(UserSession).filter_by(user_id=user_id).delete()
+    session.flush()
+    return count
 
 
 def delete_expired_sessions(session: Session) -> int:

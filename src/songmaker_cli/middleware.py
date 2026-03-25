@@ -24,7 +24,6 @@ PUBLIC_PREFIXES = (
     "/",
     "/login",
     "/setup",
-    "/static",
     "/audio/",
     "/_app",
     "/favicon",

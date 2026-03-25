@@ -9,6 +9,7 @@ import unicodedata
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from songmaker_cli.admin_api import router as admin_router
@@ -52,7 +53,7 @@ from songmaker_cli.config import (
     save_generation_defaults,
 )
 from songmaker_cli.db.engine import get_db_session
-from songmaker_cli.db.models import Album
+from songmaker_cli.db.models import Album, Generation, Song
 from songmaker_cli.db.queries import (
     cleanup_album,
     count_total_queued_jobs,
@@ -77,7 +78,7 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.gpu_queue import get_gpu_queue
 from songmaker_cli.jobs import run_generation_job, run_scoring_job
-from songmaker_cli.middleware import AuthenticatedUser
+from songmaker_cli.middleware import AuthenticatedUser, require_admin
 
 log = logging.getLogger(__name__)
 
@@ -122,6 +123,18 @@ _VALID_GEN_PARAM_KEYS = frozenset({
 })
 
 
+_GEN_PARAM_LIMITS: dict[str, tuple[float, float]] = {
+    "inference_steps": (1, 200),
+    "guidance_scale": (0, 50),
+    "shift": (0, 100),
+    "lm_temperature": (0, 5),
+    "lm_top_k": (0, 1000),
+    "lm_top_p": (0, 1),
+    "lm_cfg_scale": (0, 50),
+    "batch_size": (1, 8),
+}
+
+
 def _validate_generation_params(params: dict | None) -> dict | None:
     if params is None:
         return None
@@ -130,6 +143,11 @@ def _validate_generation_params(params: dict | None) -> dict | None:
         raise HTTPException(
             422, f"Unknown generation_params keys: {', '.join(sorted(invalid))}",
         )
+    for key, (lo, hi) in _GEN_PARAM_LIMITS.items():
+        val = params.get(key)
+        if val is not None and isinstance(val, (int, float)):
+            if val < lo or val > hi:
+                raise HTTPException(422, f"{key}={val} out of range [{lo}, {hi}]")
     return params
 
 
@@ -144,6 +162,16 @@ def _slugify(text: str) -> str:
     return text.strip("-") or "untitled"
 
 
+def _unique_album_id(session: Session, base_slug: str) -> str:
+    """Return a unique album ID, appending -2, -3, etc. if needed."""
+    candidate = base_slug
+    counter = 1
+    while get_album(session, candidate):
+        counter += 1
+        candidate = f"{base_slug}-{counter}"
+    return candidate
+
+
 def _owner_filter(user: AuthenticatedUser | None) -> str | None:
     if not user or user.role == ROLE_ADMIN:
         return None
@@ -156,6 +184,34 @@ def _check_album_access(album: Album | None, user: AuthenticatedUser | None) -> 
     if user and user.role != ROLE_ADMIN and album.created_by != user.id:
         raise HTTPException(404, "Album not found")
     return album
+
+
+def _check_song_access(
+    session: Session, song_id: str, user: AuthenticatedUser | None,
+) -> Song:
+    """Load a song and verify ownership. Returns the song or raises 404."""
+    song = get_song(session, song_id)
+    if not song:
+        raise HTTPException(404, "Song not found")
+    if user and user.role != ROLE_ADMIN:
+        album = song.album
+        if album and album.created_by != user.id:
+            raise HTTPException(404, "Song not found")
+    return song
+
+
+def _check_generation_access(
+    session: Session, gen_id: str, user: AuthenticatedUser | None,
+) -> Generation:
+    """Load a generation and verify ownership. Returns the generation or raises 404."""
+    gen = get_generation(session, gen_id)
+    if not gen:
+        raise HTTPException(404, "Generation not found")
+    if user and user.role != ROLE_ADMIN:
+        album = gen.song.album if gen.song else None
+        if album and album.created_by != user.id:
+            raise HTTPException(404, "Generation not found")
+    return gen
 
 
 @router.get("/albums")
@@ -186,16 +242,17 @@ def api_create_album(
     title = data.get("title", "").strip()
     if not title:
         raise HTTPException(422, "Title is required")
-    album_id = _slugify(title)
-    existing = get_album(session, album_id)
-    if existing:
+    album_id = _unique_album_id(session, _slugify(title))
+    try:
+        album = create_album(
+            session, album_id, title,
+            artist=data.get("artist", ""),
+            created_by=user.id if user else None,
+        )
+        session.commit()
+    except IntegrityError:
+        session.rollback()
         raise HTTPException(409, f"Album '{title}' already exists")
-    album = create_album(
-        session, album_id, title,
-        artist=data.get("artist", ""),
-        created_by=user.id if user else None,
-    )
-    session.commit()
     return AlbumResponse.from_orm(album)
 
 
@@ -230,9 +287,12 @@ def api_get_song(
 
 @router.post("/songs")
 def api_create_song(
-    req: SongCreateRequest, session: Session = Depends(_get_session),
+    req: SongCreateRequest, request: Request,
+    session: Session = Depends(_get_session),
 ) -> SongResponse:
-    log.debug("POST /songs: title='%s', album='%s'", req.title, req.album_id)
+    user = _get_optional_user(request)
+    album = get_album(session, req.album_id)
+    _check_album_access(album, user)
     _validate_generation_params(req.generation_params)
     song = create_song(
         session, title=req.title, album_id=req.album_id,
@@ -246,9 +306,11 @@ def api_create_song(
 
 @router.put("/songs/{song_id}")
 def api_update_song(
-    song_id: str, req: SongUpdateRequest, session: Session = Depends(_get_session),
+    song_id: str, req: SongUpdateRequest, request: Request,
+    session: Session = Depends(_get_session),
 ) -> SongResponse:
-    log.debug("PUT /songs/%s: fields_set=%s", song_id, req.model_fields_set)
+    user = _get_optional_user(request)
+    _check_song_access(session, song_id, user)
     _validate_generation_params(req.generation_params)
     kwargs: dict = dict(
         lyrics=req.lyrics, prompt=req.prompt,
@@ -266,11 +328,10 @@ def api_update_song(
 
 @router.get("/songs/{song_id}/versions")
 def api_song_versions(
-    song_id: str, session: Session = Depends(_get_session),
+    song_id: str, request: Request, session: Session = Depends(_get_session),
 ) -> list[VersionResponse]:
-    song = get_song(session, song_id)
-    if not song:
-        raise HTTPException(404, "Song not found")
+    user = _get_optional_user(request)
+    song = _check_song_access(session, song_id, user)
     return [VersionResponse.from_orm(v) for v in reversed(song.versions)]
 
 
@@ -280,9 +341,17 @@ def api_song_versions(
 @router.delete("/versions/{version_id}")
 def api_delete_version(
     version_id: str,
+    request: Request,
     delete_generations: bool = Query(False),
     session: Session = Depends(_get_session),
 ) -> StatusResponse:
+    from songmaker_cli.db.models import Version as VersionModel
+
+    user = _get_optional_user(request)
+    ver = session.query(VersionModel).filter_by(id=version_id).first()
+    if not ver:
+        raise HTTPException(404, "Version not found")
+    _check_song_access(session, ver.song_id, user)
     try:
         delete_version(
             session, version_id,
@@ -300,18 +369,19 @@ def api_delete_version(
 
 @router.get("/generations/{gen_id}")
 def api_get_generation(
-    gen_id: str, session: Session = Depends(_get_session),
+    gen_id: str, request: Request, session: Session = Depends(_get_session),
 ) -> GenerationResponse:
-    gen = get_generation(session, gen_id)
-    if not gen:
-        raise HTTPException(404, "Generation not found")
+    user = _get_optional_user(request)
+    gen = _check_generation_access(session, gen_id, user)
     return GenerationResponse.from_orm(gen)
 
 
 @router.delete("/generations/{gen_id}")
 def api_delete_generation(
-    gen_id: str, session: Session = Depends(_get_session),
+    gen_id: str, request: Request, session: Session = Depends(_get_session),
 ) -> StatusResponse:
+    user = _get_optional_user(request)
+    _check_generation_access(session, gen_id, user)
     try:
         delete_generation(session, gen_id, output_dir=_resolve_output_dir())
     except ValueError:
@@ -333,9 +403,7 @@ def api_generate_song(
     user = _get_optional_user(request)
     _check_rate_limit(session, user, "generate")
 
-    song = get_song(session, song_id)
-    if not song:
-        raise HTTPException(404, "Song not found")
+    song = _check_song_access(session, song_id, user)
     version = song.latest_version
     if not version or not version.lyrics or not version.prompt:
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
@@ -362,9 +430,7 @@ def api_score_generation(
     user = _get_optional_user(request)
     _check_rate_limit(session, user, "score")
 
-    gen = get_generation(session, gen_id)
-    if not gen:
-        raise HTTPException(404, "Generation not found")
+    _check_generation_access(session, gen_id, user)
 
     job = create_job(session, "score", user_id=user.id if user else None)
     session.commit()
@@ -393,11 +459,11 @@ def api_get_job(job_id: str, session: Session = Depends(_get_session)) -> JobRes
 
 @router.post("/generations/{gen_id}/rate")
 def api_rate_generation(
-    gen_id: str, req: RateRequest, session: Session = Depends(_get_session),
+    gen_id: str, req: RateRequest, request: Request,
+    session: Session = Depends(_get_session),
 ) -> RateResponse:
-    gen = get_generation(session, gen_id)
-    if not gen:
-        raise HTTPException(404, "Generation not found")
+    user = _get_optional_user(request)
+    _check_generation_access(session, gen_id, user)
     save_rating(session, gen_id, req.rating, req.notes)
     session.commit()
     return RateResponse(generation_id=gen_id, rating=req.rating)
@@ -422,8 +488,10 @@ def api_rate_by_path(
 
 @router.post("/generations/{gen_id}/pick")
 def api_pick_generation(
-    gen_id: str, session: Session = Depends(_get_session),
+    gen_id: str, request: Request, session: Session = Depends(_get_session),
 ) -> StatusResponse:
+    user = _get_optional_user(request)
+    _check_generation_access(session, gen_id, user)
     try:
         pick_generation(session, gen_id)
     except ValueError:
@@ -434,8 +502,10 @@ def api_pick_generation(
 
 @router.post("/generations/{gen_id}/unpick")
 def api_unpick_generation(
-    gen_id: str, session: Session = Depends(_get_session),
+    gen_id: str, request: Request, session: Session = Depends(_get_session),
 ) -> StatusResponse:
+    user = _get_optional_user(request)
+    _check_generation_access(session, gen_id, user)
     try:
         unpick_generation(session, gen_id)
     except ValueError:
@@ -446,11 +516,11 @@ def api_unpick_generation(
 
 @router.post("/albums/{album_id}/cleanup")
 def api_cleanup_album(
-    album_id: str, session: Session = Depends(_get_session),
+    album_id: str, request: Request, session: Session = Depends(_get_session),
 ) -> CleanupResponse:
+    user = _get_optional_user(request)
     album = get_album(session, album_id)
-    if not album:
-        raise HTTPException(404, "Album not found")
+    _check_album_access(album, user)
     count = cleanup_album(session, album_id, output_dir=_resolve_output_dir())
     session.commit()
     return CleanupResponse(deleted=count)
@@ -460,12 +530,17 @@ def api_cleanup_album(
 
 
 @router.get("/settings/generation-defaults")
-def api_get_generation_defaults() -> dict:
+def api_get_generation_defaults(
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> dict:
     return load_generation_defaults()
 
 
 @router.put("/settings/generation-defaults")
-def api_set_generation_defaults(req: GenerationDefaultsRequest) -> dict:
+def api_set_generation_defaults(
+    req: GenerationDefaultsRequest,
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> dict:
     data: dict = {}
     if req.turbo is not None:
         data["turbo"] = req.turbo

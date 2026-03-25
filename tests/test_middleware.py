@@ -75,8 +75,8 @@ def test_is_public_setup() -> None:
     assert _is_public("/setup") is True
 
 
-def test_is_public_static() -> None:
-    assert _is_public("/static/foo.js") is True
+def test_static_requires_auth() -> None:
+    assert _is_public("/static/foo.js") is False
 
 
 def test_is_public_audio() -> None:

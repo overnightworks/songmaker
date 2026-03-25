@@ -51,7 +51,7 @@ class SessionMiddleware(BaseHTTPMiddleware):
 def create_app(
     output_dir: Path, project_root: Path, *, auth_enabled: bool = True,
 ) -> FastAPI:
-    app = FastAPI(title="Songmaker", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Songmaker", docs_url=None, redoc_url=None, openapi_url=None)
 
     app.add_middleware(AccessLogMiddleware)
 
@@ -94,10 +94,6 @@ def create_app(
     sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"
 
-    app.mount(
-        "/static", StaticFiles(directory=str(output_dir)), name="static",
-    )
-
     if sveltekit_app_dir.exists():
         app.mount(
             "/_app", StaticFiles(directory=str(sveltekit_app_dir)), name="sveltekit-app",
@@ -110,7 +106,6 @@ def create_app(
         if (
             not request.url.path.startswith("/api/")
             and not request.url.path.startswith("/audio/")
-            and not request.url.path.startswith("/static/")
             and not request.url.path.startswith("/_app/")
             and sk_index.exists()
         ):
@@ -150,7 +145,10 @@ def run_server(
     if auth_enabled:
         log.info("Auth enabled (session-based)")
     else:
-        log.info("Auth disabled — set SESSION_SECRET to enable")
+        log.warning(
+            "Auth disabled — server bound to localhost only. "
+            "Set SESSION_SECRET to enable auth and network access.",
+        )
 
     if open_browser:
         import webbrowser

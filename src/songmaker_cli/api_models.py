@@ -251,23 +251,23 @@ class JobResponse(BaseModel):
 
 
 class SongCreateRequest(BaseModel):
-    title: str
-    album_id: str
-    lyrics: str = ""
-    prompt: str = ""
+    title: str = Field(max_length=200)
+    album_id: str = Field(max_length=64)
+    lyrics: str = Field("", max_length=50_000)
+    prompt: str = Field("", max_length=5_000)
     bpm: int = 0
-    duration: int = 180
-    key: str = ""
-    language: str = ""
+    duration: int = Field(180, ge=1, le=600)
+    key: str = Field("", max_length=10)
+    language: str = Field("", max_length=10)
     generation_params: dict | None = None
 
 
 class SongUpdateRequest(BaseModel):
-    lyrics: str | None = None
-    prompt: str | None = None
+    lyrics: str | None = Field(None, max_length=50_000)
+    prompt: str | None = Field(None, max_length=5_000)
     bpm: int | None = None
-    duration: int | None = None
-    key: str | None = None
+    duration: int | None = Field(None, ge=1, le=600)
+    key: str | None = Field(None, max_length=10)
     generation_params: dict | None = None
 
 
@@ -281,7 +281,7 @@ class ScoreRequest(BaseModel):
 
 class RateRequest(BaseModel):
     rating: float = Field(ge=0, le=100)
-    notes: str = ""
+    notes: str = Field("", max_length=2_000)
 
 
 class GenerationDefaultsRequest(BaseModel):
@@ -290,9 +290,9 @@ class GenerationDefaultsRequest(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
-    system: str = ""
-    context: str = ""
+    message: str = Field(max_length=10_000)
+    system: str = Field("", max_length=5_000)
+    context: str = Field("", max_length=20_000)
 
 
 # ── Simple responses ────────────────────────────────────────────────

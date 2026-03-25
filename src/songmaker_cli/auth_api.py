@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_models import (
@@ -31,6 +32,7 @@ from songmaker_cli.db.queries import (
     create_session,
     create_user,
     delete_session,
+    delete_user_sessions,
     get_user,
     get_user_by_username,
     record_login_attempt,
@@ -54,7 +56,13 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _set_session_cookie(response: Response, session_id: str, secure: bool = False) -> None:
+def _set_session_cookie(
+    response: Response, session_id: str, request: Request | None = None,
+) -> None:
+    secure = False
+    if request:
+        forwarded = request.headers.get("x-forwarded-proto", "")
+        secure = forwarded == "https" or request.url.scheme == "https"
     response.set_cookie(
         SESSION_COOKIE,
         session_id,
@@ -81,16 +89,20 @@ def setup(
     if user_count(db) > 0:
         raise HTTPException(403, "Setup already completed")
 
-    user = create_user(db, req.username, hash_password(req.password), role=ROLE_ADMIN)
-    expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
-    user_session = create_session(
-        db, user.id, expires,
-        ip_address=_client_ip(request),
-        user_agent=request.headers.get("user-agent", ""),
-    )
-    db.commit()
+    try:
+        user = create_user(db, req.username, hash_password(req.password), role=ROLE_ADMIN)
+        expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
+        user_session = create_session(
+            db, user.id, expires,
+            ip_address=_client_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+        )
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(403, "Setup already completed")
 
-    _set_session_cookie(response, user_session.id)
+    _set_session_cookie(response, user_session.id, request)
     log.info("Setup completed: admin user '%s' created", req.username)
     return UserResponse.from_orm(user)
 
@@ -126,6 +138,7 @@ def login(
         raise HTTPException(403, "Account disabled")
 
     record_login_attempt(db, ip, req.username, success=True)
+    delete_user_sessions(db, user.id)
 
     expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
     user_session = create_session(
@@ -135,7 +148,7 @@ def login(
     )
     db.commit()
 
-    _set_session_cookie(response, user_session.id)
+    _set_session_cookie(response, user_session.id, request)
     return UserResponse.from_orm(user)
 
 
@@ -178,5 +191,6 @@ def change_password(
         raise HTTPException(401, "Current password is incorrect")
 
     user.password_hash = hash_password(req.new)
+    delete_user_sessions(db, current_user.id)
     db.commit()
     return StatusResponse(status="ok")

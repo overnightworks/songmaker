@@ -300,17 +300,18 @@ def test_version_includes_generation_params(client: TestClient) -> None:
 # ── Generation defaults ─────────────────────────────────────────────
 
 
-def test_generation_defaults_roundtrip(client: TestClient, tmp_path: Path) -> None:
+def test_generation_defaults_roundtrip(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
     from songmaker_cli import config as config_mod
     original = config_mod._defaults_path
 
     config_mod._defaults_path = lambda: tmp_path / "gen_defaults.json"
     try:
-        resp = client.get("/api/settings/generation-defaults")
+        resp = c.get("/api/settings/generation-defaults")
         assert resp.status_code == 200
         assert resp.json() == {}
 
-        resp = client.put("/api/settings/generation-defaults", json={
+        resp = c.put("/api/settings/generation-defaults", json={
             "turbo": {"inference_steps": 12},
             "sft": {"inference_steps": 60},
         })
@@ -319,10 +320,11 @@ def test_generation_defaults_roundtrip(client: TestClient, tmp_path: Path) -> No
         assert data["turbo"] == {"inference_steps": 12}
         assert data["sft"] == {"inference_steps": 60}
 
-        resp = client.get("/api/settings/generation-defaults")
+        resp = c.get("/api/settings/generation-defaults")
         assert resp.json()["turbo"]["inference_steps"] == 12
     finally:
         config_mod._defaults_path = original
+        reset_engine()
 
 
 # ── 404 error branches ──────────────────────────────────────────────
@@ -543,10 +545,12 @@ def test_create_album_slugifies_unicode(client: TestClient) -> None:
     assert resp.json()["id"] == "uber-nachte"
 
 
-def test_create_album_duplicate(client: TestClient) -> None:
-    client.post("/api/albums", json={"title": "Dupe"})
-    resp = client.post("/api/albums", json={"title": "Dupe"})
-    assert resp.status_code == 409
+def test_create_album_duplicate_gets_suffix(client: TestClient) -> None:
+    resp1 = client.post("/api/albums", json={"title": "Dupe"})
+    assert resp1.json()["id"] == "dupe"
+    resp2 = client.post("/api/albums", json={"title": "Dupe"})
+    assert resp2.status_code == 200
+    assert resp2.json()["id"] == "dupe-2"
 
 
 def test_create_album_empty_title(client: TestClient) -> None:
