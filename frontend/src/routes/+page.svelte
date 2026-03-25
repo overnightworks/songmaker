@@ -360,8 +360,10 @@
 	.main-content {
 		flex: 1;
 		overflow-y: auto;
+		overflow-x: hidden;
 		display: flex;
 		flex-direction: column;
+		min-width: 0;
 	}
 
 	.detail-panel {
@@ -372,6 +374,7 @@
 		flex: 1;
 		max-width: 800px;
 		width: 100%;
+		min-width: 0;
 		margin: 0 auto;
 	}
 
@@ -608,6 +611,10 @@
 			flex-wrap: wrap;
 		}
 
+		.detail-panel {
+			padding: 12px 12px calc(var(--player-height) + 12px);
+		}
+
 		.chat-panel {
 			position: fixed;
 			top: var(--header-height);
@@ -615,12 +622,14 @@
 			right: 0;
 			bottom: 0;
 			width: 100%;
+			height: calc(100dvh - var(--header-height));
 			z-index: 170;
 			background: var(--bg);
 		}
 
 		.chat-panel.with-player {
 			bottom: var(--player-height);
+			height: calc(100dvh - var(--header-height) - var(--player-height));
 		}
 	}
 </style>

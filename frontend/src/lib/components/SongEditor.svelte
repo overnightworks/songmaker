@@ -257,6 +257,8 @@
 		border-radius: 4px;
 		color: var(--text);
 		font-size: 13px;
+		width: 100%;
+		min-width: 0;
 	}
 
 	.edit-field input:focus,

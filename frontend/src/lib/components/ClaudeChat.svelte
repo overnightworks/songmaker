@@ -250,7 +250,9 @@
 		display: flex;
 		flex-direction: column;
 		height: 100%;
+		max-height: 100%;
 		border-left: 1px solid var(--border);
+		overflow: hidden;
 	}
 
 	.chat-header {
@@ -409,7 +411,6 @@
 		display: flex;
 		gap: 6px;
 		padding: 8px;
-		padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
 		border-top: 1px solid var(--border);
 		flex-shrink: 0;
 	}
