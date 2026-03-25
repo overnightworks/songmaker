@@ -36,8 +36,16 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: var(--font-body);
-	height: 100vh;
+	height: 100dvh;
+	height: 100vh; /* fallback for older browsers */
 	overflow: hidden;
+}
+
+@supports (height: 100dvh) {
+	html,
+	body {
+		height: 100dvh;
+	}
 }
 
 ::-webkit-scrollbar {

@@ -378,8 +378,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
 
     with patch.dict("os.environ", {"ALLOWED_HOSTS": "myapp.example.com"}):
         import songmaker_cli.server as srv
-        old_hosts = srv.ALLOWED_HOSTS
-        srv.ALLOWED_HOSTS = frozenset({"myapp.example.com"})
+        srv._allowed_hosts_cache = None
         try:
             app = create_app(output_dir, project_root)
             client = TestClient(app, cookies={})
@@ -400,7 +399,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
             )
             assert resp.status_code == 403
         finally:
-            srv.ALLOWED_HOSTS = old_hosts
+            srv._allowed_hosts_cache = None
     reset_engine()
 
 

@@ -34,12 +34,12 @@
 			try {
 				const { required } = await checkSetupRequired();
 				if (required) {
-					await goto('/setup');
+					await goto('/setup', { replaceState: true });
 				} else {
-					await goto('/login');
+					await goto('/login', { replaceState: true });
 				}
 			} catch {
-				await goto('/login');
+				await goto('/login', { replaceState: true });
 			}
 		}
 	}
@@ -95,7 +95,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		height: 100vh;
+		height: 100dvh;
 		color: var(--text-muted);
 		font-size: 1.1rem;
 	}
@@ -182,13 +182,13 @@
 
 	.app-body {
 		margin-top: var(--header-height);
-		height: calc(100vh - var(--header-height));
+		height: calc(100dvh - var(--header-height));
 		display: flex;
 		overflow: hidden;
 	}
 
 	.app-body.has-player {
-		height: calc(100vh - var(--header-height) - var(--player-height));
+		height: calc(100dvh - var(--header-height) - var(--player-height));
 	}
 
 	.sidebar-overlay {

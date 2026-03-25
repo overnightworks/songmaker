@@ -19,7 +19,8 @@
 		selectSong,
 		selectedGeneration,
 		clearGenerationSelection,
-		ensureGenerationsLoaded
+		ensureGenerationsLoaded,
+		playback
 	} from '$lib/stores/player';
 	import {
 		editLyrics,
@@ -63,6 +64,7 @@
 	const statusMsg = $derived($status);
 	const jobs = $derived($activeJobs);
 	const sbOpen = $derived($sidebarOpen);
+	const hasPlayer = $derived($playback !== null);
 
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
 	const isGenerating = $derived(
@@ -320,7 +322,7 @@
 	</main>
 
 	{#if showChat && !activeGen}
-		<aside class="chat-panel">
+		<aside class="chat-panel" class:with-player={hasPlayer}>
 			<ClaudeChat songId={song?.id ?? ''} {songContext} onapply={handleApply} />
 		</aside>
 	{/if}
@@ -589,6 +591,23 @@
 	}
 
 	@media (max-width: 768px) {
+		.create-fields {
+			flex-direction: column;
+		}
+
+		.create-fields button {
+			align-self: flex-start;
+		}
+
+		.detail-header {
+			flex-direction: column;
+			gap: 8px;
+		}
+
+		.detail-actions {
+			flex-wrap: wrap;
+		}
+
 		.chat-panel {
 			position: fixed;
 			top: var(--header-height);
@@ -598,6 +617,10 @@
 			width: 100%;
 			z-index: 170;
 			background: var(--bg);
+		}
+
+		.chat-panel.with-player {
+			bottom: var(--player-height);
 		}
 	}
 </style>

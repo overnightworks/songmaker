@@ -75,7 +75,8 @@ All responses include:
 ## Error Handling
 
 - **Job errors**: Sanitized before storing in DB. Internal exception details logged server-side only; clients see generic messages like "Internal error during processing".
-- **API errors**: All `HTTPException` messages are human-readable strings with no internal paths or stack traces.
+- **API errors**: All `HTTPException` messages are human-readable strings with no internal paths or stack traces. User input is never reflected in error messages.
+- **Validation errors**: Custom `RequestValidationError` handler returns only affected field names, not full Pydantic error details (constraints, expected types, internal schema).
 - **ACE-Step errors**: Raw responses logged server-side; clients see "ACE-Step returned an error".
 - **Claude CLI errors**: stderr is logged server-side; clients see "Claude is currently unavailable".
 - **OpenAPI/docs**: Disabled (`docs_url=None, redoc_url=None, openapi_url=None`).
@@ -161,3 +162,25 @@ Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory 
 - **No IP binding on sessions**: A stolen session cookie works from any IP. IP/UA changes are logged to the audit trail but not blocked, to avoid breaking mobile users who switch networks.
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
 - **ACE-Step reinitialize**: No cooldown on `POST /api/admin/acestep/reinitialize`. Repeated calls by a compromised admin could cause GPU disruption.
+
+## Hardening Roadmap (for public internet exposure)
+
+The application-layer security (auth, CSRF, IDOR, injection, error sanitization) is solid for a self-hosted tool behind a reverse proxy. The gaps below are infrastructure-level and would need addressing before exposing the app to untrusted public traffic at scale.
+
+### 1. Replace SQLite with PostgreSQL
+**Priority: High** — SQLite uses file-level locking. Under concurrent write load from multiple users, requests will fail with "database is locked" errors. PostgreSQL handles concurrent access natively and is required for any serious multi-user deployment.
+
+### 2. Persistent rate limiting (Redis)
+**Priority: High** — The in-memory `IpRateLimiter` resets on every server restart (crash, deploy, OOM kill). An attacker who notices a restart gets a fresh quota. A Redis-backed sliding window would survive restarts and could be shared across multiple server processes.
+
+### 3. Account lockout / progressive delays
+**Priority: Medium** — Failed logins are rate-limited (5/5min per IP and per username) but accounts are never locked. A patient attacker staying under the rate limit can try indefinitely. Bcrypt-12 makes this slow (~250ms/attempt) but not impossible for weak passwords. Options: temporary lockout after N failures, exponential backoff, or CAPTCHA after repeated failures.
+
+### 4. Content Security Policy (script-src)
+**Priority: Medium** — The current CSP only sets `frame-ancestors 'none'`. There is no `script-src` or `default-src` directive restricting which scripts can execute. If an XSS vulnerability is found in the frontend, there is no CSP mitigation. Adding `script-src 'self'` (with nonces for inline scripts) would significantly reduce XSS impact.
+
+### 5. Multi-worker / async architecture
+**Priority: Medium** — Uvicorn runs a single process. A slow request (heavy DB query, large validation) blocks all other requests. For production: run multiple Uvicorn workers behind gunicorn, or use an async framework for I/O-bound endpoints.
+
+### 6. Database file permissions
+**Priority: Low** — The `.session_secret` file is created with `0600` permissions, but the SQLite database file inherits permissions from the output directory. Consider explicitly setting `0600` on the DB file at creation time, since it contains bcrypt hashes and session tokens.

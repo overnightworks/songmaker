@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -133,16 +134,43 @@ _FORM_CONTENT_TYPES = frozenset({
 })
 
 
-ALLOWED_HOSTS: frozenset[str] = frozenset(
-    h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()
-)
-
 _LOCALHOST_PATTERN = re.compile(r"^(localhost|127\.0\.0\.1)(:\d+)?$")
 
 
+_allowed_hosts_cache: tuple[frozenset[str], list[re.Pattern[str]]] | None = None
+
+
+def _get_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
+    """Parse ALLOWED_HOSTS into exact matches and wildcard patterns (cached).
+
+    Entries like ``*.trycloudflare.com`` are converted to suffix-match
+    regexes; plain entries are used for exact matching.
+    """
+    global _allowed_hosts_cache
+    if _allowed_hosts_cache is not None:
+        return _allowed_hosts_cache
+    raw = os.environ.get("ALLOWED_HOSTS", "")
+    exact: set[str] = set()
+    patterns: list[re.Pattern[str]] = []
+    for h in raw.split(","):
+        h = h.strip()
+        if not h:
+            continue
+        if h.startswith("*."):
+            suffix = re.escape(h[2:])
+            patterns.append(re.compile(rf"^[^:]+\.{suffix}(:\d+)?$"))
+        else:
+            exact.add(h)
+    _allowed_hosts_cache = (frozenset(exact), patterns)
+    return _allowed_hosts_cache
+
+
 def _is_allowed_host(netloc: str) -> bool:
-    if ALLOWED_HOSTS:
-        return netloc in ALLOWED_HOSTS
+    exact, patterns = _get_allowed_hosts()
+    if exact or patterns:
+        if netloc in exact:
+            return True
+        return any(p.match(netloc) for p in patterns)
     return bool(_LOCALHOST_PATTERN.match(netloc))
 
 
@@ -273,11 +301,26 @@ def create_app(
         "allow_headers": ["Content-Type", "Cookie", "X-CSRF-Token"],
         "allow_credentials": True,
     }
-    if cors_origin:
+    if cors_origin and "*" in cors_origin:
+        suffix = re.escape(cors_origin.replace("*.", "").replace("*", ""))
+        cors_kwargs["allow_origin_regex"] = rf"^https?://[^:/]+\.{suffix}$"
+    elif cors_origin:
         cors_kwargs["allow_origins"] = [cors_origin]
     else:
         cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:(8080|5173))?$"
     app.add_middleware(CORSMiddleware, **cors_kwargs)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        request: Request, exc: RequestValidationError,
+    ) -> JSONResponse:
+        fields = sorted({
+            ".".join(str(loc) for loc in e["loc"]) for e in exc.errors()
+        })
+        return JSONResponse(
+            {"detail": f"Validation error on: {', '.join(fields)}"},
+            status_code=422,
+        )
 
     from songmaker_cli.api import router as api_router
 
@@ -332,6 +375,25 @@ def create_app(
     return app
 
 
+def _load_env_file(project_root: Path) -> None:
+    """Load .server.env if it exists, without overriding existing env vars."""
+    env_file = project_root / ".server.env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if key and key not in os.environ:
+            os.environ[key] = value
+    log.info("Loaded env from %s", env_file)
+
+
 def run_server(
     output_dir: Path | None = None,
     project_root: Path | None = None,
@@ -344,6 +406,8 @@ def run_server(
         project_root = find_project_root(Path.cwd()) or Path.cwd()
     if output_dir is None:
         output_dir = project_root / OUTPUT_ROOT
+
+    _load_env_file(project_root)
 
     if not output_dir.exists():
         output_dir.mkdir(parents=True)

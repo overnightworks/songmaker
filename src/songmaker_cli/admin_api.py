@@ -59,7 +59,7 @@ def create_user_endpoint(
 ) -> UserResponse:
     existing = get_user_by_username(db, req.username)
     if existing:
-        raise HTTPException(409, f"Username '{req.username}' already exists")
+        raise HTTPException(409, "Username already exists")
 
     user = create_user(db, req.username, hash_password(req.password), role=req.role)
     record_audit(db, _admin.id, "create", "user", user.id, f"role={req.role}")

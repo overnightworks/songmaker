@@ -48,7 +48,7 @@ export async function createAlbum(title: string, artist: string = ''): Promise<A
 
 export async function fetchSongs(albumId?: string): Promise<SongItem[]> {
 	let path = '/api/songs';
-	if (albumId) path += `?album_id=${albumId}`;
+	if (albumId) path += `?album_id=${encodeURIComponent(albumId)}`;
 	const songs = await apiFetch<SongItem[]>(path);
 	return songs.map((s) => ({ ...s, generations: s.generations ?? [] }));
 }

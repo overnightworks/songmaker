@@ -13,7 +13,7 @@
 		submitting = true;
 		try {
 			await login(username, password);
-			await goto('/');
+			await goto('/', { replaceState: true });
 		} catch {
 			// error is set in the store
 		} finally {
@@ -73,7 +73,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		height: 100vh;
+		height: 100dvh;
 		background: var(--bg);
 	}
 
