@@ -52,10 +52,8 @@ def _login_as(client: TestClient, role: str) -> None:
         if album and not album.created_by:
             album.created_by = user.id
         session.commit()
-    resp = client.post(
-        "/api/auth/login", json={"username": f"test_{role}", "password": "t3stP@ssw0rd"},
-    )
-    assert resp.status_code == 200
+    from conftest import login_and_csrf
+    login_and_csrf(client, f"test_{role}", "t3stP@ssw0rd")
 
 
 def _get_user_id(client: TestClient) -> str:

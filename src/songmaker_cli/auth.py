@@ -31,6 +31,8 @@ LOGIN_RATE_LIMIT = int(os.environ.get("LOGIN_RATE_LIMIT", 5))
 LOGIN_RATE_WINDOW_SECONDS = 300
 
 ROLE_ADMIN = "admin"
+CSRF_COOKIE = "csrf_token"
+CSRF_HEADER = "x-csrf-token"
 
 MIN_PASSWORD_LENGTH = 8
 

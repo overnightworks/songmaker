@@ -42,6 +42,25 @@
 
 ---
 
+## 7. Known Design Decisions (Do NOT re-flag)
+
+These have been reviewed and accepted. Skip them unless the implementation has regressed:
+
+- **`Secure` cookie flag is conditional**: Only set when HTTPS is detected via `X-Forwarded-Proto` or URL scheme. This is by design — the server runs behind a reverse proxy in production. The deployment docs require `X-Forwarded-Proto: https` to be set. Not a bug.
+- **CORS allows any localhost port**: Default `allow_origin_regex` matches `localhost:*`. Acceptable for local-only dev mode. Production deployments must set `CORS_ORIGIN`.
+- **No IP binding on sessions**: A stolen session cookie works from any IP. IP/UA changes are logged but not blocked to avoid breaking mobile users. Accepted tradeoff.
+- **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
+- **Claude CLI tool denylist**: Uses `--disallowedTools` (not an allowlist) because `--tools ""` doesn't reliably block tools. The list in `provider.py` must be kept up to date manually. Accepted limitation.
+- **Login rate limit allows distributed attacks**: IP and username rate limits are independent by design. A distributed attacker with many IPs gets `LOGIN_RATE_LIMIT` per IP. This is expected — bcrypt's 12-round cost is the primary defense.
+- **`force_logout` iterates all sessions**: O(n) session scan is acceptable given the expected scale (< 100 concurrent sessions).
+- **Session secret in output directory**: Stored with 0600 permissions. Production deployments can use `SESSION_SECRET` env var instead.
+- **No `X-XSS-Protection` header**: Modern browsers use CSP instead. The buggy XSS auditor is deprecated.
+- **ACE-Step reinitialize has no cooldown**: Admin-only endpoint. Compromised admin has full access anyway.
+- **AccessLogMiddleware logs URL paths**: `request.url.path` does not include query strings, so no sensitive data is logged.
+- **Frontend API key in localStorage**: BYOK key is stored client-side. CSP mitigates XSS. The key is sent directly to Anthropic, never to the songmaker server.
+
+---
+
 ## Output Format
 
 ### Critical Vulnerabilities

@@ -6,13 +6,13 @@ Session-based auth with bcrypt password hashing (12 rounds).
 
 - **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in SQLite
 - **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB leak does not yield usable cookies. The secret is auto-generated and stored in `<output_dir>/.session_secret` (mode 0600), or provided via `SESSION_SECRET` env var (min 32 chars).
-- **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected via `X-Forwarded-Proto`)
+- **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected; `X-Forwarded-Proto` only honored when the direct peer is in `TRUSTED_PROXIES`)
 - **Session lifetime**: 30-day sliding window, 90-day absolute max
 - **Session fixation**: All old sessions deleted on login and password change
 - **Logout**: `DELETE /session` invalidates the session in the database (not just the cookie). The session ID is passed via `request.state` from the auth dependency.
 - **Session anomaly detection**: IP and user-agent changes are logged to the audit trail
 - **Brute-force protection**: 5 failed attempts per 5 minutes, per IP + per username. Also applies to password change endpoint.
-- **Constant-time login**: bcrypt always runs against a dummy hash when the user doesn't exist, preventing timing-based username enumeration
+- **Constant-time verification**: bcrypt always runs against a dummy hash when the user doesn't exist (login) or on password change, preventing timing-based enumeration
 - **Login attempt cleanup**: Records older than 90 days are pruned at startup
 - **Password strength**: Common passwords (~200 entries including seasonal/year variants) and low-entropy passwords (< 4 unique chars) are rejected on setup, user creation, and password change
 
@@ -23,15 +23,16 @@ Two-layer defense:
 1. **Dependency-based auth** (`middleware.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session — all in the same DB transaction as the endpoint.
 2. **Endpoint** (`api.py`): Every endpoint uses `Depends(get_current_user)` — returns 401 if unauthenticated. Ownership checks enforce default-deny: access is blocked unless `album.created_by == user.id` (or user is admin). Missing album → denied.
 
-Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. Demotion or deactivation of the last active admin is blocked to prevent lockout.
+Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. Demotion or deactivation of the last active admin is blocked to prevent lockout. When a user is deactivated or their role is changed, all their sessions are immediately invalidated.
 
 ## CSRF Protection
 
-Three-layer defense:
+Four-layer defense:
 
 1. **`SameSite=Strict` cookies**: Prevents cross-site cookie transmission in modern browsers
-2. **Origin verification**: Mutating requests to `/api/` with an `Origin`/`Referer` header that doesn't match `ALLOWED_HOSTS` (or localhost by default) are rejected (403). Uses a server-side allowlist instead of the request's `Host` header to prevent header-spoofing bypasses.
-3. **Form-submit blocking**: Mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (CLI, fetch).
+2. **Double-submit CSRF token**: Login and setup set a `csrf_token` cookie (non-HttpOnly, `SameSite=Strict`). All mutating `/api/` requests (except login/setup) must include an `X-CSRF-Token` header matching the cookie value. The frontend reads the cookie and attaches the header automatically. This defends against sub-domain attacks and older browsers that don't enforce SameSite.
+3. **Origin verification**: Mutating requests to `/api/` with an `Origin`/`Referer` header that doesn't match `ALLOWED_HOSTS` (or localhost by default) are rejected (403). Uses a server-side allowlist instead of the request's `Host` header to prevent header-spoofing bypasses.
+4. **Form-submit blocking**: Mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (CLI, fetch).
 
 ## Rate Limiting
 
@@ -61,15 +62,15 @@ All responses include:
 - `Content-Security-Policy: frame-ancestors 'none'`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only)
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only; `X-Forwarded-Proto` only honored from `TRUSTED_PROXIES`)
 - `Cache-Control: no-store` (API responses only — prevents caching of authenticated data)
 
 ## CORS
 
 - **Methods**: `GET`, `POST`, `PUT`, `DELETE` (no wildcard)
-- **Headers**: `Content-Type`, `Cookie` (no wildcard)
+- **Headers**: `Content-Type`, `Cookie`, `X-CSRF-Token` (no wildcard)
 - **Credentials**: Allowed
-- **Origins**: Configurable via `CORS_ORIGIN`. Defaults to `localhost`/`127.0.0.1` regex for dev.
+- **Origins**: Configurable via `CORS_ORIGIN`. Defaults to `localhost`/`127.0.0.1` on ports 8080 and 5173 only for dev (not any arbitrary port).
 
 ## Error Handling
 
@@ -84,6 +85,10 @@ All responses include:
 `BodySizeLimitMiddleware` (raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Requests > 1 MB are rejected (HTTP 413). Configurable via `MAX_REQUEST_BODY_BYTES` env var.
 
 **Note**: For production deployments exposed to the internet, use a reverse proxy (e.g., nginx `client_max_body_size 1m`) to reject oversized requests at the network edge before they reach the application.
+
+## Request Timeout
+
+Uvicorn's `timeout-keep-alive` is set to `REQUEST_TIMEOUT` (default 30s). Idle connections exceeding this are closed. For production, use a reverse proxy timeout (e.g., nginx `proxy_read_timeout`) for full request-level timeout enforcement.
 
 ## Claude Chat Security
 
@@ -117,6 +122,7 @@ All mutating operations are logged to the `audit_log` table:
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). |
 | Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). Also set in reverse proxy for defense-in-depth. |
 | IP rate limit | `IP_RATE_LIMIT` (default 120/min). Adjust based on expected traffic. |
+| Request timeout | `REQUEST_TIMEOUT` (default 30s). Increase if generation/scoring endpoints are called synchronously. |
 | DB file permissions | Automatically set to `600` (owner read/write only). |
 
 ### Secrets
@@ -140,7 +146,7 @@ All request models use Pydantic with strict constraints:
 
 ## Path Traversal Protection
 
-Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. Slug generation strips all non-alphanumeric characters. The rate-by-path endpoint validates that album and generation name parameters contain no `..` or `/`.
+Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. Audio is only served for albums that exist in the database (orphaned files on disk are inaccessible). Slug generation strips all non-alphanumeric characters. The rate-by-path endpoint validates that album and generation name parameters contain no `..` or `/`.
 
 ## GPU Resource Safety
 

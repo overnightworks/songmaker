@@ -27,7 +27,6 @@
 	import type { SongItem, GenerationItem, AlbumItem } from '$lib/api/types';
 	import { closeSidebar } from '$lib/stores/ui';
 	import { SvelteSet } from 'svelte/reactivity';
-	import NewAlbumForm from '$lib/components/NewAlbumForm.svelte';
 
 	const MAX_VISIBLE_GENS = 3;
 
@@ -47,7 +46,6 @@
 	let deleteError = $state('');
 	let confirmCleanup: string | null = $state(null);
 	let cleanupResult = $state('');
-	let showNewAlbum = $state(false);
 
 	// Auto-expand all albums on first load
 	$effect(() => {
@@ -207,20 +205,10 @@
 		oninput={(e: Event) => searchQuery.set((e.target as HTMLInputElement).value)}
 		aria-label="Search songs"
 	/>
-	<button
-		class="new-btn"
-		onclick={() => (showNewAlbum = !showNewAlbum)}
-		title="New Album"
-		aria-label="New Album">📁</button
-	>
 	{#if onNewSong}
 		<button class="new-btn" onclick={onNewSong} title="New Song" aria-label="New Song">+</button>
 	{/if}
 </div>
-
-{#if showNewAlbum}
-	<NewAlbumForm onclose={() => (showNewAlbum = false)} />
-{/if}
 
 <div
 	class="tree"

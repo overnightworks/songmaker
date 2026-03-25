@@ -4,6 +4,7 @@
 		fetchAlbums,
 		fetchSongs,
 		fetchSong,
+		createAlbum,
 		createSong,
 		generateSong,
 		scoreGeneration,
@@ -48,8 +49,11 @@
 
 	let newTitle = $state('');
 	let newAlbumId = $state('');
-	let showNewSong = $state(false);
+	let newAlbumTitle = $state('');
+	let newAlbumArtist = $state('');
+	let showCreate = $state(false);
 	let creating = $state(false);
+	let creatingAlbum = $state(false);
 
 	const song = $derived($selectedSong);
 	const activeGen = $derived($selectedGeneration);
@@ -136,9 +140,27 @@
 		clearGenerationSelection();
 	}
 
-	async function handleCreate(): Promise<void> {
+	async function handleCreateAlbum(): Promise<void> {
+		if (!newAlbumTitle.trim()) return;
+		creatingAlbum = true;
+		error = '';
+		try {
+			const album = await createAlbum(newAlbumTitle.trim(), newAlbumArtist.trim());
+			albumList.set(await fetchAlbums());
+			newAlbumId = album.id;
+			newAlbumTitle = '';
+			newAlbumArtist = '';
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Album creation failed';
+		} finally {
+			creatingAlbum = false;
+		}
+	}
+
+	async function handleCreateSong(): Promise<void> {
 		if (!newTitle.trim() || !newAlbumId) return;
 		creating = true;
+		error = '';
 		try {
 			const created = await createSong({
 				title: newTitle,
@@ -151,7 +173,7 @@
 			});
 			songList.update((songs) => [...songs, created]);
 			selectSong(created.id);
-			showNewSong = false;
+			showCreate = false;
 			newTitle = '';
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Create failed';
@@ -175,37 +197,48 @@
 	<aside class="sidebar" class:open={sbOpen}>
 		<SongList
 			onNewSong={() => {
-				showNewSong = !showNewSong;
+				showCreate = !showCreate;
 				closeSidebar();
 			}}
 		/>
 	</aside>
 
 	<main class="main-content">
-		{#if showNewSong}
-			<div class="new-song-form">
-				<div class="new-song-header">
-					<h2>New Song</h2>
-					<button
-						class="action-btn chat-btn"
-						class:active={showChat}
-						onclick={() => (showChat = !showChat)}
-						aria-label="Toggle chat"
-					>
-						💬
-					</button>
+		{#if showCreate}
+			<div class="create-panel">
+				<div class="create-header">
+					<h2>Create</h2>
+					<button class="cancel-create" onclick={() => (showCreate = false)}>Cancel</button>
 				</div>
-				<div class="new-song-fields">
-					<input type="text" bind:value={newTitle} placeholder="Song title" />
-					<select bind:value={newAlbumId}>
-						<option value="">Select album</option>
-						{#each albums as a (a.id)}
-							<option value={a.id}>{a.title}</option>
-						{/each}
-					</select>
-					<button onclick={handleCreate} disabled={creating || !newTitle.trim() || !newAlbumId}>
-						{creating ? 'Creating...' : 'Create'}
-					</button>
+
+				<div class="create-section">
+					<h3>New Album</h3>
+					<div class="create-fields">
+						<input type="text" bind:value={newAlbumTitle} placeholder="Album title" />
+						<input type="text" bind:value={newAlbumArtist} placeholder="Artist (optional)" />
+						<button onclick={handleCreateAlbum} disabled={creatingAlbum || !newAlbumTitle.trim()}>
+							{creatingAlbum ? 'Creating...' : 'Create'}
+						</button>
+					</div>
+				</div>
+
+				<div class="create-section">
+					<h3>New Song</h3>
+					<div class="create-fields">
+						<input type="text" bind:value={newTitle} placeholder="Song title" />
+						<select bind:value={newAlbumId}>
+							<option value="">Select album</option>
+							{#each albums as a (a.id)}
+								<option value={a.id}>{a.title}</option>
+							{/each}
+						</select>
+						<button
+							onclick={handleCreateSong}
+							disabled={creating || !newTitle.trim() || !newAlbumId}
+						>
+							{creating ? 'Creating...' : 'Create'}
+						</button>
+					</div>
 				</div>
 			</div>
 		{:else if song}
@@ -461,33 +494,60 @@
 		flex-shrink: 0;
 	}
 
-	.new-song-form {
+	.create-panel {
 		padding: 20px;
+		max-width: 600px;
 	}
 
-	.new-song-header {
+	.create-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 12px;
+		margin-bottom: 16px;
 	}
 
-	.new-song-form h2 {
+	.create-header h2 {
 		font-family: var(--font-display);
 		color: var(--primary);
 		font-size: 20px;
-		margin-bottom: 12px;
+		margin: 0;
 		text-transform: uppercase;
 	}
 
-	.new-song-fields {
-		display: flex;
-		gap: 8px;
-		max-width: 500px;
+	.cancel-create {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text-muted);
+		padding: 4px 12px;
+		font-size: 11px;
+		cursor: pointer;
 	}
 
-	.new-song-fields input,
-	.new-song-fields select {
+	.cancel-create:hover {
+		border-color: var(--text-muted);
+	}
+
+	.create-section {
+		margin-bottom: 16px;
+	}
+
+	.create-section h3 {
+		font-family: var(--font-display);
+		color: var(--text-muted);
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		margin: 0 0 8px;
+	}
+
+	.create-fields {
+		display: flex;
+		gap: 8px;
+	}
+
+	.create-fields input,
+	.create-fields select {
 		flex: 1;
 		padding: 8px 12px;
 		background: var(--surface);
@@ -497,7 +557,7 @@
 		font-size: 13px;
 	}
 
-	.new-song-fields button {
+	.create-fields button {
 		padding: 8px 20px;
 		border: 2px solid var(--primary);
 		border-radius: 20px;
@@ -506,9 +566,10 @@
 		font-family: var(--font-display);
 		font-size: 12px;
 		cursor: pointer;
+		white-space: nowrap;
 	}
 
-	.new-song-fields button:disabled {
+	.create-fields button:disabled {
 		opacity: 0.4;
 	}
 

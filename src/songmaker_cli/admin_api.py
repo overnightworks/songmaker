@@ -23,6 +23,7 @@ from songmaker_cli.db.models import User as UserModel
 from songmaker_cli.db.queries import (
     create_user,
     delete_session,
+    delete_user_sessions,
     get_user,
     get_user_by_username,
     list_active_sessions,
@@ -96,6 +97,8 @@ def update_user_endpoint(
         changes.append(f"active={req.is_active}")
     if req.password:
         changes.append("password_changed")
+    if req.role is not None or req.is_active is False:
+        delete_user_sessions(db, user_id)
     record_audit(db, admin.id, "update", "user", user_id, ", ".join(changes))
     db.commit()
     return UserResponse.from_orm(updated)
@@ -120,6 +123,7 @@ def deactivate_user_endpoint(
             raise HTTPException(400, "Cannot deactivate the last active admin")
 
     update_user(db, user_id, is_active=False)
+    delete_user_sessions(db, user_id)
     record_audit(db, admin.id, "deactivate", "user", user_id)
     db.commit()
     return StatusResponse(status="ok")

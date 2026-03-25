@@ -31,6 +31,23 @@ def _set_session_secret():
     reset_session_secret()
 
 
+def apply_csrf_header(client) -> None:
+    """Extract the csrf_token cookie and set it as a default X-CSRF-Token header.
+
+    Call after login/setup to enable CSRF-protected mutating requests in tests.
+    """
+    token = client.cookies.get("csrf_token")
+    if token:
+        client.headers["X-CSRF-Token"] = token
+
+
+def login_and_csrf(client, username: str, password: str) -> None:
+    """Login and configure CSRF header for subsequent requests."""
+    resp = client.post("/api/auth/login", json={"username": username, "password": password})
+    assert resp.status_code == 200
+    apply_csrf_header(client)
+
+
 def mock_http_response(data: bytes, status: int = 200) -> MagicMock:
     """Build a mock urllib HTTPResponse for ACE-Step client tests."""
     resp = MagicMock(spec=HTTPResponse)

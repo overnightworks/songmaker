@@ -227,12 +227,12 @@ describe('chatWithClaude', () => {
 
 	it('throws on 503 unavailable from server', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
-		await expect(chatWithClaude('hi')).rejects.toThrow('Claude unavailable');
+		await expect(chatWithClaude('hi')).rejects.toThrow('API /api/chat: 503');
 	});
 
 	it('throws on other server errors', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
-		await expect(chatWithClaude('hi')).rejects.toThrow('Chat failed: 500');
+		await expect(chatWithClaude('hi')).rejects.toThrow('API /api/chat: 500');
 	});
 
 	it('throws on Anthropic API error with message', async () => {

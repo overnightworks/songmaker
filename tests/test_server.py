@@ -52,7 +52,8 @@ def server_app(tmp_path: Path) -> TestClient:
 
     app = create_app(output_dir, project_root)
     client = TestClient(app, cookies={})
-    client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
+    from conftest import login_and_csrf
+    login_and_csrf(client, "admin", "admin12345")
     yield client
     reset_engine()
 
@@ -382,7 +383,8 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
         try:
             app = create_app(output_dir, project_root)
             client = TestClient(app, cookies={})
-            client.post("/api/auth/login", json={"username": "admin2", "password": "admin12345"})
+            from conftest import login_and_csrf
+            login_and_csrf(client, "admin2", "admin12345")
 
             resp = client.post(
                 "/api/songs",
@@ -422,9 +424,20 @@ def test_body_size_limit_rejects_large_content_length(server_app: TestClient) ->
 
 
 def test_hsts_header_on_https(server_app: TestClient) -> None:
-    resp = server_app.get("/", headers={"x-forwarded-proto": "https"})
+    import songmaker_cli.auth as auth_mod
+    original = auth_mod.TRUSTED_PROXIES
+    auth_mod.TRUSTED_PROXIES = frozenset({"testclient"})
+    try:
+        resp = server_app.get("/", headers={"x-forwarded-proto": "https"})
+    finally:
+        auth_mod.TRUSTED_PROXIES = original
     assert "Strict-Transport-Security" in resp.headers
     assert "max-age=31536000" in resp.headers["Strict-Transport-Security"]
+
+
+def test_hsts_header_not_set_without_trusted_proxy(server_app: TestClient) -> None:
+    resp = server_app.get("/", headers={"x-forwarded-proto": "https"})
+    assert "Strict-Transport-Security" not in resp.headers
 
 
 def test_run_server_infers_project_root(tmp_path: Path) -> None:

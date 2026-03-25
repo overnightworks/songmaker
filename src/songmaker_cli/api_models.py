@@ -307,7 +307,7 @@ class SongCreateRequest(BaseModel):
     album_id: str = Field(max_length=64)
     lyrics: str = Field("", max_length=50_000)
     prompt: str = Field("", max_length=5_000)
-    bpm: int = 0
+    bpm: int = Field(0, ge=0, le=999)
     duration: int = Field(180, ge=1, le=600)
     key: str = Field("", max_length=10)
     language: str = Field("", max_length=10)
@@ -317,7 +317,7 @@ class SongCreateRequest(BaseModel):
 class SongUpdateRequest(BaseModel):
     lyrics: str | None = Field(None, max_length=50_000)
     prompt: str | None = Field(None, max_length=5_000)
-    bpm: int | None = None
+    bpm: int | None = Field(None, ge=0, le=999)
     duration: int | None = Field(None, ge=1, le=600)
     key: str | None = Field(None, max_length=10)
     generation_params: GenerationParams | None = None

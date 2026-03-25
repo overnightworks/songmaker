@@ -12,8 +12,24 @@ import type {
 } from './types';
 import { getClaudeKey } from '$lib/stores/settings';
 
+function getCsrfToken(): string {
+	const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+	return match ? decodeURIComponent(match[1]) : '';
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-	const resp = await fetch(path, { credentials: 'include', ...init });
+	const method = init?.method?.toUpperCase() ?? 'GET';
+	let opts: RequestInit = { credentials: 'include', ...init };
+	if (method !== 'GET' && method !== 'HEAD') {
+		const token = getCsrfToken();
+		if (token) {
+			opts = {
+				...opts,
+				headers: { 'X-CSRF-Token': token, ...(init?.headers as Record<string, string>) }
+			};
+		}
+	}
+	const resp = await fetch(path, opts);
 	if (!resp.ok) throw new Error(`API ${path}: ${resp.status}`);
 	return resp.json() as Promise<T>;
 }
@@ -217,17 +233,11 @@ export async function chatWithClaude(
 		return chatDirect(fullMessage, system, claudeKey);
 	}
 
-	const resp = await fetch('/api/chat', {
+	const data = await apiFetch<{ response: string }>('/api/chat', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		credentials: 'include',
-		body: JSON.stringify({ message, context, system })
+		body: JSON.stringify({ message, context })
 	});
-	if (!resp.ok) {
-		if (resp.status === 503) throw new Error('Claude unavailable. Add API key in settings.');
-		throw new Error(`Chat failed: ${resp.status}`);
-	}
-	const data = await resp.json();
 	return data.response;
 }
 

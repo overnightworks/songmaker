@@ -32,21 +32,21 @@ def client(tmp_path: Path) -> TestClient:
 
 
 def _login_as_admin(client: TestClient) -> None:
+    from conftest import login_and_csrf
     factory = get_session_factory()
     with factory() as session:
         create_user(session, "admin", hash_password("admin12345"), role="admin")
         session.commit()
-    resp = client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
-    assert resp.status_code == 200
+    login_and_csrf(client, "admin", "admin12345")
 
 
 def _login_as_user(client: TestClient) -> None:
+    from conftest import login_and_csrf
     factory = get_session_factory()
     with factory() as session:
         create_user(session, "regular", hash_password("user123456"), role="user")
         session.commit()
-    resp = client.post("/api/auth/login", json={"username": "regular", "password": "user123456"})
-    assert resp.status_code == 200
+    login_and_csrf(client, "regular", "user123456")
 
 
 # ── Access control ──────────────────────────────────────────────────

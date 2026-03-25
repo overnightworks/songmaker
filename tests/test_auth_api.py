@@ -48,8 +48,8 @@ def _seed_user(username: str = "alice", active: bool = True) -> None:
 
 
 def _login(client: TestClient, username: str, password: str) -> TestClient:
-    resp = client.post("/api/auth/login", json={"username": username, "password": password})
-    assert resp.status_code == 200
+    from conftest import login_and_csrf
+    login_and_csrf(client, username, password)
     return client
 
 
@@ -186,7 +186,7 @@ def test_logout_invalidates_session_in_db(client: TestClient) -> None:
 
 def test_logout_without_session(client: TestClient) -> None:
     resp = client.delete("/api/auth/session")
-    assert resp.status_code == 401
+    assert resp.status_code in (401, 403)
 
 
 # ── Me ──────────────────────────────────────────────────────────────
@@ -266,7 +266,7 @@ def test_change_password_unauthenticated(client: TestClient) -> None:
         "/api/auth/password",
         json={"current": "admin12345", "new_password": "newpassword1"},
     )
-    assert resp.status_code == 401
+    assert resp.status_code in (401, 403)
 
 
 # ── Setup race-condition and integrity error guards ──────────────────

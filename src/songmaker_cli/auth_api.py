@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -27,7 +28,6 @@ from songmaker_cli.auth import (
     get_client_ip,
     hash_password,
     sign_session_id,
-    verify_password,
     verify_password_constant_time,
 )
 from songmaker_cli.db.engine import get_db_session
@@ -68,19 +68,43 @@ def _client_user_agent(request: Request) -> str:
     return request.headers.get("user-agent", "")[:_MAX_USER_AGENT_LENGTH]
 
 
+def _is_trusted_proxy(request: Request) -> bool:
+    from songmaker_cli.auth import TRUSTED_PROXIES
+    if not TRUSTED_PROXIES:
+        return False
+    direct_ip = request.client.host if request.client else ""
+    return direct_ip in TRUSTED_PROXIES
+
+
+def _detect_secure(request: Request | None) -> bool:
+    if not request:
+        return False
+    if _is_trusted_proxy(request):
+        return request.headers.get("x-forwarded-proto", "") == "https"
+    return request.url.scheme == "https"
+
+
 def _set_session_cookie(
     response: Response, session_id: str, request: Request | None = None,
 ) -> None:
-    secure = False
-    if request:
-        forwarded = request.headers.get("x-forwarded-proto", "")
-        secure = forwarded == "https" or request.url.scheme == "https"
+    from songmaker_cli.auth import CSRF_COOKIE
+    secure = _detect_secure(request)
     signed = sign_session_id(session_id)
     response.set_cookie(
         SESSION_COOKIE,
         signed,
         max_age=SESSION_MAX_AGE_SECONDS,
         httponly=True,
+        samesite="strict",
+        secure=secure,
+        path="/",
+    )
+    csrf_token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        CSRF_COOKIE,
+        csrf_token,
+        max_age=SESSION_MAX_AGE_SECONDS,
+        httponly=False,
         samesite="strict",
         secure=secure,
         path="/",
@@ -188,7 +212,9 @@ def logout(
         delete_session(db, session_id)
         db.commit()
 
+    from songmaker_cli.auth import CSRF_COOKIE
     response.delete_cookie(SESSION_COOKIE, path="/")
+    response.delete_cookie(CSRF_COOKIE, path="/")
     return StatusResponse(status="ok")
 
 
@@ -223,7 +249,7 @@ def change_password(
             headers={"Retry-After": str(LOGIN_RATE_WINDOW_SECONDS)},
         )
 
-    if not verify_password(req.current, user.password_hash):
+    if not verify_password_constant_time(req.current, user.password_hash):
         record_login_attempt(db, ip, f"__pwchange__{current_user.username}", success=False)
         db.commit()
         raise HTTPException(401, "Current password is incorrect")

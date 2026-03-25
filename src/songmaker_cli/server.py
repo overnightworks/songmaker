@@ -13,7 +13,7 @@ import os
 import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -98,22 +98,27 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        forwarded = request.headers.get("x-forwarded-proto", "")
-        if forwarded == "https" or request.url.scheme == "https":
+        is_https = request.url.scheme == "https"
+        if not is_https:
+            from songmaker_cli.auth import TRUSTED_PROXIES
+            direct_ip = request.client.host if request.client else ""
+            if TRUSTED_PROXIES and direct_ip in TRUSTED_PROXIES:
+                is_https = request.headers.get("x-forwarded-proto", "") == "https"
+        if is_https:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        start = datetime.now()
+        start = datetime.now(timezone.utc)
         response = await call_next(request)
         ip = request.client.host if request.client else "unknown"
         log.info(
             "ACCESS %s %s %s %d (%.0fms)",
             ip, request.method, request.url.path,
             response.status_code,
-            (datetime.now() - start).total_seconds() * 1000,
+            (datetime.now(timezone.utc) - start).total_seconds() * 1000,
         )
         return response
 
@@ -139,6 +144,34 @@ def _is_allowed_host(netloc: str) -> bool:
     if ALLOWED_HOSTS:
         return netloc in ALLOWED_HOSTS
     return bool(_LOCALHOST_PATTERN.match(netloc))
+
+
+_CSRF_EXEMPT_PATHS = frozenset({"/api/auth/login", "/api/auth/setup"})
+
+
+class CsrfTokenMiddleware(BaseHTTPMiddleware):
+    """Double-submit cookie CSRF defense-in-depth.
+
+    Mutating /api/ requests must include an X-CSRF-Token header whose value
+    matches the csrf_token cookie. Login and setup are exempt (they issue
+    the token). The token is set as a non-HttpOnly cookie so the frontend
+    JS can read and echo it back.
+    """
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if (
+            request.method in _MUTATING_METHODS
+            and request.url.path.startswith("/api/")
+            and request.url.path not in _CSRF_EXEMPT_PATHS
+        ):
+            from songmaker_cli.auth import CSRF_COOKIE, CSRF_HEADER
+            cookie_token = request.cookies.get(CSRF_COOKIE)
+            header_token = request.headers.get(CSRF_HEADER)
+            if not cookie_token or not header_token or cookie_token != header_token:
+                return JSONResponse(
+                    {"detail": "CSRF token missing or invalid"}, status_code=403,
+                )
+        return await call_next(request)
 
 
 class CsrfOriginMiddleware(BaseHTTPMiddleware):
@@ -173,6 +206,8 @@ class CsrfOriginMiddleware(BaseHTTPMiddleware):
                     )
         return await call_next(request)
 
+
+REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT", 30))
 
 IP_RATE_LIMIT = int(os.environ.get("IP_RATE_LIMIT", 120))
 IP_RATE_WINDOW = 60
@@ -227,6 +262,7 @@ def create_app(
 
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(AccessLogMiddleware)
+    app.add_middleware(CsrfTokenMiddleware)
     app.add_middleware(CsrfOriginMiddleware)
     app.add_middleware(IpRateLimitMiddleware)
     app.add_middleware(BodySizeLimitMiddleware)
@@ -234,13 +270,13 @@ def create_app(
     cors_origin = os.environ.get("CORS_ORIGIN")
     cors_kwargs: dict = {
         "allow_methods": ["GET", "POST", "PUT", "DELETE"],
-        "allow_headers": ["Content-Type", "Cookie"],
+        "allow_headers": ["Content-Type", "Cookie", "X-CSRF-Token"],
         "allow_credentials": True,
     }
     if cors_origin:
         cors_kwargs["allow_origins"] = [cors_origin]
     else:
-        cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+        cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:(8080|5173))?$"
     app.add_middleware(CORSMiddleware, **cors_kwargs)
 
     from songmaker_cli.api import router as api_router
@@ -262,12 +298,13 @@ def create_app(
         if not audio_path.exists():
             raise HTTPException(404, "Audio file not found")
 
-        if user.role != "admin":
-            from songmaker_cli.db.queries import get_album as get_album_query
+        from songmaker_cli.db.queries import get_album as get_album_query
 
-            db_album = get_album_query(db, album)
-            if db_album and db_album.created_by != user.id:
-                raise HTTPException(404, "Audio file not found")
+        db_album = get_album_query(db, album)
+        if not db_album:
+            raise HTTPException(404, "Audio file not found")
+        if user.role != "admin" and db_album.created_by != user.id:
+            raise HTTPException(404, "Audio file not found")
 
         return FileResponse(audio_path, media_type="audio/mpeg")
 
@@ -328,4 +365,7 @@ def run_server(
         webbrowser.open(f"http://localhost:{port}")
 
     host = os.environ.get("HOST", "127.0.0.1")
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    uvicorn.run(
+        app, host=host, port=port, log_level="info",
+        timeout_keep_alive=REQUEST_TIMEOUT_SECONDS,
+    )
