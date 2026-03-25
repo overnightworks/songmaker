@@ -183,8 +183,9 @@ class SongResponse(SongSummaryResponse):
 
     @classmethod
     def from_orm(cls, song: Song) -> SongResponse:
-        best_gen = _best_generation(song.generations)
+        base = SongSummaryResponse.from_orm(song)
 
+        best_gen = _best_generation(song.generations)
         best_scores: dict[str, object] | None = None
         if best_gen:
             best_scores = {}
@@ -192,27 +193,12 @@ class SongResponse(SongSummaryResponse):
                 if isinstance(s.value, dict):
                     best_scores.update(s.value)
 
-        ver = song.latest_version
+        exclude = {"best_scores", "best_rating"}
         return cls(
-            id=song.id,
-            title=song.title,
-            album_id=song.album_id,
-            album_title=song.album.title if song.album else "",
-            artist=song.album.artist if song.album else "",
-            track_number=song.track_number,
-            language=song.language,
-            lyrics=ver.lyrics if ver else "",
-            prompt=ver.prompt if ver else "",
-            bpm=ver.bpm if ver else 0,
-            duration=ver.duration if ver else 180,
-            key=ver.key if ver else "",
-            generation_params=ver.generation_params if ver else None,
-            version_count=len(song.versions),
-            generation_count=len(song.generations),
+            **{k: v for k, v in base.model_dump().items() if k not in exclude},
             best_scores=best_scores if best_scores else None,
             best_rating=best_gen.rating.rating if best_gen and best_gen.rating else None,
             generations=[GenerationResponse.from_orm(g) for g in song.generations],
-            created_at=song.created_at.isoformat() if song.created_at else None,
         )
 
 

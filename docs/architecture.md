@@ -41,7 +41,8 @@ The API client and `types.ts` are the frontend's contract with the backend. When
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, SPA fallback | `server.py` |
 | Auth | Session middleware, login/setup/logout, password change, brute-force protection | `middleware.py`, `auth_api.py`, `auth.py` |
-| API | REST endpoints, ownership checks, rate limiting, audit logging | `api.py`, `admin_api.py` |
+| API | REST endpoints split by domain: albums, songs, generations, chat | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `chat_api.py`, `admin_api.py` |
+| Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models.py` |
 | Jobs | Background generation + scoring runners | `jobs.py` |
 | GPU | Sequential job queue, ACE-Step lifecycle, VRAM management | `gpu_queue.py` |

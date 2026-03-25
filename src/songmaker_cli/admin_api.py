@@ -33,6 +33,7 @@ from songmaker_cli.db.queries import (
     record_audit,
     update_user,
 )
+from songmaker_cli.gpu_queue import ACESTEP_PORT
 from songmaker_cli.middleware import AuthenticatedUser, require_admin
 
 log = logging.getLogger(__name__)
@@ -176,7 +177,7 @@ def reinitialize_acestep(
     import json
     from urllib.request import Request, urlopen
 
-    acestep_url = "http://localhost:8001/v1/reinitialize"
+    acestep_url = f"http://localhost:{ACESTEP_PORT}/v1/reinitialize"
     try:
         req = Request(
             acestep_url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST",
@@ -201,11 +202,11 @@ def acestep_status(
     from urllib.request import Request, urlopen
 
     try:
-        req = Request("http://localhost:8001/health", method="GET")
+        req = Request(f"http://localhost:{ACESTEP_PORT}/health", method="GET")
         with urlopen(req, timeout=5) as resp:
             health = json.loads(resp.read())
 
-        req2 = Request("http://localhost:8001/v1/stats", method="GET")
+        req2 = Request(f"http://localhost:{ACESTEP_PORT}/v1/stats", method="GET")
         with urlopen(req2, timeout=5) as resp:
             stats = json.loads(resp.read())
 

@@ -449,7 +449,7 @@ def test_generate_song_submits_job(client: TestClient) -> None:
 
     mock_queue = MagicMock()
 
-    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 2},
@@ -473,7 +473,7 @@ def test_score_generation_submits_job(client: TestClient) -> None:
 
     mock_queue = MagicMock()
 
-    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
         resp = client.post(
             "/api/generations/g1/score",
             json={},
@@ -494,7 +494,7 @@ def test_chat_success(tmp_path: Path) -> None:
     mock_response = MagicMock()
     mock_response.text = "Hello from Claude"
 
-    with patch("songmaker_cli.api.call_claude", return_value=mock_response):
+    with patch("songmaker_cli.chat_api.call_claude", return_value=mock_response):
         resp = c.post("/api/chat", json={
             "message": "hi",
             "context": "Song: Test",
@@ -511,7 +511,7 @@ def test_chat_unavailable(tmp_path: Path) -> None:
 
     c = _make_authed_client(tmp_path)
     with patch(
-        "songmaker_cli.api.call_claude",
+        "songmaker_cli.chat_api.call_claude",
         side_effect=UnavailableError("no backend"),
     ):
         resp = c.post("/api/chat", json={"message": "hi"})
@@ -535,7 +535,7 @@ def test_get_job_found(client: TestClient) -> None:
 
     mock_queue = MagicMock()
 
-    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
         resp = client.post("/api/songs/s1/generate", json={"count": 1})
     job_id = resp.json()["id"]
 
@@ -803,7 +803,7 @@ def test_create_album_integrity_error(client: TestClient) -> None:
     """Lines 254-256: IntegrityError in create_album triggers 409 response."""
     from unittest.mock import patch
 
-    with patch("songmaker_cli.api._unique_album_id", return_value="rock"):
+    with patch("songmaker_cli.album_api.unique_album_id", return_value="rock"):
         resp = client.post("/api/albums", json={"title": "Rock Album"})
 
     assert resp.status_code == 409
@@ -814,7 +814,7 @@ def test_update_song_value_error(client: TestClient) -> None:
     """Lines 324-325: ValueError from update_song raises 404."""
     from unittest.mock import patch
 
-    with patch("songmaker_cli.api.update_song", side_effect=ValueError("Song not found")):
+    with patch("songmaker_cli.song_api.update_song", side_effect=ValueError("Song not found")):
         resp = client.put("/api/songs/s1", json={"lyrics": "x"})
 
     assert resp.status_code == 404
@@ -824,7 +824,8 @@ def test_delete_version_value_error(client: TestClient) -> None:
     """Lines 362-363: ValueError from delete_version raises 404."""
     from unittest.mock import patch
 
-    with patch("songmaker_cli.api.delete_version", side_effect=ValueError("Version not found")):
+    err = ValueError("Version not found")
+    with patch("songmaker_cli.song_api.delete_version", side_effect=err):
         resp = client.delete("/api/versions/v1")
 
     assert resp.status_code == 404
@@ -835,7 +836,7 @@ def test_delete_generation_value_error(client: TestClient) -> None:
     from unittest.mock import patch
 
     err = ValueError("Generation not found")
-    with patch("songmaker_cli.api.delete_generation", side_effect=err):
+    with patch("songmaker_cli.generation_api.delete_generation", side_effect=err):
         resp = client.delete("/api/generations/g1")
 
     assert resp.status_code == 404
@@ -845,7 +846,8 @@ def test_pick_generation_value_error(client: TestClient) -> None:
     """Lines 506-507: ValueError from pick_generation raises 404."""
     from unittest.mock import patch
 
-    with patch("songmaker_cli.api.pick_generation", side_effect=ValueError("Generation not found")):
+    err = ValueError("Generation not found")
+    with patch("songmaker_cli.generation_api.pick_generation", side_effect=err):
         resp = client.post("/api/generations/g1/pick")
 
     assert resp.status_code == 404
@@ -856,7 +858,7 @@ def test_unpick_generation_value_error(client: TestClient) -> None:
     from unittest.mock import patch
 
     err = ValueError("Generation not found")
-    with patch("songmaker_cli.api.unpick_generation", side_effect=err):
+    with patch("songmaker_cli.generation_api.unpick_generation", side_effect=err):
         resp = client.post("/api/generations/g1/unpick")
 
     assert resp.status_code == 404
@@ -898,7 +900,7 @@ def test_chat_rate_limit(tmp_path: Path) -> None:
 
     original = auth_mod.CHAT_RATE_LIMIT_USER
     auth_mod.CHAT_RATE_LIMIT_USER = 2
-    import songmaker_cli.api as api_mod
+    import songmaker_cli.api_helpers as api_mod
     api_mod._RATE_LIMITS["chat"] = (2, 300)
 
     c = _make_authed_client(tmp_path)
@@ -906,7 +908,7 @@ def test_chat_rate_limit(tmp_path: Path) -> None:
     mock_resp.text = "ok"
 
     try:
-        with patch("songmaker_cli.api.call_claude", return_value=mock_resp):
+        with patch("songmaker_cli.chat_api.call_claude", return_value=mock_resp):
             for _ in range(2):
                 r = c.post("/api/chat", json={"message": "hi"})
                 assert r.status_code == 200
@@ -927,7 +929,7 @@ def test_chat_rate_limit(tmp_path: Path) -> None:
 def test_admin_has_rate_limit(tmp_path: Path) -> None:
     from unittest.mock import MagicMock, patch
 
-    import songmaker_cli.api as api_mod
+    import songmaker_cli.api_helpers as api_mod
 
     original_limits = api_mod._RATE_LIMITS["generate"]
     api_mod._RATE_LIMITS["generate"] = (3, 1)
@@ -936,7 +938,7 @@ def test_admin_has_rate_limit(tmp_path: Path) -> None:
 
     mock_queue = MagicMock()
     try:
-        with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+        with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
             r = c.post("/api/songs/s1/generate", json={"count": 1})
             assert r.status_code == 200
 
@@ -1002,7 +1004,7 @@ def test_chat_unavailable_hides_details(tmp_path: Path) -> None:
 
     c = _make_authed_client(tmp_path)
     with patch(
-        "songmaker_cli.api.call_claude",
+        "songmaker_cli.chat_api.call_claude",
         side_effect=UnavailableError("Claude CLI error: /home/user/.local/bin..."),
     ):
         resp = c.post("/api/chat", json={"message": "hi"})

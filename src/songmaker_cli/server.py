@@ -140,6 +140,12 @@ _LOCALHOST_PATTERN = re.compile(r"^(localhost|127\.0\.0\.1)(:\d+)?$")
 _allowed_hosts_cache: tuple[frozenset[str], list[re.Pattern[str]]] | None = None
 
 
+def reset_allowed_hosts_cache() -> None:
+    """Clear the cached ALLOWED_HOSTS (for testing or config reload)."""
+    global _allowed_hosts_cache
+    _allowed_hosts_cache = None
+
+
 def _get_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
     """Parse ALLOWED_HOSTS into exact matches and wildcard patterns (cached).
 
@@ -377,20 +383,12 @@ def create_app(
 
 def _load_env_file(project_root: Path) -> None:
     """Load .server.env if it exists, without overriding existing env vars."""
+    from dotenv import load_dotenv
+
     env_file = project_root / ".server.env"
     if not env_file.exists():
         return
-    for line in env_file.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.strip().strip("'\"")
-        if key and key not in os.environ:
-            os.environ[key] = value
+    load_dotenv(env_file, override=False)
     log.info("Loaded env from %s", env_file)
 
 

@@ -16,6 +16,8 @@ from songmaker_cli.cli_client import (
     api_get,
     api_post,
     api_put,
+    cli_login,
+    cli_logout,
     poll_job,
     resolve_song,
 )
@@ -52,6 +54,26 @@ _server_url: str = DEFAULT_SERVER
 
 def _server() -> str:
     return _server_url
+
+
+# ── Auth ────────────────────────────────────────────────────────────
+
+
+@app.command
+def login(
+    username: Annotated[str, Parameter(help="Username")],
+    password: Annotated[str, Parameter(help="Password")],
+) -> None:
+    """Authenticate with the songmaker server and save the session."""
+    user = cli_login(_server(), username, password)
+    log.info("Logged in as '%s' (role=%s)", user["username"], user["role"])
+
+
+@app.command
+def logout() -> None:
+    """Logout and clear the saved session."""
+    cli_logout(_server())
+    log.info("Logged out")
 
 
 # ── Server ──────────────────────────────────────────────────────────

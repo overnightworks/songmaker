@@ -16,7 +16,7 @@ _ACE_STEP_FIELDS = frozenset({
 })
 
 
-class GenerationParams(TypedDict, total=False):
+class GenerationParamsDict(TypedDict, total=False):
     bpm: int
     duration: int
     key: str
@@ -26,7 +26,7 @@ class GenerationParams(TypedDict, total=False):
     inference_steps: int
     guidance_scale: float
     shift: float
-    think_mode: bool
+    think_mode: str
     lm_temperature: float
     infer_method: str
 
@@ -40,7 +40,7 @@ class SongMeta(BaseModel):
     lyrics: str = ""
     status: str = ""
     source_path: Path = Path()
-    generation_params: GenerationParams = Field(default_factory=dict)
+    generation_params: GenerationParamsDict = Field(default_factory=dict)
 
     @field_validator("track", mode="before")
     @classmethod

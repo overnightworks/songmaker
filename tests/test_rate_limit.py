@@ -74,7 +74,7 @@ def test_generate_rate_limit_for_user(client: TestClient) -> None:
         session.commit()
 
     mock_queue = MagicMock()
-    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
         resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
     assert resp.status_code == 429
@@ -92,7 +92,7 @@ def test_generate_no_rate_limit_for_admin(client: TestClient) -> None:
         session.commit()
 
     mock_queue = MagicMock()
-    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
         resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
     assert resp.status_code == 200
@@ -112,7 +112,7 @@ def test_score_rate_limit_for_user(client: TestClient) -> None:
         session.commit()
 
     mock_queue = MagicMock()
-    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
         resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 429
@@ -131,7 +131,7 @@ def test_active_job_limit(client: TestClient) -> None:
         session.commit()
 
     mock_queue = MagicMock()
-    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
         resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
     assert resp.status_code == 429
@@ -151,7 +151,7 @@ def test_queue_depth_limit(client: TestClient) -> None:
         session.commit()
 
     mock_queue = MagicMock()
-    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
         resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
     assert resp.status_code == 429
@@ -166,7 +166,7 @@ def test_generate_job_gets_user_id(client: TestClient) -> None:
     user_id = _get_user_id(client)
 
     mock_queue = MagicMock()
-    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
         resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
     assert resp.status_code == 200
@@ -183,7 +183,7 @@ def test_score_job_gets_user_id(client: TestClient) -> None:
     user_id = _get_user_id(client)
 
     mock_queue = MagicMock()
-    with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
         resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 200

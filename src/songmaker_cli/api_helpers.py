@@ -1,0 +1,123 @@
+"""Shared helpers for API endpoint modules."""
+
+from __future__ import annotations
+
+import re
+import unicodedata
+
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from songmaker_cli.auth import (
+    CHAT_RATE_LIMIT_ADMIN,
+    CHAT_RATE_LIMIT_USER,
+    GENERATION_RATE_LIMIT_ADMIN,
+    GENERATION_RATE_LIMIT_USER,
+    MAX_QUEUE_DEPTH,
+    MAX_USER_ACTIVE_JOBS,
+    RATE_LIMIT_WINDOW_SECONDS,
+    ROLE_ADMIN,
+    SCORING_RATE_LIMIT_ADMIN,
+    SCORING_RATE_LIMIT_USER,
+)
+from songmaker_cli.db.models import Album, Generation, Song
+from songmaker_cli.db.queries import (
+    count_total_queued_jobs,
+    count_user_active_jobs,
+    count_user_jobs_in_window,
+    get_album,
+    get_generation,
+    get_song,
+)
+from songmaker_cli.middleware import AuthenticatedUser
+
+_RATE_LIMITS: dict[str, tuple[int, int]] = {
+    "generate": (GENERATION_RATE_LIMIT_USER, GENERATION_RATE_LIMIT_ADMIN),
+    "score": (SCORING_RATE_LIMIT_USER, SCORING_RATE_LIMIT_ADMIN),
+    "chat": (CHAT_RATE_LIMIT_USER, CHAT_RATE_LIMIT_ADMIN),
+}
+
+
+def check_rate_limit(
+    session: Session, user: AuthenticatedUser, job_type: str,
+) -> None:
+    is_admin = user.role == ROLE_ADMIN
+
+    if job_type in ("generate", "score"):
+        if count_total_queued_jobs(session) >= MAX_QUEUE_DEPTH:
+            raise HTTPException(429, "Queue is full. Try again later.")
+        if not is_admin and count_user_active_jobs(session, user.id) >= MAX_USER_ACTIVE_JOBS:
+            raise HTTPException(429, "You already have an active job. Wait for it to finish.")
+
+    user_limit, admin_limit = _RATE_LIMITS.get(job_type, (10, 100))
+    limit = admin_limit if is_admin else user_limit
+    count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
+    if count >= limit:
+        raise HTTPException(429, f"Rate limit reached ({limit}/{job_type}s per hour).")
+
+
+def gen_params_to_dict(params: object | None) -> dict | None:
+    """Convert GenerationParams to a plain dict for DB storage, dropping None values."""
+    if params is None:
+        return None
+    return params.to_dict() or None
+
+
+def slugify(text: str) -> str:
+    """Convert text to a filesystem-safe ASCII slug."""
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    return text.strip("-") or "untitled"
+
+
+def unique_album_id(session: Session, base_slug: str) -> str:
+    """Return a unique album ID, appending -2, -3, etc. if needed."""
+    candidate = base_slug
+    counter = 1
+    while get_album(session, candidate):
+        counter += 1
+        candidate = f"{base_slug}-{counter}"
+    return candidate
+
+
+def owner_filter(user: AuthenticatedUser) -> str | None:
+    if user.role == ROLE_ADMIN:
+        return None
+    return user.id
+
+
+def check_album_access(album: Album | None, user: AuthenticatedUser) -> Album:
+    if not album:
+        raise HTTPException(404, "Album not found")
+    if user.role != ROLE_ADMIN and album.created_by != user.id:
+        raise HTTPException(404, "Album not found")
+    return album
+
+
+def check_song_access(
+    session: Session, song_id: str, user: AuthenticatedUser,
+) -> Song:
+    """Load a song and verify ownership. Returns the song or raises 404."""
+    song = get_song(session, song_id)
+    if not song:
+        raise HTTPException(404, "Song not found")
+    if user.role != ROLE_ADMIN:
+        album = song.album
+        if not album or album.created_by != user.id:
+            raise HTTPException(404, "Song not found")
+    return song
+
+
+def check_generation_access(
+    session: Session, gen_id: str, user: AuthenticatedUser,
+) -> Generation:
+    """Load a generation and verify ownership. Returns the generation or raises 404."""
+    gen = get_generation(session, gen_id)
+    if not gen:
+        raise HTTPException(404, "Generation not found")
+    if user.role != ROLE_ADMIN:
+        album = gen.song.album if gen.song else None
+        if not album or album.created_by != user.id:
+            raise HTTPException(404, "Generation not found")
+    return gen

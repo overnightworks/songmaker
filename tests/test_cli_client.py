@@ -21,49 +21,81 @@ def _mock_response(status: int = 200, json_data: object = None):
     resp.status_code = status
     resp.text = str(json_data)
     resp.json.return_value = json_data
+    resp.cookies = {}
     return resp
+
+
+def _mock_client(response: MagicMock | None = None, side_effect: Exception | None = None):
+    """Build a mock httpx.Client that returns the given response for any HTTP method."""
+    client = MagicMock()
+    client.cookies = MagicMock()
+    client.cookies.get = MagicMock(return_value=None)
+    if side_effect:
+        client.get.side_effect = side_effect
+        client.post.side_effect = side_effect
+        client.put.side_effect = side_effect
+    else:
+        client.get.return_value = response
+        client.post.return_value = response
+        client.put.return_value = response
+    client.__enter__ = MagicMock(return_value=client)
+    client.__exit__ = MagicMock(return_value=False)
+    return client
 
 
 # ── api_get ─────────────────────────────────────────────────────────
 
 
 def test_api_get_success() -> None:
-    with patch("httpx.get", return_value=_mock_response(json_data=[{"id": "a1"}])):
+    client = _mock_client(_mock_response(json_data=[{"id": "a1"}]))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
         result = api_get("http://localhost:8080", "/api/albums")
     assert result == [{"id": "a1"}]
 
 
 def test_api_get_connection_error() -> None:
     import httpx
-    with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
+    client = _mock_client(side_effect=httpx.ConnectError("refused"))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
         with pytest.raises(ServerError, match="Cannot connect"):
             api_get("http://localhost:8080", "/api/albums")
 
 
 def test_api_get_error_response() -> None:
-    with patch("httpx.get", return_value=_mock_response(status=404, json_data={"error": "nope"})):
+    client = _mock_client(_mock_response(status=404, json_data={"error": "nope"}))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
         with pytest.raises(ServerError, match="404"):
             api_get("http://localhost:8080", "/api/songs/bad")
+
+
+def test_api_get_401_suggests_login() -> None:
+    client = _mock_client(_mock_response(status=401, json_data={"detail": "auth required"}))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
+        with pytest.raises(ServerError, match="songmaker login"):
+            api_get("http://localhost:8080", "/api/albums")
 
 
 # ── api_post ────────────────────────────────────────────────────────
 
 
 def test_api_post_success() -> None:
-    with patch("httpx.post", return_value=_mock_response(json_data={"id": "j1"})):
+    client = _mock_client(_mock_response(json_data={"id": "j1"}))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
         result = api_post("http://localhost:8080", "/api/songs/s1/generate", {"count": 2})
     assert result["id"] == "j1"
 
 
 def test_api_post_connection_error() -> None:
     import httpx
-    with patch("httpx.post", side_effect=httpx.ConnectError("refused")):
+    client = _mock_client(side_effect=httpx.ConnectError("refused"))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
         with pytest.raises(ServerError, match="Cannot connect"):
             api_post("http://localhost:8080", "/api/songs/s1/generate")
 
 
 def test_api_post_error_response() -> None:
-    with patch("httpx.post", return_value=_mock_response(status=400, json_data="bad")):
+    client = _mock_client(_mock_response(status=400, json_data="bad"))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
         with pytest.raises(ServerError, match="400"):
             api_post("http://localhost:8080", "/api/songs/s1/generate")
 
@@ -72,14 +104,16 @@ def test_api_post_error_response() -> None:
 
 
 def test_api_put_success() -> None:
-    with patch("httpx.put", return_value=_mock_response(json_data={"id": "s1"})):
+    client = _mock_client(_mock_response(json_data={"id": "s1"}))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
         result = api_put("http://localhost:8080", "/api/songs/s1", {"lyrics": "new"})
     assert result["id"] == "s1"
 
 
 def test_api_put_connection_error() -> None:
     import httpx
-    with patch("httpx.put", side_effect=httpx.ConnectError("refused")):
+    client = _mock_client(side_effect=httpx.ConnectError("refused"))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
         with pytest.raises(ServerError, match="Cannot connect"):
             api_put("http://localhost:8080", "/api/songs/s1", {"lyrics": "x"})
 
@@ -126,7 +160,8 @@ def test_resolve_song_no_match() -> None:
 
 
 def test_api_put_error_response() -> None:
-    with patch("httpx.put", return_value=_mock_response(status=400, json_data="bad request")):
+    client = _mock_client(_mock_response(status=400, json_data="bad request"))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
         with pytest.raises(ServerError, match="400"):
             api_put("http://localhost:8080", "/api/songs/s1", {"lyrics": "x"})
 
@@ -238,3 +273,56 @@ def test_print_progress_zero() -> None:
 
     output = buf.getvalue()
     assert "0%" in output
+
+
+# ── cli_login / cli_logout ──────────────────────────────────────────
+
+
+def test_cli_login_success(tmp_path) -> None:
+    import httpx
+
+    from songmaker_cli.cli_client import cli_login
+
+    resp = MagicMock()
+    resp.is_success = True
+    resp.status_code = 200
+    resp.json.return_value = {"username": "admin", "role": "admin"}
+    resp.cookies = httpx.Cookies()
+    resp.cookies.set("session_id", "tok123")
+    resp.cookies.set("csrf_token", "csrf456")
+    resp.headers = {"content-type": "application/json"}
+
+    with (
+        patch("httpx.post", return_value=resp),
+        patch("songmaker_cli.cli_client.SESSION_DIR", tmp_path),
+        patch("songmaker_cli.cli_client.SESSION_FILE", tmp_path / "session.json"),
+    ):
+        result = cli_login("http://localhost:8080", "admin", "password")
+
+    assert result["username"] == "admin"
+    assert (tmp_path / "session.json").exists()
+
+
+def test_cli_login_failure() -> None:
+
+    from songmaker_cli.cli_client import cli_login
+
+    resp = MagicMock()
+    resp.is_success = False
+    resp.status_code = 401
+    resp.json.return_value = {"detail": "Invalid credentials"}
+    resp.headers = {"content-type": "application/json"}
+
+    with patch("httpx.post", return_value=resp):
+        with pytest.raises(ServerError, match="Login failed"):
+            cli_login("http://localhost:8080", "admin", "wrong")
+
+
+def test_cli_login_connection_error() -> None:
+    import httpx
+
+    from songmaker_cli.cli_client import cli_login
+
+    with patch("httpx.post", side_effect=httpx.ConnectError("refused")):
+        with pytest.raises(ServerError, match="Cannot connect"):
+            cli_login("http://localhost:8080", "admin", "pass")

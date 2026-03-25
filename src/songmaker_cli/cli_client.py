@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 import time
+from pathlib import Path
 
 import httpx
 
@@ -13,18 +15,112 @@ log = logging.getLogger(__name__)
 DEFAULT_SERVER = "http://localhost:8080"
 POLL_INTERVAL = 2.0
 
+SESSION_DIR = Path.home() / ".songmaker"
+SESSION_FILE = SESSION_DIR / "session.json"
+
 
 class ServerError(Exception):
     pass
+
+
+def _load_session(server: str) -> dict:
+    """Load saved session cookies for a server, or return empty dict."""
+    if not SESSION_FILE.exists():
+        return {}
+    try:
+        data = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
+        return data.get(server, {})
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_session(server: str, cookies: dict) -> None:
+    """Save session cookies for a server."""
+    SESSION_DIR.mkdir(parents=True, exist_ok=True)
+    existing: dict = {}
+    if SESSION_FILE.exists():
+        try:
+            existing = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    existing[server] = cookies
+    SESSION_FILE.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    SESSION_FILE.chmod(0o600)
+
+
+def _clear_session(server: str) -> None:
+    """Remove saved session for a server."""
+    if not SESSION_FILE.exists():
+        return
+    try:
+        existing = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
+        existing.pop(server, None)
+        SESSION_FILE.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    except (json.JSONDecodeError, OSError):
+        pass
+
+
+def _build_client(server: str) -> httpx.Client:
+    """Build an httpx client with stored session cookies."""
+    session = _load_session(server)
+    cookies = httpx.Cookies()
+    for name, value in session.items():
+        cookies.set(name, value)
+    return httpx.Client(cookies=cookies, timeout=30)
+
+
+def _extract_cookies(response: httpx.Response) -> dict:
+    """Extract cookies from a response as a plain dict."""
+    result = {}
+    for name, value in response.cookies.items():
+        result[name] = value
+    return result
+
+
+def cli_login(server: str, username: str, password: str) -> dict:
+    """Authenticate with the server and save the session.
+
+    Returns the user info dict on success, raises ServerError on failure.
+    """
+    url = f"{server}/api/auth/login"
+    try:
+        resp = httpx.post(url, json={"username": username, "password": password}, timeout=10)
+    except httpx.ConnectError:
+        raise ServerError(f"Cannot connect to {server}. Is the server running?")
+
+    if not resp.is_success:
+        is_json = resp.headers.get("content-type", "").startswith("application/json")
+        detail = resp.json().get("detail", resp.text[:200]) if is_json else resp.text[:200]
+        raise ServerError(f"Login failed: {detail}")
+
+    cookies = _extract_cookies(resp)
+    _save_session(server, cookies)
+    log.info("Session saved to %s", SESSION_FILE)
+    return resp.json()
+
+
+def cli_logout(server: str) -> None:
+    """Logout and clear the saved session."""
+    try:
+        with _build_client(server) as client:
+            csrf = client.cookies.get("csrf_token")
+            headers = {"X-CSRF-Token": csrf} if csrf else {}
+            client.delete(f"{server}/api/auth/session", headers=headers)
+    except httpx.ConnectError:
+        pass
+    _clear_session(server)
 
 
 def api_get(server: str, path: str) -> dict | list:
     url = f"{server}{path}"
     log.debug("GET %s", url)
     try:
-        resp = httpx.get(url, timeout=10)
+        with _build_client(server) as client:
+            resp = client.get(url)
     except httpx.ConnectError:
         raise ServerError(f"Cannot connect to {server}. Is the server running?")
+    if resp.status_code == 401:
+        raise ServerError("Not authenticated. Run 'songmaker login' first.")
     if not resp.is_success:
         raise ServerError(f"GET {path}: {resp.status_code} {resp.text[:200]}")
     return resp.json()
@@ -34,9 +130,14 @@ def api_post(server: str, path: str, json: dict | None = None) -> dict:
     url = f"{server}{path}"
     log.debug("POST %s %s", url, json)
     try:
-        resp = httpx.post(url, json=json or {}, timeout=30)
+        with _build_client(server) as client:
+            csrf = client.cookies.get("csrf_token")
+            headers = {"X-CSRF-Token": csrf} if csrf else {}
+            resp = client.post(url, json=json or {}, headers=headers)
     except httpx.ConnectError:
         raise ServerError(f"Cannot connect to {server}. Is the server running?")
+    if resp.status_code == 401:
+        raise ServerError("Not authenticated. Run 'songmaker login' first.")
     if not resp.is_success:
         raise ServerError(f"POST {path}: {resp.status_code} {resp.text[:200]}")
     return resp.json()
@@ -46,9 +147,14 @@ def api_put(server: str, path: str, json: dict) -> dict:
     url = f"{server}{path}"
     log.debug("PUT %s %s", url, json)
     try:
-        resp = httpx.put(url, json=json, timeout=10)
+        with _build_client(server) as client:
+            csrf = client.cookies.get("csrf_token")
+            headers = {"X-CSRF-Token": csrf} if csrf else {}
+            resp = client.put(url, json=json, headers=headers)
     except httpx.ConnectError:
         raise ServerError(f"Cannot connect to {server}. Is the server running?")
+    if resp.status_code == 401:
+        raise ServerError("Not authenticated. Run 'songmaker login' first.")
     if not resp.is_success:
         raise ServerError(f"PUT {path}: {resp.status_code} {resp.text[:200]}")
     return resp.json()
@@ -96,6 +202,6 @@ def _print_progress(progress: float, status: str) -> None:
     pct = int(progress * 100)
     bar_len = 30
     filled = int(bar_len * progress)
-    bar = "█" * filled + "░" * (bar_len - filled)
+    bar = "\u2588" * filled + "\u2591" * (bar_len - filled)
     sys.stderr.write(f"\r  [{bar}] {pct}% {status}")
     sys.stderr.flush()
