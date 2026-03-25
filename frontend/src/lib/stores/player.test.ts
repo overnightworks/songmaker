@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import {
-	albumList,
 	clearGenerationSelection,
 	expandedSongIds,
 	filteredSongs,

@@ -8,8 +8,7 @@ from pathlib import Path
 
 from acestep_engine import AceStepClient
 from acestep_engine.models import AceStepConfig
-from songmaker_cli.config import build_ace_config, find_project_root, load_generation_defaults
-from songmaker_cli.constants import OUTPUT_ROOT
+from songmaker_cli.config import build_ace_config, get_output_dir, load_generation_defaults
 from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
     create_generation,
@@ -43,10 +42,8 @@ class GenerationSetupError(Exception):
     pass
 
 
-def _build_generation_context(
-    song_id: str, version_id: str,
-) -> GenerationContext:
-    """Load song/version from DB and build all config needed for generation."""
+def _load_song_meta(song_id: str, version_id: str) -> tuple[SongMeta, AlbumMeta]:
+    """Load song and version from DB and return domain models."""
     factory = get_session_factory()
 
     with factory() as session:
@@ -60,37 +57,39 @@ def _build_generation_context(
 
         album = song.album
         album_name = album.title.lower().replace(" ", "_") if album else "unknown"
-        album_artist = album.artist if album else ""
-        song_title = song.title
-        track_number = song.track_number
-        lyrics = version.lyrics
-        prompt = version.prompt
-        bpm = version.bpm
-        duration = version.duration
-        key = version.key
-        language = song.language
-        version_gen_params = version.generation_params or {}
 
-    log.debug(
-        "Song: '%s' (album=%s, bpm=%s, duration=%s, key=%s, version_params=%s)",
-        song_title, album_name, bpm, duration, key, version_gen_params or "none",
-    )
+        base_params: dict = {
+            k: v for k, v in {
+                "bpm": version.bpm,
+                "duration": version.duration,
+                "key": version.key,
+                "language": song.language,
+            }.items() if v
+        }
+        base_params.update(version.generation_params or {})
 
-    base_params: dict = {
-        k: v for k, v in {
-            "bpm": bpm, "duration": duration, "key": key, "language": language,
-        }.items() if v
-    }
-    base_params.update(version_gen_params)
+        meta = SongMeta(
+            title=song.title,
+            album=album_name,
+            track=str(song.track_number),
+            prompt=version.prompt,
+            lyrics=version.lyrics,
+            generation_params=base_params,
+        )
+        album_meta = AlbumMeta(
+            title=album_name,
+            artist=album.artist if album else "",
+        )
 
-    meta = SongMeta(
-        title=song_title,
-        album=album_name,
-        track=str(track_number),
-        prompt=prompt,
-        lyrics=lyrics,
-        generation_params=base_params,
-    )
+    log.debug("Loaded: '%s' (album=%s, params=%s)", meta.title, album_name, base_params or "none")
+    return meta, album_meta
+
+
+def _build_generation_context(
+    song_id: str, version_id: str,
+) -> GenerationContext:
+    """Load song/version from DB and build all config needed for generation."""
+    meta, album_meta = _load_song_meta(song_id, version_id)
 
     client = AceStepClient()
     if not client.is_available:
@@ -100,24 +99,20 @@ def _build_generation_context(
     model_name = server_info.model if server_info else None
     log.debug("ACE-Step model: %s", model_name)
 
-    global_defaults = load_generation_defaults()
     ace_config = build_ace_config(
-        meta, model_name=model_name, global_defaults=global_defaults,
+        meta, model_name=model_name, global_defaults=load_generation_defaults(),
     )
-
-    project_root = find_project_root(Path.cwd())
-    output_root = (project_root / OUTPUT_ROOT) if project_root else Path(OUTPUT_ROOT)
 
     return GenerationContext(
         song_id=song_id,
         version_id=version_id,
         meta=meta,
-        album_meta=AlbumMeta(title=album_name, artist=album_artist),
+        album_meta=album_meta,
         ace_config=ace_config,
-        output_root=output_root,
+        output_root=get_output_dir(),
         model_name=model_name,
         client=client,
-        base_params=base_params,
+        base_params=meta.generation_params,
     )
 
 
@@ -134,7 +129,7 @@ def run_generation_job(
         try:
             ctx = _build_generation_context(song_id, version_id)
         except GenerationSetupError as exc:
-            _update_job(factory, job_id, "failed", error=str(exc))
+            _update_job(factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return
 
         for i in range(count):
@@ -175,7 +170,7 @@ def run_generation_job(
 
     except Exception as exc:
         log.exception("Generation job failed: %s", exc)
-        _update_job(factory, job_id, "failed", error=str(exc))
+        _update_job(factory, job_id, "failed", error=str(exc), error_type="generation_error")
 
 
 def run_scoring_job(
@@ -191,7 +186,10 @@ def run_scoring_job(
         with factory() as session:
             gen = get_generation(session, gen_id)
             if not gen:
-                _update_job(factory, job_id, "failed", error="Generation not found")
+                _update_job(
+                    factory, job_id, "failed",
+                    error="Generation not found", error_type="setup_error",
+                )
                 return
             mp3_path_rel = gen.mp3_path
             song = gen.song
@@ -206,12 +204,14 @@ def run_scoring_job(
                         "lyrics": ver.lyrics,
                     }
 
-        project_root = find_project_root(Path.cwd())
-        output_root = (project_root / OUTPUT_ROOT) if project_root else Path(OUTPUT_ROOT)
+        output_root = get_output_dir()
         mp3_full = output_root / mp3_path_rel
 
         if not mp3_full.exists():
-            _update_job(factory, job_id, "failed", error=f"MP3 not found: {mp3_path_rel}")
+            _update_job(
+                factory, job_id, "failed",
+                error=f"MP3 not found: {mp3_path_rel}", error_type="setup_error",
+            )
             return
 
         device = _detect_device()
@@ -238,7 +238,7 @@ def run_scoring_job(
 
     except Exception as exc:
         log.exception("Scoring job failed: %s", exc)
-        _update_job(factory, job_id, "failed", error=str(exc))
+        _update_job(factory, job_id, "failed", error=str(exc), error_type="scoring_error")
 
 
 def _detect_device() -> str:

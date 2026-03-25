@@ -9,7 +9,7 @@ vi.stubGlobal('localStorage', {
 		mockStorage[key] = value;
 	},
 	removeItem: (key: string) => {
-		delete mockStorage[key];
+		Reflect.deleteProperty(mockStorage, key);
 	}
 });
 
@@ -17,7 +17,7 @@ import { claudeApiKey, getClaudeKey } from './settings';
 
 describe('settings store', () => {
 	beforeEach(() => {
-		Object.keys(mockStorage).forEach((k) => delete mockStorage[k]);
+		Object.keys(mockStorage).forEach((k) => Reflect.deleteProperty(mockStorage, k));
 		claudeApiKey.set('');
 	});
 

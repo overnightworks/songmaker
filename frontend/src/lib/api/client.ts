@@ -44,7 +44,8 @@ export async function createAlbum(title: string, artist: string = ''): Promise<A
 export async function fetchSongs(albumId?: string): Promise<SongItem[]> {
 	let path = '/api/songs';
 	if (albumId) path += `?album_id=${albumId}`;
-	return apiFetch<SongItem[]>(path);
+	const songs = await apiFetch<SongItem[]>(path);
+	return songs.map((s) => ({ ...s, generations: s.generations ?? [] }));
 }
 
 export async function fetchSong(songId: string): Promise<SongItem> {
@@ -106,6 +107,7 @@ export interface JobStatus {
 	status: string;
 	progress: number;
 	error: string | null;
+	error_type: string | null;
 	started_at: string | null;
 	completed_at: string | null;
 }
@@ -141,8 +143,6 @@ export async function unpickGeneration(genId: string): Promise<void> {
 export async function cleanupAlbum(albumId: string): Promise<{ deleted: number }> {
 	return apiFetch<{ deleted: number }>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
 }
-
-
 
 export async function fetchCapabilities(): Promise<Capabilities> {
 	return apiFetch<Capabilities>('/api/capabilities');

@@ -84,7 +84,7 @@ export interface VersionItem {
 	created_at: string | null;
 }
 
-/** A song with its versions and generations. */
+/** A song — list endpoint omits generations, detail endpoint includes them. */
 export interface SongItem {
 	id: string;
 	title: string;

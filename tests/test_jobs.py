@@ -106,7 +106,7 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
     with (
         patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
         patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", return_value=result),
     ):
@@ -132,7 +132,7 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
     with (
         patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
         patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", side_effect=results),
     ):
@@ -187,7 +187,7 @@ def test_generation_job_exception(seeded_db) -> None:
     with (
         patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
         patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.find_project_root", return_value=Path("/tmp")),
+        patch("songmaker_cli.jobs.get_output_dir", return_value=Path("/tmp/_output")),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", side_effect=RuntimeError("GPU error")),
     ):
@@ -213,7 +213,7 @@ def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> 
     with (
         patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
         patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", return_value=result),
     ):
@@ -234,8 +234,11 @@ def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> Non
     with (
         patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
         patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
-        patch("songmaker_cli.jobs.load_generation_defaults", return_value={"turbo": {"shift": 7.0}}) as mock_load,
+        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
+        patch(
+            "songmaker_cli.jobs.load_generation_defaults",
+            return_value={"turbo": {"shift": 7.0}},
+        ) as mock_load,
         patch("songmaker_cli.jobs.generate_single", return_value=result),
     ):
         run_generation_job("j1", "s1", "v1", 1)
@@ -270,7 +273,7 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
 
     with (
         patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
-        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch("songmaker_cli.jobs.run_scoring_pipeline", return_value=mock_result),
     ):
@@ -296,7 +299,7 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
 
     with (
         patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
-        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch("songmaker_cli.jobs.run_scoring_pipeline", return_value=mock_result),
     ):
@@ -327,7 +330,7 @@ def test_scoring_job_mp3_not_found(seeded_db, tmp_path: Path) -> None:
 
     with (
         patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
-        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
     ):
         run_scoring_job("j2", "g1", None)
 
@@ -347,7 +350,7 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
 
     with (
         patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
-        patch("songmaker_cli.jobs.find_project_root", return_value=tmp_path),
+        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch("songmaker_cli.jobs.run_scoring_pipeline", side_effect=RuntimeError("scorer crash")),
     ):

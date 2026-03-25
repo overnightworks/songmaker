@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+import unicodedata
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -25,6 +27,7 @@ from songmaker_cli.api_models import (
     ScoreRequest,
     SongCreateRequest,
     SongResponse,
+    SongSummaryResponse,
     SongUpdateRequest,
     StatusResponse,
     VersionResponse,
@@ -44,12 +47,11 @@ from songmaker_cli.claude.provider import (
     is_available,
 )
 from songmaker_cli.config import (
-    find_project_root,
+    get_output_dir,
     load_generation_defaults,
     save_generation_defaults,
 )
-from songmaker_cli.constants import OUTPUT_ROOT
-from songmaker_cli.db.engine import get_session_factory
+from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     cleanup_album,
@@ -84,15 +86,8 @@ router.include_router(auth_router)
 router.include_router(admin_router)
 
 
-_cached_output_dir: Path | None = None
-
-
 def _resolve_output_dir() -> Path:
-    global _cached_output_dir
-    if _cached_output_dir is None:
-        root = find_project_root(Path.cwd())
-        _cached_output_dir = (root / OUTPUT_ROOT) if root else Path(OUTPUT_ROOT)
-    return _cached_output_dir
+    return get_output_dir()
 
 
 def _get_optional_user(request: Request) -> AuthenticatedUser | None:
@@ -117,16 +112,7 @@ def _check_rate_limit(
         raise HTTPException(429, f"Rate limit reached ({limit}/{job_type}s per hour).")
 
 
-def _get_session() -> Session:  # type: ignore[misc]
-    factory = get_session_factory()
-    session = factory()
-    try:
-        yield session
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+_get_session = get_db_session
 
 
 _VALID_GEN_PARAM_KEYS = frozenset({
@@ -148,6 +134,14 @@ def _validate_generation_params(params: dict | None) -> dict | None:
 
 
 # ── Albums ───────────────────────────────────────────────────────────
+
+
+def _slugify(text: str) -> str:
+    """Convert text to a filesystem-safe ASCII slug."""
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    return text.strip("-") or "untitled"
 
 
 def _owner_filter(user: AuthenticatedUser | None) -> str | None:
@@ -192,7 +186,7 @@ def api_create_album(
     title = data.get("title", "").strip()
     if not title:
         raise HTTPException(422, "Title is required")
-    album_id = title.lower().replace(" ", "-").replace("'", "")
+    album_id = _slugify(title)
     existing = get_album(session, album_id)
     if existing:
         raise HTTPException(409, f"Album '{title}' already exists")
@@ -213,11 +207,11 @@ def api_list_songs(
     request: Request,
     album_id: str | None = Query(None),
     session: Session = Depends(_get_session),
-) -> list[SongResponse]:
+) -> list[SongSummaryResponse]:
     user = _get_optional_user(request)
     return [
-        SongResponse.from_orm(s)
-        for s in list_songs(session, album_id=album_id, user_id=_owner_filter(user))
+        SongSummaryResponse.from_orm(s)
+        for s in list_songs(session, album_id=album_id, user_id=_owner_filter(user), light=True)
     ]
 
 

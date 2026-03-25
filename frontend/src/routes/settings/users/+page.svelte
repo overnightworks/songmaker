@@ -17,7 +17,12 @@
 	let users = $state<UserItem[]>([]);
 	let sessions = $state<SessionItem[]>([]);
 	let attempts = $state<LoginAttemptItem[]>([]);
-	let aceStatus = $state<{ online: boolean; model: string | null; lm_model: string | null; jobs: Record<string, number> } | null>(null);
+	let aceStatus = $state<{
+		online: boolean;
+		model: string | null;
+		lm_model: string | null;
+		jobs: Record<string, number>;
+	} | null>(null);
 	let error = $state('');
 	let tab = $state<'users' | 'sessions' | 'attempts' | 'acestep'>('users');
 	let reinitializing = $state(false);
@@ -121,9 +126,7 @@
 
 		<div class="tabs">
 			<button class:active={tab === 'users'} onclick={() => (tab = 'users')}>Users</button>
-			<button class:active={tab === 'sessions'} onclick={() => (tab = 'sessions')}
-				>Sessions</button
-			>
+			<button class:active={tab === 'sessions'} onclick={() => (tab = 'sessions')}>Sessions</button>
 			<button class:active={tab === 'attempts'} onclick={() => (tab = 'attempts')}
 				>Login Attempts</button
 			>
@@ -137,8 +140,21 @@
 		{#if tab === 'users'}
 			<section>
 				<h2>Create User</h2>
-			<form class="create-form" onsubmit={(e) => { e.preventDefault(); handleCreate(); }} autocomplete="off">
-					<input bind:value={newUsername} placeholder="Username" minlength={3} required autocomplete="off" />
+				<form
+					class="create-form"
+					onsubmit={(e) => {
+						e.preventDefault();
+						handleCreate();
+					}}
+					autocomplete="off"
+				>
+					<input
+						bind:value={newUsername}
+						placeholder="Username"
+						minlength={3}
+						required
+						autocomplete="off"
+					/>
 					<input
 						type="password"
 						bind:value={newPassword}
@@ -244,9 +260,7 @@
 					<tbody>
 						{#each attempts as att (att.id)}
 							<tr>
-								<td
-									>{att.attempted_at ? new Date(att.attempted_at).toLocaleString() : ''}</td
-								>
+								<td>{att.attempted_at ? new Date(att.attempted_at).toLocaleString() : ''}</td>
 								<td>{att.username}</td>
 								<td>{att.ip_address}</td>
 								<td>
@@ -291,14 +305,12 @@
 							</div>
 						{/if}
 					</div>
-					<button
-						class="reinit-btn"
-						onclick={handleReinitialize}
-						disabled={reinitializing}
-					>
+					<button class="reinit-btn" onclick={handleReinitialize} disabled={reinitializing}>
 						{reinitializing ? 'Reinitializing...' : 'Reinitialize ACE-Step'}
 					</button>
-					<p class="hint">Use this if generations fail. Resets the model without restarting the server.</p>
+					<p class="hint">
+						Use this if generations fail. Resets the model without restarting the server.
+					</p>
 				{:else}
 					<p>Loading...</p>
 				{/if}

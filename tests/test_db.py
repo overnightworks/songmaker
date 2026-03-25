@@ -59,6 +59,7 @@ from songmaker_cli.db.queries import (
     list_users,
     pick_generation,
     record_login_attempt,
+    recover_stale_jobs,
     save_rating,
     save_scores,
     unpick_generation,
@@ -133,6 +134,43 @@ def test_generation_rating(seeded_session: Session) -> None:
 
 def test_list_albums(seeded_session: Session) -> None:
     assert len(list_albums(seeded_session)) == 1
+
+
+def test_list_albums_filtered_by_user(db_session: Session) -> None:
+    from songmaker_cli.db.queries import create_album, list_albums
+
+    u1 = create_user(db_session, "alice", "h", role="user")
+    u2 = create_user(db_session, "bob", "h", role="user")
+    db_session.flush()
+    create_album(db_session, "a1", "Album A", created_by=u1.id)
+    create_album(db_session, "a2", "Album B", created_by=u2.id)
+    create_album(db_session, "a3", "Album C", created_by=u1.id)
+    db_session.commit()
+
+    assert len(list_albums(db_session)) == 3
+    assert len(list_albums(db_session, user_id=u1.id)) == 2
+    assert len(list_albums(db_session, user_id=u2.id)) == 1
+
+
+def test_create_album(db_session: Session) -> None:
+    from songmaker_cli.db.queries import create_album, get_album
+
+    album = create_album(db_session, "my-album", "My Album", artist="Artist")
+    db_session.commit()
+    assert album.id == "my-album"
+    assert album.title == "My Album"
+    assert album.artist == "Artist"
+    assert get_album(db_session, "my-album") is not None
+
+
+def test_create_album_with_owner(db_session: Session) -> None:
+    from songmaker_cli.db.queries import create_album
+
+    user = create_user(db_session, "owner", "h", role="user")
+    db_session.flush()
+    album = create_album(db_session, "owned", "Owned", created_by=user.id)
+    db_session.commit()
+    assert album.created_by == user.id
 
 
 def test_list_songs(seeded_session: Session) -> None:
@@ -498,6 +536,14 @@ def test_get_session_factory_before_init() -> None:
     reset_engine()
 
 
+def test_init_db_different_path_raises(tmp_path: Path) -> None:
+    reset_engine()
+    init_db(tmp_path / "a.db")
+    with pytest.raises(RuntimeError, match="already initialized"):
+        init_db(tmp_path / "b.db")
+    reset_engine()
+
+
 # ── queries.py gap coverage ─────────────────────────────────────────
 
 
@@ -821,9 +867,11 @@ def test_delete_user_cascades_sessions(db_session: Session) -> None:
 
 
 def test_create_job_with_user_id(db_session: Session) -> None:
-    job = create_job(db_session, "generate", user_id="u1")
+    user = create_user(db_session, "testuser", "hash", role="user")
+    db_session.flush()
+    job = create_job(db_session, "generate", user_id=user.id)
     db_session.commit()
-    assert job.user_id == "u1"
+    assert job.user_id == user.id
 
 
 def test_create_job_without_user_id(db_session: Session) -> None:
@@ -833,15 +881,18 @@ def test_create_job_without_user_id(db_session: Session) -> None:
 
 
 def test_count_user_jobs_in_window(db_session: Session) -> None:
-    create_job(db_session, "generate", user_id="u1")
-    create_job(db_session, "generate", user_id="u1")
-    create_job(db_session, "score", user_id="u1")
-    create_job(db_session, "generate", user_id="u2")
+    u1 = create_user(db_session, "user1", "hash", role="user")
+    u2 = create_user(db_session, "user2", "hash", role="user")
+    db_session.flush()
+    create_job(db_session, "generate", user_id=u1.id)
+    create_job(db_session, "generate", user_id=u1.id)
+    create_job(db_session, "score", user_id=u1.id)
+    create_job(db_session, "generate", user_id=u2.id)
     db_session.commit()
 
-    assert count_user_jobs_in_window(db_session, "u1", "generate") == 2
-    assert count_user_jobs_in_window(db_session, "u1", "score") == 1
-    assert count_user_jobs_in_window(db_session, "u2", "generate") == 1
+    assert count_user_jobs_in_window(db_session, u1.id, "generate") == 2
+    assert count_user_jobs_in_window(db_session, u1.id, "score") == 1
+    assert count_user_jobs_in_window(db_session, u2.id, "generate") == 1
 
 
 def test_count_user_jobs_outside_window(db_session: Session) -> None:
@@ -849,35 +900,42 @@ def test_count_user_jobs_outside_window(db_session: Session) -> None:
 
     from songmaker_cli.db.models import Job
 
+    user = create_user(db_session, "testuser", "hash", role="user")
+    db_session.flush()
     old_job = Job(
-        type="generate", user_id="u1",
+        type="generate", user_id=user.id,
         started_at=datetime.now(timezone.utc) - timedelta(hours=2),
     )
     db_session.add(old_job)
     db_session.commit()
 
-    assert count_user_jobs_in_window(db_session, "u1", "generate", window_seconds=3600) == 0
+    assert count_user_jobs_in_window(db_session, user.id, "generate", window_seconds=3600) == 0
 
 
 def test_count_user_active_jobs(db_session: Session) -> None:
     from songmaker_cli.db.queries import update_job_status
 
-    create_job(db_session, "generate", user_id="u1")
-    j2 = create_job(db_session, "generate", user_id="u1")
-    create_job(db_session, "generate", user_id="u1")
+    user = create_user(db_session, "testuser", "hash", role="user")
+    db_session.flush()
+    create_job(db_session, "generate", user_id=user.id)
+    j2 = create_job(db_session, "generate", user_id=user.id)
+    create_job(db_session, "generate", user_id=user.id)
     db_session.commit()
 
     update_job_status(db_session, j2.id, "completed", progress=1.0)
     db_session.commit()
 
-    assert count_user_active_jobs(db_session, "u1") == 2
+    assert count_user_active_jobs(db_session, user.id) == 2
 
 
 def test_count_total_queued_jobs(db_session: Session) -> None:
     from songmaker_cli.db.queries import update_job_status
 
-    create_job(db_session, "generate", user_id="u1")
-    create_job(db_session, "score", user_id="u2")
+    u1 = create_user(db_session, "user1", "hash", role="user")
+    u2 = create_user(db_session, "user2", "hash", role="user")
+    db_session.flush()
+    create_job(db_session, "generate", user_id=u1.id)
+    create_job(db_session, "score", user_id=u2.id)
     j3 = create_job(db_session, "generate")
     db_session.commit()
 
@@ -885,3 +943,43 @@ def test_count_total_queued_jobs(db_session: Session) -> None:
     db_session.commit()
 
     assert count_total_queued_jobs(db_session) == 2
+
+
+def test_recover_stale_jobs(db_session: Session) -> None:
+    from songmaker_cli.db.queries import update_job_status
+
+    j1 = create_job(db_session, "generate")
+    j2 = create_job(db_session, "score")
+    j3 = create_job(db_session, "generate")
+    db_session.commit()
+
+    update_job_status(db_session, j1.id, "running", progress=0.5)
+    update_job_status(db_session, j3.id, "completed", progress=1.0)
+    db_session.commit()
+
+    count = recover_stale_jobs(db_session)
+    db_session.commit()
+
+    assert count == 2
+
+    j1_after = get_job(db_session, j1.id)
+    assert j1_after.status == "failed"
+    assert j1_after.error_type == "server_restart"
+    assert j1_after.completed_at is not None
+
+    j2_after = get_job(db_session, j2.id)
+    assert j2_after.status == "failed"
+
+    j3_after = get_job(db_session, j3.id)
+    assert j3_after.status == "completed"
+
+
+def test_recover_stale_jobs_none(db_session: Session) -> None:
+    j1 = create_job(db_session, "generate")
+    db_session.commit()
+
+    from songmaker_cli.db.queries import update_job_status
+    update_job_status(db_session, j1.id, "completed", progress=1.0)
+    db_session.commit()
+
+    assert recover_stale_jobs(db_session) == 0

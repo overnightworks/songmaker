@@ -52,18 +52,32 @@ def create_album(
 
 
 def list_songs(
-    session: Session, album_id: str | None = None, user_id: str | None = None,
+    session: Session,
+    album_id: str | None = None,
+    user_id: str | None = None,
+    light: bool = False,
 ) -> list[Song]:
-    query = (
-        session.query(Song)
-        .options(
-            joinedload(Song.versions),
-            joinedload(Song.generations).joinedload(Generation.scores),
-            joinedload(Song.generations).joinedload(Generation.rating),
-            joinedload(Song.album),
+    if light:
+        query = (
+            session.query(Song)
+            .options(
+                joinedload(Song.versions),
+                joinedload(Song.generations),
+                joinedload(Song.album),
+            )
+            .order_by(Song.album_id, Song.track_number)
         )
-        .order_by(Song.album_id, Song.track_number)
-    )
+    else:
+        query = (
+            session.query(Song)
+            .options(
+                joinedload(Song.versions),
+                joinedload(Song.generations).joinedload(Generation.scores),
+                joinedload(Song.generations).joinedload(Generation.rating),
+                joinedload(Song.album),
+            )
+            .order_by(Song.album_id, Song.track_number)
+        )
     if album_id:
         query = query.filter_by(album_id=album_id)
     if user_id:
@@ -301,6 +315,7 @@ def count_total_queued_jobs(session: Session) -> int:
 def update_job_status(
     session: Session, job_id: str, status: str,
     progress: float = 0.0, error: str | None = None,
+    error_type: str | None = None,
 ) -> None:
     job = session.query(Job).filter_by(id=job_id).first()
     if not job:
@@ -308,6 +323,7 @@ def update_job_status(
     job.status = status
     job.progress = progress
     job.error = error
+    job.error_type = error_type
     if status in ("completed", "failed"):
         job.completed_at = datetime.now(timezone.utc)
     session.flush()
@@ -315,6 +331,25 @@ def update_job_status(
 
 def get_job(session: Session, job_id: str) -> Job | None:
     return session.query(Job).filter_by(id=job_id).first()
+
+
+def recover_stale_jobs(session: Session) -> int:
+    """Mark all running/queued jobs as failed on startup. Returns count recovered."""
+    now = datetime.now(timezone.utc)
+    stale = (
+        session.query(Job)
+        .filter(Job.status.in_(("queued", "running")))
+        .all()
+    )
+    for job in stale:
+        job.status = "failed"
+        job.error = "Server restarted while job was in progress"
+        job.error_type = "server_restart"
+        job.completed_at = now
+    session.flush()
+    if stale:
+        log.info("Recovered %d stale jobs", len(stale))
+    return len(stale)
 
 
 

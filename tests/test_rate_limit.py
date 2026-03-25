@@ -145,8 +145,8 @@ def test_queue_depth_limit(client: TestClient) -> None:
 
     factory = get_session_factory()
     with factory() as session:
-        for i in range(10):
-            session.add(Job(type="generate", user_id=f"other_{i}", status="queued"))
+        for _ in range(10):
+            session.add(Job(type="generate", status="queued"))
         session.commit()
 
     mock_queue = MagicMock()

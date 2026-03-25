@@ -16,7 +16,7 @@ from songmaker_cli.api_models import (
     UserResponse,
 )
 from songmaker_cli.auth import hash_password
-from songmaker_cli.db.engine import get_session_factory
+from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.db.queries import (
     create_user,
     delete_session,
@@ -34,16 +34,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-def _get_session() -> Session:  # type: ignore[misc]
-    factory = get_session_factory()
-    session = factory()
-    try:
-        yield session
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+_get_session = get_db_session
 
 
 @router.get("/users")

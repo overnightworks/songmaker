@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from songmaker_cli.config import find_project_root
+from songmaker_cli.config import find_project_root, set_output_dir
 from songmaker_cli.constants import OUTPUT_ROOT
 
 log = logging.getLogger(__name__)
@@ -138,6 +138,7 @@ def run_server(
 
     from songmaker_cli.db.engine import init_db
 
+    set_output_dir(output_dir)
     db_path = output_dir / DB_FILENAME
     init_db(db_path)
 

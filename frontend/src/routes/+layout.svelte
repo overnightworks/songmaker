@@ -77,11 +77,7 @@
 	</header>
 
 	{#if sbOpen}
-		<button
-			class="sidebar-overlay"
-			onclick={closeSidebar}
-			aria-label="Close sidebar"
-			tabindex="-1"
+		<button class="sidebar-overlay" onclick={closeSidebar} aria-label="Close sidebar" tabindex="-1"
 		></button>
 	{/if}
 

@@ -23,14 +23,16 @@ from songmaker_cli.claude.provider import (
 
 
 def test_call_claude_routes_to_api_with_key() -> None:
-    with patch("songmaker_cli.claude.provider._call_api", return_value=ClaudeResponse(text="hi")) as mock:
+    resp = ClaudeResponse(text="hi")
+    with patch("songmaker_cli.claude.provider._call_api", return_value=resp) as mock:
         result = call_claude("hello", api_key="sk-test")
     mock.assert_called_once()
     assert result.text == "hi"
 
 
 def test_call_claude_routes_to_cli_without_key() -> None:
-    with patch("songmaker_cli.claude.provider._call_cli", return_value=ClaudeResponse(text="yo")) as mock:
+    resp = ClaudeResponse(text="yo")
+    with patch("songmaker_cli.claude.provider._call_cli", return_value=resp) as mock:
         result = call_claude("hello")
     mock.assert_called_once()
     assert result.text == "yo"

@@ -57,9 +57,22 @@ class GpuQueue:
         if self._running:
             return
         self._running = True
+        self._recover_stale_jobs()
         self._worker = threading.Thread(target=self._run, daemon=True, name="gpu-queue")
         self._worker.start()
         log.info("GPU queue started")
+
+    def _recover_stale_jobs(self) -> None:
+        try:
+            from songmaker_cli.db.engine import get_session_factory
+            from songmaker_cli.db.queries import recover_stale_jobs
+
+            factory = get_session_factory()
+            with factory() as session:
+                recover_stale_jobs(session)
+                session.commit()
+        except RuntimeError:
+            pass
 
     def shutdown(self) -> None:
         self._running = False

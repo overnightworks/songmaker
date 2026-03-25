@@ -9,8 +9,8 @@ vi.mock('$lib/api/client', () => ({
 	fetchSong: (...args: unknown[]) => mockFetchSong(...args)
 }));
 
-vi.mock('$lib/stores/player', () => {
-	const { writable } = require('svelte/store');
+vi.mock('$lib/stores/player', async () => {
+	const { writable } = await import('svelte/store');
 	return { songList: writable([]) };
 });
 
@@ -24,6 +24,7 @@ function makeJob(overrides: Partial<JobStatus> = {}): JobStatus {
 		status: 'queued',
 		progress: 0,
 		error: null,
+		error_type: null,
 		started_at: null,
 		completed_at: null,
 		...overrides

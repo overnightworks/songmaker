@@ -1,4 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
+import { fetchSong } from '$lib/api/client';
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 
 // --- Data ---
@@ -48,6 +49,22 @@ export function toggleSongExpanded(songId: string): void {
 	});
 }
 
+const _loadingIds = new Set<string>();
+
+export async function ensureGenerationsLoaded(songId: string): Promise<void> {
+	const songs = get(songList);
+	const song = songs.find((s) => s.id === songId);
+	if (!song || song.generations.length > 0 || song.generation_count === 0) return;
+	if (_loadingIds.has(songId)) return;
+	_loadingIds.add(songId);
+	try {
+		const full = await fetchSong(songId);
+		songList.update((list) => list.map((s) => (s.id === songId ? full : s)));
+	} finally {
+		_loadingIds.delete(songId);
+	}
+}
+
 export function selectGenerationInSidebar(gen: GenerationItem, song: SongItem): void {
 	selectedSongId.set(song.id);
 	selectedGenerationId.set(gen.id);
@@ -79,7 +96,6 @@ export function playGeneration(gen: GenerationItem, song: SongItem): void {
 	});
 }
 
-
 export const canPlayPrevGen = derived([playback, songList], ([$pb, $songs]) => {
 	if (!$pb) return false;
 	const song = $songs.find((s) => s.id === $pb.songId);
@@ -100,7 +116,7 @@ export const canPlayPrevSong = derived([playback, songList], ([$pb, $songs]) => 
 	if (!$pb) return false;
 	const idx = $songs.findIndex((s) => s.id === $pb.songId);
 	for (let i = idx - 1; i >= 0; i--) {
-		if ($songs[i].generations.length > 0) return true;
+		if ($songs[i].generation_count > 0) return true;
 	}
 	return false;
 });
@@ -109,7 +125,7 @@ export const canPlayNextSong = derived([playback, songList], ([$pb, $songs]) => 
 	if (!$pb) return false;
 	const idx = $songs.findIndex((s) => s.id === $pb.songId);
 	for (let i = idx + 1; i < $songs.length; i++) {
-		if ($songs[i].generations.length > 0) return true;
+		if ($songs[i].generation_count > 0) return true;
 	}
 	return false;
 });
@@ -144,40 +160,49 @@ function bestGen(song: SongItem): GenerationItem | undefined {
 	return song.generations.find((g) => g.is_picked) ?? song.generations[0];
 }
 
-export function playNextSong(): void {
+export async function playNextSong(): Promise<void> {
 	const pb = get(playback);
 	if (!pb) return;
 	const songs = get(songList);
 	const idx = songs.findIndex((s) => s.id === pb.songId);
 	for (let i = idx + 1; i < songs.length; i++) {
-		const gen = bestGen(songs[i]);
-		if (gen) {
-			playGeneration(gen, songs[i]);
+		if (songs[i].generation_count === 0) continue;
+		await ensureGenerationsLoaded(songs[i].id);
+		const fresh = get(songList).find((s) => s.id === songs[i].id);
+		const gen = fresh ? bestGen(fresh) : undefined;
+		if (gen && fresh) {
+			playGeneration(gen, fresh);
 			return;
 		}
 	}
 }
 
-export function playPrevSong(): void {
+export async function playPrevSong(): Promise<void> {
 	const pb = get(playback);
 	if (!pb) return;
 	const songs = get(songList);
 	const idx = songs.findIndex((s) => s.id === pb.songId);
 	for (let i = idx - 1; i >= 0; i--) {
-		const gen = bestGen(songs[i]);
-		if (gen) {
-			playGeneration(gen, songs[i]);
+		if (songs[i].generation_count === 0) continue;
+		await ensureGenerationsLoaded(songs[i].id);
+		const fresh = get(songList).find((s) => s.id === songs[i].id);
+		const gen = fresh ? bestGen(fresh) : undefined;
+		if (gen && fresh) {
+			playGeneration(gen, fresh);
 			return;
 		}
 	}
 }
 
-export function playAlbum(albumId: string): void {
+export async function playAlbum(albumId: string): Promise<void> {
 	const songs = get(songList).filter((s) => s.album_id === albumId);
 	for (const song of songs) {
-		const gen = bestGen(song);
-		if (gen) {
-			playGeneration(gen, song);
+		if (song.generation_count === 0) continue;
+		await ensureGenerationsLoaded(song.id);
+		const fresh = get(songList).find((s) => s.id === song.id);
+		const gen = fresh ? bestGen(fresh) : undefined;
+		if (gen && fresh) {
+			playGeneration(gen, fresh);
 			return;
 		}
 	}

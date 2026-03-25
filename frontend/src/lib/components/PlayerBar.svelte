@@ -124,17 +124,47 @@
 
 <footer class="player-bar">
 	<div class="player-controls">
-		<button class="nav-btn" onclick={playPrevSong} disabled={!prevSong} aria-label="Previous song" title="Previous song">⏮</button>
-		<button class="nav-btn" onclick={playPrevGeneration} disabled={!prevGen} aria-label="Previous generation" title="Previous generation">⏪</button>
-		<button class="play-btn" class:loading={isLoading} onclick={togglePlay} disabled={isLoading} aria-label={isPlaying ? 'Pause' : 'Play'}>
+		<button
+			class="nav-btn"
+			onclick={playPrevSong}
+			disabled={!prevSong}
+			aria-label="Previous song"
+			title="Previous song">⏮</button
+		>
+		<button
+			class="nav-btn"
+			onclick={playPrevGeneration}
+			disabled={!prevGen}
+			aria-label="Previous generation"
+			title="Previous generation">⏪</button
+		>
+		<button
+			class="play-btn"
+			class:loading={isLoading}
+			onclick={togglePlay}
+			disabled={isLoading}
+			aria-label={isPlaying ? 'Pause' : 'Play'}
+		>
 			{#if isLoading}
 				<span class="spinner"></span>
 			{:else}
 				{isPlaying ? '⏸' : '▶'}
 			{/if}
 		</button>
-		<button class="nav-btn" onclick={playNextGeneration} disabled={!nextGen} aria-label="Next generation" title="Next generation">⏩</button>
-		<button class="nav-btn" onclick={playNextSong} disabled={!nextSong} aria-label="Next song" title="Next song">⏭</button>
+		<button
+			class="nav-btn"
+			onclick={playNextGeneration}
+			disabled={!nextGen}
+			aria-label="Next generation"
+			title="Next generation">⏩</button
+		>
+		<button
+			class="nav-btn"
+			onclick={playNextSong}
+			disabled={!nextSong}
+			aria-label="Next song"
+			title="Next song">⏭</button
+		>
 	</div>
 
 	<button class="track-info" onclick={navigateToPlaying} aria-label="Go to playing song">
@@ -214,7 +244,9 @@
 	}
 
 	@keyframes spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.nav-btn {

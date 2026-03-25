@@ -8,8 +8,8 @@ vi.mock('$lib/api/client', () => ({
 	fetchSong: vi.fn()
 }));
 
-vi.mock('$lib/stores/player', () => {
-	const { writable } = require('svelte/store');
+vi.mock('$lib/stores/player', async () => {
+	const { writable } = await import('svelte/store');
 	return { songList: writable([]) };
 });
 

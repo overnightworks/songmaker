@@ -18,13 +18,16 @@
 		expandedSongIds,
 		toggleSongExpanded,
 		selectedGenerationId,
-		selectGenerationInSidebar
+		selectGenerationInSidebar,
+		ensureGenerationsLoaded
 	} from '$lib/stores/player';
-	import { deleteGeneration, cleanupAlbum, fetchSongs, fetchAlbums, createAlbum } from '$lib/api/client';
+	import { deleteGeneration, cleanupAlbum, fetchSongs } from '$lib/api/client';
 	import { searchQuery } from '$lib/stores/filter';
 	import { isAdmin } from '$lib/stores/auth';
 	import type { SongItem, GenerationItem, AlbumItem } from '$lib/api/types';
 	import { closeSidebar } from '$lib/stores/ui';
+	import { SvelteSet } from 'svelte/reactivity';
+	import NewAlbumForm from '$lib/components/NewAlbumForm.svelte';
 
 	const MAX_VISIBLE_GENS = 3;
 
@@ -38,40 +41,18 @@
 	const search = $derived($searchQuery);
 	const admin = $derived($isAdmin);
 
-	let expandedAlbums = $state<Set<string>>(new Set());
+	let expandedAlbums = new SvelteSet<string>();
 	let showAllGens: Record<string, boolean> = $state({});
 	let confirmDeleteGenId: string | null = $state(null);
 	let deleteError = $state('');
 	let confirmCleanup: string | null = $state(null);
 	let cleanupResult = $state('');
 	let showNewAlbum = $state(false);
-	let newAlbumTitle = $state('');
-	let newAlbumArtist = $state('');
-	let creatingAlbum = $state(false);
-	let albumError = $state('');
-
-	async function handleCreateAlbum() {
-		if (!newAlbumTitle.trim()) return;
-		creatingAlbum = true;
-		albumError = '';
-		try {
-			await createAlbum(newAlbumTitle.trim(), newAlbumArtist.trim());
-			const refreshed = await fetchAlbums();
-			albumList.set(refreshed);
-			newAlbumTitle = '';
-			newAlbumArtist = '';
-			showNewAlbum = false;
-		} catch (e) {
-			albumError = e instanceof Error ? e.message : 'Failed';
-		} finally {
-			creatingAlbum = false;
-		}
-	}
 
 	// Auto-expand all albums on first load
 	$effect(() => {
 		if (albums.length > 0 && expandedAlbums.size === 0) {
-			expandedAlbums = new Set(albums.map((a) => a.id));
+			for (const a of albums) expandedAlbums.add(a.id);
 		}
 	});
 
@@ -100,10 +81,8 @@
 	});
 
 	function toggleAlbum(albumId: string): void {
-		const next = new Set(expandedAlbums);
-		if (next.has(albumId)) next.delete(albumId);
-		else next.add(albumId);
-		expandedAlbums = next;
+		if (expandedAlbums.has(albumId)) expandedAlbums.delete(albumId);
+		else expandedAlbums.add(albumId);
 	}
 
 	interface VersionGroup {
@@ -160,12 +139,14 @@
 	function handleSongClick(song: SongItem): void {
 		selectSong(song.id);
 		if (!expanded.has(song.id)) toggleSongExpanded(song.id);
+		ensureGenerationsLoaded(song.id);
 		closeSidebar();
 	}
 
 	function handleExpandToggle(e: Event, songId: string): void {
 		e.stopPropagation();
 		toggleSongExpanded(songId);
+		if (!expanded.has(songId)) ensureGenerationsLoaded(songId);
 	}
 
 	function handleGenPlayToggle(e: Event, gen: GenerationItem, song: SongItem): void {
@@ -226,34 +207,19 @@
 		oninput={(e: Event) => searchQuery.set((e.target as HTMLInputElement).value)}
 		aria-label="Search songs"
 	/>
-	<button class="new-btn" onclick={() => (showNewAlbum = !showNewAlbum)} title="New Album" aria-label="New Album">📁</button>
+	<button
+		class="new-btn"
+		onclick={() => (showNewAlbum = !showNewAlbum)}
+		title="New Album"
+		aria-label="New Album">📁</button
+	>
 	{#if onNewSong}
 		<button class="new-btn" onclick={onNewSong} title="New Song" aria-label="New Song">+</button>
 	{/if}
 </div>
 
 {#if showNewAlbum}
-	<div class="new-album-form">
-		<input
-			type="text"
-			bind:value={newAlbumTitle}
-			placeholder="Album title"
-			disabled={creatingAlbum}
-		/>
-		<input
-			type="text"
-			bind:value={newAlbumArtist}
-			placeholder="Artist (optional)"
-			disabled={creatingAlbum}
-		/>
-		<div class="new-album-actions">
-			<button class="create-btn" onclick={handleCreateAlbum} disabled={creatingAlbum || !newAlbumTitle.trim()}>
-				{creatingAlbum ? 'Creating...' : 'Create Album'}
-			</button>
-			<button class="cancel-btn" onclick={() => (showNewAlbum = false)}>Cancel</button>
-		</div>
-		{#if albumError}<p class="album-error">{albumError}</p>{/if}
-	</div>
+	<NewAlbumForm onclose={() => (showNewAlbum = false)} />
 {/if}
 
 <div
@@ -278,27 +244,39 @@
 				<span class="album-title">{group.album.title}</span>
 				<button
 					class="album-play"
-					onclick={(e) => { e.stopPropagation(); playAlbum(group.album.id); }}
+					onclick={(e) => {
+						e.stopPropagation();
+						playAlbum(group.album.id);
+					}}
 					title="Play album"
-					aria-label="Play album {group.album.title}"
-				>▶</button>
+					aria-label="Play album {group.album.title}">▶</button
+				>
 				<span class="album-count">{group.songs.length}</span>
 				{#if admin && expandedAlbums.has(group.album.id)}
 					{#if confirmCleanup === group.album.id}
 						<button
 							class="cleanup-btn confirm"
-							onclick={(e) => { e.stopPropagation(); handleCleanup(group.album.id); }}
-						>Delete unpicked?</button>
+							onclick={(e) => {
+								e.stopPropagation();
+								handleCleanup(group.album.id);
+							}}>Delete unpicked?</button
+						>
 						<button
 							class="cleanup-btn"
-							onclick={(e) => { e.stopPropagation(); confirmCleanup = null; }}
-						>Cancel</button>
+							onclick={(e) => {
+								e.stopPropagation();
+								confirmCleanup = null;
+							}}>Cancel</button
+						>
 					{:else}
 						<button
 							class="cleanup-btn"
-							onclick={(e) => { e.stopPropagation(); confirmCleanup = group.album.id; }}
-							title="Delete all non-picked generations"
-						>Clean up</button>
+							onclick={(e) => {
+								e.stopPropagation();
+								confirmCleanup = group.album.id;
+							}}
+							title="Delete all non-picked generations">Clean up</button
+						>
 					{/if}
 				{/if}
 			</div>
@@ -358,9 +336,16 @@
 													<span class="gen-seed">seed:{gen.seed}</span>
 												{/if}
 												{#if confirmDeleteGenId === gen.id}
-													<button class="gen-delete-confirm" onclick={(e) => handleGenDeleteConfirm(e, gen)}>Delete?</button>
+													<button
+														class="gen-delete-confirm"
+														onclick={(e) => handleGenDeleteConfirm(e, gen)}>Delete?</button
+													>
 												{:else}
-													<button class="gen-delete-btn" onclick={(e) => handleGenDeleteClick(e, gen.id)} aria-label="Delete">✕</button>
+													<button
+														class="gen-delete-btn"
+														onclick={(e) => handleGenDeleteClick(e, gen.id)}
+														aria-label="Delete">✕</button
+													>
 												{/if}
 											</div>
 										{/each}
@@ -433,67 +418,6 @@
 	.new-btn:hover {
 		border-color: var(--primary);
 		color: var(--primary);
-	}
-
-	.new-album-form {
-		padding: 8px 12px;
-		border-bottom: 1px solid var(--border);
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		flex-shrink: 0;
-	}
-
-	.new-album-form input {
-		padding: 5px 8px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text);
-		font-size: 12px;
-		width: 100%;
-	}
-
-	.new-album-form input:focus {
-		border-color: var(--primary);
-		outline: none;
-	}
-
-	.new-album-actions {
-		display: flex;
-		gap: 6px;
-	}
-
-	.create-btn {
-		background: var(--primary);
-		color: white;
-		border: none;
-		border-radius: 4px;
-		padding: 4px 10px;
-		font-size: 11px;
-		cursor: pointer;
-		font-family: var(--font-body);
-	}
-
-	.create-btn:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.cancel-btn {
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		padding: 4px 10px;
-		font-size: 11px;
-		color: var(--text-muted);
-		cursor: pointer;
-		font-family: var(--font-body);
-	}
-
-	.album-error {
-		color: var(--score-bad);
-		font-size: 11px;
 	}
 
 	.search:focus {

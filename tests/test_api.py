@@ -5,10 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from songmaker_cli.db.engine import init_db, reset_engine
-from songmaker_cli.db.models import Album, Generation, Score, Song, Version
+from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
+from songmaker_cli.middleware import AuthenticatedUser
 
 
 @pytest.fixture()
@@ -18,8 +21,6 @@ def client(tmp_path: Path) -> TestClient:
     with factory() as session:
         _seed_db(session)
 
-    from fastapi import FastAPI
-
     from songmaker_cli.api import router
     app = FastAPI()
     app.include_router(router)
@@ -27,8 +28,39 @@ def client(tmp_path: Path) -> TestClient:
     reset_engine()
 
 
-def _seed_db(session) -> None:
-    album = Album(id="rock", title="Rock Album", artist="TestBand")
+def _make_authed_client(
+    tmp_path: Path, role: str = "user", user_id: str = "u-test",
+) -> TestClient:
+    """Create a TestClient with a fake authenticated user injected."""
+    reset_engine()
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        session.add(User(
+            id=user_id, username=f"test_{role}",
+            password_hash="unused", role=role,
+        ))
+        session.flush()
+        _seed_db(session, owner_id=user_id if role != "admin" else None)
+
+    from songmaker_cli.api import router
+
+    app = FastAPI()
+
+    class FakeAuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+            request.state.user = AuthenticatedUser(
+                id=user_id, username=f"test_{role}",
+                role=role, is_active=True,
+            )
+            return await call_next(request)
+
+    app.add_middleware(FakeAuthMiddleware)
+    app.include_router(router)
+    return TestClient(app)
+
+
+def _seed_db(session, owner_id: str | None = None) -> None:
+    album = Album(id="rock", title="Rock Album", artist="TestBand", created_by=owner_id)
     session.add(album)
     song = Song(id="s1", title="Thunder", album_id="rock", track_number=1)
     session.add(song)
@@ -491,5 +523,146 @@ def test_get_job_found(client: TestClient) -> None:
     resp = client.get(f"/api/jobs/{job_id}")
     assert resp.status_code == 200
     assert resp.json()["id"] == job_id
+
+
+# ── Album creation ──────────────────────────────────────────────────
+
+
+def test_create_album(client: TestClient) -> None:
+    resp = client.post("/api/albums", json={"title": "New Album", "artist": "Me"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == "new-album"
+    assert data["title"] == "New Album"
+    assert data["artist"] == "Me"
+
+
+def test_create_album_slugifies_unicode(client: TestClient) -> None:
+    resp = client.post("/api/albums", json={"title": "Über Nächte"})
+    assert resp.status_code == 200
+    assert resp.json()["id"] == "uber-nachte"
+
+
+def test_create_album_duplicate(client: TestClient) -> None:
+    client.post("/api/albums", json={"title": "Dupe"})
+    resp = client.post("/api/albums", json={"title": "Dupe"})
+    assert resp.status_code == 409
+
+
+def test_create_album_empty_title(client: TestClient) -> None:
+    resp = client.post("/api/albums", json={"title": "  "})
+    assert resp.status_code == 422
+
+
+def test_create_album_slugify_special_chars(client: TestClient) -> None:
+    resp = client.post("/api/albums", json={"title": "Don't Stop!"})
+    assert resp.status_code == 200
+    assert resp.json()["id"] == "don-t-stop"
+
+
+# ── Song list (summary vs detail) ──────────────────────────────────
+
+
+def test_list_songs_has_no_generations_field(client: TestClient) -> None:
+    resp = client.get("/api/songs")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "generations" not in data[0]
+    assert data[0]["generation_count"] == 2
+
+
+def test_get_song_has_generations(client: TestClient) -> None:
+    resp = client.get("/api/songs/s1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "generations" in data
+    assert len(data["generations"]) == 2
+
+
+def test_get_song_best_scores_from_rated_gen(client: TestClient) -> None:
+    from songmaker_cli.db.engine import get_session_factory
+    from songmaker_cli.db.models import Rating
+
+    factory = get_session_factory()
+    with factory() as session:
+        session.add(Rating(generation_id="g1", rating=80))
+        session.commit()
+
+    resp = client.get("/api/songs/s1")
+    data = resp.json()
+    assert data["best_scores"] is not None
+    assert "dynamics" in data["best_scores"]
+    assert data["best_rating"] == 80
+
+
+# ── Ownership / access control ──────────────────────────────────────
+
+
+def test_user_sees_own_album_only(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+    resp = c.get("/api/albums")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+    assert resp.json()[0]["id"] == "rock"
+
+
+def test_user_cannot_see_other_album(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+    from songmaker_cli.db.engine import get_session_factory
+
+    factory = get_session_factory()
+    with factory() as session:
+        session.add(User(
+            id="u-other", username="other", password_hash="x", role="user",
+        ))
+        session.flush()
+        session.add(Album(id="other", title="Other", artist="X", created_by="u-other"))
+        session.commit()
+    resp = c.get("/api/albums/other")
+    assert resp.status_code == 404
+    reset_engine()
+
+
+def test_user_cannot_see_other_song(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+    from songmaker_cli.db.engine import get_session_factory
+
+    factory = get_session_factory()
+    with factory() as session:
+        session.add(User(
+            id="u-other", username="other", password_hash="x", role="user",
+        ))
+        session.flush()
+        session.add(Album(id="secret", title="Secret", artist="X", created_by="u-other"))
+        session.add(Song(id="s-secret", title="Hidden", album_id="secret", track_number=1))
+        session.add(Version(
+            id="v-secret", song_id="s-secret", version_number=1,
+            lyrics="x", prompt="x",
+        ))
+        session.commit()
+    resp = c.get("/api/songs/s-secret")
+    assert resp.status_code == 404
+    reset_engine()
+
+
+def test_admin_sees_all_albums(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+    resp = c.get("/api/albums")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+
+
+def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+    resp = c.post("/api/albums", json={"title": "My New Album"})
+    assert resp.status_code == 200
+    from songmaker_cli.db.engine import get_session_factory
+    from songmaker_cli.db.queries import get_album
+    factory = get_session_factory()
+    with factory() as session:
+        album = get_album(session, "my-new-album")
+        assert album is not None
+        assert album.created_by == "u-test"
+    reset_engine()
 
 

@@ -164,7 +164,7 @@ describe('API client', () => {
 		expect(result.deleted).toBe(5);
 	});
 
-it('fetchCapabilities', async () => {
+	it('fetchCapabilities', async () => {
 		mockOk({ generation: true, scoring: true });
 		const result = await fetchCapabilities();
 		expect(result.generation).toBe(true);

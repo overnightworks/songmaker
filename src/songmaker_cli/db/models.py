@@ -42,7 +42,9 @@ class Album(Base):
     subtitle: Mapped[str] = mapped_column(String(400), default="")
     year: Mapped[str] = mapped_column(String(10), default="")
     colors: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_by: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    created_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     songs: Mapped[list[Song]] = relationship(back_populates="album", cascade="all, delete-orphan")
@@ -156,7 +158,10 @@ class Job(Base):
     status: Mapped[str] = mapped_column(String(20), default="queued")
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    error_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
     started_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

@@ -165,7 +165,9 @@
 				<h5 class="section-title">Parameters</h5>
 				<div class="params-grid">
 					{#each entries as [key, value] (key)}
-						<span class="param">{key}: {typeof value === 'boolean' ? (value ? 'on' : 'off') : value}</span>
+						<span class="param"
+							>{key}: {typeof value === 'boolean' ? (value ? 'on' : 'off') : value}</span
+						>
 					{/each}
 				</div>
 			</section>

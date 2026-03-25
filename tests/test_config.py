@@ -9,10 +9,13 @@ import pytest
 from songmaker_cli.config import (
     build_ace_config,
     find_project_root,
+    get_output_dir,
     load_generation_defaults,
     next_version,
+    reset_output_dir,
     resolve_output_paths,
     save_generation_defaults,
+    set_output_dir,
 )
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import SongMeta
@@ -144,12 +147,14 @@ def test_find_project_root_at_root(tmp_path: Path) -> None:
 
 
 def test_load_defaults_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reset_output_dir()
     monkeypatch.chdir(tmp_path)
     (tmp_path / "pyproject.toml").write_text("")
     assert load_generation_defaults() == {}
 
 
 def test_save_and_load_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reset_output_dir()
     monkeypatch.chdir(tmp_path)
     (tmp_path / "pyproject.toml").write_text("")
     data = {"turbo": {"inference_steps": 12}, "sft": {"inference_steps": 60}}
@@ -191,3 +196,25 @@ def test_build_ace_config_cli_overrides_global_defaults() -> None:
     defaults = {"turbo": {"shift": 5.0}}
     config = build_ace_config(meta, cli_overrides={"shift": 1.0}, global_defaults=defaults)
     assert config.shift == 1.0
+
+
+# ── Output dir management ──────────────────────────────────────────
+
+
+def test_set_and_get_output_dir(tmp_path: Path) -> None:
+    reset_output_dir()
+    custom = tmp_path / "custom_output"
+    set_output_dir(custom)
+    assert get_output_dir() == custom
+    reset_output_dir()
+
+
+def test_get_output_dir_auto_resolves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reset_output_dir()
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text("")
+    result = get_output_dir()
+    assert result == tmp_path / "_output"
+    reset_output_dir()

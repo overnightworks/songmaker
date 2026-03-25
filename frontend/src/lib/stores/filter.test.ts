@@ -140,10 +140,7 @@ describe('applyFilters', () => {
 	});
 
 	it('filters by select value', () => {
-		const songs = [
-			makeSong({ id: 's1', key: 'Am' }),
-			makeSong({ id: 's2', key: 'C' })
-		];
+		const songs = [makeSong({ id: 's1', key: 'Am' }), makeSong({ id: 's2', key: 'C' })];
 		const filters = [{ metric: getMetric('key'), min: 0, selectValue: 'Am' }];
 		const result = applyFilters(songs, filters);
 		expect(result).toHaveLength(1);

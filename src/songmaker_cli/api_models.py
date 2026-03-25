@@ -127,7 +127,9 @@ class VersionResponse(BaseModel):
 # ── Song ────────────────────────────────────────────────────────────
 
 
-class SongResponse(BaseModel):
+class SongSummaryResponse(BaseModel):
+    """Lightweight song for list endpoints — no generations."""
+
     id: str
     title: str
     album_id: str
@@ -145,12 +147,38 @@ class SongResponse(BaseModel):
     generation_count: int = 0
     best_scores: dict | None = None
     best_rating: float | None = None
-    generations: list[GenerationResponse] = Field(default_factory=list)
     created_at: str | None = None
 
     @classmethod
-    def from_orm(cls, song: Song) -> SongResponse:
+    def from_orm(cls, song: Song) -> SongSummaryResponse:
         ver = song.latest_version
+        return cls(
+            id=song.id,
+            title=song.title,
+            album_id=song.album_id,
+            album_title=song.album.title if song.album else "",
+            artist=song.album.artist if song.album else "",
+            track_number=song.track_number,
+            language=song.language,
+            lyrics=ver.lyrics if ver else "",
+            prompt=ver.prompt if ver else "",
+            bpm=ver.bpm if ver else 0,
+            duration=ver.duration if ver else 180,
+            key=ver.key if ver else "",
+            generation_params=ver.generation_params if ver else None,
+            version_count=len(song.versions),
+            generation_count=len(song.generations),
+            created_at=song.created_at.isoformat() if song.created_at else None,
+        )
+
+
+class SongResponse(SongSummaryResponse):
+    """Full song with generations — used by detail endpoints."""
+
+    generations: list[GenerationResponse] = Field(default_factory=list)
+
+    @classmethod
+    def from_orm(cls, song: Song) -> SongResponse:
         best_gen = _best_generation(song.generations)
 
         best_scores: dict[str, object] | None = None
@@ -160,6 +188,7 @@ class SongResponse(BaseModel):
                 if isinstance(s.value, dict):
                     best_scores.update(s.value)
 
+        ver = song.latest_version
         return cls(
             id=song.id,
             title=song.title,
@@ -200,6 +229,7 @@ class JobResponse(BaseModel):
     status: str
     progress: float = 0.0
     error: str | None = None
+    error_type: str | None = None
     started_at: str | None = None
     completed_at: str | None = None
 
@@ -211,6 +241,7 @@ class JobResponse(BaseModel):
             status=job.status,
             progress=job.progress,
             error=job.error,
+            error_type=job.error_type,
             started_at=job.started_at.isoformat() if job.started_at else None,
             completed_at=job.completed_at.isoformat() if job.completed_at else None,
         )

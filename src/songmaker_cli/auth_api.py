@@ -25,7 +25,7 @@ from songmaker_cli.auth import (
     hash_password,
     verify_password,
 )
-from songmaker_cli.db.engine import get_session_factory
+from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.db.queries import (
     count_recent_failed_attempts,
     create_session,
@@ -47,16 +47,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _get_session() -> Session:  # type: ignore[misc]
-    factory = get_session_factory()
-    session = factory()
-    try:
-        yield session
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+_get_session = get_db_session
 
 
 def _client_ip(request: Request) -> str:

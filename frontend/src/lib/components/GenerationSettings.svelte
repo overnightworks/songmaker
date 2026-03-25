@@ -392,7 +392,10 @@
 					</label>
 					<label class="setting">
 						<span>LM Top-K</span>
-						<input type="number" min="0" max="200"
+						<input
+							type="number"
+							min="0"
+							max="200"
 							value={editDefaults.lm_top_k ?? ''}
 							placeholder={String(BUILTIN_DEFAULTS[editModel].lm_top_k)}
 							oninput={(e) => setDefaultNum('lm_top_k', e.currentTarget.value)}
@@ -400,7 +403,11 @@
 					</label>
 					<label class="setting">
 						<span>LM Top-P</span>
-						<input type="number" min="0" max="1" step="0.05"
+						<input
+							type="number"
+							min="0"
+							max="1"
+							step="0.05"
 							value={editDefaults.lm_top_p ?? ''}
 							placeholder={String(BUILTIN_DEFAULTS[editModel].lm_top_p)}
 							oninput={(e) => setDefaultNum('lm_top_p', e.currentTarget.value)}
@@ -408,7 +415,11 @@
 					</label>
 					<label class="setting">
 						<span>LM CFG Scale</span>
-						<input type="number" min="0" max="10" step="0.5"
+						<input
+							type="number"
+							min="0"
+							max="10"
+							step="0.5"
 							value={editDefaults.lm_cfg_scale ?? ''}
 							placeholder={String(BUILTIN_DEFAULTS[editModel].lm_cfg_scale)}
 							oninput={(e) => setDefaultNum('lm_cfg_scale', e.currentTarget.value)}
@@ -416,7 +427,10 @@
 					</label>
 					<label class="setting">
 						<span>Batch Size</span>
-						<input type="number" min="1" max="8"
+						<input
+							type="number"
+							min="1"
+							max="8"
 							value={editDefaults.batch_size ?? ''}
 							placeholder={String(BUILTIN_DEFAULTS[editModel].batch_size)}
 							oninput={(e) => setDefaultNum('batch_size', e.currentTarget.value)}

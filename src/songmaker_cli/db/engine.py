@@ -62,3 +62,16 @@ def reset_engine() -> None:
     global _session_factory, _db_path
     _session_factory = None
     _db_path = None
+
+
+def get_db_session() -> Session:  # type: ignore[misc]
+    """FastAPI dependency that yields a SQLAlchemy session with rollback on error."""
+    factory = get_session_factory()
+    session = factory()
+    try:
+        yield session
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()

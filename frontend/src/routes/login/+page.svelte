@@ -48,7 +48,12 @@
 						autocomplete="current-password"
 						disabled={submitting}
 					/>
-					<button type="button" class="pw-toggle" onclick={() => (showPassword = !showPassword)} tabindex="-1">
+					<button
+						type="button"
+						class="pw-toggle"
+						onclick={() => (showPassword = !showPassword)}
+						tabindex="-1"
+					>
 						{showPassword ? '🙈' : '👁'}
 					</button>
 				</div>
