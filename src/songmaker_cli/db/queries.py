@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import (
     Album,
+    AuditLog,
     Generation,
     Job,
     LoginAttempt,
@@ -596,6 +597,40 @@ def list_login_attempts(
     return (
         session.query(LoginAttempt)
         .order_by(LoginAttempt.attempted_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+# ── Audit log ──────────────────────────────────────────────────────
+
+
+def record_audit(
+    session: Session,
+    user_id: str | None,
+    action: str,
+    resource_type: str,
+    resource_id: str = "",
+    detail: str = "",
+) -> AuditLog:
+    entry = AuditLog(
+        user_id=user_id,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        detail=detail,
+    )
+    session.add(entry)
+    session.flush()
+    return entry
+
+
+def list_audit_log(
+    session: Session, limit: int = 100,
+) -> list[AuditLog]:
+    return (
+        session.query(AuditLog)
+        .order_by(AuditLog.created_at.desc())
         .limit(limit)
         .all()
     )

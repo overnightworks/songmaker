@@ -2,116 +2,115 @@
 
 ## Overview
 
-AI-powered song generation platform. Songs are created, generated, scored, and reviewed through a web UI. All data lives in SQLite. The CLI is a thin HTTP client to the same API.
-
 ```
-┌─────────────────────────────────┐
-│   SvelteKit Frontend            │
-│   Single-page app: editor,      │
-│   player, Claude chat, filters  │
-└──────────────┬──────────────────┘
-               │ REST API
-               ▼
-┌─────────────────────────────────┐
-│   FastAPI Backend               │
-│   api.py → api_models.py        │
-│   Pydantic request/response     │
-└───┬──────────┬──────────┬───────┘
+┌──────────────────────────────────────┐
+│   SvelteKit Frontend                 │
+│   Song editor, player, Claude chat,  │
+│   generation settings, filters       │
+└───────────────┬──────────────────────┘
+                │ REST API (JSON)
+                ▼
+┌──────────────────────────────────────┐
+│   FastAPI Backend                    │
+│   Auth middleware → API endpoints    │
+│   Pydantic request/response models   │
+└───┬──────────┬──────────┬────────────┘
     │          │          │
- SQLite    GPU Queue    External
- (data)    (jobs.py)    (ACE-Step, Claude, Whisper)
+ SQLite    GPU Queue    External Services
+ (all data)  (serial)   (ACE-Step, Claude, Whisper)
 ```
+
+## Layers
+
+### Frontend (`frontend/`)
+
+SvelteKit single-page app. All state in Svelte stores.
+
+| Layer | What | Key files |
+|-------|------|-----------|
+| Routes | Pages: main view, login, setup, settings | `src/routes/` |
+| Components | SongEditor, PlayerBar, SongList, GenerationDetail, ClaudeChat, etc. | `src/lib/components/` |
+| Stores | Reactive state: player, editor, filter, jobs, auth, settings, ui | `src/lib/stores/` |
+| API client | Typed HTTP client, mirrors `api_models.py` | `src/lib/api/client.ts`, `types.ts` |
+
+The API client and `types.ts` are the frontend's contract with the backend. When `api_models.py` changes, `types.ts` must match.
+
+### Backend (`src/songmaker_cli/`)
+
+| Layer | Responsibility | Key files |
+|-------|---------------|-----------|
+| HTTP | FastAPI app, CORS, security headers, body size limit, SPA fallback | `server.py` |
+| Auth | Session middleware, login/setup/logout, password change, brute-force protection | `middleware.py`, `auth_api.py`, `auth.py` |
+| API | REST endpoints, ownership checks, rate limiting, audit logging | `api.py`, `admin_api.py` |
+| Models | Pydantic request/response with `from_orm()` | `api_models.py` |
+| Jobs | Background generation + scoring runners | `jobs.py` |
+| GPU | Sequential job queue, ACE-Step lifecycle, VRAM management | `gpu_queue.py` |
+| Generation | ACE-Step call → decode WAV → master → MP3 | `generate.py` |
+| Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
+| DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
+| Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics, coherence | `scoring/` |
+| Claude | API + CLI backends for chat and lyrical coherence | `claude/provider.py` |
+| CLI | Thin HTTP client to the same API | `main.py`, `cli_client.py` |
+
+### Engine packages (`src/`)
+
+| Package | Purpose |
+|---------|---------|
+| `acestep_engine` | HTTP client for the ACE-Step server (generate, poll, model info) |
+| `audio_engine` | Mastering chain (multiband compression, stereo widening, LUFS normalization, MP3 encoding), WAV I/O |
 
 ## Data Model
 
 ```
-User (username, role: admin|user, bcrypt password)
-  └── Album (title, artist — owned by created_by user)
-        └── Song (title, track_number)
-              └── Version (lyrics, prompt, BPM, key, duration, generation_params)
-                    └── Generation (MP3, seed, scores, rating, whisper text)
+User (username, role: admin|user, bcrypt hash)
+  ├── Album (title, artist — owned via created_by)
+  │     └── Song (title, track_number)
+  │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params)
+  │           └── Generation (MP3, seed, status, whisper_text)
+  │                 ├── Score (scorer, value JSON)
+  │                 └── Rating (0-100, notes)
+  ├── Job (type, status, progress, error)
+  └── AuditLog (action, resource_type, resource_id, detail)
+
+Also: UserSession, LoginAttempt
 ```
 
-**Ownership**: Albums have `created_by` → User. Songs inherit ownership from their album.
-Users see only their own albums. Admin sees all.
+SQLite with WAL mode. SQLAlchemy ORM. Alembic migrations. DB file permissions `600`.
 
-**Auth**: Session cookies (HttpOnly, SameSite=Lax), bcrypt passwords, brute-force protection.
+## API Endpoints
 
-All in SQLite with SQLAlchemy ORM. Alembic for migrations.
-
-## Package Structure
-
-```
-src/
-├── acestep_engine/     ACE-Step HTTP client (retry, polling, models)
-├── audio_engine/       Mastering chain, WAV/MP3 I/O, LUFS
-└── songmaker_cli/
-    ├── main.py          CLI (httpx HTTP client)
-    ├── cli_client.py    HTTP helpers (resolve_song, poll_job)
-    ├── server.py        FastAPI app, static files, startup
-    ├── api.py           REST endpoints
-    ├── api_models.py    Pydantic models with from_orm()
-    ├── jobs.py          Background generation + scoring
-    ├── gpu_queue.py     GPU job queue, ACE-Step lifecycle
-    ├── auth.py          Password hashing, session config, constants
-    ├── auth_api.py      Auth endpoints (login, setup, logout, password)
-    ├── admin_api.py     Admin endpoints (user CRUD, sessions, ACE-Step)
-    ├── middleware.py     Session auth middleware, require_admin dependency
-    ├── config.py        ACE-Step config, path resolution
-    ├── generate.py      Generation engine (decode, master, MP3)
-    ├── parser.py        Data models (SongMeta, AlbumMeta)
-    ├── db/
-    │   ├── models.py    SQLAlchemy ORM models
-    │   ├── queries.py   DB query functions
-    │   ├── engine.py    DB init, WAL mode, session factory
-    │   └── migrations/  Alembic migrations
-    ├── scoring/
-    │   ├── pipeline.py  ScorerRegistry, fault-isolated runner
-    │   ├── text_accuracy.py      Whisper transcription comparison
-    │   ├── emotional_dynamics.py  Pitch/RMS/onset analysis
-    │   ├── bpm_accuracy.py       BPM detection vs intended
-    │   ├── silence_detection.py   Gap detection
-    │   ├── spectral_quality.py    Noise artifact detection
-    │   ├── audiobox_aesthetics.py Meta AudioBox model
-    │   └── lyrical_coherence.py   Claude-judged coherence
-    └── claude/
-        └── provider.py  Claude API + CLI backends
-
-frontend/               SvelteKit + TypeScript
-├── src/routes/         Pages (single-page app)
-├── src/lib/stores/     Svelte stores (player, editor, filter, jobs)
-├── src/lib/api/        Typed API client + types
-├── src/lib/components/ UI components
-└── src/lib/utils/      Diff, formatting
-
-tests/                  377 Python tests
-```
-
-## Key Design Decisions
-
-| Decision | Choice | Why |
-|----------|--------|-----|
-| Single code path | CLI → API → DB | No duplication between CLI and web |
-| Pydantic from_orm() | Response models serialize ORM objects | No manual dict layer to maintain |
-| GPU queue | Single-threaded, in-process | One GPU (3090), ACE-Step + scoring share VRAM |
-| Scoring isolation | One crash doesn't block others | try/except per scorer in pipeline |
-| Session auth | Cookies, not JWT | Revocable, HttpOnly, simpler for monolith |
-| Album ownership | `created_by` on Album | Users see own data, admin sees all, future-proof for sharing |
-| SQLite + WAL | Good enough for single-server | No Redis/Postgres overhead |
-| Alembic | Schema migrations tracked | Safe schema evolution |
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/api/albums` | user | List albums (filtered by ownership) |
+| POST | `/api/albums` | user | Create album |
+| GET/PUT | `/api/songs/{id}` | user | Get/update song |
+| POST | `/api/songs` | user | Create song in album |
+| POST | `/api/songs/{id}/generate` | user | Submit generation job |
+| POST | `/api/generations/{id}/score` | user | Submit scoring job |
+| POST | `/api/generations/{id}/rate` | user | Rate a generation |
+| POST | `/api/generations/{id}/pick` | user | Pick best generation |
+| GET | `/api/jobs/{id}` | user | Poll job status |
+| POST | `/api/chat` | user | Claude chat (rate-limited) |
+| GET | `/api/capabilities` | user | Feature flags |
+| * | `/api/admin/*` | admin | User CRUD, sessions, audit log, ACE-Step control |
+| * | `/api/auth/*` | public | Login, logout, setup, password change |
+| GET | `/audio/{album}/{file}` | user | Serve MP3 files (ownership-checked) |
 
 ## Generation Flow
 
 ```
 POST /api/songs/{id}/generate
-  → create Job record
+  → rate limit check (per-user)
+  → ownership check
+  → create Job record + audit log entry
   → submit to GpuQueue
   → GpuQueue._prepare_mode("generate")
     → clear scoring models from VRAM
-    → start ACE-Step server if needed
+    → start ACE-Step server if not running
   → run_generation_job()
-    → _build_generation_context() (DB lookup + config)
-    → generate_single() (ACE-Step → decode → master → MP3)
+    → build config (song params + admin defaults + model defaults)
+    → ACE-Step HTTP API → WAV bytes
+    → decode → master (multiband compress, LUFS normalize) → MP3
     → create Generation record in DB
   → Job status: completed
 ```
@@ -120,13 +119,43 @@ POST /api/songs/{id}/generate
 
 ```
 POST /api/generations/{id}/score
-  → create Job record
+  → rate limit check (per-user)
+  → ownership check
+  → create Job record + audit log entry
   → submit to GpuQueue
   → GpuQueue._prepare_mode("score")
     → stop ACE-Step server
-    → free VRAM
+    → free VRAM (gc + torch.cuda.empty_cache)
   → run_scoring_job()
-    → run_scoring_pipeline() (all scorers, fault-isolated)
+    → run_scoring_pipeline() — each scorer fault-isolated:
+      text_accuracy (Whisper), emotional_dynamics, bpm_accuracy,
+      silence_detection, spectral_quality, audiobox_aesthetics,
+      lyrical_coherence (Claude)
     → save scores + whisper text to DB
   → Job status: completed
 ```
+
+## VRAM Management
+
+Single RTX 3090 shared between generation and scoring. Only one mode active at a time.
+
+```
+generate mode: ACE-Step server (loads DiT + LM models)
+score mode:    Whisper large-v3 + AudioBox (loaded on demand, cached)
+```
+
+Mode switching: stop ACE-Step → `gc.collect()` + `torch.cuda.empty_cache()` → verify VRAM freed → load scoring models. Reverse for generation.
+
+## Key Design Decisions
+
+| Decision | Choice | Why |
+|----------|--------|-----|
+| Single code path | CLI → API → DB | No duplication between CLI and web |
+| Pydantic from_orm() | Response models serialize ORM objects | No manual dict layer to maintain |
+| GPU queue | Single-threaded, in-process | One GPU, ACE-Step + scoring share VRAM |
+| Scoring isolation | try/except per scorer | One crash doesn't block others |
+| Session auth | Cookies, not JWT | Revocable, HttpOnly, simpler for monolith |
+| Album ownership | `created_by` on Album | Songs inherit access, future-proof for sharing |
+| SQLite + WAL | Single-server, no external deps | No Redis/Postgres overhead |
+| ACE-Step as subprocess | Separate server, managed lifecycle | Clean VRAM release, independent restarts |
+| Typed API contract | `api_models.py` ↔ `types.ts` | Backend and frontend stay in sync |

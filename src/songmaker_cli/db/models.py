@@ -211,3 +211,17 @@ class LoginAttempt(Base):
     username: Mapped[str] = mapped_column(String(100))
     success: Mapped[bool] = mapped_column(Boolean)
     attempted_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    action: Mapped[str] = mapped_column(String(30), index=True)
+    resource_type: Mapped[str] = mapped_column(String(30))
+    resource_id: Mapped[str] = mapped_column(String(64), default="")
+    detail: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)

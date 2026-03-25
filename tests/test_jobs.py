@@ -196,7 +196,7 @@ def test_generation_job_exception(seeded_db) -> None:
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert "GPU error" in job.error
+        assert job.error == "Internal error during processing"
 
 
 def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> None:
@@ -337,7 +337,7 @@ def test_scoring_job_mp3_not_found(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         job = get_job(session, "j2")
         assert job.status == "failed"
-        assert "MP3 not found" in job.error
+        assert job.error == "Audio file not found for scoring"
 
 
 def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
@@ -359,4 +359,4 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         job = get_job(session, "j2")
         assert job.status == "failed"
-        assert "scorer crash" in job.error
+        assert job.error == "Internal error during processing"

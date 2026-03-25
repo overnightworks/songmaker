@@ -24,6 +24,23 @@ from songmaker_cli.scoring.pipeline import PipelineConfig
 
 log = logging.getLogger(__name__)
 
+_USER_FACING_ERRORS: dict[str, str] = {
+    "AudioDownloadError": "Failed to download generated audio",
+    "ConnectionError": "ACE-Step server not reachable",
+    "TimeoutError": "Generation timed out",
+    "RuntimeError": "Internal error during processing",
+}
+
+
+def _sanitize_error(exc: Exception) -> str:
+    """Return a user-safe error message, logging the full exception."""
+    if isinstance(exc, GenerationSetupError):
+        return str(exc)
+    type_name = type(exc).__name__
+    if type_name in _USER_FACING_ERRORS:
+        return _USER_FACING_ERRORS[type_name]
+    return "An unexpected error occurred"
+
 
 @dataclass
 class GenerationContext:
@@ -170,7 +187,10 @@ def run_generation_job(
 
     except Exception as exc:
         log.exception("Generation job failed: %s", exc)
-        _update_job(factory, job_id, "failed", error=str(exc), error_type="generation_error")
+        _update_job(
+            factory, job_id, "failed",
+            error=_sanitize_error(exc), error_type="generation_error",
+        )
 
 
 def run_scoring_job(
@@ -210,8 +230,9 @@ def run_scoring_job(
         if not mp3_full.exists():
             _update_job(
                 factory, job_id, "failed",
-                error=f"MP3 not found: {mp3_path_rel}", error_type="setup_error",
+                error="Audio file not found for scoring", error_type="setup_error",
             )
+            log.error("Scoring job %s: MP3 not found at %s", job_id, mp3_path_rel)
             return
 
         device = _detect_device()
@@ -238,7 +259,10 @@ def run_scoring_job(
 
     except Exception as exc:
         log.exception("Scoring job failed: %s", exc)
-        _update_job(factory, job_id, "failed", error=str(exc), error_type="scoring_error")
+        _update_job(
+            factory, job_id, "failed",
+            error=_sanitize_error(exc), error_type="scoring_error",
+        )
 
 
 def _detect_device() -> str:

@@ -8,7 +8,7 @@ import re
 import unicodedata
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -35,11 +35,15 @@ from songmaker_cli.api_models import (
     VersionResponse,
 )
 from songmaker_cli.auth import (
+    CHAT_RATE_LIMIT_ADMIN,
+    CHAT_RATE_LIMIT_USER,
+    GENERATION_RATE_LIMIT_ADMIN,
     GENERATION_RATE_LIMIT_USER,
     MAX_QUEUE_DEPTH,
     MAX_USER_ACTIVE_JOBS,
     RATE_LIMIT_WINDOW_SECONDS,
     ROLE_ADMIN,
+    SCORING_RATE_LIMIT_ADMIN,
     SCORING_RATE_LIMIT_USER,
 )
 from songmaker_cli.auth_api import router as auth_router
@@ -73,13 +77,14 @@ from songmaker_cli.db.queries import (
     list_albums,
     list_songs,
     pick_generation,
+    record_audit,
     save_rating,
     unpick_generation,
     update_song,
 )
 from songmaker_cli.gpu_queue import get_gpu_queue
 from songmaker_cli.jobs import run_generation_job, run_scoring_job
-from songmaker_cli.middleware import AuthenticatedUser, require_admin
+from songmaker_cli.middleware import AuthenticatedUser, get_current_user, require_admin
 
 log = logging.getLogger(__name__)
 
@@ -92,23 +97,26 @@ def _resolve_output_dir() -> Path:
     return get_output_dir()
 
 
-def _get_optional_user(request: Request) -> AuthenticatedUser | None:
-    return getattr(request.state, "user", None)
+_RATE_LIMITS: dict[str, tuple[int, int]] = {
+    "generate": (GENERATION_RATE_LIMIT_USER, GENERATION_RATE_LIMIT_ADMIN),
+    "score": (SCORING_RATE_LIMIT_USER, SCORING_RATE_LIMIT_ADMIN),
+    "chat": (CHAT_RATE_LIMIT_USER, CHAT_RATE_LIMIT_ADMIN),
+}
 
 
 def _check_rate_limit(
-    session: Session, user: AuthenticatedUser | None, job_type: str,
+    session: Session, user: AuthenticatedUser, job_type: str,
 ) -> None:
-    if not user or user.role == ROLE_ADMIN:
-        return
+    is_admin = user.role == ROLE_ADMIN
 
-    if count_total_queued_jobs(session) >= MAX_QUEUE_DEPTH:
-        raise HTTPException(429, "Queue is full. Try again later.")
+    if job_type in ("generate", "score"):
+        if count_total_queued_jobs(session) >= MAX_QUEUE_DEPTH:
+            raise HTTPException(429, "Queue is full. Try again later.")
+        if not is_admin and count_user_active_jobs(session, user.id) >= MAX_USER_ACTIVE_JOBS:
+            raise HTTPException(429, "You already have an active job. Wait for it to finish.")
 
-    if count_user_active_jobs(session, user.id) >= MAX_USER_ACTIVE_JOBS:
-        raise HTTPException(429, "You already have an active job. Wait for it to finish.")
-
-    limit = GENERATION_RATE_LIMIT_USER if job_type == "generate" else SCORING_RATE_LIMIT_USER
+    user_limit, admin_limit = _RATE_LIMITS.get(job_type, (10, 100))
+    limit = admin_limit if is_admin else user_limit
     count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
     if count >= limit:
         raise HTTPException(429, f"Rate limit reached ({limit}/{job_type}s per hour).")
@@ -184,28 +192,28 @@ def _unique_album_id(session: Session, base_slug: str) -> str:
     return candidate
 
 
-def _owner_filter(user: AuthenticatedUser | None) -> str | None:
-    if not user or user.role == ROLE_ADMIN:
+def _owner_filter(user: AuthenticatedUser) -> str | None:
+    if user.role == ROLE_ADMIN:
         return None
     return user.id
 
 
-def _check_album_access(album: Album | None, user: AuthenticatedUser | None) -> Album:
+def _check_album_access(album: Album | None, user: AuthenticatedUser) -> Album:
     if not album:
         raise HTTPException(404, "Album not found")
-    if user and user.role != ROLE_ADMIN and album.created_by != user.id:
+    if user.role != ROLE_ADMIN and album.created_by != user.id:
         raise HTTPException(404, "Album not found")
     return album
 
 
 def _check_song_access(
-    session: Session, song_id: str, user: AuthenticatedUser | None,
+    session: Session, song_id: str, user: AuthenticatedUser,
 ) -> Song:
     """Load a song and verify ownership. Returns the song or raises 404."""
     song = get_song(session, song_id)
     if not song:
         raise HTTPException(404, "Song not found")
-    if user and user.role != ROLE_ADMIN:
+    if user.role != ROLE_ADMIN:
         album = song.album
         if album and album.created_by != user.id:
             raise HTTPException(404, "Song not found")
@@ -213,13 +221,13 @@ def _check_song_access(
 
 
 def _check_generation_access(
-    session: Session, gen_id: str, user: AuthenticatedUser | None,
+    session: Session, gen_id: str, user: AuthenticatedUser,
 ) -> Generation:
     """Load a generation and verify ownership. Returns the generation or raises 404."""
     gen = get_generation(session, gen_id)
     if not gen:
         raise HTTPException(404, "Generation not found")
-    if user and user.role != ROLE_ADMIN:
+    if user.role != ROLE_ADMIN:
         album = gen.song.album if gen.song else None
         if album and album.created_by != user.id:
             raise HTTPException(404, "Generation not found")
@@ -228,17 +236,18 @@ def _check_generation_access(
 
 @router.get("/albums")
 def api_list_albums(
-    request: Request, session: Session = Depends(_get_session),
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
 ) -> list[AlbumResponse]:
-    user = _get_optional_user(request)
     return [AlbumResponse.from_orm(a) for a in list_albums(session, user_id=_owner_filter(user))]
 
 
 @router.get("/albums/{album_id}")
 def api_get_album(
-    album_id: str, request: Request, session: Session = Depends(_get_session),
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
 ) -> AlbumResponse:
-    user = _get_optional_user(request)
     album = get_album(session, album_id)
     _check_album_access(album, user)
     return AlbumResponse.from_orm(album)
@@ -246,11 +255,10 @@ def api_get_album(
 
 @router.post("/albums")
 def api_create_album(
-    request: Request,
     data: AlbumCreateRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> AlbumResponse:
-    user = _get_optional_user(request)
     title = data.title.strip()
     if not title:
         raise HTTPException(422, "Title is required")
@@ -259,8 +267,9 @@ def api_create_album(
         album = create_album(
             session, album_id, title,
             artist=data.artist,
-            created_by=user.id if user else None,
+            created_by=user.id,
         )
+        record_audit(session, user.id, "create", "album", album_id)
         session.commit()
     except IntegrityError:
         session.rollback()
@@ -273,11 +282,10 @@ def api_create_album(
 
 @router.get("/songs")
 def api_list_songs(
-    request: Request,
     album_id: str | None = Query(None),
+    user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> list[SongSummaryResponse]:
-    user = _get_optional_user(request)
     return [
         SongSummaryResponse.from_orm(s)
         for s in list_songs(session, album_id=album_id, user_id=_owner_filter(user), light=True)
@@ -286,23 +294,20 @@ def api_list_songs(
 
 @router.get("/songs/{song_id}")
 def api_get_song(
-    song_id: str, request: Request, session: Session = Depends(_get_session),
+    song_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
 ) -> SongResponse:
-    user = _get_optional_user(request)
-    song = get_song(session, song_id)
-    if not song:
-        raise HTTPException(404, "Song not found")
-    if user and user.role != ROLE_ADMIN and song.album and song.album.created_by != user.id:
-        raise HTTPException(404, "Song not found")
+    song = _check_song_access(session, song_id, user)
     return SongResponse.from_orm(song)
 
 
 @router.post("/songs")
 def api_create_song(
-    req: SongCreateRequest, request: Request,
+    req: SongCreateRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> SongResponse:
-    user = _get_optional_user(request)
     album = get_album(session, req.album_id)
     _check_album_access(album, user)
     _validate_generation_params(req.generation_params)
@@ -312,16 +317,17 @@ def api_create_song(
         duration=req.duration, key=req.key, language=req.language,
         generation_params=req.generation_params,
     )
+    record_audit(session, user.id, "create", "song", song.id)
     session.commit()
     return SongResponse.from_orm(song)
 
 
 @router.put("/songs/{song_id}")
 def api_update_song(
-    song_id: str, req: SongUpdateRequest, request: Request,
+    song_id: str, req: SongUpdateRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> SongResponse:
-    user = _get_optional_user(request)
     _check_song_access(session, song_id, user)
     _validate_generation_params(req.generation_params)
     kwargs: dict = dict(
@@ -334,15 +340,17 @@ def api_update_song(
         version = update_song(session, song_id, **kwargs)
     except ValueError:
         raise HTTPException(404, "Song not found")
+    record_audit(session, user.id, "update", "song", song_id)
     session.commit()
     return SongResponse.from_orm(version.song)
 
 
 @router.get("/songs/{song_id}/versions")
 def api_song_versions(
-    song_id: str, request: Request, session: Session = Depends(_get_session),
+    song_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
 ) -> list[VersionResponse]:
-    user = _get_optional_user(request)
     song = _check_song_access(session, song_id, user)
     return [VersionResponse.from_orm(v) for v in reversed(song.versions)]
 
@@ -353,13 +361,12 @@ def api_song_versions(
 @router.delete("/versions/{version_id}")
 def api_delete_version(
     version_id: str,
-    request: Request,
     delete_generations: bool = Query(False),
+    user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> StatusResponse:
     from songmaker_cli.db.models import Version as VersionModel
 
-    user = _get_optional_user(request)
     ver = session.query(VersionModel).filter_by(id=version_id).first()
     if not ver:
         raise HTTPException(404, "Version not found")
@@ -372,6 +379,7 @@ def api_delete_version(
         )
     except ValueError:
         raise HTTPException(404, "Version not found")
+    record_audit(session, user.id, "delete", "version", version_id)
     session.commit()
     return StatusResponse()
 
@@ -381,23 +389,26 @@ def api_delete_version(
 
 @router.get("/generations/{gen_id}")
 def api_get_generation(
-    gen_id: str, request: Request, session: Session = Depends(_get_session),
+    gen_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
 ) -> GenerationResponse:
-    user = _get_optional_user(request)
     gen = _check_generation_access(session, gen_id, user)
     return GenerationResponse.from_orm(gen)
 
 
 @router.delete("/generations/{gen_id}")
 def api_delete_generation(
-    gen_id: str, request: Request, session: Session = Depends(_get_session),
+    gen_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
 ) -> StatusResponse:
-    user = _get_optional_user(request)
     _check_generation_access(session, gen_id, user)
     try:
         delete_generation(session, gen_id, output_dir=_resolve_output_dir())
     except ValueError:
         raise HTTPException(404, "Generation not found")
+    record_audit(session, user.id, "delete", "generation", gen_id)
     session.commit()
     return StatusResponse()
 
@@ -409,10 +420,9 @@ def api_delete_generation(
 def api_generate_song(
     song_id: str,
     req: GenerateRequest,
-    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> JobResponse:
-    user = _get_optional_user(request)
     _check_rate_limit(session, user, "generate")
 
     song = _check_song_access(session, song_id, user)
@@ -420,7 +430,8 @@ def api_generate_song(
     if not version or not version.lyrics or not version.prompt:
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
-    job = create_job(session, "generate", user_id=user.id if user else None)
+    job = create_job(session, "generate", user_id=user.id)
+    record_audit(session, user.id, "generate", "song", song_id, f"count={req.count}")
     session.commit()
     log.info("Generate: song='%s', count=%d, job=%s", song.title, req.count, job.id)
 
@@ -436,15 +447,15 @@ def api_generate_song(
 def api_score_generation(
     gen_id: str,
     req: ScoreRequest,
-    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> JobResponse:
-    user = _get_optional_user(request)
     _check_rate_limit(session, user, "score")
 
     _check_generation_access(session, gen_id, user)
 
-    job = create_job(session, "score", user_id=user.id if user else None)
+    job = create_job(session, "score", user_id=user.id)
+    record_audit(session, user.id, "score", "generation", gen_id)
     session.commit()
 
     get_gpu_queue().submit(
@@ -460,13 +471,14 @@ def api_score_generation(
 
 @router.get("/jobs/{job_id}")
 def api_get_job(
-    job_id: str, request: Request, session: Session = Depends(_get_session),
+    job_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
 ) -> JobResponse:
-    user = _get_optional_user(request)
     job = get_job(session, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    if user and user.role != ROLE_ADMIN and job.user_id != user.id:
+    if user.role != ROLE_ADMIN and job.user_id != user.id:
         raise HTTPException(404, "Job not found")
     return JobResponse.from_orm(job)
 
@@ -476,10 +488,10 @@ def api_get_job(
 
 @router.post("/generations/{gen_id}/rate")
 def api_rate_generation(
-    gen_id: str, req: RateRequest, request: Request,
+    gen_id: str, req: RateRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> RateResponse:
-    user = _get_optional_user(request)
     _check_generation_access(session, gen_id, user)
     save_rating(session, gen_id, req.rating, req.notes)
     session.commit()
@@ -489,10 +501,9 @@ def api_rate_generation(
 @router.post("/rate/{album}/{gen_name}")
 def api_rate_by_path(
     album: str, gen_name: str, req: RateRequest,
-    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> RateResponse:
-    user = _get_optional_user(request)
     mp3_path = f"{album}/{gen_name}.mp3"
     gen = get_generation_by_path(session, mp3_path)
     if not gen:
@@ -508,9 +519,10 @@ def api_rate_by_path(
 
 @router.post("/generations/{gen_id}/pick")
 def api_pick_generation(
-    gen_id: str, request: Request, session: Session = Depends(_get_session),
+    gen_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
 ) -> StatusResponse:
-    user = _get_optional_user(request)
     _check_generation_access(session, gen_id, user)
     try:
         pick_generation(session, gen_id)
@@ -522,9 +534,10 @@ def api_pick_generation(
 
 @router.post("/generations/{gen_id}/unpick")
 def api_unpick_generation(
-    gen_id: str, request: Request, session: Session = Depends(_get_session),
+    gen_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
 ) -> StatusResponse:
-    user = _get_optional_user(request)
     _check_generation_access(session, gen_id, user)
     try:
         unpick_generation(session, gen_id)
@@ -536,12 +549,14 @@ def api_unpick_generation(
 
 @router.post("/albums/{album_id}/cleanup")
 def api_cleanup_album(
-    album_id: str, request: Request, session: Session = Depends(_get_session),
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
 ) -> CleanupResponse:
-    user = _get_optional_user(request)
     album = get_album(session, album_id)
     _check_album_access(album, user)
     count = cleanup_album(session, album_id, output_dir=_resolve_output_dir())
+    record_audit(session, user.id, "cleanup", "album", album_id, f"deleted={count}")
     session.commit()
     return CleanupResponse(deleted=count)
 
@@ -588,7 +603,15 @@ def api_capabilities() -> CapabilitiesResponse:
 
 
 @router.post("/chat")
-def api_chat(req: ChatRequest) -> ChatResponse:
+def api_chat(
+    req: ChatRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(_get_session),
+) -> ChatResponse:
+    _check_rate_limit(session, user, "chat")
+    create_job(session, "chat", user_id=user.id)
+    session.commit()
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     prompt = req.message
     if req.context:
@@ -597,6 +620,7 @@ def api_chat(req: ChatRequest) -> ChatResponse:
     try:
         response = call_claude(prompt, api_key=api_key, system=req.system or None)
     except UnavailableError as e:
-        raise HTTPException(503, str(e))
+        log.warning("Claude chat unavailable: %s", e)
+        raise HTTPException(503, "Claude is currently unavailable")
 
     return ChatResponse(response=response.text)

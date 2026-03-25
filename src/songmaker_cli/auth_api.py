@@ -26,6 +26,7 @@ from songmaker_cli.auth import (
     SESSION_MAX_AGE_SECONDS,
     hash_password,
     verify_password,
+    verify_password_constant_time,
 )
 from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.db.queries import (
@@ -57,6 +58,9 @@ _MAX_USER_AGENT_LENGTH = 500
 
 
 def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -141,7 +145,10 @@ def login(
         )
 
     user = get_user_by_username(db, req.username)
-    if not user or not verify_password(req.password, user.password_hash):
+    password_valid = verify_password_constant_time(
+        req.password, user.password_hash if user else None,
+    )
+    if not user or not password_valid:
         record_login_attempt(db, ip, req.username, success=False)
         db.commit()
         raise HTTPException(401, "Invalid username or password")

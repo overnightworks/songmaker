@@ -127,7 +127,8 @@ def _call_cli(prompt: str, system: str | None = None) -> ClaudeResponse:
         raise UnavailableError("Claude CLI timed out after 120s")
 
     if proc.returncode != 0:
-        raise UnavailableError(f"Claude CLI error: {proc.stderr[:300]}")
+        log.warning("Claude CLI failed (rc=%d): %s", proc.returncode, proc.stderr[:500])
+        raise UnavailableError("Claude CLI is unavailable. Check server logs for details.")
 
     try:
         outer = json.loads(proc.stdout)

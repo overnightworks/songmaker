@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -25,6 +27,30 @@ from songmaker_cli.constants import OUTPUT_ROOT
 log = logging.getLogger(__name__)
 
 DB_FILENAME = "songmaker.db"
+
+
+MAX_REQUEST_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", 1_048_576))
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > MAX_REQUEST_BODY_BYTES:
+            return JSONResponse(
+                {"detail": "Request body too large"}, status_code=413,
+            )
+        return await call_next(request)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
 
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
@@ -48,21 +74,45 @@ class SessionMiddleware(BaseHTTPMiddleware):
         return await session_auth_middleware(request, call_next)
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+    from songmaker_cli.db.engine import get_session_factory
+    from songmaker_cli.db.queries import delete_expired_sessions
+
+    factory = get_session_factory()
+    with factory() as session:
+        deleted = delete_expired_sessions(session)
+        session.commit()
+        if deleted:
+            log.info("Startup: cleaned up %d expired sessions", deleted)
+    yield
+
+
 def create_app(
     output_dir: Path, project_root: Path,
 ) -> FastAPI:
-    app = FastAPI(title="Songmaker", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(
+        title="Songmaker",
+        docs_url=None, redoc_url=None, openapi_url=None,
+        lifespan=_lifespan,
+    )
 
+    app.add_middleware(BodySizeLimitMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(SessionMiddleware)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-        allow_methods=["*"],
-        allow_headers=["*"],
-        allow_credentials=True,
-    )
+    cors_origin = os.environ.get("CORS_ORIGIN")
+    cors_kwargs: dict = {
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
+        "allow_credentials": True,
+    }
+    if cors_origin:
+        cors_kwargs["allow_origins"] = [cors_origin]
+    else:
+        cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+    app.add_middleware(CORSMiddleware, **cors_kwargs)
 
     from songmaker_cli.api import router as api_router
 
@@ -74,10 +124,12 @@ def create_app(
         if not audio_path.is_relative_to(output_dir.resolve()):
             raise HTTPException(403, "Path traversal denied")
         if not audio_path.exists():
-            raise HTTPException(404, f"Not found: {album}/{filename}")
+            raise HTTPException(404, "Audio file not found")
 
         user = getattr(request.state, "user", None)
-        if user and user.role != "admin":
+        if not user:
+            raise HTTPException(401, "Authentication required")
+        if user.role != "admin":
             from songmaker_cli.db.engine import get_session_factory
             from songmaker_cli.db.queries import get_album
 
@@ -85,7 +137,7 @@ def create_app(
             with factory() as session:
                 db_album = get_album(session, album)
                 if db_album and db_album.created_by != user.id:
-                    raise HTTPException(404, f"Not found: {album}/{filename}")
+                    raise HTTPException(404, "Audio file not found")
 
         return FileResponse(audio_path, media_type="audio/mpeg")
 

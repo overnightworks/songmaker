@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -60,6 +61,15 @@ def test_get_player(server_app: TestClient) -> None:
     resp = server_app.get("/")
     assert resp.status_code == 200
     assert "Songmaker" in resp.text
+
+
+def test_security_headers(server_app: TestClient) -> None:
+    resp = server_app.get("/")
+    assert resp.headers["X-Content-Type-Options"] == "nosniff"
+    assert resp.headers["X-Frame-Options"] == "DENY"
+    assert "frame-ancestors 'none'" in resp.headers["Content-Security-Policy"]
+    assert resp.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert "camera=()" in resp.headers["Permissions-Policy"]
 
 
 def test_get_audio(server_app: TestClient) -> None:
@@ -219,6 +229,42 @@ def test_get_audio_other_users_album_denied(auth_server_app) -> None:
     client.cookies.set(cookie_name, owner_sid)
     resp = client.get("/audio/other_album/other.mp3")
     assert resp.status_code == 404
+
+
+def test_startup_cleans_expired_sessions(tmp_path: Path) -> None:
+    reset_engine()
+    output_dir = tmp_path / "_output"
+    output_dir.mkdir(parents=True)
+    project_root = tmp_path
+    (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = project_root / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
+
+    from songmaker_cli.auth import hash_password
+    from songmaker_cli.db.queries import create_session as create_db_session
+
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        user = User(username="tester", password_hash=hash_password("pass1234"))
+        session.add(user)
+        session.flush()
+        expired = datetime.now(timezone.utc) - timedelta(days=1)
+        create_db_session(session, user.id, expired)
+        session.commit()
+
+    with factory() as session:
+        from songmaker_cli.db.models import UserSession
+        assert session.query(UserSession).count() == 1
+
+    app = create_app(output_dir, project_root)
+    with TestClient(app):
+        pass
+
+    with factory() as session:
+        from songmaker_cli.db.models import UserSession
+        assert session.query(UserSession).count() == 0
+    reset_engine()
 
 
 # ── run_server ──────────────────────────────────────────────────────

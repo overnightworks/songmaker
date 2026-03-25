@@ -6,45 +6,42 @@ AI-powered song generation platform. SvelteKit web UI + FastAPI backend + SQLite
 
 **Python**: 3.12 | **Venv**: `.venv/` | **Node**: 22 LTS | **Package manager**: pnpm | **Frontend**: `frontend/`
 
-Architecture: [docs/architecture.md](docs/architecture.md) | Testing: [docs/testing.md](docs/testing.md)
+Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [security](docs/security.md) | [ACE-Step](docs/acestep.md)
 
 ## Setup & Run
 
 ```bash
 # Backend
-python3.12 -m venv .venv && source .venv/bin/activate
+source .venv/bin/activate
 pip install -e ".[server,scoring,whisper,dev]"
-songmaker server --port 8080    # starts FastAPI + serves frontend build
+songmaker server --port 8080
 
-# Frontend (dev mode with HMR)
+# Frontend (dev mode)
 cd frontend && pnpm install && pnpm dev
-
-# CLI (requires server running)
-songmaker albums
-songmaker songs [--album TITLE]
-songmaker generate <title> [-n COUNT]
-songmaker score <title> [-g NUM]
-songmaker edit <title> [--lyrics @file.txt] [--bpm N] [--key STR]
 ```
 
-## Checks Before Committing
+## Checks
+
+Run after every change. After refactors, also check coverage.
 
 ```bash
 # Backend
 pytest tests/ -q
 ruff check src/ tests/
+# + coverage after refactors:
+pytest tests/ -q --cov=songmaker_cli --cov-report=term-missing
 
 # Frontend
 cd frontend
-pnpm check        # svelte-check + tsc
-pnpm lint         # eslint + prettier
-pnpm test         # vitest
+pnpm check && pnpm lint && pnpm test
 ```
+
+- Coverage on core modules must stay at 100% (exclude `main.py` CLI entrypoint)
+- Docs (`docs/`) must stay accurate after changes
 
 ## Schema Changes
 
 ```bash
-# After modifying db/models.py:
 alembic revision --autogenerate -m "description"
 alembic upgrade head
 ```
@@ -73,30 +70,8 @@ alembic upgrade head
 4. **Never commit secrets** — `.server.env` is gitignored
 5. **Commit messages**: conventional commits (`feat:`, `fix:`, `refactor:`, `test:`)
 
-## Self-Review (for multi-file changes)
+## Self-Review (multi-file changes)
 
 1. Re-read changed files in full — coherent whole, no dead traces?
 2. Question abstractions — explainable in one sentence?
-3. Run tests + lint (both backend and frontend)
-
-## Auth System
-
-- Session-based auth (bcrypt, HttpOnly cookies, brute-force protection)
-- Roles: `admin` (sees all) + `user` (sees own albums only)
-- Albums have `created_by` → User (ownership)
-- CLI: `songmaker list-users`, `songmaker reset-password`, `songmaker reinit-acestep`
-- Requires `SESSION_SECRET` env var (generate with `openssl rand -hex 32`)
-
-## Claude Chat
-
-- **User has own API key** → browser calls Anthropic Messages API directly (key never hits server)
-- **No user key** → server's `/api/chat` uses `ANTHROPIC_API_KEY` env var (available to all authenticated users)
-- Server-side chat is intentional for now; may be removed in future once all users provide their own keys
-
-## Current State
-
-- **Branch**: `feat/auth-system`
-- **Tests**: 484 Python + 131 frontend, all passing
-- **Next**: Step 10 — Album ownership (see `plans/auth-system.md`)
-- **Deferred**: B6 (pagination), B8 (client caching), B9 (E2E tests), Playwright
-- **Plans**: `plans/acestep-modes.md` (cover, repaint, reference audio)
+3. Run checks (above)

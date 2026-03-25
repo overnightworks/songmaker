@@ -163,7 +163,7 @@ def test_call_cli_error() -> None:
         patch("songmaker_cli.claude.provider._find_claude_binary", return_value="/usr/bin/claude"),
         patch("subprocess.run", return_value=mock_proc),
     ):
-        with pytest.raises(UnavailableError, match="Claude CLI error"):
+        with pytest.raises(UnavailableError, match="Claude CLI is unavailable"):
             _call_cli("hello")
 
 

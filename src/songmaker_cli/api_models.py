@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 if TYPE_CHECKING:
     from songmaker_cli.db.models import (
         Album,
+        AuditLog,
         Generation,
         Job,
         LoginAttempt,
@@ -299,9 +300,20 @@ class RateRequest(BaseModel):
     notes: str = Field("", max_length=2_000)
 
 
+MAX_GENERATION_DEFAULTS_KEYS = 50
+
+
 class GenerationDefaultsRequest(BaseModel):
-    turbo: dict | None = Field(None, max_length=50)
-    sft: dict | None = Field(None, max_length=50)
+    turbo: dict | None = None
+    sft: dict | None = None
+
+    @field_validator("turbo", "sft")
+    @classmethod
+    def _cap_dict_size(cls, v: dict | None) -> dict | None:
+        if v is not None and len(v) > MAX_GENERATION_DEFAULTS_KEYS:
+            msg = f"Too many keys (max {MAX_GENERATION_DEFAULTS_KEYS})"
+            raise ValueError(msg)
+        return v
 
 
 class ChatRequest(BaseModel):
@@ -435,4 +447,26 @@ class LoginAttemptResponse(BaseModel):
             username=attempt.username,
             success=attempt.success,
             attempted_at=attempt.attempted_at.isoformat() if attempt.attempted_at else None,
+        )
+
+
+class AuditLogResponse(BaseModel):
+    id: str
+    user_id: str | None
+    action: str
+    resource_type: str
+    resource_id: str
+    detail: str
+    created_at: str | None = None
+
+    @classmethod
+    def from_orm(cls, entry: AuditLog) -> AuditLogResponse:
+        return cls(
+            id=entry.id,
+            user_id=entry.user_id,
+            action=entry.action,
+            resource_type=entry.resource_type,
+            resource_id=entry.resource_id,
+            detail=entry.detail,
+            created_at=entry.created_at.isoformat() if entry.created_at else None,
         )

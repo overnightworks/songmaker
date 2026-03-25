@@ -19,10 +19,17 @@ ROLE_ADMIN = "admin"
 MIN_PASSWORD_LENGTH = 8
 
 GENERATION_RATE_LIMIT_USER = int(os.environ.get("GENERATION_RATE_LIMIT_USER", 3))
+GENERATION_RATE_LIMIT_ADMIN = int(os.environ.get("GENERATION_RATE_LIMIT_ADMIN", 30))
 SCORING_RATE_LIMIT_USER = int(os.environ.get("SCORING_RATE_LIMIT_USER", 10))
+SCORING_RATE_LIMIT_ADMIN = int(os.environ.get("SCORING_RATE_LIMIT_ADMIN", 100))
+CHAT_RATE_LIMIT_USER = int(os.environ.get("CHAT_RATE_LIMIT_USER", 30))
+CHAT_RATE_LIMIT_ADMIN = int(os.environ.get("CHAT_RATE_LIMIT_ADMIN", 300))
 RATE_LIMIT_WINDOW_SECONDS = 3600
 MAX_QUEUE_DEPTH = int(os.environ.get("MAX_QUEUE_DEPTH", 10))
 MAX_USER_ACTIVE_JOBS = 1
+
+
+_DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode()
 
 
 def hash_password(password: str) -> str:
@@ -31,3 +38,8 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode(), password_hash.encode())
+
+
+def verify_password_constant_time(password: str, password_hash: str | None) -> bool:
+    """Verify password, using a dummy hash if None to prevent timing oracle."""
+    return bcrypt.checkpw(password.encode(), (password_hash or _DUMMY_HASH).encode())

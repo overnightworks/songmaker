@@ -13,9 +13,46 @@ from songmaker_cli.db.engine import init_db, reset_engine
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.middleware import AuthenticatedUser
 
+_DEFAULT_USER_ID = "u-test"
+
+
+class _FakeAuthMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, user_id: str, username: str, role: str):
+        super().__init__(app)
+        self._user = AuthenticatedUser(
+            id=user_id, username=username, role=role, is_active=True,
+        )
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        request.state.user = self._user
+        return await call_next(request)
+
 
 @pytest.fixture()
 def client(tmp_path: Path) -> TestClient:
+    reset_engine()
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        session.add(User(
+            id=_DEFAULT_USER_ID, username="test_user",
+            password_hash="unused", role="user",
+        ))
+        session.flush()
+        _seed_db(session, owner_id=_DEFAULT_USER_ID)
+
+    from songmaker_cli.api import router
+    app = FastAPI()
+    app.add_middleware(
+        _FakeAuthMiddleware,
+        user_id=_DEFAULT_USER_ID, username="test_user", role="user",
+    )
+    app.include_router(router)
+    yield TestClient(app)
+    reset_engine()
+
+
+@pytest.fixture()
+def unauthed_client(tmp_path: Path) -> TestClient:
     reset_engine()
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
@@ -45,16 +82,10 @@ def _make_authed_client(
     from songmaker_cli.api import router
 
     app = FastAPI()
-
-    class FakeAuthMiddleware(BaseHTTPMiddleware):
-        async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-            request.state.user = AuthenticatedUser(
-                id=user_id, username=f"test_{role}",
-                role=role, is_active=True,
-            )
-            return await call_next(request)
-
-    app.add_middleware(FakeAuthMiddleware)
+    app.add_middleware(
+        _FakeAuthMiddleware,
+        user_id=user_id, username=f"test_{role}", role=role,
+    )
     app.include_router(router)
     return TestClient(app)
 
@@ -327,6 +358,13 @@ def test_generation_defaults_roundtrip(tmp_path: Path) -> None:
         reset_engine()
 
 
+def test_generation_defaults_too_many_keys(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+    big_dict = {f"k{i}": i for i in range(51)}
+    resp = c.put("/api/settings/generation-defaults", json={"turbo": big_dict})
+    assert resp.status_code == 422
+
+
 # ── 404 error branches ──────────────────────────────────────────────
 
 
@@ -459,14 +497,15 @@ def test_score_generation_submits_job(client: TestClient) -> None:
 # ── Chat endpoint ───────────────────────────────────────────────────
 
 
-def test_chat_success(client: TestClient) -> None:
+def test_chat_success(tmp_path: Path) -> None:
     from unittest.mock import MagicMock, patch
 
+    c = _make_authed_client(tmp_path)
     mock_response = MagicMock()
     mock_response.text = "Hello from Claude"
 
     with patch("songmaker_cli.api.call_claude", return_value=mock_response):
-        resp = client.post("/api/chat", json={
+        resp = c.post("/api/chat", json={
             "message": "hi",
             "context": "Song: Test",
         })
@@ -475,19 +514,24 @@ def test_chat_success(client: TestClient) -> None:
     assert resp.json()["response"] == "Hello from Claude"
 
 
-
-def test_chat_unavailable(client: TestClient) -> None:
+def test_chat_unavailable(tmp_path: Path) -> None:
     from unittest.mock import patch
 
     from songmaker_cli.claude.provider import UnavailableError
 
+    c = _make_authed_client(tmp_path)
     with patch(
         "songmaker_cli.api.call_claude",
         side_effect=UnavailableError("no backend"),
     ):
-        resp = client.post("/api/chat", json={"message": "hi"})
+        resp = c.post("/api/chat", json={"message": "hi"})
 
     assert resp.status_code == 503
+
+
+def test_chat_requires_auth(unauthed_client: TestClient) -> None:
+    resp = unauthed_client.post("/api/chat", json={"message": "hi"})
+    assert resp.status_code == 401
 
 
 def test_get_album(client: TestClient) -> None:
@@ -797,5 +841,158 @@ def test_unpick_generation_value_error(client: TestClient) -> None:
         resp = client.post("/api/generations/g1/unpick")
 
     assert resp.status_code == 404
+
+
+# ── Audit trail tests ────────────────────────────────────────────────
+
+
+def test_create_album_records_audit(client: TestClient) -> None:
+    from songmaker_cli.db.engine import get_session_factory
+    from songmaker_cli.db.queries import list_audit_log
+
+    client.post("/api/albums", json={"title": "Audited"})
+    factory = get_session_factory()
+    with factory() as session:
+        entries = list_audit_log(session)
+    assert any(e.action == "create" and e.resource_type == "album" for e in entries)
+
+
+def test_audit_log_admin_endpoint(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+    c.post("/api/albums", json={"title": "Audit Test"})
+    resp = c.get("/api/admin/audit-log")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) >= 1
+    assert data[0]["action"] == "create"
+    assert "created_at" in data[0]
+    reset_engine()
+
+
+# ── Chat rate limiting ───────────────────────────────────────────────
+
+
+def test_chat_rate_limit(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock, patch
+
+    import songmaker_cli.auth as auth_mod
+
+    original = auth_mod.CHAT_RATE_LIMIT_USER
+    auth_mod.CHAT_RATE_LIMIT_USER = 2
+    import songmaker_cli.api as api_mod
+    api_mod._RATE_LIMITS["chat"] = (2, 300)
+
+    c = _make_authed_client(tmp_path)
+    mock_resp = MagicMock()
+    mock_resp.text = "ok"
+
+    try:
+        with patch("songmaker_cli.api.call_claude", return_value=mock_resp):
+            for _ in range(2):
+                r = c.post("/api/chat", json={"message": "hi"})
+                assert r.status_code == 200
+
+            r = c.post("/api/chat", json={"message": "hi"})
+            assert r.status_code == 429
+    finally:
+        auth_mod.CHAT_RATE_LIMIT_USER = original
+        api_mod._RATE_LIMITS["chat"] = (
+            auth_mod.CHAT_RATE_LIMIT_USER, auth_mod.CHAT_RATE_LIMIT_ADMIN,
+        )
+        reset_engine()
+
+
+# ── Admin rate limits ────────────────────────────────────────────────
+
+
+def test_admin_has_rate_limit(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock, patch
+
+    import songmaker_cli.api as api_mod
+
+    original_limits = api_mod._RATE_LIMITS["generate"]
+    api_mod._RATE_LIMITS["generate"] = (3, 1)
+
+    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+
+    mock_queue = MagicMock()
+    try:
+        with patch("songmaker_cli.api.get_gpu_queue", return_value=mock_queue):
+            r = c.post("/api/songs/s1/generate", json={"count": 1})
+            assert r.status_code == 200
+
+            r = c.post("/api/songs/s1/generate", json={"count": 1})
+            assert r.status_code == 429
+    finally:
+        api_mod._RATE_LIMITS["generate"] = original_limits
+        reset_engine()
+
+
+# ── Body size limit middleware ───────────────────────────────────────
+
+
+def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
+    from songmaker_cli.api import router
+    from songmaker_cli.server import BodySizeLimitMiddleware
+    app = FastAPI()
+    app.add_middleware(BodySizeLimitMiddleware)
+    app.add_middleware(
+        _FakeAuthMiddleware,
+        user_id="u-test", username="test", role="user",
+    )
+    app.include_router(router)
+
+    reset_engine()
+    init_db(tmp_path / "test.db")
+
+    tc = TestClient(app)
+    resp = tc.post(
+        "/api/albums",
+        json={"title": "x"},
+        headers={"content-length": "2000000"},
+    )
+    assert resp.status_code == 413
+    reset_engine()
+
+
+# ── Error sanitization ──────────────────────────────────────────────
+
+
+def test_sanitize_error_known_type() -> None:
+    from songmaker_cli.jobs import _sanitize_error
+
+    assert _sanitize_error(ConnectionError("x")) == "ACE-Step server not reachable"
+    assert _sanitize_error(TimeoutError("x")) == "Generation timed out"
+    assert _sanitize_error(RuntimeError("x")) == "Internal error during processing"
+
+
+def test_sanitize_error_unknown_type() -> None:
+    from songmaker_cli.jobs import _sanitize_error
+
+    assert _sanitize_error(KeyError("x")) == "An unexpected error occurred"
+
+
+def test_sanitize_error_generation_setup() -> None:
+    from songmaker_cli.jobs import GenerationSetupError, _sanitize_error
+
+    assert _sanitize_error(GenerationSetupError("Song not found")) == "Song not found"
+
+
+def test_chat_unavailable_hides_details(tmp_path: Path) -> None:
+    from unittest.mock import patch
+
+    from songmaker_cli.claude.provider import UnavailableError
+
+    c = _make_authed_client(tmp_path)
+    with patch(
+        "songmaker_cli.api.call_claude",
+        side_effect=UnavailableError("Claude CLI error: /home/user/.local/bin..."),
+    ):
+        resp = c.post("/api/chat", json={"message": "hi"})
+
+    assert resp.status_code == 503
+    assert "Claude is currently unavailable" in resp.json()["detail"]
+    assert "/home/" not in resp.json()["detail"]
+    reset_engine()
 
 

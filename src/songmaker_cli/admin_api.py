@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_models import (
+    AuditLogResponse,
     CreateUserRequest,
     LoginAttemptResponse,
     SessionResponse,
@@ -23,6 +24,7 @@ from songmaker_cli.db.queries import (
     get_user,
     get_user_by_username,
     list_active_sessions,
+    list_audit_log,
     list_login_attempts,
     list_users,
     update_user,
@@ -107,6 +109,15 @@ def deactivate_user_endpoint(
     update_user(db, user_id, is_active=False)
     db.commit()
     return StatusResponse(status="ok")
+
+
+@router.get("/audit-log")
+def audit_log_endpoint(
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(_get_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> list[AuditLogResponse]:
+    return [AuditLogResponse.from_orm(e) for e in list_audit_log(db, limit=limit)]
 
 
 @router.get("/login-attempts")
