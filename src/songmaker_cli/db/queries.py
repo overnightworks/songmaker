@@ -591,6 +591,16 @@ def count_recent_failed_attempts(
     return query.count()
 
 
+LOGIN_ATTEMPT_RETENTION_DAYS = 90
+
+
+def cleanup_old_login_attempts(session: Session) -> int:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=LOGIN_ATTEMPT_RETENTION_DAYS)
+    count = session.query(LoginAttempt).filter(LoginAttempt.attempted_at < cutoff).delete()
+    session.flush()
+    return count
+
+
 def list_login_attempts(
     session: Session, limit: int = 100,
 ) -> list[LoginAttempt]:

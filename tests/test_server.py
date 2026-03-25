@@ -277,7 +277,7 @@ def test_run_server_calls_uvicorn(tmp_path: Path) -> None:
         patch("uvicorn.run") as mock_uvicorn,
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
-        patch.dict("os.environ", {"SESSION_SECRET": "testsecret"}),
+
     ):
         run_server(output_dir=output_dir, project_root=tmp_path, port=9999)
 
@@ -286,32 +286,18 @@ def test_run_server_calls_uvicorn(tmp_path: Path) -> None:
     assert call_kwargs.kwargs.get("port") == 9999
 
 
-def test_run_server_no_session_secret_raises(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
-
-    with (
-        patch("uvicorn.run"),
-        patch("songmaker_cli.db.engine.init_db"),
-        patch("songmaker_cli.config.set_output_dir"),
-        patch.dict("os.environ", {}, clear=True),
-    ):
-        with pytest.raises(RuntimeError, match="SESSION_SECRET"):
-            run_server(output_dir=output_dir, project_root=tmp_path)
-
-
-def test_run_server_uses_all_interfaces(tmp_path: Path) -> None:
+def test_run_server_defaults_to_localhost(tmp_path: Path) -> None:
     output_dir = tmp_path / "_output"
 
     with (
         patch("uvicorn.run") as mock_uvicorn,
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
-        patch.dict("os.environ", {"SESSION_SECRET": "mysecret"}),
     ):
         run_server(output_dir=output_dir, project_root=tmp_path, port=8080)
 
     _, kwargs = mock_uvicorn.call_args
-    assert kwargs.get("host") == "0.0.0.0"
+    assert kwargs.get("host") == "127.0.0.1"
 
 
 def test_run_server_opens_browser(tmp_path: Path) -> None:
@@ -322,7 +308,7 @@ def test_run_server_opens_browser(tmp_path: Path) -> None:
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
         patch("webbrowser.open") as mock_browser,
-        patch.dict("os.environ", {"SESSION_SECRET": "secret"}),
+
     ):
         run_server(output_dir=output_dir, project_root=tmp_path, open_browser=True)
 
@@ -336,7 +322,7 @@ def test_run_server_creates_output_dir(tmp_path: Path) -> None:
         patch("uvicorn.run"),
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
-        patch.dict("os.environ", {"SESSION_SECRET": "secret"}),
+
     ):
         run_server(output_dir=output_dir, project_root=tmp_path)
 
@@ -349,9 +335,34 @@ def test_run_server_infers_output_dir_from_project_root(tmp_path: Path) -> None:
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
         patch("songmaker_cli.server.find_project_root", return_value=tmp_path),
-        patch.dict("os.environ", {"SESSION_SECRET": "secret"}),
+
     ):
         run_server(output_dir=None, project_root=None)
+
+
+def test_csrf_origin_check_rejects_cross_origin(server_app: TestClient) -> None:
+    resp = server_app.post(
+        "/api/songs",
+        json={"title": "X", "album_id": "test_album"},
+        headers={"origin": "http://evil.example.com", "host": "localhost:8080"},
+    )
+    assert resp.status_code == 403
+    assert "Cross-origin" in resp.json()["detail"]
+
+
+def test_csrf_origin_check_allows_same_origin(server_app: TestClient) -> None:
+    resp = server_app.post(
+        "/api/songs",
+        json={"title": "New Song", "album_id": "test_album"},
+        headers={"origin": "http://testserver", "host": "testserver"},
+    )
+    assert resp.status_code == 200
+
+
+def test_hsts_header_on_https(server_app: TestClient) -> None:
+    resp = server_app.get("/", headers={"x-forwarded-proto": "https"})
+    assert "Strict-Transport-Security" in resp.headers
+    assert "max-age=31536000" in resp.headers["Strict-Transport-Security"]
 
 
 def test_run_server_infers_project_root(tmp_path: Path) -> None:
@@ -362,6 +373,6 @@ def test_run_server_infers_project_root(tmp_path: Path) -> None:
         patch("songmaker_cli.db.engine.init_db"),
         patch("songmaker_cli.config.set_output_dir"),
         patch("songmaker_cli.server.find_project_root", return_value=None),
-        patch.dict("os.environ", {"SESSION_SECRET": "secret"}),
+
     ):
         run_server(output_dir=output_dir, project_root=None)

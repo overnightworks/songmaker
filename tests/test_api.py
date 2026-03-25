@@ -358,10 +358,9 @@ def test_generation_defaults_roundtrip(tmp_path: Path) -> None:
         reset_engine()
 
 
-def test_generation_defaults_too_many_keys(tmp_path: Path) -> None:
+def test_generation_defaults_rejects_unknown_keys(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
-    big_dict = {f"k{i}": i for i in range(51)}
-    resp = c.put("/api/settings/generation-defaults", json={"turbo": big_dict})
+    resp = c.put("/api/settings/generation-defaults", json={"turbo": {"bad_key": 1}})
     assert resp.status_code == 422
 
 
@@ -749,14 +748,43 @@ def test_rate_by_path_ownership_check(tmp_path: Path) -> None:
 
 
 def test_create_song_gen_param_out_of_range(client: TestClient) -> None:
-    """Line 151: _validate_generation_params raises 422 for out-of-range value."""
+    """GenerationParams rejects out-of-range values via Pydantic validation."""
     resp = client.post("/api/songs", json={
         "title": "Bad Params",
         "album_id": "rock",
         "generation_params": {"inference_steps": 500},
     })
     assert resp.status_code == 422
-    assert "out of range" in resp.json()["detail"]
+
+
+def test_create_song_gen_param_invalid_infer_method(client: TestClient) -> None:
+    """GenerationParams rejects unknown infer_method values."""
+    resp = client.post("/api/songs", json={
+        "title": "Bad Infer",
+        "album_id": "rock",
+        "generation_params": {"infer_method": "euler"},
+    })
+    assert resp.status_code == 422
+
+
+def test_create_song_gen_param_invalid_think_mode(client: TestClient) -> None:
+    """GenerationParams rejects unknown think_mode values."""
+    resp = client.post("/api/songs", json={
+        "title": "Bad Think",
+        "album_id": "rock",
+        "generation_params": {"think_mode": "invalid"},
+    })
+    assert resp.status_code == 422
+
+
+def test_score_request_invalid_scorer_name(client: TestClient) -> None:
+    """ScoreRequest rejects unknown scorer names."""
+    import pytest
+
+    from songmaker_cli.api_models import ScoreRequest
+
+    with pytest.raises(Exception):
+        ScoreRequest(scorers=["nonexistent_scorer"])
 
 
 def test_check_song_access_ownership_denied(tmp_path: Path) -> None:
@@ -935,21 +963,22 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     from songmaker_cli.api import router
     from songmaker_cli.server import BodySizeLimitMiddleware
     app = FastAPI()
-    app.add_middleware(BodySizeLimitMiddleware)
     app.add_middleware(
         _FakeAuthMiddleware,
         user_id="u-test", username="test", role="user",
     )
+    app.add_middleware(BodySizeLimitMiddleware)
     app.include_router(router)
 
     reset_engine()
     init_db(tmp_path / "test.db")
 
     tc = TestClient(app)
+    large_body = b"x" * 2_000_000
     resp = tc.post(
         "/api/albums",
-        json={"title": "x"},
-        headers={"content-length": "2000000"},
+        content=large_body,
+        headers={"content-type": "application/json"},
     )
     assert resp.status_code == 413
     reset_engine()

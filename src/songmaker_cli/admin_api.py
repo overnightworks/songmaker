@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -27,6 +28,7 @@ from songmaker_cli.db.queries import (
     list_audit_log,
     list_login_attempts,
     list_users,
+    record_audit,
     update_user,
 )
 from songmaker_cli.middleware import AuthenticatedUser, require_admin
@@ -61,6 +63,7 @@ def create_user_endpoint(
         raise HTTPException(409, f"Username '{req.username}' already exists")
 
     user = create_user(db, req.username, hash_password(req.password), role=req.role)
+    record_audit(db, _admin.id, "create", "user", user.id, f"role={req.role}")
     db.commit()
     return UserResponse.from_orm(user)
 
@@ -89,6 +92,14 @@ def update_user_endpoint(
     updated = update_user(
         db, user_id, role=req.role, is_active=req.is_active, password_hash=password_hash,
     )
+    changes = []
+    if req.role is not None:
+        changes.append(f"role={req.role}")
+    if req.is_active is not None:
+        changes.append(f"active={req.is_active}")
+    if req.password:
+        changes.append("password_changed")
+    record_audit(db, admin.id, "update", "user", user_id, ", ".join(changes))
     db.commit()
     return UserResponse.from_orm(updated)
 
@@ -107,6 +118,7 @@ def deactivate_user_endpoint(
         raise HTTPException(400, "Cannot deactivate your own account")
 
     update_user(db, user_id, is_active=False)
+    record_audit(db, admin.id, "deactivate", "user", user_id)
     db.commit()
     return StatusResponse(status="ok")
 
@@ -137,15 +149,18 @@ def sessions_endpoint(
     return [SessionResponse.from_orm(s) for s in list_active_sessions(db)]
 
 
-@router.delete("/sessions/{session_id}")
+@router.delete("/sessions/{session_hash}")
 def force_logout_endpoint(
-    session_id: str,
+    session_hash: str,
     db: Session = Depends(_get_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
-    delete_session(db, session_id)
-    db.commit()
-    return StatusResponse(status="ok")
+    for sess in list_active_sessions(db):
+        if hashlib.sha256(sess.id.encode()).hexdigest() == session_hash:
+            delete_session(db, sess.id)
+            db.commit()
+            return StatusResponse(status="ok")
+    raise HTTPException(404, "Session not found")
 
 
 @router.post("/acestep/reinitialize")
@@ -164,7 +179,8 @@ def reinitialize_acestep(
             data = json.loads(resp.read())
         if data.get("code") == 200:
             return StatusResponse(status="ok")
-        raise HTTPException(502, f"ACE-Step error: {data}")
+        log.warning("ACE-Step reinitialize returned: %s", data)
+        raise HTTPException(502, "ACE-Step returned an error")
     except HTTPException:
         raise
     except Exception as exc:

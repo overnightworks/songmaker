@@ -6,9 +6,10 @@ FastAPI auto-generates OpenAPI docs from these models.
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import (
@@ -251,6 +252,49 @@ class JobResponse(BaseModel):
 # ── Requests ────────────────────────────────────────────────────────
 
 
+_GEN_PARAM_MAX_STRING_LENGTH = 2000
+
+_VALID_INFER_METHODS = frozenset({"ode", "sde"})
+_VALID_THINK_MODES = frozenset({"deep", "off", ""})
+
+
+class GenerationParams(BaseModel):
+    """Typed ACE-Step generation parameters — replaces untyped dict."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    inference_steps: int | None = Field(None, ge=1, le=200)
+    guidance_scale: float | None = Field(None, ge=0, le=50)
+    shift: float | None = Field(None, ge=0, le=100)
+    think_mode: str | None = Field(None, max_length=10)
+    lm_temperature: float | None = Field(None, ge=0, le=5)
+    lm_top_k: int | None = Field(None, ge=0, le=1000)
+    lm_top_p: float | None = Field(None, ge=0, le=1)
+    lm_cfg_scale: float | None = Field(None, ge=0, le=50)
+    lm_negative_prompt: str | None = Field(None, max_length=_GEN_PARAM_MAX_STRING_LENGTH)
+    infer_method: str | None = Field(None, max_length=10)
+    batch_size: int | None = Field(None, ge=1, le=8)
+
+    @field_validator("infer_method")
+    @classmethod
+    def _validate_infer_method(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_INFER_METHODS:
+            msg = f"infer_method must be one of {sorted(_VALID_INFER_METHODS)}"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("think_mode")
+    @classmethod
+    def _validate_think_mode(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_THINK_MODES:
+            msg = f"think_mode must be one of {sorted(_VALID_THINK_MODES)}"
+            raise ValueError(msg)
+        return v
+
+    def to_dict(self) -> dict:
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
 class AlbumCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     artist: str = Field("", max_length=200)
@@ -265,7 +309,7 @@ class SongCreateRequest(BaseModel):
     duration: int = Field(180, ge=1, le=600)
     key: str = Field("", max_length=10)
     language: str = Field("", max_length=10)
-    generation_params: dict | None = None
+    generation_params: GenerationParams | None = None
 
 
 class SongUpdateRequest(BaseModel):
@@ -274,11 +318,17 @@ class SongUpdateRequest(BaseModel):
     bpm: int | None = None
     duration: int | None = Field(None, ge=1, le=600)
     key: str | None = Field(None, max_length=10)
-    generation_params: dict | None = None
+    generation_params: GenerationParams | None = None
 
 
 class GenerateRequest(BaseModel):
     count: int = Field(1, ge=1, le=10)
+
+
+VALID_SCORER_NAMES = frozenset({
+    "text_accuracy", "lyrical_coherence", "emotional_dynamics",
+    "audiobox", "bpm_accuracy", "silence", "spectral_quality",
+})
 
 
 class ScoreRequest(BaseModel):
@@ -288,10 +338,10 @@ class ScoreRequest(BaseModel):
     @classmethod
     def validate_scorer_items(cls, v: list[str] | None) -> list[str] | None:
         if v:
-            for item in v:
-                if len(item) > 100:
-                    msg = "Scorer name exceeds 100 characters"
-                    raise ValueError(msg)
+            invalid = set(v) - VALID_SCORER_NAMES
+            if invalid:
+                msg = f"Unknown scorers: {', '.join(sorted(invalid))}"
+                raise ValueError(msg)
         return v
 
 
@@ -300,25 +350,13 @@ class RateRequest(BaseModel):
     notes: str = Field("", max_length=2_000)
 
 
-MAX_GENERATION_DEFAULTS_KEYS = 50
-
-
 class GenerationDefaultsRequest(BaseModel):
-    turbo: dict | None = None
-    sft: dict | None = None
-
-    @field_validator("turbo", "sft")
-    @classmethod
-    def _cap_dict_size(cls, v: dict | None) -> dict | None:
-        if v is not None and len(v) > MAX_GENERATION_DEFAULTS_KEYS:
-            msg = f"Too many keys (max {MAX_GENERATION_DEFAULTS_KEYS})"
-            raise ValueError(msg)
-        return v
+    turbo: GenerationParams | None = None
+    sft: GenerationParams | None = None
 
 
 class ChatRequest(BaseModel):
     message: str = Field(max_length=10_000)
-    system: str = Field("", max_length=5_000)
     context: str = Field("", max_length=20_000)
 
 
@@ -422,7 +460,7 @@ class SessionResponse(BaseModel):
     @classmethod
     def from_orm(cls, sess: UserSession) -> SessionResponse:
         return cls(
-            id=sess.id,
+            id=hashlib.sha256(sess.id.encode()).hexdigest(),
             user_id=sess.user_id,
             username=sess.user.username,
             created_at=sess.created_at.isoformat() if sess.created_at else None,

@@ -137,6 +137,25 @@ def test_login_brute_force_lockout(client: TestClient) -> None:
     assert "Retry-After" in resp.headers
 
 
+def test_client_ip_trusted_proxy(client: TestClient) -> None:
+    from unittest.mock import patch
+
+    _seed_admin()
+    with patch("songmaker_cli.auth_api.TRUSTED_PROXIES", frozenset({"testclient"})):
+        resp = client.post(
+            "/api/auth/login",
+            json={"username": "admin", "password": "admin12345"},
+            headers={"x-forwarded-for": "203.0.113.1, 10.0.0.1"},
+        )
+    assert resp.status_code == 200
+
+    factory = get_session_factory()
+    with factory() as session:
+        from songmaker_cli.db.models import LoginAttempt
+        attempt = session.query(LoginAttempt).order_by(LoginAttempt.attempted_at.desc()).first()
+        assert attempt.ip_address == "203.0.113.1"
+
+
 # ── Logout ──────────────────────────────────────────────────────────
 
 

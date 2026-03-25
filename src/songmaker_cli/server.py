@@ -33,9 +33,11 @@ MAX_REQUEST_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", 1_048_576)
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    """Checks actual body size, not just Content-Length header."""
+
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > MAX_REQUEST_BODY_BYTES:
+        body = await request.body()
+        if len(body) > MAX_REQUEST_BODY_BYTES:
             return JSONResponse(
                 {"detail": "Request body too large"}, status_code=413,
             )
@@ -50,6 +52,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        forwarded = request.headers.get("x-forwarded-proto", "")
+        if forwarded == "https" or request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
 
@@ -67,6 +72,31 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         return response
 
 
+_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+class CsrfOriginMiddleware(BaseHTTPMiddleware):
+    """Reject cross-origin state-changing API requests as CSRF defense-in-depth."""
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if (
+            request.method in _MUTATING_METHODS
+            and request.url.path.startswith("/api/")
+        ):
+            origin = request.headers.get("origin") or request.headers.get("referer")
+            if origin:
+                from urllib.parse import urlparse
+                parsed = urlparse(origin)
+                server_host = request.headers.get("host", "")
+                origin_host = parsed.netloc
+                if origin_host and origin_host != server_host:
+                    return JSONResponse(
+                        {"detail": "Cross-origin request rejected"},
+                        status_code=403,
+                    )
+        return await call_next(request)
+
+
 class SessionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         from songmaker_cli.middleware import session_auth_middleware
@@ -77,14 +107,17 @@ class SessionMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.db.engine import get_session_factory
-    from songmaker_cli.db.queries import delete_expired_sessions
+    from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
 
     factory = get_session_factory()
     with factory() as session:
         deleted = delete_expired_sessions(session)
-        session.commit()
         if deleted:
             log.info("Startup: cleaned up %d expired sessions", deleted)
+        pruned = cleanup_old_login_attempts(session)
+        if pruned:
+            log.info("Startup: pruned %d old login attempts", pruned)
+        session.commit()
     yield
 
 
@@ -97,10 +130,11 @@ def create_app(
         lifespan=_lifespan,
     )
 
-    app.add_middleware(BodySizeLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(AccessLogMiddleware)
+    app.add_middleware(CsrfOriginMiddleware)
     app.add_middleware(SessionMiddleware)
+    app.add_middleware(BodySizeLimitMiddleware)
 
     cors_origin = os.environ.get("CORS_ORIGIN")
     cors_kwargs: dict = {
@@ -187,13 +221,6 @@ def run_server(
     db_path = output_dir / DB_FILENAME
     init_db(db_path)
 
-    session_secret = os.environ.get("SESSION_SECRET", "")
-    if not session_secret:
-        raise RuntimeError(
-            "SESSION_SECRET env var is required. "
-            "Generate one with: openssl rand -hex 32"
-        )
-
     app = create_app(output_dir, project_root)
     log.info("Songmaker server: http://localhost:%d", port)
     log.info("Auth enabled (session-based)")
@@ -202,4 +229,5 @@ def run_server(
         import webbrowser
         webbrowser.open(f"http://localhost:{port}")
 
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    host = os.environ.get("HOST", "127.0.0.1")
+    uvicorn.run(app, host=host, port=port, log_level="info")

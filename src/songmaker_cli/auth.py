@@ -7,6 +7,9 @@ import os
 import bcrypt
 
 BCRYPT_ROUNDS = 12
+TRUSTED_PROXIES: frozenset[str] = frozenset(
+    p.strip() for p in os.environ.get("TRUSTED_PROXIES", "").split(",") if p.strip()
+)
 SESSION_MAX_AGE_SECONDS = int(os.environ.get("SESSION_MAX_AGE", 60 * 60 * 24 * 30))
 SESSION_ABSOLUTE_MAX_AGE_SECONDS = int(
     os.environ.get("SESSION_ABSOLUTE_MAX_AGE", 60 * 60 * 24 * 90),

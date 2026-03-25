@@ -125,50 +125,11 @@ def _check_rate_limit(
 _get_session = get_db_session
 
 
-_VALID_GEN_PARAM_KEYS = frozenset({
-    "inference_steps", "guidance_scale", "shift",
-    "think_mode", "lm_temperature", "lm_top_k", "lm_top_p",
-    "lm_cfg_scale", "lm_negative_prompt", "infer_method", "batch_size",
-})
-
-_GEN_PARAM_STRING_KEYS = frozenset({"lm_negative_prompt", "infer_method", "think_mode"})
-_GEN_PARAM_MAX_STRING_LENGTH = 2000
-
-_GEN_PARAM_LIMITS: dict[str, tuple[float, float]] = {
-    "inference_steps": (1, 200),
-    "guidance_scale": (0, 50),
-    "shift": (0, 100),
-    "lm_temperature": (0, 5),
-    "lm_top_k": (0, 1000),
-    "lm_top_p": (0, 1),
-    "lm_cfg_scale": (0, 50),
-    "batch_size": (1, 8),
-}
-
-
-def _validate_generation_params(params: dict | None) -> dict | None:
+def _gen_params_to_dict(params: object | None) -> dict | None:
+    """Convert GenerationParams to a plain dict for DB storage, dropping None values."""
     if params is None:
         return None
-    invalid = set(params.keys()) - _VALID_GEN_PARAM_KEYS
-    if invalid:
-        raise HTTPException(
-            422, f"Unknown generation_params keys: {', '.join(sorted(invalid))}",
-        )
-    for key, val in params.items():
-        if key in _GEN_PARAM_STRING_KEYS:
-            if not isinstance(val, str):
-                raise HTTPException(422, f"{key} must be a string")
-            if len(val) > _GEN_PARAM_MAX_STRING_LENGTH:
-                raise HTTPException(
-                    422, f"{key} exceeds max length ({_GEN_PARAM_MAX_STRING_LENGTH})",
-                )
-        elif key in _GEN_PARAM_LIMITS:
-            if not isinstance(val, (int, float)):
-                raise HTTPException(422, f"{key} must be a number")
-            lo, hi = _GEN_PARAM_LIMITS[key]
-            if val < lo or val > hi:
-                raise HTTPException(422, f"{key}={val} out of range [{lo}, {hi}]")
-    return params
+    return params.to_dict() or None
 
 
 # ── Albums ───────────────────────────────────────────────────────────
@@ -310,12 +271,11 @@ def api_create_song(
 ) -> SongResponse:
     album = get_album(session, req.album_id)
     _check_album_access(album, user)
-    _validate_generation_params(req.generation_params)
     song = create_song(
         session, title=req.title, album_id=req.album_id,
         lyrics=req.lyrics, prompt=req.prompt, bpm=req.bpm,
         duration=req.duration, key=req.key, language=req.language,
-        generation_params=req.generation_params,
+        generation_params=_gen_params_to_dict(req.generation_params),
     )
     record_audit(session, user.id, "create", "song", song.id)
     session.commit()
@@ -329,13 +289,12 @@ def api_update_song(
     session: Session = Depends(_get_session),
 ) -> SongResponse:
     _check_song_access(session, song_id, user)
-    _validate_generation_params(req.generation_params)
     kwargs: dict = dict(
         lyrics=req.lyrics, prompt=req.prompt,
         bpm=req.bpm, duration=req.duration, key=req.key,
     )
     if "generation_params" in req.model_fields_set:
-        kwargs["generation_params"] = req.generation_params
+        kwargs["generation_params"] = _gen_params_to_dict(req.generation_params)
     try:
         version = update_song(session, song_id, **kwargs)
     except ValueError:
@@ -578,9 +537,9 @@ def api_set_generation_defaults(
 ) -> dict:
     data: dict = {}
     if req.turbo is not None:
-        data["turbo"] = req.turbo
+        data["turbo"] = req.turbo.to_dict()
     if req.sft is not None:
-        data["sft"] = req.sft
+        data["sft"] = req.sft.to_dict()
     save_generation_defaults(data)
     return data
 
@@ -589,7 +548,9 @@ def api_set_generation_defaults(
 
 
 @router.get("/capabilities")
-def api_capabilities() -> CapabilitiesResponse:
+def api_capabilities(
+    _user: AuthenticatedUser = Depends(get_current_user),
+) -> CapabilitiesResponse:
     env_key = os.environ.get("ANTHROPIC_API_KEY")
     return CapabilitiesResponse(
         claude_api=bool(env_key),
@@ -600,6 +561,18 @@ def api_capabilities() -> CapabilitiesResponse:
 
 
 # ── Claude chat ──────────────────────────────────────────────────────
+
+_CHAT_SYSTEM_PROMPT = (
+    "You are a songwriting assistant. Help write, improve, and refine song lyrics. "
+    "Be creative but respect the style and theme.\n\n"
+    "When suggesting lyrics or song parameters, include a ```songmaker block "
+    "at the end of your response with the applicable fields as JSON:\n"
+    '```songmaker\n{"lyrics": "[verse]\\n...", "prompt": "style...",'
+    ' "bpm": 120, "key": "Am"}\n```\n\n'
+    "Only include fields you are suggesting changes for. The lyrics field should use "
+    "section tags like [verse], [chorus], [bridge]. Use \\n for newlines in lyrics.\n"
+    "If the user just asks a question without needing changes, skip the songmaker block."
+)
 
 
 @router.post("/chat")
@@ -618,7 +591,7 @@ def api_chat(
         prompt = f"Song context:\n{req.context}\n\n{req.message}"
 
     try:
-        response = call_claude(prompt, api_key=api_key, system=req.system or None)
+        response = call_claude(prompt, api_key=api_key, system=_CHAT_SYSTEM_PROMPT)
     except UnavailableError as e:
         log.warning("Claude chat unavailable: %s", e)
         raise HTTPException(503, "Claude is currently unavailable")

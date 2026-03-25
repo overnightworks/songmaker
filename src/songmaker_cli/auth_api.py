@@ -24,6 +24,7 @@ from songmaker_cli.auth import (
     LOGIN_RATE_WINDOW_SECONDS,
     ROLE_ADMIN,
     SESSION_MAX_AGE_SECONDS,
+    TRUSTED_PROXIES,
     hash_password,
     verify_password,
     verify_password_constant_time,
@@ -58,10 +59,12 @@ _MAX_USER_AGENT_LENGTH = 500
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    direct_ip = request.client.host if request.client else "unknown"
+    if TRUSTED_PROXIES and direct_ip in TRUSTED_PROXIES:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return direct_ip
 
 
 def _client_user_agent(request: Request) -> str:

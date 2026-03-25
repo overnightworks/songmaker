@@ -255,12 +255,25 @@ def test_force_logout(client: TestClient) -> None:
     other_client.post("/api/auth/login", json={"username": "victim", "password": "password123"})
     victim_cookie = other_client.cookies.get(SESSION_COOKIE)
 
-    resp = client.delete(f"/api/admin/sessions/{victim_cookie}")
+    sessions_resp = client.get("/api/admin/sessions")
+    victim_sessions = [
+        s for s in sessions_resp.json() if s["username"] == "victim"
+    ]
+    assert victim_sessions
+    session_hash = victim_sessions[0]["id"]
+
+    resp = client.delete(f"/api/admin/sessions/{session_hash}")
     assert resp.status_code == 200
 
     other_client.cookies.set(SESSION_COOKIE, victim_cookie)
     resp = other_client.get("/api/auth/me")
     assert resp.status_code == 401
+
+
+def test_force_logout_not_found(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.delete("/api/admin/sessions/nonexistent_hash")
+    assert resp.status_code == 404
 
 
 # ── ACE-Step reinitialize ────────────────────────────────────────────
@@ -320,7 +333,7 @@ def test_reinitialize_acestep_error_response(client: TestClient) -> None:
         resp = client.post("/api/admin/acestep/reinitialize")
 
     assert resp.status_code == 502
-    assert "ACE-Step error" in resp.json()["detail"]
+    assert resp.json()["detail"] == "ACE-Step returned an error"
 
 
 def test_reinitialize_acestep_connection_failure(client: TestClient) -> None:
