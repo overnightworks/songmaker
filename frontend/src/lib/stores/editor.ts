@@ -123,8 +123,8 @@ export function loadSongData(s: SongItem): void {
 	editBpm.set(s.bpm);
 	editDuration.set(s.duration);
 	editKey.set(s.key);
-	editGenParams.set(s.generation_params);
-	setSavedState(s.lyrics, s.prompt, s.bpm, s.duration, s.key, s.generation_params);
+	editGenParams.set(s.generation_params ?? null);
+	setSavedState(s.lyrics, s.prompt, s.bpm, s.duration, s.key, s.generation_params ?? null);
 	loadVersions(s.id);
 }
 

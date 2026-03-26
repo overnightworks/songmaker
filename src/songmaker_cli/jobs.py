@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine import AceStepClient
 from acestep_engine.models import AceStepConfig
+from songmaker_cli.api_models import StoredGenerationParams
 from songmaker_cli.config import build_ace_config, load_generation_defaults
 from songmaker_cli.db.queries import (
     create_generation,
@@ -183,18 +184,18 @@ def run_generation_job(
             )
 
             mp3_rel = f"{ctx.meta.album}/{result.mp3_path.name}"
-            gen_params = {
-                "acestep_model": ctx.model_name,
-                "bpm": ctx.ace_config.bpm,
-                "duration": ctx.ace_config.duration,
-                "key": ctx.meta.generation_params.get("key", ""),
-                "guidance_scale": ctx.ace_config.guidance_scale,
-                "inference_steps": ctx.ace_config.inference_steps,
-                "shift": ctx.ace_config.shift,
-                "lm_temperature": ctx.ace_config.lm_temperature,
-                "infer_method": ctx.ace_config.infer_method,
-                "think_mode": ctx.ace_config.think_mode,
-            }
+            gen_params = StoredGenerationParams(
+                acestep_model=ctx.model_name,
+                bpm=ctx.ace_config.bpm,
+                duration=ctx.ace_config.duration,
+                key=ctx.meta.generation_params.get("key", ""),
+                guidance_scale=ctx.ace_config.guidance_scale,
+                inference_steps=ctx.ace_config.inference_steps,
+                shift=ctx.ace_config.shift,
+                lm_temperature=ctx.ace_config.lm_temperature,
+                infer_method=ctx.ace_config.infer_method,
+                think_mode=ctx.ace_config.think_mode,
+            ).model_dump(exclude_none=True)
 
             with db_factory() as session:
                 create_generation(

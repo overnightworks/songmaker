@@ -14,7 +14,9 @@
 		"format": "prettier --write .",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:coverage": "vitest run --coverage"
+		"test:coverage": "vitest run --coverage",
+		"generate:types": "cd .. && python scripts/generate_types.py",
+		"check:types-sync": "cd .. && python scripts/generate_types.py --check"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

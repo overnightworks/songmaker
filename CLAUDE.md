@@ -47,7 +47,7 @@ alembic upgrade head
 
 | Adding a... | Files to touch | Exemplar |
 |---|---|---|
-| API endpoint | `api_models.py` → `db/queries/{domain}.py` → `{domain}_api.py` → `types.ts` | `album_api.py` |
+| API endpoint | `api_models.py` → `db/queries/{domain}.py` → `{domain}_api.py` → run `python scripts/generate_types.py` | `album_api.py` |
 | Scorer | `scoring/{name}.py` → `scoring/models.py` → `pipeline.py` count → `api_models.py` names | `scoring/silence_detection.py` |
 | DB model | `db/models.py` → `db/queries/{domain}.py` → Alembic migration | `db/models.py:Song` |
 | Frontend component | `lib/components/` → `lib/stores/` if stateful → `lib/api/client.ts` if new API | `SongList.svelte` |
@@ -69,13 +69,12 @@ These are conventions that aren't obvious from reading a single file:
 
 1. **Database is source of truth** — all data in SQLite, not files
 2. **One code path** — CLI and web UI use the same REST API (exception: `reset-password` and `list-users` are local DB escape hatches)
-3. **Pydantic models define the API contract** — `api_models.py` ↔ `types.ts`
+3. **Pydantic models define the API contract** — `api_models.py` → `types.ts` (generated via `python scripts/generate_types.py`)
 4. **Never commit secrets** — `.server.env` is gitignored
 5. **Commit messages**: conventional commits (`feat:`, `fix:`, `refactor:`, `test:`)
 
 ## Known Technical Debt
 
-- **Global mutable state**: 7 module-level singletons with `reset_*()` for testing. Blocks parallel tests. Future fix: `AppContext` with DI.
 - **Dual schema management**: `create_all()` at startup + Alembic migrations must stay in sync manually.
 - **`main.py` escape hatches**: `reset-password` and `list-users` bypass the API. Intentional for emergency recovery.
 

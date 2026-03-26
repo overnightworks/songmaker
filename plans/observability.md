@@ -2,52 +2,132 @@
 
 ## Problem
 
-Currently text logs only. No way to know queue depth, job duration, error rates, or VRAM usage without grepping log files. No structured logging for parsing by log aggregators. No metrics endpoint for dashboards or alerts.
+All logging is free-text `log.info("ACCESS %s %s %s %d (%.0fms)", ...)`. No structured fields, no metrics, no health endpoint. With multiple users, you need to answer "which user's job failed?", "how deep is the queue?", "is ACE-Step healthy?" — and grep won't cut it.
 
-For a single-user personal project this is acceptable. This plan is for when the system serves multiple users or needs operational visibility.
+## Phases
 
-## Design
+### Phase 1: Structured Logging (structlog)
 
-### Phase 1: Structured logging
+Drop-in `structlog` with JSON output in production, human-readable in dev. Zero changes to existing `log.info(...)` call sites — structlog wraps stdlib logging transparently.
 
-Replace plain text log messages with structured JSON logging using `structlog` or Python's built-in `logging` with a JSON formatter.
+**Why structlog over stdlib JSON formatter:**
+- Processors pipeline (add user_id, request_id, job_id automatically)
+- Context binding via contextvars (persists across calls within a request/job)
+- Dev mode: colored human-readable output. Prod mode: JSON lines.
+
+**Implementation:**
+
+1. Add `structlog>=24.0` to `pyproject.toml`
+2. New file `songmaker_cli/logging_config.py` (~40 lines):
 
 ```python
-log.info("job_completed", job_id=job_id, duration_s=elapsed, job_type="generate")
+import logging
+import os
+import structlog
+
+def configure_logging() -> None:
+    json_mode = os.environ.get("LOG_FORMAT", "text") == "json"
+
+    shared_processors = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
+
+    if json_mode:
+        renderer = structlog.processors.JSONRenderer()
+    else:
+        renderer = structlog.dev.ConsoleRenderer()
+
+    structlog.configure(
+        processors=[
+            *shared_processors,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+    )
+
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processors=[*shared_processors, renderer],
+    )
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
 ```
 
-Output:
+3. Bind context in middleware:
+
+```python
+# AccessLogMiddleware — clear and bind per-request context
+structlog.contextvars.clear_contextvars()
+structlog.contextvars.bind_contextvars(ip=ip, method=request.method, path=request.url.path)
+
+# get_current_user — after auth resolves
+structlog.contextvars.bind_contextvars(user_id=user.id)
+```
+
+4. Bind context in job runners:
+
+```python
+# jobs.py run_generation_job / run_scoring_job
+structlog.contextvars.bind_contextvars(job_id=job_id, job_type="generate", song_id=song_id)
+```
+
+5. Call `configure_logging()` in `server.py:run_server()` before `create_app()`.
+
+**Output examples:**
+
+Dev (`LOG_FORMAT=text`, default):
+```
+2026-03-26 14:32:01 [info] ACCESS POST /api/songs/abc/generate 200 (45ms)  user_id=usr_123
+```
+
+Prod (`LOG_FORMAT=json`):
 ```json
-{"event": "job_completed", "job_id": "abc123", "duration_s": 45.2, "job_type": "generate", "timestamp": "..."}
+{"event": "ACCESS", "ip": "192.168.1.5", "method": "POST", "path": "/api/songs/abc/generate", "status": 200, "duration_ms": 45, "user_id": "usr_123", "level": "info", "timestamp": "2026-03-26T14:32:01Z"}
 ```
 
-Controlled by env var `LOG_FORMAT=json` (default: plain text for development).
+**Files to change:**
+- New: `songmaker_cli/logging_config.py` (~40 lines)
+- `server.py` — call `configure_logging()`, update AccessLogMiddleware to bind contextvars
+- `middleware.py` — bind `user_id` after auth
+- `jobs.py` — bind `job_id`, `job_type` at job start
+- `pyproject.toml` — add `structlog` dependency
 
-Files: `server.py` (configure formatter), all modules using `log.*` (add structured fields).
+**Files NOT changed:** every module calling `log.info(...)` — stdlib integration handles them.
 
-### Phase 2: `/metrics` endpoint
+**Convention:** stick with `logging.getLogger(__name__)`, not `structlog.get_logger()`.
 
-Expose key operational metrics at `/metrics` (no auth, rate-limited by IP):
+### Phase 2: Metrics Endpoint
+
+Expose `/metrics` (no auth, IP rate-limited) with operational data:
 
 | Metric | Type | Source |
 |--------|------|--------|
-| `songmaker_jobs_total` | counter | `jobs.py` (by type and status) |
-| `songmaker_jobs_active` | gauge | DB query |
-| `songmaker_job_duration_seconds` | histogram | `jobs.py` (completed_at - started_at) |
-| `songmaker_queue_depth` | gauge | `gpu_queue._queue.qsize()` |
-| `songmaker_gpu_vram_mb` | gauge | `torch.cuda.memory_allocated()` |
-| `songmaker_http_requests_total` | counter | `AccessLogMiddleware` |
-| `songmaker_http_request_duration_seconds` | histogram | `AccessLogMiddleware` |
+| `jobs_total` | counter | DB query (by type and status) |
+| `jobs_active` | gauge | DB query |
+| `job_duration_seconds` | summary | `completed_at - started_at` |
+| `queue_depth` | gauge | `gpu_queue._queue.qsize()` |
+| `gpu_vram_mb` | gauge | `torch.cuda.memory_allocated()` |
+| `http_requests_total` | counter | AccessLogMiddleware |
+| `http_request_duration_seconds` | summary | AccessLogMiddleware |
 
-Implementation options:
-- **Lightweight**: Custom `/metrics` endpoint returning JSON (no dependencies)
-- **Prometheus**: `prometheus-fastapi-instrumentator` + custom metrics via `prometheus_client`
+Lightweight JSON endpoint — no Prometheus dependency. Add Prometheus later if needed.
 
-For this project, the lightweight JSON approach is sufficient. Add Prometheus later if needed.
+**Files to change:**
+- `server.py` — new `/metrics` endpoint
+- `gpu_queue.py` — expose `queue_depth` property
+- Possibly: in-memory counters in middleware for request counts/durations
 
-### Phase 3: Health endpoint
+### Phase 3: Health Endpoint
 
-`/health` endpoint (no auth) returning:
+`/health` (no auth) for liveness/readiness probes:
 
 ```json
 {
@@ -60,16 +140,27 @@ For this project, the lightweight JSON approach is sufficient. Add Prometheus la
 }
 ```
 
-Useful for container orchestration liveness/readiness probes.
+**Files to change:**
+- `server.py` — new `/health` endpoint
+- `gpu_queue.py` — expose `is_running` and ACE-Step status
 
-## Files to change
+## Effort
 
-| Phase | Files | Effort |
-|-------|-------|--------|
-| 1 | `server.py`, new `logging_config.py` | Small |
-| 2 | `server.py` (new endpoint), `gpu_queue.py`, `jobs.py` | Medium |
-| 3 | `server.py` (new endpoint), `gpu_queue.py` | Small |
+| Phase | Effort | Independently shippable? |
+|-------|--------|--------------------------|
+| 1 — Structured logging | Small (~2 hours) | Yes |
+| 2 — Metrics endpoint | Medium (~3 hours) | Yes |
+| 3 — Health endpoint | Small (~1 hour) | Yes |
 
-## Scope
+Phase 1 is the highest ROI. Phases 2+3 matter for deployment and multi-user monitoring.
 
-Medium overall. Each phase is independently shippable. Phase 1 is the highest ROI.
+## Test Changes
+
+- Phase 1: none required (structlog wraps stdlib transparently). Optional: verify JSON output keys.
+- Phase 2: test `/metrics` returns expected JSON shape.
+- Phase 3: test `/health` returns expected fields and status codes.
+
+## Risks
+
+- structlog adds ~1ms overhead per log call (negligible).
+- Metrics endpoint with DB queries on every hit — cache results for 5-10s to avoid load.

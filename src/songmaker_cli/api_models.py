@@ -56,6 +56,22 @@ class AlbumResponse(BaseModel):
 # ── Generation ──────────────────────────────────────────────────────
 
 
+class StoredGenerationParams(BaseModel):
+    """Shape of the generation_params JSON stored on each Generation record."""
+
+    seed: int | None = None
+    acestep_model: str | None = None
+    bpm: int | None = None
+    duration: int | None = None
+    key: str | None = None
+    guidance_scale: float | None = None
+    inference_steps: int | None = None
+    shift: float | None = None
+    think_mode: str | None = None
+    lm_temperature: float | None = None
+    infer_method: str | None = None
+
+
 class GenerationResponse(BaseModel):
     id: str
     song_id: str
@@ -485,7 +501,7 @@ class UserResponse(BaseModel):
 class AuthMeResponse(BaseModel):
     id: str
     username: str
-    role: str
+    role: Literal["admin", "user"]
 
 
 class SetupRequiredResponse(BaseModel):

@@ -1,20 +1,36 @@
-/** API response types — match Python DB models.
+/**
+ * Auto-generated from api_models.py and scoring/models.py.
+ * Do NOT edit manually — run: python scripts/generate_types.py
  *
  * Hierarchy: Song → Version (content) → Generation (MP3 output)
  */
 
 export interface GenerationParams {
-	seed?: number;
-	acestep_model?: string;
-	bpm?: number;
-	duration?: number;
-	key?: string;
-	guidance_scale?: number;
-	inference_steps?: number;
-	shift?: number;
-	think_mode?: string;
-	lm_temperature?: number;
-	infer_method?: string;
+	seed?: number | null;
+	acestep_model?: string | null;
+	bpm?: number | null;
+	duration?: number | null;
+	key?: string | null;
+	guidance_scale?: number | null;
+	inference_steps?: number | null;
+	shift?: number | null;
+	think_mode?: string | null;
+	lm_temperature?: number | null;
+	infer_method?: string | null;
+}
+
+export interface VersionGenerationParams {
+	inference_steps?: number | null;
+	guidance_scale?: number | null;
+	shift?: number | null;
+	think_mode?: string | null;
+	lm_temperature?: number | null;
+	lm_top_k?: number | null;
+	lm_top_p?: number | null;
+	lm_cfg_scale?: number | null;
+	lm_negative_prompt?: string | null;
+	infer_method?: string | null;
+	batch_size?: number | null;
 }
 
 export interface TrackScores {
@@ -38,7 +54,6 @@ export interface TrackScores {
 	user_notes?: string;
 }
 
-/** A generated MP3 from a version. */
 export interface GenerationItem {
 	id: string;
 	song_id: string;
@@ -56,22 +71,6 @@ export interface GenerationItem {
 	created_at: string | null;
 }
 
-/** ACE-Step generation settings stored per version (null = use global default). */
-export interface VersionGenerationParams {
-	inference_steps?: number;
-	guidance_scale?: number;
-	shift?: number;
-	think_mode?: string;
-	lm_temperature?: number;
-	lm_top_k?: number;
-	lm_top_p?: number;
-	lm_cfg_scale?: number;
-	lm_negative_prompt?: string;
-	infer_method?: string;
-	batch_size?: number;
-}
-
-/** A content snapshot — lyrics, prompt, params. */
 export interface VersionItem {
 	id: string;
 	version_number: number;
@@ -84,7 +83,6 @@ export interface VersionItem {
 	created_at: string | null;
 }
 
-/** A song — list endpoint omits generations, detail endpoint includes them. */
 export interface SongItem {
 	id: string;
 	title: string;
@@ -98,13 +96,13 @@ export interface SongItem {
 	bpm: number;
 	duration: number;
 	key: string;
-	generation_params: VersionGenerationParams | null;
+	generation_params?: VersionGenerationParams | null;
 	version_count: number;
 	generation_count: number;
-	best_scores: TrackScores | null;
-	best_rating: number | null;
+	best_scores?: TrackScores | null;
+	best_rating?: number | null;
+	created_at?: string | null;
 	generations: GenerationItem[];
-	created_at: string | null;
 }
 
 export interface AlbumItem {
@@ -115,6 +113,17 @@ export interface AlbumItem {
 	year: string;
 	colors: Record<string, string>;
 	song_count: number;
+}
+
+export interface JobItem {
+	id: string;
+	type: string;
+	status: string;
+	progress: number;
+	error?: string | null;
+	error_type?: string | null;
+	started_at?: string | null;
+	completed_at?: string | null;
 }
 
 export interface Capabilities {
@@ -139,15 +148,15 @@ export interface UserItem {
 	username: string;
 	role: string;
 	is_active: boolean;
-	created_at: string | null;
+	created_at?: string | null;
 }
 
 export interface SessionItem {
 	id: string;
 	user_id: string;
 	username: string;
-	created_at: string | null;
-	expires_at: string | null;
+	created_at?: string | null;
+	expires_at?: string | null;
 	ip_address: string;
 	user_agent: string;
 }
@@ -167,5 +176,15 @@ export interface LoginAttemptItem {
 	ip_address: string;
 	username: string;
 	success: boolean;
-	attempted_at: string | null;
+	attempted_at?: string | null;
+}
+
+export interface AuditLogItem {
+	id: string;
+	user_id: string | null;
+	action: string;
+	resource_type: string;
+	resource_id: string;
+	detail: string;
+	created_at?: string | null;
 }
