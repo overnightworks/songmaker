@@ -1,5 +1,7 @@
 # Generation Presets
 
+**Status**: Done
+
 ## Problem
 
 Generation settings live in three places with no single source of truth:

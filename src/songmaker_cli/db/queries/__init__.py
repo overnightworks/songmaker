@@ -32,6 +32,16 @@ from songmaker_cli.db.queries.jobs import (
     recover_stale_jobs_by_age,
     update_job_status,
 )
+from songmaker_cli.db.queries.settings import (
+    create_preset,
+    delete_preset,
+    get_default_preset,
+    get_preset,
+    list_presets,
+    name_exists,
+    set_default_preset,
+    update_preset,
+)
 from songmaker_cli.db.queries.songs import (
     UNSET,
     _delete_generation_files,
@@ -58,6 +68,14 @@ __all__ = [
     "LOGIN_ATTEMPT_RETENTION_DAYS",
     "STALE_JOB_THRESHOLD_SECONDS",
     "UNSET",
+    "create_preset",
+    "delete_preset",
+    "get_default_preset",
+    "get_preset",
+    "list_presets",
+    "name_exists",
+    "set_default_preset",
+    "update_preset",
     "_delete_generation_files",
     "cleanup_album",
     "cleanup_old_login_attempts",

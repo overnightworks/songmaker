@@ -152,6 +152,16 @@ export interface SessionItem {
 	user_agent: string;
 }
 
+export interface PresetItem {
+	id: string;
+	name: string;
+	model_mode: string;
+	params: VersionGenerationParams;
+	is_default: boolean;
+	created_at: string;
+	updated_at: string;
+}
+
 export interface LoginAttemptItem {
 	id: string;
 	ip_address: string;

@@ -3,6 +3,7 @@ import type {
 	AuthUser,
 	Capabilities,
 	LoginAttemptItem,
+	PresetItem,
 	SessionItem,
 	SetupRequired,
 	SongItem,
@@ -193,6 +194,46 @@ export async function updateGenerationDefaults(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(data)
 	});
+}
+
+export async function fetchBuiltinDefaults(): Promise<Record<string, VersionGenerationParams>> {
+	return apiFetch<Record<string, VersionGenerationParams>>('/api/settings/generation-builtins');
+}
+
+export async function fetchPresets(): Promise<PresetItem[]> {
+	return apiFetch<PresetItem[]>('/api/settings/presets');
+}
+
+export async function createPreset(
+	name: string,
+	model_mode: string,
+	params: VersionGenerationParams,
+	is_default: boolean = false
+): Promise<PresetItem> {
+	return apiFetch<PresetItem>('/api/settings/presets', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ name, model_mode, params, is_default })
+	});
+}
+
+export async function updatePreset(
+	presetId: string,
+	data: { name?: string; params?: VersionGenerationParams; is_default?: boolean }
+): Promise<PresetItem> {
+	return apiFetch<PresetItem>(`/api/settings/presets/${presetId}`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(data)
+	});
+}
+
+export async function deletePresetApi(presetId: string): Promise<void> {
+	await apiFetch(`/api/settings/presets/${presetId}`, { method: 'DELETE' });
+}
+
+export async function setPresetDefault(presetId: string): Promise<PresetItem> {
+	return apiFetch<PresetItem>(`/api/settings/presets/${presetId}/set-default`, { method: 'POST' });
 }
 
 // ── Auth ──────────────────────────────────────────────────────────

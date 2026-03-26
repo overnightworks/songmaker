@@ -95,7 +95,7 @@ def api_generate_song(
 
     get_gpu_queue().submit(
         job.id, "generate", run_generation_job,
-        args=(job.id, song_id, version.id, req.count),
+        args=(job.id, song_id, version.id, req.count, user.id),
     )
 
     return JobResponse.from_orm(job)

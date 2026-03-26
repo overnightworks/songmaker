@@ -1,4 +1,4 @@
-"""Chat, capabilities, and generation defaults API endpoints."""
+"""Chat and capabilities API endpoints."""
 
 from __future__ import annotations
 
@@ -13,46 +13,20 @@ from songmaker_cli.api_models import (
     CapabilitiesResponse,
     ChatRequest,
     ChatResponse,
-    GenerationDefaultsRequest,
 )
 from songmaker_cli.claude.provider import (
     UnavailableError,
     call_claude,
     is_available,
 )
-from songmaker_cli.config import load_generation_defaults, save_generation_defaults
 from songmaker_cli.db.engine import get_db_session
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user, require_admin
+from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
 
 _get_session = get_db_session
-
-
-# ── Generation Defaults ──────────────────────────────────────────────
-
-
-@router.get("/settings/generation-defaults")
-def api_get_generation_defaults(
-    _admin: AuthenticatedUser = Depends(require_admin),
-) -> dict:
-    return load_generation_defaults()
-
-
-@router.put("/settings/generation-defaults")
-def api_set_generation_defaults(
-    req: GenerationDefaultsRequest,
-    _admin: AuthenticatedUser = Depends(require_admin),
-) -> dict:
-    data: dict = {}
-    if req.turbo is not None:
-        data["turbo"] = req.turbo.to_dict()
-    if req.sft is not None:
-        data["sft"] = req.sft.to_dict()
-    save_generation_defaults(data)
-    return data
 
 
 # ── Capabilities ─────────────────────────────────────────────────────

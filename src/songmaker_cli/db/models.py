@@ -155,6 +155,21 @@ class Rating(Base):
     generation: Mapped[Generation] = relationship(back_populates="rating")
 
 
+class GenerationPreset(Base):
+    __tablename__ = "generation_presets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(100))
+    model_mode: Mapped[str] = mapped_column(String(10))
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
 class Job(Base):
     __tablename__ = "jobs"
 

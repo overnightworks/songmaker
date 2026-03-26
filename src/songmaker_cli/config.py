@@ -122,15 +122,48 @@ def save_generation_defaults(data: dict) -> None:
 _FIELD_MAPPING = {"language": "vocal_language"}
 
 
-_SFT_DEFAULTS = {
+_SFT_DEFAULTS: dict[str, object] = {
     "inference_steps": 50,
     "guidance_scale": 0.0,
 }
 
-_TURBO_DEFAULTS = {
+_TURBO_DEFAULTS: dict[str, object] = {
     "inference_steps": 8,
     "guidance_scale": 0.0,
 }
+
+_BUILTIN_DEFAULTS: dict[str, dict[str, object]] = {
+    "turbo": {
+        "inference_steps": 8,
+        "guidance_scale": 0.0,
+        "shift": 3.0,
+        "think_mode": "deep",
+        "lm_temperature": 0.85,
+        "lm_top_k": 0,
+        "lm_top_p": 0.9,
+        "lm_cfg_scale": 2.0,
+        "lm_negative_prompt": "",
+        "infer_method": "ode",
+        "batch_size": 1,
+    },
+    "sft": {
+        "inference_steps": 50,
+        "guidance_scale": 0.0,
+        "shift": 3.0,
+        "think_mode": "deep",
+        "lm_temperature": 0.85,
+        "lm_top_k": 0,
+        "lm_top_p": 0.9,
+        "lm_cfg_scale": 2.0,
+        "lm_negative_prompt": "",
+        "infer_method": "ode",
+        "batch_size": 1,
+    },
+}
+
+
+def get_builtin_defaults() -> dict[str, dict[str, object]]:
+    return _BUILTIN_DEFAULTS
 
 
 def build_ace_config(
@@ -138,30 +171,40 @@ def build_ace_config(
     cli_overrides: dict | None = None,
     model_name: str | None = None,
     global_defaults: dict | None = None,
+    preset_params: dict | None = None,
 ) -> AceStepConfig:
     """Build an AceStepConfig from SongMeta + optional CLI overrides.
 
-    Priority: CLI overrides > frontmatter > global defaults > model defaults.
-    When using SFT model, applies SFT-appropriate defaults (50 steps, guidance 5.5)
-    unless the frontmatter or CLI explicitly sets them.
+    Priority: CLI overrides > frontmatter > preset params > global defaults > model defaults.
     """
     is_sft = model_name and "sft" in model_name
     model_defaults = _SFT_DEFAULTS if is_sft else _TURBO_DEFAULTS
 
     model_key = "sft" if is_sft else "turbo"
     user_defaults = (global_defaults or {}).get(model_key, {})
+    active_preset = preset_params or {}
     log.debug(
-        "build_ace_config: model=%s (%s), user_defaults=%s, song_params=%s",
-        model_name, model_key, user_defaults or "none", meta.generation_params or "none",
+        "build_ace_config: model=%s (%s), preset=%s, user_defaults=%s, song_params=%s",
+        model_name, model_key,
+        active_preset or "none", user_defaults or "none",
+        meta.generation_params or "none",
     )
 
     fields: dict = {"prompt": meta.prompt, "lyrics": meta.lyrics}
 
     for key, value in model_defaults.items():
-        if key not in user_defaults and key not in meta.generation_params:
+        overridden = (
+            key in active_preset or key in user_defaults or key in meta.generation_params
+        )
+        if not overridden:
             fields[key] = value
 
     for key, value in user_defaults.items():
+        if key not in active_preset and key not in meta.generation_params:
+            mapped = _FIELD_MAPPING.get(key, key)
+            fields[mapped] = value
+
+    for key, value in active_preset.items():
         if key not in meta.generation_params:
             mapped = _FIELD_MAPPING.get(key, key)
             fields[mapped] = value

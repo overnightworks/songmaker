@@ -12,6 +12,7 @@ from songmaker_cli.config import build_ace_config, get_output_dir, load_generati
 from songmaker_cli.db.engine import get_session_factory
 from songmaker_cli.db.queries import (
     create_generation,
+    get_default_preset,
     get_generation,
     get_song,
     save_scores,
@@ -102,8 +103,19 @@ def _load_song_meta(song_id: str, version_id: str) -> tuple[SongMeta, AlbumMeta]
     return meta, album_meta
 
 
+def _load_preset_params(user_id: str | None, model_name: str | None) -> dict | None:
+    if not user_id:
+        return None
+    is_sft = model_name and "sft" in model_name
+    model_mode = "sft" if is_sft else "turbo"
+    factory = get_session_factory()
+    with factory() as session:
+        preset = get_default_preset(session, user_id, model_mode)
+        return dict(preset.params) if preset else None
+
+
 def _build_generation_context(
-    song_id: str, version_id: str,
+    song_id: str, version_id: str, user_id: str | None = None,
 ) -> GenerationContext:
     """Load song/version from DB and build all config needed for generation."""
     meta, album_meta = _load_song_meta(song_id, version_id)
@@ -116,8 +128,12 @@ def _build_generation_context(
     model_name = server_info.model if server_info else None
     log.debug("ACE-Step model: %s", model_name)
 
+    preset_params = _load_preset_params(user_id, model_name)
     ace_config = build_ace_config(
-        meta, model_name=model_name, global_defaults=load_generation_defaults(),
+        meta,
+        model_name=model_name,
+        global_defaults=load_generation_defaults(),
+        preset_params=preset_params,
     )
 
     return GenerationContext(
@@ -135,6 +151,7 @@ def _build_generation_context(
 
 def run_generation_job(
     job_id: str, song_id: str, version_id: str, count: int,
+    user_id: str | None = None,
 ) -> None:
     """Run generation in a background thread, updating DB status."""
     factory = get_session_factory()
@@ -144,7 +161,7 @@ def run_generation_job(
         _update_job(factory, job_id, "running")
 
         try:
-            ctx = _build_generation_context(song_id, version_id)
+            ctx = _build_generation_context(song_id, version_id, user_id=user_id)
         except GenerationSetupError as exc:
             _update_job(factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return
