@@ -6,6 +6,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import Job
@@ -122,3 +123,36 @@ def recover_stale_jobs_by_age(
     if stale:
         log.info("Recovered %d stale jobs (threshold=%ds)", len(stale), threshold_seconds)
     return len(stale)
+
+
+def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]:
+    """Return {type: {status: count}} for all jobs."""
+    rows = (
+        session.query(Job.type, Job.status, func.count())
+        .group_by(Job.type, Job.status)
+        .all()
+    )
+    result: dict[str, dict[str, int]] = {}
+    for job_type, status, count in rows:
+        result.setdefault(job_type, {})[status] = count
+    return result
+
+
+def job_duration_stats(session: Session) -> dict[str, float | None]:
+    """Return avg/min/max duration in seconds for completed jobs."""
+    duration_expr = func.julianday(Job.completed_at) - func.julianday(Job.started_at)
+    row = (
+        session.query(
+            func.avg(duration_expr),
+            func.min(duration_expr),
+            func.max(duration_expr),
+        )
+        .filter(Job.status == "completed", Job.completed_at.isnot(None))
+        .one()
+    )
+    days_to_seconds = 86400.0
+    return {
+        "avg": round(row[0] * days_to_seconds, 1) if row[0] is not None else None,
+        "min": round(row[1] * days_to_seconds, 1) if row[1] is not None else None,
+        "max": round(row[2] * days_to_seconds, 1) if row[2] is not None else None,
+    }

@@ -983,3 +983,110 @@ def test_health_degraded_when_queue_stopped(tmp_path: Path) -> None:
         resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "degraded"
+
+
+# ── HttpMetrics ──────────────────────────────────────────────────
+
+
+class TestHttpMetrics:
+    def test_empty_snapshot(self) -> None:
+        from songmaker_cli.server import HttpMetrics
+        m = HttpMetrics()
+        snap = m.snapshot()
+        assert snap["http_requests_count"] == 0
+        assert snap["http_request_duration_avg_ms"] == 0.0
+        assert snap["http_requests_total"] == {}
+
+    def test_record_and_snapshot(self) -> None:
+        from songmaker_cli.server import HttpMetrics
+        m = HttpMetrics()
+        m.record("GET", 200, 10.0)
+        m.record("GET", 200, 20.0)
+        m.record("POST", 201, 30.0)
+        snap = m.snapshot()
+        assert snap["http_requests_count"] == 3
+        assert snap["http_request_duration_avg_ms"] == 20.0
+        assert snap["http_requests_total"]["GET 200"] == 2
+        assert snap["http_requests_total"]["POST 201"] == 1
+
+
+# ── /metrics endpoint ────────────────────────────────────────────
+
+
+def _make_metrics_client(tmp_path: Path) -> TestClient:
+    output_dir = tmp_path / "_output"
+    output_dir.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = tmp_path / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        admin = User(
+            username="metrics_admin", password_hash=hash_password("admin12345"), role="admin",
+        )
+        session.add(admin)
+        session.commit()
+
+    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
+    return TestClient(create_app(output_dir, tmp_path, ctx=ctx))
+
+
+def test_metrics_no_auth_required(tmp_path: Path) -> None:
+    client = _make_metrics_client(tmp_path)
+    with client:
+        resp = client.get("/metrics")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "jobs_total" in data
+    assert "jobs_active" in data
+    assert "job_duration_seconds" in data
+    assert "queue_depth" in data
+    assert "gpu_vram_mb" in data
+    assert "http_requests_total" in data
+    assert "http_requests_count" in data
+    assert "http_request_duration_avg_ms" in data
+
+
+def test_metrics_reflects_http_traffic(tmp_path: Path) -> None:
+    client = _make_metrics_client(tmp_path)
+    with client:
+        client.get("/health")
+        client.get("/health")
+        resp = client.get("/metrics")
+    data = resp.json()
+    assert data["http_requests_count"] >= 2
+
+
+def test_metrics_with_jobs(tmp_path: Path) -> None:
+    from songmaker_cli.db.models import Job
+
+    output_dir = tmp_path / "_output"
+    output_dir.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = tmp_path / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+
+    factory = init_db(output_dir / "songmaker.db")
+    now = datetime.now(timezone.utc)
+    with factory() as session:
+        admin = User(
+            username="metrics_admin2", password_hash=hash_password("admin12345"), role="admin",
+        )
+        session.add(admin)
+        job = Job(type="generate", status="completed", started_at=now, completed_at=now)
+        session.add(job)
+        session.commit()
+
+    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
+    app = create_app(output_dir, tmp_path, ctx=ctx)
+    client = TestClient(app)
+
+    with client:
+        resp = client.get("/metrics")
+    data = resp.json()
+    assert data["jobs_total"]["generate"]["completed"] == 1
+    assert data["jobs_active"] == 0
+    assert data["job_duration_seconds"]["avg"] is not None

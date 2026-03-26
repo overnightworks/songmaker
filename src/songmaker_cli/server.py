@@ -120,6 +120,38 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class HttpMetrics:
+    """Thread-safe in-memory HTTP request counters for /metrics."""
+
+    def __init__(self) -> None:
+        import threading
+        self._lock = threading.Lock()
+        self._request_counts: dict[tuple[str, int], int] = {}
+        self._total_duration_ms: float = 0.0
+        self._total_requests: int = 0
+
+    def record(self, method: str, status_code: int, duration_ms: float) -> None:
+        key = (method, status_code)
+        with self._lock:
+            self._request_counts[key] = self._request_counts.get(key, 0) + 1
+            self._total_duration_ms += duration_ms
+            self._total_requests += 1
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            avg_ms = (
+                self._total_duration_ms / self._total_requests
+                if self._total_requests > 0 else 0.0
+            )
+            return {
+                "http_requests_total": dict(
+                    {f"{m} {s}": c for (m, s), c in sorted(self._request_counts.items())}
+                ),
+                "http_requests_count": self._total_requests,
+                "http_request_duration_avg_ms": round(avg_ms, 1),
+            }
+
+
 class AccessLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         import structlog
@@ -143,6 +175,11 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
             ip, request.method, request.url.path,
             response.status_code, duration_ms,
         )
+
+        http_metrics = getattr(request.app.state, "http_metrics", None)
+        if http_metrics:
+            http_metrics.record(request.method, response.status_code, duration_ms)
+
         return response
 
 
@@ -288,6 +325,16 @@ def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
     return frozenset(exact), patterns
 
 
+def _get_gpu_vram_mb() -> float | None:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return round(torch.cuda.memory_allocated() / 1024 / 1024, 1)
+    except ImportError:
+        pass
+    return None
+
+
 def _check_db(ctx: AppContext) -> bool:
     try:
         from sqlalchemy import text
@@ -296,6 +343,13 @@ def _check_db(ctx: AppContext) -> bool:
         return True
     except Exception:
         return False
+
+
+def _picked_filename(song) -> str | None:  # type: ignore[no-untyped-def]
+    picked = [g for g in song.generations if g.is_picked and not g.is_archived]
+    if picked:
+        return picked[0].mp3_path
+    return None
 
 
 @asynccontextmanager
@@ -350,6 +404,7 @@ def create_app(
         gpu_q.start()
 
     app.state.ctx = ctx
+    app.state.http_metrics = HttpMetrics()
 
     # Middleware execution order (Starlette LIFO — last added runs first):
     #   1. BodySizeLimitMiddleware  — reject oversized bodies before processing
@@ -405,6 +460,47 @@ def create_app(
 
     app.include_router(api_router)
 
+    _metrics_cache: dict[str, object] = {}
+    _metrics_cache_time: list[float] = [0.0]
+
+    @app.get("/metrics")
+    def metrics_endpoint(request: Request) -> JSONResponse:
+        import time
+
+        from songmaker_cli.constants import METRICS_CACHE_TTL_SECONDS
+
+        now = time.monotonic()
+        if now - _metrics_cache_time[0] < METRICS_CACHE_TTL_SECONDS and _metrics_cache:
+            return JSONResponse(_metrics_cache)
+
+        ctx: AppContext = request.app.state.ctx
+        http_metrics: HttpMetrics = request.app.state.http_metrics
+
+        from songmaker_cli.db.queries import job_counts_by_type_and_status, job_duration_stats
+        with ctx.db() as session:
+            jobs_by_type = job_counts_by_type_and_status(session)
+            duration = job_duration_stats(session)
+
+        gpu_vram_mb = _get_gpu_vram_mb()
+        queue_depth = ctx.gpu_queue.queue_depth if ctx.gpu_queue else 0
+
+        result: dict[str, object] = {
+            "jobs_total": jobs_by_type,
+            "jobs_active": sum(
+                counts.get("queued", 0) + counts.get("running", 0)
+                for counts in jobs_by_type.values()
+            ),
+            "job_duration_seconds": duration,
+            "queue_depth": queue_depth,
+            "gpu_vram_mb": gpu_vram_mb,
+            **http_metrics.snapshot(),
+        }
+
+        _metrics_cache.clear()
+        _metrics_cache.update(result)
+        _metrics_cache_time[0] = now
+        return JSONResponse(result)
+
     @app.get("/health")
     def health_check(request: Request) -> JSONResponse:
         ctx: AppContext = request.app.state.ctx
@@ -456,6 +552,85 @@ def create_app(
 
         return FileResponse(audio_path, media_type="audio/mpeg")
 
+    from songmaker_cli.constants import SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS
+    from songmaker_cli.middleware import IpRateLimiter
+
+    shared_limiter = IpRateLimiter(SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS)
+
+    def _check_shared_rate_limit(request: Request) -> None:
+        from songmaker_cli.auth import get_client_ip
+        ctx: AppContext = request.app.state.ctx
+        direct_ip = request.client.host if request.client else "unknown"
+        ip = get_client_ip(
+            direct_ip,
+            request.headers.get("x-forwarded-for"),
+            ctx.trusted_proxies,
+        )
+        if not shared_limiter.is_allowed(ip):
+            raise HTTPException(
+                429, "Too many requests",
+                headers={"Retry-After": str(SHARED_RATE_WINDOW_SECONDS)},
+            )
+
+    @app.get("/shared/{slug}")
+    def get_shared_album(
+        slug: str,
+        request: Request,
+        db: Session = Depends(get_db_session),
+    ) -> JSONResponse:
+        _check_shared_rate_limit(request)
+        from songmaker_cli.db.queries import get_album_by_slug
+        album = get_album_by_slug(db, slug)
+        if not album:
+            raise HTTPException(404, "Not found")
+        songs = sorted(album.songs, key=lambda s: s.track_number)
+        base_url = str(request.base_url).rstrip("/")
+        return JSONResponse({
+            "title": album.title,
+            "artist": album.artist,
+            "subtitle": album.subtitle,
+            "year": album.year,
+            "songs": [
+                {
+                    "title": s.title,
+                    "track_number": s.track_number,
+                    "audio_url": (
+                        f"{base_url}/shared/{slug}/audio/{_picked_filename(s)}"
+                        if _picked_filename(s) else None
+                    ),
+                }
+                for s in songs
+            ],
+        })
+
+    @app.get("/shared/{slug}/audio/{filename:path}")
+    async def get_shared_audio(
+        slug: str,
+        filename: str,
+        request: Request,
+        db: Session = Depends(get_db_session),
+    ) -> FileResponse:
+        _check_shared_rate_limit(request)
+        from songmaker_cli.db.queries import get_album_by_slug
+        album = get_album_by_slug(db, slug)
+        if not album:
+            raise HTTPException(404, "Not found")
+
+        valid_filenames = {
+            _picked_filename(s)
+            for s in album.songs
+            if _picked_filename(s)
+        }
+        if filename not in valid_filenames:
+            raise HTTPException(404, "Not found")
+
+        audio_path = (output_dir / filename).resolve()
+        if not audio_path.is_relative_to(output_dir.resolve()):
+            raise HTTPException(403, "Path traversal denied")
+        if not audio_path.exists():
+            raise HTTPException(404, "Not found")
+        return FileResponse(audio_path, media_type="audio/mpeg")
+
     sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"
 
@@ -472,6 +647,7 @@ def create_app(
             not request.url.path.startswith("/api/")
             and not request.url.path.startswith("/audio/")
             and not request.url.path.startswith("/_app/")
+            and not request.url.path.startswith("/shared/")
             and sk_index.exists()
         ):
             return FileResponse(sk_index, media_type="text/html")

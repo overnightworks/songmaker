@@ -363,3 +363,70 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
         job = get_job(session, "j2")
         assert job.status == "failed"
         assert job.error == "Internal error during processing"
+
+
+# ── Job metrics queries ──────────────────────────────────────────
+
+
+def test_job_counts_by_type_and_status(db_factory) -> None:
+    from songmaker_cli.db.queries import job_counts_by_type_and_status
+
+    with db_factory() as session:
+        session.add(Job(type="generate", status="completed"))
+        session.add(Job(type="generate", status="completed"))
+        session.add(Job(type="generate", status="failed"))
+        session.add(Job(type="score", status="completed"))
+        session.commit()
+
+    with db_factory() as session:
+        counts = job_counts_by_type_and_status(session)
+    assert counts["generate"]["completed"] == 2
+    assert counts["generate"]["failed"] == 1
+    assert counts["score"]["completed"] == 1
+
+
+def test_job_counts_empty_db(db_factory) -> None:
+    from songmaker_cli.db.queries import job_counts_by_type_and_status
+
+    with db_factory() as session:
+        counts = job_counts_by_type_and_status(session)
+    assert counts == {}
+
+
+def test_job_duration_stats(db_factory) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from songmaker_cli.db.queries import job_duration_stats
+
+    now = datetime.now(timezone.utc)
+    with db_factory() as session:
+        j1 = Job(type="generate", status="completed")
+        j1.started_at = now - timedelta(seconds=10)
+        j1.completed_at = now
+        session.add(j1)
+        j2 = Job(type="generate", status="completed")
+        j2.started_at = now - timedelta(seconds=20)
+        j2.completed_at = now
+        session.add(j2)
+        session.commit()
+
+    with db_factory() as session:
+        stats = job_duration_stats(session)
+    assert stats["avg"] is not None
+    assert stats["min"] is not None
+    assert stats["max"] is not None
+    assert stats["min"] <= stats["avg"] <= stats["max"]
+
+
+def test_job_duration_stats_no_completed(db_factory) -> None:
+    from songmaker_cli.db.queries import job_duration_stats
+
+    with db_factory() as session:
+        session.add(Job(type="generate", status="running"))
+        session.commit()
+
+    with db_factory() as session:
+        stats = job_duration_stats(session)
+    assert stats["avg"] is None
+    assert stats["min"] is None
+    assert stats["max"] is None
