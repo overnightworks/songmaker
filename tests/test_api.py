@@ -815,6 +815,33 @@ def test_score_request_invalid_scorer_name(client: TestClient) -> None:
         ScoreRequest(scorers=["nonexistent_scorer"])
 
 
+def test_generation_params_invalid_infer_method_direct() -> None:
+    from pydantic import ValidationError
+
+    from songmaker_cli.api_models import GenerationParams
+
+    with pytest.raises(ValidationError, match="infer_method"):
+        GenerationParams(infer_method="euler")
+
+
+def test_generation_params_invalid_think_mode_direct() -> None:
+    from pydantic import ValidationError
+
+    from songmaker_cli.api_models import GenerationParams
+
+    with pytest.raises(ValidationError, match="think_mode"):
+        GenerationParams(think_mode="invalid")
+
+
+def test_score_request_invalid_scorer_direct() -> None:
+    from pydantic import ValidationError
+
+    from songmaker_cli.api_models import ScoreRequest
+
+    with pytest.raises(ValidationError, match="Unknown scorers"):
+        ScoreRequest(scorers=["fake_scorer"])
+
+
 def test_check_song_access_ownership_denied(tmp_path: Path) -> None:
     """Line 200: _check_song_access raises 404 when song belongs to another user's album."""
     from songmaker_cli.db.engine import get_session_factory
@@ -899,6 +926,12 @@ def test_unpick_generation_value_error(client: TestClient) -> None:
         resp = client.post("/api/generations/g1/unpick")
 
     assert resp.status_code == 404
+
+
+def test_rate_by_path_traversal_rejected(client: TestClient) -> None:
+    resp = client.post("/api/rate/album..name/01_thunder_v1", json={"rating": 50.0})
+    assert resp.status_code == 400
+    assert "Invalid path" in resp.json()["detail"]
 
 
 # ── Audit trail tests ────────────────────────────────────────────────

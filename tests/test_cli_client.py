@@ -326,3 +326,227 @@ def test_cli_login_connection_error() -> None:
     with patch("httpx.post", side_effect=httpx.ConnectError("refused")):
         with pytest.raises(ServerError, match="Cannot connect"):
             cli_login("http://localhost:8080", "admin", "pass")
+
+
+def test_cli_login_non_json_error() -> None:
+    from songmaker_cli.cli_client import cli_login
+
+    resp = MagicMock()
+    resp.is_success = False
+    resp.status_code = 500
+    resp.text = "Internal Server Error"
+    resp.headers = {"content-type": "text/plain"}
+
+    with patch("httpx.post", return_value=resp):
+        with pytest.raises(ServerError, match="Internal Server Error"):
+            cli_login("http://localhost:8080", "admin", "wrong")
+
+
+# ── _load_session / _save_session / _clear_session ────────────────
+
+
+def test_load_session_no_file(tmp_path) -> None:
+    from songmaker_cli.cli_client import _load_session
+
+    with patch("songmaker_cli.cli_client.SESSION_FILE", tmp_path / "nonexistent.json"):
+        result = _load_session("http://localhost:8080")
+    assert result == {}
+
+
+def test_load_session_valid_file(tmp_path) -> None:
+    import json
+
+    from songmaker_cli.cli_client import _load_session
+
+    sf = tmp_path / "session.json"
+    sf.write_text(json.dumps({"http://localhost:8080": {"session_id": "tok"}}))
+    with patch("songmaker_cli.cli_client.SESSION_FILE", sf):
+        result = _load_session("http://localhost:8080")
+    assert result == {"session_id": "tok"}
+
+
+def test_load_session_corrupt_file(tmp_path) -> None:
+    from songmaker_cli.cli_client import _load_session
+
+    sf = tmp_path / "session.json"
+    sf.write_text("not json{{{")
+    with patch("songmaker_cli.cli_client.SESSION_FILE", sf):
+        result = _load_session("http://localhost:8080")
+    assert result == {}
+
+
+def test_load_session_missing_server(tmp_path) -> None:
+    import json
+
+    from songmaker_cli.cli_client import _load_session
+
+    sf = tmp_path / "session.json"
+    sf.write_text(json.dumps({"http://other:9000": {"tok": "abc"}}))
+    with patch("songmaker_cli.cli_client.SESSION_FILE", sf):
+        result = _load_session("http://localhost:8080")
+    assert result == {}
+
+
+def test_save_session_creates_file(tmp_path) -> None:
+    import json
+
+    from songmaker_cli.cli_client import _save_session
+
+    sf = tmp_path / "session.json"
+    with (
+        patch("songmaker_cli.cli_client.SESSION_DIR", tmp_path),
+        patch("songmaker_cli.cli_client.SESSION_FILE", sf),
+    ):
+        _save_session("http://localhost:8080", {"session_id": "tok"})
+    data = json.loads(sf.read_text())
+    assert data["http://localhost:8080"]["session_id"] == "tok"
+
+
+def test_save_session_merges_with_existing(tmp_path) -> None:
+    import json
+
+    from songmaker_cli.cli_client import _save_session
+
+    sf = tmp_path / "session.json"
+    sf.write_text(json.dumps({"http://other:9000": {"tok": "abc"}}))
+    with (
+        patch("songmaker_cli.cli_client.SESSION_DIR", tmp_path),
+        patch("songmaker_cli.cli_client.SESSION_FILE", sf),
+    ):
+        _save_session("http://localhost:8080", {"session_id": "new"})
+    data = json.loads(sf.read_text())
+    assert data["http://other:9000"]["tok"] == "abc"
+    assert data["http://localhost:8080"]["session_id"] == "new"
+
+
+def test_save_session_handles_corrupt_existing(tmp_path) -> None:
+    import json
+
+    from songmaker_cli.cli_client import _save_session
+
+    sf = tmp_path / "session.json"
+    sf.write_text("not json{{{")
+    with (
+        patch("songmaker_cli.cli_client.SESSION_DIR", tmp_path),
+        patch("songmaker_cli.cli_client.SESSION_FILE", sf),
+    ):
+        _save_session("http://localhost:8080", {"session_id": "tok"})
+    data = json.loads(sf.read_text())
+    assert data["http://localhost:8080"]["session_id"] == "tok"
+
+
+def test_clear_session_removes_server(tmp_path) -> None:
+    import json
+
+    from songmaker_cli.cli_client import _clear_session
+
+    sf = tmp_path / "session.json"
+    sf.write_text(json.dumps({
+        "http://localhost:8080": {"tok": "a"},
+        "http://other:9000": {"tok": "b"},
+    }))
+    with patch("songmaker_cli.cli_client.SESSION_FILE", sf):
+        _clear_session("http://localhost:8080")
+    data = json.loads(sf.read_text())
+    assert "http://localhost:8080" not in data
+    assert "http://other:9000" in data
+
+
+def test_clear_session_no_file(tmp_path) -> None:
+    from songmaker_cli.cli_client import _clear_session
+
+    with patch("songmaker_cli.cli_client.SESSION_FILE", tmp_path / "nonexistent.json"):
+        _clear_session("http://localhost:8080")
+
+
+def test_clear_session_corrupt_file(tmp_path) -> None:
+    from songmaker_cli.cli_client import _clear_session
+
+    sf = tmp_path / "session.json"
+    sf.write_text("not json{{{")
+    with patch("songmaker_cli.cli_client.SESSION_FILE", sf):
+        _clear_session("http://localhost:8080")
+
+
+# ── _build_client ──────────────────────────────────────────────────
+
+
+def test_build_client_with_cookies(tmp_path) -> None:
+    import json
+
+    from songmaker_cli.cli_client import _build_client
+
+    sf = tmp_path / "session.json"
+    cookies = {"session_id": "tok", "csrf_token": "csrf"}
+    sf.write_text(json.dumps({"http://localhost:8080": cookies}))
+    with patch("songmaker_cli.cli_client.SESSION_FILE", sf):
+        client = _build_client("http://localhost:8080")
+    assert client.cookies.get("session_id") == "tok"
+    assert client.cookies.get("csrf_token") == "csrf"
+    client.close()
+
+
+def test_build_client_no_cookies(tmp_path) -> None:
+    from songmaker_cli.cli_client import _build_client
+
+    with patch("songmaker_cli.cli_client.SESSION_FILE", tmp_path / "nonexistent.json"):
+        client = _build_client("http://localhost:8080")
+    assert len(list(client.cookies.jar)) == 0
+    client.close()
+
+
+# ── cli_logout ─────────────────────────────────────────────────────
+
+
+def test_cli_logout_success(tmp_path) -> None:
+    import json
+
+    from songmaker_cli.cli_client import cli_logout
+
+    sf = tmp_path / "session.json"
+    sf.write_text(json.dumps({"http://localhost:8080": {"session_id": "tok"}}))
+    client = _mock_client(_mock_response(json_data={"ok": True}))
+    with (
+        patch("songmaker_cli.cli_client._build_client", return_value=client),
+        patch("songmaker_cli.cli_client.SESSION_FILE", sf),
+    ):
+        cli_logout("http://localhost:8080")
+    data = json.loads(sf.read_text())
+    assert "http://localhost:8080" not in data
+
+
+def test_cli_logout_connection_error(tmp_path) -> None:
+    import json
+
+    import httpx
+
+    from songmaker_cli.cli_client import cli_logout
+
+    sf = tmp_path / "session.json"
+    sf.write_text(json.dumps({"http://localhost:8080": {"session_id": "tok"}}))
+    client = _mock_client(side_effect=httpx.ConnectError("refused"))
+    client.delete = MagicMock(side_effect=httpx.ConnectError("refused"))
+    with (
+        patch("songmaker_cli.cli_client._build_client", return_value=client),
+        patch("songmaker_cli.cli_client.SESSION_FILE", sf),
+    ):
+        cli_logout("http://localhost:8080")
+    data = json.loads(sf.read_text())
+    assert "http://localhost:8080" not in data
+
+
+# ── api_post / api_put 401 ─────────────────────────────────────────
+
+
+def test_api_post_401_suggests_login() -> None:
+    client = _mock_client(_mock_response(status=401, json_data={"detail": "auth required"}))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
+        with pytest.raises(ServerError, match="songmaker login"):
+            api_post("http://localhost:8080", "/api/songs/s1/generate")
+
+
+def test_api_put_401_suggests_login() -> None:
+    client = _mock_client(_mock_response(status=401, json_data={"detail": "auth required"}))
+    with patch("songmaker_cli.cli_client._build_client", return_value=client):
+        with pytest.raises(ServerError, match="songmaker login"):
+            api_put("http://localhost:8080", "/api/songs/s1", {"lyrics": "x"})

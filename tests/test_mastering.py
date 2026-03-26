@@ -350,3 +350,31 @@ def test_normalize_to_lufs_silent_signal() -> None:
     silent = np.zeros(44100, dtype=np.float64)
     left, right = normalize_to_lufs(silent, silent.copy(), target_lufs=-14.0, current_lufs=-70.0)
     assert np.array_equal(left, silent)
+
+
+def test_measure_lufs_neg_inf_fallback() -> None:
+    """Verify LUFS measurement returns -70.0 for digital silence."""
+    silence = np.zeros(44100 * 2, dtype=np.float64)
+    lufs = measure_lufs(silence, silence.copy(), sample_rate=SAMPLE_RATE)
+    assert lufs == -70.0
+
+
+def test_extract_band_degenerate_range() -> None:
+    """Verify _extract_band returns zeros when low >= high after normalization."""
+    from audio_engine.mastering import _extract_band
+
+    signal = _generate_sine(440.0, 0.5, 1.0)
+    left, right = _extract_band(signal, signal.copy(), 20000.0, 100.0, SAMPLE_RATE / 2.0)
+    assert np.all(left == 0.0)
+    assert np.all(right == 0.0)
+
+
+def test_extract_band_highpass() -> None:
+    """Verify _extract_band handles the highpass branch (high_hz near nyquist)."""
+    from audio_engine.mastering import _extract_band
+
+    signal = _generate_multiband_signal(1.0)
+    nyquist = SAMPLE_RATE / 2.0
+    left, right = _extract_band(signal, signal.copy(), 4000.0, nyquist * 0.96, nyquist)
+    assert len(left) == len(signal)
+    assert not np.all(left == 0.0)

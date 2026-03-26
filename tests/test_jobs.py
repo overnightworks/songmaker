@@ -62,6 +62,23 @@ def test_update_job_swallows_exception(db_factory) -> None:
 # ── _detect_device ──────────────────────────────────────────────────
 
 
+def test_cleanup_gpu_with_cuda() -> None:
+    from songmaker_cli.jobs import _cleanup_gpu
+
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = True
+    with patch.dict("sys.modules", {"torch": mock_torch}):
+        _cleanup_gpu()
+    mock_torch.cuda.empty_cache.assert_called_once()
+
+
+def test_cleanup_gpu_no_torch() -> None:
+    from songmaker_cli.jobs import _cleanup_gpu
+
+    with patch.dict("sys.modules", {"torch": None}):
+        _cleanup_gpu()
+
+
 def test_detect_device_cuda() -> None:
     mock_torch = MagicMock()
     mock_torch.cuda.is_available.return_value = True

@@ -266,6 +266,20 @@ def test_deactivate_admin_via_delete_allowed_when_multiple(client: TestClient) -
         assert admin2_user.is_active is False
 
 
+def test_delete_inactive_admin_blocked_when_sole_active(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "admin2", "password": "t3stP@ssw0rd", "role": "admin"},
+    )
+    admin2_id = resp.json()["id"]
+    client.put(f"/api/admin/users/{admin2_id}", json={"is_active": False})
+
+    resp = client.delete(f"/api/admin/users/{admin2_id}")
+    assert resp.status_code == 400
+    assert "last active admin" in resp.json()["detail"]
+
+
 def test_cannot_deactivate_sole_active_admin_via_delete(client: TestClient) -> None:
     _login_as_admin(client)
     resp = client.post(

@@ -324,3 +324,12 @@ def test_setup_integrity_error_returns_403(client: TestClient) -> None:
 
     assert resp.status_code == 403
     assert "already completed" in resp.json()["detail"]
+
+
+# ── _detect_secure ─────────────────────────────────────────────────
+
+
+def test_detect_secure_none_request() -> None:
+    from songmaker_cli.auth_api import _detect_secure
+
+    assert _detect_secure(None) is False

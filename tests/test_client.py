@@ -287,3 +287,219 @@ def test_server_info_unavailable() -> None:
         info = client.server_info()
 
     assert info is None
+
+
+# ── lm_negative_prompt in payload ──────────────────────────────────
+
+
+def test_submit_task_with_lm_negative_prompt() -> None:
+    client = AceStepClient()
+    config = AceStepConfig(
+        prompt="test", lyrics="[verse]\nHello",
+        lm_negative_prompt="no drums",
+    )
+
+    response_data = json.dumps({
+        "data": {"task_id": "abc123", "status": "queued"},
+        "code": 200,
+    }).encode()
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(response_data)
+        task_id = client._submit_task(config)
+
+    assert task_id == "abc123"
+    call_args = mock_urlopen.call_args
+    req = call_args[0][0]
+    payload = json.loads(req.data)
+    assert payload["lm_negative_prompt"] == "no drums"
+
+
+# ── submit json/pydantic decode error (non-retryable) ─────────────
+
+
+def test_submit_task_bad_json_response() -> None:
+    client = AceStepClient()
+    config = AceStepConfig(prompt="test", lyrics="test")
+
+    with patch("acestep_engine.client.urlopen") as mock_urlopen:
+        mock_urlopen.return_value = _mock_response(b"not json at all")
+        with pytest.raises(TaskSubmissionError, match="Failed to submit"):
+            client._submit_task(config)
+
+
+# ── poll empty data continues ──────────────────────────────────────
+
+
+def test_poll_result_empty_data_continues() -> None:
+    client = AceStepClient()
+
+    empty_resp = json.dumps({"data": []}).encode()
+    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "42"}])
+    success_resp = json.dumps({
+        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+    }).encode()
+
+    with (
+        patch("acestep_engine.client.urlopen") as mock_urlopen,
+        patch("acestep_engine.client.time.sleep"),
+    ):
+        mock_urlopen.side_effect = [
+            _mock_response(empty_resp),
+            _mock_response(success_resp),
+        ]
+        result = client._poll_result("abc")
+
+    assert result == ("/v1/audio?path=test.wav", 42)
+
+
+# ── poll with progress_text logging ────────────────────────────────
+
+
+def test_poll_result_logs_progress_text() -> None:
+    client = AceStepClient()
+
+    progress_resp = json.dumps({
+        "data": [{"task_id": "abc", "status": 0, "progress_text": "Generating bars 10/20"}],
+    }).encode()
+    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "1"}])
+    success_resp = json.dumps({
+        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+    }).encode()
+
+    call_count = 0
+
+    def fake_monotonic() -> float:
+        nonlocal call_count
+        call_count += 1
+        return 0.0
+
+    with (
+        patch("acestep_engine.client.urlopen") as mock_urlopen,
+        patch("acestep_engine.client.time.sleep"),
+        patch("acestep_engine.client.time.monotonic", side_effect=fake_monotonic),
+    ):
+        mock_urlopen.side_effect = [
+            _mock_response(progress_resp),
+            _mock_response(success_resp),
+        ]
+        result = client._poll_result("abc")
+
+    assert result == ("/v1/audio?path=test.wav", 1)
+
+
+# ── poll with no progress_text logging ─────────────────────────────
+
+
+def test_poll_result_logs_elapsed_without_progress_text() -> None:
+    client = AceStepClient()
+
+    progress_resp = json.dumps({
+        "data": [{"task_id": "abc", "status": 0, "progress_text": ""}],
+    }).encode()
+    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "1"}])
+    success_resp = json.dumps({
+        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+    }).encode()
+
+    call_count = 0
+
+    def fake_monotonic() -> float:
+        nonlocal call_count
+        call_count += 1
+        return 0.0
+
+    with (
+        patch("acestep_engine.client.urlopen") as mock_urlopen,
+        patch("acestep_engine.client.time.sleep"),
+        patch("acestep_engine.client.time.monotonic", side_effect=fake_monotonic),
+    ):
+        mock_urlopen.side_effect = [
+            _mock_response(progress_resp),
+            _mock_response(success_resp),
+        ]
+        result = client._poll_result("abc")
+
+    assert result == ("/v1/audio?path=test.wav", 1)
+
+
+# ── poll KeyboardInterrupt ─────────────────────────────────────────
+
+
+def test_poll_result_keyboard_interrupt() -> None:
+    client = AceStepClient()
+
+    with (
+        patch("acestep_engine.client.urlopen") as mock_urlopen,
+        patch("acestep_engine.client.time.sleep"),
+    ):
+        mock_urlopen.side_effect = KeyboardInterrupt
+        with pytest.raises(KeyboardInterrupt):
+            client._poll_result("abc")
+
+
+# ── poll transient error retries ───────────────────────────────────
+
+
+def test_poll_result_retries_on_transient_error() -> None:
+    client = AceStepClient()
+
+    from urllib.error import URLError
+
+    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "1"}])
+    success_resp = json.dumps({
+        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+    }).encode()
+
+    with (
+        patch("acestep_engine.client.urlopen") as mock_urlopen,
+        patch("acestep_engine.client.time.sleep"),
+    ):
+        mock_urlopen.side_effect = [
+            URLError("transient error"),
+            _mock_response(success_resp),
+        ]
+        result = client._poll_result("abc")
+
+    assert result == ("/v1/audio?path=test.wav", 1)
+
+
+# ── acestep_engine/models.py coverage ─────────────────────────────
+
+
+def test_result_item_seed_invalid() -> None:
+    from acestep_engine.models import ResultItem
+
+    item = ResultItem(file="test.wav", seed_value="not_a_number")
+    assert item.seed == -1
+
+
+def test_result_item_seed_empty() -> None:
+    from acestep_engine.models import ResultItem
+
+    item = ResultItem(file="test.wav", seed_value="")
+    assert item.seed == -1
+
+
+def test_task_query_entry_parse_invalid_json_string() -> None:
+    from acestep_engine.models import TaskQueryEntry
+
+    entry = TaskQueryEntry(result="not valid json{{{")
+    items = entry.parse_result_items()
+    assert items == []
+
+
+def test_task_query_entry_parse_non_list_result() -> None:
+    from acestep_engine.models import TaskQueryEntry
+
+    entry = TaskQueryEntry(result=json.dumps({"key": "value"}))
+    items = entry.parse_result_items()
+    assert items == []
+
+
+def test_task_query_entry_parse_list_with_non_dict() -> None:
+    from acestep_engine.models import TaskQueryEntry
+
+    entry = TaskQueryEntry(result=json.dumps(["not a dict", 42]))
+    items = entry.parse_result_items()
+    assert items == []

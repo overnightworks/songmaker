@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import struct
+import subprocess
 from typing import Callable
 
 import numpy as np
@@ -138,9 +139,104 @@ def test_master_to_mp3_empty_audio() -> None:
         master_to_mp3(empty, empty, "/tmp/test.mp3")
 
 
+def test_master_to_mp3_ffmpeg_failure() -> None:
+    from unittest.mock import patch
+
+    signal = np.sin(np.linspace(0, 100, 44100 * 3)).astype(np.float64) * 0.5
+
+    with (
+        patch("shutil.which", return_value="/usr/bin/ffmpeg"),
+        patch(
+            "subprocess.run",
+            side_effect=subprocess.CalledProcessError(1, "ffmpeg", stderr=b"error"),
+        ),
+    ):
+        with pytest.raises(MasteringError, match="MP3 encoding failed"):
+            master_to_mp3(signal, signal.copy(), "/tmp/test.mp3")
+
+
 def test_build_ffmpeg_cmd_pipe_input() -> None:
     cmd = build_ffmpeg_cmd("-", "out.mp3", "320k", None)
     assert "pipe:0" in cmd
     assert "-f" in cmd
+
+
+# ── _normalize_dtype edge cases ────────────────────────────────────
+
+
+def test_read_wav_bytes_uint8(make_wav_bytes: Callable[..., bytes]) -> None:
+    samples = np.array([0, 128, 255], dtype=np.uint8)
+    data = make_wav_bytes(samples.tobytes(), n_channels=1, sampwidth=1, audio_format=1)
+    left, right, rate = read_wav_bytes(data)
+    assert rate == 44100
+    assert len(left) == 3
+    assert abs(left[0] - (-1.0)) < 0.01
+    assert abs(left[1] - 0.0) < 0.01
+    assert abs(left[2] - (127.0 / 128.0)) < 0.01
+    assert np.array_equal(left, right)
+
+
+def test_read_wav_bytes_float64(make_wav_bytes: Callable[..., bytes]) -> None:
+    from audio_engine.audio_io import _normalize_dtype
+
+    raw = np.array([0.5, -0.5], dtype=np.float64)
+    result = _normalize_dtype(raw)
+    assert result is not None
+    assert result.dtype == np.float64
+    assert abs(result[0] - 0.5) < 0.001
+
+
+def test_normalize_dtype_unsupported() -> None:
+    from audio_engine.audio_io import _normalize_dtype
+
+    raw = np.array([1, 2, 3], dtype=np.complex128)
+    result = _normalize_dtype(raw)
+    assert result is None
+
+
+def test_normalize_dtype_uint8() -> None:
+    from audio_engine.audio_io import _normalize_dtype
+
+    raw = np.array([0, 128, 255], dtype=np.uint8)
+    result = _normalize_dtype(raw)
+    assert result is not None
+    assert abs(result[0] - (-1.0)) < 0.01
+    assert abs(result[1] - 0.0) < 0.01
+
+
+def test_normalize_dtype_float32() -> None:
+    from audio_engine.audio_io import _normalize_dtype
+
+    raw = np.array([0.5, -0.5], dtype=np.float32)
+    result = _normalize_dtype(raw)
+    assert result is not None
+    assert result.dtype == np.float64
+
+
+def test_read_wav_bytes_unsupported_dtype() -> None:
+    from unittest.mock import patch
+
+    from audio_engine.audio_io import read_wav_bytes
+    from audio_engine.errors import AudioDecodeError
+
+    fake_data = np.array([1, 2, 3], dtype=np.complex128)
+    with patch("audio_engine.audio_io.scipy_wavfile.read", return_value=(44100, fake_data)):
+        valid_header = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
+        with pytest.raises(AudioDecodeError, match="Unsupported WAV dtype"):
+            read_wav_bytes(valid_header)
+
+
+def test_read_wav_bytes_2d_single_column() -> None:
+    from unittest.mock import patch
+
+    from audio_engine.audio_io import read_wav_bytes
+
+    fake_data = np.array([[0.5], [-0.3], [0.1]], dtype=np.float32)
+    with patch("audio_engine.audio_io.scipy_wavfile.read", return_value=(44100, fake_data)):
+        valid_header = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
+        left, right, rate = read_wav_bytes(valid_header)
+        assert rate == 44100
+        assert len(left) == 3
+        assert np.array_equal(left, right)
 
 
