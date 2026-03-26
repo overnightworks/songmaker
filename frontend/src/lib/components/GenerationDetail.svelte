@@ -20,6 +20,26 @@
 		color: string;
 	}
 
+	interface ScoreThreshold {
+		good: number;
+		ok: number;
+	}
+
+	const SCORE_THRESHOLDS: Record<string, ScoreThreshold> = {
+		user_rating: { good: 70, ok: 40 },
+		audiobox_enjoyment: { good: 7, ok: 4 },
+		audiobox_quality: { good: 7, ok: 4 },
+		lyrical_coherence: { good: 7, ok: 4 },
+		dynamics: { good: 60, ok: 30 },
+		text_accuracy: { good: 70, ok: 40 }
+	};
+
+	function scoreColor(key: string, value: number): string {
+		const t = SCORE_THRESHOLDS[key];
+		if (!t) return 'ok';
+		return value >= t.good ? 'good' : value >= t.ok ? 'ok' : 'bad';
+	}
+
 	const scoreEntries = $derived.by((): ScoreEntry[] => {
 		if (!scores) return [];
 		const entries: ScoreEntry[] = [];
@@ -27,38 +47,37 @@
 			entries.push({
 				label: 'Rating',
 				value: scores.user_rating.toFixed(0),
-				color: scores.user_rating >= 70 ? 'good' : scores.user_rating >= 40 ? 'ok' : 'bad'
+				color: scoreColor('user_rating', scores.user_rating)
 			});
 		if (scores.audiobox_enjoyment !== undefined)
 			entries.push({
 				label: 'Enjoyment',
 				value: scores.audiobox_enjoyment.toFixed(2),
-				color:
-					scores.audiobox_enjoyment >= 7 ? 'good' : scores.audiobox_enjoyment >= 4 ? 'ok' : 'bad'
+				color: scoreColor('audiobox_enjoyment', scores.audiobox_enjoyment)
 			});
 		if (scores.audiobox_quality !== undefined)
 			entries.push({
 				label: 'Quality',
 				value: scores.audiobox_quality.toFixed(2),
-				color: scores.audiobox_quality >= 7 ? 'good' : scores.audiobox_quality >= 4 ? 'ok' : 'bad'
+				color: scoreColor('audiobox_quality', scores.audiobox_quality)
 			});
 		if (scores.lyrical_coherence !== undefined)
 			entries.push({
 				label: 'Coherence',
 				value: String(scores.lyrical_coherence),
-				color: scores.lyrical_coherence >= 7 ? 'good' : scores.lyrical_coherence >= 4 ? 'ok' : 'bad'
+				color: scoreColor('lyrical_coherence', scores.lyrical_coherence)
 			});
 		if (scores.dynamics !== undefined)
 			entries.push({
 				label: 'Dynamics',
 				value: scores.dynamics.toFixed(0),
-				color: scores.dynamics >= 60 ? 'good' : scores.dynamics >= 30 ? 'ok' : 'bad'
+				color: scoreColor('dynamics', scores.dynamics)
 			});
 		if (scores.text_accuracy !== undefined)
 			entries.push({
 				label: 'Text Accuracy',
 				value: scores.text_accuracy.toFixed(0) + '%',
-				color: scores.text_accuracy >= 70 ? 'good' : scores.text_accuracy >= 40 ? 'ok' : 'bad'
+				color: scoreColor('text_accuracy', scores.text_accuracy)
 			});
 		if (scores.audiobox_understanding !== undefined)
 			entries.push({

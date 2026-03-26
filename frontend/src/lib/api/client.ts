@@ -312,6 +312,9 @@ const DEFAULT_CHAT_STYLE =
 	'You are a songwriting assistant. Help write, improve, and refine song lyrics. ' +
 	'Be creative but respect the style and theme.';
 
+// SYNC: must match model in src/songmaker_cli/claude/provider.py call_claude() default
+const CHAT_MODEL = 'claude-sonnet-4-20250514';
+
 async function chatDirect(message: string, apiKey: string): Promise<string> {
 	const system = `${DEFAULT_CHAT_STYLE}\n\n${STRUCTURAL_PROMPT}`;
 	const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -323,7 +326,7 @@ async function chatDirect(message: string, apiKey: string): Promise<string> {
 			'anthropic-dangerous-direct-browser-access': 'true'
 		},
 		body: JSON.stringify({
-			model: 'claude-sonnet-4-20250514',
+			model: CHAT_MODEL,
 			max_tokens: 4096,
 			system,
 			messages: [{ role: 'user', content: message }]
