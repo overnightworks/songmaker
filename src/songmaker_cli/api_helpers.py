@@ -87,7 +87,9 @@ def slugify(text: str) -> str:
 
 
 def unique_album_id(session: Session, base_slug: str) -> str:
-    """Return a unique album ID, appending -2, -3, etc. if needed."""
+    """Atomically find a unique album ID, appending -2, -3, etc. if needed."""
+    session.commit()
+    session.execute(text("BEGIN IMMEDIATE"))
     candidate = base_slug
     counter = 1
     while get_album(session, candidate):

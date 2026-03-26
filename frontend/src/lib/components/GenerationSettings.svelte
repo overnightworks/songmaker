@@ -8,8 +8,7 @@
 	import PresetManager from './PresetManager.svelte';
 	import DefaultsEditor from './DefaultsEditor.svelte';
 
-	const FALLBACK_DEFAULTS: Required<VersionGenerationParams> = {
-		inference_steps: 8,
+	const SHARED_DEFAULTS: Omit<Required<VersionGenerationParams>, 'inference_steps'> = {
 		guidance_scale: 0.0,
 		shift: 3.0,
 		think_mode: 'deep',
@@ -22,6 +21,11 @@
 		batch_size: 1
 	};
 
+	const FALLBACK_DEFAULTS: Record<string, Required<VersionGenerationParams>> = {
+		turbo: { inference_steps: 8, ...SHARED_DEFAULTS } as Required<VersionGenerationParams>,
+		sft: { inference_steps: 50, ...SHARED_DEFAULTS } as Required<VersionGenerationParams>
+	};
+
 	let open = $state(false);
 	let showDefaults = $state(false);
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
@@ -29,8 +33,14 @@
 	const builtins = $derived.by((): Record<string, Required<VersionGenerationParams>> => {
 		const b = $builtinDefaults;
 		return {
-			turbo: { ...FALLBACK_DEFAULTS, ...(b.turbo ?? {}) } as Required<VersionGenerationParams>,
-			sft: { ...FALLBACK_DEFAULTS, ...(b.sft ?? {}) } as Required<VersionGenerationParams>
+			turbo: {
+				...FALLBACK_DEFAULTS.turbo,
+				...(b.turbo ?? {})
+			} as Required<VersionGenerationParams>,
+			sft: {
+				...FALLBACK_DEFAULTS.sft,
+				...(b.sft ?? {})
+			} as Required<VersionGenerationParams>
 		};
 	});
 

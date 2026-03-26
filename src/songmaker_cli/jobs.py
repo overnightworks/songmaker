@@ -334,10 +334,25 @@ def _detect_device() -> str:
     return "cpu"
 
 
+_UPDATE_JOB_MAX_RETRIES = 3
+_UPDATE_JOB_BASE_DELAY = 1.0
+
+
 def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
-    try:
-        with factory() as session:
-            update_job_status(session, job_id, status, **kwargs)
-            session.commit()
-    except Exception:
-        log.exception("Failed to update job %s to %s", job_id, status)
+    import time
+
+    for attempt in range(_UPDATE_JOB_MAX_RETRIES):
+        try:
+            with factory() as session:
+                update_job_status(session, job_id, status, **kwargs)
+                session.commit()
+            return
+        except Exception:
+            if attempt == _UPDATE_JOB_MAX_RETRIES - 1:
+                log.exception("Failed to update job %s to %s after %d attempts",
+                              job_id, status, _UPDATE_JOB_MAX_RETRIES)
+            else:
+                delay = _UPDATE_JOB_BASE_DELAY * (2 ** attempt)
+                log.warning("Retrying job %s status update (%s) in %.0fs",
+                            job_id, status, delay)
+                time.sleep(delay)
