@@ -122,43 +122,21 @@ def save_generation_defaults(data: dict) -> None:
 _FIELD_MAPPING = {"language": "vocal_language"}
 
 
-_SFT_DEFAULTS: dict[str, object] = {
-    "inference_steps": 50,
-    "guidance_scale": 0.0,
-}
-
-_TURBO_DEFAULTS: dict[str, object] = {
-    "inference_steps": 8,
-    "guidance_scale": 0.0,
+_SHARED_LM_DEFAULTS: dict[str, object] = {
+    "shift": 3.0,
+    "think_mode": "deep",
+    "lm_temperature": 0.85,
+    "lm_top_k": 0,
+    "lm_top_p": 0.9,
+    "lm_cfg_scale": 2.0,
+    "lm_negative_prompt": "",
+    "infer_method": "ode",
+    "batch_size": 1,
 }
 
 _BUILTIN_DEFAULTS: dict[str, dict[str, object]] = {
-    "turbo": {
-        "inference_steps": 8,
-        "guidance_scale": 0.0,
-        "shift": 3.0,
-        "think_mode": "deep",
-        "lm_temperature": 0.85,
-        "lm_top_k": 0,
-        "lm_top_p": 0.9,
-        "lm_cfg_scale": 2.0,
-        "lm_negative_prompt": "",
-        "infer_method": "ode",
-        "batch_size": 1,
-    },
-    "sft": {
-        "inference_steps": 50,
-        "guidance_scale": 0.0,
-        "shift": 3.0,
-        "think_mode": "deep",
-        "lm_temperature": 0.85,
-        "lm_top_k": 0,
-        "lm_top_p": 0.9,
-        "lm_cfg_scale": 2.0,
-        "lm_negative_prompt": "",
-        "infer_method": "ode",
-        "batch_size": 1,
-    },
+    "turbo": {"inference_steps": 8, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
+    "sft": {"inference_steps": 50, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
 }
 
 
@@ -178,9 +156,8 @@ def build_ace_config(
     Priority: CLI overrides > frontmatter > preset params > global defaults > model defaults.
     """
     is_sft = model_name and "sft" in model_name
-    model_defaults = _SFT_DEFAULTS if is_sft else _TURBO_DEFAULTS
-
     model_key = "sft" if is_sft else "turbo"
+    model_defaults = _BUILTIN_DEFAULTS[model_key]
     user_defaults = (global_defaults or {}).get(model_key, {})
     active_preset = preset_params or {}
     log.debug(

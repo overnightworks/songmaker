@@ -18,6 +18,7 @@
 	let savingDefaults = $state(false);
 	let showSavePreset = $state(false);
 	let presetName = $state('');
+	let presetModel = $state<'turbo' | 'sft'>('turbo');
 	let presetAsDefault = $state(false);
 	let savingPreset = $state(false);
 
@@ -68,13 +69,6 @@
 			...builtins.turbo,
 			...(globalDefaults.turbo ?? {})
 		} as Required<VersionGenerationParams>;
-	});
-
-	const modePresets = $derived.by(() => {
-		return {
-			turbo: $presets.filter((p) => p.model_mode === 'turbo'),
-			sft: $presets.filter((p) => p.model_mode === 'sft')
-		};
 	});
 
 	onMount(async () => {
@@ -177,9 +171,10 @@
 		if (!presetName.trim()) return;
 		savingPreset = true;
 		try {
-			await savePreset(presetName.trim(), 'turbo', $editGenParams ?? {}, presetAsDefault);
+			await savePreset(presetName.trim(), presetModel, $editGenParams ?? {}, presetAsDefault);
 			showSavePreset = false;
 			presetName = '';
+			presetModel = 'turbo';
 			presetAsDefault = false;
 		} catch {
 			/* save failed */
@@ -215,18 +210,18 @@
 	</button>
 
 	{#if open}
-		{#if modePresets.turbo.length > 0}
+		{#if $presets.length > 0}
 			<div class="presets-row">
 				<span class="presets-label">Presets:</span>
-				{#each modePresets.turbo as preset (preset.id)}
+				{#each $presets as preset (preset.id)}
 					<button
 						class="preset-chip"
 						class:is-default={preset.is_default}
 						onclick={() => loadPresetParams(preset.id)}
-						title="Load preset"
+						title="{preset.model_mode} preset"
 					>
 						{preset.name}
-						{#if preset.is_default}*{/if}
+						<span class="preset-mode-tag">{preset.model_mode}</span>
 					</button>
 				{/each}
 			</div>
@@ -398,6 +393,10 @@
 						bind:value={presetName}
 						class="preset-name-input"
 					/>
+					<select class="model-select" bind:value={presetModel}>
+						<option value="turbo">Turbo</option>
+						<option value="sft">SFT</option>
+					</select>
 					<label class="preset-default-label">
 						<input type="checkbox" bind:checked={presetAsDefault} />
 						<span>Set as default</span>
@@ -416,15 +415,16 @@
 			</div>
 		{/if}
 
-		{#if modePresets.turbo.length > 0}
+		{#if $presets.length > 0}
 			<div class="defaults-panel">
 				<div class="defaults-header">
 					<span>Saved Presets</span>
 				</div>
 				<div class="preset-list">
-					{#each modePresets.turbo as preset (preset.id)}
+					{#each $presets as preset (preset.id)}
 						<div class="preset-row">
 							<span class="preset-name">{preset.name}</span>
+							<span class="preset-mode-tag">{preset.model_mode}</span>
 							{#if !preset.is_default}
 								<button
 									class="preset-action"
@@ -672,6 +672,27 @@
 	.preset-chip.is-default {
 		border-color: var(--primary);
 		color: var(--primary);
+	}
+
+	.preset-mode-tag {
+		font-size: 8px;
+		opacity: 0.6;
+		text-transform: uppercase;
+		margin-left: 2px;
+	}
+
+	.model-select {
+		padding: 5px 8px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text);
+		font-size: 12px;
+	}
+
+	.model-select:focus {
+		border-color: var(--primary);
+		outline: none;
 	}
 
 	.settings-grid {
