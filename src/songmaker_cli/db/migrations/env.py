@@ -20,6 +20,9 @@ target_metadata = Base.metadata
 
 
 def _resolve_db_url() -> str:
+    url = config.get_main_option("sqlalchemy.url")
+    if url and not url.endswith("_output/songmaker.db"):
+        return url
     env_url = os.environ.get("SONGMAKER_DB_URL")
     if env_url:
         return env_url

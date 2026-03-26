@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from songmaker_cli.db.engine import init_db
+from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, Version
 from songmaker_cli.db.queries import get_generation, get_job
 from songmaker_cli.jobs import _detect_device, _update_job, run_generation_job, run_scoring_job

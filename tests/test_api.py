@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.db.engine import init_db
+from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 

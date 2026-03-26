@@ -75,7 +75,6 @@ These are conventions that aren't obvious from reading a single file:
 
 ## Known Technical Debt
 
-- **Dual schema management**: `create_all()` at startup + Alembic migrations must stay in sync manually.
 - **`main.py` escape hatches**: `reset-password` and `list-users` bypass the API. Intentional for emergency recovery.
 
 ## Workflow — Speed

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from songmaker_cli.auth import get_client_ip, hash_password, sign_session_id
-from songmaker_cli.db.engine import init_db
+from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import create_session, create_user
 from songmaker_cli.middleware import (
     SESSION_COOKIE,

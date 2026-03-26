@@ -17,7 +17,7 @@ from songmaker_cli.api_models import (
     UserResponse,
     VersionResponse,
 )
-from songmaker_cli.db.engine import init_db
+from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -1007,3 +1007,48 @@ def test_recover_stale_jobs_by_age_none(db_session: Session) -> None:
     db_session.commit()
 
     assert recover_stale_jobs_by_age(db_session, threshold_seconds=3600) == 0
+
+
+# ── Migration tests ────────────────────────────────────────────────
+
+
+def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
+    from sqlalchemy import create_engine, inspect
+
+    from songmaker_cli.db.engine import init_db
+
+    db_path = tmp_path / "fresh.db"
+    init_db(db_path)
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    tables = set(inspect(engine).get_table_names())
+    engine.dispose()
+
+    expected = {
+        "albums", "songs", "versions", "generations", "scores", "ratings",
+        "jobs", "users", "user_sessions", "login_attempts", "audit_log",
+        "generation_presets", "alembic_version",
+    }
+    assert tables == expected
+
+
+def test_init_db_stamps_existing_db(tmp_path: Path) -> None:
+    from sqlalchemy import create_engine, inspect, text
+
+    from songmaker_cli.db.engine import init_db
+    from songmaker_cli.db.models import Base
+
+    db_path = tmp_path / "existing.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    Base.metadata.create_all(engine)
+    engine.dispose()
+
+    init_db(db_path)
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    tables = set(inspect(engine).get_table_names())
+    assert "alembic_version" in tables
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
+        assert row is not None
+    engine.dispose()

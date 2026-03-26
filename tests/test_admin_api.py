@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth import hash_password
-from songmaker_cli.db.engine import init_db
+from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import create_user
 from songmaker_cli.middleware import SESSION_COOKIE
 from songmaker_cli.server import create_app

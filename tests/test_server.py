@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth import hash_password, sign_session_id
-from songmaker_cli.db.engine import init_db
+from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.server import create_app, parse_allowed_hosts, run_server
 
