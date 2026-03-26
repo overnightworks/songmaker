@@ -122,17 +122,26 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        start = datetime.now(timezone.utc)
-        response = await call_next(request)
+        import structlog
+
+        structlog.contextvars.clear_contextvars()
+
         from songmaker_cli.auth import get_client_ip
         ctx: AppContext = request.app.state.ctx
         direct_ip = request.client.host if request.client else "unknown"
         ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"), ctx.trusted_proxies)
+
+        structlog.contextvars.bind_contextvars(
+            ip=ip, method=request.method, path=request.url.path,
+        )
+
+        start = datetime.now(timezone.utc)
+        response = await call_next(request)
+        duration_ms = (datetime.now(timezone.utc) - start).total_seconds() * 1000
         log.info(
             "ACCESS %s %s %s %d (%.0fms)",
             ip, request.method, request.url.path,
-            response.status_code,
-            (datetime.now(timezone.utc) - start).total_seconds() * 1000,
+            response.status_code, duration_ms,
         )
         return response
 
@@ -458,6 +467,9 @@ def run_server(
         output_dir = project_root / OUTPUT_ROOT
 
     _load_env_file(project_root)
+
+    from songmaker_cli.logging_config import configure_logging
+    configure_logging()
 
     if not output_dir.exists():
         output_dir.mkdir(parents=True)

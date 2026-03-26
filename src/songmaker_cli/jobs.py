@@ -163,6 +163,13 @@ def run_generation_job(
     """Run generation in a background thread, updating DB status."""
     assert db_factory is not None, "db_factory is required"
     assert output_dir is not None, "output_dir is required"
+
+    import structlog
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(
+        job_id=job_id, job_type="generate", song_id=song_id,
+    )
+
     log.info("Generation job %s: song=%s, count=%d", job_id, song_id, count)
 
     try:
@@ -230,6 +237,13 @@ def run_scoring_job(
     """Run scoring in a background thread, updating DB status."""
     assert db_factory is not None, "db_factory is required"
     assert output_dir is not None, "output_dir is required"
+
+    import structlog
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(
+        job_id=job_id, job_type="score", generation_id=gen_id,
+    )
+
     log.info("Scoring job %s: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
 
     try:

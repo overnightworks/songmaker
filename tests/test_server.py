@@ -849,3 +849,34 @@ def test_run_server_loads_env_file(tmp_path: Path) -> None:
         run_server(output_dir=tmp_path / "_output", project_root=tmp_path)
 
     mock_load.assert_called_once()
+
+
+# ── structured logging configuration ──────────────────────────────
+
+
+class TestConfigureLogging:
+    def test_text_mode_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("LOG_FORMAT", raising=False)
+        from songmaker_cli.logging_config import configure_logging
+        configure_logging()
+        import logging
+        root = logging.getLogger()
+        assert root.handlers
+        import structlog
+        formatter = root.handlers[0].formatter
+        assert isinstance(formatter, structlog.stdlib.ProcessorFormatter)
+        last_processor = formatter.processors[-1]
+        assert isinstance(last_processor, structlog.dev.ConsoleRenderer)
+
+    def test_json_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LOG_FORMAT", "json")
+        from songmaker_cli.logging_config import configure_logging
+        configure_logging()
+        import logging
+        root = logging.getLogger()
+        assert root.handlers
+        import structlog
+        formatter = root.handlers[0].formatter
+        assert isinstance(formatter, structlog.stdlib.ProcessorFormatter)
+        last_processor = formatter.processors[-1]
+        assert isinstance(last_processor, structlog.processors.JSONRenderer)

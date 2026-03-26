@@ -87,6 +87,9 @@ def get_current_user(
 
     user_session.expires_at = now + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
 
+    import structlog
+    structlog.contextvars.bind_contextvars(user_id=user_session.user.id)
+
     return AuthenticatedUser(
         id=user_session.user.id,
         username=user_session.user.username,
