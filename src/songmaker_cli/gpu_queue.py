@@ -23,7 +23,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from queue import Queue
-from typing import Any
+from typing import Any, Final
 from urllib.request import Request, urlopen
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -36,6 +36,8 @@ ACESTEP_HEALTH_URL = f"http://localhost:{ACESTEP_PORT}/health"
 ACESTEP_STARTUP_TIMEOUT = 120
 CLEANUP_INTERVAL_SECONDS = int(os.environ.get("JOB_CLEANUP_INTERVAL", 900))
 SHUTDOWN_TIMEOUT_SECONDS = 120
+GENERATE_TIMEOUT_SECONDS: Final[int] = int(os.environ.get("GENERATE_TIMEOUT_SECONDS", "300"))
+SCORE_TIMEOUT_SECONDS: Final[int] = int(os.environ.get("SCORE_TIMEOUT_SECONDS", "120"))
 
 
 @dataclass
@@ -59,6 +61,7 @@ class GpuQueue:
         self._current_mode: str | None = None
         self._running = False
         self._acestep_process: subprocess.Popen | None = None
+        self._cached_model: str | None = None
 
     def start(self) -> None:
         if self._running:
@@ -143,13 +146,34 @@ class GpuQueue:
                 self._fail_job(job.job_id, "GPU mode preparation failed")
                 return
 
-        log.info("GPU queue: running %s job %s", job.job_type, job.job_id)
+        timeout = GENERATE_TIMEOUT_SECONDS if job.job_type == "generate" else SCORE_TIMEOUT_SECONDS
+        log.info("GPU queue: running %s job %s (timeout=%ds)", job.job_type, job.job_id, timeout)
 
-        try:
-            job.fn(*job.args, **job.kwargs)
-        except Exception:
-            log.exception("GPU job %s failed", job.job_id)
+        result: list[Exception | None] = [None]
+
+        def run_job() -> None:
+            try:
+                job.fn(*job.args, **job.kwargs)
+            except Exception as exc:
+                result[0] = exc
+
+        worker = threading.Thread(target=run_job, daemon=True, name=f"gpu-job-{job.job_id[:8]}")
+        worker.start()
+        worker.join(timeout=timeout)
+
+        if worker.is_alive():
+            log.error("GPU job %s timed out after %ds", job.job_id, timeout)
+            self._fail_job(job.job_id, f"Job timed out after {timeout}s")
+            self._handle_stuck_job(job)
+        elif result[0] is not None:
+            log.exception("GPU job %s failed", job.job_id, exc_info=result[0])
             self._fail_job(job.job_id, "Job execution failed")
+
+    def _handle_stuck_job(self, job: GpuJob) -> None:
+        if job.job_type == "generate":
+            log.info("Restarting ACE-Step after stuck generation job %s", job.job_id)
+            self._stop_acestep()
+            self._current_mode = None
 
     def _fail_job(self, job_id: str, error: str) -> None:
         try:
@@ -166,6 +190,7 @@ class GpuQueue:
             self._clear_scoring_models()
             self._verify_vram_freed()
             self._ensure_acestep()
+            self._refresh_cached_model()
 
     def _clear_scoring_models(self) -> None:
         try:
@@ -276,6 +301,7 @@ class GpuQueue:
             self._acestep_process.kill()
             self._acestep_process.wait(timeout=5)
         self._acestep_process = None
+        self._cached_model = None
         self._gc_gpu()
         log.info("ACE-Step server stopped")
 
@@ -307,14 +333,18 @@ class GpuQueue:
 
     @property
     def active_model(self) -> str | None:
+        return self._cached_model
+
+    def _refresh_cached_model(self) -> None:
         try:
             from acestep_engine.client import AceStepClient
             info = AceStepClient().server_info()
             if info and info.model:
-                return "sft" if "sft" in info.model else "turbo"
+                self._cached_model = "sft" if "sft" in info.model else "turbo"
+                return
         except Exception:
             pass
-        return None
+        self._cached_model = None
 
     def _gc_gpu(self) -> None:
         import gc

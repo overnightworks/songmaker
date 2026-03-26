@@ -10,8 +10,9 @@ Two timeout vulnerabilities:
 ## Design Decisions
 
 - **Socket timeouts already exist** on poll (10s), submit (30s), download (60s), health (5s). The gap is `resp.read()` post-connection.
-- **Job-level timeout**: 1200s (20 min), shorter than `POLL_TIMEOUT` (1800s). Configurable via `JOB_TIMEOUT_SECONDS` env var.
+- **Job-level timeout by type**: generation 300s (5 min), scoring 120s (2 min). Typical generation takes under a minute; these are generous safety margins. Configurable via env vars.
 - **Cancellation**: No cancel API on ACE-Step server. On timeout, restart the subprocess via `_stop_acestep()`.
+- **Restart blocks the queue**: `_handle_stuck_job` must complete (stop + cleanup) before the worker dequeues the next job. The next generation job's `_ensure_acestep()` handles the restart (~120s). During this window the queue is blocked — acceptable, since we just recovered from a hang.
 - **Stale recovery** remains as safety net for edge cases.
 
 ## Implementation
@@ -23,7 +24,7 @@ Two timeout vulnerabilities:
 Replace `resp.read()` in `_download_audio` with chunked read that checks `time.monotonic()`:
 
 ```python
-DOWNLOAD_DEADLINE_SECONDS: Final[float] = 120.0
+DOWNLOAD_DEADLINE_SECONDS: Final[float] = 60.0
 
 def _download_audio(self, task_id, ...):
     # ... existing urlopen with timeout=60 ...
@@ -43,35 +44,45 @@ def _download_audio(self, task_id, ...):
 
 **File: `src/songmaker_cli/gpu_queue.py`**
 
+Add per-type timeout constants:
+
+```python
+GENERATE_TIMEOUT_SECONDS: Final[int] = int(os.environ.get("GENERATE_TIMEOUT_SECONDS", "300"))
+SCORE_TIMEOUT_SECONDS: Final[int] = int(os.environ.get("SCORE_TIMEOUT_SECONDS", "120"))
+```
+
 Run `job.fn()` in a sub-thread with join timeout:
 
 ```python
-JOB_TIMEOUT_SECONDS = int(os.environ.get("JOB_TIMEOUT_SECONDS", 1200))
-
 def _execute(self, job):
     # ... existing mode preparation ...
+    timeout = GENERATE_TIMEOUT_SECONDS if job.job_type == "generate" else SCORE_TIMEOUT_SECONDS
     worker = threading.Thread(target=self._run_job, args=(job,), daemon=True)
     worker.start()
-    worker.join(timeout=JOB_TIMEOUT_SECONDS)
+    worker.join(timeout=timeout)
     if worker.is_alive():
-        self._fail_job(job.job_id, f"Job timed out after {JOB_TIMEOUT_SECONDS}s")
-        self._handle_stuck_job(job)
+        self._fail_job(job.job_id, f"Job timed out after {timeout}s")
+        self._handle_stuck_job(job)  # blocks until cleanup completes
 
 def _handle_stuck_job(self, job):
     if job.job_type == "generate":
-        self._stop_acestep()
-        self._current_mode = None  # force re-preparation
+        self._stop_acestep()       # synchronous: SIGTERM → wait → kill → wait
+        self._current_mode = None  # force re-preparation on next job
+    # scoring: daemon thread leaks but holds no subprocess — tolerable
 ```
+
+Key ordering guarantee: `_handle_stuck_job` runs synchronously on the worker thread. The worker does not dequeue the next job until `_stop_acestep()` returns. The next generation job's `_ensure_acestep()` cold-starts the subprocess.
 
 ### Phase 3: Tests
 
-- `test_execute_times_out_stuck_job` — mock fn to sleep, verify fail + restart
-- `test_execute_timeout_no_restart_for_score` — verify no subprocess restart
+- `test_execute_times_out_stuck_generation` — mock fn to sleep(forever), verify fail + `_stop_acestep` called
+- `test_execute_times_out_stuck_scoring` — mock fn to sleep(forever), verify fail + `_stop_acestep` NOT called
 - `test_execute_normal_job_within_timeout` — verify normal flow unaffected
-- `test_download_audio_deadline_exceeded` — mock slow chunked read
+- `test_download_audio_deadline_exceeded` — mock slow chunked read, verify `AudioDownloadError`
 
 ## Risks
 
-- **Daemon thread leak**: Abandoned thread holds resources until ACE-Step subprocess is killed (socket errors propagate).
+- **Daemon thread leak**: Abandoned generation thread holds resources until ACE-Step subprocess is killed (socket errors propagate, thread exits). Abandoned scoring thread leaks until model call returns or process exits — tolerable since scoring models are small.
 - **Double failure marking**: Both watchdog and job may call `_fail_job`. Idempotent — harmless.
 - **Thread safety of `_stop_acestep`**: Abandoned thread gets `ConnectionRefusedError` on next call — safe.
+- **Queue blocked during restart**: Up to `ACESTEP_STARTUP_TIMEOUT` (120s) for the next generation job to cold-start the subprocess. Acceptable — recovering from a hang.

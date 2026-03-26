@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+from http.client import HTTPResponse
+from io import BytesIO
+from unittest.mock import MagicMock, patch
 
 import pytest
 from conftest import mock_http_response as _mock_response
@@ -503,3 +505,35 @@ def test_task_query_entry_parse_list_with_non_dict() -> None:
     entry = TaskQueryEntry(result=json.dumps(["not a dict", 42]))
     items = entry.parse_result_items()
     assert items == []
+
+
+# ── download deadline ─────────────────────────────────────────────
+
+
+def test_download_audio_deadline_exceeded() -> None:
+    client = AceStepClient()
+
+    call_count = 0
+
+    def fake_monotonic() -> float:
+        nonlocal call_count
+        call_count += 1
+        if call_count <= 1:
+            return 0.0
+        return 999.0
+
+    wav_data = b"RIFF" + b"\x00" * 100
+
+    resp = MagicMock(spec=HTTPResponse)
+    resp.status = 200
+    buf = BytesIO(wav_data)
+    resp.read = buf.read
+    resp.__enter__ = MagicMock(return_value=resp)
+    resp.__exit__ = MagicMock(return_value=False)
+
+    with (
+        patch("acestep_engine.client.urlopen", return_value=resp),
+        patch("acestep_engine.client.time.monotonic", side_effect=fake_monotonic),
+    ):
+        with pytest.raises(AudioDownloadError, match="exceeded"):
+            client._download_audio("/v1/audio?path=test.wav", 1)

@@ -45,6 +45,8 @@ SUBMIT_RETRIES: Final[int] = 3
 SUBMIT_RETRY_DELAYS: Final[tuple[float, ...]] = (1.0, 3.0, 10.0)
 _TASK_STATUS_COMPLETE: Final[int] = 1
 _TASK_STATUS_FAILED: Final[int] = 2
+DOWNLOAD_DEADLINE_SECONDS: Final[float] = 60.0
+_DOWNLOAD_CHUNK_SIZE: Final[int] = 65536
 
 
 def _default_host() -> str:
@@ -308,7 +310,18 @@ class AceStepClient:
                 url = f"{self.base_url}/v1/audio?path={quote(audio_path)}"
             req = Request(url, method="GET")
             with urlopen(req, timeout=60) as resp:
-                wav_bytes = resp.read()
+                start = time.monotonic()
+                chunks: list[bytes] = []
+                while True:
+                    if time.monotonic() - start > DOWNLOAD_DEADLINE_SECONDS:
+                        raise AudioDownloadError(
+                            f"Audio download exceeded {DOWNLOAD_DEADLINE_SECONDS:.0f}s deadline"
+                        )
+                    chunk = resp.read(_DOWNLOAD_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                wav_bytes = b"".join(chunks)
 
             if len(wav_bytes) < 44:
                 raise AudioDownloadError("Downloaded audio is empty or too small")

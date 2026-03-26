@@ -10,6 +10,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from songmaker_cli.gpu_queue import (
+    GENERATE_TIMEOUT_SECONDS,
+    SCORE_TIMEOUT_SECONDS,
     SHUTDOWN_TIMEOUT_SECONDS,
     GpuJob,
     GpuQueue,
@@ -517,6 +519,7 @@ def test_active_model_sft() -> None:
     mock_client = MagicMock()
     mock_client.server_info.return_value = mock_info
     with patch("acestep_engine.client.AceStepClient", return_value=mock_client):
+        queue._refresh_cached_model()
         assert queue.active_model == "sft"
 
 
@@ -527,6 +530,7 @@ def test_active_model_turbo() -> None:
     mock_client = MagicMock()
     mock_client.server_info.return_value = mock_info
     with patch("acestep_engine.client.AceStepClient", return_value=mock_client):
+        queue._refresh_cached_model()
         assert queue.active_model == "turbo"
 
 
@@ -535,12 +539,14 @@ def test_active_model_server_unavailable() -> None:
     mock_client = MagicMock()
     mock_client.server_info.return_value = None
     with patch("acestep_engine.client.AceStepClient", return_value=mock_client):
+        queue._refresh_cached_model()
         assert queue.active_model is None
 
 
 def test_active_model_exception() -> None:
     queue = GpuQueue(MagicMock())
     with patch("acestep_engine.client.AceStepClient", side_effect=Exception("boom")):
+        queue._refresh_cached_model()
         assert queue.active_model is None
 
 
@@ -660,3 +666,95 @@ def test_acestep_healthy_property() -> None:
         assert queue.acestep_healthy is True
     with patch.object(queue, "_is_acestep_healthy", return_value=False):
         assert queue.acestep_healthy is False
+
+
+# ── job timeout watchdog ──────────────────────────────────────────
+
+
+def test_timeout_constants() -> None:
+    assert GENERATE_TIMEOUT_SECONDS == 300
+    assert SCORE_TIMEOUT_SECONDS == 120
+
+
+def test_execute_times_out_stuck_generation() -> None:
+    queue = _make_queue()
+    hung = threading.Event()
+
+    def hang_forever() -> None:
+        hung.set()
+        time.sleep(999)
+
+    with (
+        patch.object(queue, "_fail_job") as mock_fail,
+        patch.object(queue, "_stop_acestep") as mock_stop,
+        patch("songmaker_cli.gpu_queue.GENERATE_TIMEOUT_SECONDS", 0.2),
+    ):
+        queue._current_mode = "generate"
+        queue._execute(GpuJob(job_id="j1", job_type="generate", fn=hang_forever))
+
+    hung.wait(timeout=2)
+    mock_fail.assert_called_once_with("j1", "Job timed out after 0.2s")
+    mock_stop.assert_called_once()
+    assert queue._current_mode is None
+
+
+def test_execute_times_out_stuck_scoring() -> None:
+    queue = _make_queue()
+
+    def hang_forever() -> None:
+        time.sleep(999)
+
+    with (
+        patch.object(queue, "_fail_job") as mock_fail,
+        patch.object(queue, "_stop_acestep") as mock_stop,
+        patch("songmaker_cli.gpu_queue.SCORE_TIMEOUT_SECONDS", 0.2),
+    ):
+        queue._current_mode = "score"
+        queue._execute(GpuJob(job_id="j1", job_type="score", fn=hang_forever))
+
+    mock_fail.assert_called_once_with("j1", "Job timed out after 0.2s")
+    mock_stop.assert_not_called()
+
+
+def test_execute_normal_job_within_timeout() -> None:
+    queue = _make_queue()
+    results: list[str] = []
+
+    with patch("songmaker_cli.gpu_queue.GENERATE_TIMEOUT_SECONDS", 5):
+        queue._current_mode = "generate"
+        queue._execute(GpuJob(
+            job_id="j1", job_type="generate", fn=lambda: results.append("done"),
+        ))
+
+    assert results == ["done"]
+
+
+def test_execute_job_exception_captured_from_thread() -> None:
+    queue = _make_queue()
+
+    with patch.object(queue, "_fail_job") as mock_fail:
+        queue._current_mode = "generate"
+        queue._execute(GpuJob(
+            job_id="j1", job_type="generate",
+            fn=lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        ))
+
+    mock_fail.assert_called_once_with("j1", "Job execution failed")
+
+
+def test_handle_stuck_job_generate_restarts() -> None:
+    queue = _make_queue()
+    with patch.object(queue, "_stop_acestep") as mock_stop:
+        queue._current_mode = "generate"
+        queue._handle_stuck_job(GpuJob(job_id="j1", job_type="generate", fn=lambda: None))
+    mock_stop.assert_called_once()
+    assert queue._current_mode is None
+
+
+def test_handle_stuck_job_score_no_restart() -> None:
+    queue = _make_queue()
+    with patch.object(queue, "_stop_acestep") as mock_stop:
+        queue._current_mode = "score"
+        queue._handle_stuck_job(GpuJob(job_id="j1", job_type="score", fn=lambda: None))
+    mock_stop.assert_not_called()
+    assert queue._current_mode == "score"
