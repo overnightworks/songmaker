@@ -286,6 +286,7 @@ def create_generation(
     mp3_path: str,
     seed: int | None = None,
     generation_params: dict | None = None,
+    wav_path: str | None = None,
 ) -> Generation:
     max_num = (
         session.query(Generation.generation_number)
@@ -300,6 +301,7 @@ def create_generation(
         version_id=version_id,
         generation_number=gen_number,
         mp3_path=mp3_path,
+        wav_path=wav_path,
         seed=seed,
         generation_params=generation_params,
         status="completed",

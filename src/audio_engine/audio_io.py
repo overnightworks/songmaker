@@ -20,6 +20,49 @@ from audio_engine.mastering import master_stereo
 log = logging.getLogger(__name__)
 
 
+def master_audio(
+    left: NDArray[np.float64],
+    right: NDArray[np.float64],
+    sample_rate: int = FALLBACK_SAMPLE_RATE,
+    target_lufs: float = -14.0,
+    stereo_width: float = 1.2,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    if len(left) == 0 or len(right) == 0:
+        raise MasteringError("Cannot master empty audio")
+
+    log.info(
+        "Mastering: multiband -> stereo(%.1fx) -> LUFS(%.1f) -> clip",
+        stereo_width, target_lufs,
+    )
+    return master_stereo(
+        left, right,
+        target_lufs=target_lufs,
+        stereo_width=stereo_width,
+        sample_rate=sample_rate,
+    )
+
+
+def encode_mp3(
+    left: NDArray[np.float64],
+    right: NDArray[np.float64],
+    mp3_path: str,
+    sample_rate: int = FALLBACK_SAMPLE_RATE,
+    bitrate: str = "320k",
+    metadata: dict[str, str] | None = None,
+) -> None:
+    if not shutil.which("ffmpeg"):
+        raise MasteringError("ffmpeg not found on PATH — install ffmpeg to encode MP3s")
+
+    wav_bytes = _stereo_to_wav_bytes(left, right, sample_rate)
+    cmd = build_ffmpeg_cmd("-", mp3_path, bitrate, metadata)
+
+    try:
+        subprocess.run(cmd, input=wav_bytes, check=True, capture_output=True)
+        log.info("Encoded MP3: %s", mp3_path)
+    except subprocess.CalledProcessError as exc:
+        raise MasteringError(f"MP3 encoding failed: {exc}") from exc
+
+
 def master_to_mp3(
     left: NDArray[np.float64],
     right: NDArray[np.float64],
@@ -30,39 +73,14 @@ def master_to_mp3(
     bitrate: str = "320k",
     metadata: dict[str, str] | None = None,
 ) -> None:
-    """Master stereo audio to MP3.
-
-    Pipeline: multiband compression -> stereo widening ->
-    LUFS normalization -> soft clipping -> MP3 encoding (ffmpeg).
-
-    Raises:
-        MasteringError: On empty audio, missing ffmpeg, or encoding failure.
-    """
-    if len(left) == 0 or len(right) == 0:
-        raise MasteringError("Cannot master empty audio")
-
-    if not shutil.which("ffmpeg"):
-        raise MasteringError("ffmpeg not found on PATH — install ffmpeg to encode MP3s")
-
-    log.info(
-        "Mastering: multiband -> stereo(%.1fx) -> LUFS(%.1f) -> clip",
-        stereo_width, target_lufs,
+    mastered_left, mastered_right = master_audio(
+        left, right, sample_rate=sample_rate,
+        target_lufs=target_lufs, stereo_width=stereo_width,
     )
-    mastered_left, mastered_right = master_stereo(
-        left, right,
-        target_lufs=target_lufs,
-        stereo_width=stereo_width,
-        sample_rate=sample_rate,
+    encode_mp3(
+        mastered_left, mastered_right, mp3_path,
+        sample_rate=sample_rate, bitrate=bitrate, metadata=metadata,
     )
-
-    wav_bytes = _stereo_to_wav_bytes(mastered_left, mastered_right, sample_rate)
-    cmd = build_ffmpeg_cmd("-", mp3_path, bitrate, metadata)
-
-    try:
-        subprocess.run(cmd, input=wav_bytes, check=True, capture_output=True)
-        log.info("Mastered to %s", mp3_path)
-    except subprocess.CalledProcessError as exc:
-        raise MasteringError(f"MP3 encoding failed: {exc}") from exc
 
 
 def _interleave_to_int16(

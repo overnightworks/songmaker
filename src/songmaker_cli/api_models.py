@@ -115,6 +115,7 @@ class GenerationResponse(BaseModel):
     version_number: int | None
     generation_number: int
     mp3_path: str
+    wav_path: str | None
     seed: int | None
     status: str
     is_archived: bool
@@ -147,6 +148,7 @@ class GenerationResponse(BaseModel):
             version_number=gen.version.version_number if gen.version else None,
             generation_number=gen.generation_number,
             mp3_path=gen.mp3_path,
+            wav_path=gen.wav_path,
             seed=gen.seed,
             status=gen.status,
             is_archived=gen.is_archived,
@@ -487,6 +489,7 @@ class CapabilitiesResponse(BaseModel):
     claude_cli: bool
     generation: bool
     scoring: bool
+    chat_model: str
 
 
 class ChatResponse(BaseModel):

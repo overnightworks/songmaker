@@ -12,7 +12,7 @@ from numpy.typing import NDArray
 
 from acestep_engine import AceStepClient, AceStepError
 from acestep_engine.models import AceStepConfig, AceStepResult
-from audio_engine import MasteringError, master_to_mp3, read_wav_bytes, write_stereo_wav
+from audio_engine import MasteringError, encode_mp3, master_audio, read_wav_bytes, write_stereo_wav
 from songmaker_cli.config import OutputPaths, resolve_output_paths
 from songmaker_cli.errors import GenerationError
 from songmaker_cli.parser import AlbumMeta, SongMeta
@@ -31,6 +31,7 @@ class DecodedAudio:
 @dataclass(frozen=True)
 class GenerationResult:
     mp3_path: Path
+    wav_path: Path
     seed: int
     duration: float
     output_paths: OutputPaths
@@ -57,6 +58,7 @@ def generate_single(
     log.info("Generated: %s (seed=%s, %.0fs)", paths.mp3.name, ace_result.seed, elapsed)
     return GenerationResult(
         mp3_path=paths.mp3,
+        wav_path=paths.wav,
         seed=ace_result.seed,
         duration=audio.duration,
         output_paths=paths,
@@ -94,7 +96,15 @@ def _write_output(
     meta: SongMeta,
     album_meta: AlbumMeta,
 ) -> None:
-    write_stereo_wav(str(paths.raw_wav), audio.left, audio.right, audio.sample_rate)
+    try:
+        mastered_left, mastered_right = master_audio(
+            audio.left, audio.right, sample_rate=audio.sample_rate,
+        )
+    except MasteringError as exc:
+        raise GenerationError(str(exc)) from exc
+
+    write_stereo_wav(str(paths.wav), mastered_left, mastered_right, audio.sample_rate)
+
     id3_metadata = {
         "title": meta.title,
         "artist": album_meta.artist,
@@ -105,10 +115,9 @@ def _write_output(
         "comment": f"seed={seed}",
     }
     try:
-        master_to_mp3(
-            audio.left, audio.right, str(paths.mp3),
+        encode_mp3(
+            mastered_left, mastered_right, str(paths.mp3),
             sample_rate=audio.sample_rate, metadata=id3_metadata,
         )
     except MasteringError as exc:
         raise GenerationError(str(exc)) from exc
-    paths.raw_wav.unlink(missing_ok=True)

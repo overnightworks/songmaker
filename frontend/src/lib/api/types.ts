@@ -68,6 +68,7 @@ export interface GenerationItem {
 	version_number: number | null;
 	generation_number: number;
 	mp3_path: string;
+	wav_path: string | null;
 	seed: number | null;
 	status: string;
 	is_archived: boolean;
@@ -140,6 +141,7 @@ export interface Capabilities {
 	claude_cli: boolean;
 	generation: boolean;
 	scoring: boolean;
+	chat_model: string;
 }
 
 export interface AuthUser {

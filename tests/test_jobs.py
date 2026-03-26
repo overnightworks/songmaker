@@ -100,8 +100,10 @@ def test_detect_device_no_torch() -> None:
 
 
 def _mock_generate_result(mp3_name: str = "01_song_one_v1.mp3", seed: int = 42):
+    wav_name = mp3_name.replace(".mp3", ".wav")
     result = MagicMock()
     result.mp3_path = Path(f"/output/rock/{mp3_name}")
+    result.wav_path = Path(f"/output/rock/{wav_name}")
     result.seed = seed
     return result
 
@@ -154,6 +156,33 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 3
+
+
+def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
+    ok_result = _mock_generate_result("song_v1.mp3", seed=100)
+    client = MagicMock()
+    client.is_available = True
+    client.server_info.return_value = _mock_server_info()
+
+    with (
+        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+        patch(
+            "songmaker_cli.jobs.generate_single",
+            side_effect=[ok_result, RuntimeError("GPU OOM"), RuntimeError("GPU OOM")],
+        ),
+    ):
+        out = tmp_path / "_output"
+        run_generation_job("j1", "s1", "v1", 3, db_factory=seeded_db, output_dir=out)
+
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "failed"
+        assert "1/3 completed" in job.error
+        assert "2 failed" in job.error
+
+        gens = session.query(Generation).filter_by(song_id="s1").all()
+        assert len(gens) == 1
 
 
 def test_generation_job_song_not_found(seeded_db) -> None:

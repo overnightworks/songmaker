@@ -77,6 +77,7 @@ def test_resolve_output_paths(tmp_path: Path) -> None:
     assert paths.version == 1
     assert paths.versioned_name == "song_name_v1"
     assert paths.mp3 == tmp_path / "my_album" / "song_name_v1.mp3"
+    assert paths.wav == tmp_path / "my_album" / "song_name_v1.wav"
 
 
 def test_resolve_output_paths_increments_version(tmp_path: Path) -> None:

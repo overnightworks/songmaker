@@ -106,7 +106,7 @@ class Version(Base):
 
 
 class Generation(Base):
-    """A generated MP3 from a specific version."""
+    """A generated audio output from a specific version."""
 
     __tablename__ = "generations"
 
@@ -118,6 +118,7 @@ class Generation(Base):
     generation_number: Mapped[int] = mapped_column(Integer, default=1)
     seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     mp3_path: Mapped[str] = mapped_column(String(500), index=True)
+    wav_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     whisper_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="completed")

@@ -385,6 +385,15 @@ def test_create_generation(seeded_session: Session) -> None:
     assert gen.mp3_path == "test/new_gen.mp3"
 
 
+def test_create_generation_with_wav_path(seeded_session: Session) -> None:
+    gen = create_generation(
+        seeded_session, "s1", "v1", "test/gen.mp3", seed=1,
+        wav_path="test/gen.wav",
+    )
+    seeded_session.commit()
+    assert gen.wav_path == "test/gen.wav"
+
+
 def test_save_scores_create(seeded_session: Session) -> None:
     save_scores(seeded_session, "g2", {"dynamics": 77.0, "enjoyment": 8.5})
     seeded_session.commit()

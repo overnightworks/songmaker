@@ -289,6 +289,7 @@ REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT", 30))
 
 IP_RATE_LIMIT = int(os.environ.get("IP_RATE_LIMIT", 120))
 IP_RATE_WINDOW = 60
+STATIC_ASSET_PREFIX = "/_app/"
 
 
 class IpRateLimitMiddleware(BaseHTTPMiddleware):
@@ -300,6 +301,8 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
         self._limiter = IpRateLimiter(IP_RATE_LIMIT, IP_RATE_WINDOW)
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if request.url.path.startswith(STATIC_ASSET_PREFIX):
+            return await call_next(request)
         from songmaker_cli.auth import get_client_ip
         ctx: AppContext = request.app.state.ctx
         direct_ip = request.client.host if request.client else "unknown"
@@ -581,7 +584,9 @@ def create_app(
         if user.role != "admin" and db_album.created_by != user.id:
             raise HTTPException(404, "Audio file not found")
 
-        return FileResponse(audio_path, media_type="audio/mpeg")
+        from songmaker_cli.constants import AUDIO_MEDIA_TYPES
+        media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+        return FileResponse(audio_path, media_type=media_type)
 
     from songmaker_cli.constants import SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS
     from songmaker_cli.middleware import IpRateLimiter
@@ -663,7 +668,9 @@ def create_app(
             raise HTTPException(403, "Path traversal denied")
         if not audio_path.exists():
             raise HTTPException(404, "Not found")
-        return FileResponse(audio_path, media_type="audio/mpeg")
+        from songmaker_cli.constants import AUDIO_MEDIA_TYPES
+        media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+        return FileResponse(audio_path, media_type=media_type)
 
     sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"

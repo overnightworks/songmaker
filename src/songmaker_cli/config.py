@@ -39,6 +39,10 @@ class OutputPaths(BaseModel):
     def mp3(self) -> Path:
         return self.output_dir / f"{self.versioned_name}.mp3"
 
+    @property
+    def wav(self) -> Path:
+        return self.output_dir / f"{self.versioned_name}.wav"
+
 
 def next_version(output_dir: Path, base_name: str) -> int:
     """Find the next version number for a track (v1, v2, ...)."""

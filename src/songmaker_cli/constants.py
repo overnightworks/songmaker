@@ -51,3 +51,9 @@ METRICS_CACHE_TTL_SECONDS = 5
 
 # Global generation defaults
 GLOBAL_DEFAULTS_PRESET_NAME = "__global_defaults__"
+
+# Audio file serving
+AUDIO_MEDIA_TYPES: dict[str, str] = {
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+}

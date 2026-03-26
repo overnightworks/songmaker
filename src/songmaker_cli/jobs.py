@@ -183,14 +183,23 @@ def run_generation_job(
             _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return
 
+        completed = 0
+        last_error: Exception | None = None
+
         for i in range(count):
             _update_job(db_factory, job_id, "running", progress=i / count)
 
-            result = generate_single(
-                ctx.meta, ctx.album_meta, ctx.ace_config, ctx.output_root, client=ctx.client,
-            )
+            try:
+                result = generate_single(
+                    ctx.meta, ctx.album_meta, ctx.ace_config, ctx.output_root, client=ctx.client,
+                )
+            except Exception as exc:
+                log.exception("Generation %d/%d failed: %s", i + 1, count, exc)
+                last_error = exc
+                continue
 
             mp3_rel = f"{ctx.meta.album}/{result.mp3_path.name}"
+            wav_rel = f"{ctx.meta.album}/{result.wav_path.name}"
             gen_params = StoredGenerationParams(
                 acestep_model=ctx.model_name,
                 bpm=ctx.ace_config.bpm,
@@ -212,12 +221,28 @@ def run_generation_job(
                     mp3_path=mp3_rel,
                     seed=result.seed,
                     generation_params=gen_params,
+                    wav_path=wav_rel,
                 )
                 session.commit()
 
+            completed += 1
             log.info("Generated %d/%d: %s (seed=%s)", i + 1, count, mp3_rel, result.seed)
 
-        _update_job(db_factory, job_id, "completed", progress=1.0)
+        if completed == count:
+            _update_job(db_factory, job_id, "completed", progress=1.0)
+        elif completed > 0:
+            _update_job(
+                db_factory, job_id, "failed", progress=completed / count,
+                error=f"{completed}/{count} completed, {count - completed} failed: "
+                      f"{_sanitize_error(last_error)}",
+                error_type="generation_error",
+            )
+        else:
+            _update_job(
+                db_factory, job_id, "failed",
+                error=_sanitize_error(last_error),
+                error_type="generation_error",
+            )
 
     except Exception as exc:
         log.exception("Generation job failed: %s", exc)
@@ -334,25 +359,10 @@ def _detect_device() -> str:
     return "cpu"
 
 
-_UPDATE_JOB_MAX_RETRIES = 3
-_UPDATE_JOB_BASE_DELAY = 1.0
-
-
 def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
-    import time
-
-    for attempt in range(_UPDATE_JOB_MAX_RETRIES):
-        try:
-            with factory() as session:
-                update_job_status(session, job_id, status, **kwargs)
-                session.commit()
-            return
-        except Exception:
-            if attempt == _UPDATE_JOB_MAX_RETRIES - 1:
-                log.exception("Failed to update job %s to %s after %d attempts",
-                              job_id, status, _UPDATE_JOB_MAX_RETRIES)
-            else:
-                delay = _UPDATE_JOB_BASE_DELAY * (2 ** attempt)
-                log.warning("Retrying job %s status update (%s) in %.0fs",
-                            job_id, status, delay)
-                time.sleep(delay)
+    try:
+        with factory() as session:
+            update_job_status(session, job_id, status, **kwargs)
+            session.commit()
+    except Exception:
+        log.exception("Failed to update job %s to %s", job_id, status)

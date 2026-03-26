@@ -11,6 +11,8 @@ import pytest
 
 from audio_engine.audio_io import (
     build_ffmpeg_cmd,
+    encode_mp3,
+    master_audio,
     master_to_mp3,
     read_wav_bytes,
     sanitize_metadata,
@@ -133,6 +135,44 @@ def test_read_wav_bytes_missing_data_chunk() -> None:
         read_wav_bytes(bytes(buf))
 
 
+def test_master_audio_empty() -> None:
+    empty = np.array([], dtype=np.float64)
+    with pytest.raises(MasteringError, match="empty"):
+        master_audio(empty, empty)
+
+
+def test_master_audio_returns_arrays() -> None:
+    signal = np.sin(np.linspace(0, 100, 44100 * 3)).astype(np.float64) * 0.5
+    left, right = master_audio(signal, signal.copy())
+    assert len(left) == len(signal)
+    assert len(right) == len(signal)
+
+
+def test_encode_mp3_no_ffmpeg() -> None:
+    from unittest.mock import patch
+
+    signal = np.zeros(100, dtype=np.float64)
+    with patch("audio_engine.audio_io.shutil.which", return_value=None):
+        with pytest.raises(MasteringError, match="ffmpeg not found"):
+            encode_mp3(signal, signal.copy(), "/tmp/test.mp3")
+
+
+def test_encode_mp3_ffmpeg_failure() -> None:
+    from unittest.mock import patch
+
+    signal = np.zeros(100, dtype=np.float64)
+
+    with (
+        patch("audio_engine.audio_io.shutil.which", return_value="/usr/bin/ffmpeg"),
+        patch(
+            "subprocess.run",
+            side_effect=subprocess.CalledProcessError(1, "ffmpeg", stderr=b"error"),
+        ),
+    ):
+        with pytest.raises(MasteringError, match="MP3 encoding failed"):
+            encode_mp3(signal, signal.copy(), "/tmp/test.mp3")
+
+
 def test_master_to_mp3_empty_audio() -> None:
     empty = np.array([], dtype=np.float64)
     with pytest.raises(MasteringError, match="empty"):
@@ -145,7 +185,7 @@ def test_master_to_mp3_ffmpeg_failure() -> None:
     signal = np.sin(np.linspace(0, 100, 44100 * 3)).astype(np.float64) * 0.5
 
     with (
-        patch("shutil.which", return_value="/usr/bin/ffmpeg"),
+        patch("audio_engine.audio_io.shutil.which", return_value="/usr/bin/ffmpeg"),
         patch(
             "subprocess.run",
             side_effect=subprocess.CalledProcessError(1, "ffmpeg", stderr=b"error"),

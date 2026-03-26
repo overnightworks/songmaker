@@ -60,7 +60,8 @@ def test_write_output(tmp_path: Path) -> None:
 
     assert paths.mp3.exists()
     assert paths.mp3.stat().st_size > 0
-    assert not paths.raw_wav.exists()
+    assert paths.wav.exists()
+    assert paths.wav.stat().st_size > 0
 
 
 
@@ -125,9 +126,26 @@ def test_run_generation_error() -> None:
 def test_write_output_mastering_error(tmp_path: Path) -> None:
     from songmaker_cli.config import OutputPaths
 
-    left = np.array([0.5, -0.5], dtype=np.float64)
+    left = np.array([], dtype=np.float64)
     right = left.copy()
-    audio = DecodedAudio(left=left, right=right, sample_rate=44100, duration=0.01)
+    audio = DecodedAudio(left=left, right=right, sample_rate=44100, duration=0.0)
+
+    paths = OutputPaths(
+        output_dir=tmp_path, base_name="song", version=1, versioned_name="song_v1",
+    )
+    meta = SongMeta(title="Song", prompt="rock", lyrics="hello", album="test")
+    album_meta = AlbumMeta(title="Album", artist="Artist")
+
+    with pytest.raises(GenerationError, match="empty"):
+        _write_output(audio, 42, paths, meta, album_meta)
+
+
+def test_write_output_encode_error(tmp_path: Path) -> None:
+    from songmaker_cli.config import OutputPaths
+
+    left = np.sin(np.linspace(0, 2 * np.pi * 440, 44100)) * 0.3
+    right = left.copy()
+    audio = DecodedAudio(left=left, right=right, sample_rate=44100, duration=1.0)
 
     paths = OutputPaths(
         output_dir=tmp_path, base_name="song", version=1, versioned_name="song_v1",
@@ -167,13 +185,16 @@ def test_generate_single_success(tmp_path: Path, make_stereo_wav_bytes) -> None:
     album_meta = AlbumMeta(title="Test Album", artist="Test Artist")
     ace_config = AceStepConfig(prompt="rock", lyrics="hello")
 
-    with patch("songmaker_cli.generate.master_to_mp3") as mock_master:
-        mock_master.return_value = None
+    with (
+        patch("songmaker_cli.generate.master_audio") as mock_master,
+        patch("songmaker_cli.generate.encode_mp3") as mock_encode,
+    ):
+        mock_master.return_value = (np.zeros(100), np.zeros(100))
 
         def write_mp3_side_effect(left, right, mp3_path, **kwargs):
             Path(mp3_path).write_bytes(b"\xff\xfb" * 100)
 
-        mock_master.side_effect = write_mp3_side_effect
+        mock_encode.side_effect = write_mp3_side_effect
 
         result = generate_single(
             meta=meta,
@@ -205,12 +226,15 @@ def test_generate_single_creates_client_when_none(tmp_path: Path, make_stereo_wa
 
     with (
         patch("songmaker_cli.generate.AceStepClient", return_value=mock_client),
-        patch("songmaker_cli.generate.master_to_mp3") as mock_master,
+        patch("songmaker_cli.generate.master_audio") as mock_master,
+        patch("songmaker_cli.generate.encode_mp3") as mock_encode,
     ):
+        mock_master.return_value = (np.zeros(100), np.zeros(100))
+
         def write_mp3_side_effect(left, right, mp3_path, **kwargs):
             Path(mp3_path).write_bytes(b"\xff\xfb" * 100)
 
-        mock_master.side_effect = write_mp3_side_effect
+        mock_encode.side_effect = write_mp3_side_effect
 
         result = generate_single(
             meta=meta,

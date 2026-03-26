@@ -60,6 +60,7 @@ function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		version_number: 1,
 		generation_number: 1,
 		mp3_path: 'a1/song_v1.mp3',
+		wav_path: 'a1/song_v1.wav',
 		seed: 42,
 		status: 'completed',
 		is_archived: false,
