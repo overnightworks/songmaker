@@ -75,6 +75,20 @@ class ShareResponse(BaseModel):
     share_slug: str
 
 
+class SharedSongItem(BaseModel):
+    title: str
+    track_number: int
+    audio_url: str | None
+
+
+class SharedAlbumResponse(BaseModel):
+    title: str
+    artist: str
+    subtitle: str
+    year: str
+    songs: list[SharedSongItem]
+
+
 # ── Generation ──────────────────────────────────────────────────────
 
 
@@ -115,7 +129,13 @@ class GenerationResponse(BaseModel):
         scores: dict[str, object] = {}
         for score in gen.scores:
             if isinstance(score.value, dict):
-                scores.update(score.value)
+                for key, value in score.value.items():
+                    if key in scores:
+                        import logging
+                        logging.getLogger(__name__).warning(
+                            "Duplicate score key '%s' in generation %s", key, gen.id,
+                        )
+                    scores[key] = value
         if gen.rating:
             scores["user_rating"] = gen.rating.rating
             scores["user_notes"] = gen.rating.notes

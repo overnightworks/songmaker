@@ -356,8 +356,14 @@ def test_gc_gpu_no_torch() -> None:
 
 def test_prepare_mode_generate() -> None:
     queue = GpuQueue(MagicMock())
-    with patch.object(queue, "_ensure_acestep") as mock_ensure:
+    with (
+        patch.object(queue, "_clear_scoring_models") as mock_clear,
+        patch.object(queue, "_verify_vram_freed") as mock_verify,
+        patch.object(queue, "_ensure_acestep") as mock_ensure,
+    ):
         queue._prepare_mode("generate")
+    mock_clear.assert_called_once()
+    mock_verify.assert_called_once()
     mock_ensure.assert_called_once()
 
 
@@ -368,7 +374,11 @@ def test_prepare_mode_score_is_noop() -> None:
 
 def test_prepare_mode_generate_exception_propagates() -> None:
     queue = GpuQueue(MagicMock())
-    with patch.object(queue, "_ensure_acestep", side_effect=RuntimeError("boom")):
+    with (
+        patch.object(queue, "_clear_scoring_models"),
+        patch.object(queue, "_verify_vram_freed"),
+        patch.object(queue, "_ensure_acestep", side_effect=RuntimeError("boom")),
+    ):
         with pytest.raises(RuntimeError, match="boom"):
             queue._prepare_mode("generate")
 

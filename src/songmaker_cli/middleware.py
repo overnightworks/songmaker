@@ -141,6 +141,6 @@ class IpRateLimiter:
         for ip in stale[:self._EVICT_BATCH]:
             del self._requests[ip]
         if len(self._requests) >= self._MAX_TRACKED_IPS:
-            to_delete = list(self._requests)[:self._EVICT_BATCH]
-            for ip in to_delete:
+            by_last_use = sorted(self._requests, key=lambda ip: self._requests[ip][-1])
+            for ip in by_last_use[:self._EVICT_BATCH]:
                 del self._requests[ip]

@@ -162,6 +162,8 @@ class GpuQueue:
 
     def _prepare_mode(self, mode: str) -> None:
         if mode == "generate":
+            self._clear_scoring_models()
+            self._verify_vram_freed()
             self._ensure_acestep()
 
     def _clear_scoring_models(self) -> None:

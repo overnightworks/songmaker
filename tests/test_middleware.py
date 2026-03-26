@@ -324,13 +324,26 @@ def test_get_client_ip_no_xff() -> None:
     assert result == "10.0.0.1"
 
 
-def test_ip_rate_limiter_evicts_oldest_when_all_active() -> None:
+def test_ip_rate_limiter_evicts_least_recently_used() -> None:
+    from unittest.mock import patch
+
     from songmaker_cli.middleware import IpRateLimiter
     limiter = IpRateLimiter(max_requests=100, window_seconds=60)
     limiter._MAX_TRACKED_IPS = 3
     limiter._EVICT_BATCH = 2
-    for i in range(3):
-        limiter.is_allowed(f"10.0.0.{i}")
-    assert len(limiter._requests) == 3
-    limiter.is_allowed("10.0.0.99")
-    assert len(limiter._requests) <= 3
+
+    base = time.time()
+    with patch("songmaker_cli.middleware.time") as mock_time:
+        mock_time.time.return_value = base
+        limiter.is_allowed("10.0.0.0")
+        mock_time.time.return_value = base + 1
+        limiter.is_allowed("10.0.0.1")
+        mock_time.time.return_value = base + 2
+        limiter.is_allowed("10.0.0.2")
+        assert len(limiter._requests) == 3
+
+        mock_time.time.return_value = base + 3
+        limiter.is_allowed("10.0.0.99")
+        assert len(limiter._requests) <= 3
+        assert "10.0.0.2" in limiter._requests
+        assert "10.0.0.99" in limiter._requests

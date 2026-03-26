@@ -91,15 +91,14 @@ class _BodyTooLarge(Exception):
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        response = await call_next(request)
-        if request.url.path.startswith("/api/"):
-            response.headers["Cache-Control"] = "no-store"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Content-Security-Policy"] = (
+    def __init__(self, app: object, script_hash: str = "") -> None:
+        super().__init__(app)
+        script_src = "'self'"
+        if script_hash:
+            script_src += f" '{script_hash}'"
+        self._csp = (
             "default-src 'none'; "
-            "script-src 'self'; "
+            f"script-src {script_src}; "
             "style-src 'self' 'unsafe-inline'; "
             "connect-src 'self' https://api.anthropic.com; "
             "img-src 'self' data: blob:; "
@@ -107,6 +106,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "font-src 'self'; "
             "frame-ancestors 'none'"
         )
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        response = await call_next(request)
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = self._csp
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         is_https = request.url.scheme == "https"
@@ -238,8 +245,9 @@ def _is_allowed_host(
     exact: frozenset[str],
     patterns: list[re.Pattern[str]],
 ) -> bool:
+    host_without_port = netloc.rsplit(":", 1)[0] if ":" in netloc else netloc
     if exact or patterns:
-        if netloc in exact:
+        if netloc in exact or host_without_port in exact:
             return True
         return any(p.match(netloc) for p in patterns)
     return bool(_LOCALHOST_PATTERN.match(netloc))
@@ -335,6 +343,20 @@ def _get_gpu_vram_mb() -> float | None:
     return None
 
 
+def _compute_script_hash(index_html: Path) -> str:
+    if not index_html.exists():
+        return ""
+    import hashlib
+    import re
+    content = index_html.read_text()
+    match = re.search(r"<script>(.*?)</script>", content, re.DOTALL)
+    if not match:
+        return ""
+    import base64
+    digest = hashlib.sha256(match.group(1).encode()).digest()
+    return f"sha256-{base64.b64encode(digest).decode()}"
+
+
 def _check_db(ctx: AppContext) -> bool:
     try:
         from sqlalchemy import text
@@ -414,7 +436,8 @@ def create_app(
     #   5. AccessLogMiddleware       — log all requests (after security checks)
     #   6. SecurityHeadersMiddleware — add security headers to responses
     # WARNING: reordering these lines changes security behavior.
-    app.add_middleware(SecurityHeadersMiddleware)
+    script_hash = _compute_script_hash(project_root / "frontend" / "build" / "index.html")
+    app.add_middleware(SecurityHeadersMiddleware, script_hash=script_hash)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(CsrfTokenMiddleware)
     app.add_middleware(CsrfOriginMiddleware)
@@ -584,29 +607,32 @@ def create_app(
         db: Session = Depends(get_db_session),
     ) -> JSONResponse:
         _check_shared_rate_limit(request)
+        from songmaker_cli.api_models import SharedAlbumResponse, SharedSongItem
         from songmaker_cli.db.queries import get_album_by_slug
+
         album = get_album_by_slug(db, slug)
         if not album:
             raise HTTPException(404, "Not found")
         songs = sorted(album.songs, key=lambda s: s.track_number)
         base_url = str(request.base_url).rstrip("/")
-        return JSONResponse({
-            "title": album.title,
-            "artist": album.artist,
-            "subtitle": album.subtitle,
-            "year": album.year,
-            "songs": [
-                {
-                    "title": s.title,
-                    "track_number": s.track_number,
-                    "audio_url": (
+        response = SharedAlbumResponse(
+            title=album.title,
+            artist=album.artist,
+            subtitle=album.subtitle,
+            year=album.year,
+            songs=[
+                SharedSongItem(
+                    title=s.title,
+                    track_number=s.track_number,
+                    audio_url=(
                         f"{base_url}/shared/{slug}/audio/{_picked_filename(s)}"
                         if _picked_filename(s) else None
                     ),
-                }
+                )
                 for s in songs
             ],
-        })
+        )
+        return JSONResponse(response.model_dump())
 
     @app.get("/shared/{slug}/audio/{filename:path}")
     async def get_shared_audio(
