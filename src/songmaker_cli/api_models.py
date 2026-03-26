@@ -371,6 +371,10 @@ class SongUpdateRequest(BaseModel):
     generation_params: GenerationParams | None = None
 
 
+class SongMoveRequest(BaseModel):
+    album_id: str = Field(max_length=64)
+
+
 _VALID_MODEL_MODES = frozenset(get_builtin_defaults().keys())
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 import uuid
 from pathlib import Path
 
@@ -407,13 +408,15 @@ def delete_generation(
     log.info("Deleted generation %s", generation_id)
 
 
+_GENERATION_FILE_SUFFIXES = [".mp3", ".wav", ".md", ".whisper"]
+
+
 def _delete_generation_files(output_dir: Path, mp3_rel: str) -> None:
-    """Remove MP3 and related files (.md snapshot, .whisper) from disk."""
     mp3 = (output_dir / mp3_rel).resolve()
     if not mp3.is_relative_to(output_dir.resolve()):
         log.warning("Path traversal blocked in delete: %s", mp3_rel)
         return
-    for suffix in [".mp3", ".md", ".whisper"]:
+    for suffix in _GENERATION_FILE_SUFFIXES:
         path = mp3.with_suffix(suffix)
         if path.exists():
             path.unlink()
@@ -438,3 +441,100 @@ def cleanup_album(
         session.delete(gen)
     session.flush()
     return count
+
+
+def delete_album(
+    session: Session, album_id: str, output_dir: Path | None = None,
+) -> None:
+    album = session.query(Album).filter_by(id=album_id).first()
+    if not album:
+        raise ValueError(f"Album not found: {album_id}")
+
+    gens = (
+        session.query(Generation)
+        .join(Song)
+        .options(joinedload(Generation.scores), joinedload(Generation.rating))
+        .filter(Song.album_id == album_id)
+        .all()
+    )
+    for gen in gens:
+        if output_dir and gen.mp3_path:
+            _delete_generation_files(output_dir, gen.mp3_path)
+        session.delete(gen)
+
+    session.delete(album)
+    session.flush()
+
+    if output_dir:
+        album_dir = (output_dir / album_id).resolve()
+        if album_dir.is_relative_to(output_dir.resolve()) and album_dir.is_dir():
+            shutil.rmtree(album_dir, ignore_errors=True)
+            log.info("Removed album directory: %s", album_dir)
+
+    log.info("Deleted album %s", album_id)
+
+
+def move_song(
+    session: Session, song_id: str, new_album_id: str,
+    output_dir: Path | None = None,
+) -> Song:
+    song = session.query(Song).filter_by(id=song_id).first()
+    if not song:
+        raise ValueError(f"Song not found: {song_id}")
+
+    new_album = session.query(Album).filter_by(id=new_album_id).first()
+    if not new_album:
+        raise ValueError(f"Album not found: {new_album_id}")
+
+    if song.album_id == new_album_id:
+        return song
+
+    old_album_id = song.album_id
+    song.album_id = new_album_id
+
+    if output_dir:
+        _move_generation_files(session, song_id, old_album_id, new_album_id, output_dir)
+
+    session.flush()
+    log.info("Moved song %s from album %s to %s", song_id, old_album_id, new_album_id)
+    return song
+
+
+def _move_generation_files(
+    session: Session, song_id: str,
+    old_album_id: str, new_album_id: str,
+    output_dir: Path,
+) -> None:
+    new_dir = output_dir / new_album_id
+    new_dir.mkdir(parents=True, exist_ok=True)
+
+    gens = session.query(Generation).filter_by(song_id=song_id).all()
+    for gen in gens:
+        if gen.mp3_path:
+            gen.mp3_path = _move_file_and_update_path(
+                output_dir, gen.mp3_path, old_album_id, new_album_id,
+            )
+        if gen.wav_path:
+            gen.wav_path = _move_file_and_update_path(
+                output_dir, gen.wav_path, old_album_id, new_album_id,
+            )
+
+
+def _move_file_and_update_path(
+    output_dir: Path, rel_path: str,
+    old_album_id: str, new_album_id: str,
+) -> str:
+    src = (output_dir / rel_path).resolve()
+    if not src.is_relative_to(output_dir.resolve()):
+        log.warning("Path traversal blocked in move: %s", rel_path)
+        return rel_path
+
+    new_rel = rel_path.replace(old_album_id + "/", new_album_id + "/", 1)
+    dst = (output_dir / new_rel).resolve()
+
+    if src.exists():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+        log.info("Moved: %s -> %s", src, dst)
+
+    return new_rel

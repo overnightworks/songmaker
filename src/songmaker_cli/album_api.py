@@ -23,6 +23,7 @@ from songmaker_cli.db.queries import (
     cleanup_album,
     count_albums,
     create_album,
+    delete_album,
     disable_album_sharing,
     enable_album_sharing,
     get_album,
@@ -85,6 +86,21 @@ def api_create_album(
         session.rollback()
         raise HTTPException(409, f"Album ID conflict for '{title}'. Try a different title.")
     return AlbumResponse.from_orm(album)
+
+
+@router.delete("/albums/{album_id}")
+def api_delete_album(
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> StatusResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    delete_album(session, album_id, output_dir=ctx.output_dir)
+    record_audit(session, user.id, "delete", "album", album_id)
+    session.commit()
+    return StatusResponse()
 
 
 @router.post("/albums/{album_id}/cleanup")

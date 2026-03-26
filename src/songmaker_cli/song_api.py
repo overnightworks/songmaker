@@ -14,6 +14,7 @@ from songmaker_cli.api_helpers import (
 from songmaker_cli.api_models import (
     PaginatedResponse,
     SongCreateRequest,
+    SongMoveRequest,
     SongResponse,
     SongSummaryResponse,
     SongUpdateRequest,
@@ -28,6 +29,7 @@ from songmaker_cli.db.queries import (
     delete_version,
     get_album,
     list_songs,
+    move_song,
     record_audit,
     update_song,
 )
@@ -105,6 +107,25 @@ def api_update_song(
     record_audit(session, user.id, "update", "song", song_id)
     session.commit()
     return SongResponse.from_orm(version.song)
+
+
+@router.put("/songs/{song_id}/album")
+def api_move_song(
+    song_id: str, req: SongMoveRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> SongResponse:
+    check_song_access(session, song_id, user)
+    target_album = get_album(session, req.album_id)
+    check_album_access(target_album, user)
+    try:
+        song = move_song(session, song_id, req.album_id, output_dir=ctx.output_dir)
+    except ValueError:
+        raise HTTPException(404, "Song or album not found")
+    record_audit(session, user.id, "move", "song", song_id, f"album={req.album_id}")
+    session.commit()
+    return SongResponse.from_orm(song)
 
 
 @router.get("/songs/{song_id}/versions")

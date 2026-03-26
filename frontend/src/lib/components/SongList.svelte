@@ -23,9 +23,11 @@
 	} from '$lib/stores/player';
 	import {
 		deleteGeneration,
+		deleteAlbum,
 		cleanupAlbum,
 		shareAlbum,
 		unshareAlbum,
+		moveSong,
 		fetchSongs
 	} from '$lib/api/client';
 	import { searchQuery } from '$lib/stores/filter';
@@ -51,6 +53,8 @@
 	let showAllGens: Record<string, boolean> = $state({});
 	let confirmDeleteGenId: string | null = $state(null);
 	let confirmCleanup: string | null = $state(null);
+	let confirmDeleteAlbum: string | null = $state(null);
+	let movingSongId: string | null = $state(null);
 
 	// Auto-expand all albums on first load
 	$effect(() => {
@@ -196,6 +200,29 @@
 		}
 	}
 
+	async function handleDeleteAlbum(albumId: string): Promise<void> {
+		try {
+			await deleteAlbum(albumId);
+			confirmDeleteAlbum = null;
+			albumList.update((list) => list.filter((a) => a.id !== albumId));
+			songList.update((list) => list.filter((s) => s.album_id !== albumId));
+			addToast('Album deleted', 'success');
+		} catch (err) {
+			addToast(err instanceof Error ? err.message : 'Delete failed', 'error');
+		}
+	}
+
+	async function handleMoveSong(songId: string, targetAlbumId: string): Promise<void> {
+		try {
+			const updated = await moveSong(songId, targetAlbumId);
+			songList.update((list) => list.map((s) => (s.id === updated.id ? updated : s)));
+			movingSongId = null;
+			addToast('Song moved', 'success');
+		} catch (err) {
+			addToast(err instanceof Error ? err.message : 'Move failed', 'error');
+		}
+	}
+
 	async function handleShare(e: Event, albumId: string): Promise<void> {
 		e.stopPropagation();
 		const album = albums.find((a) => a.id === albumId);
@@ -294,6 +321,21 @@
 								confirmCleanup = null;
 							}}>Cancel</button
 						>
+					{:else if confirmDeleteAlbum === group.album.id}
+						<button
+							class="cleanup-btn confirm"
+							onclick={(e) => {
+								e.stopPropagation();
+								handleDeleteAlbum(group.album.id);
+							}}>Delete album?</button
+						>
+						<button
+							class="cleanup-btn"
+							onclick={(e) => {
+								e.stopPropagation();
+								confirmDeleteAlbum = null;
+							}}>Cancel</button
+						>
 					{:else}
 						<button
 							class="cleanup-btn"
@@ -302,6 +344,14 @@
 								confirmCleanup = group.album.id;
 							}}
 							title="Delete all non-picked generations">Clean up</button
+						>
+						<button
+							class="cleanup-btn"
+							onclick={(e) => {
+								e.stopPropagation();
+								confirmDeleteAlbum = group.album.id;
+							}}
+							title="Delete album and all songs">Delete</button
 						>
 					{/if}
 				{/if}
@@ -327,6 +377,37 @@
 							<button class="song-name-btn" onclick={() => handleSongClick(song)}>
 								<span class="song-name">{song.title}</span>
 							</button>
+							{#if movingSongId === song.id}
+								<select
+									class="move-select"
+									onchange={(e) => {
+										const target = (e.target as HTMLSelectElement).value;
+										if (target) handleMoveSong(song.id, target);
+									}}
+									onclick={(e) => e.stopPropagation()}
+								>
+									<option value="">Move to...</option>
+									{#each albums.filter((a) => a.id !== song.album_id) as a (a.id)}
+										<option value={a.id}>{a.title}</option>
+									{/each}
+								</select>
+								<button
+									class="move-cancel"
+									onclick={(e) => {
+										e.stopPropagation();
+										movingSongId = null;
+									}}>✕</button
+								>
+							{:else}
+								<button
+									class="move-btn"
+									onclick={(e) => {
+										e.stopPropagation();
+										movingSongId = song.id;
+									}}
+									title="Move to another album">↷</button
+								>
+							{/if}
 							<span class="song-meta">
 								{song.generation_count} gen{song.generation_count !== 1 ? 's' : ''}
 							</span>
@@ -644,6 +725,47 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.move-btn {
+		background: none;
+		border: none;
+		color: transparent;
+		font-size: 12px;
+		cursor: pointer;
+		padding: 0 2px;
+		flex-shrink: 0;
+	}
+
+	.song-item:hover .move-btn {
+		color: var(--text-dim);
+	}
+
+	.move-btn:hover {
+		color: var(--primary) !important;
+	}
+
+	.move-select {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		color: var(--text);
+		font-size: 10px;
+		padding: 1px 4px;
+		border-radius: 3px;
+		max-width: 100px;
+	}
+
+	.move-cancel {
+		background: none;
+		border: none;
+		color: var(--text-dim);
+		font-size: 9px;
+		cursor: pointer;
+		padding: 0 2px;
+	}
+
+	.move-cancel:hover {
+		color: var(--text-muted);
 	}
 
 	.song-meta {

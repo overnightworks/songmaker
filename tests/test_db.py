@@ -41,6 +41,7 @@ from songmaker_cli.db.queries import (
     create_session,
     create_song,
     create_user,
+    delete_album,
     delete_expired_sessions,
     delete_generation,
     delete_session,
@@ -58,6 +59,7 @@ from songmaker_cli.db.queries import (
     list_login_attempts,
     list_songs,
     list_users,
+    move_song,
     pick_generation,
     record_login_attempt,
     recover_stale_jobs,
@@ -319,6 +321,84 @@ def test_cleanup_album_no_picks_deletes_all(seeded_session: Session) -> None:
     deleted = cleanup_album(seeded_session, "test")
     seeded_session.commit()
     assert deleted == 2
+
+
+def test_delete_album(seeded_session: Session) -> None:
+    delete_album(seeded_session, "test")
+    seeded_session.commit()
+    assert get_album(seeded_session, "test") is None
+    assert get_song(seeded_session, "s1") is None
+    assert get_generation(seeded_session, "g1") is None
+    assert get_generation(seeded_session, "g2") is None
+
+
+def test_delete_album_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Album not found"):
+        delete_album(seeded_session, "nonexistent")
+
+
+def test_delete_album_removes_files(seeded_session: Session, tmp_path: Path) -> None:
+    output_dir = tmp_path / "output"
+    album_dir = output_dir / "test"
+    album_dir.mkdir(parents=True)
+    (album_dir / "01_song_one_v1.mp3").write_bytes(b"fake mp3")
+    (album_dir / "01_song_one_v1.wav").write_bytes(b"fake wav")
+
+    delete_album(seeded_session, "test", output_dir=output_dir)
+    seeded_session.commit()
+    assert not album_dir.exists()
+
+
+def test_move_song(seeded_session: Session) -> None:
+    seeded_session.add(Album(id="other", title="Other Album", artist="A"))
+    seeded_session.commit()
+
+    song = move_song(seeded_session, "s1", "other")
+    seeded_session.commit()
+    assert song.album_id == "other"
+    assert get_song(seeded_session, "s1").album_id == "other"
+
+
+def test_move_song_same_album(seeded_session: Session) -> None:
+    song = move_song(seeded_session, "s1", "test")
+    assert song.album_id == "test"
+
+
+def test_move_song_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Song not found"):
+        move_song(seeded_session, "nonexistent", "test")
+
+
+def test_move_song_target_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Album not found"):
+        move_song(seeded_session, "s1", "nonexistent")
+
+
+def test_move_song_moves_files(seeded_session: Session, tmp_path: Path) -> None:
+    gen = get_generation(seeded_session, "g1")
+    gen.wav_path = "test/01_song_one_v1.wav"
+    seeded_session.commit()
+
+    output_dir = tmp_path / "output"
+    old_dir = output_dir / "test"
+    old_dir.mkdir(parents=True)
+    (old_dir / "01_song_one_v1.mp3").write_bytes(b"fake mp3")
+    (old_dir / "01_song_one_v1.wav").write_bytes(b"fake wav")
+
+    seeded_session.add(Album(id="other", title="Other", artist="A"))
+    seeded_session.commit()
+
+    move_song(seeded_session, "s1", "other", output_dir=output_dir)
+    seeded_session.commit()
+
+    new_dir = output_dir / "other"
+    assert (new_dir / "01_song_one_v1.mp3").exists()
+    assert (new_dir / "01_song_one_v1.wav").exists()
+    assert not (old_dir / "01_song_one_v1.mp3").exists()
+
+    gen = get_generation(seeded_session, "g1")
+    assert gen.mp3_path.startswith("other/")
+    assert gen.wav_path.startswith("other/")
 
 
 # ── Job tests ────────────────────────────────────────────────────────

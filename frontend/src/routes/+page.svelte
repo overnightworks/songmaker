@@ -78,6 +78,7 @@
 
 	$effect(() => {
 		if (song) {
+			showCreate = false;
 			loadSongData(song);
 			ensureGenerationsLoaded(song.id);
 		}
@@ -213,7 +214,6 @@
 			<div class="create-panel">
 				<div class="create-header">
 					<h2>Create</h2>
-					<button class="cancel-create" onclick={() => (showCreate = false)}>Cancel</button>
 				</div>
 
 				<div class="create-section">
@@ -533,20 +533,6 @@
 		font-size: 20px;
 		margin: 0;
 		text-transform: uppercase;
-	}
-
-	.cancel-create {
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text-muted);
-		padding: 4px 12px;
-		font-size: 11px;
-		cursor: pointer;
-	}
-
-	.cancel-create:hover {
-		border-color: var(--text-muted);
 	}
 
 	.create-section {

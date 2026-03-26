@@ -159,6 +159,18 @@ export async function deleteGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}`, { method: 'DELETE' });
 }
 
+export async function deleteAlbum(albumId: string): Promise<void> {
+	await apiFetch(`/api/albums/${albumId}`, { method: 'DELETE' });
+}
+
+export async function moveSong(songId: string, albumId: string): Promise<SongItem> {
+	return apiFetch<SongItem>(`/api/songs/${songId}/album`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ album_id: albumId })
+	});
+}
+
 export interface JobStatus {
 	id: string;
 	type: string;

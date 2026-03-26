@@ -84,7 +84,9 @@ SQLite with WAL mode. SQLAlchemy ORM. Alembic migrations. DB file permissions `6
 |--------|------|------|---------|
 | GET | `/api/albums?offset=0&limit=50` | user | List albums with pagination (filtered by ownership) |
 | POST | `/api/albums` | user | Create album |
+| DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |
 | GET/PUT | `/api/songs/{id}` | user | Get/update song |
+| PUT | `/api/songs/{id}/album` | user | Move song to different album |
 | POST | `/api/songs` | user | Create song in album |
 | POST | `/api/songs/{id}/generate` | user | Submit generation job |
 | POST | `/api/generations/{id}/score` | user | Submit scoring job |
@@ -101,7 +103,7 @@ SQLite with WAL mode. SQLAlchemy ORM. Alembic migrations. DB file permissions `6
 | DELETE | `/api/albums/{id}/share` | user | Revoke sharing |
 | GET | `/shared/{slug}` | public | Read-only album view (no auth, rate-limited) |
 | GET | `/shared/{slug}/audio/{file}` | public | Stream MP3 for shared album (no auth, rate-limited) |
-| GET | `/audio/{album}/{file}` | user | Serve MP3 files (ownership-checked) |
+| GET | `/audio/{album}/{file}` | user | Serve audio files (MP3/WAV, ownership-checked) |
 
 ## Generation Flow
 
