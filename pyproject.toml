@@ -24,9 +24,8 @@ scoring = [
     "torch>=2.2",
 ]
 whisper = [
-    "openai-whisper",
+    "faster-whisper>=1.1",
     "torch>=2.2",
-    "torchaudio>=2.2",
     "soundfile",
     "librosa",
     "numba",

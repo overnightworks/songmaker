@@ -239,29 +239,25 @@ def test_word_level_accuracy_empty() -> None:
 def test_get_whisper_model_caches() -> None:
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
 
-    mock_whisper = MagicMock()
     mock_model = MagicMock()
-    mock_whisper.load_model.return_value = mock_model
     cache: dict = {}
 
-    with patch.dict("sys.modules", {"whisper": mock_whisper}):
+    with patch("faster_whisper.WhisperModel", return_value=mock_model) as mock_cls:
         m1 = _get_whisper_model("base", device="cpu", cache=cache)
         m2 = _get_whisper_model("base", device="cpu", cache=cache)
 
     assert m1 is m2
-    assert mock_whisper.load_model.call_count == 1
+    assert mock_cls.call_count == 1
 
 
 def test_get_whisper_model_default_cache() -> None:
     from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
 
-    mock_whisper = MagicMock()
     mock_model = MagicMock()
-    mock_whisper.load_model.return_value = mock_model
     key = "test_default:cpu"
 
-    with patch.dict("sys.modules", {"whisper": mock_whisper}):
+    with patch("faster_whisper.WhisperModel", return_value=mock_model):
         result = _get_whisper_model("test_default", device="cpu")
 
     assert result is mock_model
@@ -271,14 +267,15 @@ def test_get_whisper_model_default_cache() -> None:
 def test_transcribe() -> None:
     from songmaker_cli.scoring.text_accuracy import _transcribe
 
+    mock_segment = MagicMock()
+    mock_segment.text = "hello world"
+    mock_info = MagicMock()
     mock_model = MagicMock()
-    mock_model.transcribe.return_value = {
-        "text": "hello world",
-        "segments": [{"text": "hello world", "avg_logprob": -0.3}],
-    }
+    mock_model.transcribe.return_value = (iter([mock_segment]), mock_info)
     text, segments = _transcribe(Path("test.mp3"), "en", mock_model, "hint")
     assert text == "hello world"
     assert len(segments) == 1
+    assert segments[0]["text"] == "hello world"
     mock_model.transcribe.assert_called_once()
 
 
@@ -288,14 +285,11 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
 
     meta = SongMeta(prompt="test", lyrics="[verse]\nhello world\ngoodbye moon")
 
+    seg1, seg2 = MagicMock(), MagicMock()
+    seg1.text = "hello world"
+    seg2.text = "goodbye moon"
     mock_model = MagicMock()
-    mock_model.transcribe.return_value = {
-        "text": "hello world goodbye moon",
-        "segments": [
-            {"text": "hello world", "avg_logprob": -0.3, "no_speech_prob": 0.01},
-            {"text": "goodbye moon", "avg_logprob": -0.4, "no_speech_prob": 0.02},
-        ],
-    }
+    mock_model.transcribe.return_value = (iter([seg1, seg2]), MagicMock())
     config = PipelineConfig(device="cpu", whisper_model="base")
 
     shared_data: dict = {}
@@ -382,11 +376,13 @@ def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:
 
     meta = SongMeta(prompt="test", lyrics="[verse]\nhello world")
 
+    mock_segments = []
+    for _ in range(6):
+        seg = MagicMock()
+        seg.text = "thank you"
+        mock_segments.append(seg)
     mock_model = MagicMock()
-    mock_model.transcribe.return_value = {
-        "text": "thank you " * 10,
-        "segments": [{"text": "thank you", "avg_logprob": -0.3, "no_speech_prob": 0.01}] * 6,
-    }
+    mock_model.transcribe.return_value = (iter(mock_segments), MagicMock())
     config = PipelineConfig(device="cpu", whisper_model="base")
 
     with patch("songmaker_cli.scoring.text_accuracy._get_whisper_model", return_value=mock_model):

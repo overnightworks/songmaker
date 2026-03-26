@@ -10,7 +10,7 @@ from pathlib import Path
 
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import TextAccuracyScore
-from songmaker_cli.scoring.pipeline import DEVICE_GPU, AudioData, PipelineConfig, register
+from songmaker_cli.scoring.pipeline import DEVICE_CPU, AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def clear_cache() -> None:
     log.info("Cleared Whisper model cache")
 
 
-@register("text_accuracy", needs_audio=False, device=DEVICE_GPU)
+@register("text_accuracy", needs_audio=False, device=DEVICE_CPU)
 def score_text_accuracy(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
     config: PipelineConfig | None = None, shared_data: dict | None = None,
@@ -40,7 +40,7 @@ def score_text_accuracy(
 
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
     whisper_size = effective_config.whisper_model
-    device = effective_config.device
+    device = effective_config.whisper_device or effective_config.device
     language = meta.generation_params.get("language", "en")
     model = _get_whisper_model(whisper_size, device=device)
 
@@ -175,8 +175,9 @@ def _get_whisper_model(
     device: str = "cpu",
     cache: dict[str, object] | None = None,
 ) -> object:
-    """Return a cached Whisper model, loading it on first use."""
-    import whisper
+    from faster_whisper import WhisperModel
+
+    from songmaker_cli.constants import WHISPER_COMPUTE_TYPE
 
     if cache is None:
         cache = _whisper_model_cache
@@ -184,7 +185,9 @@ def _get_whisper_model(
     with _whisper_cache_lock:
         if cache_key not in cache:
             log.info("Loading Whisper model (%s) on %s...", model_size, device)
-            cache[cache_key] = whisper.load_model(model_size, device=device)
+            cache[cache_key] = WhisperModel(
+                model_size, device=device, compute_type=WHISPER_COMPUTE_TYPE,
+            )
     return cache[cache_key]
 
 
@@ -192,17 +195,18 @@ def _transcribe(
     mp3_path: Path, language: str, model: object,
     initial_prompt: str | None = None,
 ) -> tuple[str, list[dict]]:
+    from songmaker_cli.constants import WHISPER_BEAM_SIZE, WHISPER_TEMPERATURE
+
     log.info("Transcribing %s...", mp3_path.name)
     kwargs: dict[str, object] = {
-        "language": language, "fp16": True,
+        "language": language,
         "condition_on_previous_text": False,
-        "beam_size": 5,
-        "best_of": 5,
-        "temperature": 0,
-        "compression_ratio_threshold": 1.8,
-        "logprob_threshold": -0.5,
+        "beam_size": WHISPER_BEAM_SIZE,
+        "temperature": WHISPER_TEMPERATURE,
     }
     if initial_prompt:
         kwargs["initial_prompt"] = initial_prompt
-    result = model.transcribe(str(mp3_path), **kwargs)  # type: ignore[union-attr]
-    return result["text"].strip(), result.get("segments", [])
+    segments_gen, _info = model.transcribe(str(mp3_path), **kwargs)  # type: ignore[union-attr]
+    segments = [{"text": seg.text} for seg in segments_gen]
+    full_text = " ".join(seg["text"].strip() for seg in segments if seg["text"].strip())
+    return full_text, segments

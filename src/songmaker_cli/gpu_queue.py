@@ -161,15 +161,8 @@ class GpuQueue:
             log.exception("Failed to mark job %s as failed", job_id)
 
     def _prepare_mode(self, mode: str) -> None:
-        """Prepare GPU for the given mode — clear old models, start services."""
         if mode == "generate":
-            self._clear_scoring_models()
-            self._verify_vram_freed()
             self._ensure_acestep()
-        elif mode == "score":
-            self._stop_acestep()
-            self._gc_gpu()
-            self._verify_vram_freed()
 
     def _clear_scoring_models(self) -> None:
         try:
@@ -241,7 +234,8 @@ class GpuQueue:
         env.setdefault("ACESTEP_INIT_LLM", "1")
         env.setdefault("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-4B")
         env.setdefault("ACESTEP_LM_BACKEND", "vllm")
-        env.setdefault("MAX_CUDA_VRAM", "20")
+        from songmaker_cli.constants import ACESTEP_DEFAULT_VRAM_GB
+        env.setdefault("MAX_CUDA_VRAM", ACESTEP_DEFAULT_VRAM_GB)
         env.setdefault("ACESTEP_COMPILE_MODEL", "0")
 
         cmd = [*uv, "run", "acestep-api", "--port", str(ACESTEP_PORT)]
