@@ -288,6 +288,16 @@ def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
     return frozenset(exact), patterns
 
 
+def _check_db(ctx: AppContext) -> bool:
+    try:
+        from sqlalchemy import text
+        with ctx.db() as session:
+            session.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
@@ -301,6 +311,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         if pruned:
             log.info("Startup: pruned %d old login attempts", pruned)
         session.commit()
+    app.state.startup_time = datetime.now(timezone.utc)
     yield
     if ctx.gpu_queue:
         log.info("Shutting down GPU queue...")
@@ -393,6 +404,33 @@ def create_app(
     from songmaker_cli.api import router as api_router
 
     app.include_router(api_router)
+
+    @app.get("/health")
+    def health_check(request: Request) -> JSONResponse:
+        ctx: AppContext = request.app.state.ctx
+        startup_time: datetime = getattr(
+            request.app.state, "startup_time", datetime.now(timezone.utc),
+        )
+        uptime = int((datetime.now(timezone.utc) - startup_time).total_seconds())
+
+        db_ok = _check_db(ctx)
+        gpu_running = bool(ctx.gpu_queue and ctx.gpu_queue.is_running)
+        queue_depth = ctx.gpu_queue.queue_depth if ctx.gpu_queue else 0
+
+        if ctx.gpu_queue:
+            acestep = "healthy" if ctx.gpu_queue.acestep_healthy else "unhealthy"
+        else:
+            acestep = "unknown"
+
+        degraded = not db_ok or (ctx.gpu_queue and not gpu_running)
+        return JSONResponse({
+            "status": "degraded" if degraded else "ok",
+            "gpu_queue": "running" if gpu_running else "stopped",
+            "queue_depth": queue_depth,
+            "db": "ok" if db_ok else "error",
+            "acestep": acestep,
+            "uptime_seconds": uptime,
+        })
 
     from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 

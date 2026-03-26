@@ -296,6 +296,18 @@ class GpuQueue:
                 continue
         return None
 
+    @property
+    def is_running(self) -> bool:
+        return self._running
+
+    @property
+    def queue_depth(self) -> int:
+        return self._queue.qsize()
+
+    @property
+    def acestep_healthy(self) -> bool:
+        return self._is_acestep_healthy()
+
     def _gc_gpu(self) -> None:
         import gc
         gc.collect()

@@ -91,7 +91,9 @@ def test_get_audio_not_found(server_app: TestClient) -> None:
 def test_api_songs(server_app: TestClient) -> None:
     resp = server_app.get("/api/songs")
     assert resp.status_code == 200
-    assert len(resp.json()) == 1
+    data = resp.json()
+    assert len(data["items"]) == 1
+    assert data["total"] == 1
 
 
 def test_api_rate(server_app: TestClient) -> None:
@@ -880,3 +882,104 @@ class TestConfigureLogging:
         assert isinstance(formatter, structlog.stdlib.ProcessorFormatter)
         last_processor = formatter.processors[-1]
         assert isinstance(last_processor, structlog.processors.JSONRenderer)
+
+
+# ── health endpoint ──────────────────────────────────────────────
+
+
+def test_health_no_auth_required(tmp_path: Path) -> None:
+    output_dir = tmp_path / "_output"
+    output_dir.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = tmp_path / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        admin = User(username="admin6", password_hash=hash_password("admin12345"), role="admin")
+        session.add(admin)
+        session.commit()
+
+    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
+    app = create_app(output_dir, tmp_path, ctx=ctx)
+    client = TestClient(app)
+
+    with client:
+        resp = client.get("/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["db"] == "ok"
+    assert data["gpu_queue"] == "stopped"
+    assert data["queue_depth"] == 0
+    assert data["acestep"] == "unknown"
+    assert isinstance(data["uptime_seconds"], int)
+
+
+def test_health_with_gpu_queue(tmp_path: Path) -> None:
+    output_dir = tmp_path / "_output"
+    output_dir.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = tmp_path / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        admin = User(username="admin7", password_hash=hash_password("admin12345"), role="admin")
+        session.add(admin)
+        session.commit()
+
+    gpu_queue = MagicMock()
+    gpu_queue.is_running = True
+    gpu_queue.queue_depth = 3
+    gpu_queue.acestep_healthy = False
+
+    ctx = AppContext(
+        db=factory, output_dir=output_dir, session_secret=TEST_SECRET,
+        gpu_queue=gpu_queue,
+    )
+    app = create_app(output_dir, tmp_path, ctx=ctx)
+    client = TestClient(app)
+
+    with client:
+        resp = client.get("/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["gpu_queue"] == "running"
+    assert data["queue_depth"] == 3
+    assert data["acestep"] == "unhealthy"
+
+
+def test_health_degraded_when_queue_stopped(tmp_path: Path) -> None:
+    output_dir = tmp_path / "_output"
+    output_dir.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = tmp_path / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        admin = User(username="admin8", password_hash=hash_password("admin12345"), role="admin")
+        session.add(admin)
+        session.commit()
+
+    gpu_queue = MagicMock()
+    gpu_queue.is_running = False
+    gpu_queue.queue_depth = 0
+    gpu_queue.acestep_healthy = False
+
+    ctx = AppContext(
+        db=factory, output_dir=output_dir, session_secret=TEST_SECRET,
+        gpu_queue=gpu_queue,
+    )
+    app = create_app(output_dir, tmp_path, ctx=ctx)
+    client = TestClient(app)
+
+    with client:
+        resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "degraded"

@@ -595,3 +595,27 @@ def test_start_skips_cleanup_when_disabled() -> None:
         queue.start()
     assert queue._cleanup_thread is None
     queue.shutdown(timeout=1)
+
+
+def test_is_running_property() -> None:
+    queue = _make_queue()
+    assert not queue.is_running
+    queue.start()
+    assert queue.is_running
+    queue.shutdown(timeout=1)
+    assert not queue.is_running
+
+
+def test_queue_depth_property() -> None:
+    queue = GpuQueue(MagicMock())
+    assert queue.queue_depth == 0
+    queue._queue.put(GpuJob(job_id="j1", job_type="generate", fn=lambda: None))
+    assert queue.queue_depth == 1
+
+
+def test_acestep_healthy_property() -> None:
+    queue = _make_queue()
+    with patch.object(queue, "_is_acestep_healthy", return_value=True):
+        assert queue.acestep_healthy is True
+    with patch.object(queue, "_is_acestep_healthy", return_value=False):
+        assert queue.acestep_healthy is False
