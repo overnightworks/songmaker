@@ -618,6 +618,7 @@ def create_app(
             raise HTTPException(404, "Not found")
         songs = sorted(album.songs, key=lambda s: s.track_number)
         base_url = str(request.base_url).rstrip("/")
+        picked_by_song = {s.id: _picked_filename(s) for s in songs}
         response = SharedAlbumResponse(
             title=album.title,
             artist=album.artist,
@@ -628,8 +629,8 @@ def create_app(
                     title=s.title,
                     track_number=s.track_number,
                     audio_url=(
-                        f"{base_url}/shared/{slug}/audio/{_picked_filename(s)}"
-                        if _picked_filename(s) else None
+                        f"{base_url}/shared/{slug}/audio/{picked_by_song[s.id]}"
+                        if picked_by_song[s.id] else None
                     ),
                 )
                 for s in songs
@@ -651,9 +652,8 @@ def create_app(
             raise HTTPException(404, "Not found")
 
         valid_filenames = {
-            _picked_filename(s)
-            for s in album.songs
-            if _picked_filename(s)
+            fn for s in album.songs
+            if (fn := _picked_filename(s))
         }
         if filename not in valid_filenames:
             raise HTTPException(404, "Not found")

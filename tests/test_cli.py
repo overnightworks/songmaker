@@ -93,7 +93,7 @@ def test_run_generation_success() -> None:
 
     wav_resp = MagicMock(spec=HTTPResponse)
     wav_resp.status = 200
-    wav_resp.read.return_value = b"RIFF" + b"\x00" * 40 + b"extra_data"
+    wav_resp.read.side_effect = [b"RIFF" + b"\x00" * 40 + b"extra_data", b""]
     wav_resp.__enter__ = MagicMock(return_value=wav_resp)
     wav_resp.__exit__ = MagicMock(return_value=False)
 

@@ -9,6 +9,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+import structlog
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -87,7 +88,6 @@ def get_current_user(
 
     user_session.expires_at = now + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
 
-    import structlog
     structlog.contextvars.bind_contextvars(user_id=user_session.user.id)
 
     return AuthenticatedUser(
