@@ -331,7 +331,13 @@
 
 	{#if showChat && !activeGen}
 		<aside class="chat-panel" class:with-player={hasPlayer}>
-			<ClaudeChat songId={song?.id ?? ''} {songContext} onapply={handleApply} />
+			<ClaudeChat
+				songId={song?.id ?? ''}
+				{songContext}
+				allSongs={$songList}
+				currentAlbumId={song?.album_id ?? ''}
+				onapply={handleApply}
+			/>
 		</aside>
 	{/if}
 {/if}

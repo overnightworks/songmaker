@@ -125,6 +125,7 @@ export function loadSongData(s: SongItem): void {
 	editKey.set(s.key);
 	editGenParams.set(s.generation_params ?? null);
 	setSavedState(s.lyrics, s.prompt, s.bpm, s.duration, s.key, s.generation_params ?? null);
+	dismissAppliedDiff();
 	loadVersions(s.id);
 }
 

@@ -58,6 +58,9 @@ STRUCTURAL_PROMPT = (
     ' "bpm": 120, "key": "Am"}\n```\n\n'
     "Only include fields you are suggesting changes for. The lyrics field should use "
     "section tags like [verse], [chorus], [bridge]. Use \\n for newlines in lyrics.\n"
+    "If you are suggesting changes for a song OTHER than the current song, "
+    'add a "song" field with the exact song title: '
+    '```songmaker\n{"song": "Song Title", "lyrics": "..."}\n```\n'
     "If the user just asks a question without needing changes, skip the songmaker block."
 )
 

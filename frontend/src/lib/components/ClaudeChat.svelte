@@ -1,15 +1,22 @@
 <script lang="ts">
 	import { claudeApiKey } from '$lib/stores/settings';
-	import { chatWithClaude } from '$lib/api/client';
+	import { chatWithClaude, updateSong, ApiError } from '$lib/api/client';
 	import { trimChatHistory } from '$lib/utils/chat';
+	import { songList } from '$lib/stores/player';
+	import { addToast } from '$lib/stores/toast';
+	import type { SongItem } from '$lib/api/types';
 
 	interface Props {
 		songId?: string;
 		songContext?: string;
+		allSongs?: SongItem[];
+		currentAlbumId?: string;
 		onapply?: (data: ApplyData) => void;
 	}
 
 	export interface ApplyData {
+		song?: string;
+		songId?: string;
 		lyrics?: string;
 		prompt?: string;
 		bpm?: number;
@@ -17,7 +24,15 @@
 		key?: string;
 	}
 
-	let { songId = '', songContext = '', onapply }: Props = $props();
+	type ContextScope = 'song' | 'album';
+
+	let {
+		songId = '',
+		songContext = '',
+		allSongs = [],
+		currentAlbumId = '',
+		onapply
+	}: Props = $props();
 
 	interface Message {
 		role: 'user' | 'assistant';
@@ -32,20 +47,43 @@
 	let error = $state('');
 	let showKeyInput = $state(false);
 	let container: HTMLDivElement | undefined = $state();
+	let inputEl: HTMLTextAreaElement | undefined = $state();
 	const hasKey = $derived(!!$claudeApiKey);
 
-	let prevSongId = $state('');
+	let contextScope: ContextScope = $state('song');
+	let mentionedSongIds: string[] = $state([]);
+	let mentionQuery = $state('');
+	let showMentions = $state(false);
+	let mentionCursorPos = $state(0);
+	let selectedMentionIdx = $state(0);
+
+	const mentionResults = $derived.by(() => {
+		if (!mentionQuery) return [];
+		const q = mentionQuery.toLowerCase();
+		return allSongs
+			.filter(
+				(s) =>
+					s.title.toLowerCase().includes(q) && s.id !== songId && !mentionedSongIds.includes(s.id)
+			)
+			.slice(0, 8);
+	});
+
+	let prevChatKey = $state('');
+
+	function storageKey(): string {
+		if (contextScope === 'album' && currentAlbumId) {
+			return `songmaker:chat:album:${currentAlbumId}`;
+		}
+		return songId ? `songmaker:chat:${songId}` : 'songmaker:chat:new';
+	}
 
 	$effect(() => {
-		if (songId !== prevSongId) {
-			prevSongId = songId;
+		const key = storageKey();
+		if (key !== prevChatKey) {
+			prevChatKey = key;
 			loadHistory();
 		}
 	});
-
-	function storageKey(): string {
-		return songId ? `songmaker:chat:${songId}` : 'songmaker:chat:new';
-	}
 
 	function loadHistory(): void {
 		try {
@@ -72,6 +110,48 @@
 		localStorage.setItem(storageKey(), JSON.stringify(toSave));
 	}
 
+	function formatSongContext(s: SongItem): string {
+		const parts = [`[Track ${s.track_number}] ${s.title}`];
+		if (s.prompt) parts.push(`Style: ${s.prompt}`);
+		const meta: string[] = [];
+		if (s.key) meta.push(`Key: ${s.key}`);
+		if (s.bpm) meta.push(`BPM: ${s.bpm}`);
+		if (s.duration) meta.push(`Duration: ${s.duration}s`);
+		if (meta.length) parts.push(meta.join(' | '));
+		if (s.lyrics) parts.push(`Lyrics:\n${s.lyrics}`);
+		return parts.join('\n');
+	}
+
+	function buildFullContext(): string {
+		const parts: string[] = [];
+
+		if (songContext) {
+			parts.push(`[Current Song]\n${songContext}`);
+		}
+
+		const extraSongs: SongItem[] = [];
+
+		if (contextScope === 'album' && currentAlbumId) {
+			const albumSongs = allSongs
+				.filter((s) => s.album_id === currentAlbumId && s.id !== songId)
+				.sort((a, b) => a.track_number - b.track_number);
+			extraSongs.push(...albumSongs);
+		}
+
+		for (const id of mentionedSongIds) {
+			if (!extraSongs.some((s) => s.id === id)) {
+				const s = allSongs.find((s) => s.id === id);
+				if (s) extraSongs.push(s);
+			}
+		}
+
+		if (extraSongs.length > 0) {
+			parts.push('--- Other songs ---\n\n' + extraSongs.map(formatSongContext).join('\n\n'));
+		}
+
+		return parts.join('\n\n');
+	}
+
 	function buildConversation(newMessage: string): string {
 		const parts: string[] = [];
 		for (const msg of messages) {
@@ -79,12 +159,7 @@
 			parts.push(`${prefix}: ${cleanDisplayText(msg.text)}`);
 		}
 		parts.push(`User: ${newMessage}`);
-
-		let fullPrompt = parts.join('\n\n');
-		if (songContext) {
-			fullPrompt = `Song context:\n${songContext}\n\n---\n\n${fullPrompt}`;
-		}
-		return fullPrompt;
+		return parts.join('\n\n');
 	}
 
 	function extractApplyData(text: string): ApplyData | undefined {
@@ -99,9 +174,41 @@
 			if (typeof raw.bpm === 'number' && raw.bpm >= 0 && raw.bpm <= 999) data.bpm = raw.bpm;
 			if (typeof raw.duration === 'number' && raw.duration >= 1 && raw.duration <= 600)
 				data.duration = raw.duration;
-			return Object.keys(data).length > 0 ? data : undefined;
+			if (typeof raw.song === 'string') {
+				data.song = raw.song;
+				const q = raw.song.toLowerCase();
+				const albumMatch = currentAlbumId
+					? allSongs.find((s) => s.title.toLowerCase() === q && s.album_id === currentAlbumId)
+					: undefined;
+				const target = albumMatch ?? allSongs.find((s) => s.title.toLowerCase() === q);
+				if (target) data.songId = target.id;
+			}
+			return Object.keys(data).filter((k) => k !== 'song' && k !== 'songId').length > 0
+				? data
+				: undefined;
 		} catch {
 			return undefined;
+		}
+	}
+
+	function isCurrentSong(data: ApplyData): boolean {
+		return !data.songId || data.songId === songId;
+	}
+
+	async function applyCrossSong(data: ApplyData): Promise<void> {
+		if (!data.songId || !data.song) return;
+		try {
+			const updated = await updateSong(data.songId, {
+				lyrics: data.lyrics,
+				prompt: data.prompt,
+				bpm: data.bpm,
+				duration: data.duration,
+				key: data.key
+			});
+			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+			addToast(`Applied to ${data.song}`, 'success');
+		} catch {
+			addToast(`Failed to apply to ${data.song}`, 'error');
 		}
 	}
 
@@ -115,16 +222,36 @@
 
 		input = '';
 		error = '';
+		showMentions = false;
 		messages = [...messages, { role: 'user', text: msg }];
 		loading = true;
 
 		try {
-			const fullPrompt = buildConversation(msg);
-			const responseText = await chatWithClaude(fullPrompt);
+			let responseText: string | undefined;
+			const ctx = buildFullContext();
+
+			for (let attempt = 0; attempt < 3; attempt++) {
+				const conversation = buildConversation(msg);
+				try {
+					responseText = await chatWithClaude(conversation, ctx);
+					break;
+				} catch (e) {
+					if (e instanceof ApiError && e.status === 422 && messages.length > 1) {
+						const half = Math.max(1, Math.floor(messages.length / 2));
+						messages = messages.slice(half);
+						saveHistory();
+						continue;
+					}
+					throw e;
+				}
+			}
+
+			if (!responseText) throw new Error('Chat failed after trimming history');
+
 			const applyData = extractApplyData(responseText);
 			const newMsg: Message = { role: 'assistant', text: responseText, applyData };
 
-			if (applyData && onapply) {
+			if (applyData && isCurrentSong(applyData) && onapply) {
 				onapply(applyData);
 				newMsg.applied = true;
 			}
@@ -139,10 +266,14 @@
 		}
 	}
 
-	function applyMessage(index: number): void {
+	async function applyMessage(index: number): Promise<void> {
 		const msg = messages[index];
-		if (!msg?.applyData || !onapply) return;
-		onapply(msg.applyData);
+		if (!msg?.applyData) return;
+		if (isCurrentSong(msg.applyData)) {
+			if (onapply) onapply(msg.applyData);
+		} else {
+			await applyCrossSong(msg.applyData);
+		}
 		messages[index] = { ...msg, applied: true };
 		saveHistory();
 	}
@@ -158,18 +289,91 @@
 		}, 50);
 	}
 
+	function removeMention(id: string): void {
+		mentionedSongIds = mentionedSongIds.filter((sid) => sid !== id);
+	}
+
+	function selectMention(song: SongItem): void {
+		if (!inputEl) return;
+		const before = input.slice(0, mentionCursorPos);
+		const atIdx = before.lastIndexOf('@');
+		const after = input.slice(mentionCursorPos);
+		input = before.slice(0, atIdx) + after;
+		mentionedSongIds = [...mentionedSongIds, song.id];
+		showMentions = false;
+		mentionQuery = '';
+		inputEl.focus();
+	}
+
+	function handleInput(): void {
+		if (!inputEl) return;
+		const pos = inputEl.selectionStart ?? 0;
+		const textBefore = input.slice(0, pos);
+		const atMatch = textBefore.match(/@([^@\n]*)$/);
+		if (atMatch) {
+			mentionQuery = atMatch[1];
+			mentionCursorPos = pos;
+			showMentions = true;
+			selectedMentionIdx = 0;
+		} else {
+			showMentions = false;
+			mentionQuery = '';
+		}
+	}
+
 	function handleKeydown(e: KeyboardEvent): void {
+		if (showMentions && mentionResults.length > 0) {
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				selectedMentionIdx = (selectedMentionIdx + 1) % mentionResults.length;
+				return;
+			}
+			if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				selectedMentionIdx =
+					(selectedMentionIdx - 1 + mentionResults.length) % mentionResults.length;
+				return;
+			}
+			if (e.key === 'Enter' || e.key === 'Tab') {
+				e.preventDefault();
+				selectMention(mentionResults[selectedMentionIdx]);
+				return;
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				showMentions = false;
+				return;
+			}
+		}
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
 			send();
 		}
 	}
+
+	const mentionedSongs = $derived(
+		mentionedSongIds
+			.map((id) => allSongs.find((s) => s.id === id))
+			.filter((s): s is SongItem => !!s)
+	);
 </script>
 
 <div class="chat">
 	<div class="chat-header">
 		<h3>Claude Co-Writer</h3>
 		<div class="header-actions">
+			<div class="scope-toggle">
+				<button
+					class="scope-btn"
+					class:active={contextScope === 'song'}
+					onclick={() => (contextScope = 'song')}>Song</button
+				>
+				<button
+					class="scope-btn"
+					class:active={contextScope === 'album'}
+					onclick={() => (contextScope = 'album')}>Album</button
+				>
+			</div>
 			{#if messages.length > 0}
 				<button class="clear-btn" onclick={clearHistory} aria-label="Clear chat">✕</button>
 			{/if}
@@ -201,11 +405,22 @@
 		</div>
 	{/if}
 
+	{#if mentionedSongs.length > 0}
+		<div class="mentions-bar">
+			{#each mentionedSongs as s (s.id)}
+				<span class="mention-tag">
+					{s.title}
+					<button class="mention-remove" onclick={() => removeMention(s.id)}>✕</button>
+				</span>
+			{/each}
+		</div>
+	{/if}
+
 	<div class="messages" bind:this={container}>
 		{#if messages.length === 0}
 			<p class="empty-hint">
 				Ask Claude to write lyrics, brainstorm ideas, or refine your song. Suggestions auto-apply to
-				the editor.
+				the editor. Use <strong>@song name</strong> to reference other songs.
 			</p>
 		{/if}
 		{#each messages as msg, i (i)}
@@ -218,9 +433,17 @@
 				{#if msg.role === 'assistant' && msg.applyData}
 					<div class="apply-row">
 						{#if msg.applied}
-							<span class="applied-badge">✓ Applied</span>
+							<span class="applied-badge"
+								>✓ Applied{msg.applyData.song ? ` to ${msg.applyData.song}` : ''}</span
+							>
 						{:else}
-							<button class="apply-btn" onclick={() => applyMessage(i)}> Apply to editor </button>
+							<button class="apply-btn" onclick={() => applyMessage(i)}>
+								{#if msg.applyData.song && !isCurrentSong(msg.applyData)}
+									Apply to {msg.applyData.song}
+								{:else}
+									Apply to editor
+								{/if}
+							</button>
 						{/if}
 					</div>
 				{/if}
@@ -236,17 +459,35 @@
 		{/if}
 	</div>
 
-	<div class="input-row">
-		<textarea
-			class="chat-input"
-			rows="2"
-			placeholder="Ask Claude..."
-			bind:value={input}
-			onkeydown={handleKeydown}
-		></textarea>
-		<button class="send-btn" onclick={send} disabled={loading || !input.trim()} aria-label="Send">
-			↑
-		</button>
+	<div class="input-area">
+		{#if showMentions && mentionResults.length > 0}
+			<div class="mention-dropdown">
+				{#each mentionResults as s, idx (s.id)}
+					<button
+						class="mention-option"
+						class:selected={idx === selectedMentionIdx}
+						onclick={() => selectMention(s)}
+					>
+						<span class="mention-title">{s.title}</span>
+						<span class="mention-album">{s.album_title}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
+		<div class="input-row">
+			<textarea
+				class="chat-input"
+				rows="2"
+				placeholder="Ask Claude... (@song to reference)"
+				bind:value={input}
+				bind:this={inputEl}
+				onkeydown={handleKeydown}
+				oninput={handleInput}
+			></textarea>
+			<button class="send-btn" onclick={send} disabled={loading || !input.trim()} aria-label="Send">
+				↑
+			</button>
+		</div>
 	</div>
 </div>
 
@@ -281,6 +522,30 @@
 		display: flex;
 		gap: 4px;
 		align-items: center;
+	}
+
+	.scope-toggle {
+		display: flex;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		overflow: hidden;
+	}
+
+	.scope-btn {
+		background: none;
+		border: none;
+		color: var(--text-dim);
+		font-size: 9px;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		padding: 2px 8px;
+		cursor: pointer;
+	}
+
+	.scope-btn.active {
+		background: var(--primary);
+		color: #fff;
 	}
 
 	.clear-btn {
@@ -327,6 +592,41 @@
 	.key-hint {
 		font-size: 9px;
 		color: var(--text-dim);
+	}
+
+	.mentions-bar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		padding: 6px 12px;
+		border-bottom: 1px solid var(--border);
+		flex-shrink: 0;
+	}
+
+	.mention-tag {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		background: var(--surface);
+		border: 1px solid var(--primary);
+		color: var(--primary);
+		padding: 1px 8px;
+		border-radius: 10px;
+		font-size: 10px;
+	}
+
+	.mention-remove {
+		background: none;
+		border: none;
+		color: var(--text-dim);
+		font-size: 10px;
+		cursor: pointer;
+		padding: 0;
+		line-height: 1;
+	}
+
+	.mention-remove:hover {
+		color: var(--score-bad);
 	}
 
 	.messages {
@@ -412,12 +712,59 @@
 		padding: 4px 8px;
 	}
 
+	.input-area {
+		flex-shrink: 0;
+		position: relative;
+	}
+
+	.mention-dropdown {
+		position: absolute;
+		bottom: 100%;
+		left: 8px;
+		right: 8px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		max-height: 200px;
+		overflow-y: auto;
+		box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+		z-index: 10;
+	}
+
+	.mention-option {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		width: 100%;
+		padding: 6px 12px;
+		background: none;
+		border: none;
+		color: var(--text);
+		font-size: 12px;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.mention-option:hover,
+	.mention-option.selected {
+		background: var(--primary);
+		color: #fff;
+	}
+
+	.mention-title {
+		font-weight: 500;
+	}
+
+	.mention-album {
+		font-size: 10px;
+		opacity: 0.6;
+	}
+
 	.input-row {
 		display: flex;
 		gap: 6px;
 		padding: 8px;
 		border-top: 1px solid var(--border);
-		flex-shrink: 0;
 	}
 
 	.chat-input {
