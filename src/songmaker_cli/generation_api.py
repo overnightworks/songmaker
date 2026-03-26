@@ -21,9 +21,8 @@ from songmaker_cli.api_models import (
     ScoreRequest,
     StatusResponse,
 )
+from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import ROLE_ADMIN
-from songmaker_cli.config import get_output_dir
-from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.db.queries import (
     delete_generation,
     get_generation_by_path,
@@ -33,15 +32,12 @@ from songmaker_cli.db.queries import (
     save_rating,
     unpick_generation,
 )
-from songmaker_cli.gpu_queue import get_gpu_queue
 from songmaker_cli.jobs import run_generation_job, run_scoring_job
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_get_session = get_db_session
 
 
 # ── Generations ──────────────────────────────────────────────────────
@@ -51,7 +47,7 @@ _get_session = get_db_session
 def api_get_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> GenerationResponse:
     gen = check_generation_access(session, gen_id, user)
     return GenerationResponse.from_orm(gen)
@@ -61,11 +57,12 @@ def api_get_generation(
 def api_delete_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
     check_generation_access(session, gen_id, user)
     try:
-        delete_generation(session, gen_id, output_dir=get_output_dir())
+        delete_generation(session, gen_id, output_dir=ctx.output_dir)
     except ValueError:
         raise HTTPException(404, "Generation not found")
     record_audit(session, user.id, "delete", "generation", gen_id)
@@ -81,7 +78,8 @@ def api_generate_song(
     song_id: str,
     req: GenerateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
     song = check_song_access(session, song_id, user)
     version = song.latest_version
@@ -93,9 +91,10 @@ def api_generate_song(
     session.commit()
     log.info("Generate: song='%s', count=%d, job=%s", song.title, req.count, job.id)
 
-    get_gpu_queue().submit(
+    ctx.gpu_queue.submit(
         job.id, "generate", run_generation_job,
         args=(job.id, song_id, version.id, req.count, user.id),
+        kwargs={"db_factory": ctx.db, "output_dir": ctx.output_dir},
     )
 
     return JobResponse.from_orm(job)
@@ -106,7 +105,8 @@ def api_score_generation(
     gen_id: str,
     req: ScoreRequest,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
     check_generation_access(session, gen_id, user)
 
@@ -114,9 +114,10 @@ def api_score_generation(
     record_audit(session, user.id, "score", "generation", gen_id)
     session.commit()
 
-    get_gpu_queue().submit(
+    ctx.gpu_queue.submit(
         job.id, "score", run_scoring_job,
         args=(job.id, gen_id, req.scorers),
+        kwargs={"db_factory": ctx.db, "output_dir": ctx.output_dir},
     )
 
     return JobResponse.from_orm(job)
@@ -129,7 +130,7 @@ def api_score_generation(
 def api_get_job(
     job_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> JobResponse:
     job = get_job(session, job_id)
     if not job:
@@ -146,7 +147,7 @@ def api_get_job(
 def api_rate_generation(
     gen_id: str, req: RateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> RateResponse:
     check_generation_access(session, gen_id, user)
     save_rating(session, gen_id, req.rating, req.notes)
@@ -158,7 +159,7 @@ def api_rate_generation(
 def api_rate_by_path(
     album: str, gen_name: str, req: RateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> RateResponse:
     if ".." in album or ".." in gen_name or "/" in album or "/" in gen_name:
         raise HTTPException(400, "Invalid path")
@@ -179,7 +180,7 @@ def api_rate_by_path(
 def api_pick_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     check_generation_access(session, gen_id, user)
     try:
@@ -194,7 +195,7 @@ def api_pick_generation(
 def api_unpick_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     check_generation_access(session, gen_id, user)
     try:

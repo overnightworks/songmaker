@@ -18,8 +18,8 @@ from songmaker_cli.api_models import (
     UpdateUserRequest,
     UserResponse,
 )
+from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth import hash_password
-from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.db.models import User as UserModel
 from songmaker_cli.db.queries import (
     create_user,
@@ -42,12 +42,9 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-_get_session = get_db_session
-
-
 @router.get("/users")
 def list_users_endpoint(
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> list[UserResponse]:
     return [UserResponse.from_orm(u) for u in list_users(db)]
@@ -56,7 +53,7 @@ def list_users_endpoint(
 @router.post("/users")
 def create_user_endpoint(
     req: CreateUserRequest,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> UserResponse:
     existing = get_user_by_username(db, req.username)
@@ -73,7 +70,7 @@ def create_user_endpoint(
 def update_user_endpoint(
     user_id: str,
     req: UpdateUserRequest,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
     admin: AuthenticatedUser = Depends(require_admin),
 ) -> UserResponse:
     user = get_user(db, user_id)
@@ -109,7 +106,7 @@ def update_user_endpoint(
 @router.delete("/users/{user_id}")
 def deactivate_user_endpoint(
     user_id: str,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
     admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
     user = get_user(db, user_id)
@@ -134,7 +131,7 @@ def deactivate_user_endpoint(
 @router.get("/audit-log")
 def audit_log_endpoint(
     limit: int = Query(100, ge=1, le=1000),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> list[AuditLogResponse]:
     return [AuditLogResponse.from_orm(e) for e in list_audit_log(db, limit=limit)]
@@ -143,7 +140,7 @@ def audit_log_endpoint(
 @router.get("/login-attempts")
 def login_attempts_endpoint(
     limit: int = Query(100, ge=1, le=1000),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> list[LoginAttemptResponse]:
     return [LoginAttemptResponse.from_orm(a) for a in list_login_attempts(db, limit=limit)]
@@ -151,7 +148,7 @@ def login_attempts_endpoint(
 
 @router.get("/sessions")
 def sessions_endpoint(
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> list[SessionResponse]:
     return [SessionResponse.from_orm(s) for s in list_active_sessions(db)]
@@ -160,7 +157,7 @@ def sessions_endpoint(
 @router.delete("/sessions/{session_hash}")
 def force_logout_endpoint(
     session_hash: str,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
     for sess in list_active_sessions(db):

@@ -11,32 +11,22 @@ import bcrypt
 
 BCRYPT_ROUNDS = 12
 
-_trusted_proxies: frozenset[str] | None = None
+
+def parse_trusted_proxies() -> frozenset[str]:
+    """Parse TRUSTED_PROXIES from env. Returns a frozenset of proxy IPs."""
+    return frozenset(
+        p.strip() for p in os.environ.get("TRUSTED_PROXIES", "").split(",") if p.strip()
+    )
 
 
-def get_trusted_proxies() -> frozenset[str]:
-    """Lazily parse TRUSTED_PROXIES from env (not at import time)."""
-    global _trusted_proxies
-    if _trusted_proxies is None:
-        _trusted_proxies = frozenset(
-            p.strip() for p in os.environ.get("TRUSTED_PROXIES", "").split(",") if p.strip()
-        )
-    return _trusted_proxies
-
-
-def reset_trusted_proxies() -> None:
-    """Clear cached trusted proxies (for testing or config reload)."""
-    global _trusted_proxies
-    _trusted_proxies = None
-
-
-def get_client_ip(client_host: str, forwarded_for: str | None) -> str:
+def get_client_ip(
+    client_host: str, forwarded_for: str | None, trusted_proxies: frozenset[str],
+) -> str:
     """Extract the real client IP, using rightmost untrusted XFF entry."""
-    proxies = get_trusted_proxies()
-    if proxies and client_host in proxies and forwarded_for:
+    if trusted_proxies and client_host in trusted_proxies and forwarded_for:
         ips = [ip.strip() for ip in forwarded_for.split(",")]
         for ip in reversed(ips):
-            if ip not in proxies:
+            if ip not in trusted_proxies:
                 return ip
     return client_host
 
@@ -154,84 +144,58 @@ def check_password_strength(cls_or_value: str, *_args: object) -> str:
 
 # ── HMAC session signing ───────────────────────────────────────────
 
-_session_secret: str | None = None
-
-
-def _get_session_secret() -> str:
-    global _session_secret
-    if _session_secret is not None:
-        return _session_secret
-    secret = os.environ.get("SESSION_SECRET", "")
-    if not secret or len(secret) < 32:
-        raise RuntimeError(
-            "SESSION_SECRET not set. The server generates one automatically at startup."
-        )
-    _session_secret = secret
-    return secret
-
-
-def reset_session_secret() -> None:
-    """Clear cached session secret (for testing)."""
-    global _session_secret
-    _session_secret = None
-
 
 def ensure_session_secret(output_dir_path: str | os.PathLike) -> str:
     """Generate or load a persistent session signing secret.
 
     Called once at server startup. Stores the secret in
     ``<output_dir>/.session_secret`` with 0600 permissions.
+    Returns the secret string for storage in AppContext.
     """
     from pathlib import Path
 
     secret = os.environ.get("SESSION_SECRET")
     if secret and len(secret) >= 32:
-        os.environ["SESSION_SECRET"] = secret
         return secret
 
     secret_file = Path(output_dir_path) / ".session_secret"
     if secret_file.exists():
         secret = secret_file.read_text().strip()
         if len(secret) >= 32:
-            os.environ["SESSION_SECRET"] = secret
             return secret
 
     secret = secrets.token_hex(32)
     secret_file.parent.mkdir(parents=True, exist_ok=True)
     secret_file.write_text(secret)
     os.chmod(secret_file, 0o600)
-    os.environ["SESSION_SECRET"] = secret
     return secret
 
 
-def sign_session_id(session_id: str) -> str:
+def sign_session_id(session_id: str, secret: bytes) -> str:
     """Return ``session_id.hmac_hex`` for use as a cookie value."""
-    secret = _get_session_secret()
-    sig = hmac.new(secret.encode(), session_id.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(secret, session_id.encode(), hashlib.sha256).hexdigest()
     return f"{session_id}.{sig}"
 
 
-def verify_session_cookie(cookie_value: str) -> str | None:
+def verify_session_cookie(cookie_value: str, secret: bytes) -> str | None:
     """Verify the HMAC signature and return the raw session_id, or None."""
     if "." not in cookie_value:
         return None
     session_id, sig = cookie_value.rsplit(".", 1)
     if not session_id or not sig:
         return None
-    secret = _get_session_secret()
-    expected = hmac.new(secret.encode(), session_id.encode(), hashlib.sha256).hexdigest()
+    expected = hmac.new(secret, session_id.encode(), hashlib.sha256).hexdigest()
     if hmac.compare_digest(sig, expected):
         return session_id
     return None
 
 
-def generate_csrf_token(session_id: str) -> str:
+def generate_csrf_token(session_id: str, secret: bytes) -> str:
     """Generate a CSRF token cryptographically bound to the session."""
-    secret = _get_session_secret()
-    return hmac.new(secret.encode(), f"csrf:{session_id}".encode(), hashlib.sha256).hexdigest()
+    return hmac.new(secret, f"csrf:{session_id}".encode(), hashlib.sha256).hexdigest()
 
 
-def verify_csrf_token(token: str, session_id: str) -> bool:
+def verify_csrf_token(token: str, session_id: str, secret: bytes) -> bool:
     """Verify a CSRF token is valid for the given session."""
-    expected = generate_csrf_token(session_id)
+    expected = generate_csrf_token(session_id, secret)
     return hmac.compare_digest(token, expected)

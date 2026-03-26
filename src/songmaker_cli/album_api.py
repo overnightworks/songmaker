@@ -14,8 +14,7 @@ from songmaker_cli.api_models import (
     AlbumResponse,
     CleanupResponse,
 )
-from songmaker_cli.config import get_output_dir
-from songmaker_cli.db.engine import get_db_session
+from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.db.queries import (
     cleanup_album,
     create_album,
@@ -29,13 +28,11 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_get_session = get_db_session
-
 
 @router.get("/albums")
 def api_list_albums(
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> list[AlbumResponse]:
     return [AlbumResponse.from_orm(a) for a in list_albums(session, user_id=owner_filter(user))]
 
@@ -44,7 +41,7 @@ def api_list_albums(
 def api_get_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> AlbumResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
@@ -55,7 +52,7 @@ def api_get_album(
 def api_create_album(
     data: AlbumCreateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> AlbumResponse:
     title = data.title.strip()
     if not title:
@@ -79,11 +76,12 @@ def api_create_album(
 def api_cleanup_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> CleanupResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    count = cleanup_album(session, album_id, output_dir=get_output_dir())
+    count = cleanup_album(session, album_id, output_dir=ctx.output_dir)
     record_audit(session, user.id, "cleanup", "album", album_id, f"deleted={count}")
     session.commit()
     return CleanupResponse(deleted=count)

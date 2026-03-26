@@ -12,12 +12,12 @@ from songmaker_cli.api_models import (
     PresetUpdateRequest,
     StatusResponse,
 )
+from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.config import (
     get_builtin_defaults,
     load_generation_defaults,
     save_generation_defaults,
 )
-from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.db.queries import record_audit
 from songmaker_cli.db.queries.settings import (
     create_preset,
@@ -32,8 +32,6 @@ from songmaker_cli.middleware import AuthenticatedUser, get_current_user, requir
 
 router = APIRouter()
 
-_get_session = get_db_session
-
 
 @router.get("/settings/generation-builtins")
 def api_get_builtins(
@@ -45,28 +43,30 @@ def api_get_builtins(
 @router.get("/settings/generation-defaults")
 def api_get_generation_defaults(
     _admin: AuthenticatedUser = Depends(require_admin),
+    ctx: AppContext = Depends(get_app_context),
 ) -> dict:
-    return load_generation_defaults()
+    return load_generation_defaults(ctx.output_dir)
 
 
 @router.put("/settings/generation-defaults")
 def api_set_generation_defaults(
     req: GenerationDefaultsRequest,
     _admin: AuthenticatedUser = Depends(require_admin),
+    ctx: AppContext = Depends(get_app_context),
 ) -> dict:
     data: dict = {}
     if req.turbo is not None:
         data["turbo"] = req.turbo.to_dict()
     if req.sft is not None:
         data["sft"] = req.sft.to_dict()
-    save_generation_defaults(data)
+    save_generation_defaults(ctx.output_dir, data)
     return data
 
 
 @router.get("/settings/presets")
 def api_list_presets(
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> list[PresetResponse]:
     presets = list_presets(session, user.id)
     return [PresetResponse.from_orm(p) for p in presets]
@@ -76,7 +76,7 @@ def api_list_presets(
 def api_create_preset(
     req: PresetCreateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> PresetResponse:
     if name_exists(session, user.id, req.model_mode, req.name):
         raise HTTPException(409, "A preset with that name already exists")
@@ -98,7 +98,7 @@ def api_update_preset(
     preset_id: str,
     req: PresetUpdateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> PresetResponse:
     preset = get_preset(session, preset_id, user.id)
     if not preset:
@@ -116,7 +116,7 @@ def api_update_preset(
 def api_delete_preset(
     preset_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     if not delete_preset(session, preset_id, user.id):
         raise HTTPException(404, "Preset not found")
@@ -129,7 +129,7 @@ def api_delete_preset(
 def api_set_default_preset(
     preset_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> PresetResponse:
     preset = get_preset(session, preset_id, user.id)
     if not preset:

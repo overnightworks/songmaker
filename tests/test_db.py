@@ -17,7 +17,7 @@ from songmaker_cli.api_models import (
     UserResponse,
     VersionResponse,
 )
-from songmaker_cli.db.engine import init_db, reset_engine
+from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -74,12 +74,10 @@ from songmaker_cli.db.queries import (
 
 @pytest.fixture()
 def db_session(tmp_path: Path) -> Session:
-    reset_engine()
     factory = init_db(tmp_path / "test.db")
     session = factory()
     yield session
     session.close()
-    reset_engine()
 
 
 @pytest.fixture()
@@ -404,27 +402,20 @@ def test_save_scores_upsert(seeded_session: Session) -> None:
     assert batch_scores[0].value["dynamics"] == 99.0
 
 
-def test_save_scores_upsert_persists(db_session: Session) -> None:
+def test_save_scores_upsert_persists(tmp_path: Path) -> None:
     """Verify score upsert actually persists to DB (not just in-memory)."""
-    from songmaker_cli.db.engine import get_session_factory
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        session.add(Album(id="t2", title="T2", artist="A"))
+        session.add(Song(id="s2", title="S2", album_id="t2", track_number=1))
+        session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="x", prompt="y"))
+        session.add(Generation(
+            id="gx", song_id="s2", version_id="v2", generation_number=1,
+            mp3_path="t2/test.mp3",
+        ))
+        session.add(Score(id="scx", generation_id="gx", scorer="batch", value={"old": 1.0}))
+        session.commit()
 
-    album = Album(id="t2", title="T2", artist="A")
-    db_session.add(album)
-    song = Song(id="s2", title="S2", album_id="t2", track_number=1)
-    db_session.add(song)
-    ver = Version(id="v2", song_id="s2", version_number=1, lyrics="x", prompt="y")
-    db_session.add(ver)
-    gen = Generation(
-        id="gx", song_id="s2", version_id="v2", generation_number=1,
-        mp3_path="t2/test.mp3",
-    )
-    db_session.add(gen)
-    score = Score(id="scx", generation_id="gx", scorer="batch", value={"old": 1.0})
-    db_session.add(score)
-    db_session.commit()
-    db_session.close()
-
-    factory = get_session_factory()
     with factory() as s2:
         save_scores(s2, "gx", {"new": 99.0})
         s2.commit()
@@ -517,33 +508,6 @@ def test_song_to_dict_includes_generation_params(seeded_session: Session) -> Non
     song = get_song(seeded_session, "s1")
     d = SongResponse.from_orm(song).model_dump()
     assert d["generation_params"] == params
-
-
-# ── Engine: init_db ─────────────────────────────────────────────────
-
-
-def test_init_db_idempotent(tmp_path: Path) -> None:
-    reset_engine()
-    f1 = init_db(tmp_path / "test.db")
-    f2 = init_db(tmp_path / "test.db")
-    assert f1 is f2
-    reset_engine()
-
-
-def test_get_session_factory_before_init() -> None:
-    from songmaker_cli.db.engine import get_session_factory
-    reset_engine()
-    with pytest.raises(RuntimeError, match="not initialized"):
-        get_session_factory()
-    reset_engine()
-
-
-def test_init_db_different_path_raises(tmp_path: Path) -> None:
-    reset_engine()
-    init_db(tmp_path / "a.db")
-    with pytest.raises(RuntimeError, match="already initialized"):
-        init_db(tmp_path / "b.db")
-    reset_engine()
 
 
 # ── queries.py gap coverage ─────────────────────────────────────────

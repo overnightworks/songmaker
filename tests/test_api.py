@@ -5,10 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import TEST_SECRET
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from songmaker_cli.db.engine import init_db, reset_engine
+from songmaker_cli.app_context import AppContext
+from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
@@ -23,7 +25,6 @@ def _fake_user(user_id: str, username: str, role: str):
 
 @pytest.fixture()
 def client(tmp_path: Path) -> TestClient:
-    reset_engine()
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
@@ -33,35 +34,43 @@ def client(tmp_path: Path) -> TestClient:
         session.flush()
         _seed_db(session, owner_id=_DEFAULT_USER_ID)
 
+    ctx = AppContext(
+        db=factory,
+        output_dir=tmp_path,
+        session_secret=TEST_SECRET,
+    )
     from songmaker_cli.api import router
     app = FastAPI()
+    app.state.ctx = ctx
     app.dependency_overrides[get_current_user] = _fake_user(
         _DEFAULT_USER_ID, "test_user", "user",
     )
     app.include_router(router)
     yield TestClient(app)
-    reset_engine()
 
 
 @pytest.fixture()
 def unauthed_client(tmp_path: Path) -> TestClient:
-    reset_engine()
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         _seed_db(session)
 
+    ctx = AppContext(
+        db=factory,
+        output_dir=tmp_path,
+        session_secret=TEST_SECRET,
+    )
     from songmaker_cli.api import router
     app = FastAPI()
+    app.state.ctx = ctx
     app.include_router(router)
     yield TestClient(app)
-    reset_engine()
 
 
 def _make_authed_client(
     tmp_path: Path, role: str = "user", user_id: str = "u-test",
 ) -> TestClient:
     """Create a TestClient with a fake authenticated user injected."""
-    reset_engine()
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
@@ -71,9 +80,15 @@ def _make_authed_client(
         session.flush()
         _seed_db(session, owner_id=user_id if role != "admin" else None)
 
+    ctx = AppContext(
+        db=factory,
+        output_dir=tmp_path,
+        session_secret=TEST_SECRET,
+    )
     from songmaker_cli.api import router
 
     app = FastAPI()
+    app.state.ctx = ctx
     app.dependency_overrides[get_current_user] = _fake_user(
         user_id, f"test_{role}", role,
     )
@@ -324,29 +339,22 @@ def test_version_includes_generation_params(client: TestClient) -> None:
 
 def test_generation_defaults_roundtrip(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
-    from songmaker_cli import config as config_mod
-    original = config_mod._defaults_path
 
-    config_mod._defaults_path = lambda: tmp_path / "gen_defaults.json"
-    try:
-        resp = c.get("/api/settings/generation-defaults")
-        assert resp.status_code == 200
-        assert resp.json() == {}
+    resp = c.get("/api/settings/generation-defaults")
+    assert resp.status_code == 200
+    assert resp.json() == {}
 
-        resp = c.put("/api/settings/generation-defaults", json={
-            "turbo": {"inference_steps": 12},
-            "sft": {"inference_steps": 60},
-        })
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["turbo"] == {"inference_steps": 12}
-        assert data["sft"] == {"inference_steps": 60}
+    resp = c.put("/api/settings/generation-defaults", json={
+        "turbo": {"inference_steps": 12},
+        "sft": {"inference_steps": 60},
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["turbo"] == {"inference_steps": 12}
+    assert data["sft"] == {"inference_steps": 60}
 
-        resp = c.get("/api/settings/generation-defaults")
-        assert resp.json()["turbo"]["inference_steps"] == 12
-    finally:
-        config_mod._defaults_path = original
-        reset_engine()
+    resp = c.get("/api/settings/generation-defaults")
+    assert resp.json()["turbo"]["inference_steps"] == 12
 
 
 def test_generation_defaults_rejects_unknown_keys(tmp_path: Path) -> None:
@@ -423,11 +431,10 @@ def test_generate_song_not_found(client: TestClient) -> None:
 
 
 def test_generate_song_no_lyrics(client: TestClient) -> None:
-    from songmaker_cli.db.engine import get_session_factory
     from songmaker_cli.db.models import Song, Version
 
-    factory = get_session_factory()
-    with factory() as session:
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
         session.add(Song(
             id="s_empty", title="Empty", album_id="rock",
         ))
@@ -449,7 +456,9 @@ def test_generate_song_submits_job(client: TestClient) -> None:
 
     mock_queue = MagicMock()
 
-    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
+        mock_ctx.return_value = client.app.state.ctx
+        mock_ctx.return_value.gpu_queue = mock_queue
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 2},
@@ -473,7 +482,9 @@ def test_score_generation_submits_job(client: TestClient) -> None:
 
     mock_queue = MagicMock()
 
-    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
+        mock_ctx.return_value = client.app.state.ctx
+        mock_ctx.return_value.gpu_queue = mock_queue
         resp = client.post(
             "/api/generations/g1/score",
             json={},
@@ -572,7 +583,9 @@ def test_get_job_found(client: TestClient) -> None:
 
     mock_queue = MagicMock()
 
-    with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
+    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
+        mock_ctx.return_value = client.app.state.ctx
+        mock_ctx.return_value.gpu_queue = mock_queue
         resp = client.post("/api/songs/s1/generate", json={"count": 1})
     job_id = resp.json()["id"]
 
@@ -638,11 +651,10 @@ def test_get_song_has_generations(client: TestClient) -> None:
 
 
 def test_get_song_best_scores_from_rated_gen(client: TestClient) -> None:
-    from songmaker_cli.db.engine import get_session_factory
     from songmaker_cli.db.models import Rating
 
-    factory = get_session_factory()
-    with factory() as session:
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
         session.add(Rating(generation_id="g1", rating=80))
         session.commit()
 
@@ -666,10 +678,9 @@ def test_user_sees_own_album_only(tmp_path: Path) -> None:
 
 def test_user_cannot_see_other_album(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
-    from songmaker_cli.db.engine import get_session_factory
 
-    factory = get_session_factory()
-    with factory() as session:
+    ctx: AppContext = c.app.state.ctx
+    with ctx.db() as session:
         session.add(User(
             id="u-other", username="other", password_hash="x", role="user",
         ))
@@ -678,15 +689,13 @@ def test_user_cannot_see_other_album(tmp_path: Path) -> None:
         session.commit()
     resp = c.get("/api/albums/other")
     assert resp.status_code == 404
-    reset_engine()
 
 
 def test_user_cannot_see_other_song(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
-    from songmaker_cli.db.engine import get_session_factory
 
-    factory = get_session_factory()
-    with factory() as session:
+    ctx: AppContext = c.app.state.ctx
+    with ctx.db() as session:
         session.add(User(
             id="u-other", username="other", password_hash="x", role="user",
         ))
@@ -700,7 +709,6 @@ def test_user_cannot_see_other_song(tmp_path: Path) -> None:
         session.commit()
     resp = c.get("/api/songs/s-secret")
     assert resp.status_code == 404
-    reset_engine()
 
 
 def test_admin_sees_all_albums(tmp_path: Path) -> None:
@@ -714,25 +722,22 @@ def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
     resp = c.post("/api/albums", json={"title": "My New Album"})
     assert resp.status_code == 200
-    from songmaker_cli.db.engine import get_session_factory
     from songmaker_cli.db.queries import get_album
-    factory = get_session_factory()
-    with factory() as session:
+    ctx: AppContext = c.app.state.ctx
+    with ctx.db() as session:
         album = get_album(session, "my-new-album")
         assert album is not None
         assert album.created_by == "u-test"
-    reset_engine()
 
 
 def test_job_ownership_blocks_other_user(tmp_path: Path) -> None:
-    from songmaker_cli.db.engine import get_session_factory
     from songmaker_cli.db.models import User
     from songmaker_cli.db.queries import create_job
 
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
 
-    factory = get_session_factory()
-    with factory() as session:
+    ctx: AppContext = c.app.state.ctx
+    with ctx.db() as session:
         other = User(
             id="u-other", username="other", password_hash="unused", role="user",
         )
@@ -744,11 +749,9 @@ def test_job_ownership_blocks_other_user(tmp_path: Path) -> None:
 
     resp = c.get(f"/api/jobs/{job_id}")
     assert resp.status_code == 404
-    reset_engine()
 
 
 def test_rate_by_path_ownership_check(tmp_path: Path) -> None:
-    from songmaker_cli.db.engine import get_session_factory
     from songmaker_cli.db.models import User
     from songmaker_cli.db.queries import get_album
 
@@ -756,8 +759,8 @@ def test_rate_by_path_ownership_check(tmp_path: Path) -> None:
     resp = c.post("/api/rate/rock/01_thunder_v2", json={"rating": 72.0})
     assert resp.status_code == 200
 
-    factory = get_session_factory()
-    with factory() as session:
+    ctx: AppContext = c.app.state.ctx
+    with ctx.db() as session:
         other = User(
             id="u-other", username="other", password_hash="unused", role="user",
         )
@@ -769,14 +772,12 @@ def test_rate_by_path_ownership_check(tmp_path: Path) -> None:
 
     resp2 = c.post("/api/rate/rock/01_thunder_v2", json={"rating": 10.0})
     assert resp2.status_code == 404
-    reset_engine()
 
 
 # ── Coverage gap tests ───────────────────────────────────────────────
 
 
 def test_create_song_gen_param_out_of_range(client: TestClient) -> None:
-    """GenerationParams rejects out-of-range values via Pydantic validation."""
     resp = client.post("/api/songs", json={
         "title": "Bad Params",
         "album_id": "rock",
@@ -786,7 +787,6 @@ def test_create_song_gen_param_out_of_range(client: TestClient) -> None:
 
 
 def test_create_song_gen_param_invalid_infer_method(client: TestClient) -> None:
-    """GenerationParams rejects unknown infer_method values."""
     resp = client.post("/api/songs", json={
         "title": "Bad Infer",
         "album_id": "rock",
@@ -796,7 +796,6 @@ def test_create_song_gen_param_invalid_infer_method(client: TestClient) -> None:
 
 
 def test_create_song_gen_param_invalid_think_mode(client: TestClient) -> None:
-    """GenerationParams rejects unknown think_mode values."""
     resp = client.post("/api/songs", json={
         "title": "Bad Think",
         "album_id": "rock",
@@ -806,7 +805,6 @@ def test_create_song_gen_param_invalid_think_mode(client: TestClient) -> None:
 
 
 def test_score_request_invalid_scorer_name(client: TestClient) -> None:
-    """ScoreRequest rejects unknown scorer names."""
     import pytest
 
     from songmaker_cli.api_models import ScoreRequest
@@ -843,13 +841,10 @@ def test_score_request_invalid_scorer_direct() -> None:
 
 
 def test_check_song_access_ownership_denied(tmp_path: Path) -> None:
-    """Line 200: _check_song_access raises 404 when song belongs to another user's album."""
-    from songmaker_cli.db.engine import get_session_factory
-
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
 
-    factory = get_session_factory()
-    with factory() as session:
+    ctx: AppContext = c.app.state.ctx
+    with ctx.db() as session:
         session.add(User(
             id="u-other", username="other", password_hash="unused", role="user",
         ))
@@ -860,11 +855,9 @@ def test_check_song_access_ownership_denied(tmp_path: Path) -> None:
 
     resp = c.get("/api/songs/s-private/versions")
     assert resp.status_code == 404
-    reset_engine()
 
 
 def test_create_album_integrity_error(client: TestClient) -> None:
-    """Lines 254-256: IntegrityError in create_album triggers 409 response."""
     from unittest.mock import patch
 
     with patch("songmaker_cli.album_api.unique_album_id", return_value="rock"):
@@ -875,7 +868,6 @@ def test_create_album_integrity_error(client: TestClient) -> None:
 
 
 def test_update_song_value_error(client: TestClient) -> None:
-    """Lines 324-325: ValueError from update_song raises 404."""
     from unittest.mock import patch
 
     with patch("songmaker_cli.song_api.update_song", side_effect=ValueError("Song not found")):
@@ -885,7 +877,6 @@ def test_update_song_value_error(client: TestClient) -> None:
 
 
 def test_delete_version_value_error(client: TestClient) -> None:
-    """Lines 362-363: ValueError from delete_version raises 404."""
     from unittest.mock import patch
 
     err = ValueError("Version not found")
@@ -896,7 +887,6 @@ def test_delete_version_value_error(client: TestClient) -> None:
 
 
 def test_delete_generation_value_error(client: TestClient) -> None:
-    """Lines 388-389: ValueError from delete_generation raises 404."""
     from unittest.mock import patch
 
     err = ValueError("Generation not found")
@@ -907,7 +897,6 @@ def test_delete_generation_value_error(client: TestClient) -> None:
 
 
 def test_pick_generation_value_error(client: TestClient) -> None:
-    """Lines 506-507: ValueError from pick_generation raises 404."""
     from unittest.mock import patch
 
     err = ValueError("Generation not found")
@@ -918,7 +907,6 @@ def test_pick_generation_value_error(client: TestClient) -> None:
 
 
 def test_unpick_generation_value_error(client: TestClient) -> None:
-    """Lines 520-521: ValueError from unpick_generation raises 404."""
     from unittest.mock import patch
 
     err = ValueError("Generation not found")
@@ -938,12 +926,11 @@ def test_rate_by_path_traversal_rejected(client: TestClient) -> None:
 
 
 def test_create_album_records_audit(client: TestClient) -> None:
-    from songmaker_cli.db.engine import get_session_factory
     from songmaker_cli.db.queries import list_audit_log
 
     client.post("/api/albums", json={"title": "Audited"})
-    factory = get_session_factory()
-    with factory() as session:
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
         entries = list_audit_log(session)
     assert any(e.action == "create" and e.resource_type == "album" for e in entries)
 
@@ -957,7 +944,6 @@ def test_audit_log_admin_endpoint(tmp_path: Path) -> None:
     assert len(data) >= 1
     assert data[0]["action"] == "create"
     assert "created_at" in data[0]
-    reset_engine()
 
 
 # ── Chat rate limiting ───────────────────────────────────────────────
@@ -990,7 +976,6 @@ def test_chat_rate_limit(tmp_path: Path) -> None:
         api_mod._RATE_LIMITS["chat"] = (
             auth_mod.CHAT_RATE_LIMIT_USER, auth_mod.CHAT_RATE_LIMIT_ADMIN,
         )
-        reset_engine()
 
 
 # ── Admin rate limits ────────────────────────────────────────────────
@@ -1008,7 +993,9 @@ def test_admin_has_rate_limit(tmp_path: Path) -> None:
 
     mock_queue = MagicMock()
     try:
-        with patch("songmaker_cli.generation_api.get_gpu_queue", return_value=mock_queue):
+        with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
+            mock_ctx.return_value = c.app.state.ctx
+            mock_ctx.return_value.gpu_queue = mock_queue
             r = c.post("/api/songs/s1/generate", json={"count": 1})
             assert r.status_code == 200
 
@@ -1016,7 +1003,6 @@ def test_admin_has_rate_limit(tmp_path: Path) -> None:
             assert r.status_code == 429
     finally:
         api_mod._RATE_LIMITS["generate"] = original_limits
-        reset_engine()
 
 
 # ── Body size limit middleware ───────────────────────────────────────
@@ -1025,13 +1011,19 @@ def test_admin_has_rate_limit(tmp_path: Path) -> None:
 def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     from songmaker_cli.api import router
     from songmaker_cli.server import BodySizeLimitMiddleware
+
+    factory = init_db(tmp_path / "test.db")
+    ctx = AppContext(
+        db=factory,
+        output_dir=tmp_path,
+        session_secret=TEST_SECRET,
+    )
+
     app = FastAPI()
+    app.state.ctx = ctx
     app.dependency_overrides[get_current_user] = _fake_user("u-test", "test", "user")
     app.add_middleware(BodySizeLimitMiddleware)
     app.include_router(router)
-
-    reset_engine()
-    init_db(tmp_path / "test.db")
 
     tc = TestClient(app)
     large_body = b"x" * 2_000_000
@@ -1041,7 +1033,6 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
         headers={"content-type": "application/json"},
     )
     assert resp.status_code == 413
-    reset_engine()
 
 
 # ── Error sanitization ──────────────────────────────────────────────
@@ -1082,7 +1073,6 @@ def test_chat_unavailable_hides_details(tmp_path: Path) -> None:
     assert resp.status_code == 503
     assert "Claude is currently unavailable" in resp.json()["detail"]
     assert "/home/" not in resp.json()["detail"]
-    reset_engine()
 
 
 # ── build_system_prompt ────────────────────────────────────────────
@@ -1109,4 +1099,3 @@ def test_build_system_prompt_whitespace_only() -> None:
 
     result = build_system_prompt("   ")
     assert DEFAULT_CHAT_STYLE in result
-

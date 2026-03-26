@@ -13,14 +13,12 @@ from songmaker_cli.gpu_queue import (
     SHUTDOWN_TIMEOUT_SECONDS,
     GpuJob,
     GpuQueue,
-    get_gpu_queue,
-    reset_gpu_queue,
 )
 
 
 def _make_queue() -> GpuQueue:
     """Create a queue with _prepare_mode stubbed out (no real GPU ops)."""
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     queue._prepare_mode = lambda mode: None  # type: ignore[method-assign]
     return queue
 
@@ -53,7 +51,7 @@ def test_queue_executes_jobs_sequentially() -> None:
 
 
 def test_queue_mode_switch_calls_prepare() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     queue.start()
     prepared: list[str] = []
 
@@ -112,7 +110,7 @@ def test_queue_start_idempotent() -> None:
 
 
 def test_clear_scoring_models_calls_clear_cache() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with (
         patch("songmaker_cli.scoring.text_accuracy.clear_cache") as mock_whisper,
         patch("songmaker_cli.scoring.audiobox_aesthetics.clear_cache") as mock_audiobox,
@@ -125,7 +123,7 @@ def test_clear_scoring_models_calls_clear_cache() -> None:
 
 
 def test_clear_scoring_models_handles_import_error() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with (
         patch(
             "songmaker_cli.gpu_queue.GpuQueue._clear_scoring_models",
@@ -140,13 +138,13 @@ def test_clear_scoring_models_handles_import_error() -> None:
 
 
 def test_verify_vram_freed_no_torch() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with patch.dict("sys.modules", {"torch": None}):
         queue._verify_vram_freed()
 
 
 def test_verify_vram_freed_no_cuda() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     mock_torch = MagicMock()
     mock_torch.cuda.is_available.return_value = False
     with patch.dict("sys.modules", {"torch": mock_torch}):
@@ -154,7 +152,7 @@ def test_verify_vram_freed_no_cuda() -> None:
 
 
 def test_verify_vram_freed_immediate() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     mock_torch = MagicMock()
     mock_torch.cuda.is_available.return_value = True
     mock_torch.cuda.memory_allocated.return_value = 10 * 1024 * 1024  # 10 MB
@@ -163,7 +161,7 @@ def test_verify_vram_freed_immediate() -> None:
 
 
 def test_verify_vram_freed_timeout() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     mock_torch = MagicMock()
     mock_torch.cuda.is_available.return_value = True
     mock_torch.cuda.memory_allocated.return_value = 500 * 1024 * 1024  # 500 MB
@@ -178,13 +176,13 @@ def test_verify_vram_freed_timeout() -> None:
 
 
 def test_ensure_acestep_already_healthy() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with patch.object(queue, "_is_acestep_healthy", return_value=True):
         queue._ensure_acestep()
 
 
 def test_ensure_acestep_starts_and_waits() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with (
         patch.object(queue, "_is_acestep_healthy", return_value=False),
         patch.object(queue, "_start_acestep"),
@@ -194,7 +192,7 @@ def test_ensure_acestep_starts_and_waits() -> None:
 
 
 def test_is_acestep_healthy_success() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     mock_response = MagicMock()
     mock_response.__enter__ = MagicMock(return_value=mock_response)
     mock_response.__exit__ = MagicMock(return_value=False)
@@ -203,13 +201,13 @@ def test_is_acestep_healthy_success() -> None:
 
 
 def test_is_acestep_healthy_failure() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with patch("songmaker_cli.gpu_queue.urlopen", side_effect=ConnectionError):
         assert queue._is_acestep_healthy() is False
 
 
 def test_start_acestep() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     mock_proc = MagicMock()
     mock_proc.pid = 12345
     with (
@@ -221,14 +219,14 @@ def test_start_acestep() -> None:
 
 
 def test_start_acestep_no_uv() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with patch.object(queue, "_find_uv", return_value=None):
         with pytest.raises(RuntimeError, match="uv not found"):
             queue._start_acestep()
 
 
 def test_wait_for_acestep_success() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     queue._acestep_process = MagicMock()
     queue._acestep_process.poll.return_value = None
 
@@ -241,7 +239,7 @@ def test_wait_for_acestep_success() -> None:
 
 
 def test_wait_for_acestep_process_exits() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     stderr_mock = MagicMock()
     stderr_mock.read.return_value = b"fatal error"
     queue._acestep_process = MagicMock()
@@ -257,7 +255,7 @@ def test_wait_for_acestep_process_exits() -> None:
 
 
 def test_wait_for_acestep_timeout() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     queue._acestep_process = MagicMock()
     queue._acestep_process.poll.return_value = None
 
@@ -274,13 +272,13 @@ def test_wait_for_acestep_timeout() -> None:
 
 
 def test_stop_acestep_no_process() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     queue._acestep_process = None
     queue._stop_acestep()
 
 
 def test_stop_acestep_already_exited() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     proc = MagicMock()
     proc.poll.return_value = 0
     queue._acestep_process = proc
@@ -289,7 +287,7 @@ def test_stop_acestep_already_exited() -> None:
 
 
 def test_stop_acestep_graceful() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     proc = MagicMock()
     proc.poll.return_value = None
     proc.wait.return_value = 0
@@ -305,7 +303,7 @@ def test_stop_acestep_graceful() -> None:
 def test_stop_acestep_force_kill() -> None:
     import subprocess
 
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     proc = MagicMock()
     proc.poll.return_value = None
     proc.wait.side_effect = [subprocess.TimeoutExpired(cmd="acestep", timeout=15), None]
@@ -322,14 +320,14 @@ def test_stop_acestep_force_kill() -> None:
 
 
 def test_find_uv_found() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with patch("subprocess.run"):
         result = queue._find_uv()
     assert result is not None
 
 
 def test_find_uv_not_found() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with patch("subprocess.run", side_effect=FileNotFoundError):
         result = queue._find_uv()
     assert result is None
@@ -339,7 +337,7 @@ def test_find_uv_not_found() -> None:
 
 
 def test_gc_gpu_with_cuda() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     mock_torch = MagicMock()
     mock_torch.cuda.is_available.return_value = True
     with patch.dict("sys.modules", {"torch": mock_torch}):
@@ -348,7 +346,7 @@ def test_gc_gpu_with_cuda() -> None:
 
 
 def test_gc_gpu_no_torch() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with patch.dict("sys.modules", {"torch": None}):
         queue._gc_gpu()
 
@@ -357,7 +355,7 @@ def test_gc_gpu_no_torch() -> None:
 
 
 def test_prepare_mode_generate() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with (
         patch.object(queue, "_clear_scoring_models"),
         patch.object(queue, "_verify_vram_freed"),
@@ -367,7 +365,7 @@ def test_prepare_mode_generate() -> None:
 
 
 def test_prepare_mode_score() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with (
         patch.object(queue, "_stop_acestep"),
         patch.object(queue, "_gc_gpu"),
@@ -377,14 +375,14 @@ def test_prepare_mode_score() -> None:
 
 
 def test_prepare_mode_exception_propagates() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with patch.object(queue, "_stop_acestep", side_effect=RuntimeError("boom")):
         with pytest.raises(RuntimeError, match="boom"):
             queue._prepare_mode("score")
 
 
 def test_execute_skips_job_on_mode_failure() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     results: list[str] = []
 
     with (
@@ -398,63 +396,17 @@ def test_execute_skips_job_on_mode_failure() -> None:
     mock_fail.assert_called_once_with("j1", "GPU mode preparation failed")
 
 
-# ── get_gpu_queue singleton ─────────────────────────────────────────
-
-
-def test_get_gpu_queue_singleton() -> None:
-    import songmaker_cli.gpu_queue as mod
-    old = mod._instance
-    mod._instance = None
-    try:
-        with patch.object(GpuQueue, "start"):
-            q1 = get_gpu_queue()
-            q2 = get_gpu_queue()
-        assert q1 is q2
-    finally:
-        mod._instance = old
-
-
-# ── reset_gpu_queue ─────────────────────────────────────────────────
-
-
-def test_reset_gpu_queue_shuts_down_instance() -> None:
-    import songmaker_cli.gpu_queue as mod
-
-    old = mod._instance
-    mock_queue = MagicMock(spec=GpuQueue)
-    mod._instance = mock_queue
-    try:
-        reset_gpu_queue()
-        mock_queue.shutdown.assert_called_once()
-        assert mod._instance is None
-    finally:
-        mod._instance = old
-
-
-def test_reset_gpu_queue_noop_when_none() -> None:
-    import songmaker_cli.gpu_queue as mod
-
-    old = mod._instance
-    mod._instance = None
-    try:
-        reset_gpu_queue()
-        assert mod._instance is None
-    finally:
-        mod._instance = old
-
-
 # ── _recover_stale_jobs ─────────────────────────────────────────────
 
 
 def test_recover_stale_jobs_success() -> None:
-    queue = GpuQueue()
-    mock_factory = MagicMock()
     mock_session = MagicMock()
+    mock_factory = MagicMock()
     mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
     mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+    queue = GpuQueue(mock_factory)
 
     with (
-        patch("songmaker_cli.db.engine.get_session_factory", return_value=mock_factory),
         patch("songmaker_cli.db.queries.recover_stale_jobs"),
         patch("songmaker_cli.db.queries.delete_expired_sessions", return_value=3),
     ):
@@ -464,14 +416,13 @@ def test_recover_stale_jobs_success() -> None:
 
 
 def test_recover_stale_jobs_no_expired_sessions() -> None:
-    queue = GpuQueue()
-    mock_factory = MagicMock()
     mock_session = MagicMock()
+    mock_factory = MagicMock()
     mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
     mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+    queue = GpuQueue(mock_factory)
 
     with (
-        patch("songmaker_cli.db.engine.get_session_factory", return_value=mock_factory),
         patch("songmaker_cli.db.queries.recover_stale_jobs"),
         patch("songmaker_cli.db.queries.delete_expired_sessions", return_value=0),
     ):
@@ -481,20 +432,20 @@ def test_recover_stale_jobs_no_expired_sessions() -> None:
 
 
 def test_recover_stale_jobs_ignores_runtime_error() -> None:
-    queue = GpuQueue()
-
-    with patch(
-        "songmaker_cli.db.engine.get_session_factory",
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(
         side_effect=RuntimeError("DB not initialized"),
-    ):
-        queue._recover_stale_jobs()
+    )
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+    queue = GpuQueue(mock_factory)
+    queue._recover_stale_jobs()
 
 
 # ── _clear_scoring_models import errors ─────────────────────────────
 
 
 def test_clear_scoring_models_whisper_import_error() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     with (
         patch.dict("sys.modules", {"songmaker_cli.scoring.text_accuracy": None}),
         patch.object(queue, "_gc_gpu"),
@@ -503,7 +454,7 @@ def test_clear_scoring_models_whisper_import_error() -> None:
 
 
 def test_clear_scoring_models_audiobox_import_error() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
 
     def raise_on_clear_whisper():
         raise ImportError
@@ -523,7 +474,6 @@ def test_clear_scoring_models_audiobox_import_error() -> None:
 
 
 def test_fail_job_updates_db() -> None:
-    queue = GpuQueue()
     mock_session = MagicMock()
     mock_factory = MagicMock(
         return_value=MagicMock(
@@ -531,11 +481,9 @@ def test_fail_job_updates_db() -> None:
             __exit__=MagicMock(return_value=False),
         ),
     )
+    queue = GpuQueue(mock_factory)
 
-    with (
-        patch("songmaker_cli.db.engine.get_session_factory", return_value=mock_factory),
-        patch("songmaker_cli.db.queries.update_job_status") as mock_update,
-    ):
+    with patch("songmaker_cli.db.queries.update_job_status") as mock_update:
         queue._fail_job("j1", "something broke")
 
     mock_update.assert_called_once_with(
@@ -545,23 +493,20 @@ def test_fail_job_updates_db() -> None:
 
 
 def test_fail_job_handles_db_error() -> None:
-    queue = GpuQueue()
-
-    with patch(
-        "songmaker_cli.db.engine.get_session_factory",
-        side_effect=RuntimeError("no db"),
-    ):
-        queue._fail_job("j1", "error")
+    mock_factory = MagicMock(
+        return_value=MagicMock(
+            __enter__=MagicMock(side_effect=RuntimeError("no db")),
+            __exit__=MagicMock(return_value=False),
+        ),
+    )
+    queue = GpuQueue(mock_factory)
+    queue._fail_job("j1", "error")
 
 
 # ── _periodic_cleanup ──────────────────────────────────────────────
 
 
 def test_periodic_cleanup_runs_recovery() -> None:
-    queue = GpuQueue()
-    queue._running = True
-    cleanup_called = threading.Event()
-
     mock_session = MagicMock()
     mock_factory = MagicMock(
         return_value=MagicMock(
@@ -569,10 +514,12 @@ def test_periodic_cleanup_runs_recovery() -> None:
             __exit__=MagicMock(return_value=False),
         ),
     )
+    queue = GpuQueue(mock_factory)
+    queue._running = True
+    cleanup_called = threading.Event()
 
     with (
         patch("songmaker_cli.gpu_queue.CLEANUP_INTERVAL_SECONDS", 1),
-        patch("songmaker_cli.db.engine.get_session_factory", return_value=mock_factory),
         patch("songmaker_cli.db.queries.recover_stale_jobs_by_age") as mock_recover,
     ):
         mock_recover.side_effect = lambda s: cleanup_called.set() or 0
@@ -588,7 +535,7 @@ def test_periodic_cleanup_runs_recovery() -> None:
 
 
 def test_periodic_cleanup_stops_when_not_running() -> None:
-    queue = GpuQueue()
+    queue = GpuQueue(MagicMock())
     queue._running = False
 
     with patch("songmaker_cli.gpu_queue.CLEANUP_INTERVAL_SECONDS", 1):
@@ -596,21 +543,16 @@ def test_periodic_cleanup_stops_when_not_running() -> None:
 
 
 def test_periodic_cleanup_handles_exception() -> None:
-    queue = GpuQueue()
-    queue._running = True
-    error_logged = threading.Event()
-
-    def fail_then_stop(s):
-        error_logged.set()
-        raise RuntimeError("db error")
-
-    with (
-        patch("songmaker_cli.gpu_queue.CLEANUP_INTERVAL_SECONDS", 1),
-        patch(
-            "songmaker_cli.db.engine.get_session_factory",
-            side_effect=RuntimeError("no db"),
+    mock_factory = MagicMock(
+        return_value=MagicMock(
+            __enter__=MagicMock(side_effect=RuntimeError("no db")),
+            __exit__=MagicMock(return_value=False),
         ),
-    ):
+    )
+    queue = GpuQueue(mock_factory)
+    queue._running = True
+
+    with patch("songmaker_cli.gpu_queue.CLEANUP_INTERVAL_SECONDS", 1):
         t = threading.Thread(target=queue._periodic_cleanup, daemon=True)
         t.start()
         time.sleep(2)

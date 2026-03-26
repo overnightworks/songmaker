@@ -24,15 +24,16 @@ from songmaker_cli.auth import (
     check_password_strength,
     ensure_session_secret,
     generate_csrf_token,
-    get_trusted_proxies,
+    get_client_ip,
     hash_password,
-    reset_session_secret,
-    reset_trusted_proxies,
+    parse_trusted_proxies,
     sign_session_id,
     verify_csrf_token,
     verify_password,
     verify_session_cookie,
 )
+
+_TEST_SECRET = b"a" * 64
 
 
 def test_hash_and_verify_password() -> None:
@@ -68,48 +69,46 @@ def test_constants() -> None:
     assert LOGIN_LOCKOUT_WINDOW_SECONDS == 3600
 
 
-# ── HMAC session signing ───────────────────────────────────────────
+# -- HMAC session signing ---------------------------------------------------
 
 
 def test_sign_and_verify_session() -> None:
-    signed = sign_session_id("my-session-token")
+    signed = sign_session_id("my-session-token", _TEST_SECRET)
     assert "." in signed
-    assert verify_session_cookie(signed) == "my-session-token"
+    assert verify_session_cookie(signed, _TEST_SECRET) == "my-session-token"
 
 
 def test_verify_rejects_tampered_signature() -> None:
-    signed = sign_session_id("my-session-token")
+    signed = sign_session_id("my-session-token", _TEST_SECRET)
     tampered = signed[:-4] + "XXXX"
-    assert verify_session_cookie(tampered) is None
+    assert verify_session_cookie(tampered, _TEST_SECRET) is None
 
 
 def test_verify_rejects_no_dot() -> None:
-    assert verify_session_cookie("no-dot-here") is None
+    assert verify_session_cookie("no-dot-here", _TEST_SECRET) is None
 
 
 def test_verify_rejects_empty_parts() -> None:
-    assert verify_session_cookie(".abc") is None
-    assert verify_session_cookie("abc.") is None
+    assert verify_session_cookie(".abc", _TEST_SECRET) is None
+    assert verify_session_cookie("abc.", _TEST_SECRET) is None
 
 
 def test_ensure_session_secret_generates_file(tmp_path: Path) -> None:
-    reset_session_secret()
     old = os.environ.pop("SESSION_SECRET", None)
     try:
         result = ensure_session_secret(tmp_path)
         assert len(result) >= 32
-        assert os.environ["SESSION_SECRET"] == result
         secret_file = tmp_path / ".session_secret"
         assert secret_file.exists()
         assert secret_file.read_text().strip() == result
     finally:
         if old:
             os.environ["SESSION_SECRET"] = old
-        reset_session_secret()
+        else:
+            os.environ.pop("SESSION_SECRET", None)
 
 
 def test_ensure_session_secret_reads_existing_file(tmp_path: Path) -> None:
-    reset_session_secret()
     old = os.environ.pop("SESSION_SECRET", None)
     try:
         secret_file = tmp_path / ".session_secret"
@@ -119,11 +118,11 @@ def test_ensure_session_secret_reads_existing_file(tmp_path: Path) -> None:
     finally:
         if old:
             os.environ["SESSION_SECRET"] = old
-        reset_session_secret()
+        else:
+            os.environ.pop("SESSION_SECRET", None)
 
 
 def test_ensure_session_secret_prefers_env_var(tmp_path: Path) -> None:
-    reset_session_secret()
     old = os.environ.get("SESSION_SECRET")
     try:
         os.environ["SESSION_SECRET"] = "c" * 64
@@ -134,10 +133,9 @@ def test_ensure_session_secret_prefers_env_var(tmp_path: Path) -> None:
             os.environ["SESSION_SECRET"] = old
         else:
             os.environ.pop("SESSION_SECRET", None)
-        reset_session_secret()
 
 
-# ── Password strength ──────────────────────────────────────────────
+# -- Password strength -------------------------------------------------------
 
 
 def test_common_password_rejected() -> None:
@@ -154,71 +152,56 @@ def test_strong_password_accepted() -> None:
     assert check_password_strength("s3cur3P@ss!") == "s3cur3P@ss!"
 
 
-# ── CSRF token binding ────────────────────────────────────────────
+# -- CSRF token binding ------------------------------------------------------
 
 
 def test_generate_csrf_token_deterministic() -> None:
-    t1 = generate_csrf_token("session-abc")
-    t2 = generate_csrf_token("session-abc")
+    t1 = generate_csrf_token("session-abc", _TEST_SECRET)
+    t2 = generate_csrf_token("session-abc", _TEST_SECRET)
     assert t1 == t2
 
 
 def test_generate_csrf_token_differs_per_session() -> None:
-    t1 = generate_csrf_token("session-1")
-    t2 = generate_csrf_token("session-2")
+    t1 = generate_csrf_token("session-1", _TEST_SECRET)
+    t2 = generate_csrf_token("session-2", _TEST_SECRET)
     assert t1 != t2
 
 
 def test_verify_csrf_token_valid() -> None:
-    token = generate_csrf_token("my-session")
-    assert verify_csrf_token(token, "my-session") is True
+    token = generate_csrf_token("my-session", _TEST_SECRET)
+    assert verify_csrf_token(token, "my-session", _TEST_SECRET) is True
 
 
 def test_verify_csrf_token_wrong_session() -> None:
-    token = generate_csrf_token("session-a")
-    assert verify_csrf_token(token, "session-b") is False
+    token = generate_csrf_token("session-a", _TEST_SECRET)
+    assert verify_csrf_token(token, "session-b", _TEST_SECRET) is False
 
 
 def test_verify_csrf_token_forged() -> None:
-    assert verify_csrf_token("forged-token", "session-a") is False
-
-
-def test_get_session_secret_raises_without_env() -> None:
-    reset_session_secret()
-    old = os.environ.pop("SESSION_SECRET", None)
-    try:
-        with pytest.raises(RuntimeError, match="SESSION_SECRET not set"):
-            generate_csrf_token("anything")
-    finally:
-        if old:
-            os.environ["SESSION_SECRET"] = old
-        reset_session_secret()
+    assert verify_csrf_token("forged-token", "session-a", _TEST_SECRET) is False
 
 
 def test_none_password_passes() -> None:
     assert check_password_strength(None) is None
 
 
-# ── Trusted proxies (lazy) ───────────────────────────────────────
+# -- Trusted proxies (parse_trusted_proxies) ---------------------------------
 
 
-def test_get_trusted_proxies_lazy(monkeypatch: pytest.MonkeyPatch) -> None:
-    reset_trusted_proxies()
+def test_parse_trusted_proxies(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TRUSTED_PROXIES", "10.0.0.1, 10.0.0.2")
-    try:
-        result = get_trusted_proxies()
-        assert result == frozenset({"10.0.0.1", "10.0.0.2"})
-    finally:
-        reset_trusted_proxies()
+    result = parse_trusted_proxies()
+    assert result == frozenset({"10.0.0.1", "10.0.0.2"})
 
 
-def test_get_trusted_proxies_empty_default() -> None:
-    reset_trusted_proxies()
-    old = os.environ.pop("TRUSTED_PROXIES", None)
-    try:
-        result = get_trusted_proxies()
-        assert result == frozenset()
-    finally:
-        if old is not None:
-            os.environ["TRUSTED_PROXIES"] = old
-        reset_trusted_proxies()
+def test_parse_trusted_proxies_empty_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TRUSTED_PROXIES", raising=False)
+    result = parse_trusted_proxies()
+    assert result == frozenset()
+
+
+# -- get_client_ip -----------------------------------------------------------
+
+
+def test_get_client_ip_no_trusted_proxies() -> None:
+    assert get_client_ip("1.2.3.4", "5.6.7.8, 9.10.11.12", frozenset()) == "1.2.3.4"

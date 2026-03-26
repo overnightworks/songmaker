@@ -12,13 +12,13 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from songmaker_cli.app_context import AppContext, get_db_session
 from songmaker_cli.auth import (
     ROLE_ADMIN,
     SESSION_ABSOLUTE_MAX_AGE_SECONDS,
     SESSION_MAX_AGE_SECONDS,
     verify_session_cookie,
 )
-from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.db.queries import get_session_with_user, record_audit
 
 log = logging.getLogger(__name__)
@@ -43,11 +43,13 @@ def get_current_user(
     IP/UA change auditing, and sliding session renewal in the same
     DB session as the endpoint — single transaction, single commit.
     """
+    ctx: AppContext = request.app.state.ctx
+
     raw_cookie = request.cookies.get(SESSION_COOKIE)
     if not raw_cookie or len(raw_cookie) > 200:
         raise HTTPException(401, "Authentication required")
 
-    session_id = verify_session_cookie(raw_cookie)
+    session_id = verify_session_cookie(raw_cookie, ctx.session_secret)
     if session_id is None:
         raise HTTPException(401, "Invalid session")
 
@@ -136,6 +138,6 @@ class IpRateLimiter:
         for ip in stale[:self._EVICT_BATCH]:
             del self._requests[ip]
         if len(self._requests) >= self._MAX_TRACKED_IPS:
-            oldest = sorted(self._requests, key=lambda ip: self._requests[ip][-1])
-            for ip in oldest[:self._EVICT_BATCH]:
+            to_delete = list(self._requests)[:self._EVICT_BATCH]
+            for ip in to_delete:
                 del self._requests[ip]

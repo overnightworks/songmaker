@@ -6,10 +6,11 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from sqlalchemy.orm import Session, sessionmaker
+
 from acestep_engine import AceStepClient
 from acestep_engine.models import AceStepConfig
-from songmaker_cli.config import build_ace_config, get_output_dir, load_generation_defaults
-from songmaker_cli.db.engine import get_session_factory
+from songmaker_cli.config import build_ace_config, load_generation_defaults
 from songmaker_cli.db.queries import (
     create_generation,
     get_default_preset,
@@ -60,11 +61,11 @@ class GenerationSetupError(Exception):
     pass
 
 
-def _load_song_meta(song_id: str, version_id: str) -> tuple[SongMeta, AlbumMeta]:
+def _load_song_meta(
+    song_id: str, version_id: str, db_factory: sessionmaker[Session],
+) -> tuple[SongMeta, AlbumMeta]:
     """Load song and version from DB and return domain models."""
-    factory = get_session_factory()
-
-    with factory() as session:
+    with db_factory() as session:
         song = get_song(session, song_id)
         if not song:
             raise GenerationSetupError("Song not found")
@@ -103,22 +104,25 @@ def _load_song_meta(song_id: str, version_id: str) -> tuple[SongMeta, AlbumMeta]
     return meta, album_meta
 
 
-def _load_preset_params(user_id: str | None, model_name: str | None) -> dict | None:
+def _load_preset_params(
+    user_id: str | None, model_name: str | None, db_factory: sessionmaker[Session],
+) -> dict | None:
     if not user_id:
         return None
     is_sft = model_name and "sft" in model_name
     model_mode = "sft" if is_sft else "turbo"
-    factory = get_session_factory()
-    with factory() as session:
+    with db_factory() as session:
         preset = get_default_preset(session, user_id, model_mode)
         return dict(preset.params) if preset else None
 
 
 def _build_generation_context(
-    song_id: str, version_id: str, user_id: str | None = None,
+    song_id: str, version_id: str,
+    db_factory: sessionmaker[Session], output_dir: Path,
+    user_id: str | None = None,
 ) -> GenerationContext:
     """Load song/version from DB and build all config needed for generation."""
-    meta, album_meta = _load_song_meta(song_id, version_id)
+    meta, album_meta = _load_song_meta(song_id, version_id, db_factory)
 
     client = AceStepClient()
     if not client.is_available:
@@ -128,11 +132,11 @@ def _build_generation_context(
     model_name = server_info.model if server_info else None
     log.debug("ACE-Step model: %s", model_name)
 
-    preset_params = _load_preset_params(user_id, model_name)
+    preset_params = _load_preset_params(user_id, model_name, db_factory)
     ace_config = build_ace_config(
         meta,
         model_name=model_name,
-        global_defaults=load_generation_defaults(),
+        global_defaults=load_generation_defaults(output_dir),
         preset_params=preset_params,
     )
 
@@ -142,7 +146,7 @@ def _build_generation_context(
         meta=meta,
         album_meta=album_meta,
         ace_config=ace_config,
-        output_root=get_output_dir(),
+        output_root=output_dir,
         model_name=model_name,
         client=client,
         base_params=meta.generation_params,
@@ -152,22 +156,27 @@ def _build_generation_context(
 def run_generation_job(
     job_id: str, song_id: str, version_id: str, count: int,
     user_id: str | None = None,
+    db_factory: sessionmaker[Session] | None = None,
+    output_dir: Path | None = None,
 ) -> None:
     """Run generation in a background thread, updating DB status."""
-    factory = get_session_factory()
+    assert db_factory is not None, "db_factory is required"
+    assert output_dir is not None, "output_dir is required"
     log.info("Generation job %s: song=%s, count=%d", job_id, song_id, count)
 
     try:
-        _update_job(factory, job_id, "running")
+        _update_job(db_factory, job_id, "running")
 
         try:
-            ctx = _build_generation_context(song_id, version_id, user_id=user_id)
+            ctx = _build_generation_context(
+                song_id, version_id, db_factory, output_dir, user_id=user_id,
+            )
         except GenerationSetupError as exc:
-            _update_job(factory, job_id, "failed", error=str(exc), error_type="setup_error")
+            _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return
 
         for i in range(count):
-            _update_job(factory, job_id, "running", progress=i / count)
+            _update_job(db_factory, job_id, "running", progress=i / count)
 
             result = generate_single(
                 ctx.meta, ctx.album_meta, ctx.ace_config, ctx.output_root, client=ctx.client,
@@ -187,7 +196,7 @@ def run_generation_job(
                 "think_mode": ctx.ace_config.think_mode,
             }
 
-            with factory() as session:
+            with db_factory() as session:
                 create_generation(
                     session,
                     song_id=song_id,
@@ -200,12 +209,12 @@ def run_generation_job(
 
             log.info("Generated %d/%d: %s (seed=%s)", i + 1, count, mp3_rel, result.seed)
 
-        _update_job(factory, job_id, "completed", progress=1.0)
+        _update_job(db_factory, job_id, "completed", progress=1.0)
 
     except Exception as exc:
         log.exception("Generation job failed: %s", exc)
         _update_job(
-            factory, job_id, "failed",
+            db_factory, job_id, "failed",
             error=_sanitize_error(exc), error_type="generation_error",
         )
     finally:
@@ -214,19 +223,22 @@ def run_generation_job(
 
 def run_scoring_job(
     job_id: str, gen_id: str, scorers: list[str] | None,
+    db_factory: sessionmaker[Session] | None = None,
+    output_dir: Path | None = None,
 ) -> None:
     """Run scoring in a background thread, updating DB status."""
+    assert db_factory is not None, "db_factory is required"
+    assert output_dir is not None, "output_dir is required"
     log.info("Scoring job %s: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
-    factory = get_session_factory()
 
     try:
-        _update_job(factory, job_id, "running")
+        _update_job(db_factory, job_id, "running")
 
-        with factory() as session:
+        with db_factory() as session:
             gen = get_generation(session, gen_id)
             if not gen:
                 _update_job(
-                    factory, job_id, "failed",
+                    db_factory, job_id, "failed",
                     error="Generation not found", error_type="setup_error",
                 )
                 return
@@ -243,12 +255,11 @@ def run_scoring_job(
                         "lyrics": ver.lyrics,
                     }
 
-        output_root = get_output_dir()
-        mp3_full = output_root / mp3_path_rel
+        mp3_full = output_dir / mp3_path_rel
 
         if not mp3_full.exists():
             _update_job(
-                factory, job_id, "failed",
+                db_factory, job_id, "failed",
                 error="Audio file not found for scoring", error_type="setup_error",
             )
             log.error("Scoring job %s: MP3 not found at %s", job_id, mp3_path_rel)
@@ -264,7 +275,7 @@ def run_scoring_job(
         if song_scores.text_accuracy:
             whisper_text = "\n".join(song_scores.text_accuracy.transcribed_line_texts)
 
-        with factory() as session:
+        with db_factory() as session:
             from songmaker_cli.db.models import Generation as GenModel
             save_scores(session, gen_id, scores_dict)
             if whisper_text is not None:
@@ -274,12 +285,12 @@ def run_scoring_job(
             session.commit()
 
         log.info("Scored: %s (%d metrics)", mp3_path_rel, len(scores_dict))
-        _update_job(factory, job_id, "completed", progress=1.0)
+        _update_job(db_factory, job_id, "completed", progress=1.0)
 
     except Exception as exc:
         log.exception("Scoring job failed: %s", exc)
         _update_job(
-            factory, job_id, "failed",
+            db_factory, job_id, "failed",
             error=_sanitize_error(exc), error_type="scoring_error",
         )
     finally:

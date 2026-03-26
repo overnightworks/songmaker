@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from songmaker_cli.auth import get_client_ip, hash_password, sign_session_id
-from songmaker_cli.db.engine import get_db_session, init_db, reset_engine
+from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.queries import create_session, create_user
 from songmaker_cli.middleware import (
     SESSION_COOKIE,
@@ -21,19 +21,28 @@ from songmaker_cli.middleware import (
     require_admin,
 )
 
+_TEST_SECRET = b"a" * 64
+
+_test_factory = None
+
 
 @pytest.fixture()
 def _db(tmp_path: Path):
-    reset_engine()
-    init_db(tmp_path / "test.db")
-    yield
-    reset_engine()
+    global _test_factory
+    factory = init_db(tmp_path / "test.db")
+    _test_factory = factory
+    yield factory
+    _test_factory = None
 
 
 @pytest.fixture()
 def auth_app(_db) -> TestClient:
     """Minimal FastAPI app with auth dependency — no middleware stack."""
+    from songmaker_cli.app_context import AppContext, get_db_session
+
+    ctx = AppContext(db=_db, output_dir=Path("/tmp"), session_secret=_TEST_SECRET)
     app = FastAPI()
+    app.state.ctx = ctx
 
     @app.get("/protected")
     def protected(
@@ -63,9 +72,7 @@ def _create_user_and_session(
     role: str = "user", active: bool = True, expired: bool = False,
     created_days_ago: int = 0,
 ) -> str:
-    from songmaker_cli.db.engine import get_session_factory
-
-    factory = get_session_factory()
+    factory = _test_factory
     with factory() as session:
         user = create_user(
             session, f"test_{role}_{active}_{expired}_{created_days_ago}",
@@ -84,7 +91,7 @@ def _create_user_and_session(
         return user_session.id
 
 
-# ── No cookie / bad cookie ────────────────────────────────────────
+# -- No cookie / bad cookie ---------------------------------------------------
 
 
 def test_no_cookie_returns_401(auth_app: TestClient) -> None:
@@ -99,44 +106,44 @@ def test_unsigned_cookie_returns_401(auth_app: TestClient) -> None:
 
 
 def test_nonexistent_session_returns_401(auth_app: TestClient) -> None:
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id("nonexistent"))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id("nonexistent", _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 401
 
 
-# ── Expiry ────────────────────────────────────────────────────────
+# -- Expiry -------------------------------------------------------------------
 
 
 def test_expired_session_returns_401(auth_app: TestClient) -> None:
     sid = _create_user_and_session(expired=True)
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 401
 
 
 def test_absolute_max_age_expired(auth_app: TestClient) -> None:
     sid = _create_user_and_session(created_days_ago=91)
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 401
 
 
-# ── Disabled user ─────────────────────────────────────────────────
+# -- Disabled user ------------------------------------------------------------
 
 
 def test_disabled_user_returns_403(auth_app: TestClient) -> None:
     sid = _create_user_and_session(active=False)
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 403
 
 
-# ── Valid session ─────────────────────────────────────────────────
+# -- Valid session ------------------------------------------------------------
 
 
 def test_valid_session_returns_200(auth_app: TestClient) -> None:
     sid = _create_user_and_session()
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 200
     assert resp.json()["username"].startswith("test_user")
@@ -144,23 +151,22 @@ def test_valid_session_returns_200(auth_app: TestClient) -> None:
 
 def test_session_id_set_on_request_state(auth_app: TestClient) -> None:
     sid = _create_user_and_session()
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 200
     assert resp.json()["session_id_set"] is True
 
 
 def test_sliding_window_renewal(auth_app: TestClient) -> None:
-    from songmaker_cli.db.engine import get_session_factory
     from songmaker_cli.db.queries import get_session_with_user
 
     sid = _create_user_and_session()
-    factory = get_session_factory()
+    factory = _test_factory
 
     with factory() as db:
         old_expires = get_session_with_user(db, sid).expires_at
 
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     auth_app.get("/protected")
 
     with factory() as db:
@@ -173,32 +179,31 @@ def test_public_route_no_auth_needed(auth_app: TestClient) -> None:
     assert resp.status_code == 200
 
 
-# ── Admin dependency ──────────────────────────────────────────────
+# -- Admin dependency ---------------------------------------------------------
 
 
 def test_require_admin_rejects_regular_user(auth_app: TestClient) -> None:
     sid = _create_user_and_session(role="user")
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/admin-only")
     assert resp.status_code == 403
 
 
 def test_require_admin_allows_admin(auth_app: TestClient) -> None:
     sid = _create_user_and_session(role="admin")
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/admin-only")
     assert resp.status_code == 200
 
 
-# ── IP/UA audit logging ──────────────────────────────────────────
+# -- IP/UA audit logging -----------------------------------------------------
 
 
 def test_ip_change_creates_audit(auth_app: TestClient) -> None:
-    from songmaker_cli.db.engine import get_session_factory
     from songmaker_cli.db.models import AuditLog
 
     sid = _create_user_and_session()
-    factory = get_session_factory()
+    factory = _test_factory
 
     with factory() as db:
         from songmaker_cli.db.queries import get_session_with_user
@@ -206,7 +211,7 @@ def test_ip_change_creates_audit(auth_app: TestClient) -> None:
         sess.ip_address = "1.2.3.4"
         db.commit()
 
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     auth_app.get("/protected")
 
     with factory() as db:
@@ -216,11 +221,10 @@ def test_ip_change_creates_audit(auth_app: TestClient) -> None:
 
 
 def test_ua_change_creates_audit(auth_app: TestClient) -> None:
-    from songmaker_cli.db.engine import get_session_factory
     from songmaker_cli.db.models import AuditLog
 
     sid = _create_user_and_session()
-    factory = get_session_factory()
+    factory = _test_factory
 
     with factory() as db:
         from songmaker_cli.db.queries import get_session_with_user
@@ -228,7 +232,7 @@ def test_ua_change_creates_audit(auth_app: TestClient) -> None:
         sess.user_agent = "OldBrowser/1.0"
         db.commit()
 
-    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid))
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     auth_app.get("/protected", headers={"user-agent": "NewBrowser/2.0"})
 
     with factory() as db:
@@ -236,7 +240,7 @@ def test_ua_change_creates_audit(auth_app: TestClient) -> None:
         assert entry is not None
 
 
-# ── IpRateLimiter ────────────────────────────────────────────────
+# -- IpRateLimiter ------------------------------------------------------------
 
 
 def test_ip_rate_limiter_allows_within_limit() -> None:
@@ -295,42 +299,29 @@ def test_ip_rate_limiter_evicts_stale_ips() -> None:
         assert len(limiter._requests) <= 3
 
 
-# ── get_client_ip ─────────────────────────────────────────────────
+# -- get_client_ip ------------------------------------------------------------
 
 
 def test_get_client_ip_no_trusted_proxies() -> None:
-    from songmaker_cli.auth import get_client_ip
-    assert get_client_ip("1.2.3.4", "5.6.7.8, 9.10.11.12") == "1.2.3.4"
+    assert get_client_ip("1.2.3.4", "5.6.7.8, 9.10.11.12", frozenset()) == "1.2.3.4"
 
 
 def test_get_client_ip_rightmost_untrusted() -> None:
-    from songmaker_cli import auth as auth_mod
-    auth_mod._trusted_proxies = frozenset({"10.0.0.1"})
-    try:
-        result = get_client_ip("10.0.0.1", "1.2.3.4, 5.6.7.8, 10.0.0.1")
-        assert result == "5.6.7.8"
-    finally:
-        auth_mod.reset_trusted_proxies()
+    proxies = frozenset({"10.0.0.1"})
+    result = get_client_ip("10.0.0.1", "1.2.3.4, 5.6.7.8, 10.0.0.1", proxies)
+    assert result == "5.6.7.8"
 
 
 def test_get_client_ip_all_trusted_falls_back() -> None:
-    from songmaker_cli import auth as auth_mod
-    auth_mod._trusted_proxies = frozenset({"10.0.0.1", "10.0.0.2"})
-    try:
-        result = get_client_ip("10.0.0.1", "10.0.0.2, 10.0.0.1")
-        assert result == "10.0.0.1"
-    finally:
-        auth_mod.reset_trusted_proxies()
+    proxies = frozenset({"10.0.0.1", "10.0.0.2"})
+    result = get_client_ip("10.0.0.1", "10.0.0.2, 10.0.0.1", proxies)
+    assert result == "10.0.0.1"
 
 
 def test_get_client_ip_no_xff() -> None:
-    from songmaker_cli import auth as auth_mod
-    auth_mod._trusted_proxies = frozenset({"10.0.0.1"})
-    try:
-        result = get_client_ip("10.0.0.1", None)
-        assert result == "10.0.0.1"
-    finally:
-        auth_mod.reset_trusted_proxies()
+    proxies = frozenset({"10.0.0.1"})
+    result = get_client_ip("10.0.0.1", None, proxies)
+    assert result == "10.0.0.1"
 
 
 def test_ip_rate_limiter_evicts_oldest_when_all_active() -> None:

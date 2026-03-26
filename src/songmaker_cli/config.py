@@ -74,36 +74,12 @@ def resolve_output_paths(
     )
 
 
-_cached_output_dir: Path | None = None
+def _defaults_path(output_dir: Path) -> Path:
+    return output_dir / "generation_defaults.json"
 
 
-def get_output_dir() -> Path:
-    """Return the resolved output directory, cached after first call."""
-    global _cached_output_dir
-    if _cached_output_dir is None:
-        root = find_project_root(Path.cwd())
-        _cached_output_dir = (root / OUTPUT_ROOT) if root else Path(OUTPUT_ROOT)
-    return _cached_output_dir
-
-
-def set_output_dir(path: Path) -> None:
-    """Override the output directory (used by server startup and tests)."""
-    global _cached_output_dir
-    _cached_output_dir = path
-
-
-def reset_output_dir() -> None:
-    """Clear the cached output directory (for testing)."""
-    global _cached_output_dir
-    _cached_output_dir = None
-
-
-def _defaults_path() -> Path:
-    return get_output_dir() / "generation_defaults.json"
-
-
-def load_generation_defaults() -> dict:
-    path = _defaults_path()
+def load_generation_defaults(output_dir: Path) -> dict:
+    path = _defaults_path(output_dir)
     if path.exists():
         defaults = json.loads(path.read_text(encoding="utf-8"))
         log.debug("Loaded generation defaults from %s: %s", path, list(defaults.keys()))
@@ -112,8 +88,8 @@ def load_generation_defaults() -> dict:
     return {}
 
 
-def save_generation_defaults(data: dict) -> None:
-    path = _defaults_path()
+def save_generation_defaults(output_dir: Path, data: dict) -> None:
+    path = _defaults_path(output_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     log.info("Saved generation defaults: %s", path)

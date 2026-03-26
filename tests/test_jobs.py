@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from songmaker_cli.db.engine import init_db, reset_engine
+from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, Version
 from songmaker_cli.db.queries import get_generation, get_job
 from songmaker_cli.jobs import _detect_device, _update_job, run_generation_job, run_scoring_job
@@ -15,10 +15,8 @@ from songmaker_cli.jobs import _detect_device, _update_job, run_generation_job, 
 
 @pytest.fixture()
 def db_factory(tmp_path: Path):
-    reset_engine()
     factory = init_db(tmp_path / "test.db")
     yield factory
-    reset_engine()
 
 
 @pytest.fixture()
@@ -121,13 +119,12 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
     client.server_info.return_value = _mock_server_info()
 
     with (
-        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
         patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", return_value=result),
     ):
-        run_generation_job("j1", "s1", "v1", 1)
+        out = tmp_path / "_output"
+        run_generation_job("j1", "s1", "v1", 1, db_factory=seeded_db, output_dir=out)
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -147,13 +144,12 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
     client.server_info.return_value = _mock_server_info()
 
     with (
-        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
         patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", side_effect=results),
     ):
-        run_generation_job("j1", "s1", "v1", 3)
+        out = tmp_path / "_output"
+        run_generation_job("j1", "s1", "v1", 3, db_factory=seeded_db, output_dir=out)
 
     with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
@@ -161,8 +157,9 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
 
 
 def test_generation_job_song_not_found(seeded_db) -> None:
-    with patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db):
-        run_generation_job("j1", "nonexistent", "v1", 1)
+    run_generation_job(
+        "j1", "nonexistent", "v1", 1, db_factory=seeded_db, output_dir=Path("/tmp/_output"),
+    )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -171,8 +168,9 @@ def test_generation_job_song_not_found(seeded_db) -> None:
 
 
 def test_generation_job_version_not_found(seeded_db) -> None:
-    with patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db):
-        run_generation_job("j1", "s1", "nonexistent", 1)
+    run_generation_job(
+        "j1", "s1", "nonexistent", 1, db_factory=seeded_db, output_dir=Path("/tmp/_output"),
+    )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -184,11 +182,10 @@ def test_generation_job_acestep_not_reachable(seeded_db) -> None:
     client = MagicMock()
     client.is_available = False
 
-    with (
-        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
-        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-    ):
-        run_generation_job("j1", "s1", "v1", 1)
+    with patch("songmaker_cli.jobs.AceStepClient", return_value=client):
+        run_generation_job(
+            "j1", "s1", "v1", 1, db_factory=seeded_db, output_dir=Path("/tmp/_output"),
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -202,13 +199,13 @@ def test_generation_job_exception(seeded_db) -> None:
     client.server_info.return_value = _mock_server_info()
 
     with (
-        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
         patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.get_output_dir", return_value=Path("/tmp/_output")),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", side_effect=RuntimeError("GPU error")),
     ):
-        run_generation_job("j1", "s1", "v1", 1)
+        run_generation_job(
+            "j1", "s1", "v1", 1, db_factory=seeded_db, output_dir=Path("/tmp/_output"),
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -228,13 +225,12 @@ def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> 
     client.server_info.return_value = _mock_server_info()
 
     with (
-        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
         patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", return_value=result),
     ):
-        run_generation_job("j1", "s1", "v1", 1)
+        out = tmp_path / "_output"
+        run_generation_job("j1", "s1", "v1", 1, db_factory=seeded_db, output_dir=out)
 
     with seeded_db() as session:
         gen = session.query(Generation).filter_by(song_id="s1").first()
@@ -249,16 +245,15 @@ def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> Non
     client.server_info.return_value = _mock_server_info()
 
     with (
-        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
         patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch(
             "songmaker_cli.jobs.load_generation_defaults",
             return_value={"turbo": {"shift": 7.0}},
         ) as mock_load,
         patch("songmaker_cli.jobs.generate_single", return_value=result),
     ):
-        run_generation_job("j1", "s1", "v1", 1)
+        out = tmp_path / "_output"
+        run_generation_job("j1", "s1", "v1", 1, db_factory=seeded_db, output_dir=out)
 
     mock_load.assert_called_once()
 
@@ -289,12 +284,10 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
     mock_result = _mock_scores()
 
     with (
-        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
-        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch("songmaker_cli.jobs.run_scoring_pipeline", return_value=mock_result),
     ):
-        run_scoring_job("j2", "g1", None)
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, output_dir=tmp_path / "_output")
 
     with seeded_db() as session:
         job = get_job(session, "j2")
@@ -315,12 +308,10 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
     mock_result = _mock_scores(with_whisper=True)
 
     with (
-        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
-        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch("songmaker_cli.jobs.run_scoring_pipeline", return_value=mock_result),
     ):
-        run_scoring_job("j2", "g1", None)
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, output_dir=tmp_path / "_output")
 
     with seeded_db() as session:
         gen = get_generation(session, "g1")
@@ -328,8 +319,9 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
 
 
 def test_scoring_job_generation_not_found(seeded_db) -> None:
-    with patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db):
-        run_scoring_job("j2", "nonexistent", None)
+    run_scoring_job(
+        "j2", "nonexistent", None, db_factory=seeded_db, output_dir=Path("/tmp/_output"),
+    )
 
     with seeded_db() as session:
         job = get_job(session, "j2")
@@ -345,11 +337,7 @@ def test_scoring_job_mp3_not_found(seeded_db, tmp_path: Path) -> None:
         ))
         session.commit()
 
-    with (
-        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
-        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
-    ):
-        run_scoring_job("j2", "g1", None)
+    run_scoring_job("j2", "g1", None, db_factory=seeded_db, output_dir=tmp_path / "_output")
 
     with seeded_db() as session:
         job = get_job(session, "j2")
@@ -366,12 +354,10 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
         session.commit()
 
     with (
-        patch("songmaker_cli.jobs.get_session_factory", return_value=seeded_db),
-        patch("songmaker_cli.jobs.get_output_dir", return_value=tmp_path / "_output"),
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch("songmaker_cli.jobs.run_scoring_pipeline", side_effect=RuntimeError("scorer crash")),
     ):
-        run_scoring_job("j2", "g1", None)
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, output_dir=tmp_path / "_output")
 
     with seeded_db() as session:
         job = get_job(session, "j2")

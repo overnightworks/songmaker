@@ -14,19 +14,17 @@ from songmaker_cli.api_models import (
     ChatRequest,
     ChatResponse,
 )
+from songmaker_cli.app_context import get_db_session
 from songmaker_cli.claude.provider import (
     UnavailableError,
     call_claude,
     is_available,
 )
-from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_get_session = get_db_session
 
 
 # ── Capabilities ─────────────────────────────────────────────────────
@@ -73,7 +71,7 @@ def build_system_prompt(style: str = "") -> str:
 def api_chat(
     req: ChatRequest,
     user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(_get_session),
+    session: Session = Depends(get_db_session),
 ) -> ChatResponse:
     create_job_with_rate_limit(session, user, "chat")
     session.commit()

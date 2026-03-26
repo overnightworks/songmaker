@@ -7,16 +7,18 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth import hash_password
-from songmaker_cli.db.engine import get_session_factory, init_db, reset_engine
+from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.queries import create_user
 from songmaker_cli.middleware import SESSION_COOKIE
 from songmaker_cli.server import create_app
 
+_TEST_SECRET = b"a" * 64
+
 
 @pytest.fixture()
 def client(tmp_path: Path) -> TestClient:
-    reset_engine()
     output_dir = tmp_path / "_output"
     output_dir.mkdir()
     project_root = tmp_path
@@ -25,15 +27,15 @@ def client(tmp_path: Path) -> TestClient:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    init_db(output_dir / "songmaker.db")
-    app = create_app(output_dir, project_root)
+    factory = init_db(output_dir / "songmaker.db")
+    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=_TEST_SECRET)
+    app = create_app(output_dir, project_root, ctx=ctx)
     yield TestClient(app, cookies={})
-    reset_engine()
 
 
 def _login_as_admin(client: TestClient) -> None:
     from conftest import login_and_csrf
-    factory = get_session_factory()
+    factory = client.app.state.ctx.db
     with factory() as session:
         create_user(session, "admin", hash_password("admin12345"), role="admin")
         session.commit()
@@ -42,14 +44,14 @@ def _login_as_admin(client: TestClient) -> None:
 
 def _login_as_user(client: TestClient) -> None:
     from conftest import login_and_csrf
-    factory = get_session_factory()
+    factory = client.app.state.ctx.db
     with factory() as session:
         create_user(session, "regular", hash_password("user123456"), role="user")
         session.commit()
     login_and_csrf(client, "regular", "user123456")
 
 
-# ── Access control ──────────────────────────────────────────────────
+# -- Access control -----------------------------------------------------------
 
 
 def test_admin_endpoints_require_auth(client: TestClient) -> None:
@@ -63,7 +65,7 @@ def test_admin_endpoints_require_admin_role(client: TestClient) -> None:
     assert resp.status_code == 403
 
 
-# ── List users ──────────────────────────────────────────────────────
+# -- List users ---------------------------------------------------------------
 
 
 def test_list_users(client: TestClient) -> None:
@@ -76,7 +78,7 @@ def test_list_users(client: TestClient) -> None:
     assert "password_hash" not in users[0]
 
 
-# ── Create user ─────────────────────────────────────────────────────
+# -- Create user --------------------------------------------------------------
 
 
 def test_create_user(client: TestClient) -> None:
@@ -112,7 +114,7 @@ def test_create_user_invalid_role(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
-# ── Update user ─────────────────────────────────────────────────────
+# -- Update user --------------------------------------------------------------
 
 
 def test_update_user_role(client: TestClient) -> None:
@@ -216,7 +218,7 @@ def test_demote_admin_allowed_when_multiple(client: TestClient) -> None:
     assert resp.json()["role"] == "user"
 
 
-# ── Delete (deactivate) user ────────────────────────────────────────
+# -- Delete (deactivate) user -------------------------------------------------
 
 
 def test_deactivate_user(client: TestClient) -> None:
@@ -259,7 +261,7 @@ def test_deactivate_admin_via_delete_allowed_when_multiple(client: TestClient) -
     resp = client.delete(f"/api/admin/users/{admin2_id}")
     assert resp.status_code == 200
 
-    factory = get_session_factory()
+    factory = client.app.state.ctx.db
     with factory() as session:
         from songmaker_cli.db.queries import get_user
         admin2_user = get_user(session, admin2_id)
@@ -309,7 +311,7 @@ def test_cannot_deactivate_sole_active_admin_via_delete(client: TestClient) -> N
     assert resp.status_code == 200
 
 
-# ── Login attempts ──────────────────────────────────────────────────
+# -- Login attempts -----------------------------------------------------------
 
 
 def test_list_login_attempts(client: TestClient) -> None:
@@ -321,7 +323,7 @@ def test_list_login_attempts(client: TestClient) -> None:
     assert len(attempts) >= 1
 
 
-# ── Sessions ────────────────────────────────────────────────────────
+# -- Sessions -----------------------------------------------------------------
 
 
 def test_list_sessions(client: TestClient) -> None:
@@ -336,7 +338,7 @@ def test_list_sessions(client: TestClient) -> None:
 def test_force_logout(client: TestClient) -> None:
     _login_as_admin(client)
 
-    factory = get_session_factory()
+    factory = client.app.state.ctx.db
     with factory() as session:
         create_user(session, "victim", hash_password("t3stP@ssw0rd"))
         session.commit()
@@ -366,7 +368,7 @@ def test_force_logout_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-# ── ACE-Step reinitialize ────────────────────────────────────────────
+# -- ACE-Step reinitialize ----------------------------------------------------
 
 
 def _make_urlopen_mock(payloads: list[bytes]):
@@ -441,7 +443,7 @@ def test_reinitialize_acestep_connection_failure(client: TestClient) -> None:
     assert "unreachable" in resp.json()["detail"]
 
 
-# ── ACE-Step status ──────────────────────────────────────────────────
+# -- ACE-Step status ----------------------------------------------------------
 
 
 def test_acestep_status_online(client: TestClient) -> None:

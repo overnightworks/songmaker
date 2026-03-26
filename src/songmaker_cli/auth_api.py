@@ -19,7 +19,9 @@ from songmaker_cli.api_models import (
     StatusResponse,
     UserResponse,
 )
+from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import (
+    CSRF_COOKIE,
     LOGIN_LOCKOUT_THRESHOLD,
     LOGIN_LOCKOUT_WINDOW_SECONDS,
     LOGIN_RATE_LIMIT,
@@ -32,7 +34,6 @@ from songmaker_cli.auth import (
     sign_session_id,
     verify_password_constant_time,
 )
-from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.db.queries import (
     count_recent_failed_attempts,
     create_session,
@@ -55,44 +56,33 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-_get_session = get_db_session
-
-
 _MAX_USER_AGENT_LENGTH = 500
 
 
-def _client_ip(request: Request) -> str:
+def _client_ip(request: Request, ctx: AppContext) -> str:
     direct_ip = request.client.host if request.client else "unknown"
-    return get_client_ip(direct_ip, request.headers.get("x-forwarded-for"))
+    return get_client_ip(direct_ip, request.headers.get("x-forwarded-for"), ctx.trusted_proxies)
 
 
 def _client_user_agent(request: Request) -> str:
     return request.headers.get("user-agent", "")[:_MAX_USER_AGENT_LENGTH]
 
 
-def _is_trusted_proxy(request: Request) -> bool:
-    from songmaker_cli.auth import get_trusted_proxies
-    proxies = get_trusted_proxies()
-    if not proxies:
-        return False
-    direct_ip = request.client.host if request.client else ""
-    return direct_ip in proxies
-
-
-def _detect_secure(request: Request | None) -> bool:
+def _detect_secure(request: Request | None, ctx: AppContext) -> bool:
     if not request:
         return False
-    if _is_trusted_proxy(request):
+    direct_ip = request.client.host if request.client else ""
+    if ctx.trusted_proxies and direct_ip in ctx.trusted_proxies:
         return request.headers.get("x-forwarded-proto", "") == "https"
     return request.url.scheme == "https"
 
 
 def _set_session_cookie(
-    response: Response, session_id: str, request: Request | None = None,
+    response: Response, session_id: str, ctx: AppContext,
+    request: Request | None = None,
 ) -> None:
-    from songmaker_cli.auth import CSRF_COOKIE
-    secure = _detect_secure(request)
-    signed = sign_session_id(session_id)
+    secure = _detect_secure(request, ctx)
+    signed = sign_session_id(session_id, ctx.session_secret)
     response.set_cookie(
         SESSION_COOKIE,
         signed,
@@ -102,7 +92,7 @@ def _set_session_cookie(
         secure=secure,
         path="/",
     )
-    csrf_token = generate_csrf_token(session_id)
+    csrf_token = generate_csrf_token(session_id, ctx.session_secret)
     response.set_cookie(
         CSRF_COOKIE,
         csrf_token,
@@ -115,7 +105,7 @@ def _set_session_cookie(
 
 
 @router.get("/setup-required")
-def setup_required(db: Session = Depends(_get_session)) -> SetupRequiredResponse:
+def setup_required(db: Session = Depends(get_db_session)) -> SetupRequiredResponse:
     return SetupRequiredResponse(required=user_count(db) == 0)
 
 
@@ -124,7 +114,8 @@ def setup(
     req: SetupRequest,
     request: Request,
     response: Response,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> UserResponse:
     db.execute(text("BEGIN IMMEDIATE"))
     if user_count(db) > 0:
@@ -139,7 +130,7 @@ def setup(
         expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
         user_session = create_session(
             db, user.id, expires,
-            ip_address=_client_ip(request),
+            ip_address=_client_ip(request, ctx),
             user_agent=_client_user_agent(request),
         )
         db.commit()
@@ -147,7 +138,7 @@ def setup(
         db.rollback()
         raise HTTPException(403, "Setup already completed")
 
-    _set_session_cookie(response, user_session.id, request)
+    _set_session_cookie(response, user_session.id, ctx, request)
     log.info("Setup completed: admin user '%s' created", req.username)
     return UserResponse.from_orm(user)
 
@@ -157,9 +148,10 @@ def login(
     req: LoginRequest,
     request: Request,
     response: Response,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> UserResponse:
-    ip = _client_ip(request)
+    ip = _client_ip(request, ctx)
 
     lockout_failures = count_recent_failed_attempts(
         db, ip, LOGIN_LOCKOUT_WINDOW_SECONDS, username=req.username,
@@ -197,8 +189,6 @@ def login(
         raise HTTPException(401, "Invalid username or password")
 
     record_login_attempt(db, ip, req.username, success=True)
-    # Security: wipe all existing sessions on login to prevent session accumulation.
-    # Tradeoff: logging in from a new device logs out all others.
     delete_user_sessions(db, user.id)
 
     expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
@@ -209,7 +199,7 @@ def login(
     )
     db.commit()
 
-    _set_session_cookie(response, user_session.id, request)
+    _set_session_cookie(response, user_session.id, ctx, request)
     return UserResponse.from_orm(user)
 
 
@@ -217,7 +207,7 @@ def login(
 def logout(
     request: Request,
     response: Response,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> StatusResponse:
     session_id = getattr(request.state, "session_id", None)
@@ -225,7 +215,6 @@ def logout(
         delete_session(db, session_id)
         db.commit()
 
-    from songmaker_cli.auth import CSRF_COOKIE
     response.delete_cookie(SESSION_COOKIE, path="/")
     response.delete_cookie(CSRF_COOKIE, path="/")
     return StatusResponse(status="ok")
@@ -247,11 +236,12 @@ def change_password(
     req: ChangePasswordRequest,
     request: Request,
     response: Response,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db_session),
     current_user: AuthenticatedUser = Depends(get_current_user),
+    ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
     user = get_user(db, current_user.id)
-    ip = _client_ip(request)
+    ip = _client_ip(request, ctx)
 
     ip_failures = count_recent_failed_attempts(
         db, ip, LOGIN_RATE_WINDOW_SECONDS, username=f"__pwchange__{current_user.username}",
@@ -273,10 +263,10 @@ def change_password(
     expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
     new_session = create_session(
         db, current_user.id, expires,
-        ip_address=_client_ip(request),
+        ip_address=_client_ip(request, ctx),
         user_agent=_client_user_agent(request),
     )
     db.commit()
 
-    _set_session_cookie(response, new_session.id, request)
+    _set_session_cookie(response, new_session.id, ctx, request)
     return StatusResponse(status="ok")

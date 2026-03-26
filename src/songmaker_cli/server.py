@@ -24,7 +24,8 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from songmaker_cli.config import find_project_root, set_output_dir
+from songmaker_cli.app_context import AppContext, get_db_session
+from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import OUTPUT_ROOT
 
 log = logging.getLogger(__name__)
@@ -110,10 +111,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         is_https = request.url.scheme == "https"
         if not is_https:
-            from songmaker_cli.auth import get_trusted_proxies
+            ctx: AppContext = request.app.state.ctx
             direct_ip = request.client.host if request.client else ""
-            proxies = get_trusted_proxies()
-            if proxies and direct_ip in proxies:
+            if ctx.trusted_proxies and direct_ip in ctx.trusted_proxies:
                 is_https = request.headers.get("x-forwarded-proto", "") == "https"
         if is_https:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -125,8 +125,9 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         start = datetime.now(timezone.utc)
         response = await call_next(request)
         from songmaker_cli.auth import get_client_ip
+        ctx: AppContext = request.app.state.ctx
         direct_ip = request.client.host if request.client else "unknown"
-        ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"))
+        ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"), ctx.trusted_proxies)
         log.info(
             "ACCESS %s %s %s %d (%.0fms)",
             ip, request.method, request.url.path,
@@ -147,49 +148,6 @@ _FORM_CONTENT_TYPES = frozenset({
 
 
 _LOCALHOST_PATTERN = re.compile(r"^(localhost|127\.0\.0\.1)(:\d+)?$")
-
-
-_allowed_hosts_cache: tuple[frozenset[str], list[re.Pattern[str]]] | None = None
-
-
-def reset_allowed_hosts_cache() -> None:
-    """Clear the cached ALLOWED_HOSTS (for testing or config reload)."""
-    global _allowed_hosts_cache
-    _allowed_hosts_cache = None
-
-
-def _get_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
-    """Parse ALLOWED_HOSTS into exact matches and wildcard patterns (cached).
-
-    Entries like ``*.trycloudflare.com`` are converted to suffix-match
-    regexes; plain entries are used for exact matching.
-    """
-    global _allowed_hosts_cache
-    if _allowed_hosts_cache is not None:
-        return _allowed_hosts_cache
-    raw = os.environ.get("ALLOWED_HOSTS", "")
-    exact: set[str] = set()
-    patterns: list[re.Pattern[str]] = []
-    for h in raw.split(","):
-        h = h.strip()
-        if not h:
-            continue
-        if h.startswith("*."):
-            suffix = re.escape(h[2:])
-            patterns.append(re.compile(rf"^[^:]+\.{suffix}(:\d+)?$"))
-        else:
-            exact.add(h)
-    _allowed_hosts_cache = (frozenset(exact), patterns)
-    return _allowed_hosts_cache
-
-
-def _is_allowed_host(netloc: str) -> bool:
-    exact, patterns = _get_allowed_hosts()
-    if exact or patterns:
-        if netloc in exact:
-            return True
-        return any(p.match(netloc) for p in patterns)
-    return bool(_LOCALHOST_PATTERN.match(netloc))
 
 
 _CSRF_EXEMPT_PATHS = frozenset({"/api/auth/login", "/api/auth/setup"})
@@ -213,18 +171,32 @@ class CsrfTokenMiddleware(BaseHTTPMiddleware):
             from songmaker_cli.auth import CSRF_HEADER, verify_csrf_token, verify_session_cookie
             from songmaker_cli.middleware import SESSION_COOKIE
 
+            ctx: AppContext = request.app.state.ctx
             header_token = request.headers.get(CSRF_HEADER)
             if not header_token:
                 return JSONResponse(
                     {"detail": "CSRF token missing or invalid"}, status_code=403,
                 )
             raw_cookie = request.cookies.get(SESSION_COOKIE)
-            session_id = verify_session_cookie(raw_cookie) if raw_cookie else None
-            if not session_id or not verify_csrf_token(header_token, session_id):
+            secret = ctx.session_secret
+            session_id = verify_session_cookie(raw_cookie, secret) if raw_cookie else None
+            if not session_id or not verify_csrf_token(header_token, session_id, secret):
                 return JSONResponse(
                     {"detail": "CSRF token missing or invalid"}, status_code=403,
                 )
         return await call_next(request)
+
+
+def _is_allowed_host(
+    netloc: str,
+    exact: frozenset[str],
+    patterns: list[re.Pattern[str]],
+) -> bool:
+    if exact or patterns:
+        if netloc in exact:
+            return True
+        return any(p.match(netloc) for p in patterns)
+    return bool(_LOCALHOST_PATTERN.match(netloc))
 
 
 class CsrfOriginMiddleware(BaseHTTPMiddleware):
@@ -243,9 +215,12 @@ class CsrfOriginMiddleware(BaseHTTPMiddleware):
             origin = request.headers.get("origin") or request.headers.get("referer")
             if origin:
                 from urllib.parse import urlparse
+                ctx: AppContext = request.app.state.ctx
                 parsed = urlparse(origin)
                 origin_host = parsed.netloc
-                if origin_host and not _is_allowed_host(origin_host):
+                if origin_host and not _is_allowed_host(
+                    origin_host, ctx.allowed_hosts_exact, ctx.allowed_hosts_patterns,
+                ):
                     return JSONResponse(
                         {"detail": "Cross-origin request rejected"},
                         status_code=403,
@@ -276,8 +251,9 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         from songmaker_cli.auth import get_client_ip
+        ctx: AppContext = request.app.state.ctx
         direct_ip = request.client.host if request.client else "unknown"
-        ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"))
+        ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"), ctx.trusted_proxies)
         if not self._limiter.is_allowed(ip):
             return JSONResponse(
                 {"detail": "Too many requests"}, status_code=429,
@@ -286,14 +262,29 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
+    """Parse ALLOWED_HOSTS env into exact matches and wildcard patterns."""
+    raw = os.environ.get("ALLOWED_HOSTS", "")
+    exact: set[str] = set()
+    patterns: list[re.Pattern[str]] = []
+    for h in raw.split(","):
+        h = h.strip()
+        if not h:
+            continue
+        if h.startswith("*."):
+            suffix = re.escape(h[2:])
+            patterns.append(re.compile(rf"^[^:]+\.{suffix}(:\d+)?$"))
+        else:
+            exact.add(h)
+    return frozenset(exact), patterns
+
 
 @asynccontextmanager
-async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
-    from songmaker_cli.db.engine import get_session_factory
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
 
-    factory = get_session_factory()
-    with factory() as session:
+    ctx: AppContext = app.state.ctx
+    with ctx.db() as session:
         deleted = delete_expired_sessions(session)
         if deleted:
             log.info("Startup: cleaned up %d expired sessions", deleted)
@@ -302,22 +293,43 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
             log.info("Startup: pruned %d old login attempts", pruned)
         session.commit()
     yield
-    try:
-        from songmaker_cli.gpu_queue import get_gpu_queue
+    if ctx.gpu_queue:
         log.info("Shutting down GPU queue...")
-        get_gpu_queue().shutdown()
-    except RuntimeError:
-        pass
+        ctx.gpu_queue.shutdown()
 
 
 def create_app(
     output_dir: Path, project_root: Path,
+    ctx: AppContext | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="Songmaker",
         docs_url=None, redoc_url=None, openapi_url=None,
         lifespan=_lifespan,
     )
+
+    if ctx is None:
+        from songmaker_cli.auth import ensure_session_secret, parse_trusted_proxies
+        from songmaker_cli.db.engine import init_db
+        from songmaker_cli.gpu_queue import GpuQueue
+
+        db_factory = init_db(output_dir / DB_FILENAME)
+        secret = ensure_session_secret(output_dir)
+        hosts_exact, hosts_patterns = parse_allowed_hosts()
+        gpu_q = GpuQueue(db_factory)
+
+        ctx = AppContext(
+            db=db_factory,
+            output_dir=output_dir,
+            session_secret=secret.encode(),
+            trusted_proxies=parse_trusted_proxies(),
+            allowed_hosts_exact=hosts_exact,
+            allowed_hosts_patterns=hosts_patterns,
+            gpu_queue=gpu_q,
+        )
+        gpu_q.start()
+
+    app.state.ctx = ctx
 
     # Middleware execution order (Starlette LIFO — last added runs first):
     #   1. BodySizeLimitMiddleware  — reject oversized bodies before processing
@@ -373,7 +385,6 @@ def create_app(
 
     app.include_router(api_router)
 
-    from songmaker_cli.db.engine import get_db_session
     from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
     @app.get("/audio/{album}/{filename}")
@@ -450,14 +461,6 @@ def run_server(
 
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
-
-    from songmaker_cli.auth import ensure_session_secret
-    from songmaker_cli.db.engine import init_db
-
-    set_output_dir(output_dir)
-    db_path = output_dir / DB_FILENAME
-    init_db(db_path)
-    ensure_session_secret(output_dir)
 
     app = create_app(output_dir, project_root)
     log.info("Songmaker server: http://localhost:%d", port)

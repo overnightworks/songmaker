@@ -5,7 +5,7 @@ Designed to be replaceable with a distributed queue (Celery/Redis)
 without changing the submission interface.
 
 Usage:
-    queue = GpuQueue()
+    queue = GpuQueue(db_factory)
     queue.start()
     queue.submit(job_id, "generate", fn, args, kwargs)
     queue.shutdown()
@@ -25,6 +25,8 @@ from pathlib import Path
 from queue import Queue
 from typing import Any
 from urllib.request import Request, urlopen
+
+from sqlalchemy.orm import Session, sessionmaker
 
 log = logging.getLogger(__name__)
 
@@ -48,10 +50,12 @@ class GpuJob:
 class GpuQueue:
     """Sequential GPU job queue with model cache clearing between job types."""
 
-    def __init__(self) -> None:
+    def __init__(self, db_factory: sessionmaker[Session]) -> None:
+        self._db_factory = db_factory
         self._queue: Queue[GpuJob | None] = Queue()
         self._worker: threading.Thread | None = None
         self._cleanup_thread: threading.Thread | None = None
+        self._shutdown_event = threading.Event()
         self._current_mode: str | None = None
         self._running = False
         self._acestep_process: subprocess.Popen | None = None
@@ -72,15 +76,13 @@ class GpuQueue:
 
     def _recover_stale_jobs(self) -> None:
         try:
-            from songmaker_cli.db.engine import get_session_factory
             from songmaker_cli.db.queries import (
                 delete_expired_sessions,
                 recover_stale_jobs,
                 recover_stale_jobs_by_age,
             )
 
-            factory = get_session_factory()
-            with factory() as session:
+            with self._db_factory() as session:
                 recover_stale_jobs(session)
                 recover_stale_jobs_by_age(session)
                 expired = delete_expired_sessions(session)
@@ -92,18 +94,12 @@ class GpuQueue:
 
     def _periodic_cleanup(self) -> None:
         while self._running:
-            for _ in range(CLEANUP_INTERVAL_SECONDS):
-                if not self._running:
-                    return
-                time.sleep(1)
-            if not self._running:
+            if self._shutdown_event.wait(timeout=CLEANUP_INTERVAL_SECONDS):
                 return
             try:
-                from songmaker_cli.db.engine import get_session_factory
                 from songmaker_cli.db.queries import recover_stale_jobs_by_age
 
-                factory = get_session_factory()
-                with factory() as session:
+                with self._db_factory() as session:
                     recover_stale_jobs_by_age(session)
                     session.commit()
             except Exception:
@@ -111,6 +107,7 @@ class GpuQueue:
 
     def shutdown(self, timeout: int = SHUTDOWN_TIMEOUT_SECONDS) -> None:
         self._running = False
+        self._shutdown_event.set()
         self._queue.put(None)
         if self._worker:
             self._worker.join(timeout=timeout)
@@ -155,11 +152,9 @@ class GpuQueue:
 
     def _fail_job(self, job_id: str, error: str) -> None:
         try:
-            from songmaker_cli.db.engine import get_session_factory
             from songmaker_cli.db.queries import update_job_status
 
-            factory = get_session_factory()
-            with factory() as session:
+            with self._db_factory() as session:
                 update_job_status(session, job_id, "failed", error=error, error_type="gpu_error")
                 session.commit()
         except Exception:
@@ -311,24 +306,3 @@ class GpuQueue:
                 log.info("Cleared CUDA cache")
         except ImportError:
             pass
-
-
-# ── Singleton ────────────────────────────────────────────────────────
-
-_instance: GpuQueue | None = None
-
-
-def get_gpu_queue() -> GpuQueue:
-    global _instance
-    if _instance is None:
-        _instance = GpuQueue()
-        _instance.start()
-    return _instance
-
-
-def reset_gpu_queue() -> None:
-    """Shutdown and reset the GPU queue singleton (for testing)."""
-    global _instance
-    if _instance is not None:
-        _instance.shutdown()
-        _instance = None
