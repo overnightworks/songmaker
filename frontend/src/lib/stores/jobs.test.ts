@@ -116,6 +116,22 @@ describe('jobs store', () => {
 		expect(mockFetchJob).toHaveBeenCalledTimes(2);
 	});
 
+	it('slows polling after 30 seconds', async () => {
+		mockFetchJob.mockResolvedValue(makeJob({ status: 'running', progress: 0.5 }));
+
+		trackJob(makeJob(), {});
+
+		vi.setSystemTime(Date.now() + 31_000);
+		await vi.advanceTimersByTimeAsync(2100);
+		expect(mockFetchJob).toHaveBeenCalledTimes(1);
+
+		await vi.advanceTimersByTimeAsync(2100);
+		expect(mockFetchJob).toHaveBeenCalledTimes(1);
+
+		await vi.advanceTimersByTimeAsync(6000);
+		expect(mockFetchJob).toHaveBeenCalledTimes(2);
+	});
+
 	it('marks job failed after max poll errors', async () => {
 		mockFetchJob.mockRejectedValue(new Error('network'));
 

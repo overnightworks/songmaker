@@ -69,7 +69,9 @@
 
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
 	const isGenerating = $derived(
-		songJobs.some((j) => j.job.type === 'generate' && j.job.status === 'running')
+		songJobs.some(
+			(j) => j.job.type === 'generate' && (j.job.status === 'running' || j.job.status === 'queued')
+		)
 	);
 
 	let genCount = $state(1);
@@ -277,7 +279,9 @@
 						{/if}
 						{#each songJobs as j (j.job.id)}
 							<span class="job-indicator" class:failed={j.job.status === 'failed'}>
-								{#if j.job.status === 'running'}
+								{#if j.job.status === 'queued'}
+									{j.job.type} queued
+								{:else if j.job.status === 'running'}
 									{j.job.type} {Math.round(j.job.progress * 100)}%
 								{:else if j.job.status === 'completed'}
 									Done
@@ -304,7 +308,10 @@
 
 				{#if activeGen}
 					{@const genScoring = jobs.some(
-						(j) => j.genId === activeGen.id && j.job.type === 'score' && j.job.status === 'running'
+						(j) =>
+							j.genId === activeGen.id &&
+							j.job.type === 'score' &&
+							(j.job.status === 'running' || j.job.status === 'queued')
 					)}
 					<GenerationDetail
 						generation={activeGen}

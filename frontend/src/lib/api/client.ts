@@ -79,6 +79,19 @@ export async function createAlbum(title: string, artist: string = ''): Promise<A
 	});
 }
 
+export interface ShareResult {
+	share_url: string;
+	share_slug: string;
+}
+
+export async function shareAlbum(albumId: string): Promise<ShareResult> {
+	return apiFetch<ShareResult>(`/api/albums/${albumId}/share`, { method: 'POST' });
+}
+
+export async function unshareAlbum(albumId: string): Promise<void> {
+	await apiFetch(`/api/albums/${albumId}/share`, { method: 'DELETE' });
+}
+
 export async function fetchSongs(
 	albumId?: string,
 	offset: number = 0,

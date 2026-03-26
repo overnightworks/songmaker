@@ -27,7 +27,14 @@ HEADER = """\
  * Do NOT edit manually — run: python scripts/generate_types.py
  *
  * Hierarchy: Song → Version (content) → Generation (MP3 output)
- */"""
+ */
+
+export interface PaginatedResponse<T> {
+\titems: T[];
+\ttotal: number;
+\toffset: number;
+\tlimit: number;
+}"""
 
 _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "AlbumResponse": "AlbumItem",

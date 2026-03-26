@@ -3,7 +3,9 @@ import { fetchJob, fetchSong, type JobStatus } from '$lib/api/client';
 import { songList } from '$lib/stores/player';
 import { addToast } from '$lib/stores/toast';
 
-const POLL_INTERVAL = 2000;
+const POLL_INTERVAL_FAST = 2000;
+const POLL_INTERVAL_SLOW = 8000;
+const POLL_BACKOFF_AFTER = 30_000;
 const MAX_POLL_ERRORS = 10;
 
 export interface ActiveJob {
@@ -21,6 +23,11 @@ export function trackJob(job: JobStatus, context: { songId?: string; genId?: str
 
 async function pollJob(jobId: string): Promise<void> {
 	let errorCount = 0;
+	const startTime = Date.now();
+
+	function interval(): number {
+		return Date.now() - startTime > POLL_BACKOFF_AFTER ? POLL_INTERVAL_SLOW : POLL_INTERVAL_FAST;
+	}
 
 	const poll = async (): Promise<void> => {
 		try {
@@ -43,7 +50,7 @@ async function pollJob(jobId: string): Promise<void> {
 				return;
 			}
 
-			setTimeout(poll, POLL_INTERVAL);
+			setTimeout(poll, interval());
 		} catch {
 			errorCount++;
 			if (errorCount >= MAX_POLL_ERRORS) {
@@ -60,11 +67,11 @@ async function pollJob(jobId: string): Promise<void> {
 				}, 5000);
 				return;
 			}
-			setTimeout(poll, POLL_INTERVAL);
+			setTimeout(poll, interval());
 		}
 	};
 
-	setTimeout(poll, POLL_INTERVAL);
+	setTimeout(poll, POLL_INTERVAL_FAST);
 }
 
 async function refreshSongData(jobId: string): Promise<void> {

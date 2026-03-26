@@ -149,6 +149,7 @@ class GpuQueue:
             job.fn(*job.args, **job.kwargs)
         except Exception:
             log.exception("GPU job %s failed", job.job_id)
+            self._fail_job(job.job_id, "Job execution failed")
 
     def _fail_job(self, job_id: str, error: str) -> None:
         try:

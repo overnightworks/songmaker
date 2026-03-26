@@ -21,7 +21,13 @@
 		selectGenerationInSidebar,
 		ensureGenerationsLoaded
 	} from '$lib/stores/player';
-	import { deleteGeneration, cleanupAlbum, fetchSongs } from '$lib/api/client';
+	import {
+		deleteGeneration,
+		cleanupAlbum,
+		shareAlbum,
+		unshareAlbum,
+		fetchSongs
+	} from '$lib/api/client';
 	import { searchQuery } from '$lib/stores/filter';
 	import { isAdmin } from '$lib/stores/auth';
 	import type { SongItem, GenerationItem, AlbumItem } from '$lib/api/types';
@@ -189,6 +195,32 @@
 			addToast('Cleanup failed', 'error');
 		}
 	}
+
+	async function handleShare(e: Event, albumId: string): Promise<void> {
+		e.stopPropagation();
+		const album = albums.find((a) => a.id === albumId);
+		if (!album) return;
+		try {
+			if (album.is_shared) {
+				await unshareAlbum(albumId);
+				albumList.update((list) =>
+					list.map((a) => (a.id === albumId ? { ...a, is_shared: false, share_slug: null } : a))
+				);
+				addToast('Sharing disabled', 'success');
+			} else {
+				const result = await shareAlbum(albumId);
+				albumList.update((list) =>
+					list.map((a) =>
+						a.id === albumId ? { ...a, is_shared: true, share_slug: result.share_slug } : a
+					)
+				);
+				await navigator.clipboard.writeText(result.share_url);
+				addToast('Link copied to clipboard', 'success');
+			}
+		} catch {
+			addToast('Share failed', 'error');
+		}
+	}
 </script>
 
 <div class="search-bar">
@@ -235,6 +267,17 @@
 					aria-label="Play album {group.album.title}">▶</button
 				>
 				<span class="album-count">{group.songs.length}</span>
+				{#if expandedAlbums.has(group.album.id)}
+					<button
+						class="share-btn"
+						class:active={group.album.is_shared}
+						onclick={(e) => handleShare(e, group.album.id)}
+						title={group.album.is_shared ? 'Disable sharing' : 'Share album'}
+						aria-label={group.album.is_shared ? 'Disable sharing' : 'Share album'}
+					>
+						{group.album.is_shared ? 'Shared' : 'Share'}
+					</button>
+				{/if}
 				{#if admin && expandedAlbums.has(group.album.id)}
 					{#if confirmCleanup === group.album.id}
 						<button
@@ -334,7 +377,10 @@
 										{/each}
 									</div>
 								{/each}
-								{#if song.generations.length === 0}
+								{#if song.generations.length === 0 && song.generation_count > 0}
+									<span class="gen-empty loading">Loading...</span>
+									{void ensureGenerationsLoaded(song.id)}
+								{:else if song.generations.length === 0}
 									<span class="gen-empty">No generations</span>
 								{/if}
 								{#if song.generations.length > MAX_VISIBLE_GENS && !showAllGens[song.id]}
@@ -508,6 +554,30 @@
 	.cleanup-btn.confirm:hover {
 		background: var(--score-bad);
 		color: #fff;
+	}
+
+	.share-btn {
+		background: none;
+		border: 1px solid var(--border);
+		color: var(--text-dim);
+		padding: 1px 6px;
+		font-size: 8px;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		border-radius: 3px;
+		flex-shrink: 0;
+		cursor: pointer;
+	}
+
+	.share-btn:hover {
+		color: var(--text-muted);
+		border-color: var(--text-muted);
+	}
+
+	.share-btn.active {
+		border-color: var(--score-good);
+		color: var(--score-good);
 	}
 
 	/* Song level */
@@ -698,6 +768,20 @@
 		padding: 4px 12px;
 	}
 
+	.gen-empty.loading {
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%,
+		100% {
+			opacity: 0.4;
+		}
+		50% {
+			opacity: 1;
+		}
+	}
+
 	.show-all-btn {
 		background: none;
 		border: none;
@@ -718,5 +802,4 @@
 		text-align: center;
 		font-size: 12px;
 	}
-
 </style>

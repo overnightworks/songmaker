@@ -165,7 +165,8 @@ def api_put(server: str, path: str, json: dict) -> dict:
 
 
 def resolve_song(server: str, query: str) -> dict:
-    songs = api_get(server, "/api/songs")["items"]
+    response = api_get(server, "/api/songs")
+    songs = response["items"] if isinstance(response, dict) else response
     query_lower = query.lower()
 
     exact = [s for s in songs if s["title"].lower() == query_lower]

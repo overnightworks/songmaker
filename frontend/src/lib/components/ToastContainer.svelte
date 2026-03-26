@@ -7,7 +7,9 @@
 		{#each $toasts as toast (toast.id)}
 			<div class="toast toast-{toast.type}" role="alert">
 				<span class="toast-message">{toast.message}</span>
-				<button class="toast-dismiss" onclick={() => dismissToast(toast.id)} aria-label="Dismiss">&times;</button>
+				<button class="toast-dismiss" onclick={() => dismissToast(toast.id)} aria-label="Dismiss"
+					>&times;</button
+				>
 			</div>
 		{/each}
 	</div>

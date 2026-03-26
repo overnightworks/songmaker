@@ -479,18 +479,24 @@ def create_app(
 
     app.include_router(api_router)
 
+    import threading
+
     _metrics_cache: dict[str, object] = {}
-    _metrics_cache_time: list[float] = [0.0]
+    _metrics_cache_time: float = 0.0
+    _metrics_lock = threading.Lock()
 
     @app.get("/metrics")
     def metrics_endpoint(request: Request) -> JSONResponse:
         import time
 
+        nonlocal _metrics_cache_time
+
         from songmaker_cli.constants import METRICS_CACHE_TTL_SECONDS
 
         now = time.monotonic()
-        if now - _metrics_cache_time[0] < METRICS_CACHE_TTL_SECONDS and _metrics_cache:
-            return JSONResponse(_metrics_cache)
+        with _metrics_lock:
+            if now - _metrics_cache_time < METRICS_CACHE_TTL_SECONDS and _metrics_cache:
+                return JSONResponse(_metrics_cache)
 
         ctx: AppContext = request.app.state.ctx
         http_metrics: HttpMetrics = request.app.state.http_metrics
@@ -515,9 +521,10 @@ def create_app(
             **http_metrics.snapshot(),
         }
 
-        _metrics_cache.clear()
-        _metrics_cache.update(result)
-        _metrics_cache_time[0] = now
+        with _metrics_lock:
+            _metrics_cache.clear()
+            _metrics_cache.update(result)
+            _metrics_cache_time = now
         return JSONResponse(result)
 
     @app.get("/health")

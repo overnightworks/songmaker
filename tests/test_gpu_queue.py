@@ -81,13 +81,15 @@ def test_queue_handles_job_exception() -> None:
     def ok_job() -> None:
         results.append("ok")
 
-    queue.submit("j1", "generate", failing_job)
-    queue.submit("j2", "generate", ok_job)
+    with patch.object(queue, "_fail_job") as mock_fail:
+        queue.submit("j1", "generate", failing_job)
+        queue.submit("j2", "generate", ok_job)
 
-    time.sleep(0.3)
-    queue.shutdown()
+        time.sleep(0.3)
+        queue.shutdown()
 
     assert results == ["ok"]
+    mock_fail.assert_called_once_with("j1", "Job execution failed")
 
 
 def test_queue_shutdown() -> None:

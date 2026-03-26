@@ -41,6 +41,9 @@ jobs:
       - name: Ruff lint
         run: ruff check src/ tests/
 
+      - name: Check TypeScript types in sync
+        run: python scripts/generate_types.py --check
+
       - name: Run tests with coverage
         run: |
           pytest tests/ -q --tb=short \

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_models import (
@@ -89,7 +90,10 @@ def api_create_preset(
         is_default=req.is_default,
     )
     record_audit(session, user.id, "create", "preset", preset.id, req.name)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        raise HTTPException(409, "A preset with that name already exists")
     return PresetResponse.from_orm(preset)
 
 
@@ -108,7 +112,10 @@ def api_update_preset(
             raise HTTPException(409, "A preset with that name already exists")
     params_dict = req.params.to_dict() if req.params is not None else None
     update_preset(session, preset, name=req.name, params=params_dict, is_default=req.is_default)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        raise HTTPException(409, "A preset with that name already exists")
     return PresetResponse.from_orm(preset)
 
 
