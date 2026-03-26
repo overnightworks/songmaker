@@ -22,12 +22,15 @@ cd frontend && pnpm install && pnpm dev
 
 ## Checks
 
-Run after every change. After refactors, also check coverage.
+During iteration, run **targeted tests** for the files you changed + the linter. Full suite once before committing or when asked.
 
 ```bash
-# Backend
-pytest tests/ -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov-report=term-missing
+# During iteration — fast feedback
 ruff check src/ tests/
+pytest tests/test_foo.py -q              # just the relevant test file(s)
+
+# Before committing — full suite + coverage
+pytest tests/ -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov-report=term-missing
 
 # Frontend
 cd frontend && pnpm check && pnpm lint && pnpm test
