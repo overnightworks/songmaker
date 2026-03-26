@@ -9,9 +9,10 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
 
 from songmaker_cli.auth import check_password_strength
+from songmaker_cli.config import get_builtin_defaults
 
 T = TypeVar("T")
 
@@ -370,7 +371,7 @@ class SongUpdateRequest(BaseModel):
     generation_params: GenerationParams | None = None
 
 
-_VALID_MODEL_MODES = frozenset({"turbo", "sft"})
+_VALID_MODEL_MODES = frozenset(get_builtin_defaults().keys())
 
 
 class GenerateRequest(BaseModel):
@@ -411,9 +412,17 @@ class RateRequest(BaseModel):
     notes: str = Field("", max_length=2_000)
 
 
-class GenerationDefaultsRequest(BaseModel):
-    turbo: GenerationParams | None = None
-    sft: GenerationParams | None = None
+class GenerationDefaultsRequest(RootModel[dict[str, GenerationParams]]):
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_keys(cls, values: object) -> object:
+        if isinstance(values, dict):
+            invalid = set(values.keys()) - _VALID_MODEL_MODES
+            if invalid:
+                msg = f"Unknown model modes: {sorted(invalid)}. Valid: {sorted(_VALID_MODEL_MODES)}"
+                raise ValueError(msg)
+        return values
 
 
 class PresetCreateRequest(BaseModel):

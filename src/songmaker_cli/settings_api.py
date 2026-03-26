@@ -55,11 +55,7 @@ def api_set_generation_defaults(
     _admin: AuthenticatedUser = Depends(require_admin),
     ctx: AppContext = Depends(get_app_context),
 ) -> dict:
-    data: dict = {}
-    if req.turbo is not None:
-        data["turbo"] = req.turbo.to_dict()
-    if req.sft is not None:
-        data["sft"] = req.sft.to_dict()
+    data = {mode: params.to_dict() for mode, params in req.root.items()}
     save_generation_defaults(ctx.db, data)
     return data
 

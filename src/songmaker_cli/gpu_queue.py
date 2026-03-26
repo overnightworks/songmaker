@@ -338,9 +338,10 @@ class GpuQueue:
     def _refresh_cached_model(self) -> None:
         try:
             from acestep_engine.client import AceStepClient
+            from songmaker_cli.config import resolve_model_mode
             info = AceStepClient().server_info()
             if info and info.model:
-                self._cached_model = "sft" if "sft" in info.model else "turbo"
+                self._cached_model = resolve_model_mode(info.model)
                 return
         except Exception:
             pass

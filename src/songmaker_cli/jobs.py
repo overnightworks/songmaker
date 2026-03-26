@@ -110,8 +110,8 @@ def _load_preset_params(
 ) -> dict | None:
     if not user_id:
         return None
-    is_sft = model_name and "sft" in model_name
-    model_mode = "sft" if is_sft else "turbo"
+    from songmaker_cli.config import resolve_model_mode
+    model_mode = resolve_model_mode(model_name)
     with db_factory() as session:
         preset = get_default_preset(session, user_id, model_mode)
         return dict(preset.params) if preset else None

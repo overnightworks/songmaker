@@ -4,32 +4,18 @@
 	import { loadPresets, loadBuiltins, builtinDefaults } from '$lib/stores/presets';
 	import { fetchGenerationDefaults } from '$lib/api/client';
 	import type { VersionGenerationParams } from '$lib/api/types';
-	import { FALLBACK_DEFAULTS } from '$lib/defaults';
 	import ParamControls from './ParamControls.svelte';
 	import PresetChips from './PresetChips.svelte';
 
 	let open = $state(false);
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
 
-	const builtins = $derived.by((): Record<string, Required<VersionGenerationParams>> => {
-		const b = $builtinDefaults;
-		return {
-			turbo: {
-				...FALLBACK_DEFAULTS.turbo,
-				...(b.turbo ?? {})
-			} as Required<VersionGenerationParams>,
-			sft: {
-				...FALLBACK_DEFAULTS.sft,
-				...(b.sft ?? {})
-			} as Required<VersionGenerationParams>
-		};
-	});
+	const firstMode = $derived(Object.keys($builtinDefaults)[0] ?? '');
 
 	const effectiveDefaults = $derived.by((): Required<VersionGenerationParams> => {
-		return {
-			...builtins.turbo,
-			...(globalDefaults.turbo ?? {})
-		} as Required<VersionGenerationParams>;
+		const builtin = firstMode ? ($builtinDefaults[firstMode] ?? {}) : {};
+		const global = firstMode ? (globalDefaults[firstMode] ?? {}) : {};
+		return { ...builtin, ...global } as Required<VersionGenerationParams>;
 	});
 
 	const hasOverrides = $derived(

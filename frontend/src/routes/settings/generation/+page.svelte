@@ -12,34 +12,24 @@
 	} from '$lib/stores/presets';
 	import { fetchGenerationDefaults, updateGenerationDefaults } from '$lib/api/client';
 	import type { VersionGenerationParams } from '$lib/api/types';
-	import { FALLBACK_DEFAULTS } from '$lib/defaults';
 	import ParamControls from '$lib/components/ParamControls.svelte';
 
 	const admin = $derived($isAdmin);
 
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
-	let editModel = $state<'turbo' | 'sft'>('turbo');
+	let editModel = $state('');
 	let editDefaults = $state<VersionGenerationParams>({});
 	let saving = $state(false);
 	let error = $state('');
 
 	let showSavePreset = $state(false);
 	let presetName = $state('');
-	let presetModel = $state<'turbo' | 'sft'>('turbo');
+	let presetModel = $state('');
 	let presetParams = $state<VersionGenerationParams>({});
 	let presetAsDefault = $state(false);
 	let savingPreset = $state(false);
 
-	const builtins = $derived.by((): Record<string, Required<VersionGenerationParams>> => {
-		const b = $builtinDefaults;
-		return {
-			turbo: {
-				...FALLBACK_DEFAULTS.turbo,
-				...(b.turbo ?? {})
-			} as Required<VersionGenerationParams>,
-			sft: { ...FALLBACK_DEFAULTS.sft, ...(b.sft ?? {}) } as Required<VersionGenerationParams>
-		};
-	});
+	const modelModes = $derived(Object.keys($builtinDefaults));
 
 	onMount(async () => {
 		await Promise.all([
@@ -48,13 +38,18 @@
 			fetchGenerationDefaults()
 				.then((d) => {
 					globalDefaults = d;
-					editDefaults = { ...(d[editModel] ?? {}) };
 				})
 				.catch(() => {})
 		]);
+		const modes = Object.keys($builtinDefaults);
+		if (modes.length > 0) {
+			editModel = modes[0];
+			presetModel = modes[0];
+			editDefaults = { ...(globalDefaults[modes[0]] ?? {}) };
+		}
 	});
 
-	function switchModel(model: 'turbo' | 'sft'): void {
+	function switchModel(model: string): void {
 		editModel = model;
 		editDefaults = { ...(globalDefaults[model] ?? {}) };
 	}
@@ -84,7 +79,7 @@
 			await savePreset(presetName.trim(), presetModel, presetParams, presetAsDefault);
 			showSavePreset = false;
 			presetName = '';
-			presetModel = 'turbo';
+			presetModel = modelModes[0] ?? '';
 			presetParams = {};
 			presetAsDefault = false;
 		} catch {
@@ -128,26 +123,21 @@
 			</p>
 
 			<div class="model-tabs">
-				<button
-					class="model-tab"
-					class:active={editModel === 'turbo'}
-					onclick={() => switchModel('turbo')}
-				>
-					Turbo
-				</button>
-				<button
-					class="model-tab"
-					class:active={editModel === 'sft'}
-					onclick={() => switchModel('sft')}
-				>
-					SFT
-				</button>
+				{#each modelModes as mode (mode)}
+					<button
+						class="model-tab"
+						class:active={editModel === mode}
+						onclick={() => switchModel(mode)}
+					>
+						{mode.toUpperCase()}
+					</button>
+				{/each}
 			</div>
 
 			<div class="defaults-controls">
 				<ParamControls
 					values={editDefaults}
-					placeholders={builtins[editModel]}
+					placeholders={($builtinDefaults[editModel] ?? {}) as Required<VersionGenerationParams>}
 					onchange={(p) => (editDefaults = p)}
 				/>
 			</div>
@@ -176,8 +166,9 @@
 							class="preset-name-input"
 						/>
 						<select class="model-select" bind:value={presetModel}>
-							<option value="turbo">Turbo</option>
-							<option value="sft">SFT</option>
+							{#each modelModes as mode (mode)}
+								<option value={mode}>{mode.toUpperCase()}</option>
+							{/each}
 						</select>
 						<label class="preset-default-label">
 							<input type="checkbox" bind:checked={presetAsDefault} />
@@ -186,7 +177,8 @@
 					</div>
 					<ParamControls
 						values={presetParams}
-						placeholders={builtins[presetModel]}
+						placeholders={($builtinDefaults[presetModel] ??
+							{}) as Required<VersionGenerationParams>}
 						onchange={(p) => (presetParams = p)}
 					/>
 					<div class="actions-row">

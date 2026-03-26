@@ -81,7 +81,6 @@ def resolve_output_paths(
 
 
 _DEFAULTS_FILENAME = "generation_defaults.json"
-_MODEL_MODES = ("turbo", "sft")
 
 
 def _defaults_path(output_dir: Path) -> Path:
@@ -96,7 +95,7 @@ def _migrate_file_defaults(
         return {}
     data = json.loads(path.read_text(encoding="utf-8"))
     with db_factory() as session:
-        for mode in _MODEL_MODES:
+        for mode in _BUILTIN_DEFAULTS:
             if mode in data:
                 save_global_defaults(session, mode, data[mode])
         session.commit()
@@ -108,7 +107,7 @@ def _migrate_file_defaults(
 def load_generation_defaults(db_factory: sessionmaker[Session], output_dir: Path) -> dict:
     result: dict = {}
     with db_factory() as session:
-        for mode in _MODEL_MODES:
+        for mode in _BUILTIN_DEFAULTS:
             params = get_global_defaults(session, mode)
             if params is not None:
                 result[mode] = params
@@ -119,7 +118,7 @@ def load_generation_defaults(db_factory: sessionmaker[Session], output_dir: Path
 
 def save_generation_defaults(db_factory: sessionmaker[Session], data: dict) -> None:
     with db_factory() as session:
-        for mode in _MODEL_MODES:
+        for mode in _BUILTIN_DEFAULTS:
             if mode in data:
                 save_global_defaults(session, mode, data[mode])
         session.commit()
@@ -151,6 +150,15 @@ def get_builtin_defaults() -> dict[str, dict[str, object]]:
     return _BUILTIN_DEFAULTS
 
 
+def resolve_model_mode(model_name: str | None) -> str:
+    """Map an ACE-Step model name (e.g. 'acestep-v15-sft') to a builtin mode key."""
+    if model_name:
+        for mode in _BUILTIN_DEFAULTS:
+            if mode in model_name:
+                return mode
+    return next(iter(_BUILTIN_DEFAULTS))
+
+
 def build_ace_config(
     meta: "SongMeta",
     cli_overrides: dict | None = None,
@@ -162,8 +170,7 @@ def build_ace_config(
 
     Priority: CLI overrides > frontmatter > preset params > global defaults > model defaults.
     """
-    is_sft = model_name and "sft" in model_name
-    model_key = "sft" if is_sft else "turbo"
+    model_key = resolve_model_mode(model_name)
     model_defaults = _BUILTIN_DEFAULTS[model_key]
     user_defaults = (global_defaults or {}).get(model_key, {})
     active_preset = preset_params or {}
