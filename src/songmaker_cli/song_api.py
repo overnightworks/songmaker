@@ -12,6 +12,7 @@ from songmaker_cli.api_helpers import (
     owner_filter,
 )
 from songmaker_cli.api_models import (
+    PaginatedResponse,
     SongCreateRequest,
     SongResponse,
     SongSummaryResponse,
@@ -20,7 +21,9 @@ from songmaker_cli.api_models import (
     VersionResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.constants import PAGE_DEFAULT_LIMIT, PAGE_MAX_LIMIT
 from songmaker_cli.db.queries import (
+    count_songs,
     create_song,
     delete_version,
     get_album,
@@ -36,13 +39,21 @@ router = APIRouter()
 @router.get("/songs")
 def api_list_songs(
     album_id: str | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(PAGE_DEFAULT_LIMIT, ge=1, le=PAGE_MAX_LIMIT),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-) -> list[SongSummaryResponse]:
-    return [
-        SongSummaryResponse.from_orm(s)
-        for s in list_songs(session, album_id=album_id, user_id=owner_filter(user), light=True)
-    ]
+) -> PaginatedResponse[SongSummaryResponse]:
+    uid = owner_filter(user)
+    total = count_songs(session, album_id=album_id, user_id=uid)
+    songs = list_songs(
+        session, album_id=album_id, user_id=uid, light=True,
+        offset=offset, limit=limit,
+    )
+    return PaginatedResponse(
+        items=[SongSummaryResponse.from_orm(s) for s in songs],
+        total=total, offset=offset, limit=limit,
+    )
 
 
 @router.get("/songs/{song_id}")

@@ -42,12 +42,12 @@
 			const [u, s, a, ace] = await Promise.all([
 				fetchUsers(),
 				fetchSessions(),
-				fetchLoginAttempts(50),
+				fetchLoginAttempts(0, 50),
 				getAceStepStatus()
 			]);
 			users = u;
-			sessions = s;
-			attempts = a;
+			sessions = s.items;
+			attempts = a.items;
 			aceStatus = ace;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
@@ -105,7 +105,7 @@
 	async function handleForceLogout(sessionId: string) {
 		try {
 			await forceLogout(sessionId);
-			sessions = await fetchSessions();
+			sessions = (await fetchSessions()).items;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed';
 		}

@@ -103,15 +103,27 @@ def delete_session(session: Session, session_id: str) -> None:
         session.flush()
 
 
-def list_active_sessions(session: Session) -> list[UserSession]:
+def list_active_sessions(
+    session: Session,
+    offset: int = 0,
+    limit: int | None = None,
+) -> list[UserSession]:
     now = datetime.now(timezone.utc)
-    return (
+    query = (
         session.query(UserSession)
         .options(joinedload(UserSession.user))
         .filter(UserSession.expires_at > now)
         .order_by(UserSession.created_at.desc())
-        .all()
+        .offset(offset)
     )
+    if limit is not None:
+        query = query.limit(limit)
+    return query.all()
+
+
+def count_active_sessions(session: Session) -> int:
+    now = datetime.now(timezone.utc)
+    return session.query(UserSession).filter(UserSession.expires_at > now).count()
 
 
 def delete_user_sessions(session: Session, user_id: str) -> int:
@@ -171,14 +183,21 @@ def cleanup_old_login_attempts(session: Session) -> int:
 
 
 def list_login_attempts(
-    session: Session, limit: int = 100,
+    session: Session,
+    offset: int = 0,
+    limit: int = 100,
 ) -> list[LoginAttempt]:
     return (
         session.query(LoginAttempt)
         .order_by(LoginAttempt.attempted_at.desc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
+
+
+def count_login_attempts(session: Session) -> int:
+    return session.query(LoginAttempt).count()
 
 
 # ── Audit log ─────────────────────────────────────────────────────
@@ -205,11 +224,18 @@ def record_audit(
 
 
 def list_audit_log(
-    session: Session, limit: int = 100,
+    session: Session,
+    offset: int = 0,
+    limit: int = 100,
 ) -> list[AuditLog]:
     return (
         session.query(AuditLog)
         .order_by(AuditLog.created_at.desc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
+
+
+def count_audit_log(session: Session) -> int:
+    return session.query(AuditLog).count()

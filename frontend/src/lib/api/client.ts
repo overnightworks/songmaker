@@ -3,6 +3,7 @@ import type {
 	AuthUser,
 	Capabilities,
 	LoginAttemptItem,
+	PaginatedResponse,
 	PresetItem,
 	SessionItem,
 	SetupRequired,
@@ -63,8 +64,11 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 	}
 }
 
-export async function fetchAlbums(): Promise<AlbumItem[]> {
-	return apiFetch<AlbumItem[]>('/api/albums');
+export async function fetchAlbums(
+	offset: number = 0,
+	limit: number = 50
+): Promise<PaginatedResponse<AlbumItem>> {
+	return apiFetch<PaginatedResponse<AlbumItem>>(`/api/albums?offset=${offset}&limit=${limit}`);
 }
 
 export async function createAlbum(title: string, artist: string = ''): Promise<AlbumItem> {
@@ -75,11 +79,18 @@ export async function createAlbum(title: string, artist: string = ''): Promise<A
 	});
 }
 
-export async function fetchSongs(albumId?: string): Promise<SongItem[]> {
-	let path = '/api/songs';
-	if (albumId) path += `?album_id=${encodeURIComponent(albumId)}`;
-	const songs = await apiFetch<SongItem[]>(path);
-	return songs.map((s) => ({ ...s, generations: s.generations ?? [] }));
+export async function fetchSongs(
+	albumId?: string,
+	offset: number = 0,
+	limit: number = 50
+): Promise<PaginatedResponse<SongItem>> {
+	const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+	if (albumId) params.set('album_id', albumId);
+	const resp = await apiFetch<PaginatedResponse<SongItem>>(`/api/songs?${params}`);
+	return {
+		...resp,
+		items: resp.items.map((s) => ({ ...s, generations: s.generations ?? [] }))
+	};
 }
 
 export async function fetchSong(songId: string): Promise<SongItem> {
@@ -353,16 +364,26 @@ export async function deactivateUser(userId: string): Promise<void> {
 	await apiFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
 }
 
-export async function fetchSessions(): Promise<SessionItem[]> {
-	return apiFetch<SessionItem[]>('/api/admin/sessions');
+export async function fetchSessions(
+	offset: number = 0,
+	limit: number = 100
+): Promise<PaginatedResponse<SessionItem>> {
+	return apiFetch<PaginatedResponse<SessionItem>>(
+		`/api/admin/sessions?offset=${offset}&limit=${limit}`
+	);
 }
 
 export async function forceLogout(sessionId: string): Promise<void> {
 	await apiFetch(`/api/admin/sessions/${sessionId}`, { method: 'DELETE' });
 }
 
-export async function fetchLoginAttempts(limit: number = 100): Promise<LoginAttemptItem[]> {
-	return apiFetch<LoginAttemptItem[]>(`/api/admin/login-attempts?limit=${limit}`);
+export async function fetchLoginAttempts(
+	offset: number = 0,
+	limit: number = 100
+): Promise<PaginatedResponse<LoginAttemptItem>> {
+	return apiFetch<PaginatedResponse<LoginAttemptItem>>(
+		`/api/admin/login-attempts?offset=${offset}&limit=${limit}`
+	);
 }
 
 export async function getAceStepStatus(): Promise<{

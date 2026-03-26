@@ -28,11 +28,26 @@ UNSET = _Unset()
 # ── Albums ────────────────────────────────────────────────────────
 
 
-def list_albums(session: Session, user_id: str | None = None) -> list[Album]:
+def list_albums(
+    session: Session,
+    user_id: str | None = None,
+    offset: int = 0,
+    limit: int | None = None,
+) -> list[Album]:
     query = session.query(Album).options(joinedload(Album.songs))
     if user_id:
         query = query.filter_by(created_by=user_id)
-    return query.order_by(Album.title).all()
+    query = query.order_by(Album.title).offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    return query.all()
+
+
+def count_albums(session: Session, user_id: str | None = None) -> int:
+    query = session.query(Album)
+    if user_id:
+        query = query.filter_by(created_by=user_id)
+    return query.count()
 
 
 def get_album(session: Session, album_id: str) -> Album | None:
@@ -61,6 +76,8 @@ def list_songs(
     album_id: str | None = None,
     user_id: str | None = None,
     light: bool = False,
+    offset: int = 0,
+    limit: int | None = None,
 ) -> list[Song]:
     if light:
         query = (
@@ -87,7 +104,23 @@ def list_songs(
         query = query.filter_by(album_id=album_id)
     if user_id:
         query = query.join(Album).filter(Album.created_by == user_id)
+    query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
     return query.all()
+
+
+def count_songs(
+    session: Session,
+    album_id: str | None = None,
+    user_id: str | None = None,
+) -> int:
+    query = session.query(Song)
+    if album_id:
+        query = query.filter_by(album_id=album_id)
+    if user_id:
+        query = query.join(Album).filter(Album.created_by == user_id)
+    return query.count()
 
 
 def get_song(session: Session, song_id: str) -> Song | None:

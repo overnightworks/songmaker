@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,10 +13,13 @@ from songmaker_cli.api_models import (
     AlbumCreateRequest,
     AlbumResponse,
     CleanupResponse,
+    PaginatedResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.constants import PAGE_DEFAULT_LIMIT, PAGE_MAX_LIMIT
 from songmaker_cli.db.queries import (
     cleanup_album,
+    count_albums,
     create_album,
     get_album,
     list_albums,
@@ -31,10 +34,18 @@ router = APIRouter()
 
 @router.get("/albums")
 def api_list_albums(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(PAGE_DEFAULT_LIMIT, ge=1, le=PAGE_MAX_LIMIT),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-) -> list[AlbumResponse]:
-    return [AlbumResponse.from_orm(a) for a in list_albums(session, user_id=owner_filter(user))]
+) -> PaginatedResponse[AlbumResponse]:
+    uid = owner_filter(user)
+    total = count_albums(session, user_id=uid)
+    albums = list_albums(session, user_id=uid, offset=offset, limit=limit)
+    return PaginatedResponse(
+        items=[AlbumResponse.from_orm(a) for a in albums],
+        total=total, offset=offset, limit=limit,
+    )
 
 
 @router.get("/albums/{album_id}")

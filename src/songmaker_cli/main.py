@@ -213,7 +213,7 @@ def reinit_acestep() -> None:
 @app.command
 def albums() -> None:
     """List all albums."""
-    data = api_get(_server(), "/api/albums")
+    data = api_get(_server(), "/api/albums")["items"]
     for album in data:
         count = album.get("song_count", 0)
         print(f"  {album['title']} ({album['artist']}) — {count} songs")
@@ -230,13 +230,13 @@ def songs(
     s = _server()
     path = "/api/songs"
     if album:
-        albums_data = api_get(s, "/api/albums")
+        albums_data = api_get(s, "/api/albums")["items"]
         match = next((a for a in albums_data if album.lower() in a["title"].lower()), None)
         if not match:
             raise ServerError(f"Album not found: '{album}'")
         path += f"?album_id={match['id']}"
 
-    data = api_get(s, path)
+    data = api_get(s, path)["items"]
     for song in data:
         gens = song.get("generation_count", 0)
         print(f"  {song['title']} [{song['album_title']}] — {gens} generations")

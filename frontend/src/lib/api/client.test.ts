@@ -62,30 +62,31 @@ beforeEach(() => {
 });
 
 describe('API client', () => {
-	it('fetchAlbums calls GET /api/albums', async () => {
-		mockOk([{ id: 'a1', title: 'Album' }]);
+	it('fetchAlbums calls GET /api/albums with pagination', async () => {
+		mockOk({ items: [{ id: 'a1', title: 'Album' }], total: 1, offset: 0, limit: 50 });
 		const result = await fetchAlbums();
-		expect(result).toHaveLength(1);
+		expect(result.items).toHaveLength(1);
+		expect(result.total).toBe(1);
 		expect(mockFetch).toHaveBeenCalledWith(
-			'/api/albums',
+			'/api/albums?offset=0&limit=50',
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});
 
 	it('fetchSongs without album', async () => {
-		mockOk([]);
+		mockOk({ items: [], total: 0, offset: 0, limit: 50 });
 		await fetchSongs();
 		expect(mockFetch).toHaveBeenCalledWith(
-			'/api/songs',
+			'/api/songs?offset=0&limit=50',
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});
 
 	it('fetchSongs with album filter', async () => {
-		mockOk([]);
+		mockOk({ items: [], total: 0, offset: 0, limit: 50 });
 		await fetchSongs('a1');
 		expect(mockFetch).toHaveBeenCalledWith(
-			'/api/songs?album_id=a1',
+			'/api/songs?offset=0&limit=50&album_id=a1',
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});
@@ -369,9 +370,9 @@ describe('Admin API', () => {
 	});
 
 	it('fetchSessions', async () => {
-		mockOk([{ id: 's1', username: 'admin' }]);
+		mockOk({ items: [{ id: 's1', username: 'admin' }], total: 1, offset: 0, limit: 100 });
 		const result = await fetchSessions();
-		expect(result).toHaveLength(1);
+		expect(result.items).toHaveLength(1);
 	});
 
 	it('forceLogout sends DELETE', async () => {
@@ -383,9 +384,9 @@ describe('Admin API', () => {
 	});
 
 	it('fetchLoginAttempts', async () => {
-		mockOk([{ id: 'a1', success: false }]);
-		const result = await fetchLoginAttempts(50);
-		expect(result).toHaveLength(1);
-		expect(mockFetch.mock.calls[0][0]).toBe('/api/admin/login-attempts?limit=50');
+		mockOk({ items: [{ id: 'a1', success: false }], total: 1, offset: 0, limit: 50 });
+		const result = await fetchLoginAttempts(0, 50);
+		expect(result.items).toHaveLength(1);
+		expect(mockFetch.mock.calls[0][0]).toBe('/api/admin/login-attempts?offset=0&limit=50');
 	});
 });

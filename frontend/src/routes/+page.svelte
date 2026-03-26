@@ -83,8 +83,8 @@
 	onMount(async () => {
 		try {
 			const [a, s] = await Promise.all([fetchAlbums(), fetchSongs()]);
-			albumList.set(a);
-			songList.set(s);
+			albumList.set(a.items);
+			songList.set(s.items);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
 		} finally {
@@ -148,7 +148,7 @@
 		error = '';
 		try {
 			const album = await createAlbum(newAlbumTitle.trim(), newAlbumArtist.trim());
-			albumList.set(await fetchAlbums());
+			albumList.set((await fetchAlbums()).items);
 			newAlbumId = album.id;
 			newAlbumTitle = '';
 			newAlbumArtist = '';

@@ -121,15 +121,19 @@ def _seed_db(session, owner_id: str | None = None) -> None:
 def test_list_albums(client: TestClient) -> None:
     resp = client.get("/api/albums")
     assert resp.status_code == 200
-    assert len(resp.json()) == 1
+    data = resp.json()
+    assert len(data["items"]) == 1
+    assert data["total"] == 1
+    assert data["offset"] == 0
 
 
 def test_list_songs(client: TestClient) -> None:
     resp = client.get("/api/songs")
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) == 1
-    assert data[0]["generation_count"] == 2
+    assert len(data["items"]) == 1
+    assert data["items"][0]["generation_count"] == 2
+    assert data["total"] == 1
 
 
 def test_get_song(client: TestClient) -> None:
@@ -637,9 +641,9 @@ def test_create_album_slugify_special_chars(client: TestClient) -> None:
 def test_list_songs_has_no_generations_field(client: TestClient) -> None:
     resp = client.get("/api/songs")
     assert resp.status_code == 200
-    data = resp.json()
-    assert "generations" not in data[0]
-    assert data[0]["generation_count"] == 2
+    items = resp.json()["items"]
+    assert "generations" not in items[0]
+    assert items[0]["generation_count"] == 2
 
 
 def test_get_song_has_generations(client: TestClient) -> None:
@@ -672,8 +676,9 @@ def test_user_sees_own_album_only(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
     resp = c.get("/api/albums")
     assert resp.status_code == 200
-    assert len(resp.json()) == 1
-    assert resp.json()[0]["id"] == "rock"
+    items = resp.json()["items"]
+    assert len(items) == 1
+    assert items[0]["id"] == "rock"
 
 
 def test_user_cannot_see_other_album(tmp_path: Path) -> None:
@@ -715,7 +720,7 @@ def test_admin_sees_all_albums(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
     resp = c.get("/api/albums")
     assert resp.status_code == 200
-    assert len(resp.json()) == 1
+    assert len(resp.json()["items"]) == 1
 
 
 def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:
@@ -941,9 +946,10 @@ def test_audit_log_admin_endpoint(tmp_path: Path) -> None:
     resp = c.get("/api/admin/audit-log")
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) >= 1
-    assert data[0]["action"] == "create"
-    assert "created_at" in data[0]
+    assert len(data["items"]) >= 1
+    assert data["items"][0]["action"] == "create"
+    assert "created_at" in data["items"][0]
+    assert data["total"] >= 1
 
 
 # ── Chat rate limiting ───────────────────────────────────────────────
@@ -1099,3 +1105,43 @@ def test_build_system_prompt_whitespace_only() -> None:
 
     result = build_system_prompt("   ")
     assert DEFAULT_CHAT_STYLE in result
+
+
+# ── Pagination ────────────────────────────────────────────────────
+
+
+def test_list_songs_pagination_offset_limit(client: TestClient) -> None:
+    resp = client.get("/api/songs?offset=0&limit=1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["items"]) == 1
+    assert data["total"] == 1
+    assert data["offset"] == 0
+    assert data["limit"] == 1
+
+
+def test_list_songs_offset_beyond_total(client: TestClient) -> None:
+    resp = client.get("/api/songs?offset=100")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["items"]) == 0
+    assert data["total"] == 1
+
+
+def test_list_albums_pagination(client: TestClient) -> None:
+    resp = client.get("/api/albums?offset=0&limit=1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["items"]) == 1
+    assert data["total"] == 1
+
+
+def test_list_songs_limit_validation(client: TestClient) -> None:
+    resp = client.get("/api/songs?limit=0")
+    assert resp.status_code == 422
+
+    resp = client.get("/api/songs?limit=999")
+    assert resp.status_code == 422
+
+    resp = client.get("/api/songs?offset=-1")
+    assert resp.status_code == 422

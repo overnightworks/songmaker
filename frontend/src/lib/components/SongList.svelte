@@ -187,7 +187,7 @@
 			cleanupResult = `Deleted ${result.deleted} generation${result.deleted !== 1 ? 's' : ''}`;
 			confirmCleanup = null;
 			const refreshed = await fetchSongs();
-			songList.set(refreshed);
+			songList.set(refreshed.items);
 			setTimeout(() => (cleanupResult = ''), 3000);
 		} catch {
 			cleanupResult = 'Cleanup failed';

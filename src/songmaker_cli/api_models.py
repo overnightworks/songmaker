@@ -7,11 +7,13 @@ FastAPI auto-generates OpenAPI docs from these models.
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from songmaker_cli.auth import check_password_strength
+
+T = TypeVar("T")
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import (
@@ -26,6 +28,16 @@ if TYPE_CHECKING:
         UserSession,
         Version,
     )
+
+
+# ── Pagination ─────────────────────────────────────────────────────
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: list[T]
+    total: int
+    offset: int
+    limit: int
 
 
 # ── Album ───────────────────────────────────────────────────────────

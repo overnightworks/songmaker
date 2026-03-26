@@ -5,6 +5,13 @@
  * Hierarchy: Song → Version (content) → Generation (MP3 output)
  */
 
+export interface PaginatedResponse<T> {
+	items: T[];
+	total: number;
+	offset: number;
+	limit: number;
+}
+
 export interface GenerationParams {
 	seed?: number | null;
 	acestep_model?: string | null;

@@ -319,8 +319,9 @@ def test_list_login_attempts(client: TestClient) -> None:
     client.post("/api/auth/login", json={"username": "nobody", "password": "wrong12345"})
     resp = client.get("/api/admin/login-attempts")
     assert resp.status_code == 200
-    attempts = resp.json()
-    assert len(attempts) >= 1
+    data = resp.json()
+    assert len(data["items"]) >= 1
+    assert data["total"] >= 1
 
 
 # -- Sessions -----------------------------------------------------------------
@@ -330,9 +331,9 @@ def test_list_sessions(client: TestClient) -> None:
     _login_as_admin(client)
     resp = client.get("/api/admin/sessions")
     assert resp.status_code == 200
-    sessions = resp.json()
-    assert len(sessions) >= 1
-    assert sessions[0]["username"] == "admin"
+    data = resp.json()
+    assert len(data["items"]) >= 1
+    assert data["items"][0]["username"] == "admin"
 
 
 def test_force_logout(client: TestClient) -> None:
@@ -349,7 +350,7 @@ def test_force_logout(client: TestClient) -> None:
 
     sessions_resp = client.get("/api/admin/sessions")
     victim_sessions = [
-        s for s in sessions_resp.json() if s["username"] == "victim"
+        s for s in sessions_resp.json()["items"] if s["username"] == "victim"
     ]
     assert victim_sessions
     session_hash = victim_sessions[0]["id"]

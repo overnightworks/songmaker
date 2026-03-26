@@ -13,6 +13,7 @@ from songmaker_cli.api_models import (
     AuditLogResponse,
     CreateUserRequest,
     LoginAttemptResponse,
+    PaginatedResponse,
     SessionResponse,
     StatusResponse,
     UpdateUserRequest,
@@ -20,8 +21,12 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth import hash_password
+from songmaker_cli.constants import PAGE_ADMIN_DEFAULT_LIMIT, PAGE_ADMIN_MAX_LIMIT
 from songmaker_cli.db.models import User as UserModel
 from songmaker_cli.db.queries import (
+    count_active_sessions,
+    count_audit_log,
+    count_login_attempts,
     create_user,
     delete_session,
     delete_user_sessions,
@@ -130,28 +135,47 @@ def deactivate_user_endpoint(
 
 @router.get("/audit-log")
 def audit_log_endpoint(
-    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(PAGE_ADMIN_DEFAULT_LIMIT, ge=1, le=PAGE_ADMIN_MAX_LIMIT),
     db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
-) -> list[AuditLogResponse]:
-    return [AuditLogResponse.from_orm(e) for e in list_audit_log(db, limit=limit)]
+) -> PaginatedResponse[AuditLogResponse]:
+    total = count_audit_log(db)
+    entries = list_audit_log(db, offset=offset, limit=limit)
+    return PaginatedResponse(
+        items=[AuditLogResponse.from_orm(e) for e in entries],
+        total=total, offset=offset, limit=limit,
+    )
 
 
 @router.get("/login-attempts")
 def login_attempts_endpoint(
-    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(PAGE_ADMIN_DEFAULT_LIMIT, ge=1, le=PAGE_ADMIN_MAX_LIMIT),
     db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
-) -> list[LoginAttemptResponse]:
-    return [LoginAttemptResponse.from_orm(a) for a in list_login_attempts(db, limit=limit)]
+) -> PaginatedResponse[LoginAttemptResponse]:
+    total = count_login_attempts(db)
+    attempts = list_login_attempts(db, offset=offset, limit=limit)
+    return PaginatedResponse(
+        items=[LoginAttemptResponse.from_orm(a) for a in attempts],
+        total=total, offset=offset, limit=limit,
+    )
 
 
 @router.get("/sessions")
 def sessions_endpoint(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(PAGE_ADMIN_DEFAULT_LIMIT, ge=1, le=PAGE_ADMIN_MAX_LIMIT),
     db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
-) -> list[SessionResponse]:
-    return [SessionResponse.from_orm(s) for s in list_active_sessions(db)]
+) -> PaginatedResponse[SessionResponse]:
+    total = count_active_sessions(db)
+    sessions = list_active_sessions(db, offset=offset, limit=limit)
+    return PaginatedResponse(
+        items=[SessionResponse.from_orm(s) for s in sessions],
+        total=total, offset=offset, limit=limit,
+    )
 
 
 @router.delete("/sessions/{session_hash}")
