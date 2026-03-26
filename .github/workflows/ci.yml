@@ -43,7 +43,15 @@ jobs:
           pytest tests/ -q --tb=short \
             --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine \
             --cov-report=term-missing \
-            --cov-fail-under=90
+            --cov-fail-under=90 | tee pytest-output.txt
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          total=$(grep '^TOTAL' pytest-output.txt | awk '{print $NF}')
+          passed=$(grep -oP '^\d+ passed' pytest-output.txt | awk '{print $1}')
+          skipped=$(grep -oP '\d+ skipped' pytest-output.txt | awk '{print $1}')
+          echo "### Backend: ${passed} passed, ${skipped:-0} skipped — ${total} coverage" >> "$GITHUB_STEP_SUMMARY"
 
   frontend:
     name: Frontend (Node ${{ matrix.node-version }})
@@ -79,4 +87,10 @@ jobs:
         run: pnpm lint
 
       - name: Tests
-        run: pnpm test
+        run: pnpm test | tee vitest-output.txt
+
+      - name: Test summary
+        if: always()
+        run: |
+          line=$(grep -E '^\s*Tests\s' vitest-output.txt || echo 'Tests  ? passed')
+          echo "### Frontend: ${line}" >> "$GITHUB_STEP_SUMMARY"
