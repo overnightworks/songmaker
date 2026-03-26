@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from songmaker_cli.constants import GLOBAL_DEFAULTS_PRESET_NAME
 from songmaker_cli.db.models import GenerationPreset
 
 
@@ -108,6 +109,43 @@ def set_default_preset(session: Session, preset: GenerationPreset) -> None:
     _clear_default(session, preset.created_by, preset.model_mode)
     preset.is_default = True
     preset.updated_at = datetime.now(timezone.utc)
+    session.flush()
+
+
+def get_global_defaults(session: Session, model_mode: str) -> dict | None:
+    preset = (
+        session.query(GenerationPreset)
+        .filter(
+            GenerationPreset.name == GLOBAL_DEFAULTS_PRESET_NAME,
+            GenerationPreset.model_mode == model_mode,
+            GenerationPreset.created_by.is_(None),
+        )
+        .first()
+    )
+    return dict(preset.params) if preset else None
+
+
+def save_global_defaults(session: Session, model_mode: str, params: dict) -> None:
+    preset = (
+        session.query(GenerationPreset)
+        .filter(
+            GenerationPreset.name == GLOBAL_DEFAULTS_PRESET_NAME,
+            GenerationPreset.model_mode == model_mode,
+            GenerationPreset.created_by.is_(None),
+        )
+        .first()
+    )
+    if preset:
+        preset.params = params
+        preset.updated_at = datetime.now(timezone.utc)
+    else:
+        preset = GenerationPreset(
+            name=GLOBAL_DEFAULTS_PRESET_NAME,
+            model_mode=model_mode,
+            params=params,
+            created_by=None,
+        )
+        session.add(preset)
     session.flush()
 
 

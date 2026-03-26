@@ -14,8 +14,14 @@ from songmaker_cli.config import (
     resolve_output_paths,
     save_generation_defaults,
 )
+from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import SongMeta
+
+
+@pytest.fixture()
+def db_factory(tmp_path: Path):
+    return init_db(tmp_path / "test.db")
 
 
 def test_build_ace_config_basic() -> None:
@@ -143,15 +149,46 @@ def test_find_project_root_at_root(tmp_path: Path) -> None:
 # ── Global defaults ─────────────────────────────────────────────────
 
 
-def test_load_defaults_empty(tmp_path: Path) -> None:
-    assert load_generation_defaults(tmp_path) == {}
+def test_load_defaults_empty(db_factory, tmp_path: Path) -> None:
+    assert load_generation_defaults(db_factory, tmp_path) == {}
 
 
-def test_save_and_load_defaults(tmp_path: Path) -> None:
+def test_save_and_load_defaults(db_factory, tmp_path: Path) -> None:
     data = {"turbo": {"inference_steps": 12}, "sft": {"inference_steps": 60}}
-    save_generation_defaults(tmp_path, data)
-    loaded = load_generation_defaults(tmp_path)
+    save_generation_defaults(db_factory, data)
+    loaded = load_generation_defaults(db_factory, tmp_path)
     assert loaded == data
+
+
+def test_migrate_file_defaults_to_db(db_factory, tmp_path: Path) -> None:
+    json_path = tmp_path / "generation_defaults.json"
+    import json
+    data = {"turbo": {"inference_steps": 12}, "sft": {"inference_steps": 60}}
+    json_path.write_text(json.dumps(data), encoding="utf-8")
+
+    loaded = load_generation_defaults(db_factory, tmp_path)
+    assert loaded == data
+    assert not json_path.exists()
+
+    reloaded = load_generation_defaults(db_factory, tmp_path)
+    assert reloaded == data
+
+
+def test_save_defaults_upserts(db_factory, tmp_path: Path) -> None:
+    save_generation_defaults(db_factory, {"turbo": {"shift": 1.0}})
+    save_generation_defaults(db_factory, {"turbo": {"shift": 5.0}})
+    loaded = load_generation_defaults(db_factory, tmp_path)
+    assert loaded["turbo"]["shift"] == 5.0
+
+
+def test_db_defaults_take_priority_over_file(db_factory, tmp_path: Path) -> None:
+    import json
+    json_path = tmp_path / "generation_defaults.json"
+    json_path.write_text(json.dumps({"turbo": {"shift": 1.0}}), encoding="utf-8")
+
+    save_generation_defaults(db_factory, {"turbo": {"shift": 5.0}})
+    loaded = load_generation_defaults(db_factory, tmp_path)
+    assert loaded["turbo"]["shift"] == 5.0
 
 
 # ── build_ace_config with global_defaults ────────────────────────────

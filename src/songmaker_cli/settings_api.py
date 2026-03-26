@@ -45,7 +45,7 @@ def api_get_generation_defaults(
     _admin: AuthenticatedUser = Depends(require_admin),
     ctx: AppContext = Depends(get_app_context),
 ) -> dict:
-    return load_generation_defaults(ctx.output_dir)
+    return load_generation_defaults(ctx.db, ctx.output_dir)
 
 
 @router.put("/settings/generation-defaults")
@@ -59,7 +59,7 @@ def api_set_generation_defaults(
         data["turbo"] = req.turbo.to_dict()
     if req.sft is not None:
         data["sft"] = req.sft.to_dict()
-    save_generation_defaults(ctx.output_dir, data)
+    save_generation_defaults(ctx.db, data)
     return data
 
 

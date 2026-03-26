@@ -48,3 +48,6 @@ SHARED_RATE_WINDOW_SECONDS = 60
 
 # Metrics
 METRICS_CACHE_TTL_SECONDS = 5
+
+# Global generation defaults
+GLOBAL_DEFAULTS_PRESET_NAME = "__global_defaults__"

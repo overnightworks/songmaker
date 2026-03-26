@@ -99,11 +99,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         self._csp = (
             "default-src 'none'; "
             f"script-src {script_src}; "
-            "style-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "connect-src 'self' https://api.anthropic.com; "
             "img-src 'self' data: blob:; "
             "media-src 'self' blob:; "
-            "font-src 'self'; "
+            "font-src 'self' https://fonts.gstatic.com; "
             "frame-ancestors 'none'"
         )
 
@@ -146,16 +146,12 @@ class HttpMetrics:
 
     def snapshot(self) -> dict:
         with self._lock:
-            avg_ms = (
-                self._total_duration_ms / self._total_requests
-                if self._total_requests > 0 else 0.0
-            )
             return {
                 "http_requests_total": dict(
                     {f"{m} {s}": c for (m, s), c in sorted(self._request_counts.items())}
                 ),
                 "http_requests_count": self._total_requests,
-                "http_request_duration_avg_ms": round(avg_ms, 1),
+                "http_request_duration_total_ms": round(self._total_duration_ms, 1),
             }
 
 

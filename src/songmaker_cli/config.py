@@ -9,9 +9,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
+from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.constants import OUTPUT_ROOT
+from songmaker_cli.db.queries.settings import get_global_defaults, save_global_defaults
 from songmaker_cli.errors import ValidationError
 
 log = logging.getLogger(__name__)
@@ -74,25 +76,50 @@ def resolve_output_paths(
     )
 
 
+_DEFAULTS_FILENAME = "generation_defaults.json"
+_MODEL_MODES = ("turbo", "sft")
+
+
 def _defaults_path(output_dir: Path) -> Path:
-    return output_dir / "generation_defaults.json"
+    return output_dir / _DEFAULTS_FILENAME
 
 
-def load_generation_defaults(output_dir: Path) -> dict:
+def _migrate_file_defaults(
+    db_factory: sessionmaker[Session], output_dir: Path,
+) -> dict:
     path = _defaults_path(output_dir)
-    if path.exists():
-        defaults = json.loads(path.read_text(encoding="utf-8"))
-        log.debug("Loaded generation defaults from %s: %s", path, list(defaults.keys()))
-        return defaults
-    log.debug("No generation defaults file at %s", path)
-    return {}
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    with db_factory() as session:
+        for mode in _MODEL_MODES:
+            if mode in data:
+                save_global_defaults(session, mode, data[mode])
+        session.commit()
+    path.unlink()
+    log.info("Migrated generation defaults from %s to database", path)
+    return data
 
 
-def save_generation_defaults(output_dir: Path, data: dict) -> None:
-    path = _defaults_path(output_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    log.info("Saved generation defaults: %s", path)
+def load_generation_defaults(db_factory: sessionmaker[Session], output_dir: Path) -> dict:
+    result: dict = {}
+    with db_factory() as session:
+        for mode in _MODEL_MODES:
+            params = get_global_defaults(session, mode)
+            if params is not None:
+                result[mode] = params
+    if result:
+        return result
+    return _migrate_file_defaults(db_factory, output_dir)
+
+
+def save_generation_defaults(db_factory: sessionmaker[Session], data: dict) -> None:
+    with db_factory() as session:
+        for mode in _MODEL_MODES:
+            if mode in data:
+                save_global_defaults(session, mode, data[mode])
+        session.commit()
+    log.info("Saved generation defaults to database")
 
 
 _FIELD_MAPPING = {"language": "vocal_language"}

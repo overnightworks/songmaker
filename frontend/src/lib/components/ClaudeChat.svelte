@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { claudeApiKey } from '$lib/stores/settings';
 	import { chatWithClaude } from '$lib/api/client';
+	import { trimChatHistory } from '$lib/utils/chat';
 
 	interface Props {
 		songId?: string;
@@ -49,14 +50,20 @@
 	function loadHistory(): void {
 		try {
 			const saved = localStorage.getItem(storageKey());
-			messages = saved ? JSON.parse(saved) : [];
+			const parsed: Message[] = saved ? JSON.parse(saved) : [];
+			const trimmed = trimChatHistory(parsed);
+			messages = trimmed;
+			if (trimmed.length < parsed.length) {
+				saveHistory();
+			}
 		} catch {
 			messages = [];
 		}
 	}
 
 	function saveHistory(): void {
-		const toSave = messages.map(({ role, text, applied, applyData }) => ({
+		const trimmed = trimChatHistory(messages);
+		const toSave = trimmed.map(({ role, text, applied, applyData }) => ({
 			role,
 			text,
 			applied,

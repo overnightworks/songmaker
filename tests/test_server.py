@@ -997,7 +997,7 @@ class TestHttpMetrics:
         m = HttpMetrics()
         snap = m.snapshot()
         assert snap["http_requests_count"] == 0
-        assert snap["http_request_duration_avg_ms"] == 0.0
+        assert snap["http_request_duration_total_ms"] == 0.0
         assert snap["http_requests_total"] == {}
 
     def test_record_and_snapshot(self) -> None:
@@ -1008,7 +1008,7 @@ class TestHttpMetrics:
         m.record("POST", 201, 30.0)
         snap = m.snapshot()
         assert snap["http_requests_count"] == 3
-        assert snap["http_request_duration_avg_ms"] == 20.0
+        assert snap["http_request_duration_total_ms"] == 60.0
         assert snap["http_requests_total"]["GET 200"] == 2
         assert snap["http_requests_total"]["POST 201"] == 1
 
@@ -1049,7 +1049,7 @@ def test_metrics_no_auth_required(tmp_path: Path) -> None:
     assert "gpu_vram_mb" in data
     assert "http_requests_total" in data
     assert "http_requests_count" in data
-    assert "http_request_duration_avg_ms" in data
+    assert "http_request_duration_total_ms" in data
 
 
 def test_metrics_reflects_http_traffic(tmp_path: Path) -> None:

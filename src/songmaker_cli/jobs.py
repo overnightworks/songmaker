@@ -137,7 +137,7 @@ def _build_generation_context(
     ace_config = build_ace_config(
         meta,
         model_name=model_name,
-        global_defaults=load_generation_defaults(output_dir),
+        global_defaults=load_generation_defaults(db_factory, output_dir),
         preset_params=preset_params,
     )
 
