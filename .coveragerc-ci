@@ -1,0 +1,12 @@
+# Coverage config for CI — excludes modules that require scoring/whisper extras.
+# Full coverage (including scorers) is measured locally with all extras installed.
+[run]
+omit =
+    src/songmaker_cli/scoring/audiobox_aesthetics.py
+    src/songmaker_cli/scoring/bpm_accuracy.py
+    src/songmaker_cli/scoring/emotional_dynamics.py
+    src/songmaker_cli/scoring/lyrical_coherence.py
+    src/songmaker_cli/scoring/silence_detection.py
+    src/songmaker_cli/scoring/spectral_quality.py
+    src/songmaker_cli/scoring/text_accuracy.py
+    src/songmaker_cli/main.py

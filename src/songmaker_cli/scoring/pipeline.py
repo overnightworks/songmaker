@@ -57,10 +57,11 @@ _VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
 class ScorerRegistry:
     """Registry of scorer functions. Supports lazy loading and test isolation."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, autoload: bool = False) -> None:
         self._scorers: dict[str, ScorerFunc] = {}
         self._needs_audio: dict[str, bool] = {}
         self._loaded: bool = False
+        self._autoload: bool = autoload
 
     def register(
         self, name: str, needs_audio: bool = True,
@@ -97,8 +98,12 @@ class ScorerRegistry:
         return list(self._scorers.keys())
 
     def ensure_loaded(self) -> None:
-        """Lazily import scorer modules to trigger @register decorators."""
-        if self._loaded:
+        """Lazily import scorer modules to trigger @register decorators.
+
+        Only runs on registries created with autoload=True (i.e. the
+        default_registry). Test registries skip this entirely.
+        """
+        if self._loaded or not self._autoload:
             return
         self._loaded = True
         import songmaker_cli.scoring.audiobox_aesthetics  # noqa: F401
@@ -116,7 +121,7 @@ class ScorerRegistry:
         self._loaded = False
 
 
-default_registry = ScorerRegistry()
+default_registry = ScorerRegistry(autoload=True)
 register = default_registry.register
 
 

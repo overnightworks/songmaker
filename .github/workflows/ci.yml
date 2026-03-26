@@ -32,6 +32,9 @@ jobs:
           key: pip-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: pip-${{ runner.os }}-${{ matrix.python-version }}-
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Install dependencies
         run: pip install -e ".[server,dev]" pytest-cov
 
@@ -43,7 +46,8 @@ jobs:
           pytest tests/ -q --tb=short \
             --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine \
             --cov-report=term-missing \
-            --cov-fail-under=90 | tee pytest-output.txt
+            --cov-fail-under=90 \
+            --cov-config=.coveragerc-ci | tee pytest-output.txt
 
       - name: Coverage summary
         if: always()
