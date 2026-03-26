@@ -19,6 +19,8 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+CHAT_MODEL = "claude-opus-4-6"
+
 
 class UnavailableError(Exception):
     """Raised when no Claude backend is available."""
@@ -33,7 +35,7 @@ def call_claude(
     prompt: str,
     api_key: str | None = None,
     system: str | None = None,
-    model: str = "claude-sonnet-4-20250514",
+    model: str = CHAT_MODEL,
     max_tokens: int = 1024,
 ) -> ClaudeResponse:
     """Call Claude using the best available backend.

@@ -3,7 +3,7 @@
 	import '../app.css';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { checkSetupRequired } from '$lib/api/client';
+	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { playback } from '$lib/stores/player';
@@ -29,6 +29,9 @@
 		}
 
 		const user = await checkAuth();
+		if (user) {
+			fetchCapabilities().catch(() => {});
+		}
 		if (!user) {
 			try {
 				const { required } = await checkSetupRequired();

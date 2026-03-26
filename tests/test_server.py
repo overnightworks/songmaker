@@ -748,6 +748,39 @@ def test_ip_rate_limit_429(tmp_path: Path) -> None:
         srv.IP_RATE_LIMIT = old_limit
 
 
+def test_static_assets_bypass_rate_limit(tmp_path: Path) -> None:
+    import songmaker_cli.server as srv
+
+    output_dir = tmp_path / "_output"
+    output_dir.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = tmp_path / "frontend" / "build"
+    app_dir = sk_dir / "_app" / "immutable"
+    app_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+    (app_dir / "test.js").write_text("console.log('ok')")
+
+    factory = init_db(output_dir / "songmaker.db")
+    with factory() as session:
+        session.commit()
+
+    ctx = AppContext(
+        db=factory,
+        output_dir=output_dir,
+        session_secret=TEST_SECRET,
+    )
+    old_limit = srv.IP_RATE_LIMIT
+    srv.IP_RATE_LIMIT = 2
+    try:
+        app = create_app(output_dir, tmp_path, ctx=ctx)
+        client = TestClient(app)
+        for _ in range(5):
+            resp = client.get("/_app/immutable/test.js")
+        assert resp.status_code == 200
+    finally:
+        srv.IP_RATE_LIMIT = old_limit
+
+
 # ── Audio endpoint edge cases ──────────────────────────────────────
 
 

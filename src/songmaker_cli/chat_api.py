@@ -16,6 +16,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.claude.provider import (
+    CHAT_MODEL,
     UnavailableError,
     call_claude,
     is_available,
@@ -40,6 +41,7 @@ def api_capabilities(
         claude_cli=is_available(api_key=None),
         generation=True,
         scoring=True,
+        chat_model=CHAT_MODEL,
     )
 
 

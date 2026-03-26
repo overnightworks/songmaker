@@ -208,8 +208,16 @@ export async function cleanupAlbum(albumId: string): Promise<{ deleted: number }
 	return apiFetch<{ deleted: number }>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
 }
 
+let _chatModel = '';
+
 export async function fetchCapabilities(): Promise<Capabilities> {
-	return apiFetch<Capabilities>('/api/capabilities');
+	const caps = await apiFetch<Capabilities>('/api/capabilities');
+	_chatModel = caps.chat_model;
+	return caps;
+}
+
+export function getChatModel(): string {
+	return _chatModel;
 }
 
 export async function fetchGenerationDefaults(): Promise<Record<string, VersionGenerationParams>> {
@@ -312,8 +320,7 @@ const DEFAULT_CHAT_STYLE =
 	'You are a songwriting assistant. Help write, improve, and refine song lyrics. ' +
 	'Be creative but respect the style and theme.';
 
-// SYNC: must match model in src/songmaker_cli/claude/provider.py call_claude() default
-const CHAT_MODEL = 'claude-sonnet-4-20250514';
+const FALLBACK_CHAT_MODEL = 'claude-opus-4-6';
 
 async function chatDirect(message: string, apiKey: string): Promise<string> {
 	const system = `${DEFAULT_CHAT_STYLE}\n\n${STRUCTURAL_PROMPT}`;
@@ -326,7 +333,7 @@ async function chatDirect(message: string, apiKey: string): Promise<string> {
 			'anthropic-dangerous-direct-browser-access': 'true'
 		},
 		body: JSON.stringify({
-			model: CHAT_MODEL,
+			model: _chatModel || FALLBACK_CHAT_MODEL,
 			max_tokens: 4096,
 			system,
 			messages: [{ role: 'user', content: message }]

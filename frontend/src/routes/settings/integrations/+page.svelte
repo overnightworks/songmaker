@@ -29,7 +29,9 @@
 				placeholder="sk-ant-..."
 				bind:value={keyValue}
 				class="key-input"
-				autocomplete="off"
+				autocomplete="one-time-code"
+				data-1p-ignore
+				data-lpignore="true"
 				spellcheck="false"
 			/>
 			<div class="key-actions">
