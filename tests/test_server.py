@@ -424,12 +424,11 @@ def test_body_size_limit_rejects_large_content_length(server_app: TestClient) ->
 
 def test_hsts_header_on_https(server_app: TestClient) -> None:
     import songmaker_cli.auth as auth_mod
-    original = auth_mod.TRUSTED_PROXIES
-    auth_mod.TRUSTED_PROXIES = frozenset({"testclient"})
+    auth_mod._trusted_proxies = frozenset({"testclient"})
     try:
         resp = server_app.get("/", headers={"x-forwarded-proto": "https"})
     finally:
-        auth_mod.TRUSTED_PROXIES = original
+        auth_mod.reset_trusted_proxies()
     assert "Strict-Transport-Security" in resp.headers
     assert "max-age=31536000" in resp.headers["Strict-Transport-Security"]
 

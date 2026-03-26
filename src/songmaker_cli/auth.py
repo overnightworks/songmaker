@@ -10,19 +10,36 @@ import secrets
 import bcrypt
 
 BCRYPT_ROUNDS = 12
-TRUSTED_PROXIES: frozenset[str] = frozenset(
-    p.strip() for p in os.environ.get("TRUSTED_PROXIES", "").split(",") if p.strip()
-)
+
+_trusted_proxies: frozenset[str] | None = None
+
+
+def get_trusted_proxies() -> frozenset[str]:
+    """Lazily parse TRUSTED_PROXIES from env (not at import time)."""
+    global _trusted_proxies
+    if _trusted_proxies is None:
+        _trusted_proxies = frozenset(
+            p.strip() for p in os.environ.get("TRUSTED_PROXIES", "").split(",") if p.strip()
+        )
+    return _trusted_proxies
+
+
+def reset_trusted_proxies() -> None:
+    """Clear cached trusted proxies (for testing or config reload)."""
+    global _trusted_proxies
+    _trusted_proxies = None
 
 
 def get_client_ip(client_host: str, forwarded_for: str | None) -> str:
     """Extract the real client IP, using rightmost untrusted XFF entry."""
-    if TRUSTED_PROXIES and client_host in TRUSTED_PROXIES and forwarded_for:
+    proxies = get_trusted_proxies()
+    if proxies and client_host in proxies and forwarded_for:
         ips = [ip.strip() for ip in forwarded_for.split(",")]
         for ip in reversed(ips):
-            if ip not in TRUSTED_PROXIES:
+            if ip not in proxies:
                 return ip
     return client_host
+
 SESSION_MAX_AGE_SECONDS = int(os.environ.get("SESSION_MAX_AGE", 60 * 60 * 24 * 30))
 SESSION_ABSOLUTE_MAX_AGE_SECONDS = int(
     os.environ.get("SESSION_ABSOLUTE_MAX_AGE", 60 * 60 * 24 * 90),
@@ -45,6 +62,9 @@ CHAT_RATE_LIMIT_ADMIN = int(os.environ.get("CHAT_RATE_LIMIT_ADMIN", 300))
 RATE_LIMIT_WINDOW_SECONDS = 3600
 MAX_QUEUE_DEPTH = int(os.environ.get("MAX_QUEUE_DEPTH", 10))
 MAX_USER_ACTIVE_JOBS = 1
+
+LOGIN_LOCKOUT_THRESHOLD = int(os.environ.get("LOGIN_LOCKOUT_THRESHOLD", 15))
+LOGIN_LOCKOUT_WINDOW_SECONDS = int(os.environ.get("LOGIN_LOCKOUT_WINDOW", 3600))
 
 
 _DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode()

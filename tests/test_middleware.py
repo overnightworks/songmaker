@@ -305,35 +305,32 @@ def test_get_client_ip_no_trusted_proxies() -> None:
 
 def test_get_client_ip_rightmost_untrusted() -> None:
     from songmaker_cli import auth as auth_mod
-    original = auth_mod.TRUSTED_PROXIES
-    auth_mod.TRUSTED_PROXIES = frozenset({"10.0.0.1"})
+    auth_mod._trusted_proxies = frozenset({"10.0.0.1"})
     try:
         result = get_client_ip("10.0.0.1", "1.2.3.4, 5.6.7.8, 10.0.0.1")
         assert result == "5.6.7.8"
     finally:
-        auth_mod.TRUSTED_PROXIES = original
+        auth_mod.reset_trusted_proxies()
 
 
 def test_get_client_ip_all_trusted_falls_back() -> None:
     from songmaker_cli import auth as auth_mod
-    original = auth_mod.TRUSTED_PROXIES
-    auth_mod.TRUSTED_PROXIES = frozenset({"10.0.0.1", "10.0.0.2"})
+    auth_mod._trusted_proxies = frozenset({"10.0.0.1", "10.0.0.2"})
     try:
         result = get_client_ip("10.0.0.1", "10.0.0.2, 10.0.0.1")
         assert result == "10.0.0.1"
     finally:
-        auth_mod.TRUSTED_PROXIES = original
+        auth_mod.reset_trusted_proxies()
 
 
 def test_get_client_ip_no_xff() -> None:
     from songmaker_cli import auth as auth_mod
-    original = auth_mod.TRUSTED_PROXIES
-    auth_mod.TRUSTED_PROXIES = frozenset({"10.0.0.1"})
+    auth_mod._trusted_proxies = frozenset({"10.0.0.1"})
     try:
         result = get_client_ip("10.0.0.1", None)
         assert result == "10.0.0.1"
     finally:
-        auth_mod.TRUSTED_PROXIES = original
+        auth_mod.reset_trusted_proxies()
 
 
 def test_ip_rate_limiter_evicts_oldest_when_all_active() -> None:

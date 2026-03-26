@@ -101,9 +101,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         is_https = request.url.scheme == "https"
         if not is_https:
-            from songmaker_cli.auth import TRUSTED_PROXIES
+            from songmaker_cli.auth import get_trusted_proxies
             direct_ip = request.client.host if request.client else ""
-            if TRUSTED_PROXIES and direct_ip in TRUSTED_PROXIES:
+            proxies = get_trusted_proxies()
+            if proxies and direct_ip in proxies:
                 is_https = request.headers.get("x-forwarded-proto", "") == "https"
         if is_https:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -452,7 +453,9 @@ def run_server(
         webbrowser.open(f"http://localhost:{port}")
 
     host = os.environ.get("HOST", "127.0.0.1")
+    workers = int(os.environ.get("UVICORN_WORKERS", 1))
     uvicorn.run(
         app, host=host, port=port, log_level="info",
         timeout_keep_alive=REQUEST_TIMEOUT_SECONDS,
+        workers=workers,
     )

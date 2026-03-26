@@ -20,6 +20,8 @@ from songmaker_cli.api_models import (
     UserResponse,
 )
 from songmaker_cli.auth import (
+    LOGIN_LOCKOUT_THRESHOLD,
+    LOGIN_LOCKOUT_WINDOW_SECONDS,
     LOGIN_RATE_LIMIT,
     LOGIN_RATE_WINDOW_SECONDS,
     ROLE_ADMIN,
@@ -69,11 +71,12 @@ def _client_user_agent(request: Request) -> str:
 
 
 def _is_trusted_proxy(request: Request) -> bool:
-    from songmaker_cli.auth import TRUSTED_PROXIES
-    if not TRUSTED_PROXIES:
+    from songmaker_cli.auth import get_trusted_proxies
+    proxies = get_trusted_proxies()
+    if not proxies:
         return False
     direct_ip = request.client.host if request.client else ""
-    return direct_ip in TRUSTED_PROXIES
+    return direct_ip in proxies
 
 
 def _detect_secure(request: Request | None) -> bool:
@@ -157,6 +160,16 @@ def login(
     db: Session = Depends(_get_session),
 ) -> UserResponse:
     ip = _client_ip(request)
+
+    lockout_failures = count_recent_failed_attempts(
+        db, ip, LOGIN_LOCKOUT_WINDOW_SECONDS, username=req.username,
+    )
+    if lockout_failures >= LOGIN_LOCKOUT_THRESHOLD:
+        raise HTTPException(
+            429,
+            "Account temporarily locked due to repeated failed attempts. Try again later.",
+            headers={"Retry-After": str(LOGIN_LOCKOUT_WINDOW_SECONDS)},
+        )
 
     ip_failures = count_recent_failed_attempts(db, ip, LOGIN_RATE_WINDOW_SECONDS)
     user_failures = count_recent_failed_attempts(

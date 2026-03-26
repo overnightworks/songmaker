@@ -10,6 +10,8 @@ import pytest
 from songmaker_cli.auth import (
     BCRYPT_ROUNDS,
     GENERATION_RATE_LIMIT_USER,
+    LOGIN_LOCKOUT_THRESHOLD,
+    LOGIN_LOCKOUT_WINDOW_SECONDS,
     LOGIN_RATE_LIMIT,
     MAX_QUEUE_DEPTH,
     MAX_USER_ACTIVE_JOBS,
@@ -22,8 +24,10 @@ from songmaker_cli.auth import (
     check_password_strength,
     ensure_session_secret,
     generate_csrf_token,
+    get_trusted_proxies,
     hash_password,
     reset_session_secret,
+    reset_trusted_proxies,
     sign_session_id,
     verify_csrf_token,
     verify_password,
@@ -60,6 +64,8 @@ def test_constants() -> None:
     assert RATE_LIMIT_WINDOW_SECONDS == 3600
     assert MAX_QUEUE_DEPTH == 10
     assert MAX_USER_ACTIVE_JOBS == 1
+    assert LOGIN_LOCKOUT_THRESHOLD == 15
+    assert LOGIN_LOCKOUT_WINDOW_SECONDS == 3600
 
 
 # ── HMAC session signing ───────────────────────────────────────────
@@ -191,3 +197,28 @@ def test_get_session_secret_raises_without_env() -> None:
 
 def test_none_password_passes() -> None:
     assert check_password_strength(None) is None
+
+
+# ── Trusted proxies (lazy) ───────────────────────────────────────
+
+
+def test_get_trusted_proxies_lazy(monkeypatch: pytest.MonkeyPatch) -> None:
+    reset_trusted_proxies()
+    monkeypatch.setenv("TRUSTED_PROXIES", "10.0.0.1, 10.0.0.2")
+    try:
+        result = get_trusted_proxies()
+        assert result == frozenset({"10.0.0.1", "10.0.0.2"})
+    finally:
+        reset_trusted_proxies()
+
+
+def test_get_trusted_proxies_empty_default() -> None:
+    reset_trusted_proxies()
+    old = os.environ.pop("TRUSTED_PROXIES", None)
+    try:
+        result = get_trusted_proxies()
+        assert result == frozenset()
+    finally:
+        if old is not None:
+            os.environ["TRUSTED_PROXIES"] = old
+        reset_trusted_proxies()

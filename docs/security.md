@@ -12,6 +12,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 - **Logout**: `DELETE /session` invalidates the session in the database (not just the cookie). The session ID is passed via `request.state` from the auth dependency.
 - **Session anomaly detection**: IP and user-agent changes are logged to the audit trail
 - **Brute-force protection**: 5 failed attempts per 5 minutes, per IP + per username. Also applies to password change endpoint.
+- **Account lockout**: After 15 failed attempts per username within 1 hour, the account is temporarily locked (returns 429 with Retry-After). This catches patient attackers who stay under the per-window rate limit. Configurable via `LOGIN_LOCKOUT_THRESHOLD` and `LOGIN_LOCKOUT_WINDOW`.
 - **Constant-time verification**: bcrypt always runs against a dummy hash when the user doesn't exist (login) or on password change, preventing timing-based enumeration
 - **Login attempt cleanup**: Records older than 90 days are pruned at startup
 - **Password strength**: Common passwords (~200 entries including seasonal/year variants) and low-entropy passwords (< 4 unique chars) are rejected on setup, user creation, and password change
@@ -51,7 +52,7 @@ Four-layer defense:
 
 All requests are subject to a global per-IP rate limit (default: 120 requests/minute). This prevents multi-account abuse and unauthenticated request floods. The rate limiter is memory-bounded (max 10k tracked IPs with automatic eviction of stale entries). Configurable via `IP_RATE_LIMIT` env var. When `TRUSTED_PROXIES` is configured, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), matching the login rate limiter's behavior.
 
-Configure via env vars: `LOGIN_RATE_LIMIT`, `GENERATION_RATE_LIMIT_USER`, `GENERATION_RATE_LIMIT_ADMIN`, `SCORING_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_ADMIN`, `CHAT_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_ADMIN`, `MAX_QUEUE_DEPTH`, `IP_RATE_LIMIT`.
+Configure via env vars: `LOGIN_RATE_LIMIT`, `LOGIN_LOCKOUT_THRESHOLD`, `LOGIN_LOCKOUT_WINDOW`, `GENERATION_RATE_LIMIT_USER`, `GENERATION_RATE_LIMIT_ADMIN`, `SCORING_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_ADMIN`, `CHAT_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_ADMIN`, `MAX_QUEUE_DEPTH`, `IP_RATE_LIMIT`.
 
 ## Security Headers
 
@@ -121,6 +122,7 @@ All mutating operations are logged to the `audit_log` table:
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1` (comma-separated). Only these IPs are trusted for `X-Forwarded-For`. Uses the rightmost untrusted entry to prevent spoofing. Without this, the client's direct IP is always used for rate limiting. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). |
+| Workers | `UVICORN_WORKERS` (default 1). Set to 2–4 for production to avoid single-process bottleneck. Note: SQLite may require PostgreSQL for concurrent writes at scale. |
 | Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). Also set in reverse proxy for defense-in-depth. |
 | IP rate limit | `IP_RATE_LIMIT` (default 120/min). Adjust based on expected traffic. |
 | Request timeout | `REQUEST_TIMEOUT` (default 30s). Increase if generation/scoring endpoints are called synchronously. |
@@ -173,14 +175,14 @@ The application-layer security (auth, CSRF, IDOR, injection, error sanitization)
 ### 2. Persistent rate limiting (Redis)
 **Priority: High** — The in-memory `IpRateLimiter` resets on every server restart (crash, deploy, OOM kill). An attacker who notices a restart gets a fresh quota. A Redis-backed sliding window would survive restarts and could be shared across multiple server processes.
 
-### 3. Account lockout / progressive delays
-**Priority: Medium** — Failed logins are rate-limited (5/5min per IP and per username) but accounts are never locked. A patient attacker staying under the rate limit can try indefinitely. Bcrypt-12 makes this slow (~250ms/attempt) but not impossible for weak passwords. Options: temporary lockout after N failures, exponential backoff, or CAPTCHA after repeated failures.
+### ~~3. Account lockout / progressive delays~~ (Done)
+Implemented: 15 failed attempts per username within 1 hour triggers account lockout (429). Configurable via `LOGIN_LOCKOUT_THRESHOLD` and `LOGIN_LOCKOUT_WINDOW`.
 
-### 4. Content Security Policy (script-src)
+### ~~4. Multi-worker / async architecture~~ (Done)
+Implemented: `UVICORN_WORKERS` env var (default 1). Set to 2–4 for production.
+
+### 5. Content Security Policy (script-src)
 **Priority: Medium** — The current CSP only sets `frame-ancestors 'none'`. There is no `script-src` or `default-src` directive restricting which scripts can execute. If an XSS vulnerability is found in the frontend, there is no CSP mitigation. Adding `script-src 'self'` (with nonces for inline scripts) would significantly reduce XSS impact.
-
-### 5. Multi-worker / async architecture
-**Priority: Medium** — Uvicorn runs a single process. A slow request (heavy DB query, large validation) blocks all other requests. For production: run multiple Uvicorn workers behind gunicorn, or use an async framework for I/O-bound endpoints.
 
 ### 6. Database file permissions
 **Priority: Low** — The `.session_secret` file is created with `0600` permissions, but the SQLite database file inherits permissions from the output directory. Consider explicitly setting `0600` on the DB file at creation time, since it contains bcrypt hashes and session tokens.

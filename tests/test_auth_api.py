@@ -137,12 +137,27 @@ def test_login_brute_force_lockout(client: TestClient) -> None:
     assert "Retry-After" in resp.headers
 
 
+def test_login_lockout_after_sustained_failures(client: TestClient) -> None:
+    from songmaker_cli.auth import LOGIN_LOCKOUT_THRESHOLD
+    from songmaker_cli.db.queries import record_login_attempt
+    _seed_admin()
+    factory = get_session_factory()
+    with factory() as session:
+        for _ in range(LOGIN_LOCKOUT_THRESHOLD):
+            record_login_attempt(session, "testclient", "admin", success=False)
+        session.commit()
+
+    resp = client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
+    assert resp.status_code == 429
+    assert "temporarily locked" in resp.json()["detail"]
+    assert "Retry-After" in resp.headers
+
+
 def test_client_ip_trusted_proxy(client: TestClient) -> None:
     import songmaker_cli.auth as auth_mod
-    original = auth_mod.TRUSTED_PROXIES
 
     _seed_admin()
-    auth_mod.TRUSTED_PROXIES = frozenset({"testclient", "10.0.0.1"})
+    auth_mod._trusted_proxies = frozenset({"testclient", "10.0.0.1"})
     try:
         resp = client.post(
             "/api/auth/login",
@@ -150,7 +165,7 @@ def test_client_ip_trusted_proxy(client: TestClient) -> None:
             headers={"x-forwarded-for": "203.0.113.1, 10.0.0.1"},
         )
     finally:
-        auth_mod.TRUSTED_PROXIES = original
+        auth_mod.reset_trusted_proxies()
     assert resp.status_code == 200
 
     factory = get_session_factory()
