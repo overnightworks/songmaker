@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-import soundfile as sf
+from conftest import read_wav, write_wav
 
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import AudioBoxScore, SpectralQualityScore, TextAccuracyScore
@@ -21,7 +21,7 @@ def _sine_wav(tmp_path: Path, duration: float = 3.0, name: str = "test.wav") -> 
     t = np.arange(int(SR * duration)) / SR
     audio = (0.5 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
     path = tmp_path / name
-    sf.write(str(path), audio, SR)
+    write_wav(path, audio, SR)
     return path
 
 
@@ -32,7 +32,7 @@ def test_spectral_quality_clean_audio(tmp_path: Path) -> None:
     from songmaker_cli.scoring.spectral_quality import score_spectral_quality
 
     wav = _sine_wav(tmp_path, duration=5.0)
-    audio, sr = sf.read(str(wav))
+    audio, sr = read_wav(wav)
     audio_data = AudioData(audio=audio.astype(np.float32), sr=sr)
 
     result = score_spectral_quality(wav, audio_data=audio_data)

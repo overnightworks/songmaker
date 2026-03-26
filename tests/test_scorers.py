@@ -7,7 +7,7 @@ from typing import Callable
 
 import numpy as np
 import pytest
-import soundfile as sf
+from conftest import write_wav
 
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.bpm_accuracy import (
@@ -36,7 +36,7 @@ def wav_file(tmp_path: Path) -> Callable[..., Path]:
         audio: np.ndarray, sr: int = SR, name: str = "test.wav",
     ) -> Path:
         path = tmp_path / name
-        sf.write(str(path), audio, sr)
+        write_wav(path, audio, sr)
         return path
 
     return _make
