@@ -18,7 +18,7 @@ from pathlib import Path
 
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import AudioBoxScore
-from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
+from songmaker_cli.scoring.pipeline import DEVICE_GPU, AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ def _force_cpu_env() -> Iterator[None]:
             os.environ["CUDA_VISIBLE_DEVICES"] = saved
 
 
-@register("audiobox", needs_audio=False)
+@register("audiobox", needs_audio=False, device=DEVICE_GPU)
 def score_audiobox(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
     config: PipelineConfig | None = None, shared_data: dict | None = None,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Generator
 from unittest.mock import patch
@@ -245,5 +246,178 @@ def test_pipeline_rejects_wrong_return_type(
 
     assert scores.silence is None
     assert "expected SilenceScore" in caplog.text
+
+
+# ── Concurrency tests ────────────────────────────────────────────
+
+
+SLEEP_SECONDS = 0.3
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_cpu_scorers_run_concurrently(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+) -> None:
+    """CPU scorers execute in parallel — total time is less than their sum."""
+
+    @clean_registry.register("silence")
+    def slow_silence(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> SilenceScore:
+        time.sleep(SLEEP_SECONDS)
+        return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
+
+    @clean_registry.register("bpm_accuracy")
+    def slow_bpm(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> BpmAccuracyScore:
+        time.sleep(SLEEP_SECONDS)
+        return BpmAccuracyScore(
+            detected_bpm=120, requested_bpm=120, deviation_percent=0, octave_corrected=False,
+        )
+
+    @clean_registry.register("emotional_dynamics")
+    def slow_dynamics(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> EmotionalDynamicsScore:
+        time.sleep(SLEEP_SECONDS)
+        return EmotionalDynamicsScore(
+            pitch_cv=0.3, rms_contrast=2.0, onset_rate_cv=0.2, overall_expressiveness=0.5,
+        )
+
+    start = time.monotonic()
+    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+    elapsed = time.monotonic() - start
+
+    assert scores.silence is not None
+    assert scores.bpm_accuracy is not None
+    assert scores.emotional_dynamics is not None
+    serial_time = SLEEP_SECONDS * 3
+    assert elapsed < serial_time, (
+        f"Expected parallel execution, took {elapsed:.2f}s (serial would be {serial_time:.1f}s)"
+    )
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_gpu_scorers_run_sequentially_with_cpu_overlap(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+) -> None:
+    """GPU scorers run in main thread while CPU scorers execute in pool."""
+
+    @clean_registry.register("silence")
+    def cpu_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> SilenceScore:
+        time.sleep(SLEEP_SECONDS)
+        return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
+
+    @clean_registry.register("text_accuracy", needs_audio=False, device="gpu")
+    def gpu_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> TextAccuracyScore:
+        time.sleep(SLEEP_SECONDS)
+        return TextAccuracyScore(
+            similarity_ratio=0.9, intended_line_texts=("hello",), transcribed_line_texts=("hello",),
+        )
+
+    start = time.monotonic()
+    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+    elapsed = time.monotonic() - start
+
+    assert scores.silence is not None
+    assert scores.text_accuracy is not None
+    serial_time = SLEEP_SECONDS * 2
+    assert elapsed < serial_time, f"Expected overlapping execution, took {elapsed:.2f}s"
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_after_gpu_scorers_run_after_gpu_completes(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+) -> None:
+    """Scorers with after_gpu=True wait for GPU scorers to populate shared_data."""
+
+    @clean_registry.register("text_accuracy", needs_audio=False, device="gpu")
+    def gpu_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: dict | None = None,
+    ) -> TextAccuracyScore:
+        time.sleep(SLEEP_SECONDS)
+        if shared_data is not None:
+            shared_data["whisper_text"] = "hello world"
+        return TextAccuracyScore(
+            similarity_ratio=0.9, intended_line_texts=("hello",), transcribed_line_texts=("hello",),
+        )
+
+    @clean_registry.register("lyrical_coherence", needs_audio=False, after_gpu=True)
+    def deferred_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: dict | None = None,
+    ) -> object:
+        from songmaker_cli.scoring.models import LyricalCoherenceScore
+
+        transcribed = (shared_data or {}).get("whisper_text", "")
+        assert transcribed == "hello world", f"Expected shared_data populated, got: {transcribed!r}"
+        return LyricalCoherenceScore(score=8, issues=(), summary="good")
+
+    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+    assert scores.text_accuracy is not None
+    assert scores.lyrical_coherence is not None
+    assert scores.lyrical_coherence.score == 8
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_gpu_scorer_failure_does_not_block_cpu(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+) -> None:
+    """A failing GPU scorer does not prevent CPU scorers from completing."""
+
+    @clean_registry.register("text_accuracy", needs_audio=False, device="gpu")
+    def broken_gpu(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> None:
+        raise RuntimeError("GPU exploded")
+
+    @clean_registry.register("silence")
+    def ok_cpu(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> SilenceScore:
+        return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
+
+    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
+    assert scores.silence is not None
+    assert scores.text_accuracy is None
+
+
+@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
+def test_pipeline_warns_on_unknown_gpu_scorer(
+    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An unknown scorer in the GPU partition logs a warning and is skipped."""
+    import logging
+
+    @clean_registry.register("silence")
+    def ok_scorer(
+        mp3_path: Path, meta: object = None, audio_data: object = None,
+        config: object = None, shared_data: object = None,
+    ) -> SilenceScore:
+        return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
+
+    clean_registry._device["text_accuracy"] = "gpu"
+
+    with caplog.at_level(logging.WARNING):
+        scores = run_scoring_pipeline(
+            fake_mp3, scorers=["silence", "text_accuracy"], registry=clean_registry,
+        )
+    assert scores.silence is not None
+    assert scores.text_accuracy is None
+    assert "Unknown scorer" in caplog.text
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -38,6 +38,8 @@ class AudioData:
 
 
 SCORER_TIMEOUT_SECONDS = 300
+DEVICE_CPU = "cpu"
+DEVICE_GPU = "gpu"
 
 
 @dataclass(frozen=True)
@@ -60,16 +62,21 @@ class ScorerRegistry:
     def __init__(self, *, autoload: bool = False) -> None:
         self._scorers: dict[str, ScorerFunc] = {}
         self._needs_audio: dict[str, bool] = {}
+        self._device: dict[str, str] = {}
+        self._after_gpu: dict[str, bool] = {}
         self._loaded: bool = False
         self._autoload: bool = autoload
 
     def register(
         self, name: str, needs_audio: bool = True,
+        device: str = DEVICE_CPU, after_gpu: bool = False,
     ) -> Callable[[ScorerFunc], ScorerFunc]:
         """Decorator to register a scorer function.
 
         The name must match a field on SongScores (e.g. "silence", "bpm_accuracy").
         Set needs_audio=False for scorers that use file paths (e.g. Whisper, AudioBox).
+        Set device="gpu" for scorers that require GPU (serialized to avoid VRAM contention).
+        Set after_gpu=True for CPU scorers that depend on GPU scorer output via shared_data.
         """
 
         def decorator(func: ScorerFunc) -> ScorerFunc:
@@ -80,6 +87,8 @@ class ScorerRegistry:
                 )
             self._scorers[name] = func
             self._needs_audio[name] = needs_audio
+            self._device[name] = device
+            self._after_gpu[name] = after_gpu
             return func
 
         return decorator
@@ -93,6 +102,12 @@ class ScorerRegistry:
 
     def scorer_needs_audio(self, name: str) -> bool:
         return self._needs_audio.get(name, True)
+
+    def scorer_uses_gpu(self, name: str) -> bool:
+        return self._device.get(name, DEVICE_CPU) == DEVICE_GPU
+
+    def scorer_after_gpu(self, name: str) -> bool:
+        return self._after_gpu.get(name, False)
 
     def all_names(self) -> list[str]:
         return list(self._scorers.keys())
@@ -118,6 +133,8 @@ class ScorerRegistry:
         """Clear all scorers for test isolation."""
         self._scorers.clear()
         self._needs_audio.clear()
+        self._device.clear()
+        self._after_gpu.clear()
         self._loaded = False
 
 
@@ -181,6 +198,51 @@ def _validated(
     return value
 
 
+def _resolve_scorer(
+    reg: ScorerRegistry, name: str,
+) -> ScorerFunc | None:
+    func = reg.get(name)
+    if func is None:
+        log.warning("Unknown scorer: %s (available: %s)", name, ", ".join(reg.all_names()))
+    return func
+
+
+def _submit_scorers(
+    pool: ThreadPoolExecutor,
+    names: list[str],
+    reg: ScorerRegistry,
+    mp3_path: Path,
+    meta: SongMeta | None,
+    audio_data: AudioData | None,
+    config: PipelineConfig,
+    shared_data: dict,
+) -> dict[Future[object], str]:
+    futures: dict[Future[object], str] = {}
+    for name in names:
+        func = _resolve_scorer(reg, name)
+        if func is None:
+            continue
+        log.info("Running scorer: %s", name)
+        future = pool.submit(
+            _run_with_timeout, func, mp3_path, meta, audio_data,
+            config, shared_data, config.scorer_timeout, name,
+        )
+        futures[future] = name
+    return futures
+
+
+def _collect_futures(
+    futures: dict[Future[object], str],
+    results: dict[str, object],
+) -> None:
+    for future in as_completed(futures):
+        name = futures[future]
+        try:
+            results[name] = future.result()
+        except Exception:  # noqa: BLE001 — scorer failures must not block others
+            log.exception("Scorer '%s' failed", name)
+
+
 def run_scoring_pipeline(
     mp3_path: Path,
     meta: SongMeta | None = None,
@@ -192,6 +254,12 @@ def run_scoring_pipeline(
 
     Audio is loaded once and shared across all scorers.
     Each scorer runs independently — one failure does not block others.
+
+    Execution strategy for parallelism:
+    1. Independent CPU scorers run concurrently in a thread pool
+    2. GPU scorers run sequentially in the main thread (VRAM contention)
+    3. CPU scorers that depend on GPU output (after_gpu) run after GPU completes
+    CPU and GPU phases overlap — CPU scorers execute during GPU inference.
     """
     reg = registry or default_registry
     reg.ensure_loaded()
@@ -205,21 +273,37 @@ def run_scoring_pipeline(
     )
     audio_data = load_audio(mp3_path) if any_needs_audio else None
 
+    gpu_names = [n for n in scorers if reg.scorer_uses_gpu(n)]
+    cpu_names = [n for n in scorers if not reg.scorer_uses_gpu(n) and not reg.scorer_after_gpu(n)]
+    deferred_cpu_names = [n for n in scorers if reg.scorer_after_gpu(n)]
+
     shared_data: dict = {}
     results: dict[str, object] = {}
-    for name in scorers:
-        func = reg.get(name)
-        if func is None:
-            log.warning("Unknown scorer: %s (available: %s)", name, ", ".join(reg.all_names()))
-            continue
-        try:
-            log.info("Running scorer: %s", name)
-            results[name] = _run_with_timeout(
-                func, mp3_path, meta, audio_data, config,
-                shared_data, timeout=config.scorer_timeout, name=name,
-            )
-        except Exception:  # noqa: BLE001 — broad catch is intentional: scorer failures must not block others
-            log.exception("Scorer '%s' failed", name)
+
+    with ThreadPoolExecutor(max_workers=max(len(cpu_names), 1)) as pool:
+        cpu_futures = _submit_scorers(
+            pool, cpu_names, reg, mp3_path, meta, audio_data, config, shared_data,
+        )
+
+        for name in gpu_names:
+            func = _resolve_scorer(reg, name)
+            if func is None:
+                continue
+            try:
+                log.info("Running scorer: %s", name)
+                results[name] = _run_with_timeout(
+                    func, mp3_path, meta, audio_data, config,
+                    shared_data, config.scorer_timeout, name,
+                )
+            except Exception:  # noqa: BLE001 — scorer failures must not block others
+                log.exception("Scorer '%s' failed", name)
+
+        deferred_futures = _submit_scorers(
+            pool, deferred_cpu_names, reg, mp3_path, meta, audio_data, config, shared_data,
+        )
+
+        _collect_futures(cpu_futures, results)
+        _collect_futures(deferred_futures, results)
 
     return SongScores(
         text_accuracy=_validated(results, "text_accuracy", TextAccuracyScore),

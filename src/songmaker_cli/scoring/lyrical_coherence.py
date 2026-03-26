@@ -59,7 +59,7 @@ JUDGE_PROMPT = (  # noqa: E501
 )
 
 
-@register("lyrical_coherence", needs_audio=False)
+@register("lyrical_coherence", needs_audio=False, after_gpu=True)
 def score_lyrical_coherence(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
     config: PipelineConfig | None = None, shared_data: dict | None = None,
