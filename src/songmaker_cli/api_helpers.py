@@ -48,7 +48,6 @@ def create_job_with_rate_limit(
     Prevents TOCTOU races where two concurrent requests both pass the rate
     limit check before either creates a job.
     """
-    session.flush()
     session.commit()
     session.execute(text("BEGIN IMMEDIATE"))
 
