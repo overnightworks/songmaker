@@ -92,4 +92,5 @@ These are conventions that aren't obvious from reading a single file:
 
 1. Re-read changed files in full — coherent whole, no dead traces?
 2. Question abstractions — explainable in one sentence?
-3. Run checks (above)
+3. Update `docs/` if the change affects architecture, security, API endpoints, or test structure
+4. Run checks (above)

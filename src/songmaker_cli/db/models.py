@@ -47,6 +47,10 @@ class Album(Base):
     subtitle: Mapped[str] = mapped_column(String(400), default="")
     year: Mapped[str] = mapped_column(String(10), default="")
     colors: Mapped[dict] = mapped_column(JSON, default=dict)
+    share_slug: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, index=True,
+    )
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
     )

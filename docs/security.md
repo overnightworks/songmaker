@@ -50,6 +50,10 @@ Four-layer defense:
 
 Rate limit checks and job creation are atomic (`BEGIN IMMEDIATE`) to prevent TOCTOU races where concurrent requests bypass limits.
 
+### Shared endpoints (public, no auth)
+
+`/shared/{slug}` and `/shared/{slug}/audio/{file}` are public read-only endpoints with a dedicated per-IP rate limiter (default: 60 requests/minute, configurable via `SHARED_RATE_LIMIT`). Only picked generations are served. No user data (IDs, scores, edit history) is exposed. The slug is a UUID v4 (122 bits of entropy, unguessable). Sharing is revocable by the album owner.
+
 ### Per-IP (global middleware)
 
 All requests are subject to a global per-IP rate limit (default: 120 requests/minute). This prevents multi-account abuse and unauthenticated request floods. The rate limiter is memory-bounded (max 10k tracked IPs with automatic eviction of stale entries). Configurable via `IP_RATE_LIMIT` env var. When `TRUSTED_PROXIES` is configured, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), matching the login rate limiter's behavior.
@@ -108,7 +112,7 @@ The admin sessions endpoint (`GET /api/admin/sessions`) returns SHA256 hashes of
 
 All mutating operations are logged to the `audit_log` table:
 
-- **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `deactivate`, `session_ip_change`, `session_ua_change`
+- **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`, `deactivate`, `session_ip_change`, `session_ua_change`
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`
 - **Admin access**: `GET /api/admin/audit-log?limit=100`
 
@@ -124,7 +128,7 @@ All mutating operations are logged to the `audit_log` table:
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1` (comma-separated). Only these IPs are trusted for `X-Forwarded-For`. Uses the rightmost untrusted entry to prevent spoofing. Without this, the client's direct IP is always used for rate limiting. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). |
-| Workers | `UVICORN_WORKERS` (default 1). Set to 2–4 for production to avoid single-process bottleneck. Note: SQLite may require PostgreSQL for concurrent writes at scale. |
+| Workers | `UVICORN_WORKERS` must be 1. SQLite and the in-memory GPU queue require a single worker process. |
 | Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). Also set in reverse proxy for defense-in-depth. |
 | IP rate limit | `IP_RATE_LIMIT` (default 120/min). Adjust based on expected traffic. |
 | Request timeout | `REQUEST_TIMEOUT` (default 30s). Increase if generation/scoring endpoints are called synchronously. |
@@ -151,7 +155,7 @@ All request models use Pydantic with strict constraints:
 
 ## Path Traversal Protection
 
-Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. Audio is only served for albums that exist in the database (orphaned files on disk are inaccessible). Slug generation strips all non-alphanumeric characters. The rate-by-path endpoint validates that album and generation name parameters contain no `..` or `/`.
+Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. Audio is only served for albums that exist in the database (orphaned files on disk are inaccessible). Shared audio endpoints additionally validate the requested filename against the set of picked generation paths for the shared album. Slug generation strips all non-alphanumeric characters. The rate-by-path endpoint validates that album and generation name parameters contain no `..` or `/`.
 
 ## GPU Resource Safety
 
@@ -180,8 +184,8 @@ The application-layer security (auth, CSRF, IDOR, injection, error sanitization)
 ### ~~3. Account lockout / progressive delays~~ (Done)
 Implemented: 15 failed attempts per username within 1 hour triggers account lockout (429). Configurable via `LOGIN_LOCKOUT_THRESHOLD` and `LOGIN_LOCKOUT_WINDOW`.
 
-### ~~4. Multi-worker / async architecture~~ (Done)
-Implemented: `UVICORN_WORKERS` env var (default 1). Set to 2–4 for production.
+### 4. Multi-worker architecture
+**Priority: Medium** — Currently single-worker only (SQLite + in-memory GPU queue). Would require PostgreSQL and an external job queue (Redis/Celery) to support multiple workers.
 
 ### 5. Content Security Policy — remove `'unsafe-inline'` from `style-src`
 **Priority: Low** — CSP now enforces `script-src 'self'` and `default-src 'none'`. The `style-src 'unsafe-inline'` directive is needed for SvelteKit dev mode but could be tightened in production. Consider nonce-based inline styles if a stricter policy is desired.

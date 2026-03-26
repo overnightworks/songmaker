@@ -45,6 +45,7 @@ tests/
 ├── test_scorers.py          Silence, BPM, dynamics scorers
 ├── test_scorers_extended.py Spectral, audiobox, text accuracy, coherence
 ├── test_scoring_pipeline.py Pipeline registry, runner, type validation
+├── test_sharing.py          Album sharing (share/unshare, shared view, rate limit)
 └── test_server.py           Server app creation, static files, audio routes
 
 frontend/src/

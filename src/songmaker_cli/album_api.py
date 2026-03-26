@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,8 @@ from songmaker_cli.api_models import (
     AlbumResponse,
     CleanupResponse,
     PaginatedResponse,
+    ShareResponse,
+    StatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.constants import PAGE_DEFAULT_LIMIT, PAGE_MAX_LIMIT
@@ -21,6 +23,8 @@ from songmaker_cli.db.queries import (
     cleanup_album,
     count_albums,
     create_album,
+    disable_album_sharing,
+    enable_album_sharing,
     get_album,
     list_albums,
     record_audit,
@@ -96,3 +100,36 @@ def api_cleanup_album(
     record_audit(session, user.id, "cleanup", "album", album_id, f"deleted={count}")
     session.commit()
     return CleanupResponse(deleted=count)
+
+
+@router.post("/albums/{album_id}/share")
+def api_share_album(
+    album_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> ShareResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    album = enable_album_sharing(session, album_id)
+    record_audit(session, user.id, "share", "album", album_id)
+    session.commit()
+    base_url = str(request.base_url).rstrip("/")
+    return ShareResponse(
+        share_url=f"{base_url}/shared/{album.share_slug}",
+        share_slug=album.share_slug,
+    )
+
+
+@router.delete("/albums/{album_id}/share")
+def api_unshare_album(
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> StatusResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    disable_album_sharing(session, album_id)
+    record_audit(session, user.id, "unshare", "album", album_id)
+    session.commit()
+    return StatusResponse()
