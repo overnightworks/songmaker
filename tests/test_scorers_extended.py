@@ -8,8 +8,10 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from conftest import read_wav, write_wav
 
+librosa = pytest.importorskip("librosa")
+
+from conftest import read_wav, write_wav
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import AudioBoxScore, SpectralQualityScore, TextAccuracyScore
 from songmaker_cli.scoring.pipeline import AudioData
