@@ -1,6 +1,6 @@
 # CI Pipeline & Security Scanning
 
-> **Status: NOT STARTED** — local checks only (ruff, pytest, vitest, svelte-check).
+> **Status: Phase 1 DONE** — CI + security workflows in `.github/workflows/`.
 
 ## Goal
 
@@ -14,19 +14,19 @@ Automated CI pipeline that runs on every push/PR + security scanning to catch vu
 
 Runs on every push and PR to `main` and `feat/*` branches.
 
-- [ ] **Python checks**: `ruff check src/ tests/` + `pytest tests/ -q --tb=short`
-- [ ] **Frontend checks**: `pnpm check` + `pnpm lint` + `pnpm test`
-- [ ] **Coverage gate**: fail if coverage drops below 90% on core modules
-- [ ] Matrix: Python 3.12, Node 22
+- [x] **Python checks**: `ruff check src/ tests/` + `pytest tests/ -q --tb=short`
+- [x] **Frontend checks**: `pnpm check` + `pnpm lint` + `pnpm test`
+- [x] **Coverage gate**: fail if coverage drops below 90% on core modules
+- [x] Matrix: Python 3.12, Node 22
 
 ### Workflow: `.github/workflows/security.yml`
 
 Runs on every push + weekly schedule.
 
-- [ ] **Bandit**: `bandit -r src/ -c pyproject.toml` (Python security linter)
-- [ ] **pip-audit**: check for known vulnerabilities in Python dependencies
-- [ ] **npm audit**: check for known vulnerabilities in frontend dependencies
-- [ ] Notifications: email/Slack on security findings
+- [x] **Bandit**: `bandit -r src/ -c pyproject.toml` (Python security linter)
+- [x] **pip-audit**: check for known vulnerabilities in Python dependencies
+- [x] **npm audit**: check for known vulnerabilities in frontend dependencies
+- [ ] Notifications: email/Slack on security findings (deferred — GitHub default email works)
 
 ---
 
