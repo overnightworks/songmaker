@@ -26,6 +26,7 @@
 	import { isAdmin } from '$lib/stores/auth';
 	import type { SongItem, GenerationItem, AlbumItem } from '$lib/api/types';
 	import { closeSidebar } from '$lib/stores/ui';
+	import { addToast } from '$lib/stores/toast';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	const MAX_VISIBLE_GENS = 3;
@@ -43,9 +44,7 @@
 	let expandedAlbums = new SvelteSet<string>();
 	let showAllGens: Record<string, boolean> = $state({});
 	let confirmDeleteGenId: string | null = $state(null);
-	let deleteError = $state('');
 	let confirmCleanup: string | null = $state(null);
-	let cleanupResult = $state('');
 
 	// Auto-expand all albums on first load
 	$effect(() => {
@@ -164,7 +163,6 @@
 
 	async function handleGenDeleteConfirm(e: Event, gen: GenerationItem): Promise<void> {
 		e.stopPropagation();
-		deleteError = '';
 		try {
 			await deleteGeneration(gen.id);
 			songList.update((songs) =>
@@ -175,8 +173,7 @@
 				}))
 			);
 		} catch (err) {
-			deleteError = err instanceof Error ? err.message : 'Delete failed';
-			setTimeout(() => (deleteError = ''), 3000);
+			addToast(err instanceof Error ? err.message : 'Delete failed', 'error');
 		}
 		confirmDeleteGenId = null;
 	}
@@ -184,14 +181,12 @@
 	async function handleCleanup(albumId: string): Promise<void> {
 		try {
 			const result = await cleanupAlbum(albumId);
-			cleanupResult = `Deleted ${result.deleted} generation${result.deleted !== 1 ? 's' : ''}`;
 			confirmCleanup = null;
 			const refreshed = await fetchSongs();
 			songList.set(refreshed.items);
-			setTimeout(() => (cleanupResult = ''), 3000);
+			addToast(`Deleted ${result.deleted} generation${result.deleted !== 1 ? 's' : ''}`, 'success');
 		} catch {
-			cleanupResult = 'Cleanup failed';
-			setTimeout(() => (cleanupResult = ''), 3000);
+			addToast('Cleanup failed', 'error');
 		}
 	}
 </script>
@@ -363,8 +358,6 @@
 	{#if albumGroups.length === 0}
 		<p class="empty">{search ? 'No songs match' : 'No songs yet'}</p>
 	{/if}
-	{#if deleteError}<div class="delete-error">{deleteError}</div>{/if}
-	{#if cleanupResult}<div class="cleanup-result">{cleanupResult}</div>{/if}
 </div>
 
 <style>
@@ -726,15 +719,4 @@
 		font-size: 12px;
 	}
 
-	.delete-error {
-		font-size: 10px;
-		color: var(--score-bad);
-		padding: 4px 12px;
-	}
-
-	.cleanup-result {
-		font-size: 10px;
-		color: var(--success);
-		padding: 4px 12px;
-	}
 </style>

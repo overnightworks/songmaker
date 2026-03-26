@@ -43,9 +43,10 @@
 	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
 	import GenerationDetail from '$lib/components/GenerationDetail.svelte';
 	import SongEditor from '$lib/components/SongEditor.svelte';
+	import ToastContainer from '$lib/components/ToastContainer.svelte';
+	import { addToast } from '$lib/stores/toast';
 
 	let loading = $state(true);
-	let error = $state('');
 	let showChat = $state(false);
 
 	let newTitle = $state('');
@@ -80,13 +81,16 @@
 		}
 	});
 
+	let loadError = $state(false);
+
 	onMount(async () => {
 		try {
 			const [a, s] = await Promise.all([fetchAlbums(), fetchSongs()]);
 			albumList.set(a.items);
 			songList.set(s.items);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load';
+			addToast(e instanceof Error ? e.message : 'Failed to load', 'error');
+			loadError = true;
 		} finally {
 			loading = false;
 		}
@@ -102,12 +106,11 @@
 
 	async function onGenerate(): Promise<void> {
 		if (!song) return;
-		error = '';
 		try {
 			const job = await generateSong(song.id, genCount);
 			trackJob(job, { songId: song.id });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Generation failed';
+			addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
 		}
 	}
 
@@ -122,7 +125,7 @@
 			const updated = await fetchSong(song.id);
 			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Pick failed';
+			addToast(e instanceof Error ? e.message : 'Pick failed', 'error');
 		}
 	}
 
@@ -132,7 +135,7 @@
 			const job = await scoreGeneration(genId);
 			trackJob(job, { songId: song.id, genId });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Scoring failed';
+			addToast(e instanceof Error ? e.message : 'Scoring failed', 'error');
 		}
 	}
 
@@ -145,7 +148,6 @@
 	async function handleCreateAlbum(): Promise<void> {
 		if (!newAlbumTitle.trim()) return;
 		creatingAlbum = true;
-		error = '';
 		try {
 			const album = await createAlbum(newAlbumTitle.trim(), newAlbumArtist.trim());
 			albumList.set((await fetchAlbums()).items);
@@ -153,7 +155,7 @@
 			newAlbumTitle = '';
 			newAlbumArtist = '';
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Album creation failed';
+			addToast(e instanceof Error ? e.message : 'Album creation failed', 'error');
 		} finally {
 			creatingAlbum = false;
 		}
@@ -162,7 +164,6 @@
 	async function handleCreateSong(): Promise<void> {
 		if (!newTitle.trim() || !newAlbumId) return;
 		creating = true;
-		error = '';
 		try {
 			const created = await createSong({
 				title: newTitle,
@@ -178,7 +179,7 @@
 			showCreate = false;
 			newTitle = '';
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Create failed';
+			addToast(e instanceof Error ? e.message : 'Create failed', 'error');
 		} finally {
 			creating = false;
 		}
@@ -193,8 +194,8 @@
 
 {#if loading}
 	<div class="loading">Loading...</div>
-{:else if error}
-	<div class="error">{error}</div>
+{:else if loadError}
+	<div class="error">Failed to load. Please refresh.</div>
 {:else}
 	<aside class="sidebar" class:open={sbOpen}>
 		<SongList
@@ -327,6 +328,8 @@
 		</aside>
 	{/if}
 {/if}
+
+<ToastContainer />
 
 <style>
 	.sidebar {

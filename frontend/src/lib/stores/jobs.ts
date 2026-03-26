@@ -1,6 +1,7 @@
 import { writable, get } from 'svelte/store';
 import { fetchJob, fetchSong, type JobStatus } from '$lib/api/client';
 import { songList } from '$lib/stores/player';
+import { addToast } from '$lib/stores/toast';
 
 const POLL_INTERVAL = 2000;
 const MAX_POLL_ERRORS = 10;
@@ -32,6 +33,9 @@ async function pollJob(jobId: string): Promise<void> {
 			if (updated.status === 'completed' || updated.status === 'failed') {
 				if (updated.status === 'completed') {
 					await refreshSongData(jobId);
+					addToast(`${updated.type} completed`, 'success');
+				} else {
+					addToast(updated.error || `${updated.type} failed`, 'error');
 				}
 				setTimeout(() => {
 					activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
@@ -50,6 +54,7 @@ async function pollJob(jobId: string): Promise<void> {
 							: j
 					)
 				);
+				addToast('Lost connection to server', 'error');
 				setTimeout(() => {
 					activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
 				}, 5000);
