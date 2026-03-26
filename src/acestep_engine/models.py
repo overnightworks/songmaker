@@ -24,7 +24,7 @@ class AceStepConfig:
     inference_steps: int = 8
     guidance_scale: float = 0.0
     shift: float = 3.0
-    think_mode: bool = True
+    think_mode: str = "deep"
     lm_temperature: float = 0.85
     lm_top_k: int = 0
     lm_top_p: float = 0.9

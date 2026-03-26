@@ -8,7 +8,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from songmaker_cli.api_helpers import check_rate_limit
+from songmaker_cli.api_helpers import create_job_with_rate_limit
 from songmaker_cli.api_models import (
     CapabilitiesResponse,
     ChatRequest,
@@ -22,7 +22,6 @@ from songmaker_cli.claude.provider import (
 )
 from songmaker_cli.config import load_generation_defaults, save_generation_defaults
 from songmaker_cli.db.engine import get_db_session
-from songmaker_cli.db.queries import create_job
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user, require_admin
 
 log = logging.getLogger(__name__)
@@ -74,9 +73,13 @@ def api_capabilities(
 
 # ── Claude chat ──────────────────────────────────────────────────────
 
-_CHAT_SYSTEM_PROMPT = (
+DEFAULT_CHAT_STYLE = (
     "You are a songwriting assistant. Help write, improve, and refine song lyrics. "
-    "Be creative but respect the style and theme.\n\n"
+    "Be creative but respect the style and theme."
+)
+
+# SYNC: duplicated in frontend/src/lib/api/client.ts for direct Anthropic API calls
+STRUCTURAL_PROMPT = (
     "When suggesting lyrics or song parameters, include a ```songmaker block "
     "at the end of your response with the applicable fields as JSON:\n"
     '```songmaker\n{"lyrics": "[verse]\\n...", "prompt": "style...",'
@@ -87,14 +90,18 @@ _CHAT_SYSTEM_PROMPT = (
 )
 
 
+def build_system_prompt(style: str = "") -> str:
+    effective_style = style.strip() or DEFAULT_CHAT_STYLE
+    return f"{effective_style}\n\n{STRUCTURAL_PROMPT}"
+
+
 @router.post("/chat")
 def api_chat(
     req: ChatRequest,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> ChatResponse:
-    check_rate_limit(session, user, "chat")
-    create_job(session, "chat", user_id=user.id)
+    create_job_with_rate_limit(session, user, "chat")
     session.commit()
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -102,8 +109,10 @@ def api_chat(
     if req.context:
         prompt = f"Song context:\n{req.context}\n\n{req.message}"
 
+    system = build_system_prompt(req.style)
+
     try:
-        response = call_claude(prompt, api_key=api_key, system=_CHAT_SYSTEM_PROMPT)
+        response = call_claude(prompt, api_key=api_key, system=system)
     except UnavailableError as e:
         log.warning("Claude chat unavailable: %s", e)
         raise HTTPException(503, "Claude is currently unavailable")

@@ -61,6 +61,7 @@ from songmaker_cli.db.queries import (
     pick_generation,
     record_login_attempt,
     recover_stale_jobs,
+    recover_stale_jobs_by_age,
     save_rating,
     save_scores,
     unpick_generation,
@@ -996,3 +997,49 @@ def test_recover_stale_jobs_none(db_session: Session) -> None:
     db_session.commit()
 
     assert recover_stale_jobs(db_session) == 0
+
+
+# ── recover_stale_jobs_by_age ─────────────────────────────────────
+
+
+def test_recover_stale_jobs_by_age(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    j_old = create_job(db_session, "generate")
+    j_recent = create_job(db_session, "score")
+    j_completed = create_job(db_session, "generate")
+    db_session.commit()
+
+    update_job_status(db_session, j_old.id, "running", progress=0.5)
+    update_job_status(db_session, j_recent.id, "running", progress=0.3)
+    update_job_status(db_session, j_completed.id, "completed", progress=1.0)
+    db_session.commit()
+
+    j_old.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    db_session.commit()
+
+    count = recover_stale_jobs_by_age(db_session, threshold_seconds=1800)
+    db_session.commit()
+
+    assert count == 1
+
+    old_after = get_job(db_session, j_old.id)
+    assert old_after.status == "failed"
+    assert old_after.error_type == "stale_timeout"
+    assert old_after.completed_at is not None
+
+    recent_after = get_job(db_session, j_recent.id)
+    assert recent_after.status == "running"
+
+    completed_after = get_job(db_session, j_completed.id)
+    assert completed_after.status == "completed"
+
+
+def test_recover_stale_jobs_by_age_none(db_session: Session) -> None:
+    j1 = create_job(db_session, "generate")
+    db_session.commit()
+
+    update_job_status(db_session, j1.id, "running")
+    db_session.commit()
+
+    assert recover_stale_jobs_by_age(db_session, threshold_seconds=3600) == 0

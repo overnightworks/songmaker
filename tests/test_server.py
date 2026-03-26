@@ -450,3 +450,53 @@ def test_run_server_infers_project_root(tmp_path: Path) -> None:
 
     ):
         run_server(output_dir=output_dir, project_root=None)
+
+
+def test_run_server_rejects_multi_worker(tmp_path: Path) -> None:
+    with (
+        patch.dict("os.environ", {"UVICORN_WORKERS": "2"}),
+        patch("songmaker_cli.db.engine.init_db"),
+        patch("songmaker_cli.config.set_output_dir"),
+        patch("songmaker_cli.auth.ensure_session_secret"),
+    ):
+        with pytest.raises(ValueError, match="UVICORN_WORKERS=2 is unsupported"):
+            run_server(output_dir=tmp_path / "_output", project_root=tmp_path)
+
+
+def test_lifespan_shutdown_calls_gpu_queue_shutdown(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock
+
+    from songmaker_cli.server import _lifespan
+
+    reset_engine()
+    init_db(tmp_path / "test.db")
+
+    mock_queue = MagicMock()
+
+    async def _run():
+        async with _lifespan(None):
+            pass
+
+    with patch("songmaker_cli.gpu_queue.get_gpu_queue", return_value=mock_queue):
+        import asyncio
+        asyncio.run(_run())
+
+    mock_queue.shutdown.assert_called_once()
+
+
+def test_lifespan_shutdown_handles_runtime_error(tmp_path: Path) -> None:
+    from songmaker_cli.server import _lifespan
+
+    reset_engine()
+    init_db(tmp_path / "test.db")
+
+    async def _run():
+        async with _lifespan(None):
+            pass
+
+    with patch(
+        "songmaker_cli.gpu_queue.get_gpu_queue",
+        side_effect=RuntimeError("not initialized"),
+    ):
+        import asyncio
+        asyncio.run(_run())

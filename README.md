@@ -1,95 +1,69 @@
 # Songmaker
 
-AI-powered song generation CLI. Write lyrics in markdown, run one command, get a mastered MP3.
+AI-powered song generation platform. Web UI + REST API + CLI backed by [ACE-Step](https://github.com/ace-step/ACE-Step) for music generation, with automated quality scoring and a mastering chain.
 
 ## How It Works
 
-Each song is a markdown file with YAML frontmatter (style prompt, BPM, key, duration) and lyrics. The CLI sends it to an ACE-Step server for generation, then runs a mastering chain and encodes to MP3.
+Create albums and songs through the web UI or CLI. Each song has lyrics and a style prompt. Songmaker sends them to ACE-Step for generation, runs a multi-band mastering chain, encodes to MP3, and optionally scores the output (Whisper transcription accuracy, emotional dynamics, spectral quality, and more).
 
-```bash
-songmaker generate albums/my_album/lyrics/01_my_song.md
+## Architecture
 
-songmaker generate albums/my_album/lyrics/01_my_song.md --shift 1.0 --no-think-mode
+- **Frontend**: SvelteKit (static SPA) with audio player, version timeline, and Claude chat assistant
+- **Backend**: FastAPI + SQLite (WAL mode), session-based auth, CSRF protection
+- **Generation**: ACE-Step server (managed subprocess) on GPU
+- **Scoring**: 7-scorer pipeline (Whisper, AudioBox, librosa-based metrics, Claude LLM)
+- **CLI**: Thin HTTP client to the same REST API
 
-songmaker generate albums/my_album/lyrics/01_my_song.md --count 3 --seed 42
-```
+See [docs/architecture.md](docs/architecture.md) for the full system design.
 
 ## Setup
 
-Requires **Python 3.12** and **ffmpeg** on PATH.
+Requires **Python 3.12**, **Node 22**, **pnpm**, and **ffmpeg** on PATH.
 
 ```bash
+# Backend
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[server,scoring,whisper,dev]"
 
-# Start the ACE-Step server (required for generation)
-python scripts/start_acestep.py
+# Frontend
+cd frontend && pnpm install && pnpm build && cd ..
+
+# Run
+songmaker server --port 8080
 ```
 
-## Song Format
+On first launch, the web UI prompts you to create an admin account.
 
-```markdown
----
-title: My Song
-album: my_album
-track: 1
-prompt: >
-  upbeat indie rock with driving guitars
-bpm: 140
-duration: 180
-key: Em
-language: en
----
+## CLI
 
-## Lyrics
+The CLI talks to the same API as the web UI:
 
-[verse]
-First verse here...
-
-[chorus]
-Chorus here...
+```bash
+songmaker server                           # Start the server
+songmaker generate <song.md>               # Generate from markdown
+songmaker generate <song.md> --count 3     # Multiple generations
 ```
-
-## Project Structure
-
-```
-songmaker/
-├── src/
-│   ├── acestep_engine/     ACE-Step HTTP client
-│   ├── audio_engine/       Mastering, WAV/MP3 I/O
-│   └── songmaker_cli/      CLI (generate, check, player)
-├── albums/
-│   └── <album>/lyrics/     Song markdown files
-├── _output/                Generated audio (gitignored)
-├── scripts/                Server setup/start
-├── tests/                  pytest suite
-└── docs/
-    ├── architecture.md     System architecture and mastering chain
-    └── testing.md          Test structure and conventions
-```
-
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `songmaker generate <path>` | Generate a song from markdown |
-| `songmaker check <mp3>` | Whisper transcription accuracy check |
-| `songmaker player` | Generate HTML player for all albums |
 
 Run `songmaker --help` for all options.
 
 ## Development
 
 ```bash
-pytest tests/
+# Backend tests + lint
+pytest tests/ -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov-report=term-missing
 ruff check src/ tests/
+
+# Frontend checks
+cd frontend && pnpm check && pnpm lint && pnpm test
 ```
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — pipeline, file map, mastering chain
+- [Architecture](docs/architecture.md) — system design, data flow, middleware stack
 - [Testing](docs/testing.md) — test structure, fixtures, coverage targets
+- [Security](docs/security.md) — auth, CSRF, rate limiting, headers
+- [ACE-Step](docs/acestep.md) — generation server, model variants, parameters
 
 ## License
 

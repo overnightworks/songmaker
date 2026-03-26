@@ -225,7 +225,21 @@ export async function fetchMe(): Promise<AuthUser> {
 	return apiFetch<AuthUser>('/api/auth/me');
 }
 
-async function chatDirect(message: string, system: string, apiKey: string): Promise<string> {
+// SYNC: duplicated from src/songmaker_cli/chat_api.py for direct Anthropic API calls
+const STRUCTURAL_PROMPT =
+	'When suggesting lyrics or song parameters, include a ```songmaker block ' +
+	'at the end of your response with the applicable fields as JSON:\n' +
+	'```songmaker\n{"lyrics": "[verse]\\n...", "prompt": "style...", "bpm": 120, "key": "Am"}\n```\n\n' +
+	'Only include fields you are suggesting changes for. The lyrics field should use ' +
+	'section tags like [verse], [chorus], [bridge]. Use \\n for newlines in lyrics.\n' +
+	'If the user just asks a question without needing changes, skip the songmaker block.';
+
+const DEFAULT_CHAT_STYLE =
+	'You are a songwriting assistant. Help write, improve, and refine song lyrics. ' +
+	'Be creative but respect the style and theme.';
+
+async function chatDirect(message: string, apiKey: string): Promise<string> {
+	const system = `${DEFAULT_CHAT_STYLE}\n\n${STRUCTURAL_PROMPT}`;
 	const resp = await fetch('https://api.anthropic.com/v1/messages', {
 		method: 'POST',
 		headers: {
@@ -249,16 +263,12 @@ async function chatDirect(message: string, system: string, apiKey: string): Prom
 	return data.content?.[0]?.text ?? '';
 }
 
-export async function chatWithClaude(
-	message: string,
-	context: string = '',
-	system: string = ''
-): Promise<string> {
+export async function chatWithClaude(message: string, context: string = ''): Promise<string> {
 	const claudeKey = getClaudeKey();
 	const fullMessage = context ? `Song context:\n${context}\n\n${message}` : message;
 
 	if (claudeKey) {
-		return chatDirect(fullMessage, system, claudeKey);
+		return chatDirect(fullMessage, claudeKey);
 	}
 
 	const data = await apiFetch<{ response: string }>('/api/chat', {

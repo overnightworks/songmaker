@@ -32,6 +32,8 @@ ACESTEP_DIR = Path(__file__).resolve().parent.parent.parent / "_models" / "acest
 ACESTEP_PORT = int(os.environ.get("ACESTEP_API_PORT", "8001"))
 ACESTEP_HEALTH_URL = f"http://localhost:{ACESTEP_PORT}/health"
 ACESTEP_STARTUP_TIMEOUT = 120
+CLEANUP_INTERVAL_SECONDS = int(os.environ.get("JOB_CLEANUP_INTERVAL", 900))
+SHUTDOWN_TIMEOUT_SECONDS = 120
 
 
 @dataclass
@@ -49,6 +51,7 @@ class GpuQueue:
     def __init__(self) -> None:
         self._queue: Queue[GpuJob | None] = Queue()
         self._worker: threading.Thread | None = None
+        self._cleanup_thread: threading.Thread | None = None
         self._current_mode: str | None = None
         self._running = False
         self._acestep_process: subprocess.Popen | None = None
@@ -60,16 +63,26 @@ class GpuQueue:
         self._recover_stale_jobs()
         self._worker = threading.Thread(target=self._run, daemon=True, name="gpu-queue")
         self._worker.start()
+        if CLEANUP_INTERVAL_SECONDS > 0:
+            self._cleanup_thread = threading.Thread(
+                target=self._periodic_cleanup, daemon=True, name="job-cleanup",
+            )
+            self._cleanup_thread.start()
         log.info("GPU queue started")
 
     def _recover_stale_jobs(self) -> None:
         try:
             from songmaker_cli.db.engine import get_session_factory
-            from songmaker_cli.db.queries import delete_expired_sessions, recover_stale_jobs
+            from songmaker_cli.db.queries import (
+                delete_expired_sessions,
+                recover_stale_jobs,
+                recover_stale_jobs_by_age,
+            )
 
             factory = get_session_factory()
             with factory() as session:
                 recover_stale_jobs(session)
+                recover_stale_jobs_by_age(session)
                 expired = delete_expired_sessions(session)
                 if expired:
                     log.info("Cleaned up %d expired sessions", expired)
@@ -77,11 +90,32 @@ class GpuQueue:
         except RuntimeError:
             pass
 
-    def shutdown(self) -> None:
+    def _periodic_cleanup(self) -> None:
+        while self._running:
+            for _ in range(CLEANUP_INTERVAL_SECONDS):
+                if not self._running:
+                    return
+                time.sleep(1)
+            if not self._running:
+                return
+            try:
+                from songmaker_cli.db.engine import get_session_factory
+                from songmaker_cli.db.queries import recover_stale_jobs_by_age
+
+                factory = get_session_factory()
+                with factory() as session:
+                    recover_stale_jobs_by_age(session)
+                    session.commit()
+            except Exception:
+                log.exception("Periodic job cleanup failed")
+
+    def shutdown(self, timeout: int = SHUTDOWN_TIMEOUT_SECONDS) -> None:
         self._running = False
         self._queue.put(None)
         if self._worker:
-            self._worker.join(timeout=5)
+            self._worker.join(timeout=timeout)
+        if self._cleanup_thread:
+            self._cleanup_thread.join(timeout=5)
         self._stop_acestep()
 
     def submit(

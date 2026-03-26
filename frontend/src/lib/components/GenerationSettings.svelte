@@ -13,7 +13,7 @@
 			inference_steps: 8,
 			guidance_scale: 0.0,
 			shift: 3.0,
-			think_mode: true,
+			think_mode: 'deep',
 			lm_temperature: 0.85,
 			lm_top_k: 0,
 			lm_top_p: 0.9,
@@ -26,7 +26,7 @@
 			inference_steps: 50,
 			guidance_scale: 0.0,
 			shift: 3.0,
-			think_mode: true,
+			think_mode: 'deep',
 			lm_temperature: 0.85,
 			lm_top_k: 0,
 			lm_top_p: 0.9,
@@ -207,20 +207,19 @@
 				</select>
 			</label>
 
-			<label class="setting checkbox">
-				<input
-					type="checkbox"
-					checked={getParam('think_mode') ?? effectiveDefaults.think_mode}
-					onchange={(e) => {
-						const val = e.currentTarget.checked;
-						if (val === effectiveDefaults.think_mode) {
-							setParam('think_mode', undefined);
-						} else {
-							setParam('think_mode', val);
-						}
-					}}
-				/>
+			<label class="setting">
 				<span>Think Mode</span>
+				<select
+					value={getParam('think_mode') ?? ''}
+					onchange={(e) => {
+						const val = e.currentTarget.value;
+						setParam('think_mode', val || undefined);
+					}}
+				>
+					<option value="">default ({effectiveDefaults.think_mode})</option>
+					<option value="deep">deep</option>
+					<option value="off">off</option>
+				</select>
 			</label>
 
 			<label class="setting">
@@ -375,20 +374,16 @@
 							<option value="sde">sde</option>
 						</select>
 					</label>
-					<label class="setting checkbox">
-						<input
-							type="checkbox"
-							checked={editDefaults.think_mode ?? BUILTIN_DEFAULTS[editModel].think_mode}
-							onchange={(e) => {
-								const val = e.currentTarget.checked;
-								if (val === BUILTIN_DEFAULTS[editModel].think_mode) {
-									setDefaultVal('think_mode', undefined);
-								} else {
-									setDefaultVal('think_mode', val);
-								}
-							}}
-						/>
+					<label class="setting">
 						<span>Think Mode</span>
+						<select
+							value={editDefaults.think_mode ?? ''}
+							onchange={(e) => setDefaultVal('think_mode', e.currentTarget.value || undefined)}
+						>
+							<option value="">default ({BUILTIN_DEFAULTS[editModel].think_mode})</option>
+							<option value="deep">deep</option>
+							<option value="off">off</option>
+						</select>
 					</label>
 					<label class="setting">
 						<span>LM Top-K</span>
@@ -529,16 +524,6 @@
 	.setting select:focus {
 		border-color: var(--primary);
 		outline: none;
-	}
-
-	.setting.checkbox {
-		flex-direction: row;
-		align-items: center;
-		gap: 6px;
-	}
-
-	.setting.checkbox input {
-		width: auto;
 	}
 
 	.actions-row {

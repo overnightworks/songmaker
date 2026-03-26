@@ -96,7 +96,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "connect-src 'self' https://api.anthropic.com; "
+            "img-src 'self' data: blob:; "
+            "media-src 'self' blob:; "
+            "font-src 'self'; "
+            "frame-ancestors 'none'"
+        )
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         is_https = request.url.scheme == "https"
@@ -293,6 +302,12 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
             log.info("Startup: pruned %d old login attempts", pruned)
         session.commit()
     yield
+    try:
+        from songmaker_cli.gpu_queue import get_gpu_queue
+        log.info("Shutting down GPU queue...")
+        get_gpu_queue().shutdown()
+    except RuntimeError:
+        pass
 
 
 def create_app(
@@ -454,8 +469,13 @@ def run_server(
 
     host = os.environ.get("HOST", "127.0.0.1")
     workers = int(os.environ.get("UVICORN_WORKERS", 1))
+    if workers > 1:
+        raise ValueError(
+            f"UVICORN_WORKERS={workers} is unsupported. "
+            "SQLite and the in-memory GPU queue require a single worker process. "
+            "Use workers=1 (default)."
+        )
     uvicorn.run(
         app, host=host, port=port, log_level="info",
         timeout_keep_alive=REQUEST_TIMEOUT_SECONDS,
-        workers=workers,
     )

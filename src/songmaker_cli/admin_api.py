@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -163,7 +164,7 @@ def force_logout_endpoint(
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
     for sess in list_active_sessions(db):
-        if hashlib.sha256(sess.id.encode()).hexdigest() == session_hash:
+        if hmac.compare_digest(hashlib.sha256(sess.id.encode()).hexdigest(), session_hash):
             delete_session(db, sess.id)
             db.commit()
             return StatusResponse(status="ok")

@@ -35,7 +35,7 @@ def init_db(db_path: Path) -> sessionmaker[Session]:
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
     url = f"sqlite:///{db_path}"
-    engine = create_engine(url, echo=False)
+    engine = create_engine(url, echo=False, connect_args={"timeout": 30})
 
     @event.listens_for(engine, "connect")
     def _set_sqlite_pragma(dbapi_conn, _connection_record):

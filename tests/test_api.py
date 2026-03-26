@@ -519,6 +519,43 @@ def test_chat_unavailable(tmp_path: Path) -> None:
     assert resp.status_code == 503
 
 
+def test_chat_with_style(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock, patch
+
+    c = _make_authed_client(tmp_path)
+    mock_response = MagicMock()
+    mock_response.text = "Rock on!"
+
+    with patch("songmaker_cli.chat_api.call_claude", return_value=mock_response) as mock_call:
+        resp = c.post("/api/chat", json={
+            "message": "write a verse",
+            "style": "Write like a punk poet",
+        })
+
+    assert resp.status_code == 200
+    system_arg = mock_call.call_args.kwargs["system"]
+    assert "Write like a punk poet" in system_arg
+    assert "```songmaker" in system_arg
+
+
+def test_chat_default_style(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock, patch
+
+    from songmaker_cli.chat_api import DEFAULT_CHAT_STYLE
+
+    c = _make_authed_client(tmp_path)
+    mock_response = MagicMock()
+    mock_response.text = "Hello"
+
+    with patch("songmaker_cli.chat_api.call_claude", return_value=mock_response) as mock_call:
+        resp = c.post("/api/chat", json={"message": "hi"})
+
+    assert resp.status_code == 200
+    system_arg = mock_call.call_args.kwargs["system"]
+    assert DEFAULT_CHAT_STYLE in system_arg
+    assert "```songmaker" in system_arg
+
+
 def test_chat_requires_auth(unauthed_client: TestClient) -> None:
     resp = unauthed_client.post("/api/chat", json={"message": "hi"})
     assert resp.status_code == 401
@@ -1014,4 +1051,29 @@ def test_chat_unavailable_hides_details(tmp_path: Path) -> None:
     assert "/home/" not in resp.json()["detail"]
     reset_engine()
 
+
+# ── build_system_prompt ────────────────────────────────────────────
+
+
+def test_build_system_prompt_with_style() -> None:
+    from songmaker_cli.chat_api import STRUCTURAL_PROMPT, build_system_prompt
+
+    result = build_system_prompt("Write like a punk poet")
+    assert result.startswith("Write like a punk poet")
+    assert STRUCTURAL_PROMPT in result
+
+
+def test_build_system_prompt_default() -> None:
+    from songmaker_cli.chat_api import DEFAULT_CHAT_STYLE, STRUCTURAL_PROMPT, build_system_prompt
+
+    result = build_system_prompt("")
+    assert DEFAULT_CHAT_STYLE in result
+    assert STRUCTURAL_PROMPT in result
+
+
+def test_build_system_prompt_whitespace_only() -> None:
+    from songmaker_cli.chat_api import DEFAULT_CHAT_STYLE, build_system_prompt
+
+    result = build_system_prompt("   ")
+    assert DEFAULT_CHAT_STYLE in result
 

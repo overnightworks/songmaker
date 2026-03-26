@@ -33,16 +33,6 @@
 	let container: HTMLDivElement | undefined = $state();
 	const hasKey = $derived(!!$claudeApiKey);
 
-	const SYSTEM_PROMPT =
-		'You are a songwriting assistant. Help write, improve, and refine song lyrics. ' +
-		'Be creative but respect the style and theme.\n\n' +
-		'When suggesting lyrics or song parameters, ALWAYS include a ```songmaker block ' +
-		'at the end of your response with the applicable fields as JSON:\n' +
-		'```songmaker\n{"lyrics": "[verse]\\n...", "prompt": "style...", "bpm": 120, "key": "Am"}\n```\n\n' +
-		'Only include fields you are suggesting changes for. The lyrics field should use ' +
-		'section tags like [verse], [chorus], [bridge]. Use \\n for newlines in lyrics.\n' +
-		'If the user just asks a question without needing changes, skip the songmaker block.';
-
 	let prevSongId = $state('');
 
 	$effect(() => {
@@ -94,7 +84,15 @@
 		const match = text.match(/```songmaker\s*\n([\s\S]*?)```/);
 		if (!match) return undefined;
 		try {
-			return JSON.parse(match[1].trim());
+			const raw = JSON.parse(match[1].trim());
+			const data: ApplyData = {};
+			if (typeof raw.lyrics === 'string' && raw.lyrics.length <= 50_000) data.lyrics = raw.lyrics;
+			if (typeof raw.prompt === 'string' && raw.prompt.length <= 5_000) data.prompt = raw.prompt;
+			if (typeof raw.key === 'string' && raw.key.length <= 10) data.key = raw.key;
+			if (typeof raw.bpm === 'number' && raw.bpm >= 0 && raw.bpm <= 999) data.bpm = raw.bpm;
+			if (typeof raw.duration === 'number' && raw.duration >= 1 && raw.duration <= 600)
+				data.duration = raw.duration;
+			return Object.keys(data).length > 0 ? data : undefined;
 		} catch {
 			return undefined;
 		}
@@ -115,7 +113,7 @@
 
 		try {
 			const fullPrompt = buildConversation(msg);
-			const responseText = await chatWithClaude(fullPrompt, '', SYSTEM_PROMPT);
+			const responseText = await chatWithClaude(fullPrompt);
 			const applyData = extractApplyData(responseText);
 			const newMsg: Message = { role: 'assistant', text: responseText, applyData };
 

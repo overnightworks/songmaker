@@ -6,6 +6,7 @@ import re
 import unicodedata
 
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from songmaker_cli.auth import (
@@ -20,11 +21,12 @@ from songmaker_cli.auth import (
     SCORING_RATE_LIMIT_ADMIN,
     SCORING_RATE_LIMIT_USER,
 )
-from songmaker_cli.db.models import Album, Generation, Song
+from songmaker_cli.db.models import Album, Generation, Job, Song
 from songmaker_cli.db.queries import (
     count_total_queued_jobs,
     count_user_active_jobs,
     count_user_jobs_in_window,
+    create_job,
     get_album,
     get_generation,
     get_song,
@@ -38,22 +40,36 @@ _RATE_LIMITS: dict[str, tuple[int, int]] = {
 }
 
 
-def check_rate_limit(
+def create_job_with_rate_limit(
     session: Session, user: AuthenticatedUser, job_type: str,
-) -> None:
+) -> Job:
+    """Atomically check rate limits and create a job under BEGIN IMMEDIATE.
+
+    Prevents TOCTOU races where two concurrent requests both pass the rate
+    limit check before either creates a job.
+    """
+    session.flush()
+    session.commit()
+    session.execute(text("BEGIN IMMEDIATE"))
+
     is_admin = user.role == ROLE_ADMIN
 
     if job_type in ("generate", "score"):
         if count_total_queued_jobs(session) >= MAX_QUEUE_DEPTH:
+            session.rollback()
             raise HTTPException(429, "Queue is full. Try again later.")
         if not is_admin and count_user_active_jobs(session, user.id) >= MAX_USER_ACTIVE_JOBS:
+            session.rollback()
             raise HTTPException(429, "You already have an active job. Wait for it to finish.")
 
     user_limit, admin_limit = _RATE_LIMITS.get(job_type, (10, 100))
     limit = admin_limit if is_admin else user_limit
     count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
     if count >= limit:
+        session.rollback()
         raise HTTPException(429, f"Rate limit reached ({limit}/{job_type}s per hour).")
+
+    return create_job(session, job_type, user_id=user.id)
 
 
 def gen_params_to_dict(params: object | None) -> dict | None:

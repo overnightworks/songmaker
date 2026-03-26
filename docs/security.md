@@ -48,6 +48,8 @@ Four-layer defense:
 | Queue depth  | 10 total          | 10 total          | Global   |
 | Active jobs  | 1 concurrent      | 1 concurrent      | Per user (non-admin) |
 
+Rate limit checks and job creation are atomic (`BEGIN IMMEDIATE`) to prevent TOCTOU races where concurrent requests bypass limits.
+
 ### Per-IP (global middleware)
 
 All requests are subject to a global per-IP rate limit (default: 120 requests/minute). This prevents multi-account abuse and unauthenticated request floods. The rate limiter is memory-bounded (max 10k tracked IPs with automatic eviction of stale entries). Configurable via `IP_RATE_LIMIT` env var. When `TRUSTED_PROXIES` is configured, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), matching the login rate limiter's behavior.
@@ -60,7 +62,7 @@ All responses include:
 
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
-- `Content-Security-Policy: frame-ancestors 'none'`
+- `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.anthropic.com; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; frame-ancestors 'none'`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only; `X-Forwarded-Proto` only honored from `TRUSTED_PROXIES`)
@@ -181,8 +183,8 @@ Implemented: 15 failed attempts per username within 1 hour triggers account lock
 ### ~~4. Multi-worker / async architecture~~ (Done)
 Implemented: `UVICORN_WORKERS` env var (default 1). Set to 2–4 for production.
 
-### 5. Content Security Policy (script-src)
-**Priority: Medium** — The current CSP only sets `frame-ancestors 'none'`. There is no `script-src` or `default-src` directive restricting which scripts can execute. If an XSS vulnerability is found in the frontend, there is no CSP mitigation. Adding `script-src 'self'` (with nonces for inline scripts) would significantly reduce XSS impact.
+### 5. Content Security Policy — remove `'unsafe-inline'` from `style-src`
+**Priority: Low** — CSP now enforces `script-src 'self'` and `default-src 'none'`. The `style-src 'unsafe-inline'` directive is needed for SvelteKit dev mode but could be tightened in production. Consider nonce-based inline styles if a stricter policy is desired.
 
 ### 6. Database file permissions
 **Priority: Low** — The `.session_secret` file is created with `0600` permissions, but the SQLite database file inherits permissions from the output directory. Consider explicitly setting `0600` on the DB file at creation time, since it contains bcrypt hashes and session tokens.

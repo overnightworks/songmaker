@@ -345,6 +345,7 @@ class GenerationDefaultsRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(max_length=10_000)
+    style: str = Field("", max_length=500)
     context: str = Field("", max_length=20_000)
 
 

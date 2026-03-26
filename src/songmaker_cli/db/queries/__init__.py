@@ -22,12 +22,14 @@ from songmaker_cli.db.queries.auth import (
     user_count,
 )
 from songmaker_cli.db.queries.jobs import (
+    STALE_JOB_THRESHOLD_SECONDS,
     count_total_queued_jobs,
     count_user_active_jobs,
     count_user_jobs_in_window,
     create_job,
     get_job,
     recover_stale_jobs,
+    recover_stale_jobs_by_age,
     update_job_status,
 )
 from songmaker_cli.db.queries.songs import (
@@ -54,6 +56,7 @@ from songmaker_cli.db.queries.songs import (
 
 __all__ = [
     "LOGIN_ATTEMPT_RETENTION_DAYS",
+    "STALE_JOB_THRESHOLD_SECONDS",
     "UNSET",
     "_delete_generation_files",
     "cleanup_album",
@@ -91,6 +94,7 @@ __all__ = [
     "record_audit",
     "record_login_attempt",
     "recover_stale_jobs",
+    "recover_stale_jobs_by_age",
     "save_rating",
     "save_scores",
     "unpick_generation",

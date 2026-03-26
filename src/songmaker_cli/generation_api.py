@@ -7,7 +7,11 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from songmaker_cli.api_helpers import check_generation_access, check_rate_limit, check_song_access
+from songmaker_cli.api_helpers import (
+    check_generation_access,
+    check_song_access,
+    create_job_with_rate_limit,
+)
 from songmaker_cli.api_models import (
     GenerateRequest,
     GenerationResponse,
@@ -21,7 +25,6 @@ from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.config import get_output_dir
 from songmaker_cli.db.engine import get_db_session
 from songmaker_cli.db.queries import (
-    create_job,
     delete_generation,
     get_generation_by_path,
     get_job,
@@ -80,14 +83,12 @@ def api_generate_song(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> JobResponse:
-    check_rate_limit(session, user, "generate")
-
     song = check_song_access(session, song_id, user)
     version = song.latest_version
     if not version or not version.lyrics or not version.prompt:
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
-    job = create_job(session, "generate", user_id=user.id)
+    job = create_job_with_rate_limit(session, user, "generate")
     record_audit(session, user.id, "generate", "song", song_id, f"count={req.count}")
     session.commit()
     log.info("Generate: song='%s', count=%d, job=%s", song.title, req.count, job.id)
@@ -107,11 +108,9 @@ def api_score_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(_get_session),
 ) -> JobResponse:
-    check_rate_limit(session, user, "score")
-
     check_generation_access(session, gen_id, user)
 
-    job = create_job(session, "score", user_id=user.id)
+    job = create_job_with_rate_limit(session, user, "score")
     record_audit(session, user.id, "score", "generation", gen_id)
     session.commit()
 

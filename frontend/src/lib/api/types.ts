@@ -12,7 +12,7 @@ export interface GenerationParams {
 	guidance_scale?: number;
 	inference_steps?: number;
 	shift?: number;
-	think_mode?: boolean;
+	think_mode?: string;
 	lm_temperature?: number;
 	infer_method?: string;
 }
@@ -61,7 +61,7 @@ export interface VersionGenerationParams {
 	inference_steps?: number;
 	guidance_scale?: number;
 	shift?: number;
-	think_mode?: boolean;
+	think_mode?: string;
 	lm_temperature?: number;
 	lm_top_k?: number;
 	lm_top_p?: number;

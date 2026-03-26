@@ -9,7 +9,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from songmaker_cli.gpu_queue import GpuJob, GpuQueue, get_gpu_queue, reset_gpu_queue
+from songmaker_cli.gpu_queue import (
+    SHUTDOWN_TIMEOUT_SECONDS,
+    GpuJob,
+    GpuQueue,
+    get_gpu_queue,
+    reset_gpu_queue,
+)
 
 
 def _make_queue() -> GpuQueue:
@@ -546,3 +552,104 @@ def test_fail_job_handles_db_error() -> None:
         side_effect=RuntimeError("no db"),
     ):
         queue._fail_job("j1", "error")
+
+
+# ── _periodic_cleanup ──────────────────────────────────────────────
+
+
+def test_periodic_cleanup_runs_recovery() -> None:
+    queue = GpuQueue()
+    queue._running = True
+    cleanup_called = threading.Event()
+
+    mock_session = MagicMock()
+    mock_factory = MagicMock(
+        return_value=MagicMock(
+            __enter__=MagicMock(return_value=mock_session),
+            __exit__=MagicMock(return_value=False),
+        ),
+    )
+
+    with (
+        patch("songmaker_cli.gpu_queue.CLEANUP_INTERVAL_SECONDS", 1),
+        patch("songmaker_cli.db.engine.get_session_factory", return_value=mock_factory),
+        patch("songmaker_cli.db.queries.recover_stale_jobs_by_age") as mock_recover,
+    ):
+        mock_recover.side_effect = lambda s: cleanup_called.set() or 0
+
+        t = threading.Thread(target=queue._periodic_cleanup, daemon=True)
+        t.start()
+        cleanup_called.wait(timeout=5)
+        queue._running = False
+        t.join(timeout=3)
+
+    mock_recover.assert_called()
+    mock_session.commit.assert_called()
+
+
+def test_periodic_cleanup_stops_when_not_running() -> None:
+    queue = GpuQueue()
+    queue._running = False
+
+    with patch("songmaker_cli.gpu_queue.CLEANUP_INTERVAL_SECONDS", 1):
+        queue._periodic_cleanup()
+
+
+def test_periodic_cleanup_handles_exception() -> None:
+    queue = GpuQueue()
+    queue._running = True
+    error_logged = threading.Event()
+
+    def fail_then_stop(s):
+        error_logged.set()
+        raise RuntimeError("db error")
+
+    with (
+        patch("songmaker_cli.gpu_queue.CLEANUP_INTERVAL_SECONDS", 1),
+        patch(
+            "songmaker_cli.db.engine.get_session_factory",
+            side_effect=RuntimeError("no db"),
+        ),
+    ):
+        t = threading.Thread(target=queue._periodic_cleanup, daemon=True)
+        t.start()
+        time.sleep(2)
+        queue._running = False
+        t.join(timeout=3)
+
+
+# ── shutdown timeout ───────────────────────────────────────────────
+
+
+def test_shutdown_default_timeout() -> None:
+    assert SHUTDOWN_TIMEOUT_SECONDS == 120
+
+
+def test_shutdown_joins_cleanup_thread() -> None:
+    queue = _make_queue()
+    queue.start()
+    time.sleep(0.1)
+    mock_cleanup = MagicMock()
+    queue._cleanup_thread = mock_cleanup
+    queue.shutdown(timeout=1)
+    mock_cleanup.join.assert_called_once_with(timeout=5)
+
+
+# ── start with cleanup thread ─────────────────────────────────────
+
+
+def test_start_creates_cleanup_thread() -> None:
+    queue = _make_queue()
+    with patch("songmaker_cli.gpu_queue.CLEANUP_INTERVAL_SECONDS", 900):
+        queue.start()
+    assert queue._cleanup_thread is not None
+    assert queue._cleanup_thread.name == "job-cleanup"
+    queue.shutdown(timeout=1)
+
+
+def test_start_skips_cleanup_when_disabled() -> None:
+    queue = _make_queue()
+    with patch("songmaker_cli.gpu_queue.CLEANUP_INTERVAL_SECONDS", 0):
+        queue.start()
+    assert queue._cleanup_thread is None
+    queue.shutdown(timeout=1)

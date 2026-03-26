@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -90,4 +91,34 @@ def recover_stale_jobs(session: Session) -> int:
     session.flush()
     if stale:
         log.info("Recovered %d stale jobs", len(stale))
+    return len(stale)
+
+
+STALE_JOB_THRESHOLD_SECONDS = int(
+    os.environ.get("STALE_JOB_THRESHOLD_SECONDS", 1800),
+)
+
+
+def recover_stale_jobs_by_age(
+    session: Session, threshold_seconds: int = STALE_JOB_THRESHOLD_SECONDS,
+) -> int:
+    """Mark running jobs older than threshold as failed. Returns count recovered."""
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=threshold_seconds)
+    stale = (
+        session.query(Job)
+        .filter(
+            Job.status == "running",
+            Job.started_at < cutoff,
+        )
+        .all()
+    )
+    for job in stale:
+        job.status = "failed"
+        job.error = "Job timed out (exceeded maximum run time)"
+        job.error_type = "stale_timeout"
+        job.completed_at = now
+    session.flush()
+    if stale:
+        log.info("Recovered %d stale jobs (threshold=%ds)", len(stale), threshold_seconds)
     return len(stale)

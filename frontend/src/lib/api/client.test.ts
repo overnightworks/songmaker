@@ -246,7 +246,7 @@ describe('chatWithClaude', () => {
 			ok: true,
 			json: () => Promise.resolve({ content: [{ type: 'text', text: 'Direct response' }] })
 		});
-		const result = await chatWithClaude('hi', '', 'system');
+		const result = await chatWithClaude('hi');
 		expect(result).toBe('Direct response');
 		expect(mockFetch).toHaveBeenCalledWith(
 			'https://api.anthropic.com/v1/messages',
