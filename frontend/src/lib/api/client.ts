@@ -157,11 +157,17 @@ export interface JobStatus {
 	completed_at: string | null;
 }
 
-export async function generateSong(songId: string, count: number = 1): Promise<JobStatus> {
+export async function generateSong(
+	songId: string,
+	count: number = 1,
+	model?: string | null
+): Promise<JobStatus> {
+	const payload: Record<string, unknown> = { count };
+	if (model) payload.model = model;
 	return apiFetch<JobStatus>(`/api/songs/${songId}/generate`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ count })
+		body: JSON.stringify(payload)
 	});
 }
 

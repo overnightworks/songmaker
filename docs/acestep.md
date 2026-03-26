@@ -4,19 +4,18 @@ Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5)
 
 ## How Songmaker Uses ACE-Step
 
-ACE-Step runs as a separate HTTP server (`localhost:8001`). The `gpu_queue.py` manages its lifecycle — starting it before generation jobs and stopping it before scoring (to free VRAM).
+ACE-Step runs as a separate HTTP server (`localhost:8001`). The `gpu_queue.py` manages its lifecycle — starting it before the first generation job. It stays running; scoring models (faster-whisper, AudioBox) coexist on the GPU.
 
 ```
 songmaker server
   → GpuQueue starts
-  → on generate job:
-    → clear scoring models from VRAM
-    → start ACE-Step server if not running
+  → on first generate job:
+    → start ACE-Step server (~18 GB VRAM)
     → POST to ACE-Step API → get WAV bytes
     → master → MP3
   → on score job:
-    → stop ACE-Step server
-    → load scoring models
+    → load faster-whisper + AudioBox on demand (~4 GB VRAM)
+    → ACE-Step stays running
 ```
 
 Client: `src/acestep_engine/client.py` (HTTP client with retry, polling, model info)
@@ -75,5 +74,5 @@ These are not yet integrated into Songmaker.
 | `ACESTEP_INIT_LLM` | 1 | Load LM on startup |
 | `ACESTEP_LM_MODEL_PATH` | acestep-5Hz-lm-4B | LM model |
 | `ACESTEP_LM_BACKEND` | vllm | LM inference backend |
-| `MAX_CUDA_VRAM` | 20 | VRAM budget in GB |
+| `MAX_CUDA_VRAM` | 18 | VRAM budget in GB |
 | `ACESTEP_COMPILE_MODEL` | 0 | torch.compile (slower startup, faster inference) |

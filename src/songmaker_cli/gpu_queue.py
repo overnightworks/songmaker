@@ -302,6 +302,17 @@ class GpuQueue:
     def acestep_healthy(self) -> bool:
         return self._is_acestep_healthy()
 
+    @property
+    def active_model(self) -> str | None:
+        try:
+            from acestep_engine.client import AceStepClient
+            info = AceStepClient().server_info()
+            if info and info.model:
+                return "sft" if "sft" in info.model else "turbo"
+        except Exception:
+            pass
+        return None
+
     def _gc_gpu(self) -> None:
         import gc
         gc.collect()

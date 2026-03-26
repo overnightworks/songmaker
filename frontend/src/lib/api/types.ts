@@ -5,13 +5,6 @@
  * Hierarchy: Song → Version (content) → Generation (MP3 output)
  */
 
-export interface PaginatedResponse<T> {
-	items: T[];
-	total: number;
-	offset: number;
-	limit: number;
-}
-
 export interface GenerationParams {
 	seed?: number | null;
 	acestep_model?: string | null;
@@ -120,6 +113,8 @@ export interface AlbumItem {
 	year: string;
 	colors: Record<string, string>;
 	song_count: number;
+	is_shared: boolean;
+	share_slug?: string | null;
 }
 
 export interface JobItem {

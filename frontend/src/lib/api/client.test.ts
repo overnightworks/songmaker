@@ -147,6 +147,14 @@ describe('API client', () => {
 		expect(result.type).toBe('generate');
 		const body = JSON.parse(mockFetch.mock.calls[0][1].body);
 		expect(body.count).toBe(3);
+		expect(body.model).toBeUndefined();
+	});
+
+	it('generateSong sends model when specified', async () => {
+		mockOk({ id: 'j1', type: 'generate' });
+		await generateSong('s1', 1, 'sft');
+		const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+		expect(body.model).toBe('sft');
 	});
 
 	it('scoreGeneration sends POST', async () => {

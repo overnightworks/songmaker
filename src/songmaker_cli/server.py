@@ -514,8 +514,12 @@ def create_app(
         queue_depth = ctx.gpu_queue.queue_depth if ctx.gpu_queue else 0
 
         if ctx.gpu_queue:
-            acestep = "healthy" if ctx.gpu_queue.acestep_healthy else "unhealthy"
+            acestep_model = ctx.gpu_queue.active_model
+            acestep = "healthy" if acestep_model is not None else (
+                "healthy" if ctx.gpu_queue.acestep_healthy else "unhealthy"
+            )
         else:
+            acestep_model = None
             acestep = "unknown"
 
         degraded = not db_ok or (ctx.gpu_queue and not gpu_running)
@@ -525,6 +529,7 @@ def create_app(
             "queue_depth": queue_depth,
             "db": "ok" if db_ok else "error",
             "acestep": acestep,
+            "acestep_model": acestep_model,
             "uptime_seconds": uptime,
         })
 

@@ -473,6 +473,86 @@ def test_generate_song_submits_job(client: TestClient) -> None:
     mock_queue.submit.assert_called_once()
 
 
+def test_generate_song_model_mismatch(client: TestClient) -> None:
+    from unittest.mock import MagicMock, PropertyMock, patch
+
+    mock_queue = MagicMock()
+    type(mock_queue).active_model = PropertyMock(return_value="sft")
+
+    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
+        mock_ctx.return_value = client.app.state.ctx
+        mock_ctx.return_value.gpu_queue = mock_queue
+        resp = client.post(
+            "/api/songs/s1/generate",
+            json={"count": 1, "model": "turbo"},
+        )
+
+    assert resp.status_code == 409
+    assert "turbo" in resp.json()["detail"]
+    mock_queue.submit.assert_not_called()
+
+
+def test_generate_song_model_unavailable(client: TestClient) -> None:
+    from unittest.mock import MagicMock, PropertyMock, patch
+
+    mock_queue = MagicMock()
+    type(mock_queue).active_model = PropertyMock(return_value=None)
+
+    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
+        mock_ctx.return_value = client.app.state.ctx
+        mock_ctx.return_value.gpu_queue = mock_queue
+        resp = client.post(
+            "/api/songs/s1/generate",
+            json={"count": 1, "model": "sft"},
+        )
+
+    assert resp.status_code == 503
+    mock_queue.submit.assert_not_called()
+
+
+def test_generate_song_model_match(client: TestClient) -> None:
+    from unittest.mock import MagicMock, PropertyMock, patch
+
+    mock_queue = MagicMock()
+    type(mock_queue).active_model = PropertyMock(return_value="sft")
+
+    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
+        mock_ctx.return_value = client.app.state.ctx
+        mock_ctx.return_value.gpu_queue = mock_queue
+        resp = client.post(
+            "/api/songs/s1/generate",
+            json={"count": 1, "model": "sft"},
+        )
+
+    assert resp.status_code == 200
+    mock_queue.submit.assert_called_once()
+
+
+def test_generate_song_no_model_skips_check(client: TestClient) -> None:
+    from unittest.mock import MagicMock, patch
+
+    mock_queue = MagicMock()
+
+    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
+        mock_ctx.return_value = client.app.state.ctx
+        mock_ctx.return_value.gpu_queue = mock_queue
+        resp = client.post(
+            "/api/songs/s1/generate",
+            json={"count": 1},
+        )
+
+    assert resp.status_code == 200
+    mock_queue.submit.assert_called_once()
+
+
+def test_generate_song_invalid_model(client: TestClient) -> None:
+    resp = client.post(
+        "/api/songs/s1/generate",
+        json={"count": 1, "model": "invalid"},
+    )
+    assert resp.status_code == 422
+
+
 def test_score_generation_not_found(client: TestClient) -> None:
     resp = client.post(
         "/api/generations/nonexistent/score",

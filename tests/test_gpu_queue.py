@@ -495,6 +495,43 @@ def test_fail_job_handles_db_error() -> None:
     queue._fail_job("j1", "error")
 
 
+# ── active_model ───────────────────────────────────────────────────
+
+
+def test_active_model_sft() -> None:
+    queue = GpuQueue(MagicMock())
+    mock_info = MagicMock()
+    mock_info.model = "acestep-v15-sft"
+    mock_client = MagicMock()
+    mock_client.server_info.return_value = mock_info
+    with patch("acestep_engine.client.AceStepClient", return_value=mock_client):
+        assert queue.active_model == "sft"
+
+
+def test_active_model_turbo() -> None:
+    queue = GpuQueue(MagicMock())
+    mock_info = MagicMock()
+    mock_info.model = "acestep-v15-turbo"
+    mock_client = MagicMock()
+    mock_client.server_info.return_value = mock_info
+    with patch("acestep_engine.client.AceStepClient", return_value=mock_client):
+        assert queue.active_model == "turbo"
+
+
+def test_active_model_server_unavailable() -> None:
+    queue = GpuQueue(MagicMock())
+    mock_client = MagicMock()
+    mock_client.server_info.return_value = None
+    with patch("acestep_engine.client.AceStepClient", return_value=mock_client):
+        assert queue.active_model is None
+
+
+def test_active_model_exception() -> None:
+    queue = GpuQueue(MagicMock())
+    with patch("acestep_engine.client.AceStepClient", side_effect=Exception("boom")):
+        assert queue.active_model is None
+
+
 # ── _periodic_cleanup ──────────────────────────────────────────────
 
 

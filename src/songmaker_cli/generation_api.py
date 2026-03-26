@@ -86,6 +86,13 @@ def api_generate_song(
     if not version or not version.lyrics or not version.prompt:
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
+    if req.model:
+        active = ctx.gpu_queue.active_model if ctx.gpu_queue else None
+        if active is None:
+            raise HTTPException(503, "ACE-Step server not available")
+        if req.model != active:
+            raise HTTPException(409, f"Model '{req.model}' not available, active: '{active}'")
+
     job = create_job_with_rate_limit(session, user, "generate")
     record_audit(session, user.id, "generate", "song", song_id, f"count={req.count}")
     session.commit()

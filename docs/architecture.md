@@ -64,7 +64,7 @@ The API client and `types.ts` are the frontend's contract with the backend. When
 
 ```
 User (username, role: admin|user, bcrypt hash)
-  ├── Album (title, artist — owned via created_by)
+  ├── Album (title, artist, share_slug?, is_shared — owned via created_by)
   │     └── Song (title, track_number)
   │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params)
   │           └── Generation (MP3, seed, status, whisper_text)
@@ -82,7 +82,7 @@ SQLite with WAL mode. SQLAlchemy ORM. Alembic migrations. DB file permissions `6
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| GET | `/api/albums` | user | List albums (filtered by ownership) |
+| GET | `/api/albums?offset=0&limit=50` | user | List albums with pagination (filtered by ownership) |
 | POST | `/api/albums` | user | Create album |
 | GET/PUT | `/api/songs/{id}` | user | Get/update song |
 | POST | `/api/songs` | user | Create song in album |
@@ -95,19 +95,25 @@ SQLite with WAL mode. SQLAlchemy ORM. Alembic migrations. DB file permissions `6
 | GET | `/api/capabilities` | user | Feature flags |
 | * | `/api/admin/*` | admin | User CRUD, sessions, audit log, ACE-Step control |
 | * | `/api/auth/*` | public | Login, logout, setup, password change |
+| GET | `/health` | public | Liveness/readiness probe (DB, GPU queue, ACE-Step, active model) |
+| GET | `/metrics` | public | Job stats, HTTP request counters, VRAM usage |
+| POST | `/api/albums/{id}/share` | user | Enable sharing, return secret link |
+| DELETE | `/api/albums/{id}/share` | user | Revoke sharing |
+| GET | `/shared/{slug}` | public | Read-only album view (no auth, rate-limited) |
+| GET | `/shared/{slug}/audio/{file}` | public | Stream MP3 for shared album (no auth, rate-limited) |
 | GET | `/audio/{album}/{file}` | user | Serve MP3 files (ownership-checked) |
 
 ## Generation Flow
 
 ```
-POST /api/songs/{id}/generate
+POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
   → rate limit check (per-user)
   → ownership check
+  → model validation (if specified — reject 409 if active model doesn't match)
   → create Job record + audit log entry
   → submit to GpuQueue
   → GpuQueue._prepare_mode("generate")
-    → clear scoring models from VRAM
-    → start ACE-Step server if not running
+    → ensure ACE-Step server is running (start if needed)
   → run_generation_job()
     → build config (song params + admin defaults + model defaults)
     → ACE-Step HTTP API → WAV bytes
@@ -124,28 +130,28 @@ POST /api/generations/{id}/score
   → ownership check
   → create Job record + audit log entry
   → submit to GpuQueue
-  → GpuQueue._prepare_mode("score")
-    → stop ACE-Step server
-    → free VRAM (gc + torch.cuda.empty_cache)
   → run_scoring_job()
-    → run_scoring_pipeline() — each scorer fault-isolated:
-      text_accuracy (Whisper), emotional_dynamics, bpm_accuracy,
-      silence_detection, spectral_quality, audiobox_aesthetics,
-      lyrical_coherence (Claude)
+    → run_scoring_pipeline() with parallel CPU/GPU execution:
+      GPU scorers (audiobox) run sequentially in main thread
+      CPU scorers (text_accuracy via faster-whisper, emotional_dynamics,
+        bpm_accuracy, silence_detection, spectral_quality) run concurrently
+      Deferred CPU scorers (lyrical_coherence) wait for shared_data from GPU
+      Each scorer fault-isolated: one failure does not block others
     → save scores + whisper text to DB
   → Job status: completed
 ```
 
 ## VRAM Management
 
-Single RTX 3090 shared between generation and scoring. Only one mode active at a time.
+Single RTX 3090 shared between generation and scoring. ACE-Step stays running; no mode switching.
 
 ```
-generate mode: ACE-Step server (loads DiT + LM models)
-score mode:    Whisper large-v3 + AudioBox (loaded on demand, cached)
+ACE-Step server: ~18 GB VRAM (DiT + LM models, stays loaded)
+faster-whisper:  ~3 GB VRAM (int8_float16, loads on demand, cached)
+AudioBox:        ~1 GB VRAM (loads on demand, cached)
 ```
 
-Mode switching: stop ACE-Step → `gc.collect()` + `torch.cuda.empty_cache()` → verify VRAM freed → load scoring models. Reverse for generation.
+ACE-Step and scoring models coexist on the GPU. Per-job cleanup: `gc.collect()` + `torch.cuda.empty_cache()` in `finally` blocks.
 
 ## Key Design Decisions
 
@@ -156,7 +162,7 @@ Mode switching: stop ACE-Step → `gc.collect()` + `torch.cuda.empty_cache()` �
 | GPU queue | Single-threaded, in-process | One GPU, ACE-Step + scoring share VRAM |
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
 | Session auth | Cookies, not JWT | Revocable, HttpOnly, simpler for monolith |
-| Album ownership | `created_by` on Album | Songs inherit access, future-proof for sharing |
+| Album ownership | `created_by` on Album | Songs inherit access; sharing via secret UUID slug |
 | SQLite + WAL | Single-server, no external deps | No Redis/Postgres overhead |
 | ACE-Step as subprocess | Separate server, managed lifecycle | Clean VRAM release, independent restarts |
 | Typed API contract | `api_models.py` ↔ `types.ts` | Backend and frontend stay in sync |

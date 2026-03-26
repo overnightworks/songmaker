@@ -51,6 +51,8 @@ class AlbumResponse(BaseModel):
     year: str = ""
     colors: dict[str, str] = Field(default_factory=dict)
     song_count: int = 0
+    is_shared: bool = False
+    share_slug: str | None = None
 
     @classmethod
     def from_orm(cls, album: Album) -> AlbumResponse:
@@ -62,7 +64,15 @@ class AlbumResponse(BaseModel):
             year=album.year,
             colors=album.colors or {},
             song_count=len(album.songs) if album.songs else 0,
+            is_shared=album.is_shared,
+            share_slug=album.share_slug,
         )
+
+
+class ShareResponse(BaseModel):
+    status: str = "ok"
+    share_url: str
+    share_slug: str
 
 
 # ── Generation ──────────────────────────────────────────────────────
@@ -338,8 +348,20 @@ class SongUpdateRequest(BaseModel):
     generation_params: GenerationParams | None = None
 
 
+_VALID_MODEL_MODES = frozenset({"turbo", "sft"})
+
+
 class GenerateRequest(BaseModel):
     count: int = Field(1, ge=1, le=10)
+    model: str | None = None
+
+    @field_validator("model")
+    @classmethod
+    def _validate_model(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_MODEL_MODES:
+            msg = f"model must be one of {sorted(_VALID_MODEL_MODES)}"
+            raise ValueError(msg)
+        return v
 
 
 VALID_SCORER_NAMES = frozenset({
@@ -370,9 +392,6 @@ class RateRequest(BaseModel):
 class GenerationDefaultsRequest(BaseModel):
     turbo: GenerationParams | None = None
     sft: GenerationParams | None = None
-
-
-_VALID_MODEL_MODES = frozenset({"turbo", "sft"})
 
 
 class PresetCreateRequest(BaseModel):

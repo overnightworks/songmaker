@@ -914,6 +914,7 @@ def test_health_no_auth_required(tmp_path: Path) -> None:
     assert data["gpu_queue"] == "stopped"
     assert data["queue_depth"] == 0
     assert data["acestep"] == "unknown"
+    assert data["acestep_model"] is None
     assert isinstance(data["uptime_seconds"], int)
 
 
@@ -934,7 +935,7 @@ def test_health_with_gpu_queue(tmp_path: Path) -> None:
     gpu_queue = MagicMock()
     gpu_queue.is_running = True
     gpu_queue.queue_depth = 3
-    gpu_queue.acestep_healthy = False
+    gpu_queue.active_model = "sft"
 
     ctx = AppContext(
         db=factory, output_dir=output_dir, session_secret=TEST_SECRET,
@@ -950,7 +951,8 @@ def test_health_with_gpu_queue(tmp_path: Path) -> None:
     assert data["status"] == "ok"
     assert data["gpu_queue"] == "running"
     assert data["queue_depth"] == 3
-    assert data["acestep"] == "unhealthy"
+    assert data["acestep"] == "healthy"
+    assert data["acestep_model"] == "sft"
 
 
 def test_health_degraded_when_queue_stopped(tmp_path: Path) -> None:
@@ -971,6 +973,7 @@ def test_health_degraded_when_queue_stopped(tmp_path: Path) -> None:
     gpu_queue.is_running = False
     gpu_queue.queue_depth = 0
     gpu_queue.acestep_healthy = False
+    gpu_queue.active_model = None
 
     ctx = AppContext(
         db=factory, output_dir=output_dir, session_secret=TEST_SECRET,
