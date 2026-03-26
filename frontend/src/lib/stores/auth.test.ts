@@ -75,12 +75,6 @@ describe('login', () => {
 		expect(get(authError)).toBe('Too many attempts. Try again later.');
 	});
 
-	it('sets authError on 403', async () => {
-		mockApiLogin.mockRejectedValueOnce(new Error('API /api/auth/login: 403'));
-		await expect(login('alice', 'x')).rejects.toThrow();
-		expect(get(authError)).toBe('Account disabled.');
-	});
-
 	it('sets generic authError on unknown error', async () => {
 		mockApiLogin.mockRejectedValueOnce(new Error('Network failure'));
 		await expect(login('alice', 'x')).rejects.toThrow();

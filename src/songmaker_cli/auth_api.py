@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -25,6 +24,7 @@ from songmaker_cli.auth import (
     LOGIN_RATE_WINDOW_SECONDS,
     ROLE_ADMIN,
     SESSION_MAX_AGE_SECONDS,
+    generate_csrf_token,
     get_client_ip,
     hash_password,
     sign_session_id,
@@ -99,7 +99,7 @@ def _set_session_cookie(
         secure=secure,
         path="/",
     )
-    csrf_token = secrets.token_urlsafe(32)
+    csrf_token = generate_csrf_token(session_id)
     response.set_cookie(
         CSRF_COOKIE,
         csrf_token,
@@ -181,7 +181,7 @@ def login(
     if not user.is_active:
         record_login_attempt(db, ip, req.username, success=False)
         db.commit()
-        raise HTTPException(403, "Account disabled")
+        raise HTTPException(401, "Invalid username or password")
 
     record_login_attempt(db, ip, req.username, success=True)
     # Security: wipe all existing sessions on login to prevent session accumulation.

@@ -98,7 +98,7 @@ def update_user_endpoint(
         changes.append(f"active={req.is_active}")
     if req.password:
         changes.append("password_changed")
-    if req.role is not None or req.is_active is False:
+    if req.role is not None or req.is_active is False or req.password:
         delete_user_sessions(db, user_id)
     record_audit(db, admin.id, "update", "user", user_id, ", ".join(changes))
     db.commit()

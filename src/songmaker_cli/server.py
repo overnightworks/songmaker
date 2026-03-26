@@ -114,7 +114,9 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         start = datetime.now(timezone.utc)
         response = await call_next(request)
-        ip = request.client.host if request.client else "unknown"
+        from songmaker_cli.auth import get_client_ip
+        direct_ip = request.client.host if request.client else "unknown"
+        ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"))
         log.info(
             "ACCESS %s %s %s %d (%.0fms)",
             ip, request.method, request.url.path,
@@ -198,10 +200,17 @@ class CsrfTokenMiddleware(BaseHTTPMiddleware):
             and request.url.path.startswith("/api/")
             and request.url.path not in _CSRF_EXEMPT_PATHS
         ):
-            from songmaker_cli.auth import CSRF_COOKIE, CSRF_HEADER
-            cookie_token = request.cookies.get(CSRF_COOKIE)
+            from songmaker_cli.auth import CSRF_HEADER, verify_csrf_token, verify_session_cookie
+            from songmaker_cli.middleware import SESSION_COOKIE
+
             header_token = request.headers.get(CSRF_HEADER)
-            if not cookie_token or not header_token or cookie_token != header_token:
+            if not header_token:
+                return JSONResponse(
+                    {"detail": "CSRF token missing or invalid"}, status_code=403,
+                )
+            raw_cookie = request.cookies.get(SESSION_COOKIE)
+            session_id = verify_session_cookie(raw_cookie) if raw_cookie else None
+            if not session_id or not verify_csrf_token(header_token, session_id):
                 return JSONResponse(
                     {"detail": "CSRF token missing or invalid"}, status_code=403,
                 )
@@ -294,6 +303,14 @@ def create_app(
         lifespan=_lifespan,
     )
 
+    # Middleware execution order (Starlette LIFO — last added runs first):
+    #   1. BodySizeLimitMiddleware  — reject oversized bodies before processing
+    #   2. IpRateLimitMiddleware    — rate-limit before auth/CSRF to bound cost
+    #   3. CsrfOriginMiddleware     — reject cross-origin state-changing requests
+    #   4. CsrfTokenMiddleware      — verify double-submit CSRF token
+    #   5. AccessLogMiddleware       — log all requests (after security checks)
+    #   6. SecurityHeadersMiddleware — add security headers to responses
+    # WARNING: reordering these lines changes security behavior.
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(CsrfTokenMiddleware)
@@ -308,7 +325,15 @@ def create_app(
         "allow_credentials": True,
     }
     if cors_origin and "*" in cors_origin:
-        suffix = re.escape(cors_origin.replace("*.", "").replace("*", ""))
+        if not re.match(
+            r"^\*\.[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$",
+            cors_origin,
+        ):
+            raise ValueError(
+                f"Invalid CORS_ORIGIN wildcard: {cors_origin!r}. "
+                "Must be *.domain.tld (e.g., *.example.com, *.trycloudflare.com)"
+            )
+        suffix = re.escape(cors_origin[2:])
         cors_kwargs["allow_origin_regex"] = rf"^https?://[^:/]+\.{suffix}$"
     elif cors_origin:
         cors_kwargs["allow_origins"] = [cors_origin]

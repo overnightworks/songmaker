@@ -29,7 +29,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries import (
-    _UNSET,
+    UNSET,
     _delete_generation_files,
     cleanup_album,
     count_recent_failed_attempts,
@@ -494,7 +494,7 @@ def test_update_song_clears_generation_params(seeded_session: Session) -> None:
 def test_update_song_unset_keeps_previous(seeded_session: Session) -> None:
     update_song(seeded_session, "s1", generation_params={"shift": 5.0})
     seeded_session.commit()
-    update_song(seeded_session, "s1", lyrics="changed", generation_params=_UNSET)
+    update_song(seeded_session, "s1", lyrics="changed", generation_params=UNSET)
     seeded_session.commit()
     song = get_song(seeded_session, "s1")
     assert song.latest_version.generation_params == {"shift": 5.0}

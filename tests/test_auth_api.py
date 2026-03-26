@@ -123,8 +123,8 @@ def test_login_disabled_user(client: TestClient) -> None:
     resp = client.post(
         "/api/auth/login", json={"username": "disabled_user", "password": "t3stP@ssw0rd"},
     )
-    assert resp.status_code == 403
-    assert "disabled" in resp.json()["detail"]
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Invalid username or password"
 
 
 def test_login_brute_force_lockout(client: TestClient) -> None:

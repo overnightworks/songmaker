@@ -113,7 +113,11 @@ def reset_password(
     ] = "",
 ) -> None:
     """Reset a user's password (requires local DB access)."""
-    from songmaker_cli.auth import MIN_PASSWORD_LENGTH, hash_password
+    from songmaker_cli.auth import (
+        MIN_PASSWORD_LENGTH,
+        check_password_strength,
+        hash_password,
+    )
     from songmaker_cli.config import find_project_root
     from songmaker_cli.constants import OUTPUT_ROOT
     from songmaker_cli.db.engine import init_db
@@ -121,6 +125,11 @@ def reset_password(
 
     if len(password) < MIN_PASSWORD_LENGTH:
         print(f"Error: password must be at least {MIN_PASSWORD_LENGTH} characters")
+        sys.exit(1)
+    try:
+        check_password_strength(password)
+    except ValueError as exc:
+        print(f"Error: {exc}")
         sys.exit(1)
 
     root = find_project_root(Path.cwd()) or Path.cwd()

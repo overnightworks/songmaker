@@ -21,9 +21,11 @@ from songmaker_cli.auth import (
     SESSION_MAX_AGE_SECONDS,
     check_password_strength,
     ensure_session_secret,
+    generate_csrf_token,
     hash_password,
     reset_session_secret,
     sign_session_id,
+    verify_csrf_token,
     verify_password,
     verify_session_cookie,
 )
@@ -144,6 +146,47 @@ def test_low_entropy_rejected() -> None:
 
 def test_strong_password_accepted() -> None:
     assert check_password_strength("s3cur3P@ss!") == "s3cur3P@ss!"
+
+
+# ── CSRF token binding ────────────────────────────────────────────
+
+
+def test_generate_csrf_token_deterministic() -> None:
+    t1 = generate_csrf_token("session-abc")
+    t2 = generate_csrf_token("session-abc")
+    assert t1 == t2
+
+
+def test_generate_csrf_token_differs_per_session() -> None:
+    t1 = generate_csrf_token("session-1")
+    t2 = generate_csrf_token("session-2")
+    assert t1 != t2
+
+
+def test_verify_csrf_token_valid() -> None:
+    token = generate_csrf_token("my-session")
+    assert verify_csrf_token(token, "my-session") is True
+
+
+def test_verify_csrf_token_wrong_session() -> None:
+    token = generate_csrf_token("session-a")
+    assert verify_csrf_token(token, "session-b") is False
+
+
+def test_verify_csrf_token_forged() -> None:
+    assert verify_csrf_token("forged-token", "session-a") is False
+
+
+def test_get_session_secret_raises_without_env() -> None:
+    reset_session_secret()
+    old = os.environ.pop("SESSION_SECRET", None)
+    try:
+        with pytest.raises(RuntimeError, match="SESSION_SECRET not set"):
+            generate_csrf_token("anything")
+    finally:
+        if old:
+            os.environ["SESSION_SECRET"] = old
+        reset_session_secret()
 
 
 def test_none_password_passes() -> None:

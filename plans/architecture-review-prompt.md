@@ -4,7 +4,7 @@ You are a senior software architect with 20+ years of experience. You have seen 
 
 ## Scope
 
-Focus on `src/` and `tests/`. Config files (pyproject.toml, etc.) are in scope. Album content, generated output, and model weights are not.
+Focus on `src/` and `tests/`. Config files (pyproject.toml, etc.) are in scope. The `frontend/` directory is in scope for architecture (component structure, state management, API contract). Album content, generated output, and model weights are not.
 
 ## Your Task
 
@@ -36,32 +36,50 @@ Read the entire codebase. Then tear it apart across these dimensions:
 - What happens when things go wrong? Does it crash, swallow errors silently, or handle them properly?
 - Are there failure modes that nobody thought about?
 - Is there any retry/recovery logic where it matters?
+- **Degradation paths**: What happens when ACE-Step OOMs, disk fills up mid-write, Anthropic API is down, or the DB is locked? Does the system degrade gracefully or leave orphaned state?
+- **Job lifecycle gaps**: Can jobs get stuck in "pending" forever? What happens to in-memory queue items if the server restarts? Are there any states a job can enter but never leave?
 
 ### 5. Testability
 - Is the code actually testable or do you need to mock the entire universe?
 - Are there untestable god functions?
 - Is there test coverage where it matters (not just easy happy paths)?
 - Is there an integration test for the full pipeline or only isolated unit tests?
+- **Global singletons**: How many `reset_*()` functions exist for testing? Could these block parallel test execution?
 
-### 6. API Contracts & Boundaries
+### 6. Concurrency & State
+- **Thread safety**: The GPU queue runs a background thread while FastAPI handles concurrent requests. Are shared resources protected? Can the worker thread and request threads race on DB state?
+- **TOCTOU in check-then-act**: Rate limit checks, job count checks, setup endpoint — are these atomic or can concurrent requests slip through the gap between "check" and "act"?
+- **Singleton lifecycle**: What happens if a singleton is accessed before initialization or after reset? Are there ordering dependencies between singletons?
+- **SQLite under concurrency**: WAL mode allows concurrent reads, but writes still serialize. Under concurrent write load, what breaks first? Are there long-held transactions that would block other writers?
+
+### 7. API Contracts & Boundaries
 - Are external API contracts (ACE-Step server) documented and validated?
 - What happens with unexpected or malformed API responses?
 - Are CLI argument defaults sensible? Is help text accurate?
 - Do internal module interfaces have clear input/output contracts?
+- **Frontend-backend contract**: Is the `api_models.py` <-> `types.ts` contract enforced by CI or only by convention? What breaks when they diverge?
 
-### 7. Configuration & Hardcoding
+### 8. Operational Readiness
+- **Observability**: Are there metrics (queue depth, job duration, VRAM usage, error rates), or only text logs? Can you build a dashboard or set up alerts, or would you be reading log files?
+- **Deployment**: Can you deploy a new version without losing in-flight jobs? Is there a graceful shutdown path?
+- **Recovery**: After a crash, what state is the system in? Are there orphaned jobs, leaked temp files, or stale locks?
+- **Monitoring the GPU queue**: Can an operator tell if the worker thread is alive, how deep the queue is, or how long the current job has been running?
+- **Backpressure**: If the GPU is slow (mode switching, long generations), does the system communicate this to users or just silently queue?
+
+### 9. Configuration & Hardcoding
 - Are there magic numbers, hardcoded paths, or buried config?
 - Is configuration scattered or centralized?
+- Are environment variable names documented? Do they have sensible defaults?
 
-### 8. Performance
+### 10. Performance
 - Are there unnecessary copies of large arrays or buffers?
 - Could the pipeline stream data instead of loading everything into memory?
-- Are there O(n²) operations hiding in loops?
+- Are there O(n^2) operations hiding in loops?
 
-### 9. Security & Operations
-- Any obvious security holes?
-- Could you deploy, monitor, and debug this in production?
-- Are logs useful or just noise?
+### 11. Trust Boundaries
+- **ACE-Step subprocess**: Runs model inference code as the same OS user. If model weights or ACE-Step code are compromised, what's the blast radius? Does the subprocess inherit more privileges than it needs?
+- **Claude CLI**: Runs as the server's OS user. Even with the tool denylist, what can a future Claude Code version do?
+- **Frontend build artifacts**: Are the SvelteKit build outputs served directly? Could a compromised build inject scripts?
 
 ## Output Format
 
@@ -90,10 +108,12 @@ Rate each dimension 1-10. Be harsh — a 7 means "solid, no major issues", a 9 m
 | Data Flow & Dependencies | /10 | |
 | Error Handling & Resilience | /10 | |
 | Testability | /10 | |
+| Concurrency & State | /10 | |
 | API Contracts & Boundaries | /10 | |
+| Operational Readiness | /10 | |
 | Configuration | /10 | |
 | Performance | /10 | |
-| Security & Operations | /10 | |
+| Trust Boundaries | /10 | |
 | **Overall** | **/10** | |
 
 Compare to the typical quality bar for open-source projects of similar size and scope — where does this codebase land (top 5%, top 25%, median, below average)?

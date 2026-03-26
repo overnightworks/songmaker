@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -44,8 +45,11 @@ def _save_session(server: str, cookies: dict) -> None:
         except (json.JSONDecodeError, OSError):
             pass
     existing[server] = cookies
-    SESSION_FILE.write_text(json.dumps(existing, indent=2), encoding="utf-8")
-    SESSION_FILE.chmod(0o600)
+    fd = os.open(str(SESSION_FILE), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, json.dumps(existing, indent=2).encode("utf-8"))
+    finally:
+        os.close(fd)
 
 
 def _clear_session(server: str) -> None:

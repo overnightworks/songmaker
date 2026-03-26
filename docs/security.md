@@ -8,7 +8,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 - **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB leak does not yield usable cookies. The secret is auto-generated and stored in `<output_dir>/.session_secret` (mode 0600), or provided via `SESSION_SECRET` env var (min 32 chars).
 - **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected; `X-Forwarded-Proto` only honored when the direct peer is in `TRUSTED_PROXIES`)
 - **Session lifetime**: 30-day sliding window, 90-day absolute max
-- **Session fixation**: All old sessions deleted on login and password change
+- **Session fixation**: All old sessions deleted on login, password change, and admin password reset
 - **Logout**: `DELETE /session` invalidates the session in the database (not just the cookie). The session ID is passed via `request.state` from the auth dependency.
 - **Session anomaly detection**: IP and user-agent changes are logged to the audit trail
 - **Brute-force protection**: 5 failed attempts per 5 minutes, per IP + per username. Also applies to password change endpoint.
@@ -30,7 +30,7 @@ Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No
 Four-layer defense:
 
 1. **`SameSite=Strict` cookies**: Prevents cross-site cookie transmission in modern browsers
-2. **Double-submit CSRF token**: Login and setup set a `csrf_token` cookie (non-HttpOnly, `SameSite=Strict`). All mutating `/api/` requests (except login/setup) must include an `X-CSRF-Token` header matching the cookie value. The frontend reads the cookie and attaches the header automatically. This defends against sub-domain attacks and older browsers that don't enforce SameSite.
+2. **Session-bound CSRF token**: Login and setup set a `csrf_token` cookie (non-HttpOnly, `SameSite=Strict`) whose value is `HMAC-SHA256(session_secret, "csrf:" + session_id)`. All mutating `/api/` requests (except login/setup) must include an `X-CSRF-Token` header. The server verifies the token by recomputing the HMAC from the current session — it does not trust the cookie value. This prevents subdomain cookie injection attacks (where a sibling subdomain sets a forged cookie).
 3. **Origin verification**: Mutating requests to `/api/` with an `Origin`/`Referer` header that doesn't match `ALLOWED_HOSTS` (or localhost by default) are rejected (403). Uses a server-side allowlist instead of the request's `Host` header to prevent header-spoofing bypasses.
 4. **Form-submit blocking**: Mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (CLI, fetch).
 
@@ -70,7 +70,7 @@ All responses include:
 - **Methods**: `GET`, `POST`, `PUT`, `DELETE` (no wildcard)
 - **Headers**: `Content-Type`, `Cookie`, `X-CSRF-Token` (no wildcard)
 - **Credentials**: Allowed
-- **Origins**: Configurable via `CORS_ORIGIN`. Defaults to `localhost`/`127.0.0.1` on ports 8080 and 5173 only for dev (not any arbitrary port).
+- **Origins**: Configurable via `CORS_ORIGIN`. Wildcard origins must be `*.domain.tld` format (e.g., `*.trycloudflare.com`) — bare TLDs like `*.com` are rejected at startup. Defaults to `localhost`/`127.0.0.1` on ports 8080 and 5173 only for dev (not any arbitrary port).
 
 ## Error Handling
 
@@ -117,7 +117,7 @@ All mutating operations are logged to the `audit_log` table:
 |---------|-----|
 | HTTPS termination | Reverse proxy (nginx/caddy) with TLS. Set `X-Forwarded-Proto: https` so `Secure` cookie flag and HSTS header activate. |
 | Session secret | Set `SESSION_SECRET` env var (min 32 chars) for stable HMAC signing across restarts. If not set, auto-generated and stored in `<output_dir>/.session_secret`. |
-| CORS origin | Set `CORS_ORIGIN=https://yourdomain.com`. Defaults to `localhost` regex for dev. |
+| CORS origin | Set `CORS_ORIGIN=https://yourdomain.com` or `CORS_ORIGIN=*.yourdomain.com`. Wildcard must include a registrable domain (e.g., `*.trycloudflare.com`). Bare TLDs rejected. |
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1` (comma-separated). Only these IPs are trusted for `X-Forwarded-For`. Uses the rightmost untrusted entry to prevent spoofing. Without this, the client's direct IP is always used for rate limiting. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). |

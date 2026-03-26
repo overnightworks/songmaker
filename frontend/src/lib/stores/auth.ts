@@ -33,8 +33,6 @@ export async function login(username: string, password: string): Promise<AuthUse
 			authError.set('Too many attempts. Try again later.');
 		} else if (msg.includes('401')) {
 			authError.set('Invalid username or password.');
-		} else if (msg.includes('403')) {
-			authError.set('Account disabled.');
 		} else {
 			authError.set(msg);
 		}

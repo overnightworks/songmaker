@@ -203,3 +203,15 @@ def verify_session_cookie(cookie_value: str) -> str | None:
     if hmac.compare_digest(sig, expected):
         return session_id
     return None
+
+
+def generate_csrf_token(session_id: str) -> str:
+    """Generate a CSRF token cryptographically bound to the session."""
+    secret = _get_session_secret()
+    return hmac.new(secret.encode(), f"csrf:{session_id}".encode(), hashlib.sha256).hexdigest()
+
+
+def verify_csrf_token(token: str, session_id: str) -> bool:
+    """Verify a CSRF token is valid for the given session."""
+    expected = generate_csrf_token(session_id)
+    return hmac.compare_digest(token, expected)
