@@ -19,9 +19,12 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+_ALEMBIC_INI_DEFAULT_URL = "sqlite:///_output/songmaker.db"
+
+
 def _resolve_db_url() -> str:
     url = config.get_main_option("sqlalchemy.url")
-    if url and not url.endswith("_output/songmaker.db"):
+    if url and url != _ALEMBIC_INI_DEFAULT_URL:
         return url
     env_url = os.environ.get("SONGMAKER_DB_URL")
     if env_url:

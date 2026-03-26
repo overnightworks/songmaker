@@ -17,6 +17,15 @@ log = logging.getLogger(__name__)
 MIGRATIONS_DIR = str(Path(__file__).parent / "migrations")
 
 
+def _enable_sqlite_pragmas(engine) -> None:
+    @event.listens_for(engine, "connect")
+    def _set_pragmas(dbapi_conn, _connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
 def _run_migrations(db_path: Path) -> None:
     """Run Alembic migrations, stamping existing databases that lack alembic_version."""
     from alembic import command
@@ -53,13 +62,7 @@ def init_db(db_path: Path) -> sessionmaker[Session]:
     _run_migrations(db_path)
 
     engine = create_engine(url, echo=False, connect_args={"timeout": 30})
-
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_conn, _connection_record):
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+    _enable_sqlite_pragmas(engine)
 
     _restrict_permissions(db_path)
 
@@ -72,13 +75,7 @@ def init_test_db(db_path: Path) -> sessionmaker[Session]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     url = f"sqlite:///{db_path}"
     engine = create_engine(url, echo=False, connect_args={"timeout": 30})
-
-    @event.listens_for(engine, "connect")
-    def _set_sqlite_pragma(dbapi_conn, _connection_record):
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+    _enable_sqlite_pragmas(engine)
 
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)
