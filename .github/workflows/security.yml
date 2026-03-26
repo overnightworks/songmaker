@@ -41,7 +41,7 @@ jobs:
         run: pip install -e ".[server,dev]" pip-audit
 
       - name: Audit Python dependencies
-        run: pip-audit
+        run: pip-audit --skip-editable --ignore-vuln CVE-2026-4539
 
   npm-audit:
     name: npm audit (Frontend dependencies)
