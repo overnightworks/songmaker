@@ -164,7 +164,7 @@ class AceStepClient:
             "inference_steps": config.inference_steps,
             "guidance_scale": config.guidance_scale,
             "shift": config.shift,
-            "thinking": config.think_mode,
+            "thinking": config.think_mode not in ("off", "", "false"),
             "lm_temperature": config.lm_temperature,
             "lm_top_k": config.lm_top_k,
             "lm_top_p": config.lm_top_p,
