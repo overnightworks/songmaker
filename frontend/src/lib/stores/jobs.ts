@@ -3,6 +3,7 @@ import { fetchJob, fetchSong, type JobStatus } from '$lib/api/client';
 import { songList } from '$lib/stores/player';
 
 const POLL_INTERVAL = 2000;
+const MAX_POLL_ERRORS = 10;
 
 export interface ActiveJob {
 	job: JobStatus;
@@ -18,9 +19,12 @@ export function trackJob(job: JobStatus, context: { songId?: string; genId?: str
 }
 
 async function pollJob(jobId: string): Promise<void> {
+	let errorCount = 0;
+
 	const poll = async (): Promise<void> => {
 		try {
 			const updated = await fetchJob(jobId);
+			errorCount = 0;
 			activeJobs.update((jobs) =>
 				jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j))
 			);
@@ -37,6 +41,20 @@ async function pollJob(jobId: string): Promise<void> {
 
 			setTimeout(poll, POLL_INTERVAL);
 		} catch {
+			errorCount++;
+			if (errorCount >= MAX_POLL_ERRORS) {
+				activeJobs.update((jobs) =>
+					jobs.map((j) =>
+						j.job.id === jobId
+							? { ...j, job: { ...j.job, status: 'failed', error: 'Lost connection' } }
+							: j
+					)
+				);
+				setTimeout(() => {
+					activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
+				}, 5000);
+				return;
+			}
 			setTimeout(poll, POLL_INTERVAL);
 		}
 	};

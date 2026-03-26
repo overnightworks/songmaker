@@ -134,13 +134,17 @@ def _is_hallucination(lines: tuple[str, ...]) -> bool:
     cleaned = [clean_lyrics(line) for line in lines if clean_lyrics(line)]
     if not cleaned:
         return True
+    from songmaker_cli.constants import (
+        HALLUCINATION_MAX_UNIQUE,
+        HALLUCINATION_MIN_LINES,
+        HALLUCINATION_PHRASE_RATIO,
+    )
+
     unique = set(cleaned)
-    # If >80% of lines are the same phrase, it's hallucination
-    if len(unique) <= 2 and len(cleaned) >= 5:
+    if len(unique) <= HALLUCINATION_MAX_UNIQUE and len(cleaned) >= HALLUCINATION_MIN_LINES:
         return True
-    # If most lines match known hallucination phrases
     hallucinated = sum(1 for c in cleaned if c in _HALLUCINATION_PHRASES)
-    return hallucinated > len(cleaned) * 0.5
+    return hallucinated > len(cleaned) * HALLUCINATION_PHRASE_RATIO
 
 
 

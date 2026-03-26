@@ -116,6 +116,23 @@ describe('jobs store', () => {
 		expect(mockFetchJob).toHaveBeenCalledTimes(2);
 	});
 
+	it('marks job failed after max poll errors', async () => {
+		mockFetchJob.mockRejectedValue(new Error('network'));
+
+		trackJob(makeJob(), {});
+
+		for (let i = 0; i < 10; i++) {
+			await vi.advanceTimersByTimeAsync(2100);
+		}
+
+		const jobs = get(activeJobs);
+		expect(jobs[0].job.status).toBe('failed');
+		expect(jobs[0].job.error).toBe('Lost connection');
+
+		await vi.advanceTimersByTimeAsync(5100);
+		expect(get(activeJobs)).toHaveLength(0);
+	});
+
 	it('refreshes song data on completion with songId', async () => {
 		mockFetchJob.mockResolvedValue(makeJob({ status: 'completed' }));
 		mockFetchSong.mockResolvedValue({ id: 's1', title: 'Updated' });

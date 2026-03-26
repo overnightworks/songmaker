@@ -5,13 +5,18 @@ const mockFetchMe = vi.fn();
 const mockApiLogin = vi.fn();
 const mockApiLogout = vi.fn();
 
-vi.mock('$lib/api/client', () => ({
-	fetchMe: (...args: unknown[]) => mockFetchMe(...args),
-	login: (...args: unknown[]) => mockApiLogin(...args),
-	logout: (...args: unknown[]) => mockApiLogout(...args)
-}));
+vi.mock('$lib/api/client', async () => {
+	const { ApiError } = await vi.importActual<typeof import('$lib/api/client')>('$lib/api/client');
+	return {
+		ApiError,
+		fetchMe: (...args: unknown[]) => mockFetchMe(...args),
+		login: (...args: unknown[]) => mockApiLogin(...args),
+		logout: (...args: unknown[]) => mockApiLogout(...args)
+	};
+});
 
 import { currentUser, authLoading, authError, isAdmin, checkAuth, login, logout } from './auth';
+import { ApiError } from '$lib/api/client';
 
 beforeEach(() => {
 	mockFetchMe.mockReset();
@@ -64,18 +69,24 @@ describe('login', () => {
 	});
 
 	it('sets authError on 401', async () => {
-		mockApiLogin.mockRejectedValueOnce(new Error('API /api/auth/login: 401'));
+		mockApiLogin.mockRejectedValueOnce(new ApiError(401, 'Invalid credentials', '/api/auth/login'));
 		await expect(login('alice', 'wrong')).rejects.toThrow();
 		expect(get(authError)).toBe('Invalid username or password.');
 	});
 
 	it('sets authError on 429', async () => {
-		mockApiLogin.mockRejectedValueOnce(new Error('API /api/auth/login: 429'));
+		mockApiLogin.mockRejectedValueOnce(new ApiError(429, 'Too many requests', '/api/auth/login'));
 		await expect(login('alice', 'x')).rejects.toThrow();
 		expect(get(authError)).toBe('Too many attempts. Try again later.');
 	});
 
-	it('sets generic authError on unknown error', async () => {
+	it('sets detail from ApiError on other status', async () => {
+		mockApiLogin.mockRejectedValueOnce(new ApiError(403, 'Account disabled', '/api/auth/login'));
+		await expect(login('alice', 'x')).rejects.toThrow();
+		expect(get(authError)).toBe('Account disabled');
+	});
+
+	it('sets generic authError on non-API error', async () => {
 		mockApiLogin.mockRejectedValueOnce(new Error('Network failure'));
 		await expect(login('alice', 'x')).rejects.toThrow();
 		expect(get(authError)).toBe('Network failure');

@@ -12,6 +12,19 @@ import type {
 } from './types';
 import { getClaudeKey } from '$lib/stores/settings';
 
+const API_TIMEOUT_MS = 30_000;
+
+export class ApiError extends Error {
+	constructor(
+		public readonly status: number,
+		public readonly detail: string,
+		public readonly path: string
+	) {
+		super(detail || `API ${path}: ${status}`);
+		this.name = 'ApiError';
+	}
+}
+
 function getCsrfToken(): string {
 	const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
 	return match ? decodeURIComponent(match[1]) : '';
@@ -19,7 +32,9 @@ function getCsrfToken(): string {
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 	const method = init?.method?.toUpperCase() ?? 'GET';
-	let opts: RequestInit = { credentials: 'include', ...init };
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+	let opts: RequestInit = { credentials: 'include', signal: controller.signal, ...init };
 	if (method !== 'GET' && method !== 'HEAD') {
 		const token = getCsrfToken();
 		if (token) {
@@ -29,9 +44,22 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 			};
 		}
 	}
-	const resp = await fetch(path, opts);
-	if (!resp.ok) throw new Error(`API ${path}: ${resp.status}`);
-	return resp.json() as Promise<T>;
+	try {
+		const resp = await fetch(path, opts);
+		if (!resp.ok) {
+			let detail = '';
+			try {
+				const body = await resp.json();
+				detail = body.detail ?? '';
+			} catch {
+				// response body not JSON — use empty detail
+			}
+			throw new ApiError(resp.status, detail, path);
+		}
+		return resp.json() as Promise<T>;
+	} finally {
+		clearTimeout(timeout);
+	}
 }
 
 export async function fetchAlbums(): Promise<AlbumItem[]> {

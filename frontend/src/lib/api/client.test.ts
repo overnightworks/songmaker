@@ -38,7 +38,8 @@ import {
 	fetchSessions,
 	forceLogout,
 	fetchLoginAttempts,
-	changePassword
+	changePassword,
+	ApiError
 } from './client';
 
 function mockOk(data: unknown) {
@@ -48,10 +49,11 @@ function mockOk(data: unknown) {
 	});
 }
 
-function mockError(status: number) {
+function mockError(status: number, detail: string = '') {
 	mockFetch.mockResolvedValueOnce({
 		ok: false,
-		status
+		status,
+		json: () => Promise.resolve({ detail })
 	});
 }
 
@@ -64,19 +66,28 @@ describe('API client', () => {
 		mockOk([{ id: 'a1', title: 'Album' }]);
 		const result = await fetchAlbums();
 		expect(result).toHaveLength(1);
-		expect(mockFetch).toHaveBeenCalledWith('/api/albums', { credentials: 'include' });
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/albums',
+			expect.objectContaining({ credentials: 'include' })
+		);
 	});
 
 	it('fetchSongs without album', async () => {
 		mockOk([]);
 		await fetchSongs();
-		expect(mockFetch).toHaveBeenCalledWith('/api/songs', { credentials: 'include' });
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/songs',
+			expect.objectContaining({ credentials: 'include' })
+		);
 	});
 
 	it('fetchSongs with album filter', async () => {
 		mockOk([]);
 		await fetchSongs('a1');
-		expect(mockFetch).toHaveBeenCalledWith('/api/songs?album_id=a1', { credentials: 'include' });
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/songs?album_id=a1',
+			expect.objectContaining({ credentials: 'include' })
+		);
 	});
 
 	it('fetchSong by id', async () => {
@@ -107,7 +118,10 @@ describe('API client', () => {
 	it('fetchVersions calls correct URL', async () => {
 		mockOk([]);
 		await fetchVersions('s1');
-		expect(mockFetch).toHaveBeenCalledWith('/api/songs/s1/versions', { credentials: 'include' });
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/songs/s1/versions',
+			expect.objectContaining({ credentials: 'include' })
+		);
 	});
 
 	it('deleteVersion sends DELETE', async () => {
@@ -183,9 +197,29 @@ describe('API client', () => {
 		expect(mockFetch.mock.calls[0][1].method).toBe('PUT');
 	});
 
-	it('throws on non-ok response', async () => {
-		mockError(500);
-		await expect(fetchAlbums()).rejects.toThrow('API /api/albums: 500');
+	it('throws ApiError on non-ok response', async () => {
+		mockError(500, 'Internal server error');
+		await expect(fetchAlbums()).rejects.toThrow(ApiError);
+	});
+
+	it('ApiError carries status and detail', async () => {
+		mockError(422, 'Validation failed');
+		const err = (await fetchAlbums().catch((e: unknown) => e)) as ApiError;
+		expect(err).toBeInstanceOf(ApiError);
+		expect(err.status).toBe(422);
+		expect(err.detail).toBe('Validation failed');
+	});
+
+	it('ApiError handles non-JSON response body', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 502,
+			json: () => Promise.reject(new Error('not json'))
+		});
+		const err = (await fetchAlbums().catch((e: unknown) => e)) as ApiError;
+		expect(err).toBeInstanceOf(ApiError);
+		expect(err.status).toBe(502);
+		expect(err.detail).toBe('');
 	});
 });
 
@@ -225,14 +259,22 @@ describe('chatWithClaude', () => {
 		vi.mocked(getClaudeKey).mockReturnValue('');
 	});
 
-	it('throws on 503 unavailable from server', async () => {
-		mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
-		await expect(chatWithClaude('hi')).rejects.toThrow('API /api/chat: 503');
+	it('throws ApiError on 503 unavailable from server', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 503,
+			json: () => Promise.resolve({ detail: 'Claude unavailable' })
+		});
+		await expect(chatWithClaude('hi')).rejects.toThrow(ApiError);
 	});
 
-	it('throws on other server errors', async () => {
-		mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
-		await expect(chatWithClaude('hi')).rejects.toThrow('API /api/chat: 500');
+	it('throws ApiError on other server errors', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 500,
+			json: () => Promise.resolve({ detail: 'Internal error' })
+		});
+		await expect(chatWithClaude('hi')).rejects.toThrow(ApiError);
 	});
 
 	it('throws on Anthropic API error with message', async () => {

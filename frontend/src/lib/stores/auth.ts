@@ -1,6 +1,6 @@
 import { writable, derived } from 'svelte/store';
 import type { AuthUser } from '$lib/api/types';
-import { fetchMe, login as apiLogin, logout as apiLogout } from '$lib/api/client';
+import { ApiError, fetchMe, login as apiLogin, logout as apiLogout } from '$lib/api/client';
 
 export const currentUser = writable<AuthUser | null>(null);
 export const authLoading = writable(true);
@@ -28,13 +28,16 @@ export async function login(username: string, password: string): Promise<AuthUse
 		currentUser.set(user);
 		return user;
 	} catch (err) {
-		const msg = err instanceof Error ? err.message : 'Login failed';
-		if (msg.includes('429')) {
-			authError.set('Too many attempts. Try again later.');
-		} else if (msg.includes('401')) {
-			authError.set('Invalid username or password.');
+		if (err instanceof ApiError) {
+			if (err.status === 429) {
+				authError.set('Too many attempts. Try again later.');
+			} else if (err.status === 401) {
+				authError.set('Invalid username or password.');
+			} else {
+				authError.set(err.detail || err.message);
+			}
 		} else {
-			authError.set(msg);
+			authError.set(err instanceof Error ? err.message : 'Login failed');
 		}
 		throw err;
 	}

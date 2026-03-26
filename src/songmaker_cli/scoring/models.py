@@ -18,6 +18,9 @@ SCORE_KEY_BPM_DETECTED = "bpm_detected"
 SCORE_KEY_BPM_DEVIATION = "bpm_deviation"
 SCORE_KEY_SILENCE_GAPS = "silence_gaps"
 SCORE_KEY_SILENCE_LONGEST = "silence_longest"
+SCORE_KEY_SPECTRAL_ARTIFACTS = "spectral_artifacts"
+SCORE_KEY_LYRICAL_COHERENCE = "lyrical_coherence"
+SCORE_KEY_LYRICAL_SUMMARY = "lyrical_summary"
 
 
 @dataclass(frozen=True)
@@ -158,10 +161,10 @@ class SongScores:
             result[SCORE_KEY_SILENCE_LONGEST] = self.silence.longest_gap_seconds
 
         if self.spectral_quality:
-            result["spectral_artifacts"] = self.spectral_quality.artifact_count
+            result[SCORE_KEY_SPECTRAL_ARTIFACTS] = self.spectral_quality.artifact_count
 
         if self.lyrical_coherence:
-            result["lyrical_coherence"] = self.lyrical_coherence.score
-            result["lyrical_summary"] = self.lyrical_coherence.summary
+            result[SCORE_KEY_LYRICAL_COHERENCE] = self.lyrical_coherence.score
+            result[SCORE_KEY_LYRICAL_SUMMARY] = self.lyrical_coherence.summary
 
         return result
