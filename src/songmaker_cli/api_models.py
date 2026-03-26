@@ -474,7 +474,6 @@ class PresetResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(max_length=50_000)
-    style: str = Field("", max_length=500)
     context: str = Field("", max_length=100_000)
 
 

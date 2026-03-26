@@ -17,6 +17,7 @@ from songmaker_cli.db.queries import (
     get_default_preset,
     get_generation,
     get_song,
+    get_version,
     save_scores,
     update_job_status,
 )
@@ -71,7 +72,7 @@ def _load_song_meta(
         if not song:
             raise GenerationSetupError("Song not found")
 
-        version = next((v for v in song.versions if v.id == version_id), None)
+        version = get_version(session, version_id, song_id)
         if not version:
             raise GenerationSetupError("Version not found")
 

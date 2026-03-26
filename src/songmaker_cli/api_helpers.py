@@ -47,6 +47,16 @@ def create_job_with_rate_limit(
 
     Prevents TOCTOU races where two concurrent requests both pass the rate
     limit check before either creates a job.
+
+    The initial commit() closes the implicit transaction opened by the auth
+    dependency (session renewal, IP/UA audit records) so that BEGIN IMMEDIATE
+    can acquire an exclusive write lock.  This means auth-layer mutations are
+    committed even when the rate limit rejects the request — that is correct
+    because session renewal and audit logging must persist regardless.
+
+    Callers must not perform any additional mutations between dependency
+    injection and this function; such mutations would be committed
+    unconditionally by the commit() here.
     """
     session.commit()
     session.execute(text("BEGIN IMMEDIATE"))

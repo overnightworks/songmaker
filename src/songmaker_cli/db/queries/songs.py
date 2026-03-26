@@ -174,6 +174,14 @@ def get_song(session: Session, song_id: str) -> Song | None:
     )
 
 
+def get_version(session: Session, version_id: str, song_id: str) -> Version | None:
+    return (
+        session.query(Version)
+        .filter_by(id=version_id, song_id=song_id)
+        .first()
+    )
+
+
 def create_song(
     session: Session,
     title: str,
@@ -379,10 +387,11 @@ def delete_version(
     if not version:
         raise ValueError(f"Version not found: {version_id}")
 
+    paths_to_delete: list[str] = []
     if delete_generations:
         for gen in version.generations:
             if output_dir and gen.mp3_path:
-                _delete_generation_files(output_dir, gen.mp3_path)
+                paths_to_delete.append(gen.mp3_path)
             session.delete(gen)
     else:
         for gen in version.generations:
@@ -390,6 +399,10 @@ def delete_version(
 
     session.delete(version)
     session.flush()
+
+    for mp3_rel in paths_to_delete:
+        _delete_generation_files(output_dir, mp3_rel)
+
     log.info("Deleted version %s (delete_generations=%s)", version_id, delete_generations)
 
 
@@ -400,11 +413,13 @@ def delete_generation(
     if not gen:
         raise ValueError(f"Generation not found: {generation_id}")
 
-    if output_dir and gen.mp3_path:
-        _delete_generation_files(output_dir, gen.mp3_path)
-
+    mp3_rel = gen.mp3_path
     session.delete(gen)
     session.flush()
+
+    if output_dir and mp3_rel:
+        _delete_generation_files(output_dir, mp3_rel)
+
     log.info("Deleted generation %s", generation_id)
 
 
@@ -435,11 +450,16 @@ def cleanup_album(
         .all()
     )
     count = len(gens)
+    paths_to_delete: list[str] = []
     for gen in gens:
         if output_dir and gen.mp3_path:
-            _delete_generation_files(output_dir, gen.mp3_path)
+            paths_to_delete.append(gen.mp3_path)
         session.delete(gen)
     session.flush()
+
+    for mp3_rel in paths_to_delete:
+        _delete_generation_files(output_dir, mp3_rel)
+
     return count
 
 
@@ -457,13 +477,17 @@ def delete_album(
         .filter(Song.album_id == album_id)
         .all()
     )
+    paths_to_delete: list[str] = []
     for gen in gens:
         if output_dir and gen.mp3_path:
-            _delete_generation_files(output_dir, gen.mp3_path)
+            paths_to_delete.append(gen.mp3_path)
         session.delete(gen)
 
     session.delete(album)
     session.flush()
+
+    for mp3_rel in paths_to_delete:
+        _delete_generation_files(output_dir, mp3_rel)
 
     if output_dir:
         album_dir = (output_dir / album_id).resolve()
