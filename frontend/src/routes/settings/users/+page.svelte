@@ -1,5 +1,4 @@
 <script lang="ts">
-	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { onMount } from 'svelte';
 	import {
 		fetchUsers,
@@ -116,13 +115,7 @@
 	<div class="denied">Admin access required.</div>
 {:else}
 	<div class="settings-page">
-		<header>
-			<h1>Admin</h1>
-			<nav>
-				<a href="/">Back</a>
-				<a href="/settings/account">Account</a>
-			</nav>
-		</header>
+		<h1>Admin</h1>
 
 		<div class="tabs">
 			<button class:active={tab === 'users'} onclick={() => (tab = 'users')}>Users</button>
@@ -336,34 +329,13 @@
 		font-size: 1.1rem;
 	}
 
-	header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 1.5rem;
-	}
-
-	header h1 {
+	h1 {
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
 		color: var(--primary);
 		font-size: 1.5rem;
-	}
-
-	nav {
-		display: flex;
-		gap: 1rem;
-	}
-
-	nav a {
-		color: var(--text-muted);
-		text-decoration: none;
-		font-size: 0.85rem;
-	}
-
-	nav a:hover {
-		color: var(--text);
+		margin-bottom: 1.5rem;
 	}
 
 	.tabs {

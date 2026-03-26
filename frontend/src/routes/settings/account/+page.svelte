@@ -1,5 +1,4 @@
 <script lang="ts">
-	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { changePassword } from '$lib/api/client';
 	import { currentUser } from '$lib/stores/auth';
 
@@ -43,15 +42,7 @@
 </script>
 
 <div class="settings-page">
-	<header>
-		<h1>Account</h1>
-		<nav>
-			<a href="/">Back</a>
-			{#if me?.role === 'admin'}
-				<a href="/settings/users">Admin</a>
-			{/if}
-		</nav>
-	</header>
+	<h1>Account</h1>
 
 	<section>
 		<h2>Change Password</h2>
@@ -119,34 +110,13 @@
 		max-width: 500px;
 	}
 
-	header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 1.5rem;
-	}
-
-	header h1 {
+	h1 {
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
 		color: var(--primary);
 		font-size: 1.5rem;
-	}
-
-	nav {
-		display: flex;
-		gap: 1rem;
-	}
-
-	nav a {
-		color: var(--text-muted);
-		text-decoration: none;
-		font-size: 0.85rem;
-	}
-
-	nav a:hover {
-		color: var(--text);
+		margin-bottom: 1.5rem;
 	}
 
 	h2 {

@@ -5,7 +5,7 @@
 	import { page } from '$app/state';
 	import { checkSetupRequired } from '$lib/api/client';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
-	import { checkAuth, currentUser, authLoading, isAdmin, logout } from '$lib/stores/auth';
+	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { playback } from '$lib/stores/player';
 	import { sidebarOpen, toggleSidebar, closeSidebar } from '$lib/stores/ui';
 
@@ -14,7 +14,6 @@
 	const PUBLIC_ROUTES = ['/login', '/setup'];
 	let isPublicRoute = $derived(PUBLIC_ROUTES.includes(page.url.pathname));
 	const me = $derived($currentUser);
-	const admin = $derived($isAdmin);
 	const hasPlayback = $derived($playback !== null);
 	const sbOpen = $derived($sidebarOpen);
 
@@ -68,10 +67,7 @@
 		</div>
 		<nav class="top-right">
 			<span class="top-username">{me.username}</span>
-			<a href="/settings/account">Account</a>
-			{#if admin}
-				<a href="/settings/users">Admin</a>
-			{/if}
+			<a href="/settings">Settings</a>
 			<button class="top-logout" onclick={handleLogout}>Logout</button>
 		</nav>
 	</header>

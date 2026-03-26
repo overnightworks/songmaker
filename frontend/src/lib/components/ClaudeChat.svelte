@@ -1,4 +1,5 @@
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { claudeApiKey } from '$lib/stores/settings';
 	import { chatWithClaude, updateSong, ApiError } from '$lib/api/client';
 	import { trimChatHistory } from '$lib/utils/chat';
@@ -45,7 +46,6 @@
 	let input = $state('');
 	let loading = $state(false);
 	let error = $state('');
-	let showKeyInput = $state(false);
 	let container: HTMLDivElement | undefined = $state();
 	let inputEl: HTMLTextAreaElement | undefined = $state();
 	const hasKey = $derived(!!$claudeApiKey);
@@ -377,31 +377,12 @@
 			{#if messages.length > 0}
 				<button class="clear-btn" onclick={clearHistory} aria-label="Clear chat">✕</button>
 			{/if}
-			<button
-				class="key-toggle"
-				onclick={() => (showKeyInput = !showKeyInput)}
-				aria-label="API key settings"
-			>
-				{hasKey ? '🔑' : '⚙️'}
-			</button>
 		</div>
 	</div>
 
-	{#if showKeyInput}
-		<div class="key-input">
-			<input
-				type="password"
-				placeholder="Anthropic API key (optional)"
-				value={$claudeApiKey}
-				oninput={(e: Event) => claudeApiKey.set((e.target as HTMLInputElement).value)}
-			/>
-			<span class="key-hint">
-				{#if hasKey}
-					Using your API key
-				{:else}
-					No key — using server CLI
-				{/if}
-			</span>
+	{#if !hasKey}
+		<div class="key-hint">
+			<a href="/settings/integrations">Configure API key in Settings</a>
 		</div>
 	{/if}
 
@@ -561,37 +542,20 @@
 		color: var(--score-bad);
 	}
 
-	.key-toggle {
-		background: none;
-		border: none;
-		font-size: 14px;
-		cursor: pointer;
-	}
-
-	.key-input {
-		padding: 8px 12px;
+	.key-hint {
+		padding: 6px 12px;
 		border-bottom: 1px solid var(--border);
 		flex-shrink: 0;
+		font-size: 10px;
 	}
 
-	.key-input input {
-		width: 100%;
-		padding: 4px 8px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text);
-		font-size: 11px;
-	}
-
-	.key-input input:focus {
-		border-color: var(--primary);
-		outline: none;
-	}
-
-	.key-hint {
-		font-size: 9px;
+	.key-hint a {
 		color: var(--text-dim);
+		text-decoration: none;
+	}
+
+	.key-hint a:hover {
+		color: var(--primary);
 	}
 
 	.mentions-bar {
