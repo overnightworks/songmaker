@@ -61,7 +61,7 @@ def _get_user_id(client: TestClient) -> str:
 
 
 def _mock_arq():
-    return patch("songmaker_cli.arq_pool.get_arq_pool", AsyncMock(return_value=AsyncMock()))
+    return patch("songmaker_cli.arq_pool.get_arq_pool", return_value=AsyncMock())
 
 
 # ── Generation rate limit ───────────────────────────────────────────

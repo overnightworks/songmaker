@@ -30,7 +30,6 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries import (
     UNSET,
-    _delete_generation_files,
     cleanup_album,
     count_recent_failed_attempts,
     count_total_queued_jobs,
@@ -44,6 +43,7 @@ from songmaker_cli.db.queries import (
     delete_album,
     delete_expired_sessions,
     delete_generation,
+    delete_generation_files,
     delete_session,
     delete_version,
     get_album,
@@ -660,7 +660,7 @@ def test_delete_generation_files_path_traversal_blocked(tmp_path: Path) -> None:
     sentinel.parent.mkdir()
     sentinel.write_text("secret")
 
-    _delete_generation_files(output_dir, "../../etc/passwd")
+    delete_generation_files(output_dir, "../../etc/passwd")
 
     assert sentinel.exists()
 

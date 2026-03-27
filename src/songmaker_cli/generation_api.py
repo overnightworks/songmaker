@@ -100,7 +100,7 @@ async def api_generate_song(
 
     try:
         from songmaker_cli.arq_pool import get_arq_pool
-        pool = await get_arq_pool()
+        pool = get_arq_pool()
         await pool.enqueue_job("generate", job.id, song_id, version.id, req.count, user.id)
     except ConnectionError:
         raise HTTPException(503, "Job queue unavailable")
@@ -124,8 +124,7 @@ async def api_score_generation(
 
     try:
         from songmaker_cli.arq_pool import get_arq_pool
-        pool = await get_arq_pool()
-        await pool.enqueue_job("score", job.id, gen_id, req.scorers)
+        await get_arq_pool().enqueue_job("score", job.id, gen_id, req.scorers)
     except ConnectionError:
         raise HTTPException(503, "Job queue unavailable")
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 import songmaker_cli.arq_pool as pool_mod
 
 
@@ -16,25 +18,33 @@ def setup_function():
     pool_mod._pool = None
 
 
-# ── get_arq_pool ───────────────────────────────────────────────────
+# ── init_arq_pool ─────────────────────────────────────────────────
 
 
-def test_get_arq_pool_creates_pool() -> None:
+def test_init_arq_pool_creates_pool() -> None:
     mock_pool = AsyncMock()
     with patch(
         "songmaker_cli.arq_pool.create_pool", new_callable=AsyncMock, return_value=mock_pool,
     ):
-        result = _run(pool_mod.get_arq_pool())
+        result = _run(pool_mod.init_arq_pool())
 
     assert result is mock_pool
     assert pool_mod._pool is mock_pool
 
 
+# ── get_arq_pool ──────────────────────────────────────────────────
+
+
 def test_get_arq_pool_returns_existing() -> None:
     mock_pool = AsyncMock()
     pool_mod._pool = mock_pool
-    result = _run(pool_mod.get_arq_pool())
+    result = pool_mod.get_arq_pool()
     assert result is mock_pool
+
+
+def test_get_arq_pool_raises_when_not_initialized() -> None:
+    with pytest.raises(RuntimeError, match="arq pool not initialized"):
+        pool_mod.get_arq_pool()
 
 
 # ── close_arq_pool ─────────────────────────────────────────────────
@@ -72,6 +82,11 @@ def test_get_queue_depth_error_returns_zero() -> None:
     mock_pool.zcard = AsyncMock(side_effect=ConnectionError)
     pool_mod._pool = mock_pool
 
+    result = _run(pool_mod.get_queue_depth())
+    assert result == 0
+
+
+def test_get_queue_depth_no_pool_returns_zero() -> None:
     result = _run(pool_mod.get_queue_depth())
     assert result == 0
 

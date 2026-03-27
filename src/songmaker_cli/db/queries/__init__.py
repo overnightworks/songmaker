@@ -51,7 +51,6 @@ from songmaker_cli.db.queries.settings import (
 )
 from songmaker_cli.db.queries.songs import (
     UNSET,
-    _delete_generation_files,
     cleanup_album,
     count_albums,
     count_songs,
@@ -60,6 +59,7 @@ from songmaker_cli.db.queries.songs import (
     create_song,
     delete_album,
     delete_generation,
+    delete_generation_files,
     delete_version,
     disable_album_sharing,
     enable_album_sharing,
@@ -98,7 +98,7 @@ __all__ = [
     "save_global_defaults",
     "set_default_preset",
     "update_preset",
-    "_delete_generation_files",
+    "delete_generation_files",
     "cleanup_album",
     "cleanup_old_login_attempts",
     "count_recent_failed_attempts",

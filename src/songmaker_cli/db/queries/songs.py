@@ -401,7 +401,7 @@ def delete_version(
     session.flush()
 
     for mp3_rel in paths_to_delete:
-        _delete_generation_files(output_dir, mp3_rel)
+        delete_generation_files(output_dir, mp3_rel)
 
     log.info("Deleted version %s (delete_generations=%s)", version_id, delete_generations)
 
@@ -418,7 +418,7 @@ def delete_generation(
     session.flush()
 
     if output_dir and mp3_rel:
-        _delete_generation_files(output_dir, mp3_rel)
+        delete_generation_files(output_dir, mp3_rel)
 
     log.info("Deleted generation %s", generation_id)
 
@@ -426,7 +426,7 @@ def delete_generation(
 _GENERATION_FILE_SUFFIXES = [".mp3", ".wav", ".md", ".whisper"]
 
 
-def _delete_generation_files(output_dir: Path, mp3_rel: str) -> None:
+def delete_generation_files(output_dir: Path, mp3_rel: str) -> None:
     mp3 = (output_dir / mp3_rel).resolve()
     if not mp3.is_relative_to(output_dir.resolve()):
         log.warning("Path traversal blocked in delete: %s", mp3_rel)
@@ -458,7 +458,7 @@ def cleanup_album(
     session.flush()
 
     for mp3_rel in paths_to_delete:
-        _delete_generation_files(output_dir, mp3_rel)
+        delete_generation_files(output_dir, mp3_rel)
 
     return count
 
@@ -487,7 +487,7 @@ def delete_album(
     session.flush()
 
     for mp3_rel in paths_to_delete:
-        _delete_generation_files(output_dir, mp3_rel)
+        delete_generation_files(output_dir, mp3_rel)
 
     if output_dir:
         album_dir = (output_dir / album_id).resolve()

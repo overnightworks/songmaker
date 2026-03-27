@@ -233,7 +233,7 @@ def run_generation_job(
             _update_job(db_factory, job_id, "completed", progress=1.0)
         elif completed > 0:
             _update_job(
-                db_factory, job_id, "failed", progress=completed / count,
+                db_factory, job_id, "partial", progress=completed / count,
                 error=f"{completed}/{count} completed, {count - completed} failed: "
                       f"{_sanitize_error(last_error)}",
                 error_type="generation_error",

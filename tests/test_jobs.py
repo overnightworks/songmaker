@@ -177,7 +177,7 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
 
     with seeded_db() as session:
         job = get_job(session, "j1")
-        assert job.status == "failed"
+        assert job.status == "partial"
         assert "1/3 completed" in job.error
         assert "2 failed" in job.error
 

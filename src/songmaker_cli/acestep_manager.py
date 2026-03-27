@@ -38,6 +38,7 @@ class AceStepManager:
     def __init__(self) -> None:
         self._process: subprocess.Popen | None = None
         self._cached_model: str | None = None
+        self._current_mode: str | None = None
 
     def start(self) -> None:
         log.info("Starting ACE-Step server...")
@@ -132,14 +133,22 @@ class AceStepManager:
             pass
         self._cached_model = None
 
+    @property
+    def current_mode(self) -> str | None:
+        return self._current_mode
+
     def prepare_generate_mode(self) -> None:
-        clear_scoring_models()
-        verify_vram_freed()
+        if self._current_mode != "generate":
+            clear_scoring_models()
+            verify_vram_freed()
         self.ensure()
         self.refresh_cached_model()
+        self._current_mode = "generate"
 
     def prepare_score_mode(self) -> None:
-        pass
+        if self._current_mode == "score":
+            return
+        self._current_mode = "score"
 
     def _find_uv(self) -> list[str] | None:
         for candidate in [

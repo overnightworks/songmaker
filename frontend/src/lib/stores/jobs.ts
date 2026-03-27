@@ -37,10 +37,17 @@ async function pollJob(jobId: string): Promise<void> {
 				jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j))
 			);
 
-			if (updated.status === 'completed' || updated.status === 'failed') {
+			if (
+				updated.status === 'completed' ||
+				updated.status === 'partial' ||
+				updated.status === 'failed'
+			) {
 				if (updated.status === 'completed') {
 					await refreshSongData(jobId);
 					addToast(`${updated.type} completed`, 'success');
+				} else if (updated.status === 'partial') {
+					await refreshSongData(jobId);
+					addToast(updated.error || `${updated.type} partially completed`, 'info');
 				} else {
 					addToast(updated.error || `${updated.type} failed`, 'error');
 				}

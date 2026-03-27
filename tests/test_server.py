@@ -514,7 +514,7 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
 
     async def _run():
         with patch(
-            "songmaker_cli.arq_pool.get_arq_pool",
+            "songmaker_cli.arq_pool.init_arq_pool",
             new_callable=AsyncMock,
         ) as mock_get, patch(
             "songmaker_cli.arq_pool.close_arq_pool",
@@ -544,7 +544,7 @@ def test_lifespan_handles_redis_unavailable(tmp_path: Path) -> None:
 
     async def _run():
         with patch(
-            "songmaker_cli.arq_pool.get_arq_pool",
+            "songmaker_cli.arq_pool.init_arq_pool",
             new_callable=AsyncMock,
             side_effect=ConnectionError("no redis"),
         ), patch(

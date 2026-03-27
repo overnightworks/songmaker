@@ -400,6 +400,8 @@ def _auto_setup_admin(ctx: AppContext) -> None:
     if not admin_user or not admin_pass:
         return
 
+    from sqlalchemy.exc import IntegrityError
+
     from songmaker_cli.auth import ROLE_ADMIN, check_password_strength, hash_password
     from songmaker_cli.db.queries import create_user, user_count
 
@@ -411,14 +413,19 @@ def _auto_setup_admin(ctx: AppContext) -> None:
         except ValueError:
             log.error("ADMIN_PASSWORD does not meet strength requirements — skipping auto-setup")
             return
-        create_user(session, admin_user, hash_password(admin_pass), role=ROLE_ADMIN)
-        session.commit()
+        try:
+            create_user(session, admin_user, hash_password(admin_pass), role=ROLE_ADMIN)
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            log.info("Auto-setup: admin user already exists (concurrent startup)")
+            return
         log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    from songmaker_cli.arq_pool import close_arq_pool, get_arq_pool
+    from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
     from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
 
     ctx: AppContext = app.state.ctx
@@ -434,7 +441,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     _auto_setup_admin(ctx)
 
     try:
-        await get_arq_pool()
+        await init_arq_pool()
         log.info("arq pool connected")
     except Exception:
         log.warning("Could not connect to Redis — job submission will fail")

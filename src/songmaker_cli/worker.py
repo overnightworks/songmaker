@@ -22,7 +22,6 @@ log = logging.getLogger(__name__)
 
 _db_factory = None
 _acestep_manager = None
-_current_mode: str | None = None
 
 JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "300"))
 HEALTH_CHECK_INTERVAL_SECONDS = 30
@@ -48,13 +47,10 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id):
         if not job or job.status in TERMINAL_STATUSES:
             return
 
-    global _current_mode
-    if _current_mode != "generate":
-        _acestep_manager.prepare_generate_mode()
-        _current_mode = "generate"
-        model = _acestep_manager.active_model
-        if model:
-            await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model)
+    _acestep_manager.prepare_generate_mode()
+    model = _acestep_manager.active_model
+    if model:
+        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model)
 
     import structlog
     structlog.contextvars.bind_contextvars(job_id=job_id, task="generate")
@@ -73,10 +69,7 @@ async def score(ctx, job_id, gen_id, scorers):
         if not job or job.status in TERMINAL_STATUSES:
             return
 
-    global _current_mode
-    if _current_mode != "score":
-        _acestep_manager.prepare_score_mode()
-        _current_mode = "score"
+    _acestep_manager.prepare_score_mode()
 
     import structlog
     structlog.contextvars.bind_contextvars(job_id=job_id, task="score")

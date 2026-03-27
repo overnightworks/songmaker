@@ -85,7 +85,6 @@ def test_generate_runs_queued_job() -> None:
 
     mock_mgr = MagicMock()
     mock_mgr.active_model = "sft"
-    original_mode = worker_mod._current_mode
 
     ctx = _mock_ctx()
 
@@ -94,7 +93,6 @@ def test_generate_runs_queued_job() -> None:
         patch("songmaker_cli.worker.get_job", return_value=mock_job),
         patch("songmaker_cli.worker.run_generation_job") as mock_run,
         patch.object(worker_mod, "_acestep_manager", mock_mgr),
-        patch.object(worker_mod, "_current_mode", None),
         patch.object(worker_mod, "_output_dir", return_value="out"),
     ):
         _run(worker_mod.generate(ctx, "j1", "s1", "v1", 2, "u1"))
@@ -103,8 +101,7 @@ def test_generate_runs_queued_job() -> None:
     call_kwargs = mock_run.call_args
     assert call_kwargs[0][0] == "j1"
     assert call_kwargs[0][1] == "s1"
-
-    worker_mod._current_mode = original_mode
+    mock_mgr.prepare_generate_mode.assert_called_once()
 
 
 # ── score task ─────────────────────────────────────────────────────
@@ -139,21 +136,18 @@ def test_score_runs_queued_job() -> None:
     mock_job.status = "queued"
 
     mock_mgr = MagicMock()
-    original_mode = worker_mod._current_mode
 
     with (
         patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
         patch("songmaker_cli.worker.get_job", return_value=mock_job),
         patch("songmaker_cli.worker.run_scoring_job") as mock_run,
         patch.object(worker_mod, "_acestep_manager", mock_mgr),
-        patch.object(worker_mod, "_current_mode", None),
         patch.object(worker_mod, "_output_dir", return_value="out"),
     ):
         _run(worker_mod.score(_mock_ctx(), "j1", "g1", ["silence"]))
 
     mock_run.assert_called_once()
-
-    worker_mod._current_mode = original_mode
+    mock_mgr.prepare_score_mode.assert_called_once()
 
 
 # ── cleanup_stale ──────────────────────────────────────────────────
