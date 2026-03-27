@@ -24,7 +24,8 @@ uv sync --extra server --extra scoring --extra whisper --extra dev && source .ve
 cd frontend && pnpm install && pnpm build && cd ..
 
 # 5. Start (runs migrations automatically on first launch)
-songmaker server
+songmaker server                              # terminal 1 — web server
+arq songmaker_cli.worker.WorkerSettings       # terminal 2 — GPU worker
 ```
 
 Configure `DATABASE_URL`, `REDIS_URL`, and optional `ADMIN_USERNAME`/`ADMIN_PASSWORD` in `.server.env`. See [.server.env.example](.server.env.example) for all options.
