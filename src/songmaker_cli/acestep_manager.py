@@ -64,7 +64,7 @@ class AceStepManager:
         cmd = [*uv, "run", "acestep-api", "--port", str(_ACESTEP_PORT)]
         self._process = subprocess.Popen(
             cmd, env=env, cwd=ACESTEP_DIR,
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         log.info("ACE-Step server process started (PID %d)", self._process.pid)
 
