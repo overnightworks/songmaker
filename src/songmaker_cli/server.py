@@ -302,8 +302,11 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
     def _get_limiter(self, ctx: AppContext):  # type: ignore[no-untyped-def]
         if self._limiter is None:
             if ctx.redis:
+                from songmaker_cli.constants import REDIS_RL_IP_PREFIX
                 from songmaker_cli.redis_client import RedisRateLimiter
-                self._limiter = RedisRateLimiter(ctx.redis, "rl:ip", IP_RATE_LIMIT, IP_RATE_WINDOW)
+                self._limiter = RedisRateLimiter(
+                    ctx.redis, REDIS_RL_IP_PREFIX, IP_RATE_LIMIT, IP_RATE_WINDOW,
+                )
             else:
                 from songmaker_cli.middleware import IpRateLimiter
                 self._limiter = IpRateLimiter(IP_RATE_LIMIT, IP_RATE_WINDOW)
@@ -642,9 +645,10 @@ def create_app(
     from songmaker_cli.constants import SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS
 
     if ctx.redis:
+        from songmaker_cli.constants import REDIS_RL_SHARED_PREFIX
         from songmaker_cli.redis_client import RedisRateLimiter
         shared_limiter = RedisRateLimiter(
-            ctx.redis, "rl:shared", SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS,
+            ctx.redis, REDIS_RL_SHARED_PREFIX, SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS,
         )
     else:
         from songmaker_cli.middleware import IpRateLimiter

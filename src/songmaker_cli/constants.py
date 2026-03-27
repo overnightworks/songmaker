@@ -49,6 +49,14 @@ SHARED_RATE_WINDOW_SECONDS = 60
 # Metrics
 METRICS_CACHE_TTL_SECONDS = 5
 
+# Redis key prefixes
+REDIS_KEY_PREFIX = "songmaker"
+REDIS_METRICS_HTTP_KEY = f"{REDIS_KEY_PREFIX}:metrics:http"
+REDIS_METRICS_DURATION_KEY = f"{REDIS_KEY_PREFIX}:metrics:http:duration"
+REDIS_METRICS_TOTAL_KEY = f"{REDIS_KEY_PREFIX}:metrics:http:total"
+REDIS_RL_IP_PREFIX = "rl:ip"
+REDIS_RL_SHARED_PREFIX = "rl:shared"
+
 # Global generation defaults
 GLOBAL_DEFAULTS_PRESET_NAME = "__global_defaults__"
 

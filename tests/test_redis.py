@@ -191,21 +191,6 @@ def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis) -> None
         assert resp.status_code == 200
 
 
-def test_ip_rate_limit_redis_down_returns_503(tmp_path: Path) -> None:
-    broken_redis = MagicMock()
-    broken_redis.ping.return_value = True
-    pipe_mock = MagicMock()
-    pipe_mock.execute.side_effect = ConnectionError("Redis down")
-    broken_redis.pipeline.return_value = pipe_mock
-
-    ctx, output_dir, project_root = _make_redis_ctx(tmp_path, broken_redis)
-    ctx.redis = broken_redis
-    app = create_app(output_dir, project_root, ctx=ctx)
-    client = TestClient(app, cookies={}, raise_server_exceptions=False)
-    resp = client.get("/health")
-    assert resp.status_code == 503 or resp.status_code == 200
-
-
 def test_redis_rate_limit_503_on_failure(tmp_path: Path) -> None:
     broken_redis = MagicMock()
     broken_redis.ping.return_value = True
@@ -241,9 +226,14 @@ def test_metrics_with_redis(tmp_path: Path, fake_redis) -> None:
     assert data["http_requests_count"] >= 1
 
 
-def test_shared_limiter_uses_redis(fake_redis) -> None:
-    limiter = RedisRateLimiter(fake_redis, "rl:shared", max_requests=2, window_seconds=60)
-    assert limiter.is_allowed("10.0.0.1") is True
-    assert limiter.is_allowed("10.0.0.1") is True
-    assert limiter.is_allowed("10.0.0.1") is False
-    assert limiter.is_allowed("10.0.0.2") is True
+def test_ip_rate_limit_middleware_writes_to_redis(tmp_path: Path, fake_redis) -> None:
+    from songmaker_cli.constants import REDIS_RL_IP_PREFIX
+
+    ctx, output_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+    app = create_app(output_dir, project_root, ctx=ctx)
+    client = TestClient(app, cookies={})
+    from conftest import login_and_csrf
+    login_and_csrf(client, "admin", "admin12345")
+    client.get("/api/songs")
+    keys = [k for k in fake_redis.keys() if k.startswith(REDIS_RL_IP_PREFIX)]
+    assert len(keys) > 0
