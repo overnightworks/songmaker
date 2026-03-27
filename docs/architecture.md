@@ -16,8 +16,8 @@
 │   Pydantic request/response models   │
 └───┬──────────┬──────────┬────────────┘
     │          │          │
- SQLite    GPU Queue    External Services
- (all data)  (serial)   (ACE-Step, Claude, Whisper)
+ SQLite/PG   Redis        External Services
+ (all data)  (queue,RL)   (ACE-Step, Claude, Whisper)
 ```
 
 ## Layers

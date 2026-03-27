@@ -127,33 +127,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-class HttpMetrics:
-    """Thread-safe in-memory HTTP request counters for /metrics."""
-
-    def __init__(self) -> None:
-        import threading
-        self._lock = threading.Lock()
-        self._request_counts: dict[tuple[str, int], int] = {}
-        self._total_duration_ms: float = 0.0
-        self._total_requests: int = 0
-
-    def record(self, method: str, status_code: int, duration_ms: float) -> None:
-        key = (method, status_code)
-        with self._lock:
-            self._request_counts[key] = self._request_counts.get(key, 0) + 1
-            self._total_duration_ms += duration_ms
-            self._total_requests += 1
-
-    def snapshot(self) -> dict:
-        with self._lock:
-            return {
-                "http_requests_total": dict(
-                    {f"{m} {s}": c for (m, s), c in sorted(self._request_counts.items())}
-                ),
-                "http_requests_count": self._total_requests,
-                "http_request_duration_total_ms": round(self._total_duration_ms, 1),
-            }
-
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
@@ -301,15 +274,11 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
 
     def _get_limiter(self, ctx: AppContext):  # type: ignore[no-untyped-def]
         if self._limiter is None:
-            if ctx.redis:
-                from songmaker_cli.constants import REDIS_RL_IP_PREFIX
-                from songmaker_cli.redis_client import RedisRateLimiter
-                self._limiter = RedisRateLimiter(
-                    ctx.redis, REDIS_RL_IP_PREFIX, IP_RATE_LIMIT, IP_RATE_WINDOW,
-                )
-            else:
-                from songmaker_cli.middleware import IpRateLimiter
-                self._limiter = IpRateLimiter(IP_RATE_LIMIT, IP_RATE_WINDOW)
+            from songmaker_cli.constants import REDIS_RL_IP_PREFIX
+            from songmaker_cli.redis_client import RedisRateLimiter
+            self._limiter = RedisRateLimiter(
+                ctx.redis, REDIS_RL_IP_PREFIX, IP_RATE_LIMIT, IP_RATE_WINDOW,
+            )
         return self._limiter
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
@@ -322,11 +291,9 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
         try:
             allowed = self._get_limiter(ctx).is_allowed(ip)
         except Exception:
-            if ctx.redis:
-                return JSONResponse(
-                    {"detail": "Rate limiting unavailable"}, status_code=503,
-                )
-            raise
+            return JSONResponse(
+                {"detail": "Rate limiting unavailable"}, status_code=503,
+            )
         if not allowed:
             return JSONResponse(
                 {"detail": "Too many requests"}, status_code=429,
@@ -470,29 +437,24 @@ def create_app(
         secret = ensure_session_secret(output_dir)
         hosts_exact, hosts_patterns = parse_allowed_hosts()
 
-        redis_url = os.environ.get("REDIS_URL")
-        redis_instance = None
-        if redis_url:
-            from songmaker_cli.redis_client import create_redis
-            redis_instance = create_redis(redis_url)
-            log.info("Redis configured: %s", redis_url.split("@")[-1])
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        from songmaker_cli.redis_client import create_redis
+        redis_instance = create_redis(redis_url)
+        log.info("Redis configured: %s", redis_url.split("@")[-1])
 
         ctx = AppContext(
             db=db_factory,
             output_dir=output_dir,
             session_secret=secret.encode(),
+            redis=redis_instance,
             trusted_proxies=parse_trusted_proxies(),
             allowed_hosts_exact=hosts_exact,
             allowed_hosts_patterns=hosts_patterns,
-            redis=redis_instance,
         )
 
     app.state.ctx = ctx
-    if ctx.redis:
-        from songmaker_cli.redis_client import RedisHttpMetrics
-        app.state.http_metrics = RedisHttpMetrics(ctx.redis)
-    else:
-        app.state.http_metrics = HttpMetrics()
+    from songmaker_cli.redis_client import RedisHttpMetrics
+    app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 
     # Middleware execution order (Starlette LIFO — last added runs first):
     #   1. BodySizeLimitMiddleware  — reject oversized bodies before processing
@@ -549,32 +511,12 @@ def create_app(
 
     app.include_router(api_router)
 
-    import threading
-
-    _metrics_cache: dict[str, object] = {}
-    _metrics_cache_time: float = 0.0
-    _metrics_lock = threading.Lock()
-
     @app.get("/metrics")
     async def metrics_endpoint(request: Request) -> JSONResponse:
-        import time
-
-        nonlocal _metrics_cache_time
-
-        ctx: AppContext = request.app.state.ctx
         http_metrics = request.app.state.http_metrics
-        use_cache = not ctx.redis
-
-        if use_cache:
-            from songmaker_cli.constants import METRICS_CACHE_TTL_SECONDS
-            now = time.monotonic()
-            with _metrics_lock:
-                if now - _metrics_cache_time < METRICS_CACHE_TTL_SECONDS and _metrics_cache:
-                    return JSONResponse(_metrics_cache)
-        else:
-            now = time.monotonic()
 
         from songmaker_cli.db.queries import job_counts_by_type_and_status, job_duration_stats
+        ctx: AppContext = request.app.state.ctx
         with ctx.db() as session:
             jobs_by_type = job_counts_by_type_and_status(session)
             duration = job_duration_stats(session)
@@ -584,7 +526,7 @@ def create_app(
         from songmaker_cli.arq_pool import get_queue_depth
         queue_depth = await get_queue_depth()
 
-        result: dict[str, object] = {
+        return JSONResponse({
             "jobs_total": jobs_by_type,
             "jobs_active": sum(
                 counts.get("queued", 0) + counts.get("running", 0)
@@ -594,14 +536,7 @@ def create_app(
             "queue_depth": queue_depth,
             "gpu_vram_mb": gpu_vram_mb,
             **http_metrics.snapshot(),
-        }
-
-        if use_cache:
-            with _metrics_lock:
-                _metrics_cache.clear()
-                _metrics_cache.update(result)
-                _metrics_cache_time = now
-        return JSONResponse(result)
+        })
 
     @app.get("/health")
     async def health_check(request: Request) -> JSONResponse:
@@ -625,27 +560,20 @@ def create_app(
             mgr = AceStepManager()
             acestep = "healthy" if mgr.is_healthy() else "unknown"
 
-        if ctx.redis:
-            from songmaker_cli.redis_client import redis_health
-            redis_ok = redis_health(ctx.redis)
-        else:
-            redis_ok = None
+        from songmaker_cli.redis_client import redis_health
+        redis_ok = redis_health(ctx.redis)
 
-        degraded = not db_ok or not worker_running
-        if redis_ok is False:
-            degraded = True
-        result = {
+        degraded = not db_ok or not worker_running or not redis_ok
+        return JSONResponse({
             "status": "degraded" if degraded else "ok",
             "worker": "running" if worker_running else "stopped",
             "queue_depth": queue_depth,
             "db": "ok" if db_ok else "error",
+            "redis": "ok" if redis_ok else "error",
             "acestep": acestep,
             "acestep_model": acestep_model,
             "uptime_seconds": uptime,
-        }
-        if redis_ok is not None:
-            result["redis"] = "ok" if redis_ok else "error"
-        return JSONResponse(result)
+        })
 
     from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
@@ -673,17 +601,15 @@ def create_app(
         media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
         return FileResponse(audio_path, media_type=media_type)
 
-    from songmaker_cli.constants import SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS
-
-    if ctx.redis:
-        from songmaker_cli.constants import REDIS_RL_SHARED_PREFIX
-        from songmaker_cli.redis_client import RedisRateLimiter
-        shared_limiter = RedisRateLimiter(
-            ctx.redis, REDIS_RL_SHARED_PREFIX, SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS,
-        )
-    else:
-        from songmaker_cli.middleware import IpRateLimiter
-        shared_limiter = IpRateLimiter(SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS)
+    from songmaker_cli.constants import (
+        REDIS_RL_SHARED_PREFIX,
+        SHARED_RATE_LIMIT,
+        SHARED_RATE_WINDOW_SECONDS,
+    )
+    from songmaker_cli.redis_client import RedisRateLimiter
+    shared_limiter = RedisRateLimiter(
+        ctx.redis, REDIS_RL_SHARED_PREFIX, SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS,
+    )
 
     def _check_shared_rate_limit(request: Request) -> None:
         from songmaker_cli.auth import get_client_ip
@@ -697,9 +623,7 @@ def create_app(
         try:
             allowed = shared_limiter.is_allowed(ip)
         except Exception:
-            if ctx.redis:
-                raise HTTPException(503, "Rate limiting unavailable")
-            raise
+            raise HTTPException(503, "Rate limiting unavailable")
         if not allowed:
             raise HTTPException(
                 429, "Too many requests",

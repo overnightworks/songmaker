@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import logging
-import threading
-import time
-from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -103,44 +100,3 @@ def require_admin(user: AuthenticatedUser = Depends(get_current_user)) -> Authen
         raise HTTPException(403, "Admin access required")
     return user
 
-
-# ── IP rate limiter ────────────────────────────────────────────────
-
-
-class IpRateLimiter:
-    """In-memory sliding-window IP rate limiter with bounded memory."""
-
-    _MAX_TRACKED_IPS = 10_000
-    _EVICT_BATCH = 2_000
-
-    def __init__(self, max_requests: int, window_seconds: int) -> None:
-        self._max = max_requests
-        self._window = window_seconds
-        self._requests: dict[str, deque[float]] = {}
-        self._lock = threading.Lock()
-
-    def is_allowed(self, ip: str) -> bool:
-        now = time.time()
-        cutoff = now - self._window
-        with self._lock:
-            if len(self._requests) >= self._MAX_TRACKED_IPS:
-                self._evict(cutoff)
-            q = self._requests.get(ip)
-            if q is None:
-                q = deque()
-                self._requests[ip] = q
-            while q and q[0] < cutoff:
-                q.popleft()
-            if len(q) >= self._max:
-                return False
-            q.append(now)
-            return True
-
-    def _evict(self, cutoff: float) -> None:
-        stale = [ip for ip, q in self._requests.items() if not q or q[-1] < cutoff]
-        for ip in stale[:self._EVICT_BATCH]:
-            del self._requests[ip]
-        if len(self._requests) >= self._MAX_TRACKED_IPS:
-            by_last_use = sorted(self._requests, key=lambda ip: self._requests[ip][-1])
-            for ip in by_last_use[:self._EVICT_BATCH]:
-                del self._requests[ip]

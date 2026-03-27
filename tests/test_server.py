@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from conftest import TEST_SECRET
+from conftest import TEST_SECRET, make_fake_redis
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
@@ -55,6 +55,7 @@ def server_app(tmp_path: Path) -> TestClient:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     app = create_app(output_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
@@ -123,6 +124,7 @@ def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     app = create_app(output_dir, project_root, ctx=ctx)
     client = TestClient(app)
@@ -172,6 +174,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     app = create_app(output_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
@@ -222,6 +225,7 @@ def auth_server_app(tmp_path: Path):
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     app = create_app(output_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
@@ -270,6 +274,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path) -> None:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     app = create_app(output_dir, project_root, ctx=ctx)
     with TestClient(app):
@@ -421,6 +426,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
             session_secret=TEST_SECRET,
             allowed_hosts_exact=exact,
             allowed_hosts_patterns=patterns,
+            redis=make_fake_redis(),
         )
         app = create_app(output_dir, project_root, ctx=ctx)
         client = TestClient(app, cookies={})
@@ -510,6 +516,7 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
         db=factory,
         output_dir=tmp_path,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
 
     async def _run():
@@ -540,6 +547,7 @@ def test_lifespan_handles_redis_unavailable(tmp_path: Path) -> None:
         db=factory,
         output_dir=tmp_path,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
 
     async def _run():
@@ -636,6 +644,7 @@ def test_cors_wildcard_invalid_raises(tmp_path: Path) -> None:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
 
     with patch.dict("os.environ", {"CORS_ORIGIN": "*."}):
@@ -659,6 +668,7 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"CORS_ORIGIN": "https://mysite.example.com"}):
         app = create_app(output_dir, tmp_path, ctx=ctx)
@@ -700,6 +710,7 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
             session_secret=TEST_SECRET,
             allowed_hosts_exact=exact,
             allowed_hosts_patterns=patterns,
+            redis=make_fake_redis(),
         )
         app = create_app(output_dir, tmp_path, ctx=ctx)
         client = TestClient(app, cookies={})
@@ -751,6 +762,7 @@ def test_ip_rate_limit_429(tmp_path: Path) -> None:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     old_limit = srv.IP_RATE_LIMIT
     srv.IP_RATE_LIMIT = 2
@@ -785,6 +797,7 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path) -> None:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     old_limit = srv.IP_RATE_LIMIT
     srv.IP_RATE_LIMIT = 2
@@ -823,6 +836,7 @@ def test_get_audio_album_not_in_db(tmp_path: Path) -> None:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     app = create_app(output_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
@@ -876,6 +890,7 @@ def test_startup_prunes_login_attempts(tmp_path: Path) -> None:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     app = create_app(output_dir, tmp_path, ctx=ctx)
     with TestClient(app):
@@ -953,7 +968,10 @@ def test_health_no_auth_required(tmp_path: Path) -> None:
         session.add(admin)
         session.commit()
 
-    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+    )
     app = create_app(output_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
@@ -990,7 +1008,10 @@ def test_health_with_worker_running(tmp_path: Path) -> None:
         session.add(admin)
         session.commit()
 
-    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+    )
     app = create_app(output_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
@@ -1026,7 +1047,10 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path) -> None:
         session.add(admin)
         session.commit()
 
-    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+    )
     app = create_app(output_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
@@ -1040,30 +1064,6 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path) -> None:
     assert resp.status_code == 200
     assert resp.json()["status"] == "degraded"
 
-
-# ── HttpMetrics ──────────────────────────────────────────────────
-
-
-class TestHttpMetrics:
-    def test_empty_snapshot(self) -> None:
-        from songmaker_cli.server import HttpMetrics
-        m = HttpMetrics()
-        snap = m.snapshot()
-        assert snap["http_requests_count"] == 0
-        assert snap["http_request_duration_total_ms"] == 0.0
-        assert snap["http_requests_total"] == {}
-
-    def test_record_and_snapshot(self) -> None:
-        from songmaker_cli.server import HttpMetrics
-        m = HttpMetrics()
-        m.record("GET", 200, 10.0)
-        m.record("GET", 200, 20.0)
-        m.record("POST", 201, 30.0)
-        snap = m.snapshot()
-        assert snap["http_requests_count"] == 3
-        assert snap["http_request_duration_total_ms"] == 60.0
-        assert snap["http_requests_total"]["GET 200"] == 2
-        assert snap["http_requests_total"]["POST 201"] == 1
 
 
 # ── /metrics endpoint ────────────────────────────────────────────
@@ -1085,7 +1085,10 @@ def _make_metrics_client(tmp_path: Path) -> TestClient:
         session.add(admin)
         session.commit()
 
-    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+    )
     return TestClient(create_app(output_dir, tmp_path, ctx=ctx))
 
 
@@ -1136,7 +1139,10 @@ def test_metrics_with_jobs(tmp_path: Path) -> None:
         session.add(job)
         session.commit()
 
-    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+    )
     app = create_app(output_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
@@ -1157,7 +1163,7 @@ def test_auto_setup_admin_creates_user(tmp_path: Path) -> None:
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
-        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET,
+        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
         _auto_setup_admin(ctx)
@@ -1179,7 +1185,7 @@ def test_auto_setup_admin_skips_when_users_exist(tmp_path: Path) -> None:
         session.commit()
 
     ctx = AppContext(
-        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET,
+        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
         _auto_setup_admin(ctx)
@@ -1193,7 +1199,7 @@ def test_auto_setup_admin_skips_without_env_vars(tmp_path: Path) -> None:
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
-        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET,
+        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {}, clear=True):
         _auto_setup_admin(ctx)
@@ -1205,7 +1211,7 @@ def test_auto_setup_admin_rejects_weak_password(tmp_path: Path) -> None:
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
-        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET,
+        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "aaa"}):
         _auto_setup_admin(ctx)

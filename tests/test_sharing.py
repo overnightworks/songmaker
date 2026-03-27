@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, login_and_csrf
+from conftest import TEST_SECRET, login_and_csrf, make_fake_redis
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
@@ -50,6 +50,7 @@ def _make_sharing_app(tmp_path: Path) -> tuple[TestClient, Path]:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     from songmaker_cli.server import create_app
     app = create_app(output_dir, project_root, ctx=ctx)
@@ -180,7 +181,10 @@ def test_shared_album_song_without_picked_generation(tmp_path: Path) -> None:
         session.add(gen)
         session.commit()
 
-    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+    )
     from songmaker_cli.server import create_app
     app = create_app(output_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
@@ -231,6 +235,7 @@ def test_shared_rate_limit(tmp_path: Path) -> None:
             db=client.app.state.ctx.db,
             output_dir=output_dir,
             session_secret=TEST_SECRET,
+            redis=make_fake_redis(),
         )
         app = create_app(output_dir, tmp_path, ctx=ctx)
         unauthed = TestClient(app, cookies={})
@@ -272,6 +277,7 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
         db=factory,
         output_dir=output_dir,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     from songmaker_cli.server import create_app
     app = create_app(output_dir, project_root, ctx=ctx)

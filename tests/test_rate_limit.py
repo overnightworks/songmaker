@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from conftest import make_fake_redis
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
@@ -39,7 +40,10 @@ def client(tmp_path: Path) -> TestClient:
         ))
         session.commit()
 
-    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=b"a" * 64)
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=factory, output_dir=output_dir, session_secret=b"a" * 64, redis=redis,
+    )
     app = create_app(output_dir, project_root, ctx=ctx)
     yield TestClient(app, cookies={})
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET
+from conftest import TEST_SECRET, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -38,6 +38,7 @@ def client(tmp_path: Path) -> TestClient:
         db=factory,
         output_dir=tmp_path,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
     app = FastAPI()
@@ -59,6 +60,7 @@ def unauthed_client(tmp_path: Path) -> TestClient:
         db=factory,
         output_dir=tmp_path,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
     app = FastAPI()
@@ -84,6 +86,7 @@ def _make_authed_client(
         db=factory,
         output_dir=tmp_path,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
     from songmaker_cli.api import router
 
@@ -1125,6 +1128,7 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
         db=factory,
         output_dir=tmp_path,
         session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
     )
 
     app = FastAPI()

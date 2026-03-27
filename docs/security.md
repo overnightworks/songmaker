@@ -128,7 +128,7 @@ All mutating operations are logged to the `audit_log` table:
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1` (comma-separated). Only these IPs are trusted for `X-Forwarded-For`. Uses the rightmost untrusted entry to prevent spoofing. Without this, the client's direct IP is always used for rate limiting. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). |
-| Workers | `UVICORN_WORKERS` must be 1. SQLite and the in-memory GPU queue require a single worker process. |
+| Workers | `UVICORN_WORKERS` > 1 requires PostgreSQL (`DATABASE_URL`). SQLite is single-process only. |
 | Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). Also set in reverse proxy for defense-in-depth. |
 | IP rate limit | `IP_RATE_LIMIT` (default 120/min). Adjust based on expected traffic. |
 | Request timeout | `REQUEST_TIMEOUT` (default 30s). Increase if generation/scoring endpoints are called synchronously. |
@@ -178,14 +178,14 @@ The application-layer security (auth, CSRF, IDOR, injection, error sanitization)
 ### 1. Replace SQLite with PostgreSQL
 **Priority: High** — SQLite uses file-level locking. Under concurrent write load from multiple users, requests will fail with "database is locked" errors. PostgreSQL handles concurrent access natively and is required for any serious multi-user deployment.
 
-### 2. Persistent rate limiting (Redis)
-**Priority: High** — The in-memory `IpRateLimiter` resets on every server restart (crash, deploy, OOM kill). An attacker who notices a restart gets a fresh quota. A Redis-backed sliding window would survive restarts and could be shared across multiple server processes.
+### ~~2. Persistent rate limiting (Redis)~~ (Done)
+Redis-backed sliding-window rate limiting is now the only implementation. Rate limit state survives restarts and is shared across workers.
 
 ### ~~3. Account lockout / progressive delays~~ (Done)
 Implemented: 15 failed attempts per username within 1 hour triggers account lockout (429). Configurable via `LOGIN_LOCKOUT_THRESHOLD` and `LOGIN_LOCKOUT_WINDOW`.
 
 ### 4. Multi-worker architecture
-**Priority: Medium** — Currently single-worker only (SQLite + in-memory GPU queue). Would require PostgreSQL and an external job queue (Redis/Celery) to support multiple workers.
+**Priority: Medium** — Requires PostgreSQL (`DATABASE_URL`). Redis and arq worker are already in place. SQLite remains single-worker only.
 
 ### 5. Content Security Policy — remove `'unsafe-inline'` from `style-src`
 **Priority: Low** — CSP now enforces `script-src 'self'` and `default-src 'none'`. The `style-src 'unsafe-inline'` directive is needed for SvelteKit dev mode but could be tightened in production. Consider nonce-based inline styles if a stricter policy is desired.

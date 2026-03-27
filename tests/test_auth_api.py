@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from conftest import make_fake_redis
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
@@ -30,7 +31,10 @@ def client(tmp_path: Path) -> TestClient:
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
     factory = init_db(output_dir / "songmaker.db")
-    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=_TEST_SECRET)
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=factory, output_dir=output_dir, session_secret=_TEST_SECRET, redis=redis,
+    )
     app = create_app(output_dir, project_root, ctx=ctx)
     yield TestClient(app, cookies={})
 
@@ -332,5 +336,8 @@ def test_setup_integrity_error_returns_403(client: TestClient) -> None:
 def test_detect_secure_none_request() -> None:
     from songmaker_cli.auth_api import _detect_secure
 
-    ctx = AppContext(db=MagicMock(), output_dir=Path("/tmp"), session_secret=b"x" * 32)
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=MagicMock(), output_dir=Path("/tmp"), session_secret=b"x" * 32, redis=redis,
+    )
     assert _detect_secure(None, ctx) is False

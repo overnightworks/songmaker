@@ -169,20 +169,6 @@ def test_health_reports_redis_error(tmp_path: Path, fake_redis) -> None:
     assert data["status"] == "degraded"
 
 
-def test_health_no_redis_field_when_unconfigured(tmp_path: Path) -> None:
-    output_dir, project_root = _make_server_project(tmp_path)
-    factory = init_db(output_dir / "songmaker.db")
-    with factory() as session:
-        session.add(User(
-            username="admin", password_hash=hash_password("admin12345"), role="admin",
-        ))
-        session.commit()
-    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
-    app = create_app(output_dir, project_root, ctx=ctx)
-    with TestClient(app) as client:
-        resp = client.get("/health")
-    assert "redis" not in resp.json()
-
 
 def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis) -> None:
     ctx, output_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)

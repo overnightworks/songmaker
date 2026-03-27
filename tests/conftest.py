@@ -9,10 +9,22 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import fakeredis
 import numpy as np
 import pytest
 
 TEST_SECRET = b"a" * 64
+
+
+@pytest.fixture
+def fake_redis():
+    """Provide a fresh fakeredis instance for tests that need Redis."""
+    return fakeredis.FakeRedis(decode_responses=True)
+
+
+def make_fake_redis():
+    """Non-fixture factory for test helpers that build AppContext directly."""
+    return fakeredis.FakeRedis(decode_responses=True)
 
 
 def apply_csrf_header(client) -> None:

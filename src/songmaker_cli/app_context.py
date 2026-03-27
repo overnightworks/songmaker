@@ -19,10 +19,10 @@ class AppContext:
     db: sessionmaker[Session]
     output_dir: Path
     session_secret: bytes
+    redis: Redis
     trusted_proxies: frozenset[str] = field(default_factory=frozenset)
     allowed_hosts_exact: frozenset[str] = field(default_factory=frozenset)
     allowed_hosts_patterns: list[re.Pattern[str]] = field(default_factory=list)
-    redis: Redis | None = None
 
 
 def get_app_context(request: Request) -> AppContext:
