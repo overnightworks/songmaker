@@ -1,47 +1,27 @@
-"""Pydantic models for API requests and responses.
-
-These define the exact contract between backend and frontend.
-FastAPI auto-generates OpenAPI docs from these models.
-"""
+"""Song, album, version, and generation API models."""
 
 from __future__ import annotations
 
-import hashlib
-from typing import TYPE_CHECKING, Generic, Literal, TypeVar
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
-from songmaker_cli.auth import check_password_strength
 from songmaker_cli.config import get_builtin_defaults
 
-T = TypeVar("T")
-
 if TYPE_CHECKING:
-    from songmaker_cli.db.models import (
-        Album,
-        AuditLog,
-        Generation,
-        GenerationPreset,
-        Job,
-        LoginAttempt,
-        Song,
-        User,
-        UserSession,
-        Version,
-    )
+    from songmaker_cli.db.models import Generation, Song, Version
 
 
-# ── Pagination ─────────────────────────────────────────────────────
+_GEN_PARAM_MAX_STRING_LENGTH = 2000
 
+_VALID_INFER_METHODS = frozenset({"ode", "sde"})
+_VALID_THINK_MODES = frozenset({"deep", "off", ""})
+_VALID_MODEL_MODES = frozenset(get_builtin_defaults().keys())
 
-class PaginatedResponse(BaseModel, Generic[T]):
-    items: list[T]
-    total: int
-    offset: int
-    limit: int
-
-
-# ── Album ───────────────────────────────────────────────────────────
+VALID_SCORER_NAMES = frozenset({
+    "text_accuracy", "lyrical_coherence", "emotional_dynamics",
+    "audiobox", "bpm_accuracy", "silence", "spectral_quality",
+})
 
 
 class AlbumResponse(BaseModel):
@@ -56,7 +36,7 @@ class AlbumResponse(BaseModel):
     share_slug: str | None = None
 
     @classmethod
-    def from_orm(cls, album: Album) -> AlbumResponse:
+    def from_orm(cls, album) -> AlbumResponse:
         return cls(
             id=album.id,
             title=album.title,
@@ -90,12 +70,7 @@ class SharedAlbumResponse(BaseModel):
     songs: list[SharedSongItem]
 
 
-# ── Generation ──────────────────────────────────────────────────────
-
-
 class StoredGenerationParams(BaseModel):
-    """Shape of the generation_params JSON stored on each Generation record."""
-
     seed: int | None = None
     acestep_model: str | None = None
     bpm: int | None = None
@@ -161,9 +136,6 @@ class GenerationResponse(BaseModel):
         )
 
 
-# ── Version ─────────────────────────────────────────────────────────
-
-
 class VersionResponse(BaseModel):
     id: str
     version_number: int
@@ -190,12 +162,7 @@ class VersionResponse(BaseModel):
         )
 
 
-# ── Song ────────────────────────────────────────────────────────────
-
-
 class SongSummaryResponse(BaseModel):
-    """Lightweight song for list endpoints — no generations."""
-
     id: str
     title: str
     album_id: str
@@ -239,8 +206,6 @@ class SongSummaryResponse(BaseModel):
 
 
 class SongResponse(SongSummaryResponse):
-    """Full song with generations — used by detail endpoints."""
-
     generations: list[GenerationResponse] = Field(default_factory=list)
 
     @classmethod
@@ -272,46 +237,8 @@ def _best_generation(generations: list) -> object | None:
     return active[0] if active else None
 
 
-# ── Job ─────────────────────────────────────────────────────────────
-
-
-class JobResponse(BaseModel):
-    id: str
-    type: str
-    status: str
-    progress: float = 0.0
-    error: str | None = None
-    error_type: str | None = None
-    started_at: str | None = None
-    completed_at: str | None = None
-
-    @classmethod
-    def from_orm(cls, job: Job) -> JobResponse:
-        return cls(
-            id=job.id,
-            type=job.type,
-            status=job.status,
-            progress=job.progress,
-            error=job.error,
-            error_type=job.error_type,
-            started_at=job.started_at.isoformat() if job.started_at else None,
-            completed_at=job.completed_at.isoformat() if job.completed_at else None,
-        )
-
-
-# ── Requests ────────────────────────────────────────────────────────
-
-
-_GEN_PARAM_MAX_STRING_LENGTH = 2000
-
-_VALID_INFER_METHODS = frozenset({"ode", "sde"})
-_VALID_THINK_MODES = frozenset({"deep", "off", ""})
-
-
 class GenerationParams(BaseModel):
-    """Typed ACE-Step generation parameters — replaces untyped dict."""
-
-    model_config = ConfigDict(extra="forbid")
+    model_config = {"extra": "forbid"}
 
     inference_steps: int | None = Field(None, ge=1, le=200)
     guidance_scale: float | None = Field(None, ge=0, le=50)
@@ -375,9 +302,6 @@ class SongMoveRequest(BaseModel):
     album_id: str = Field(max_length=64)
 
 
-_VALID_MODEL_MODES = frozenset(get_builtin_defaults().keys())
-
-
 class GenerateRequest(BaseModel):
     count: int = Field(1, ge=1, le=10)
     model: str | None = None
@@ -389,12 +313,6 @@ class GenerateRequest(BaseModel):
             msg = f"model must be one of {sorted(_VALID_MODEL_MODES)}"
             raise ValueError(msg)
         return v
-
-
-VALID_SCORER_NAMES = frozenset({
-    "text_accuracy", "lyrical_coherence", "emotional_dynamics",
-    "audiobox", "bpm_accuracy", "silence", "spectral_quality",
-})
 
 
 class ScoreRequest(BaseModel):
@@ -414,223 +332,3 @@ class ScoreRequest(BaseModel):
 class RateRequest(BaseModel):
     rating: float = Field(ge=0, le=100)
     notes: str = Field("", max_length=2_000)
-
-
-class GenerationDefaultsRequest(RootModel[dict[str, GenerationParams]]):
-
-    @model_validator(mode="before")
-    @classmethod
-    def _validate_keys(cls, values: object) -> object:
-        if isinstance(values, dict):
-            invalid = set(values.keys()) - _VALID_MODEL_MODES
-            if invalid:
-                msg = f"Unknown model modes: {sorted(invalid)}. Valid: {sorted(_VALID_MODEL_MODES)}"
-                raise ValueError(msg)
-        return values
-
-
-class PresetCreateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    model_mode: str = Field(max_length=10)
-    params: GenerationParams
-    is_default: bool = False
-
-    @field_validator("model_mode")
-    @classmethod
-    def _validate_model_mode(cls, v: str) -> str:
-        if v not in _VALID_MODEL_MODES:
-            msg = f"model_mode must be one of {sorted(_VALID_MODEL_MODES)}"
-            raise ValueError(msg)
-        return v
-
-
-class PresetUpdateRequest(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=100)
-    params: GenerationParams | None = None
-    is_default: bool | None = None
-
-
-class PresetResponse(BaseModel):
-    id: str
-    name: str
-    model_mode: str
-    params: dict
-    is_default: bool
-    created_at: str
-    updated_at: str
-
-    @classmethod
-    def from_orm(cls, preset: GenerationPreset) -> PresetResponse:
-        return cls(
-            id=preset.id,
-            name=preset.name,
-            model_mode=preset.model_mode,
-            params=preset.params or {},
-            is_default=preset.is_default,
-            created_at=preset.created_at.isoformat() if preset.created_at else "",
-            updated_at=preset.updated_at.isoformat() if preset.updated_at else "",
-        )
-
-
-class ChatRequest(BaseModel):
-    message: str = Field(max_length=50_000)
-    context: str = Field("", max_length=100_000)
-
-
-# ── Simple responses ────────────────────────────────────────────────
-
-
-class StatusResponse(BaseModel):
-    status: str = "ok"
-
-
-class RateResponse(BaseModel):
-    status: str = "ok"
-    generation_id: str | None = None
-    generation: str | None = None
-    rating: float
-
-
-class CleanupResponse(BaseModel):
-    status: str = "ok"
-    deleted: int
-
-
-class CapabilitiesResponse(BaseModel):
-    claude_api: bool
-    claude_cli: bool
-    generation: bool
-    scoring: bool
-    chat_model: str
-
-
-class ChatResponse(BaseModel):
-    response: str
-
-
-# ── Auth ───────────────────────────────────────────────────────────
-
-
-class LoginRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=100)
-    password: str = Field(min_length=8, max_length=128)
-
-
-class SetupRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=100)
-    password: str = Field(min_length=8, max_length=128)
-
-    _check_strength = field_validator("password")(check_password_strength)
-
-
-class ChangePasswordRequest(BaseModel):
-    current: str = Field(min_length=1, max_length=128)
-    new: str = Field(min_length=8, max_length=128, alias="new_password")
-
-    _check_strength = field_validator("new")(check_password_strength)
-
-
-class CreateUserRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=100)
-    password: str = Field(min_length=8, max_length=128)
-    role: Literal["admin", "user"] = "user"
-
-    _check_strength = field_validator("password")(check_password_strength)
-
-
-class UpdateUserRequest(BaseModel):
-    role: Literal["admin", "user"] | None = None
-    is_active: bool | None = None
-    password: str | None = Field(None, min_length=8, max_length=128)
-
-    _check_strength = field_validator("password")(check_password_strength)
-
-
-class UserResponse(BaseModel):
-    id: str
-    username: str
-    role: str
-    is_active: bool
-    created_at: str | None = None
-
-    @classmethod
-    def from_orm(cls, user: User) -> UserResponse:
-        return cls(
-            id=user.id,
-            username=user.username,
-            role=user.role,
-            is_active=user.is_active,
-            created_at=user.created_at.isoformat() if user.created_at else None,
-        )
-
-
-class AuthMeResponse(BaseModel):
-    id: str
-    username: str
-    role: Literal["admin", "user"]
-
-
-class SetupRequiredResponse(BaseModel):
-    required: bool
-
-
-class SessionResponse(BaseModel):
-    id: str
-    user_id: str
-    username: str
-    created_at: str | None = None
-    expires_at: str | None = None
-    ip_address: str = ""
-    user_agent: str = ""
-
-    @classmethod
-    def from_orm(cls, sess: UserSession) -> SessionResponse:
-        return cls(
-            id=hashlib.sha256(sess.id.encode()).hexdigest(),
-            user_id=sess.user_id,
-            username=sess.user.username,
-            created_at=sess.created_at.isoformat() if sess.created_at else None,
-            expires_at=sess.expires_at.isoformat() if sess.expires_at else None,
-            ip_address=sess.ip_address,
-            user_agent=sess.user_agent,
-        )
-
-
-class LoginAttemptResponse(BaseModel):
-    id: str
-    ip_address: str
-    username: str
-    success: bool
-    attempted_at: str | None = None
-
-    @classmethod
-    def from_orm(cls, attempt: LoginAttempt) -> LoginAttemptResponse:
-        return cls(
-            id=attempt.id,
-            ip_address=attempt.ip_address,
-            username=attempt.username,
-            success=attempt.success,
-            attempted_at=attempt.attempted_at.isoformat() if attempt.attempted_at else None,
-        )
-
-
-class AuditLogResponse(BaseModel):
-    id: str
-    user_id: str | None
-    action: str
-    resource_type: str
-    resource_id: str
-    detail: str
-    created_at: str | None = None
-
-    @classmethod
-    def from_orm(cls, entry: AuditLog) -> AuditLogResponse:
-        return cls(
-            id=entry.id,
-            user_id=entry.user_id,
-            action=entry.action,
-            resource_type=entry.resource_type,
-            resource_id=entry.resource_id,
-            detail=entry.detail,
-            created_at=entry.created_at.isoformat() if entry.created_at else None,
-        )
