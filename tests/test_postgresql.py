@@ -182,7 +182,9 @@ def test_alembic_migrations_on_postgresql() -> None:
 
     engine = create_engine(TEST_PG_URL)
     Base.metadata.drop_all(engine)
-    engine.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    with engine.connect() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+        conn.commit()
     engine.dispose()
 
     cfg = Config("alembic.ini")

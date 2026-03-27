@@ -148,7 +148,10 @@ def migrate(sqlite_url: str, pg_url: str) -> None:
 def main() -> None:
     if len(sys.argv) != 3:
         print(f"Usage: {sys.argv[0]} <sqlite_url> <postgresql_url>")
-        print(f"Example: {sys.argv[0]} sqlite:///data/songmaker.db postgresql://user:pass@localhost/songmaker")
+        print(
+            f"Example: {sys.argv[0]} sqlite:///data/songmaker.db"
+            " postgresql://user:pass@localhost/songmaker",
+        )
         sys.exit(1)
 
     sqlite_url = sys.argv[1]
