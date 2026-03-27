@@ -7,8 +7,8 @@
 ```
 Phase 0: Feature Flags         (prerequisite — wires env var detection into engine/server)
 Phase 1: Redis + PostgreSQL    (parallel — no dependencies on each other)
-Phase 2: Celery                (depends on: Redis)
-Phase 3: Object Storage        (optional, only for multi-machine — depends on Celery)
+Phase 2: arq                   (depends on: Redis)
+Phase 3: Object Storage        (optional, only for multi-machine — depends on arq)
          Sessions/Auth         (optional, deferred — depends on Redis + PostgreSQL)
 ```
 
@@ -33,7 +33,7 @@ Before any migration can start, the codebase needs env-var-based backend selecti
 - If unset: use current in-memory classes unchanged
 - Remove `UVICORN_WORKERS > 1` guard (line 742-747) when both Redis AND non-SQLite DB are configured
 
-**`server.py` — Celery detection** (new):
+**`server.py` — arq/Celery detection** (new):
 - Read `USE_CELERY` env var
 - If set: skip `GpuQueue` creation (line 414) and startup (line 425)
 - If unset: current behavior
@@ -64,14 +64,14 @@ Every migration plan references feature flags (`REDIS_URL`, `DATABASE_URL`, `USE
 | 0 | Phase 0 (above) | Feature flag infrastructure | Small | No — must be first |
 | 1 | [migration-redis.md](migration-redis.md) | In-memory state lost on restart, blocks multi-process | Medium | Yes (parallel with #2) |
 | 2 | [migration-postgresql.md](migration-postgresql.md) | Write serialization, SQLite-specific hacks | Medium | Yes (parallel with #1) |
-| 3 | [migration-celery.md](migration-celery.md) | Zombie threads, job durability, multi-GPU | Large | No — sequential after #1 |
+| 3 | [migration-arq.md](migration-arq.md) | Zombie threads, job durability, multi-GPU | Medium | No — sequential after #1 |
 | 4 | [migration-object-storage.md](migration-object-storage.md) | File sharing across machines | Small (deferred) | Yes (independent) |
 | 5 | [migration-sessions-auth.md](migration-sessions-auth.md) | Per-request DB writes, OAuth/MFA | Medium (deferred) | Yes (independent) |
 
 ## What Each Migration Unblocks
 
-| Capability | Phase 0 | Redis | PostgreSQL | Celery | Obj Storage | Auth |
-|------------|---------|-------|------------|--------|-------------|------|
+| Capability | Phase 0 | Redis | PostgreSQL | arq | Obj Storage | Auth |
+|------------|---------|-------|------------|-----|-------------|------|
 | Multiple uvicorn workers | x | x | | | | |
 | Concurrent DB writes | x | | x | | | |
 | Durable job queue | | x | | x | | |
@@ -87,16 +87,16 @@ Every migration plan references feature flags (`REDIS_URL`, `DATABASE_URL`, `USE
 Human:   Implements Phase 0 (small, touches plumbing everywhere)
 Agent A: Redis migration        ← starts after Phase 0 merges
 Agent B: PostgreSQL migration   ← starts after Phase 0 merges (parallel with A)
-Human:   Celery migration       ← after Redis, too complex for unsupervised agent
-Agent C: Object Storage         ← after Celery (deferred, clean interface)
-Agent D: Sessions/Auth          ← after Redis + PostgreSQL (deferred)
+Agent C: arq migration          ← after Redis (agent-safe — simpler than Celery)
+Agent D: Object Storage         ← after arq (deferred, clean interface)
+Agent E: Sessions/Auth          ← after Redis + PostgreSQL (deferred)
 ```
 
-Celery is human-driven because ACE-Step subprocess lifecycle, VRAM management, and job idempotency require judgment calls that agents will get wrong without supervision.
+arq is simple enough for an agent — `max_jobs=1`, two task functions, startup/shutdown hooks. The ACE-Step extraction is mechanical (copy methods from `gpu_queue.py` into a standalone class).
 
 ## Docker Compose Target
 
-After Phase 0 through Celery, the deployment looks like:
+After Phase 0 through arq, the deployment looks like:
 
 ```yaml
 services:
@@ -119,20 +119,18 @@ services:
       USE_CELERY: "1"
   worker:
     build: .
-    command: celery -A songmaker_cli.celery_app worker --concurrency=1
+    command: arq songmaker_cli.worker.WorkerSettings
     environment:
       DATABASE_URL: postgresql://songmaker:password@postgres:5432/songmaker
       REDIS_URL: redis://redis:6379/0
+      ACESTEP_DEVICE: cuda:0
     deploy:
       resources:
         reservations:
           devices: [{capabilities: [gpu]}]
-  beat:
-    build: .
-    command: celery -A songmaker_cli.celery_app beat
-    environment:
-      REDIS_URL: redis://redis:6379/0
 ```
+
+No Beat process needed — arq has built-in cron.
 
 ## Backwards Compatibility
 
