@@ -8,6 +8,8 @@ AI-powered song generation platform. SvelteKit web UI + FastAPI backend + SQLite
 
 Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [security](docs/security.md) | [ACE-Step](docs/acestep.md)
 
+**Parallel agents**: If you're implementing a plan alongside other agents, read [plans/COORDINATION.md](plans/COORDINATION.md) before editing any files. It tracks file ownership to prevent merge conflicts.
+
 ## Setup & Run
 
 ```bash
