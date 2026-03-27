@@ -13,16 +13,17 @@ Requires: Python 3.12, Node 22, pnpm, ffmpeg, PostgreSQL, Redis.
 sudo apt install postgresql redis-server ffmpeg
 sudo systemctl enable --now postgresql redis-server
 
-# 2. Backend
+# 2. PostgreSQL database (one-time)
+sudo -u postgres psql -c "CREATE USER songmaker WITH PASSWORD 'songmaker';"
+sudo -u postgres psql -c "CREATE DATABASE songmaker OWNER songmaker;"
+
+# 3. Backend
 uv sync --extra server --extra scoring --extra whisper --extra dev && source .venv/bin/activate
 
-# 3. Frontend (optional — only needed for UI changes)
+# 4. Frontend (optional — only needed for UI changes)
 cd frontend && pnpm install && pnpm build && cd ..
 
-# 4. Database (one-time — creates PG user + database + migrations)
-sudo -u postgres songmaker setup-db
-
-# 5. Start
+# 5. Start (runs migrations automatically on first launch)
 songmaker server
 ```
 

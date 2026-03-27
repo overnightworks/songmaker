@@ -76,35 +76,6 @@ def logout() -> None:
     log.info("Logged out")
 
 
-# ── Setup ──────────────────────────────────────────────────────────
-
-
-@app.command(name="setup-db")
-def setup_db(
-    root: Annotated[Optional[str], Parameter(help="Project root")] = None,
-) -> None:
-    """Create the PostgreSQL database and run migrations. Reads DATABASE_URL from .server.env."""
-    from songmaker_cli.config import find_project_root
-    from songmaker_cli.db.setup import create_database
-
-    project_root = Path(root).resolve() if root else (find_project_root(Path.cwd()) or Path.cwd())
-
-    from songmaker_cli.server import _load_env_file
-    _load_env_file(project_root)
-
-    import os
-    db_url = os.environ.get("DATABASE_URL")
-    if not db_url:
-        print("Error: DATABASE_URL not set. Add it to .server.env or set it as an env var.")
-        sys.exit(1)
-    if db_url.startswith("sqlite"):
-        print("Error: setup-db is for PostgreSQL. SQLite databases are created automatically.")
-        sys.exit(1)
-
-    create_database(db_url)
-    print("Database ready.")
-
-
 # ── Server ──────────────────────────────────────────────────────────
 
 
