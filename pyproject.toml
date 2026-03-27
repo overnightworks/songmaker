@@ -38,6 +38,8 @@ server = [
     "bcrypt>=4.0",
     "python-dotenv>=1.0",
     "structlog>=24.0",
+    "redis[hiredis]>=5.0",
+    "psycopg2-binary>=2.9",
 ]
 claude = [
     "anthropic>=0.20",
@@ -46,6 +48,7 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=7.0",
     "ruff>=0.4",
+    "fakeredis[lua]>=2.0",
 ]
 
 [project.scripts]
