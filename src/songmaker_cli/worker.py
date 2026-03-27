@@ -93,6 +93,11 @@ async def cleanup_stale(ctx):
 
 
 async def on_startup(ctx):
+    from songmaker_cli.config import find_project_root
+    from songmaker_cli.server import _load_env_file
+    project_root = find_project_root(Path.cwd()) or Path.cwd()
+    _load_env_file(project_root)
+
     global _acestep_manager
     from songmaker_cli.acestep_manager import AceStepManager
     _acestep_manager = AceStepManager()
