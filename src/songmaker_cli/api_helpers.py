@@ -33,6 +33,20 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.middleware import AuthenticatedUser
 
+
+def _begin_exclusive(session: Session) -> None:
+    """Acquire an exclusive write lock appropriate for the database dialect.
+
+    SQLite uses BEGIN IMMEDIATE for an exclusive file lock.
+    PostgreSQL uses SERIALIZABLE isolation for the current transaction.
+    """
+    dialect = session.bind.dialect.name
+    if dialect == "sqlite":
+        session.execute(text("BEGIN IMMEDIATE"))
+    else:
+        session.execute(text("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
+
+
 _RATE_LIMITS: dict[str, tuple[int, int]] = {
     "generate": (GENERATION_RATE_LIMIT_USER, GENERATION_RATE_LIMIT_ADMIN),
     "score": (SCORING_RATE_LIMIT_USER, SCORING_RATE_LIMIT_ADMIN),
@@ -59,7 +73,7 @@ def create_job_with_rate_limit(
     unconditionally by the commit() here.
     """
     session.commit()
-    session.execute(text("BEGIN IMMEDIATE"))
+    _begin_exclusive(session)
 
     is_admin = user.role == ROLE_ADMIN
 
@@ -99,7 +113,7 @@ def slugify(text: str) -> str:
 def unique_album_id(session: Session, base_slug: str) -> str:
     """Atomically find a unique album ID, appending -2, -3, etc. if needed."""
     session.commit()
-    session.execute(text("BEGIN IMMEDIATE"))
+    _begin_exclusive(session)
     candidate = base_slug
     counter = 1
     while get_album(session, candidate):

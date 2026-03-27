@@ -495,7 +495,7 @@ def test_run_server_rejects_multi_worker(tmp_path: Path) -> None:
         patch.dict("os.environ", {"UVICORN_WORKERS": "2"}),
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
-        with pytest.raises(ValueError, match="UVICORN_WORKERS=2 is unsupported"):
+        with pytest.raises(ValueError, match="UVICORN_WORKERS=2 requires"):
             run_server(output_dir=tmp_path / "_output", project_root=tmp_path)
 
 

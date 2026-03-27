@@ -138,9 +138,18 @@ def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]
     return result
 
 
+def _duration_seconds_expr(session: Session):
+    """Duration expression in seconds, dialect-aware."""
+    dialect = session.bind.dialect.name
+    if dialect == "sqlite":
+        days = func.julianday(Job.completed_at) - func.julianday(Job.started_at)
+        return days * 86400.0
+    return func.extract("epoch", Job.completed_at - Job.started_at)
+
+
 def job_duration_stats(session: Session) -> dict[str, float | None]:
     """Return avg/min/max duration in seconds for completed jobs."""
-    duration_expr = func.julianday(Job.completed_at) - func.julianday(Job.started_at)
+    duration_expr = _duration_seconds_expr(session)
     row = (
         session.query(
             func.avg(duration_expr),
@@ -150,9 +159,8 @@ def job_duration_stats(session: Session) -> dict[str, float | None]:
         .filter(Job.status == "completed", Job.completed_at.isnot(None))
         .one()
     )
-    days_to_seconds = 86400.0
     return {
-        "avg": round(row[0] * days_to_seconds, 1) if row[0] is not None else None,
-        "min": round(row[1] * days_to_seconds, 1) if row[1] is not None else None,
-        "max": round(row[2] * days_to_seconds, 1) if row[2] is not None else None,
+        "avg": round(row[0], 1) if row[0] is not None else None,
+        "min": round(row[1], 1) if row[1] is not None else None,
+        "max": round(row[2], 1) if row[2] is not None else None,
     }

@@ -26,7 +26,7 @@ def _resolve_db_url() -> str:
     url = config.get_main_option("sqlalchemy.url")
     if url and url != _ALEMBIC_INI_DEFAULT_URL:
         return url
-    env_url = os.environ.get("SONGMAKER_DB_URL")
+    env_url = os.environ.get("DATABASE_URL")
     if env_url:
         return env_url
     db_path = Path.cwd() / "_output" / "songmaker.db"

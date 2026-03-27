@@ -23,6 +23,7 @@ class AppContext:
     allowed_hosts_exact: frozenset[str] = field(default_factory=frozenset)
     allowed_hosts_patterns: list[re.Pattern[str]] = field(default_factory=list)
     gpu_queue: GpuQueue | None = None
+    use_celery: bool = False
 
 
 def get_app_context(request: Request) -> AppContext:

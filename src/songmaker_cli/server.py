@@ -405,13 +405,18 @@ def create_app(
 
     if ctx is None:
         from songmaker_cli.auth import ensure_session_secret, parse_trusted_proxies
-        from songmaker_cli.db.engine import init_db
-        from songmaker_cli.gpu_queue import GpuQueue
+        from songmaker_cli.db.engine import init_db, resolve_database_url
 
-        db_factory = init_db(output_dir / DB_FILENAME)
+        db_url = resolve_database_url(output_dir)
+        db_factory = init_db(db_url)
         secret = ensure_session_secret(output_dir)
         hosts_exact, hosts_patterns = parse_allowed_hosts()
-        gpu_q = GpuQueue(db_factory)
+
+        use_celery = bool(os.environ.get("USE_CELERY"))
+        gpu_q = None
+        if not use_celery:
+            from songmaker_cli.gpu_queue import GpuQueue
+            gpu_q = GpuQueue(db_factory)
 
         ctx = AppContext(
             db=db_factory,
@@ -421,8 +426,10 @@ def create_app(
             allowed_hosts_exact=hosts_exact,
             allowed_hosts_patterns=hosts_patterns,
             gpu_queue=gpu_q,
+            use_celery=use_celery,
         )
-        gpu_q.start()
+        if gpu_q:
+            gpu_q.start()
 
     app.state.ctx = ctx
     app.state.http_metrics = HttpMetrics()
@@ -739,11 +746,13 @@ def run_server(
 
     host = os.environ.get("HOST", "127.0.0.1")
     workers = int(os.environ.get("UVICORN_WORKERS", 1))
-    if workers > 1:
+    db_url = os.environ.get("DATABASE_URL", "")
+    use_celery = bool(os.environ.get("USE_CELERY"))
+    is_sqlite = not db_url or db_url.startswith("sqlite")
+    if workers > 1 and (is_sqlite or not use_celery):
         raise ValueError(
-            f"UVICORN_WORKERS={workers} is unsupported. "
-            "SQLite and the in-memory GPU queue require a single worker process. "
-            "Use workers=1 (default)."
+            f"UVICORN_WORKERS={workers} requires a non-SQLite DATABASE_URL and USE_CELERY=1. "
+            "SQLite and the in-memory GPU queue are single-process only."
         )
     uvicorn.run(
         app, host=host, port=port, log_level="info",
