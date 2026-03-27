@@ -1162,7 +1162,7 @@ def test_chat_unavailable_hides_details(tmp_path: Path) -> None:
     assert "/home/" not in resp.json()["detail"]
 
 
-# ── build_system_prompt ────────────────────────────────────────────
+# ── System prompt ──────────────────────────────────────────────────
 
 
 def test_system_prompt_contains_style_and_structure() -> None:
