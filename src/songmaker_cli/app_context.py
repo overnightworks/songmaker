@@ -11,6 +11,8 @@ from fastapi import Request
 from sqlalchemy.orm import Session, sessionmaker
 
 if TYPE_CHECKING:
+    from redis import Redis
+
     from songmaker_cli.gpu_queue import GpuQueue
 
 
@@ -24,6 +26,7 @@ class AppContext:
     allowed_hosts_patterns: list[re.Pattern[str]] = field(default_factory=list)
     gpu_queue: GpuQueue | None = None
     use_celery: bool = False
+    redis: Redis | None = None
 
 
 def get_app_context(request: Request) -> AppContext:
