@@ -1146,3 +1146,69 @@ def test_metrics_with_jobs(tmp_path: Path) -> None:
     assert data["jobs_total"]["generate"]["completed"] == 1
     assert data["jobs_active"] == 0
     assert data["job_duration_seconds"]["avg"] is not None
+
+
+# ── Auto-setup admin ──────────────────────────────────────────────
+
+
+def test_auto_setup_admin_creates_user(tmp_path: Path) -> None:
+    from songmaker_cli.db.queries import get_user_by_username
+    from songmaker_cli.server import _auto_setup_admin
+
+    factory = init_db(tmp_path / "test.db")
+    ctx = AppContext(
+        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET,
+    )
+    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
+        _auto_setup_admin(ctx)
+
+    with factory() as session:
+        user = get_user_by_username(session, "boss")
+        assert user is not None
+        assert user.role == "admin"
+
+
+def test_auto_setup_admin_skips_when_users_exist(tmp_path: Path) -> None:
+    from songmaker_cli.auth import hash_password
+    from songmaker_cli.db.queries import create_user, get_user_by_username
+    from songmaker_cli.server import _auto_setup_admin
+
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        create_user(session, "existing", hash_password("Test1234!"), role="admin")
+        session.commit()
+
+    ctx = AppContext(
+        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET,
+    )
+    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
+        _auto_setup_admin(ctx)
+
+    with factory() as session:
+        assert get_user_by_username(session, "boss") is None
+
+
+def test_auto_setup_admin_skips_without_env_vars(tmp_path: Path) -> None:
+    from songmaker_cli.server import _auto_setup_admin
+
+    factory = init_db(tmp_path / "test.db")
+    ctx = AppContext(
+        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET,
+    )
+    with patch.dict("os.environ", {}, clear=True):
+        _auto_setup_admin(ctx)
+
+
+def test_auto_setup_admin_rejects_weak_password(tmp_path: Path) -> None:
+    from songmaker_cli.db.queries import user_count
+    from songmaker_cli.server import _auto_setup_admin
+
+    factory = init_db(tmp_path / "test.db")
+    ctx = AppContext(
+        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET,
+    )
+    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "aaa"}):
+        _auto_setup_admin(ctx)
+
+    with factory() as session:
+        assert user_count(session) == 0
