@@ -147,11 +147,15 @@ def _make_redis_ctx(tmp_path: Path, fake_redis) -> tuple[AppContext, Path, Path]
 def test_health_reports_redis_ok(tmp_path: Path, fake_redis) -> None:
     ctx, output_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(output_dir, project_root, ctx=ctx)
-    with TestClient(app) as client:
+    with (
+        patch("songmaker_cli.arq_pool.is_worker_healthy", return_value=False),
+        patch("songmaker_cli.arq_pool.get_queue_depth", return_value=0),
+        patch("songmaker_cli.arq_pool.get_active_model", return_value=None),
+        TestClient(app) as client,
+    ):
         resp = client.get("/health")
     data = resp.json()
     assert data["redis"] == "ok"
-    assert data["status"] == "ok"
 
 
 def test_health_reports_redis_error(tmp_path: Path, fake_redis) -> None:

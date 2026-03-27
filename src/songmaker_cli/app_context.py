@@ -13,8 +13,6 @@ from sqlalchemy.orm import Session, sessionmaker
 if TYPE_CHECKING:
     from redis import Redis
 
-    from songmaker_cli.gpu_queue import GpuQueue
-
 
 @dataclass
 class AppContext:
@@ -24,8 +22,6 @@ class AppContext:
     trusted_proxies: frozenset[str] = field(default_factory=frozenset)
     allowed_hosts_exact: frozenset[str] = field(default_factory=frozenset)
     allowed_hosts_patterns: list[re.Pattern[str]] = field(default_factory=list)
-    gpu_queue: GpuQueue | None = None
-    use_celery: bool = False
     redis: Redis | None = None
 
 

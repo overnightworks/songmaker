@@ -393,8 +393,32 @@ def _picked_filename(song) -> str | None:  # type: ignore[no-untyped-def]
     return None
 
 
+def _auto_setup_admin(ctx: AppContext) -> None:
+    """Create the first admin account from env vars if no users exist."""
+    admin_user = os.environ.get("ADMIN_USERNAME")
+    admin_pass = os.environ.get("ADMIN_PASSWORD")
+    if not admin_user or not admin_pass:
+        return
+
+    from songmaker_cli.auth import ROLE_ADMIN, check_password_strength, hash_password
+    from songmaker_cli.db.queries import create_user, user_count
+
+    with ctx.db() as session:
+        if user_count(session) > 0:
+            return
+        try:
+            check_password_strength(admin_pass)
+        except ValueError:
+            log.error("ADMIN_PASSWORD does not meet strength requirements — skipping auto-setup")
+            return
+        create_user(session, admin_user, hash_password(admin_pass), role=ROLE_ADMIN)
+        session.commit()
+        log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    from songmaker_cli.arq_pool import close_arq_pool, get_arq_pool
     from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
 
     ctx: AppContext = app.state.ctx
@@ -406,11 +430,18 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         if pruned:
             log.info("Startup: pruned %d old login attempts", pruned)
         session.commit()
+
+    _auto_setup_admin(ctx)
+
+    try:
+        await get_arq_pool()
+        log.info("arq pool connected")
+    except Exception:
+        log.warning("Could not connect to Redis — job submission will fail")
+
     app.state.startup_time = datetime.now(timezone.utc)
     yield
-    if ctx.gpu_queue:
-        log.info("Shutting down GPU queue...")
-        ctx.gpu_queue.shutdown()
+    await close_arq_pool()
 
 
 def create_app(
@@ -432,12 +463,6 @@ def create_app(
         secret = ensure_session_secret(output_dir)
         hosts_exact, hosts_patterns = parse_allowed_hosts()
 
-        use_celery = bool(os.environ.get("USE_CELERY"))
-        gpu_q = None
-        if not use_celery:
-            from songmaker_cli.gpu_queue import GpuQueue
-            gpu_q = GpuQueue(db_factory)
-
         redis_url = os.environ.get("REDIS_URL")
         redis_instance = None
         if redis_url:
@@ -452,12 +477,8 @@ def create_app(
             trusted_proxies=parse_trusted_proxies(),
             allowed_hosts_exact=hosts_exact,
             allowed_hosts_patterns=hosts_patterns,
-            gpu_queue=gpu_q,
-            use_celery=use_celery,
             redis=redis_instance,
         )
-        if gpu_q:
-            gpu_q.start()
 
     app.state.ctx = ctx
     if ctx.redis:
@@ -528,7 +549,7 @@ def create_app(
     _metrics_lock = threading.Lock()
 
     @app.get("/metrics")
-    def metrics_endpoint(request: Request) -> JSONResponse:
+    async def metrics_endpoint(request: Request) -> JSONResponse:
         import time
 
         nonlocal _metrics_cache_time
@@ -552,7 +573,9 @@ def create_app(
             duration = job_duration_stats(session)
 
         gpu_vram_mb = _get_gpu_vram_mb()
-        queue_depth = ctx.gpu_queue.queue_depth if ctx.gpu_queue else 0
+
+        from songmaker_cli.arq_pool import get_queue_depth
+        queue_depth = await get_queue_depth()
 
         result: dict[str, object] = {
             "jobs_total": jobs_by_type,
@@ -574,7 +597,7 @@ def create_app(
         return JSONResponse(result)
 
     @app.get("/health")
-    def health_check(request: Request) -> JSONResponse:
+    async def health_check(request: Request) -> JSONResponse:
         ctx: AppContext = request.app.state.ctx
         startup_time: datetime = getattr(
             request.app.state, "startup_time", datetime.now(timezone.utc),
@@ -582,17 +605,18 @@ def create_app(
         uptime = int((datetime.now(timezone.utc) - startup_time).total_seconds())
 
         db_ok = _check_db(ctx)
-        gpu_running = bool(ctx.gpu_queue and ctx.gpu_queue.is_running)
-        queue_depth = ctx.gpu_queue.queue_depth if ctx.gpu_queue else 0
 
-        if ctx.gpu_queue:
-            acestep_model = ctx.gpu_queue.active_model
-            acestep = "healthy" if acestep_model is not None else (
-                "healthy" if ctx.gpu_queue.acestep_healthy else "unhealthy"
-            )
+        from songmaker_cli.arq_pool import get_active_model, get_queue_depth, is_worker_healthy
+        worker_running = await is_worker_healthy()
+        queue_depth = await get_queue_depth()
+        acestep_model = await get_active_model()
+
+        if acestep_model is not None:
+            acestep = "healthy"
         else:
-            acestep_model = None
-            acestep = "unknown"
+            from songmaker_cli.acestep_manager import AceStepManager
+            mgr = AceStepManager()
+            acestep = "healthy" if mgr.is_healthy() else "unknown"
 
         if ctx.redis:
             from songmaker_cli.redis_client import redis_health
@@ -600,12 +624,12 @@ def create_app(
         else:
             redis_ok = None
 
-        degraded = not db_ok or (ctx.gpu_queue and not gpu_running)
+        degraded = not db_ok or not worker_running
         if redis_ok is False:
             degraded = True
         result = {
             "status": "degraded" if degraded else "ok",
-            "gpu_queue": "running" if gpu_running else "stopped",
+            "worker": "running" if worker_running else "stopped",
             "queue_depth": queue_depth,
             "db": "ok" if db_ok else "error",
             "acestep": acestep,
@@ -807,12 +831,11 @@ def run_server(
     host = os.environ.get("HOST", "127.0.0.1")
     workers = int(os.environ.get("UVICORN_WORKERS", 1))
     db_url = os.environ.get("DATABASE_URL", "")
-    use_celery = bool(os.environ.get("USE_CELERY"))
     is_sqlite = not db_url or db_url.startswith("sqlite")
-    if workers > 1 and (is_sqlite or not use_celery):
+    if workers > 1 and is_sqlite:
         raise ValueError(
-            f"UVICORN_WORKERS={workers} requires a non-SQLite DATABASE_URL and USE_CELERY=1. "
-            "SQLite and the in-memory GPU queue are single-process only."
+            f"UVICORN_WORKERS={workers} requires a non-SQLite DATABASE_URL. "
+            "SQLite is single-process only."
         )
     uvicorn.run(
         app, host=host, port=port, log_level="info",

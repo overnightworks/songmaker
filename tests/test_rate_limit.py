@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -60,6 +60,10 @@ def _get_user_id(client: TestClient) -> str:
     return client.get("/api/auth/me").json()["id"]
 
 
+def _mock_arq():
+    return patch("songmaker_cli.arq_pool.get_arq_pool", AsyncMock(return_value=AsyncMock()))
+
+
 # ── Generation rate limit ───────────────────────────────────────────
 
 
@@ -73,8 +77,6 @@ def test_generate_rate_limit_for_user(client: TestClient) -> None:
             session.add(Job(type="generate", user_id=user_id, status="completed"))
         session.commit()
 
-    mock_queue = MagicMock()
-    client.app.state.ctx.gpu_queue = mock_queue
     resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
     assert resp.status_code == 429
@@ -91,9 +93,8 @@ def test_generate_no_rate_limit_for_admin(client: TestClient) -> None:
             session.add(Job(type="generate", user_id=user_id, status="completed"))
         session.commit()
 
-    mock_queue = MagicMock()
-    client.app.state.ctx.gpu_queue = mock_queue
-    resp = client.post("/api/songs/s1/generate", json={"count": 1})
+    with _mock_arq():
+        resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
     assert resp.status_code == 200
 
@@ -111,8 +112,6 @@ def test_score_rate_limit_for_user(client: TestClient) -> None:
             session.add(Job(type="score", user_id=user_id, status="completed"))
         session.commit()
 
-    mock_queue = MagicMock()
-    client.app.state.ctx.gpu_queue = mock_queue
     resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 429
@@ -130,8 +129,6 @@ def test_active_job_limit(client: TestClient) -> None:
         session.add(Job(type="generate", user_id=user_id, status="running"))
         session.commit()
 
-    mock_queue = MagicMock()
-    client.app.state.ctx.gpu_queue = mock_queue
     resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
     assert resp.status_code == 429
@@ -150,8 +147,6 @@ def test_queue_depth_limit(client: TestClient) -> None:
             session.add(Job(type="generate", status="queued"))
         session.commit()
 
-    mock_queue = MagicMock()
-    client.app.state.ctx.gpu_queue = mock_queue
     resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
     assert resp.status_code == 429
@@ -165,9 +160,8 @@ def test_generate_job_gets_user_id(client: TestClient) -> None:
     _login_as(client, "user")
     user_id = _get_user_id(client)
 
-    mock_queue = MagicMock()
-    client.app.state.ctx.gpu_queue = mock_queue
-    resp = client.post("/api/songs/s1/generate", json={"count": 1})
+    with _mock_arq():
+        resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
     assert resp.status_code == 200
     job_id = resp.json()["id"]
@@ -182,9 +176,8 @@ def test_score_job_gets_user_id(client: TestClient) -> None:
     _login_as(client, "user")
     user_id = _get_user_id(client)
 
-    mock_queue = MagicMock()
-    client.app.state.ctx.gpu_queue = mock_queue
-    resp = client.post("/api/generations/g1/score", json={})
+    with _mock_arq():
+        resp = client.post("/api/generations/g1/score", json={})
 
     assert resp.status_code == 200
     job_id = resp.json()["id"]

@@ -21,7 +21,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth import hash_password
-from songmaker_cli.constants import PAGE_ADMIN_DEFAULT_LIMIT, PAGE_ADMIN_MAX_LIMIT
+from songmaker_cli.constants import ACESTEP_PORT, PAGE_ADMIN_DEFAULT_LIMIT, PAGE_ADMIN_MAX_LIMIT
 from songmaker_cli.db.models import User as UserModel
 from songmaker_cli.db.queries import (
     count_active_sessions,
@@ -39,7 +39,6 @@ from songmaker_cli.db.queries import (
     record_audit,
     update_user,
 )
-from songmaker_cli.gpu_queue import ACESTEP_PORT
 from songmaker_cli.middleware import AuthenticatedUser, require_admin
 
 log = logging.getLogger(__name__)

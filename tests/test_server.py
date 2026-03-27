@@ -499,29 +499,39 @@ def test_run_server_rejects_multi_worker(tmp_path: Path) -> None:
             run_server(output_dir=tmp_path / "_output", project_root=tmp_path)
 
 
-def test_lifespan_shutdown_calls_gpu_queue_shutdown(tmp_path: Path) -> None:
+def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
+    from unittest.mock import AsyncMock
+
     from songmaker_cli.server import _lifespan
 
     factory = init_db(tmp_path / "test.db")
-    mock_queue = MagicMock()
     mock_app = MagicMock()
     mock_app.state.ctx = AppContext(
         db=factory,
         output_dir=tmp_path,
         session_secret=TEST_SECRET,
-        gpu_queue=mock_queue,
     )
 
     async def _run():
-        async with _lifespan(mock_app):
-            pass
+        with patch(
+            "songmaker_cli.arq_pool.get_arq_pool",
+            new_callable=AsyncMock,
+        ) as mock_get, patch(
+            "songmaker_cli.arq_pool.close_arq_pool",
+            new_callable=AsyncMock,
+        ) as mock_close:
+            async with _lifespan(mock_app):
+                pass
+        mock_get.assert_called_once()
+        mock_close.assert_called_once()
 
     import asyncio
     asyncio.run(_run())
-    mock_queue.shutdown.assert_called_once()
 
 
-def test_lifespan_shutdown_handles_no_gpu_queue(tmp_path: Path) -> None:
+def test_lifespan_handles_redis_unavailable(tmp_path: Path) -> None:
+    from unittest.mock import AsyncMock
+
     from songmaker_cli.server import _lifespan
 
     factory = init_db(tmp_path / "test.db")
@@ -530,12 +540,19 @@ def test_lifespan_shutdown_handles_no_gpu_queue(tmp_path: Path) -> None:
         db=factory,
         output_dir=tmp_path,
         session_secret=TEST_SECRET,
-        gpu_queue=None,
     )
 
     async def _run():
-        async with _lifespan(mock_app):
-            pass
+        with patch(
+            "songmaker_cli.arq_pool.get_arq_pool",
+            new_callable=AsyncMock,
+            side_effect=ConnectionError("no redis"),
+        ), patch(
+            "songmaker_cli.arq_pool.close_arq_pool",
+            new_callable=AsyncMock,
+        ):
+            async with _lifespan(mock_app):
+                pass
 
     import asyncio
     asyncio.run(_run())
@@ -921,6 +938,8 @@ class TestConfigureLogging:
 
 
 def test_health_no_auth_required(tmp_path: Path) -> None:
+    from unittest.mock import AsyncMock
+
     output_dir = tmp_path / "_output"
     output_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
@@ -938,20 +957,26 @@ def test_health_no_auth_required(tmp_path: Path) -> None:
     app = create_app(output_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
-    with client:
+    with (
+        client,
+        patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=False)),
+        patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=0)),
+        patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value=None)),
+    ):
         resp = client.get("/health")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["status"] == "ok"
     assert data["db"] == "ok"
-    assert data["gpu_queue"] == "stopped"
+    assert data["worker"] == "stopped"
     assert data["queue_depth"] == 0
     assert data["acestep"] == "unknown"
     assert data["acestep_model"] is None
     assert isinstance(data["uptime_seconds"], int)
 
 
-def test_health_with_gpu_queue(tmp_path: Path) -> None:
+def test_health_with_worker_running(tmp_path: Path) -> None:
+    from unittest.mock import AsyncMock
+
     output_dir = tmp_path / "_output"
     output_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
@@ -965,30 +990,29 @@ def test_health_with_gpu_queue(tmp_path: Path) -> None:
         session.add(admin)
         session.commit()
 
-    gpu_queue = MagicMock()
-    gpu_queue.is_running = True
-    gpu_queue.queue_depth = 3
-    gpu_queue.active_model = "sft"
-
-    ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=TEST_SECRET,
-        gpu_queue=gpu_queue,
-    )
+    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
     app = create_app(output_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
-    with client:
+    with (
+        client,
+        patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=True)),
+        patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=3)),
+        patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value="sft")),
+    ):
         resp = client.get("/health")
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
-    assert data["gpu_queue"] == "running"
+    assert data["worker"] == "running"
     assert data["queue_depth"] == 3
     assert data["acestep"] == "healthy"
     assert data["acestep_model"] == "sft"
 
 
-def test_health_degraded_when_queue_stopped(tmp_path: Path) -> None:
+def test_health_degraded_when_worker_stopped(tmp_path: Path) -> None:
+    from unittest.mock import AsyncMock
+
     output_dir = tmp_path / "_output"
     output_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
@@ -1002,20 +1026,16 @@ def test_health_degraded_when_queue_stopped(tmp_path: Path) -> None:
         session.add(admin)
         session.commit()
 
-    gpu_queue = MagicMock()
-    gpu_queue.is_running = False
-    gpu_queue.queue_depth = 0
-    gpu_queue.acestep_healthy = False
-    gpu_queue.active_model = None
-
-    ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=TEST_SECRET,
-        gpu_queue=gpu_queue,
-    )
+    ctx = AppContext(db=factory, output_dir=output_dir, session_secret=TEST_SECRET)
     app = create_app(output_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
-    with client:
+    with (
+        client,
+        patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=False)),
+        patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=0)),
+        patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value=None)),
+    ):
         resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "degraded"

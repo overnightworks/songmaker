@@ -35,7 +35,9 @@ tests/
 ├── test_claude_provider.py  Claude API/CLI backend tests
 ├── test_config.py           ACE-Step config building, path resolution
 ├── test_db.py               DB models, queries, engine, migrations
-├── test_gpu_queue.py        GPU queue, ACE-Step lifecycle, VRAM management
+├── test_acestep_manager.py   ACE-Step lifecycle, VRAM management
+├── test_arq_pool.py         arq connection pool, Redis health queries
+├── test_worker.py           arq worker tasks, idempotency, startup/shutdown
 ├── test_jobs.py             Background generation + scoring job runners
 ├── test_mastering.py        Mastering chain (compression, LUFS, clipping)
 ├── test_middleware.py       Auth middleware and FastAPI dependencies
