@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: songmaker
+      POSTGRES_PASSWORD: songmaker
+      POSTGRES_DB: songmaker
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U songmaker"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  songmaker:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://songmaker:songmaker@postgres:5432/songmaker
+      HOST: "0.0.0.0"
+    ports:
+      - "8080:8080"
+    volumes:
+      - output:/app/_output
+
+volumes:
+  pgdata:
+  output:
