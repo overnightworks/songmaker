@@ -37,7 +37,7 @@ See each migration plan for its exact file:line ownership. Summary:
 
 **Redis**: `middleware.py`, `server.py:130-156`, `server.py:290-315`, `server.py:487-531`, `server.py:594-609`
 **PostgreSQL**: `engine.py`, `api_helpers.py`, `db/migrations/env.py`, `db/queries/jobs.py:141-158`, `server.py:742-747`
-**Celery**: `gpu_queue.py`, `generation_api.py:96-130`, `jobs.py`, `server.py:376-425`
+**arq**: `gpu_queue.py`, `generation_api.py:96-130`, `jobs.py`, `server.py:376-440`, `worker.py` (new), `arq_pool.py` (new), `acestep_manager.py` (new)
 
 **Shared (additive only)**: `app_context.py` (append fields), `pyproject.toml` (append deps)
 **Never touch**: `server.py:439-444` (middleware order is security-critical)
