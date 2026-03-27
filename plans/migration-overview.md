@@ -33,27 +33,27 @@ Before any migration can start, the codebase needs env-var-based backend selecti
 - If unset: use current in-memory classes unchanged
 - Remove `UVICORN_WORKERS > 1` guard (line 742-747) when both Redis AND non-SQLite DB are configured
 
-**`server.py` — arq/Celery detection** (new):
-- Read `USE_CELERY` env var
+**`server.py` — arq worker detection** (new):
+- Read `USE_ARQ` env var
 - If set: skip `GpuQueue` creation (line 414) and startup (line 425)
 - If unset: current behavior
 
 **`app_context.py` — Extend AppContext** (line 17-25):
 - Add `redis: Redis | None = None` field
-- Add `use_celery: bool = False` field
+- Add `use_arq: bool = False` field
 
 ### Files to change
 - `src/songmaker_cli/db/engine.py` — dialect detection, conditional PRAGMAs/pool
 - `src/songmaker_cli/db/migrations/env.py` — unify to `DATABASE_URL`
-- `src/songmaker_cli/server.py` — Redis/Celery env var reads, conditional startup
+- `src/songmaker_cli/server.py` — Redis/arq env var reads, conditional startup
 - `src/songmaker_cli/app_context.py` — new fields
 
 ### Tests
 - `test_engine.py` — test SQLite path unchanged, test PostgreSQL pool config (mock)
-- `test_server.py` — test with/without REDIS_URL, with/without USE_CELERY
+- `test_server.py` — test with/without REDIS_URL, with/without USE_ARQ
 
 ### Why this is Phase 0
-Every migration plan references feature flags (`REDIS_URL`, `DATABASE_URL`, `USE_CELERY`) that don't exist yet. Without Phase 0, agents implementing Redis or PostgreSQL have no hook point.
+Every migration plan references feature flags (`REDIS_URL`, `DATABASE_URL`) that don't exist yet. Without Phase 0, agents implementing Redis or PostgreSQL have no hook point.
 
 ---
 
@@ -116,7 +116,7 @@ services:
     environment:
       DATABASE_URL: postgresql://songmaker:password@postgres:5432/songmaker
       REDIS_URL: redis://redis:6379/0
-      USE_CELERY: "1"
+      USE_ARQ: "1"
   worker:
     build: .
     command: arq songmaker_cli.worker.WorkerSettings
@@ -137,7 +137,7 @@ No Beat process needed — arq has built-in cron.
 Every migration is behind an env var:
 - `DATABASE_URL` unset or starts with `sqlite://` → SQLite mode (current)
 - `REDIS_URL` unset → in-memory fallback (current)
-- `USE_CELERY` unset → in-process GPU queue (current)
+- `REDIS_URL` unset → in-process GPU queue + in-memory rate limits (current)
 - `STORAGE_URL` unset → local filesystem (current)
 
 The single-user `songmaker server` command continues to work without any infrastructure dependencies.
