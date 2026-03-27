@@ -35,17 +35,18 @@ def _db(tmp_path: Path):
     _test_factory = None
 
 
-@pytest.fixture()
-def auth_app(_db) -> TestClient:
-    """Minimal FastAPI app with auth dependency — no middleware stack."""
+def _build_auth_app(_db, redis=None):
     from songmaker_cli.app_context import AppContext, get_db_session
+    from songmaker_cli.redis_client import SessionCache
 
-    redis = make_fake_redis()
+    if redis is None:
+        redis = make_fake_redis()
     ctx = AppContext(
         db=_db, output_dir=Path("/tmp"), session_secret=_TEST_SECRET, redis=redis,
     )
     app = FastAPI()
     app.state.ctx = ctx
+    app.state.session_cache = SessionCache(redis)
 
     @app.get("/protected")
     def protected(
@@ -68,6 +69,13 @@ def auth_app(_db) -> TestClient:
     def public():
         return {"status": "ok"}
 
+    return app
+
+
+@pytest.fixture()
+def auth_app(_db) -> TestClient:
+    """Minimal FastAPI app with auth dependency — no middleware stack."""
+    app = _build_auth_app(_db)
     return TestClient(app, cookies={})
 
 
@@ -267,5 +275,123 @@ def test_get_client_ip_no_xff() -> None:
     proxies = frozenset({"10.0.0.1"})
     result = get_client_ip("10.0.0.1", None, proxies)
     assert result == "10.0.0.1"
+
+
+# -- Redis session cache integration -----------------------------------------
+
+
+def test_redis_cache_hit_skips_db_query(auth_app: TestClient) -> None:
+    from unittest.mock import patch
+
+    from songmaker_cli.redis_client import SessionCache
+
+    sid = _create_user_and_session()
+    session_cache: SessionCache = auth_app.app.state.session_cache
+
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
+    auth_app.get("/protected")
+    assert session_cache.get(sid) is not None
+
+    with patch("songmaker_cli.middleware.get_session_with_user") as mock_db:
+        auth_app.get("/protected")
+        mock_db.assert_not_called()
+
+
+def test_redis_miss_falls_back_to_db_and_populates_cache(auth_app: TestClient) -> None:
+    from songmaker_cli.redis_client import SessionCache
+
+    sid = _create_user_and_session()
+    session_cache: SessionCache = auth_app.app.state.session_cache
+
+    assert session_cache.get(sid) is None
+
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
+    resp = auth_app.get("/protected")
+    assert resp.status_code == 200
+
+    assert session_cache.get(sid) is not None
+
+
+def test_redis_failure_falls_back_to_db(_db) -> None:
+    from unittest.mock import MagicMock
+
+    broken_redis = MagicMock()
+    broken_redis.get.side_effect = ConnectionError("Redis down")
+
+    app = _build_auth_app(_db, redis=broken_redis)
+    client = TestClient(app, cookies={})
+
+    sid = _create_user_and_session()
+    client.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
+    resp = client.get("/protected")
+    assert resp.status_code == 200
+
+
+def test_redis_path_checks_absolute_max_age(auth_app: TestClient) -> None:
+    import json
+
+    from songmaker_cli.constants import REDIS_SESSION_PREFIX
+
+    sid = _create_user_and_session()
+
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
+    resp = auth_app.get("/protected")
+    assert resp.status_code == 200
+
+    key = f"{REDIS_SESSION_PREFIX}:{sid}"
+    redis = auth_app.app.state.ctx.redis
+    raw = json.loads(redis.get(key))
+    raw["created_at"] = (datetime.now(timezone.utc) - timedelta(days=91)).isoformat()
+    redis.set(key, json.dumps(raw), ex=86400)
+
+    resp = auth_app.get("/protected")
+    assert resp.status_code == 401
+
+
+def test_redis_path_ip_change_writes_audit(auth_app: TestClient) -> None:
+    from songmaker_cli.db.models import AuditLog
+
+    sid = _create_user_and_session()
+
+    factory = _test_factory
+    with factory() as db:
+        from songmaker_cli.db.queries import get_session_with_user
+        sess = get_session_with_user(db, sid)
+        sess.ip_address = "1.2.3.4"
+        db.commit()
+
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
+    auth_app.get("/protected")
+
+    import json
+
+    from songmaker_cli.constants import REDIS_SESSION_PREFIX
+    key = f"{REDIS_SESSION_PREFIX}:{sid}"
+    raw = json.loads(auth_app.app.state.ctx.redis.get(key))
+    raw["ip_address"] = "9.9.9.9"
+    auth_app.app.state.ctx.redis.set(key, json.dumps(raw), ex=86400)
+
+    auth_app.get("/protected")
+
+    with factory() as db:
+        entry = db.query(AuditLog).filter(AuditLog.action == "session_ip_change").all()
+        ip_entries = [e for e in entry if "9.9.9.9" in (e.detail or "")]
+        assert len(ip_entries) >= 1
+
+
+def test_redis_path_refreshes_ttl(auth_app: TestClient) -> None:
+    from songmaker_cli.constants import REDIS_SESSION_PREFIX
+
+    sid = _create_user_and_session()
+    auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
+    auth_app.get("/protected")
+
+    key = f"{REDIS_SESSION_PREFIX}:{sid}"
+    redis = auth_app.app.state.ctx.redis
+    redis.expire(key, 100)
+
+    auth_app.get("/protected")
+    ttl = redis.ttl(key)
+    assert ttl > 100
 
 

@@ -341,3 +341,113 @@ def test_detect_secure_none_request() -> None:
         db=MagicMock(), output_dir=Path("/tmp"), session_secret=b"x" * 32, redis=redis,
     )
     assert _detect_secure(None, ctx) is False
+
+
+# -- Redis session cache integration ------------------------------------------
+
+
+def test_login_populates_redis(client: TestClient) -> None:
+    from songmaker_cli.redis_client import SessionCache
+
+    _seed_admin(client)
+    session_cache: SessionCache = client.app.state.session_cache
+
+    client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
+
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    redis = client.app.state.ctx.redis
+    members = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{_get_user_id(client, 'admin')}")
+    assert len(members) == 1
+    sid = list(members)[0]
+    assert session_cache.get(sid) is not None
+
+
+def test_login_clears_old_redis_sessions(client: TestClient) -> None:
+    from songmaker_cli.redis_client import SessionCache
+
+    _seed_admin(client)
+    session_cache: SessionCache = client.app.state.session_cache
+
+    client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    redis = client.app.state.ctx.redis
+    user_id = _get_user_id(client, "admin")
+    old_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    assert len(old_sids) == 1
+    old_sid = list(old_sids)[0]
+
+    other = TestClient(client.app, cookies={})
+    other.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
+    new_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    assert len(new_sids) == 1
+    new_sid = list(new_sids)[0]
+    assert new_sid != old_sid
+    assert session_cache.get(old_sid) is None
+
+
+def test_logout_clears_redis(client: TestClient) -> None:
+    from songmaker_cli.redis_client import SessionCache
+
+    _seed_admin(client)
+    _login(client, "admin", "admin12345")
+
+    session_cache: SessionCache = client.app.state.session_cache
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    redis = client.app.state.ctx.redis
+    user_id = _get_user_id(client, "admin")
+    sids_before = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    assert len(sids_before) >= 1
+    sid = list(sids_before)[0]
+
+    client.delete("/api/auth/session")
+
+    assert session_cache.get(sid) is None
+
+
+def test_password_change_clears_old_populates_new(client: TestClient) -> None:
+    from songmaker_cli.redis_client import SessionCache
+
+    _seed_admin(client)
+    _login(client, "admin", "admin12345")
+
+    session_cache: SessionCache = client.app.state.session_cache
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    redis = client.app.state.ctx.redis
+    user_id = _get_user_id(client, "admin")
+    old_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    old_sid = list(old_sids)[0]
+
+    client.put(
+        "/api/auth/password",
+        json={"current": "admin12345", "new_password": "newpassword1"},
+    )
+
+    assert session_cache.get(old_sid) is None
+    new_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    assert len(new_sids) == 1
+    new_sid = list(new_sids)[0]
+    assert new_sid != old_sid
+    assert session_cache.get(new_sid) is not None
+
+
+def test_setup_populates_redis(client: TestClient) -> None:
+    from songmaker_cli.redis_client import SessionCache
+
+    session_cache: SessionCache = client.app.state.session_cache
+    client.post("/api/auth/setup", json={"username": "myadmin", "password": "secure1234"})
+
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    redis = client.app.state.ctx.redis
+    user_id = _get_user_id(client, "myadmin")
+    members = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    assert len(members) == 1
+    sid = list(members)[0]
+    assert session_cache.get(sid) is not None
+
+
+def _get_user_id(client: TestClient, username: str) -> str:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        from songmaker_cli.db.queries import get_user_by_username
+        user = get_user_by_username(session, username)
+        return user.id

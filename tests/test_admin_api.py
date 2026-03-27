@@ -501,3 +501,103 @@ def test_acestep_status_offline(client: TestClient) -> None:
     assert data["model"] is None
     assert data["lm_model"] is None
     assert data["jobs"] == {}
+
+
+# -- Redis session cache integration ------------------------------------------
+
+
+def _get_user_id(client: TestClient, username: str) -> str:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        from songmaker_cli.db.queries import get_user_by_username
+        user = get_user_by_username(session, username)
+        return user.id
+
+
+def test_deactivate_user_clears_redis_sessions(client: TestClient) -> None:
+    from conftest import login_and_csrf
+
+    from songmaker_cli.redis_client import SessionCache
+
+    _login_as_admin(client)
+
+    client.post(
+        "/api/admin/users",
+        json={"username": "victim", "password": "t3stP@ssw0rd"},
+    )
+    victim_id = _get_user_id(client, "victim")
+
+    victim_client = TestClient(client.app, cookies={})
+    login_and_csrf(victim_client, "victim", "t3stP@ssw0rd")
+
+    session_cache: SessionCache = client.app.state.session_cache
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    redis = client.app.state.ctx.redis
+    sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{victim_id}")
+    assert len(sids) >= 1
+
+    client.delete(f"/api/admin/users/{victim_id}")
+
+    sids_after = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{victim_id}")
+    assert len(sids_after) == 0
+    for sid in sids:
+        assert session_cache.get(sid) is None
+
+
+def test_force_logout_clears_redis(client: TestClient) -> None:
+    from songmaker_cli.redis_client import SessionCache
+
+    _login_as_admin(client)
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        create_user(session, "victim2", hash_password("t3stP@ssw0rd"))
+        session.commit()
+
+    victim_client = TestClient(client.app, cookies={})
+    victim_client.post(
+        "/api/auth/login",
+        json={"username": "victim2", "password": "t3stP@ssw0rd"},
+    )
+
+    session_cache: SessionCache = client.app.state.session_cache
+    victim_id = _get_user_id(client, "victim2")
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    redis = client.app.state.ctx.redis
+    sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{victim_id}")
+    assert len(sids) >= 1
+    sid = list(sids)[0]
+
+    sessions_resp = client.get("/api/admin/sessions")
+    victim_sessions = [
+        s for s in sessions_resp.json()["items"] if s["username"] == "victim2"
+    ]
+    session_hash = victim_sessions[0]["id"]
+
+    client.delete(f"/api/admin/sessions/{session_hash}")
+
+    assert session_cache.get(sid) is None
+
+
+def test_update_user_role_clears_redis(client: TestClient) -> None:
+    from conftest import login_and_csrf
+
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "bob", "password": "t3stP@ssw0rd"},
+    )
+    bob_id = resp.json()["id"]
+
+    bob_client = TestClient(client.app, cookies={})
+    login_and_csrf(bob_client, "bob", "t3stP@ssw0rd")
+
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    redis = client.app.state.ctx.redis
+    sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{bob_id}")
+    assert len(sids) >= 1
+
+    client.put(f"/api/admin/users/{bob_id}", json={"role": "admin"})
+
+    sids_after = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{bob_id}")
+    assert len(sids_after) == 0

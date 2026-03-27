@@ -4,13 +4,15 @@
 
 Session-based auth with bcrypt password hashing (12 rounds).
 
-- **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in SQLite
-- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB leak does not yield usable cookies. The secret is auto-generated and stored in `<output_dir>/.session_secret` (mode 0600), or provided via `SESSION_SECRET` env var (min 32 chars).
+- **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in both DB and Redis
+- **Redis session cache**: Session validation reads from Redis first (no DB hit on cache hit). DB is the durable store, synced every 5 minutes via a background task. Redis failure degrades gracefully to DB-only mode. Session TTL in Redis replaces per-request DB writes for sliding window renewal.
+- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB or Redis leak does not yield usable cookies. The secret is auto-generated and stored in `<output_dir>/.session_secret` (mode 0600), or provided via `SESSION_SECRET` env var (min 32 chars).
 - **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected; `X-Forwarded-Proto` only honored when the direct peer is in `TRUSTED_PROXIES`)
-- **Session lifetime**: 30-day sliding window, 90-day absolute max
-- **Session fixation**: All old sessions deleted on login, password change, and admin password reset
-- **Logout**: `DELETE /session` invalidates the session in the database (not just the cookie). The session ID is passed via `request.state` from the auth dependency.
-- **Session anomaly detection**: IP and user-agent changes are logged to the audit trail
+- **Session lifetime**: 30-day sliding window (via Redis TTL), 90-day absolute max (checked from cached `created_at`)
+- **Session fixation**: All old sessions deleted from both DB and Redis on login, password change, and admin password reset
+- **Logout**: `DELETE /session` invalidates the session in both DB and Redis (not just the cookie). The session ID is passed via `request.state` from the auth dependency.
+- **Session anomaly detection**: IP and user-agent changes are logged to the audit trail (even on Redis cache hits)
+- **User deactivation**: All sessions immediately deleted from both DB and Redis. A `user_sessions:{user_id}` Redis set tracks all active session IDs per user for efficient bulk deletion.
 - **Brute-force protection**: 5 failed attempts per 5 minutes, per IP + per username. Also applies to password change endpoint.
 - **Account lockout**: After 15 failed attempts per username within 1 hour, the account is temporarily locked (returns 429 with Retry-After). This catches patient attackers who stay under the per-window rate limit. Configurable via `LOGIN_LOCKOUT_THRESHOLD` and `LOGIN_LOCKOUT_WINDOW`.
 - **Constant-time verification**: bcrypt always runs against a dummy hash when the user doesn't exist (login) or on password change, preventing timing-based enumeration
@@ -21,7 +23,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 
 Two-layer defense:
 
-1. **Dependency-based auth** (`middleware.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session — all in the same DB transaction as the endpoint.
+1. **Dependency-based auth** (`middleware.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session. On Redis cache hit, validation uses cached data and TTL refresh replaces the DB write. On Redis miss or failure, falls back to the DB path and populates the Redis cache for subsequent requests.
 2. **Endpoint** (`api.py`): Every endpoint uses `Depends(get_current_user)` — returns 401 if unauthenticated. Ownership checks enforce default-deny: access is blocked unless `album.created_by == user.id` (or user is admin). Missing album → denied.
 
 Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. Demotion or deactivation of the last active admin is blocked to prevent lockout. When a user is deactivated or their role is changed, all their sessions are immediately invalidated.
@@ -169,6 +171,7 @@ Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory 
 - **Frontend API key in localStorage**: When users provide their own Anthropic API key (BYOK), it's stored in `localStorage`. This is readable by any JavaScript on the same origin. CSP headers mitigate XSS risk, but browser extensions could potentially access it. The key is sent directly to Anthropic's API, never to the songmaker server.
 - **No IP binding on sessions**: A stolen session cookie works from any IP. IP/UA changes are logged to the audit trail but not blocked, to avoid breaking mobile users who switch networks.
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
+- **Redis session staleness**: If Redis delete fails during user deactivation, the cached session remains valid until the next background sync (up to 5 minutes) or Redis TTL expiry. The background sync detects and cleans up orphaned/deactivated sessions.
 - **ACE-Step reinitialize**: No cooldown on `POST /api/admin/acestep/reinitialize`. Repeated calls by a compromised admin could cause GPU disruption.
 
 ## Hardening Roadmap (for public internet exposure)

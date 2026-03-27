@@ -6,7 +6,7 @@ import hashlib
 import hmac
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_models import (
@@ -46,6 +46,17 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
+def _clear_user_session_cache(request: Request, user_id: str) -> None:
+    from songmaker_cli.redis_client import SessionCache
+    session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+    if not session_cache:
+        return
+    try:
+        session_cache.delete_user_sessions(user_id)
+    except Exception:
+        log.warning("Redis session cache clear failed for user %s", user_id)
+
+
 @router.get("/users")
 def list_users_endpoint(
     db: Session = Depends(get_db_session),
@@ -74,6 +85,7 @@ def create_user_endpoint(
 def update_user_endpoint(
     user_id: str,
     req: UpdateUserRequest,
+    request: Request,
     db: Session = Depends(get_db_session),
     admin: AuthenticatedUser = Depends(require_admin),
 ) -> UserResponse:
@@ -90,6 +102,7 @@ def update_user_endpoint(
             raise HTTPException(400, "Cannot demote the last active admin")
 
     password_hash = hash_password(req.password) if req.password else None
+    invalidate_sessions = req.role is not None or req.is_active is False or req.password
     updated = update_user(
         db, user_id, role=req.role, is_active=req.is_active, password_hash=password_hash,
     )
@@ -100,16 +113,19 @@ def update_user_endpoint(
         changes.append(f"active={req.is_active}")
     if req.password:
         changes.append("password_changed")
-    if req.role is not None or req.is_active is False or req.password:
+    if invalidate_sessions:
         delete_user_sessions(db, user_id)
     record_audit(db, admin.id, "update", "user", user_id, ", ".join(changes))
     db.commit()
+    if invalidate_sessions:
+        _clear_user_session_cache(request, user_id)
     return UserResponse.from_orm(updated)
 
 
 @router.delete("/users/{user_id}")
 def deactivate_user_endpoint(
     user_id: str,
+    request: Request,
     db: Session = Depends(get_db_session),
     admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
@@ -129,6 +145,7 @@ def deactivate_user_endpoint(
     delete_user_sessions(db, user_id)
     record_audit(db, admin.id, "deactivate", "user", user_id)
     db.commit()
+    _clear_user_session_cache(request, user_id)
     return StatusResponse(status="ok")
 
 
@@ -180,6 +197,7 @@ def sessions_endpoint(
 @router.delete("/sessions/{session_hash}")
 def force_logout_endpoint(
     session_hash: str,
+    request: Request,
     db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
@@ -187,6 +205,13 @@ def force_logout_endpoint(
         if hmac.compare_digest(hashlib.sha256(sess.id.encode()).hexdigest(), session_hash):
             delete_session(db, sess.id)
             db.commit()
+            from songmaker_cli.redis_client import SessionCache
+            session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+            if session_cache:
+                try:
+                    session_cache.delete(sess.id, sess.user_id)
+                except Exception:
+                    log.warning("Redis session cache delete failed on force-logout")
             return StatusResponse(status="ok")
     raise HTTPException(404, "Session not found")
 

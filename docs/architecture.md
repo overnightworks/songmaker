@@ -16,8 +16,8 @@
 │   Pydantic request/response models   │
 └───┬──────────┬──────────┬────────────┘
     │          │          │
- SQLite/PG   Redis        External Services
- (all data)  (queue,RL)   (ACE-Step, Claude, Whisper)
+ SQLite/PG   Redis              External Services
+ (all data)  (queue,RL,sessions) (ACE-Step, Claude, Whisper)
 ```
 
 ## Layers
@@ -163,7 +163,7 @@ ACE-Step and scoring models coexist on the GPU. Per-job cleanup: `gc.collect()` 
 | Pydantic from_orm() | Response models serialize ORM objects | No manual dict layer to maintain |
 | GPU queue | Single-threaded, in-process | One GPU, ACE-Step + scoring share VRAM |
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
-| Session auth | Cookies, not JWT | Revocable, HttpOnly, simpler for monolith |
+| Session auth | Cookies + Redis cache | Revocable, HttpOnly, Redis-first reads, DB synced every 5 min |
 | Album ownership | `created_by` on Album | Songs inherit access; sharing via secret UUID slug |
 | SQLite + WAL | Single-server, no external deps | No Redis/Postgres overhead |
 | ACE-Step as subprocess | Separate server, managed lifecycle | Clean VRAM release, independent restarts |

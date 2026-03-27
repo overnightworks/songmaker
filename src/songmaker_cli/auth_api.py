@@ -56,7 +56,33 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-_MAX_USER_AGENT_LENGTH = 500
+
+
+def _cache_session(
+    request: Request, session_id: str, user, ip: str, ua: str, expires, created_at,
+) -> None:
+    from songmaker_cli.redis_client import SessionCache
+    session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+    if not session_cache:
+        return
+    try:
+        session_cache.store(
+            session_id, user.id, user.username, user.role, user.is_active,
+            ip, ua, expires, created_at, SESSION_MAX_AGE_SECONDS,
+        )
+    except Exception:
+        log.warning("Redis session cache write failed on login")
+
+
+def _clear_user_cache(request: Request, user_id: str) -> None:
+    from songmaker_cli.redis_client import SessionCache
+    session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+    if not session_cache:
+        return
+    try:
+        session_cache.delete_user_sessions(user_id)
+    except Exception:
+        log.warning("Redis session cache clear failed")
 
 
 def _client_ip(request: Request, ctx: AppContext) -> str:
@@ -65,7 +91,8 @@ def _client_ip(request: Request, ctx: AppContext) -> str:
 
 
 def _client_user_agent(request: Request) -> str:
-    return request.headers.get("user-agent", "")[:_MAX_USER_AGENT_LENGTH]
+    from songmaker_cli.constants import MAX_USER_AGENT_LENGTH
+    return request.headers.get("user-agent", "")[:MAX_USER_AGENT_LENGTH]
 
 
 def _detect_secure(request: Request | None, ctx: AppContext) -> bool:
@@ -121,6 +148,8 @@ def setup(
     if user_count(db) > 0:
         raise HTTPException(403, "Setup already completed")
 
+    ip = _client_ip(request, ctx)
+    ua = _client_user_agent(request)
     try:
         user = create_user(db, req.username, hash_password(req.password), role=ROLE_ADMIN)
         db.flush()
@@ -130,14 +159,14 @@ def setup(
         expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
         user_session = create_session(
             db, user.id, expires,
-            ip_address=_client_ip(request, ctx),
-            user_agent=_client_user_agent(request),
+            ip_address=ip, user_agent=ua,
         )
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(403, "Setup already completed")
 
+    _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
     _set_session_cookie(response, user_session.id, ctx, request)
     log.info("Setup completed: admin user '%s' created", req.username)
     return UserResponse.from_orm(user)
@@ -191,14 +220,16 @@ def login(
     record_login_attempt(db, ip, req.username, success=True)
     delete_user_sessions(db, user.id)
 
+    ua = _client_user_agent(request)
     expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
     user_session = create_session(
         db, user.id, expires,
-        ip_address=ip,
-        user_agent=_client_user_agent(request),
+        ip_address=ip, user_agent=ua,
     )
     db.commit()
 
+    _clear_user_cache(request, user.id)
+    _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
     _set_session_cookie(response, user_session.id, ctx, request)
     return UserResponse.from_orm(user)
 
@@ -214,6 +245,14 @@ def logout(
     if session_id:
         delete_session(db, session_id)
         db.commit()
+
+        from songmaker_cli.redis_client import SessionCache
+        session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+        if session_cache:
+            try:
+                session_cache.delete(session_id, current_user.id)
+            except Exception:
+                log.warning("Redis session cache delete failed on logout")
 
     response.delete_cookie(SESSION_COOKIE, path="/")
     response.delete_cookie(CSRF_COOKIE, path="/")
@@ -260,13 +299,16 @@ def change_password(
     user.password_hash = hash_password(req.new)
     delete_user_sessions(db, current_user.id)
 
+    ip = _client_ip(request, ctx)
+    ua = _client_user_agent(request)
     expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
     new_session = create_session(
         db, current_user.id, expires,
-        ip_address=_client_ip(request, ctx),
-        user_agent=_client_user_agent(request),
+        ip_address=ip, user_agent=ua,
     )
     db.commit()
 
+    _clear_user_cache(request, current_user.id)
+    _cache_session(request, new_session.id, user, ip, ua, expires, new_session.created_at)
     _set_session_cookie(response, new_session.id, ctx, request)
     return StatusResponse(status="ok")

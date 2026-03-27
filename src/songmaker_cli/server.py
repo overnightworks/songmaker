@@ -8,12 +8,13 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -390,6 +391,43 @@ def _auto_setup_admin(ctx: AppContext) -> None:
         log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
 
 
+async def _session_sync_loop(app: FastAPI) -> None:
+    from songmaker_cli.constants import REDIS_SESSION_SYNC_INTERVAL_SECONDS
+    from songmaker_cli.db.models import User as UserModel
+    from songmaker_cli.db.models import UserSession
+
+    ctx: AppContext = app.state.ctx
+    session_cache = app.state.session_cache
+
+    while True:
+        await asyncio.sleep(REDIS_SESSION_SYNC_INTERVAL_SECONDS)
+        try:
+            active = session_cache.get_all_sessions()
+            if not active:
+                continue
+            synced = 0
+            with ctx.db() as db:
+                for session_id, ttl in active:
+                    user_session = db.query(UserSession).filter_by(id=session_id).first()
+                    if not user_session:
+                        cached = session_cache.get(session_id)
+                        if cached:
+                            session_cache.delete(session_id, cached["user_id"])
+                        continue
+                    user = db.query(UserModel).filter_by(id=user_session.user_id).first()
+                    if user and not user.is_active:
+                        session_cache.delete_user_sessions(user.id)
+                        continue
+                    real_expires = datetime.now(timezone.utc) + timedelta(seconds=ttl)
+                    user_session.expires_at = real_expires
+                    synced += 1
+                db.commit()
+            if synced:
+                log.info("Session sync: updated %d sessions", synced)
+        except Exception:
+            log.warning("Session sync failed", exc_info=True)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
@@ -414,7 +452,13 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         log.warning("Could not connect to Redis — job submission will fail")
 
     app.state.startup_time = datetime.now(timezone.utc)
+    sync_task = asyncio.create_task(_session_sync_loop(app))
     yield
+    sync_task.cancel()
+    try:
+        await sync_task
+    except asyncio.CancelledError:
+        pass
     await close_arq_pool()
 
 
@@ -453,8 +497,9 @@ def create_app(
         )
 
     app.state.ctx = ctx
-    from songmaker_cli.redis_client import RedisHttpMetrics
+    from songmaker_cli.redis_client import RedisHttpMetrics, SessionCache
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
+    app.state.session_cache = SessionCache(ctx.redis)
 
     # Middleware execution order (Starlette LIFO — last added runs first):
     #   1. BodySizeLimitMiddleware  — reject oversized bodies before processing
