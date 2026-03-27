@@ -43,6 +43,12 @@ def _data_dir() -> Path:
     return Path(os.environ.get("DATA_DIR", DATA_ROOT))
 
 
+def _require_acestep_manager():
+    if _acestep_manager is None:
+        raise RuntimeError("ACE-Step manager not initialized — on_startup may have failed")
+    return _acestep_manager
+
+
 async def generate(ctx, job_id, song_id, version_id, count, user_id):
     db_factory = _get_db_factory()
 
@@ -51,8 +57,9 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id):
         if not job or job.status in TERMINAL_STATUSES:
             return
 
-    _acestep_manager.prepare_generate_mode()
-    model = _acestep_manager.active_model
+    mgr = _require_acestep_manager()
+    mgr.prepare_generate_mode()
+    model = mgr.active_model
     if model:
         await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model)
 
@@ -73,7 +80,8 @@ async def score(ctx, job_id, gen_id, scorers):
         if not job or job.status in TERMINAL_STATUSES:
             return
 
-    _acestep_manager.prepare_score_mode()
+    mgr = _require_acestep_manager()
+    mgr.prepare_score_mode()
 
     import structlog
     structlog.contextvars.bind_contextvars(job_id=job_id, task="score")
@@ -94,25 +102,34 @@ async def cleanup_stale(ctx):
 
 async def on_startup(ctx):
     from songmaker_cli.config import find_project_root
+    from songmaker_cli.logging_config import configure_logging
     from songmaker_cli.server import _load_env_file
+
     project_root = find_project_root(Path.cwd()) or Path.cwd()
     _load_env_file(project_root)
+    configure_logging()
+
+    log.info("Worker starting up...")
 
     global _acestep_manager
     from songmaker_cli.acestep_manager import AceStepManager
     _acestep_manager = AceStepManager()
-    _acestep_manager.start()
-    _acestep_manager.wait_for_health()
+    _acestep_manager.ensure()
     _acestep_manager.refresh_cached_model()
 
     model = _acestep_manager.active_model
+    log.info("ACE-Step model: %s", model or "unknown")
     if model:
         await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model)
 
     db_factory = _get_db_factory()
     with db_factory() as session:
-        recover_stale_jobs(session)
+        recovered = recover_stale_jobs(session)
+        if recovered:
+            log.info("Recovered %d stale jobs", recovered)
         session.commit()
+
+    log.info("Worker ready")
 
 
 async def on_shutdown(ctx):

@@ -206,8 +206,7 @@ def test_on_startup_recovers_jobs() -> None:
 
     mock_recover.assert_called_once()
     mock_session.commit.assert_called_once()
-    mock_mgr.start.assert_called_once()
-    mock_mgr.wait_for_health.assert_called_once()
+    mock_mgr.ensure.assert_called_once()
 
 
 # ── on_shutdown ────────────────────────────────────────────────────
