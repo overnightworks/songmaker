@@ -50,8 +50,8 @@ Every location that touches `GpuQueue` must be migrated. File:line references ar
 
 | Location | What it does | Migration |
 |----------|-------------|-----------|
-| `server.py:417-419` | `GpuQueue(db_factory)` creation | Skip when `USE_CELERY` set (Phase 0 already does this) |
-| `server.py:439-440` | `gpu_q.start()` | Skip when `USE_CELERY` set (Phase 0 already does this) |
+| `server.py:417-419` | `GpuQueue(db_factory)` creation | Skip when arq worker is configured (Redis agent wired this) |
+| `server.py:439-440` | `gpu_q.start()` | Skip when arq worker is configured (Redis agent wired this) |
 | `server.py:391-393` | `gpu_q.shutdown()` in lifespan | Skip when `gpu_queue is None` (Phase 0 already does this) |
 | `app_context.py:27` | `gpu_queue: GpuQueue \| None` | Keep None when using arq |
 
@@ -121,11 +121,11 @@ Every location that touches `GpuQueue` must be migrated. File:line references ar
   @asynccontextmanager
   async def _lifespan(app: FastAPI):
       # ... existing startup ...
-      if app.state.ctx.use_celery:
+      if app.state.ctx.redis:
           from songmaker_cli.arq_pool import get_arq_pool
           app.state.arq_pool = await get_arq_pool()
       yield
-      if app.state.ctx.use_celery:
+      if app.state.ctx.redis:
           from songmaker_cli.arq_pool import close_arq_pool
           await close_arq_pool()
       # ... existing shutdown ...
@@ -264,7 +264,7 @@ Every location that touches `GpuQueue` must be migrated. File:line references ar
 
 - [ ] `generation_api.py:101`: Replace `ctx.gpu_queue.submit(...)` with:
   ```python
-  if ctx.use_celery:
+  if ctx.redis:  # arq uses Redis as backend
       pool = request.app.state.arq_pool
       await pool.enqueue_job("generate", job.id, song_id, version.id, req.count, req.model)
   else:
@@ -296,8 +296,7 @@ Every location that touches `GpuQueue` must be migrated. File:line references ar
 - [ ] Delete `gpu_queue.py` (entire file)
 - [ ] Remove `GpuQueue` from `app_context.py`
 - [ ] Remove `GpuQueue` import guard in `server.py`
-- [ ] Remove `USE_CELERY` feature flag — arq becomes the only path
-- [ ] Rename `use_celery` field in `AppContext` to something generic (or remove if no fallback needed)
+- [ ] Remove in-process `GpuQueue` fallback — arq becomes the only path
 - [ ] Update `docs/architecture.md`
 
 ## Design Decisions
@@ -321,7 +320,7 @@ If the worker dies, arq can retry the job (configurable). The task checks if the
 arq workers are separate processes. `structlog.contextvars` bindings from the API process don't carry over. Each task binds its own context vars at the start of execution.
 
 ### Backwards compatibility
-- Feature flag: `USE_CELERY` env var (naming kept for Phase 0 compatibility, despite using arq)
+- Feature flag: `REDIS_URL` env var — when set, arq is available
 - When unset: fall back to in-process `GpuQueue` (current behavior)
 - Phase 6 removes the flag and the old code path
 
@@ -339,7 +338,7 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: postgresql://...
-      USE_CELERY: "1"
+      # arq uses REDIS_URL — no separate flag needed
 
   worker:
     build: .
