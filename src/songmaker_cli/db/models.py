@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -119,7 +120,7 @@ class Generation(Base):
         ForeignKey("versions.id"), nullable=True,
     )
     generation_number: Mapped[int] = mapped_column(Integer, default=1)
-    seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     mp3_path: Mapped[str] = mapped_column(String(500), index=True)
     wav_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     whisper_text: Mapped[str | None] = mapped_column(Text, nullable=True)
