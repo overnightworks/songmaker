@@ -13,10 +13,10 @@ Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [secur
 ## Setup & Run
 
 ```bash
-# Backend (requires Redis — `docker run -d redis` or install locally)
+# Backend (requires Redis + PostgreSQL)
+uv sync --extra server --extra scoring --extra whisper --extra dev
 source .venv/bin/activate
-pip install -e ".[server,scoring,whisper,dev]"
-songmaker server --port 8080   # REDIS_URL defaults to redis://localhost:6379/0
+songmaker server --port 8080   # Reads DATABASE_URL + REDIS_URL from .server.env
 
 # Frontend (dev mode)
 cd frontend && pnpm install && pnpm dev

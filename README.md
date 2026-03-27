@@ -14,8 +14,8 @@ sudo apt install postgresql redis-server ffmpeg
 sudo systemctl enable --now postgresql redis-server
 
 # 2. Python + frontend
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -e ".[server,scoring,whisper,dev]"
+uv sync --extra server --extra scoring --extra whisper --extra dev
+source .venv/bin/activate
 cd frontend && pnpm install && pnpm build && cd ..
 
 # 3. Database (one-time — creates PG user + database + migrations)
