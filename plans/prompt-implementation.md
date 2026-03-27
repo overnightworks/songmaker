@@ -6,11 +6,10 @@ This codebase is in active use. The quality of your work directly affects a real
 
 **Before writing any code**, read `plans/COORDINATION.md`. This file tracks which agents are working on which plans and which files they own.
 
-1. Read the "Active Work" table — check if another agent is already working on files you need
-2. Read the "File Ownership Map" — verify no conflicts with your plan's files
-3. **Add your row** to the "Active Work" table: your plan name, status "active", your branch name, and today's date. Commit this update to your branch immediately.
-4. If a file you need is owned by another agent, DO NOT edit it. Implement everything else and leave a TODO comment at the call site: `# TODO(migration-redis): wire up after Redis migration lands`
-5. When done, update your status to "done" in the coordination file
+1. Run `python scripts/coordinate.py status` to see what's in progress
+2. Run `python scripts/coordinate.py claim <your-plan> <your-files>` — if it prints CONFLICT, stop and ask the user
+3. If a file you need is claimed by another agent, DO NOT edit it. Implement everything else and leave a TODO comment at the call site: `# TODO(migration-X): wire up after X migration lands`
+4. When done, run `python scripts/coordinate.py done <your-plan>`
 
 Work on a **git branch** named `feat/migration-{plan-name}` (e.g., `feat/migration-redis`). Do not commit to `main`.
 

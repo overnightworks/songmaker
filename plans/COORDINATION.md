@@ -1,53 +1,43 @@
 # Agent Coordination
 
-Agents working on plans in parallel MUST read this file before starting and update their status as they work.
+Agents working on plans in parallel MUST coordinate file ownership to prevent merge conflicts.
 
-## Rules
+## How it works
 
-1. **Read this file first** — check if any files you need are owned by another agent
-2. **Claim your files** — add your plan name to the "Active Work" table before editing anything
-3. **Update status** — mark phases as you complete them (queued → active → done)
-4. **Release files** — remove your entry when done, commit the update
+A SQLite database at `~/.claude/songmaker-coordination.db` (outside the repo) tracks which agent owns which files. All agents — including those in git worktrees — share this database.
 
-## File Ownership Map
+## Commands
 
-Files that multiple plans touch. If another agent owns a file, DO NOT edit it — wait or coordinate.
+```bash
+# Before starting: claim the files your plan needs
+python scripts/coordinate.py claim migration-redis "middleware.py,server.py:130-156,server.py:290-315,server.py:487-531,server.py:594-609"
 
-| File | Redis | PostgreSQL | Celery | Notes |
-|------|-------|------------|--------|-------|
-| `engine.py` | | owns | | Dialect detection, pool config |
-| `server.py` lines 130-156 (HttpMetrics) | owns | | | Metrics class |
-| `server.py` lines 290-315 (IpRateLimit) | owns | | | Rate limiter middleware |
-| `server.py` lines 487-531 (metrics cache) | owns | | | Cache + lock |
-| `server.py` lines 594-609 (shared limiter) | owns | | | Shared album rate limit |
-| `server.py` lines 376-425 (lifespan/startup) | | | owns | GPU queue startup |
-| `server.py` lines 439-444 (middleware order) | | | | DO NOT TOUCH |
-| `server.py` lines 491-531 (metrics endpoint) | owns | | | Reads from metrics |
-| `server.py` lines 742-747 (workers guard) | | owns | | UVICORN_WORKERS check |
-| `middleware.py` lines 110-146 (IpRateLimiter) | owns | | | Class definition |
-| `api_helpers.py` lines 43-81 | | owns | | BEGIN IMMEDIATE |
-| `api_helpers.py` lines 99-108 | | owns | | unique_album_id |
-| `app_context.py` | shared | shared | shared | Add fields — coordinate! |
-| `db/migrations/env.py` | | owns | | DATABASE_URL |
-| `db/queries/jobs.py` lines 141-158 | | owns | | julianday |
-| `gpu_queue.py` | | | owns | Entire file |
-| `generation_api.py` lines 96-107, 118-130 | | | owns | submit() calls |
-| `jobs.py` | | | owns | Task extraction |
+# Check if a file is available before editing
+python scripts/coordinate.py check middleware.py
 
-### Shared files (multiple agents need to edit)
+# See all active work
+python scripts/coordinate.py status
 
-**`app_context.py`**: Redis adds `redis` field, Celery adds `use_celery` field. Agents must ADD fields, never remove or rename existing ones. Merge is safe if both just append.
+# When done: release all claims
+python scripts/coordinate.py done migration-redis
+```
 
-**`server.py`**: Split by line ranges above. Each agent owns specific sections. Do not edit outside your owned ranges.
+## Agent workflow
 
-**`pyproject.toml`**: Redis adds `redis[hiredis]`, PostgreSQL adds `psycopg[binary]`, Celery adds `celery[redis]`. All are additive to the `[server]` extras list. Safe to merge.
+1. Read your plan file
+2. Run `python scripts/coordinate.py status` to see what's in progress
+3. Run `python scripts/coordinate.py claim <plan> <files>` — if it prints CONFLICT, stop and ask the user
+4. Work on a git branch `feat/migration-{plan-name}`
+5. If a file you need is claimed by another agent, leave a `# TODO(migration-X): ...` at the call site
+6. When done, run `python scripts/coordinate.py done <plan>`
 
-## Active Work
+## File ownership reference
 
-| Plan | Agent | Status | Branch | Started |
-|------|-------|--------|--------|---------|
-| | | | | |
+See each migration plan for its exact file:line ownership. Summary:
 
-<!-- Agents: fill in your row when you start, update status as you go -->
-<!-- Status values: queued | active | phase-N | done -->
-<!-- Branch: the git branch you're working on -->
+**Redis**: `middleware.py`, `server.py:130-156`, `server.py:290-315`, `server.py:487-531`, `server.py:594-609`
+**PostgreSQL**: `engine.py`, `api_helpers.py`, `db/migrations/env.py`, `db/queries/jobs.py:141-158`, `server.py:742-747`
+**Celery**: `gpu_queue.py`, `generation_api.py:96-130`, `jobs.py`, `server.py:376-425`
+
+**Shared (additive only)**: `app_context.py` (append fields), `pyproject.toml` (append deps)
+**Never touch**: `server.py:439-444` (middleware order is security-critical)
