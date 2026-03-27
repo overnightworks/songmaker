@@ -32,7 +32,6 @@ from songmaker_cli.db.queries import (
     save_rating,
     unpick_generation,
 )
-from songmaker_cli.jobs import run_generation_job, run_scoring_job
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
@@ -74,7 +73,7 @@ def api_delete_generation(
 
 
 @router.post("/songs/{song_id}/generate")
-def api_generate_song(
+async def api_generate_song(
     song_id: str,
     req: GenerateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -87,7 +86,8 @@ def api_generate_song(
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
     if req.model:
-        active = ctx.gpu_queue.active_model if ctx.gpu_queue else None
+        from songmaker_cli.arq_pool import get_active_model
+        active = await get_active_model()
         if active is None:
             raise HTTPException(503, "ACE-Step server not available")
         if req.model != active:
@@ -98,17 +98,18 @@ def api_generate_song(
     session.commit()
     log.info("Generate: song='%s', count=%d, job=%s", song.title, req.count, job.id)
 
-    ctx.gpu_queue.submit(
-        job.id, "generate", run_generation_job,
-        args=(job.id, song_id, version.id, req.count, user.id),
-        kwargs={"db_factory": ctx.db, "output_dir": ctx.output_dir},
-    )
+    try:
+        from songmaker_cli.arq_pool import get_arq_pool
+        pool = await get_arq_pool()
+        await pool.enqueue_job("generate", job.id, song_id, version.id, req.count, user.id)
+    except ConnectionError:
+        raise HTTPException(503, "Job queue unavailable")
 
     return JobResponse.from_orm(job)
 
 
 @router.post("/generations/{gen_id}/score")
-def api_score_generation(
+async def api_score_generation(
     gen_id: str,
     req: ScoreRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -121,11 +122,12 @@ def api_score_generation(
     record_audit(session, user.id, "score", "generation", gen_id)
     session.commit()
 
-    ctx.gpu_queue.submit(
-        job.id, "score", run_scoring_job,
-        args=(job.id, gen_id, req.scorers),
-        kwargs={"db_factory": ctx.db, "output_dir": ctx.output_dir},
-    )
+    try:
+        from songmaker_cli.arq_pool import get_arq_pool
+        pool = await get_arq_pool()
+        await pool.enqueue_job("score", job.id, gen_id, req.scorers)
+    except ConnectionError:
+        raise HTTPException(503, "Job queue unavailable")
 
     return JobResponse.from_orm(job)
 

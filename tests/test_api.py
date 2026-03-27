@@ -456,13 +456,11 @@ def test_generate_song_no_lyrics(client: TestClient) -> None:
 
 
 def test_generate_song_submits_job(client: TestClient) -> None:
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import AsyncMock, patch
 
-    mock_queue = MagicMock()
+    mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
-        mock_ctx.return_value = client.app.state.ctx
-        mock_ctx.return_value.gpu_queue = mock_queue
+    with patch("songmaker_cli.arq_pool.get_arq_pool", AsyncMock(return_value=mock_pool)):
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 2},
@@ -470,18 +468,18 @@ def test_generate_song_submits_job(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["type"] == "generate"
-    mock_queue.submit.assert_called_once()
+    mock_pool.enqueue_job.assert_called_once()
 
 
 def test_generate_song_model_mismatch(client: TestClient) -> None:
-    from unittest.mock import MagicMock, PropertyMock, patch
+    from unittest.mock import AsyncMock, patch
 
-    mock_queue = MagicMock()
-    type(mock_queue).active_model = PropertyMock(return_value="sft")
+    mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
-        mock_ctx.return_value = client.app.state.ctx
-        mock_ctx.return_value.gpu_queue = mock_queue
+    with (
+        patch("songmaker_cli.arq_pool.get_arq_pool", AsyncMock(return_value=mock_pool)),
+        patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value="sft")),
+    ):
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 1, "model": "turbo"},
@@ -489,60 +487,58 @@ def test_generate_song_model_mismatch(client: TestClient) -> None:
 
     assert resp.status_code == 409
     assert "turbo" in resp.json()["detail"]
-    mock_queue.submit.assert_not_called()
+    mock_pool.enqueue_job.assert_not_called()
 
 
 def test_generate_song_model_unavailable(client: TestClient) -> None:
-    from unittest.mock import MagicMock, PropertyMock, patch
+    from unittest.mock import AsyncMock, patch
 
-    mock_queue = MagicMock()
-    type(mock_queue).active_model = PropertyMock(return_value=None)
+    mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
-        mock_ctx.return_value = client.app.state.ctx
-        mock_ctx.return_value.gpu_queue = mock_queue
+    with (
+        patch("songmaker_cli.arq_pool.get_arq_pool", AsyncMock(return_value=mock_pool)),
+        patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value=None)),
+    ):
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 1, "model": "sft"},
         )
 
     assert resp.status_code == 503
-    mock_queue.submit.assert_not_called()
+    mock_pool.enqueue_job.assert_not_called()
 
 
 def test_generate_song_model_match(client: TestClient) -> None:
-    from unittest.mock import MagicMock, PropertyMock, patch
+    from unittest.mock import AsyncMock, patch
 
-    mock_queue = MagicMock()
-    type(mock_queue).active_model = PropertyMock(return_value="sft")
+    mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
-        mock_ctx.return_value = client.app.state.ctx
-        mock_ctx.return_value.gpu_queue = mock_queue
+    with (
+        patch("songmaker_cli.arq_pool.get_arq_pool", AsyncMock(return_value=mock_pool)),
+        patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value="sft")),
+    ):
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 1, "model": "sft"},
         )
 
     assert resp.status_code == 200
-    mock_queue.submit.assert_called_once()
+    mock_pool.enqueue_job.assert_called_once()
 
 
 def test_generate_song_no_model_skips_check(client: TestClient) -> None:
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import AsyncMock, patch
 
-    mock_queue = MagicMock()
+    mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
-        mock_ctx.return_value = client.app.state.ctx
-        mock_ctx.return_value.gpu_queue = mock_queue
+    with patch("songmaker_cli.arq_pool.get_arq_pool", AsyncMock(return_value=mock_pool)):
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 1},
         )
 
     assert resp.status_code == 200
-    mock_queue.submit.assert_called_once()
+    mock_pool.enqueue_job.assert_called_once()
 
 
 def test_generate_song_invalid_model(client: TestClient) -> None:
@@ -551,6 +547,38 @@ def test_generate_song_invalid_model(client: TestClient) -> None:
         json={"count": 1, "model": "invalid"},
     )
     assert resp.status_code == 422
+
+
+def test_generate_song_redis_down(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    with patch(
+        "songmaker_cli.arq_pool.get_arq_pool",
+        AsyncMock(side_effect=ConnectionError("redis down")),
+    ):
+        resp = client.post(
+            "/api/songs/s1/generate",
+            json={"count": 1},
+        )
+
+    assert resp.status_code == 503
+    assert "Job queue unavailable" in resp.json()["detail"]
+
+
+def test_score_generation_redis_down(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    with patch(
+        "songmaker_cli.arq_pool.get_arq_pool",
+        AsyncMock(side_effect=ConnectionError("redis down")),
+    ):
+        resp = client.post(
+            "/api/generations/g1/score",
+            json={},
+        )
+
+    assert resp.status_code == 503
+    assert "Job queue unavailable" in resp.json()["detail"]
 
 
 def test_score_generation_not_found(client: TestClient) -> None:
@@ -562,13 +590,11 @@ def test_score_generation_not_found(client: TestClient) -> None:
 
 
 def test_score_generation_submits_job(client: TestClient) -> None:
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import AsyncMock, patch
 
-    mock_queue = MagicMock()
+    mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
-        mock_ctx.return_value = client.app.state.ctx
-        mock_ctx.return_value.gpu_queue = mock_queue
+    with patch("songmaker_cli.arq_pool.get_arq_pool", AsyncMock(return_value=mock_pool)):
         resp = client.post(
             "/api/generations/g1/score",
             json={},
@@ -576,7 +602,7 @@ def test_score_generation_submits_job(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["type"] == "score"
-    mock_queue.submit.assert_called_once()
+    mock_pool.enqueue_job.assert_called_once()
 
 
 # ── Chat endpoint ───────────────────────────────────────────────────
@@ -664,13 +690,11 @@ def test_get_album(client: TestClient) -> None:
 
 
 def test_get_job_found(client: TestClient) -> None:
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import AsyncMock, patch
 
-    mock_queue = MagicMock()
+    mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
-        mock_ctx.return_value = client.app.state.ctx
-        mock_ctx.return_value.gpu_queue = mock_queue
+    with patch("songmaker_cli.arq_pool.get_arq_pool", AsyncMock(return_value=mock_pool)):
         resp = client.post("/api/songs/s1/generate", json={"count": 1})
     job_id = resp.json()["id"]
 
@@ -1069,7 +1093,7 @@ def test_chat_rate_limit(tmp_path: Path) -> None:
 
 
 def test_admin_has_rate_limit(tmp_path: Path) -> None:
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import AsyncMock, patch
 
     import songmaker_cli.api_helpers as api_mod
 
@@ -1078,11 +1102,8 @@ def test_admin_has_rate_limit(tmp_path: Path) -> None:
 
     c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
 
-    mock_queue = MagicMock()
     try:
-        with patch("songmaker_cli.generation_api.get_app_context") as mock_ctx:
-            mock_ctx.return_value = c.app.state.ctx
-            mock_ctx.return_value.gpu_queue = mock_queue
+        with patch("songmaker_cli.arq_pool.get_arq_pool", AsyncMock(return_value=AsyncMock())):
             r = c.post("/api/songs/s1/generate", json={"count": 1})
             assert r.status_code == 200
 

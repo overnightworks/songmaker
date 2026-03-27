@@ -45,7 +45,7 @@ The API client and `types.ts` are the frontend's contract with the backend. When
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models.py` |
 | Jobs | Background generation + scoring runners | `jobs.py` |
-| GPU | Sequential job queue, ACE-Step lifecycle, VRAM management | `gpu_queue.py` |
+| Worker | arq-based job queue, ACE-Step lifecycle, VRAM management | `worker.py`, `acestep_manager.py`, `arq_pool.py` |
 | Generation | ACE-Step call → decode WAV → master → MP3 | `generate.py` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
@@ -113,8 +113,8 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
   → ownership check
   → model validation (if specified — reject 409 if active model doesn't match)
   → create Job record + audit log entry
-  → submit to GpuQueue
-  → GpuQueue._prepare_mode("generate")
+  → enqueue to arq (Redis-backed)
+  → arq worker: prepare_generate_mode()
     → ensure ACE-Step server is running (start if needed)
   → run_generation_job()
     → build config (song params + admin defaults + model defaults)
@@ -131,8 +131,8 @@ POST /api/generations/{id}/score
   → rate limit check (per-user)
   → ownership check
   → create Job record + audit log entry
-  → submit to GpuQueue
-  → run_scoring_job()
+  → enqueue to arq (Redis-backed)
+  → arq worker: run_scoring_job()
     → run_scoring_pipeline() with parallel CPU/GPU execution:
       GPU scorers (audiobox) run sequentially in main thread
       CPU scorers (text_accuracy via faster-whisper, emotional_dynamics,

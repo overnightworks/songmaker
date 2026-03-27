@@ -5,13 +5,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from fastapi import Request
 from sqlalchemy.orm import Session, sessionmaker
-
-if TYPE_CHECKING:
-    from songmaker_cli.gpu_queue import GpuQueue
 
 
 @dataclass
@@ -22,8 +18,6 @@ class AppContext:
     trusted_proxies: frozenset[str] = field(default_factory=frozenset)
     allowed_hosts_exact: frozenset[str] = field(default_factory=frozenset)
     allowed_hosts_patterns: list[re.Pattern[str]] = field(default_factory=list)
-    gpu_queue: GpuQueue | None = None
-    use_celery: bool = False
 
 
 def get_app_context(request: Request) -> AppContext:

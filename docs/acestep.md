@@ -4,13 +4,13 @@ Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5)
 
 ## How Songmaker Uses ACE-Step
 
-ACE-Step runs as a separate HTTP server (`localhost:8001`). The `gpu_queue.py` manages its lifecycle — starting it before the first generation job. It stays running; scoring models (faster-whisper, AudioBox) coexist on the GPU.
+ACE-Step runs as a separate HTTP server (`localhost:8001`). The `acestep_manager.py` manages its lifecycle — starting it before the first generation job. It stays running; scoring models (faster-whisper, AudioBox) coexist on the GPU.
 
 ```
-songmaker server
-  → GpuQueue starts
-  → on first generate job:
-    → start ACE-Step server (~18 GB VRAM)
+arq worker (songmaker_cli.worker.WorkerSettings)
+  → on_startup: AceStepManager.start()
+  → on generate job:
+    → prepare_generate_mode() (clear scoring models, ensure ACE-Step)
     → POST to ACE-Step API → get WAV bytes
     → master → MP3
   → on score job:

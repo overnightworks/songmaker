@@ -38,6 +38,7 @@ server = [
     "bcrypt>=4.0",
     "python-dotenv>=1.0",
     "structlog>=24.0",
+    "arq>=0.26",
 ]
 claude = [
     "anthropic>=0.20",

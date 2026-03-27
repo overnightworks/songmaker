@@ -52,6 +52,16 @@ METRICS_CACHE_TTL_SECONDS = 5
 # Global generation defaults
 GLOBAL_DEFAULTS_PRESET_NAME = "__global_defaults__"
 
+# ACE-Step server
+ACESTEP_PORT = 8001
+ACESTEP_HEALTH_URL_TEMPLATE = "http://localhost:{port}/health"
+ACESTEP_STARTUP_TIMEOUT_SECONDS = 120
+
+# arq worker
+ARQ_QUEUE_KEY = "arq:queue"
+ACTIVE_MODEL_REDIS_KEY = "songmaker:active_model"
+ARQ_HEALTH_KEY_PATTERN = "arq:worker:*"
+
 # Audio file serving
 AUDIO_MEDIA_TYPES: dict[str, str] = {
     ".mp3": "audio/mpeg",
