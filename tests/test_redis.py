@@ -121,33 +121,36 @@ class TestRedisHttpMetrics:
 
 
 def _make_server_project(tmp_path: Path):
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
-    return output_dir, project_root
+    return audio_dir, data_dir, project_root
 
 
-def _make_redis_ctx(tmp_path: Path, fake_redis) -> tuple[AppContext, Path, Path]:
-    output_dir, project_root = _make_server_project(tmp_path)
-    factory = init_db(output_dir / "songmaker.db")
+def _make_redis_ctx(tmp_path: Path, fake_redis) -> tuple[AppContext, Path, Path, Path]:
+    audio_dir, data_dir, project_root = _make_server_project(tmp_path)
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.add(User(
             username="admin", password_hash=hash_password("admin12345"), role="admin",
         ))
         session.commit()
     ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=fake_redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        session_secret=TEST_SECRET, redis=fake_redis,
     )
-    return ctx, output_dir, project_root
+    return ctx, audio_dir, data_dir, project_root
 
 
 def test_health_reports_redis_ok(tmp_path: Path, fake_redis) -> None:
-    ctx, output_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
-    app = create_app(output_dir, project_root, ctx=ctx)
+    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with (
         patch("songmaker_cli.arq_pool.is_worker_healthy", return_value=False),
         patch("songmaker_cli.arq_pool.get_queue_depth", return_value=0),
@@ -160,8 +163,8 @@ def test_health_reports_redis_ok(tmp_path: Path, fake_redis) -> None:
 
 
 def test_health_reports_redis_error(tmp_path: Path, fake_redis) -> None:
-    ctx, output_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
-    app = create_app(output_dir, project_root, ctx=ctx)
+    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with TestClient(app) as client:
         with patch("songmaker_cli.redis_client.redis_health", return_value=False):
             resp = client.get("/health")
@@ -172,8 +175,8 @@ def test_health_reports_redis_error(tmp_path: Path, fake_redis) -> None:
 
 
 def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis) -> None:
-    ctx, output_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
-    app = create_app(output_dir, project_root, ctx=ctx)
+    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
     from conftest import login_and_csrf
     login_and_csrf(client, "admin", "admin12345")
@@ -189,25 +192,26 @@ def test_redis_rate_limit_503_on_failure(tmp_path: Path) -> None:
     pipe_mock.execute.side_effect = ConnectionError("Redis down")
     broken_redis.pipeline.return_value = pipe_mock
 
-    output_dir, project_root = _make_server_project(tmp_path)
-    factory = init_db(output_dir / "songmaker.db")
+    audio_dir, data_dir, project_root = _make_server_project(tmp_path)
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.add(User(
             username="admin", password_hash=hash_password("admin12345"), role="admin",
         ))
         session.commit()
     ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=broken_redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        session_secret=TEST_SECRET, redis=broken_redis,
     )
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={}, raise_server_exceptions=False)
     resp = client.get("/api/songs")
     assert resp.status_code == 503
 
 
 def test_metrics_with_redis(tmp_path: Path, fake_redis) -> None:
-    ctx, output_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
-    app = create_app(output_dir, project_root, ctx=ctx)
+    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with TestClient(app) as client:
         client.get("/health")
         resp = client.get("/metrics")
@@ -220,8 +224,8 @@ def test_metrics_with_redis(tmp_path: Path, fake_redis) -> None:
 def test_ip_rate_limit_middleware_writes_to_redis(tmp_path: Path, fake_redis) -> None:
     from songmaker_cli.constants import REDIS_RL_IP_PREFIX
 
-    ctx, output_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
-    app = create_app(output_dir, project_root, ctx=ctx)
+    ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
     from conftest import login_and_csrf
     login_and_csrf(client, "admin", "admin12345")

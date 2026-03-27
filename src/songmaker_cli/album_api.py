@@ -97,7 +97,7 @@ def api_delete_album(
 ) -> StatusResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    delete_album(session, album_id, output_dir=ctx.output_dir)
+    delete_album(session, album_id, audio_dir=ctx.audio_dir)
     record_audit(session, user.id, "delete", "album", album_id)
     session.commit()
     return StatusResponse()
@@ -112,7 +112,7 @@ def api_cleanup_album(
 ) -> CleanupResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    count = cleanup_album(session, album_id, output_dir=ctx.output_dir)
+    count = cleanup_album(session, album_id, audio_dir=ctx.audio_dir)
     record_audit(session, user.id, "cleanup", "album", album_id, f"deleted={count}")
     session.commit()
     return CleanupResponse(deleted=count)

@@ -7,11 +7,10 @@ from pathlib import Path
 import pytest
 
 from songmaker_cli.config import (
+    audio_file_path,
     build_ace_config,
     find_project_root,
     load_generation_defaults,
-    next_version,
-    resolve_output_paths,
     save_generation_defaults,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -71,32 +70,17 @@ def test_build_ace_config_cli_overrides_none_ignored() -> None:
     assert config.seed == 99
 
 
-def test_resolve_output_paths(tmp_path: Path) -> None:
-    paths = resolve_output_paths("my_album", "song_name", output_root=tmp_path)
-    assert paths.output_dir == tmp_path / "my_album"
-    assert paths.version == 1
-    assert paths.versioned_name == "song_name_v1"
-    assert paths.mp3 == tmp_path / "my_album" / "song_name_v1.mp3"
-    assert paths.wav == tmp_path / "my_album" / "song_name_v1.wav"
+def test_audio_file_path_basic(tmp_path: Path) -> None:
+    result = audio_file_path(tmp_path, "user1", "gen1", ".mp3")
+    assert result == tmp_path / "user1" / "gen1.mp3"
+    assert result.parent.exists()
 
 
-def test_resolve_output_paths_increments_version(tmp_path: Path) -> None:
-    album_dir = tmp_path / "album"
-    album_dir.mkdir()
-    (album_dir / "song_v1.mp3").touch()
-    (album_dir / "song_v2.mp3").touch()
-    paths = resolve_output_paths("album", "song", output_root=tmp_path)
-    assert paths.version == 3
-
-
-def test_next_version_empty(tmp_path: Path) -> None:
-    assert next_version(tmp_path, "song") == 1
-
-
-def test_next_version_with_existing(tmp_path: Path) -> None:
-    (tmp_path / "song_v1.mp3").touch()
-    (tmp_path / "song_v3.mp3").touch()
-    assert next_version(tmp_path, "song") == 4
+def test_audio_file_path_creates_dir(tmp_path: Path) -> None:
+    audio_dir = tmp_path / "audio"
+    result = audio_file_path(audio_dir, "user2", "gen2", ".wav")
+    assert result == audio_dir / "user2" / "gen2.wav"
+    assert result.parent.exists()
 
 
 def test_build_ace_config_negative_shift_raises() -> None:

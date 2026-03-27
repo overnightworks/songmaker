@@ -19,9 +19,9 @@ from songmaker_cli.server import create_app, parse_allowed_hosts, run_server
 
 @pytest.fixture()
 def server_app(tmp_path: Path) -> TestClient:
-    output_dir = tmp_path / "_output"
-    album_dir = output_dir / "test_album"
-    album_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
 
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
@@ -29,11 +29,14 @@ def server_app(tmp_path: Path) -> TestClient:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    mp3 = album_dir / "01_song_v1.mp3"
-    mp3.write_bytes(b"\xff\xfb\x90\x00" * 100)
-
-    factory = init_db(output_dir / "songmaker.db")
+    admin_id = "admin-user-id"
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
+        admin = User(
+            id=admin_id, username="admin",
+            password_hash=hash_password("admin12345"), role="admin",
+        )
+        session.add(admin)
         album = Album(id="test_album", title="Test", artist="Test")
         session.add(album)
         song = Song(id="s1", title="Song", album_id="test_album", track_number=1)
@@ -42,22 +45,26 @@ def server_app(tmp_path: Path) -> TestClient:
         session.add(ver)
         gen = Generation(
             id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="test_album/01_song_v1.mp3", seed=42,
+            mp3_path=f"{admin_id}/g1.mp3", seed=42,
         )
         session.add(gen)
         score = Score(id="sc1", generation_id="g1", scorer="batch", value={"dynamics": 48.9})
         session.add(score)
-        admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
-        session.add(admin)
         session.commit()
+
+    user_dir = audio_dir / admin_id
+    user_dir.mkdir(parents=True)
+    mp3 = user_dir / "g1.mp3"
+    mp3.write_bytes(b"\xff\xfb\x90\x00" * 100)
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
     from conftest import login_and_csrf
     login_and_csrf(client, "admin", "admin12345")
@@ -80,12 +87,12 @@ def test_security_headers(server_app: TestClient) -> None:
 
 
 def test_get_audio(server_app: TestClient) -> None:
-    resp = server_app.get("/audio/test_album/01_song_v1.mp3")
+    resp = server_app.get("/audio/admin-user-id/g1.mp3")
     assert resp.status_code == 200
 
 
 def test_get_audio_not_found(server_app: TestClient) -> None:
-    resp = server_app.get("/audio/test_album/nonexistent.mp3")
+    resp = server_app.get("/audio/admin-user-id/nonexistent.mp3")
     assert resp.status_code == 404
 
 
@@ -97,17 +104,11 @@ def test_api_songs(server_app: TestClient) -> None:
     assert data["total"] == 1
 
 
-def test_api_rate(server_app: TestClient) -> None:
-    resp = server_app.post(
-        "/api/rate/test_album/01_song_v1",
-        json={"rating": 72.5, "notes": "great groove"},
-    )
-    assert resp.status_code == 200
-
-
 def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
 
     project_root = tmp_path
     sk_dir = project_root / "frontend" / "build"
@@ -116,46 +117,42 @@ def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
     (sk_app_dir / "dummy.js").write_text("// chunk")
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.commit()
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app)
     resp = client.get("/_app/dummy.js")
     assert resp.status_code == 200
 
 
-def test_api_rate_not_found(server_app: TestClient) -> None:
-    resp = server_app.post(
-        "/api/rate/test_album/nonexistent",
-        json={"rating": 3},
-    )
-    assert resp.status_code == 404
-
-
 def test_get_audio_path_traversal_denied(server_app: TestClient) -> None:
-    resp = server_app.get("/audio/..%2F..%2Fetc/passwd")
+    resp = server_app.get("/audio/admin-user-id/..%2F..%2Fetc%2Fpasswd")
     assert resp.status_code in (403, 404)
 
 
 def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     import os
 
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
 
     secret_dir = tmp_path / "secrets"
     secret_dir.mkdir()
     (secret_dir / "data.mp3").write_bytes(b"\xff\xfb\x90\x00" * 10)
 
-    symlink_dir = output_dir / "escaped"
+    admin_id = "symlink-admin-id"
+    symlink_dir = audio_dir / admin_id
     os.symlink(str(secret_dir), str(symlink_dir))
 
     project_root = tmp_path
@@ -164,23 +161,27 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin6", password_hash=hash_password("admin12345"), role="admin")
+        admin = User(
+            id=admin_id, username="admin6",
+            password_hash=hash_password("admin12345"), role="admin",
+        )
         session.add(admin)
         session.commit()
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
     from conftest import login_and_csrf
     login_and_csrf(client, "admin6", "admin12345")
-    resp = client.get("/audio/escaped/data.mp3")
+    resp = client.get(f"/audio/{admin_id}/data.mp3")
     assert resp.status_code == 403
 
 
@@ -189,14 +190,9 @@ def auth_server_app(tmp_path: Path):
     from songmaker_cli.db.queries import create_album, create_session, create_user
     from songmaker_cli.middleware import SESSION_COOKIE
 
-    output_dir = tmp_path / "_output"
-    album_dir = output_dir / "owned_album"
-    album_dir.mkdir(parents=True)
-    (album_dir / "song.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
-
-    other_album_dir = output_dir / "other_album"
-    other_album_dir.mkdir(parents=True)
-    (other_album_dir / "other.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+    audio_dir = tmp_path / "audio"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
 
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
@@ -204,11 +200,19 @@ def auth_server_app(tmp_path: Path):
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         owner = create_user(session, "owner", hash_password("pass1234"))
         other = create_user(session, "other_user", hash_password("pass1234"))
         session.flush()
+
+        owner_dir = audio_dir / owner.id
+        owner_dir.mkdir(parents=True)
+        (owner_dir / "song.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+
+        other_dir = audio_dir / other.id
+        other_dir.mkdir(parents=True)
+        (other_dir / "other.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
 
         create_album(session, "owned_album", "Owned Album", created_by=owner.id)
         create_album(session, "other_album", "Other Album", created_by=other.id)
@@ -220,35 +224,40 @@ def auth_server_app(tmp_path: Path):
         session.commit()
         owner_sid = owner_session.id
         other_sid = other_session.id
+        owner_id = owner.id
+        other_id = other.id
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
-    yield client, owner_sid, other_sid, SESSION_COOKIE
+    yield client, owner_sid, other_sid, SESSION_COOKIE, owner_id, other_id
 
 
-def test_get_audio_owned_album_allowed(auth_server_app) -> None:
-    client, owner_sid, _other_sid, cookie_name = auth_server_app
+def test_get_audio_own_files_allowed(auth_server_app) -> None:
+    client, owner_sid, _other_sid, cookie_name, owner_id, _other_id = auth_server_app
     client.cookies.set(cookie_name, sign_session_id(owner_sid, TEST_SECRET))
-    resp = client.get("/audio/owned_album/song.mp3")
+    resp = client.get(f"/audio/{owner_id}/song.mp3")
     assert resp.status_code == 200
 
 
-def test_get_audio_other_users_album_denied(auth_server_app) -> None:
-    client, owner_sid, _other_sid, cookie_name = auth_server_app
+def test_get_audio_other_users_files_denied(auth_server_app) -> None:
+    client, owner_sid, _other_sid, cookie_name, _owner_id, other_id = auth_server_app
     client.cookies.set(cookie_name, sign_session_id(owner_sid, TEST_SECRET))
-    resp = client.get("/audio/other_album/other.mp3")
+    resp = client.get(f"/audio/{other_id}/other.mp3")
     assert resp.status_code == 404
 
 
 def test_startup_cleans_expired_sessions(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
@@ -257,7 +266,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path) -> None:
 
     from songmaker_cli.db.queries import create_session as create_db_session
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         user = User(username="tester", password_hash=hash_password("pass1234"))
         session.add(user)
@@ -272,11 +281,12 @@ def test_startup_cleans_expired_sessions(tmp_path: Path) -> None:
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with TestClient(app):
         pass
 
@@ -289,14 +299,13 @@ def test_startup_cleans_expired_sessions(tmp_path: Path) -> None:
 
 
 def test_run_server_calls_uvicorn(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
     mock_app = MagicMock()
 
     with (
         patch("uvicorn.run") as mock_uvicorn,
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
-        run_server(output_dir=output_dir, project_root=tmp_path, port=9999)
+        run_server(project_root=tmp_path, port=9999)
 
     mock_uvicorn.assert_called_once()
     call_kwargs = mock_uvicorn.call_args
@@ -304,21 +313,19 @@ def test_run_server_calls_uvicorn(tmp_path: Path) -> None:
 
 
 def test_run_server_defaults_to_localhost(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
     mock_app = MagicMock()
 
     with (
         patch("uvicorn.run") as mock_uvicorn,
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
-        run_server(output_dir=output_dir, project_root=tmp_path, port=8080)
+        run_server(project_root=tmp_path, port=8080)
 
     _, kwargs = mock_uvicorn.call_args
     assert kwargs.get("host") == "127.0.0.1"
 
 
 def test_run_server_opens_browser(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
     mock_app = MagicMock()
 
     with (
@@ -326,33 +333,41 @@ def test_run_server_opens_browser(tmp_path: Path) -> None:
         patch("songmaker_cli.server.create_app", return_value=mock_app),
         patch("webbrowser.open") as mock_browser,
     ):
-        run_server(output_dir=output_dir, project_root=tmp_path, open_browser=True)
+        run_server(project_root=tmp_path, open_browser=True)
 
     mock_browser.assert_called_once()
 
 
-def test_run_server_creates_output_dir(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output" / "nested"
+def test_run_server_creates_dirs(tmp_path: Path) -> None:
+    from songmaker_cli.constants import AUDIO_ROOT, DATA_ROOT
+
     mock_app = MagicMock()
 
     with (
         patch("uvicorn.run"),
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
-        run_server(output_dir=output_dir, project_root=tmp_path)
+        run_server(project_root=tmp_path)
 
-    assert output_dir.exists()
+    assert (tmp_path / AUDIO_ROOT).exists()
+    assert (tmp_path / DATA_ROOT).exists()
 
 
-def test_run_server_infers_output_dir_from_project_root(tmp_path: Path) -> None:
+def test_run_server_infers_dirs_from_project_root(tmp_path: Path) -> None:
+    from songmaker_cli.constants import AUDIO_ROOT, DATA_ROOT
+
     mock_app = MagicMock()
 
     with (
         patch("uvicorn.run"),
-        patch("songmaker_cli.server.create_app", return_value=mock_app),
+        patch("songmaker_cli.server.create_app", return_value=mock_app) as mock_create,
         patch("songmaker_cli.server.find_project_root", return_value=tmp_path),
     ):
-        run_server(output_dir=None, project_root=None)
+        run_server(project_root=None)
+
+    call_args = mock_create.call_args
+    assert call_args[0][0] == tmp_path / AUDIO_ROOT
+    assert call_args[0][1] == tmp_path / DATA_ROOT
 
 
 def test_csrf_origin_check_rejects_cross_origin(server_app: TestClient) -> None:
@@ -402,15 +417,17 @@ def test_csrf_rejects_spoofed_host_with_matching_origin(server_app: TestClient) 
 
 
 def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(username="admin2", password_hash=hash_password("admin12345"), role="admin")
         session.add(admin)
@@ -422,13 +439,14 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
         exact, patterns = parse_allowed_hosts()
         ctx = AppContext(
             db=factory,
-            output_dir=output_dir,
+            audio_dir=audio_dir,
+            data_dir=data_dir,
             session_secret=TEST_SECRET,
             allowed_hosts_exact=exact,
             allowed_hosts_patterns=patterns,
             redis=make_fake_redis(),
         )
-        app = create_app(output_dir, project_root, ctx=ctx)
+        app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
         client = TestClient(app, cookies={})
         from conftest import login_and_csrf
         login_and_csrf(client, "admin2", "admin12345")
@@ -483,7 +501,6 @@ def test_hsts_header_not_set_without_trusted_proxy(server_app: TestClient) -> No
 
 
 def test_run_server_infers_project_root(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
     mock_app = MagicMock()
 
     with (
@@ -491,7 +508,7 @@ def test_run_server_infers_project_root(tmp_path: Path) -> None:
         patch("songmaker_cli.server.create_app", return_value=mock_app),
         patch("songmaker_cli.server.find_project_root", return_value=None),
     ):
-        run_server(output_dir=output_dir, project_root=None)
+        run_server(project_root=None)
 
 
 def test_run_server_rejects_multi_worker(tmp_path: Path) -> None:
@@ -502,7 +519,7 @@ def test_run_server_rejects_multi_worker(tmp_path: Path) -> None:
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
         with pytest.raises(ValueError, match="UVICORN_WORKERS=2 requires"):
-            run_server(output_dir=tmp_path / "_output", project_root=tmp_path)
+            run_server(project_root=tmp_path)
 
 
 def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
@@ -514,7 +531,8 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
     mock_app = MagicMock()
     mock_app.state.ctx = AppContext(
         db=factory,
-        output_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
@@ -545,7 +563,8 @@ def test_lifespan_handles_redis_unavailable(tmp_path: Path) -> None:
     mock_app = MagicMock()
     mock_app.state.ctx = AppContext(
         db=factory,
-        output_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
@@ -632,46 +651,52 @@ def test_body_size_streaming_too_large(tmp_path: Path) -> None:
 
 
 def test_cors_wildcard_invalid_raises(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
 
     with patch.dict("os.environ", {"CORS_ORIGIN": "*."}):
         with pytest.raises(ValueError, match="Invalid CORS_ORIGIN"):
-            create_app(output_dir, tmp_path, ctx=ctx)
+            create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
 
 
 def test_cors_specific_origin(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.commit()
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"CORS_ORIGIN": "https://mysite.example.com"}):
-        app = create_app(output_dir, tmp_path, ctx=ctx)
+        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
     resp = client.options(
         "/api/songs",
@@ -687,14 +712,16 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
 
 
 def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(username="admin4", password_hash=hash_password("admin12345"), role="admin")
         session.add(admin)
@@ -706,13 +733,14 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
         exact, patterns = parse_allowed_hosts()
         ctx = AppContext(
             db=factory,
-            output_dir=output_dir,
+            audio_dir=audio_dir,
+            data_dir=data_dir,
             session_secret=TEST_SECRET,
             allowed_hosts_exact=exact,
             allowed_hosts_patterns=patterns,
             redis=make_fake_redis(),
         )
-        app = create_app(output_dir, tmp_path, ctx=ctx)
+        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
         client = TestClient(app, cookies={})
         from conftest import login_and_csrf
         login_and_csrf(client, "admin4", "admin12345")
@@ -747,27 +775,30 @@ def test_parse_allowed_hosts() -> None:
 def test_ip_rate_limit_429(tmp_path: Path) -> None:
     import songmaker_cli.server as srv
 
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.commit()
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
     old_limit = srv.IP_RATE_LIMIT
     srv.IP_RATE_LIMIT = 2
     try:
-        app = create_app(output_dir, tmp_path, ctx=ctx)
+        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
         client = TestClient(app)
         for _ in range(3):
             resp = client.get("/api/auth/check")
@@ -780,8 +811,10 @@ def test_ip_rate_limit_429(tmp_path: Path) -> None:
 def test_static_assets_bypass_rate_limit(tmp_path: Path) -> None:
     import songmaker_cli.server as srv
 
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     app_dir = sk_dir / "_app" / "immutable"
@@ -789,20 +822,21 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path) -> None:
     (sk_dir / "index.html").write_text("<html>Test</html>")
     (app_dir / "test.js").write_text("console.log('ok')")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.commit()
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
     old_limit = srv.IP_RATE_LIMIT
     srv.IP_RATE_LIMIT = 2
     try:
-        app = create_app(output_dir, tmp_path, ctx=ctx)
+        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
         client = TestClient(app)
         for _ in range(5):
             resp = client.get("/_app/immutable/test.js")
@@ -814,11 +848,14 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path) -> None:
 # ── Audio endpoint edge cases ──────────────────────────────────────
 
 
-def test_get_audio_album_not_in_db(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
-    orphan_dir = output_dir / "orphan_album"
-    orphan_dir.mkdir(parents=True)
-    (orphan_dir / "song.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+def test_get_audio_other_user_id_denied(tmp_path: Path) -> None:
+    audio_dir = tmp_path / "audio"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
+
+    other_user_dir = audio_dir / "other-user-id"
+    other_user_dir.mkdir(parents=True)
+    (other_user_dir / "song.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
 
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
@@ -826,23 +863,24 @@ def test_get_audio_album_not_in_db(tmp_path: Path) -> None:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin5", password_hash=hash_password("admin12345"), role="admin")
+        admin = User(username="admin5", password_hash=hash_password("admin12345"))
         session.add(admin)
         session.commit()
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
     from conftest import login_and_csrf
     login_and_csrf(client, "admin5", "admin12345")
-    resp = client.get("/audio/orphan_album/song.mp3")
+    resp = client.get("/audio/other-user-id/song.mp3")
     assert resp.status_code == 404
 
 
@@ -866,14 +904,16 @@ def test_spa_fallback_not_for_audio(server_app: TestClient) -> None:
 def test_startup_prunes_login_attempts(tmp_path: Path) -> None:
     from songmaker_cli.db.models import LoginAttempt
 
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         old_time = datetime.now(timezone.utc) - timedelta(days=100)
         attempt = LoginAttempt(
@@ -888,11 +928,12 @@ def test_startup_prunes_login_attempts(tmp_path: Path) -> None:
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    app = create_app(output_dir, tmp_path, ctx=ctx)
+    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     with TestClient(app):
         pass
 
@@ -913,7 +954,7 @@ def test_run_server_loads_env_file(tmp_path: Path) -> None:
         patch("songmaker_cli.server.create_app", return_value=mock_app),
         patch("dotenv.load_dotenv") as mock_load,
     ):
-        run_server(output_dir=tmp_path / "_output", project_root=tmp_path)
+        run_server(project_root=tmp_path)
 
     mock_load.assert_called_once()
 
@@ -955,14 +996,16 @@ class TestConfigureLogging:
 def test_health_no_auth_required(tmp_path: Path) -> None:
     from unittest.mock import AsyncMock
 
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(username="admin6", password_hash=hash_password("admin12345"), role="admin")
         session.add(admin)
@@ -970,9 +1013,9 @@ def test_health_no_auth_required(tmp_path: Path) -> None:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
     )
-    app = create_app(output_dir, tmp_path, ctx=ctx)
+    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
     with (
@@ -995,14 +1038,16 @@ def test_health_no_auth_required(tmp_path: Path) -> None:
 def test_health_with_worker_running(tmp_path: Path) -> None:
     from unittest.mock import AsyncMock
 
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(username="admin7", password_hash=hash_password("admin12345"), role="admin")
         session.add(admin)
@@ -1010,9 +1055,9 @@ def test_health_with_worker_running(tmp_path: Path) -> None:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
     )
-    app = create_app(output_dir, tmp_path, ctx=ctx)
+    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
     with (
@@ -1034,14 +1079,16 @@ def test_health_with_worker_running(tmp_path: Path) -> None:
 def test_health_degraded_when_worker_stopped(tmp_path: Path) -> None:
     from unittest.mock import AsyncMock
 
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(username="admin8", password_hash=hash_password("admin12345"), role="admin")
         session.add(admin)
@@ -1049,9 +1096,9 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path) -> None:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
     )
-    app = create_app(output_dir, tmp_path, ctx=ctx)
+    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
     with (
@@ -1070,14 +1117,16 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path) -> None:
 
 
 def _make_metrics_client(tmp_path: Path) -> TestClient:
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(
             username="metrics_admin", password_hash=hash_password("admin12345"), role="admin",
@@ -1087,9 +1136,9 @@ def _make_metrics_client(tmp_path: Path) -> TestClient:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
     )
-    return TestClient(create_app(output_dir, tmp_path, ctx=ctx))
+    return TestClient(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
 
 def test_metrics_no_auth_required(tmp_path: Path) -> None:
@@ -1121,14 +1170,16 @@ def test_metrics_reflects_http_traffic(tmp_path: Path) -> None:
 def test_metrics_with_jobs(tmp_path: Path) -> None:
     from songmaker_cli.db.models import Job
 
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = tmp_path / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     now = datetime.now(timezone.utc)
     with factory() as session:
         admin = User(
@@ -1141,9 +1192,9 @@ def test_metrics_with_jobs(tmp_path: Path) -> None:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
     )
-    app = create_app(output_dir, tmp_path, ctx=ctx)
+    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
     client = TestClient(app)
 
     with client:
@@ -1163,7 +1214,8 @@ def test_auto_setup_admin_creates_user(tmp_path: Path) -> None:
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
-        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET, redis=make_fake_redis(),
+        db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
         _auto_setup_admin(ctx)
@@ -1185,7 +1237,8 @@ def test_auto_setup_admin_skips_when_users_exist(tmp_path: Path) -> None:
         session.commit()
 
     ctx = AppContext(
-        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET, redis=make_fake_redis(),
+        db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
         _auto_setup_admin(ctx)
@@ -1199,7 +1252,8 @@ def test_auto_setup_admin_skips_without_env_vars(tmp_path: Path) -> None:
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
-        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET, redis=make_fake_redis(),
+        db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {}, clear=True):
         _auto_setup_admin(ctx)
@@ -1211,7 +1265,8 @@ def test_auto_setup_admin_rejects_weak_password(tmp_path: Path) -> None:
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
-        db=factory, output_dir=tmp_path, session_secret=TEST_SECRET, redis=make_fake_redis(),
+        db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET, redis=make_fake_redis(),
     )
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "aaa"}):
         _auto_setup_admin(ctx)

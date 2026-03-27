@@ -19,15 +19,17 @@ from songmaker_cli.server import create_app
 
 @pytest.fixture()
 def client(tmp_path: Path) -> TestClient:
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir()
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.add(Album(id="rock", title="Rock", artist="Band"))
         session.add(Song(id="s1", title="Song", album_id="rock", track_number=1))
@@ -42,9 +44,9 @@ def client(tmp_path: Path) -> TestClient:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=b"a" * 64, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=b"a" * 64, redis=redis,
     )
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     yield TestClient(app, cookies={})
 
 

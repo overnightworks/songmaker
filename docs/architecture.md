@@ -103,7 +103,8 @@ SQLite with WAL mode. SQLAlchemy ORM. Alembic migrations. DB file permissions `6
 | DELETE | `/api/albums/{id}/share` | user | Revoke sharing |
 | GET | `/shared/{slug}` | public | Read-only album view (no auth, rate-limited) |
 | GET | `/shared/{slug}/audio/{file}` | public | Stream MP3 for shared album (no auth, rate-limited) |
-| GET | `/audio/{album}/{file}` | user | Serve audio files (MP3/WAV, ownership-checked) |
+| POST | `/api/songs/{id}/reimport` | user | Upload MP3/WAV to reimport into a song |
+| GET | `/audio/{owner_id}/{file}` | user | Serve audio files (MP3/WAV, ownership-checked by user ID) |
 
 ## Generation Flow
 

@@ -36,7 +36,8 @@ def client(tmp_path: Path) -> TestClient:
 
     ctx = AppContext(
         db=factory,
-        output_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
@@ -58,7 +59,8 @@ def unauthed_client(tmp_path: Path) -> TestClient:
 
     ctx = AppContext(
         db=factory,
-        output_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
@@ -84,7 +86,8 @@ def _make_authed_client(
 
     ctx = AppContext(
         db=factory,
-        output_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
@@ -108,12 +111,12 @@ def _seed_db(session, owner_id: str | None = None) -> None:
     session.add(ver)
     gen1 = Generation(
         id="g1", song_id="s1", version_id="v1", generation_number=1,
-        mp3_path="rock/01_thunder_v1.mp3", seed=42,
+        mp3_path="u-test/g1.mp3", seed=42,
         generation_params={"bpm": 140},
     )
     gen2 = Generation(
         id="g2", song_id="s1", version_id="v1", generation_number=2,
-        mp3_path="rock/01_thunder_v2.mp3", seed=77,
+        mp3_path="u-test/g2.mp3", seed=77,
     )
     session.add_all([gen1, gen2])
     score = Score(id="sc1", generation_id="g1", scorer="batch", value={"dynamics": 65.0})
@@ -181,11 +184,6 @@ def test_rate_generation(client: TestClient) -> None:
 
     resp = client.get("/api/generations/g1")
     assert resp.json()["scores"]["user_rating"] == 85.0
-
-
-def test_rate_by_path(client: TestClient) -> None:
-    resp = client.post("/api/rate/rock/01_thunder_v2", json={"rating": 72.0})
-    assert resp.status_code == 200
 
 
 def test_rate_not_found(client: TestClient) -> None:
@@ -864,29 +862,6 @@ def test_job_ownership_blocks_other_user(tmp_path: Path) -> None:
     assert resp.status_code == 404
 
 
-def test_rate_by_path_ownership_check(tmp_path: Path) -> None:
-    from songmaker_cli.db.models import User
-    from songmaker_cli.db.queries import get_album
-
-    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
-    resp = c.post("/api/rate/rock/01_thunder_v2", json={"rating": 72.0})
-    assert resp.status_code == 200
-
-    ctx: AppContext = c.app.state.ctx
-    with ctx.db() as session:
-        other = User(
-            id="u-other", username="other", password_hash="unused", role="user",
-        )
-        session.add(other)
-        session.flush()
-        album = get_album(session, "rock")
-        album.created_by = "u-other"
-        session.commit()
-
-    resp2 = c.post("/api/rate/rock/01_thunder_v2", json={"rating": 10.0})
-    assert resp2.status_code == 404
-
-
 # ── Coverage gap tests ───────────────────────────────────────────────
 
 
@@ -1029,12 +1004,6 @@ def test_unpick_generation_value_error(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_rate_by_path_traversal_rejected(client: TestClient) -> None:
-    resp = client.post("/api/rate/album..name/01_thunder_v1", json={"rating": 50.0})
-    assert resp.status_code == 400
-    assert "Invalid path" in resp.json()["detail"]
-
-
 # ── Audit trail tests ────────────────────────────────────────────────
 
 
@@ -1126,7 +1095,8 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
         db=factory,
-        output_dir=tmp_path,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )

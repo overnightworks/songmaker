@@ -53,7 +53,8 @@ class GenerationContext:
     meta: SongMeta
     album_meta: AlbumMeta
     ace_config: AceStepConfig
-    output_root: Path
+    audio_dir: Path
+    user_id: str
     model_name: str | None
     client: AceStepClient
     base_params: dict = field(default_factory=dict)
@@ -120,8 +121,8 @@ def _load_preset_params(
 
 def _build_generation_context(
     song_id: str, version_id: str,
-    db_factory: sessionmaker[Session], output_dir: Path,
-    user_id: str | None = None,
+    db_factory: sessionmaker[Session], audio_dir: Path, data_dir: Path,
+    user_id: str,
 ) -> GenerationContext:
     """Load song/version from DB and build all config needed for generation."""
     meta, album_meta = _load_song_meta(song_id, version_id, db_factory)
@@ -138,7 +139,7 @@ def _build_generation_context(
     ace_config = build_ace_config(
         meta,
         model_name=model_name,
-        global_defaults=load_generation_defaults(db_factory, output_dir),
+        global_defaults=load_generation_defaults(db_factory, data_dir),
         preset_params=preset_params,
     )
 
@@ -148,7 +149,8 @@ def _build_generation_context(
         meta=meta,
         album_meta=album_meta,
         ace_config=ace_config,
-        output_root=output_dir,
+        audio_dir=audio_dir,
+        user_id=user_id,
         model_name=model_name,
         client=client,
         base_params=meta.generation_params,
@@ -157,13 +159,17 @@ def _build_generation_context(
 
 def run_generation_job(
     job_id: str, song_id: str, version_id: str, count: int,
-    user_id: str | None = None,
+    user_id: str,
     db_factory: sessionmaker[Session] | None = None,
-    output_dir: Path | None = None,
+    audio_dir: Path | None = None,
+    data_dir: Path | None = None,
 ) -> None:
     """Run generation in a background thread, updating DB status."""
     assert db_factory is not None, "db_factory is required"
-    assert output_dir is not None, "output_dir is required"
+    assert audio_dir is not None, "audio_dir is required"
+    assert data_dir is not None, "data_dir is required"
+
+    import uuid
 
     import structlog
     structlog.contextvars.clear_contextvars()
@@ -178,7 +184,7 @@ def run_generation_job(
 
         try:
             ctx = _build_generation_context(
-                song_id, version_id, db_factory, output_dir, user_id=user_id,
+                song_id, version_id, db_factory, audio_dir, data_dir, user_id=user_id,
             )
         except GenerationSetupError as exc:
             _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")
@@ -190,17 +196,20 @@ def run_generation_job(
         for i in range(count):
             _update_job(db_factory, job_id, "running", progress=i / count)
 
+            generation_id = str(uuid.uuid4())
             try:
                 result = generate_single(
-                    ctx.meta, ctx.album_meta, ctx.ace_config, ctx.output_root, client=ctx.client,
+                    ctx.meta, ctx.album_meta, ctx.ace_config,
+                    ctx.audio_dir, ctx.user_id, generation_id,
+                    client=ctx.client,
                 )
             except Exception as exc:
                 log.exception("Generation %d/%d failed: %s", i + 1, count, exc)
                 last_error = exc
                 continue
 
-            mp3_rel = f"{ctx.meta.album}/{result.mp3_path.name}"
-            wav_rel = f"{ctx.meta.album}/{result.wav_path.name}"
+            mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
+            wav_rel = f"{ctx.user_id}/{generation_id}.wav"
             gen_params = StoredGenerationParams(
                 acestep_model=ctx.model_name,
                 bpm=ctx.ace_config.bpm,
@@ -258,11 +267,11 @@ def run_generation_job(
 def run_scoring_job(
     job_id: str, gen_id: str, scorers: list[str] | None,
     db_factory: sessionmaker[Session] | None = None,
-    output_dir: Path | None = None,
+    audio_dir: Path | None = None,
 ) -> None:
     """Run scoring in a background thread, updating DB status."""
     assert db_factory is not None, "db_factory is required"
-    assert output_dir is not None, "output_dir is required"
+    assert audio_dir is not None, "audio_dir is required"
 
     import structlog
     structlog.contextvars.clear_contextvars()
@@ -296,7 +305,7 @@ def run_scoring_job(
                         "lyrics": ver.lyrics,
                     }
 
-        mp3_full = output_dir / mp3_path_rel
+        mp3_full = audio_dir / mp3_path_rel
 
         if not mp3_full.exists():
             _update_job(

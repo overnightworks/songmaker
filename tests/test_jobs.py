@@ -32,11 +32,12 @@ def seeded_db(db_factory, tmp_path: Path):
         session.add(Job(id="j2", type="score", status="queued"))
         session.commit()
 
-    mp3_dir = tmp_path / "_output" / "rock"
+    mp3_dir = tmp_path / "audio" / "user1"
     mp3_dir.mkdir(parents=True)
-    mp3 = mp3_dir / "01_song_one_v1.mp3"
+    mp3 = mp3_dir / "g_seed42.mp3"
     mp3.write_bytes(b"\xff\xfb\x90\x00" * 100)
 
+    (tmp_path / "data").mkdir(exist_ok=True)
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     return db_factory
 
@@ -125,8 +126,10 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", return_value=result),
     ):
-        out = tmp_path / "_output"
-        run_generation_job("j1", "s1", "v1", 1, db_factory=seeded_db, output_dir=out)
+        run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -150,8 +153,10 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", side_effect=results),
     ):
-        out = tmp_path / "_output"
-        run_generation_job("j1", "s1", "v1", 3, db_factory=seeded_db, output_dir=out)
+        run_generation_job(
+            "j1", "s1", "v1", 3, "u1",
+            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        )
 
     with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
@@ -172,8 +177,10 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
             side_effect=[ok_result, RuntimeError("GPU OOM"), RuntimeError("GPU OOM")],
         ),
     ):
-        out = tmp_path / "_output"
-        run_generation_job("j1", "s1", "v1", 3, db_factory=seeded_db, output_dir=out)
+        run_generation_job(
+            "j1", "s1", "v1", 3, "u1",
+            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        )
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -187,7 +194,8 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
 
 def test_generation_job_song_not_found(seeded_db) -> None:
     run_generation_job(
-        "j1", "nonexistent", "v1", 1, db_factory=seeded_db, output_dir=Path("/tmp/_output"),
+        "j1", "nonexistent", "v1", 1, "u1",
+        db_factory=seeded_db, audio_dir=Path("/tmp/audio"), data_dir=Path("/tmp/data"),
     )
 
     with seeded_db() as session:
@@ -198,7 +206,8 @@ def test_generation_job_song_not_found(seeded_db) -> None:
 
 def test_generation_job_version_not_found(seeded_db) -> None:
     run_generation_job(
-        "j1", "s1", "nonexistent", 1, db_factory=seeded_db, output_dir=Path("/tmp/_output"),
+        "j1", "s1", "nonexistent", 1, "u1",
+        db_factory=seeded_db, audio_dir=Path("/tmp/audio"), data_dir=Path("/tmp/data"),
     )
 
     with seeded_db() as session:
@@ -213,7 +222,8 @@ def test_generation_job_acestep_not_reachable(seeded_db) -> None:
 
     with patch("songmaker_cli.jobs.AceStepClient", return_value=client):
         run_generation_job(
-            "j1", "s1", "v1", 1, db_factory=seeded_db, output_dir=Path("/tmp/_output"),
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db, audio_dir=Path("/tmp/audio"), data_dir=Path("/tmp/data"),
         )
 
     with seeded_db() as session:
@@ -233,7 +243,8 @@ def test_generation_job_exception(seeded_db) -> None:
         patch("songmaker_cli.jobs.generate_single", side_effect=RuntimeError("GPU error")),
     ):
         run_generation_job(
-            "j1", "s1", "v1", 1, db_factory=seeded_db, output_dir=Path("/tmp/_output"),
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db, audio_dir=Path("/tmp/audio"), data_dir=Path("/tmp/data"),
         )
 
     with seeded_db() as session:
@@ -258,8 +269,10 @@ def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> 
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         patch("songmaker_cli.jobs.generate_single", return_value=result),
     ):
-        out = tmp_path / "_output"
-        run_generation_job("j1", "s1", "v1", 1, db_factory=seeded_db, output_dir=out)
+        run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        )
 
     with seeded_db() as session:
         gen = session.query(Generation).filter_by(song_id="s1").first()
@@ -281,8 +294,10 @@ def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> Non
         ) as mock_load,
         patch("songmaker_cli.jobs.generate_single", return_value=result),
     ):
-        out = tmp_path / "_output"
-        run_generation_job("j1", "s1", "v1", 1, db_factory=seeded_db, output_dir=out)
+        run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+        )
 
     mock_load.assert_called_once()
 
@@ -303,10 +318,15 @@ def _mock_scores(with_whisper: bool = False):
 
 
 def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
+    audio_dir = tmp_path / "audio"
+    mp3_file = audio_dir / "user1" / "g1.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3")
+
     with seeded_db() as session:
         session.add(Generation(
             id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="rock/01_song_one_v1.mp3", seed=42,
+            mp3_path="user1/g1.mp3", seed=42,
         ))
         session.commit()
 
@@ -316,7 +336,7 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch("songmaker_cli.jobs.run_scoring_pipeline", return_value=mock_result),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, output_dir=tmp_path / "_output")
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
     with seeded_db() as session:
         job = get_job(session, "j2")
@@ -327,10 +347,15 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
 
 
 def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
+    audio_dir = tmp_path / "audio"
+    mp3_file = audio_dir / "user1" / "g1.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3")
+
     with seeded_db() as session:
         session.add(Generation(
             id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="rock/01_song_one_v1.mp3", seed=42,
+            mp3_path="user1/g1.mp3", seed=42,
         ))
         session.commit()
 
@@ -340,7 +365,7 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch("songmaker_cli.jobs.run_scoring_pipeline", return_value=mock_result),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, output_dir=tmp_path / "_output")
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
     with seeded_db() as session:
         gen = get_generation(session, "g1")
@@ -349,7 +374,7 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
 
 def test_scoring_job_generation_not_found(seeded_db) -> None:
     run_scoring_job(
-        "j2", "nonexistent", None, db_factory=seeded_db, output_dir=Path("/tmp/_output"),
+        "j2", "nonexistent", None, db_factory=seeded_db, audio_dir=Path("/tmp/audio"),
     )
 
     with seeded_db() as session:
@@ -362,11 +387,11 @@ def test_scoring_job_mp3_not_found(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         session.add(Generation(
             id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="rock/missing.mp3", seed=42,
+            mp3_path="user1/missing.mp3", seed=42,
         ))
         session.commit()
 
-    run_scoring_job("j2", "g1", None, db_factory=seeded_db, output_dir=tmp_path / "_output")
+    run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=tmp_path / "audio")
 
     with seeded_db() as session:
         job = get_job(session, "j2")
@@ -375,10 +400,15 @@ def test_scoring_job_mp3_not_found(seeded_db, tmp_path: Path) -> None:
 
 
 def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
+    audio_dir = tmp_path / "audio"
+    mp3_file = audio_dir / "user1" / "g1.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3")
+
     with seeded_db() as session:
         session.add(Generation(
             id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="rock/01_song_one_v1.mp3", seed=42,
+            mp3_path="user1/g1.mp3", seed=42,
         ))
         session.commit()
 
@@ -386,7 +416,7 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch("songmaker_cli.jobs.run_scoring_pipeline", side_effect=RuntimeError("scorer crash")),
     ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, output_dir=tmp_path / "_output")
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
     with seeded_db() as session:
         job = get_job(session, "j2")

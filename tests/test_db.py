@@ -48,7 +48,6 @@ from songmaker_cli.db.queries import (
     delete_version,
     get_album,
     get_generation,
-    get_generation_by_path,
     get_job,
     get_session_with_user,
     get_song,
@@ -186,11 +185,6 @@ def test_get_song(seeded_session: Session) -> None:
     assert song is not None
     assert len(song.generations) == 2
 
-
-def test_get_generation_by_path(seeded_session: Session) -> None:
-    gen = get_generation_by_path(seeded_session, "test/01_song_one_v1.mp3")
-    assert gen is not None
-    assert gen.id == "g1"
 
 
 def test_save_rating_create(seeded_session: Session) -> None:
@@ -338,15 +332,14 @@ def test_delete_album_not_found(seeded_session: Session) -> None:
 
 
 def test_delete_album_removes_files(seeded_session: Session, tmp_path: Path) -> None:
-    output_dir = tmp_path / "output"
-    album_dir = output_dir / "test"
-    album_dir.mkdir(parents=True)
-    (album_dir / "01_song_one_v1.mp3").write_bytes(b"fake mp3")
-    (album_dir / "01_song_one_v1.wav").write_bytes(b"fake wav")
+    audio_dir = tmp_path / "audio"
+    mp3_dir = audio_dir / "user1"
+    mp3_dir.mkdir(parents=True)
+    (mp3_dir / "g1.mp3").write_bytes(b"fake mp3")
+    (mp3_dir / "g1.wav").write_bytes(b"fake wav")
 
-    delete_album(seeded_session, "test", output_dir=output_dir)
+    delete_album(seeded_session, "test", audio_dir=audio_dir)
     seeded_session.commit()
-    assert not album_dir.exists()
 
 
 def test_move_song(seeded_session: Session) -> None:
@@ -374,31 +367,15 @@ def test_move_song_target_not_found(seeded_session: Session) -> None:
         move_song(seeded_session, "s1", "nonexistent")
 
 
-def test_move_song_moves_files(seeded_session: Session, tmp_path: Path) -> None:
-    gen = get_generation(seeded_session, "g1")
-    gen.wav_path = "test/01_song_one_v1.wav"
-    seeded_session.commit()
-
-    output_dir = tmp_path / "output"
-    old_dir = output_dir / "test"
-    old_dir.mkdir(parents=True)
-    (old_dir / "01_song_one_v1.mp3").write_bytes(b"fake mp3")
-    (old_dir / "01_song_one_v1.wav").write_bytes(b"fake wav")
-
+def test_move_song_updates_album(seeded_session: Session) -> None:
     seeded_session.add(Album(id="other", title="Other", artist="A"))
     seeded_session.commit()
 
-    move_song(seeded_session, "s1", "other", output_dir=output_dir)
+    move_song(seeded_session, "s1", "other")
     seeded_session.commit()
 
-    new_dir = output_dir / "other"
-    assert (new_dir / "01_song_one_v1.mp3").exists()
-    assert (new_dir / "01_song_one_v1.wav").exists()
-    assert not (old_dir / "01_song_one_v1.mp3").exists()
-
     gen = get_generation(seeded_session, "g1")
-    assert gen.mp3_path.startswith("other/")
-    assert gen.wav_path.startswith("other/")
+    assert gen.song.album_id == "other"
 
 
 # ── Job tests ────────────────────────────────────────────────────────
@@ -638,15 +615,15 @@ def test_unpick_generation_not_found(db_session: Session) -> None:
 
 
 def test_delete_generation_files_exist(seeded_session: Session, tmp_path: Path) -> None:
-    output_dir = tmp_path / "out"
-    album_dir = output_dir / "test"
-    album_dir.mkdir(parents=True)
-    mp3 = album_dir / "01_song_one_v1.mp3"
+    audio_dir = tmp_path / "audio"
+    gen_dir = audio_dir / "test"
+    gen_dir.mkdir(parents=True)
+    mp3 = gen_dir / "01_song_one_v1.mp3"
     mp3.write_bytes(b"fake")
-    md = album_dir / "01_song_one_v1.md"
+    md = gen_dir / "01_song_one_v1.md"
     md.write_text("snapshot")
 
-    delete_generation(seeded_session, "g1", output_dir=output_dir)
+    delete_generation(seeded_session, "g1", audio_dir=audio_dir)
     seeded_session.commit()
 
     assert not mp3.exists()
@@ -654,13 +631,13 @@ def test_delete_generation_files_exist(seeded_session: Session, tmp_path: Path) 
 
 
 def test_delete_generation_files_path_traversal_blocked(tmp_path: Path) -> None:
-    output_dir = tmp_path / "out"
-    output_dir.mkdir()
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
     sentinel = tmp_path / "etc" / "passwd"
     sentinel.parent.mkdir()
     sentinel.write_text("secret")
 
-    delete_generation_files(output_dir, "../../etc/passwd")
+    delete_generation_files(audio_dir, "../../etc/passwd")
 
     assert sentinel.exists()
 

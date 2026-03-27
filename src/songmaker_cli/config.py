@@ -4,15 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
-from songmaker_cli.constants import OUTPUT_ROOT
 from songmaker_cli.db.queries.settings import get_global_defaults, save_global_defaults
 from songmaker_cli.errors import ValidationError
 
@@ -23,35 +20,10 @@ if TYPE_CHECKING:
 
 
 
-class OutputPaths(BaseModel):
-    """Resolved output file paths for a generation run."""
-
-    output_dir: Path
-    base_name: str
-    version: int
-    versioned_name: str
-
-    @property
-    def raw_wav(self) -> Path:
-        return self.output_dir / f"{self.versioned_name}_raw.wav"
-
-    @property
-    def mp3(self) -> Path:
-        return self.output_dir / f"{self.versioned_name}.mp3"
-
-    @property
-    def wav(self) -> Path:
-        return self.output_dir / f"{self.versioned_name}.wav"
-
-
-def next_version(output_dir: Path, base_name: str) -> int:
-    """Find the next version number for a track (v1, v2, ...)."""
-    versions = []
-    for p in output_dir.glob(f"{base_name}_v*.mp3"):
-        match = re.search(r"_v(\d+)\.mp3$", p.name)
-        if match:
-            versions.append(int(match.group(1)))
-    return max(versions, default=0) + 1
+def audio_file_path(audio_dir: Path, user_id: str, generation_id: str, suffix: str) -> Path:
+    path = audio_dir / user_id / f"{generation_id}{suffix}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def find_project_root(start: Path) -> Path | None:
@@ -63,34 +35,17 @@ def find_project_root(start: Path) -> Path | None:
     return None
 
 
-def resolve_output_paths(
-    album: str, base_name: str, output_root: Path | None = None,
-) -> OutputPaths:
-    """Build versioned output paths for a generation run."""
-    root = output_root or Path(OUTPUT_ROOT)
-    output_dir = root / album
-    output_dir.mkdir(parents=True, exist_ok=True)
-    version = next_version(output_dir, base_name)
-    versioned_name = f"{base_name}_v{version}"
-    return OutputPaths(
-        output_dir=output_dir,
-        base_name=base_name,
-        version=version,
-        versioned_name=versioned_name,
-    )
-
-
 _DEFAULTS_FILENAME = "generation_defaults.json"
 
 
-def _defaults_path(output_dir: Path) -> Path:
-    return output_dir / _DEFAULTS_FILENAME
+def _defaults_path(data_dir: Path) -> Path:
+    return data_dir / _DEFAULTS_FILENAME
 
 
 def _migrate_file_defaults(
-    db_factory: sessionmaker[Session], output_dir: Path,
+    db_factory: sessionmaker[Session], data_dir: Path,
 ) -> dict:
-    path = _defaults_path(output_dir)
+    path = _defaults_path(data_dir)
     if not path.exists():
         return {}
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -104,7 +59,7 @@ def _migrate_file_defaults(
     return data
 
 
-def load_generation_defaults(db_factory: sessionmaker[Session], output_dir: Path) -> dict:
+def load_generation_defaults(db_factory: sessionmaker[Session], data_dir: Path) -> dict:
     result: dict = {}
     with db_factory() as session:
         for mode in _BUILTIN_DEFAULTS:
@@ -113,7 +68,7 @@ def load_generation_defaults(db_factory: sessionmaker[Session], output_dir: Path
                 result[mode] = params
     if result:
         return result
-    return _migrate_file_defaults(db_factory, output_dir)
+    return _migrate_file_defaults(db_factory, data_dir)
 
 
 def save_generation_defaults(db_factory: sessionmaker[Session], data: dict) -> None:

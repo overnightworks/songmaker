@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
 import uuid
 from pathlib import Path
 
@@ -279,14 +278,6 @@ def get_generation(session: Session, gen_id: str) -> Generation | None:
     )
 
 
-def get_generation_by_path(session: Session, mp3_path: str) -> Generation | None:
-    return (
-        session.query(Generation)
-        .options(joinedload(Generation.scores), joinedload(Generation.rating))
-        .filter_by(mp3_path=mp3_path)
-        .first()
-    )
-
 
 def create_generation(
     session: Session,
@@ -381,7 +372,7 @@ def unpick_generation(session: Session, generation_id: str) -> None:
 
 def delete_version(
     session: Session, version_id: str, *,
-    delete_generations: bool = False, output_dir: Path | None = None,
+    delete_generations: bool = False, audio_dir: Path | None = None,
 ) -> None:
     version = session.query(Version).filter_by(id=version_id).first()
     if not version:
@@ -390,7 +381,7 @@ def delete_version(
     paths_to_delete: list[str] = []
     if delete_generations:
         for gen in version.generations:
-            if output_dir and gen.mp3_path:
+            if audio_dir and gen.mp3_path:
                 paths_to_delete.append(gen.mp3_path)
             session.delete(gen)
     else:
@@ -401,13 +392,13 @@ def delete_version(
     session.flush()
 
     for mp3_rel in paths_to_delete:
-        delete_generation_files(output_dir, mp3_rel)
+        delete_generation_files(audio_dir, mp3_rel)
 
     log.info("Deleted version %s (delete_generations=%s)", version_id, delete_generations)
 
 
 def delete_generation(
-    session: Session, generation_id: str, output_dir: Path | None = None,
+    session: Session, generation_id: str, audio_dir: Path | None = None,
 ) -> None:
     gen = session.query(Generation).filter_by(id=generation_id).first()
     if not gen:
@@ -417,8 +408,8 @@ def delete_generation(
     session.delete(gen)
     session.flush()
 
-    if output_dir and mp3_rel:
-        delete_generation_files(output_dir, mp3_rel)
+    if audio_dir and mp3_rel:
+        delete_generation_files(audio_dir, mp3_rel)
 
     log.info("Deleted generation %s", generation_id)
 
@@ -426,9 +417,9 @@ def delete_generation(
 _GENERATION_FILE_SUFFIXES = [".mp3", ".wav", ".md", ".whisper"]
 
 
-def delete_generation_files(output_dir: Path, mp3_rel: str) -> None:
-    mp3 = (output_dir / mp3_rel).resolve()
-    if not mp3.is_relative_to(output_dir.resolve()):
+def delete_generation_files(audio_dir: Path, mp3_rel: str) -> None:
+    mp3 = (audio_dir / mp3_rel).resolve()
+    if not mp3.is_relative_to(audio_dir.resolve()):
         log.warning("Path traversal blocked in delete: %s", mp3_rel)
         return
     for suffix in _GENERATION_FILE_SUFFIXES:
@@ -439,7 +430,7 @@ def delete_generation_files(output_dir: Path, mp3_rel: str) -> None:
 
 
 def cleanup_album(
-    session: Session, album_id: str, output_dir: Path | None = None,
+    session: Session, album_id: str, audio_dir: Path | None = None,
 ) -> int:
     """Delete all non-picked generations for an album. Returns count deleted."""
     gens = (
@@ -452,19 +443,19 @@ def cleanup_album(
     count = len(gens)
     paths_to_delete: list[str] = []
     for gen in gens:
-        if output_dir and gen.mp3_path:
+        if audio_dir and gen.mp3_path:
             paths_to_delete.append(gen.mp3_path)
         session.delete(gen)
     session.flush()
 
     for mp3_rel in paths_to_delete:
-        delete_generation_files(output_dir, mp3_rel)
+        delete_generation_files(audio_dir, mp3_rel)
 
     return count
 
 
 def delete_album(
-    session: Session, album_id: str, output_dir: Path | None = None,
+    session: Session, album_id: str, audio_dir: Path | None = None,
 ) -> None:
     album = session.query(Album).filter_by(id=album_id).first()
     if not album:
@@ -479,7 +470,7 @@ def delete_album(
     )
     paths_to_delete: list[str] = []
     for gen in gens:
-        if output_dir and gen.mp3_path:
+        if audio_dir and gen.mp3_path:
             paths_to_delete.append(gen.mp3_path)
         session.delete(gen)
 
@@ -487,21 +478,12 @@ def delete_album(
     session.flush()
 
     for mp3_rel in paths_to_delete:
-        delete_generation_files(output_dir, mp3_rel)
-
-    if output_dir:
-        album_dir = (output_dir / album_id).resolve()
-        if album_dir.is_relative_to(output_dir.resolve()) and album_dir.is_dir():
-            shutil.rmtree(album_dir, ignore_errors=True)
-            log.info("Removed album directory: %s", album_dir)
+        delete_generation_files(audio_dir, mp3_rel)
 
     log.info("Deleted album %s", album_id)
 
 
-def move_song(
-    session: Session, song_id: str, new_album_id: str,
-    output_dir: Path | None = None,
-) -> Song:
+def move_song(session: Session, song_id: str, new_album_id: str) -> Song:
     song = session.query(Song).filter_by(id=song_id).first()
     if not song:
         raise ValueError(f"Song not found: {song_id}")
@@ -515,50 +497,6 @@ def move_song(
 
     old_album_id = song.album_id
     song.album_id = new_album_id
-
-    if output_dir:
-        _move_generation_files(session, song_id, old_album_id, new_album_id, output_dir)
-
     session.flush()
     log.info("Moved song %s from album %s to %s", song_id, old_album_id, new_album_id)
     return song
-
-
-def _move_generation_files(
-    session: Session, song_id: str,
-    old_album_id: str, new_album_id: str,
-    output_dir: Path,
-) -> None:
-    new_dir = output_dir / new_album_id
-    new_dir.mkdir(parents=True, exist_ok=True)
-
-    gens = session.query(Generation).filter_by(song_id=song_id).all()
-    for gen in gens:
-        if gen.mp3_path:
-            gen.mp3_path = _move_file_and_update_path(
-                output_dir, gen.mp3_path, old_album_id, new_album_id,
-            )
-        if gen.wav_path:
-            gen.wav_path = _move_file_and_update_path(
-                output_dir, gen.wav_path, old_album_id, new_album_id,
-            )
-
-
-def _move_file_and_update_path(
-    output_dir: Path, rel_path: str,
-    old_album_id: str, new_album_id: str,
-) -> str:
-    src = (output_dir / rel_path).resolve()
-    if not src.is_relative_to(output_dir.resolve()):
-        log.warning("Path traversal blocked in move: %s", rel_path)
-        return rel_path
-
-    new_rel = rel_path.replace(old_album_id + "/", new_album_id + "/", 1)
-    dst = (output_dir / new_rel).resolve()
-
-    if src.exists():
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(dst))
-        log.info("Moved: %s -> %s", src, dst)
-
-    return new_rel

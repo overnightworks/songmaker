@@ -27,14 +27,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from songmaker_cli.app_context import AppContext, get_db_session
 from songmaker_cli.config import find_project_root
-from songmaker_cli.constants import OUTPUT_ROOT
+from songmaker_cli.constants import AUDIO_ROOT, DATA_ROOT
 
 log = logging.getLogger(__name__)
 
-DB_FILENAME = "songmaker.db"
-
 
 MAX_REQUEST_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", 1_048_576))
+MAX_UPLOAD_BODY_BYTES = int(os.environ.get("MAX_UPLOAD_BODY_BYTES", 52_428_800))
 
 
 class BodySizeLimitMiddleware:
@@ -53,6 +52,10 @@ class BodySizeLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
+        path = scope.get("path", "")
+        is_upload = path.endswith("/reimport")
+        limit = MAX_UPLOAD_BODY_BYTES if is_upload else MAX_REQUEST_BODY_BYTES
+
         headers = {k.lower(): v for k, v in (
             (k.decode("latin-1"), v.decode("latin-1"))
             for k, v in scope.get("headers", [])
@@ -60,7 +63,7 @@ class BodySizeLimitMiddleware:
         cl = headers.get("content-length")
         if cl:
             try:
-                if int(cl) > MAX_REQUEST_BODY_BYTES:
+                if int(cl) > limit:
                     resp = JSONResponse({"detail": "Request body too large"}, status_code=413)
                     await resp(scope, receive, send)
                     return
@@ -75,7 +78,7 @@ class BodySizeLimitMiddleware:
             msg = await receive()
             if msg.get("type") == "http.request":
                 received += len(msg.get("body", b""))
-                if received > MAX_REQUEST_BODY_BYTES:
+                if received > limit:
                     rejected = True
                     raise _BodyTooLarge
             return msg
@@ -463,7 +466,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 def create_app(
-    output_dir: Path, project_root: Path,
+    audio_dir: Path, data_dir: Path, project_root: Path,
     ctx: AppContext | None = None,
 ) -> FastAPI:
     app = FastAPI(
@@ -476,9 +479,9 @@ def create_app(
         from songmaker_cli.auth import ensure_session_secret, parse_trusted_proxies
         from songmaker_cli.db.engine import init_db, resolve_database_url
 
-        db_url = resolve_database_url(output_dir)
+        db_url = resolve_database_url(data_dir)
         db_factory = init_db(db_url)
-        secret = ensure_session_secret(output_dir)
+        secret = ensure_session_secret(data_dir)
         hosts_exact, hosts_patterns = parse_allowed_hosts()
 
         redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
@@ -488,7 +491,8 @@ def create_app(
 
         ctx = AppContext(
             db=db_factory,
-            output_dir=output_dir,
+            audio_dir=audio_dir,
+            data_dir=data_dir,
             session_secret=secret.encode(),
             redis=redis_instance,
             trusted_proxies=parse_trusted_proxies(),
@@ -622,24 +626,18 @@ def create_app(
 
     from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
-    @app.get("/audio/{album}/{filename}")
+    @app.get("/audio/{owner_id}/{filename}")
     async def get_audio(
-        album: str, filename: str,
+        owner_id: str, filename: str,
         user: AuthenticatedUser = Depends(get_current_user),
-        db: Session = Depends(get_db_session),
     ) -> FileResponse:
-        audio_path = (output_dir / album / filename).resolve()
-        if not audio_path.is_relative_to(output_dir.resolve()):
+        if user.role != "admin" and owner_id != user.id:
+            raise HTTPException(404, "Audio file not found")
+
+        audio_path = (audio_dir / owner_id / filename).resolve()
+        if not audio_path.is_relative_to(audio_dir.resolve()):
             raise HTTPException(403, "Path traversal denied")
         if not audio_path.exists():
-            raise HTTPException(404, "Audio file not found")
-
-        from songmaker_cli.db.queries import get_album as get_album_query
-
-        db_album = get_album_query(db, album)
-        if not db_album:
-            raise HTTPException(404, "Audio file not found")
-        if user.role != "admin" and db_album.created_by != user.id:
             raise HTTPException(404, "Audio file not found")
 
         from songmaker_cli.constants import AUDIO_MEDIA_TYPES
@@ -730,8 +728,8 @@ def create_app(
         if filename not in valid_filenames:
             raise HTTPException(404, "Not found")
 
-        audio_path = (output_dir / filename).resolve()
-        if not audio_path.is_relative_to(output_dir.resolve()):
+        audio_path = (audio_dir / filename).resolve()
+        if not audio_path.is_relative_to(audio_dir.resolve()):
             raise HTTPException(403, "Path traversal denied")
         if not audio_path.exists():
             raise HTTPException(404, "Not found")
@@ -776,7 +774,8 @@ def _load_env_file(project_root: Path) -> None:
 
 
 def run_server(
-    output_dir: Path | None = None,
+    audio_dir: Path | None = None,
+    data_dir: Path | None = None,
     project_root: Path | None = None,
     port: int = 8080,
     open_browser: bool = False,
@@ -785,18 +784,21 @@ def run_server(
 
     if project_root is None:
         project_root = find_project_root(Path.cwd()) or Path.cwd()
-    if output_dir is None:
-        output_dir = project_root / OUTPUT_ROOT
+    if audio_dir is None:
+        audio_dir = project_root / AUDIO_ROOT
+    if data_dir is None:
+        data_dir = project_root / DATA_ROOT
 
     _load_env_file(project_root)
 
     from songmaker_cli.logging_config import configure_logging
     configure_logging()
 
-    if not output_dir.exists():
-        output_dir.mkdir(parents=True)
+    for d in (audio_dir, data_dir):
+        if not d.exists():
+            d.mkdir(parents=True)
 
-    app = create_app(output_dir, project_root)
+    app = create_app(audio_dir, data_dir, project_root)
     log.info("Songmaker server: http://localhost:%d", port)
     log.info("Auth enabled (session-based)")
 

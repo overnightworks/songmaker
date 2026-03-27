@@ -25,7 +25,6 @@ from songmaker_cli.app_context import AppContext, get_app_context, get_db_sessio
 from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.db.queries import (
     delete_generation,
-    get_generation_by_path,
     get_job,
     pick_generation,
     record_audit,
@@ -61,7 +60,7 @@ def api_delete_generation(
 ) -> StatusResponse:
     check_generation_access(session, gen_id, user)
     try:
-        delete_generation(session, gen_id, output_dir=ctx.output_dir)
+        delete_generation(session, gen_id, audio_dir=ctx.audio_dir)
     except ValueError:
         raise HTTPException(404, "Generation not found")
     record_audit(session, user.id, "delete", "generation", gen_id)
@@ -162,23 +161,6 @@ def api_rate_generation(
     session.commit()
     return RateResponse(generation_id=gen_id, rating=req.rating)
 
-
-@router.post("/rate/{album}/{gen_name}")
-def api_rate_by_path(
-    album: str, gen_name: str, req: RateRequest,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> RateResponse:
-    if ".." in album or ".." in gen_name or "/" in album or "/" in gen_name:
-        raise HTTPException(400, "Invalid path")
-    mp3_path = f"{album}/{gen_name}.mp3"
-    gen = get_generation_by_path(session, mp3_path)
-    if not gen:
-        raise HTTPException(404, "Generation not found")
-    check_generation_access(session, gen.id, user)
-    save_rating(session, gen.id, req.rating, req.notes)
-    session.commit()
-    return RateResponse(generation=gen_name, rating=req.rating)
 
 
 # ── Pick ─────────────────────────────────────────────────────────────

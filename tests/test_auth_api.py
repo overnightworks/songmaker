@@ -22,20 +22,23 @@ _TEST_SECRET = b"a" * 64
 
 @pytest.fixture()
 def client(tmp_path: Path) -> TestClient:
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir()
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=_TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        session_secret=_TEST_SECRET, redis=redis,
     )
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     yield TestClient(app, cookies={})
 
 
@@ -338,7 +341,8 @@ def test_detect_secure_none_request() -> None:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=MagicMock(), output_dir=Path("/tmp"), session_secret=b"x" * 32, redis=redis,
+        db=MagicMock(), audio_dir=Path("/tmp/audio"),
+        data_dir=Path("/tmp/data"), session_secret=b"x" * 32, redis=redis,
     )
     assert _detect_secure(None, ctx) is False
 

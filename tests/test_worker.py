@@ -93,7 +93,8 @@ def test_generate_runs_queued_job() -> None:
         patch("songmaker_cli.worker.get_job", return_value=mock_job),
         patch("songmaker_cli.worker.run_generation_job") as mock_run,
         patch.object(worker_mod, "_acestep_manager", mock_mgr),
-        patch.object(worker_mod, "_output_dir", return_value="out"),
+        patch.object(worker_mod, "_audio_dir", return_value="audio"),
+        patch.object(worker_mod, "_data_dir", return_value="data"),
     ):
         _run(worker_mod.generate(ctx, "j1", "s1", "v1", 2, "u1"))
 
@@ -142,7 +143,7 @@ def test_score_runs_queued_job() -> None:
         patch("songmaker_cli.worker.get_job", return_value=mock_job),
         patch("songmaker_cli.worker.run_scoring_job") as mock_run,
         patch.object(worker_mod, "_acestep_manager", mock_mgr),
-        patch.object(worker_mod, "_output_dir", return_value="out"),
+        patch.object(worker_mod, "_audio_dir", return_value="audio"),
     ):
         _run(worker_mod.score(_mock_ctx(), "j1", "g1", ["silence"]))
 

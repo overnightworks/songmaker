@@ -42,7 +42,8 @@ def _build_auth_app(_db, redis=None):
     if redis is None:
         redis = make_fake_redis()
     ctx = AppContext(
-        db=_db, output_dir=Path("/tmp"), session_secret=_TEST_SECRET, redis=redis,
+        db=_db, audio_dir=Path("/tmp/audio"), data_dir=Path("/tmp/data"),
+        session_secret=_TEST_SECRET, redis=redis,
     )
     app = FastAPI()
     app.state.ctx = ctx

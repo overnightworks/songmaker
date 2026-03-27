@@ -164,6 +164,25 @@ def api_put(server: str, path: str, json: dict) -> dict:
     return resp.json()
 
 
+def api_upload(
+    server: str, path: str, files: list[tuple[str, tuple[str, bytes, str]]],
+) -> dict:
+    url = f"{server}{path}"
+    log.debug("POST (upload) %s", url)
+    try:
+        with _build_client(server) as client:
+            csrf = client.cookies.get("csrf_token")
+            headers = {"X-CSRF-Token": csrf} if csrf else {}
+            resp = client.post(url, files=files, headers=headers)
+    except httpx.ConnectError:
+        raise ServerError(f"Cannot connect to {server}. Is the server running?")
+    if resp.status_code == 401:
+        raise ServerError("Not authenticated. Run 'songmaker login' first.")
+    if not resp.is_success:
+        raise ServerError(f"POST {path}: {resp.status_code} {resp.text[:200]}")
+    return resp.json()
+
+
 def resolve_song(server: str, query: str) -> dict:
     response = api_get(server, "/api/songs")
     songs = response["items"] if isinstance(response, dict) else response

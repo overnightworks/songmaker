@@ -41,27 +41,21 @@ def test_decode_audio_empty() -> None:
 
 
 def test_write_output(tmp_path: Path) -> None:
-    from songmaker_cli.config import OutputPaths
-
     left = np.sin(np.linspace(0, 2 * np.pi * 440, 44100)) * 0.3
     right = left.copy()
     audio = DecodedAudio(left=left, right=right, sample_rate=44100, duration=1.0)
 
-    paths = OutputPaths(
-        output_dir=tmp_path,
-        base_name="song",
-        version=1,
-        versioned_name="song_v1",
-    )
+    mp3_path = tmp_path / "song_v1.mp3"
+    wav_path = tmp_path / "song_v1.wav"
     meta = SongMeta(title="Song", prompt="rock", lyrics="hello", album="test")
     album_meta = AlbumMeta(title="Album", artist="Artist")
 
-    _write_output(audio, 42, paths, meta, album_meta)
+    _write_output(audio, 42, mp3_path, wav_path, meta, album_meta)
 
-    assert paths.mp3.exists()
-    assert paths.mp3.stat().st_size > 0
-    assert paths.wav.exists()
-    assert paths.wav.stat().st_size > 0
+    assert mp3_path.exists()
+    assert mp3_path.stat().st_size > 0
+    assert wav_path.exists()
+    assert wav_path.stat().st_size > 0
 
 
 
@@ -124,38 +118,32 @@ def test_run_generation_error() -> None:
 
 
 def test_write_output_mastering_error(tmp_path: Path) -> None:
-    from songmaker_cli.config import OutputPaths
-
     left = np.array([], dtype=np.float64)
     right = left.copy()
     audio = DecodedAudio(left=left, right=right, sample_rate=44100, duration=0.0)
 
-    paths = OutputPaths(
-        output_dir=tmp_path, base_name="song", version=1, versioned_name="song_v1",
-    )
+    mp3_path = tmp_path / "song_v1.mp3"
+    wav_path = tmp_path / "song_v1.wav"
     meta = SongMeta(title="Song", prompt="rock", lyrics="hello", album="test")
     album_meta = AlbumMeta(title="Album", artist="Artist")
 
     with pytest.raises(GenerationError, match="empty"):
-        _write_output(audio, 42, paths, meta, album_meta)
+        _write_output(audio, 42, mp3_path, wav_path, meta, album_meta)
 
 
 def test_write_output_encode_error(tmp_path: Path) -> None:
-    from songmaker_cli.config import OutputPaths
-
     left = np.sin(np.linspace(0, 2 * np.pi * 440, 44100)) * 0.3
     right = left.copy()
     audio = DecodedAudio(left=left, right=right, sample_rate=44100, duration=1.0)
 
-    paths = OutputPaths(
-        output_dir=tmp_path, base_name="song", version=1, versioned_name="song_v1",
-    )
+    mp3_path = tmp_path / "song_v1.mp3"
+    wav_path = tmp_path / "song_v1.wav"
     meta = SongMeta(title="Song", prompt="rock", lyrics="hello", album="test")
     album_meta = AlbumMeta(title="Album", artist="Artist")
 
     with patch("shutil.which", return_value=None):
         with pytest.raises(GenerationError, match="ffmpeg not found"):
-            _write_output(audio, 42, paths, meta, album_meta)
+            _write_output(audio, 42, mp3_path, wav_path, meta, album_meta)
 
 
 def test_main_error_handling() -> None:
@@ -200,7 +188,9 @@ def test_generate_single_success(tmp_path: Path, make_stereo_wav_bytes) -> None:
             meta=meta,
             album_meta=album_meta,
             ace_config=ace_config,
-            output_root=tmp_path,
+            audio_dir=tmp_path,
+            user_id="u1",
+            generation_id="gen1",
             client=mock_client,
         )
 
@@ -240,7 +230,9 @@ def test_generate_single_creates_client_when_none(tmp_path: Path, make_stereo_wa
             meta=meta,
             album_meta=album_meta,
             ace_config=ace_config,
-            output_root=tmp_path,
+            audio_dir=tmp_path,
+            user_id="u1",
+            generation_id="gen2",
             client=None,
         )
 
@@ -264,6 +256,8 @@ def test_generate_single_server_not_available(tmp_path: Path) -> None:
             meta=meta,
             album_meta=album_meta,
             ace_config=ace_config,
-            output_root=tmp_path,
+            audio_dir=tmp_path,
+            user_id="u1",
+            generation_id="gen3",
             client=mock_client,
         )

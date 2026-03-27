@@ -13,7 +13,7 @@ from numpy.typing import NDArray
 from acestep_engine import AceStepClient, AceStepError
 from acestep_engine.models import AceStepConfig, AceStepResult
 from audio_engine import MasteringError, encode_mp3, master_audio, read_wav_bytes, write_stereo_wav
-from songmaker_cli.config import OutputPaths, resolve_output_paths
+from songmaker_cli.config import audio_file_path
 from songmaker_cli.errors import GenerationError
 from songmaker_cli.parser import AlbumMeta, SongMeta
 
@@ -34,14 +34,15 @@ class GenerationResult:
     wav_path: Path
     seed: int
     duration: float
-    output_paths: OutputPaths
 
 
 def generate_single(
     meta: SongMeta,
     album_meta: AlbumMeta,
     ace_config: AceStepConfig,
-    output_root: Path,
+    audio_dir: Path,
+    user_id: str,
+    generation_id: str,
     client: AceStepClient | None = None,
 ) -> GenerationResult:
     if client is None:
@@ -49,19 +50,18 @@ def generate_single(
     if not client.is_available:
         raise GenerationError("ACE-Step server is not reachable")
 
-    base_name = meta.title.lower().replace(" ", "_")
-    paths = resolve_output_paths(meta.album, base_name, output_root=output_root)
+    mp3_path = audio_file_path(audio_dir, user_id, generation_id, ".mp3")
+    wav_path = audio_file_path(audio_dir, user_id, generation_id, ".wav")
     ace_result, elapsed = _run_generation(ace_config, client)
     audio = _decode_audio(ace_result)
-    _write_output(audio, ace_result.seed, paths, meta, album_meta)
+    _write_output(audio, ace_result.seed, mp3_path, wav_path, meta, album_meta)
 
-    log.info("Generated: %s (seed=%s, %.0fs)", paths.mp3.name, ace_result.seed, elapsed)
+    log.info("Generated: %s (seed=%s, %.0fs)", mp3_path.name, ace_result.seed, elapsed)
     return GenerationResult(
-        mp3_path=paths.mp3,
-        wav_path=paths.wav,
+        mp3_path=mp3_path,
+        wav_path=wav_path,
         seed=ace_result.seed,
         duration=audio.duration,
-        output_paths=paths,
     )
 
 
@@ -92,7 +92,8 @@ def _decode_audio(ace_result: AceStepResult) -> DecodedAudio:
 def _write_output(
     audio: DecodedAudio,
     seed: int,
-    paths: OutputPaths,
+    mp3_path: Path,
+    wav_path: Path,
     meta: SongMeta,
     album_meta: AlbumMeta,
 ) -> None:
@@ -103,7 +104,7 @@ def _write_output(
     except MasteringError as exc:
         raise GenerationError(str(exc)) from exc
 
-    write_stereo_wav(str(paths.wav), mastered_left, mastered_right, audio.sample_rate)
+    write_stereo_wav(str(wav_path), mastered_left, mastered_right, audio.sample_rate)
 
     id3_metadata = {
         "title": meta.title,
@@ -116,7 +117,7 @@ def _write_output(
     }
     try:
         encode_mp3(
-            mastered_left, mastered_right, str(paths.mp3),
+            mastered_left, mastered_right, str(mp3_path),
             sample_rate=audio.sample_rate, metadata=id3_metadata,
         )
     except MasteringError as exc:

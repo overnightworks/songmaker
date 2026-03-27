@@ -6,7 +6,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 
 - **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in both DB and Redis
 - **Redis session cache**: Session validation reads from Redis first (no DB hit on cache hit). DB is the durable store, synced every 5 minutes via a background task. Redis failure degrades gracefully to DB-only mode. Session TTL in Redis replaces per-request DB writes for sliding window renewal.
-- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB or Redis leak does not yield usable cookies. The secret is auto-generated and stored in `<output_dir>/.session_secret` (mode 0600), or provided via `SESSION_SECRET` env var (min 32 chars).
+- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB or Redis leak does not yield usable cookies. The secret is auto-generated and stored in `<data_dir>/.session_secret` (mode 0600), or provided via `SESSION_SECRET` env var (min 32 chars).
 - **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected; `X-Forwarded-Proto` only honored when the direct peer is in `TRUSTED_PROXIES`)
 - **Session lifetime**: 30-day sliding window (via Redis TTL), 90-day absolute max (checked from cached `created_at`)
 - **Session fixation**: All old sessions deleted from both DB and Redis on login, password change, and admin password reset
@@ -92,7 +92,7 @@ All responses include:
 
 ## Request Size Limits
 
-`BodySizeLimitMiddleware` (raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Requests > 1 MB are rejected (HTTP 413). Configurable via `MAX_REQUEST_BODY_BYTES` env var.
+`BodySizeLimitMiddleware` (raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Requests > 1 MB are rejected (HTTP 413). Configurable via `MAX_REQUEST_BODY_BYTES` env var. The reimport endpoint (`/reimport`) has a higher limit (50 MB, configurable via `MAX_UPLOAD_BODY_BYTES`) to allow MP3/WAV uploads.
 
 **Note**: For production deployments exposed to the internet, use a reverse proxy (e.g., nginx `client_max_body_size 1m`) to reject oversized requests at the network edge before they reach the application.
 
@@ -125,7 +125,7 @@ All mutating operations are logged to the `audit_log` table:
 | Setting | How |
 |---------|-----|
 | HTTPS termination | Reverse proxy (nginx/caddy) with TLS. Set `X-Forwarded-Proto: https` so `Secure` cookie flag and HSTS header activate. |
-| Session secret | Set `SESSION_SECRET` env var (min 32 chars) for stable HMAC signing across restarts. If not set, auto-generated and stored in `<output_dir>/.session_secret`. |
+| Session secret | Set `SESSION_SECRET` env var (min 32 chars) for stable HMAC signing across restarts. If not set, auto-generated and stored in `<data_dir>/.session_secret`. |
 | CORS origin | Set `CORS_ORIGIN=https://yourdomain.com` or `CORS_ORIGIN=*.yourdomain.com`. Wildcard must include a registrable domain (e.g., `*.trycloudflare.com`). Bare TLDs rejected. |
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1` (comma-separated). Only these IPs are trusted for `X-Forwarded-For`. Uses the rightmost untrusted entry to prevent spoofing. Without this, the client's direct IP is always used for rate limiting. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
@@ -151,13 +151,12 @@ All request models use Pydantic with strict constraints:
 - Generation params: Typed `GenerationParams` model with `extra="forbid"`, range-validated fields, and enum-validated string values
 - Role fields: `Literal["admin", "user"]` — no arbitrary role injection
 - Password strength: Common password blocklist + minimum unique character count
-- Path parameters: `..` and `/` rejected in rate-by-path endpoint
 - No raw SQL — 100% SQLAlchemy ORM with parameterized queries
 - No `eval`, `exec`, `pickle`, `shell=True`, or `yaml.load` anywhere
 
 ## Path Traversal Protection
 
-Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. Audio is only served for albums that exist in the database (orphaned files on disk are inaccessible). Shared audio endpoints additionally validate the requested filename against the set of picked generation paths for the shared album. Slug generation strips all non-alphanumeric characters. The rate-by-path endpoint validates that album and generation name parameters contain no `..` or `/`.
+Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. The authenticated audio endpoint (`/audio/{owner_id}/{filename}`) checks that the requesting user owns the files (or is admin) — no DB lookup needed since the path is keyed by user ID. Shared audio endpoints validate the requested filename against the set of picked generation paths for the shared album. Slug generation strips all non-alphanumeric characters.
 
 ## GPU Resource Safety
 
@@ -194,4 +193,4 @@ Implemented: 15 failed attempts per username within 1 hour triggers account lock
 **Priority: Low** — CSP now enforces `script-src 'self'` and `default-src 'none'`. The `style-src 'unsafe-inline'` directive is needed for SvelteKit dev mode but could be tightened in production. Consider nonce-based inline styles if a stricter policy is desired.
 
 ### 6. Database file permissions
-**Priority: Low** — The `.session_secret` file is created with `0600` permissions, but the SQLite database file inherits permissions from the output directory. Consider explicitly setting `0600` on the DB file at creation time, since it contains bcrypt hashes and session tokens.
+**Priority: Low** — The `.session_secret` file is created with `0600` permissions, but the SQLite database file inherits permissions from the data directory. Consider explicitly setting `0600` on the DB file at creation time, since it contains bcrypt hashes and session tokens.

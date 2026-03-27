@@ -16,9 +16,10 @@ from songmaker_cli.db.models import Album, Generation, Song, User, Version
 
 
 def _make_sharing_app(tmp_path: Path) -> tuple[TestClient, Path]:
-    output_dir = tmp_path / "_output"
-    album_dir = output_dir / "test_album"
-    album_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
 
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
@@ -26,10 +27,12 @@ def _make_sharing_app(tmp_path: Path) -> tuple[TestClient, Path]:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    mp3 = album_dir / "01_song_v1.mp3"
+    user_dir = audio_dir / "admin_user"
+    user_dir.mkdir(parents=True)
+    mp3 = user_dir / "g1.mp3"
     mp3.write_bytes(b"\xff\xfb\x90\x00" * 100)
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
         session.add(admin)
@@ -41,20 +44,21 @@ def _make_sharing_app(tmp_path: Path) -> tuple[TestClient, Path]:
         session.add(ver)
         gen = Generation(
             id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="test_album/01_song_v1.mp3", seed=42, is_picked=True,
+            mp3_path="admin_user/g1.mp3", seed=42, is_picked=True,
         )
         session.add(gen)
         session.commit()
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.server import create_app
-    app = create_app(output_dir, project_root, ctx=ctx)
-    return TestClient(app, cookies={}), output_dir
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
+    return TestClient(app, cookies={}), audio_dir
 
 
 @pytest.fixture()
@@ -151,14 +155,15 @@ def test_shared_audio(sharing_app: TestClient) -> None:
     slug = resp.json()["share_slug"]
 
     unauthed = TestClient(sharing_app.app, cookies={})
-    resp = unauthed.get(f"/shared/{slug}/audio/test_album/01_song_v1.mp3")
+    resp = unauthed.get(f"/shared/{slug}/audio/admin_user/g1.mp3")
     assert resp.status_code == 200
 
 
 def test_shared_album_song_without_picked_generation(tmp_path: Path) -> None:
-    output_dir = tmp_path / "_output"
-    album_dir = output_dir / "test_album"
-    album_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
 
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
@@ -166,7 +171,7 @@ def test_shared_album_song_without_picked_generation(tmp_path: Path) -> None:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
         session.add(admin)
@@ -176,17 +181,17 @@ def test_shared_album_song_without_picked_generation(tmp_path: Path) -> None:
         session.add(song)
         gen = Generation(
             id="g1", song_id="s1", generation_number=1,
-            mp3_path="test_album/song.mp3", seed=42, is_picked=False,
+            mp3_path="admin_user/g1.mp3", seed=42, is_picked=False,
         )
         session.add(gen)
         session.commit()
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, output_dir=output_dir, session_secret=TEST_SECRET, redis=redis,
+        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=TEST_SECRET, redis=redis,
     )
     from songmaker_cli.server import create_app
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
     login_and_csrf(client, "admin", "admin12345")
     resp = client.post("/api/albums/test_album/share")
@@ -209,7 +214,7 @@ def test_shared_audio_not_found_wrong_file(sharing_app: TestClient) -> None:
 
 def test_shared_audio_not_found_bad_slug(sharing_app: TestClient) -> None:
     unauthed = TestClient(sharing_app.app, cookies={})
-    resp = unauthed.get("/shared/bad-slug/audio/test_album/01_song_v1.mp3")
+    resp = unauthed.get("/shared/bad-slug/audio/admin_user/g1.mp3")
     assert resp.status_code == 404
 
 
@@ -229,15 +234,17 @@ def test_shared_rate_limit(tmp_path: Path) -> None:
     consts.SHARED_RATE_LIMIT = 2
     try:
         from songmaker_cli.server import create_app
-        output_dir = client.app.state.ctx.output_dir
+        audio_dir = client.app.state.ctx.audio_dir
+        data_dir = client.app.state.ctx.data_dir
 
         ctx = AppContext(
             db=client.app.state.ctx.db,
-            output_dir=output_dir,
+            audio_dir=audio_dir,
+            data_dir=data_dir,
             session_secret=TEST_SECRET,
             redis=make_fake_redis(),
         )
-        app = create_app(output_dir, tmp_path, ctx=ctx)
+        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
         unauthed = TestClient(app, cookies={})
 
         for _ in range(3):
@@ -254,15 +261,17 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
     from songmaker_cli.db.queries import create_album, create_session, create_user
     from songmaker_cli.middleware import SESSION_COOKIE
 
-    output_dir = tmp_path / "_output"
-    output_dir.mkdir(parents=True)
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
     project_root = tmp_path
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    factory = init_db(output_dir / "songmaker.db")
+    factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         owner = create_user(session, "owner", hash_password("pass1234"))
         other = create_user(session, "other_user", hash_password("pass1234"))
@@ -275,12 +284,13 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
 
     ctx = AppContext(
         db=factory,
-        output_dir=output_dir,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
     from songmaker_cli.server import create_app
-    app = create_app(output_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
     client.cookies.set(SESSION_COOKIE, sign_session_id(other_sid, TEST_SECRET))
 

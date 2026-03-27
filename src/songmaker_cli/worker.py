@@ -13,7 +13,7 @@ from pathlib import Path
 from arq import cron
 from arq.connections import RedisSettings
 
-from songmaker_cli.constants import ACTIVE_MODEL_REDIS_KEY
+from songmaker_cli.constants import ACTIVE_MODEL_REDIS_KEY, AUDIO_ROOT, DATA_ROOT
 from songmaker_cli.db.engine import init_db, resolve_database_url
 from songmaker_cli.db.queries import get_job, recover_stale_jobs, recover_stale_jobs_by_age
 from songmaker_cli.jobs import run_generation_job, run_scoring_job
@@ -31,12 +31,16 @@ TERMINAL_STATUSES = frozenset({"completed", "partial", "failed"})
 def _get_db_factory():
     global _db_factory
     if _db_factory is None:
-        _db_factory = init_db(resolve_database_url(_output_dir()))
+        _db_factory = init_db(resolve_database_url(_data_dir()))
     return _db_factory
 
 
-def _output_dir() -> Path:
-    return Path(os.environ.get("OUTPUT_DIR", "_output"))
+def _audio_dir() -> Path:
+    return Path(os.environ.get("AUDIO_DIR", AUDIO_ROOT))
+
+
+def _data_dir() -> Path:
+    return Path(os.environ.get("DATA_DIR", DATA_ROOT))
 
 
 async def generate(ctx, job_id, song_id, version_id, count, user_id):
@@ -57,7 +61,7 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id):
 
     run_generation_job(
         job_id, song_id, version_id, count, user_id,
-        db_factory=db_factory, output_dir=_output_dir(),
+        db_factory=db_factory, audio_dir=_audio_dir(), data_dir=_data_dir(),
     )
 
 
@@ -76,7 +80,7 @@ async def score(ctx, job_id, gen_id, scorers):
 
     run_scoring_job(
         job_id, gen_id, scorers,
-        db_factory=db_factory, output_dir=_output_dir(),
+        db_factory=db_factory, audio_dir=_audio_dir(),
     )
 
 

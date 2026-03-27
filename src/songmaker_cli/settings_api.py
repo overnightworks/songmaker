@@ -46,7 +46,7 @@ def api_get_generation_defaults(
     _admin: AuthenticatedUser = Depends(require_admin),
     ctx: AppContext = Depends(get_app_context),
 ) -> dict:
-    return load_generation_defaults(ctx.db, ctx.output_dir)
+    return load_generation_defaults(ctx.db, ctx.data_dir)
 
 
 @router.put("/settings/generation-defaults")

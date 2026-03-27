@@ -41,6 +41,8 @@ server = [
     "redis[hiredis]>=5.0",
     "psycopg2-binary>=2.9",
     "arq>=0.26",
+    "mutagen>=1.47",
+    "python-multipart>=0.0.7",
 ]
 claude = [
     "anthropic>=0.20",

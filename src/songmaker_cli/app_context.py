@@ -17,7 +17,8 @@ if TYPE_CHECKING:
 @dataclass
 class AppContext:
     db: sessionmaker[Session]
-    output_dir: Path
+    audio_dir: Path
+    data_dir: Path
     session_secret: bytes
     redis: Redis
     trusted_proxies: frozenset[str] = field(default_factory=frozenset)

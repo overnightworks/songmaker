@@ -82,9 +82,6 @@ def logout() -> None:
 @app.command
 def server(
     port: Annotated[int, Parameter(help="Server port")] = 8080,
-    output: Annotated[
-        str, Parameter(name=["-o", "--output"], help="Output directory"),
-    ] = "",
     root: Annotated[Optional[str], Parameter(help="Project root")] = None,
     open_browser: Annotated[
         bool, Parameter(name="--open", help="Open browser on start"),
@@ -93,12 +90,8 @@ def server(
     """Start the songmaker web server."""
     from songmaker_cli.server import run_server
 
-    output_dir = Path(output).resolve() if output else None
     project_root = Path(root).resolve() if root else None
-    run_server(
-        output_dir=output_dir, project_root=project_root,
-        port=port, open_browser=open_browser,
-    )
+    run_server(project_root=project_root, port=port, open_browser=open_browser)
 
 
 # ── Auth (local DB commands) ────────────────────────────────────────
@@ -108,9 +101,6 @@ def server(
 def reset_password(
     username: Annotated[str, Parameter(help="Username to reset")],
     password: Annotated[str, Parameter(help="New password (min 8 chars)")],
-    output: Annotated[
-        str, Parameter(name=["-o", "--output"], help="Output directory"),
-    ] = "",
 ) -> None:
     """Reset a user's password (requires local DB access)."""
     from songmaker_cli.auth import (
@@ -119,9 +109,8 @@ def reset_password(
         hash_password,
     )
     from songmaker_cli.config import find_project_root
-    from songmaker_cli.constants import OUTPUT_ROOT
-    from songmaker_cli.db.engine import init_db
-    from songmaker_cli.db.queries import get_user_by_username
+    from songmaker_cli.constants import DATA_ROOT
+    from songmaker_cli.db.engine import init_db, resolve_database_url
 
     if len(password) < MIN_PASSWORD_LENGTH:
         print(f"Error: password must be at least {MIN_PASSWORD_LENGTH} characters")
@@ -133,15 +122,12 @@ def reset_password(
         sys.exit(1)
 
     root = find_project_root(Path.cwd()) or Path.cwd()
-    output_dir = Path(output).resolve() if output else root / OUTPUT_ROOT
-    db_path = output_dir / "songmaker.db"
+    data_dir = root / DATA_ROOT
+    db_url = resolve_database_url(data_dir)
 
-    if not db_path.exists():
-        print(f"Error: database not found at {db_path}")
-        sys.exit(1)
-
-    factory = init_db(db_path)
+    factory = init_db(db_url)
     with factory() as session:
+        from songmaker_cli.db.queries import get_user_by_username
         user = get_user_by_username(session, username)
         if not user:
             print(f"Error: user '{username}' not found")
@@ -152,26 +138,18 @@ def reset_password(
 
 
 @app.command(name="list-users")
-def list_users_cmd(
-    output: Annotated[
-        str, Parameter(name=["-o", "--output"], help="Output directory"),
-    ] = "",
-) -> None:
+def list_users_cmd() -> None:
     """List all users (requires local DB access)."""
     from songmaker_cli.config import find_project_root
-    from songmaker_cli.constants import OUTPUT_ROOT
-    from songmaker_cli.db.engine import init_db
+    from songmaker_cli.constants import DATA_ROOT
+    from songmaker_cli.db.engine import init_db, resolve_database_url
     from songmaker_cli.db.queries import list_users
 
     root = find_project_root(Path.cwd()) or Path.cwd()
-    output_dir = Path(output).resolve() if output else root / OUTPUT_ROOT
-    db_path = output_dir / "songmaker.db"
+    data_dir = root / DATA_ROOT
+    db_url = resolve_database_url(data_dir)
 
-    if not db_path.exists():
-        print(f"Error: database not found at {db_path}")
-        sys.exit(1)
-
-    factory = init_db(db_path)
+    factory = init_db(db_url)
     with factory() as session:
         users = list_users(session)
         if not users:
@@ -357,6 +335,43 @@ def edit(
 def jobs() -> None:
     """List recent jobs (requires GET /api/jobs endpoint)."""
     raise ServerError("Not yet implemented — use the web UI to monitor jobs")
+
+
+# ── Reimport ──────────────────────────────────────────────────────────
+
+
+@app.command
+def reimport(
+    file: Annotated[str, Parameter(help="MP3 or WAV file to reimport")],
+    song_id: Annotated[str, Parameter(name="--song", help="Song ID to attach to")],
+    wav: Annotated[Optional[str], Parameter(name="--wav", help="Additional WAV file")] = None,
+) -> None:
+    """Reimport an MP3/WAV file into an existing song."""
+    import mimetypes
+
+    s = _server()
+    file_path = Path(file)
+    if not file_path.exists():
+        raise ServerError(f"File not found: {file}")
+
+    mime = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    files: list[tuple[str, tuple[str, bytes, str]]] = []
+
+    if file_path.suffix.lower() == ".wav":
+        files.append(("wav", (file_path.name, file_path.read_bytes(), mime)))
+    else:
+        files.append(("mp3", (file_path.name, file_path.read_bytes(), mime)))
+
+    if wav:
+        wav_path = Path(wav)
+        if not wav_path.exists():
+            raise ServerError(f"WAV file not found: {wav}")
+        wav_mime = mimetypes.guess_type(wav_path.name)[0] or "audio/wav"
+        files.append(("wav", (wav_path.name, wav_path.read_bytes(), wav_mime)))
+
+    from songmaker_cli.cli_client import api_upload
+    result = api_upload(s, f"/api/songs/{song_id}/reimport", files)
+    log.info("Reimported as generation #%s", result.get("generation_number", "?"))
 
 
 # ── Main ────────────────────────────────────────────────────────────

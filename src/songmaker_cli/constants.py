@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-OUTPUT_ROOT = "_output"
+DATA_ROOT = "data"
+AUDIO_ROOT = "data/audio"
 DEFAULT_ARTIST = "Flex0r"
 
 # Pagination defaults and limits
