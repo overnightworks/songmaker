@@ -14,13 +14,8 @@ router = APIRouter()
 
 
 def _get_gpu_vram_mb() -> float | None:
-    try:
-        import torch
-        if torch.cuda.is_available():
-            return round(torch.cuda.memory_allocated() / 1024 / 1024, 1)
-    except ImportError:
-        pass
-    return None
+    from songmaker_cli.gpu_util import get_gpu_memory_used_mb
+    return get_gpu_memory_used_mb()
 
 
 def _compute_script_hash(index_html: Path) -> str:

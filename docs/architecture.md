@@ -156,7 +156,7 @@ AudioBox:        CPU only  (forced via CUDA_VISIBLE_DEVICES="" context manager)
 
 Mode switching via `prepare_generate_mode()` / `prepare_score_mode()` in `acestep_manager.py`. Before generation, scoring model caches are cleared and VRAM release is verified. Per-job cleanup: `gc.collect()` + `torch.cuda.empty_cache()` in `finally` blocks.
 
-Known limitation: VRAM verification uses `torch.cuda.memory_allocated()` which only sees PyTorch-managed memory, not CTranslate2's allocations or the ACE-Step subprocess. See `plans/vram-verification.md` for the fix plan (delta-based NVML verification).
+VRAM verification uses pynvml (NVML) for system-wide GPU memory measurement with a delta-based check: snapshots VRAM before clearing scoring models, then polls until usage drops back to baseline + margin. Raises `RuntimeError` if not freed, failing the job cleanly instead of OOMing ACE-Step. Falls back gracefully if pynvml is unavailable.
 
 ## Key Design Decisions
 

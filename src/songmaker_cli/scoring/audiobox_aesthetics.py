@@ -27,8 +27,18 @@ _predictor_lock = threading.Lock()
 
 
 def clear_cache() -> None:
+    import gc
+
     with _predictor_lock:
-        _predictor_cache.clear()
+        for key in list(_predictor_cache):
+            predictor = _predictor_cache.pop(key)
+            if hasattr(predictor, "model") and hasattr(predictor.model, "cpu"):
+                try:
+                    predictor.model.cpu()
+                except Exception:
+                    pass
+            del predictor
+    gc.collect()
     log.info("Cleared AudioBox model cache")
 
 

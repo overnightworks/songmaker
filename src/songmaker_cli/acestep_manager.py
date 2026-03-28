@@ -28,7 +28,7 @@ _ACESTEP_HEALTH_URL = ACESTEP_HEALTH_URL_TEMPLATE.format(port=_ACESTEP_PORT)
 _SHUTDOWN_GRACE_SECONDS = 15
 _SHUTDOWN_KILL_SECONDS = 5
 _HEALTH_POLL_SECONDS = 2
-_VRAM_THRESHOLD_MB = 100
+_VRAM_MARGIN_MB = int(os.environ.get("SONGMAKER_VRAM_MARGIN_MB", "200"))
 _VRAM_POLL_SECONDS = 1
 
 
@@ -147,8 +147,10 @@ class AceStepManager:
 
     def prepare_generate_mode(self) -> None:
         if self._current_mode != "generate":
+            from songmaker_cli.gpu_util import get_gpu_memory_used_mb
+            baseline_mb = get_gpu_memory_used_mb()
             clear_scoring_models()
-            verify_vram_freed()
+            verify_vram_freed(baseline_mb=baseline_mb)
         self.ensure()
         self.refresh_cached_model()
         self._current_mode = "generate"
@@ -191,27 +193,41 @@ def clear_scoring_models() -> None:
     gc_gpu()
 
 
-def verify_vram_freed(max_wait: int = 10) -> None:
-    try:
-        import torch
-        if not torch.cuda.is_available():
+def verify_vram_freed(
+    max_wait: int = 10, baseline_mb: float | None = None,
+) -> None:
+    from songmaker_cli.gpu_util import get_gpu_memory_used_mb
+
+    if baseline_mb is None:
+        baseline_mb = get_gpu_memory_used_mb()
+
+    if baseline_mb is None:
+        log.warning("Cannot query GPU memory (pynvml unavailable) — skipping verification")
+        return
+
+    target_mb = baseline_mb + _VRAM_MARGIN_MB
+
+    for attempt in range(max_wait):
+        gc_gpu()
+        used_mb = get_gpu_memory_used_mb()
+        if used_mb is None:
+            log.warning("NVML query failed mid-poll — skipping verification")
             return
-        for _i in range(max_wait):
-            allocated = torch.cuda.memory_allocated() / 1024 / 1024
-            if allocated < _VRAM_THRESHOLD_MB:
-                log.info("VRAM freed: %.0f MB allocated", allocated)
-                return
-            log.info("Waiting for VRAM release... %.0f MB still allocated", allocated)
-            import gc
-            gc.collect()
-            torch.cuda.empty_cache()
-            time.sleep(_VRAM_POLL_SECONDS)
-        log.warning(
-            "VRAM not fully freed after %ds (%.0f MB remaining)",
-            max_wait, torch.cuda.memory_allocated() / 1024 / 1024,
+        if used_mb <= target_mb:
+            log.info("VRAM freed: %.0f MB used (baseline=%.0f)", used_mb, baseline_mb)
+            return
+        log.info(
+            "Waiting for VRAM release... %.0f MB used, target <=%.0f (attempt %d/%d)",
+            used_mb, target_mb, attempt + 1, max_wait,
         )
-    except ImportError:
-        pass
+        time.sleep(_VRAM_POLL_SECONDS)
+
+    final_mb = get_gpu_memory_used_mb() or 0
+    raise RuntimeError(
+        f"GPU memory not freed after {max_wait}s: {final_mb:.0f} MB in use "
+        f"(baseline was {baseline_mb:.0f} MB, margin {_VRAM_MARGIN_MB} MB). "
+        f"Scoring model cleanup may have failed."
+    )
 
 
 def gc_gpu() -> None:

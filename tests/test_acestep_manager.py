@@ -225,6 +225,7 @@ def test_active_model_exception() -> None:
 def test_prepare_generate_mode() -> None:
     mgr = AceStepManager()
     with (
+        patch("songmaker_cli.gpu_util.get_gpu_memory_used_mb", return_value=18000.0),
         patch("songmaker_cli.acestep_manager.clear_scoring_models") as mock_clear,
         patch("songmaker_cli.acestep_manager.verify_vram_freed") as mock_verify,
         patch.object(mgr, "ensure") as mock_ensure,
@@ -232,8 +233,22 @@ def test_prepare_generate_mode() -> None:
     ):
         mgr.prepare_generate_mode()
     mock_clear.assert_called_once()
-    mock_verify.assert_called_once()
+    mock_verify.assert_called_once_with(baseline_mb=18000.0)
     mock_ensure.assert_called_once()
+
+
+def test_prepare_generate_mode_vram_failure_propagates() -> None:
+    mgr = AceStepManager()
+    with (
+        patch("songmaker_cli.gpu_util.get_gpu_memory_used_mb", return_value=18000.0),
+        patch("songmaker_cli.acestep_manager.clear_scoring_models"),
+        patch(
+            "songmaker_cli.acestep_manager.verify_vram_freed",
+            side_effect=RuntimeError("GPU memory not freed"),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="GPU memory not freed"):
+            mgr.prepare_generate_mode()
 
 
 def test_prepare_score_mode_is_noop() -> None:
@@ -284,35 +299,59 @@ def test_clear_scoring_models_audiobox_import_error() -> None:
 # ── verify_vram_freed ──────────────────────────────────────────────
 
 
-def test_verify_vram_freed_no_torch() -> None:
-    with patch.dict("sys.modules", {"torch": None}):
-        verify_vram_freed()
+def test_verify_vram_freed_no_pynvml() -> None:
+    with patch("songmaker_cli.gpu_util.get_gpu_memory_used_mb", return_value=None):
+        verify_vram_freed(baseline_mb=None)
 
 
-def test_verify_vram_freed_no_cuda() -> None:
-    mock_torch = MagicMock()
-    mock_torch.cuda.is_available.return_value = False
-    with patch.dict("sys.modules", {"torch": mock_torch}):
-        verify_vram_freed()
-
-
-def test_verify_vram_freed_immediate() -> None:
-    mock_torch = MagicMock()
-    mock_torch.cuda.is_available.return_value = True
-    mock_torch.cuda.memory_allocated.return_value = 10 * 1024 * 1024  # 10 MB
-    with patch.dict("sys.modules", {"torch": mock_torch}):
-        verify_vram_freed(max_wait=1)
-
-
-def test_verify_vram_freed_timeout() -> None:
-    mock_torch = MagicMock()
-    mock_torch.cuda.is_available.return_value = True
-    mock_torch.cuda.memory_allocated.return_value = 500 * 1024 * 1024  # 500 MB
+def test_verify_vram_freed_delta_success() -> None:
     with (
-        patch.dict("sys.modules", {"torch": mock_torch}),
+        patch(
+            "songmaker_cli.gpu_util.get_gpu_memory_used_mb",
+            return_value=18100.0,
+        ),
+        patch("songmaker_cli.acestep_manager.gc_gpu"),
+    ):
+        verify_vram_freed(baseline_mb=18000.0, max_wait=1)
+
+
+def test_verify_vram_freed_gradual_release() -> None:
+    readings = [21000.0, 19000.0, 18100.0]
+    with (
+        patch(
+            "songmaker_cli.gpu_util.get_gpu_memory_used_mb",
+            side_effect=readings,
+        ),
+        patch("songmaker_cli.acestep_manager.gc_gpu"),
         patch("time.sleep"),
     ):
-        verify_vram_freed(max_wait=2)
+        verify_vram_freed(baseline_mb=18000.0, max_wait=5)
+
+
+def test_verify_vram_freed_not_freed_raises() -> None:
+    with (
+        patch(
+            "songmaker_cli.gpu_util.get_gpu_memory_used_mb",
+            return_value=21000.0,
+        ),
+        patch("songmaker_cli.acestep_manager.gc_gpu"),
+        patch("time.sleep"),
+    ):
+        with pytest.raises(RuntimeError, match="GPU memory not freed"):
+            verify_vram_freed(baseline_mb=18000.0, max_wait=2)
+
+
+def test_verify_vram_freed_nvml_fails_midpoll() -> None:
+    readings = [21000.0, None]
+    with (
+        patch(
+            "songmaker_cli.gpu_util.get_gpu_memory_used_mb",
+            side_effect=readings,
+        ),
+        patch("songmaker_cli.acestep_manager.gc_gpu"),
+        patch("time.sleep"),
+    ):
+        verify_vram_freed(baseline_mb=18000.0, max_wait=5)
 
 
 # ── gc_gpu ─────────────────────────────────────────────────────────

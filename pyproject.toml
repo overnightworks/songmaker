@@ -22,6 +22,7 @@ scoring = [
     "soundfile",
     "audiobox-aesthetics>=0.0.4",
     "torch>=2.2",
+    "nvidia-ml-py3>=7.352",
 ]
 whisper = [
     "faster-whisper>=1.1",

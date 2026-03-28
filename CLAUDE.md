@@ -85,7 +85,7 @@ These are conventions that aren't obvious from reading a single file:
 - **Redis is authoritative for session expiry.** The session sync loop in `lifecycle.py` syncs Redis TTL → DB `expires_at` every 5 minutes. This is intentional — Redis-first reads avoid DB writes on every request. The DB copy is a backup for audit/recovery, not the source of truth.
 - **Frontend stores Claude API key in localStorage.** The direct-to-Anthropic chat path lets users bring their own key without server config. XSS could expose it, but CSP mitigates this. Documented as a known limitation in `docs/security.md`.
 - **`SessionCache.update_ip_ua()` has a non-atomic read-modify-write.** Benign race: only affects audit log IP/UA accuracy when two concurrent requests from the same session change IP simultaneously. Not worth a Lua script.
-- **VRAM verification uses `torch.cuda.memory_allocated()`** which only sees the worker process's PyTorch memory, not CTranslate2 (Whisper) or the ACE-Step subprocess. See `plans/vram-verification.md` for the fix plan.
+- **VRAM verification** uses delta-based NVML checks (system-wide GPU memory via `pynvml`). Falls back to proceed-with-warning if pynvml is unavailable. Raises `RuntimeError` if scoring models aren't freed, failing the job cleanly instead of OOMing.
 
 ## Workflow — Speed
 

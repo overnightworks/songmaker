@@ -19,8 +19,12 @@ _whisper_cache_lock = threading.Lock()
 
 
 def clear_cache() -> None:
+    import gc
+
     with _whisper_cache_lock:
-        _whisper_model_cache.clear()
+        for key in list(_whisper_model_cache):
+            del _whisper_model_cache[key]
+    gc.collect()
     log.info("Cleared Whisper model cache")
 
 
