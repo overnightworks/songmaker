@@ -35,17 +35,32 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.middleware import AuthenticatedUser
 
+_RATE_LIMIT_LOCK_ID = 1
+_ALBUM_ID_LOCK_ID = 2
 
-def _begin_exclusive(session: Session) -> None:
-    """Acquire an exclusive write lock via SERIALIZABLE isolation.
 
-    SQLite branch exists only for test databases (production uses PostgreSQL).
+def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> None:
+    """Acquire an exclusive write lock for check-then-act sequences.
+
+    PostgreSQL: advisory lock scoped to the transaction (auto-released on
+    commit/rollback). Different lock_ids allow independent serialization.
+    SQLite: BEGIN IMMEDIATE (global write lock, test databases only).
     """
     dialect = session.bind.dialect.name
     if dialect == "sqlite":
         session.execute(text("BEGIN IMMEDIATE"))
     else:
-        session.execute(text("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"))
+        session.execute(text(f"SELECT pg_advisory_xact_lock({lock_id})"))
+
+
+def check_redis_health(request) -> None:
+    """Reject mutation requests when Redis is degraded (fail-closed)."""
+    from songmaker_cli.constants import REDIS_DEGRADED_THRESHOLD
+    from songmaker_cli.redis_client import SessionCache
+
+    cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+    if cache and cache.consecutive_failures >= REDIS_DEGRADED_THRESHOLD:
+        raise HTTPException(503, "Service temporarily degraded — try again shortly")
 
 
 _RATE_LIMITS: dict[str, tuple[int, int]] = {
@@ -127,7 +142,7 @@ def unique_album_id(session: Session, base_slug: str) -> str:
         "the commit() below would persist them unconditionally"
     )
     session.commit()
-    _begin_exclusive(session)
+    _begin_exclusive(session, _ALBUM_ID_LOCK_ID)
     candidate = base_slug
     counter = 1
     while get_album(session, candidate):

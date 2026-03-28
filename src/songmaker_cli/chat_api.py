@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from songmaker_cli.api_helpers import create_job_with_rate_limit
+from songmaker_cli.api_helpers import check_redis_health, create_job_with_rate_limit
 from songmaker_cli.api_models import (
     CapabilitiesResponse,
     ChatRequest,
@@ -81,9 +81,11 @@ SYSTEM_PROMPT = f"{DEFAULT_CHAT_STYLE}\n\n{UNTRUSTED_DATA_NOTICE}\n\n{STRUCTURAL
 @router.post("/chat")
 def api_chat(
     req: ChatRequest,
+    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> ChatResponse:
+    check_redis_health(request)
     create_job_with_rate_limit(session, user, "chat")
     session.commit()
 

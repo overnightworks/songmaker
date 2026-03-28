@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
     check_generation_access,
+    check_redis_health,
     check_song_access,
     cleanup_generation_files,
     create_job_with_rate_limit,
@@ -79,10 +80,12 @@ def api_delete_generation(
 async def api_generate_song(
     song_id: str,
     req: GenerateRequest,
+    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
+    check_redis_health(request)
     song = check_song_access(session, song_id, user)
     version = song.latest_version
     if not version or not version.lyrics or not version.prompt:
@@ -114,10 +117,12 @@ async def api_generate_song(
 async def api_score_generation(
     gen_id: str,
     req: ScoreRequest,
+    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
+    check_redis_health(request)
     check_generation_access(session, gen_id, user)
 
     job = create_job_with_rate_limit(session, user, "score")
