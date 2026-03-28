@@ -1,0 +1,165 @@
+<script lang="ts">
+	import { fetchAlbums, createAlbum, createSong } from '$lib/api/client';
+	import { albumList, songList } from '$lib/stores/player';
+	import { selectSong, switchTab } from '$lib/stores/navigation';
+	import { addToast } from '$lib/stores/toast';
+	import type { AlbumItem } from '$lib/api/types';
+
+	interface Props {
+		albums: AlbumItem[];
+	}
+
+	let { albums }: Props = $props();
+
+	let newTitle = $state('');
+	let newAlbumId = $state('');
+	let newAlbumTitle = $state('');
+	let newAlbumArtist = $state('');
+	let creating = $state(false);
+	let creatingAlbum = $state(false);
+
+	async function handleCreateAlbum(): Promise<void> {
+		if (!newAlbumTitle.trim()) return;
+		creatingAlbum = true;
+		try {
+			const album = await createAlbum(newAlbumTitle.trim(), newAlbumArtist.trim());
+			albumList.set((await fetchAlbums()).items);
+			newAlbumId = album.id;
+			newAlbumTitle = '';
+			newAlbumArtist = '';
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Album creation failed', 'error');
+		} finally {
+			creatingAlbum = false;
+		}
+	}
+
+	async function handleCreateSong(): Promise<void> {
+		if (!newTitle.trim() || !newAlbumId) return;
+		creating = true;
+		try {
+			const created = await createSong({
+				title: newTitle,
+				album_id: newAlbumId
+			});
+			songList.update((songs) => [...songs, created]);
+			selectSong(created.id);
+			switchTab('edit');
+			newTitle = '';
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Create failed', 'error');
+		} finally {
+			creating = false;
+		}
+	}
+</script>
+
+<div class="create-panel">
+	<div class="create-header">
+		<h2>Create</h2>
+	</div>
+
+	<div class="create-section">
+		<h3>New Album</h3>
+		<div class="create-fields">
+			<input type="text" bind:value={newAlbumTitle} placeholder="Album title" />
+			<input type="text" bind:value={newAlbumArtist} placeholder="Artist (optional)" />
+			<button onclick={handleCreateAlbum} disabled={creatingAlbum || !newAlbumTitle.trim()}>
+				{creatingAlbum ? 'Creating...' : 'Create'}
+			</button>
+		</div>
+	</div>
+
+	<div class="create-section">
+		<h3>New Song</h3>
+		<div class="create-fields">
+			<input type="text" bind:value={newTitle} placeholder="Song title" />
+			<select bind:value={newAlbumId}>
+				<option value="">Select album</option>
+				{#each albums as a (a.id)}
+					<option value={a.id}>{a.title}</option>
+				{/each}
+			</select>
+			<button onclick={handleCreateSong} disabled={creating || !newTitle.trim() || !newAlbumId}>
+				{creating ? 'Creating...' : 'Create'}
+			</button>
+		</div>
+	</div>
+</div>
+
+<style>
+	.create-panel {
+		padding: 20px;
+		max-width: 600px;
+	}
+
+	.create-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 16px;
+	}
+
+	.create-header h2 {
+		font-family: var(--font-display);
+		color: var(--primary);
+		font-size: 20px;
+		margin: 0;
+		text-transform: uppercase;
+	}
+
+	.create-section {
+		margin-bottom: 16px;
+	}
+
+	.create-section h3 {
+		font-family: var(--font-display);
+		color: var(--text-muted);
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		margin: 0 0 8px;
+	}
+
+	.create-fields {
+		display: flex;
+		gap: 8px;
+	}
+
+	.create-fields input,
+	.create-fields select {
+		flex: 1;
+		padding: 8px 12px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text);
+		font-size: 13px;
+	}
+
+	.create-fields button {
+		padding: 8px 20px;
+		border: 2px solid var(--primary);
+		border-radius: 20px;
+		background: var(--primary);
+		color: #fff;
+		font-family: var(--font-display);
+		font-size: 12px;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+
+	.create-fields button:disabled {
+		opacity: 0.4;
+	}
+
+	@media (max-width: 768px) {
+		.create-fields {
+			flex-direction: column;
+		}
+
+		.create-fields button {
+			align-self: flex-start;
+		}
+	}
+</style>

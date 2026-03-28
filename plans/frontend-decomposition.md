@@ -1,6 +1,6 @@
 # Frontend Component Decomposition
 
-> **Status: NOT STARTED**
+> **Status: PHASE 1+2 DONE** — SongList split into AlbumNode + SongNode, CreateForm extracted from +page.svelte. Phase 3 (ClaudeChat) deferred — diminishing returns.
 
 ## Problem
 
