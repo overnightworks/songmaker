@@ -49,7 +49,13 @@ async function pollJob(jobId: string): Promise<void> {
 					await refreshSongData(jobId);
 					addToast(updated.error || `${updated.type} partially completed`, 'info');
 				} else {
-					addToast(updated.error || `${updated.type} failed`, 'error');
+					const isRestart = updated.error_type === 'server_restart';
+					addToast(
+						isRestart
+							? 'Server restarted — please retry'
+							: (updated.error || `${updated.type} failed`),
+						isRestart ? 'info' : 'error'
+					);
 				}
 				setTimeout(() => {
 					activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));

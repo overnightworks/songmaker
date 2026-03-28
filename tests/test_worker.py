@@ -212,24 +212,45 @@ def test_on_startup_recovers_jobs() -> None:
 # ── on_shutdown ────────────────────────────────────────────────────
 
 
-def test_on_shutdown_stops_manager() -> None:
+def test_on_shutdown_recovers_stale_and_stops_manager() -> None:
+    mock_session = MagicMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+
     mock_mgr = MagicMock()
-    original = worker_mod._acestep_manager
+    original_mgr = worker_mod._acestep_manager
     worker_mod._acestep_manager = mock_mgr
 
-    _run(worker_mod.on_shutdown(_mock_ctx()))
+    with (
+        patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
+        patch("songmaker_cli.worker.recover_stale_jobs", return_value=1) as mock_recover,
+    ):
+        _run(worker_mod.on_shutdown(_mock_ctx()))
 
+    mock_recover.assert_called_once_with(mock_session)
+    mock_session.commit.assert_called_once()
     mock_mgr.stop.assert_called_once()
-    worker_mod._acestep_manager = original
+    worker_mod._acestep_manager = original_mgr
 
 
 def test_on_shutdown_no_manager() -> None:
-    original = worker_mod._acestep_manager
+    mock_session = MagicMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+
+    original_mgr = worker_mod._acestep_manager
     worker_mod._acestep_manager = None
 
-    _run(worker_mod.on_shutdown(_mock_ctx()))
+    with (
+        patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
+        patch("songmaker_cli.worker.recover_stale_jobs", return_value=0),
+    ):
+        _run(worker_mod.on_shutdown(_mock_ctx()))
 
-    worker_mod._acestep_manager = original
+    mock_session.commit.assert_called_once()
+    worker_mod._acestep_manager = original_mgr
 
 
 # ── WorkerSettings ─────────────────────────────────────────────────
@@ -243,3 +264,8 @@ def test_worker_settings_max_jobs() -> None:
 def test_worker_settings_has_cron() -> None:
     from songmaker_cli.worker import WorkerSettings
     assert len(WorkerSettings.cron_jobs) == 1
+
+
+def test_worker_settings_drain_timeout() -> None:
+    from songmaker_cli.worker import DRAIN_TIMEOUT_SECONDS, WorkerSettings
+    assert WorkerSettings.job_completion_wait == DRAIN_TIMEOUT_SECONDS

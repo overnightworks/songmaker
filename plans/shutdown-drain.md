@@ -1,6 +1,6 @@
 # Graceful Shutdown Drain for arq Worker
 
-> **Status: NOT STARTED**
+> **Status: DONE**
 
 ## Problem
 

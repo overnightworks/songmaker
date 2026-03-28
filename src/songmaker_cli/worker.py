@@ -25,6 +25,7 @@ _db_engine = None
 _acestep_manager = None
 
 JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "300"))
+DRAIN_TIMEOUT_SECONDS = int(os.environ.get("ARQ_DRAIN_TIMEOUT", "300"))
 HEALTH_CHECK_INTERVAL_SECONDS = 30
 TERMINAL_STATUSES = frozenset({"completed", "partial", "failed"})
 
@@ -135,6 +136,13 @@ async def on_startup(ctx):
 
 
 async def on_shutdown(ctx):
+    db_factory = _get_db_factory()
+    with db_factory() as session:
+        recovered = recover_stale_jobs(session)
+        if recovered:
+            log.warning("Shutdown: marked %d in-progress jobs as failed", recovered)
+        session.commit()
+
     if _db_engine is not None:
         _db_engine.dispose()
         log.info("Database connection pool disposed")
@@ -152,7 +160,8 @@ class WorkerSettings:
     )
     max_jobs = 1
     job_timeout = JOB_TIMEOUT_SECONDS
+    job_completion_wait = DRAIN_TIMEOUT_SECONDS
     health_check_interval = HEALTH_CHECK_INTERVAL_SECONDS
     cron_jobs = [
-        cron(cleanup_stale, hour=None, minute={0, 15, 30, 45}),
+        cron(cleanup_stale, minute={i for i in range(0, 60, 2)}, second={0}),
     ]
