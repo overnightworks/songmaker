@@ -150,12 +150,11 @@ def save_global_defaults(session: Session, model_mode: str, params: dict) -> Non
 
 
 def _clear_default(session: Session, user_id: str, model_mode: str) -> None:
-    (
-        session.query(GenerationPreset)
-        .filter(
-            GenerationPreset.created_by == user_id,
-            GenerationPreset.model_mode == model_mode,
-            GenerationPreset.is_default.is_(True),
-        )
-        .update({"is_default": False})
+    query = session.query(GenerationPreset).filter(
+        GenerationPreset.created_by == user_id,
+        GenerationPreset.model_mode == model_mode,
+        GenerationPreset.is_default.is_(True),
     )
+    if session.bind.dialect.name != "sqlite":
+        query.with_for_update().all()
+    query.update({"is_default": False})

@@ -73,6 +73,10 @@ def create_job_with_rate_limit(
     injection and this function; such mutations would be committed
     unconditionally by the commit() here.
     """
+    assert not session.new and not session.dirty and not session.deleted, (
+        "create_job_with_rate_limit: session has uncommitted mutations — "
+        "the commit() below would persist them unconditionally"
+    )
     session.commit()
     _begin_exclusive(session)
 
@@ -118,6 +122,10 @@ def unique_album_id(session: Session, base_slug: str) -> str:
     Same caveats as create_job_with_rate_limit — no prior uncommitted
     mutations besides auth-layer session renewal.
     """
+    assert not session.new and not session.dirty and not session.deleted, (
+        "unique_album_id: session has uncommitted mutations — "
+        "the commit() below would persist them unconditionally"
+    )
     session.commit()
     _begin_exclusive(session)
     candidate = base_slug
@@ -174,8 +182,15 @@ _log = logging.getLogger(__name__)
 
 
 def ensure_not_last_admin(session: Session, user_id: str) -> None:
-    """Raise 400 if demoting/deactivating the last active admin."""
-    admin_count = session.query(User).filter_by(role="admin", is_active=True).count()
+    """Raise 400 if demoting/deactivating the last active admin.
+
+    Uses SELECT ... FOR UPDATE on PostgreSQL to serialize concurrent
+    admin role changes and prevent racing to zero admins.
+    """
+    query = session.query(User).filter_by(role="admin", is_active=True)
+    if session.bind.dialect.name != "sqlite":
+        query = query.with_for_update()
+    admin_count = query.count()
     if admin_count <= 1:
         user = session.get(User, user_id)
         if user and user.role == "admin":

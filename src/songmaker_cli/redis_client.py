@@ -203,15 +203,22 @@ class SessionCache:
 
     def get_all_sessions(self) -> list[tuple[str, int]]:
         prefix = f"{REDIS_SESSION_PREFIX}:"
-        result = []
+        all_keys: list[str] = []
         cursor = 0
         while True:
             cursor, keys = self._redis.scan(cursor, match=f"{prefix}*", count=100)
-            for key in keys:
-                session_id = key[len(prefix):]
-                ttl = self._redis.ttl(key)
-                if ttl > 0:
-                    result.append((session_id, ttl))
+            all_keys.extend(keys)
             if cursor == 0:
                 break
+        if not all_keys:
+            return []
+        pipe = self._redis.pipeline()
+        for key in all_keys:
+            pipe.ttl(key)
+        ttls = pipe.execute()
+        result = []
+        for key, ttl in zip(all_keys, ttls):
+            if ttl > 0:
+                session_id = key[len(prefix):]
+                result.append((session_id, ttl))
         return result

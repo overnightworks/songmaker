@@ -7,6 +7,7 @@ import hmac
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import ensure_not_last_admin
@@ -78,7 +79,11 @@ def create_user_endpoint(
 
     user = create_user(db, req.username, hash_password(req.password), role=req.role)
     record_audit(db, _admin.id, "create", "user", user.id, f"role={req.role}")
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Username already exists")
     return UserResponse.from_orm(user)
 
 

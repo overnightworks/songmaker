@@ -17,27 +17,24 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
 
-from songmaker_cli.app_context import AppContext, get_db_session
+from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import AUDIO_ROOT, DATA_ROOT
 from songmaker_cli.health_api import _compute_script_hash
 from songmaker_cli.lifecycle import auto_setup_admin, session_sync_loop
 from songmaker_cli.middleware import (
     AccessLogMiddleware,
-    AuthenticatedUser,
     BodySizeLimitMiddleware,
     CsrfOriginMiddleware,
     CsrfTokenMiddleware,
     IpRateLimitMiddleware,
     SecurityHeadersMiddleware,
-    get_current_user,
 )
 
 log = logging.getLogger(__name__)
@@ -59,13 +56,6 @@ def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
         else:
             exact.add(h)
     return frozenset(exact), patterns
-
-
-def _picked_filename(song) -> str | None:  # type: ignore[no-untyped-def]
-    picked = [g for g in song.generations if g.is_picked and not g.is_archived]
-    if picked:
-        return picked[0].mp3_path
-    return None
 
 
 @asynccontextmanager
@@ -198,121 +188,11 @@ def create_app(
 
     from songmaker_cli.api import router as api_router
     from songmaker_cli.health_api import router as health_router
+    from songmaker_cli.sharing_api import router as sharing_router
 
     app.include_router(api_router)
     app.include_router(health_router)
-
-    @app.get("/audio/{owner_id}/{filename}")
-    async def get_audio(
-        owner_id: str, filename: str,
-        user: AuthenticatedUser = Depends(get_current_user),
-    ) -> FileResponse:
-        if user.role != "admin" and owner_id != user.id:
-            raise HTTPException(404, "Audio file not found")
-
-        audio_path = (audio_dir / owner_id / filename).resolve()
-        if not audio_path.is_relative_to(audio_dir.resolve()):
-            raise HTTPException(403, "Path traversal denied")
-        if not audio_path.exists():
-            raise HTTPException(404, "Audio file not found")
-
-        from songmaker_cli.constants import AUDIO_MEDIA_TYPES
-        media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
-        return FileResponse(audio_path, media_type=media_type)
-
-    from songmaker_cli.constants import (
-        REDIS_RL_SHARED_PREFIX,
-        SHARED_RATE_LIMIT,
-        SHARED_RATE_WINDOW_SECONDS,
-    )
-    from songmaker_cli.redis_client import RedisRateLimiter
-    shared_limiter = RedisRateLimiter(
-        ctx.redis, REDIS_RL_SHARED_PREFIX, SHARED_RATE_LIMIT, SHARED_RATE_WINDOW_SECONDS,
-    )
-
-    def _check_shared_rate_limit(request: Request) -> None:
-        from songmaker_cli.auth import get_client_ip
-        ctx: AppContext = request.app.state.ctx
-        direct_ip = request.client.host if request.client else "unknown"
-        ip = get_client_ip(
-            direct_ip,
-            request.headers.get("x-forwarded-for"),
-            ctx.trusted_proxies,
-        )
-        try:
-            allowed = shared_limiter.is_allowed(ip)
-        except Exception:
-            log.warning("Shared rate limiter unavailable -- allowing request")
-            return
-        if not allowed:
-            raise HTTPException(
-                429, "Too many requests",
-                headers={"Retry-After": str(SHARED_RATE_WINDOW_SECONDS)},
-            )
-
-    @app.get("/shared/{slug}")
-    def get_shared_album(
-        slug: str,
-        request: Request,
-        db: Session = Depends(get_db_session),
-    ) -> JSONResponse:
-        _check_shared_rate_limit(request)
-        from songmaker_cli.api_models import SharedAlbumResponse, SharedSongItem
-        from songmaker_cli.db.queries import get_album_by_slug
-
-        album = get_album_by_slug(db, slug)
-        if not album:
-            raise HTTPException(404, "Not found")
-        songs = sorted(album.songs, key=lambda s: s.track_number)
-        base_url = str(request.base_url).rstrip("/")
-        picked_by_song = {s.id: _picked_filename(s) for s in songs}
-        response = SharedAlbumResponse(
-            title=album.title,
-            artist=album.artist,
-            subtitle=album.subtitle,
-            year=album.year,
-            songs=[
-                SharedSongItem(
-                    title=s.title,
-                    track_number=s.track_number,
-                    audio_url=(
-                        f"{base_url}/shared/{slug}/audio/{picked_by_song[s.id]}"
-                        if picked_by_song[s.id] else None
-                    ),
-                )
-                for s in songs
-            ],
-        )
-        return JSONResponse(response.model_dump())
-
-    @app.get("/shared/{slug}/audio/{filename:path}")
-    async def get_shared_audio(
-        slug: str,
-        filename: str,
-        request: Request,
-        db: Session = Depends(get_db_session),
-    ) -> FileResponse:
-        _check_shared_rate_limit(request)
-        from songmaker_cli.db.queries import get_album_by_slug
-        album = get_album_by_slug(db, slug)
-        if not album:
-            raise HTTPException(404, "Not found")
-
-        valid_filenames = {
-            fn for s in album.songs
-            if (fn := _picked_filename(s))
-        }
-        if filename not in valid_filenames:
-            raise HTTPException(404, "Not found")
-
-        audio_path = (audio_dir / filename).resolve()
-        if not audio_path.is_relative_to(audio_dir.resolve()):
-            raise HTTPException(403, "Path traversal denied")
-        if not audio_path.exists():
-            raise HTTPException(404, "Not found")
-        from songmaker_cli.constants import AUDIO_MEDIA_TYPES
-        media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
-        return FileResponse(audio_path, media_type=media_type)
+    app.include_router(sharing_router)
 
     sveltekit_dir = project_root / "frontend" / "build"
     sveltekit_app_dir = sveltekit_dir / "_app"
@@ -379,12 +259,6 @@ def run_server(
         webbrowser.open(f"http://localhost:{port}")
 
     host = os.environ.get("HOST", "127.0.0.1")
-    workers = int(os.environ.get("UVICORN_WORKERS", 1))
-    db_url = os.environ.get("DATABASE_URL", "")
-    if workers > 1 and not db_url.startswith("postgresql"):
-        raise ValueError(
-            f"UVICORN_WORKERS={workers} requires a PostgreSQL DATABASE_URL."
-        )
     uvicorn.run(
         app, host=host, port=port, log_level="info",
         timeout_keep_alive=REQUEST_TIMEOUT_SECONDS,

@@ -104,12 +104,14 @@ def create_song(
     if not album:
         raise ValueError(f"Album not found: {album_id}")
 
-    max_track = (
+    track_query = (
         session.query(Song.track_number)
         .filter_by(album_id=album_id)
         .order_by(Song.track_number.desc())
-        .first()
     )
+    if session.bind.dialect.name != "sqlite":
+        track_query = track_query.with_for_update()
+    max_track = track_query.first()
     track_number = (max_track[0] + 1) if max_track else 1
 
     song = Song(
