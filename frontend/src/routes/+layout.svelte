@@ -11,8 +11,11 @@
 
 	let { children } = $props();
 
-	const PUBLIC_ROUTES = ['/login', '/setup'];
-	let isPublicRoute = $derived(PUBLIC_ROUTES.includes(page.url.pathname));
+	let isPublicRoute = $derived(
+		page.url.pathname === '/login' ||
+			page.url.pathname === '/setup' ||
+			page.url.pathname.startsWith('/share/')
+	);
 	const me = $derived($currentUser);
 	const hasPlayback = $derived($playback !== null);
 	const sbOpen = $derived($sidebarOpen);
@@ -22,8 +25,7 @@
 	});
 
 	async function initAuth() {
-		const path = page.url.pathname;
-		if (PUBLIC_ROUTES.includes(path)) {
+		if (isPublicRoute) {
 			authLoading.set(false);
 			return;
 		}

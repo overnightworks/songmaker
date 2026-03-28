@@ -132,7 +132,7 @@ def api_share_album(
     session.commit()
     base_url = str(request.base_url).rstrip("/")
     return ShareResponse(
-        share_url=f"{base_url}/shared/{album.share_slug}",
+        share_url=f"{base_url}/share/{album.share_slug}",
         share_slug=album.share_slug,
     )
 

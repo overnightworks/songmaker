@@ -77,7 +77,7 @@ def test_share_album(sharing_app: TestClient) -> None:
     data = resp.json()
     assert data["status"] == "ok"
     assert data["share_slug"]
-    assert "/shared/" in data["share_url"]
+    assert "/share/" in data["share_url"]
 
 
 def test_share_album_idempotent(sharing_app: TestClient) -> None:
