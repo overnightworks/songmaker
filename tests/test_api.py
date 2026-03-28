@@ -461,7 +461,7 @@ def test_generate_song_submits_job(client: TestClient) -> None:
 
     mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+    with patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool):
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 2},
@@ -478,8 +478,8 @@ def test_generate_song_model_mismatch(client: TestClient) -> None:
     mock_pool = AsyncMock()
 
     with (
-        patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool),
-        patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value="sft")),
+        patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
+        patch("songmaker_cli.generation_api.get_active_model", AsyncMock(return_value="sft")),
     ):
         resp = client.post(
             "/api/songs/s1/generate",
@@ -497,8 +497,8 @@ def test_generate_song_model_unavailable(client: TestClient) -> None:
     mock_pool = AsyncMock()
 
     with (
-        patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool),
-        patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value=None)),
+        patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
+        patch("songmaker_cli.generation_api.get_active_model", AsyncMock(return_value=None)),
     ):
         resp = client.post(
             "/api/songs/s1/generate",
@@ -515,8 +515,8 @@ def test_generate_song_model_match(client: TestClient) -> None:
     mock_pool = AsyncMock()
 
     with (
-        patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool),
-        patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value="sft")),
+        patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
+        patch("songmaker_cli.generation_api.get_active_model", AsyncMock(return_value="sft")),
     ):
         resp = client.post(
             "/api/songs/s1/generate",
@@ -532,7 +532,7 @@ def test_generate_song_no_model_skips_check(client: TestClient) -> None:
 
     mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+    with patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool):
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 1},
@@ -554,7 +554,7 @@ def test_generate_song_redis_down(client: TestClient) -> None:
     from unittest.mock import patch
 
     with patch(
-        "songmaker_cli.arq_pool.get_arq_pool",
+        "songmaker_cli.generation_api.get_arq_pool",
         side_effect=ConnectionError("redis down"),
     ):
         resp = client.post(
@@ -570,7 +570,7 @@ def test_score_generation_redis_down(client: TestClient) -> None:
     from unittest.mock import patch
 
     with patch(
-        "songmaker_cli.arq_pool.get_arq_pool",
+        "songmaker_cli.generation_api.get_arq_pool",
         side_effect=ConnectionError("redis down"),
     ):
         resp = client.post(
@@ -595,7 +595,7 @@ def test_score_generation_submits_job(client: TestClient) -> None:
 
     mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+    with patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool):
         resp = client.post(
             "/api/generations/g1/score",
             json={},
@@ -695,7 +695,7 @@ def test_get_job_found(client: TestClient) -> None:
 
     mock_pool = AsyncMock()
 
-    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+    with patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool):
         resp = client.post("/api/songs/s1/generate", json={"count": 1})
     job_id = resp.json()["id"]
 
@@ -1075,7 +1075,7 @@ def test_admin_has_rate_limit(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
 
     try:
-        with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=AsyncMock()):
+        with patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()):
             r = c.post("/api/songs/s1/generate", json={"count": 1})
             assert r.status_code == 200
 

@@ -73,6 +73,8 @@ ACESTEP_STARTUP_TIMEOUT_SECONDS = 120
 ARQ_QUEUE_KEY = "arq:queue"
 ACTIVE_MODEL_REDIS_KEY = "songmaker:active_model"
 ARQ_HEALTH_KEY_PATTERN = "arq:worker:*"
+RECOVERY_LOCK_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock"
+RECOVERY_LOCK_TTL_SECONDS = 30
 
 # Startup error messages
 REDIS_STARTUP_ERROR = (

@@ -471,10 +471,10 @@ def test_job_duration_stats(db_factory) -> None:
 
     with db_factory() as session:
         stats = job_duration_stats(session)
-    assert stats["avg"] is not None
-    assert stats["min"] is not None
-    assert stats["max"] is not None
-    assert stats["min"] <= stats["avg"] <= stats["max"]
+    assert stats.avg is not None
+    assert stats.min is not None
+    assert stats.max is not None
+    assert stats.min <= stats.avg <= stats.max
 
 
 def test_job_duration_stats_no_completed(db_factory) -> None:
@@ -486,6 +486,6 @@ def test_job_duration_stats_no_completed(db_factory) -> None:
 
     with db_factory() as session:
         stats = job_duration_stats(session)
-    assert stats["avg"] is None
-    assert stats["min"] is None
-    assert stats["max"] is None
+    assert stats.avg is None
+    assert stats.min is None
+    assert stats.max is None

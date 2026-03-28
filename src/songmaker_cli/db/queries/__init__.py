@@ -47,6 +47,7 @@ from songmaker_cli.db.queries.generations import (
 )
 from songmaker_cli.db.queries.jobs import (
     STALE_JOB_THRESHOLD_SECONDS,
+    JobDurationStats,
     count_total_queued_jobs,
     count_user_active_jobs,
     count_user_jobs_in_window,
@@ -128,6 +129,7 @@ __all__ = [
     "get_user",
     "get_user_by_username",
     "get_version",
+    "JobDurationStats",
     "job_counts_by_type_and_status",
     "job_duration_stats",
     "list_active_sessions",

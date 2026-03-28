@@ -23,6 +23,7 @@ from songmaker_cli.api_models import (
     StatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.arq_pool import get_active_model, get_arq_pool
 from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.db.queries import (
     delete_generation,
@@ -88,7 +89,6 @@ async def api_generate_song(
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
     if req.model:
-        from songmaker_cli.arq_pool import get_active_model
         active = await get_active_model()
         if active is None:
             raise HTTPException(503, "ACE-Step server not available")
@@ -101,7 +101,6 @@ async def api_generate_song(
     log.info("Generate: song='%s', count=%d, job=%s", song.title, req.count, job.id)
 
     try:
-        from songmaker_cli.arq_pool import get_arq_pool
         pool = get_arq_pool()
         await pool.enqueue_job("generate", job.id, song_id, version.id, req.count, user.id)
     except ConnectionError:
@@ -126,7 +125,6 @@ async def api_score_generation(
     session.commit()
 
     try:
-        from songmaker_cli.arq_pool import get_arq_pool
         await get_arq_pool().enqueue_job("score", job.id, gen_id, req.scorers)
     except ConnectionError:
         _fail_job(ctx, job.id)

@@ -83,3 +83,10 @@ class CapabilitiesResponse(BaseModel):
     generation: bool
     scoring: bool
     chat_model: str
+
+
+class AceStepStatusResponse(BaseModel):
+    online: bool
+    model: str | None
+    lm_model: str | None
+    jobs: dict

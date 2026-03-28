@@ -23,6 +23,7 @@ from songmaker_cli.api_models.auth import (
     UserResponse,
 )
 from songmaker_cli.api_models.settings import (
+    AceStepStatusResponse,
     CapabilitiesResponse,
     ChatRequest,
     ChatResponse,
@@ -103,6 +104,7 @@ class CleanupResponse(BaseModel):
 
 
 __all__ = [
+    "AceStepStatusResponse",
     "AlbumCreateRequest",
     "AlbumResponse",
     "AuditLogResponse",

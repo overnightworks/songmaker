@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import time
 from datetime import datetime
 from typing import TYPE_CHECKING
+
+from pydantic import BaseModel
 
 from songmaker_cli.constants import (
     REDIS_METRICS_DURATION_KEY,
@@ -43,16 +44,23 @@ class RedisRateLimiter:
         self._max = max_requests
         self._window = window_seconds
 
+    _LUA_SLIDING_WINDOW = """
+    local key = KEYS[1]
+    local now = tonumber(ARGV[1])
+    local window = tonumber(ARGV[2])
+    local max_requests = tonumber(ARGV[3])
+    redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
+    redis.call('ZADD', key, now, tostring(now))
+    local count = redis.call('ZCARD', key)
+    redis.call('EXPIRE', key, window)
+    return count
+    """
+
     def is_allowed(self, ip: str) -> bool:
         now = time.time()
         key = f"{self._prefix}:{ip}"
-        pipe = self._redis.pipeline()
-        pipe.zremrangebyscore(key, 0, now - self._window)
-        pipe.zadd(key, {str(now): now})
-        pipe.zcard(key)
-        pipe.expire(key, self._window)
-        results = pipe.execute()
-        return results[2] <= self._max
+        count = self._redis.eval(self._LUA_SLIDING_WINDOW, 1, key, now, self._window, self._max)
+        return count <= self._max
 
 
 class RedisHttpMetrics:
@@ -85,6 +93,19 @@ class RedisHttpMetrics:
             "http_requests_count": total,
             "http_request_duration_total_ms": round(duration, 1),
         }
+
+
+class CachedSessionData(BaseModel):
+    """Structured session payload stored in Redis."""
+
+    user_id: str
+    username: str
+    role: str
+    is_active: bool
+    ip_address: str
+    user_agent: str
+    expires_at: datetime
+    created_at: datetime
 
 
 class SessionCache:
@@ -123,22 +144,17 @@ class SessionCache:
         created_at: datetime,
         max_age_seconds: int,
     ) -> None:
-        payload = json.dumps({
-            "user_id": user_id,
-            "username": username,
-            "role": role,
-            "is_active": is_active,
-            "ip_address": ip_address,
-            "user_agent": user_agent,
-            "expires_at": expires_at.isoformat(),
-            "created_at": created_at.isoformat(),
-        })
+        data = CachedSessionData(
+            user_id=user_id, username=username, role=role, is_active=is_active,
+            ip_address=ip_address, user_agent=user_agent,
+            expires_at=expires_at, created_at=created_at,
+        )
         pipe = self._redis.pipeline()
-        pipe.set(self._session_key(session_id), payload, ex=max_age_seconds)
+        pipe.set(self._session_key(session_id), data.model_dump_json(), ex=max_age_seconds)
         pipe.sadd(self._user_sessions_key(user_id), session_id)
         pipe.execute()
 
-    def get(self, session_id: str) -> dict | None:
+    def get(self, session_id: str) -> CachedSessionData | None:
         try:
             raw = self._redis.get(self._session_key(session_id))
         except Exception:
@@ -147,10 +163,7 @@ class SessionCache:
         self._record_success()
         if raw is None:
             return None
-        data = json.loads(raw)
-        data["expires_at"] = datetime.fromisoformat(data["expires_at"])
-        data["created_at"] = datetime.fromisoformat(data["created_at"])
-        return data
+        return CachedSessionData.model_validate_json(raw)
 
     def refresh_ttl(self, session_id: str, max_age_seconds: int) -> None:
         self._redis.expire(self._session_key(session_id), max_age_seconds)
@@ -160,12 +173,11 @@ class SessionCache:
         raw = self._redis.get(key)
         if raw is None:
             return
-        data = json.loads(raw)
-        data["ip_address"] = ip_address
-        data["user_agent"] = user_agent
+        data = CachedSessionData.model_validate_json(raw)
+        updated = data.model_copy(update={"ip_address": ip_address, "user_agent": user_agent})
         ttl = self._redis.ttl(key)
         if ttl > 0:
-            self._redis.set(key, json.dumps(data), ex=ttl)
+            self._redis.set(key, updated.model_dump_json(), ex=ttl)
 
     def delete(self, session_id: str, user_id: str) -> None:
         pipe = self._redis.pipeline()

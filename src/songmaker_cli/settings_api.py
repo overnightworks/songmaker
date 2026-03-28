@@ -37,7 +37,7 @@ router = APIRouter()
 @router.get("/settings/generation-builtins")
 def api_get_builtins(
     _user: AuthenticatedUser = Depends(get_current_user),
-) -> dict:
+) -> dict[str, dict[str, object]]:
     return get_builtin_defaults()
 
 
@@ -45,7 +45,7 @@ def api_get_builtins(
 def api_get_generation_defaults(
     _admin: AuthenticatedUser = Depends(require_admin),
     ctx: AppContext = Depends(get_app_context),
-) -> dict:
+) -> dict[str, dict[str, object]]:
     return load_generation_defaults(ctx.db, ctx.data_dir)
 
 
@@ -54,7 +54,7 @@ def api_set_generation_defaults(
     req: GenerationDefaultsRequest,
     _admin: AuthenticatedUser = Depends(require_admin),
     ctx: AppContext = Depends(get_app_context),
-) -> dict:
+) -> dict[str, dict[str, object]]:
     data = {mode: params.to_dict() for mode, params in req.root.items()}
     save_generation_defaults(ctx.db, data)
     return data

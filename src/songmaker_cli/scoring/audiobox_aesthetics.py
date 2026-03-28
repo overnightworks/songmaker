@@ -17,27 +17,29 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.models import AudioBoxScore
+from songmaker_cli.scoring.models import AudioBoxScore, SharedScorerData
 from songmaker_cli.scoring.pipeline import DEVICE_GPU, AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
 
-_predictor_cache: dict[str, object] = {}
+_predictor: object | None = None
+_predictor_device: str | None = None
 _predictor_lock = threading.Lock()
 
 
 def clear_cache() -> None:
     import gc
 
+    global _predictor, _predictor_device
     with _predictor_lock:
-        for key in list(_predictor_cache):
-            predictor = _predictor_cache.pop(key)
-            if hasattr(predictor, "model") and hasattr(predictor.model, "cpu"):
+        if _predictor is not None:
+            if hasattr(_predictor, "model") and hasattr(_predictor.model, "cpu"):
                 try:
-                    predictor.model.cpu()
+                    _predictor.model.cpu()
                 except Exception:
                     pass
-            del predictor
+        _predictor = None
+        _predictor_device = None
     gc.collect()
     log.info("Cleared AudioBox model cache")
 
@@ -68,7 +70,7 @@ def _force_cpu_env() -> Iterator[None]:
 @register("audiobox", needs_audio=False, device=DEVICE_GPU)
 def score_audiobox(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None, shared_data: dict | None = None,
+    config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,
 ) -> AudioBoxScore:
     """Score audio quality using Meta's AudioBox Aesthetics model."""
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
@@ -91,7 +93,6 @@ def score_audiobox(
 
 def _get_predictor(
     device: str = "cpu",
-    cache: dict[str, object] | None = None,
 ) -> object:
     """Return a cached AudioBox predictor, loading on first use.
 
@@ -100,16 +101,15 @@ def _get_predictor(
     """
     from audiobox_aesthetics.infer import AesPredictor
 
-    if cache is None:
-        cache = _predictor_cache
-    cache_key = device
+    global _predictor, _predictor_device
     with _predictor_lock:
-        if cache_key not in cache:
+        if _predictor_device != device:
             if device == "cpu":
                 log.info("Loading AudioBox Aesthetics model on CPU...")
                 with _force_cpu_env():
-                    cache[cache_key] = AesPredictor(checkpoint_pth="default")
+                    _predictor = AesPredictor(checkpoint_pth="default")
             else:
                 log.info("Loading AudioBox Aesthetics model on %s...", device)
-                cache[cache_key] = AesPredictor(checkpoint_pth="default")
-    return cache[cache_key]
+                _predictor = AesPredictor(checkpoint_pth="default")
+            _predictor_device = device
+    return _predictor

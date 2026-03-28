@@ -344,11 +344,11 @@ def test_after_gpu_scorers_run_after_gpu_completes(
     @clean_registry.register("text_accuracy", needs_audio=False, device="gpu")
     def gpu_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: dict | None = None,
+        config: object = None, shared_data=None,
     ) -> TextAccuracyScore:
         time.sleep(SLEEP_SECONDS)
         if shared_data is not None:
-            shared_data["whisper_text"] = "hello world"
+            shared_data.whisper_text = "hello world"
         return TextAccuracyScore(
             similarity_ratio=0.9, intended_line_texts=("hello",), transcribed_line_texts=("hello",),
         )
@@ -356,11 +356,11 @@ def test_after_gpu_scorers_run_after_gpu_completes(
     @clean_registry.register("lyrical_coherence", needs_audio=False, after_gpu=True)
     def deferred_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: dict | None = None,
+        config: object = None, shared_data=None,
     ) -> object:
         from songmaker_cli.scoring.models import LyricalCoherenceScore
 
-        transcribed = (shared_data or {}).get("whisper_text", "")
+        transcribed = shared_data.whisper_text if shared_data else ""
         assert transcribed == "hello world", f"Expected shared_data populated, got: {transcribed!r}"
         return LyricalCoherenceScore(score=8, issues=(), summary="good")
 

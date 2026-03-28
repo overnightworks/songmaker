@@ -14,7 +14,13 @@ from pathlib import Path
 from arq import cron
 from arq.connections import RedisSettings
 
-from songmaker_cli.constants import ACTIVE_MODEL_REDIS_KEY, AUDIO_ROOT, DATA_ROOT
+from songmaker_cli.constants import (
+    ACTIVE_MODEL_REDIS_KEY,
+    AUDIO_ROOT,
+    DATA_ROOT,
+    RECOVERY_LOCK_KEY,
+    RECOVERY_LOCK_TTL_SECONDS,
+)
 from songmaker_cli.db.engine import init_db, resolve_database_url
 from songmaker_cli.db.queries import get_job, recover_stale_jobs, recover_stale_jobs_by_age
 from songmaker_cli.jobs import run_generation_job, run_scoring_job
@@ -133,23 +139,33 @@ async def on_startup(ctx):
     if model:
         await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model)
 
-    db_factory = _get_db_factory()
-    with db_factory() as session:
-        recovered = recover_stale_jobs(session)
-        if recovered:
-            log.info("Recovered %d stale jobs", recovered)
-        session.commit()
+    redis = ctx["redis"]
+    if await redis.set(RECOVERY_LOCK_KEY, "1", ex=RECOVERY_LOCK_TTL_SECONDS, nx=True):
+        db_factory = _get_db_factory()
+        with db_factory() as session:
+            recovered = recover_stale_jobs(session)
+            if recovered:
+                log.info("Recovered %d stale jobs", recovered)
+            session.commit()
+        await redis.delete(RECOVERY_LOCK_KEY)
+    else:
+        log.info("Stale job recovery skipped — another worker holds the lock")
 
     log.info("Worker ready")
 
 
 async def on_shutdown(ctx):
-    db_factory = _get_db_factory()
-    with db_factory() as session:
-        recovered = recover_stale_jobs(session)
-        if recovered:
-            log.warning("Shutdown: marked %d in-progress jobs as failed", recovered)
-        session.commit()
+    redis = ctx["redis"]
+    if await redis.set(RECOVERY_LOCK_KEY, "1", ex=RECOVERY_LOCK_TTL_SECONDS, nx=True):
+        db_factory = _get_db_factory()
+        with db_factory() as session:
+            recovered = recover_stale_jobs(session)
+            if recovered:
+                log.warning("Shutdown: marked %d in-progress jobs as failed", recovered)
+            session.commit()
+        await redis.delete(RECOVERY_LOCK_KEY)
+    else:
+        log.warning("Shutdown recovery skipped — another worker holds the lock")
 
     if _db_engine is not None:
         _db_engine.dispose()

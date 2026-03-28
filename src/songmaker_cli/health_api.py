@@ -63,7 +63,7 @@ async def metrics_endpoint(request: Request) -> JSONResponse:
             counts.get("queued", 0) + counts.get("running", 0)
             for counts in jobs_by_type.values()
         ),
-        "job_duration_seconds": duration,
+        "job_duration_seconds": {"avg": duration.avg, "min": duration.min, "max": duration.max},
         "queue_depth": queue_depth,
         "gpu_vram_mb": gpu_vram_mb,
         **http_metrics.snapshot(),

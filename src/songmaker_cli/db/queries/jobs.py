@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
@@ -149,7 +150,16 @@ def _duration_seconds_expr(session: Session):
     return func.extract("epoch", Job.completed_at - Job.started_at)
 
 
-def job_duration_stats(session: Session) -> dict[str, float | None]:
+@dataclass(frozen=True)
+class JobDurationStats:
+    """Avg/min/max duration in seconds for completed jobs."""
+
+    avg: float | None
+    min: float | None
+    max: float | None
+
+
+def job_duration_stats(session: Session) -> JobDurationStats:
     """Return avg/min/max duration in seconds for completed jobs."""
     duration_expr = _duration_seconds_expr(session)
     row = (
@@ -161,8 +171,8 @@ def job_duration_stats(session: Session) -> dict[str, float | None]:
         .filter(Job.status == "completed", Job.completed_at.isnot(None))
         .one()
     )
-    return {
-        "avg": round(row[0], 1) if row[0] is not None else None,
-        "min": round(row[1], 1) if row[1] is not None else None,
-        "max": round(row[2], 1) if row[2] is not None else None,
-    }
+    return JobDurationStats(
+        avg=round(row[0], 1) if row[0] is not None else None,
+        min=round(row[1], 1) if row[1] is not None else None,
+        max=round(row[2], 1) if row[2] is not None else None,
+    )

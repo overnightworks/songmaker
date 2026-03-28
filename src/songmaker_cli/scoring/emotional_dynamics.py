@@ -32,7 +32,7 @@ from songmaker_cli.constants import (
     SCORING_NUM_SECTIONS,
 )
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.models import EmotionalDynamicsScore
+from songmaker_cli.scoring.models import EmotionalDynamicsScore, SharedScorerData
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ log = logging.getLogger(__name__)
 @register("emotional_dynamics")
 def score_emotional_dynamics(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None, shared_data: dict | None = None,
+    config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,
 ) -> EmotionalDynamicsScore:
     """Score vocal expressiveness by analyzing pitch, energy, and rhythm variance."""
     if audio_data is None:

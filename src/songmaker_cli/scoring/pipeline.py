@@ -19,6 +19,7 @@ from songmaker_cli.scoring.models import (
     BpmAccuracyScore,
     EmotionalDynamicsScore,
     LyricalCoherenceScore,
+    SharedScorerData,
     SilenceScore,
     SongScores,
     SpectralQualityScore,
@@ -53,7 +54,9 @@ class PipelineConfig:
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
 
 
-ScorerFunc = Callable[[Path, SongMeta | None, AudioData | None, PipelineConfig, dict], object]
+ScorerFunc = Callable[
+    [Path, SongMeta | None, AudioData | None, PipelineConfig, SharedScorerData], object,
+]
 
 _VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
 
@@ -166,7 +169,7 @@ class _ScorerTimeout(Exception):
 def _run_with_timeout(
     func: ScorerFunc, mp3_path: Path, meta: SongMeta | None,
     audio_data: AudioData | None, config: PipelineConfig,
-    shared_data: dict, timeout: int, name: str,
+    shared_data: SharedScorerData, timeout: int, name: str,
 ) -> object:
     """Run a scorer with a thread-based timeout.
 
@@ -217,7 +220,7 @@ def _submit_scorers(
     meta: SongMeta | None,
     audio_data: AudioData | None,
     config: PipelineConfig,
-    shared_data: dict,
+    shared_data: SharedScorerData,
 ) -> dict[Future[object], str]:
     futures: dict[Future[object], str] = {}
     for name in names:
@@ -279,7 +282,7 @@ def run_scoring_pipeline(
     cpu_names = [n for n in scorers if not reg.scorer_uses_gpu(n) and not reg.scorer_after_gpu(n)]
     deferred_cpu_names = [n for n in scorers if reg.scorer_after_gpu(n)]
 
-    shared_data: dict = {}
+    shared_data = SharedScorerData()
     results: dict[str, object] = {}
 
     with ThreadPoolExecutor(max_workers=min(max(len(cpu_names), 1), os.cpu_count() or 4)) as pool:

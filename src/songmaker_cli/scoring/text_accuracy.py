@@ -9,21 +9,23 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.models import TextAccuracyScore
+from songmaker_cli.scoring.models import SharedScorerData, TextAccuracyScore
 from songmaker_cli.scoring.pipeline import DEVICE_CPU, AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
 
-_whisper_model_cache: dict[str, object] = {}
+_whisper_model: object | None = None
+_whisper_model_key: str | None = None
 _whisper_cache_lock = threading.Lock()
 
 
 def clear_cache() -> None:
     import gc
 
+    global _whisper_model, _whisper_model_key
     with _whisper_cache_lock:
-        for key in list(_whisper_model_cache):
-            del _whisper_model_cache[key]
+        _whisper_model = None
+        _whisper_model_key = None
     gc.collect()
     log.info("Cleared Whisper model cache")
 
@@ -31,7 +33,7 @@ def clear_cache() -> None:
 @register("text_accuracy", needs_audio=False, device=DEVICE_CPU)
 def score_text_accuracy(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None, shared_data: dict | None = None,
+    config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,
 ) -> TextAccuracyScore:
     """Transcribe with Whisper and compare to intended lyrics.
 
@@ -69,7 +71,7 @@ def score_text_accuracy(
         trans_lines = ()
 
     if shared_data is not None:
-        shared_data["whisper_text"] = "\n".join(trans_lines)
+        shared_data.whisper_text = "\n".join(trans_lines)
 
     return TextAccuracyScore(
         similarity_ratio=round(ratio, 3),
@@ -177,22 +179,21 @@ def clean_lyrics(text: str) -> str:
 def _get_whisper_model(
     model_size: str,
     device: str = "cpu",
-    cache: dict[str, object] | None = None,
 ) -> object:
     from faster_whisper import WhisperModel
 
     from songmaker_cli.constants import WHISPER_COMPUTE_TYPE
 
-    if cache is None:
-        cache = _whisper_model_cache
+    global _whisper_model, _whisper_model_key
     cache_key = f"{model_size}:{device}"
     with _whisper_cache_lock:
-        if cache_key not in cache:
+        if _whisper_model_key != cache_key:
             log.info("Loading Whisper model (%s) on %s...", model_size, device)
-            cache[cache_key] = WhisperModel(
+            _whisper_model = WhisperModel(
                 model_size, device=device, compute_type=WHISPER_COMPUTE_TYPE,
             )
-    return cache[cache_key]
+            _whisper_model_key = cache_key
+    return _whisper_model
 
 
 def _transcribe(

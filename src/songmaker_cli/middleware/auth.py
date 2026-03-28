@@ -78,22 +78,22 @@ def _try_redis_auth(
         return None
 
     now = datetime.now(timezone.utc)
-    created_at = cached["created_at"]
+    created_at = cached.created_at
     if created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=timezone.utc)
 
     if (now - created_at).total_seconds() > SESSION_ABSOLUTE_MAX_AGE_SECONDS:
         raise HTTPException(401, "Session expired")
 
-    if not cached["is_active"]:
+    if not cached.is_active:
         raise HTTPException(403, "Account disabled")
 
     current_ip = request.client.host if request.client else "unknown"
     current_ua = (request.headers.get("user-agent") or "")[:MAX_USER_AGENT_LENGTH]
 
     ip_changed, ua_changed = _check_ip_ua_changes(
-        db, session_id, cached["user_id"],
-        cached["ip_address"], cached["user_agent"],
+        db, session_id, cached.user_id,
+        cached.ip_address, cached.user_agent,
         current_ip, current_ua,
     )
 
@@ -104,13 +104,13 @@ def _try_redis_auth(
     except Exception:
         log.warning("Redis session cache write failed")
 
-    structlog.contextvars.bind_contextvars(user_id=cached["user_id"])
+    structlog.contextvars.bind_contextvars(user_id=cached.user_id)
 
     return AuthenticatedUser(
-        id=cached["user_id"],
-        username=cached["username"],
-        role=cached["role"],
-        is_active=cached["is_active"],
+        id=cached.user_id,
+        username=cached.username,
+        role=cached.role,
+        is_active=cached.is_active,
     )
 
 

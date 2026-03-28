@@ -12,7 +12,7 @@ from pathlib import Path
 
 from songmaker_cli.claude.provider import call_claude, parse_json_response
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.models import LyricalCoherenceScore
+from songmaker_cli.scoring.models import LyricalCoherenceScore, SharedScorerData
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ JUDGE_PROMPT = (  # noqa: E501
 @register("lyrical_coherence", needs_audio=False, after_gpu=True)
 def score_lyrical_coherence(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None, shared_data: dict | None = None,
+    config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,
 ) -> LyricalCoherenceScore:
     """Judge lyrical coherence using Claude (CLI or API).
 
@@ -71,7 +71,7 @@ def score_lyrical_coherence(
     if meta is None or not meta.lyrics:
         raise ValueError("No lyrics metadata — cannot judge lyrical coherence")
 
-    transcribed = (shared_data or {}).get("whisper_text", "")
+    transcribed = shared_data.whisper_text if shared_data else None
     if not transcribed:
         raise ValueError("No Whisper transcription in pipeline. Run text_accuracy first.")
     intended = "\n".join(

@@ -9,6 +9,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
+from songmaker_cli.api_helpers import ensure_not_last_admin
 from songmaker_cli.api_models import (
     AuditLogResponse,
     CreateUserRequest,
@@ -19,10 +20,10 @@ from songmaker_cli.api_models import (
     UpdateUserRequest,
     UserResponse,
 )
+from songmaker_cli.api_models.settings import AceStepStatusResponse
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth import hash_password
 from songmaker_cli.constants import ACESTEP_PORT, PAGE_ADMIN_DEFAULT_LIMIT, PAGE_ADMIN_MAX_LIMIT
-from songmaker_cli.db.models import User as UserModel
 from songmaker_cli.db.queries import (
     count_active_sessions,
     count_audit_log,
@@ -40,6 +41,7 @@ from songmaker_cli.db.queries import (
     update_user,
 )
 from songmaker_cli.middleware import AuthenticatedUser, require_admin
+from songmaker_cli.redis_client import SessionCache
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +49,6 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _clear_user_session_cache(request: Request, user_id: str) -> None:
-    from songmaker_cli.redis_client import SessionCache
     session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
     if not session_cache:
         return
@@ -97,9 +98,7 @@ def update_user_endpoint(
         raise HTTPException(400, "Cannot deactivate your own account")
 
     if req.role is not None and req.role != "admin" and user.role == "admin":
-        admin_count = db.query(UserModel).filter_by(role="admin", is_active=True).count()
-        if admin_count <= 1:
-            raise HTTPException(400, "Cannot demote the last active admin")
+        ensure_not_last_admin(db, user_id)
 
     password_hash = hash_password(req.password) if req.password else None
     invalidate_sessions = req.role is not None or req.is_active is False or req.password
@@ -137,9 +136,7 @@ def deactivate_user_endpoint(
         raise HTTPException(400, "Cannot deactivate your own account")
 
     if user.role == "admin":
-        admin_count = db.query(UserModel).filter_by(role="admin", is_active=True).count()
-        if admin_count <= 1:
-            raise HTTPException(400, "Cannot deactivate the last active admin")
+        ensure_not_last_admin(db, user_id)
 
     update_user(db, user_id, is_active=False)
     delete_user_sessions(db, user_id)
@@ -205,7 +202,6 @@ def force_logout_endpoint(
         if hmac.compare_digest(hashlib.sha256(sess.id.encode()).hexdigest(), session_hash):
             delete_session(db, sess.id)
             db.commit()
-            from songmaker_cli.redis_client import SessionCache
             session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
             if session_cache:
                 try:
@@ -243,7 +239,7 @@ def reinitialize_acestep(
 @router.get("/acestep/status")
 def acestep_status(
     _admin: AuthenticatedUser = Depends(require_admin),
-) -> dict:
+) -> AceStepStatusResponse:
     import json
     from urllib.request import Request, urlopen
 
@@ -256,11 +252,11 @@ def acestep_status(
         with urlopen(req2, timeout=5) as resp:
             stats = json.loads(resp.read())
 
-        return {
-            "online": True,
-            "model": health.get("data", {}).get("loaded_model", "unknown"),
-            "lm_model": health.get("data", {}).get("loaded_lm_model", "unknown"),
-            "jobs": stats.get("data", {}).get("jobs", {}),
-        }
+        return AceStepStatusResponse(
+            online=True,
+            model=health.get("data", {}).get("loaded_model", "unknown"),
+            lm_model=health.get("data", {}).get("loaded_lm_model", "unknown"),
+            jobs=stats.get("data", {}).get("jobs", {}),
+        )
     except Exception:
-        return {"online": False, "model": None, "lm_model": None, "jobs": {}}
+        return AceStepStatusResponse(online=False, model=None, lm_model=None, jobs={})

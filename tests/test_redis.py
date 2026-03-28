@@ -88,7 +88,7 @@ class TestRedisRateLimiter:
 
     def test_raises_on_redis_failure(self) -> None:
         broken = MagicMock()
-        broken.pipeline.return_value.execute.side_effect = ConnectionError("down")
+        broken.eval.side_effect = ConnectionError("down")
         limiter = RedisRateLimiter(broken, "rl:test", max_requests=10, window_seconds=60)
         with pytest.raises(ConnectionError):
             limiter.is_allowed("10.0.0.1")
@@ -258,11 +258,11 @@ class TestSessionCache:
         self._store_sample(cache)
         data = cache.get("sess1")
         assert data is not None
-        assert data["user_id"] == "user1"
-        assert data["username"] == "alice"
-        assert data["role"] == "user"
-        assert data["is_active"] is True
-        assert data["ip_address"] == "1.2.3.4"
+        assert data.user_id == "user1"
+        assert data.username == "alice"
+        assert data.role == "user"
+        assert data.is_active is True
+        assert data.ip_address == "1.2.3.4"
 
     def test_get_missing_returns_none(self, fake_redis) -> None:
         cache = self._make_cache(fake_redis)
@@ -295,8 +295,8 @@ class TestSessionCache:
         self._store_sample(cache)
         cache.update_ip_ua("sess1", "5.6.7.8", "NewBrowser/2.0")
         data = cache.get("sess1")
-        assert data["ip_address"] == "5.6.7.8"
-        assert data["user_agent"] == "NewBrowser/2.0"
+        assert data.ip_address == "5.6.7.8"
+        assert data.user_agent == "NewBrowser/2.0"
 
     def test_update_ip_ua_missing_session_noop(self, fake_redis) -> None:
         cache = self._make_cache(fake_redis)

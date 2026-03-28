@@ -23,7 +23,7 @@ from songmaker_cli.auth import (
     SCORING_RATE_LIMIT_ADMIN,
     SCORING_RATE_LIMIT_USER,
 )
-from songmaker_cli.db.models import Album, Generation, Job, Song
+from songmaker_cli.db.models import Album, Generation, Job, Song, User
 from songmaker_cli.db.queries import (
     count_total_queued_jobs,
     count_user_active_jobs,
@@ -166,6 +166,15 @@ def check_generation_access(
 
 
 _log = logging.getLogger(__name__)
+
+
+def ensure_not_last_admin(session: Session, user_id: str) -> None:
+    """Raise 400 if demoting/deactivating the last active admin."""
+    admin_count = session.query(User).filter_by(role="admin", is_active=True).count()
+    if admin_count <= 1:
+        user = session.get(User, user_id)
+        if user and user.role == "admin":
+            raise HTTPException(400, "Cannot remove the last active admin")
 
 
 def cleanup_generation_files(audio_dir: Path, paths: list[str]) -> None:

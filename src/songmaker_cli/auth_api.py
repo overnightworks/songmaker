@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from songmaker_cli.api_helpers import _begin_exclusive
 from songmaker_cli.api_models import (
     AuthMeResponse,
     ChangePasswordRequest,
@@ -33,6 +34,7 @@ from songmaker_cli.auth import (
     sign_session_id,
     verify_password_constant_time,
 )
+from songmaker_cli.constants import MAX_USER_AGENT_LENGTH
 from songmaker_cli.db.queries import (
     count_recent_failed_attempts,
     create_session,
@@ -49,6 +51,7 @@ from songmaker_cli.middleware import (
     AuthenticatedUser,
     get_current_user,
 )
+from songmaker_cli.redis_client import SessionCache
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +63,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def _cache_session(
     request: Request, session_id: str, user, ip: str, ua: str, expires, created_at,
 ) -> None:
-    from songmaker_cli.redis_client import SessionCache
     session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
     if not session_cache:
         return
@@ -74,7 +76,6 @@ def _cache_session(
 
 
 def _clear_user_cache(request: Request, user_id: str) -> None:
-    from songmaker_cli.redis_client import SessionCache
     session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
     if not session_cache:
         return
@@ -90,7 +91,6 @@ def _client_ip(request: Request, ctx: AppContext) -> str:
 
 
 def _client_user_agent(request: Request) -> str:
-    from songmaker_cli.constants import MAX_USER_AGENT_LENGTH
     return request.headers.get("user-agent", "")[:MAX_USER_AGENT_LENGTH]
 
 
@@ -143,7 +143,6 @@ def setup(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> UserResponse:
-    from songmaker_cli.api_helpers import _begin_exclusive
     _begin_exclusive(db)
     if user_count(db) > 0:
         raise HTTPException(403, "Setup already completed")
@@ -246,7 +245,6 @@ def logout(
         delete_session(db, session_id)
         db.commit()
 
-        from songmaker_cli.redis_client import SessionCache
         session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
         if session_cache:
             try:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Score serialization keys — used by to_dict() and returned in API responses.
 SCORE_KEY_DYNAMICS = "dynamics"
@@ -21,6 +21,17 @@ SCORE_KEY_SILENCE_LONGEST = "silence_longest"
 SCORE_KEY_SPECTRAL_ARTIFACTS = "spectral_artifacts"
 SCORE_KEY_LYRICAL_COHERENCE = "lyrical_coherence"
 SCORE_KEY_LYRICAL_SUMMARY = "lyrical_summary"
+
+
+@dataclass
+class SharedScorerData:
+    """Data shared between scorer phases (e.g. text_accuracy → lyrical_coherence).
+
+    Mutable: scorers write fields during execution. Not frozen because
+    GPU-phase scorers populate data that CPU-phase scorers read.
+    """
+
+    whisper_text: str | None = field(default=None)
 
 
 @dataclass(frozen=True)

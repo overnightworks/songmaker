@@ -95,55 +95,61 @@ def test_force_cpu_env_restores_existing() -> None:
 
 
 def test_get_predictor_caches() -> None:
+    from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
+    ab.clear_cache()
     mock_cls = MagicMock(return_value=MagicMock())
-    cache: dict = {}
 
     with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        p1 = _get_predictor(device="cpu", cache=cache)
-        p2 = _get_predictor(device="cpu", cache=cache)
+        p1 = _get_predictor(device="cpu")
+        p2 = _get_predictor(device="cpu")
 
     assert p1 is p2
     assert mock_cls.call_count == 1
+    ab.clear_cache()
 
 
 def test_get_predictor_cpu_uses_force_env() -> None:
+    from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
+    ab.clear_cache()
     mock_cls = MagicMock(return_value=MagicMock())
-    cache: dict = {}
 
     with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        _get_predictor(device="cpu", cache=cache)
+        _get_predictor(device="cpu")
 
     mock_cls.assert_called_once()
+    ab.clear_cache()
 
 
 def test_get_predictor_cuda_no_force_env() -> None:
+    from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
+    ab.clear_cache()
     mock_cls = MagicMock(return_value=MagicMock())
-    cache: dict = {}
 
     with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        _get_predictor(device="cuda", cache=cache)
+        _get_predictor(device="cuda")
 
     mock_cls.assert_called_once()
+    ab.clear_cache()
 
 
 def test_get_predictor_default_cache() -> None:
     from songmaker_cli.scoring import audiobox_aesthetics as ab
     from songmaker_cli.scoring.audiobox_aesthetics import _get_predictor
 
+    ab.clear_cache()
     mock_cls = MagicMock(return_value=MagicMock())
-    key = "test_default"
 
     with patch("audiobox_aesthetics.infer.AesPredictor", mock_cls):
-        result = _get_predictor(device="test_default")
+        result = _get_predictor(device="cpu")
 
     assert result is not None
-    ab._predictor_cache.pop(key, None)
+    ab.clear_cache()
 
 
 def test_score_audiobox(tmp_path: Path) -> None:
@@ -237,31 +243,33 @@ def test_word_level_accuracy_empty() -> None:
 
 
 def test_get_whisper_model_caches() -> None:
+    from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
 
+    ta.clear_cache()
     mock_model = MagicMock()
-    cache: dict = {}
 
     with patch("faster_whisper.WhisperModel", return_value=mock_model) as mock_cls:
-        m1 = _get_whisper_model("base", device="cpu", cache=cache)
-        m2 = _get_whisper_model("base", device="cpu", cache=cache)
+        m1 = _get_whisper_model("base", device="cpu")
+        m2 = _get_whisper_model("base", device="cpu")
 
     assert m1 is m2
     assert mock_cls.call_count == 1
+    ta.clear_cache()
 
 
 def test_get_whisper_model_default_cache() -> None:
     from songmaker_cli.scoring import text_accuracy as ta
     from songmaker_cli.scoring.text_accuracy import _get_whisper_model
 
+    ta.clear_cache()
     mock_model = MagicMock()
-    key = "test_default:cpu"
 
     with patch("faster_whisper.WhisperModel", return_value=mock_model):
-        result = _get_whisper_model("test_default", device="cpu")
+        result = _get_whisper_model("base", device="cpu")
 
     assert result is mock_model
-    ta._whisper_model_cache.pop(key, None)
+    ta.clear_cache()
 
 
 def test_transcribe() -> None:
@@ -292,7 +300,8 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
     mock_model.transcribe.return_value = (iter([seg1, seg2]), MagicMock())
     config = PipelineConfig(device="cpu", whisper_model="base")
 
-    shared_data: dict = {}
+    from songmaker_cli.scoring.models import SharedScorerData
+    shared_data = SharedScorerData()
     with patch("songmaker_cli.scoring.text_accuracy._get_whisper_model", return_value=mock_model):
         result = score_text_accuracy(
             tmp_path / "test.mp3", meta=meta, config=config, shared_data=shared_data,
@@ -300,8 +309,8 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
 
     assert isinstance(result, TextAccuracyScore)
     assert result.similarity_ratio > 0
-    assert "whisper_text" in shared_data
-    assert "hello world" in shared_data["whisper_text"]
+    assert shared_data.whisper_text is not None
+    assert "hello world" in shared_data.whisper_text
 
 
 def test_score_text_accuracy_no_meta() -> None:
@@ -366,8 +375,9 @@ def test_score_lyrical_coherence_no_whisper(tmp_path: Path) -> None:
     mp3 = tmp_path / "test.mp3"
     mp3.write_bytes(b"fake")
 
+    from songmaker_cli.scoring.models import SharedScorerData
     with pytest.raises(ValueError, match="No Whisper transcription"):
-        score_lyrical_coherence(mp3, meta=meta, shared_data={})
+        score_lyrical_coherence(mp3, meta=meta, shared_data=SharedScorerData())
 
 
 def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:
@@ -541,7 +551,8 @@ def test_score_lyrical_coherence_happy_path(tmp_path: Path) -> None:
     mp3.write_bytes(b"fake")
 
     meta = SongMeta(prompt="test", lyrics="[verse]\nhello world\ngoodbye moon")
-    shared_data = {"whisper_text": "hello world\ngoodbye moon"}
+    from songmaker_cli.scoring.models import SharedScorerData
+    shared_data = SharedScorerData(whisper_text="hello world\ngoodbye moon")
     mock_response = ClaudeResponse(text='{"score": 9, "issues": [], "summary": "great"}')
 
     with patch("songmaker_cli.scoring.lyrical_coherence.call_claude", return_value=mock_response):
