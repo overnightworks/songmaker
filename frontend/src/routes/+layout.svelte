@@ -16,6 +16,7 @@
 			page.url.pathname === '/setup' ||
 			page.url.pathname.startsWith('/share/')
 	);
+	const isSettings = $derived(page.url.pathname.startsWith('/settings'));
 	const me = $derived($currentUser);
 	const hasPlayback = $derived($playback !== null);
 	const sbOpen = $derived($sidebarOpen);
@@ -65,9 +66,13 @@
 {:else if me}
 	<header class="top-bar">
 		<div class="top-left">
-			<button class="hamburger" onclick={toggleSidebar} aria-label="Toggle sidebar">
-				{sbOpen ? '✕' : '☰'}
-			</button>
+			{#if isSettings}
+				<a href="/" class="back-btn" aria-label="Back to home">←</a>
+			{:else}
+				<button class="hamburger" onclick={toggleSidebar} aria-label="Toggle sidebar">
+					{sbOpen ? '✕' : '☰'}
+				</button>
+			{/if}
 			<a href="/" class="brand">Songmaker</a>
 		</div>
 		<nav class="top-right">
@@ -130,6 +135,23 @@
 		font-size: 20px;
 		cursor: pointer;
 		padding: 4px;
+	}
+
+	.back-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 20px;
+		cursor: pointer;
+		padding: 4px;
+		text-decoration: none;
+	}
+
+	.back-btn:hover {
+		color: var(--primary);
 	}
 
 	.brand {

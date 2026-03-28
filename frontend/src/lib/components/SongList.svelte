@@ -9,7 +9,6 @@
 		albumList,
 		songList,
 		selectedSongId,
-		selectSong,
 		playback,
 		playGeneration,
 		playAlbum,
@@ -18,9 +17,9 @@
 		expandedSongIds,
 		toggleSongExpanded,
 		selectedGenerationId,
-		selectGenerationInSidebar,
 		ensureGenerationsLoaded
 	} from '$lib/stores/player';
+	import { selectSong, selectGeneration } from '$lib/stores/navigation';
 	import {
 		deleteGeneration,
 		deleteAlbum,
@@ -33,7 +32,7 @@
 	import { searchQuery } from '$lib/stores/filter';
 	import { isAdmin } from '$lib/stores/auth';
 	import type { SongItem, GenerationItem, AlbumItem } from '$lib/api/types';
-	import { closeSidebar } from '$lib/stores/ui';
+
 	import { addToast } from '$lib/stores/toast';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -145,9 +144,6 @@
 
 	function handleSongClick(song: SongItem): void {
 		selectSong(song.id);
-		if (!expanded.has(song.id)) toggleSongExpanded(song.id);
-		ensureGenerationsLoaded(song.id);
-		closeSidebar();
 	}
 
 	function handleExpandToggle(e: Event, songId: string): void {
@@ -163,7 +159,7 @@
 	}
 
 	function handleGenSelect(gen: GenerationItem, song: SongItem): void {
-		selectGenerationInSidebar(gen, song);
+		selectGeneration(gen, song);
 	}
 
 	function handleGenDeleteClick(e: Event, genId: string): void {

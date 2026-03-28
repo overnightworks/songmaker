@@ -16,12 +16,19 @@
 		albumList,
 		songList,
 		selectedSong,
-		selectSong,
 		selectedGeneration,
-		clearGenerationSelection,
 		ensureGenerationsLoaded,
 		playback
 	} from '$lib/stores/player';
+	import {
+		selectSong,
+		selectGeneration,
+		clearGenerationSelection,
+		navigateToSongTab,
+		switchTab,
+		detailTab,
+		initNavigation
+	} from '$lib/stores/navigation';
 	import {
 		editLyrics,
 		editPrompt,
@@ -42,6 +49,7 @@
 	import SongList from '$lib/components/SongList.svelte';
 	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
 	import GenerationDetail from '$lib/components/GenerationDetail.svelte';
+	import GenerationsList from '$lib/components/GenerationsList.svelte';
 	import SongEditor from '$lib/components/SongEditor.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import { addToast } from '$lib/stores/toast';
@@ -66,6 +74,7 @@
 	const jobs = $derived($activeJobs);
 	const sbOpen = $derived($sidebarOpen);
 	const hasPlayer = $derived($playback !== null);
+	const tab = $derived($detailTab);
 
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
 	const isGenerating = $derived(
@@ -86,17 +95,26 @@
 
 	let loadError = $state(false);
 
-	onMount(async () => {
-		try {
-			const [a, s] = await Promise.all([fetchAlbums(), fetchSongs()]);
-			albumList.set(a.items);
-			songList.set(s.items);
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Failed to load', 'error');
-			loadError = true;
-		} finally {
-			loading = false;
-		}
+	onMount(() => {
+		let cleanup: (() => void) | undefined;
+
+		(async () => {
+			try {
+				const [a, s] = await Promise.all([fetchAlbums(), fetchSongs()]);
+				albumList.set(a.items);
+				songList.set(s.items);
+			} catch (e) {
+				addToast(e instanceof Error ? e.message : 'Failed to load', 'error');
+				loadError = true;
+			} finally {
+				loading = false;
+			}
+			if (!loadError) {
+				cleanup = initNavigation();
+			}
+		})();
+
+		return () => cleanup?.();
 	});
 
 	function onSave(): void {
@@ -145,7 +163,7 @@
 	function onVersionClick(versionId: string): void {
 		const idx = $versions.findIndex((v) => v.id === versionId);
 		if (idx !== -1) loadVersion(idx);
-		clearGenerationSelection();
+		navigateToSongTab('edit');
 	}
 
 	async function handleCreateAlbum(): Promise<void> {
@@ -257,7 +275,7 @@
 					</div>
 					<div class="detail-actions">
 						{#if !activeGen}
-							{#if dirty}
+							{#if tab === 'edit' && dirty}
 								<button class="save-btn" onclick={onSave} disabled={isSaving}>
 									{isSaving ? 'Saving...' : 'Save'}
 								</button>
@@ -293,7 +311,7 @@
 						{#if statusMsg}
 							<span class="status-msg">{statusMsg}</span>
 						{/if}
-						{#if !activeGen}
+						{#if !activeGen && tab === 'edit'}
 							<button
 								class="action-btn chat-btn"
 								class:active={showChat}
@@ -321,7 +339,29 @@
 						onpick={onPick}
 					/>
 				{:else}
-					<SongEditor ondeleteversion={onDeleteVersion} />
+					<div class="tab-bar">
+						<button
+							class="tab-btn"
+							class:active={tab === 'generations'}
+							onclick={() => switchTab('generations')}
+						>
+							Generations
+						</button>
+						<button class="tab-btn" class:active={tab === 'edit'} onclick={() => switchTab('edit')}>
+							Edit
+						</button>
+					</div>
+
+					{#if tab === 'generations'}
+						<GenerationsList
+							{song}
+							onselect={(gen) => selectGeneration(gen, song)}
+							onscore={onScore}
+							onpick={onPick}
+						/>
+					{:else}
+						<SongEditor ondeleteversion={onDeleteVersion} />
+					{/if}
 				{/if}
 			</div>
 		{:else}
@@ -329,7 +369,7 @@
 		{/if}
 	</main>
 
-	{#if showChat && !activeGen}
+	{#if showChat && !activeGen && tab === 'edit'}
 		<aside class="chat-panel" class:with-player={hasPlayer}>
 			<ClaudeChat
 				songId={song?.id ?? ''}
@@ -506,6 +546,35 @@
 
 	.job-indicator.failed {
 		color: var(--score-bad);
+	}
+
+	.tab-bar {
+		display: flex;
+		gap: 2px;
+		border-bottom: 1px solid var(--border);
+		padding-bottom: 0;
+	}
+
+	.tab-btn {
+		padding: 8px 16px;
+		background: none;
+		border: none;
+		border-bottom: 2px solid transparent;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		cursor: pointer;
+	}
+
+	.tab-btn:hover {
+		color: var(--text);
+	}
+
+	.tab-btn.active {
+		color: var(--primary);
+		border-bottom-color: var(--primary);
 	}
 
 	.chat-panel {

@@ -108,6 +108,10 @@
 			padding: 0.75rem 1rem;
 		}
 
+		.back-link {
+			display: none;
+		}
+
 		.nav-items {
 			flex-direction: row;
 			gap: 4px;
