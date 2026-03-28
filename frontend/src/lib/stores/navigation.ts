@@ -9,7 +9,6 @@ import {
 	expandedSongIds,
 	toggleSongExpanded
 } from '$lib/stores/player';
-import { closeSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
 export type DetailTab = 'generations' | 'edit';
@@ -59,13 +58,11 @@ export function selectSong(songId: string): void {
 	if (!expanded.has(songId)) toggleSongExpanded(songId);
 	ensureGenerationsLoaded(songId);
 	detailTab.set('generations');
-	closeSidebar();
 	pushNav({ songId, genId: null, tab: 'generations' });
 }
 
 export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 	playerSelectGeneration(gen, song);
-	closeSidebar();
 	pushNav({ songId: song.id, genId: gen.id, tab: get(detailTab) });
 }
 
