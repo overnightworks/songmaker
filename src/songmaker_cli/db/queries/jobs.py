@@ -139,9 +139,11 @@ def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]
 
 
 def _duration_seconds_expr(session: Session):
-    """Duration expression in seconds, dialect-aware."""
-    dialect = session.bind.dialect.name
-    if dialect == "sqlite":
+    """Duration expression in seconds.
+
+    SQLite branch exists only for test databases (production uses PostgreSQL).
+    """
+    if session.bind.dialect.name == "sqlite":
         days = func.julianday(Job.completed_at) - func.julianday(Job.started_at)
         return days * 86400.0
     return func.extract("epoch", Job.completed_at - Job.started_at)

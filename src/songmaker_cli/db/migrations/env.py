@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from logging.config import fileConfig
-from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -19,18 +18,17 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
-_ALEMBIC_INI_DEFAULT_URL = "sqlite:///_output/songmaker.db"
-
-
 def _resolve_db_url() -> str:
     url = config.get_main_option("sqlalchemy.url")
-    if url and url != _ALEMBIC_INI_DEFAULT_URL:
+    if url:
         return url
     env_url = os.environ.get("DATABASE_URL")
     if env_url:
         return env_url
-    db_path = Path.cwd() / "_output" / "songmaker.db"
-    return f"sqlite:///{db_path}"
+    raise RuntimeError(
+        "DATABASE_URL environment variable is required for migrations. "
+        "Set it to a PostgreSQL connection string."
+    )
 
 
 def run_migrations_offline() -> None:

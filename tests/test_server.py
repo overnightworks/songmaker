@@ -515,7 +515,7 @@ def test_run_server_rejects_multi_worker(tmp_path: Path) -> None:
     mock_app = MagicMock()
 
     with (
-        patch.dict("os.environ", {"UVICORN_WORKERS": "2"}),
+        patch.dict("os.environ", {"UVICORN_WORKERS": "2", "DATABASE_URL": "sqlite:///test.db"}),
         patch("songmaker_cli.server.create_app", return_value=mock_app),
     ):
         with pytest.raises(ValueError, match="UVICORN_WORKERS=2 requires"):

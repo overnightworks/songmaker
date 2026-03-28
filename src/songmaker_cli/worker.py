@@ -31,7 +31,7 @@ TERMINAL_STATUSES = frozenset({"completed", "partial", "failed"})
 def _get_db_factory():
     global _db_factory
     if _db_factory is None:
-        _db_factory = init_db(resolve_database_url(_data_dir()))
+        _db_factory = init_db(resolve_database_url())
     return _db_factory
 
 

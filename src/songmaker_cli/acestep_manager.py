@@ -39,6 +39,7 @@ class AceStepManager:
         self._process: subprocess.Popen | None = None
         self._cached_model: str | None = None
         self._current_mode: str | None = None
+        self._stderr_path: Path | None = None
 
     def start(self) -> None:
         log.info("Starting ACE-Step server...")
@@ -62,9 +63,11 @@ class AceStepManager:
             env.pop(secret_key, None)
 
         cmd = [*uv, "run", "acestep-api", "--port", str(_ACESTEP_PORT)]
+        self._stderr_path = ACESTEP_DIR / "acestep_stderr.log"
+        stderr_file = self._stderr_path.open("w")
         self._process = subprocess.Popen(
             cmd, env=env, cwd=ACESTEP_DIR,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=stderr_file,
         )
         log.info("ACE-Step server process started (PID %d)", self._process.pid)
 
@@ -102,13 +105,18 @@ class AceStepManager:
                 log.info("ACE-Step server is ready")
                 return
             if self._process and self._process.poll() is not None:
-                stderr = self._process.stderr
-                err = stderr.read().decode() if stderr else ""
-                raise RuntimeError(f"ACE-Step server exited: {err[:500]}")
+                err = self._read_stderr_tail()
+                raise RuntimeError(f"ACE-Step server exited: {err}")
             time.sleep(_HEALTH_POLL_SECONDS)
         raise RuntimeError(
             f"ACE-Step server did not start within {ACESTEP_STARTUP_TIMEOUT_SECONDS}s"
         )
+
+    def _read_stderr_tail(self, max_chars: int = 500) -> str:
+        if self._stderr_path and self._stderr_path.exists():
+            text = self._stderr_path.read_text(errors="replace")
+            return text[-max_chars:] if len(text) > max_chars else text
+        return ""
 
     def ensure(self) -> None:
         if self.is_healthy():

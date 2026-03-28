@@ -1084,7 +1084,7 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
     from songmaker_cli.db.engine import init_db
 
     db_path = tmp_path / "fresh.db"
-    init_db(db_path)
+    init_db(f"sqlite:///{db_path}")
 
     engine = create_engine(f"sqlite:///{db_path}")
     tables = set(inspect(engine).get_table_names())
@@ -1109,7 +1109,7 @@ def test_init_db_stamps_existing_db(tmp_path: Path) -> None:
     Base.metadata.create_all(engine)
     engine.dispose()
 
-    init_db(db_path)
+    init_db(f"sqlite:///{db_path}")
 
     engine = create_engine(f"sqlite:///{db_path}")
     tables = set(inspect(engine).get_table_names())

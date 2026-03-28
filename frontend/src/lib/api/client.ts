@@ -2,6 +2,7 @@ import type {
 	AlbumItem,
 	AuthUser,
 	Capabilities,
+	JobItem,
 	LoginAttemptItem,
 	PaginatedResponse,
 	PresetItem,
@@ -171,16 +172,7 @@ export async function moveSong(songId: string, albumId: string): Promise<SongIte
 	});
 }
 
-export interface JobStatus {
-	id: string;
-	type: string;
-	status: string;
-	progress: number;
-	error: string | null;
-	error_type: string | null;
-	started_at: string | null;
-	completed_at: string | null;
-}
+export type JobStatus = JobItem;
 
 export async function generateSong(
 	songId: string,

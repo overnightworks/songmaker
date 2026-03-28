@@ -1,6 +1,6 @@
 """Songmaker server — FastAPI backend for the web UI.
 
-Serves the SvelteKit frontend, audio files, and REST API backed by SQLite.
+Serves the SvelteKit frontend, audio files, and REST API backed by PostgreSQL.
 
 Usage:
     songmaker server [--port 8080] [--open]
@@ -479,7 +479,7 @@ def create_app(
         from songmaker_cli.auth import ensure_session_secret, parse_trusted_proxies
         from songmaker_cli.db.engine import init_db, resolve_database_url
 
-        db_url = resolve_database_url(data_dir)
+        db_url = resolve_database_url()
         db_factory = init_db(db_url)
         secret = ensure_session_secret(data_dir)
         hosts_exact, hosts_patterns = parse_allowed_hosts()
@@ -809,11 +809,9 @@ def run_server(
     host = os.environ.get("HOST", "127.0.0.1")
     workers = int(os.environ.get("UVICORN_WORKERS", 1))
     db_url = os.environ.get("DATABASE_URL", "")
-    is_sqlite = not db_url or db_url.startswith("sqlite")
-    if workers > 1 and is_sqlite:
+    if workers > 1 and not db_url.startswith("postgresql"):
         raise ValueError(
-            f"UVICORN_WORKERS={workers} requires a non-SQLite DATABASE_URL. "
-            "SQLite is single-process only."
+            f"UVICORN_WORKERS={workers} requires a PostgreSQL DATABASE_URL."
         )
     uvicorn.run(
         app, host=host, port=port, log_level="info",

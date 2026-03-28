@@ -108,8 +108,6 @@ def reset_password(
         check_password_strength,
         hash_password,
     )
-    from songmaker_cli.config import find_project_root
-    from songmaker_cli.constants import DATA_ROOT
     from songmaker_cli.db.engine import init_db, resolve_database_url
 
     if len(password) < MIN_PASSWORD_LENGTH:
@@ -121,9 +119,7 @@ def reset_password(
         print(f"Error: {exc}")
         sys.exit(1)
 
-    root = find_project_root(Path.cwd()) or Path.cwd()
-    data_dir = root / DATA_ROOT
-    db_url = resolve_database_url(data_dir)
+    db_url = resolve_database_url()
 
     factory = init_db(db_url)
     with factory() as session:
@@ -140,14 +136,10 @@ def reset_password(
 @app.command(name="list-users")
 def list_users_cmd() -> None:
     """List all users (requires local DB access)."""
-    from songmaker_cli.config import find_project_root
-    from songmaker_cli.constants import DATA_ROOT
     from songmaker_cli.db.engine import init_db, resolve_database_url
     from songmaker_cli.db.queries import list_users
 
-    root = find_project_root(Path.cwd()) or Path.cwd()
-    data_dir = root / DATA_ROOT
-    db_url = resolve_database_url(data_dir)
+    db_url = resolve_database_url()
 
     factory = init_db(db_url)
     with factory() as session:

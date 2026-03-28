@@ -16,7 +16,7 @@
 │   Pydantic request/response models   │
 └───┬──────────┬──────────┬────────────┘
     │          │          │
- SQLite/PG   Redis              External Services
+ PostgreSQL  Redis              External Services
  (all data)  (queue,RL,sessions) (ACE-Step, Claude, Whisper)
 ```
 
@@ -76,7 +76,7 @@ User (username, role: admin|user, bcrypt hash)
 Also: UserSession, LoginAttempt
 ```
 
-SQLite with WAL mode. SQLAlchemy ORM. Alembic migrations. DB file permissions `600`.
+PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations.
 
 ## API Endpoints
 
@@ -166,6 +166,6 @@ ACE-Step and scoring models coexist on the GPU. Per-job cleanup: `gc.collect()` 
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
 | Session auth | Cookies + Redis cache | Revocable, HttpOnly, Redis-first reads, DB synced every 5 min |
 | Album ownership | `created_by` on Album | Songs inherit access; sharing via secret UUID slug |
-| SQLite + WAL | Single-server, no external deps | No Redis/Postgres overhead |
+| PostgreSQL | Connection pooling, concurrent writes | Required alongside Redis |
 | ACE-Step as subprocess | Separate server, managed lifecycle | Clean VRAM release, independent restarts |
 | Typed API contract | `api_models.py` ↔ `types.ts` | Backend and frontend stay in sync |

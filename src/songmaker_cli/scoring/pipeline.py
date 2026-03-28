@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass, fields
@@ -281,7 +282,7 @@ def run_scoring_pipeline(
     shared_data: dict = {}
     results: dict[str, object] = {}
 
-    with ThreadPoolExecutor(max_workers=max(len(cpu_names), 1)) as pool:
+    with ThreadPoolExecutor(max_workers=min(max(len(cpu_names), 1), os.cpu_count() or 4)) as pool:
         cpu_futures = _submit_scorers(
             pool, cpu_names, reg, mp3_path, meta, audio_data, config, shared_data,
         )

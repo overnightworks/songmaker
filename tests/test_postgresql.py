@@ -1,8 +1,7 @@
 """PostgreSQL-specific tests.
 
-These tests verify dialect-aware code paths work correctly on both SQLite
-and PostgreSQL. Tests requiring a live PostgreSQL instance are skipped
-unless TEST_DATABASE_URL is set to a PostgreSQL URL.
+Tests requiring a live PostgreSQL instance are skipped unless
+TEST_DATABASE_URL is set to a PostgreSQL URL.
 
 Run with: TEST_DATABASE_URL=postgresql://user:pass@localhost/test pytest tests/test_postgresql.py
 """
@@ -19,8 +18,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.db.engine import (
-    _build_engine_kwargs,
-    _is_sqlite,
+    DEFAULT_PG_MAX_OVERFLOW,
+    DEFAULT_PG_POOL_SIZE,
     init_test_db,
     resolve_database_url,
 )
@@ -35,7 +34,12 @@ SKIP_NO_PG = pytest.mark.skipif(
 
 
 def _pg_session_factory() -> sessionmaker[Session]:
-    engine = create_engine(TEST_PG_URL, **_build_engine_kwargs(TEST_PG_URL))
+    engine = create_engine(
+        TEST_PG_URL,
+        pool_size=DEFAULT_PG_POOL_SIZE,
+        max_overflow=DEFAULT_PG_MAX_OVERFLOW,
+        pool_pre_ping=True,
+    )
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)
@@ -57,70 +61,19 @@ def pg_factory():
     engine.dispose()
 
 
-# ── _is_sqlite / _build_engine_kwargs ─────────────────────────────
-
-
-def test_is_sqlite_true() -> None:
-    assert _is_sqlite("sqlite:///test.db") is True
-    assert _is_sqlite("sqlite+pysqlite:///test.db") is True
-
-
-def test_is_sqlite_false() -> None:
-    assert _is_sqlite("postgresql://localhost/test") is False
-    assert _is_sqlite("postgresql+psycopg2://localhost/test") is False
-
-
-def test_build_engine_kwargs_sqlite() -> None:
-    kwargs = _build_engine_kwargs("sqlite:///test.db")
-    assert "connect_args" in kwargs
-    assert kwargs["connect_args"]["timeout"] == 30
-    assert "pool_size" not in kwargs
-
-
-def test_build_engine_kwargs_postgresql() -> None:
-    kwargs = _build_engine_kwargs("postgresql://localhost/test")
-    assert kwargs["pool_size"] == 5
-    assert kwargs["max_overflow"] == 10
-    assert kwargs["pool_pre_ping"] is True
-    assert "connect_args" not in kwargs
-
-
 # ── resolve_database_url ──────────────────────────────────────────
 
 
-def test_resolve_database_url_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_database_url_raises_without_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    url = resolve_database_url(tmp_path)
-    assert url.startswith("sqlite:///")
-    assert "songmaker.db" in url
+    with pytest.raises(RuntimeError, match="DATABASE_URL environment variable is required"):
+        resolve_database_url()
 
 
-def test_resolve_database_url_from_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@host/db")
-    url = resolve_database_url(tmp_path)
+    url = resolve_database_url()
     assert url == "postgresql://user:pass@host/db"
-
-
-# ── job_duration_stats on SQLite ──────────────────────────────────
-
-
-def test_duration_stats_sqlite_values(sqlite_factory) -> None:
-    now = datetime.now(timezone.utc)
-    with sqlite_factory() as session:
-        j1 = Job(type="generate", status="completed")
-        j1.started_at = now - timedelta(seconds=10)
-        j1.completed_at = now
-        j2 = Job(type="generate", status="completed")
-        j2.started_at = now - timedelta(seconds=30)
-        j2.completed_at = now
-        session.add_all([j1, j2])
-        session.commit()
-
-    with sqlite_factory() as session:
-        stats = job_duration_stats(session)
-    assert stats["min"] == pytest.approx(10.0, abs=1.0)
-    assert stats["max"] == pytest.approx(30.0, abs=1.0)
-    assert stats["avg"] == pytest.approx(20.0, abs=1.0)
 
 
 # ── PostgreSQL-specific tests ─────────────────────────────────────

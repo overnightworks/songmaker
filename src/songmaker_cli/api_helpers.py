@@ -35,10 +35,9 @@ from songmaker_cli.middleware import AuthenticatedUser
 
 
 def _begin_exclusive(session: Session) -> None:
-    """Acquire an exclusive write lock appropriate for the database dialect.
+    """Acquire an exclusive write lock via SERIALIZABLE isolation.
 
-    SQLite uses BEGIN IMMEDIATE for an exclusive file lock.
-    PostgreSQL uses SERIALIZABLE isolation for the current transaction.
+    SQLite branch exists only for test databases (production uses PostgreSQL).
     """
     dialect = session.bind.dialect.name
     if dialect == "sqlite":
