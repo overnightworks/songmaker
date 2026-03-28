@@ -14,6 +14,7 @@ import type { GenerationItem, SongItem } from '$lib/api/types';
 
 export type DetailTab = 'generations' | 'edit';
 export const detailTab = writable<DetailTab>('generations');
+export const chatOpen = writable(false);
 
 let suppressPush = false;
 
@@ -21,6 +22,7 @@ interface NavState {
 	songId: string | null;
 	genId: string | null;
 	tab: DetailTab;
+	chat: boolean;
 }
 
 function stateToUrl(state: NavState): string {
@@ -28,6 +30,7 @@ function stateToUrl(state: NavState): string {
 	if (state.songId) params.set('song', state.songId);
 	if (state.genId) params.set('gen', state.genId);
 	if (state.songId && !state.genId && state.tab === 'edit') params.set('tab', 'edit');
+	if (state.chat) params.set('chat', '1');
 	const qs = params.toString();
 	return qs ? `/?${qs}` : '/';
 }
@@ -35,6 +38,10 @@ function stateToUrl(state: NavState): string {
 function pushNav(state: NavState): void {
 	if (suppressPush) return;
 	history.pushState(state, '', stateToUrl(state));
+}
+
+function currentChat(): boolean {
+	return get(chatOpen);
 }
 
 function applyState(state: NavState): void {
@@ -51,6 +58,7 @@ function applyState(state: NavState): void {
 		selectedGenerationId.set(null);
 	}
 	detailTab.set(state.tab);
+	chatOpen.set(state.chat);
 }
 
 export function selectSong(songId: string): void {
@@ -59,36 +67,46 @@ export function selectSong(songId: string): void {
 	if (!expanded.has(songId)) toggleSongExpanded(songId);
 	ensureGenerationsLoaded(songId);
 	detailTab.set('generations');
+	chatOpen.set(false);
 	closeSidebar();
-	pushNav({ songId, genId: null, tab: 'generations' });
+	pushNav({ songId, genId: null, tab: 'generations', chat: false });
 }
 
 export function deselectSong(): void {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	detailTab.set('generations');
-	pushNav({ songId: null, genId: null, tab: 'generations' });
+	chatOpen.set(false);
+	pushNav({ songId: null, genId: null, tab: 'generations', chat: false });
 }
 
 export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 	playerSelectGeneration(gen, song);
-	pushNav({ songId: song.id, genId: gen.id, tab: get(detailTab) });
+	chatOpen.set(false);
+	pushNav({ songId: song.id, genId: gen.id, tab: get(detailTab), chat: false });
 }
 
 export function clearGenerationSelection(): void {
 	playerClearGeneration();
-	pushNav({ songId: get(selectedSongId), genId: null, tab: get(detailTab) });
+	pushNav({ songId: get(selectedSongId), genId: null, tab: get(detailTab), chat: currentChat() });
 }
 
 export function navigateToSongTab(tab: DetailTab): void {
 	playerClearGeneration();
 	detailTab.set(tab);
-	pushNav({ songId: get(selectedSongId), genId: null, tab });
+	pushNav({ songId: get(selectedSongId), genId: null, tab, chat: currentChat() });
 }
 
 export function switchTab(tab: DetailTab): void {
 	detailTab.set(tab);
-	pushNav({ songId: get(selectedSongId), genId: null, tab });
+	chatOpen.set(false);
+	pushNav({ songId: get(selectedSongId), genId: null, tab, chat: false });
+}
+
+export function toggleChat(): void {
+	const next = !get(chatOpen);
+	chatOpen.set(next);
+	pushNav({ songId: get(selectedSongId), genId: null, tab: get(detailTab), chat: next });
 }
 
 export function initNavigation(): () => void {
@@ -96,8 +114,9 @@ export function initNavigation(): () => void {
 	const songId = params.get('song');
 	const genId = params.get('gen');
 	const tab: DetailTab = params.get('tab') === 'edit' ? 'edit' : 'generations';
+	const chat = params.get('chat') === '1';
 
-	const initialState: NavState = { songId: songId ?? null, genId: genId ?? null, tab };
+	const initialState: NavState = { songId: songId ?? null, genId: genId ?? null, tab, chat };
 	history.replaceState(initialState, '', window.location.href);
 
 	if (songId) {
@@ -108,7 +127,12 @@ export function initNavigation(): () => void {
 
 	function onPopstate(e: PopStateEvent): void {
 		suppressPush = true;
-		const state = (e.state as NavState) ?? { songId: null, genId: null, tab: 'generations' };
+		const state = (e.state as NavState) ?? {
+			songId: null,
+			genId: null,
+			tab: 'generations' as DetailTab,
+			chat: false
+		};
 		applyState(state);
 		suppressPush = false;
 	}

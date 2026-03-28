@@ -15,6 +15,7 @@
 			page.url.pathname.startsWith('/share/')
 	);
 	const isSettings = $derived(page.url.pathname.startsWith('/settings'));
+	const hasBack = $derived(isSettings || page.url.search.length > 0);
 	const me = $derived($currentUser);
 	const hasPlayback = $derived($playback !== null);
 
@@ -63,8 +64,8 @@
 {:else if me}
 	<header class="top-bar">
 		<div class="top-left">
-			{#if isSettings}
-				<a href="/" class="back-btn" aria-label="Back to home">←</a>
+			{#if hasBack}
+				<button class="back-btn" onclick={() => history.back()} aria-label="Go back">←</button>
 			{/if}
 			<a href="/" class="brand">Songmaker</a>
 		</div>
@@ -125,7 +126,6 @@
 		font-size: 20px;
 		cursor: pointer;
 		padding: 4px;
-		text-decoration: none;
 	}
 
 	.back-btn:hover {

@@ -24,10 +24,11 @@
 		selectSong,
 		selectGeneration,
 		clearGenerationSelection,
-		deselectSong,
 		navigateToSongTab,
 		switchTab,
+		toggleChat,
 		detailTab,
+		chatOpen,
 		initNavigation
 	} from '$lib/stores/navigation';
 	import {
@@ -55,7 +56,6 @@
 	import { addToast } from '$lib/stores/toast';
 
 	let loading = $state(true);
-	let showChat = $state(false);
 
 	let newTitle = $state('');
 	let newAlbumId = $state('');
@@ -74,6 +74,7 @@
 	const jobs = $derived($activeJobs);
 	const hasPlayer = $derived($playback !== null);
 	const tab = $derived($detailTab);
+	const showChat = $derived($chatOpen);
 
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
 	const isGenerating = $derived(
@@ -229,13 +230,6 @@
 		{#if showCreate}
 			<div class="create-panel">
 				<div class="create-header">
-					<button
-						class="mobile-back"
-						onclick={() => (showCreate = false)}
-						aria-label="Back to songs"
-					>
-						←
-					</button>
 					<h2>Create</h2>
 				</div>
 
@@ -272,16 +266,11 @@
 		{:else if song}
 			<div class="detail-panel">
 				<div class="detail-header">
-					<div class="detail-title-row">
-						<button class="mobile-back" onclick={deselectSong} aria-label="Back to songs">
-							←
+					<div>
+						<button class="song-title-btn" onclick={clearGenerationSelection}>
+							<h2 class="song-title">{song.title}</h2>
 						</button>
-						<div>
-							<button class="song-title-btn" onclick={clearGenerationSelection}>
-								<h2 class="song-title">{song.title}</h2>
-							</button>
-							<span class="song-album">{song.album_title} · {song.artist}</span>
-						</div>
+						<span class="song-album">{song.album_title} · {song.artist}</span>
 					</div>
 					<div class="detail-actions">
 						{#if !activeGen}
@@ -325,7 +314,7 @@
 							<button
 								class="action-btn chat-btn"
 								class:active={showChat}
-								onclick={() => (showChat = !showChat)}
+								onclick={toggleChat}
 								aria-label="Toggle chat"
 							>
 								💬
@@ -381,9 +370,6 @@
 
 	{#if showChat && !activeGen && tab === 'edit'}
 		<aside class="chat-panel" class:with-player={hasPlayer}>
-			<button class="chat-close" onclick={() => (showChat = false)} aria-label="Close chat">
-				← Back
-			</button>
 			<ClaudeChat
 				songId={song?.id ?? ''}
 				{songContext}
@@ -433,27 +419,6 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
-	}
-
-	.detail-title-row {
-		display: flex;
-		align-items: flex-start;
-		gap: 8px;
-	}
-
-	.mobile-back {
-		display: none;
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 20px;
-		cursor: pointer;
-		padding: 2px 4px;
-		flex-shrink: 0;
-	}
-
-	.mobile-back:hover {
-		color: var(--primary);
 	}
 
 	.song-title-btn {
@@ -593,10 +558,6 @@
 		border-bottom-color: var(--primary);
 	}
 
-	.chat-close {
-		display: none;
-	}
-
 	.chat-panel {
 		width: 350px;
 		min-width: 300px;
@@ -706,10 +667,6 @@
 			display: flex;
 		}
 
-		.mobile-back {
-			display: block;
-		}
-
 		.create-fields {
 			flex-direction: column;
 		}
@@ -729,26 +686,6 @@
 
 		.detail-panel {
 			padding: 12px 12px calc(var(--player-height) + 12px);
-		}
-
-		.chat-close {
-			display: flex;
-			align-items: center;
-			gap: 4px;
-			background: none;
-			border: none;
-			border-bottom: 1px solid var(--border);
-			color: var(--text-muted);
-			font-size: 14px;
-			padding: 10px 12px;
-			cursor: pointer;
-			width: 100%;
-			text-align: left;
-			flex-shrink: 0;
-		}
-
-		.chat-close:hover {
-			color: var(--primary);
 		}
 
 		.chat-panel {
