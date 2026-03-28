@@ -7,6 +7,8 @@
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { playback } from '$lib/stores/player';
+	import { canGoBack } from '$lib/stores/navigation';
+
 	let { children } = $props();
 
 	let isPublicRoute = $derived(
@@ -15,7 +17,7 @@
 			page.url.pathname.startsWith('/share/')
 	);
 	const isSettings = $derived(page.url.pathname.startsWith('/settings'));
-	const hasBack = $derived(isSettings || page.url.search.length > 0);
+	const hasBack = $derived(isSettings || $canGoBack);
 	const me = $derived($currentUser);
 	const hasPlayback = $derived($playback !== null);
 

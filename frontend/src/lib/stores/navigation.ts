@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { get, writable, derived } from 'svelte/store';
 import {
 	selectedSongId,
 	selectedGenerationId,
@@ -140,3 +140,8 @@ export function initNavigation(): () => void {
 	window.addEventListener('popstate', onPopstate);
 	return () => window.removeEventListener('popstate', onPopstate);
 }
+
+export const canGoBack = derived(
+	[selectedSongId, chatOpen],
+	([$songId, $chat]) => $songId !== null || $chat
+);
