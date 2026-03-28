@@ -1,0 +1,23 @@
+# GPU worker: runs arq worker + manages ACE-Step subprocess
+# Requires NVIDIA Container Toolkit for GPU access
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+COPY src/ src/
+COPY alembic.ini ./
+
+RUN uv sync --frozen --no-dev --extra server --extra scoring --extra whisper
+
+RUN useradd --create-home --shell /bin/bash songmaker
+RUN chown -R songmaker:songmaker /app
+USER songmaker
+
+ENTRYPOINT ["uv", "run", "arq", "songmaker_cli.worker.WorkerSettings"]

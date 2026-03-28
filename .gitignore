@@ -58,3 +58,4 @@ albums/*/legacy_output/
 _reference/
 _archive/
 .server.env
+.env

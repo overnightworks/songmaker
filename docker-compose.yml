@@ -1,33 +1,97 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: songmaker
-      POSTGRES_PASSWORD: songmaker
-      POSTGRES_DB: songmaker
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-songmaker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-songmaker}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U songmaker"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-songmaker}"]
       interval: 5s
       timeout: 3s
       retries: 5
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - FOWNER
+      - DAC_READ_SEARCH
 
-  songmaker:
-    build: .
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+
+  songmaker-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://songmaker:songmaker@postgres:5432/songmaker
+      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
+      REDIS_URL: redis://redis:6379/0
+      SESSION_SECRET: ${SESSION_SECRET}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
       HOST: "0.0.0.0"
     ports:
       - "8080:8080"
     volumes:
-      - output:/app/_output
+      - audiofiles:/app/data/audio
+    cap_drop:
+      - ALL
+
+  songmaker-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
+      REDIS_URL: redis://redis:6379/0
+      ACESTEP_API_HOST: "127.0.0.1"
+      ACESTEP_API_PORT: "8001"
+    volumes:
+      - audiofiles:/app/data/audio
+      - ./_models/acestep:/app/_models/acestep
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
 volumes:
   pgdata:
-  output:
+  redisdata:
+  audiofiles:

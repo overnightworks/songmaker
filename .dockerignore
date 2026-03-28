@@ -1,0 +1,40 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# ACE-Step (mounted as volume, not copied)
+_models/
+
+# Frontend dev artifacts
+frontend/node_modules/
+frontend/.svelte-kit/
+
+# Data
+_output/
+data/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+
+# Plans and docs (not needed in image)
+plans/
+docs/
+
+# Environment (secrets)
+.server.env
+.session_secret
+
+# Tests (not needed in image)
+tests/
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore

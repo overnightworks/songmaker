@@ -15,8 +15,7 @@ Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [secur
 ```bash
 # Backend (requires Redis + PostgreSQL)
 uv sync --extra server --extra scoring --extra whisper --extra dev
-source .venv/bin/activate
-songmaker server --port 8080   # Reads DATABASE_URL + REDIS_URL from .server.env
+uv run songmaker server --port 8080   # Reads DATABASE_URL + REDIS_URL from .server.env
 
 # Frontend (dev mode)
 cd frontend && pnpm install && pnpm dev
