@@ -207,7 +207,7 @@
 	}
 
 	.point-group.latest .dot {
-		border-color: var(--score-good);
+		border-color: var(--accent);
 	}
 
 	.point-group.latest.selected .dot {
@@ -216,13 +216,13 @@
 	}
 
 	.point-group.anchor .dot {
-		border-color: var(--score-ok);
-		background: var(--score-ok);
-		box-shadow: 0 0 6px var(--score-ok);
+		border-color: var(--accent);
+		background: var(--accent);
+		box-shadow: 0 0 6px var(--accent);
 	}
 
 	.point-group.in-range .dot {
-		border-color: var(--score-ok);
+		border-color: var(--accent);
 	}
 
 	.label {
@@ -237,17 +237,17 @@
 	}
 
 	.point-group.anchor .label {
-		color: var(--score-ok);
+		color: var(--accent);
 	}
 
 	.point-group.dirty .label {
-		color: var(--score-ok);
+		color: var(--accent);
 	}
 
 	.dirty-dot {
 		animation: pulse 1.5s ease-in-out infinite;
-		border-color: var(--score-ok) !important;
-		background: var(--score-ok) !important;
+		border-color: var(--accent) !important;
+		background: var(--accent) !important;
 	}
 
 	@keyframes pulse {
@@ -273,7 +273,7 @@
 		align-items: center;
 		gap: 8px;
 		font-size: 10px;
-		color: var(--score-ok);
+		color: var(--accent);
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
@@ -339,13 +339,13 @@
 
 	.choice.keep {
 		background: none;
-		border: 1px solid var(--score-ok);
-		color: var(--score-ok);
+		border: 1px solid var(--accent);
+		color: var(--accent);
 	}
 
 	.choice.keep:hover {
-		background: var(--score-ok);
-		color: #000;
+		background: var(--accent);
+		color: #fff;
 	}
 
 	.choice.destroy {

@@ -154,7 +154,8 @@
 
 	.setting input:focus,
 	.setting select:focus {
-		border-color: var(--primary);
+		border-color: var(--accent);
 		outline: none;
+		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
 	}
 </style>

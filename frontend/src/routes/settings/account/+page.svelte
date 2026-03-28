@@ -114,7 +114,10 @@
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
-		color: var(--primary);
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
 		font-size: 1.5rem;
 		margin-bottom: 1.5rem;
 	}
@@ -123,6 +126,9 @@
 		font-size: 1rem;
 		color: var(--text-muted);
 		margin-bottom: 0.5rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
 	}
 
 	.info {
@@ -179,7 +185,8 @@
 
 	input:focus {
 		outline: none;
-		border-color: var(--primary);
+		border-color: var(--accent);
+		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
 	}
 
 	input:disabled {
@@ -187,20 +194,23 @@
 	}
 
 	button {
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: white;
 		border: none;
-		border-radius: 4px;
+		border-radius: 16px;
 		padding: 0.7rem;
 		font-size: 0.95rem;
 		font-weight: 600;
 		cursor: pointer;
 		margin-top: 0.5rem;
-		font-family: var(--font-body);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		transition: box-shadow 0.2s;
 	}
 
 	button:hover:not(:disabled) {
-		filter: brightness(1.1);
+		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
 	}
 
 	button:disabled {

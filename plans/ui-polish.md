@@ -1,6 +1,6 @@
 # UI Polish — Hallucination Theme Deep Pass
 
-> **Status: NOT STARTED** — Login page is done, basic gradient theme applied to app interior. Needs deeper pass.
+> **Status: COMPLETE** — All 6 phases implemented.
 
 ## Goal
 
@@ -28,11 +28,11 @@ Still plain/mismatched:
 
 The player is always visible — it's the most seen component.
 
-- [ ] Wavesurfer colors: `waveColor` → dark purple, `progressColor` → red-to-purple gradient (wavesurfer.js supports gradient via canvas)
-- [ ] Play button: gradient border that rotates/animates while playing
-- [ ] Track info: song title gets subtle glow when playing
-- [ ] Nav buttons (⏮ ⏪ ⏩ ⏭): replace emoji with SVG icons or styled text that matches theme
-- [ ] Loading spinner: purple-to-red gradient spin instead of flat red
+- [x] Wavesurfer colors: `waveColor` → dark purple, `progressColor` → red-to-purple gradient (wavesurfer.js supports gradient via canvas)
+- [x] Play button: gradient border that rotates/animates while playing
+- [x] Track info: song title gets subtle glow when playing
+- [x] Nav buttons (⏮ ⏪ ⏩ ⏭): replace emoji with SVG icons or styled text that matches theme
+- [x] Loading spinner: purple-to-red gradient spin instead of flat red
 
 ### Wavesurfer Gradient Implementation
 
@@ -49,21 +49,21 @@ gradient.addColorStop(1, '#a020f0');
 
 The yellow (--score-ok, picked stars) clashes with the red/purple hallucination theme.
 
-- [ ] Replace `--score-ok: #ff4` (yellow) with a warm amber/orange that blends: `#f0a030` or similar
-- [ ] Picked star (★): change from yellow to a pulsing purple-gold gradient, or a glowing accent color
-- [ ] "Shared" badge on albums: currently green border, consider accent purple
-- [ ] Score "ok" background: warm dark instead of yellow-green
-- [ ] Review all hardcoded hex colors in components (search for `#1a2a1a`, `#1a1a2a`, etc.) — replace with CSS variables for consistency
+- [x] Replace `--score-ok: #ff4` (yellow) with a warm amber/orange that blends: `#f0a030` or similar
+- [x] Picked star (★): change from yellow to a pulsing purple-gold gradient, or a glowing accent color
+- [x] "Shared" badge on albums: currently green border, consider accent purple
+- [x] Score "ok" background: warm dark instead of yellow-green
+- [x] Review all hardcoded hex colors in components (search for `#1a2a1a`, `#1a1a2a`, etc.) — replace with CSS variables for consistency
 
 ## Phase 3: Subtle Ambient Animation
 
 Add depth without being distracting. These should be barely noticeable — felt, not seen.
 
-- [ ] Main app background: very subtle, slow-moving gradient noise (CSS only, no JS) — like a dark nebula
-- [ ] Sidebar: faint grid pattern matching login page (opacity 0.02, very subtle)
-- [ ] Active song: slow breathing glow on the purple border (2-3s cycle)
-- [ ] Generate button while generating: pulse animation
-- [ ] Empty states ("No generations", "Select a song"): replace text with small waveform animation from login page
+- [x] Main app background: very subtle, slow-moving gradient noise (CSS only, no JS) — like a dark nebula
+- [x] Sidebar: faint grid pattern matching login page (opacity 0.02, very subtle)
+- [x] Active song: slow breathing glow on the purple border (2-3s cycle)
+- [x] Generate button while generating: pulse animation
+- [x] Empty states ("No generations", "Select a song"): replace text with small waveform animation from login page
 
 ### CSS-only Background Approach
 
@@ -83,30 +83,30 @@ Add depth without being distracting. These should be barely noticeable — felt,
 
 The public share page is the first thing non-users see. It should impress.
 
-- [ ] Add the login page's background effects (grid, floating glows) but toned down
-- [ ] Album title: glitch effect like the login logo
-- [ ] Track list: hover glow effect
-- [ ] Now-playing bar: gradient progress instead of flat red
-- [ ] "Powered by Hallucinai" footer: subtle gradient text
+- [x] Add the login page's background effects (grid, floating glows) but toned down
+- [x] Album title: glitch effect like the login logo
+- [x] Track list: hover glow effect
+- [x] Now-playing bar: gradient progress instead of flat red
+- [x] "Powered by Hallucinai" footer: subtle gradient text
 
 ## Phase 5: Settings Pages
 
 Currently unstyled — feels like a different app.
 
-- [ ] Settings sidebar: match main app sidebar style
-- [ ] Form inputs: match login page input style (dark background, glow on focus)
-- [ ] Save/action buttons: gradient style matching rest of app
-- [ ] Section headings: Oswald uppercase with accent color
+- [x] Settings sidebar: match main app sidebar style
+- [x] Form inputs: match login page input style (dark background, glow on focus)
+- [x] Save/action buttons: gradient style matching rest of app
+- [x] Section headings: Oswald uppercase with accent color
 
 ## Phase 6: Micro-interactions
 
 Small details that make it feel polished:
 
-- [ ] Button clicks: subtle scale down (transform: scale(0.97)) on active
-- [ ] Song selection: brief purple flash/highlight on click
-- [ ] Generation complete toast: confetti/sparkle effect? (maybe too much — test it)
-- [ ] Hover on generation rows: subtle purple left-border preview before selection
-- [ ] Focus rings: purple glow instead of browser default blue outline
+- [x] Button clicks: subtle scale down (transform: scale(0.97)) on active
+- [x] Song selection: brief purple flash/highlight on click
+- [x] Generation complete toast: confetti/sparkle effect? (maybe too much — test it)
+- [x] Hover on generation rows: subtle purple left-border preview before selection
+- [x] Focus rings: purple glow instead of browser default blue outline
 
 ## Technical Notes
 

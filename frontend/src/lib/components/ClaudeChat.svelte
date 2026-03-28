@@ -528,7 +528,7 @@
 	}
 
 	.scope-btn.active {
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 	}
 
@@ -622,7 +622,7 @@
 	}
 
 	.message.user {
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 		align-self: flex-end;
 		border-bottom-right-radius: 2px;
@@ -714,7 +714,7 @@
 
 	.mention-option:hover,
 	.mention-option.selected {
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 	}
 
@@ -747,8 +747,9 @@
 	}
 
 	.chat-input:focus {
-		border-color: var(--primary);
+		border-color: var(--accent);
 		outline: none;
+		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
 	}
 
 	.send-btn {

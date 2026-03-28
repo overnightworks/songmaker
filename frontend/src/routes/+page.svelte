@@ -190,6 +190,7 @@
 							{:else}
 								<button
 									class="generate-btn"
+									class:generating={isGenerating}
 									onclick={onGenerate}
 									disabled={isGenerating || !song?.lyrics || !song?.prompt}
 									title={!song?.lyrics || !song?.prompt ? 'Add lyrics and style prompt first' : ''}
@@ -276,7 +277,16 @@
 				{/if}
 			</div>
 		{:else}
-			<div class="empty-state">Select a song or create a new one</div>
+			<div class="empty-state">
+				<div class="empty-waveform" aria-hidden="true">
+					<span class="wave-bar"></span>
+					<span class="wave-bar"></span>
+					<span class="wave-bar"></span>
+					<span class="wave-bar"></span>
+					<span class="wave-bar"></span>
+				</div>
+				Select a song or create a new one
+			</div>
 		{/if}
 	</main>
 {/if}
@@ -292,6 +302,11 @@
 		flex-direction: column;
 		border-right: 1px solid var(--border);
 		flex-shrink: 0;
+		position: relative;
+		background-image:
+			linear-gradient(rgba(160, 32, 240, 0.02) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(160, 32, 240, 0.02) 1px, transparent 1px);
+		background-size: 40px 40px;
 	}
 
 	.main-content {
@@ -403,6 +418,17 @@
 		cursor: not-allowed;
 	}
 
+	@media (prefers-reduced-motion: no-preference) {
+		.generate-btn.generating {
+			animation: gen-pulse 1.5s ease-in-out infinite;
+		}
+	}
+
+	@keyframes gen-pulse {
+		0%, 100% { box-shadow: 0 0 6px rgba(160, 32, 240, 0.2); }
+		50% { box-shadow: 0 0 20px rgba(160, 32, 240, 0.4); }
+	}
+
 	.gen-count-select {
 		background: var(--surface);
 		border: 1px solid var(--border);
@@ -470,6 +496,47 @@
 		flex: 1;
 		color: var(--text-muted);
 		font-style: italic;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.empty-waveform {
+		display: flex;
+		align-items: flex-end;
+		gap: 3px;
+		height: 32px;
+	}
+
+	.wave-bar {
+		width: 3px;
+		background: linear-gradient(to top, var(--primary), var(--accent));
+		border-radius: 2px;
+		opacity: 0.3;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.wave-bar {
+			animation: wave-idle 1.5s ease-in-out infinite;
+		}
+
+		.wave-bar:nth-child(1) { animation-delay: 0s; height: 12px; }
+		.wave-bar:nth-child(2) { animation-delay: 0.15s; height: 20px; }
+		.wave-bar:nth-child(3) { animation-delay: 0.3s; height: 28px; }
+		.wave-bar:nth-child(4) { animation-delay: 0.45s; height: 20px; }
+		.wave-bar:nth-child(5) { animation-delay: 0.6s; height: 12px; }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.wave-bar:nth-child(1) { height: 12px; }
+		.wave-bar:nth-child(2) { height: 20px; }
+		.wave-bar:nth-child(3) { height: 28px; }
+		.wave-bar:nth-child(4) { height: 20px; }
+		.wave-bar:nth-child(5) { height: 12px; }
+	}
+
+	@keyframes wave-idle {
+		0%, 100% { transform: scaleY(0.6); }
+		50% { transform: scaleY(1); }
 	}
 
 	.error {

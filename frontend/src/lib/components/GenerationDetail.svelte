@@ -211,20 +211,22 @@
 	}
 
 	.pick-btn:hover {
-		border-color: var(--score-ok);
-		color: var(--score-ok);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.pick-btn.picked {
-		border-color: var(--score-ok);
-		background: var(--score-ok-bg);
-		color: var(--score-ok);
+		border-color: var(--accent);
+		background: rgba(160, 32, 240, 0.1);
+		color: var(--accent);
+		box-shadow: 0 0 8px rgba(160, 32, 240, 0.15);
 	}
 
 	.picked-badge {
 		font-size: 11px;
-		color: var(--score-ok);
+		color: var(--accent);
 		font-family: var(--font-display);
+		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
 	}
 
 	.gen-heading {

@@ -102,7 +102,10 @@
 
 	.create-header h2 {
 		font-family: var(--font-display);
-		color: var(--primary);
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
 		font-size: 20px;
 		margin: 0;
 		text-transform: uppercase;
@@ -137,16 +140,30 @@
 		font-size: 13px;
 	}
 
+	.create-fields input:focus,
+	.create-fields select:focus {
+		border-color: var(--accent);
+		outline: none;
+		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
+	}
+
 	.create-fields button {
 		padding: 8px 20px;
-		border: 2px solid var(--primary);
+		border: none;
 		border-radius: 20px;
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 		font-family: var(--font-display);
 		font-size: 12px;
 		cursor: pointer;
 		white-space: nowrap;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		transition: box-shadow 0.2s;
+	}
+
+	.create-fields button:hover:not(:disabled) {
+		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
 	}
 
 	.create-fields button:disabled {

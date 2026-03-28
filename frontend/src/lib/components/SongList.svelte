@@ -138,7 +138,8 @@
 	}
 
 	.search:focus {
-		border-color: var(--primary);
+		border-color: var(--accent);
+		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
 	}
 
 	.search::placeholder {

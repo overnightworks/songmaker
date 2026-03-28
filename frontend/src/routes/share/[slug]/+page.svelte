@@ -104,13 +104,17 @@
 ></audio>
 
 <div class="shared-page">
+	<div class="bg-effects" aria-hidden="true">
+		<div class="glow glow-1"></div>
+		<div class="glow glow-2"></div>
+	</div>
 	{#if loading}
 		<div class="center">Loading...</div>
 	{:else if error}
 		<div class="center error">{error}</div>
 	{:else if album}
 		<div class="album-header">
-			<h1>{album.title}</h1>
+			<h1 data-text={album.title}>{album.title}</h1>
 			<p class="artist">{album.artist}</p>
 			{#if album.subtitle}<p class="subtitle">{album.subtitle}</p>{/if}
 			{#if album.year}<p class="year">{album.year}</p>{/if}
@@ -168,6 +172,57 @@
 		min-height: 100dvh;
 		font-family: var(--font-body, 'Open Sans', sans-serif);
 		color: var(--text, #e0e0e0);
+		position: relative;
+		z-index: 1;
+	}
+
+	.bg-effects {
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+		z-index: 0;
+		overflow: hidden;
+		background-image:
+			linear-gradient(rgba(160, 32, 240, 0.03) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(160, 32, 240, 0.03) 1px, transparent 1px);
+		background-size: 60px 60px;
+	}
+
+	.glow {
+		position: absolute;
+		border-radius: 50%;
+		filter: blur(80px);
+		opacity: 0.4;
+	}
+
+	.glow-1 {
+		width: 300px;
+		height: 300px;
+		background: rgba(160, 32, 240, 0.15);
+		top: 10%;
+		left: -5%;
+	}
+
+	.glow-2 {
+		width: 250px;
+		height: 250px;
+		background: rgba(255, 50, 32, 0.1);
+		bottom: 20%;
+		right: -5%;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.glow-1 {
+			animation: float-glow 8s ease-in-out infinite;
+		}
+		.glow-2 {
+			animation: float-glow 10s ease-in-out infinite reverse;
+		}
+	}
+
+	@keyframes float-glow {
+		0%, 100% { transform: translate(0, 0); }
+		50% { transform: translate(20px, -15px); }
 	}
 
 	.center {
@@ -186,6 +241,7 @@
 	.album-header {
 		text-align: center;
 		margin-bottom: 2rem;
+		position: relative;
 	}
 
 	.album-header h1 {
@@ -195,6 +251,26 @@
 		letter-spacing: 0.05em;
 		margin: 0 0 0.3rem;
 		color: #fff;
+		position: relative;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.album-header h1:hover::after {
+			content: attr(data-text);
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			color: #a020f0;
+			clip-path: inset(0 0 50% 0);
+			animation: title-glitch 0.3s steps(2) infinite;
+		}
+	}
+
+	@keyframes title-glitch {
+		0% { transform: translate(0); }
+		50% { transform: translate(3px, -1px); }
+		100% { transform: translate(-2px, 1px); }
 	}
 
 	.artist {
@@ -221,23 +297,26 @@
 		align-items: center;
 		gap: 0.8rem;
 		padding: 0.7rem 1rem;
-		background: var(--surface, #111);
-		border: none;
+		background: rgba(17, 17, 17, 0.8);
+		border: 1px solid transparent;
 		border-radius: 4px;
 		color: var(--text, #e0e0e0);
 		font-size: 0.95rem;
 		cursor: pointer;
 		text-align: left;
-		transition: background 0.15s;
+		transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 	}
 
 	.track:hover:not(.disabled) {
-		background: var(--surface-hover, #1a1a1a);
+		background: rgba(26, 26, 26, 0.9);
+		border-color: rgba(160, 32, 240, 0.15);
+		box-shadow: 0 0 12px rgba(160, 32, 240, 0.08);
 	}
 
 	.track.active {
-		background: var(--surface-hover, #1a1a1a);
-		border-left: 3px solid var(--primary, #ff3220);
+		background: rgba(26, 26, 26, 0.9);
+		border-left: 3px solid transparent;
+		border-image: linear-gradient(to bottom, #ff3220, #a020f0) 1;
 	}
 
 	.track.disabled {
@@ -271,8 +350,10 @@
 		left: 0;
 		right: 0;
 		background: #0a0a0a;
-		border-top: 2px solid var(--primary, #ff3220);
+		border-top: 2px solid transparent;
+		border-image: linear-gradient(90deg, #ff3220, #a020f0, #ff3220) 1;
 		padding: 0.6rem 1rem 0.8rem;
+		z-index: 10;
 	}
 
 	.now-info {
@@ -285,6 +366,9 @@
 	.now-title {
 		font-size: 0.9rem;
 		color: #fff;
+		font-family: var(--font-display, 'Oswald', sans-serif);
+		text-transform: uppercase;
+		letter-spacing: 1px;
 	}
 
 	.now-time {
@@ -298,11 +382,12 @@
 		background: var(--border, #333);
 		border-radius: 2px;
 		cursor: pointer;
+		overflow: hidden;
 	}
 
 	.progress-fill {
 		height: 100%;
-		background: var(--primary, #ff3220);
+		background: linear-gradient(90deg, #ff3220, #a020f0);
 		border-radius: 2px;
 		transition: width 0.1s linear;
 	}
@@ -310,6 +395,7 @@
 	.powered {
 		text-align: center;
 		margin-top: 3rem;
+		padding-bottom: 4rem;
 		font-size: 0.75rem;
 		color: var(--text-dim, #444);
 	}
@@ -317,9 +403,12 @@
 	.powered a {
 		color: var(--text-muted, #888);
 		text-decoration: none;
+		background: linear-gradient(90deg, #ff3220, #a020f0);
+		-webkit-background-clip: text;
+		background-clip: text;
 	}
 
 	.powered a:hover {
-		color: var(--primary, #ff3220);
+		-webkit-text-fill-color: transparent;
 	}
 </style>

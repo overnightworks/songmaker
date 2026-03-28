@@ -174,13 +174,13 @@
 	}
 
 	.gen-card:hover {
-		border-color: var(--primary);
+		border-color: rgba(160, 32, 240, 0.3);
 		background: var(--surface-hover);
 	}
 
 	.gen-card.playing {
-		border-color: var(--primary);
-		background: #1a1a2a;
+		border-color: var(--accent);
+		background: rgba(160, 32, 240, 0.1);
 	}
 
 	.play-btn {
@@ -204,8 +204,8 @@
 	}
 
 	.gen-card.playing .play-btn {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.gen-info {
@@ -224,7 +224,8 @@
 	}
 
 	.picked-star {
-		color: var(--score-ok);
+		color: var(--accent);
+		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
 	}
 
 	.gen-seed {
@@ -285,11 +286,12 @@
 	}
 
 	.pick-btn:hover {
-		color: var(--score-ok);
+		color: var(--accent);
 	}
 
 	.pick-btn.picked {
-		color: var(--score-ok);
+		color: var(--accent);
+		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
 	}
 
 	.score-action {

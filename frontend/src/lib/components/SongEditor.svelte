@@ -263,8 +263,9 @@
 
 	.edit-field input:focus,
 	.edit-field textarea:focus {
-		border-color: var(--primary);
+		border-color: var(--accent);
 		outline: none;
+		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
 	}
 
 	.params-row {

@@ -57,6 +57,10 @@
 		padding: 1.5rem 1rem;
 		border-right: 1px solid var(--border);
 		overflow-y: auto;
+		background-image:
+			linear-gradient(rgba(160, 32, 240, 0.02) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(160, 32, 240, 0.02) 1px, transparent 1px);
+		background-size: 40px 40px;
 	}
 
 	.back-link {
@@ -64,10 +68,13 @@
 		text-decoration: none;
 		font-size: 0.8rem;
 		margin-bottom: 1rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 1px;
 	}
 
 	.back-link:hover {
-		color: var(--text);
+		color: var(--primary);
 	}
 
 	.nav-items {
@@ -83,6 +90,11 @@
 		color: var(--text-muted);
 		text-decoration: none;
 		font-size: 0.85rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		transition: color 0.15s, background 0.15s, border-color 0.15s;
+		border-left: 2px solid transparent;
 	}
 
 	.nav-link:hover {
@@ -93,6 +105,7 @@
 	.nav-link.active {
 		color: var(--primary);
 		background: var(--surface);
+		border-left-color: var(--accent);
 	}
 
 	.settings-content {

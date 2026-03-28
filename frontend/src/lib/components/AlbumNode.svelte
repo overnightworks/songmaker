@@ -285,7 +285,8 @@
 	}
 
 	.share-btn.active {
-		border-color: var(--score-good);
-		color: var(--score-good);
+		border-color: var(--accent);
+		color: var(--accent);
+		box-shadow: 0 0 6px rgba(160, 32, 240, 0.2);
 	}
 </style>

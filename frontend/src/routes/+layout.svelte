@@ -142,27 +142,78 @@
 	.brand {
 		font-family: var(--font-display);
 		font-size: 18px;
-		color: var(--primary);
+		font-weight: 700;
+		background: linear-gradient(90deg, var(--primary), var(--accent), var(--primary));
+		background-size: 200% 100%;
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
 		letter-spacing: 4px;
 		text-transform: uppercase;
 		text-decoration: none;
 		position: relative;
+		text-shadow: none;
 	}
 
-	.brand:hover::after {
+	@media (prefers-reduced-motion: no-preference) {
+		.brand {
+			animation: brand-shimmer 4s ease-in-out infinite;
+		}
+	}
+
+	@keyframes brand-shimmer {
+		0%, 100% { background-position: 0% 50%; }
+		50% { background-position: 100% 50%; }
+	}
+
+	.brand::before,
+	.brand::after {
 		content: attr(data-text);
 		position: absolute;
 		top: 0;
 		left: 0;
-		color: #a020f0;
-		clip-path: inset(0 0 50% 0);
-		animation: brand-glitch 0.3s steps(2) infinite;
+		right: 0;
+		background: inherit;
+		background-size: inherit;
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+		pointer-events: none;
+		opacity: 0;
 	}
 
-	@keyframes brand-glitch {
-		0% { transform: translate(0); }
-		50% { transform: translate(2px, -1px); }
-		100% { transform: translate(-1px, 1px); }
+	@media (prefers-reduced-motion: no-preference) {
+		.brand::before {
+			color: var(--primary);
+			clip-path: inset(0 0 65% 0);
+			animation: brand-glitch-top 4s steps(2) infinite;
+		}
+
+		.brand::after {
+			color: var(--accent);
+			clip-path: inset(60% 0 0 0);
+			animation: brand-glitch-bottom 4s steps(2) infinite;
+		}
+
+		.brand:hover::before,
+		.brand:hover::after {
+			opacity: 0.8;
+			animation-duration: 0.2s;
+		}
+	}
+
+	@keyframes brand-glitch-top {
+		0%, 92% { opacity: 0; transform: translate(0); }
+		93% { opacity: 0.6; transform: translate(2px, -1px); }
+		94% { opacity: 0; transform: translate(-1px, 1px); }
+		95%, 100% { opacity: 0; transform: translate(0); }
+	}
+
+	@keyframes brand-glitch-bottom {
+		0%, 94% { opacity: 0; transform: translate(0); }
+		95% { opacity: 0.6; transform: translate(-2px, 1px); }
+		96% { opacity: 0; transform: translate(1px, -1px); }
+		97%, 100% { opacity: 0; transform: translate(0); }
 	}
 
 	.top-right {
@@ -210,6 +261,20 @@
 		height: calc(100dvh - var(--header-height));
 		display: flex;
 		overflow: hidden;
+		position: relative;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.app-body::before {
+			content: '';
+			position: fixed;
+			inset: 0;
+			background:
+				radial-gradient(ellipse at 20% 50%, rgba(160, 32, 240, 0.03), transparent 70%),
+				radial-gradient(ellipse at 80% 50%, rgba(255, 50, 32, 0.02), transparent 70%);
+			pointer-events: none;
+			z-index: 0;
+		}
 	}
 
 	.app-body.has-player {

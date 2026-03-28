@@ -250,11 +250,23 @@
 
 <style>
 	.song-group {
-		border-top: 1px solid #1a1a1a;
+		border-top: 1px solid var(--surface-hover);
 	}
 
 	.song-group.active {
 		border-left: 3px solid var(--accent);
+		box-shadow: inset 3px 0 8px rgba(160, 32, 240, 0.08);
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.song-group.active {
+			animation: breathe 3s ease-in-out infinite;
+		}
+	}
+
+	@keyframes breathe {
+		0%, 100% { box-shadow: inset 3px 0 8px rgba(160, 32, 240, 0.06); }
+		50% { box-shadow: inset 3px 0 12px rgba(160, 32, 240, 0.12); }
 	}
 
 	.song-item {
@@ -273,11 +285,22 @@
 	}
 
 	.song-item.active {
-		background: #1a2a1a;
+		background: rgba(160, 32, 240, 0.06);
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.song-item.active {
+			animation: select-flash 0.4s ease-out;
+		}
+	}
+
+	@keyframes select-flash {
+		0% { background: rgba(160, 32, 240, 0.2); }
+		100% { background: rgba(160, 32, 240, 0.06); }
 	}
 
 	.song-item.playing {
-		background: #1a1a2a;
+		background: rgba(160, 32, 240, 0.1);
 	}
 
 	.expand-toggle {
@@ -394,10 +417,12 @@
 
 	.gen-row:hover {
 		background: var(--surface-hover);
+		border-left: 2px solid rgba(160, 32, 240, 0.3);
+		padding-left: 10px;
 	}
 
 	.gen-row.playing {
-		background: #1a1a2a;
+		background: rgba(160, 32, 240, 0.1);
 	}
 
 	.gen-row.selected {
@@ -426,7 +451,8 @@
 	}
 
 	.picked {
-		color: var(--score-ok);
+		color: var(--accent);
+		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
 	}
 
 	.gen-seed {

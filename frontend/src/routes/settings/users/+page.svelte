@@ -333,7 +333,10 @@
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
-		color: var(--primary);
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
 		font-size: 1.5rem;
 		margin-bottom: 1.5rem;
 	}
@@ -352,13 +355,16 @@
 		color: var(--text-muted);
 		padding: 0.5rem 1rem;
 		cursor: pointer;
-		font-family: var(--font-body);
+		font-family: var(--font-display);
 		font-size: 0.9rem;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
 	}
 
 	.tabs button.active {
-		color: var(--text);
-		border-bottom-color: var(--primary);
+		color: var(--primary);
+		border-bottom: 2px solid transparent;
+		border-image: linear-gradient(90deg, var(--primary), var(--accent)) 1;
 	}
 
 	.error {
@@ -372,6 +378,9 @@
 		color: var(--text-muted);
 		margin-bottom: 0.8rem;
 		margin-top: 1.5rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
 	}
 
 	.create-form {
@@ -393,13 +402,20 @@
 	}
 
 	.create-form button {
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: white;
 		border: none;
-		border-radius: 4px;
+		border-radius: 16px;
 		padding: 0.5rem 1rem;
 		cursor: pointer;
-		font-family: var(--font-body);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		transition: box-shadow 0.2s;
+	}
+
+	.create-form button:hover:not(:disabled) {
+		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
 	}
 
 	.create-form button:disabled {
@@ -509,18 +525,21 @@
 	}
 
 	.reinit-btn {
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: white;
 		border: none;
-		border-radius: 4px;
+		border-radius: 16px;
 		padding: 0.5rem 1rem;
 		font-size: 0.85rem;
 		cursor: pointer;
-		font-family: var(--font-body);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		transition: box-shadow 0.2s;
 	}
 
 	.reinit-btn:hover:not(:disabled) {
-		filter: brightness(1.1);
+		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
 	}
 
 	.reinit-btn:disabled {
