@@ -1,4 +1,4 @@
-"""Session-based authentication — FastAPI dependencies (no middleware)."""
+"""Session-based authentication -- FastAPI dependencies (no middleware)."""
 
 from __future__ import annotations
 
@@ -188,4 +188,3 @@ def require_admin(user: AuthenticatedUser = Depends(get_current_user)) -> Authen
     if user.role != ROLE_ADMIN:
         raise HTTPException(403, "Admin access required")
     return user
-

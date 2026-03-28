@@ -1090,7 +1090,7 @@ def test_admin_has_rate_limit(tmp_path: Path) -> None:
 
 def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     from songmaker_cli.api import router
-    from songmaker_cli.server import BodySizeLimitMiddleware
+    from songmaker_cli.middleware.body_size import BodySizeLimitMiddleware
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(

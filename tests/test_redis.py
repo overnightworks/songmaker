@@ -185,7 +185,7 @@ def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis) -> None
         assert resp.status_code == 200
 
 
-def test_redis_rate_limit_503_on_failure(tmp_path: Path) -> None:
+def test_redis_rate_limit_fail_open(tmp_path: Path) -> None:
     broken_redis = MagicMock()
     broken_redis.ping.return_value = True
     pipe_mock = MagicMock()
@@ -206,7 +206,7 @@ def test_redis_rate_limit_503_on_failure(tmp_path: Path) -> None:
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={}, raise_server_exceptions=False)
     resp = client.get("/api/songs")
-    assert resp.status_code == 503
+    assert resp.status_code != 503
 
 
 def test_metrics_with_redis(tmp_path: Path, fake_redis) -> None:

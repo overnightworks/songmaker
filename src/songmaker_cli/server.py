@@ -1,4 +1,4 @@
-"""Songmaker server — FastAPI backend for the web UI.
+"""Songmaker server -- FastAPI backend for the web UI.
 
 Serves the SvelteKit frontend, audio files, and REST API backed by PostgreSQL.
 
@@ -14,7 +14,7 @@ import os
 import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -23,291 +23,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from songmaker_cli.app_context import AppContext, get_db_session
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import AUDIO_ROOT, DATA_ROOT
+from songmaker_cli.health_api import _compute_script_hash
+from songmaker_cli.lifecycle import auto_setup_admin, session_sync_loop
+from songmaker_cli.middleware import (
+    AccessLogMiddleware,
+    AuthenticatedUser,
+    BodySizeLimitMiddleware,
+    CsrfOriginMiddleware,
+    CsrfTokenMiddleware,
+    IpRateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    get_current_user,
+)
 
 log = logging.getLogger(__name__)
 
-
-MAX_REQUEST_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", 1_048_576))
-MAX_UPLOAD_BODY_BYTES = int(os.environ.get("MAX_UPLOAD_BODY_BYTES", 52_428_800))
-
-
-class BodySizeLimitMiddleware:
-    """Raw ASGI middleware: reject requests exceeding the body size limit.
-
-    Checks Content-Length for fast rejection, then wraps the ASGI receive
-    channel to track bytes as they stream in — aborting with 413 if the
-    limit is exceeded, without buffering the entire body into memory first.
-    """
-
-    def __init__(self, app):  # type: ignore[no-untyped-def]
-        self.app = app
-
-    async def __call__(self, scope, receive, send):  # type: ignore[no-untyped-def]
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        path = scope.get("path", "")
-        is_upload = path.endswith("/reimport")
-        limit = MAX_UPLOAD_BODY_BYTES if is_upload else MAX_REQUEST_BODY_BYTES
-
-        headers = {k.lower(): v for k, v in (
-            (k.decode("latin-1"), v.decode("latin-1"))
-            for k, v in scope.get("headers", [])
-        )}
-        cl = headers.get("content-length")
-        if cl:
-            try:
-                if int(cl) > limit:
-                    resp = JSONResponse({"detail": "Request body too large"}, status_code=413)
-                    await resp(scope, receive, send)
-                    return
-            except ValueError:
-                pass
-
-        received = 0
-        rejected = False
-
-        async def guarded_receive():  # type: ignore[no-untyped-def]
-            nonlocal received, rejected
-            msg = await receive()
-            if msg.get("type") == "http.request":
-                received += len(msg.get("body", b""))
-                if received > limit:
-                    rejected = True
-                    raise _BodyTooLarge
-            return msg
-
-        try:
-            await self.app(scope, guarded_receive, send)
-        except _BodyTooLarge:
-            resp = JSONResponse({"detail": "Request body too large"}, status_code=413)
-            await resp(scope, receive, send)
-
-
-class _BodyTooLarge(Exception):
-    pass
-
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: object, script_hash: str = "") -> None:
-        super().__init__(app)
-        script_src = "'self'"
-        if script_hash:
-            script_src += f" '{script_hash}'"
-        self._csp = (
-            "default-src 'none'; "
-            f"script-src {script_src}; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "connect-src 'self' https://api.anthropic.com; "
-            "img-src 'self' data: blob:; "
-            "media-src 'self' blob:; "
-            "font-src 'self' https://fonts.gstatic.com; "
-            "frame-ancestors 'none'"
-        )
-
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        response = await call_next(request)
-        if request.url.path.startswith("/api/"):
-            response.headers["Cache-Control"] = "no-store"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Content-Security-Policy"] = self._csp
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        is_https = request.url.scheme == "https"
-        if not is_https:
-            ctx: AppContext = request.app.state.ctx
-            direct_ip = request.client.host if request.client else ""
-            if ctx.trusted_proxies and direct_ip in ctx.trusted_proxies:
-                is_https = request.headers.get("x-forwarded-proto", "") == "https"
-        if is_https:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        return response
-
-
-
-class AccessLogMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        import structlog
-
-        structlog.contextvars.clear_contextvars()
-
-        from songmaker_cli.auth import get_client_ip
-        ctx: AppContext = request.app.state.ctx
-        direct_ip = request.client.host if request.client else "unknown"
-        ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"), ctx.trusted_proxies)
-
-        structlog.contextvars.bind_contextvars(
-            ip=ip, method=request.method, path=request.url.path,
-        )
-
-        start = datetime.now(timezone.utc)
-        response = await call_next(request)
-        duration_ms = (datetime.now(timezone.utc) - start).total_seconds() * 1000
-        log.info(
-            "ACCESS %s %s %s %d (%.0fms)",
-            ip, request.method, request.url.path,
-            response.status_code, duration_ms,
-        )
-
-        http_metrics = getattr(request.app.state, "http_metrics", None)
-        if http_metrics:
-            http_metrics.record(request.method, response.status_code, duration_ms)
-
-        return response
-
-
-_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-
-
-_FORM_CONTENT_TYPES = frozenset({
-    "application/x-www-form-urlencoded",
-    "multipart/form-data",
-    "text/plain",
-})
-
-
-_LOCALHOST_PATTERN = re.compile(r"^(localhost|127\.0\.0\.1)(:\d+)?$")
-
-
-_CSRF_EXEMPT_PATHS = frozenset({"/api/auth/login", "/api/auth/setup"})
-
-
-class CsrfTokenMiddleware(BaseHTTPMiddleware):
-    """Double-submit cookie CSRF defense-in-depth.
-
-    Mutating /api/ requests must include an X-CSRF-Token header whose value
-    matches the csrf_token cookie. Login and setup are exempt (they issue
-    the token). The token is set as a non-HttpOnly cookie so the frontend
-    JS can read and echo it back.
-    """
-
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        if (
-            request.method in _MUTATING_METHODS
-            and request.url.path.startswith("/api/")
-            and request.url.path not in _CSRF_EXEMPT_PATHS
-        ):
-            from songmaker_cli.auth import CSRF_HEADER, verify_csrf_token, verify_session_cookie
-            from songmaker_cli.middleware import SESSION_COOKIE
-
-            ctx: AppContext = request.app.state.ctx
-            header_token = request.headers.get(CSRF_HEADER)
-            if not header_token:
-                return JSONResponse(
-                    {"detail": "CSRF token missing or invalid"}, status_code=403,
-                )
-            raw_cookie = request.cookies.get(SESSION_COOKIE)
-            secret = ctx.session_secret
-            session_id = verify_session_cookie(raw_cookie, secret) if raw_cookie else None
-            if not session_id or not verify_csrf_token(header_token, session_id, secret):
-                return JSONResponse(
-                    {"detail": "CSRF token missing or invalid"}, status_code=403,
-                )
-        return await call_next(request)
-
-
-def _is_allowed_host(
-    netloc: str,
-    exact: frozenset[str],
-    patterns: list[re.Pattern[str]],
-) -> bool:
-    host_without_port = netloc.rsplit(":", 1)[0] if ":" in netloc else netloc
-    if exact or patterns:
-        if netloc in exact or host_without_port in exact:
-            return True
-        return any(p.match(netloc) for p in patterns)
-    return bool(_LOCALHOST_PATTERN.match(netloc))
-
-
-class CsrfOriginMiddleware(BaseHTTPMiddleware):
-    """Reject cross-origin state-changing API requests as CSRF defense-in-depth.
-
-    When Origin/Referer is present, verify it matches ALLOWED_HOSTS (env var)
-    or localhost (default). When absent, reject requests with form-like
-    Content-Types (the only types an HTML form can produce).
-    """
-
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        if (
-            request.method in _MUTATING_METHODS
-            and request.url.path.startswith("/api/")
-        ):
-            origin = request.headers.get("origin") or request.headers.get("referer")
-            if origin:
-                from urllib.parse import urlparse
-                ctx: AppContext = request.app.state.ctx
-                parsed = urlparse(origin)
-                origin_host = parsed.netloc
-                if origin_host and not _is_allowed_host(
-                    origin_host, ctx.allowed_hosts_exact, ctx.allowed_hosts_patterns,
-                ):
-                    return JSONResponse(
-                        {"detail": "Cross-origin request rejected"},
-                        status_code=403,
-                    )
-            else:
-                content_type = (request.headers.get("content-type") or "").split(";")[0].strip()
-                if content_type in _FORM_CONTENT_TYPES:
-                    return JSONResponse(
-                        {"detail": "Missing Origin header on form submission"},
-                        status_code=403,
-                    )
-        return await call_next(request)
-
-
 REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT", 30))
-
-IP_RATE_LIMIT = int(os.environ.get("IP_RATE_LIMIT", 120))
-IP_RATE_WINDOW = 60
-STATIC_ASSET_PREFIX = "/_app/"
-
-
-class IpRateLimitMiddleware(BaseHTTPMiddleware):
-    """Global per-IP rate limiter — defense against multi-account abuse."""
-
-    def __init__(self, app, **kwargs):  # type: ignore[no-untyped-def]
-        super().__init__(app, **kwargs)
-        self._limiter = None
-
-    def _get_limiter(self, ctx: AppContext):  # type: ignore[no-untyped-def]
-        if self._limiter is None:
-            from songmaker_cli.constants import REDIS_RL_IP_PREFIX
-            from songmaker_cli.redis_client import RedisRateLimiter
-            self._limiter = RedisRateLimiter(
-                ctx.redis, REDIS_RL_IP_PREFIX, IP_RATE_LIMIT, IP_RATE_WINDOW,
-            )
-        return self._limiter
-
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        if request.url.path.startswith(STATIC_ASSET_PREFIX):
-            return await call_next(request)
-        from songmaker_cli.auth import get_client_ip
-        ctx: AppContext = request.app.state.ctx
-        direct_ip = request.client.host if request.client else "unknown"
-        ip = get_client_ip(direct_ip, request.headers.get("x-forwarded-for"), ctx.trusted_proxies)
-        try:
-            allowed = self._get_limiter(ctx).is_allowed(ip)
-        except Exception:
-            return JSONResponse(
-                {"detail": "Rate limiting unavailable"}, status_code=503,
-            )
-        if not allowed:
-            return JSONResponse(
-                {"detail": "Too many requests"}, status_code=429,
-                headers={"Retry-After": str(IP_RATE_WINDOW)},
-            )
-        return await call_next(request)
 
 
 def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
-    """Parse ALLOWED_HOSTS env into exact matches and wildcard patterns."""
     raw = os.environ.get("ALLOWED_HOSTS", "")
     exact: set[str] = set()
     patterns: list[re.Pattern[str]] = []
@@ -323,112 +61,11 @@ def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
     return frozenset(exact), patterns
 
 
-def _get_gpu_vram_mb() -> float | None:
-    try:
-        import torch
-        if torch.cuda.is_available():
-            return round(torch.cuda.memory_allocated() / 1024 / 1024, 1)
-    except ImportError:
-        pass
-    return None
-
-
-def _compute_script_hash(index_html: Path) -> str:
-    if not index_html.exists():
-        return ""
-    import hashlib
-    import re
-    content = index_html.read_text()
-    match = re.search(r"<script>(.*?)</script>", content, re.DOTALL)
-    if not match:
-        return ""
-    import base64
-    digest = hashlib.sha256(match.group(1).encode()).digest()
-    return f"sha256-{base64.b64encode(digest).decode()}"
-
-
-def _check_db(ctx: AppContext) -> bool:
-    try:
-        from sqlalchemy import text
-        with ctx.db() as session:
-            session.execute(text("SELECT 1"))
-        return True
-    except Exception:
-        return False
-
-
 def _picked_filename(song) -> str | None:  # type: ignore[no-untyped-def]
     picked = [g for g in song.generations if g.is_picked and not g.is_archived]
     if picked:
         return picked[0].mp3_path
     return None
-
-
-def _auto_setup_admin(ctx: AppContext) -> None:
-    """Create the first admin account from env vars if no users exist."""
-    admin_user = os.environ.get("ADMIN_USERNAME")
-    admin_pass = os.environ.get("ADMIN_PASSWORD")
-    if not admin_user or not admin_pass:
-        return
-
-    from sqlalchemy.exc import IntegrityError
-
-    from songmaker_cli.auth import ROLE_ADMIN, check_password_strength, hash_password
-    from songmaker_cli.db.queries import create_user, user_count
-
-    with ctx.db() as session:
-        if user_count(session) > 0:
-            return
-        try:
-            check_password_strength(admin_pass)
-        except ValueError:
-            log.error("ADMIN_PASSWORD does not meet strength requirements — skipping auto-setup")
-            return
-        try:
-            create_user(session, admin_user, hash_password(admin_pass), role=ROLE_ADMIN)
-            session.commit()
-        except IntegrityError:
-            session.rollback()
-            log.info("Auto-setup: admin user already exists (concurrent startup)")
-            return
-        log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
-
-
-async def _session_sync_loop(app: FastAPI) -> None:
-    from songmaker_cli.constants import REDIS_SESSION_SYNC_INTERVAL_SECONDS
-    from songmaker_cli.db.models import User as UserModel
-    from songmaker_cli.db.models import UserSession
-
-    ctx: AppContext = app.state.ctx
-    session_cache = app.state.session_cache
-
-    while True:
-        await asyncio.sleep(REDIS_SESSION_SYNC_INTERVAL_SECONDS)
-        try:
-            active = session_cache.get_all_sessions()
-            if not active:
-                continue
-            synced = 0
-            with ctx.db() as db:
-                for session_id, ttl in active:
-                    user_session = db.query(UserSession).filter_by(id=session_id).first()
-                    if not user_session:
-                        cached = session_cache.get(session_id)
-                        if cached:
-                            session_cache.delete(session_id, cached["user_id"])
-                        continue
-                    user = db.query(UserModel).filter_by(id=user_session.user_id).first()
-                    if user and not user.is_active:
-                        session_cache.delete_user_sessions(user.id)
-                        continue
-                    real_expires = datetime.now(timezone.utc) + timedelta(seconds=ttl)
-                    user_session.expires_at = real_expires
-                    synced += 1
-                db.commit()
-            if synced:
-                log.info("Session sync: updated %d sessions", synced)
-        except Exception:
-            log.warning("Session sync failed", exc_info=True)
 
 
 @asynccontextmanager
@@ -446,16 +83,13 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             log.info("Startup: pruned %d old login attempts", pruned)
         session.commit()
 
-    _auto_setup_admin(ctx)
+    auto_setup_admin(ctx)
 
-    try:
-        await init_arq_pool()
-        log.info("arq pool connected")
-    except Exception:
-        log.warning("Could not connect to Redis — job submission will fail")
+    await init_arq_pool()
+    log.info("arq pool connected")
 
     app.state.startup_time = datetime.now(timezone.utc)
-    sync_task = asyncio.create_task(_session_sync_loop(app))
+    sync_task = asyncio.create_task(session_sync_loop(app))
     yield
     sync_task.cancel()
     try:
@@ -487,7 +121,12 @@ def create_app(
         redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
         from songmaker_cli.redis_client import create_redis
         redis_instance = create_redis(redis_url)
-        log.info("Redis configured: %s", redis_url.split("@")[-1])
+
+        from songmaker_cli.constants import REDIS_STARTUP_ERROR
+        from songmaker_cli.redis_client import redis_health
+        if not redis_health(redis_instance):
+            raise RuntimeError(REDIS_STARTUP_ERROR.format(url=redis_url.split("@")[-1]))
+        log.info("Redis connected: %s", redis_url.split("@")[-1])
 
         ctx = AppContext(
             db=db_factory,
@@ -505,13 +144,13 @@ def create_app(
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
     app.state.session_cache = SessionCache(ctx.redis)
 
-    # Middleware execution order (Starlette LIFO — last added runs first):
-    #   1. BodySizeLimitMiddleware  — reject oversized bodies before processing
-    #   2. IpRateLimitMiddleware    — rate-limit before auth/CSRF to bound cost
-    #   3. CsrfOriginMiddleware     — reject cross-origin state-changing requests
-    #   4. CsrfTokenMiddleware      — verify double-submit CSRF token
-    #   5. AccessLogMiddleware       — log all requests (after security checks)
-    #   6. SecurityHeadersMiddleware — add security headers to responses
+    # Middleware execution order (Starlette LIFO -- last added runs first):
+    #   1. BodySizeLimitMiddleware  -- reject oversized bodies before processing
+    #   2. IpRateLimitMiddleware    -- rate-limit before auth/CSRF to bound cost
+    #   3. CsrfOriginMiddleware     -- reject cross-origin state-changing requests
+    #   4. CsrfTokenMiddleware      -- verify double-submit CSRF token
+    #   5. AccessLogMiddleware       -- log all requests (after security checks)
+    #   6. SecurityHeadersMiddleware -- add security headers to responses
     # WARNING: reordering these lines changes security behavior.
     script_hash = _compute_script_hash(project_root / "frontend" / "build" / "index.html")
     app.add_middleware(SecurityHeadersMiddleware, script_hash=script_hash)
@@ -557,74 +196,10 @@ def create_app(
         )
 
     from songmaker_cli.api import router as api_router
+    from songmaker_cli.health_api import router as health_router
 
     app.include_router(api_router)
-
-    @app.get("/metrics")
-    async def metrics_endpoint(request: Request) -> JSONResponse:
-        http_metrics = request.app.state.http_metrics
-
-        from songmaker_cli.db.queries import job_counts_by_type_and_status, job_duration_stats
-        ctx: AppContext = request.app.state.ctx
-        with ctx.db() as session:
-            jobs_by_type = job_counts_by_type_and_status(session)
-            duration = job_duration_stats(session)
-
-        gpu_vram_mb = _get_gpu_vram_mb()
-
-        from songmaker_cli.arq_pool import get_queue_depth
-        queue_depth = await get_queue_depth()
-
-        return JSONResponse({
-            "jobs_total": jobs_by_type,
-            "jobs_active": sum(
-                counts.get("queued", 0) + counts.get("running", 0)
-                for counts in jobs_by_type.values()
-            ),
-            "job_duration_seconds": duration,
-            "queue_depth": queue_depth,
-            "gpu_vram_mb": gpu_vram_mb,
-            **http_metrics.snapshot(),
-        })
-
-    @app.get("/health")
-    async def health_check(request: Request) -> JSONResponse:
-        ctx: AppContext = request.app.state.ctx
-        startup_time: datetime = getattr(
-            request.app.state, "startup_time", datetime.now(timezone.utc),
-        )
-        uptime = int((datetime.now(timezone.utc) - startup_time).total_seconds())
-
-        db_ok = _check_db(ctx)
-
-        from songmaker_cli.arq_pool import get_active_model, get_queue_depth, is_worker_healthy
-        worker_running = await is_worker_healthy()
-        queue_depth = await get_queue_depth()
-        acestep_model = await get_active_model()
-
-        if acestep_model is not None:
-            acestep = "healthy"
-        else:
-            from songmaker_cli.acestep_manager import AceStepManager
-            mgr = AceStepManager()
-            acestep = "healthy" if mgr.is_healthy() else "unknown"
-
-        from songmaker_cli.redis_client import redis_health
-        redis_ok = redis_health(ctx.redis)
-
-        degraded = not db_ok or not worker_running or not redis_ok
-        return JSONResponse({
-            "status": "degraded" if degraded else "ok",
-            "worker": "running" if worker_running else "stopped",
-            "queue_depth": queue_depth,
-            "db": "ok" if db_ok else "error",
-            "redis": "ok" if redis_ok else "error",
-            "acestep": acestep,
-            "acestep_model": acestep_model,
-            "uptime_seconds": uptime,
-        })
-
-    from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+    app.include_router(health_router)
 
     @app.get("/audio/{owner_id}/{filename}")
     async def get_audio(
@@ -666,7 +241,8 @@ def create_app(
         try:
             allowed = shared_limiter.is_allowed(ip)
         except Exception:
-            raise HTTPException(503, "Rate limiting unavailable")
+            log.warning("Shared rate limiter unavailable -- allowing request")
+            return
         if not allowed:
             raise HTTPException(
                 429, "Too many requests",
@@ -763,7 +339,6 @@ def create_app(
 
 
 def _load_env_file(project_root: Path) -> None:
-    """Load .server.env if it exists, without overriding existing env vars."""
     from dotenv import load_dotenv
 
     env_file = project_root / ".server.env"

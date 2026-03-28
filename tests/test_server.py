@@ -554,7 +554,7 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
     asyncio.run(_run())
 
 
-def test_lifespan_handles_redis_unavailable(tmp_path: Path) -> None:
+def test_lifespan_fails_on_redis_unavailable(tmp_path: Path) -> None:
     from unittest.mock import AsyncMock
 
     from songmaker_cli.server import _lifespan
@@ -577,7 +577,7 @@ def test_lifespan_handles_redis_unavailable(tmp_path: Path) -> None:
         ), patch(
             "songmaker_cli.arq_pool.close_arq_pool",
             new_callable=AsyncMock,
-        ):
+        ), pytest.raises(ConnectionError):
             async with _lifespan(mock_app):
                 pass
 
@@ -600,8 +600,8 @@ def test_body_size_limit_invalid_content_length(server_app: TestClient) -> None:
 def test_body_size_streaming_too_large(tmp_path: Path) -> None:
     import asyncio
 
-    import songmaker_cli.server as srv
-    from songmaker_cli.server import BodySizeLimitMiddleware
+    import songmaker_cli.middleware.body_size as srv
+    from songmaker_cli.middleware.body_size import BodySizeLimitMiddleware
 
     async def dummy_app(scope, receive, send):
         await receive()
@@ -773,7 +773,7 @@ def test_parse_allowed_hosts() -> None:
 
 
 def test_ip_rate_limit_429(tmp_path: Path) -> None:
-    import songmaker_cli.server as srv
+    import songmaker_cli.middleware.rate_limit as srv
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -809,7 +809,7 @@ def test_ip_rate_limit_429(tmp_path: Path) -> None:
 
 
 def test_static_assets_bypass_rate_limit(tmp_path: Path) -> None:
-    import songmaker_cli.server as srv
+    import songmaker_cli.middleware.rate_limit as srv
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -1210,7 +1210,7 @@ def test_metrics_with_jobs(tmp_path: Path) -> None:
 
 def test_auto_setup_admin_creates_user(tmp_path: Path) -> None:
     from songmaker_cli.db.queries import get_user_by_username
-    from songmaker_cli.server import _auto_setup_admin
+    from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
@@ -1229,7 +1229,7 @@ def test_auto_setup_admin_creates_user(tmp_path: Path) -> None:
 def test_auto_setup_admin_skips_when_users_exist(tmp_path: Path) -> None:
     from songmaker_cli.auth import hash_password
     from songmaker_cli.db.queries import create_user, get_user_by_username
-    from songmaker_cli.server import _auto_setup_admin
+    from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
 
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
@@ -1248,7 +1248,7 @@ def test_auto_setup_admin_skips_when_users_exist(tmp_path: Path) -> None:
 
 
 def test_auto_setup_admin_skips_without_env_vars(tmp_path: Path) -> None:
-    from songmaker_cli.server import _auto_setup_admin
+    from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(
@@ -1261,7 +1261,7 @@ def test_auto_setup_admin_skips_without_env_vars(tmp_path: Path) -> None:
 
 def test_auto_setup_admin_rejects_weak_password(tmp_path: Path) -> None:
     from songmaker_cli.db.queries import user_count
-    from songmaker_cli.server import _auto_setup_admin
+    from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
 
     factory = init_db(tmp_path / "test.db")
     ctx = AppContext(

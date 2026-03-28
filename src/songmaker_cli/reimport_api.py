@@ -14,8 +14,8 @@ from songmaker_cli.api_models import GenerationResponse
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.db.queries import get_generation
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from songmaker_cli.middleware.body_size import MAX_UPLOAD_BODY_BYTES
 from songmaker_cli.reimport import reimport_files
-from songmaker_cli.server import MAX_UPLOAD_BODY_BYTES
 
 log = logging.getLogger(__name__)
 

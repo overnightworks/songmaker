@@ -293,7 +293,7 @@ def test_redis_cache_hit_skips_db_query(auth_app: TestClient) -> None:
     auth_app.get("/protected")
     assert session_cache.get(sid) is not None
 
-    with patch("songmaker_cli.middleware.get_session_with_user") as mock_db:
+    with patch("songmaker_cli.middleware.auth.get_session_with_user") as mock_db:
         auth_app.get("/protected")
         mock_db.assert_not_called()
 

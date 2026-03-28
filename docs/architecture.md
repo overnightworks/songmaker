@@ -76,7 +76,7 @@ User (username, role: admin|user, bcrypt hash)
 Also: UserSession, LoginAttempt
 ```
 
-PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations.
+PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
 
 ## API Endpoints
 
@@ -165,6 +165,7 @@ ACE-Step and scoring models coexist on the GPU. Per-job cleanup: `gc.collect()` 
 | GPU queue | Single-threaded, in-process | One GPU, ACE-Step + scoring share VRAM |
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
 | Session auth | Cookies + Redis cache | Revocable, HttpOnly, Redis-first reads, DB synced every 5 min |
+| Redis required | Fail-fast at startup, fail-open rate limiting | Server won't start without Redis; if Redis drops mid-operation, rate limiting allows requests through |
 | Album ownership | `created_by` on Album | Songs inherit access; sharing via secret UUID slug |
 | PostgreSQL | Connection pooling, concurrent writes | Required alongside Redis |
 | ACE-Step as subprocess | Separate server, managed lifecycle | Clean VRAM release, independent restarts |

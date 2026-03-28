@@ -74,6 +74,12 @@ ARQ_QUEUE_KEY = "arq:queue"
 ACTIVE_MODEL_REDIS_KEY = "songmaker:active_model"
 ARQ_HEALTH_KEY_PATTERN = "arq:worker:*"
 
+# Startup error messages
+REDIS_STARTUP_ERROR = (
+    "Cannot connect to Redis at {url}. "
+    "Redis is required — set REDIS_URL in .server.env or start Redis."
+)
+
 # Audio file serving
 AUDIO_MEDIA_TYPES: dict[str, str] = {
     ".mp3": "audio/mpeg",
