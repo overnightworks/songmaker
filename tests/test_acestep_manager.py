@@ -305,14 +305,26 @@ def test_verify_vram_freed_no_pynvml() -> None:
 
 
 def test_verify_vram_freed_delta_success() -> None:
+    mock_get = MagicMock(return_value=18100.0)
     with (
-        patch(
-            "songmaker_cli.gpu_util.get_gpu_memory_used_mb",
-            return_value=18100.0,
-        ),
+        patch("songmaker_cli.gpu_util.get_gpu_memory_used_mb", mock_get),
         patch("songmaker_cli.acestep_manager.gc_gpu"),
     ):
         verify_vram_freed(baseline_mb=18000.0, max_wait=1)
+    mock_get.assert_called_once()
+
+
+def test_verify_vram_freed_just_over_margin_fails() -> None:
+    with (
+        patch(
+            "songmaker_cli.gpu_util.get_gpu_memory_used_mb",
+            return_value=18201.0,
+        ),
+        patch("songmaker_cli.acestep_manager.gc_gpu"),
+        patch("time.sleep"),
+    ):
+        with pytest.raises(RuntimeError, match="GPU memory not freed"):
+            verify_vram_freed(baseline_mb=18000.0, max_wait=1)
 
 
 def test_verify_vram_freed_gradual_release() -> None:
