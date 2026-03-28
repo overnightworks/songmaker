@@ -112,7 +112,12 @@ def slugify(text: str) -> str:
 
 
 def unique_album_id(session: Session, base_slug: str) -> str:
-    """Atomically find a unique album ID, appending -2, -3, etc. if needed."""
+    """Atomically find a unique album ID, appending -2, -3, etc. if needed.
+
+    Commits the current transaction before acquiring an exclusive lock.
+    Same caveats as create_job_with_rate_limit — no prior uncommitted
+    mutations besides auth-layer session renewal.
+    """
     session.commit()
     _begin_exclusive(session)
     candidate = base_slug

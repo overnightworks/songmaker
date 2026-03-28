@@ -118,12 +118,11 @@ async def on_startup(ctx):
         "CUDA_VISIBLE_DEVICES mutation are not safe under concurrency"
     )
 
-    from songmaker_cli.config import find_project_root
+    from songmaker_cli.config import find_project_root, load_env_file
     from songmaker_cli.logging_config import configure_logging
-    from songmaker_cli.server import _load_env_file
 
     project_root = find_project_root(Path.cwd()) or Path.cwd()
-    _load_env_file(project_root)
+    load_env_file(project_root)
     configure_logging()
 
     log.info("Worker starting up...")

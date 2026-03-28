@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -113,17 +114,21 @@ class SessionCache:
 
     def __init__(self, redis: Redis) -> None:
         self._redis = redis
+        self._failure_lock = threading.Lock()
         self._consecutive_failures: int = 0
 
     @property
     def consecutive_failures(self) -> int:
-        return self._consecutive_failures
+        with self._failure_lock:
+            return self._consecutive_failures
 
     def _record_success(self) -> None:
-        self._consecutive_failures = 0
+        with self._failure_lock:
+            self._consecutive_failures = 0
 
     def _record_failure(self) -> None:
-        self._consecutive_failures += 1
+        with self._failure_lock:
+            self._consecutive_failures += 1
 
     def _session_key(self, session_id: str) -> str:
         return f"{REDIS_SESSION_PREFIX}:{session_id}"

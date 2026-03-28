@@ -20,6 +20,17 @@ if TYPE_CHECKING:
 
 
 
+def load_env_file(project_root: Path) -> None:
+    """Load .server.env from project root if it exists."""
+    from dotenv import load_dotenv
+
+    env_file = project_root / ".server.env"
+    if not env_file.exists():
+        return
+    load_dotenv(env_file, override=False)
+    log.info("Loaded env from %s", env_file)
+
+
 def audio_file_path(audio_dir: Path, user_id: str, generation_id: str, suffix: str) -> Path:
     path = audio_dir / user_id / f"{generation_id}{suffix}"
     path.parent.mkdir(parents=True, exist_ok=True)
