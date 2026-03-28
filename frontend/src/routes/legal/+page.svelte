@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { currentUser } from '$lib/stores/auth';
 
 	const section = $derived(page.url.hash || '#impressum');
+	const backHref = $derived($currentUser ? '/settings' : '/login');
 </script>
 
 <svelte:head>
@@ -10,9 +12,12 @@
 
 <div class="legal">
 	<nav class="legal-nav">
-		<a href="#impressum" class:active={section === '#impressum'}>Impressum</a>
-		<a href="#datenschutz" class:active={section === '#datenschutz'}>Datenschutz</a>
-		<a href="#nutzungsbedingungen" class:active={section === '#nutzungsbedingungen'}>Nutzungsbedingungen</a>
+		<a href={backHref} class="back-link">← Back</a>
+		<div class="nav-links">
+			<a href="#impressum" class:active={section === '#impressum'}>Impressum</a>
+			<a href="#datenschutz" class:active={section === '#datenschutz'}>Datenschutz</a>
+			<a href="#nutzungsbedingungen" class:active={section === '#nutzungsbedingungen'}>Nutzungsbedingungen</a>
+		</div>
 	</nav>
 
 	<section id="impressum">
@@ -172,61 +177,80 @@
 
 <style>
 	.legal {
-		max-width: 700px;
+		max-width: 640px;
 		margin: 0 auto;
-		padding: 2rem 1.5rem;
+		padding: 2rem 1.5rem 4rem;
 		color: var(--text, #e0e0e0);
 		font-family: var(--font-body, 'Open Sans', sans-serif);
-		line-height: 1.7;
+		line-height: 1.6;
+		height: 100dvh;
+		overflow-y: auto;
 	}
 
 	.legal-nav {
 		display: flex;
+		align-items: center;
 		gap: 1rem;
 		margin-bottom: 2rem;
 		border-bottom: 1px solid var(--border, #333);
 		padding-bottom: 0.75rem;
 	}
 
-	.legal-nav a {
+	.back-link {
+		color: var(--text-dim, #444);
+		text-decoration: none;
+		font-size: 0.75rem;
+		margin-right: 0.5rem;
+	}
+
+	.back-link:hover {
+		color: var(--text-muted, #888);
+	}
+
+	.nav-links {
+		display: flex;
+		gap: 1rem;
+	}
+
+	.nav-links a {
 		color: var(--text-muted, #888);
 		text-decoration: none;
-		font-size: 0.85rem;
+		font-size: 0.75rem;
 		font-family: var(--font-display, 'Oswald', sans-serif);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 	}
 
-	.legal-nav a:hover,
-	.legal-nav a.active {
+	.nav-links a:hover,
+	.nav-links a.active {
 		color: var(--primary, #ff3220);
 	}
 
 	section {
-		margin-bottom: 3rem;
+		margin-bottom: 2rem;
 	}
 
 	h1 {
 		font-family: var(--font-display, 'Oswald', sans-serif);
-		font-size: 1.6rem;
+		font-size: 1.1rem;
 		text-transform: uppercase;
 		letter-spacing: 1px;
 		color: #fff;
-		margin: 0 0 1rem;
+		margin: 0 0 0.75rem;
 	}
 
 	h2 {
 		font-family: var(--font-display, 'Oswald', sans-serif);
-		font-size: 1rem;
+		font-size: 0.8rem;
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 		color: var(--text-muted, #888);
-		margin: 1.5rem 0 0.5rem;
+		margin: 1.2rem 0 0.4rem;
 	}
 
 	p {
-		margin: 0.5rem 0;
-		font-size: 0.9rem;
+		margin: 0.4rem 0;
+		font-size: 0.78rem;
 	}
 
 	ul {
@@ -235,8 +259,8 @@
 	}
 
 	li {
-		margin: 0.3rem 0;
-		font-size: 0.9rem;
+		margin: 0.2rem 0;
+		font-size: 0.78rem;
 	}
 
 	code {

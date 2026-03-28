@@ -15,15 +15,19 @@ docker compose up -d            # starts web, worker, PostgreSQL, Redis
 
 # 2. That's it — survives reboots automatically
 
-# 3. Remote access (optional)
-cloudflared tunnel --url http://localhost:8080
-
-# 4. Update after code changes
+# 3. Update after code changes
 git pull && docker compose up -d --build
 
-# 5. View logs
+# 4. View logs
 docker compose logs -f songmaker-worker   # GPU worker + ACE-Step
 docker compose logs -f songmaker-web      # API + frontend
+
+# 5. Manage services
+docker compose stop                       # stop everything
+docker compose start                      # start everything
+sudo systemctl stop cloudflared           # stop tunnel (remote access)
+sudo systemctl start cloudflared          # start tunnel
+sudo systemctl status cloudflared         # check tunnel status
 ```
 
 First start downloads ~3.5GB of ACE-Step dependencies (one-time). All data (database, audio files, models) persists across restarts and rebuilds.

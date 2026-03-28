@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#0d0d0d"/>
+  <text x="16" y="23" font-family="Impact,sans-serif" font-size="22" font-weight="bold" fill="#ff3220" text-anchor="middle" letter-spacing="1">H</text>
+  <text x="17" y="22" font-family="Impact,sans-serif" font-size="22" font-weight="bold" fill="#a020f0" text-anchor="middle" letter-spacing="1" opacity="0.4" clip-path="inset(0 0 50% 0)">H</text>
+</svg>

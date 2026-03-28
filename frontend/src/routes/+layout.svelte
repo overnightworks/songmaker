@@ -58,6 +58,7 @@
 
 <svelte:head>
 	<title>Hallucinai</title>
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </svelte:head>
 
 {#if isPublicRoute}
@@ -72,7 +73,7 @@
 			{:else if hasBack}
 				<button class="back-btn" onclick={deselectSong} aria-label="Back to songs">←</button>
 			{/if}
-			<a href="/" class="brand">Hallucinai</a>
+			<a href="/" class="brand" data-text="Hallucinai">Hallucinai</a>
 		</div>
 		<nav class="top-right">
 			<span class="top-username">{me.username}</span>
@@ -144,6 +145,23 @@
 		letter-spacing: 4px;
 		text-transform: uppercase;
 		text-decoration: none;
+		position: relative;
+	}
+
+	.brand:hover::after {
+		content: attr(data-text);
+		position: absolute;
+		top: 0;
+		left: 0;
+		color: #a020f0;
+		clip-path: inset(0 0 50% 0);
+		animation: brand-glitch 0.3s steps(2) infinite;
+	}
+
+	@keyframes brand-glitch {
+		0% { transform: translate(0); }
+		50% { transform: translate(2px, -1px); }
+		100% { transform: translate(-1px, 1px); }
 	}
 
 	.top-right {
