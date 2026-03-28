@@ -157,6 +157,77 @@ def _build_generation_context(
     )
 
 
+def _run_single_generation(
+    ctx: GenerationContext, generation_id: str,
+    db_factory: sessionmaker[Session],
+) -> None:
+    """Generate one song variant, master it, and persist the DB record.
+
+    On ACE-Step/mastering failure: raises (caller tracks partial progress).
+    On DB failure after files written: cleans up orphaned files, then raises.
+    """
+    result = generate_single(
+        ctx.meta, ctx.album_meta, ctx.ace_config,
+        ctx.audio_dir, ctx.user_id, generation_id,
+        client=ctx.client,
+    )
+
+    mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
+    wav_rel = f"{ctx.user_id}/{generation_id}.wav"
+    gen_params = StoredGenerationParams(
+        acestep_model=ctx.model_name,
+        bpm=ctx.ace_config.bpm,
+        duration=ctx.ace_config.duration,
+        key=ctx.meta.generation_params.get("key", ""),
+        guidance_scale=ctx.ace_config.guidance_scale,
+        inference_steps=ctx.ace_config.inference_steps,
+        shift=ctx.ace_config.shift,
+        lm_temperature=ctx.ace_config.lm_temperature,
+        infer_method=ctx.ace_config.infer_method,
+        think_mode=ctx.ace_config.think_mode,
+    ).model_dump(exclude_none=True)
+
+    try:
+        with db_factory() as session:
+            create_generation(
+                session,
+                song_id=ctx.song_id,
+                version_id=ctx.version_id,
+                mp3_path=mp3_rel,
+                seed=result.seed,
+                generation_params=gen_params,
+                wav_path=wav_rel,
+            )
+            session.commit()
+    except Exception:
+        _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel)
+        raise
+
+    log.info("Generated: %s (seed=%s)", mp3_rel, result.seed)
+
+
+def _finalize_generation_job(
+    db_factory: sessionmaker[Session], job_id: str,
+    count: int, completed: int, last_error: Exception | None,
+) -> None:
+    """Set final job status based on how many generations succeeded."""
+    if completed == count:
+        _update_job(db_factory, job_id, "completed", progress=1.0)
+    elif completed > 0:
+        _update_job(
+            db_factory, job_id, "partial", progress=completed / count,
+            error=f"{completed}/{count} completed, {count - completed} failed: "
+                  f"{_sanitize_error(last_error)}",
+            error_type="generation_error",
+        )
+    else:
+        _update_job(
+            db_factory, job_id, "failed",
+            error=_sanitize_error(last_error),
+            error_type="generation_error",
+        )
+
+
 def run_generation_job(
     job_id: str, song_id: str, version_id: str, count: int,
     user_id: str,
@@ -195,68 +266,14 @@ def run_generation_job(
 
         for i in range(count):
             _update_job(db_factory, job_id, "running", progress=i / count)
-
-            generation_id = str(uuid.uuid4())
             try:
-                result = generate_single(
-                    ctx.meta, ctx.album_meta, ctx.ace_config,
-                    ctx.audio_dir, ctx.user_id, generation_id,
-                    client=ctx.client,
-                )
+                _run_single_generation(ctx, str(uuid.uuid4()), db_factory)
+                completed += 1
             except Exception as exc:
                 log.exception("Generation %d/%d failed: %s", i + 1, count, exc)
                 last_error = exc
-                continue
 
-            mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
-            wav_rel = f"{ctx.user_id}/{generation_id}.wav"
-            gen_params = StoredGenerationParams(
-                acestep_model=ctx.model_name,
-                bpm=ctx.ace_config.bpm,
-                duration=ctx.ace_config.duration,
-                key=ctx.meta.generation_params.get("key", ""),
-                guidance_scale=ctx.ace_config.guidance_scale,
-                inference_steps=ctx.ace_config.inference_steps,
-                shift=ctx.ace_config.shift,
-                lm_temperature=ctx.ace_config.lm_temperature,
-                infer_method=ctx.ace_config.infer_method,
-                think_mode=ctx.ace_config.think_mode,
-            ).model_dump(exclude_none=True)
-
-            try:
-                with db_factory() as session:
-                    create_generation(
-                        session,
-                        song_id=song_id,
-                        version_id=version_id,
-                        mp3_path=mp3_rel,
-                        seed=result.seed,
-                        generation_params=gen_params,
-                        wav_path=wav_rel,
-                    )
-                    session.commit()
-            except Exception:
-                _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel)
-                raise
-
-            completed += 1
-            log.info("Generated %d/%d: %s (seed=%s)", i + 1, count, mp3_rel, result.seed)
-
-        if completed == count:
-            _update_job(db_factory, job_id, "completed", progress=1.0)
-        elif completed > 0:
-            _update_job(
-                db_factory, job_id, "partial", progress=completed / count,
-                error=f"{completed}/{count} completed, {count - completed} failed: "
-                      f"{_sanitize_error(last_error)}",
-                error_type="generation_error",
-            )
-        else:
-            _update_job(
-                db_factory, job_id, "failed",
-                error=_sanitize_error(last_error),
-                error_type="generation_error",
-            )
+        _finalize_generation_job(db_factory, job_id, count, completed, last_error)
 
     except Exception as exc:
         log.exception("Generation job failed: %s", exc)
