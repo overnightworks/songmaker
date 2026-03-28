@@ -261,3 +261,47 @@ def test_generate_single_server_not_available(tmp_path: Path) -> None:
             generation_id="gen3",
             client=mock_client,
         )
+
+
+def test_generate_single_cleans_up_partial_files_on_failure(
+    tmp_path: Path, make_stereo_wav_bytes,
+) -> None:
+    from acestep_engine.client import AceStepClient
+    from acestep_engine.models import AceStepConfig, AceStepResult
+    from songmaker_cli.errors import GenerationError
+
+    wav_bytes = make_stereo_wav_bytes()
+    ace_result = AceStepResult(wav_bytes=wav_bytes, seed=42)
+
+    mock_client = MagicMock(spec=AceStepClient)
+    mock_client.is_available = True
+    mock_client.generate.return_value = ace_result
+
+    meta = SongMeta(title="Fail Song", prompt="rock", lyrics="nope", album="album")
+    album_meta = AlbumMeta(title="Album", artist="Artist")
+    ace_config = AceStepConfig(prompt="rock", lyrics="nope")
+
+    with (
+        patch("songmaker_cli.generate.master_audio") as mock_master,
+        patch(
+            "songmaker_cli.generate.encode_mp3",
+            side_effect=GenerationError("MP3 encode failed"),
+        ),
+    ):
+        mock_master.return_value = (np.zeros(100), np.zeros(100))
+
+        with pytest.raises(GenerationError, match="MP3 encode failed"):
+            generate_single(
+                meta=meta,
+                album_meta=album_meta,
+                ace_config=ace_config,
+                audio_dir=tmp_path,
+                user_id="u1",
+                generation_id="fail1",
+                client=mock_client,
+            )
+
+    wav_path = tmp_path / "u1" / "fail1.wav"
+    mp3_path = tmp_path / "u1" / "fail1.mp3"
+    assert not mp3_path.exists()
+    assert not wav_path.exists()

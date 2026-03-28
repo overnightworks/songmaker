@@ -52,9 +52,13 @@ def generate_single(
 
     mp3_path = audio_file_path(audio_dir, user_id, generation_id, ".mp3")
     wav_path = audio_file_path(audio_dir, user_id, generation_id, ".wav")
-    ace_result, elapsed = _run_generation(ace_config, client)
-    audio = _decode_audio(ace_result)
-    _write_output(audio, ace_result.seed, mp3_path, wav_path, meta, album_meta)
+    try:
+        ace_result, elapsed = _run_generation(ace_config, client)
+        audio = _decode_audio(ace_result)
+        _write_output(audio, ace_result.seed, mp3_path, wav_path, meta, album_meta)
+    except Exception:
+        _cleanup_partial_files(mp3_path, wav_path)
+        raise
 
     log.info("Generated: %s (seed=%s, %.0fs)", mp3_path.name, ace_result.seed, elapsed)
     return GenerationResult(
@@ -122,3 +126,13 @@ def _write_output(
         )
     except MasteringError as exc:
         raise GenerationError(str(exc)) from exc
+
+
+def _cleanup_partial_files(*paths: Path) -> None:
+    for path in paths:
+        try:
+            if path.exists():
+                path.unlink()
+                log.info("Cleaned up partial file: %s", path.name)
+        except OSError:
+            log.warning("Failed to clean up partial file: %s", path)

@@ -6,7 +6,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -144,7 +143,8 @@ def setup(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> UserResponse:
-    db.execute(text("BEGIN IMMEDIATE"))
+    from songmaker_cli.api_helpers import _begin_exclusive
+    _begin_exclusive(db)
     if user_count(db) > 0:
         raise HTTPException(403, "Setup already completed")
 

@@ -21,6 +21,7 @@ from songmaker_cli.jobs import run_generation_job, run_scoring_job
 log = logging.getLogger(__name__)
 
 _db_factory = None
+_db_engine = None
 _acestep_manager = None
 
 JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "300"))
@@ -29,9 +30,10 @@ TERMINAL_STATUSES = frozenset({"completed", "partial", "failed"})
 
 
 def _get_db_factory():
-    global _db_factory
+    global _db_factory, _db_engine
     if _db_factory is None:
         _db_factory = init_db(resolve_database_url())
+        _db_engine = _db_factory.kw["bind"]
     return _db_factory
 
 
@@ -133,6 +135,10 @@ async def on_startup(ctx):
 
 
 async def on_shutdown(ctx):
+    if _db_engine is not None:
+        _db_engine.dispose()
+        log.info("Database connection pool disposed")
+
     if _acestep_manager:
         _acestep_manager.stop()
 

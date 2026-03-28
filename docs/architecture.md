@@ -146,15 +146,17 @@ POST /api/generations/{id}/score
 
 ## VRAM Management
 
-Single RTX 3090 shared between generation and scoring. ACE-Step stays running; no mode switching.
+Single RTX 3090 shared between generation and scoring. `max_jobs=1` serializes all GPU work.
 
 ```
-ACE-Step server: ~18 GB VRAM (DiT + LM models, stays loaded)
-faster-whisper:  ~3 GB VRAM (int8_float16, loads on demand, cached)
-AudioBox:        ~1 GB VRAM (loads on demand, cached)
+ACE-Step server: ~18 GB VRAM (DiT + LM models, stays loaded as subprocess)
+faster-whisper:  ~3 GB VRAM (int8_float16, CTranslate2 backend, loads on demand, cached)
+AudioBox:        CPU only  (forced via CUDA_VISIBLE_DEVICES="" context manager)
 ```
 
-ACE-Step and scoring models coexist on the GPU. Per-job cleanup: `gc.collect()` + `torch.cuda.empty_cache()` in `finally` blocks.
+Mode switching via `prepare_generate_mode()` / `prepare_score_mode()` in `acestep_manager.py`. Before generation, scoring model caches are cleared and VRAM release is verified. Per-job cleanup: `gc.collect()` + `torch.cuda.empty_cache()` in `finally` blocks.
+
+Known limitation: VRAM verification uses `torch.cuda.memory_allocated()` which only sees PyTorch-managed memory, not CTranslate2's allocations or the ACE-Step subprocess. See `plans/vram-verification.md` for the fix plan (delta-based NVML verification).
 
 ## Key Design Decisions
 
@@ -164,7 +166,7 @@ ACE-Step and scoring models coexist on the GPU. Per-job cleanup: `gc.collect()` 
 | Pydantic from_orm() | Response models serialize ORM objects | No manual dict layer to maintain |
 | GPU queue | Single-threaded, in-process | One GPU, ACE-Step + scoring share VRAM |
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
-| Session auth | Cookies + Redis cache | Revocable, HttpOnly, Redis-first reads, DB synced every 5 min |
+| Session auth | Cookies + Redis cache | Revocable, HttpOnly, Redis-first reads. Redis TTL is authoritative for session expiry; DB synced every 5 min as backup |
 | Redis required | Fail-fast at startup, fail-open rate limiting | Server won't start without Redis; if Redis drops mid-operation, rate limiting allows requests through |
 | Album ownership | `created_by` on Album | Songs inherit access; sharing via secret UUID slug |
 | PostgreSQL | Connection pooling, concurrent writes | Required alongside Redis |

@@ -2,7 +2,7 @@
 
 ## Project
 
-AI-powered song generation platform. SvelteKit web UI + FastAPI backend + SQLite. Songs are created, generated via ACE-Step, scored, and reviewed. The CLI is a thin HTTP client to the same API.
+AI-powered song generation platform. SvelteKit web UI + FastAPI backend + PostgreSQL + Redis. Songs are created, generated via ACE-Step, scored, and reviewed. The CLI is a thin HTTP client to the same API.
 
 **Python**: 3.12 | **Venv**: `.venv/` | **Node**: 22 LTS | **Package manager**: pnpm | **Frontend**: `frontend/`
 
@@ -38,7 +38,7 @@ pytest tests/ -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --c
 cd frontend && pnpm check && pnpm lint && pnpm test
 ```
 
-- Coverage on core modules must stay at 100% (exclude `main.py` CLI entrypoint)
+- CI enforces 90% overall coverage; scoring modules excluded from CI (require GPU extras). Locally, aim for 100% on non-scoring modules (exclude `main.py` CLI entrypoint).
 - Docs (`docs/`) must stay accurate after changes
 
 ## Schema Changes
@@ -72,7 +72,7 @@ These are conventions that aren't obvious from reading a single file:
 
 ## Key Rules
 
-1. **Database is source of truth** — all data in SQLite, not files
+1. **Database is source of truth** — all data in PostgreSQL, not files
 2. **One code path** — CLI and web UI use the same REST API (exception: `reset-password` and `list-users` are local DB escape hatches)
 3. **Pydantic models define the API contract** — `api_models.py` → `types.ts` (generated via `python scripts/generate_types.py`)
 4. **Never commit secrets** — `.server.env` is gitignored
@@ -81,6 +81,11 @@ These are conventions that aren't obvious from reading a single file:
 ## Known Technical Debt
 
 - **`main.py` escape hatches**: `reset-password` and `list-users` bypass the API. Intentional for emergency recovery.
+- **`WorkerSettings.redis_settings` is resolved at import time** from `REDIS_URL`. The env var must be set in the process environment _before_ `arq` imports the module. `.server.env` loading in `on_startup` is too late for this setting — it covers other vars (DB, secrets).
+- **Redis is authoritative for session expiry.** The session sync loop in `lifecycle.py` syncs Redis TTL → DB `expires_at` every 5 minutes. This is intentional — Redis-first reads avoid DB writes on every request. The DB copy is a backup for audit/recovery, not the source of truth.
+- **Frontend stores Claude API key in localStorage.** The direct-to-Anthropic chat path lets users bring their own key without server config. XSS could expose it, but CSP mitigates this. Documented as a known limitation in `docs/security.md`.
+- **`SessionCache.update_ip_ua()` has a non-atomic read-modify-write.** Benign race: only affects audit log IP/UA accuracy when two concurrent requests from the same session change IP simultaneously. Not worth a Lua script.
+- **VRAM verification uses `torch.cuda.memory_allocated()`** which only sees the worker process's PyTorch memory, not CTranslate2 (Whisper) or the ACE-Step subprocess. See `plans/vram-verification.md` for the fix plan.
 
 ## Workflow — Speed
 

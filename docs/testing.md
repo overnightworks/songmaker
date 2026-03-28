@@ -16,9 +16,9 @@ pnpm test:coverage                  # with v8 coverage report
 
 ## Coverage Targets
 
-- **Python**: 100% on all core modules (`pytest tests/ -q` to see current count)
+- **CI**: 90% overall (scoring modules excluded — require GPU extras not installed in CI, see `.coveragerc-ci`)
+- **Local**: aim for 100% on non-scoring core modules (exclude `main.py` CLI entrypoint)
 - **Frontend**: 100% statement coverage on `lib/` (`pnpm test` to see current count)
-- Doomed/legacy modules excluded from coverage requirements
 
 ## Test Structure
 
