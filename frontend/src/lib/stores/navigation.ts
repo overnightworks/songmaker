@@ -18,47 +18,15 @@ export const chatOpen = writable(false);
 
 let suppressPush = false;
 
-interface NavState {
-	songId: string | null;
-	genId: string | null;
-	tab: DetailTab;
-	chat: boolean;
-}
-
-function stateToUrl(state: NavState): string {
-	const params = new URLSearchParams();
-	if (state.songId) params.set('song', state.songId);
-	if (state.genId) params.set('gen', state.genId);
-	if (state.songId && !state.genId && state.tab === 'edit') params.set('tab', 'edit');
-	if (state.chat) params.set('chat', '1');
-	const qs = params.toString();
-	return qs ? `/?${qs}` : '/';
-}
-
-function pushNav(state: NavState): void {
+function pushSongUrl(songId: string | null): void {
 	if (suppressPush) return;
-	history.pushState(state, '', stateToUrl(state));
+	const url = songId ? `/?song=${songId}` : '/';
+	history.pushState({ songId }, '', url);
 }
 
-function currentChat(): boolean {
-	return get(chatOpen);
-}
-
-function applyState(state: NavState): void {
-	if (state.songId) {
-		playerSelectSong(state.songId);
-		const expanded = get(expandedSongIds);
-		if (!expanded.has(state.songId)) toggleSongExpanded(state.songId);
-		ensureGenerationsLoaded(state.songId);
-		if (state.genId) {
-			selectedGenerationId.set(state.genId);
-		}
-	} else {
-		selectedSongId.set(null);
-		selectedGenerationId.set(null);
-	}
-	detailTab.set(state.tab);
-	chatOpen.set(state.chat);
+function replaceSongUrl(songId: string | null): void {
+	const url = songId ? `/?song=${songId}` : '/';
+	history.replaceState({ songId }, '', url);
 }
 
 export function selectSong(songId: string): void {
@@ -69,7 +37,7 @@ export function selectSong(songId: string): void {
 	detailTab.set('generations');
 	chatOpen.set(false);
 	closeSidebar();
-	pushNav({ songId, genId: null, tab: 'generations', chat: false });
+	pushSongUrl(songId);
 }
 
 export function deselectSong(): void {
@@ -77,63 +45,61 @@ export function deselectSong(): void {
 	selectedGenerationId.set(null);
 	detailTab.set('generations');
 	chatOpen.set(false);
-	pushNav({ songId: null, genId: null, tab: 'generations', chat: false });
+	pushSongUrl(null);
 }
 
 export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 	playerSelectGeneration(gen, song);
 	chatOpen.set(false);
-	pushNav({ songId: song.id, genId: gen.id, tab: get(detailTab), chat: false });
 }
 
 export function clearGenerationSelection(): void {
 	playerClearGeneration();
-	pushNav({ songId: get(selectedSongId), genId: null, tab: get(detailTab), chat: currentChat() });
 }
 
 export function navigateToSongTab(tab: DetailTab): void {
 	playerClearGeneration();
 	detailTab.set(tab);
-	pushNav({ songId: get(selectedSongId), genId: null, tab, chat: currentChat() });
 }
 
 export function switchTab(tab: DetailTab): void {
 	detailTab.set(tab);
 	chatOpen.set(false);
-	pushNav({ songId: get(selectedSongId), genId: null, tab, chat: false });
 }
 
 export function toggleChat(): void {
-	const next = !get(chatOpen);
-	chatOpen.set(next);
-	pushNav({ songId: get(selectedSongId), genId: null, tab: get(detailTab), chat: next });
+	chatOpen.update((v) => !v);
 }
 
 export function initNavigation(): () => void {
 	const params = new URLSearchParams(window.location.search);
 	const songId = params.get('song');
-	const genId = params.get('gen');
-	const tab: DetailTab = params.get('tab') === 'edit' ? 'edit' : 'generations';
-	const chat = params.get('chat') === '1';
 
-	const initialState: NavState = { songId: songId ?? null, genId: genId ?? null, tab, chat };
-	history.replaceState(initialState, '', window.location.href);
+	replaceSongUrl(songId);
 
 	if (songId) {
 		suppressPush = true;
-		applyState(initialState);
+		playerSelectSong(songId);
+		const expanded = get(expandedSongIds);
+		if (!expanded.has(songId)) toggleSongExpanded(songId);
+		ensureGenerationsLoaded(songId);
 		suppressPush = false;
 	}
 
 	function onPopstate(e: PopStateEvent): void {
 		suppressPush = true;
-		const state = (e.state as NavState) ?? {
-			songId: null,
-			genId: null,
-			tab: 'generations' as DetailTab,
-			chat: false
-		};
-		applyState(state);
+		const state = (e.state as { songId: string | null } | null) ?? { songId: null };
+		if (state.songId) {
+			playerSelectSong(state.songId);
+			const expanded = get(expandedSongIds);
+			if (!expanded.has(state.songId)) toggleSongExpanded(state.songId);
+			ensureGenerationsLoaded(state.songId);
+		} else {
+			selectedSongId.set(null);
+			selectedGenerationId.set(null);
+		}
+		detailTab.set('generations');
+		chatOpen.set(false);
 		suppressPush = false;
 	}
 
@@ -141,7 +107,4 @@ export function initNavigation(): () => void {
 	return () => window.removeEventListener('popstate', onPopstate);
 }
 
-export const canGoBack = derived(
-	[selectedSongId, chatOpen],
-	([$songId, $chat]) => $songId !== null || $chat
-);
+export const canGoBack = derived(selectedSongId, ($songId) => $songId !== null);

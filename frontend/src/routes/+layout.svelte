@@ -7,7 +7,7 @@
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { playback } from '$lib/stores/player';
-	import { canGoBack } from '$lib/stores/navigation';
+	import { canGoBack, deselectSong } from '$lib/stores/navigation';
 
 	let { children } = $props();
 
@@ -66,8 +66,10 @@
 {:else if me}
 	<header class="top-bar">
 		<div class="top-left">
-			{#if hasBack}
-				<button class="back-btn" onclick={() => history.back()} aria-label="Go back">←</button>
+			{#if isSettings}
+				<a href="/" class="back-btn" aria-label="Back to home">←</a>
+			{:else if hasBack}
+				<button class="back-btn" onclick={deselectSong} aria-label="Back to songs">←</button>
 			{/if}
 			<a href="/" class="brand">Songmaker</a>
 		</div>
