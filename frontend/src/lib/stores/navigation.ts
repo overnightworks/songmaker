@@ -12,9 +12,8 @@ import {
 import { closeSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
-export type DetailTab = 'generations' | 'edit';
+export type DetailTab = 'generations' | 'edit' | 'chat';
 export const detailTab = writable<DetailTab>('generations');
-export const chatOpen = writable(false);
 
 let suppressPush = false;
 
@@ -35,7 +34,6 @@ export function selectSong(songId: string): void {
 	if (!expanded.has(songId)) toggleSongExpanded(songId);
 	ensureGenerationsLoaded(songId);
 	detailTab.set('generations');
-	chatOpen.set(false);
 	closeSidebar();
 	pushSongUrl(songId);
 }
@@ -44,13 +42,11 @@ export function deselectSong(): void {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	detailTab.set('generations');
-	chatOpen.set(false);
 	pushSongUrl(null);
 }
 
 export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 	playerSelectGeneration(gen, song);
-	chatOpen.set(false);
 }
 
 export function clearGenerationSelection(): void {
@@ -64,11 +60,6 @@ export function navigateToSongTab(tab: DetailTab): void {
 
 export function switchTab(tab: DetailTab): void {
 	detailTab.set(tab);
-	chatOpen.set(false);
-}
-
-export function toggleChat(): void {
-	chatOpen.update((v) => !v);
 }
 
 export function initNavigation(): () => void {
@@ -99,7 +90,6 @@ export function initNavigation(): () => void {
 			selectedGenerationId.set(null);
 		}
 		detailTab.set('generations');
-		chatOpen.set(false);
 		suppressPush = false;
 	}
 

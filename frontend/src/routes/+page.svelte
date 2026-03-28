@@ -17,8 +17,7 @@
 		songList,
 		selectedSong,
 		selectedGeneration,
-		ensureGenerationsLoaded,
-		playback
+		ensureGenerationsLoaded
 	} from '$lib/stores/player';
 	import {
 		selectSong,
@@ -26,9 +25,7 @@
 		clearGenerationSelection,
 		navigateToSongTab,
 		switchTab,
-		toggleChat,
 		detailTab,
-		chatOpen,
 		initNavigation
 	} from '$lib/stores/navigation';
 	import {
@@ -72,9 +69,7 @@
 	const isSaving = $derived($saving);
 	const statusMsg = $derived($status);
 	const jobs = $derived($activeJobs);
-	const hasPlayer = $derived($playback !== null);
 	const tab = $derived($detailTab);
-	const showChat = $derived($chatOpen);
 
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
 	const isGenerating = $derived(
@@ -310,16 +305,6 @@
 						{#if statusMsg}
 							<span class="status-msg">{statusMsg}</span>
 						{/if}
-						{#if !activeGen && tab === 'edit'}
-							<button
-								class="action-btn chat-btn"
-								class:active={showChat}
-								onclick={toggleChat}
-								aria-label="Toggle chat"
-							>
-								💬
-							</button>
-						{/if}
 					</div>
 				</div>
 
@@ -349,6 +334,9 @@
 						<button class="tab-btn" class:active={tab === 'edit'} onclick={() => switchTab('edit')}>
 							Edit
 						</button>
+						<button class="tab-btn" class:active={tab === 'chat'} onclick={() => switchTab('chat')}>
+							Co-Writer
+						</button>
 					</div>
 
 					{#if tab === 'generations'}
@@ -358,8 +346,18 @@
 							onscore={onScore}
 							onpick={onPick}
 						/>
-					{:else}
+					{:else if tab === 'edit'}
 						<SongEditor ondeleteversion={onDeleteVersion} />
+					{:else if tab === 'chat'}
+						<div class="chat-tab">
+							<ClaudeChat
+								songId={song?.id ?? ''}
+								{songContext}
+								allSongs={$songList}
+								currentAlbumId={song?.album_id ?? ''}
+								onapply={handleApply}
+							/>
+						</div>
 					{/if}
 				{/if}
 			</div>
@@ -367,18 +365,6 @@
 			<div class="empty-state">Select a song or create a new one</div>
 		{/if}
 	</main>
-
-	{#if showChat && !activeGen && tab === 'edit'}
-		<aside class="chat-panel" class:with-player={hasPlayer}>
-			<ClaudeChat
-				songId={song?.id ?? ''}
-				{songContext}
-				allSongs={$songList}
-				currentAlbumId={song?.album_id ?? ''}
-				onapply={handleApply}
-			/>
-		</aside>
-	{/if}
 {/if}
 
 <ToastContainer />
@@ -449,21 +435,6 @@
 		display: flex;
 		gap: 8px;
 		align-items: center;
-	}
-
-	.action-btn {
-		width: 36px;
-		height: 36px;
-		border-radius: 50%;
-		border: 2px solid var(--border);
-		background: transparent;
-		font-size: 16px;
-		cursor: pointer;
-	}
-
-	.action-btn:hover,
-	.action-btn.active {
-		border-color: var(--primary);
 	}
 
 	.status-msg {
@@ -558,11 +529,11 @@
 		border-bottom-color: var(--primary);
 	}
 
-	.chat-panel {
-		width: 350px;
-		min-width: 300px;
-		height: 100%;
-		flex-shrink: 0;
+	.chat-tab {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.create-panel {
@@ -686,25 +657,6 @@
 
 		.detail-panel {
 			padding: 12px 12px calc(var(--player-height) + 12px);
-		}
-
-		.chat-panel {
-			position: fixed;
-			top: var(--header-height);
-			left: 0;
-			right: 0;
-			bottom: 0;
-			width: 100%;
-			height: calc(100dvh - var(--header-height));
-			z-index: 170;
-			background: var(--bg);
-			display: flex;
-			flex-direction: column;
-		}
-
-		.chat-panel.with-player {
-			bottom: var(--player-height);
-			height: calc(100dvh - var(--header-height) - var(--player-height));
 		}
 	}
 </style>
