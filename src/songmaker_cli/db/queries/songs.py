@@ -237,7 +237,6 @@ def update_song(
         raise ValueError(f"Song not found: {song_id}")
 
     prev = song.latest_version
-    next_num = (prev.version_number + 1) if prev else 1
 
     if isinstance(generation_params, _Unset):
         new_gen_params = prev.generation_params if prev else None
@@ -246,14 +245,32 @@ def update_song(
     else:
         new_gen_params = generation_params or None
 
+    new_lyrics = lyrics if lyrics is not None else (prev.lyrics if prev else "")
+    new_prompt = prompt if prompt is not None else (prev.prompt if prev else "")
+    new_bpm = bpm if bpm is not None else (prev.bpm if prev else 0)
+    new_duration = duration if duration is not None else (prev.duration if prev else 180)
+    new_key = key if key is not None else (prev.key if prev else "")
+
+    if prev and not prev.generations:
+        prev.lyrics = new_lyrics
+        prev.prompt = new_prompt
+        prev.bpm = new_bpm
+        prev.duration = new_duration
+        prev.key = new_key
+        prev.generation_params = new_gen_params
+        session.flush()
+        log.info("Updated song %s v%d in-place", song_id, prev.version_number)
+        return prev
+
+    next_num = (prev.version_number + 1) if prev else 1
     version = Version(
         song_id=song_id,
         version_number=next_num,
-        lyrics=lyrics if lyrics is not None else (prev.lyrics if prev else ""),
-        prompt=prompt if prompt is not None else (prev.prompt if prev else ""),
-        bpm=bpm if bpm is not None else (prev.bpm if prev else 0),
-        duration=duration if duration is not None else (prev.duration if prev else 180),
-        key=key if key is not None else (prev.key if prev else ""),
+        lyrics=new_lyrics,
+        prompt=new_prompt,
+        bpm=new_bpm,
+        duration=new_duration,
+        key=new_key,
         generation_params=new_gen_params,
     )
     session.add(version)
