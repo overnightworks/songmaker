@@ -381,6 +381,9 @@
 
 	{#if showChat && !activeGen && tab === 'edit'}
 		<aside class="chat-panel" class:with-player={hasPlayer}>
+			<button class="chat-close" onclick={() => (showChat = false)} aria-label="Close chat">
+				← Back
+			</button>
 			<ClaudeChat
 				songId={song?.id ?? ''}
 				{songContext}
@@ -590,6 +593,10 @@
 		border-bottom-color: var(--primary);
 	}
 
+	.chat-close {
+		display: none;
+	}
+
 	.chat-panel {
 		width: 350px;
 		min-width: 300px;
@@ -724,6 +731,26 @@
 			padding: 12px 12px calc(var(--player-height) + 12px);
 		}
 
+		.chat-close {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			background: none;
+			border: none;
+			border-bottom: 1px solid var(--border);
+			color: var(--text-muted);
+			font-size: 14px;
+			padding: 10px 12px;
+			cursor: pointer;
+			width: 100%;
+			text-align: left;
+			flex-shrink: 0;
+		}
+
+		.chat-close:hover {
+			color: var(--primary);
+		}
+
 		.chat-panel {
 			position: fixed;
 			top: var(--header-height);
@@ -734,6 +761,8 @@
 			height: calc(100dvh - var(--header-height));
 			z-index: 170;
 			background: var(--bg);
+			display: flex;
+			flex-direction: column;
 		}
 
 		.chat-panel.with-player {
