@@ -87,6 +87,9 @@ These are conventions that aren't obvious from reading a single file:
 - **Frontend stores Claude API key in localStorage.** The direct-to-Anthropic chat path lets users bring their own key without server config. XSS could expose it, but CSP mitigates this. Documented as a known limitation in `docs/security.md`.
 - **`SessionCache.update_ip_ua()` has a non-atomic read-modify-write.** Benign race: only affects audit log IP/UA accuracy when two concurrent requests from the same session change IP simultaneously. Not worth a Lua script.
 - **VRAM verification** uses delta-based NVML checks (system-wide GPU memory via `pynvml`). Falls back to proceed-with-warning if pynvml is unavailable. Raises `RuntimeError` if scoring models aren't freed, failing the job cleanly instead of OOMing.
+- **`slugify()` silently drops all non-ASCII.** `.encode("ascii", "ignore")` in `api_helpers.py` means CJK/emoji album names collapse to empty or collide. Intentional for filesystem safety, but two albums with different non-ASCII names can get the same slug. Would need a Unicode-aware slug library (e.g. `python-slugify`) to fix properly.
+- **No backup/restore strategy.** Audio files live in `data/audio/`, DB records reference them by relative path. Restoring the DB without the audio directory leaves orphaned records (404 on playback). Restoring audio without the DB leaves unreachable files. Both must be backed up together. Not documented in ops runbooks.
+- **Dependencies float `>=` with no upper bound** in `pyproject.toml`. The `uv.lock` file pins exact versions for reproducible installs, but anyone installing without the lock file gets latest everything. A future SQLAlchemy 3.0 or FastAPI breaking change would not be caught until runtime.
 
 ## Workflow — Speed
 

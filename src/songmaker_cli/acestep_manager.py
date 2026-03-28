@@ -65,6 +65,11 @@ class AceStepManager:
 
         cmd = [*uv, "run", "acestep-api", "--port", str(_ACESTEP_PORT)]
         self._stderr_path = ACESTEP_DIR / "acestep_stderr.log"
+        if self._stderr_file:
+            try:
+                self._stderr_file.close()
+            except Exception:
+                pass
         self._stderr_file = self._stderr_path.open("w")
         self._process = subprocess.Popen(
             cmd, env=env, cwd=ACESTEP_DIR,

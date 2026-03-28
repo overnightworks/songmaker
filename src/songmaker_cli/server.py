@@ -125,6 +125,7 @@ def create_app(
         from songmaker_cli.constants import REDIS_STARTUP_ERROR
         from songmaker_cli.redis_client import redis_health
         if not redis_health(redis_instance):
+            redis_instance.close()
             raise RuntimeError(REDIS_STARTUP_ERROR.format(url=redis_url.split("@")[-1]))
         log.info("Redis connected: %s", redis_url.split("@")[-1])
 
@@ -339,13 +340,9 @@ def create_app(
 
 
 def _load_env_file(project_root: Path) -> None:
-    from dotenv import load_dotenv
+    from songmaker_cli.config import load_env_file
 
-    env_file = project_root / ".server.env"
-    if not env_file.exists():
-        return
-    load_dotenv(env_file, override=False)
-    log.info("Loaded env from %s", env_file)
+    load_env_file(project_root)
 
 
 def run_server(

@@ -50,17 +50,39 @@ def encode_mp3(
     bitrate: str = "320k",
     metadata: dict[str, str] | None = None,
 ) -> None:
+    """Encode stereo float arrays to MP3 via ffmpeg.
+
+    Uses atomic write (temp file + rename) to prevent partial files on
+    disk-full or ffmpeg crash.
+    """
+    import os
+    import tempfile
+
     if not shutil.which("ffmpeg"):
         raise MasteringError("ffmpeg not found on PATH — install ffmpeg to encode MP3s")
 
     wav_bytes = _stereo_to_wav_bytes(left, right, sample_rate)
-    cmd = build_ffmpeg_cmd("-", mp3_path, bitrate, metadata)
+    dest_dir = os.path.dirname(mp3_path) or "."
+    fd, tmp_path = tempfile.mkstemp(suffix=".mp3", dir=dest_dir)
+    os.close(fd)
 
+    cmd = build_ffmpeg_cmd("-", tmp_path, bitrate, metadata)
     try:
         subprocess.run(cmd, input=wav_bytes, check=True, capture_output=True)
+        os.replace(tmp_path, mp3_path)
         log.info("Encoded MP3: %s", mp3_path)
     except subprocess.CalledProcessError as exc:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
         raise MasteringError(f"MP3 encoding failed: {exc}") from exc
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def master_to_mp3(
@@ -203,11 +225,28 @@ def write_stereo_wav(
     right: NDArray[np.float64],
     sample_rate: int,
 ) -> None:
-    """Write stereo WAV file from two float channel arrays."""
-    interleaved = _interleave_to_int16(left, right)
+    """Write stereo WAV file from two float channel arrays.
 
-    with wave.open(filename, "w") as wf:
-        wf.setnchannels(2)
-        wf.setsampwidth(2)
-        wf.setframerate(sample_rate)
-        wf.writeframes(interleaved.tobytes())
+    Uses atomic write (temp file + rename) to prevent partial files on
+    disk-full or crash.
+    """
+    import os
+    import tempfile
+
+    interleaved = _interleave_to_int16(left, right)
+    dest_dir = os.path.dirname(filename) or "."
+    fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=dest_dir)
+    os.close(fd)
+    try:
+        with wave.open(tmp_path, "w") as wf:
+            wf.setnchannels(2)
+            wf.setsampwidth(2)
+            wf.setframerate(sample_rate)
+            wf.writeframes(interleaved.tobytes())
+        os.replace(tmp_path, filename)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
