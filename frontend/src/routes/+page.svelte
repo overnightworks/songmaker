@@ -183,15 +183,11 @@
 		try {
 			const created = await createSong({
 				title: newTitle,
-				album_id: newAlbumId,
-				lyrics: $editLyrics,
-				prompt: $editPrompt,
-				bpm: $editBpm,
-				duration: $editDuration,
-				key: $editKey
+				album_id: newAlbumId
 			});
 			songList.update((songs) => [...songs, created]);
 			selectSong(created.id);
+			switchTab('edit');
 			showCreate = false;
 			newTitle = '';
 		} catch (e) {
