@@ -215,10 +215,10 @@ def test_metrics_with_redis(tmp_path: Path, fake_redis) -> None:
     with TestClient(app) as client:
         client.get("/health")
         resp = client.get("/metrics")
-    data = resp.json()
-    assert "http_requests_total" in data
-    assert "http_requests_count" in data
-    assert data["http_requests_count"] >= 1
+    body = resp.text
+    assert "songmaker_http_requests_total" in body
+    assert "songmaker_http_request_duration_milliseconds_total" in body
+    assert 'method="GET"' in body
 
 
 def test_ip_rate_limit_middleware_writes_to_redis(tmp_path: Path, fake_redis) -> None:

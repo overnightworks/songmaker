@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import logging
-import re
-import unicodedata
 from pathlib import Path
 
 from fastapi import HTTPException
+from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -122,12 +121,8 @@ def gen_params_to_dict(params: object | None) -> dict | None:
     return params.to_dict() or None
 
 
-def slugify(text: str) -> str:
-    """Convert text to a filesystem-safe ASCII slug."""
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    text = text.lower()
-    text = re.sub(r"[^a-z0-9]+", "-", text)
-    return text.strip("-") or "untitled"
+def slugify(value: str) -> str:
+    return _slugify(value) or "untitled"
 
 
 def unique_album_id(session: Session, base_slug: str) -> str:

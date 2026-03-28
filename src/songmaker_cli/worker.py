@@ -20,6 +20,7 @@ from songmaker_cli.constants import (
     DATA_ROOT,
     RECOVERY_LOCK_KEY,
     RECOVERY_LOCK_TTL_SECONDS,
+    REDIS_URL_MISMATCH_WARNING,
 )
 from songmaker_cli.db.engine import init_db, resolve_database_url
 from songmaker_cli.db.queries import get_job, recover_stale_jobs, recover_stale_jobs_by_age
@@ -125,6 +126,15 @@ async def on_startup(ctx):
     load_env_file(project_root)
     configure_logging()
 
+    current_redis_url = os.environ.get("REDIS_URL")
+    if current_redis_url and current_redis_url != _IMPORT_TIME_REDIS_URL:
+        log.warning(
+            REDIS_URL_MISMATCH_WARNING.format(
+                env_value=current_redis_url,
+                import_value=_IMPORT_TIME_REDIS_URL or "redis://localhost:6379/0",
+            ),
+        )
+
     log.info("Worker starting up...")
 
     global _acestep_manager
@@ -175,6 +185,7 @@ async def on_shutdown(ctx):
 
 
 _MAX_CONCURRENT_JOBS = 1
+_IMPORT_TIME_REDIS_URL = os.environ.get("REDIS_URL")
 
 
 class WorkerSettings:

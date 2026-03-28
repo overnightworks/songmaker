@@ -82,6 +82,22 @@ REDIS_STARTUP_ERROR = (
     "Cannot connect to Redis at {url}. "
     "Redis is required — set REDIS_URL in .server.env or start Redis."
 )
+REDIS_URL_MISMATCH_WARNING = (
+    "REDIS_URL in .server.env ({env_value}) differs from the import-time value "
+    "({import_value}). The worker is using the import-time value because "
+    "WorkerSettings.redis_settings is resolved at import time. "
+    "Set REDIS_URL in the process environment before starting the worker."
+)
+
+# Prometheus metric names
+PROM_HTTP_REQUESTS_TOTAL = "songmaker_http_requests_total"
+PROM_HTTP_REQUEST_DURATION_MS = "songmaker_http_request_duration_milliseconds_total"
+PROM_ACTIVE_SESSIONS = "songmaker_active_sessions"
+PROM_JOBS_TOTAL = "songmaker_jobs_total"
+PROM_JOB_DURATION_SECONDS = "songmaker_job_duration_seconds"
+PROM_QUEUE_DEPTH = "songmaker_queue_depth"
+PROM_GPU_VRAM_MB = "songmaker_gpu_vram_megabytes"
+PROM_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
 # Audio file serving
 AUDIO_MEDIA_TYPES: dict[str, str] = {

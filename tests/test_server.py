@@ -1133,19 +1133,18 @@ def _make_metrics_client(tmp_path: Path) -> TestClient:
 
 
 def test_metrics_no_auth_required(tmp_path: Path) -> None:
+    from songmaker_cli.constants import PROM_CONTENT_TYPE
     client = _make_metrics_client(tmp_path)
     with client:
         resp = client.get("/metrics")
     assert resp.status_code == 200
-    data = resp.json()
-    assert "jobs_total" in data
-    assert "jobs_active" in data
-    assert "job_duration_seconds" in data
-    assert "queue_depth" in data
-    assert "gpu_vram_mb" in data
-    assert "http_requests_total" in data
-    assert "http_requests_count" in data
-    assert "http_request_duration_total_ms" in data
+    assert resp.headers["content-type"] == PROM_CONTENT_TYPE
+    body = resp.text
+    assert "songmaker_http_requests_total" in body
+    assert "songmaker_http_request_duration_milliseconds_total" in body
+    assert "songmaker_active_sessions" in body
+    assert "songmaker_jobs_total" in body
+    assert "songmaker_queue_depth" in body
 
 
 def test_metrics_reflects_http_traffic(tmp_path: Path) -> None:
@@ -1154,8 +1153,8 @@ def test_metrics_reflects_http_traffic(tmp_path: Path) -> None:
         client.get("/health")
         client.get("/health")
         resp = client.get("/metrics")
-    data = resp.json()
-    assert data["http_requests_count"] >= 2
+    body = resp.text
+    assert 'songmaker_http_requests_total{method="GET",status="200"}' in body
 
 
 def test_metrics_with_jobs(tmp_path: Path) -> None:
@@ -1190,10 +1189,69 @@ def test_metrics_with_jobs(tmp_path: Path) -> None:
 
     with client:
         resp = client.get("/metrics")
-    data = resp.json()
-    assert data["jobs_total"]["generate"]["completed"] == 1
-    assert data["jobs_active"] == 0
-    assert data["job_duration_seconds"]["avg"] is not None
+    body = resp.text
+    assert 'songmaker_jobs_total{type="generate",status="completed"} 1' in body
+    assert "songmaker_job_duration_seconds" in body
+
+
+def test_metrics_format_prometheus_all_sections() -> None:
+    from songmaker_cli.health_api import _format_prometheus
+
+    http_snapshot = {
+        "http_requests_total": {"GET 200": 10, "POST 201": 3},
+        "http_requests_count": 13,
+        "http_request_duration_total_ms": 456.7,
+    }
+    jobs_by_type = {
+        "generate": {"completed": 5, "failed": 1},
+        "score": {"queued": 2},
+    }
+    body = _format_prometheus(
+        http_snapshot=http_snapshot,
+        jobs_by_type=jobs_by_type,
+        duration_avg=12.3,
+        duration_min=1.0,
+        duration_max=45.6,
+        queue_depth=7,
+        gpu_vram_mb=1024.5,
+        active_sessions=3,
+    )
+    assert '# TYPE songmaker_http_requests_total counter' in body
+    assert 'songmaker_http_requests_total{method="GET",status="200"} 10' in body
+    assert 'songmaker_http_requests_total{method="POST",status="201"} 3' in body
+    assert "songmaker_http_request_duration_milliseconds_total 456.7" in body
+    assert "songmaker_active_sessions 3" in body
+    assert 'songmaker_jobs_total{type="generate",status="completed"} 5' in body
+    assert 'songmaker_jobs_total{type="generate",status="failed"} 1' in body
+    assert 'songmaker_jobs_total{type="score",status="queued"} 2' in body
+    assert 'songmaker_job_duration_seconds{quantile="avg"} 12.3' in body
+    assert 'songmaker_job_duration_seconds{quantile="min"} 1.0' in body
+    assert 'songmaker_job_duration_seconds{quantile="max"} 45.6' in body
+    assert "songmaker_queue_depth 7" in body
+    assert "songmaker_gpu_vram_megabytes 1024.5" in body
+
+
+def test_metrics_format_prometheus_no_gpu_no_duration() -> None:
+    from songmaker_cli.health_api import _format_prometheus
+
+    body = _format_prometheus(
+        http_snapshot={
+            "http_requests_total": {},
+            "http_requests_count": 0,
+            "http_request_duration_total_ms": 0.0,
+        },
+        jobs_by_type={},
+        duration_avg=None,
+        duration_min=None,
+        duration_max=None,
+        queue_depth=0,
+        gpu_vram_mb=None,
+        active_sessions=0,
+    )
+    assert "songmaker_gpu_vram_megabytes" not in body
+    assert "songmaker_job_duration_seconds{" not in body
+    assert "songmaker_active_sessions 0" in body
+    assert "songmaker_queue_depth 0" in body
 
 
 # ── Auto-setup admin ──────────────────────────────────────────────

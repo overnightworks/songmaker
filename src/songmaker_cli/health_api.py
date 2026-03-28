@@ -6,9 +6,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import (
+    PROM_ACTIVE_SESSIONS,
+    PROM_CONTENT_TYPE,
+    PROM_GPU_VRAM_MB,
+    PROM_HTTP_REQUEST_DURATION_MS,
+    PROM_HTTP_REQUESTS_TOTAL,
+    PROM_JOB_DURATION_SECONDS,
+    PROM_JOBS_TOTAL,
+    PROM_QUEUE_DEPTH,
+)
 
 router = APIRouter()
 
@@ -42,32 +52,99 @@ def _check_db(ctx: AppContext) -> bool:
         return False
 
 
+def _format_prometheus(
+    http_snapshot: dict,
+    jobs_by_type: dict[str, dict[str, int]],
+    duration_avg: float | None,
+    duration_min: float | None,
+    duration_max: float | None,
+    queue_depth: int,
+    gpu_vram_mb: float | None,
+    active_sessions: int,
+) -> str:
+    lines: list[str] = []
+
+    lines.append(f"# HELP {PROM_HTTP_REQUESTS_TOTAL} Total HTTP requests by method and status.")
+    lines.append(f"# TYPE {PROM_HTTP_REQUESTS_TOTAL} counter")
+    for field, count in http_snapshot["http_requests_total"].items():
+        method, status = field.split(" ", 1)
+        lines.append(
+            f'{PROM_HTTP_REQUESTS_TOTAL}{{method="{method}",status="{status}"}} {count}'
+        )
+
+    duration_help = "Cumulative HTTP request duration in milliseconds."
+    lines.append(f"# HELP {PROM_HTTP_REQUEST_DURATION_MS} {duration_help}")
+    lines.append(f"# TYPE {PROM_HTTP_REQUEST_DURATION_MS} counter")
+    duration_total = http_snapshot["http_request_duration_total_ms"]
+    lines.append(f"{PROM_HTTP_REQUEST_DURATION_MS} {duration_total}")
+
+    lines.append(f"# HELP {PROM_ACTIVE_SESSIONS} Number of active user sessions.")
+    lines.append(f"# TYPE {PROM_ACTIVE_SESSIONS} gauge")
+    lines.append(f"{PROM_ACTIVE_SESSIONS} {active_sessions}")
+
+    lines.append(f"# HELP {PROM_JOBS_TOTAL} Total jobs by type and status.")
+    lines.append(f"# TYPE {PROM_JOBS_TOTAL} gauge")
+    for job_type, statuses in sorted(jobs_by_type.items()):
+        for status, count in sorted(statuses.items()):
+            lines.append(
+                f'{PROM_JOBS_TOTAL}{{type="{job_type}",status="{status}"}} {count}'
+            )
+
+    lines.append(f"# HELP {PROM_JOB_DURATION_SECONDS} Job duration statistics for completed jobs.")
+    lines.append(f"# TYPE {PROM_JOB_DURATION_SECONDS} gauge")
+    duration_values = [
+        ("avg", duration_avg), ("min", duration_min), ("max", duration_max),
+    ]
+    for quantile_label, value in duration_values:
+        if value is not None:
+            lines.append(
+                f'{PROM_JOB_DURATION_SECONDS}{{quantile="{quantile_label}"}} {value}'
+            )
+
+    lines.append(f"# HELP {PROM_QUEUE_DEPTH} Number of jobs in the queue.")
+    lines.append(f"# TYPE {PROM_QUEUE_DEPTH} gauge")
+    lines.append(f"{PROM_QUEUE_DEPTH} {queue_depth}")
+
+    if gpu_vram_mb is not None:
+        lines.append(f"# HELP {PROM_GPU_VRAM_MB} GPU VRAM usage in megabytes.")
+        lines.append(f"# TYPE {PROM_GPU_VRAM_MB} gauge")
+        lines.append(f"{PROM_GPU_VRAM_MB} {gpu_vram_mb}")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 @router.get("/metrics")
-async def metrics_endpoint(request: Request) -> JSONResponse:
+async def metrics_endpoint(request: Request) -> PlainTextResponse:
     http_metrics = request.app.state.http_metrics
 
-    from songmaker_cli.db.queries import job_counts_by_type_and_status, job_duration_stats
+    from songmaker_cli.db.queries import (
+        count_active_sessions,
+        job_counts_by_type_and_status,
+        job_duration_stats,
+    )
     ctx: AppContext = request.app.state.ctx
     with ctx.db() as session:
         jobs_by_type = job_counts_by_type_and_status(session)
         duration = job_duration_stats(session)
+        active_sessions = count_active_sessions(session)
 
     gpu_vram_mb = _get_gpu_vram_mb()
 
     from songmaker_cli.arq_pool import get_queue_depth
     queue_depth = await get_queue_depth()
 
-    return JSONResponse({
-        "jobs_total": jobs_by_type,
-        "jobs_active": sum(
-            counts.get("queued", 0) + counts.get("running", 0)
-            for counts in jobs_by_type.values()
-        ),
-        "job_duration_seconds": {"avg": duration.avg, "min": duration.min, "max": duration.max},
-        "queue_depth": queue_depth,
-        "gpu_vram_mb": gpu_vram_mb,
-        **http_metrics.snapshot(),
-    })
+    body = _format_prometheus(
+        http_snapshot=http_metrics.snapshot(),
+        jobs_by_type=jobs_by_type,
+        duration_avg=duration.avg,
+        duration_min=duration.min,
+        duration_max=duration.max,
+        queue_depth=queue_depth,
+        gpu_vram_mb=gpu_vram_mb,
+        active_sessions=active_sessions,
+    )
+    return PlainTextResponse(body, media_type=PROM_CONTENT_TYPE)
 
 
 @router.get("/health")

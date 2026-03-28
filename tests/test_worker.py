@@ -187,6 +187,54 @@ def test_cleanup_stale_no_commit_when_zero() -> None:
 # ── on_startup ─────────────────────────────────────────────────────
 
 
+def test_on_startup_warns_on_redis_url_mismatch() -> None:
+    mock_mgr = MagicMock()
+    mock_mgr.active_model = "sft"
+    mock_session = MagicMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+
+    mock_log = MagicMock()
+
+    with (
+        patch.object(worker_mod, "_IMPORT_TIME_REDIS_URL", "redis://localhost:6379/0"),
+        patch.dict("os.environ", {"REDIS_URL": "redis://prod:6379/0"}),
+        patch.object(worker_mod, "log", mock_log),
+        patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
+        patch("songmaker_cli.worker.recover_stale_jobs"),
+        patch("songmaker_cli.acestep_manager.AceStepManager", return_value=mock_mgr),
+    ):
+        _run(worker_mod.on_startup(_mock_ctx()))
+
+    warning_calls = [c for c in mock_log.warning.call_args_list if "redis://prod:6379/0" in str(c)]
+    assert len(warning_calls) == 1
+
+
+def test_on_startup_no_warning_when_redis_url_matches() -> None:
+    mock_mgr = MagicMock()
+    mock_mgr.active_model = "sft"
+    mock_session = MagicMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+
+    mock_log = MagicMock()
+
+    with (
+        patch.object(worker_mod, "_IMPORT_TIME_REDIS_URL", "redis://localhost:6379/0"),
+        patch.dict("os.environ", {"REDIS_URL": "redis://localhost:6379/0"}),
+        patch.object(worker_mod, "log", mock_log),
+        patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
+        patch("songmaker_cli.worker.recover_stale_jobs"),
+        patch("songmaker_cli.acestep_manager.AceStepManager", return_value=mock_mgr),
+    ):
+        _run(worker_mod.on_startup(_mock_ctx()))
+
+    warning_calls = [c for c in mock_log.warning.call_args_list if "REDIS_URL" in str(c)]
+    assert len(warning_calls) == 0
+
+
 def test_on_startup_recovers_jobs() -> None:
     mock_session = MagicMock()
     mock_factory = MagicMock()

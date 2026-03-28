@@ -251,13 +251,23 @@ describe('chatWithClaude', () => {
 		const { getClaudeKey } = await import('$lib/stores/settings');
 		vi.mocked(getClaudeKey).mockReturnValue('sk-ant-test');
 
+		mockOk({
+			claude_api: true,
+			claude_cli: false,
+			generation: true,
+			scoring: true,
+			chat_model: 'claude-test',
+			chat_system_prompt: 'test prompt'
+		});
+		await fetchCapabilities();
+
 		mockFetch.mockResolvedValueOnce({
 			ok: true,
 			json: () => Promise.resolve({ content: [{ type: 'text', text: 'Direct response' }] })
 		});
 		const result = await chatWithClaude('hi');
 		expect(result).toBe('Direct response');
-		expect(mockFetch).toHaveBeenCalledWith(
+		expect(mockFetch).toHaveBeenLastCalledWith(
 			'https://api.anthropic.com/v1/messages',
 			expect.objectContaining({
 				method: 'POST',
@@ -289,6 +299,16 @@ describe('chatWithClaude', () => {
 	it('throws on Anthropic API error with message', async () => {
 		const { getClaudeKey } = await import('$lib/stores/settings');
 		vi.mocked(getClaudeKey).mockReturnValue('sk-ant-bad');
+
+		mockOk({
+			claude_api: true,
+			claude_cli: false,
+			generation: true,
+			scoring: true,
+			chat_model: 'claude-test',
+			chat_system_prompt: 'test prompt'
+		});
+		await fetchCapabilities();
 
 		mockFetch.mockResolvedValueOnce({
 			ok: false,

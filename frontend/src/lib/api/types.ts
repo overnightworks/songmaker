@@ -147,6 +147,7 @@ export interface Capabilities {
 	generation: boolean;
 	scoring: boolean;
 	chat_model: string;
+	chat_system_prompt: string;
 }
 
 export interface AuthUser {

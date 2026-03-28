@@ -42,6 +42,7 @@ def api_capabilities(
         generation=True,
         scoring=True,
         chat_model=CHAT_MODEL,
+        chat_system_prompt=SYSTEM_PROMPT,
     )
 
 
@@ -52,7 +53,6 @@ DEFAULT_CHAT_STYLE = (
     "Be creative but respect the style and theme."
 )
 
-# SYNC: duplicated in frontend/src/lib/api/client.ts for direct Anthropic API calls
 STRUCTURAL_PROMPT = (
     "When suggesting lyrics or song parameters, include a ```songmaker block "
     "at the end of your response with the applicable fields as JSON:\n"
