@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from songmaker_cli.api_helpers import check_album_access, owner_filter, slugify, unique_album_id
+from songmaker_cli.api_helpers import (
+    check_album_access,
+    cleanup_generation_files,
+    owner_filter,
+    slugify,
+    unique_album_id,
+)
 from songmaker_cli.api_models import (
     AlbumCreateRequest,
     AlbumResponse,
@@ -97,9 +103,10 @@ def api_delete_album(
 ) -> StatusResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    delete_album(session, album_id, audio_dir=ctx.audio_dir)
+    paths = delete_album(session, album_id)
     record_audit(session, user.id, "delete", "album", album_id)
     session.commit()
+    cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
 
 
@@ -112,9 +119,10 @@ def api_cleanup_album(
 ) -> CleanupResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    count = cleanup_album(session, album_id, audio_dir=ctx.audio_dir)
+    count, paths = cleanup_album(session, album_id)
     record_audit(session, user.id, "cleanup", "album", album_id, f"deleted={count}")
     session.commit()
+    cleanup_generation_files(ctx.audio_dir, paths)
     return CleanupResponse(deleted=count)
 
 

@@ -107,21 +107,22 @@ def unpick_generation(session: Session, generation_id: str) -> None:
     session.flush()
 
 
-def delete_generation(
-    session: Session, generation_id: str, audio_dir: Path | None = None,
-) -> None:
+def delete_generation(session: Session, generation_id: str) -> list[str]:
+    """Delete a generation record and return relative file paths for cleanup.
+
+    Callers must delete files AFTER committing the transaction to avoid
+    inconsistency if the commit fails.
+    """
     gen = session.query(Generation).filter_by(id=generation_id).first()
     if not gen:
         raise ValueError(f"Generation not found: {generation_id}")
 
-    mp3_rel = gen.mp3_path
+    paths = [p for p in [gen.mp3_path, gen.wav_path] if p]
     session.delete(gen)
     session.flush()
 
-    if audio_dir and mp3_rel:
-        delete_generation_files(audio_dir, mp3_rel)
-
     log.info("Deleted generation %s", generation_id)
+    return paths
 
 
 _GENERATION_FILE_SUFFIXES = [".mp3", ".wav", ".md", ".whisper"]

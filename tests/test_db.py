@@ -304,17 +304,17 @@ def test_unpick_generation(seeded_session: Session) -> None:
 def test_cleanup_album_deletes_unpicked(seeded_session: Session) -> None:
     pick_generation(seeded_session, "g1")
     seeded_session.commit()
-    deleted = cleanup_album(seeded_session, "test")
+    count, paths = cleanup_album(seeded_session, "test")
     seeded_session.commit()
-    assert deleted == 1
+    assert count == 1
     assert get_generation(seeded_session, "g1") is not None
     assert get_generation(seeded_session, "g2") is None
 
 
 def test_cleanup_album_no_picks_deletes_all(seeded_session: Session) -> None:
-    deleted = cleanup_album(seeded_session, "test")
+    count, _paths = cleanup_album(seeded_session, "test")
     seeded_session.commit()
-    assert deleted == 2
+    assert count == 2
 
 
 def test_delete_album(seeded_session: Session) -> None:
@@ -331,15 +331,11 @@ def test_delete_album_not_found(seeded_session: Session) -> None:
         delete_album(seeded_session, "nonexistent")
 
 
-def test_delete_album_removes_files(seeded_session: Session, tmp_path: Path) -> None:
-    audio_dir = tmp_path / "audio"
-    mp3_dir = audio_dir / "user1"
-    mp3_dir.mkdir(parents=True)
-    (mp3_dir / "g1.mp3").write_bytes(b"fake mp3")
-    (mp3_dir / "g1.wav").write_bytes(b"fake wav")
-
-    delete_album(seeded_session, "test", audio_dir=audio_dir)
+def test_delete_album_returns_paths(seeded_session: Session) -> None:
+    paths = delete_album(seeded_session, "test")
     seeded_session.commit()
+    assert isinstance(paths, list)
+    assert all(isinstance(p, str) for p in paths)
 
 
 def test_move_song(seeded_session: Session) -> None:
@@ -614,19 +610,28 @@ def test_unpick_generation_not_found(db_session: Session) -> None:
         unpick_generation(db_session, "nonexistent")
 
 
-def test_delete_generation_files_exist(seeded_session: Session, tmp_path: Path) -> None:
+def test_delete_generation_returns_paths(seeded_session: Session) -> None:
+    paths = delete_generation(seeded_session, "g1")
+    seeded_session.commit()
+    assert isinstance(paths, list)
+    assert "test/01_song_one_v1.mp3" in paths
+
+
+def test_delete_generation_files_removes_all_suffixes(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
-    gen_dir = audio_dir / "test"
+    gen_dir = audio_dir / "user1"
     gen_dir.mkdir(parents=True)
-    mp3 = gen_dir / "01_song_one_v1.mp3"
+    mp3 = gen_dir / "gen1.mp3"
+    wav = gen_dir / "gen1.wav"
+    md = gen_dir / "gen1.md"
     mp3.write_bytes(b"fake")
-    md = gen_dir / "01_song_one_v1.md"
+    wav.write_bytes(b"fake")
     md.write_text("snapshot")
 
-    delete_generation(seeded_session, "g1", audio_dir=audio_dir)
-    seeded_session.commit()
+    delete_generation_files(audio_dir, "user1/gen1.mp3")
 
     assert not mp3.exists()
+    assert not wav.exists()
     assert not md.exists()
 
 

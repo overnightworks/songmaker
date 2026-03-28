@@ -3,32 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TypedDict
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from songmaker_cli.constants import DEFAULT_ARTIST
-
-_ACE_STEP_FIELDS = frozenset({
-    "bpm", "duration", "key", "time_signature", "language",
-    "seed", "inference_steps", "guidance_scale", "shift",
-    "think_mode", "lm_temperature", "infer_method",
-})
-
-
-class GenerationParamsDict(TypedDict, total=False):
-    bpm: int
-    duration: int
-    key: str
-    time_signature: str
-    language: str
-    seed: int
-    inference_steps: int
-    guidance_scale: float
-    shift: float
-    think_mode: str
-    lm_temperature: float
-    infer_method: str
 
 
 class SongMeta(BaseModel):
@@ -40,7 +19,7 @@ class SongMeta(BaseModel):
     lyrics: str = ""
     status: str = ""
     source_path: Path = Path()
-    generation_params: GenerationParamsDict = Field(default_factory=dict)
+    generation_params: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("track", mode="before")
     @classmethod

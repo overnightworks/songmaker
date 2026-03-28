@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -22,10 +21,13 @@ def get_version(session: Session, version_id: str, song_id: str) -> Version | No
 
 def delete_version(
     session: Session, version_id: str, *,
-    delete_generations: bool = False, audio_dir: Path | None = None,
-) -> None:
-    from songmaker_cli.db.queries.generations import delete_generation_files
+    delete_generations: bool = False,
+) -> list[str]:
+    """Delete a version and return relative file paths for cleanup.
 
+    Callers must delete files AFTER committing the transaction to avoid
+    inconsistency if the commit fails.
+    """
     version = session.query(Version).filter_by(id=version_id).first()
     if not version:
         raise ValueError(f"Version not found: {version_id}")
@@ -33,8 +35,9 @@ def delete_version(
     paths_to_delete: list[str] = []
     if delete_generations:
         for gen in version.generations:
-            if audio_dir and gen.mp3_path:
-                paths_to_delete.append(gen.mp3_path)
+            for p in [gen.mp3_path, gen.wav_path]:
+                if p:
+                    paths_to_delete.append(p)
             session.delete(gen)
     else:
         for gen in version.generations:
@@ -43,7 +46,5 @@ def delete_version(
     session.delete(version)
     session.flush()
 
-    for mp3_rel in paths_to_delete:
-        delete_generation_files(audio_dir, mp3_rel)
-
     log.info("Deleted version %s (delete_generations=%s)", version_id, delete_generations)
+    return paths_to_delete

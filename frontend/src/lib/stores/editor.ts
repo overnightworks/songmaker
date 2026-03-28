@@ -120,11 +120,11 @@ function setSavedState(
 export function loadSongData(s: SongItem): void {
 	editLyrics.set(s.lyrics);
 	editPrompt.set(s.prompt);
-	editBpm.set(s.bpm);
-	editDuration.set(s.duration);
+	editBpm.set(s.bpm ?? 0);
+	editDuration.set(s.duration ?? 180);
 	editKey.set(s.key);
 	editGenParams.set(s.generation_params ?? null);
-	setSavedState(s.lyrics, s.prompt, s.bpm, s.duration, s.key, s.generation_params ?? null);
+	setSavedState(s.lyrics, s.prompt, s.bpm ?? 0, s.duration ?? 180, s.key, s.generation_params ?? null);
 	dismissAppliedDiff();
 	loadVersions(s.id);
 }

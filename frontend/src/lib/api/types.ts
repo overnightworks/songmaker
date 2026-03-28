@@ -13,17 +13,22 @@ export interface PaginatedResponse<T> {
 }
 
 export interface GenerationParams {
+	inference_steps?: number | null;
+	guidance_scale?: number | null;
+	shift?: number | null;
+	think_mode?: string | null;
+	lm_temperature?: number | null;
+	lm_top_k?: number | null;
+	lm_top_p?: number | null;
+	lm_cfg_scale?: number | null;
+	lm_negative_prompt?: string | null;
+	infer_method?: string | null;
+	batch_size?: number | null;
 	seed?: number | null;
 	acestep_model?: string | null;
 	bpm?: number | null;
 	duration?: number | null;
 	key?: string | null;
-	guidance_scale?: number | null;
-	inference_steps?: number | null;
-	shift?: number | null;
-	think_mode?: string | null;
-	lm_temperature?: number | null;
-	infer_method?: string | null;
 }
 
 export interface VersionGenerationParams {
@@ -101,8 +106,8 @@ export interface SongItem {
 	language: string;
 	lyrics: string;
 	prompt: string;
-	bpm: number;
-	duration: number;
+	bpm?: number | null;
+	duration?: number | null;
 	key: string;
 	generation_params?: VersionGenerationParams | null;
 	version_count: number;

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli.api_helpers import (
     check_album_access,
     check_song_access,
+    cleanup_generation_files,
     gen_params_to_dict,
     owner_filter,
 )
@@ -152,13 +153,13 @@ def api_delete_version(
         raise HTTPException(404, "Version not found")
     check_song_access(session, ver.song_id, user)
     try:
-        delete_version(
+        paths = delete_version(
             session, version_id,
             delete_generations=delete_generations,
-            audio_dir=ctx.audio_dir,
         )
     except ValueError:
         raise HTTPException(404, "Version not found")
     record_audit(session, user.id, "delete", "version", version_id)
     session.commit()
+    cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()

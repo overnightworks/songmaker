@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from pathlib import Path
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -88,11 +87,8 @@ def disable_album_sharing(session: Session, album_id: str) -> Album:
     return album
 
 
-def cleanup_album(
-    session: Session, album_id: str, audio_dir: Path | None = None,
-) -> int:
-    from songmaker_cli.db.queries.generations import delete_generation_files
-
+def cleanup_album(session: Session, album_id: str) -> tuple[int, list[str]]:
+    """Remove unpicked generations. Returns (count, paths) for post-commit cleanup."""
     gens = (
         session.query(Generation)
         .join(Song)
@@ -101,24 +97,19 @@ def cleanup_album(
         .all()
     )
     count = len(gens)
-    paths_to_delete: list[str] = []
+    paths: list[str] = []
     for gen in gens:
-        if audio_dir and gen.mp3_path:
-            paths_to_delete.append(gen.mp3_path)
+        for p in [gen.mp3_path, gen.wav_path]:
+            if p:
+                paths.append(p)
         session.delete(gen)
     session.flush()
 
-    for mp3_rel in paths_to_delete:
-        delete_generation_files(audio_dir, mp3_rel)
-
-    return count
+    return count, paths
 
 
-def delete_album(
-    session: Session, album_id: str, audio_dir: Path | None = None,
-) -> None:
-    from songmaker_cli.db.queries.generations import delete_generation_files
-
+def delete_album(session: Session, album_id: str) -> list[str]:
+    """Delete an album and return file paths for post-commit cleanup."""
     album = session.query(Album).filter_by(id=album_id).first()
     if not album:
         raise ValueError(f"Album not found: {album_id}")
@@ -130,16 +121,15 @@ def delete_album(
         .filter(Song.album_id == album_id)
         .all()
     )
-    paths_to_delete: list[str] = []
+    paths: list[str] = []
     for gen in gens:
-        if audio_dir and gen.mp3_path:
-            paths_to_delete.append(gen.mp3_path)
+        for p in [gen.mp3_path, gen.wav_path]:
+            if p:
+                paths.append(p)
         session.delete(gen)
 
     session.delete(album)
     session.flush()
 
-    for mp3_rel in paths_to_delete:
-        delete_generation_files(audio_dir, mp3_rel)
-
     log.info("Deleted album %s", album_id)
+    return paths

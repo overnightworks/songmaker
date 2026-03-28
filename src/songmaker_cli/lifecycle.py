@@ -51,11 +51,13 @@ async def session_sync_loop(app: FastAPI) -> None:
     ctx: AppContext = app.state.ctx
     session_cache = app.state.session_cache
 
+    consecutive_failures = 0
     while True:
         await asyncio.sleep(REDIS_SESSION_SYNC_INTERVAL_SECONDS)
         try:
             active = session_cache.get_all_sessions()
             if not active:
+                consecutive_failures = 0
                 continue
             synced = 0
             with ctx.db() as db:
@@ -74,7 +76,15 @@ async def session_sync_loop(app: FastAPI) -> None:
                     user_session.expires_at = real_expires
                     synced += 1
                 db.commit()
+            consecutive_failures = 0
             if synced:
                 log.info("Session sync: updated %d sessions", synced)
         except Exception:
-            log.warning("Session sync failed", exc_info=True)
+            consecutive_failures += 1
+            if consecutive_failures >= 3:
+                log.error(
+                    "Session sync failed %d consecutive times",
+                    consecutive_failures, exc_info=True,
+                )
+            else:
+                log.warning("Session sync failed", exc_info=True)

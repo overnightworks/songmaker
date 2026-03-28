@@ -40,6 +40,7 @@ class AceStepManager:
         self._cached_model: str | None = None
         self._current_mode: str | None = None
         self._stderr_path: Path | None = None
+        self._stderr_file = None
 
     def start(self) -> None:
         log.info("Starting ACE-Step server...")
@@ -64,14 +65,20 @@ class AceStepManager:
 
         cmd = [*uv, "run", "acestep-api", "--port", str(_ACESTEP_PORT)]
         self._stderr_path = ACESTEP_DIR / "acestep_stderr.log"
-        stderr_file = self._stderr_path.open("w")
+        self._stderr_file = self._stderr_path.open("w")
         self._process = subprocess.Popen(
             cmd, env=env, cwd=ACESTEP_DIR,
-            stdout=subprocess.DEVNULL, stderr=stderr_file,
+            stdout=subprocess.DEVNULL, stderr=self._stderr_file,
         )
         log.info("ACE-Step server process started (PID %d)", self._process.pid)
 
     def stop(self) -> None:
+        if self._stderr_file:
+            try:
+                self._stderr_file.close()
+            except Exception:
+                pass
+            self._stderr_file = None
         if not self._process:
             return
         if self._process.poll() is not None:

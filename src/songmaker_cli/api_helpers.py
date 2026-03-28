@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
+from pathlib import Path
 
 from fastapi import HTTPException
 from sqlalchemy import text
@@ -161,3 +163,16 @@ def check_generation_access(
         if not album or album.created_by != user.id:
             raise HTTPException(404, "Generation not found")
     return gen
+
+
+_log = logging.getLogger(__name__)
+
+
+def cleanup_generation_files(audio_dir: Path, paths: list[str]) -> None:
+    from songmaker_cli.db.queries.generations import delete_generation_files
+
+    for rel_path in paths:
+        try:
+            delete_generation_files(audio_dir, rel_path)
+        except Exception:
+            _log.warning("Orphaned file after delete: %s", rel_path)

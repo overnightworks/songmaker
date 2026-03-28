@@ -92,6 +92,17 @@ class SessionCache:
 
     def __init__(self, redis: Redis) -> None:
         self._redis = redis
+        self._consecutive_failures: int = 0
+
+    @property
+    def consecutive_failures(self) -> int:
+        return self._consecutive_failures
+
+    def _record_success(self) -> None:
+        self._consecutive_failures = 0
+
+    def _record_failure(self) -> None:
+        self._consecutive_failures += 1
 
     def _session_key(self, session_id: str) -> str:
         return f"{REDIS_SESSION_PREFIX}:{session_id}"
@@ -128,7 +139,12 @@ class SessionCache:
         pipe.execute()
 
     def get(self, session_id: str) -> dict | None:
-        raw = self._redis.get(self._session_key(session_id))
+        try:
+            raw = self._redis.get(self._session_key(session_id))
+        except Exception:
+            self._record_failure()
+            raise
+        self._record_success()
         if raw is None:
             return None
         data = json.loads(raw)

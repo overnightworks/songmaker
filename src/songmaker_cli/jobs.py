@@ -223,17 +223,21 @@ def run_generation_job(
                 think_mode=ctx.ace_config.think_mode,
             ).model_dump(exclude_none=True)
 
-            with db_factory() as session:
-                create_generation(
-                    session,
-                    song_id=song_id,
-                    version_id=version_id,
-                    mp3_path=mp3_rel,
-                    seed=result.seed,
-                    generation_params=gen_params,
-                    wav_path=wav_rel,
-                )
-                session.commit()
+            try:
+                with db_factory() as session:
+                    create_generation(
+                        session,
+                        song_id=song_id,
+                        version_id=version_id,
+                        mp3_path=mp3_rel,
+                        seed=result.seed,
+                        generation_params=gen_params,
+                        wav_path=wav_rel,
+                    )
+                    session.commit()
+            except Exception:
+                _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel)
+                raise
 
             completed += 1
             log.info("Generated %d/%d: %s (seed=%s)", i + 1, count, mp3_rel, result.seed)
@@ -370,9 +374,24 @@ def _detect_device() -> str:
 
 
 def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
-    try:
-        with factory() as session:
-            update_job_status(session, job_id, status, **kwargs)
-            session.commit()
-    except Exception:
-        log.exception("Failed to update job %s to %s", job_id, status)
+    for attempt in range(2):
+        try:
+            with factory() as session:
+                update_job_status(session, job_id, status, **kwargs)
+                session.commit()
+            return
+        except Exception:
+            if attempt == 0:
+                log.warning("Retrying job %s status update to %s", job_id, status)
+            else:
+                log.exception("Failed to update job %s to %s after retry", job_id, status)
+
+
+def _cleanup_orphaned_files(audio_dir: Path, *rel_paths: str) -> None:
+    for rel in rel_paths:
+        path = audio_dir / rel
+        try:
+            if path.exists():
+                path.unlink()
+        except OSError:
+            log.warning("Failed to clean orphaned file: %s", rel)

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator
 
 from songmaker_cli.config import get_builtin_defaults
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Generation, Song, Version
@@ -22,6 +25,49 @@ VALID_SCORER_NAMES = frozenset({
     "text_accuracy", "lyrical_coherence", "emotional_dynamics",
     "audiobox", "bpm_accuracy", "silence", "spectral_quality",
 })
+
+
+class GenerationParams(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    inference_steps: int | None = Field(None, ge=1, le=200)
+    guidance_scale: float | None = Field(None, ge=0, le=50)
+    shift: float | None = Field(None, ge=0, le=100)
+    think_mode: str | None = Field(None, max_length=10)
+    lm_temperature: float | None = Field(None, ge=0, le=5)
+    lm_top_k: int | None = Field(None, ge=0, le=1000)
+    lm_top_p: float | None = Field(None, ge=0, le=1)
+    lm_cfg_scale: float | None = Field(None, ge=0, le=50)
+    lm_negative_prompt: str | None = Field(None, max_length=_GEN_PARAM_MAX_STRING_LENGTH)
+    infer_method: str | None = Field(None, max_length=10)
+    batch_size: int | None = Field(None, ge=1, le=8)
+
+    @field_validator("infer_method")
+    @classmethod
+    def _validate_infer_method(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_INFER_METHODS:
+            msg = f"infer_method must be one of {sorted(_VALID_INFER_METHODS)}"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("think_mode")
+    @classmethod
+    def _validate_think_mode(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_THINK_MODES:
+            msg = f"think_mode must be one of {sorted(_VALID_THINK_MODES)}"
+            raise ValueError(msg)
+        return v
+
+    def to_dict(self) -> dict:
+        return {k: v for k, v in self.model_dump().items() if v is not None}
+
+
+class StoredGenerationParams(GenerationParams):
+    seed: int | None = None
+    acestep_model: str | None = None
+    bpm: int | None = None
+    duration: int | None = None
+    key: str | None = None
 
 
 class AlbumResponse(BaseModel):
@@ -70,20 +116,6 @@ class SharedAlbumResponse(BaseModel):
     songs: list[SharedSongItem]
 
 
-class StoredGenerationParams(BaseModel):
-    seed: int | None = None
-    acestep_model: str | None = None
-    bpm: int | None = None
-    duration: int | None = None
-    key: str | None = None
-    guidance_scale: float | None = None
-    inference_steps: int | None = None
-    shift: float | None = None
-    think_mode: str | None = None
-    lm_temperature: float | None = None
-    infer_method: str | None = None
-
-
 class GenerationResponse(BaseModel):
     id: str
     song_id: str
@@ -108,8 +140,7 @@ class GenerationResponse(BaseModel):
             if isinstance(score.value, dict):
                 for key, value in score.value.items():
                     if key in scores:
-                        import logging
-                        logging.getLogger(__name__).warning(
+                        log.warning(
                             "Duplicate score key '%s' in generation %s", key, gen.id,
                         )
                     scores[key] = value
@@ -172,8 +203,8 @@ class SongSummaryResponse(BaseModel):
     language: str = ""
     lyrics: str = ""
     prompt: str = ""
-    bpm: int = 0
-    duration: int = 180
+    bpm: int | None = None
+    duration: int | None = None
     key: str = ""
     generation_params: dict | None = None
     version_count: int = 0
@@ -195,8 +226,8 @@ class SongSummaryResponse(BaseModel):
             language=song.language,
             lyrics=ver.lyrics if ver else "",
             prompt=ver.prompt if ver else "",
-            bpm=ver.bpm if ver else 0,
-            duration=ver.duration if ver else 180,
+            bpm=ver.bpm if ver else None,
+            duration=ver.duration if ver else None,
             key=ver.key if ver else "",
             generation_params=ver.generation_params if ver else None,
             version_count=len(song.versions),
@@ -235,41 +266,6 @@ def _best_generation(generations: list) -> object | None:
         return max(rated, key=lambda g: g.rating.rating)
     active = [g for g in generations if not g.is_archived]
     return active[0] if active else None
-
-
-class GenerationParams(BaseModel):
-    model_config = {"extra": "forbid"}
-
-    inference_steps: int | None = Field(None, ge=1, le=200)
-    guidance_scale: float | None = Field(None, ge=0, le=50)
-    shift: float | None = Field(None, ge=0, le=100)
-    think_mode: str | None = Field(None, max_length=10)
-    lm_temperature: float | None = Field(None, ge=0, le=5)
-    lm_top_k: int | None = Field(None, ge=0, le=1000)
-    lm_top_p: float | None = Field(None, ge=0, le=1)
-    lm_cfg_scale: float | None = Field(None, ge=0, le=50)
-    lm_negative_prompt: str | None = Field(None, max_length=_GEN_PARAM_MAX_STRING_LENGTH)
-    infer_method: str | None = Field(None, max_length=10)
-    batch_size: int | None = Field(None, ge=1, le=8)
-
-    @field_validator("infer_method")
-    @classmethod
-    def _validate_infer_method(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VALID_INFER_METHODS:
-            msg = f"infer_method must be one of {sorted(_VALID_INFER_METHODS)}"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("think_mode")
-    @classmethod
-    def _validate_think_mode(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VALID_THINK_MODES:
-            msg = f"think_mode must be one of {sorted(_VALID_THINK_MODES)}"
-            raise ValueError(msg)
-        return v
-
-    def to_dict(self) -> dict:
-        return {k: v for k, v in self.model_dump().items() if v is not None}
 
 
 class AlbumCreateRequest(BaseModel):

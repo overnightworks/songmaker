@@ -95,6 +95,11 @@ async def health_check(request: Request) -> JSONResponse:
     from songmaker_cli.redis_client import redis_health
     redis_ok = redis_health(ctx.redis)
 
+    session_cache = getattr(request.app.state, "session_cache", None)
+    session_cache_failures = (
+        session_cache.consecutive_failures if session_cache else 0
+    )
+
     degraded = not db_ok or not worker_running or not redis_ok
     return JSONResponse({
         "status": "degraded" if degraded else "ok",
@@ -102,6 +107,7 @@ async def health_check(request: Request) -> JSONResponse:
         "queue_depth": queue_depth,
         "db": "ok" if db_ok else "error",
         "redis": "ok" if redis_ok else "error",
+        "redis_session_cache_failures": session_cache_failures,
         "acestep": acestep,
         "acestep_model": acestep_model,
         "uptime_seconds": uptime,

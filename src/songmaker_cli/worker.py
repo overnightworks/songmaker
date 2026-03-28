@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from pathlib import Path
 
 from arq import cron
@@ -22,6 +23,7 @@ log = logging.getLogger(__name__)
 
 _db_factory = None
 _db_engine = None
+_db_lock = threading.Lock()
 _acestep_manager = None
 
 JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "300"))
@@ -32,9 +34,10 @@ TERMINAL_STATUSES = frozenset({"completed", "partial", "failed"})
 
 def _get_db_factory():
     global _db_factory, _db_engine
-    if _db_factory is None:
-        _db_factory = init_db(resolve_database_url())
-        _db_engine = _db_factory.kw["bind"]
+    with _db_lock:
+        if _db_factory is None:
+            _db_factory = init_db(resolve_database_url())
+            _db_engine = _db_factory.kw["bind"]
     return _db_factory
 
 
@@ -104,6 +107,11 @@ async def cleanup_stale(ctx):
 
 
 async def on_startup(ctx):
+    assert WorkerSettings.max_jobs == _MAX_CONCURRENT_JOBS, (
+        f"max_jobs must be {_MAX_CONCURRENT_JOBS} — GPU mode switching and "
+        "CUDA_VISIBLE_DEVICES mutation are not safe under concurrency"
+    )
+
     from songmaker_cli.config import find_project_root
     from songmaker_cli.logging_config import configure_logging
     from songmaker_cli.server import _load_env_file
@@ -151,6 +159,9 @@ async def on_shutdown(ctx):
         _acestep_manager.stop()
 
 
+_MAX_CONCURRENT_JOBS = 1
+
+
 class WorkerSettings:
     functions = [generate, score]
     on_startup = on_startup
@@ -158,7 +169,7 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(
         os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     )
-    max_jobs = 1
+    max_jobs = _MAX_CONCURRENT_JOBS
     job_timeout = JOB_TIMEOUT_SECONDS
     job_completion_wait = DRAIN_TIMEOUT_SECONDS
     health_check_interval = HEALTH_CHECK_INTERVAL_SECONDS

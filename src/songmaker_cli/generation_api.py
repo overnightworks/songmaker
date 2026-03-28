@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli.api_helpers import (
     check_generation_access,
     check_song_access,
+    cleanup_generation_files,
     create_job_with_rate_limit,
 )
 from songmaker_cli.api_models import (
@@ -30,6 +31,7 @@ from songmaker_cli.db.queries import (
     record_audit,
     save_rating,
     unpick_generation,
+    update_job_status,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
@@ -60,11 +62,12 @@ def api_delete_generation(
 ) -> StatusResponse:
     check_generation_access(session, gen_id, user)
     try:
-        delete_generation(session, gen_id, audio_dir=ctx.audio_dir)
+        paths = delete_generation(session, gen_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
     record_audit(session, user.id, "delete", "generation", gen_id)
     session.commit()
+    cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
 
 
@@ -102,6 +105,7 @@ async def api_generate_song(
         pool = get_arq_pool()
         await pool.enqueue_job("generate", job.id, song_id, version.id, req.count, user.id)
     except ConnectionError:
+        _fail_job(ctx, job.id)
         raise HTTPException(503, "Job queue unavailable")
 
     return JobResponse.from_orm(job)
@@ -125,6 +129,7 @@ async def api_score_generation(
         from songmaker_cli.arq_pool import get_arq_pool
         await get_arq_pool().enqueue_job("score", job.id, gen_id, req.scorers)
     except ConnectionError:
+        _fail_job(ctx, job.id)
         raise HTTPException(503, "Job queue unavailable")
 
     return JobResponse.from_orm(job)
@@ -194,3 +199,12 @@ def api_unpick_generation(
         raise HTTPException(404, "Generation not found")
     session.commit()
     return StatusResponse()
+
+
+def _fail_job(ctx: AppContext, job_id: str) -> None:
+    try:
+        with ctx.db() as session:
+            update_job_status(session, job_id, "failed", error="Job queue unavailable")
+            session.commit()
+    except Exception:
+        log.warning("Failed to mark job %s as failed after enqueue error", job_id)

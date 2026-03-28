@@ -83,6 +83,13 @@ def save_generation_defaults(db_factory: sessionmaker[Session], data: dict) -> N
 _FIELD_MAPPING = {"language": "vocal_language"}
 
 
+def _apply_params(fields: dict, source: dict) -> None:
+    """Merge source params into fields, applying field name mapping."""
+    for key, value in source.items():
+        mapped = _FIELD_MAPPING.get(key, key)
+        fields[mapped] = value
+
+
 _SHARED_LM_DEFAULTS: dict[str, object] = {
     "shift": 3.0,
     "think_mode": "deep",
@@ -138,32 +145,11 @@ def build_ace_config(
 
     fields: dict = {"prompt": meta.prompt, "lyrics": meta.lyrics}
 
-    for key, value in model_defaults.items():
-        overridden = (
-            key in active_preset or key in user_defaults or key in meta.generation_params
-        )
-        if not overridden:
-            fields[key] = value
-
-    for key, value in user_defaults.items():
-        if key not in active_preset and key not in meta.generation_params:
-            mapped = _FIELD_MAPPING.get(key, key)
-            fields[mapped] = value
-
-    for key, value in active_preset.items():
-        if key not in meta.generation_params:
-            mapped = _FIELD_MAPPING.get(key, key)
-            fields[mapped] = value
-
-    for key, value in meta.generation_params.items():
-        mapped = _FIELD_MAPPING.get(key, key)
-        fields[mapped] = value
-
+    layers = [model_defaults, user_defaults, active_preset, meta.generation_params]
     if cli_overrides:
-        for key, value in cli_overrides.items():
-            if value is not None:
-                mapped = _FIELD_MAPPING.get(key, key)
-                fields[mapped] = value
+        layers.append({k: v for k, v in cli_overrides.items() if v is not None})
+    for layer in layers:
+        _apply_params(fields, layer)
 
     fields = _sanitize_params(fields)
     return AceStepConfig(**fields)
