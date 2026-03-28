@@ -7,8 +7,6 @@
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { playback } from '$lib/stores/player';
-	import { sidebarOpen, toggleSidebar, closeSidebar } from '$lib/stores/ui';
-
 	let { children } = $props();
 
 	let isPublicRoute = $derived(
@@ -19,7 +17,6 @@
 	const isSettings = $derived(page.url.pathname.startsWith('/settings'));
 	const me = $derived($currentUser);
 	const hasPlayback = $derived($playback !== null);
-	const sbOpen = $derived($sidebarOpen);
 
 	$effect(() => {
 		initAuth();
@@ -68,10 +65,6 @@
 		<div class="top-left">
 			{#if isSettings}
 				<a href="/" class="back-btn" aria-label="Back to home">←</a>
-			{:else}
-				<button class="hamburger" onclick={toggleSidebar} aria-label="Toggle sidebar">
-					{sbOpen ? '✕' : '☰'}
-				</button>
 			{/if}
 			<a href="/" class="brand">Songmaker</a>
 		</div>
@@ -81,11 +74,6 @@
 			<button class="top-logout" onclick={handleLogout}>Logout</button>
 		</nav>
 	</header>
-
-	{#if sbOpen}
-		<button class="sidebar-overlay" onclick={closeSidebar} aria-label="Close sidebar" tabindex="-1"
-		></button>
-	{/if}
 
 	<div class="app-body" class:has-player={hasPlayback}>
 		{@render children()}
@@ -125,16 +113,6 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-	}
-
-	.hamburger {
-		display: none;
-		background: none;
-		border: none;
-		color: var(--text);
-		font-size: 20px;
-		cursor: pointer;
-		padding: 4px;
 	}
 
 	.back-btn {
@@ -214,27 +192,9 @@
 		height: calc(100dvh - var(--header-height) - var(--player-height));
 	}
 
-	.sidebar-overlay {
-		display: none;
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.6);
-		z-index: 150;
-		border: none;
-		cursor: default;
-	}
-
 	@media (max-width: 768px) {
-		.hamburger {
-			display: block;
-		}
-
 		.top-username {
 			display: none;
-		}
-
-		.sidebar-overlay {
-			display: block;
 		}
 	}
 </style>

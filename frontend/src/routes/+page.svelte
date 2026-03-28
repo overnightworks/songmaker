@@ -24,6 +24,7 @@
 		selectSong,
 		selectGeneration,
 		clearGenerationSelection,
+		deselectSong,
 		navigateToSongTab,
 		switchTab,
 		detailTab,
@@ -45,7 +46,6 @@
 		handleDeleteVersion,
 		handleApply
 	} from '$lib/stores/editor';
-	import { sidebarOpen, closeSidebar } from '$lib/stores/ui';
 	import SongList from '$lib/components/SongList.svelte';
 	import ClaudeChat from '$lib/components/ClaudeChat.svelte';
 	import GenerationDetail from '$lib/components/GenerationDetail.svelte';
@@ -72,7 +72,6 @@
 	const isSaving = $derived($saving);
 	const statusMsg = $derived($status);
 	const jobs = $derived($activeJobs);
-	const sbOpen = $derived($sidebarOpen);
 	const hasPlayer = $derived($playback !== null);
 	const tab = $derived($detailTab);
 
@@ -218,19 +217,25 @@
 {:else if loadError}
 	<div class="error">Failed to load. Please refresh.</div>
 {:else}
-	<aside class="sidebar" class:open={sbOpen}>
+	<aside class="sidebar" class:has-detail={!!song || showCreate}>
 		<SongList
 			onNewSong={() => {
 				showCreate = !showCreate;
-				closeSidebar();
 			}}
 		/>
 	</aside>
 
-	<main class="main-content">
+	<main class="main-content" class:has-detail={!!song || showCreate}>
 		{#if showCreate}
 			<div class="create-panel">
 				<div class="create-header">
+					<button
+						class="mobile-back"
+						onclick={() => (showCreate = false)}
+						aria-label="Back to songs"
+					>
+						←
+					</button>
 					<h2>Create</h2>
 				</div>
 
@@ -267,11 +272,16 @@
 		{:else if song}
 			<div class="detail-panel">
 				<div class="detail-header">
-					<div>
-						<button class="song-title-btn" onclick={clearGenerationSelection}>
-							<h2 class="song-title">{song.title}</h2>
+					<div class="detail-title-row">
+						<button class="mobile-back" onclick={deselectSong} aria-label="Back to songs">
+							←
 						</button>
-						<span class="song-album">{song.album_title} · {song.artist}</span>
+						<div>
+							<button class="song-title-btn" onclick={clearGenerationSelection}>
+								<h2 class="song-title">{song.title}</h2>
+							</button>
+							<span class="song-album">{song.album_title} · {song.artist}</span>
+						</div>
 					</div>
 					<div class="detail-actions">
 						{#if !activeGen}
@@ -395,24 +405,6 @@
 		flex-shrink: 0;
 	}
 
-	@media (max-width: 768px) {
-		.sidebar {
-			position: fixed;
-			top: var(--header-height);
-			left: 0;
-			bottom: 0;
-			width: 300px;
-			z-index: 160;
-			background: var(--bg);
-			transform: translateX(-100%);
-			transition: transform 0.2s ease;
-		}
-
-		.sidebar.open {
-			transform: translateX(0);
-		}
-	}
-
 	.main-content {
 		flex: 1;
 		overflow-y: auto;
@@ -438,6 +430,27 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
+	}
+
+	.detail-title-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+	}
+
+	.mobile-back {
+		display: none;
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 20px;
+		cursor: pointer;
+		padding: 2px 4px;
+		flex-shrink: 0;
+	}
+
+	.mobile-back:hover {
+		color: var(--primary);
 	}
 
 	.song-title-btn {
@@ -665,6 +678,31 @@
 	}
 
 	@media (max-width: 768px) {
+		.sidebar {
+			position: static;
+			width: 100%;
+			min-width: 0;
+			height: 100%;
+			border-right: none;
+			transform: none;
+		}
+
+		.sidebar.has-detail {
+			display: none;
+		}
+
+		.main-content {
+			display: none;
+		}
+
+		.main-content.has-detail {
+			display: flex;
+		}
+
+		.mobile-back {
+			display: block;
+		}
+
 		.create-fields {
 			flex-direction: column;
 		}
