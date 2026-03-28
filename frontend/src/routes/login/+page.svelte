@@ -24,7 +24,7 @@
 
 <div class="login-page">
 	<div class="login-card">
-		<h1>Songmaker</h1>
+		<h1>Hallucinai</h1>
 		<form onsubmit={handleSubmit}>
 			<label>
 				Username
@@ -66,6 +66,9 @@
 			</button>
 		</form>
 	</div>
+	<p class="legal-links">
+		<a href="/legal#impressum">Impressum</a> · <a href="/legal#datenschutz">Datenschutz</a>
+	</p>
 </div>
 
 <style>
@@ -176,5 +179,20 @@
 		color: var(--score-bad);
 		font-size: 0.85rem;
 		text-align: center;
+	}
+
+	.legal-links {
+		text-align: center;
+		margin-top: 1rem;
+		font-size: 0.75rem;
+	}
+
+	.legal-links a {
+		color: var(--text-dim);
+		text-decoration: none;
+	}
+
+	.legal-links a:hover {
+		color: var(--text-muted);
 	}
 </style>

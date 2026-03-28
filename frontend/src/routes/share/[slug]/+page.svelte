@@ -92,7 +92,7 @@
 </script>
 
 <svelte:head>
-	<title>{album ? `${album.title} — ${album.artist}` : 'Shared Album'} | Songmaker</title>
+	<title>{album ? `${album.title} — ${album.artist}` : 'Shared Album'} | Hallucinai</title>
 </svelte:head>
 
 <audio
@@ -152,7 +152,11 @@
 			</div>
 		{/if}
 
-		<p class="powered">Powered by <a href="/">Songmaker</a></p>
+		<p class="powered">
+			Powered by <a href="/">Hallucinai</a>
+			· <a href="/legal#impressum">Impressum</a>
+			· <a href="/legal#datenschutz">Datenschutz</a>
+		</p>
 	{/if}
 </div>
 

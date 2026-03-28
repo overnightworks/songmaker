@@ -17,7 +17,8 @@
 		{ href: '/settings/generation', label: 'Generation', adminOnly: true },
 		{ href: '/settings/integrations', label: 'Integrations', adminOnly: false },
 		{ href: '/settings/account', label: 'Account', adminOnly: false },
-		{ href: '/settings/users', label: 'Admin', adminOnly: true }
+		{ href: '/settings/users', label: 'Admin', adminOnly: true },
+		{ href: '/legal', label: 'Legal', adminOnly: false }
 	];
 
 	const visibleItems = $derived(NAV_ITEMS.filter((item) => !item.adminOnly || admin));
@@ -26,7 +27,7 @@
 
 <div class="settings-layout">
 	<nav class="settings-sidebar">
-		<a href="/" class="back-link">Back to Songmaker</a>
+		<a href="/" class="back-link">Back to Hallucinai</a>
 		<div class="nav-items">
 			{#each visibleItems as item (item.href)}
 				<a href={item.href} class="nav-link" class:active={currentPath === item.href}>

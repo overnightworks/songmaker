@@ -14,7 +14,8 @@
 	let isPublicRoute = $derived(
 		page.url.pathname === '/login' ||
 			page.url.pathname === '/setup' ||
-			page.url.pathname.startsWith('/share/')
+			page.url.pathname.startsWith('/share/') ||
+			page.url.pathname.startsWith('/legal')
 	);
 	const isSettings = $derived(page.url.pathname.startsWith('/settings'));
 	const hasBack = $derived(isSettings || $canGoBack);
@@ -56,7 +57,7 @@
 </script>
 
 <svelte:head>
-	<title>Songmaker</title>
+	<title>Hallucinai</title>
 </svelte:head>
 
 {#if isPublicRoute}
@@ -71,7 +72,7 @@
 			{:else if hasBack}
 				<button class="back-btn" onclick={deselectSong} aria-label="Back to songs">←</button>
 			{/if}
-			<a href="/" class="brand">Songmaker</a>
+			<a href="/" class="brand">Hallucinai</a>
 		</div>
 		<nav class="top-right">
 			<span class="top-username">{me.username}</span>

@@ -39,7 +39,7 @@
 
 <div class="setup-page">
 	<div class="setup-card">
-		<h1>Songmaker</h1>
+		<h1>Hallucinai</h1>
 		<p class="subtitle">Create your admin account</p>
 		<form onsubmit={handleSubmit}>
 			<label>

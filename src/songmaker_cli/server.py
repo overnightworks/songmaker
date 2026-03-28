@@ -94,7 +94,7 @@ def create_app(
     ctx: AppContext | None = None,
 ) -> FastAPI:
     app = FastAPI(
-        title="Songmaker",
+        title="Hallucinai",
         docs_url=None, redoc_url=None, openapi_url=None,
         lifespan=_lifespan,
     )
