@@ -1023,7 +1023,9 @@ def test_health_no_auth_required(tmp_path: Path) -> None:
         patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value=None)),
+        patch("songmaker_cli.acestep_manager.AceStepManager") as mock_mgr_cls,
     ):
+        mock_mgr_cls.return_value.is_healthy.return_value = False
         resp = client.get("/health")
     assert resp.status_code == 200
     data = resp.json()
