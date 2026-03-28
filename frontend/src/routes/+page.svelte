@@ -358,9 +358,9 @@
 
 	.save-btn {
 		padding: 6px 16px;
-		border: 2px solid var(--primary);
+		border: none;
 		border-radius: 16px;
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 		font-family: var(--font-display);
 		font-size: 11px;
@@ -368,6 +368,11 @@
 		text-transform: uppercase;
 		cursor: pointer;
 		white-space: nowrap;
+		transition: box-shadow 0.2s;
+	}
+
+	.save-btn:hover:not(:disabled) {
+		box-shadow: 0 0 20px rgba(160, 32, 240, 0.3);
 	}
 
 	.save-btn:disabled {
@@ -376,9 +381,9 @@
 
 	.generate-btn {
 		padding: 6px 16px;
-		border: 2px solid var(--primary);
+		border: none;
 		border-radius: 16px;
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 		font-family: var(--font-display);
 		font-size: 11px;
@@ -386,6 +391,11 @@
 		text-transform: uppercase;
 		cursor: pointer;
 		white-space: nowrap;
+		transition: box-shadow 0.2s;
+	}
+
+	.generate-btn:hover:not(:disabled) {
+		box-shadow: 0 0 20px rgba(160, 32, 240, 0.3);
 	}
 
 	.generate-btn:disabled {
@@ -440,7 +450,8 @@
 
 	.tab-btn.active {
 		color: var(--primary);
-		border-bottom-color: var(--primary);
+		border-bottom: 2px solid transparent;
+		border-image: linear-gradient(90deg, var(--primary), var(--accent)) 1;
 	}
 
 	.chat-tab {

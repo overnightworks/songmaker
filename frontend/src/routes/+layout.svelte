@@ -108,7 +108,8 @@
 		right: 0;
 		height: var(--header-height);
 		background: #0a0a0a;
-		border-bottom: 2px solid var(--primary);
+		border-bottom: 2px solid transparent;
+		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;

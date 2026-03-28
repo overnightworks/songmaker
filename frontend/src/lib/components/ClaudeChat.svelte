@@ -494,7 +494,10 @@
 	.chat-header h3 {
 		font-family: var(--font-display);
 		font-size: 13px;
-		color: var(--primary);
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
 		text-transform: uppercase;
 		letter-spacing: 1px;
 	}
@@ -761,7 +764,8 @@
 	}
 
 	.send-btn:hover:not(:disabled) {
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		border-color: transparent;
 		color: #fff;
 	}
 

@@ -190,7 +190,8 @@
 		right: 0;
 		height: var(--player-height);
 		background: #0a0a0a;
-		border-top: 1px solid var(--border);
+		border-top: 2px solid transparent;
+		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
 		display: flex;
 		align-items: center;
 		gap: 12px;
@@ -221,7 +222,8 @@
 	}
 
 	.play-btn:hover:not(:disabled) {
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		border-color: transparent;
 		color: #fff;
 	}
 

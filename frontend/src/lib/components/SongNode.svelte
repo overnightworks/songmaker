@@ -254,7 +254,7 @@
 	}
 
 	.song-group.active {
-		border-left: 3px solid var(--primary);
+		border-left: 3px solid var(--accent);
 	}
 
 	.song-item {
@@ -401,8 +401,8 @@
 	}
 
 	.gen-row.selected {
-		background: #1a2a2a;
-		border-left: 2px solid var(--primary);
+		background: rgba(160, 32, 240, 0.08);
+		border-left: 2px solid var(--accent);
 	}
 
 	.gen-play-btn {

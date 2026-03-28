@@ -316,7 +316,8 @@
 	}
 
 	.score-btn:hover:not(:disabled) {
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		border-color: transparent;
 		color: #fff;
 	}
 
@@ -336,10 +337,12 @@
 		padding: 8px 10px;
 		border-radius: 4px;
 		background: var(--bg);
+		transition: box-shadow 0.2s;
 	}
 
 	.score-cell.good {
 		border-left: 3px solid var(--score-good);
+		box-shadow: 0 0 12px rgba(68, 255, 68, 0.06);
 	}
 
 	.score-cell.ok {
@@ -348,6 +351,7 @@
 
 	.score-cell.bad {
 		border-left: 3px solid var(--score-bad);
+		box-shadow: 0 0 12px rgba(255, 68, 68, 0.06);
 	}
 
 	.score-label {

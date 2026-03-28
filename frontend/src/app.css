@@ -58,7 +58,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-	background: var(--primary);
+	background: linear-gradient(to bottom, var(--primary), var(--accent));
 	border-radius: 3px;
 }
 
@@ -70,4 +70,9 @@ button {
 a {
 	color: inherit;
 	text-decoration: none;
+}
+
+::selection {
+	background: rgba(160, 32, 240, 0.3);
+	color: #fff;
 }
