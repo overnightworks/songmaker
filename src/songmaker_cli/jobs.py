@@ -23,8 +23,8 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.generate import generate_single
 from songmaker_cli.parser import AlbumMeta, SongMeta
-from songmaker_cli.scoring import run_scoring_pipeline
 from songmaker_cli.scoring.pipeline import PipelineConfig
+from songmaker_cli.scoring.subprocess_runner import get_scorer_process
 
 log = logging.getLogger(__name__)
 
@@ -339,7 +339,9 @@ def run_scoring_job(
         device = _detect_device()
         config = PipelineConfig(device=device)
         meta = SongMeta(**meta_kwargs) if meta_kwargs else None
-        song_scores = run_scoring_pipeline(mp3_full, meta=meta, scorers=scorers, config=config)
+        song_scores = get_scorer_process().score(
+            mp3_full, meta=meta, scorers=scorers, config=config, job_id=job_id,
+        )
         scores_dict = song_scores.to_dict()
 
         whisper_text = None
@@ -358,14 +360,18 @@ def run_scoring_job(
         log.info("Scored: %s (%d metrics)", mp3_path_rel, len(scores_dict))
         _update_job(db_factory, job_id, "completed", progress=1.0)
 
+    except TimeoutError as exc:
+        log.error("Scoring job timed out: %s", exc)
+        _update_job(
+            db_factory, job_id, "failed",
+            error=_sanitize_error(exc), error_type="timeout",
+        )
     except Exception as exc:
         log.exception("Scoring job failed: %s", exc)
         _update_job(
             db_factory, job_id, "failed",
             error=_sanitize_error(exc), error_type="scoring_error",
         )
-    finally:
-        _cleanup_gpu()
 
 
 def _cleanup_gpu() -> None:

@@ -334,7 +334,10 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
 
     with (
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
-        patch("songmaker_cli.jobs.run_scoring_pipeline", return_value=mock_result),
+        patch(
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=MagicMock(score=MagicMock(return_value=mock_result)),
+        ),
     ):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
@@ -363,7 +366,10 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
 
     with (
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
-        patch("songmaker_cli.jobs.run_scoring_pipeline", return_value=mock_result),
+        patch(
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=MagicMock(score=MagicMock(return_value=mock_result)),
+        ),
     ):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
@@ -414,7 +420,12 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
 
     with (
         patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
-        patch("songmaker_cli.jobs.run_scoring_pipeline", side_effect=RuntimeError("scorer crash")),
+        patch(
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=MagicMock(
+                score=MagicMock(side_effect=RuntimeError("scorer crash")),
+            ),
+        ),
     ):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 

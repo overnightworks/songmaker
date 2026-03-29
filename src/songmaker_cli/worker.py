@@ -98,9 +98,6 @@ async def score(ctx, job_id, gen_id, scorers):
         if not job or job.status in TERMINAL_STATUSES:
             return
 
-    mgr = _require_acestep_manager()
-    mgr.prepare_score_mode()
-
     import structlog
     structlog.contextvars.bind_contextvars(job_id=job_id, task="score")
 
@@ -202,6 +199,11 @@ async def on_startup(ctx):
     mgr.ensure()
     mgr.refresh_cached_model()
 
+    from songmaker_cli.scoring.subprocess_runner import ScorerProcess, set_scorer_process
+    scorer = ScorerProcess()
+    set_scorer_process(scorer)
+    log.info("Scorer subprocess manager initialized")
+
     model = mgr.active_model
     log.info("ACE-Step model: %s", model or "unknown")
     if model:
@@ -243,6 +245,13 @@ async def on_shutdown(ctx):
     if _db_engine is not None:
         _db_engine.dispose()
         log.info("Database connection pool disposed")
+
+    from songmaker_cli.scoring.subprocess_runner import get_scorer_process
+    try:
+        get_scorer_process().shutdown()
+        log.info("Scorer subprocess shut down")
+    except RuntimeError:
+        pass
 
     if _acestep_manager:
         _acestep_manager.stop()

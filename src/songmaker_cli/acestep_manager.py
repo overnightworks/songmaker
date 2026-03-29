@@ -161,16 +161,11 @@ class AceStepManager:
         if self._current_mode != "generate":
             from songmaker_cli.gpu_util import get_gpu_memory_used_mb
             baseline_mb = get_gpu_memory_used_mb()
-            clear_scoring_models()
+            _release_scorer_gpu()
             verify_vram_freed(baseline_mb=baseline_mb)
         self.ensure()
         self.refresh_cached_model()
         self._current_mode = "generate"
-
-    def prepare_score_mode(self) -> None:
-        if self._current_mode == "score":
-            return
-        self._current_mode = "score"
 
     def _find_uv(self) -> list[str] | None:
         for candidate in [
@@ -187,6 +182,16 @@ class AceStepManager:
             except (FileNotFoundError, subprocess.TimeoutExpired):
                 continue
         return None
+
+
+def _release_scorer_gpu() -> None:
+    try:
+        from songmaker_cli.scoring.subprocess_runner import get_scorer_process
+        get_scorer_process().release_gpu()
+        return
+    except RuntimeError:
+        pass
+    clear_scoring_models()
 
 
 def clear_scoring_models() -> None:

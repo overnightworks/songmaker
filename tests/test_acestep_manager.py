@@ -226,13 +226,13 @@ def test_prepare_generate_mode() -> None:
     mgr = AceStepManager()
     with (
         patch("songmaker_cli.gpu_util.get_gpu_memory_used_mb", return_value=18000.0),
-        patch("songmaker_cli.acestep_manager.clear_scoring_models") as mock_clear,
+        patch("songmaker_cli.acestep_manager._release_scorer_gpu") as mock_release,
         patch("songmaker_cli.acestep_manager.verify_vram_freed") as mock_verify,
         patch.object(mgr, "ensure") as mock_ensure,
         patch.object(mgr, "refresh_cached_model"),
     ):
         mgr.prepare_generate_mode()
-    mock_clear.assert_called_once()
+    mock_release.assert_called_once()
     mock_verify.assert_called_once_with(baseline_mb=18000.0)
     mock_ensure.assert_called_once()
 
@@ -241,7 +241,7 @@ def test_prepare_generate_mode_vram_failure_propagates() -> None:
     mgr = AceStepManager()
     with (
         patch("songmaker_cli.gpu_util.get_gpu_memory_used_mb", return_value=18000.0),
-        patch("songmaker_cli.acestep_manager.clear_scoring_models"),
+        patch("songmaker_cli.acestep_manager._release_scorer_gpu"),
         patch(
             "songmaker_cli.acestep_manager.verify_vram_freed",
             side_effect=RuntimeError("GPU memory not freed"),
@@ -249,11 +249,6 @@ def test_prepare_generate_mode_vram_failure_propagates() -> None:
     ):
         with pytest.raises(RuntimeError, match="GPU memory not freed"):
             mgr.prepare_generate_mode()
-
-
-def test_prepare_score_mode_is_noop() -> None:
-    mgr = AceStepManager()
-    mgr.prepare_score_mode()
 
 
 # ── clear_scoring_models ───────────────────────────────────────────

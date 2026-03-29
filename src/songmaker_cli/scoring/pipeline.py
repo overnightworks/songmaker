@@ -52,6 +52,12 @@ class PipelineConfig:
     whisper_device: str = ""
     device: str = "cpu"
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
+    pipeline_timeout: int = 0
+
+    def __post_init__(self) -> None:
+        if self.pipeline_timeout <= 0:
+            from songmaker_cli.constants import SCORER_PIPELINE_TIMEOUT_SECONDS
+            object.__setattr__(self, "pipeline_timeout", SCORER_PIPELINE_TIMEOUT_SECONDS)
 
 
 ScorerFunc = Callable[
@@ -117,22 +123,32 @@ class ScorerRegistry:
     def all_names(self) -> list[str]:
         return list(self._scorers.keys())
 
+    _SCORER_MODULES = (
+        "songmaker_cli.scoring.audiobox_aesthetics",
+        "songmaker_cli.scoring.bpm_accuracy",
+        "songmaker_cli.scoring.emotional_dynamics",
+        "songmaker_cli.scoring.lyrical_coherence",
+        "songmaker_cli.scoring.silence_detection",
+        "songmaker_cli.scoring.spectral_quality",
+        "songmaker_cli.scoring.text_accuracy",
+    )
+
     def ensure_loaded(self) -> None:
         """Lazily import scorer modules to trigger @register decorators.
 
         Only runs on registries created with autoload=True (i.e. the
         default_registry). Test registries skip this entirely.
+        Modules with missing dependencies are skipped gracefully.
         """
         if self._loaded or not self._autoload:
             return
         self._loaded = True
-        import songmaker_cli.scoring.audiobox_aesthetics  # noqa: F401
-        import songmaker_cli.scoring.bpm_accuracy  # noqa: F401
-        import songmaker_cli.scoring.emotional_dynamics  # noqa: F401
-        import songmaker_cli.scoring.lyrical_coherence  # noqa: F401
-        import songmaker_cli.scoring.silence_detection  # noqa: F401
-        import songmaker_cli.scoring.spectral_quality  # noqa: F401
-        import songmaker_cli.scoring.text_accuracy  # noqa: F401
+        import importlib
+        for mod_name in self._SCORER_MODULES:
+            try:
+                importlib.import_module(mod_name)
+            except ImportError:
+                log.debug("Scorer module %s unavailable (missing dependency)", mod_name)
 
     def reset_for_testing(self) -> None:
         """Clear all scorers for test isolation."""

@@ -134,12 +134,14 @@ POST /api/generations/{id}/score
   → create Job record + audit log entry
   → enqueue to arq (Redis-backed)
   → arq worker: run_scoring_job()
-    → run_scoring_pipeline() with parallel CPU/GPU execution:
-      GPU scorers (audiobox) run sequentially in main thread
-      CPU scorers (text_accuracy via faster-whisper, emotional_dynamics,
-        bpm_accuracy, silence_detection, spectral_quality) run concurrently
-      Deferred CPU scorers (lyrical_coherence) wait for shared_data from GPU
-      Each scorer fault-isolated: one failure does not block others
+    → ScorerProcess.score() dispatches to a long-lived subprocess:
+      Subprocess calls run_scoring_pipeline() with parallel CPU/GPU execution:
+        GPU scorers (audiobox) run sequentially
+        CPU scorers (text_accuracy via faster-whisper, emotional_dynamics,
+          bpm_accuracy, silence_detection, spectral_quality) run concurrently
+        Deferred CPU scorers (lyrical_coherence) wait for shared_data from GPU
+        Each scorer fault-isolated: one failure does not block others
+      Parent kills subprocess on timeout (SIGKILL), freeing GPU memory
     → save scores + whisper text to DB
   → Job status: completed
 ```

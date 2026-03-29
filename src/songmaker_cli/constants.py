@@ -70,6 +70,9 @@ ACESTEP_PORT = 8001
 ACESTEP_HEALTH_URL_TEMPLATE = "http://localhost:{port}/health"
 ACESTEP_STARTUP_TIMEOUT_SECONDS = 300
 
+# Scoring subprocess
+SCORER_PIPELINE_TIMEOUT_SECONDS = 600
+
 # arq worker
 ARQ_QUEUE_KEY = "arq:queue"
 ACTIVE_MODEL_REDIS_KEY = "songmaker:active_model"

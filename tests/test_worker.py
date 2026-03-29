@@ -138,19 +138,15 @@ def test_score_runs_queued_job() -> None:
     mock_job = MagicMock()
     mock_job.status = "queued"
 
-    mock_mgr = MagicMock()
-
     with (
         patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
         patch("songmaker_cli.worker.get_job", return_value=mock_job),
         patch("songmaker_cli.worker.run_scoring_job") as mock_run,
-        patch.object(worker_mod, "_acestep_manager", mock_mgr),
         patch.object(worker_mod, "_audio_dir", return_value="audio"),
     ):
         _run(worker_mod.score(_mock_ctx(), "j1", "g1", ["silence"]))
 
     mock_run.assert_called_once()
-    mock_mgr.prepare_score_mode.assert_called_once()
 
 
 # ── cleanup_stale ──────────────────────────────────────────────────
