@@ -292,8 +292,9 @@
 	}
 
 	.model-tab.active {
-		border-color: var(--primary);
-		color: var(--primary);
+		border-color: transparent;
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		color: #fff;
 	}
 
 	.defaults-controls {
@@ -467,7 +468,7 @@
 		font-size: 0.7rem;
 		padding: 1px 6px;
 		border-radius: 3px;
-		background: var(--primary);
+		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 		letter-spacing: 0.5px;
 	}

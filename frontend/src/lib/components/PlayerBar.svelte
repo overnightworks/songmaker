@@ -61,6 +61,8 @@
 	let particles: Particle[] = [];
 	let prevBassHit = false;
 	let phase = 0;
+	let bassLevel = $state(0);
+	let energyLevel = $state(0);
 
 	function makeProgressGradient(): CanvasGradient {
 		const ctx = document.createElement('canvas').getContext('2d') as CanvasRenderingContext2D;
@@ -131,6 +133,8 @@
 		midE /= (midEnd - bassEnd);
 		highE /= (binCount - midEnd);
 		const avgE = totalE / binCount;
+		bassLevel = bassE;
+		energyLevel = avgE;
 
 		ctx.globalAlpha = vizOpacity;
 
@@ -140,14 +144,14 @@
 		for (let i = 0; i < barCount; i++) {
 			const freqIdx = Math.floor((i / barCount) * binCount * 0.7);
 			const val = smoothedFreq[freqIdx];
-			const barH = val * h * 0.85;
+			const barH = val * h * 1.4;
 			const x = i * barW;
 
 			const t = i / barCount;
 			const r = Math.round(255 - t * 120);
 			const g = Math.round(20 + t * 30);
 			const b = Math.round(32 + t * 210);
-			const alpha = 0.03 + val * 0.12;
+			const alpha = 0.04 + val * 0.2;
 
 			ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
 			ctx.fillRect(x, cy - barH / 2, barW - 0.5, barH);
@@ -160,16 +164,16 @@
 		for (let i = 0; i < waveLen; i++) {
 			const x = (i / waveLen) * w;
 			const v = (waveformData[i] / 128 - 1);
-			const y = cy + v * h * (0.3 + avgE * 0.4);
+			const y = cy + v * h * (0.4 + avgE * 0.6);
 			if (i === 0) ctx.moveTo(x, y);
 			else ctx.lineTo(x, y);
 		}
 		ctx.stroke();
 
-		if (avgE > 0.15) {
+		if (avgE > 0.1) {
 			ctx.save();
-			ctx.shadowColor = `rgba(255, 50, 32, ${avgE * 0.4})`;
-			ctx.shadowBlur = 4 + avgE * 8;
+			ctx.shadowColor = `rgba(255, 50, 32, ${avgE * 0.6})`;
+			ctx.shadowBlur = 6 + avgE * 14;
 			ctx.stroke();
 			ctx.restore();
 		}
@@ -180,8 +184,8 @@
 		for (let i = 0; i < waveLen; i++) {
 			const x = (i / waveLen) * w;
 			const v = (waveformData[i] / 128 - 1);
-			const offset = Math.sin(phase * 3 + i * 0.02) * midE * 8;
-			const y = cy + v * h * (0.15 + midE * 0.25) + offset;
+			const offset = Math.sin(phase * 3 + i * 0.02) * midE * 15;
+			const y = cy + v * h * (0.25 + midE * 0.4) + offset;
 			if (i === 0) ctx.moveTo(x, y);
 			else ctx.lineTo(x, y);
 		}
@@ -190,7 +194,7 @@
 		const ringCount = 6;
 		for (let r2 = 0; r2 < ringCount; r2++) {
 			const ringT = r2 / ringCount;
-			const baseRadius = 8 + r2 * (Math.min(w, h) * 0.06);
+			const baseRadius = 10 + r2 * (Math.min(w, h) * 0.1);
 			const energy = r2 < 2 ? bassE : r2 < 4 ? midE : highE;
 
 			const points = 80;
@@ -206,7 +210,7 @@
 				const a = (p / points) * Math.PI * 2;
 				const freqI = Math.floor((p / points) * binCount * 0.6);
 				const fv = smoothedFreq[freqI];
-				const pulse = baseRadius + fv * 15 + energy * 8;
+				const pulse = baseRadius + fv * 25 + energy * 15;
 				const x = w / 2 + Math.cos(a + phase * (1 + r2 * 0.3)) * pulse;
 				const y = cy + Math.sin(a + phase * (1 + r2 * 0.3)) * pulse * 0.6;
 				if (p === 0) ctx.moveTo(x, y);
@@ -262,18 +266,6 @@
 			ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
 			ctx.fill();
 			ctx.restore();
-		}
-
-		const progressT = duration > 0 ? currentTime / duration : 0;
-		if (progressT > 0) {
-			const px = progressT * w;
-			ctx.fillStyle = `rgba(160, 32, 240, ${0.08 + avgE * 0.15})`;
-			ctx.fillRect(0, h - 2, px, 2);
-			const dot = ctx.createRadialGradient(px, h - 2, 0, px, h - 2, 6);
-			dot.addColorStop(0, `rgba(160, 32, 240, ${0.5 + avgE * 0.4})`);
-			dot.addColorStop(1, 'transparent');
-			ctx.fillStyle = dot;
-			ctx.fillRect(px - 6, h - 8, 12, 12);
 		}
 
 		ctx.globalAlpha = 1;
@@ -367,11 +359,22 @@
 	}
 </script>
 
-<footer class="player-bar">
+<footer
+	class="player-bar"
+	style={isPlaying ? `height: calc(var(--player-height) + ${energyLevel * 14}px); box-shadow: 0 ${-2 - energyLevel * 8}px ${6 + energyLevel * 18}px rgba(${Math.round(255 - energyLevel * 100)}, ${Math.round(20 + energyLevel * 12)}, ${Math.round(32 + energyLevel * 200)}, ${0.1 + energyLevel * 0.3})` : ''}
+>
 	<div class="player-controls">
 		<button class="nav-btn" onclick={playPrevSong} disabled={!prevSong} aria-label="Previous song" title="Previous song"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="3" y="5" width="3" height="14"/><polygon points="20,5 9,12 20,19"/></svg></button>
 		<button class="nav-btn" onclick={playPrevGeneration} disabled={!prevGen} aria-label="Previous generation" title="Previous generation"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="12,5 2,12 12,19"/><polygon points="22,5 12,12 22,19"/></svg></button>
-		<button class="play-btn" class:loading={isLoading} class:playing={isPlaying} onclick={togglePlay} disabled={isLoading} aria-label={isPlaying ? 'Pause' : 'Play'}>
+		<button
+			class="play-btn"
+			class:loading={isLoading}
+			class:playing={isPlaying}
+			onclick={togglePlay}
+			disabled={isLoading}
+			aria-label={isPlaying ? 'Pause' : 'Play'}
+			style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
+		>
 			{#if isLoading}<span class="spinner"></span>{:else}{isPlaying ? '⏸' : '▶'}{/if}
 		</button>
 		<button class="nav-btn" onclick={playNextGeneration} disabled={!nextGen} aria-label="Next generation" title="Next generation"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="2,5 12,12 2,19"/><polygon points="12,5 22,12 12,19"/></svg></button>
@@ -379,7 +382,11 @@
 	</div>
 	<button class="track-info" onclick={navigateToPlaying} aria-label="Go to playing song">
 		{#if pb}
-			<span class="track-title" class:glowing={isPlaying}>{pb.songTitle}</span>
+			<span
+				class="track-title"
+				class:glowing={isPlaying}
+				style={isPlaying ? `text-shadow: 0 0 ${8 + bassLevel * 20}px rgba(160, 32, 240, ${0.3 + bassLevel * 0.5}), 0 0 ${4 + bassLevel * 10}px rgba(255, 50, 32, ${bassLevel * 0.4})` : ''}
+			>{pb.songTitle}</span>
 			<span class="track-detail">{pb.artist} · gen{gen?.generation_number}{#if isLoading}<span class="loading-text">Loading...</span>{/if}</span>
 		{/if}
 	</button>
@@ -388,20 +395,24 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="viz-area" onclick={handleCanvasClick}>
 		<div class="wave-hidden" bind:this={waveContainer}></div>
-		<canvas class="viz-canvas" bind:this={vizCanvas}></canvas>
 	</div>
 	<span class="time">{formatTime(duration)}</span>
+	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
+	<div class="progress-bar">
+		<div class="progress-fill" style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"></div>
+	</div>
 </footer>
 
 <style>
 	.player-bar {
 		position: fixed; bottom: 0; left: 0; right: 0;
-		height: var(--player-height); background: #0a0a0a;
+		height: var(--player-height); background: rgba(10, 10, 10, 0.75);
 		border-top: 2px solid transparent;
 		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
 		display: flex; align-items: center; gap: 12px; padding: 0 16px; z-index: 100;
+		overflow: visible;
 	}
-	.player-controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+	.player-controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; z-index: 1; }
 	.play-btn {
 		width: 40px; height: 40px; border-radius: 50%;
 		border: 2px solid var(--primary); background: transparent;
@@ -442,6 +453,7 @@
 		overflow: hidden; background: none; border: none; cursor: pointer;
 		text-align: left; padding: 4px 8px; border-radius: 4px; flex-shrink: 0;
 	}
+	.track-info { z-index: 1; }
 	.track-info:hover { background: var(--surface-hover); }
 	.track-title {
 		font-family: var(--font-display); font-size: 13px; color: #fff;
@@ -453,10 +465,25 @@
 	}
 	.track-detail { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	.loading-text { color: var(--primary); margin-left: 4px; }
-	.time { font-family: var(--font-display); font-size: 12px; color: var(--text-muted); min-width: 36px; text-align: center; flex-shrink: 0; }
+	.time { font-family: var(--font-display); font-size: 12px; color: var(--text-muted); min-width: 36px; text-align: center; flex-shrink: 0; z-index: 1; }
 	.viz-area { flex: 1; min-width: 80px; height: 52px; position: relative; cursor: pointer; }
 	.wave-hidden { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
-	.viz-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+	.viz-fullscreen {
+		position: absolute;
+		left: 0; right: 0; top: 0; bottom: 0;
+		width: 100%; height: 100%;
+		pointer-events: none;
+		z-index: 0;
+	}
+	.progress-bar {
+		position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+		background: rgba(51, 51, 51, 0.3); z-index: 1;
+	}
+	.progress-fill {
+		height: 100%;
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+		transition: width 0.1s linear;
+	}
 	@media (max-width: 768px) {
 		.player-bar { gap: 8px; padding: 0 8px; }
 		.track-info { display: none; }

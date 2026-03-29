@@ -40,6 +40,8 @@
 		"vitest": "^3.2.4"
 	},
 	"dependencies": {
+		"@types/three": "^0.183.1",
+		"three": "^0.183.2",
 		"wavesurfer.js": "^7.12.4"
 	}
 }

@@ -18,7 +18,7 @@
 		{ href: '/settings/integrations', label: 'Integrations', adminOnly: false },
 		{ href: '/settings/account', label: 'Account', adminOnly: false },
 		{ href: '/settings/users', label: 'Admin', adminOnly: true },
-		{ href: '/legal', label: 'Legal', adminOnly: false }
+		{ href: '/settings/legal', label: 'Legal', adminOnly: false }
 	];
 
 	const visibleItems = $derived(NAV_ITEMS.filter((item) => !item.adminOnly || admin));
