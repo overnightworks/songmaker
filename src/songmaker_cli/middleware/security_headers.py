@@ -9,11 +9,11 @@ from songmaker_cli.app_context import AppContext
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: object, script_hash: str = "") -> None:
+    def __init__(self, app: object, script_hashes: list[str] | None = None) -> None:
         super().__init__(app)
         script_src = "'self'"
-        if script_hash:
-            script_src += f" '{script_hash}'"
+        for h in script_hashes or []:
+            script_src += f" '{h}'"
         self._csp = (
             "default-src 'none'; "
             f"script-src {script_src}; "

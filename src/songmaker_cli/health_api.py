@@ -28,18 +28,18 @@ def _get_gpu_vram_mb() -> float | None:
     return get_gpu_memory_used_mb()
 
 
-def _compute_script_hash(index_html: Path) -> str:
+def _compute_script_hashes(index_html: Path) -> list[str]:
     if not index_html.exists():
-        return ""
+        return []
+    import base64
     import hashlib
     import re
     content = index_html.read_text()
-    match = re.search(r"<script>(.*?)</script>", content, re.DOTALL)
-    if not match:
-        return ""
-    import base64
-    digest = hashlib.sha256(match.group(1).encode()).digest()
-    return f"sha256-{base64.b64encode(digest).decode()}"
+    hashes = []
+    for match in re.finditer(r"<script>(.*?)</script>", content, re.DOTALL):
+        digest = hashlib.sha256(match.group(1).encode()).digest()
+        hashes.append(f"sha256-{base64.b64encode(digest).decode()}")
+    return hashes
 
 
 def _check_db(ctx: AppContext) -> bool:

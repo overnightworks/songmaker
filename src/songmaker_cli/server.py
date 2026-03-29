@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import APP_NAME, AUDIO_ROOT, DATA_ROOT
-from songmaker_cli.health_api import _compute_script_hash
+from songmaker_cli.health_api import _compute_script_hashes
 from songmaker_cli.lifecycle import auto_setup_admin, session_sync_loop
 from songmaker_cli.middleware import (
     AccessLogMiddleware,
@@ -143,8 +143,8 @@ def create_app(
     #   5. AccessLogMiddleware       -- log all requests (after security checks)
     #   6. SecurityHeadersMiddleware -- add security headers to responses
     # WARNING: reordering these lines changes security behavior.
-    script_hash = _compute_script_hash(project_root / "frontend" / "build" / "index.html")
-    app.add_middleware(SecurityHeadersMiddleware, script_hash=script_hash)
+    script_hashes = _compute_script_hashes(project_root / "frontend" / "build" / "index.html")
+    app.add_middleware(SecurityHeadersMiddleware, script_hashes=script_hashes)
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(CsrfTokenMiddleware)
     app.add_middleware(CsrfOriginMiddleware)
