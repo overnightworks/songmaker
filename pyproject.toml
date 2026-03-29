@@ -8,52 +8,52 @@ license = { text = "MIT" }
 requires-python = ">=3.12,<3.13"
 
 dependencies = [
-    "numpy>=1.26",
-    "scipy>=1.12",
-    "pydantic>=2.0",
-    "cyclopts>=4.0",
-    "pyloudnorm>=0.1",
-    "httpx>=0.27",
-    "python-slugify>=8.0",
+    "numpy>=1.26,<3",
+    "scipy>=1.12,<2",
+    "pydantic>=2.0,<3",
+    "cyclopts>=4.0,<5",
+    "pyloudnorm>=0.1,<1",
+    "httpx>=0.27,<1",
+    "python-slugify>=8.0,<9",
 ]
 
 [project.optional-dependencies]
 scoring = [
-    "librosa>=0.10",
+    "librosa>=0.10,<1",
     "soundfile",
-    "audiobox-aesthetics>=0.0.4",
-    "torch>=2.2",
-    "nvidia-ml-py3>=7.352",
+    "audiobox-aesthetics>=0.0.4,<1",
+    "torch>=2.2,<3",
+    "nvidia-ml-py3>=7.352,<8",
 ]
 whisper = [
-    "faster-whisper>=1.1",
-    "torch>=2.2",
+    "faster-whisper>=1.1,<2",
+    "torch>=2.2,<3",
     "soundfile",
-    "librosa",
+    "librosa>=0.10,<1",
     "numba",
 ]
 server = [
-    "fastapi>=0.100",
-    "uvicorn>=0.20",
-    "sqlalchemy>=2.0",
-    "alembic>=1.13",
-    "bcrypt>=4.0",
-    "python-dotenv>=1.0",
-    "structlog>=24.0",
-    "redis[hiredis]>=5.0",
-    "psycopg2-binary>=2.9",
-    "arq>=0.26",
-    "mutagen>=1.47",
-    "python-multipart>=0.0.7",
+    "fastapi>=0.100,<1",
+    "uvicorn>=0.20,<1",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13,<2",
+    "bcrypt>=4.0,<5",
+    "python-dotenv>=1.0,<2",
+    "structlog>=24.0,<26",
+    "redis[hiredis]>=5.0,<6",
+    "psycopg2-binary>=2.9,<3",
+    "arq>=0.26,<1",
+    "mutagen>=1.47,<2",
+    "python-multipart>=0.0.7,<1",
 ]
 claude = [
-    "anthropic>=0.20",
+    "anthropic>=0.20,<1",
 ]
 dev = [
-    "pytest>=7.0",
-    "pytest-cov>=7.0",
-    "ruff>=0.4",
-    "fakeredis[lua]>=2.0",
+    "pytest>=7.0,<10",
+    "pytest-cov>=7.0,<8",
+    "ruff>=0.4,<1",
+    "fakeredis[lua]>=2.0,<3",
 ]
 
 [project.scripts]

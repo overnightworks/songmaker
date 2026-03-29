@@ -90,7 +90,8 @@ These are conventions that aren't obvious from reading a single file:
 - **VRAM verification** uses delta-based NVML checks (system-wide GPU memory via `pynvml`). Falls back to proceed-with-warning if pynvml is unavailable. Raises `RuntimeError` if scoring models aren't freed, failing the job cleanly instead of OOMing.
 - **`slugify()` uses `python-slugify`.** Transliterates Unicode to ASCII (CJK, emoji, accented characters all produce meaningful slugs). The `"untitled"` fallback covers edge cases where transliteration yields an empty string.
 - **No backup/restore strategy.** Audio files live in `data/audio/`, DB records reference them by relative path. Restoring the DB without the audio directory leaves orphaned records (404 on playback). Restoring audio without the DB leaves unreachable files. Both must be backed up together. Not documented in ops runbooks.
-- **Dependencies float `>=` with no upper bound** in `pyproject.toml`. The `uv.lock` file pins exact versions for reproducible installs, but anyone installing without the lock file gets latest everything. A future SQLAlchemy 3.0 or FastAPI breaking change would not be caught until runtime.
+- **Dependencies have upper bounds** in `pyproject.toml` (e.g. `>=2.0,<3`). The `uv.lock` file pins exact versions for reproducible installs. Upper bounds prevent silent breakage on major version bumps for users installing without the lock file.
+- **Trust boundaries: subprocesses share OS user.** ACE-Step and scorer subprocesses run as the same `songmaker` user in Docker with `cap_drop: ALL`. Compromised model weights or ACE-Step code get full user-level disk access. Container-level isolation mitigates this; OS user separation would require separate containers for marginal benefit. Accepted risk for a single-user deployment.
 
 ## Docker
 
