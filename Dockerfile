@@ -21,10 +21,15 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 
+# Install dependencies first (cached unless pyproject.toml/uv.lock change)
 COPY pyproject.toml uv.lock ./
+RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
+    uv sync --frozen --no-dev --extra server && \
+    rm -rf src/songmaker_cli/__init__.py
+
+# Copy source code (only this layer rebuilds on code changes)
 COPY src/ src/
 COPY alembic.ini ./
-
 RUN uv sync --frozen --no-dev --extra server
 
 COPY --from=frontend-builder /app/frontend/build frontend/build
