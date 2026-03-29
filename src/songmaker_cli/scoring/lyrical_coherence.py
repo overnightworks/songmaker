@@ -72,8 +72,15 @@ def score_lyrical_coherence(
         raise ValueError("No lyrics metadata — cannot judge lyrical coherence")
 
     transcribed = shared_data.whisper_text if shared_data else None
-    if not transcribed:
+    if transcribed is None:
         raise ValueError("No Whisper transcription in pipeline. Run text_accuracy first.")
+    if not transcribed:
+        log.info("Empty Whisper transcription (no vocals detected) — skipping coherence check")
+        return LyricalCoherenceScore(
+            score=0,
+            issues=("No vocals detected in transcription",),
+            summary="Whisper produced empty transcription — no vocals to judge",
+        )
     intended = "\n".join(
         line.strip() for line in meta.lyrics.splitlines()
         if line.strip() and not line.strip().startswith("[")

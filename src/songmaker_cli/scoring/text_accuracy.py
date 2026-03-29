@@ -47,7 +47,7 @@ def score_text_accuracy(
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
     whisper_size = effective_config.whisper_model
     device = effective_config.whisper_device or effective_config.device
-    language = meta.generation_params.get("language", "en")
+    language = meta.generation_params.get("language") or None
     model = _get_whisper_model(whisper_size, device=device)
 
     intended_lines = tuple(
@@ -56,7 +56,9 @@ def score_text_accuracy(
     )
 
     initial_prompt = " ".join(intended_lines)
-    transcribed, segments = _transcribe(mp3_path, language, model, initial_prompt)
+    transcribed, segments, detected_language = _transcribe(
+        mp3_path, language, model, initial_prompt,
+    )
 
     trans_lines = tuple(
         s.get("text", "").strip() for s in segments if s.get("text", "").strip()
@@ -77,6 +79,7 @@ def score_text_accuracy(
         similarity_ratio=round(ratio, 3),
         intended_line_texts=intended_lines,
         transcribed_line_texts=trans_lines,
+        detected_language=detected_language,
     )
 
 
@@ -197,9 +200,9 @@ def _get_whisper_model(
 
 
 def _transcribe(
-    mp3_path: Path, language: str, model: object,
+    mp3_path: Path, language: str | None, model: object,
     initial_prompt: str | None = None,
-) -> tuple[str, list[dict]]:
+) -> tuple[str, list[dict], str | None]:
     from songmaker_cli.constants import WHISPER_BEAM_SIZE, WHISPER_TEMPERATURE
 
     log.info("Transcribing %s...", mp3_path.name)
@@ -211,7 +214,10 @@ def _transcribe(
     }
     if initial_prompt:
         kwargs["initial_prompt"] = initial_prompt
-    segments_gen, _info = model.transcribe(str(mp3_path), **kwargs)  # type: ignore[union-attr]
+    segments_gen, info = model.transcribe(str(mp3_path), **kwargs)  # type: ignore[union-attr]
     segments = [{"text": seg.text} for seg in segments_gen]
     full_text = " ".join(seg["text"].strip() for seg in segments if seg["text"].strip())
-    return full_text, segments
+    detected_language = getattr(info, "language", None)
+    if detected_language:
+        log.info("Detected language: %s", detected_language)
+    return full_text, segments, detected_language

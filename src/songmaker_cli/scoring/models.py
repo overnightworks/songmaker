@@ -21,6 +21,7 @@ SCORE_KEY_SILENCE_LONGEST = "silence_longest"
 SCORE_KEY_SPECTRAL_ARTIFACTS = "spectral_artifacts"
 SCORE_KEY_LYRICAL_COHERENCE = "lyrical_coherence"
 SCORE_KEY_LYRICAL_SUMMARY = "lyrical_summary"
+SCORE_KEY_DETECTED_LANGUAGE = "detected_language"
 
 
 @dataclass
@@ -41,6 +42,7 @@ class TextAccuracyScore:
     similarity_ratio: float
     intended_line_texts: tuple[str, ...]
     transcribed_line_texts: tuple[str, ...]
+    detected_language: str | None = None
 
     @property
     def intended_lines(self) -> int:
@@ -156,6 +158,8 @@ class SongScores:
 
         if self.text_accuracy:
             result[SCORE_KEY_TEXT_ACCURACY] = round(self.text_accuracy.similarity_ratio * 100, 1)
+            if self.text_accuracy.detected_language:
+                result[SCORE_KEY_DETECTED_LANGUAGE] = self.text_accuracy.detected_language
 
         if self.audiobox:
             result[SCORE_KEY_AUDIOBOX_ENJOYMENT] = self.audiobox.content_enjoyment

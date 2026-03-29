@@ -31,6 +31,7 @@ from songmaker_cli.db.models import (
 from songmaker_cli.db.queries import (
     UNSET,
     cleanup_album,
+    clear_stale_user_jobs,
     count_recent_failed_attempts,
     count_total_queued_jobs,
     count_user_active_jobs,
@@ -1078,6 +1079,103 @@ def test_recover_stale_jobs_by_age_none(db_session: Session) -> None:
     db_session.commit()
 
     assert recover_stale_jobs_by_age(db_session, threshold_seconds=3600) == 0
+
+
+def test_recover_stale_jobs_by_age_catches_queued(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    j_queued = create_job(db_session, "generate")
+    db_session.commit()
+
+    j_queued.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    db_session.commit()
+
+    count = recover_stale_jobs_by_age(db_session, threshold_seconds=1800)
+    db_session.commit()
+
+    assert count == 1
+    after = get_job(db_session, j_queued.id)
+    assert after.status == "failed"
+    assert after.error_type == "stale_timeout"
+
+
+# ── clear_stale_user_jobs ─────────────────────────────────────────
+
+
+def test_clear_stale_user_jobs(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = create_user(db_session, "testuser", "hash", role="user")
+    j_stale = create_job(db_session, "generate", user_id=user.id)
+    j_recent = create_job(db_session, "generate", user_id=user.id)
+    db_session.commit()
+
+    update_job_status(db_session, j_stale.id, "running")
+    update_job_status(db_session, j_recent.id, "running")
+    db_session.commit()
+
+    j_stale.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    db_session.commit()
+
+    count = clear_stale_user_jobs(db_session, user.id, threshold_seconds=1800)
+    db_session.commit()
+
+    assert count == 1
+    assert get_job(db_session, j_stale.id).status == "failed"
+    assert get_job(db_session, j_recent.id).status == "running"
+
+
+def test_clear_stale_user_jobs_only_own(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user_a = create_user(db_session, "user_a", "hash", role="user")
+    user_b = create_user(db_session, "user_b", "hash", role="user")
+    j_a = create_job(db_session, "generate", user_id=user_a.id)
+    j_b = create_job(db_session, "generate", user_id=user_b.id)
+    db_session.commit()
+
+    update_job_status(db_session, j_a.id, "running")
+    update_job_status(db_session, j_b.id, "running")
+    db_session.commit()
+
+    j_a.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    j_b.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    db_session.commit()
+
+    count = clear_stale_user_jobs(db_session, user_a.id, threshold_seconds=1800)
+    db_session.commit()
+
+    assert count == 1
+    assert get_job(db_session, j_a.id).status == "failed"
+    assert get_job(db_session, j_b.id).status == "running"
+
+
+def test_clear_stale_user_jobs_queued(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = create_user(db_session, "testuser", "hash", role="user")
+    j_queued = create_job(db_session, "generate", user_id=user.id)
+    db_session.commit()
+
+    j_queued.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    db_session.commit()
+
+    count = clear_stale_user_jobs(db_session, user.id, threshold_seconds=1800)
+    db_session.commit()
+
+    assert count == 1
+    assert get_job(db_session, j_queued.id).status == "failed"
+
+
+def test_clear_stale_user_jobs_none_stale(db_session: Session) -> None:
+    user = create_user(db_session, "testuser", "hash", role="user")
+    j = create_job(db_session, "generate", user_id=user.id)
+    db_session.commit()
+
+    update_job_status(db_session, j.id, "running")
+    db_session.commit()
+
+    assert clear_stale_user_jobs(db_session, user.id, threshold_seconds=3600) == 0
 
 
 # ── Migration tests ────────────────────────────────────────────────

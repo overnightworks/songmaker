@@ -1,6 +1,6 @@
 # Job Queue Improvements
 
-> **Status: NOT STARTED**
+> **Status: PROBLEM 2 DONE** — Stale jobs auto-cleared on submission + cron catches queued jobs. Problems 1 and 3 remain.
 
 ## Problem 1: Scoring blocks generation
 

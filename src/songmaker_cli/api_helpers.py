@@ -24,6 +24,7 @@ from songmaker_cli.auth import (
 )
 from songmaker_cli.db.models import Album, Generation, Job, Song, User
 from songmaker_cli.db.queries import (
+    clear_stale_user_jobs,
     count_total_queued_jobs,
     count_user_active_jobs,
     count_user_jobs_in_window,
@@ -95,6 +96,7 @@ def create_job_with_rate_limit(
     _begin_exclusive(session)
 
     is_admin = user.role == ROLE_ADMIN
+    clear_stale_user_jobs(session, user.id)
 
     if job_type in ("generate", "score"):
         if count_total_queued_jobs(session) >= MAX_QUEUE_DEPTH:

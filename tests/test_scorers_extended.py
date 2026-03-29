@@ -278,13 +278,31 @@ def test_transcribe() -> None:
     mock_segment = MagicMock()
     mock_segment.text = "hello world"
     mock_info = MagicMock()
+    mock_info.language = "en"
     mock_model = MagicMock()
     mock_model.transcribe.return_value = (iter([mock_segment]), mock_info)
-    text, segments = _transcribe(Path("test.mp3"), "en", mock_model, "hint")
+    text, segments, detected_lang = _transcribe(Path("test.mp3"), "en", mock_model, "hint")
     assert text == "hello world"
     assert len(segments) == 1
     assert segments[0]["text"] == "hello world"
+    assert detected_lang == "en"
     mock_model.transcribe.assert_called_once()
+
+
+def test_transcribe_auto_detect_language() -> None:
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    mock_segment = MagicMock()
+    mock_segment.text = "hallo welt"
+    mock_info = MagicMock()
+    mock_info.language = "de"
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (iter([mock_segment]), mock_info)
+    text, segments, detected_lang = _transcribe(Path("test.mp3"), None, mock_model, "hint")
+    assert text == "hallo welt"
+    assert detected_lang == "de"
+    call_kwargs = mock_model.transcribe.call_args[1]
+    assert call_kwargs["language"] is None
 
 
 def test_score_text_accuracy_full(tmp_path: Path) -> None:
@@ -296,8 +314,10 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
     seg1, seg2 = MagicMock(), MagicMock()
     seg1.text = "hello world"
     seg2.text = "goodbye moon"
+    mock_info = MagicMock()
+    mock_info.language = "en"
     mock_model = MagicMock()
-    mock_model.transcribe.return_value = (iter([seg1, seg2]), MagicMock())
+    mock_model.transcribe.return_value = (iter([seg1, seg2]), mock_info)
     config = PipelineConfig(device="cpu", whisper_model="base")
 
     from songmaker_cli.scoring.models import SharedScorerData
@@ -309,6 +329,7 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
 
     assert isinstance(result, TextAccuracyScore)
     assert result.similarity_ratio > 0
+    assert result.detected_language == "en"
     assert shared_data.whisper_text is not None
     assert "hello world" in shared_data.whisper_text
 
@@ -357,6 +378,29 @@ def test_text_accuracy_score_empty_lines() -> None:
     assert score.transcribed_lines == 0
 
 
+def test_text_accuracy_score_detected_language() -> None:
+    from songmaker_cli.scoring.models import TextAccuracyScore
+
+    score = TextAccuracyScore(
+        similarity_ratio=0.9,
+        intended_line_texts=("hallo welt",),
+        transcribed_line_texts=("hallo welt",),
+        detected_language="de",
+    )
+    assert score.detected_language == "de"
+
+
+def test_text_accuracy_score_detected_language_default() -> None:
+    from songmaker_cli.scoring.models import TextAccuracyScore
+
+    score = TextAccuracyScore(
+        similarity_ratio=0.9,
+        intended_line_texts=("hello",),
+        transcribed_line_texts=("hello",),
+    )
+    assert score.detected_language is None
+
+
 # ── lyrical_coherence ──────────────────────────────────────────────
 
 
@@ -380,6 +424,21 @@ def test_score_lyrical_coherence_no_whisper(tmp_path: Path) -> None:
         score_lyrical_coherence(mp3, meta=meta, shared_data=SharedScorerData())
 
 
+def test_score_lyrical_coherence_empty_whisper(tmp_path: Path) -> None:
+    from songmaker_cli.scoring.lyrical_coherence import score_lyrical_coherence
+
+    meta = SongMeta(prompt="test", lyrics="[verse]\nhello world")
+    mp3 = tmp_path / "test.mp3"
+    mp3.write_bytes(b"fake")
+
+    from songmaker_cli.scoring.models import SharedScorerData
+    shared_data = SharedScorerData(whisper_text="")
+    result = score_lyrical_coherence(mp3, meta=meta, shared_data=shared_data)
+    assert result.score == 0
+    assert len(result.issues) == 1
+    assert "No vocals" in result.issues[0]
+
+
 def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:
     from songmaker_cli.scoring.pipeline import PipelineConfig
     from songmaker_cli.scoring.text_accuracy import score_text_accuracy
@@ -391,8 +450,10 @@ def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:
         seg = MagicMock()
         seg.text = "thank you"
         mock_segments.append(seg)
+    mock_info = MagicMock()
+    mock_info.language = "en"
     mock_model = MagicMock()
-    mock_model.transcribe.return_value = (iter(mock_segments), MagicMock())
+    mock_model.transcribe.return_value = (iter(mock_segments), mock_info)
     config = PipelineConfig(device="cpu", whisper_model="base")
 
     with patch("songmaker_cli.scoring.text_accuracy._get_whisper_model", return_value=mock_model):
@@ -507,6 +568,37 @@ def test_song_scores_to_dict_with_coherence() -> None:
     assert d["spectral_artifacts"] == 1
     assert d["lyrical_coherence"] == 8
     assert d["lyrical_summary"] == "good"
+
+
+def test_song_scores_to_dict_with_detected_language() -> None:
+    from songmaker_cli.scoring.models import SongScores, TextAccuracyScore
+
+    scores = SongScores(
+        text_accuracy=TextAccuracyScore(
+            similarity_ratio=0.85,
+            intended_line_texts=("hallo",),
+            transcribed_line_texts=("hallo",),
+            detected_language="de",
+        ),
+    )
+    d = scores.to_dict()
+    assert d["text_accuracy"] == 85.0
+    assert d["detected_language"] == "de"
+
+
+def test_song_scores_to_dict_no_detected_language() -> None:
+    from songmaker_cli.scoring.models import SongScores, TextAccuracyScore
+
+    scores = SongScores(
+        text_accuracy=TextAccuracyScore(
+            similarity_ratio=0.9,
+            intended_line_texts=("hello",),
+            transcribed_line_texts=("hello",),
+        ),
+    )
+    d = scores.to_dict()
+    assert d["text_accuracy"] == 90.0
+    assert "detected_language" not in d
 
 
 # ── scoring/pipeline.py gaps ────────────────────────────────────────

@@ -101,16 +101,47 @@ STALE_JOB_THRESHOLD_SECONDS = int(
 )
 
 
-def recover_stale_jobs_by_age(
-    session: Session, threshold_seconds: int = STALE_JOB_THRESHOLD_SECONDS,
+def clear_stale_user_jobs(
+    session: Session, user_id: str,
+    threshold_seconds: int = STALE_JOB_THRESHOLD_SECONDS,
 ) -> int:
-    """Mark running jobs older than threshold as failed. Returns count recovered."""
+    """Mark stale running/queued jobs for a user as failed. Returns count cleared.
+
+    Called at job submission time so users auto-unblock without waiting
+    for the periodic cron cleanup.
+    """
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=threshold_seconds)
     stale = (
         session.query(Job)
         .filter(
-            Job.status == "running",
+            Job.user_id == user_id,
+            Job.status.in_(("queued", "running")),
+            Job.started_at < cutoff,
+        )
+        .all()
+    )
+    for job in stale:
+        job.status = "failed"
+        job.error = "Job timed out (exceeded maximum run time)"
+        job.error_type = "stale_timeout"
+        job.completed_at = now
+    session.flush()
+    if stale:
+        log.info("Cleared %d stale jobs for user %s", len(stale), user_id)
+    return len(stale)
+
+
+def recover_stale_jobs_by_age(
+    session: Session, threshold_seconds: int = STALE_JOB_THRESHOLD_SECONDS,
+) -> int:
+    """Mark running/queued jobs older than threshold as failed. Returns count recovered."""
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=threshold_seconds)
+    stale = (
+        session.query(Job)
+        .filter(
+            Job.status.in_(("queued", "running")),
             Job.started_at < cutoff,
         )
         .all()
