@@ -2,10 +2,16 @@
 <script lang="ts">
 	interface Props {
 		onback?: () => void;
+		initialSection?: string;
 	}
 
-	let { onback }: Props = $props();
-	let section = $state('impressum');
+	let { onback, initialSection = 'impressum' }: Props = $props();
+	let userOverride: string | null = $state(null);
+	let section = $derived(userOverride ?? initialSection);
+
+	function switchSection(s: string) {
+		userOverride = s;
+	}
 </script>
 
 <div class="legal-content">
@@ -13,15 +19,15 @@
 		{#if onback}
 			<button class="back-arrow" onclick={onback} aria-label="Back">←</button>
 		{/if}
-		<button class:active={section === 'impressum'} onclick={() => (section = 'impressum')}
+		<button class:active={section === 'impressum'} onclick={() => switchSection('impressum')}
 			>Impressum</button
 		>
-		<button class:active={section === 'datenschutz'} onclick={() => (section = 'datenschutz')}
+		<button class:active={section === 'datenschutz'} onclick={() => switchSection('datenschutz')}
 			>Datenschutz</button
 		>
 		<button
 			class:active={section === 'nutzungsbedingungen'}
-			onclick={() => (section = 'nutzungsbedingungen')}>Nutzungsbedingungen</button
+			onclick={() => switchSection('nutzungsbedingungen')}>Nutzungsbedingungen</button
 		>
 	</div>
 

@@ -25,7 +25,7 @@
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let isPlaying = $state(false);
 	let progress = $state(0);
-	let showLegal = $state(false);
+	let legalSection: string | null = $state(null);
 
 	const slug = $derived(page.params.slug ?? '');
 
@@ -99,6 +99,12 @@
 	<title>{album ? `${album.title} — ${album.artist}` : 'Shared Album'} | {APP_NAME}</title>
 </svelte:head>
 
+<svelte:window
+	onkeydown={(e) => {
+		if (e.key === 'Escape') legalSection = null;
+	}}
+/>
+
 <audio
 	bind:this={audioEl}
 	ontimeupdate={onTimeUpdate}
@@ -162,19 +168,19 @@
 
 		<p class="powered">
 			Powered by <a href="/">{APP_NAME}</a>
-			· <button class="link-btn" onclick={() => (showLegal = true)}>Impressum</button>
-			· <button class="link-btn" onclick={() => (showLegal = true)}>Datenschutz</button>
+			· <button class="link-btn" onclick={() => (legalSection = 'impressum')}>Impressum</button>
+			· <button class="link-btn" onclick={() => (legalSection = 'datenschutz')}>Datenschutz</button>
 		</p>
 	{/if}
 </div>
 
-{#if showLegal}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="legal-overlay" onkeydown={(e) => e.key === 'Escape' && (showLegal = false)}>
+{#if legalSection}
+	<div class="legal-overlay">
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<div class="legal-backdrop" onclick={() => (showLegal = false)}></div>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="legal-backdrop" onclick={() => (legalSection = null)}></div>
 		<div class="legal-modal">
-			<LegalContent onback={() => (showLegal = false)} />
+			<LegalContent initialSection={legalSection} onback={() => (legalSection = null)} />
 		</div>
 	</div>
 {/if}
