@@ -68,7 +68,7 @@ GLOBAL_DEFAULTS_PRESET_NAME = "__global_defaults__"
 # ACE-Step server
 ACESTEP_PORT = 8001
 ACESTEP_HEALTH_URL_TEMPLATE = "http://localhost:{port}/health"
-ACESTEP_STARTUP_TIMEOUT_SECONDS = 120
+ACESTEP_STARTUP_TIMEOUT_SECONDS = 300
 
 # arq worker
 ARQ_QUEUE_KEY = "arq:queue"
