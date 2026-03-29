@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -100,7 +101,8 @@ _DISALLOWED_TOOLS = (
     "Agent,NotebookEdit,TodoWrite,EnterPlanMode,"
     "CronCreate,CronDelete,CronList,RemoteTrigger,"
     "EnterWorktree,ExitWorktree,ExitPlanMode,Skill,"
-    "TaskOutput,TaskStop,SendMessage,AskUserQuestion"
+    "TaskOutput,TaskStop,SendMessage,AskUserQuestion,"
+    "ToolSearch"
 )
 
 
@@ -126,9 +128,13 @@ def _call_cli(prompt: str, system: str | None = None) -> ClaudeResponse:
     if system:
         cmd.extend(["--system-prompt", system])
 
+    env = os.environ.copy()
+    for secret_key in ("ANTHROPIC_API_KEY", "SESSION_SECRET", "DATABASE_URL", "REDIS_URL"):
+        env.pop(secret_key, None)
+
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120,
+            cmd, capture_output=True, text=True, timeout=120, env=env,
         )
     except subprocess.TimeoutExpired:
         raise UnavailableError("Claude CLI timed out after 120s")

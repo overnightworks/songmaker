@@ -55,15 +55,21 @@ def run_migrations_online() -> None:
     )
     with connectable.connect() as connection:
         is_postgres = connection.dialect.name == "postgresql"
+        lock_stmt = text("SELECT pg_advisory_lock(:id)").bindparams(
+            id=MIGRATION_LOCK_ID,
+        )
+        unlock_stmt = text("SELECT pg_advisory_unlock(:id)").bindparams(
+            id=MIGRATION_LOCK_ID,
+        )
         if is_postgres:
-            connection.execute(text(f"SELECT pg_advisory_lock({MIGRATION_LOCK_ID})"))
+            connection.execute(lock_stmt)
         try:
             context.configure(connection=connection, target_metadata=target_metadata)
             with context.begin_transaction():
                 context.run_migrations()
         finally:
             if is_postgres:
-                connection.execute(text(f"SELECT pg_advisory_unlock({MIGRATION_LOCK_ID})"))
+                connection.execute(unlock_stmt)
 
 
 if context.is_offline_mode():

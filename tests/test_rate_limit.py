@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -66,8 +67,13 @@ def _get_user_id(client: TestClient) -> str:
     return client.get("/api/auth/me").json()["id"]
 
 
+@contextmanager
 def _mock_arq():
-    return patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock())
+    with (
+        patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
+        patch("songmaker_cli.generation_api.is_worker_healthy", AsyncMock(return_value=True)),
+    ):
+        yield
 
 
 # ── Generation rate limit ───────────────────────────────────────────

@@ -58,7 +58,7 @@ def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> No
     if dialect == "sqlite":
         session.execute(text("BEGIN IMMEDIATE"))
     else:
-        session.execute(text(f"SELECT pg_advisory_xact_lock({lock_id})"))
+        session.execute(text("SELECT pg_advisory_xact_lock(:id)").bindparams(id=lock_id))
 
 
 def check_redis_health(request) -> None:

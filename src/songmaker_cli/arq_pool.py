@@ -12,7 +12,7 @@ from arq.connections import ArqRedis, RedisSettings
 
 from songmaker_cli.constants import (
     ACTIVE_MODEL_REDIS_KEY,
-    ARQ_HEALTH_KEY_PATTERN,
+    ARQ_HEALTH_KEY,
     ARQ_QUEUE_KEY,
 )
 
@@ -51,8 +51,7 @@ async def get_queue_depth() -> int:
 
 async def is_worker_healthy() -> bool:
     try:
-        keys = await get_arq_pool().keys(ARQ_HEALTH_KEY_PATTERN)
-        return len(keys) > 0
+        return await get_arq_pool().exists(ARQ_HEALTH_KEY) > 0
     except Exception:
         return False
 

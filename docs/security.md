@@ -172,6 +172,8 @@ Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory 
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
 - **Redis session staleness**: If Redis delete fails during user deactivation, the cached session remains valid until the next background sync (up to 5 minutes) or Redis TTL expiry. The background sync detects and cleans up orphaned/deactivated sessions.
 - **ACE-Step reinitialize**: No cooldown on `POST /api/admin/acestep/reinitialize`. Repeated calls by a compromised admin could cause GPU disruption.
+- **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics (request counts, latencies, queue depth, VRAM usage) without auth. When deployed behind Cloudflare Tunnel or a reverse proxy, the proxy should block `/metrics` from public access. This is sufficient for single-user / friends-only deployments. If exposing to untrusted traffic, add `require_auth` or bind metrics to a separate internal port.
+- **Chat system prompt exposed via `/api/capabilities`**: The full system prompt (including untrusted-data handling instructions) is returned to authenticated users. This is intentional — the BYOK chat path (`chatDirect()` in the frontend) calls the Anthropic API directly and needs the same system prompt the server uses, so both paths behave identically. The prompt contains behavioral instructions, not secrets.
 
 ## Hardening Roadmap (for public internet exposure)
 

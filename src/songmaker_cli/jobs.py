@@ -372,6 +372,8 @@ def run_scoring_job(
             db_factory, job_id, "failed",
             error=_sanitize_error(exc), error_type="scoring_error",
         )
+    finally:
+        _cleanup_gpu()
 
 
 def _cleanup_gpu() -> None:

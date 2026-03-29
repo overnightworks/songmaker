@@ -95,6 +95,8 @@ These have been reviewed and accepted. Skip them unless the implementation has r
 - **ACE-Step reinitialize has no cooldown**: Admin-only endpoint. Compromised admin has full access anyway.
 - **AccessLogMiddleware logs URL paths**: `request.url.path` does not include query strings, so no sensitive data is logged.
 - **Frontend API key in localStorage**: BYOK key is stored client-side. CSP mitigates XSS. The key is sent directly to Anthropic, never to the songmaker server.
+- **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics without auth. Protected at the infrastructure layer (Cloudflare Tunnel / reverse proxy blocks public access). Documented in `docs/security.md`.
+- **Chat system prompt in `/api/capabilities`**: The full system prompt is returned to authenticated users. This is intentional — the BYOK `chatDirect()` path needs the same prompt the server uses. The prompt contains behavioral instructions, not secrets.
 
 ---
 

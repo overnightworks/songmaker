@@ -100,7 +100,7 @@ def test_get_queue_depth_no_pool_returns_zero() -> None:
 
 def test_is_worker_healthy_true() -> None:
     mock_pool = AsyncMock()
-    mock_pool.keys = AsyncMock(return_value=[b"arq:worker:test"])
+    mock_pool.exists = AsyncMock(return_value=1)
     pool_mod._pool = mock_pool
 
     result = _run(pool_mod.is_worker_healthy())
@@ -109,7 +109,7 @@ def test_is_worker_healthy_true() -> None:
 
 def test_is_worker_healthy_false() -> None:
     mock_pool = AsyncMock()
-    mock_pool.keys = AsyncMock(return_value=[])
+    mock_pool.exists = AsyncMock(return_value=0)
     pool_mod._pool = mock_pool
 
     result = _run(pool_mod.is_worker_healthy())
@@ -118,7 +118,7 @@ def test_is_worker_healthy_false() -> None:
 
 def test_is_worker_healthy_error() -> None:
     mock_pool = AsyncMock()
-    mock_pool.keys = AsyncMock(side_effect=ConnectionError)
+    mock_pool.exists = AsyncMock(side_effect=ConnectionError)
     pool_mod._pool = mock_pool
 
     result = _run(pool_mod.is_worker_healthy())

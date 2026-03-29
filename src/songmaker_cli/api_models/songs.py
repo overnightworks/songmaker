@@ -17,6 +17,18 @@ if TYPE_CHECKING:
 
 _GEN_PARAM_MAX_STRING_LENGTH = 2000
 
+
+def _safe_json_dict(
+    value: object, entity_type: str, entity_id: str,
+) -> dict | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+    log.warning("Corrupted JSON dict in %s %s", entity_type, entity_id)
+    return None
+
+
 _VALID_INFER_METHODS = frozenset({"ode", "sde"})
 _VALID_THINK_MODES = frozenset({"deep", "off", ""})
 _VALID_MODEL_MODES = frozenset(get_builtin_defaults().keys())
@@ -136,17 +148,25 @@ class GenerationResponse(BaseModel):
     @classmethod
     def from_orm(cls, gen: Generation) -> GenerationResponse:
         scores: dict[str, object] = {}
-        for score in gen.scores:
-            if isinstance(score.value, dict):
-                for key, value in score.value.items():
-                    if key in scores:
-                        log.warning(
-                            "Duplicate score key '%s' in generation %s", key, gen.id,
-                        )
-                    scores[key] = value
-        if gen.rating:
-            scores["user_rating"] = gen.rating.rating
-            scores["user_notes"] = gen.rating.notes
+        try:
+            for score in gen.scores:
+                if isinstance(score.value, dict):
+                    for key, value in score.value.items():
+                        if key in scores:
+                            log.warning(
+                                "Duplicate score key '%s' in generation %s", key, gen.id,
+                            )
+                        scores[key] = value
+            if gen.rating:
+                scores["user_rating"] = gen.rating.rating
+                scores["user_notes"] = gen.rating.notes
+        except (TypeError, AttributeError, KeyError):
+            log.warning("Corrupted score data in generation %s", gen.id)
+            scores = {}
+
+        generation_params = _safe_json_dict(
+            gen.generation_params, "generation", gen.id,
+        )
 
         return cls(
             id=gen.id,
@@ -162,7 +182,7 @@ class GenerationResponse(BaseModel):
             is_picked=gen.is_picked,
             whisper_text=gen.whisper_text,
             scores=scores if scores else None,
-            generation_params=gen.generation_params,
+            generation_params=generation_params,
             created_at=gen.created_at.isoformat() if gen.created_at else None,
         )
 
@@ -180,6 +200,7 @@ class VersionResponse(BaseModel):
 
     @classmethod
     def from_orm(cls, ver: Version) -> VersionResponse:
+        generation_params = _safe_json_dict(ver.generation_params, "version", ver.id)
         return cls(
             id=ver.id,
             version_number=ver.version_number,
@@ -188,7 +209,7 @@ class VersionResponse(BaseModel):
             bpm=ver.bpm,
             duration=ver.duration,
             key=ver.key,
-            generation_params=ver.generation_params,
+            generation_params=generation_params,
             created_at=ver.created_at.isoformat() if ver.created_at else None,
         )
 
@@ -216,6 +237,10 @@ class SongSummaryResponse(BaseModel):
     @classmethod
     def from_orm(cls, song: Song) -> SongSummaryResponse:
         ver = song.latest_version
+        generation_params = (
+            _safe_json_dict(ver.generation_params, "version", ver.id)
+            if ver else None
+        )
         return cls(
             id=song.id,
             title=song.title,
@@ -229,7 +254,7 @@ class SongSummaryResponse(BaseModel):
             bpm=ver.bpm if ver else None,
             duration=ver.duration if ver else None,
             key=ver.key if ver else "",
-            generation_params=ver.generation_params if ver else None,
+            generation_params=generation_params,
             version_count=len(song.versions),
             generation_count=len(song.generations),
             created_at=song.created_at.isoformat() if song.created_at else None,
