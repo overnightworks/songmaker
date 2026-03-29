@@ -148,7 +148,7 @@ def _make_redis_ctx(tmp_path: Path, fake_redis) -> tuple[AppContext, Path, Path,
     return ctx, audio_dir, data_dir, project_root
 
 
-def test_health_reports_redis_ok(tmp_path: Path, fake_redis) -> None:
+def test_health_reports_redis_ok(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with (
@@ -162,7 +162,7 @@ def test_health_reports_redis_ok(tmp_path: Path, fake_redis) -> None:
     assert data["redis"] == "ok"
 
 
-def test_health_reports_redis_error(tmp_path: Path, fake_redis) -> None:
+def test_health_reports_redis_error(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with TestClient(app) as client:
@@ -174,7 +174,7 @@ def test_health_reports_redis_error(tmp_path: Path, fake_redis) -> None:
 
 
 
-def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis) -> None:
+def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = TestClient(app, cookies={})
@@ -185,7 +185,7 @@ def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis) -> None
         assert resp.status_code == 200
 
 
-def test_redis_rate_limit_fail_open(tmp_path: Path) -> None:
+def test_redis_rate_limit_fail_open(tmp_path: Path, mock_arq_pool) -> None:
     broken_redis = MagicMock()
     broken_redis.ping.return_value = True
     pipe_mock = MagicMock()
@@ -209,7 +209,7 @@ def test_redis_rate_limit_fail_open(tmp_path: Path) -> None:
     assert resp.status_code != 503
 
 
-def test_metrics_with_redis(tmp_path: Path, fake_redis) -> None:
+def test_metrics_with_redis(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with TestClient(app) as client:
@@ -221,7 +221,7 @@ def test_metrics_with_redis(tmp_path: Path, fake_redis) -> None:
     assert 'method="GET"' in body
 
 
-def test_ip_rate_limit_middleware_writes_to_redis(tmp_path: Path, fake_redis) -> None:
+def test_ip_rate_limit_middleware_writes_to_redis(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
     from songmaker_cli.constants import REDIS_RL_IP_PREFIX
 
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
