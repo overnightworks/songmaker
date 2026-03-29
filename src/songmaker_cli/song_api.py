@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
+    Pagination,
     check_album_access,
     check_song_access,
     cleanup_generation_files,
@@ -23,7 +24,6 @@ from songmaker_cli.api_models import (
     VersionResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.constants import PAGE_DEFAULT_LIMIT, PAGE_MAX_LIMIT
 from songmaker_cli.db.queries import (
     count_songs,
     create_song,
@@ -41,9 +41,8 @@ router = APIRouter()
 
 @router.get("/songs")
 def api_list_songs(
+    page: Pagination,
     album_id: str | None = Query(None),
-    offset: int = Query(0, ge=0),
-    limit: int = Query(PAGE_DEFAULT_LIMIT, ge=1, le=PAGE_MAX_LIMIT),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> PaginatedResponse[SongSummaryResponse]:
@@ -51,11 +50,11 @@ def api_list_songs(
     total = count_songs(session, album_id=album_id, user_id=uid)
     songs = list_songs(
         session, album_id=album_id, user_id=uid, light=True,
-        offset=offset, limit=limit,
+        offset=page.offset, limit=page.limit,
     )
     return PaginatedResponse(
         items=[SongSummaryResponse.from_orm(s) for s in songs],
-        total=total, offset=offset, limit=limit,
+        total=total, offset=page.offset, limit=page.limit,
     )
 
 

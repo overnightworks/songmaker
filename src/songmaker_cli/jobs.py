@@ -336,10 +336,14 @@ def run_scoring_job(
             log.error("Scoring job %s: MP3 not found at %s", job_id, mp3_path_rel)
             return
 
+        scorer = get_scorer_process()
+        if not scorer.alive:
+            log.info("Scorer subprocess not running — spawning before scoring")
+
         device = _detect_device()
         config = PipelineConfig(device=device)
         meta = SongMeta(**meta_kwargs) if meta_kwargs else None
-        song_scores = get_scorer_process().score(
+        song_scores = scorer.score(
             mp3_full, meta=meta, scorers=scorers, config=config, job_id=job_id,
         )
         scores_dict = song_scores.to_dict()

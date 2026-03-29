@@ -97,7 +97,7 @@ def recover_stale_jobs(session: Session) -> int:
 
 
 STALE_JOB_THRESHOLD_SECONDS = int(
-    os.environ.get("STALE_JOB_THRESHOLD_SECONDS", 600),
+    os.environ.get("STALE_JOB_THRESHOLD_SECONDS", 360),
 )
 
 

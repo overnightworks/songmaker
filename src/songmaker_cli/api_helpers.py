@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException, Query
 from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -23,6 +25,10 @@ from songmaker_cli.auth import (
     SCORING_RATE_LIMIT_USER,
 )
 from songmaker_cli.constants import (
+    PAGE_ADMIN_DEFAULT_LIMIT,
+    PAGE_ADMIN_MAX_LIMIT,
+    PAGE_DEFAULT_LIMIT,
+    PAGE_MAX_LIMIT,
     SETTING_CHAT_RATE_LIMIT,
     SETTING_GENERATION_RATE_LIMIT,
     SETTING_MAX_QUEUE_DEPTH,
@@ -247,3 +253,30 @@ def cleanup_generation_files(audio_dir: Path, paths: list[str]) -> None:
             delete_generation_files(audio_dir, rel_path)
         except Exception:
             _log.warning("Orphaned file after delete: %s", rel_path)
+
+
+# ── Pagination ───────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class PageParams:
+    offset: int
+    limit: int
+
+
+def _page_params(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(PAGE_DEFAULT_LIMIT, ge=1, le=PAGE_MAX_LIMIT),
+) -> PageParams:
+    return PageParams(offset=offset, limit=limit)
+
+
+def _admin_page_params(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(PAGE_ADMIN_DEFAULT_LIMIT, ge=1, le=PAGE_ADMIN_MAX_LIMIT),
+) -> PageParams:
+    return PageParams(offset=offset, limit=limit)
+
+
+Pagination = Annotated[PageParams, Depends(_page_params)]
+AdminPagination = Annotated[PageParams, Depends(_admin_page_params)]

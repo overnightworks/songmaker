@@ -39,7 +39,7 @@ class AudioData:
     sr: int
 
 
-SCORER_TIMEOUT_SECONDS = 300
+SCORER_TIMEOUT_SECONDS = 120
 DEVICE_CPU = "cpu"
 DEVICE_GPU = "gpu"
 
