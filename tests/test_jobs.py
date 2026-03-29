@@ -53,9 +53,10 @@ def test_update_job_success(seeded_db) -> None:
         assert job.progress == 0.5
 
 
-def test_update_job_swallows_exception(db_factory) -> None:
+def test_update_job_raises_after_retries(db_factory) -> None:
     broken_factory = MagicMock(side_effect=RuntimeError("db broken"))
-    _update_job(broken_factory, "j1", "running")
+    with pytest.raises(RuntimeError, match="status update to 'running' failed after 2 attempts"):
+        _update_job(broken_factory, "j1", "running")
 
 
 # ── _detect_device ──────────────────────────────────────────────────

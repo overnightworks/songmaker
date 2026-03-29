@@ -61,10 +61,12 @@ def init_db(url: str) -> sessionmaker[Session]:
     """Create the PostgreSQL engine, run migrations, and return a session factory."""
     _run_migrations(url)
 
+    pool_size = int(os.environ.get("DATABASE_POOL_SIZE", DEFAULT_PG_POOL_SIZE))
+    max_overflow = int(os.environ.get("DATABASE_MAX_OVERFLOW", DEFAULT_PG_MAX_OVERFLOW))
     engine = create_engine(
         url, echo=False,
-        pool_size=DEFAULT_PG_POOL_SIZE,
-        max_overflow=DEFAULT_PG_MAX_OVERFLOW,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
         pool_pre_ping=True,
     )
 

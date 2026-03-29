@@ -13,43 +13,38 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Final
 
 import numpy as np
 import pyloudnorm as pyln
 from numpy.typing import NDArray
 from scipy.signal import butter, lfilter, sosfilt
 
-from audio_engine.constants import FALLBACK_SAMPLE_RATE
+from audio_engine.constants import (
+    BUTTER_ORDER,
+    CHANNEL_LENGTH_TOLERANCE,
+    COMPRESSOR_ATTACK_SECONDS,
+    COMPRESSOR_RELEASE_SECONDS,
+    DEFAULT_COMPRESSION_RATIOS,
+    DEFAULT_COMPRESSION_THRESHOLDS,
+    DEFAULT_CROSSOVER_BANDS,
+    DEFAULT_SOFT_CLIP_CEILING,
+    DEFAULT_STEREO_WIDTH,
+    DEFAULT_TARGET_LUFS,
+    FALLBACK_SAMPLE_RATE,
+    MAX_GAIN_DB,
+    MIN_RMS_FLOOR,
+    SOFT_CLIP_KNEE,
+)
 from audio_engine.errors import MasteringError
 
 log = logging.getLogger(__name__)
-
-_DEFAULT_TARGET_LUFS: Final[float] = -14.0
-_DEFAULT_STEREO_WIDTH: Final[float] = 1.2
-_DEFAULT_SOFT_CLIP_CEILING: Final[float] = 0.98
-_DEFAULT_CROSSOVER_BANDS: Final[tuple[tuple[float, float], ...]] = (
-    (20.0, 250.0),
-    (250.0, 4000.0),
-    (4000.0, 20000.0),
-)
-_DEFAULT_RATIOS: Final[tuple[float, ...]] = (3.0, 2.5, 2.0)
-_DEFAULT_THRESHOLDS: Final[tuple[float, ...]] = (0.5, 0.6, 0.7)
-_BUTTER_ORDER: Final[int] = 4
-_COMPRESSOR_ATTACK_SECONDS: Final[float] = 0.005
-_COMPRESSOR_RELEASE_SECONDS: Final[float] = 0.05
-_MIN_RMS_FLOOR: Final[float] = 1e-10
-_MAX_GAIN_DB: Final[float] = 24.0
-
-
-_CHANNEL_LENGTH_TOLERANCE: Final[int] = 16
 
 
 def master_stereo(
     left: NDArray[np.float64],
     right: NDArray[np.float64],
-    target_lufs: float = _DEFAULT_TARGET_LUFS,
-    stereo_width: float = _DEFAULT_STEREO_WIDTH,
+    target_lufs: float = DEFAULT_TARGET_LUFS,
+    stereo_width: float = DEFAULT_STEREO_WIDTH,
     sample_rate: int = FALLBACK_SAMPLE_RATE,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Apply professional mastering chain to stereo audio.
@@ -64,10 +59,10 @@ def master_stereo(
         return left, right
 
     length_diff = abs(len(left) - len(right))
-    if length_diff > _CHANNEL_LENGTH_TOLERANCE:
+    if length_diff > CHANNEL_LENGTH_TOLERANCE:
         raise MasteringError(
             f"Left/right channel length mismatch: {len(left)} vs {len(right)} "
-            f"(diff={length_diff}, tolerance={_CHANNEL_LENGTH_TOLERANCE})"
+            f"(diff={length_diff}, tolerance={CHANNEL_LENGTH_TOLERANCE})"
         )
     n = min(len(left), len(right))
     left, right = left[:n], right[:n]
@@ -91,17 +86,17 @@ def _master_chain(
         left, right, target_lufs=target_lufs, current_lufs=current_lufs,
     )
 
-    left = soft_clip(left, ceiling=_DEFAULT_SOFT_CLIP_CEILING)
-    right = soft_clip(right, ceiling=_DEFAULT_SOFT_CLIP_CEILING)
+    left = soft_clip(left, ceiling=DEFAULT_SOFT_CLIP_CEILING)
+    right = soft_clip(right, ceiling=DEFAULT_SOFT_CLIP_CEILING)
     return left, right
 
 
 def multiband_compress(
     left: NDArray[np.float64],
     right: NDArray[np.float64],
-    bands: tuple[tuple[float, float], ...] = _DEFAULT_CROSSOVER_BANDS,
-    ratios: tuple[float, ...] = _DEFAULT_RATIOS,
-    thresholds: tuple[float, ...] = _DEFAULT_THRESHOLDS,
+    bands: tuple[tuple[float, float], ...] = DEFAULT_CROSSOVER_BANDS,
+    ratios: tuple[float, ...] = DEFAULT_COMPRESSION_RATIOS,
+    thresholds: tuple[float, ...] = DEFAULT_COMPRESSION_THRESHOLDS,
     sample_rate: int = FALLBACK_SAMPLE_RATE,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Apply frequency-dependent compression across multiple bands."""
@@ -159,7 +154,7 @@ def normalize_to_lufs(
         return left, right
 
     gain_db = target_lufs - current_lufs
-    gain_db = max(-_MAX_GAIN_DB, min(_MAX_GAIN_DB, gain_db))
+    gain_db = max(-MAX_GAIN_DB, min(MAX_GAIN_DB, gain_db))
     gain_linear = 10.0 ** (gain_db / 20.0)
 
     return left * gain_linear, right * gain_linear
@@ -185,12 +180,9 @@ def widen_stereo(
     return mid + side, mid - side
 
 
-_SOFT_CLIP_KNEE: Final[float] = 0.85
-
-
 def soft_clip(
     samples: NDArray[np.float64],
-    ceiling: float = _DEFAULT_SOFT_CLIP_CEILING,
+    ceiling: float = DEFAULT_SOFT_CLIP_CEILING,
 ) -> NDArray[np.float64]:
     """Apply soft clipping: linear below knee, tanh saturation above.
 
@@ -200,7 +192,7 @@ def soft_clip(
     if len(samples) == 0:
         return samples
 
-    knee = _SOFT_CLIP_KNEE * ceiling
+    knee = SOFT_CLIP_KNEE * ceiling
     result = samples.copy()
     above = np.abs(samples) > knee
 
@@ -231,12 +223,12 @@ def _extract_band(
     is_highpass = high_hz >= nyquist * 0.95
 
     if is_lowpass:
-        sos = butter(_BUTTER_ORDER, high_norm, btype="low", output="sos")
+        sos = butter(BUTTER_ORDER, high_norm, btype="low", output="sos")
     elif is_highpass:
-        sos = butter(_BUTTER_ORDER, low_norm, btype="high", output="sos")
+        sos = butter(BUTTER_ORDER, low_norm, btype="high", output="sos")
     else:
         sos = butter(
-            _BUTTER_ORDER, [low_norm, high_norm], btype="band", output="sos",
+            BUTTER_ORDER, [low_norm, high_norm], btype="band", output="sos",
         )
 
     band_left: NDArray[np.float64] = sosfilt(sos, left).astype(np.float64)
@@ -261,8 +253,8 @@ def _compress_signal(
     for mastering-level dynamics control and produces musically acceptable
     results validated by the LUFS and clipping tests.
     """
-    attack_coeff = math.exp(-1.0 / (_COMPRESSOR_ATTACK_SECONDS * sample_rate))
-    release_coeff = math.exp(-1.0 / (_COMPRESSOR_RELEASE_SECONDS * sample_rate))
+    attack_coeff = math.exp(-1.0 / (COMPRESSOR_ATTACK_SECONDS * sample_rate))
+    release_coeff = math.exp(-1.0 / (COMPRESSOR_RELEASE_SECONDS * sample_rate))
     abs_signal = np.abs(signal)
 
     # One-pole IIR smoothers: y[n] = coeff * y[n-1] + (1 - coeff) * x[n]
@@ -277,7 +269,6 @@ def _compress_signal(
     above_threshold = envelope > threshold
     gain[above_threshold] = (
         threshold + (envelope[above_threshold] - threshold) / ratio
-    ) / np.maximum(envelope[above_threshold], _MIN_RMS_FLOOR)
+    ) / np.maximum(envelope[above_threshold], MIN_RMS_FLOOR)
 
     return signal * gain
-

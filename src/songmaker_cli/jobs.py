@@ -397,17 +397,21 @@ def _detect_device() -> str:
 
 
 def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
+    last_exc: Exception | None = None
     for attempt in range(2):
         try:
             with factory() as session:
                 update_job_status(session, job_id, status, **kwargs)
                 session.commit()
             return
-        except Exception:
+        except Exception as exc:
+            last_exc = exc
             if attempt == 0:
                 log.warning("Retrying job %s status update to %s", job_id, status)
-            else:
-                log.exception("Failed to update job %s to %s after retry", job_id, status)
+    log.exception("Failed to update job %s to %s after retry", job_id, status)
+    raise RuntimeError(
+        f"Job {job_id} status update to {status!r} failed after 2 attempts"
+    ) from last_exc
 
 
 def _cleanup_orphaned_files(audio_dir: Path, *rel_paths: str) -> None:

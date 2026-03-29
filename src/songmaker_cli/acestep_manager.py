@@ -51,7 +51,7 @@ class AceStepManager:
         env = os.environ.copy()
         env["ACESTEP_API_PORT"] = str(_ACESTEP_PORT)
         env["ACESTEP_API_HOST"] = "127.0.0.1"
-        env["ACESTEP_DEVICE"] = "cuda"
+        env.setdefault("ACESTEP_DEVICE", "cuda")
         env.setdefault("ACESTEP_CONFIG_PATH", "acestep-v15-sft")
         env.setdefault("ACESTEP_INIT_LLM", "1")
         env.setdefault("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-4B")
@@ -68,8 +68,8 @@ class AceStepManager:
         if self._stderr_file:
             try:
                 self._stderr_file.close()
-            except Exception:
-                pass
+            except OSError:
+                log.debug("Failed to close previous stderr file", exc_info=True)
         self._stderr_file = self._stderr_path.open("w")
         self._process = subprocess.Popen(
             cmd, env=env, cwd=ACESTEP_DIR,
@@ -81,8 +81,8 @@ class AceStepManager:
         if self._stderr_file:
             try:
                 self._stderr_file.close()
-            except Exception:
-                pass
+            except OSError:
+                log.debug("Failed to close stderr file during stop", exc_info=True)
             self._stderr_file = None
         if not self._process:
             return
@@ -107,7 +107,10 @@ class AceStepManager:
             req = Request(_ACESTEP_HEALTH_URL, method="GET")
             with urlopen(req, timeout=5):
                 return True
+        except (OSError, ValueError):
+            return False
         except Exception:
+            log.debug("Unexpected error during ACE-Step health check", exc_info=True)
             return False
 
     def wait_for_health(self) -> None:
@@ -150,7 +153,7 @@ class AceStepManager:
                 self._cached_model = resolve_model_mode(info.model)
                 return
         except Exception:
-            pass
+            log.debug("Failed to refresh cached model info", exc_info=True)
         self._cached_model = None
 
     @property
