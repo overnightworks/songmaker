@@ -2,6 +2,8 @@ import type {
 	AlbumItem,
 	AuthUser,
 	Capabilities,
+	ChatResult,
+	CleanupResult,
 	JobItem,
 	LoginAttemptItem,
 	PaginatedResponse,
@@ -9,6 +11,7 @@ import type {
 	RateLimitsResponse,
 	SessionItem,
 	SetupRequired,
+	ShareResult,
 	SongItem,
 	UserItem,
 	UserRateLimitsResponse,
@@ -80,11 +83,6 @@ export async function createAlbum(title: string, artist: string = ''): Promise<A
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ title, artist })
 	});
-}
-
-export interface ShareResult {
-	share_url: string;
-	share_slug: string;
 }
 
 export async function shareAlbum(albumId: string): Promise<ShareResult> {
@@ -210,8 +208,8 @@ export async function unpickGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}/unpick`, { method: 'POST' });
 }
 
-export async function cleanupAlbum(albumId: string): Promise<{ deleted: number }> {
-	return apiFetch<{ deleted: number }>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
+export async function cleanupAlbum(albumId: string): Promise<CleanupResult> {
+	return apiFetch<CleanupResult>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
 }
 
 let _chatModel = '';
@@ -358,7 +356,7 @@ export async function chatWithClaude(message: string, context: string = ''): Pro
 		return chatDirect(fullMessage, claudeKey);
 	}
 
-	const data = await apiFetch<{ response: string }>('/api/chat', {
+	const data = await apiFetch<ChatResult>('/api/chat', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ message, context })

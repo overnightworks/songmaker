@@ -173,16 +173,24 @@ class SessionCache:
     def refresh_ttl(self, session_id: str, max_age_seconds: int) -> None:
         self._redis.expire(self._session_key(session_id), max_age_seconds)
 
+    _LUA_UPDATE_IP_UA = """
+    local key = KEYS[1]
+    local ip = ARGV[1]
+    local ua = ARGV[2]
+    local raw = redis.call('GET', key)
+    if not raw then return 0 end
+    local ttl = redis.call('TTL', key)
+    if ttl <= 0 then return 0 end
+    local data = cjson.decode(raw)
+    data['ip_address'] = ip
+    data['user_agent'] = ua
+    redis.call('SET', key, cjson.encode(data), 'EX', ttl)
+    return 1
+    """
+
     def update_ip_ua(self, session_id: str, ip_address: str, user_agent: str) -> None:
         key = self._session_key(session_id)
-        raw = self._redis.get(key)
-        if raw is None:
-            return
-        data = CachedSessionData.model_validate_json(raw)
-        updated = data.model_copy(update={"ip_address": ip_address, "user_agent": user_agent})
-        ttl = self._redis.ttl(key)
-        if ttl > 0:
-            self._redis.set(key, updated.model_dump_json(), ex=ttl)
+        self._redis.eval(self._LUA_UPDATE_IP_UA, 1, key, ip_address, user_agent)
 
     def delete(self, session_id: str, user_id: str) -> None:
         pipe = self._redis.pipeline()

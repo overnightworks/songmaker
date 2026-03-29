@@ -55,6 +55,10 @@ _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "UserRateLimitsResponse": "UserRateLimitsResponse",
     "GenerationParams": "VersionGenerationParams",
     "StoredGenerationParams": "GenerationParams",
+    "ChatResponse": "ChatResult",
+    "RateResponse": "RateResult",
+    "CleanupResponse": "CleanupResult",
+    "ShareResponse": "ShareResult",
 }
 
 _FIELD_TYPE_OVERRIDES: dict[tuple[str, str], str] = {
@@ -86,6 +90,10 @@ _EMIT_ORDER: list[str] = [
     "RateLimitItem",
     "RateLimitsResponse",
     "UserRateLimitsResponse",
+    "ChatResult",
+    "RateResult",
+    "CleanupResult",
+    "ShareResult",
 ]
 
 
@@ -239,6 +247,8 @@ def generate() -> str:
         AuditLogResponse,
         AuthMeResponse,
         CapabilitiesResponse,
+        ChatResponse,
+        CleanupResponse,
         GenerationParams,
         GenerationResponse,
         JobResponse,
@@ -246,8 +256,10 @@ def generate() -> str:
         PresetResponse,
         RateLimitItem,
         RateLimitsResponse,
+        RateResponse,
         SessionResponse,
         SetupRequiredResponse,
+        ShareResponse,
         SongResponse,
         UserRateLimitsResponse,
         UserResponse,
@@ -272,6 +284,10 @@ def generate() -> str:
         "RateLimitItem": RateLimitItem,
         "RateLimitsResponse": RateLimitsResponse,
         "UserRateLimitsResponse": UserRateLimitsResponse,
+        "ChatResult": ChatResponse,
+        "RateResult": RateResponse,
+        "CleanupResult": CleanupResponse,
+        "ShareResult": ShareResponse,
     }
 
     blocks: list[str] = [HEADER]

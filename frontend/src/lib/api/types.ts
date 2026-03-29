@@ -221,3 +221,25 @@ export interface UserRateLimitsResponse {
 	overrides: RateLimitItem[];
 	effective: RateLimitItem[];
 }
+
+export interface ChatResult {
+	response: string;
+}
+
+export interface RateResult {
+	status: string;
+	generation_id?: string | null;
+	generation?: string | null;
+	rating: number;
+}
+
+export interface CleanupResult {
+	status: string;
+	deleted: number;
+}
+
+export interface ShareResult {
+	status: string;
+	share_url: string;
+	share_slug: string;
+}

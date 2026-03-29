@@ -34,6 +34,7 @@ _db_factory = None
 _db_engine = None
 _db_lock = threading.Lock()
 _acestep_manager = None
+_acestep_lock = threading.Lock()
 
 JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "300"))
 DRAIN_TIMEOUT_SECONDS = int(os.environ.get("ARQ_DRAIN_TIMEOUT", "300"))
@@ -59,9 +60,11 @@ def _data_dir() -> Path:
 
 
 def _require_acestep_manager():
-    if _acestep_manager is None:
+    with _acestep_lock:
+        mgr = _acestep_manager
+    if mgr is None:
         raise RuntimeError("ACE-Step manager not initialized — on_startup may have failed")
-    return _acestep_manager
+    return mgr
 
 
 async def generate(ctx, job_id, song_id, version_id, count, user_id):
@@ -191,26 +194,30 @@ async def on_startup(ctx):
 
     log.info("Worker starting up...")
 
-    global _acestep_manager
     from songmaker_cli.acestep_manager import AceStepManager
-    _acestep_manager = AceStepManager()
-    _acestep_manager.ensure()
-    _acestep_manager.refresh_cached_model()
+    mgr = AceStepManager()
+    with _acestep_lock:
+        global _acestep_manager
+        _acestep_manager = mgr
+    mgr.ensure()
+    mgr.refresh_cached_model()
 
-    model = _acestep_manager.active_model
+    model = mgr.active_model
     log.info("ACE-Step model: %s", model or "unknown")
     if model:
         await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model)
 
     redis = ctx["redis"]
     if await redis.set(RECOVERY_LOCK_KEY, "1", ex=RECOVERY_LOCK_TTL_SECONDS, nx=True):
-        db_factory = _get_db_factory()
-        with db_factory() as session:
-            recovered = recover_stale_jobs(session)
-            if recovered:
-                log.info("Recovered %d stale jobs", recovered)
-            session.commit()
-        await redis.delete(RECOVERY_LOCK_KEY)
+        try:
+            db_factory = _get_db_factory()
+            with db_factory() as session:
+                recovered = recover_stale_jobs(session)
+                if recovered:
+                    log.info("Recovered %d stale jobs", recovered)
+                session.commit()
+        finally:
+            await redis.delete(RECOVERY_LOCK_KEY)
     else:
         log.info("Stale job recovery skipped — another worker holds the lock")
 
@@ -221,13 +228,15 @@ async def on_startup(ctx):
 async def on_shutdown(ctx):
     redis = ctx["redis"]
     if await redis.set(RECOVERY_LOCK_KEY, "1", ex=RECOVERY_LOCK_TTL_SECONDS, nx=True):
-        db_factory = _get_db_factory()
-        with db_factory() as session:
-            recovered = recover_stale_jobs(session)
-            if recovered:
-                log.warning("Shutdown: marked %d in-progress jobs as failed", recovered)
-            session.commit()
-        await redis.delete(RECOVERY_LOCK_KEY)
+        try:
+            db_factory = _get_db_factory()
+            with db_factory() as session:
+                recovered = recover_stale_jobs(session)
+                if recovered:
+                    log.warning("Shutdown: marked %d in-progress jobs as failed", recovered)
+                session.commit()
+        finally:
+            await redis.delete(RECOVERY_LOCK_KEY)
     else:
         log.warning("Shutdown recovery skipped — another worker holds the lock")
 
