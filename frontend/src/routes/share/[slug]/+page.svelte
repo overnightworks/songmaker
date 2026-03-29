@@ -2,6 +2,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
 	import { APP_NAME } from '$lib/constants';
+	import LegalContent from '$lib/components/LegalContent.svelte';
 
 	interface SharedSong {
 		title: string;
@@ -24,6 +25,7 @@
 	let audioEl: HTMLAudioElement | null = $state(null);
 	let isPlaying = $state(false);
 	let progress = $state(0);
+	let showLegal = $state(false);
 
 	const slug = $derived(page.params.slug ?? '');
 
@@ -160,11 +162,22 @@
 
 		<p class="powered">
 			Powered by <a href="/">{APP_NAME}</a>
-			· <a href="/legal#impressum">Impressum</a>
-			· <a href="/legal#datenschutz">Datenschutz</a>
+			· <button class="link-btn" onclick={() => (showLegal = true)}>Impressum</button>
+			· <button class="link-btn" onclick={() => (showLegal = true)}>Datenschutz</button>
 		</p>
 	{/if}
 </div>
+
+{#if showLegal}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="legal-overlay" onkeydown={(e) => e.key === 'Escape' && (showLegal = false)}>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div class="legal-backdrop" onclick={() => (showLegal = false)}></div>
+		<div class="legal-modal">
+			<LegalContent onback={() => (showLegal = false)} />
+		</div>
+	</div>
+{/if}
 
 <style>
 	.shared-page {
@@ -424,7 +437,48 @@
 		background-clip: text;
 	}
 
-	.powered a:hover {
+	.powered a:hover,
+	.powered .link-btn:hover {
 		-webkit-text-fill-color: transparent;
+	}
+
+	.link-btn {
+		background: none;
+		border: none;
+		padding: 0;
+		font: inherit;
+		cursor: pointer;
+		color: var(--text-muted, #888);
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+		-webkit-background-clip: text;
+		background-clip: text;
+	}
+
+	.legal-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.legal-backdrop {
+		position: absolute;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.8);
+		backdrop-filter: blur(4px);
+	}
+
+	.legal-modal {
+		position: relative;
+		max-height: 85dvh;
+		max-width: 700px;
+		width: 95%;
+		overflow-y: auto;
+		background: var(--bg, #0a0a0a);
+		border: 1px solid var(--border, #333);
+		border-radius: 8px;
+		box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 </style>
