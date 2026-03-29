@@ -43,20 +43,25 @@ tests/
 ├── test_claude_provider.py  Claude API/CLI backend tests
 ├── test_config.py           ACE-Step config building, path resolution
 ├── test_db.py               DB models, queries, engine, migrations
-├── test_acestep_manager.py   ACE-Step lifecycle, VRAM management
-├── test_arq_pool.py         arq connection pool, Redis health queries
-├── test_worker.py           arq worker tasks, idempotency, startup/shutdown
-├── test_jobs.py             Background generation + scoring job runners
-├── test_mastering.py        Mastering chain (compression, LUFS, clipping)
-├── test_middleware.py       Auth middleware and FastAPI dependencies
-├── test_parser.py           SongMeta/AlbumMeta data model tests
-├── test_audio_io.py         WAV read/write, MP3 encoding
-├── test_rate_limit.py       Rate limiting (generation, scoring, queue depth)
-├── test_scorers.py          Silence, BPM, dynamics scorers
-├── test_scorers_extended.py Spectral, audiobox, text accuracy, coherence
-├── test_scoring_pipeline.py Pipeline registry, runner, type validation
-├── test_sharing.py          Album sharing (share/unshare, shared view, rate limit)
-└── test_server.py           Server app creation, static files, audio routes
+├── test_acestep_manager.py    ACE-Step lifecycle, VRAM management
+├── test_arq_pool.py           arq connection pool, Redis health queries
+├── test_worker.py             arq worker tasks, idempotency, startup/shutdown
+├── test_jobs.py               Background generation + scoring job runners
+├── test_gpu_util.py           GPU memory queries via NVML
+├── test_mastering.py          Mastering chain (compression, LUFS, clipping)
+├── test_middleware.py         Auth middleware and FastAPI dependencies
+├── test_parser.py             SongMeta/AlbumMeta data model tests
+├── test_audio_io.py           WAV read/write, MP3 encoding
+├── test_postgresql.py         PostgreSQL-specific tests, migrations, concurrency
+├── test_rate_limit.py         Rate limiting (generation, scoring, queue depth)
+├── test_redis.py              Redis client, rate limiter, metrics, session cache
+├── test_reimport.py           Reimport core logic and API endpoint
+├── test_scorers.py            Silence, BPM, dynamics scorers
+├── test_scorers_extended.py   Spectral, audiobox, text accuracy, coherence
+├── test_scorer_subprocess.py  Scorer subprocess lifecycle, timeout, kill, recovery
+├── test_scoring_pipeline.py   Pipeline registry, runner, type validation
+├── test_sharing.py            Album sharing (share/unshare, shared view, rate limit)
+└── test_server.py             Server app creation, static files, audio routes
 
 frontend/src/
 ├── lib/api/client.test.ts          API client (all endpoints, error handling)

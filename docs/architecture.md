@@ -156,7 +156,7 @@ faster-whisper:  ~3 GB VRAM (int8_float16, CTranslate2 backend, loads on demand,
 AudioBox:        CPU only  (forced via CUDA_VISIBLE_DEVICES="" context manager)
 ```
 
-Mode switching via `prepare_generate_mode()` / `prepare_score_mode()` in `acestep_manager.py`. Before generation, scoring model caches are cleared and VRAM release is verified. Per-job cleanup: `gc.collect()` + `torch.cuda.empty_cache()` in `finally` blocks.
+Mode switching via `prepare_generate_mode()` in `acestep_manager.py`. Before generation, the scorer subprocess is asked to release GPU memory (`release_gpu()`), falling back to `clear_scoring_models()` if no subprocess is running. VRAM release is verified via pynvml polling before ACE-Step starts.
 
 VRAM verification uses pynvml (NVML) for system-wide GPU memory measurement with a delta-based check: snapshots VRAM before clearing scoring models, then polls until usage drops back to baseline + margin. Raises `RuntimeError` if not freed, failing the job cleanly instead of OOMing ACE-Step. Falls back gracefully if pynvml is unavailable.
 
@@ -167,6 +167,7 @@ VRAM verification uses pynvml (NVML) for system-wide GPU memory measurement with
 | Single code path | CLI → API → DB | No duplication between CLI and web |
 | Pydantic from_orm() | Response models serialize ORM objects | No manual dict layer to maintain |
 | GPU queue | Single-threaded, in-process | One GPU, ACE-Step + scoring share VRAM |
+| Scoring subprocess | Long-lived child process, killed on timeout | Real cleanup via SIGKILL, GPU memory freed immediately |
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
 | Session auth | Cookies + Redis cache | Revocable, HttpOnly, Redis-first reads. Redis TTL is authoritative for session expiry; DB synced every 5 min as backup |
 | Redis required | Fail-fast at startup, fail-open rate limiting | Server won't start without Redis; if Redis drops mid-operation, rate limiting allows requests through |
@@ -174,3 +175,17 @@ VRAM verification uses pynvml (NVML) for system-wide GPU memory measurement with
 | PostgreSQL | Connection pooling, concurrent writes | Required alongside Redis |
 | ACE-Step as subprocess | Separate server, managed lifecycle | Clean VRAM release, independent restarts |
 | Typed API contract | `api_models.py` ↔ `types.ts` | Backend and frontend stay in sync |
+
+## Monitoring
+
+Prometheus + Grafana stack in `docker-compose.yml`. Prometheus scrapes `/metrics` every 15s. Grafana on port 3000 with a pre-provisioned dashboard.
+
+Exported metrics: `songmaker_http_requests_total`, `songmaker_http_request_duration_milliseconds_total`, `songmaker_active_sessions`, `songmaker_jobs_total`, `songmaker_job_duration_seconds`, `songmaker_queue_depth`, `songmaker_gpu_vram_megabytes`.
+
+Health endpoint at `/health` reports component status (worker, DB, Redis, ACE-Step) and returns `"degraded"` if any component is down.
+
+## Backup & Restore
+
+`scripts/backup.sh` dumps PostgreSQL + copies the audio Docker volume to `BACKUP_DIR` (default `/mnt/backup/songmaker`). `scripts/restore.sh` restores both. `scripts/backup-list.sh` lists snapshots. See [scripts/BACKUP.md](../scripts/BACKUP.md) for setup instructions.
+
+DB and audio must be backed up and restored together — one without the other leaves orphaned records or unreachable files.

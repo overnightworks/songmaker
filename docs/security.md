@@ -68,7 +68,7 @@ All responses include:
 
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
-- `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.anthropic.com; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; frame-ancestors 'none'`
+- `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' https://api.anthropic.com; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only; `X-Forwarded-Proto` only honored from `TRUSTED_PROXIES`)
@@ -177,8 +177,8 @@ Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory 
 
 The application-layer security (auth, CSRF, IDOR, injection, error sanitization) is solid for a self-hosted tool behind a reverse proxy. The gaps below are infrastructure-level and would need addressing before exposing the app to untrusted public traffic at scale.
 
-### 1. Replace SQLite with PostgreSQL
-**Priority: High** — SQLite uses file-level locking. Under concurrent write load from multiple users, requests will fail with "database is locked" errors. PostgreSQL handles concurrent access natively and is required for any serious multi-user deployment.
+### ~~1. Replace SQLite with PostgreSQL~~ (Done)
+PostgreSQL is now required for production. SQLite is used only in tests (`init_test_db()`).
 
 ### ~~2. Persistent rate limiting (Redis)~~ (Done)
 Redis-backed sliding-window rate limiting is now the only implementation. Rate limit state survives restarts and is shared across workers.
@@ -187,10 +187,7 @@ Redis-backed sliding-window rate limiting is now the only implementation. Rate l
 Implemented: 15 failed attempts per username within 1 hour triggers account lockout (429). Configurable via `LOGIN_LOCKOUT_THRESHOLD` and `LOGIN_LOCKOUT_WINDOW`.
 
 ### 4. Multi-worker architecture
-**Priority: Medium** — Requires PostgreSQL (`DATABASE_URL`). Redis and arq worker are already in place. SQLite remains single-worker only.
+**Priority: Medium** — PostgreSQL and Redis are in place. Multiple uvicorn workers can be added via `--workers N`. The arq worker already runs as a separate process.
 
 ### 5. Content Security Policy — remove `'unsafe-inline'` from `style-src`
 **Priority: Low** — CSP now enforces `script-src 'self'` and `default-src 'none'`. The `style-src 'unsafe-inline'` directive is needed for SvelteKit dev mode but could be tightened in production. Consider nonce-based inline styles if a stricter policy is desired.
-
-### 6. Database file permissions
-**Priority: Low** — The `.session_secret` file is created with `0600` permissions, but the SQLite database file inherits permissions from the data directory. Consider explicitly setting `0600` on the DB file at creation time, since it contains bcrypt hashes and session tokens.
