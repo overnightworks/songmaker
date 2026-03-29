@@ -6,7 +6,7 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 from songmaker_cli.db.models import Base
 
@@ -43,6 +43,8 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+MIGRATION_LOCK_ID = 7_301_489_201
+
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = _resolve_db_url()
@@ -52,9 +54,13 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
-        with context.begin_transaction():
-            context.run_migrations()
+        connection.execute(text(f"SELECT pg_advisory_lock({MIGRATION_LOCK_ID})"))
+        try:
+            context.configure(connection=connection, target_metadata=target_metadata)
+            with context.begin_transaction():
+                context.run_migrations()
+        finally:
+            connection.execute(text(f"SELECT pg_advisory_unlock({MIGRATION_LOCK_ID})"))
 
 
 if context.is_offline_mode():

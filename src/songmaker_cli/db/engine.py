@@ -50,7 +50,7 @@ def _run_migrations(url: str) -> None:
     has_alembic = "alembic_version" in table_names
 
     if has_app_tables and not has_alembic:
-        command.stamp(cfg, "head")
+        command.stamp(cfg, "head", purge=True)
         log.info("Stamped existing database at current migration head")
         return
 
