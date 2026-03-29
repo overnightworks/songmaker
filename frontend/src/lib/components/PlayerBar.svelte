@@ -37,6 +37,15 @@
 		size: number;
 	}
 
+	interface VizColors {
+		pr: number;
+		pg: number;
+		pb: number;
+		ar: number;
+		ag: number;
+		ab: number;
+	}
+
 	let waveContainer: HTMLDivElement | undefined = $state();
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
 	let wavesurfer: WaveSurfer | undefined = $state();
@@ -68,6 +77,27 @@
 	let phase = 0;
 	let bassLevel = $state(0);
 	let energyLevel = $state(0);
+	let vizColors: VizColors = $state({ pr: 255, pg: 50, pb: 32, ar: 160, ag: 32, ab: 240 });
+
+	function readVizColors(): VizColors {
+		const s = getComputedStyle(document.documentElement);
+		return {
+			pr: parseInt(s.getPropertyValue('--viz-primary-r')) || 255,
+			pg: parseInt(s.getPropertyValue('--viz-primary-g')) || 50,
+			pb: parseInt(s.getPropertyValue('--viz-primary-b')) || 32,
+			ar: parseInt(s.getPropertyValue('--viz-accent-r')) || 160,
+			ag: parseInt(s.getPropertyValue('--viz-accent-g')) || 32,
+			ab: parseInt(s.getPropertyValue('--viz-accent-b')) || 240
+		};
+	}
+
+	function lerpColor(c: VizColors, t: number): { r: number; g: number; b: number } {
+		return {
+			r: Math.round(c.pr + (c.ar - c.pr) * t),
+			g: Math.round(c.pg + (c.ag - c.pg) * t),
+			b: Math.round(c.pb + (c.ab - c.pb) * t)
+		};
+	}
 
 	function connectAnalyser(): void {
 		if (!wavesurfer || audioCtx) return;
@@ -93,6 +123,7 @@
 		const ctx = vizCanvas.getContext('2d');
 		if (!ctx) return;
 
+		const c = vizColors;
 		const dpr = window.devicePixelRatio || 1;
 		const rect = vizCanvas.getBoundingClientRect();
 		const w = rect.width;
@@ -149,9 +180,7 @@
 			const x = i * barW;
 
 			const t = i / barCount;
-			const r = Math.round(255 - t * 120);
-			const g = Math.round(20 + t * 30);
-			const b = Math.round(32 + t * 210);
+			const { r, g, b } = lerpColor(c, t);
 			const alpha = 0.04 + val * 0.2;
 
 			ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
@@ -160,7 +189,7 @@
 
 		const waveLen = waveformData.length;
 		ctx.beginPath();
-		ctx.strokeStyle = `rgba(255, 50, 32, ${0.15 + avgE * 0.35})`;
+		ctx.strokeStyle = `rgba(${c.pr}, ${c.pg}, ${c.pb}, ${0.15 + avgE * 0.35})`;
 		ctx.lineWidth = 1 + avgE * 1.5;
 		for (let i = 0; i < waveLen; i++) {
 			const x = (i / waveLen) * w;
@@ -173,14 +202,14 @@
 
 		if (avgE > 0.1) {
 			ctx.save();
-			ctx.shadowColor = `rgba(255, 50, 32, ${avgE * 0.6})`;
+			ctx.shadowColor = `rgba(${c.pr}, ${c.pg}, ${c.pb}, ${avgE * 0.6})`;
 			ctx.shadowBlur = 6 + avgE * 14;
 			ctx.stroke();
 			ctx.restore();
 		}
 
 		ctx.beginPath();
-		ctx.strokeStyle = `rgba(160, 32, 240, ${0.1 + midE * 0.3})`;
+		ctx.strokeStyle = `rgba(${c.ar}, ${c.ag}, ${c.ab}, ${0.1 + midE * 0.3})`;
 		ctx.lineWidth = 0.8 + midE * 1;
 		for (let i = 0; i < waveLen; i++) {
 			const x = (i / waveLen) * w;
@@ -201,9 +230,7 @@
 			const points = 80;
 			ctx.beginPath();
 
-			const rr = Math.round(255 - ringT * 140);
-			const rg = Math.round(15 + ringT * 35);
-			const rb = Math.round(32 + ringT * 220);
+			const { r: rr, g: rg, b: rb } = lerpColor(c, ringT);
 			ctx.strokeStyle = `rgba(${rr}, ${rg}, ${rb}, ${0.06 + energy * 0.35})`;
 			ctx.lineWidth = 0.8 + energy * 1.5;
 
@@ -236,6 +263,8 @@
 				const angle = Math.random() * Math.PI * 2;
 				const speed = 2 + bassE * 8;
 				const dist = 10 + Math.random() * 30;
+				const pt = Math.random();
+				const { r: pr, g: pg, b: ppb } = lerpColor(c, pt * 0.4);
 				particles.push({
 					x: w / 2 + Math.cos(angle) * dist,
 					y: cy + Math.sin(angle) * dist * 0.6,
@@ -243,9 +272,9 @@
 					vy: Math.sin(angle) * speed * 0.6 * (0.5 + Math.random()),
 					life: 1,
 					decay: 0.01 + Math.random() * 0.02,
-					r: Math.round(200 + Math.random() * 55),
-					g: Math.round(20 + Math.random() * 30),
-					b: Math.round(32 + Math.random() * 100),
+					r: pr,
+					g: pg,
+					b: ppb,
 					size: 1.5 + Math.random() * 3
 				});
 			}
@@ -283,6 +312,7 @@
 		if (animFrameId) return;
 		if (!audioCtx) connectAnalyser();
 		if (audioCtx?.state === 'suspended') audioCtx.resume();
+		vizColors = readVizColors();
 		vizOpacity = 0;
 		drawVisualizer();
 	}
@@ -414,14 +444,20 @@
 		stopVisualizerLoop();
 		playNextGeneration();
 	}
+
+	function boxShadowStyle(e: number, c: VizColors): string {
+		const r = Math.round(c.pr - e * (c.pr - c.ar) * 0.4);
+		const g = Math.round(c.pg + e * (c.ag - c.pg) * 0.3);
+		const b = Math.round(c.pb + e * (c.ab - c.pb) * 0.8);
+		return `height: calc(var(--player-height) + ${e * 14}px); box-shadow: 0 ${-2 - e * 8}px ${6 + e * 18}px rgba(${r}, ${g}, ${b}, ${0.1 + e * 0.3})`;
+	}
+
+	function titleGlowStyle(bass: number, c: VizColors): string {
+		return `text-shadow: 0 0 ${8 + bass * 20}px rgba(${c.ar}, ${c.ag}, ${c.ab}, ${0.3 + bass * 0.5}), 0 0 ${4 + bass * 10}px rgba(${c.pr}, ${c.pg}, ${c.pb}, ${bass * 0.4})`;
+	}
 </script>
 
-<footer
-	class="player-bar"
-	style={isPlaying
-		? `height: calc(var(--player-height) + ${energyLevel * 14}px); box-shadow: 0 ${-2 - energyLevel * 8}px ${6 + energyLevel * 18}px rgba(${Math.round(255 - energyLevel * 100)}, ${Math.round(20 + energyLevel * 12)}, ${Math.round(32 + energyLevel * 200)}, ${0.1 + energyLevel * 0.3})`
-		: ''}
->
+<footer class="player-bar" style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}>
 	<div class="player-controls">
 		<button
 			class="nav-btn"
@@ -480,9 +516,7 @@
 			<span
 				class="track-title"
 				class:glowing={isPlaying}
-				style={isPlaying
-					? `text-shadow: 0 0 ${8 + bassLevel * 20}px rgba(160, 32, 240, ${0.3 + bassLevel * 0.5}), 0 0 ${4 + bassLevel * 10}px rgba(255, 50, 32, ${bassLevel * 0.4})`
-					: ''}>{pb.songTitle}</span
+				style={isPlaying ? titleGlowStyle(bassLevel, vizColors) : ''}>{pb.songTitle}</span
 			>
 			<span class="track-detail"
 				>{pb.artist} · gen{gen?.generation_number}{#if isLoading}<span class="loading-text"
@@ -516,7 +550,7 @@
 		left: 0;
 		right: 0;
 		height: var(--player-height);
-		background: rgba(10, 10, 10, 0.75);
+		background: var(--card-bg);
 		border-top: 2px solid transparent;
 		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
 		display: flex;
@@ -567,7 +601,7 @@
 			background-origin: border-box;
 			background-clip: padding-box, border-box;
 			background-image:
-				linear-gradient(#0a0a0a, #0a0a0a),
+				linear-gradient(var(--header-bg), var(--header-bg)),
 				conic-gradient(
 					from var(--border-angle, 0deg),
 					var(--primary),
@@ -648,7 +682,7 @@
 	.track-title {
 		font-family: var(--font-display);
 		font-size: 13px;
-		color: #fff;
+		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 1px;
 		white-space: nowrap;
@@ -659,8 +693,8 @@
 	@media (prefers-reduced-motion: no-preference) {
 		.track-title.glowing {
 			text-shadow:
-				0 0 8px rgba(160, 32, 240, 0.5),
-				0 0 16px rgba(160, 32, 240, 0.2);
+				0 0 8px color-mix(in srgb, var(--accent) 50%, transparent),
+				0 0 16px color-mix(in srgb, var(--accent) 20%, transparent);
 		}
 	}
 	.track-detail {
@@ -723,7 +757,7 @@
 		content: '';
 		display: block;
 		height: 2px;
-		background: rgba(51, 51, 51, 0.3);
+		background: color-mix(in srgb, var(--border) 30%, transparent);
 		border-radius: 1px;
 	}
 	.progress-fill {

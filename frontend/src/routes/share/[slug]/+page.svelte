@@ -1,6 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
+	import { APP_NAME } from '$lib/constants';
 
 	interface SharedSong {
 		title: string;
@@ -93,7 +94,7 @@
 </script>
 
 <svelte:head>
-	<title>{album ? `${album.title} — ${album.artist}` : 'Shared Album'} | Hallucinai</title>
+	<title>{album ? `${album.title} — ${album.artist}` : 'Shared Album'} | {APP_NAME}</title>
 </svelte:head>
 
 <audio
@@ -158,7 +159,7 @@
 		{/if}
 
 		<p class="powered">
-			Powered by <a href="/">Hallucinai</a>
+			Powered by <a href="/">{APP_NAME}</a>
 			· <a href="/legal#impressum">Impressum</a>
 			· <a href="/legal#datenschutz">Datenschutz</a>
 		</p>
@@ -184,8 +185,8 @@
 		z-index: 0;
 		overflow: hidden;
 		background-image:
-			linear-gradient(rgba(160, 32, 240, 0.03) 1px, transparent 1px),
-			linear-gradient(90deg, rgba(160, 32, 240, 0.03) 1px, transparent 1px);
+			linear-gradient(var(--glow-accent) 1px, transparent 1px),
+			linear-gradient(90deg, var(--glow-accent) 1px, transparent 1px);
 		background-size: 60px 60px;
 	}
 
@@ -199,7 +200,7 @@
 	.glow-1 {
 		width: 300px;
 		height: 300px;
-		background: rgba(160, 32, 240, 0.15);
+		background: color-mix(in srgb, var(--accent) 15%, transparent);
 		top: 10%;
 		left: -5%;
 	}
@@ -207,7 +208,7 @@
 	.glow-2 {
 		width: 250px;
 		height: 250px;
-		background: rgba(255, 50, 32, 0.1);
+		background: color-mix(in srgb, var(--primary) 10%, transparent);
 		bottom: 20%;
 		right: -5%;
 	}
@@ -256,7 +257,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		margin: 0 0 0.3rem;
-		color: #fff;
+		color: var(--text);
 		position: relative;
 	}
 
@@ -267,7 +268,7 @@
 			top: 0;
 			left: 0;
 			right: 0;
-			color: #a020f0;
+			color: var(--accent);
 			clip-path: inset(0 0 50% 0);
 			animation: title-glitch 0.3s steps(2) infinite;
 		}
@@ -309,7 +310,7 @@
 		align-items: center;
 		gap: 0.8rem;
 		padding: 0.7rem 1rem;
-		background: rgba(17, 17, 17, 0.8);
+		background: color-mix(in srgb, var(--surface) 80%, transparent);
 		border: 1px solid transparent;
 		border-radius: 4px;
 		color: var(--text, #e0e0e0);
@@ -323,15 +324,15 @@
 	}
 
 	.track:hover:not(.disabled) {
-		background: rgba(26, 26, 26, 0.9);
-		border-color: rgba(160, 32, 240, 0.15);
-		box-shadow: 0 0 12px rgba(160, 32, 240, 0.08);
+		background: color-mix(in srgb, var(--surface-hover) 90%, transparent);
+		border-color: color-mix(in srgb, var(--accent) 15%, transparent);
+		box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 8%, transparent);
 	}
 
 	.track.active {
-		background: rgba(26, 26, 26, 0.9);
+		background: color-mix(in srgb, var(--surface-hover) 90%, transparent);
 		border-left: 3px solid transparent;
-		border-image: linear-gradient(to bottom, #ff3220, #a020f0) 1;
+		border-image: linear-gradient(to bottom, var(--primary), var(--accent)) 1;
 	}
 
 	.track.disabled {
@@ -364,9 +365,9 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		background: #0a0a0a;
+		background: var(--header-bg);
 		border-top: 2px solid transparent;
-		border-image: linear-gradient(90deg, #ff3220, #a020f0, #ff3220) 1;
+		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
 		padding: 0.6rem 1rem 0.8rem;
 		z-index: 10;
 	}
@@ -380,7 +381,7 @@
 
 	.now-title {
 		font-size: 0.9rem;
-		color: #fff;
+		color: var(--text);
 		font-family: var(--font-display, 'Oswald', sans-serif);
 		text-transform: uppercase;
 		letter-spacing: 1px;
@@ -402,7 +403,7 @@
 
 	.progress-fill {
 		height: 100%;
-		background: linear-gradient(90deg, #ff3220, #a020f0);
+		background: linear-gradient(90deg, var(--primary), var(--accent));
 		border-radius: 2px;
 		transition: width 0.1s linear;
 	}
@@ -418,7 +419,7 @@
 	.powered a {
 		color: var(--text-muted, #888);
 		text-decoration: none;
-		background: linear-gradient(90deg, #ff3220, #a020f0);
+		background: linear-gradient(90deg, var(--primary), var(--accent));
 		-webkit-background-clip: text;
 		background-clip: text;
 	}

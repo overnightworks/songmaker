@@ -1,3 +1,4 @@
+<!-- APP_NAME: if the app name changes, update the legal text below and the email addresses manually -->
 <script lang="ts">
 	interface Props {
 		onback?: () => void;

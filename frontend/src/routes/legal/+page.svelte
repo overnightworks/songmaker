@@ -1,6 +1,7 @@
 <!-- eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path -->
 <script lang="ts">
 	import LegalContent from '$lib/components/LegalContent.svelte';
+	import { APP_NAME } from '$lib/constants';
 
 	function goBack(): void {
 		if (window.history.length > 1) {
@@ -12,7 +13,7 @@
 </script>
 
 <svelte:head>
-	<title>Legal | Hallucinai</title>
+	<title>Legal | {APP_NAME}</title>
 </svelte:head>
 
 <div class="legal-standalone">

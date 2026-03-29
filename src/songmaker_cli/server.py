@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import find_project_root
-from songmaker_cli.constants import AUDIO_ROOT, DATA_ROOT
+from songmaker_cli.constants import APP_NAME, AUDIO_ROOT, DATA_ROOT
 from songmaker_cli.health_api import _compute_script_hash
 from songmaker_cli.lifecycle import auto_setup_admin, session_sync_loop
 from songmaker_cli.middleware import (
@@ -94,7 +94,7 @@ def create_app(
     ctx: AppContext | None = None,
 ) -> FastAPI:
     app = FastAPI(
-        title="Hallucinai",
+        title=APP_NAME,
         docs_url=None, redoc_url=None, openapi_url=None,
         lifespan=_lifespan,
     )

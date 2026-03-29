@@ -1,6 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { goto } from '$app/navigation';
+	import { APP_NAME } from '$lib/constants';
 	import { login, authError } from '$lib/stores/auth';
 
 	let username = $state('');
@@ -30,7 +31,7 @@
 
 	<div class="login-card">
 		<div class="logo-area">
-			<h1 class="logo" data-text="Hallucinai">Hallucinai</h1>
+			<h1 class="logo" data-text={APP_NAME}>{APP_NAME}</h1>
 			<p class="tagline">it's hallucination time</p>
 		</div>
 		<div class="waveform">
@@ -96,7 +97,7 @@
 		align-items: center;
 		justify-content: center;
 		height: 100dvh;
-		background: #050508;
+		background: var(--bg-deep);
 		position: relative;
 		overflow: hidden;
 	}
@@ -106,8 +107,8 @@
 		position: absolute;
 		inset: 0;
 		background-image:
-			linear-gradient(rgba(255, 50, 32, 0.03) 1px, transparent 1px),
-			linear-gradient(90deg, rgba(255, 50, 32, 0.03) 1px, transparent 1px);
+			linear-gradient(var(--glow-primary) 1px, transparent 1px),
+			linear-gradient(90deg, var(--glow-primary) 1px, transparent 1px);
 		background-size: 40px 40px;
 		animation: grid-drift 20s linear infinite;
 	}
@@ -133,7 +134,7 @@
 	.glow-1 {
 		width: 400px;
 		height: 400px;
-		background: #ff3220;
+		background: var(--primary);
 		top: -100px;
 		right: -100px;
 		animation: float-1 12s ease-in-out infinite;
@@ -142,7 +143,7 @@
 	.glow-2 {
 		width: 300px;
 		height: 300px;
-		background: #a020f0;
+		background: var(--accent);
 		bottom: -50px;
 		left: -50px;
 		animation: float-2 15s ease-in-out infinite;
@@ -151,7 +152,7 @@
 	.glow-3 {
 		width: 250px;
 		height: 250px;
-		background: #ff6040;
+		background: color-mix(in srgb, var(--primary) 70%, var(--accent));
 		top: 40%;
 		left: 60%;
 		animation: float-3 18s ease-in-out infinite;
@@ -197,15 +198,15 @@
 
 	/* Card */
 	.login-card {
-		background: rgba(13, 13, 13, 0.85);
-		border: 1px solid rgba(255, 50, 32, 0.15);
+		background: var(--card-bg);
+		border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
 		border-radius: 12px;
 		padding: 2.5rem 2rem 2rem;
 		width: 380px;
 		backdrop-filter: blur(20px);
 		position: relative;
 		z-index: 1;
-		box-shadow: 0 0 60px rgba(255, 50, 32, 0.05);
+		box-shadow: 0 0 60px color-mix(in srgb, var(--primary) 5%, transparent);
 	}
 
 	/* Logo with glitch effect */
@@ -219,7 +220,7 @@
 		font-size: 2.4rem;
 		text-transform: uppercase;
 		letter-spacing: 0.15em;
-		color: #fff;
+		color: var(--text);
 		position: relative;
 		display: inline-block;
 		animation: glow-pulse 4s ease-in-out infinite;
@@ -237,14 +238,14 @@
 	}
 
 	.logo::before {
-		color: #ff3220;
+		color: var(--primary);
 		animation: glitch-1 3s infinite;
 		clip-path: inset(0 0 65% 0);
 		opacity: 0.8;
 	}
 
 	.logo::after {
-		color: #a020f0;
+		color: var(--accent);
 		animation: glitch-2 3s infinite;
 		clip-path: inset(65% 0 0 0);
 		opacity: 0.8;
@@ -287,12 +288,12 @@
 	@keyframes glow-pulse {
 		0%,
 		100% {
-			text-shadow: 0 0 20px rgba(255, 50, 32, 0.3);
+			text-shadow: 0 0 20px color-mix(in srgb, var(--primary) 30%, transparent);
 		}
 		50% {
 			text-shadow:
-				0 0 40px rgba(255, 50, 32, 0.5),
-				0 0 80px rgba(160, 32, 240, 0.2);
+				0 0 40px color-mix(in srgb, var(--primary) 50%, transparent),
+				0 0 80px color-mix(in srgb, var(--accent) 20%, transparent);
 		}
 	}
 
@@ -318,7 +319,7 @@
 
 	.bar {
 		width: 3px;
-		background: linear-gradient(to top, #ff3220, #a020f0);
+		background: linear-gradient(to top, var(--primary), var(--accent));
 		border-radius: 2px;
 		height: calc(var(--h) * 1%);
 		animation: wave 1.5s ease-in-out infinite;
@@ -359,8 +360,8 @@
 	}
 
 	input {
-		background: rgba(0, 0, 0, 0.5);
-		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: color-mix(in srgb, var(--bg) 80%, transparent);
+		border: 1px solid var(--border);
 		border-radius: 6px;
 		color: var(--text);
 		padding: 0.7rem 0.9rem;
@@ -379,8 +380,8 @@
 
 	input:focus {
 		outline: none;
-		border-color: rgba(255, 50, 32, 0.5);
-		box-shadow: 0 0 20px rgba(255, 50, 32, 0.1);
+		border-color: color-mix(in srgb, var(--primary) 50%, transparent);
+		box-shadow: 0 0 20px color-mix(in srgb, var(--primary) 10%, transparent);
 	}
 
 	input:disabled {
@@ -409,7 +410,11 @@
 	}
 
 	.submit-btn {
-		background: linear-gradient(135deg, #ff3220, #cc2018);
+		background: linear-gradient(
+			135deg,
+			var(--primary),
+			color-mix(in srgb, var(--primary) 80%, black)
+		);
 		color: white;
 		border: none;
 		border-radius: 6px;
@@ -455,7 +460,7 @@
 
 	.submit-btn:hover:not(:disabled) {
 		transform: translateY(-1px);
-		box-shadow: 0 4px 20px rgba(255, 50, 32, 0.3);
+		box-shadow: 0 4px 20px color-mix(in srgb, var(--primary) 30%, transparent);
 	}
 
 	.submit-btn:active:not(:disabled) {
@@ -472,9 +477,9 @@
 		font-size: 0.8rem;
 		text-align: center;
 		padding: 0.4rem 0.8rem;
-		background: rgba(255, 68, 68, 0.08);
+		background: color-mix(in srgb, var(--score-bad) 8%, transparent);
 		border-radius: 4px;
-		border: 1px solid rgba(255, 68, 68, 0.15);
+		border: 1px solid color-mix(in srgb, var(--score-bad) 15%, transparent);
 	}
 
 	.legal-links {

@@ -2,6 +2,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { goto } from '$app/navigation';
 	import { setupAdmin } from '$lib/api/client';
+	import { APP_NAME } from '$lib/constants';
 	import { currentUser } from '$lib/stores/auth';
 
 	let username = $state('');
@@ -39,7 +40,7 @@
 
 <div class="setup-page">
 	<div class="setup-card">
-		<h1>Hallucinai</h1>
+		<h1>{APP_NAME}</h1>
 		<p class="subtitle">Create your admin account</p>
 		<form onsubmit={handleSubmit}>
 			<label>

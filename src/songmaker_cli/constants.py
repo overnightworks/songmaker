@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+APP_NAME = "Hallucinai"
+
 DATA_ROOT = "data"
 AUDIO_ROOT = "data/audio"
 DEFAULT_ARTIST = "Flex0r"

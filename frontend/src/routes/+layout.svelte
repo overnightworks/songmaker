@@ -5,9 +5,11 @@
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
+	import { APP_NAME } from '$lib/constants';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { playback } from '$lib/stores/player';
 	import { canGoBack, deselectSong } from '$lib/stores/navigation';
+	import { theme, toggleTheme, initTheme } from '$lib/stores/ui';
 
 	let { children } = $props();
 
@@ -23,6 +25,7 @@
 	const hasPlayback = $derived($playback !== null);
 
 	$effect(() => {
+		initTheme();
 		initAuth();
 	});
 
@@ -57,7 +60,7 @@
 </script>
 
 <svelte:head>
-	<title>Hallucinai</title>
+	<title>{APP_NAME}</title>
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </svelte:head>
 
@@ -73,10 +76,13 @@
 			{:else if hasBack}
 				<button class="back-btn" onclick={deselectSong} aria-label="Back to songs">←</button>
 			{/if}
-			<a href="/" class="brand" data-text="Hallucinai">Hallucinai</a>
+			<a href="/" class="brand" data-text={APP_NAME}>{APP_NAME}</a>
 		</div>
 		<nav class="top-right">
 			<span class="top-username">{me.username}</span>
+			<button class="theme-toggle" onclick={toggleTheme} aria-label="Toggle theme">
+				{$theme === 'dark' ? '☀' : '☾'}
+			</button>
 			<a href="/settings">Settings</a>
 			<button class="top-logout" onclick={handleLogout}>Logout</button>
 		</nav>
@@ -107,7 +113,7 @@
 		left: 0;
 		right: 0;
 		height: var(--header-height);
-		background: #0a0a0a;
+		background: var(--header-bg);
 		border-bottom: 2px solid transparent;
 		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
 		display: flex;
@@ -289,6 +295,20 @@
 		border-color: var(--score-bad);
 	}
 
+	.theme-toggle {
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 1rem;
+		cursor: pointer;
+		padding: 2px 4px;
+		line-height: 1;
+	}
+
+	.theme-toggle:hover {
+		color: var(--text);
+	}
+
 	.app-body {
 		margin-top: var(--header-height);
 		height: calc(100dvh - var(--header-height));
@@ -303,8 +323,8 @@
 			position: fixed;
 			inset: 0;
 			background:
-				radial-gradient(ellipse at 20% 50%, rgba(160, 32, 240, 0.03), transparent 70%),
-				radial-gradient(ellipse at 80% 50%, rgba(255, 50, 32, 0.02), transparent 70%);
+				radial-gradient(ellipse at 20% 50%, var(--glow-accent), transparent 70%),
+				radial-gradient(ellipse at 80% 50%, var(--glow-primary), transparent 70%);
 			pointer-events: none;
 			z-index: 0;
 		}

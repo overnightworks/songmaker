@@ -1,6 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
+	import { APP_NAME } from '$lib/constants';
 	import { isAdmin } from '$lib/stores/auth';
 
 	let { children } = $props();
@@ -27,7 +28,7 @@
 
 <div class="settings-layout">
 	<nav class="settings-sidebar">
-		<a href="/" class="back-link">Back to Hallucinai</a>
+		<a href="/" class="back-link">Back to {APP_NAME}</a>
 		<div class="nav-items">
 			{#each visibleItems as item (item.href)}
 				<a href={item.href} class="nav-link" class:active={currentPath === item.href}>
@@ -58,8 +59,8 @@
 		border-right: 1px solid var(--border);
 		overflow-y: auto;
 		background-image:
-			linear-gradient(rgba(160, 32, 240, 0.02) 1px, transparent 1px),
-			linear-gradient(90deg, rgba(160, 32, 240, 0.02) 1px, transparent 1px);
+			linear-gradient(var(--glow-accent) 1px, transparent 1px),
+			linear-gradient(90deg, var(--glow-accent) 1px, transparent 1px);
 		background-size: 40px 40px;
 	}
 
