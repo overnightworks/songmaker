@@ -50,6 +50,9 @@ _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "PresetResponse": "PresetItem",
     "LoginAttemptResponse": "LoginAttemptItem",
     "AuditLogResponse": "AuditLogItem",
+    "RateLimitItem": "RateLimitItem",
+    "RateLimitsResponse": "RateLimitsResponse",
+    "UserRateLimitsResponse": "UserRateLimitsResponse",
     "GenerationParams": "VersionGenerationParams",
     "StoredGenerationParams": "GenerationParams",
 }
@@ -80,6 +83,9 @@ _EMIT_ORDER: list[str] = [
     "PresetItem",
     "LoginAttemptItem",
     "AuditLogItem",
+    "RateLimitItem",
+    "RateLimitsResponse",
+    "UserRateLimitsResponse",
 ]
 
 
@@ -238,9 +244,12 @@ def generate() -> str:
         JobResponse,
         LoginAttemptResponse,
         PresetResponse,
+        RateLimitItem,
+        RateLimitsResponse,
         SessionResponse,
         SetupRequiredResponse,
         SongResponse,
+        UserRateLimitsResponse,
         UserResponse,
         VersionResponse,
     )
@@ -260,6 +269,9 @@ def generate() -> str:
         "PresetItem": PresetResponse,
         "LoginAttemptItem": LoginAttemptResponse,
         "AuditLogItem": AuditLogResponse,
+        "RateLimitItem": RateLimitItem,
+        "RateLimitsResponse": RateLimitsResponse,
+        "UserRateLimitsResponse": UserRateLimitsResponse,
     }
 
     blocks: list[str] = [HEADER]

@@ -86,6 +86,34 @@ class CapabilitiesResponse(BaseModel):
     chat_system_prompt: str
 
 
+class RateLimitItem(BaseModel):
+    setting_key: str
+    value: int
+    is_override: bool = False
+
+    @classmethod
+    def from_orm(cls, obj, is_override: bool = False) -> RateLimitItem:
+        return cls(
+            setting_key=obj.setting_key,
+            value=obj.value,
+            is_override=is_override,
+        )
+
+
+class RateLimitsResponse(BaseModel):
+    settings: list[RateLimitItem]
+
+
+class RateLimitUpdateRequest(BaseModel):
+    settings: dict[str, int]
+
+
+class UserRateLimitsResponse(BaseModel):
+    user_id: str
+    overrides: list[RateLimitItem]
+    effective: list[RateLimitItem]
+
+
 class AceStepStatusResponse(BaseModel):
     online: bool
     model: str | None

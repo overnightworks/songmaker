@@ -1040,7 +1040,7 @@ def test_chat_rate_limit(tmp_path: Path) -> None:
     original = auth_mod.CHAT_RATE_LIMIT_USER
     auth_mod.CHAT_RATE_LIMIT_USER = 2
     import songmaker_cli.api_helpers as api_mod
-    api_mod._RATE_LIMITS["chat"] = (2, 300)
+    api_mod._ENV_RATE_LIMITS["chat"] = (2, 300, "chat_rate_limit")
 
     c = _make_authed_client(tmp_path)
     mock_resp = MagicMock()
@@ -1056,8 +1056,9 @@ def test_chat_rate_limit(tmp_path: Path) -> None:
             assert r.status_code == 429
     finally:
         auth_mod.CHAT_RATE_LIMIT_USER = original
-        api_mod._RATE_LIMITS["chat"] = (
+        api_mod._ENV_RATE_LIMITS["chat"] = (
             auth_mod.CHAT_RATE_LIMIT_USER, auth_mod.CHAT_RATE_LIMIT_ADMIN,
+            "chat_rate_limit",
         )
 
 
@@ -1069,8 +1070,8 @@ def test_admin_has_rate_limit(tmp_path: Path) -> None:
 
     import songmaker_cli.api_helpers as api_mod
 
-    original_limits = api_mod._RATE_LIMITS["generate"]
-    api_mod._RATE_LIMITS["generate"] = (3, 1)
+    original_limits = api_mod._ENV_RATE_LIMITS["generate"]
+    api_mod._ENV_RATE_LIMITS["generate"] = (3, 1, "generation_rate_limit")
 
     c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
 
@@ -1082,7 +1083,7 @@ def test_admin_has_rate_limit(tmp_path: Path) -> None:
             r = c.post("/api/songs/s1/generate", json={"count": 1})
             assert r.status_code == 429
     finally:
-        api_mod._RATE_LIMITS["generate"] = original_limits
+        api_mod._ENV_RATE_LIMITS["generate"] = original_limits
 
 
 # ── Body size limit middleware ───────────────────────────────────────

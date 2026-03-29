@@ -6,10 +6,12 @@ import type {
 	LoginAttemptItem,
 	PaginatedResponse,
 	PresetItem,
+	RateLimitsResponse,
 	SessionItem,
 	SetupRequired,
 	SongItem,
 	UserItem,
+	UserRateLimitsResponse,
 	VersionGenerationParams,
 	VersionItem
 } from './types';
@@ -430,6 +432,41 @@ export async function getAceStepStatus(): Promise<{
 
 export async function reinitializeAceStep(): Promise<void> {
 	await apiFetch('/api/admin/acestep/reinitialize', { method: 'POST' });
+}
+
+// ── Rate limits ───────────────────────────────────────────────────
+
+export async function fetchRateLimits(): Promise<RateLimitsResponse> {
+	return apiFetch<RateLimitsResponse>('/api/settings/rate-limits');
+}
+
+export async function updateRateLimits(
+	settings: Record<string, number>
+): Promise<RateLimitsResponse> {
+	return apiFetch<RateLimitsResponse>('/api/settings/rate-limits', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ settings })
+	});
+}
+
+export async function fetchUserRateLimits(userId: string): Promise<UserRateLimitsResponse> {
+	return apiFetch<UserRateLimitsResponse>(`/api/settings/rate-limits/user/${userId}`);
+}
+
+export async function updateUserRateLimits(
+	userId: string,
+	settings: Record<string, number>
+): Promise<UserRateLimitsResponse> {
+	return apiFetch<UserRateLimitsResponse>(`/api/settings/rate-limits/user/${userId}`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ settings })
+	});
+}
+
+export async function deleteUserRateLimits(userId: string): Promise<void> {
+	await apiFetch(`/api/settings/rate-limits/user/${userId}`, { method: 'DELETE' });
 }
 
 export async function changePassword(current: string, newPassword: string): Promise<void> {

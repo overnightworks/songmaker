@@ -22,6 +22,13 @@ from songmaker_cli.auth import (
     SCORING_RATE_LIMIT_ADMIN,
     SCORING_RATE_LIMIT_USER,
 )
+from songmaker_cli.constants import (
+    SETTING_CHAT_RATE_LIMIT,
+    SETTING_GENERATION_RATE_LIMIT,
+    SETTING_MAX_QUEUE_DEPTH,
+    SETTING_MAX_USER_ACTIVE_JOBS,
+    SETTING_SCORING_RATE_LIMIT,
+)
 from songmaker_cli.db.models import Album, Generation, Job, Song, User
 from songmaker_cli.db.queries import (
     clear_stale_user_jobs,
@@ -32,6 +39,7 @@ from songmaker_cli.db.queries import (
     get_album,
     get_generation,
     get_song,
+    resolve_rate_limit,
 )
 from songmaker_cli.middleware import AuthenticatedUser
 
@@ -63,10 +71,19 @@ def check_redis_health(request) -> None:
         raise HTTPException(503, "Service temporarily degraded — try again shortly")
 
 
-_RATE_LIMITS: dict[str, tuple[int, int]] = {
-    "generate": (GENERATION_RATE_LIMIT_USER, GENERATION_RATE_LIMIT_ADMIN),
-    "score": (SCORING_RATE_LIMIT_USER, SCORING_RATE_LIMIT_ADMIN),
-    "chat": (CHAT_RATE_LIMIT_USER, CHAT_RATE_LIMIT_ADMIN),
+_ENV_RATE_LIMITS: dict[str, tuple[int, int, str]] = {
+    "generate": (
+        GENERATION_RATE_LIMIT_USER, GENERATION_RATE_LIMIT_ADMIN,
+        SETTING_GENERATION_RATE_LIMIT,
+    ),
+    "score": (
+        SCORING_RATE_LIMIT_USER, SCORING_RATE_LIMIT_ADMIN,
+        SETTING_SCORING_RATE_LIMIT,
+    ),
+    "chat": (
+        CHAT_RATE_LIMIT_USER, CHAT_RATE_LIMIT_ADMIN,
+        SETTING_CHAT_RATE_LIMIT,
+    ),
 }
 
 
@@ -99,15 +116,28 @@ def create_job_with_rate_limit(
     clear_stale_user_jobs(session, user.id)
 
     if job_type in ("generate", "score"):
-        if count_total_queued_jobs(session) >= MAX_QUEUE_DEPTH:
+        max_queue = resolve_rate_limit(
+            session, user.id, SETTING_MAX_QUEUE_DEPTH, MAX_QUEUE_DEPTH,
+        )
+        if count_total_queued_jobs(session) >= max_queue:
             session.rollback()
             raise HTTPException(429, "Queue is full. Try again later.")
-        if not is_admin and count_user_active_jobs(session, user.id) >= MAX_USER_ACTIVE_JOBS:
-            session.rollback()
-            raise HTTPException(429, "You already have an active job. Wait for it to finish.")
+        if not is_admin:
+            max_active = resolve_rate_limit(
+                session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, MAX_USER_ACTIVE_JOBS,
+            )
+            if count_user_active_jobs(session, user.id) >= max_active:
+                session.rollback()
+                raise HTTPException(429, "You already have an active job. Wait for it to finish.")
 
-    user_limit, admin_limit = _RATE_LIMITS.get(job_type, (10, 100))
-    limit = admin_limit if is_admin else user_limit
+    env_user, env_admin, setting_key = _ENV_RATE_LIMITS.get(job_type, (10, 100, ""))
+    if is_admin:
+        limit = env_admin
+    else:
+        limit = (
+            resolve_rate_limit(session, user.id, setting_key, env_user)
+            if setting_key else env_user
+        )
     count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
     if count >= limit:
         session.rollback()

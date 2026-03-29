@@ -1178,6 +1178,153 @@ def test_clear_stale_user_jobs_none_stale(db_session: Session) -> None:
     assert clear_stale_user_jobs(db_session, user.id, threshold_seconds=3600) == 0
 
 
+# ── rate_limit_settings ───────────────────────────────────────────
+
+
+def test_upsert_and_get_rate_limit_global(db_session: Session) -> None:
+    from songmaker_cli.db.queries import (
+        get_rate_limit_setting,
+        upsert_rate_limit_setting,
+    )
+
+    setting = upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
+    db_session.commit()
+    assert setting.value == 50
+    assert setting.user_id is None
+
+    fetched = get_rate_limit_setting(db_session, "generation_rate_limit")
+    assert fetched is not None
+    assert fetched.value == 50
+
+
+def test_upsert_rate_limit_updates_existing(db_session: Session) -> None:
+    from songmaker_cli.db.queries import (
+        get_rate_limit_setting,
+        upsert_rate_limit_setting,
+    )
+
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
+    db_session.commit()
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 100)
+    db_session.commit()
+
+    fetched = get_rate_limit_setting(db_session, "generation_rate_limit")
+    assert fetched.value == 100
+
+
+def test_upsert_rate_limit_per_user(db_session: Session) -> None:
+    from songmaker_cli.db.queries import (
+        get_rate_limit_setting,
+        upsert_rate_limit_setting,
+    )
+
+    user = create_user(db_session, "testuser", "hash", role="user")
+    db_session.commit()
+
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 75, user_id=user.id)
+    db_session.commit()
+
+    per_user = get_rate_limit_setting(db_session, "generation_rate_limit", user.id)
+    assert per_user is not None
+    assert per_user.value == 75
+
+    global_val = get_rate_limit_setting(db_session, "generation_rate_limit")
+    assert global_val is None
+
+
+def test_resolve_rate_limit_env_fallback(db_session: Session) -> None:
+    from songmaker_cli.db.queries import resolve_rate_limit
+
+    user = create_user(db_session, "testuser", "hash", role="user")
+    db_session.commit()
+
+    assert resolve_rate_limit(db_session, user.id, "generation_rate_limit", 20) == 20
+
+
+def test_resolve_rate_limit_global_override(db_session: Session) -> None:
+    from songmaker_cli.db.queries import resolve_rate_limit, upsert_rate_limit_setting
+
+    user = create_user(db_session, "testuser", "hash", role="user")
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
+    db_session.commit()
+
+    assert resolve_rate_limit(db_session, user.id, "generation_rate_limit", 20) == 50
+
+
+def test_resolve_rate_limit_user_override(db_session: Session) -> None:
+    from songmaker_cli.db.queries import resolve_rate_limit, upsert_rate_limit_setting
+
+    user = create_user(db_session, "testuser", "hash", role="user")
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 100, user_id=user.id)
+    db_session.commit()
+
+    assert resolve_rate_limit(db_session, user.id, "generation_rate_limit", 20) == 100
+
+
+def test_get_all_global_rate_limits(db_session: Session) -> None:
+    from songmaker_cli.db.queries import get_all_global_rate_limits, upsert_rate_limit_setting
+
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
+    upsert_rate_limit_setting(db_session, "scoring_rate_limit", 30)
+    db_session.commit()
+
+    results = get_all_global_rate_limits(db_session)
+    assert len(results) == 2
+    keys = {r.setting_key for r in results}
+    assert keys == {"generation_rate_limit", "scoring_rate_limit"}
+
+
+def test_get_user_rate_limits(db_session: Session) -> None:
+    from songmaker_cli.db.queries import (
+        get_user_rate_limits,
+        upsert_rate_limit_setting,
+    )
+
+    user = create_user(db_session, "testuser", "hash", role="user")
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 100, user_id=user.id)
+    db_session.commit()
+
+    results = get_user_rate_limits(db_session, user.id)
+    assert len(results) == 1
+    assert results[0].value == 100
+
+
+def test_delete_all_user_rate_limits(db_session: Session) -> None:
+    from songmaker_cli.db.queries import (
+        delete_all_user_rate_limits,
+        get_user_rate_limits,
+        upsert_rate_limit_setting,
+    )
+
+    user = create_user(db_session, "testuser", "hash", role="user")
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 100, user_id=user.id)
+    upsert_rate_limit_setting(db_session, "scoring_rate_limit", 50, user_id=user.id)
+    db_session.commit()
+
+    count = delete_all_user_rate_limits(db_session, user.id)
+    db_session.commit()
+    assert count == 2
+    assert get_user_rate_limits(db_session, user.id) == []
+
+
+def test_delete_rate_limit_setting(db_session: Session) -> None:
+    from songmaker_cli.db.queries import (
+        delete_rate_limit_setting,
+        get_rate_limit_setting,
+        upsert_rate_limit_setting,
+    )
+
+    upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
+    db_session.commit()
+
+    assert delete_rate_limit_setting(db_session, "generation_rate_limit") is True
+    db_session.commit()
+    assert get_rate_limit_setting(db_session, "generation_rate_limit") is None
+    assert delete_rate_limit_setting(db_session, "generation_rate_limit") is False
+
+
 # ── Migration tests ────────────────────────────────────────────────
 
 
@@ -1196,7 +1343,7 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
     expected = {
         "albums", "songs", "versions", "generations", "scores", "ratings",
         "jobs", "users", "user_sessions", "login_attempts", "audit_log",
-        "generation_presets", "alembic_version",
+        "generation_presets", "rate_limit_settings", "alembic_version",
     }
     assert tables == expected
 

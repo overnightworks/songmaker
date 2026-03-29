@@ -19,6 +19,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -235,6 +236,21 @@ class LoginAttempt(Base):
     username: Mapped[str] = mapped_column(String(100))
     success: Mapped[bool] = mapped_column(Boolean)
     attempted_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+
+
+class RateLimitSetting(Base):
+    __tablename__ = "rate_limit_settings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "setting_key", name="uq_rate_limit_user_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True,
+    )
+    setting_key: Mapped[str] = mapped_column(String(50))
+    value: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class AuditLog(Base):

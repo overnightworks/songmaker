@@ -8,9 +8,20 @@
 		forceLogout,
 		fetchLoginAttempts,
 		getAceStepStatus,
-		reinitializeAceStep
+		reinitializeAceStep,
+		fetchRateLimits,
+		updateRateLimits,
+		fetchUserRateLimits,
+		updateUserRateLimits,
+		deleteUserRateLimits
 	} from '$lib/api/client';
-	import type { UserItem, SessionItem, LoginAttemptItem } from '$lib/api/types';
+	import type {
+		UserItem,
+		SessionItem,
+		LoginAttemptItem,
+		RateLimitItem,
+		UserRateLimitsResponse
+	} from '$lib/api/types';
 	import { currentUser, isAdmin } from '$lib/stores/auth';
 
 	let users = $state<UserItem[]>([]);
@@ -23,8 +34,25 @@
 		jobs: Record<string, number>;
 	} | null>(null);
 	let error = $state('');
-	let tab = $state<'users' | 'sessions' | 'attempts' | 'acestep'>('users');
+	let tab = $state<'users' | 'sessions' | 'attempts' | 'acestep' | 'ratelimits'>('users');
 	let reinitializing = $state(false);
+
+	let globalLimits = $state<RateLimitItem[]>([]);
+	let globalEdits = $state<Record<string, string>>({});
+	let savingGlobal = $state(false);
+
+	let expandedUserId = $state<string | null>(null);
+	let userLimitsData = $state<UserRateLimitsResponse | null>(null);
+	let userEdits = $state<Record<string, string>>({});
+	let savingUser = $state(false);
+
+	const SETTING_LABELS: Record<string, string> = {
+		generation_rate_limit: 'Generations / hour',
+		scoring_rate_limit: 'Scorings / hour',
+		chat_rate_limit: 'Chat messages / hour',
+		max_queue_depth: 'Max queue depth',
+		max_user_active_jobs: 'Max active jobs'
+	};
 
 	let newUsername = $state('');
 	let newPassword = $state('');
@@ -50,6 +78,99 @@
 			aceStatus = ace;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
+		}
+	}
+
+	async function loadGlobalLimits() {
+		try {
+			const res = await fetchRateLimits();
+			globalLimits = res.settings;
+			globalEdits = Object.fromEntries(res.settings.map((s) => [s.setting_key, String(s.value)]));
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load rate limits';
+		}
+	}
+
+	async function handleSaveGlobal() {
+		savingGlobal = true;
+		error = '';
+		try {
+			const settings: Record<string, number> = {};
+			for (const [key, val] of Object.entries(globalEdits)) {
+				settings[key] = parseInt(val, 10);
+			}
+			const res = await updateRateLimits(settings);
+			globalLimits = res.settings;
+			globalEdits = Object.fromEntries(
+				res.settings.map((s) => [s.setting_key, String(s.value)])
+			);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to save';
+		} finally {
+			savingGlobal = false;
+		}
+	}
+
+	async function handleExpandUser(userId: string) {
+		if (expandedUserId === userId) {
+			expandedUserId = null;
+			userLimitsData = null;
+			return;
+		}
+		expandedUserId = userId;
+		userEdits = {};
+		try {
+			userLimitsData = await fetchUserRateLimits(userId);
+			const overrideMap = Object.fromEntries(
+				userLimitsData.overrides.map((o) => [o.setting_key, o.value])
+			);
+			userEdits = Object.fromEntries(
+				userLimitsData.effective.map((e) => [
+					e.setting_key,
+					e.is_override ? String(overrideMap[e.setting_key] ?? e.value) : ''
+				])
+			);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load user limits';
+		}
+	}
+
+	async function handleSaveUserLimits() {
+		if (!expandedUserId) return;
+		savingUser = true;
+		error = '';
+		try {
+			const settings: Record<string, number> = {};
+			for (const [key, val] of Object.entries(userEdits)) {
+				if (val !== '') settings[key] = parseInt(val, 10);
+			}
+			if (Object.keys(settings).length === 0) {
+				await deleteUserRateLimits(expandedUserId);
+				userLimitsData = await fetchUserRateLimits(expandedUserId);
+			} else {
+				userLimitsData = await updateUserRateLimits(expandedUserId, settings);
+			}
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to save user limits';
+		} finally {
+			savingUser = false;
+		}
+	}
+
+	async function handleClearUserLimits() {
+		if (!expandedUserId) return;
+		savingUser = true;
+		error = '';
+		try {
+			await deleteUserRateLimits(expandedUserId);
+			userLimitsData = await fetchUserRateLimits(expandedUserId);
+			userEdits = Object.fromEntries(
+				userLimitsData.effective.map((e) => [e.setting_key, ''])
+			);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to clear';
+		} finally {
+			savingUser = false;
 		}
 	}
 
@@ -123,6 +244,7 @@
 			<button class:active={tab === 'attempts'} onclick={() => (tab = 'attempts')}
 				>Login Attempts</button
 			>
+			<button class:active={tab === 'ratelimits'} onclick={() => { tab = 'ratelimits'; loadGlobalLimits(); }}>Rate Limits</button>
 			<button class:active={tab === 'acestep'} onclick={() => (tab = 'acestep')}>ACE-Step</button>
 		</div>
 
@@ -262,6 +384,102 @@
 									</span>
 								</td>
 							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</section>
+		{/if}
+
+		{#if tab === 'ratelimits'}
+			<section>
+				<h2>Global Defaults</h2>
+				<p class="hint">These apply to all users unless overridden per-user.</p>
+				<div class="limits-grid">
+					{#each globalLimits as item (item.setting_key)}
+						<label class="limit-row">
+							<span class="limit-label">{SETTING_LABELS[item.setting_key] ?? item.setting_key}</span>
+							<input
+								type="number"
+								min="0"
+								bind:value={globalEdits[item.setting_key]}
+								class="limit-input"
+							/>
+						</label>
+					{/each}
+				</div>
+				{#if globalLimits.length > 0}
+					<button class="save-btn" onclick={handleSaveGlobal} disabled={savingGlobal}>
+						{savingGlobal ? 'Saving...' : 'Save Defaults'}
+					</button>
+				{/if}
+
+				<h2>Per-User Overrides</h2>
+				<p class="hint">Click a user to set individual limits. Empty = uses global default.</p>
+				<table>
+					<thead>
+						<tr>
+							<th>Username</th>
+							<th>Role</th>
+							<th>Overrides</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each users as user (user.id)}
+							<tr
+								class="clickable"
+								class:expanded={expandedUserId === user.id}
+								onclick={() => handleExpandUser(user.id)}
+							>
+								<td>{user.username}</td>
+								<td>
+									<span class="badge" class:admin-badge={user.role === 'admin'}>
+										{user.role}
+									</span>
+								</td>
+								<td>
+									{#if expandedUserId === user.id && userLimitsData}
+										{userLimitsData.overrides.length} custom
+									{:else}
+										-
+									{/if}
+								</td>
+							</tr>
+							{#if expandedUserId === user.id && userLimitsData}
+								<tr class="override-row">
+									<td colspan="3">
+										<div class="limits-grid">
+											{#each userLimitsData.effective as eff (eff.setting_key)}
+												<label class="limit-row">
+													<span class="limit-label">
+														{SETTING_LABELS[eff.setting_key] ?? eff.setting_key}
+														<span class="effective-val">(effective: {eff.value})</span>
+													</span>
+													<input
+														type="number"
+														min="0"
+														placeholder={String(eff.value)}
+														bind:value={userEdits[eff.setting_key]}
+														class="limit-input"
+														onclick={(e) => e.stopPropagation()}
+													/>
+												</label>
+											{/each}
+										</div>
+										<div class="override-actions">
+											<!-- svelte-ignore a11y_click_events_have_key_events -->
+											<!-- svelte-ignore a11y_no_static_element_interactions -->
+											<span class="save-btn" onclick={(e) => { e.stopPropagation(); handleSaveUserLimits(); }} class:disabled={savingUser}>
+												{savingUser ? 'Saving...' : 'Save Overrides'}
+											</span>
+											<!-- svelte-ignore a11y_click_events_have_key_events -->
+											<!-- svelte-ignore a11y_no_static_element_interactions -->
+											<span class="clear-btn" onclick={(e) => { e.stopPropagation(); handleClearUserLimits(); }}>
+												Clear All
+											</span>
+										</div>
+									</td>
+								</tr>
+							{/if}
 						{/each}
 					</tbody>
 				</table>
@@ -551,5 +769,106 @@
 		color: var(--text-dim);
 		font-size: 0.75rem;
 		margin-top: 0.5rem;
+	}
+
+	.limits-grid {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin: 0.75rem 0;
+	}
+
+	.limit-row {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.limit-label {
+		flex: 1;
+		font-size: 0.85rem;
+		color: var(--text);
+	}
+
+	.effective-val {
+		color: var(--text-dim);
+		font-size: 0.75rem;
+	}
+
+	.limit-input {
+		width: 80px;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text);
+		padding: 0.35rem 0.5rem;
+		font-size: 0.85rem;
+		font-family: var(--font-body);
+		text-align: right;
+	}
+
+	.limit-input::placeholder {
+		color: var(--text-dim);
+	}
+
+	.save-btn {
+		display: inline-block;
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		color: white;
+		border: none;
+		border-radius: 16px;
+		padding: 0.4rem 1rem;
+		font-size: 0.8rem;
+		cursor: pointer;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		margin-top: 0.5rem;
+	}
+
+	.save-btn:hover:not(.disabled) {
+		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
+	}
+
+	.save-btn.disabled {
+		opacity: 0.5;
+		cursor: wait;
+	}
+
+	.clear-btn {
+		display: inline-block;
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: 0.8rem;
+		padding: 0.4rem 0.5rem;
+	}
+
+	.clear-btn:hover {
+		color: var(--score-bad);
+	}
+
+	.override-actions {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+		margin-top: 0.5rem;
+	}
+
+	tr.clickable {
+		cursor: pointer;
+	}
+
+	tr.clickable:hover td {
+		background: var(--surface-hover);
+	}
+
+	tr.expanded td {
+		background: var(--surface);
+		border-bottom: none;
+	}
+
+	tr.override-row td {
+		padding: 0.75rem 0.5rem 1rem;
+		background: var(--surface);
 	}
 </style>

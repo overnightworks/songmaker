@@ -99,6 +99,21 @@ PROM_QUEUE_DEPTH = "songmaker_queue_depth"
 PROM_GPU_VRAM_MB = "songmaker_gpu_vram_megabytes"
 PROM_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
+# Rate limit setting keys (stored in rate_limit_settings table)
+SETTING_GENERATION_RATE_LIMIT = "generation_rate_limit"
+SETTING_SCORING_RATE_LIMIT = "scoring_rate_limit"
+SETTING_CHAT_RATE_LIMIT = "chat_rate_limit"
+SETTING_MAX_QUEUE_DEPTH = "max_queue_depth"
+SETTING_MAX_USER_ACTIVE_JOBS = "max_user_active_jobs"
+
+RATE_LIMIT_SETTING_KEYS = frozenset({
+    SETTING_GENERATION_RATE_LIMIT,
+    SETTING_SCORING_RATE_LIMIT,
+    SETTING_CHAT_RATE_LIMIT,
+    SETTING_MAX_QUEUE_DEPTH,
+    SETTING_MAX_USER_ACTIVE_JOBS,
+})
+
 # Audio file serving
 AUDIO_MEDIA_TYPES: dict[str, str] = {
     ".mp3": "audio/mpeg",

@@ -205,3 +205,19 @@ export interface AuditLogItem {
 	detail: string;
 	created_at?: string | null;
 }
+
+export interface RateLimitItem {
+	setting_key: string;
+	value: number;
+	is_override: boolean;
+}
+
+export interface RateLimitsResponse {
+	settings: RateLimitItem[];
+}
+
+export interface UserRateLimitsResponse {
+	user_id: string;
+	overrides: RateLimitItem[];
+	effective: RateLimitItem[];
+}

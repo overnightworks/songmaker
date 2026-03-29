@@ -31,6 +31,10 @@ from songmaker_cli.api_models.settings import (
     PresetCreateRequest,
     PresetResponse,
     PresetUpdateRequest,
+    RateLimitItem,
+    RateLimitsResponse,
+    RateLimitUpdateRequest,
+    UserRateLimitsResponse,
 )
 from songmaker_cli.api_models.songs import (
     VALID_SCORER_NAMES,
@@ -126,6 +130,9 @@ __all__ = [
     "PresetCreateRequest",
     "PresetResponse",
     "PresetUpdateRequest",
+    "RateLimitItem",
+    "RateLimitUpdateRequest",
+    "RateLimitsResponse",
     "RateRequest",
     "RateResponse",
     "ScoreRequest",
@@ -143,6 +150,7 @@ __all__ = [
     "StatusResponse",
     "StoredGenerationParams",
     "UpdateUserRequest",
+    "UserRateLimitsResponse",
     "UserResponse",
     "VALID_SCORER_NAMES",
     "VersionResponse",
