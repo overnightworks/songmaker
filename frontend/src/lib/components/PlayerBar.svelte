@@ -313,6 +313,13 @@
 		wavesurfer.seekTo(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
 	}
 
+	function handleProgressClick(e: MouseEvent): void {
+		if (!wavesurfer || duration <= 0) return;
+		const bar = e.currentTarget as HTMLElement;
+		const rect = bar.getBoundingClientRect();
+		wavesurfer.seekTo(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
+	}
+
 	function createWavesurfer(): void {
 		if (!waveContainer) return;
 		wavesurfer?.destroy();
@@ -398,7 +405,9 @@
 	</div>
 	<span class="time">{formatTime(duration)}</span>
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
-	<div class="progress-bar">
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="progress-bar" onclick={handleProgressClick}>
 		<div class="progress-fill" style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"></div>
 	</div>
 </footer>
@@ -476,13 +485,20 @@
 		z-index: 0;
 	}
 	.progress-bar {
-		position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
-		background: rgba(51, 51, 51, 0.3); z-index: 1;
+		position: absolute; bottom: 0; left: 0; right: 0; height: 12px;
+		padding-top: 10px;
+		background: transparent; z-index: 2; cursor: pointer;
+	}
+	.progress-bar::after {
+		content: ''; display: block; height: 2px;
+		background: rgba(51, 51, 51, 0.3); border-radius: 1px;
 	}
 	.progress-fill {
-		height: 100%;
+		height: 2px; margin-top: -2px;
 		background: linear-gradient(90deg, var(--primary), var(--accent));
 		transition: width 0.1s linear;
+		border-radius: 1px;
+		position: relative; z-index: 1;
 	}
 	@media (max-width: 768px) {
 		.player-bar { gap: 8px; padding: 0 8px; }
