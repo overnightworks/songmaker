@@ -34,8 +34,11 @@
 			<p class="tagline">it's hallucination time</p>
 		</div>
 		<div class="waveform">
-			{#each Array(32) as _, i}
-				<div class="bar" style="--i: {i}; --h: {20 + Math.sin(i * 0.4) * 15 + Math.random() * 10}"></div>
+			{#each Array(32) as _, i (i)}
+				<div
+					class="bar"
+					style="--i: {i}; --h: {20 + Math.sin(i * 0.4) * 15 + Math.random() * 10}"
+				></div>
 			{/each}
 		</div>
 		<form onsubmit={handleSubmit}>
@@ -110,8 +113,12 @@
 	}
 
 	@keyframes grid-drift {
-		0% { transform: translate(0, 0); }
-		100% { transform: translate(40px, 40px); }
+		0% {
+			transform: translate(0, 0);
+		}
+		100% {
+			transform: translate(40px, 40px);
+		}
 	}
 
 	/* Floating glows */
@@ -151,20 +158,41 @@
 	}
 
 	@keyframes float-1 {
-		0%, 100% { transform: translate(0, 0) scale(1); }
-		33% { transform: translate(-60px, 40px) scale(1.1); }
-		66% { transform: translate(30px, -20px) scale(0.9); }
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		33% {
+			transform: translate(-60px, 40px) scale(1.1);
+		}
+		66% {
+			transform: translate(30px, -20px) scale(0.9);
+		}
 	}
 
 	@keyframes float-2 {
-		0%, 100% { transform: translate(0, 0) scale(1); }
-		33% { transform: translate(50px, -30px) scale(1.2); }
-		66% { transform: translate(-20px, 50px) scale(0.95); }
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		33% {
+			transform: translate(50px, -30px) scale(1.2);
+		}
+		66% {
+			transform: translate(-20px, 50px) scale(0.95);
+		}
 	}
 
 	@keyframes float-3 {
-		0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.15; }
-		50% { transform: translate(-40px, 30px) scale(1.1); opacity: 0.08; }
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+			opacity: 0.15;
+		}
+		50% {
+			transform: translate(-40px, 30px) scale(1.1);
+			opacity: 0.08;
+		}
 	}
 
 	/* Card */
@@ -223,22 +251,49 @@
 	}
 
 	@keyframes glitch-1 {
-		0%, 90%, 100% { transform: translate(0); }
-		92% { transform: translate(2px, -1px); }
-		94% { transform: translate(-2px, 1px); }
-		96% { transform: translate(1px, 0); }
+		0%,
+		90%,
+		100% {
+			transform: translate(0);
+		}
+		92% {
+			transform: translate(2px, -1px);
+		}
+		94% {
+			transform: translate(-2px, 1px);
+		}
+		96% {
+			transform: translate(1px, 0);
+		}
 	}
 
 	@keyframes glitch-2 {
-		0%, 88%, 100% { transform: translate(0); }
-		90% { transform: translate(-2px, 1px); }
-		93% { transform: translate(2px, -1px); }
-		95% { transform: translate(-1px, 0); }
+		0%,
+		88%,
+		100% {
+			transform: translate(0);
+		}
+		90% {
+			transform: translate(-2px, 1px);
+		}
+		93% {
+			transform: translate(2px, -1px);
+		}
+		95% {
+			transform: translate(-1px, 0);
+		}
 	}
 
 	@keyframes glow-pulse {
-		0%, 100% { text-shadow: 0 0 20px rgba(255, 50, 32, 0.3); }
-		50% { text-shadow: 0 0 40px rgba(255, 50, 32, 0.5), 0 0 80px rgba(160, 32, 240, 0.2); }
+		0%,
+		100% {
+			text-shadow: 0 0 20px rgba(255, 50, 32, 0.3);
+		}
+		50% {
+			text-shadow:
+				0 0 40px rgba(255, 50, 32, 0.5),
+				0 0 80px rgba(160, 32, 240, 0.2);
+		}
 	}
 
 	.tagline {
@@ -271,8 +326,15 @@
 	}
 
 	@keyframes wave {
-		0%, 100% { transform: scaleY(1); opacity: 0.4; }
-		50% { transform: scaleY(0.3); opacity: 0.8; }
+		0%,
+		100% {
+			transform: scaleY(1);
+			opacity: 0.4;
+		}
+		50% {
+			transform: scaleY(0.3);
+			opacity: 0.8;
+		}
 	}
 
 	/* Form */
@@ -305,7 +367,9 @@
 		font-size: 0.9rem;
 		font-family: var(--font-body);
 		width: 100%;
-		transition: border-color 0.2s, box-shadow 0.2s;
+		transition:
+			border-color 0.2s,
+			box-shadow 0.2s;
 	}
 
 	input::placeholder {
@@ -357,7 +421,9 @@
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.15em;
-		transition: transform 0.15s, box-shadow 0.15s;
+		transition:
+			transform 0.15s,
+			box-shadow 0.15s;
 		position: relative;
 		overflow: hidden;
 	}
@@ -366,14 +432,25 @@
 		content: '';
 		position: absolute;
 		inset: 0;
-		background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.1) 50%, transparent 60%);
+		background: linear-gradient(
+			135deg,
+			transparent 40%,
+			rgba(255, 255, 255, 0.1) 50%,
+			transparent 60%
+		);
 		transform: translateX(-100%);
 		animation: shimmer 3s ease-in-out infinite;
 	}
 
 	@keyframes shimmer {
-		0%, 70%, 100% { transform: translateX(-100%); }
-		80% { transform: translateX(100%); }
+		0%,
+		70%,
+		100% {
+			transform: translateX(-100%);
+		}
+		80% {
+			transform: translateX(100%);
+		}
 	}
 
 	.submit-btn:hover:not(:disabled) {

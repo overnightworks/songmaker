@@ -125,11 +125,7 @@
 	}
 </script>
 
-<div
-	class="song-group"
-	class:active={song.id === activeSongId}
-	role="group"
->
+<div class="song-group" class:active={song.id === activeSongId} role="group">
 	<div
 		class="song-item"
 		class:active={song.id === activeSongId}
@@ -213,9 +209,8 @@
 								<span class="gen-seed">seed:{gen.seed}</span>
 							{/if}
 							{#if confirmDeleteGenId === gen.id}
-								<button
-									class="gen-delete-confirm"
-									onclick={(e) => handleGenDeleteConfirm(e, gen)}>Delete?</button
+								<button class="gen-delete-confirm" onclick={(e) => handleGenDeleteConfirm(e, gen)}
+									>Delete?</button
 								>
 							{:else}
 								<button
@@ -240,9 +235,7 @@
 				</button>
 			{/if}
 			{#if showAllGens && song.generations.length > MAX_VISIBLE_GENS}
-				<button class="show-all-btn" onclick={() => (showAllGens = false)}>
-					Show less
-				</button>
+				<button class="show-all-btn" onclick={() => (showAllGens = false)}> Show less </button>
 			{/if}
 		</div>
 	{/if}
@@ -265,8 +258,13 @@
 	}
 
 	@keyframes breathe {
-		0%, 100% { box-shadow: inset 3px 0 8px rgba(160, 32, 240, 0.06); }
-		50% { box-shadow: inset 3px 0 12px rgba(160, 32, 240, 0.12); }
+		0%,
+		100% {
+			box-shadow: inset 3px 0 8px rgba(160, 32, 240, 0.06);
+		}
+		50% {
+			box-shadow: inset 3px 0 12px rgba(160, 32, 240, 0.12);
+		}
 	}
 
 	.song-item {
@@ -295,8 +293,12 @@
 	}
 
 	@keyframes select-flash {
-		0% { background: rgba(160, 32, 240, 0.2); }
-		100% { background: rgba(160, 32, 240, 0.06); }
+		0% {
+			background: rgba(160, 32, 240, 0.2);
+		}
+		100% {
+			background: rgba(160, 32, 240, 0.06);
+		}
 	}
 
 	.song-item.playing {

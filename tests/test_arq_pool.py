@@ -14,8 +14,12 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def setup_function():
+@pytest.fixture(autouse=True)
+def _isolate_pool():
+    saved = pool_mod._pool
     pool_mod._pool = None
+    yield
+    pool_mod._pool = saved
 
 
 # ── init_arq_pool ─────────────────────────────────────────────────
@@ -56,7 +60,7 @@ def test_close_arq_pool() -> None:
 
     _run(pool_mod.close_arq_pool())
 
-    mock_pool.close.assert_called_once()
+    mock_pool.aclose.assert_called_once()
     assert pool_mod._pool is None
 
 

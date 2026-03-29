@@ -7,13 +7,41 @@ import wave
 from http.client import HTTPResponse
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import fakeredis
 import numpy as np
 import pytest
 
 TEST_SECRET = b"a" * 64
+
+
+@pytest.fixture
+def mock_arq_pool():
+    """Prevent lifespan from connecting to real Redis via arq."""
+    from unittest.mock import AsyncMock
+
+    import songmaker_cli.arq_pool as arq_mod
+
+    saved = arq_mod._pool
+
+    async def _fake_init():
+        arq_mod._pool = AsyncMock()
+        arq_mod._pool.zcard = AsyncMock(return_value=0)
+        arq_mod._pool.keys = AsyncMock(return_value=[])
+        arq_mod._pool.get = AsyncMock(return_value=None)
+        arq_mod._pool.aclose = AsyncMock()
+        return arq_mod._pool
+
+    async def _fake_close():
+        arq_mod._pool = None
+
+    with (
+        patch("songmaker_cli.arq_pool.init_arq_pool", side_effect=_fake_init),
+        patch("songmaker_cli.arq_pool.close_arq_pool", side_effect=_fake_close),
+    ):
+        yield
+    arq_mod._pool = saved
 
 
 @pytest.fixture

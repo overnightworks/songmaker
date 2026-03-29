@@ -53,7 +53,7 @@ async function pollJob(jobId: string): Promise<void> {
 					addToast(
 						isRestart
 							? 'Server restarted — please retry'
-							: (updated.error || `${updated.type} failed`),
+							: updated.error || `${updated.type} failed`,
 						isRestart ? 'info' : 'error'
 					);
 				}

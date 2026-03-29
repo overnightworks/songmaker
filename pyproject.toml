@@ -15,6 +15,7 @@ dependencies = [
     "pyloudnorm>=0.1,<1",
     "httpx>=0.27,<1",
     "python-slugify>=8.0,<9",
+    "pytest-xdist[dev]>=3.8.0",
 ]
 
 [project.optional-dependencies]
@@ -117,6 +118,7 @@ skips = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "-n auto"
 
 # ---------------------------------------------------------------
 # External tools (must be on system PATH):

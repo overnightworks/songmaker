@@ -124,7 +124,14 @@ export function loadSongData(s: SongItem): void {
 	editDuration.set(s.duration ?? 180);
 	editKey.set(s.key);
 	editGenParams.set(s.generation_params ?? null);
-	setSavedState(s.lyrics, s.prompt, s.bpm ?? 0, s.duration ?? 180, s.key, s.generation_params ?? null);
+	setSavedState(
+		s.lyrics,
+		s.prompt,
+		s.bpm ?? 0,
+		s.duration ?? 180,
+		s.key,
+		s.generation_params ?? null
+	);
 	dismissAppliedDiff();
 	loadVersions(s.id);
 }

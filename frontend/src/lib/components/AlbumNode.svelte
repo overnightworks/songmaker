@@ -52,18 +52,14 @@
 			if (album.is_shared) {
 				await unshareAlbum(album.id);
 				albumList.update((list) =>
-					list.map((a) =>
-						a.id === album.id ? { ...a, is_shared: false, share_slug: null } : a
-					)
+					list.map((a) => (a.id === album.id ? { ...a, is_shared: false, share_slug: null } : a))
 				);
 				addToast('Sharing disabled', 'success');
 			} else {
 				const result = await shareAlbum(album.id);
 				albumList.update((list) =>
 					list.map((a) =>
-						a.id === album.id
-							? { ...a, is_shared: true, share_slug: result.share_slug }
-							: a
+						a.id === album.id ? { ...a, is_shared: true, share_slug: result.share_slug } : a
 					)
 				);
 				await navigator.clipboard.writeText(result.share_url);

@@ -25,10 +25,15 @@
 	const BASS_THRESHOLD = 0.35;
 
 	interface Particle {
-		x: number; y: number;
-		vx: number; vy: number;
-		life: number; decay: number;
-		r: number; g: number; b: number;
+		x: number;
+		y: number;
+		vx: number;
+		vy: number;
+		life: number;
+		decay: number;
+		r: number;
+		g: number;
+		b: number;
 		size: number;
 	}
 
@@ -64,15 +69,6 @@
 	let bassLevel = $state(0);
 	let energyLevel = $state(0);
 
-	function makeProgressGradient(): CanvasGradient {
-		const ctx = document.createElement('canvas').getContext('2d') as CanvasRenderingContext2D;
-		const w = waveContainer?.clientWidth ?? 300;
-		const gradient = ctx.createLinearGradient(0, 0, w, 0);
-		gradient.addColorStop(0, 'rgba(42, 26, 46, 0.3)');
-		gradient.addColorStop(1, 'rgba(42, 26, 46, 0.15)');
-		return gradient;
-	}
-
 	function connectAnalyser(): void {
 		if (!wavesurfer || audioCtx) return;
 		try {
@@ -87,7 +83,9 @@
 			analyser.connect(audioCtx.destination);
 			frequencyData = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
 			waveformData = new Uint8Array(analyser.fftSize) as Uint8Array<ArrayBuffer>;
-		} catch { /* Already connected */ }
+		} catch {
+			/* Already connected */
+		}
 	}
 
 	function drawVisualizer(): void {
@@ -120,7 +118,10 @@
 
 		const cy = h / 2;
 
-		let bassE = 0, midE = 0, highE = 0, totalE = 0;
+		let bassE = 0,
+			midE = 0,
+			highE = 0,
+			totalE = 0;
 		const bassEnd = Math.floor(binCount * 0.08);
 		const midEnd = Math.floor(binCount * 0.4);
 		for (let i = 0; i < binCount; i++) {
@@ -130,8 +131,8 @@
 			else highE += smoothedFreq[i];
 		}
 		bassE /= bassEnd;
-		midE /= (midEnd - bassEnd);
-		highE /= (binCount - midEnd);
+		midE /= midEnd - bassEnd;
+		highE /= binCount - midEnd;
 		const avgE = totalE / binCount;
 		bassLevel = bassE;
 		energyLevel = avgE;
@@ -163,7 +164,7 @@
 		ctx.lineWidth = 1 + avgE * 1.5;
 		for (let i = 0; i < waveLen; i++) {
 			const x = (i / waveLen) * w;
-			const v = (waveformData[i] / 128 - 1);
+			const v = waveformData[i] / 128 - 1;
 			const y = cy + v * h * (0.4 + avgE * 0.6);
 			if (i === 0) ctx.moveTo(x, y);
 			else ctx.lineTo(x, y);
@@ -183,7 +184,7 @@
 		ctx.lineWidth = 0.8 + midE * 1;
 		for (let i = 0; i < waveLen; i++) {
 			const x = (i / waveLen) * w;
-			const v = (waveformData[i] / 128 - 1);
+			const v = waveformData[i] / 128 - 1;
 			const offset = Math.sin(phase * 3 + i * 0.02) * midE * 15;
 			const y = cy + v * h * (0.25 + midE * 0.4) + offset;
 			if (i === 0) ctx.moveTo(x, y);
@@ -240,7 +241,8 @@
 					y: cy + Math.sin(angle) * dist * 0.6,
 					vx: Math.cos(angle) * speed * (0.5 + Math.random()),
 					vy: Math.sin(angle) * speed * 0.6 * (0.5 + Math.random()),
-					life: 1, decay: 0.01 + Math.random() * 0.02,
+					life: 1,
+					decay: 0.01 + Math.random() * 0.02,
 					r: Math.round(200 + Math.random() * 55),
 					g: Math.round(20 + Math.random() * 30),
 					b: Math.round(32 + Math.random() * 100),
@@ -252,10 +254,15 @@
 
 		for (let i = particles.length - 1; i >= 0; i--) {
 			const p = particles[i];
-			p.x += p.vx; p.y += p.vy;
-			p.vx *= 0.96; p.vy *= 0.96;
+			p.x += p.vx;
+			p.y += p.vy;
+			p.vx *= 0.96;
+			p.vy *= 0.96;
 			p.life -= p.decay;
-			if (p.life <= 0) { particles.splice(i, 1); continue; }
+			if (p.life <= 0) {
+				particles.splice(i, 1);
+				continue;
+			}
 			const a = p.life * 0.8;
 			ctx.save();
 			ctx.globalAlpha = a * vizOpacity;
@@ -281,7 +288,10 @@
 	}
 
 	function stopVisualizerLoop(): void {
-		if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = undefined; }
+		if (animFrameId) {
+			cancelAnimationFrame(animFrameId);
+			animFrameId = undefined;
+		}
 		fadeOut();
 	}
 
@@ -299,7 +309,9 @@
 			}
 			if (vizOpacity < 0.01) {
 				ctx.clearRect(0, 0, vizCanvas.width, vizCanvas.height);
-				smoothedFreq.fill(0); vizOpacity = 0; particles = [];
+				smoothedFreq.fill(0);
+				vizOpacity = 0;
+				particles = [];
 				return;
 			}
 			requestAnimationFrame(fade);
@@ -324,20 +336,40 @@
 		if (!waveContainer) return;
 		wavesurfer?.destroy();
 		wavesurfer = WaveSurfer.create({
-			container: waveContainer, height: 0,
-			waveColor: 'transparent', progressColor: 'transparent',
-			cursorColor: 'transparent', cursorWidth: 0,
-			normalize: true, hideScrollbar: true, interact: false
+			container: waveContainer,
+			height: 0,
+			waveColor: 'transparent',
+			progressColor: 'transparent',
+			cursorColor: 'transparent',
+			cursorWidth: 0,
+			normalize: true,
+			hideScrollbar: true,
+			interact: false
 		});
-		wavesurfer.on('loading', () => { isLoading = true; });
+		wavesurfer.on('loading', () => {
+			isLoading = true;
+		});
 		wavesurfer.on('ready', () => {
-			isLoading = false; duration = wavesurfer?.getDuration() ?? 0;
-			playbackDuration.set(duration); connectAnalyser();
+			isLoading = false;
+			duration = wavesurfer?.getDuration() ?? 0;
+			playbackDuration.set(duration);
+			connectAnalyser();
 		});
-		wavesurfer.on('timeupdate', (time: number) => { currentTime = time; playbackTime.set(time); });
+		wavesurfer.on('timeupdate', (time: number) => {
+			currentTime = time;
+			playbackTime.set(time);
+		});
 		wavesurfer.on('finish', handleEnded);
-		wavesurfer.on('play', () => { isPlaying = true; isAudioPlaying.set(true); startVisualizerLoop(); });
-		wavesurfer.on('pause', () => { isPlaying = false; isAudioPlaying.set(false); stopVisualizerLoop(); });
+		wavesurfer.on('play', () => {
+			isPlaying = true;
+			isAudioPlaying.set(true);
+			startVisualizerLoop();
+		});
+		wavesurfer.on('pause', () => {
+			isPlaying = false;
+			isAudioPlaying.set(false);
+			stopVisualizerLoop();
+		});
 	}
 
 	$effect(() => {
@@ -346,33 +378,71 @@
 			prevFile = gen.mp3_path;
 			isLoading = true;
 			if (!wavesurfer) createWavesurfer();
-			try { wavesurfer?.load(`/audio/${gen.mp3_path}`); } catch { /* harmless */ }
-			if (pb?.autoplay) { wavesurfer?.once('ready', () => wavesurfer?.play()); }
+			try {
+				wavesurfer?.load(`/audio/${gen.mp3_path}`);
+			} catch {
+				/* harmless */
+			}
+			if (pb?.autoplay) {
+				wavesurfer?.once('ready', () => wavesurfer?.play());
+			}
 		}
 	});
 
 	let prevToggle = 0;
 	$effect(() => {
-		if (toggleRequest !== prevToggle) { prevToggle = toggleRequest; if (wavesurfer) wavesurfer.playPause(); }
+		if (toggleRequest !== prevToggle) {
+			prevToggle = toggleRequest;
+			if (wavesurfer) wavesurfer.playPause();
+		}
 	});
 
-	onDestroy(() => { if (animFrameId) cancelAnimationFrame(animFrameId); wavesurfer?.destroy(); if (audioCtx) audioCtx.close(); });
+	onDestroy(() => {
+		if (animFrameId) cancelAnimationFrame(animFrameId);
+		wavesurfer?.destroy();
+		if (audioCtx) audioCtx.close();
+	});
 
-	function togglePlay(): void { if (!gen || !wavesurfer || isLoading) return; wavesurfer.playPause(); }
+	function togglePlay(): void {
+		if (!gen || !wavesurfer || isLoading) return;
+		wavesurfer.playPause();
+	}
 
 	function handleEnded(): void {
-		isPlaying = false; isAudioPlaying.set(false);
-		stopVisualizerLoop(); playNextGeneration();
+		isPlaying = false;
+		isAudioPlaying.set(false);
+		stopVisualizerLoop();
+		playNextGeneration();
 	}
 </script>
 
 <footer
 	class="player-bar"
-	style={isPlaying ? `height: calc(var(--player-height) + ${energyLevel * 14}px); box-shadow: 0 ${-2 - energyLevel * 8}px ${6 + energyLevel * 18}px rgba(${Math.round(255 - energyLevel * 100)}, ${Math.round(20 + energyLevel * 12)}, ${Math.round(32 + energyLevel * 200)}, ${0.1 + energyLevel * 0.3})` : ''}
+	style={isPlaying
+		? `height: calc(var(--player-height) + ${energyLevel * 14}px); box-shadow: 0 ${-2 - energyLevel * 8}px ${6 + energyLevel * 18}px rgba(${Math.round(255 - energyLevel * 100)}, ${Math.round(20 + energyLevel * 12)}, ${Math.round(32 + energyLevel * 200)}, ${0.1 + energyLevel * 0.3})`
+		: ''}
 >
 	<div class="player-controls">
-		<button class="nav-btn" onclick={playPrevSong} disabled={!prevSong} aria-label="Previous song" title="Previous song"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="3" y="5" width="3" height="14"/><polygon points="20,5 9,12 20,19"/></svg></button>
-		<button class="nav-btn" onclick={playPrevGeneration} disabled={!prevGen} aria-label="Previous generation" title="Previous generation"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="12,5 2,12 12,19"/><polygon points="22,5 12,12 22,19"/></svg></button>
+		<button
+			class="nav-btn"
+			onclick={playPrevSong}
+			disabled={!prevSong}
+			aria-label="Previous song"
+			title="Previous song"
+			><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"
+				><rect x="3" y="5" width="3" height="14" /><polygon points="20,5 9,12 20,19" /></svg
+			></button
+		>
+		<button
+			class="nav-btn"
+			onclick={playPrevGeneration}
+			disabled={!prevGen}
+			aria-label="Previous generation"
+			title="Previous generation"
+			><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"
+				><polygon points="12,5 2,12 12,19" /><polygon points="22,5 12,12 22,19" /></svg
+			></button
+		>
 		<button
 			class="play-btn"
 			class:loading={isLoading}
@@ -384,17 +454,41 @@
 		>
 			{#if isLoading}<span class="spinner"></span>{:else}{isPlaying ? '⏸' : '▶'}{/if}
 		</button>
-		<button class="nav-btn" onclick={playNextGeneration} disabled={!nextGen} aria-label="Next generation" title="Next generation"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="2,5 12,12 2,19"/><polygon points="12,5 22,12 12,19"/></svg></button>
-		<button class="nav-btn" onclick={playNextSong} disabled={!nextSong} aria-label="Next song" title="Next song"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="4,5 15,12 4,19"/><rect x="18" y="5" width="3" height="14"/></svg></button>
+		<button
+			class="nav-btn"
+			onclick={playNextGeneration}
+			disabled={!nextGen}
+			aria-label="Next generation"
+			title="Next generation"
+			><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"
+				><polygon points="2,5 12,12 2,19" /><polygon points="12,5 22,12 12,19" /></svg
+			></button
+		>
+		<button
+			class="nav-btn"
+			onclick={playNextSong}
+			disabled={!nextSong}
+			aria-label="Next song"
+			title="Next song"
+			><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"
+				><polygon points="4,5 15,12 4,19" /><rect x="18" y="5" width="3" height="14" /></svg
+			></button
+		>
 	</div>
 	<button class="track-info" onclick={navigateToPlaying} aria-label="Go to playing song">
 		{#if pb}
 			<span
 				class="track-title"
 				class:glowing={isPlaying}
-				style={isPlaying ? `text-shadow: 0 0 ${8 + bassLevel * 20}px rgba(160, 32, 240, ${0.3 + bassLevel * 0.5}), 0 0 ${4 + bassLevel * 10}px rgba(255, 50, 32, ${bassLevel * 0.4})` : ''}
-			>{pb.songTitle}</span>
-			<span class="track-detail">{pb.artist} · gen{gen?.generation_number}{#if isLoading}<span class="loading-text">Loading...</span>{/if}</span>
+				style={isPlaying
+					? `text-shadow: 0 0 ${8 + bassLevel * 20}px rgba(160, 32, 240, ${0.3 + bassLevel * 0.5}), 0 0 ${4 + bassLevel * 10}px rgba(255, 50, 32, ${bassLevel * 0.4})`
+					: ''}>{pb.songTitle}</span
+			>
+			<span class="track-detail"
+				>{pb.artist} · gen{gen?.generation_number}{#if isLoading}<span class="loading-text"
+						>Loading...</span
+					>{/if}</span
+			>
 		{/if}
 	</button>
 	<span class="time">{formatTime(currentTime)}</span>
@@ -408,102 +502,256 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div class="progress-bar" onclick={handleProgressClick}>
-		<div class="progress-fill" style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"></div>
+		<div
+			class="progress-fill"
+			style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"
+		></div>
 	</div>
 </footer>
 
 <style>
 	.player-bar {
-		position: fixed; bottom: 0; left: 0; right: 0;
-		height: var(--player-height); background: rgba(10, 10, 10, 0.75);
+		position: fixed;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: var(--player-height);
+		background: rgba(10, 10, 10, 0.75);
 		border-top: 2px solid transparent;
 		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
-		display: flex; align-items: center; gap: 12px; padding: 0 16px; z-index: 100;
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 0 16px;
+		z-index: 100;
 		overflow: visible;
 	}
-	.player-controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; z-index: 1; }
-	.play-btn {
-		width: 40px; height: 40px; border-radius: 50%;
-		border: 2px solid var(--primary); background: transparent;
-		color: var(--primary); font-size: 16px;
-		display: flex; align-items: center; justify-content: center;
-		flex-shrink: 0; cursor: pointer; position: relative; transition: border-color 0.3s;
+	.player-controls {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		flex-shrink: 0;
+		z-index: 1;
 	}
-	.play-btn:hover:not(:disabled) { background: linear-gradient(135deg, var(--primary), var(--accent)); border-color: transparent; color: #fff; }
-	.play-btn:disabled { opacity: 0.5; cursor: wait; }
-	.play-btn.loading { border-color: var(--text-dim); }
+	.play-btn {
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		border: 2px solid var(--primary);
+		background: transparent;
+		color: var(--primary);
+		font-size: 16px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		cursor: pointer;
+		position: relative;
+		transition: border-color 0.3s;
+	}
+	.play-btn:hover:not(:disabled) {
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		border-color: transparent;
+		color: #fff;
+	}
+	.play-btn:disabled {
+		opacity: 0.5;
+		cursor: wait;
+	}
+	.play-btn.loading {
+		border-color: var(--text-dim);
+	}
 	@media (prefers-reduced-motion: no-preference) {
 		.play-btn.playing {
-			border-color: transparent; background-origin: border-box;
+			border-color: transparent;
+			background-origin: border-box;
 			background-clip: padding-box, border-box;
-			background-image: linear-gradient(#0a0a0a, #0a0a0a),
-				conic-gradient(from var(--border-angle, 0deg), var(--primary), var(--accent), var(--primary));
+			background-image:
+				linear-gradient(#0a0a0a, #0a0a0a),
+				conic-gradient(
+					from var(--border-angle, 0deg),
+					var(--primary),
+					var(--accent),
+					var(--primary)
+				);
 			animation: rotate-border 2s linear infinite;
 		}
 	}
-	@keyframes rotate-border { to { --border-angle: 360deg; } }
-	@property --border-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+	@keyframes rotate-border {
+		to {
+			--border-angle: 360deg;
+		}
+	}
+	@property --border-angle {
+		syntax: '<angle>';
+		initial-value: 0deg;
+		inherits: false;
+	}
 	.spinner {
-		width: 16px; height: 16px; border: 2px solid transparent; border-radius: 50%;
-		background-origin: border-box; background-clip: content-box, border-box;
-		background-image: linear-gradient(transparent, transparent), conic-gradient(var(--primary), var(--accent), var(--primary));
+		width: 16px;
+		height: 16px;
+		border: 2px solid transparent;
+		border-radius: 50%;
+		background-origin: border-box;
+		background-clip: content-box, border-box;
+		background-image:
+			linear-gradient(transparent, transparent),
+			conic-gradient(var(--primary), var(--accent), var(--primary));
 		animation: spin 0.8s linear infinite;
 	}
-	@keyframes spin { to { transform: rotate(360deg); } }
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
 	.nav-btn {
-		background: none; border: none; color: var(--text-muted); font-size: 14px;
-		cursor: pointer; padding: 6px; display: flex; align-items: center;
-		min-width: 32px; min-height: 32px; justify-content: center;
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 14px;
+		cursor: pointer;
+		padding: 6px;
+		display: flex;
+		align-items: center;
+		min-width: 32px;
+		min-height: 32px;
+		justify-content: center;
 	}
-	.nav-btn:hover:not(:disabled) { color: var(--text); }
-	.nav-btn:disabled { color: var(--text-dim); cursor: default; opacity: 0.3; }
+	.nav-btn:hover:not(:disabled) {
+		color: var(--text);
+	}
+	.nav-btn:disabled {
+		color: var(--text-dim);
+		cursor: default;
+		opacity: 0.3;
+	}
 	.track-info {
-		display: flex; flex-direction: column; min-width: 100px; max-width: 200px;
-		overflow: hidden; background: none; border: none; cursor: pointer;
-		text-align: left; padding: 4px 8px; border-radius: 4px; flex-shrink: 0;
+		display: flex;
+		flex-direction: column;
+		min-width: 100px;
+		max-width: 200px;
+		overflow: hidden;
+		background: none;
+		border: none;
+		cursor: pointer;
+		text-align: left;
+		padding: 4px 8px;
+		border-radius: 4px;
+		flex-shrink: 0;
 	}
-	.track-info { z-index: 1; }
-	.track-info:hover { background: var(--surface-hover); }
+	.track-info {
+		z-index: 1;
+	}
+	.track-info:hover {
+		background: var(--surface-hover);
+	}
 	.track-title {
-		font-family: var(--font-display); font-size: 13px; color: #fff;
-		text-transform: uppercase; letter-spacing: 1px;
-		white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: text-shadow 0.3s;
+		font-family: var(--font-display);
+		font-size: 13px;
+		color: #fff;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		transition: text-shadow 0.3s;
 	}
 	@media (prefers-reduced-motion: no-preference) {
-		.track-title.glowing { text-shadow: 0 0 8px rgba(160, 32, 240, 0.5), 0 0 16px rgba(160, 32, 240, 0.2); }
+		.track-title.glowing {
+			text-shadow:
+				0 0 8px rgba(160, 32, 240, 0.5),
+				0 0 16px rgba(160, 32, 240, 0.2);
+		}
 	}
-	.track-detail { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.loading-text { color: var(--primary); margin-left: 4px; }
-	.time { font-family: var(--font-display); font-size: 12px; color: var(--text-muted); min-width: 36px; text-align: center; flex-shrink: 0; z-index: 1; }
-	.viz-area { flex: 1; min-width: 80px; height: 52px; position: relative; cursor: pointer; }
-	.wave-hidden { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+	.track-detail {
+		font-size: 10px;
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.loading-text {
+		color: var(--primary);
+		margin-left: 4px;
+	}
+	.time {
+		font-family: var(--font-display);
+		font-size: 12px;
+		color: var(--text-muted);
+		min-width: 36px;
+		text-align: center;
+		flex-shrink: 0;
+		z-index: 1;
+	}
+	.viz-area {
+		flex: 1;
+		min-width: 80px;
+		height: 52px;
+		position: relative;
+		cursor: pointer;
+	}
+	.wave-hidden {
+		position: absolute;
+		width: 0;
+		height: 0;
+		overflow: hidden;
+		pointer-events: none;
+	}
 	.viz-fullscreen {
 		position: absolute;
-		left: 0; right: 0; top: 0; bottom: 0;
-		width: 100%; height: 100%;
+		left: 0;
+		right: 0;
+		top: 0;
+		bottom: 0;
+		width: 100%;
+		height: 100%;
 		pointer-events: none;
 		z-index: 0;
 	}
 	.progress-bar {
-		position: absolute; bottom: 0; left: 0; right: 0; height: 12px;
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: 12px;
 		padding-top: 10px;
-		background: transparent; z-index: 2; cursor: pointer;
+		background: transparent;
+		z-index: 2;
+		cursor: pointer;
 	}
 	.progress-bar::after {
-		content: ''; display: block; height: 2px;
-		background: rgba(51, 51, 51, 0.3); border-radius: 1px;
+		content: '';
+		display: block;
+		height: 2px;
+		background: rgba(51, 51, 51, 0.3);
+		border-radius: 1px;
 	}
 	.progress-fill {
-		height: 2px; margin-top: -2px;
+		height: 2px;
+		margin-top: -2px;
 		background: linear-gradient(90deg, var(--primary), var(--accent));
 		transition: width 0.1s linear;
 		border-radius: 1px;
-		position: relative; z-index: 1;
+		position: relative;
+		z-index: 1;
 	}
 	@media (max-width: 768px) {
-		.player-bar { gap: 8px; padding: 0 8px; }
-		.track-info { display: none; }
-		.nav-btn { font-size: 12px; min-width: 28px; min-height: 28px; padding: 4px; }
-		.time { font-size: 10px; min-width: 28px; }
+		.player-bar {
+			gap: 8px;
+			padding: 0 8px;
+		}
+		.track-info {
+			display: none;
+		}
+		.nav-btn {
+			font-size: 12px;
+			min-width: 28px;
+			min-height: 28px;
+			padding: 4px;
+		}
+		.time {
+			font-size: 10px;
+			min-width: 28px;
+		}
 	}
 </style>

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -93,46 +92,33 @@ def test_verify_rejects_empty_parts() -> None:
     assert verify_session_cookie("abc.", _TEST_SECRET) is None
 
 
-def test_ensure_session_secret_generates_file(tmp_path: Path) -> None:
-    old = os.environ.pop("SESSION_SECRET", None)
-    try:
-        result = ensure_session_secret(tmp_path)
-        assert len(result) >= 32
-        secret_file = tmp_path / ".session_secret"
-        assert secret_file.exists()
-        assert secret_file.read_text().strip() == result
-    finally:
-        if old:
-            os.environ["SESSION_SECRET"] = old
-        else:
-            os.environ.pop("SESSION_SECRET", None)
+def test_ensure_session_secret_generates_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+    result = ensure_session_secret(tmp_path)
+    assert len(result) >= 32
+    secret_file = tmp_path / ".session_secret"
+    assert secret_file.exists()
+    assert secret_file.read_text().strip() == result
 
 
-def test_ensure_session_secret_reads_existing_file(tmp_path: Path) -> None:
-    old = os.environ.pop("SESSION_SECRET", None)
-    try:
-        secret_file = tmp_path / ".session_secret"
-        secret_file.write_text("b" * 64)
-        result = ensure_session_secret(tmp_path)
-        assert result == "b" * 64
-    finally:
-        if old:
-            os.environ["SESSION_SECRET"] = old
-        else:
-            os.environ.pop("SESSION_SECRET", None)
+def test_ensure_session_secret_reads_existing_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+    secret_file = tmp_path / ".session_secret"
+    secret_file.write_text("b" * 64)
+    result = ensure_session_secret(tmp_path)
+    assert result == "b" * 64
 
 
-def test_ensure_session_secret_prefers_env_var(tmp_path: Path) -> None:
-    old = os.environ.get("SESSION_SECRET")
-    try:
-        os.environ["SESSION_SECRET"] = "c" * 64
-        result = ensure_session_secret(tmp_path)
-        assert result == "c" * 64
-    finally:
-        if old:
-            os.environ["SESSION_SECRET"] = old
-        else:
-            os.environ.pop("SESSION_SECRET", None)
+def test_ensure_session_secret_prefers_env_var(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SESSION_SECRET", "c" * 64)
+    result = ensure_session_secret(tmp_path)
+    assert result == "c" * 64
 
 
 # -- Password strength -------------------------------------------------------

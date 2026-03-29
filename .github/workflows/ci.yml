@@ -46,7 +46,8 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest tests/ -q --tb=short \
+          set -o pipefail
+          pytest tests/ -n auto -q --tb=short \
             --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine \
             --cov-report=term-missing \
             --cov-fail-under=90 \
@@ -94,7 +95,9 @@ jobs:
         run: pnpm lint
 
       - name: Tests
-        run: pnpm test | tee vitest-output.txt
+        run: |
+          set -o pipefail
+          pnpm test | tee vitest-output.txt
 
       - name: Test summary
         if: always()

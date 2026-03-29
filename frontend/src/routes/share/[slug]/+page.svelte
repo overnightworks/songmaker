@@ -1,4 +1,5 @@
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
 
 	interface SharedSong {
@@ -221,8 +222,13 @@
 	}
 
 	@keyframes float-glow {
-		0%, 100% { transform: translate(0, 0); }
-		50% { transform: translate(20px, -15px); }
+		0%,
+		100% {
+			transform: translate(0, 0);
+		}
+		50% {
+			transform: translate(20px, -15px);
+		}
 	}
 
 	.center {
@@ -268,9 +274,15 @@
 	}
 
 	@keyframes title-glitch {
-		0% { transform: translate(0); }
-		50% { transform: translate(3px, -1px); }
-		100% { transform: translate(-2px, 1px); }
+		0% {
+			transform: translate(0);
+		}
+		50% {
+			transform: translate(3px, -1px);
+		}
+		100% {
+			transform: translate(-2px, 1px);
+		}
 	}
 
 	.artist {
@@ -304,7 +316,10 @@
 		font-size: 0.95rem;
 		cursor: pointer;
 		text-align: left;
-		transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			box-shadow 0.15s;
 	}
 
 	.track:hover:not(.disabled) {

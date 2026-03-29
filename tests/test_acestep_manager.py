@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import signal
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,13 +19,14 @@ from songmaker_cli.acestep_manager import (
 # ── start / stop ───────────────────────────────────────────────────
 
 
-def test_start_acestep() -> None:
+def test_start_acestep(tmp_path: Path) -> None:
     mgr = AceStepManager()
     mock_proc = MagicMock()
     mock_proc.pid = 12345
     with (
         patch.object(mgr, "_find_uv", return_value=["uv"]),
         patch("subprocess.Popen", return_value=mock_proc),
+        patch("songmaker_cli.acestep_manager.ACESTEP_DIR", tmp_path),
     ):
         mgr.start()
     assert mgr._process is mock_proc
@@ -37,7 +39,7 @@ def test_start_acestep_no_uv() -> None:
             mgr.start()
 
 
-def test_start_strips_secrets() -> None:
+def test_start_strips_secrets(tmp_path: Path) -> None:
     mgr = AceStepManager()
     mock_proc = MagicMock()
     mock_proc.pid = 1
@@ -51,6 +53,7 @@ def test_start_strips_secrets() -> None:
         patch.object(mgr, "_find_uv", return_value=["uv"]),
         patch("subprocess.Popen", side_effect=capture_popen),
         patch.dict("os.environ", {"ANTHROPIC_API_KEY": "secret", "SESSION_SECRET": "secret2"}),
+        patch("songmaker_cli.acestep_manager.ACESTEP_DIR", tmp_path),
     ):
         mgr.start()
 

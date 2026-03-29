@@ -4,15 +4,23 @@
 
 ```bash
 # Backend (from project root)
-pytest tests/ -q                    # all tests
-pytest tests/ -q --tb=short         # with short tracebacks
+pytest tests/ -n auto -q            # all tests, parallel (pytest-xdist)
+pytest tests/ -q --tb=short         # sequential with short tracebacks
 pytest tests/test_api.py -v         # single file, verbose
-pytest tests/ --cov=songmaker_cli --cov-report=term-missing  # coverage
+pytest tests/ -n auto --cov=songmaker_cli --cov-report=term-missing  # coverage
 
 # Frontend (from frontend/)
 pnpm test                           # all tests
 pnpm test:coverage                  # with v8 coverage report
 ```
+
+### Parallel Execution
+
+Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
+- Each test gets its own `tmp_path` and SQLite database
+- `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
+- No module-level mutable state shared between tests
+- Scorer tests (GPU-only) are skipped in CI and excluded from parallel runs
 
 ## Coverage Targets
 

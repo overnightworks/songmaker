@@ -23,16 +23,10 @@ from songmaker_cli.middleware import (
 
 _TEST_SECRET = b"a" * 64
 
-_test_factory = None
-
 
 @pytest.fixture()
 def _db(tmp_path: Path):
-    global _test_factory
-    factory = init_db(tmp_path / "test.db")
-    _test_factory = factory
-    yield factory
-    _test_factory = None
+    return init_db(tmp_path / "test.db")
 
 
 def _build_auth_app(_db, redis=None):
@@ -80,11 +74,11 @@ def auth_app(_db) -> TestClient:
     return TestClient(app, cookies={})
 
 
-def _create_user_and_session(
+def _make_user_and_session(
+    factory,
     role: str = "user", active: bool = True, expired: bool = False,
     created_days_ago: int = 0,
 ) -> str:
-    factory = _test_factory
     with factory() as session:
         user = create_user(
             session, f"test_{role}_{active}_{expired}_{created_days_ago}",
@@ -101,6 +95,12 @@ def _create_user_and_session(
             user_session.created_at = datetime.now(timezone.utc) - timedelta(days=created_days_ago)
         session.commit()
         return user_session.id
+
+
+@pytest.fixture()
+def create_session_id(_db):
+    from functools import partial
+    return partial(_make_user_and_session, _db)
 
 
 # -- No cookie / bad cookie ---------------------------------------------------
@@ -126,15 +126,15 @@ def test_nonexistent_session_returns_401(auth_app: TestClient) -> None:
 # -- Expiry -------------------------------------------------------------------
 
 
-def test_expired_session_returns_401(auth_app: TestClient) -> None:
-    sid = _create_user_and_session(expired=True)
+def test_expired_session_returns_401(auth_app: TestClient, create_session_id) -> None:
+    sid = create_session_id(expired=True)
     auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 401
 
 
-def test_absolute_max_age_expired(auth_app: TestClient) -> None:
-    sid = _create_user_and_session(created_days_ago=91)
+def test_absolute_max_age_expired(auth_app: TestClient, create_session_id) -> None:
+    sid = create_session_id(created_days_ago=91)
     auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 401
@@ -143,8 +143,8 @@ def test_absolute_max_age_expired(auth_app: TestClient) -> None:
 # -- Disabled user ------------------------------------------------------------
 
 
-def test_disabled_user_returns_403(auth_app: TestClient) -> None:
-    sid = _create_user_and_session(active=False)
+def test_disabled_user_returns_403(auth_app: TestClient, create_session_id) -> None:
+    sid = create_session_id(active=False)
     auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 403
@@ -153,27 +153,27 @@ def test_disabled_user_returns_403(auth_app: TestClient) -> None:
 # -- Valid session ------------------------------------------------------------
 
 
-def test_valid_session_returns_200(auth_app: TestClient) -> None:
-    sid = _create_user_and_session()
+def test_valid_session_returns_200(auth_app: TestClient, create_session_id) -> None:
+    sid = create_session_id()
     auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 200
     assert resp.json()["username"].startswith("test_user")
 
 
-def test_session_id_set_on_request_state(auth_app: TestClient) -> None:
-    sid = _create_user_and_session()
+def test_session_id_set_on_request_state(auth_app: TestClient, create_session_id) -> None:
+    sid = create_session_id()
     auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 200
     assert resp.json()["session_id_set"] is True
 
 
-def test_sliding_window_renewal(auth_app: TestClient) -> None:
+def test_sliding_window_renewal(auth_app: TestClient, create_session_id) -> None:
     from songmaker_cli.db.queries import get_session_with_user
 
-    sid = _create_user_and_session()
-    factory = _test_factory
+    sid = create_session_id()
+    factory = auth_app.app.state.ctx.db
 
     with factory() as db:
         old_expires = get_session_with_user(db, sid).expires_at
@@ -194,15 +194,15 @@ def test_public_route_no_auth_needed(auth_app: TestClient) -> None:
 # -- Admin dependency ---------------------------------------------------------
 
 
-def test_require_admin_rejects_regular_user(auth_app: TestClient) -> None:
-    sid = _create_user_and_session(role="user")
+def test_require_admin_rejects_regular_user(auth_app: TestClient, create_session_id) -> None:
+    sid = create_session_id(role="user")
     auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/admin-only")
     assert resp.status_code == 403
 
 
-def test_require_admin_allows_admin(auth_app: TestClient) -> None:
-    sid = _create_user_and_session(role="admin")
+def test_require_admin_allows_admin(auth_app: TestClient, create_session_id) -> None:
+    sid = create_session_id(role="admin")
     auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/admin-only")
     assert resp.status_code == 200
@@ -211,11 +211,11 @@ def test_require_admin_allows_admin(auth_app: TestClient) -> None:
 # -- IP/UA audit logging -----------------------------------------------------
 
 
-def test_ip_change_creates_audit(auth_app: TestClient) -> None:
+def test_ip_change_creates_audit(auth_app: TestClient, create_session_id) -> None:
     from songmaker_cli.db.models import AuditLog
 
-    sid = _create_user_and_session()
-    factory = _test_factory
+    sid = create_session_id()
+    factory = auth_app.app.state.ctx.db
 
     with factory() as db:
         from songmaker_cli.db.queries import get_session_with_user
@@ -232,11 +232,11 @@ def test_ip_change_creates_audit(auth_app: TestClient) -> None:
         assert "1.2.3.4" in entry.detail
 
 
-def test_ua_change_creates_audit(auth_app: TestClient) -> None:
+def test_ua_change_creates_audit(auth_app: TestClient, create_session_id) -> None:
     from songmaker_cli.db.models import AuditLog
 
-    sid = _create_user_and_session()
-    factory = _test_factory
+    sid = create_session_id()
+    factory = auth_app.app.state.ctx.db
 
     with factory() as db:
         from songmaker_cli.db.queries import get_session_with_user
@@ -281,12 +281,12 @@ def test_get_client_ip_no_xff() -> None:
 # -- Redis session cache integration -----------------------------------------
 
 
-def test_redis_cache_hit_skips_db_query(auth_app: TestClient) -> None:
+def test_redis_cache_hit_skips_db_query(auth_app: TestClient, create_session_id) -> None:
     from unittest.mock import patch
 
     from songmaker_cli.redis_client import SessionCache
 
-    sid = _create_user_and_session()
+    sid = create_session_id()
     session_cache: SessionCache = auth_app.app.state.session_cache
 
     auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
@@ -298,10 +298,12 @@ def test_redis_cache_hit_skips_db_query(auth_app: TestClient) -> None:
         mock_db.assert_not_called()
 
 
-def test_redis_miss_falls_back_to_db_and_populates_cache(auth_app: TestClient) -> None:
+def test_redis_miss_falls_back_to_db_and_populates_cache(
+    auth_app: TestClient, create_session_id,
+) -> None:
     from songmaker_cli.redis_client import SessionCache
 
-    sid = _create_user_and_session()
+    sid = create_session_id()
     session_cache: SessionCache = auth_app.app.state.session_cache
 
     assert session_cache.get(sid) is None
@@ -313,7 +315,7 @@ def test_redis_miss_falls_back_to_db_and_populates_cache(auth_app: TestClient) -
     assert session_cache.get(sid) is not None
 
 
-def test_redis_failure_falls_back_to_db(_db) -> None:
+def test_redis_failure_falls_back_to_db(_db, create_session_id) -> None:
     from unittest.mock import MagicMock
 
     broken_redis = MagicMock()
@@ -322,18 +324,18 @@ def test_redis_failure_falls_back_to_db(_db) -> None:
     app = _build_auth_app(_db, redis=broken_redis)
     client = TestClient(app, cookies={})
 
-    sid = _create_user_and_session()
+    sid = create_session_id()
     client.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = client.get("/protected")
     assert resp.status_code == 200
 
 
-def test_redis_path_checks_absolute_max_age(auth_app: TestClient) -> None:
+def test_redis_path_checks_absolute_max_age(auth_app: TestClient, create_session_id) -> None:
     import json
 
     from songmaker_cli.constants import REDIS_SESSION_PREFIX
 
-    sid = _create_user_and_session()
+    sid = create_session_id()
 
     auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
@@ -349,12 +351,12 @@ def test_redis_path_checks_absolute_max_age(auth_app: TestClient) -> None:
     assert resp.status_code == 401
 
 
-def test_redis_path_ip_change_writes_audit(auth_app: TestClient) -> None:
+def test_redis_path_ip_change_writes_audit(auth_app: TestClient, create_session_id) -> None:
     from songmaker_cli.db.models import AuditLog
 
-    sid = _create_user_and_session()
+    sid = create_session_id()
 
-    factory = _test_factory
+    factory = auth_app.app.state.ctx.db
     with factory() as db:
         from songmaker_cli.db.queries import get_session_with_user
         sess = get_session_with_user(db, sid)
@@ -380,10 +382,10 @@ def test_redis_path_ip_change_writes_audit(auth_app: TestClient) -> None:
         assert len(ip_entries) >= 1
 
 
-def test_redis_path_refreshes_ttl(auth_app: TestClient) -> None:
+def test_redis_path_refreshes_ttl(auth_app: TestClient, create_session_id) -> None:
     from songmaker_cli.constants import REDIS_SESSION_PREFIX
 
-    sid = _create_user_and_session()
+    sid = create_session_id()
     auth_app.cookies.set(SESSION_COOKIE, sign_session_id(sid, _TEST_SECRET))
     auth_app.get("/protected")
 

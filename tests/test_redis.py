@@ -221,7 +221,9 @@ def test_metrics_with_redis(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
     assert 'method="GET"' in body
 
 
-def test_ip_rate_limit_middleware_writes_to_redis(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
+def test_ip_rate_limit_middleware_writes_to_redis(
+    tmp_path: Path, fake_redis, mock_arq_pool,
+) -> None:
     from songmaker_cli.constants import REDIS_RL_IP_PREFIX
 
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)

@@ -253,7 +253,7 @@ def test_get_audio_other_users_files_denied(auth_server_app) -> None:
     assert resp.status_code == 404
 
 
-def test_startup_cleans_expired_sessions(tmp_path: Path) -> None:
+def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -890,7 +890,7 @@ def test_spa_fallback_not_for_audio(server_app: TestClient) -> None:
 # ── lifespan pruned login attempts log ──────────────────────────────
 
 
-def test_startup_prunes_login_attempts(tmp_path: Path) -> None:
+def test_startup_prunes_login_attempts(tmp_path: Path, mock_arq_pool) -> None:
     from songmaker_cli.db.models import LoginAttempt
 
     audio_dir = tmp_path / "audio"
@@ -982,7 +982,7 @@ class TestConfigureLogging:
 # ── health endpoint ──────────────────────────────────────────────
 
 
-def test_health_no_auth_required(tmp_path: Path) -> None:
+def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
     from unittest.mock import AsyncMock
 
     audio_dir = tmp_path / "audio"
@@ -1026,7 +1026,7 @@ def test_health_no_auth_required(tmp_path: Path) -> None:
     assert isinstance(data["uptime_seconds"], int)
 
 
-def test_health_with_worker_running(tmp_path: Path) -> None:
+def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
     from unittest.mock import AsyncMock
 
     audio_dir = tmp_path / "audio"
@@ -1067,7 +1067,7 @@ def test_health_with_worker_running(tmp_path: Path) -> None:
     assert data["acestep_model"] == "sft"
 
 
-def test_health_degraded_when_worker_stopped(tmp_path: Path) -> None:
+def test_health_degraded_when_worker_stopped(tmp_path: Path, mock_arq_pool) -> None:
     from unittest.mock import AsyncMock
 
     audio_dir = tmp_path / "audio"
@@ -1107,7 +1107,7 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path) -> None:
 # ── /metrics endpoint ────────────────────────────────────────────
 
 
-def _make_metrics_client(tmp_path: Path) -> TestClient:
+def _make_metrics_client(tmp_path: Path, mock_arq_pool=None) -> TestClient:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -1132,7 +1132,7 @@ def _make_metrics_client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
 
-def test_metrics_no_auth_required(tmp_path: Path) -> None:
+def test_metrics_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
     from songmaker_cli.constants import PROM_CONTENT_TYPE
     client = _make_metrics_client(tmp_path)
     with client:
@@ -1147,7 +1147,7 @@ def test_metrics_no_auth_required(tmp_path: Path) -> None:
     assert "songmaker_queue_depth" in body
 
 
-def test_metrics_reflects_http_traffic(tmp_path: Path) -> None:
+def test_metrics_reflects_http_traffic(tmp_path: Path, mock_arq_pool) -> None:
     client = _make_metrics_client(tmp_path)
     with client:
         client.get("/health")
@@ -1157,7 +1157,7 @@ def test_metrics_reflects_http_traffic(tmp_path: Path) -> None:
     assert 'songmaker_http_requests_total{method="GET",status="200"}' in body
 
 
-def test_metrics_with_jobs(tmp_path: Path) -> None:
+def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool) -> None:
     from songmaker_cli.db.models import Job
 
     audio_dir = tmp_path / "audio"

@@ -162,8 +162,13 @@
 	}
 
 	@keyframes brand-shimmer {
-		0%, 100% { background-position: 0% 50%; }
-		50% { background-position: 100% 50%; }
+		0%,
+		100% {
+			background-position: 0% 50%;
+		}
+		50% {
+			background-position: 100% 50%;
+		}
 	}
 
 	.brand::before,
@@ -203,17 +208,45 @@
 	}
 
 	@keyframes brand-glitch-top {
-		0%, 92% { opacity: 0; transform: translate(0); }
-		93% { opacity: 0.6; transform: translate(2px, -1px); }
-		94% { opacity: 0; transform: translate(-1px, 1px); }
-		95%, 100% { opacity: 0; transform: translate(0); }
+		0%,
+		92% {
+			opacity: 0;
+			transform: translate(0);
+		}
+		93% {
+			opacity: 0.6;
+			transform: translate(2px, -1px);
+		}
+		94% {
+			opacity: 0;
+			transform: translate(-1px, 1px);
+		}
+		95%,
+		100% {
+			opacity: 0;
+			transform: translate(0);
+		}
 	}
 
 	@keyframes brand-glitch-bottom {
-		0%, 94% { opacity: 0; transform: translate(0); }
-		95% { opacity: 0.6; transform: translate(-2px, 1px); }
-		96% { opacity: 0; transform: translate(1px, -1px); }
-		97%, 100% { opacity: 0; transform: translate(0); }
+		0%,
+		94% {
+			opacity: 0;
+			transform: translate(0);
+		}
+		95% {
+			opacity: 0.6;
+			transform: translate(-2px, 1px);
+		}
+		96% {
+			opacity: 0;
+			transform: translate(1px, -1px);
+		}
+		97%,
+		100% {
+			opacity: 0;
+			transform: translate(0);
+		}
 	}
 
 	.top-right {

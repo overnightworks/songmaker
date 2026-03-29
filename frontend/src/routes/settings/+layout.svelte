@@ -93,7 +93,10 @@
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
-		transition: color 0.15s, background 0.15s, border-color 0.15s;
+		transition:
+			color 0.15s,
+			background 0.15s,
+			border-color 0.15s;
 		border-left: 2px solid transparent;
 	}
 

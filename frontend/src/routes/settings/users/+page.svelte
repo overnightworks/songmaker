@@ -101,9 +101,7 @@
 			}
 			const res = await updateRateLimits(settings);
 			globalLimits = res.settings;
-			globalEdits = Object.fromEntries(
-				res.settings.map((s) => [s.setting_key, String(s.value)])
-			);
+			globalEdits = Object.fromEntries(res.settings.map((s) => [s.setting_key, String(s.value)]));
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to save';
 		} finally {
@@ -164,9 +162,7 @@
 		try {
 			await deleteUserRateLimits(expandedUserId);
 			userLimitsData = await fetchUserRateLimits(expandedUserId);
-			userEdits = Object.fromEntries(
-				userLimitsData.effective.map((e) => [e.setting_key, ''])
-			);
+			userEdits = Object.fromEntries(userLimitsData.effective.map((e) => [e.setting_key, '']));
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to clear';
 		} finally {
@@ -244,7 +240,13 @@
 			<button class:active={tab === 'attempts'} onclick={() => (tab = 'attempts')}
 				>Login Attempts</button
 			>
-			<button class:active={tab === 'ratelimits'} onclick={() => { tab = 'ratelimits'; loadGlobalLimits(); }}>Rate Limits</button>
+			<button
+				class:active={tab === 'ratelimits'}
+				onclick={() => {
+					tab = 'ratelimits';
+					loadGlobalLimits();
+				}}>Rate Limits</button
+			>
 			<button class:active={tab === 'acestep'} onclick={() => (tab = 'acestep')}>ACE-Step</button>
 		</div>
 
@@ -397,7 +399,8 @@
 				<div class="limits-grid">
 					{#each globalLimits as item (item.setting_key)}
 						<label class="limit-row">
-							<span class="limit-label">{SETTING_LABELS[item.setting_key] ?? item.setting_key}</span>
+							<span class="limit-label">{SETTING_LABELS[item.setting_key] ?? item.setting_key}</span
+							>
 							<input
 								type="number"
 								min="0"
@@ -468,12 +471,25 @@
 										<div class="override-actions">
 											<!-- svelte-ignore a11y_click_events_have_key_events -->
 											<!-- svelte-ignore a11y_no_static_element_interactions -->
-											<span class="save-btn" onclick={(e) => { e.stopPropagation(); handleSaveUserLimits(); }} class:disabled={savingUser}>
+											<span
+												class="save-btn"
+												onclick={(e) => {
+													e.stopPropagation();
+													handleSaveUserLimits();
+												}}
+												class:disabled={savingUser}
+											>
 												{savingUser ? 'Saving...' : 'Save Overrides'}
 											</span>
 											<!-- svelte-ignore a11y_click_events_have_key_events -->
 											<!-- svelte-ignore a11y_no_static_element_interactions -->
-											<span class="clear-btn" onclick={(e) => { e.stopPropagation(); handleClearUserLimits(); }}>
+											<span
+												class="clear-btn"
+												onclick={(e) => {
+													e.stopPropagation();
+													handleClearUserLimits();
+												}}
+											>
 												Clear All
 											</span>
 										</div>
