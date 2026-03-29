@@ -100,7 +100,6 @@ def get_shared_album(
     if not album:
         raise HTTPException(404, "Not found")
     songs = sorted(album.songs, key=lambda s: s.track_number)
-    base_url = str(request.base_url).rstrip("/")
     picked_by_song = {s.id: _picked_filename(s) for s in songs}
     response = SharedAlbumResponse(
         title=album.title,
@@ -112,7 +111,7 @@ def get_shared_album(
                 title=s.title,
                 track_number=s.track_number,
                 audio_url=(
-                    f"{base_url}/shared/{slug}/audio/{picked_by_song[s.id]}"
+                    f"/shared/{slug}/audio/{picked_by_song[s.id]}"
                     if picked_by_song[s.id] else None
                 ),
             )
