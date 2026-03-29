@@ -379,76 +379,34 @@ def test_force_logout_not_found(client: TestClient) -> None:
 # -- ACE-Step reinitialize ----------------------------------------------------
 
 
-def _make_urlopen_mock(payloads: list[bytes]):
-    """Return a side_effect list of context-manager mocks, one per urlopen call."""
-    from unittest.mock import MagicMock
-
-    mocks = []
-    for payload in payloads:
-        cm = MagicMock()
-        cm.__enter__ = lambda self, p=payload: _make_read_mock(p)
-        cm.__exit__ = MagicMock(return_value=False)
-        mocks.append(cm)
-    return mocks
-
-
-def _make_read_mock(payload: bytes):
-    from unittest.mock import MagicMock
-
-    m = MagicMock()
-    m.read.return_value = payload
-    return m
-
-
 def test_reinitialize_acestep_success(client: TestClient) -> None:
-    import json
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import AsyncMock, patch
 
     _login_as_admin(client)
 
-    cm = MagicMock()
-    cm.__enter__ = lambda self: _make_read_mock(json.dumps({"code": 200}).encode())
-    cm.__exit__ = MagicMock(return_value=False)
+    mock_pool = AsyncMock()
+    mock_pool.enqueue_job = AsyncMock(return_value=AsyncMock())
 
-    with patch("urllib.request.urlopen", return_value=cm):
+    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
         resp = client.post("/api/admin/acestep/reinitialize")
 
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+    mock_pool.enqueue_job.assert_called_once_with("reinitialize_acestep")
 
 
-def test_reinitialize_acestep_error_response(client: TestClient) -> None:
-    import json
-    from unittest.mock import MagicMock, patch
-
-    _login_as_admin(client)
-
-    cm = MagicMock()
-    cm.__enter__ = lambda self: _make_read_mock(
-        json.dumps({"code": 500, "error": "model not loaded"}).encode()
-    )
-    cm.__exit__ = MagicMock(return_value=False)
-
-    with patch("urllib.request.urlopen", return_value=cm):
-        resp = client.post("/api/admin/acestep/reinitialize")
-
-    assert resp.status_code == 502
-    assert resp.json()["detail"] == "ACE-Step returned an error"
-
-
-def test_reinitialize_acestep_connection_failure(client: TestClient) -> None:
-    from unittest.mock import patch
+def test_reinitialize_acestep_already_queued(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
 
     _login_as_admin(client)
 
-    with patch(
-        "urllib.request.urlopen",
-        side_effect=OSError("connection refused"),
-    ):
+    mock_pool = AsyncMock()
+    mock_pool.enqueue_job = AsyncMock(return_value=None)
+
+    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
         resp = client.post("/api/admin/acestep/reinitialize")
 
-    assert resp.status_code == 502
-    assert "unreachable" in resp.json()["detail"]
+    assert resp.status_code == 409
 
 
 # -- ACE-Step status ----------------------------------------------------------
@@ -456,27 +414,20 @@ def test_reinitialize_acestep_connection_failure(client: TestClient) -> None:
 
 def test_acestep_status_online(client: TestClient) -> None:
     import json
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import AsyncMock, patch
 
     _login_as_admin(client)
 
-    health_payload = json.dumps(
-        {"data": {"loaded_model": "turbo", "loaded_lm_model": "small"}}
-    ).encode()
-    stats_payload = json.dumps({"data": {"jobs": {"pending": 0, "running": 1}}}).encode()
+    status = {
+        "online": True,
+        "model": "turbo",
+        "lm_model": "small",
+        "jobs": {"pending": 0, "running": 1},
+    }
+    mock_pool = AsyncMock()
+    mock_pool.get = AsyncMock(return_value=json.dumps(status).encode())
 
-    call_count = 0
-
-    def fake_urlopen(req, timeout=None):
-        nonlocal call_count
-        payload = health_payload if call_count == 0 else stats_payload
-        call_count += 1
-        cm = MagicMock()
-        cm.__enter__ = lambda self, p=payload: _make_read_mock(p)
-        cm.__exit__ = MagicMock(return_value=False)
-        return cm
-
-    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
         resp = client.get("/api/admin/acestep/status")
 
     assert resp.status_code == 200
@@ -488,14 +439,14 @@ def test_acestep_status_online(client: TestClient) -> None:
 
 
 def test_acestep_status_offline(client: TestClient) -> None:
-    from unittest.mock import patch
+    from unittest.mock import AsyncMock, patch
 
     _login_as_admin(client)
 
-    with patch(
-        "urllib.request.urlopen",
-        side_effect=OSError("connection refused"),
-    ):
+    mock_pool = AsyncMock()
+    mock_pool.get = AsyncMock(return_value=None)
+
+    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
         resp = client.get("/api/admin/acestep/status")
 
     assert resp.status_code == 200

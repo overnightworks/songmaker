@@ -15,6 +15,8 @@ from arq import cron
 from arq.connections import RedisSettings
 
 from songmaker_cli.constants import (
+    ACESTEP_STATUS_REDIS_KEY,
+    ACESTEP_STATUS_TTL_SECONDS,
     ACTIVE_MODEL_REDIS_KEY,
     AUDIO_ROOT,
     DATA_ROOT,
@@ -105,12 +107,64 @@ async def score(ctx, job_id, gen_id, scorers):
     )
 
 
+async def reinitialize_acestep(ctx):
+    import json
+    from urllib.request import Request, urlopen
+
+    from songmaker_cli.acestep_manager import _ACESTEP_PORT
+
+    mgr = _require_acestep_manager()
+    acestep_url = f"http://localhost:{_ACESTEP_PORT}/v1/reinitialize"
+    req = Request(
+        acestep_url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST",
+    )
+    with urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read())
+    if data.get("code") != 200:
+        raise RuntimeError(f"ACE-Step reinitialize failed: {data}")
+    mgr.refresh_cached_model()
+    model = mgr.active_model
+    if model:
+        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model)
+    await _publish_acestep_status(ctx["redis"])
+
+
+async def _publish_acestep_status(redis) -> None:
+    import json
+    from urllib.request import Request, urlopen
+
+    from songmaker_cli.acestep_manager import _ACESTEP_PORT
+
+    try:
+        req = Request(f"http://localhost:{_ACESTEP_PORT}/health", method="GET")
+        with urlopen(req, timeout=5) as resp:
+            health = json.loads(resp.read())
+
+        req2 = Request(f"http://localhost:{_ACESTEP_PORT}/v1/stats", method="GET")
+        with urlopen(req2, timeout=5) as resp:
+            stats = json.loads(resp.read())
+
+        status = {
+            "online": True,
+            "model": health.get("data", {}).get("loaded_model"),
+            "lm_model": health.get("data", {}).get("loaded_lm_model"),
+            "jobs": stats.get("data", {}).get("jobs", {}),
+        }
+    except Exception:
+        status = {"online": False, "model": None, "lm_model": None, "jobs": {}}
+
+    await redis.set(
+        ACESTEP_STATUS_REDIS_KEY, json.dumps(status), ex=ACESTEP_STATUS_TTL_SECONDS,
+    )
+
+
 async def cleanup_stale(ctx):
     db_factory = _get_db_factory()
     with db_factory() as session:
         count = recover_stale_jobs_by_age(session)
         if count:
             session.commit()
+    await _publish_acestep_status(ctx["redis"])
 
 
 async def on_startup(ctx):
@@ -160,6 +214,7 @@ async def on_startup(ctx):
     else:
         log.info("Stale job recovery skipped — another worker holds the lock")
 
+    await _publish_acestep_status(ctx["redis"])
     log.info("Worker ready")
 
 
@@ -189,7 +244,7 @@ _IMPORT_TIME_REDIS_URL = os.environ.get("REDIS_URL")
 
 
 class WorkerSettings:
-    functions = [generate, score]
+    functions = [generate, score, reinitialize_acestep]
     on_startup = on_startup
     on_shutdown = on_shutdown
     redis_settings = RedisSettings.from_dsn(

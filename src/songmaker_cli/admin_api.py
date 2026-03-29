@@ -24,7 +24,7 @@ from songmaker_cli.api_models import (
 from songmaker_cli.api_models.settings import AceStepStatusResponse
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth import hash_password
-from songmaker_cli.constants import ACESTEP_PORT, PAGE_ADMIN_DEFAULT_LIMIT, PAGE_ADMIN_MAX_LIMIT
+from songmaker_cli.constants import PAGE_ADMIN_DEFAULT_LIMIT, PAGE_ADMIN_MAX_LIMIT
 from songmaker_cli.db.queries import (
     count_active_sessions,
     count_audit_log,
@@ -218,50 +218,36 @@ def force_logout_endpoint(
 
 
 @router.post("/acestep/reinitialize")
-def reinitialize_acestep(
+async def reinitialize_acestep(
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
-    import json
-    from urllib.request import Request, urlopen
+    from songmaker_cli.arq_pool import get_arq_pool
 
-    acestep_url = f"http://localhost:{ACESTEP_PORT}/v1/reinitialize"
-    try:
-        req = Request(
-            acestep_url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST",
-        )
-        with urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read())
-        if data.get("code") == 200:
-            return StatusResponse(status="ok")
-        log.warning("ACE-Step reinitialize returned: %s", data)
-        raise HTTPException(502, "ACE-Step returned an error")
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(502, "ACE-Step server is unreachable") from exc
+    pool = get_arq_pool()
+    job = await pool.enqueue_job("reinitialize_acestep")
+    if job is None:
+        raise HTTPException(409, "Reinitialize job already queued")
+    return StatusResponse(status="ok")
 
 
 @router.get("/acestep/status")
-def acestep_status(
+async def acestep_status(
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> AceStepStatusResponse:
     import json
-    from urllib.request import Request, urlopen
 
-    try:
-        req = Request(f"http://localhost:{ACESTEP_PORT}/health", method="GET")
-        with urlopen(req, timeout=5) as resp:
-            health = json.loads(resp.read())
+    from songmaker_cli.arq_pool import get_arq_pool
+    from songmaker_cli.constants import ACESTEP_STATUS_REDIS_KEY
 
-        req2 = Request(f"http://localhost:{ACESTEP_PORT}/v1/stats", method="GET")
-        with urlopen(req2, timeout=5) as resp:
-            stats = json.loads(resp.read())
-
-        return AceStepStatusResponse(
-            online=True,
-            model=health.get("data", {}).get("loaded_model", "unknown"),
-            lm_model=health.get("data", {}).get("loaded_lm_model", "unknown"),
-            jobs=stats.get("data", {}).get("jobs", {}),
-        )
-    except Exception:
+    pool = get_arq_pool()
+    raw = await pool.get(ACESTEP_STATUS_REDIS_KEY)
+    if raw is None:
         return AceStepStatusResponse(online=False, model=None, lm_model=None, jobs={})
+
+    status = json.loads(raw)
+    return AceStepStatusResponse(
+        online=status["online"],
+        model=status.get("model"),
+        lm_model=status.get("lm_model"),
+        jobs=status.get("jobs", {}),
+    )

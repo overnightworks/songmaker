@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 import songmaker_cli.worker as worker_mod
 
 
@@ -163,6 +165,7 @@ def test_cleanup_stale_commits_on_recovery() -> None:
     with (
         patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
         patch("songmaker_cli.worker.recover_stale_jobs_by_age", return_value=2),
+        patch("songmaker_cli.worker._publish_acestep_status", new_callable=AsyncMock),
     ):
         _run(worker_mod.cleanup_stale(_mock_ctx()))
 
@@ -178,6 +181,7 @@ def test_cleanup_stale_no_commit_when_zero() -> None:
     with (
         patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
         patch("songmaker_cli.worker.recover_stale_jobs_by_age", return_value=0),
+        patch("songmaker_cli.worker._publish_acestep_status", new_callable=AsyncMock),
     ):
         _run(worker_mod.cleanup_stale(_mock_ctx()))
 
@@ -204,6 +208,7 @@ def test_on_startup_warns_on_redis_url_mismatch() -> None:
         patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
         patch("songmaker_cli.worker.recover_stale_jobs"),
         patch("songmaker_cli.acestep_manager.AceStepManager", return_value=mock_mgr),
+        patch("songmaker_cli.worker._publish_acestep_status", new_callable=AsyncMock),
     ):
         _run(worker_mod.on_startup(_mock_ctx()))
 
@@ -228,6 +233,7 @@ def test_on_startup_no_warning_when_redis_url_matches() -> None:
         patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
         patch("songmaker_cli.worker.recover_stale_jobs"),
         patch("songmaker_cli.acestep_manager.AceStepManager", return_value=mock_mgr),
+        patch("songmaker_cli.worker._publish_acestep_status", new_callable=AsyncMock),
     ):
         _run(worker_mod.on_startup(_mock_ctx()))
 
@@ -249,6 +255,7 @@ def test_on_startup_recovers_jobs() -> None:
         patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
         patch("songmaker_cli.worker.recover_stale_jobs") as mock_recover,
         patch("songmaker_cli.acestep_manager.AceStepManager", return_value=mock_mgr),
+        patch("songmaker_cli.worker._publish_acestep_status", new_callable=AsyncMock),
     ):
         _run(worker_mod.on_startup(ctx))
 
@@ -299,6 +306,94 @@ def test_on_shutdown_no_manager() -> None:
 
     mock_session.commit.assert_called_once()
     worker_mod._acestep_manager = original_mgr
+
+
+# ── reinitialize_acestep ───────────────────────────────────────────
+
+
+def _mock_urlopen_response(payload: bytes):
+    cm = MagicMock()
+    cm.__enter__ = MagicMock(
+        return_value=MagicMock(read=MagicMock(return_value=payload)),
+    )
+    cm.__exit__ = MagicMock(return_value=False)
+    return cm
+
+
+def test_reinitialize_acestep_success() -> None:
+    import json
+
+    mock_mgr = MagicMock()
+    mock_mgr.active_model = "sft"
+    ctx = _mock_ctx()
+
+    cm = _mock_urlopen_response(json.dumps({"code": 200}).encode())
+
+    with (
+        patch.object(worker_mod, "_acestep_manager", mock_mgr),
+        patch("urllib.request.urlopen", return_value=cm),
+        patch("songmaker_cli.worker._publish_acestep_status", new_callable=AsyncMock),
+    ):
+        _run(worker_mod.reinitialize_acestep(ctx))
+
+    mock_mgr.refresh_cached_model.assert_called_once()
+    ctx["redis"].set.assert_called()
+
+
+def test_reinitialize_acestep_failure() -> None:
+    import json
+
+    mock_mgr = MagicMock()
+    ctx = _mock_ctx()
+
+    cm = _mock_urlopen_response(json.dumps({"code": 500}).encode())
+
+    with pytest.raises(RuntimeError, match="reinitialize failed"):
+        with (
+            patch.object(worker_mod, "_acestep_manager", mock_mgr),
+            patch("urllib.request.urlopen", return_value=cm),
+        ):
+            _run(worker_mod.reinitialize_acestep(ctx))
+
+
+# ── _publish_acestep_status ───────────────────────────────────────
+
+
+def test_publish_acestep_status_online() -> None:
+    import json
+
+    redis = AsyncMock()
+    health_data = {"data": {"loaded_model": "sft", "loaded_lm_model": "4B"}}
+    stats_data = {"data": {"jobs": {"pending": 1}}}
+
+    call_count = 0
+
+    def fake_urlopen(req, timeout=None):
+        nonlocal call_count
+        data = health_data if call_count == 0 else stats_data
+        call_count += 1
+        return _mock_urlopen_response(json.dumps(data).encode())
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        _run(worker_mod._publish_acestep_status(redis))
+
+    redis.set.assert_called_once()
+    stored = json.loads(redis.set.call_args[0][1])
+    assert stored["online"] is True
+    assert stored["model"] == "sft"
+
+
+def test_publish_acestep_status_offline() -> None:
+    import json
+
+    redis = AsyncMock()
+
+    with patch("urllib.request.urlopen", side_effect=OSError("refused")):
+        _run(worker_mod._publish_acestep_status(redis))
+
+    redis.set.assert_called_once()
+    stored = json.loads(redis.set.call_args[0][1])
+    assert stored["online"] is False
 
 
 # ── WorkerSettings ─────────────────────────────────────────────────

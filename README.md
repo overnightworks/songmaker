@@ -11,12 +11,12 @@ Requires: Docker, NVIDIA Container Toolkit (for GPU generation).
 ```bash
 # 1. First-time setup
 cp .env.docker.example .env     # edit with your passwords + session secret
-docker compose up -d            # starts web, worker, PostgreSQL, Redis
+docker compose up -d --wait     # starts web, worker, PostgreSQL, Redis
 
 # 2. That's it — survives reboots automatically
 
 # 3. Update after code changes
-git pull && docker compose up -d --build
+git pull && docker compose up -d --build --wait
 
 # 4. View logs
 docker compose logs -f songmaker-worker   # GPU worker + ACE-Step

@@ -92,6 +92,10 @@ These are conventions that aren't obvious from reading a single file:
 - **No backup/restore strategy.** Audio files live in `data/audio/`, DB records reference them by relative path. Restoring the DB without the audio directory leaves orphaned records (404 on playback). Restoring audio without the DB leaves unreachable files. Both must be backed up together. Not documented in ops runbooks.
 - **Dependencies float `>=` with no upper bound** in `pyproject.toml`. The `uv.lock` file pins exact versions for reproducible installs, but anyone installing without the lock file gets latest everything. A future SQLAlchemy 3.0 or FastAPI breaking change would not be caught until runtime.
 
+## Docker
+
+Always use `--wait` with `docker compose up -d` (e.g. `docker compose up -d --build --wait`). Without it, the command can hang indefinitely after containers are already running, blocking the calling process.
+
 ## Workflow — Speed
 
 - **Batch changes, test once.** All edits first, suite once at the end.
