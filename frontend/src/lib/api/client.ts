@@ -200,6 +200,10 @@ export async function fetchJob(jobId: string): Promise<JobStatus> {
 	return apiFetch<JobStatus>(`/api/jobs/${jobId}`);
 }
 
+export async function cancelJob(jobId: string): Promise<JobStatus> {
+	return apiFetch<JobStatus>(`/api/jobs/${jobId}/cancel`, { method: 'POST' });
+}
+
 export async function pickGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}/pick`, { method: 'POST' });
 }

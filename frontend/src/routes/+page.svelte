@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
+		cancelJob,
 		fetchAlbums,
 		fetchSongs,
 		fetchSong,
@@ -9,7 +10,7 @@
 		pickGeneration,
 		unpickGeneration
 	} from '$lib/api/client';
-	import { activeJobs, trackJob } from '$lib/stores/jobs';
+	import { activeJobs, trackJob, removeJob } from '$lib/stores/jobs';
 	import {
 		albumList,
 		songList,
@@ -214,6 +215,13 @@
 									Done
 								{:else if j.job.status === 'failed'}
 									{j.job.error || 'Failed'}
+								{/if}
+								{#if j.job.status === 'queued' || j.job.status === 'running'}
+									<button
+										class="job-cancel"
+										onclick={() => cancelJob(j.job.id).then(() => removeJob(j.job.id))}
+										title="Cancel job">×</button
+									>
 								{/if}
 							</span>
 						{/each}
@@ -453,6 +461,23 @@
 
 	.job-indicator.failed {
 		color: var(--score-bad);
+	}
+
+	.job-cancel {
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: 12px;
+		padding: 0 2px;
+		margin-left: 2px;
+		line-height: 1;
+		opacity: 0.6;
+	}
+
+	.job-cancel:hover {
+		color: var(--score-bad);
+		opacity: 1;
 	}
 
 	.tab-bar {

@@ -21,6 +21,10 @@ export function trackJob(job: JobStatus, context: { songId?: string; genId?: str
 	pollJob(job.id);
 }
 
+export function removeJob(jobId: string): void {
+	activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
+}
+
 async function pollJob(jobId: string): Promise<void> {
 	let errorCount = 0;
 	const startTime = Date.now();
@@ -40,7 +44,8 @@ async function pollJob(jobId: string): Promise<void> {
 			if (
 				updated.status === 'completed' ||
 				updated.status === 'partial' ||
-				updated.status === 'failed'
+				updated.status === 'failed' ||
+				updated.status === 'cancelled'
 			) {
 				if (updated.status === 'completed') {
 					await refreshSongData(jobId);
@@ -48,6 +53,8 @@ async function pollJob(jobId: string): Promise<void> {
 				} else if (updated.status === 'partial') {
 					await refreshSongData(jobId);
 					addToast(updated.error || `${updated.type} partially completed`, 'info');
+				} else if (updated.status === 'cancelled') {
+					addToast(`${updated.type} cancelled`, 'info');
 				} else {
 					const isRestart = updated.error_type === 'server_restart';
 					addToast(
