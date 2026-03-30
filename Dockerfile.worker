@@ -10,15 +10,20 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 
+# Create user early so all files are owned by songmaker from the start,
+# avoiding a slow chown -R over GB of cached model files.
+RUN useradd --create-home --shell /bin/bash songmaker
+RUN chown songmaker:songmaker /app
+USER songmaker
+
 # Install dependencies first (cached unless pyproject.toml/uv.lock change)
-COPY pyproject.toml uv.lock ./
+COPY --chown=songmaker pyproject.toml uv.lock ./
 RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
     uv sync --frozen --no-dev --extra server --extra scoring --extra whisper && \
     rm -rf src/songmaker_cli/__init__.py
 
 # Pre-download scorer models while deps are cached — this layer only
 # rebuilds when pyproject.toml/uv.lock change, not on code changes.
-# HF_HUB_CACHE ensures models land where the runtime user can find them.
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub
 RUN uv run python -c "\
 from faster_whisper import WhisperModel; \
@@ -29,13 +34,9 @@ import os; os.environ['CUDA_VISIBLE_DEVICES'] = ''; \
 AesPredictor(checkpoint_pth='default')"
 
 # Copy source code (only this layer rebuilds on code changes)
-COPY src/ src/
-COPY alembic.ini ./
+COPY --chown=songmaker src/ src/
+COPY --chown=songmaker alembic.ini ./
 RUN uv sync --frozen --no-dev --extra server --extra scoring --extra whisper
-
-RUN useradd --create-home --shell /bin/bash songmaker
-RUN chown -R songmaker:songmaker /app
-USER songmaker
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
   CMD uv run arq songmaker_cli.worker.WorkerSettings --check || exit 1
