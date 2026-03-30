@@ -23,6 +23,10 @@
 		UserRateLimitsResponse
 	} from '$lib/api/types';
 	import { currentUser, isAdmin } from '$lib/stores/auth';
+	import { loadBuiltins, builtinDefaults } from '$lib/stores/presets';
+	import { fetchGenerationDefaults, updateGenerationDefaults } from '$lib/api/client';
+	import type { VersionGenerationParams } from '$lib/api/types';
+	import ParamControls from '$lib/components/ParamControls.svelte';
 
 	let users = $state<UserItem[]>([]);
 	let sessions = $state<SessionItem[]>([]);
@@ -34,7 +38,9 @@
 		jobs: Record<string, number>;
 	} | null>(null);
 	let error = $state('');
-	let tab = $state<'users' | 'sessions' | 'attempts' | 'acestep' | 'ratelimits'>('users');
+	let tab = $state<'users' | 'sessions' | 'attempts' | 'acestep' | 'ratelimits' | 'generation'>(
+		'users'
+	);
 	let reinitializing = $state(false);
 
 	let globalLimits = $state<RateLimitItem[]>([]);
@@ -58,6 +64,12 @@
 	let newPassword = $state('');
 	let newRole = $state('user');
 	let creating = $state(false);
+
+	let genDefaults = $state<Record<string, VersionGenerationParams>>({});
+	let genEditModel = $state('');
+	let genEditDefaults = $state<VersionGenerationParams>({});
+	let genSaving = $state(false);
+	const genModelModes = $derived(Object.keys($builtinDefaults));
 
 	const admin = $derived($isAdmin);
 	const me = $derived($currentUser);
@@ -226,6 +238,43 @@
 			error = e instanceof Error ? e.message : 'Failed';
 		}
 	}
+
+	async function loadGenDefaults() {
+		await loadBuiltins();
+		try {
+			genDefaults = await fetchGenerationDefaults();
+		} catch {
+			genDefaults = {};
+		}
+		const modes = Object.keys($builtinDefaults);
+		if (modes.length > 0 && !genEditModel) {
+			genEditModel = modes[0];
+			genEditDefaults = { ...(genDefaults[modes[0]] ?? {}) };
+		}
+	}
+
+	function switchGenModel(model: string): void {
+		genEditModel = model;
+		genEditDefaults = { ...(genDefaults[model] ?? {}) };
+	}
+
+	async function handleSaveGenDefaults(): Promise<void> {
+		genSaving = true;
+		error = '';
+		try {
+			const cleaned = Object.keys(genEditDefaults).length > 0 ? genEditDefaults : {};
+			genDefaults = await updateGenerationDefaults({ ...genDefaults, [genEditModel]: cleaned });
+			genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
+		} catch {
+			error = 'Failed to save generation defaults';
+		} finally {
+			genSaving = false;
+		}
+	}
+
+	function handleResetGenDefaults(): void {
+		genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
+	}
 </script>
 
 {#if !admin}
@@ -246,6 +295,13 @@
 					tab = 'ratelimits';
 					loadGlobalLimits();
 				}}>Rate Limits</button
+			>
+			<button
+				class:active={tab === 'generation'}
+				onclick={() => {
+					tab = 'generation';
+					loadGenDefaults();
+				}}>Generation</button
 			>
 			<button class:active={tab === 'acestep'} onclick={() => (tab = 'acestep')}>ACE-Step</button>
 		</div>
@@ -499,6 +555,43 @@
 						{/each}
 					</tbody>
 				</table>
+			</section>
+		{/if}
+
+		{#if tab === 'generation'}
+			<section>
+				<h2>Generation Defaults</h2>
+				<p class="hint">
+					Default generation parameters for all users. Per-song overrides take precedence.
+				</p>
+
+				<div class="gen-model-tabs">
+					{#each genModelModes as mode (mode)}
+						<button
+							class="gen-model-tab"
+							class:active={genEditModel === mode}
+							onclick={() => switchGenModel(mode)}
+						>
+							{mode.toUpperCase()}
+						</button>
+					{/each}
+				</div>
+
+				<div class="gen-defaults-controls">
+					<ParamControls
+						values={genEditDefaults}
+						placeholders={($builtinDefaults[genEditModel] ??
+							{}) as Required<VersionGenerationParams>}
+						onchange={(p) => (genEditDefaults = p)}
+					/>
+				</div>
+
+				<div class="gen-actions-row">
+					<button class="save-btn" onclick={handleSaveGenDefaults} disabled={genSaving}>
+						{genSaving ? 'Saving...' : 'Save Defaults'}
+					</button>
+					<button class="clear-btn" onclick={handleResetGenDefaults}>Reset</button>
+				</div>
 			</section>
 		{/if}
 
@@ -886,5 +979,39 @@
 	tr.override-row td {
 		padding: 0.75rem 0.5rem 1rem;
 		background: var(--surface);
+	}
+
+	.gen-model-tabs {
+		display: flex;
+		gap: 4px;
+		margin-bottom: 1rem;
+	}
+
+	.gen-model-tab {
+		padding: 0.4rem 1rem;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 0.85rem;
+		cursor: pointer;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.gen-model-tab.active {
+		border-color: transparent;
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		color: #fff;
+	}
+
+	.gen-defaults-controls {
+		margin-bottom: 1rem;
+	}
+
+	.gen-actions-row {
+		display: flex;
+		gap: 0.5rem;
 	}
 </style>

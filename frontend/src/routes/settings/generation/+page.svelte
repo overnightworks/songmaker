@@ -12,16 +12,13 @@
 		unsetDefault,
 		deletePreset
 	} from '$lib/stores/presets';
-	import { fetchGenerationDefaults, updateGenerationDefaults } from '$lib/api/client';
+	import { fetchGenerationDefaults } from '$lib/api/client';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
 
 	const admin = $derived($isAdmin);
 
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
-	let editModel = $state('');
-	let editDefaults = $state<VersionGenerationParams>({});
-	let saving = $state(false);
 	let error = $state('');
 
 	let showPresetForm = $state(false);
@@ -52,34 +49,9 @@
 		]);
 		const modes = Object.keys($builtinDefaults);
 		if (modes.length > 0) {
-			editModel = modes[0];
 			presetModel = modes[0];
-			editDefaults = { ...(globalDefaults[modes[0]] ?? {}) };
 		}
 	});
-
-	function switchModel(model: string): void {
-		editModel = model;
-		editDefaults = { ...(globalDefaults[model] ?? {}) };
-	}
-
-	async function handleSaveDefaults(): Promise<void> {
-		saving = true;
-		error = '';
-		try {
-			const cleaned = Object.keys(editDefaults).length > 0 ? editDefaults : {};
-			globalDefaults = await updateGenerationDefaults({ ...globalDefaults, [editModel]: cleaned });
-			editDefaults = { ...(globalDefaults[editModel] ?? {}) };
-		} catch {
-			error = 'Failed to save defaults';
-		} finally {
-			saving = false;
-		}
-	}
-
-	function handleResetDefaults(): void {
-		editDefaults = { ...(globalDefaults[editModel] ?? {}) };
-	}
 
 	function openNewPreset(): void {
 		editingPresetId = null;
@@ -149,50 +121,14 @@
 	}
 </script>
 
-{#if !admin}
-	<div class="denied">Admin access required.</div>
-{:else}
-	<div class="page">
-		<h1>Generation</h1>
+<div class="page">
+	<h1>Generation</h1>
 
-		{#if error}
-			<p class="error">{error}</p>
-		{/if}
+	{#if error}
+		<p class="error">{error}</p>
+	{/if}
 
-		<section>
-			<h2>Global Defaults</h2>
-			<p class="hint">
-				Default generation parameters applied to all new songs. Per-song overrides take precedence.
-			</p>
-
-			<div class="model-tabs">
-				{#each modelModes as mode (mode)}
-					<button
-						class="model-tab"
-						class:active={editModel === mode}
-						onclick={() => switchModel(mode)}
-					>
-						{mode.toUpperCase()}
-					</button>
-				{/each}
-			</div>
-
-			<div class="defaults-controls">
-				<ParamControls
-					values={editDefaults}
-					placeholders={($builtinDefaults[editModel] ?? {}) as Required<VersionGenerationParams>}
-					onchange={(p) => (editDefaults = p)}
-				/>
-			</div>
-
-			<div class="actions-row">
-				<button class="save-btn" onclick={handleSaveDefaults} disabled={saving}>
-					{saving ? 'Saving...' : 'Save Defaults'}
-				</button>
-				<button class="reset-btn" onclick={handleResetDefaults}>Reset</button>
-			</div>
-		</section>
-
+	{#if admin}
 		<section>
 			<div class="section-header">
 				<h2>Presets</h2>
@@ -266,22 +202,32 @@
 				<p class="empty">No presets saved yet.</p>
 			{/if}
 		</section>
-	</div>
-{/if}
+	{:else}
+		<section>
+			<h2>Presets</h2>
+			{#if $presets.length > 0}
+				<div class="preset-list">
+					{#each $presets as preset (preset.id)}
+						<div class="preset-row">
+							<span class="preset-name">{preset.name}</span>
+							<span class="preset-mode-tag">{preset.model_mode}</span>
+							{#if preset.is_default}
+								<span class="preset-default-tag">default</span>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="empty">No presets available.</p>
+			{/if}
+		</section>
+	{/if}
+</div>
 
 <style>
 	.page {
 		padding: 2rem;
 		max-width: 700px;
-	}
-
-	.denied {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		height: 100%;
-		color: var(--text-muted);
-		font-size: 1.1rem;
 	}
 
 	h1 {
@@ -305,12 +251,6 @@
 		letter-spacing: 0.5px;
 	}
 
-	.hint {
-		color: var(--text-dim);
-		font-size: 0.85rem;
-		margin-bottom: 1rem;
-	}
-
 	.error {
 		color: var(--score-bad);
 		font-size: 0.85rem;
@@ -319,35 +259,6 @@
 
 	section {
 		margin-bottom: 2rem;
-	}
-
-	.model-tabs {
-		display: flex;
-		gap: 4px;
-		margin-bottom: 1rem;
-	}
-
-	.model-tab {
-		padding: 0.4rem 1rem;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		background: transparent;
-		color: var(--text-muted);
-		font-size: 0.85rem;
-		cursor: pointer;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-	}
-
-	.model-tab.active {
-		border-color: transparent;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
-	}
-
-	.defaults-controls {
-		margin-bottom: 1rem;
 	}
 
 	.actions-row {
@@ -520,6 +431,15 @@
 		font-size: 0.7rem;
 		color: var(--text-dim);
 		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.preset-default-tag {
+		font-size: 0.7rem;
+		padding: 1px 6px;
+		border-radius: 3px;
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		color: #fff;
 		letter-spacing: 0.5px;
 	}
 
