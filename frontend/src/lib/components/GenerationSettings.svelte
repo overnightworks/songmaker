@@ -7,7 +7,6 @@
 	import ParamControls from './ParamControls.svelte';
 	import PresetChips from './PresetChips.svelte';
 
-	let open = $state(false);
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
 
 	const firstMode = $derived(Object.keys($builtinDefaults)[0] ?? '');
@@ -33,16 +32,15 @@
 	});
 </script>
 
-<div class="gen-settings">
-	<button class="toggle" onclick={() => (open = !open)} aria-expanded={open}>
-		<span class="toggle-icon">{open ? '▾' : '▸'}</span>
-		<span>Generation Settings</span>
+<details class="gen-settings">
+	<summary class="toggle">
+		Generation Settings
 		{#if hasOverrides}
 			<span class="override-badge">custom</span>
 		{/if}
-	</button>
+	</summary>
 
-	{#if open}
+	<div class="settings-body">
 		<PresetChips
 			{hasOverrides}
 			onload={(p) => ($editGenParams = { ...p })}
@@ -54,8 +52,8 @@
 			placeholders={effectiveDefaults}
 			onchange={(p) => ($editGenParams = Object.keys(p).length > 0 ? p : null)}
 		/>
-	{/if}
-</div>
+	</div>
+</details>
 
 <style>
 	.gen-settings {
@@ -68,25 +66,36 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		background: none;
-		border: none;
-		padding: 0;
 		cursor: pointer;
 		font-size: 10px;
 		color: var(--text-muted);
 		text-transform: uppercase;
 		font-family: var(--font-display);
 		letter-spacing: 1px;
+		list-style: disclosure-closed;
+	}
+
+	.gen-settings[open] > .toggle {
+		list-style: disclosure-open;
 	}
 
 	.toggle:hover {
 		color: var(--text);
 	}
 
-	.toggle-icon {
+	.toggle::marker {
+		color: var(--text-muted);
 		font-size: 10px;
-		width: 10px;
-		pointer-events: none;
+	}
+
+	.toggle:hover::marker {
+		color: var(--text);
+	}
+
+	.settings-body {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
 	}
 
 	.override-badge {
