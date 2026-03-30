@@ -179,16 +179,148 @@ Store the model used for generation on the song version, so the UI can warn abou
 
 ---
 
+## Phase 7: Distributed workers
+
+Workers run on remote GPU servers instead of the web server's machine. Multiple workers can serve the same model for horizontal scaling.
+
+### What needs to change
+
+**ACE-Step URL (small):**
+Currently hardcoded to `localhost:8001`. Each worker manages its own ACE-Step subprocess, so this stays as-is — the worker and its ACE-Step server are co-located on the same GPU machine. No change needed.
+
+**Audio file storage (medium):**
+Currently audio files are written to a local `data/audio/` directory shared between web server and worker via Docker volume. With remote workers, this breaks.
+
+Options:
+- **A) Object storage (S3/MinIO):** Worker uploads audio after generation, web server serves from storage. Clean, standard, works at any scale.
+- **B) Shared NFS mount:** All machines mount the same network filesystem. Simple but adds infrastructure dependency and latency.
+- **C) Worker pushes via API:** Worker uploads audio to the web server via HTTP after generation. No shared storage needed, but adds an endpoint and network transfer.
+
+**Recommendation:** Option C for simplicity. Add `POST /api/internal/upload-audio` (worker-authenticated) that accepts the audio file. Migrate to S3 later if file volume grows. Option B works if all machines are on the same network.
+
+| File | Change |
+|------|--------|
+| `generate.py` | After writing audio files, upload to web server (or S3) |
+| `server.py` or new `internal_api.py` | Internal upload endpoint (worker auth via shared secret) |
+| `audio_io.py` | Abstract file storage behind interface (local / S3 / remote) |
+
+**Database access (none):**
+Workers already connect to PostgreSQL and Redis via network URLs. Remote workers just need `DATABASE_URL` and `REDIS_URL` pointing to the web server's DB/Redis. No code change.
+
+**Worker registration:**
+Workers register in Redis on startup with their model, host, and health status. The web server reads these to populate `available_models` automatically.
+
+```
+Redis key: songmaker:worker:{worker_id}
+Value: { "model_mode": "sft", "host": "gpu-1.internal", "last_seen": "...", "jobs_running": 0 }
+TTL: 60s (auto-expires if worker dies)
+```
+
+| File | Change |
+|------|--------|
+| `worker.py` | On startup and periodically, write worker info to Redis |
+| `health_api.py` | Read all `songmaker:worker:*` keys to report available capacity |
+| `settings_api.py` | Auto-update `available_models.is_active` based on registered workers |
+
+### Deployment (example)
+
+```
+Web server (no GPU):
+  - songmaker-web (FastAPI)
+  - PostgreSQL
+  - Redis
+  - Prometheus + Grafana
+
+GPU server 1:
+  - songmaker-worker (ACESTEP_CONFIG_PATH=acestep-v15-sft)
+  - ACE-Step server (managed by worker)
+  - Connects to: Redis @ web-server, PostgreSQL @ web-server
+
+GPU server 2:
+  - songmaker-worker (ACESTEP_CONFIG_PATH=acestep-v15-turbo)
+  - ACE-Step server (managed by worker)
+  - Connects to: Redis @ web-server, PostgreSQL @ web-server
+```
+
+---
+
+## Phase 8: Horizontal scaling (multiple workers per model)
+
+Run N workers with the same model to handle concurrent users. arq handles this natively.
+
+### How it works
+
+arq workers listening on the same queue compete for jobs. If 3 SFT workers are running, up to 3 SFT jobs run in parallel. No code change needed for basic round-robin — arq does this out of the box.
+
+```
+Queue: arq:queue:sft
+  ← Worker-sft-1 (gpu-server-1) picks job A
+  ← Worker-sft-2 (gpu-server-2) picks job B
+  ← Worker-sft-3 (gpu-server-3) picks job C
+```
+
+### What needs to change
+
+**Rate limiting:**
+Current `MAX_QUEUE_DEPTH=10` is a global limit. With 3 workers, you'd want a higher limit. Make queue depth configurable per model or auto-scale based on registered workers.
+
+| File | Change |
+|------|--------|
+| `api_helpers.py` | Queue depth limit = base × number of healthy workers for that model |
+| `health_api.py` | Report per-model capacity (workers × max_jobs) |
+
+**Scoring:**
+Currently scoring runs on the same worker as generation (GPU needed for some scorers). With horizontal scaling, scoring jobs should go to whichever worker is free — they already do via the shared queue.
+
+**Monitoring:**
+Per-worker metrics so you can see which GPU is busy/idle.
+
+| File | Change |
+|------|--------|
+| `worker.py` | Include `worker_id` in job metrics |
+| `health_api.py` | Report per-worker stats from Redis |
+| Grafana | Dashboard showing worker load distribution |
+
+### Deployment (example — 3 SFT workers)
+
+```yaml
+# On gpu-server-1
+songmaker-worker:
+  environment:
+    ACESTEP_CONFIG_PATH: acestep-v15-sft
+    ARQ_QUEUE_NAME: arq:queue:sft
+    REDIS_URL: redis://web-server:6379/0
+    DATABASE_URL: postgresql://user:pass@web-server/songmaker
+    WORKER_ID: sft-1
+
+# On gpu-server-2 (identical config, different WORKER_ID)
+songmaker-worker:
+  environment:
+    ACESTEP_CONFIG_PATH: acestep-v15-sft
+    ARQ_QUEUE_NAME: arq:queue:sft
+    REDIS_URL: redis://web-server:6379/0
+    DATABASE_URL: postgresql://user:pass@web-server/songmaker
+    WORKER_ID: sft-2
+```
+
+No code change needed for this to work. arq handles the distribution.
+
+---
+
 ## Priority
 
-Phase 1 (model tag on generations) → Phase 2 (model selection UI) → Phase 3 (health discovery) → Phase 4 or 5 (routing)
+Phase 1 (model tag) → Phase 2 (model selection UI) → Phase 3 (health discovery) → Phase 4 (queue routing) → Phase 7 (distributed) → Phase 8 (horizontal scaling)
 
-Phase 6 can happen anytime after Phase 2.
+Phase 5 (single-GPU model switching) is an alternative to Phase 4+7 for budget setups.
+Phase 6 (song model persistence) can happen anytime after Phase 2.
 
 ## Constraints
 
 - arq supports custom queue names via `_queue_name` parameter on `enqueue_job`
+- arq natively supports multiple workers on the same queue (horizontal scaling)
 - Current `max_jobs=1` on worker stays — GPU jobs are sequential per worker
 - Scoring always runs on the generation worker (no separate routing needed)
 - Rate limiting is per-user, not per-model — no change needed
 - ACE-Step startup takes 30-60s — model switching has visible latency
+- Remote workers need network access to Redis and PostgreSQL
+- Audio file transfer is the main distributed challenge (local volume doesn't work remotely)
