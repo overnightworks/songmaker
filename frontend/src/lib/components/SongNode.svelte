@@ -5,6 +5,7 @@
 		playGeneration,
 		togglePlayPause,
 		isAudioPlaying,
+		isAudioBuffering,
 		selectedGenerationId,
 		ensureGenerationsLoaded
 	} from '$lib/stores/player';
@@ -28,6 +29,7 @@
 	const activeGenId = $derived($selectedGenerationId);
 	const pb = $derived($playback);
 	const audioPlaying = $derived($isAudioPlaying);
+	const buffering = $derived($isAudioBuffering);
 	const albums = $derived($albumList);
 
 	let showAllGens = $state(false);
@@ -83,6 +85,10 @@
 
 	function isGenPlaying(gen: GenerationItem): boolean {
 		return pb?.generation.id === gen.id;
+	}
+
+	function isGenLoading(gen: GenerationItem): boolean {
+		return isGenPlaying(gen) && buffering;
 	}
 
 	function handleGenPlayToggle(e: Event, gen: GenerationItem): void {
@@ -188,6 +194,7 @@
 						<div
 							class="gen-row"
 							class:playing={isGenPlaying(gen)}
+							class:buffering={isGenLoading(gen)}
 							class:selected={gen.id === activeGenId}
 							onclick={() => selectGeneration(gen, song)}
 							onkeydown={(e) => e.key === 'Enter' && selectGeneration(gen, song)}
@@ -196,10 +203,16 @@
 						>
 							<button
 								class="gen-play-btn"
+								class:loading={isGenLoading(gen)}
 								onclick={(e) => handleGenPlayToggle(e, gen)}
-								aria-label={isGenPlaying(gen) && audioPlaying ? 'Pause' : 'Play'}
+								aria-label={isGenPlaying(gen) && audioPlaying
+									? 'Pause'
+									: isGenLoading(gen)
+										? 'Loading'
+										: 'Play'}
 							>
-								{#if isGenPlaying(gen) && audioPlaying}⏸{:else}▶{/if}
+								{#if isGenLoading(gen)}<span class="gen-spinner"
+									></span>{:else if isGenPlaying(gen) && audioPlaying}⏸{:else}▶{/if}
 							</button>
 							<span class="gen-num">
 								{#if gen.is_picked}<span class="picked">★</span>{/if}
@@ -427,6 +440,20 @@
 		background: rgba(160, 32, 240, 0.1);
 	}
 
+	.gen-row.buffering {
+		animation: sidebar-pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes sidebar-pulse {
+		0%,
+		100% {
+			background: rgba(160, 32, 240, 0.04);
+		}
+		50% {
+			background: rgba(160, 32, 240, 0.15);
+		}
+	}
+
 	.gen-row.selected {
 		background: rgba(160, 32, 240, 0.08);
 		border-left: 2px solid var(--accent);
@@ -444,6 +471,27 @@
 
 	.gen-play-btn:hover {
 		color: var(--primary);
+	}
+
+	.gen-play-btn.loading {
+		color: var(--accent);
+		cursor: wait;
+	}
+
+	.gen-spinner {
+		display: inline-block;
+		width: 8px;
+		height: 8px;
+		border: 1.5px solid var(--accent);
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: gen-spin 0.8s linear infinite;
+	}
+
+	@keyframes gen-spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.gen-num {

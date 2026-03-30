@@ -1,6 +1,12 @@
 <script lang="ts">
 	import type { SongItem, GenerationItem } from '$lib/api/types';
-	import { playGeneration, togglePlayPause, isAudioPlaying, playback } from '$lib/stores/player';
+	import {
+		playGeneration,
+		togglePlayPause,
+		isAudioPlaying,
+		isAudioBuffering,
+		playback
+	} from '$lib/stores/player';
 	import { scoreColor } from '$lib/utils/scores';
 
 	interface Props {
@@ -14,6 +20,7 @@
 
 	const pb = $derived($playback);
 	const audioPlaying = $derived($isAudioPlaying);
+	const buffering = $derived($isAudioBuffering);
 
 	interface VersionGroup {
 		label: string;
@@ -43,6 +50,10 @@
 		return pb?.generation.id === gen.id;
 	}
 
+	function isGenLoading(gen: GenerationItem): boolean {
+		return isGenPlaying(gen) && buffering;
+	}
+
 	function handlePlay(e: Event, gen: GenerationItem): void {
 		e.stopPropagation();
 		if (isGenPlaying(gen)) togglePlayPause();
@@ -61,6 +72,7 @@
 					<div
 						class="gen-card"
 						class:playing={isGenPlaying(gen)}
+						class:buffering={isGenLoading(gen)}
 						onclick={() => onselect(gen)}
 						onkeydown={(e) => e.key === 'Enter' && onselect(gen)}
 						role="button"
@@ -68,10 +80,16 @@
 					>
 						<button
 							class="play-btn"
+							class:loading={isGenLoading(gen)}
 							onclick={(e) => handlePlay(e, gen)}
-							aria-label={isGenPlaying(gen) && audioPlaying ? 'Pause' : 'Play'}
+							aria-label={isGenPlaying(gen) && audioPlaying
+								? 'Pause'
+								: isGenLoading(gen)
+									? 'Loading'
+									: 'Play'}
 						>
-							{#if isGenPlaying(gen) && audioPlaying}⏸{:else}▶{/if}
+							{#if isGenLoading(gen)}<span class="spinner"
+								></span>{:else if isGenPlaying(gen) && audioPlaying}⏸{:else}▶{/if}
 						</button>
 
 						<div class="gen-info">
@@ -181,6 +199,44 @@
 	.gen-card.playing {
 		border-color: var(--accent);
 		background: rgba(160, 32, 240, 0.1);
+	}
+
+	.gen-card.buffering {
+		border-color: var(--accent);
+		animation: buffer-pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes buffer-pulse {
+		0%,
+		100% {
+			border-color: rgba(160, 32, 240, 0.2);
+			box-shadow: 0 0 0 rgba(160, 32, 240, 0);
+		}
+		50% {
+			border-color: var(--accent);
+			box-shadow: 0 0 12px rgba(160, 32, 240, 0.15);
+		}
+	}
+
+	.play-btn.loading {
+		border-color: var(--accent);
+		cursor: wait;
+	}
+
+	.spinner {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border: 2px solid var(--accent);
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.play-btn {

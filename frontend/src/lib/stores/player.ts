@@ -221,6 +221,7 @@ export function navigateToPlaying(): void {
 
 // --- Playback control ---
 export const isAudioPlaying = writable(false);
+export const isAudioBuffering = writable(false);
 export const requestTogglePlay = writable(0);
 
 export function togglePlayPause(): void {

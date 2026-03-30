@@ -7,6 +7,7 @@
 		playbackDuration,
 		navigateToPlaying,
 		isAudioPlaying,
+		isAudioBuffering,
 		requestTogglePlay,
 		playNextGeneration,
 		playPrevGeneration,
@@ -379,9 +380,11 @@
 		});
 		wavesurfer.on('loading', () => {
 			isLoading = true;
+			isAudioBuffering.set(true);
 		});
 		wavesurfer.on('ready', () => {
 			isLoading = false;
+			isAudioBuffering.set(false);
 			loadedFile = prevFile;
 			duration = wavesurfer?.getDuration() ?? 0;
 			playbackDuration.set(duration);
@@ -411,6 +414,7 @@
 		if (gen.mp3_path !== prevFile) {
 			prevFile = gen.mp3_path;
 			isLoading = true;
+			isAudioBuffering.set(true);
 			if (!wavesurfer) createWavesurfer();
 			wavesurfer?.pause();
 			isPlaying = false;
@@ -636,8 +640,8 @@
 		inherits: false;
 	}
 	.spinner {
-		width: 16px;
-		height: 16px;
+		width: 24px;
+		height: 24px;
 		border: 2px solid transparent;
 		border-radius: 50%;
 		background-origin: border-box;

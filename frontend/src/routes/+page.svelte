@@ -185,27 +185,25 @@
 						<span class="song-album">{song.album_title} · {song.artist}</span>
 					</div>
 					<div class="detail-actions">
-						{#if !activeGen}
-							{#if tab === 'edit' && dirty}
-								<button class="save-btn" onclick={onSave} disabled={isSaving}>
-									{isSaving ? 'Saving...' : 'Save'}
-								</button>
-							{:else}
-								<button
-									class="generate-btn"
-									class:generating={isGenerating}
-									onclick={onGenerate}
-									disabled={isGenerating || !song?.lyrics || !song?.prompt}
-									title={!song?.lyrics || !song?.prompt ? 'Add lyrics and style prompt first' : ''}
-								>
-									{isGenerating ? 'Generating...' : 'Generate'}
-								</button>
-								<select class="gen-count-select" bind:value={genCount}>
-									{#each [1, 2, 3, 5, 10] as n (n)}
-										<option value={n}>×{n}</option>
-									{/each}
-								</select>
-							{/if}
+						{#if tab === 'edit' && dirty}
+							<button class="save-btn" onclick={onSave} disabled={isSaving}>
+								{isSaving ? 'Saving...' : 'Save'}
+							</button>
+						{:else}
+							<button
+								class="generate-btn"
+								class:generating={isGenerating}
+								onclick={onGenerate}
+								disabled={isGenerating || !song?.lyrics || !song?.prompt}
+								title={!song?.lyrics || !song?.prompt ? 'Add lyrics and style prompt first' : ''}
+							>
+								{isGenerating ? 'Generating...' : 'Generate'}
+							</button>
+							<select class="gen-count-select" bind:value={genCount}>
+								{#each [1, 2, 3, 5, 10] as n (n)}
+									<option value={n}>×{n}</option>
+								{/each}
+							</select>
 						{/if}
 						{#each songJobs as j (j.job.id)}
 							{#if j.job.status === 'failed'}
@@ -241,57 +239,62 @@
 					</div>
 				</div>
 
-				{#if activeGen}
-					{@const genScoring = jobs.some(
-						(j) =>
-							j.genId === activeGen.id &&
-							j.job.type === 'score' &&
-							(j.job.status === 'running' || j.job.status === 'queued')
-					)}
-					<GenerationDetail
-						generation={activeGen}
-						scoring={genScoring}
-						onversionclick={onVersionClick}
-						onscore={onScore}
-						onpick={onPick}
-					/>
-				{:else}
-					<div class="tab-bar">
-						<button
-							class="tab-btn"
-							class:active={tab === 'generations'}
-							onclick={() => switchTab('generations')}
-						>
-							Generations
-						</button>
-						<button class="tab-btn" class:active={tab === 'edit'} onclick={() => switchTab('edit')}>
-							Edit
-						</button>
-						<button class="tab-btn" class:active={tab === 'chat'} onclick={() => switchTab('chat')}>
-							Co-Writer
-						</button>
-					</div>
+				<div class="tab-bar">
+					<button
+						class="tab-btn"
+						class:active={tab === 'generations'}
+						onclick={() => switchTab('generations')}
+					>
+						Generations
+					</button>
+					<button class="tab-btn" class:active={tab === 'edit'} onclick={() => switchTab('edit')}>
+						Edit
+					</button>
+					<button class="tab-btn" class:active={tab === 'chat'} onclick={() => switchTab('chat')}>
+						Co-Writer
+					</button>
+				</div>
 
-					{#if tab === 'generations'}
+				{#if tab === 'generations'}
+					{#if activeGen}
+						{@const genScoring = jobs.some(
+							(j) =>
+								j.genId === activeGen.id &&
+								j.job.type === 'score' &&
+								(j.job.status === 'running' || j.job.status === 'queued')
+						)}
+						<div class="gen-detail-wrapper">
+							<button class="back-btn" onclick={clearGenerationSelection}>
+								<span class="back-arrow">←</span> All generations
+							</button>
+							<GenerationDetail
+								generation={activeGen}
+								scoring={genScoring}
+								onversionclick={onVersionClick}
+								onscore={onScore}
+								onpick={onPick}
+							/>
+						</div>
+					{:else}
 						<GenerationsList
 							{song}
 							onselect={(gen) => selectGeneration(gen, song)}
 							onscore={onScore}
 							onpick={onPick}
 						/>
-					{:else if tab === 'edit'}
-						<SongEditor ondeleteversion={onDeleteVersion} />
-					{:else if tab === 'chat'}
-						<div class="chat-tab">
-							<ClaudeChat
-								songId={song?.id ?? ''}
-								{songContext}
-								allSongs={$songList}
-								currentAlbumId={song?.album_id ?? ''}
-								onapply={handleApply}
-							/>
-						</div>
 					{/if}
+				{:else if tab === 'edit'}
+					<SongEditor ondeleteversion={onDeleteVersion} />
+				{:else if tab === 'chat'}
+					<div class="chat-tab">
+						<ClaudeChat
+							songId={song?.id ?? ''}
+							{songContext}
+							allSongs={$songList}
+							currentAlbumId={song?.album_id ?? ''}
+							onapply={handleApply}
+						/>
+					</div>
 				{/if}
 			</div>
 		{:else}
@@ -513,6 +516,37 @@
 	.job-cancel:hover {
 		color: var(--score-bad);
 		border-color: var(--score-bad);
+	}
+
+	.gen-detail-wrapper {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		overflow: auto;
+	}
+
+	.back-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		font-size: 11px;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		padding: 8px 16px;
+		cursor: pointer;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.back-btn:hover {
+		color: var(--primary);
+	}
+
+	.back-arrow {
+		font-size: 14px;
 	}
 
 	.tab-bar {

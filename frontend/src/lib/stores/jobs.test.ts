@@ -52,7 +52,7 @@ describe('jobs store', () => {
 		expect(jobs[0].songId).toBe('s1');
 	});
 
-	it('polls and updates job status on completion', async () => {
+	it('polls and removes completed job immediately', async () => {
 		mockFetchJob.mockResolvedValue(makeJob({ status: 'completed', progress: 1.0 }));
 		mockFetchSong.mockRejectedValue(new Error('no song'));
 
@@ -60,18 +60,6 @@ describe('jobs store', () => {
 		await vi.advanceTimersByTimeAsync(2100);
 
 		expect(mockFetchJob).toHaveBeenCalledWith('j1');
-		const jobs = get(activeJobs);
-		expect(jobs[0].job.status).toBe('completed');
-	});
-
-	it('removes completed job after 5s delay', async () => {
-		mockFetchJob.mockResolvedValue(makeJob({ status: 'completed', progress: 1.0 }));
-
-		trackJob(makeJob(), {});
-		await vi.advanceTimersByTimeAsync(2100);
-		expect(get(activeJobs)).toHaveLength(1);
-
-		await vi.advanceTimersByTimeAsync(5100);
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
@@ -99,7 +87,7 @@ describe('jobs store', () => {
 
 		await vi.advanceTimersByTimeAsync(2100);
 		expect(mockFetchJob).toHaveBeenCalledTimes(2);
-		expect(get(activeJobs)[0].job.status).toBe('completed');
+		expect(get(activeJobs)).toHaveLength(0);
 	});
 
 	it('retries on fetch error', async () => {
@@ -166,7 +154,7 @@ describe('jobs store', () => {
 		trackJob(makeJob(), { songId: 's1' });
 		await vi.advanceTimersByTimeAsync(2100);
 
-		expect(get(activeJobs)[0].job.status).toBe('completed');
+		expect(get(activeJobs)).toHaveLength(0);
 	});
 
 	it('skips refresh when no songId', async () => {
