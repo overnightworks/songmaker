@@ -113,6 +113,7 @@ skips = [
     "B310",  # urlopen — URLs are from config, not user input
     "B404",  # subprocess import — required for ffmpeg and ACE-Step
     "B603",  # subprocess without shell — intentional, uses list args
+    "B110",  # try/except/pass — used in cleanup paths (GPU, subprocess, model unload)
 ]
 
 [tool.pytest.ini_options]
