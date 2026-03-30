@@ -219,7 +219,10 @@
 								{#if j.job.status === 'queued' || j.job.status === 'running'}
 									<button
 										class="job-cancel"
-										onclick={() => cancelJob(j.job.id).then(() => removeJob(j.job.id))}
+										onclick={() =>
+											cancelJob(j.job.id)
+												.then(() => removeJob(j.job.id))
+												.catch(() => {})}
 										title="Cancel job">×</button
 									>
 								{/if}
