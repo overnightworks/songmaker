@@ -5,6 +5,7 @@
 		loadPresets,
 		loadBuiltins,
 		loadActiveModels,
+		activeModels,
 		builtinDefaults
 	} from '$lib/stores/presets';
 	import { fetchGenerationDefaults } from '$lib/api/client';
@@ -14,7 +15,7 @@
 
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
 
-	const firstMode = $derived(Object.keys($builtinDefaults)[0] ?? '');
+	const firstMode = $derived($activeModels[0]?.id ?? Object.keys($builtinDefaults)[0] ?? '');
 
 	const effectiveDefaults = $derived.by((): Required<VersionGenerationParams> => {
 		const builtin = firstMode ? ($builtinDefaults[firstMode] ?? {}) : {};
