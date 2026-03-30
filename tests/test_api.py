@@ -1361,3 +1361,22 @@ def test_presets_include_shared_flag(client: TestClient) -> None:
     assert resp.status_code == 200
     for p in resp.json():
         assert "is_shared" in p
+
+
+# ── Available models ─────────────────────────────────────────────────
+
+
+def test_list_active_models(client: TestClient) -> None:
+    resp = client.get("/api/settings/models")
+    assert resp.status_code == 200
+    models = resp.json()
+    active_ids = [m["id"] for m in models]
+    assert "sft" in active_ids
+    assert "turbo" not in active_ids
+
+
+def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
+    resp = client.post("/api/settings/presets", json={
+        "name": "turbo test", "model_mode": "turbo", "params": {"inference_steps": 8},
+    })
+    assert resp.status_code == 400
