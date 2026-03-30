@@ -471,16 +471,18 @@
 		border: none;
 		color: var(--text-muted);
 		cursor: pointer;
-		font-size: 12px;
-		padding: 0 2px;
-		margin-left: 2px;
+		font-size: 10px;
+		font-family: var(--font-display);
+		padding: 1px 4px;
+		margin-left: 4px;
 		line-height: 1;
-		opacity: 0.6;
+		border-radius: 3px;
+		border: 1px solid var(--border);
 	}
 
 	.job-cancel:hover {
 		color: var(--score-bad);
-		opacity: 1;
+		border-color: var(--score-bad);
 	}
 
 	.tab-bar {
