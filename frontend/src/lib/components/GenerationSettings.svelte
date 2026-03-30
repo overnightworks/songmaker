@@ -86,6 +86,7 @@
 	.toggle-icon {
 		font-size: 10px;
 		width: 10px;
+		pointer-events: none;
 	}
 
 	.override-badge {
