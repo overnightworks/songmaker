@@ -7,48 +7,30 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import make_fake_redis
+from conftest import make_test_app
 from fastapi.testclient import TestClient
 
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth import hash_password
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Job, Song, Version
 from songmaker_cli.db.queries import create_user
-from songmaker_cli.server import create_app
+
+
+def _seed_rate_limit_data(session) -> None:
+    session.add(Album(id="rock", title="Rock", artist="Band"))
+    session.add(Song(id="s1", title="Song", album_id="rock", track_number=1))
+    session.add(Version(
+        id="v1", song_id="s1", version_number=1, lyrics="hello", prompt="rock",
+    ))
+    session.add(Generation(
+        id="g1", song_id="s1", version_id="v1", generation_number=1,
+        mp3_path="rock/song_v1.mp3",
+    ))
 
 
 @pytest.fixture()
 def client(tmp_path: Path) -> TestClient:
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    project_root = tmp_path
-    (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
-    sk_dir = project_root / "frontend" / "build"
-    sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
-
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
-        session.add(Album(id="rock", title="Rock", artist="Band"))
-        session.add(Song(id="s1", title="Song", album_id="rock", track_number=1))
-        session.add(Version(
-            id="v1", song_id="s1", version_number=1, lyrics="hello", prompt="rock",
-        ))
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="rock/song_v1.mp3",
-        ))
-        session.commit()
-
-    redis = make_fake_redis()
-    ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, session_secret=b"a" * 64, redis=redis,
-    )
-    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    yield TestClient(app, cookies={})
+    client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data)
+    yield client
 
 
 def _login_as(client: TestClient, role: str) -> None:

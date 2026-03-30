@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
@@ -16,57 +16,32 @@ from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.server import create_app, parse_allowed_hosts, run_server
 
+_ADMIN_ID = "admin-user-id"
+
+
+def _seed_server_data(session) -> None:
+    admin = User(
+        id=_ADMIN_ID, username="admin",
+        password_hash=hash_password("admin12345"), role="admin",
+    )
+    session.add(admin)
+    session.add(Album(id="test_album", title="Test", artist="Test"))
+    session.add(Song(id="s1", title="Song", album_id="test_album", track_number=1))
+    session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="Hello"))
+    session.add(Generation(
+        id="g1", song_id="s1", version_id="v1", generation_number=1,
+        mp3_path=f"{_ADMIN_ID}/g1.mp3", seed=42,
+    ))
+    session.add(Score(id="sc1", generation_id="g1", scorer="batch", value={"dynamics": 48.9}))
+
 
 @pytest.fixture()
 def server_app(tmp_path: Path) -> TestClient:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_server_data)
     audio_dir = tmp_path / "audio"
-    data_dir = tmp_path / "data"
-    data_dir.mkdir(parents=True)
-
-    project_root = tmp_path
-    (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
-    sk_dir = project_root / "frontend" / "build"
-    sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
-
-    admin_id = "admin-user-id"
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
-        admin = User(
-            id=admin_id, username="admin",
-            password_hash=hash_password("admin12345"), role="admin",
-        )
-        session.add(admin)
-        album = Album(id="test_album", title="Test", artist="Test")
-        session.add(album)
-        song = Song(id="s1", title="Song", album_id="test_album", track_number=1)
-        session.add(song)
-        ver = Version(id="v1", song_id="s1", version_number=1, lyrics="Hello")
-        session.add(ver)
-        gen = Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path=f"{admin_id}/g1.mp3", seed=42,
-        )
-        session.add(gen)
-        score = Score(id="sc1", generation_id="g1", scorer="batch", value={"dynamics": 48.9})
-        session.add(score)
-        session.commit()
-
-    user_dir = audio_dir / admin_id
-    user_dir.mkdir(parents=True)
-    mp3 = user_dir / "g1.mp3"
-    mp3.write_bytes(b"\xff\xfb\x90\x00" * 100)
-
-    ctx = AppContext(
-        db=factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        session_secret=TEST_SECRET,
-        redis=make_fake_redis(),
-    )
-    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = TestClient(app, cookies={})
-    from conftest import login_and_csrf
+    user_dir = audio_dir / _ADMIN_ID
+    user_dir.mkdir(parents=True, exist_ok=True)
+    (user_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
     login_and_csrf(client, "admin", "admin12345")
     yield client
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import struct
 import wave
+from collections.abc import Callable
 from http.client import HTTPResponse
 from io import BytesIO
 from pathlib import Path
@@ -12,6 +13,7 @@ from unittest.mock import MagicMock, patch
 import fakeredis
 import numpy as np
 import pytest
+from fastapi.testclient import TestClient
 
 TEST_SECRET = b"a" * 64
 
@@ -198,6 +200,46 @@ def read_wav(path: Path) -> tuple[np.ndarray, int]:
         frames = wf.readframes(wf.getnframes())
         int16 = np.frombuffer(frames, dtype=np.int16)
         return int16.astype(np.float32) / 32768.0, sr
+
+
+def make_test_app(
+    tmp_path: Path,
+    seed_db: Callable | None = None,
+) -> tuple:
+    """Create a full test app with real middleware.
+
+    Returns (TestClient, sessionmaker) so callers can seed data or log in.
+    The optional ``seed_db`` callback receives a SQLAlchemy Session and can
+    add models before the app starts.
+    """
+    from songmaker_cli.app_context import AppContext
+    from songmaker_cli.db.engine import init_test_db as init_db
+    from songmaker_cli.server import create_app
+
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(exist_ok=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(exist_ok=True)
+    project_root = tmp_path
+    (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = project_root / "frontend" / "build"
+    sk_dir.mkdir(parents=True, exist_ok=True)
+    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
+
+    factory = init_db(data_dir / "songmaker.db")
+    if seed_db is not None:
+        with factory() as session:
+            seed_db(session)
+            session.commit()
+
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        session_secret=TEST_SECRET, redis=redis,
+    )
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
+    client = TestClient(app, cookies={})
+    return client, factory
 
 
 @pytest.fixture

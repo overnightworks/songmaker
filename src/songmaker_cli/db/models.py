@@ -199,6 +199,7 @@ class Job(Base):
     user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
     )
+    worker_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     started_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
 

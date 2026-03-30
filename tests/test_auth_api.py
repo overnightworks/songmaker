@@ -7,39 +7,19 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from conftest import make_fake_redis
+from conftest import make_fake_redis, make_test_app
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth import hash_password
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import create_user
 from songmaker_cli.middleware import SESSION_COOKIE
-from songmaker_cli.server import create_app
-
-_TEST_SECRET = b"a" * 64
 
 
 @pytest.fixture()
 def client(tmp_path: Path) -> TestClient:
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    project_root = tmp_path
-    (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
-    sk_dir = project_root / "frontend" / "build"
-    sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
-
-    factory = init_db(data_dir / "songmaker.db")
-    redis = make_fake_redis()
-    ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        session_secret=_TEST_SECRET, redis=redis,
-    )
-    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    yield TestClient(app, cookies={})
+    client, _ = make_test_app(tmp_path)
+    yield client
 
 
 def _seed_admin(client: TestClient) -> None:

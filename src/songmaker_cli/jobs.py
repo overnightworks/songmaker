@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from collections.abc import Callable
@@ -308,7 +309,7 @@ def run_generation_job(
     log.info("Generation job %s: song=%s, count=%d", job_id, song_id, count)
 
     try:
-        _update_job(db_factory, job_id, "running")
+        _update_job(db_factory, job_id, "running", worker_pid=os.getpid())
 
         try:
             ctx = _build_generation_context(
@@ -361,7 +362,7 @@ def run_scoring_job(
     log.info("Scoring job %s: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
 
     try:
-        _update_job(db_factory, job_id, "running")
+        _update_job(db_factory, job_id, "running", worker_pid=os.getpid())
 
         with db_factory() as session:
             gen = get_generation(session, gen_id)

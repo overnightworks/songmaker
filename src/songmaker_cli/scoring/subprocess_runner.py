@@ -1,8 +1,8 @@
-"""Long-lived scorer subprocess with kill-based timeout.
+"""Long-lived scorer subprocess with graceful timeout.
 
 Spawns a persistent child process that loads scorer models once and receives
-scoring tasks via multiprocessing.Pipe. On timeout the parent kills the child
-with SIGKILL, freeing all GPU memory and resources immediately.
+scoring tasks via multiprocessing.Pipe. On timeout the parent sends SIGTERM
+(allowing GPU memory cleanup), then SIGKILL after a 5-second grace period.
 """
 
 from __future__ import annotations
@@ -63,9 +63,20 @@ class ShutdownRequest:
     pass
 
 
+def _cleanup_gpu_and_exit(_signum: int, _frame: object) -> None:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+    raise SystemExit(0)
+
+
 def _child_main(conn: Connection) -> None:
     from songmaker_cli.scoring.pipeline import default_registry, run_scoring_pipeline
 
+    signal.signal(signal.SIGTERM, _cleanup_gpu_and_exit)
     default_registry.ensure_loaded()
 
     while True:
@@ -167,7 +178,11 @@ class ScorerProcess:
             if isinstance(msg, ScoreProgressUpdate) and on_progress:
                 on_progress(msg.completed, msg.total, msg.scorer_name)
 
-        log.error("Scorer subprocess timed out after %ds — killing", timeout)
+        scorer_desc = ", ".join(scorers) if scorers else "all"
+        log.error(
+            "Scorer subprocess timed out after %ds — killing (requested scorers: %s)",
+            timeout, scorer_desc,
+        )
         self._kill()
         raise TimeoutError(f"Scoring timed out after {timeout}s")
 
@@ -198,8 +213,12 @@ class ScorerProcess:
 
     def _kill(self) -> None:
         if self._process and self._process.is_alive():
-            os.kill(self._process.pid, signal.SIGKILL)
+            os.kill(self._process.pid, signal.SIGTERM)
             self._process.join(timeout=5)
+            if self._process.is_alive():
+                log.warning("Scorer subprocess did not exit after SIGTERM — sending SIGKILL")
+                os.kill(self._process.pid, signal.SIGKILL)
+                self._process.join(timeout=5)
         self._cleanup_dead()
 
     def _cleanup_dead(self) -> None:

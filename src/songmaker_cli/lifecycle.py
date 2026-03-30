@@ -44,7 +44,11 @@ def auto_setup_admin(ctx: AppContext) -> None:
 
 
 async def session_sync_loop(app: FastAPI) -> None:
-    from songmaker_cli.constants import REDIS_SESSION_SYNC_INTERVAL_SECONDS
+    from songmaker_cli.constants import (
+        REDIS_SESSION_SYNC_INTERVAL_SECONDS,
+        SESSION_SYNC_LOCK_KEY,
+        SESSION_SYNC_LOCK_TTL_SECONDS,
+    )
     from songmaker_cli.db.models import User as UserModel
     from songmaker_cli.db.models import UserSession
 
@@ -55,30 +59,38 @@ async def session_sync_loop(app: FastAPI) -> None:
     while True:
         await asyncio.sleep(REDIS_SESSION_SYNC_INTERVAL_SECONDS)
         try:
-            active = session_cache.get_all_sessions()
-            if not active:
-                consecutive_failures = 0
+            if not ctx.redis.set(
+                SESSION_SYNC_LOCK_KEY, "1",
+                ex=SESSION_SYNC_LOCK_TTL_SECONDS, nx=True,
+            ):
                 continue
-            synced = 0
-            with ctx.db() as db:
-                for session_id, ttl in active:
-                    user_session = db.query(UserSession).filter_by(id=session_id).first()
-                    if not user_session:
-                        cached = session_cache.get(session_id)
-                        if cached:
-                            session_cache.delete(session_id, cached["user_id"])
-                        continue
-                    user = db.query(UserModel).filter_by(id=user_session.user_id).first()
-                    if user and not user.is_active:
-                        session_cache.delete_user_sessions(user.id)
-                        continue
-                    real_expires = datetime.now(timezone.utc) + timedelta(seconds=ttl)
-                    user_session.expires_at = real_expires
-                    synced += 1
-                db.commit()
-            consecutive_failures = 0
-            if synced:
-                log.info("Session sync: updated %d sessions", synced)
+            try:
+                active = session_cache.get_all_sessions()
+                if not active:
+                    consecutive_failures = 0
+                    continue
+                synced = 0
+                with ctx.db() as db:
+                    for session_id, ttl in active:
+                        user_session = db.query(UserSession).filter_by(id=session_id).first()
+                        if not user_session:
+                            cached = session_cache.get(session_id)
+                            if cached:
+                                session_cache.delete(session_id, cached["user_id"])
+                            continue
+                        user = db.query(UserModel).filter_by(id=user_session.user_id).first()
+                        if user and not user.is_active:
+                            session_cache.delete_user_sessions(user.id)
+                            continue
+                        real_expires = datetime.now(timezone.utc) + timedelta(seconds=ttl)
+                        user_session.expires_at = real_expires
+                        synced += 1
+                    db.commit()
+                consecutive_failures = 0
+                if synced:
+                    log.info("Session sync: updated %d sessions", synced)
+            finally:
+                ctx.redis.delete(SESSION_SYNC_LOCK_KEY)
         except Exception:
             consecutive_failures += 1
             if consecutive_failures >= 3:

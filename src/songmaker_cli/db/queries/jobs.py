@@ -59,6 +59,7 @@ def update_job_status(
     session: Session, job_id: str, status: str,
     progress: float = 0.0, error: str | None = None,
     error_type: str | None = None,
+    worker_pid: int | None = None,
 ) -> None:
     job = session.query(Job).filter_by(id=job_id).first()
     if not job:
@@ -67,6 +68,8 @@ def update_job_status(
     job.progress = progress
     job.error = error
     job.error_type = error_type
+    if worker_pid is not None:
+        job.worker_pid = worker_pid
     if status in ("completed", "failed"):
         job.completed_at = datetime.now(timezone.utc)
     session.flush()
@@ -131,13 +134,29 @@ def clear_stale_user_jobs(
     return len(stale)
 
 
+def _is_worker_alive(pid: int | None) -> bool:
+    if pid is None:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
 def recover_stale_jobs_by_age(
     session: Session, threshold_seconds: int = STALE_JOB_THRESHOLD_SECONDS,
 ) -> int:
-    """Mark running/queued jobs older than threshold as failed. Returns count recovered."""
+    """Mark running/queued jobs older than threshold as failed. Returns count recovered.
+
+    Jobs whose worker_pid is still alive are skipped — the worker may be
+    legitimately slow (e.g. GPU mode switching, long scoring pipeline).
+    """
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=threshold_seconds)
-    stale = (
+    candidates = (
         session.query(Job)
         .filter(
             Job.status.in_(("queued", "running")),
@@ -145,15 +164,20 @@ def recover_stale_jobs_by_age(
         )
         .all()
     )
-    for job in stale:
+    recovered = 0
+    for job in candidates:
+        if _is_worker_alive(job.worker_pid):
+            log.info("Skipping stale job %s — worker PID %d still alive", job.id, job.worker_pid)
+            continue
         job.status = "failed"
         job.error = "Job timed out (exceeded maximum run time)"
         job.error_type = "stale_timeout"
         job.completed_at = now
+        recovered += 1
     session.flush()
-    if stale:
-        log.info("Recovered %d stale jobs (threshold=%ds)", len(stale), threshold_seconds)
-    return len(stale)
+    if recovered:
+        log.info("Recovered %d stale jobs (threshold=%ds)", recovered, threshold_seconds)
+    return recovered
 
 
 def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]:
