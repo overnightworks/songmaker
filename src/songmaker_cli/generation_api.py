@@ -26,6 +26,7 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_active_model, get_arq_pool, is_worker_healthy
 from songmaker_cli.auth import ROLE_ADMIN
+from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries import (
     delete_generation,
     get_job,
@@ -153,12 +154,33 @@ def api_get_job(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
+    job = _check_job_access(session, job_id, user)
+    return JobResponse.from_orm(job)
+
+
+@router.post("/jobs/{job_id}/cancel")
+def api_cancel_job(
+    job_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> JobResponse:
+    job = _check_job_access(session, job_id, user)
+    if job.status not in ("queued", "running"):
+        raise HTTPException(409, "Only queued or running jobs can be cancelled")
+    update_job_status(session, job_id, "cancelled")
+    record_audit(session, user.id, "cancel", "job", job_id)
+    session.commit()
+    job = get_job(session, job_id)
+    return JobResponse.from_orm(job)
+
+
+def _check_job_access(session: Session, job_id: str, user: AuthenticatedUser) -> Job:
     job = get_job(session, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
     if user.role != ROLE_ADMIN and job.user_id != user.id:
         raise HTTPException(404, "Job not found")
-    return JobResponse.from_orm(job)
+    return job
 
 
 # ── Ratings ──────────────────────────────────────────────────────────

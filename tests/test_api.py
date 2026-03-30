@@ -869,6 +869,61 @@ def test_job_ownership_blocks_other_user(tmp_path: Path) -> None:
     assert resp.status_code == 404
 
 
+# ── Job cancellation ────────────────────────────────────────────────
+
+
+def test_cancel_queued_job(client: TestClient) -> None:
+    with _mock_worker():
+        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+    job_id = resp.json()["id"]
+
+    resp = client.post(f"/api/jobs/{job_id}/cancel")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "cancelled"
+
+
+def test_cancel_already_completed_job(client: TestClient) -> None:
+    from songmaker_cli.db.queries import update_job_status
+
+    with _mock_worker():
+        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+    job_id = resp.json()["id"]
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        update_job_status(session, job_id, "completed", progress=1.0)
+        session.commit()
+
+    resp = client.post(f"/api/jobs/{job_id}/cancel")
+    assert resp.status_code == 409
+
+
+def test_cancel_job_not_found(client: TestClient) -> None:
+    resp = client.post("/api/jobs/nonexistent/cancel")
+    assert resp.status_code == 404
+
+
+def test_cancel_job_other_user_blocked(tmp_path: Path) -> None:
+    from songmaker_cli.db.models import User
+    from songmaker_cli.db.queries import create_job
+
+    c = _make_authed_client(tmp_path, role="user", user_id="u-test")
+
+    ctx: AppContext = c.app.state.ctx
+    with ctx.db() as session:
+        other = User(
+            id="u-other", username="other", password_hash="unused", role="user",
+        )
+        session.add(other)
+        session.flush()
+        job = create_job(session, "generate", user_id="u-other")
+        session.commit()
+        job_id = job.id
+
+    resp = c.post(f"/api/jobs/{job_id}/cancel")
+    assert resp.status_code == 404
+
+
 # ── Coverage gap tests ───────────────────────────────────────────────
 
 

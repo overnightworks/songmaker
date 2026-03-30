@@ -39,7 +39,7 @@ _acestep_lock = threading.Lock()
 JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "300"))
 DRAIN_TIMEOUT_SECONDS = int(os.environ.get("ARQ_DRAIN_TIMEOUT", "300"))
 HEALTH_CHECK_INTERVAL_SECONDS = 30
-TERMINAL_STATUSES = frozenset({"completed", "partial", "failed"})
+TERMINAL_STATUSES = frozenset({"completed", "partial", "failed", "cancelled"})
 
 
 def _get_db_factory():

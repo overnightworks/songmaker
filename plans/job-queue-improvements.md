@@ -1,6 +1,6 @@
 # Job Queue Improvements
 
-> **Status: IN PROGRESS** — Problem 2 done. Problem 0 up next, then Problem 1.
+> **Status: IN PROGRESS** — Problems 0, 1, 2, 3 done. Problem 4 (queue visibility UI) is future.
 
 ## Problem 0: Chat jobs never finalize (BUG)
 
@@ -66,24 +66,9 @@ Stale job recovery works via:
 
 ---
 
-## Problem 3: Job cancellation
+## Problem 3: Job cancellation (DONE)
 
-Users should be able to cancel queued jobs. The worker already skips jobs with terminal status, so cancellation is just a DB status update.
-
-### Fix
-
-- Add `"cancelled"` to `TERMINAL_STATUSES` in `worker.py`
-- Add `POST /api/jobs/{id}/cancel` endpoint with ownership check
-- Frontend: show job queue with cancel buttons (separate PR)
-
-### Files to Touch
-
-| File | Change |
-|------|--------|
-| `worker.py` | Add `"cancelled"` to `TERMINAL_STATUSES` |
-| New: `job_api.py` or in existing API | Cancel endpoint |
-| `api_helpers.py` | Ownership check helper |
-| Frontend (later PR) | Job queue UI with cancel |
+`POST /api/jobs/{id}/cancel` endpoint in `generation_api.py` with ownership check. Worker skips cancelled jobs via `TERMINAL_STATUSES`. Returns 409 if job is already in a terminal state. Frontend cancel UI deferred to Problem 4.
 
 ---
 
