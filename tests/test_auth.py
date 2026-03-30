@@ -62,8 +62,8 @@ def test_constants() -> None:
     assert GENERATION_RATE_LIMIT_USER == 3
     assert SCORING_RATE_LIMIT_USER == 10
     assert RATE_LIMIT_WINDOW_SECONDS == 3600
-    assert MAX_QUEUE_DEPTH == 10
-    assert MAX_USER_ACTIVE_JOBS == 1
+    assert MAX_QUEUE_DEPTH == 100
+    assert MAX_USER_ACTIVE_JOBS == 10
     assert LOGIN_LOCKOUT_THRESHOLD == 15
     assert LOGIN_LOCKOUT_WINDOW_SECONDS == 3600
 

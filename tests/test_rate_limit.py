@@ -136,15 +136,46 @@ def test_active_job_limit(client: TestClient) -> None:
     _login_as(client, "user")
     user_id = _get_user_id(client)
 
+    with patch("songmaker_cli.api_helpers.MAX_USER_ACTIVE_JOBS", 1):
+        factory = client.app.state.ctx.db
+        with factory() as session:
+            session.add(Job(type="generate", user_id=user_id, status="running"))
+            session.commit()
+
+        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+
+        assert resp.status_code == 429
+        assert "active job" in resp.json()["detail"]
+
+
+def test_score_job_does_not_block_generate(client: TestClient) -> None:
+    _login_as(client, "user")
+    user_id = _get_user_id(client)
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.add(Job(type="score", user_id=user_id, status="running"))
+        session.commit()
+
+    with _mock_arq():
+        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+
+    assert resp.status_code == 200
+
+
+def test_generate_job_does_not_block_score(client: TestClient) -> None:
+    _login_as(client, "user")
+    user_id = _get_user_id(client)
+
     factory = client.app.state.ctx.db
     with factory() as session:
         session.add(Job(type="generate", user_id=user_id, status="running"))
         session.commit()
 
-    resp = client.post("/api/songs/s1/generate", json={"count": 1})
+    with _mock_arq():
+        resp = client.post("/api/generations/g1/score", json={})
 
-    assert resp.status_code == 429
-    assert "active job" in resp.json()["detail"]
+    assert resp.status_code == 200
 
 
 # ── Queue depth limit ───────────────────────────────────────────────
@@ -153,16 +184,17 @@ def test_active_job_limit(client: TestClient) -> None:
 def test_queue_depth_limit(client: TestClient) -> None:
     _login_as(client, "user")
 
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        for _ in range(10):
-            session.add(Job(type="generate", status="queued"))
-        session.commit()
+    with patch("songmaker_cli.api_helpers.MAX_QUEUE_DEPTH", 10):
+        factory = client.app.state.ctx.db
+        with factory() as session:
+            for _ in range(10):
+                session.add(Job(type="generate", status="queued"))
+            session.commit()
 
-    resp = client.post("/api/songs/s1/generate", json={"count": 1})
+        resp = client.post("/api/songs/s1/generate", json={"count": 1})
 
-    assert resp.status_code == 429
-    assert "Queue is full" in resp.json()["detail"]
+        assert resp.status_code == 429
+        assert "Queue is full" in resp.json()["detail"]
 
 
 # ── Job gets user_id ────────────────────────────────────────────────

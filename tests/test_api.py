@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 _DEFAULT_USER_ID = "u-test"
@@ -1144,6 +1144,48 @@ def test_sanitize_error_generation_setup() -> None:
     from songmaker_cli.jobs import GenerationSetupError, _sanitize_error
 
     assert _sanitize_error(GenerationSetupError("Song not found")) == "Song not found"
+
+
+def test_chat_success_finalizes_job(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock, patch
+
+    c = _make_authed_client(tmp_path)
+    mock_response = MagicMock()
+    mock_response.text = "Hello"
+
+    with patch("songmaker_cli.chat_api.call_claude", return_value=mock_response):
+        resp = c.post("/api/chat", json={"message": "hi"})
+
+    assert resp.status_code == 200
+
+    factory = c.app.state.ctx.db
+    with factory() as session:
+        job = session.query(Job).filter_by(type="chat").first()
+        assert job is not None
+        assert job.status == "completed"
+        assert job.completed_at is not None
+
+
+def test_chat_failure_finalizes_job(tmp_path: Path) -> None:
+    from unittest.mock import patch
+
+    from songmaker_cli.claude.provider import UnavailableError
+
+    c = _make_authed_client(tmp_path)
+    with patch(
+        "songmaker_cli.chat_api.call_claude",
+        side_effect=UnavailableError("down"),
+    ):
+        resp = c.post("/api/chat", json={"message": "hi"})
+
+    assert resp.status_code == 503
+
+    factory = c.app.state.ctx.db
+    with factory() as session:
+        job = session.query(Job).filter_by(type="chat").first()
+        assert job is not None
+        assert job.status == "failed"
+        assert job.completed_at is not None
 
 
 def test_chat_unavailable_hides_details(tmp_path: Path) -> None:

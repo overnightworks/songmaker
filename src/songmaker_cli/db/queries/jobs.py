@@ -37,15 +37,14 @@ def count_user_jobs_in_window(
     )
 
 
-def count_user_active_jobs(session: Session, user_id: str) -> int:
-    return (
-        session.query(Job)
-        .filter(
-            Job.user_id == user_id,
-            Job.status.in_(("queued", "running")),
-        )
-        .count()
+def count_user_active_jobs(session: Session, user_id: str, job_type: str | None = None) -> int:
+    query = session.query(Job).filter(
+        Job.user_id == user_id,
+        Job.status.in_(("queued", "running")),
     )
+    if job_type is not None:
+        query = query.filter(Job.type == job_type)
+    return query.count()
 
 
 def count_total_queued_jobs(session: Session) -> int:

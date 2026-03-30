@@ -132,7 +132,7 @@ def create_job_with_rate_limit(
             max_active = resolve_rate_limit(
                 session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, MAX_USER_ACTIVE_JOBS,
             )
-            if count_user_active_jobs(session, user.id) >= max_active:
+            if count_user_active_jobs(session, user.id, job_type) >= max_active:
                 session.rollback()
                 raise HTTPException(429, "You already have an active job. Wait for it to finish.")
 

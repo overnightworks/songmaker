@@ -67,7 +67,7 @@ These are conventions that aren't obvious from reading a single file:
 - **Middleware order is security-critical.** See comment block in `server.py`. Do not reorder.
 - **DB queries split by domain.** `db/queries/songs.py`, `db/queries/auth.py`, `db/queries/jobs.py`. New queries go in the matching file, re-exported from `db/queries/__init__.py`.
 - **No inline comments.** Use descriptive names. Comments in code are a smell — if you need to explain what code does, rename things until you don't.
-- **No hardcoded strings.** Use constants in `constants.py` or `Final` module-level variables.
+- **No hardcoded strings.** Use constants in `constants.py` or `Final` module-level variables. Exception: one-off error messages, log messages, and exception descriptions are fine inline — only extract strings that are reused or configure behavior.
 - **Pydantic for structured data, not dicts.** Any function returning or accepting a dict with a known schema should use a Pydantic model (or dataclass for internal-only data). Plain dicts are fine for generic key-value stores, `**kwargs`, or serialization helpers — not for domain objects, API responses, or cross-module contracts.
 
 ## Key Rules

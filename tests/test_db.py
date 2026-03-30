@@ -969,13 +969,16 @@ def test_count_user_active_jobs(db_session: Session) -> None:
     db_session.flush()
     create_job(db_session, "generate", user_id=user.id)
     j2 = create_job(db_session, "generate", user_id=user.id)
-    create_job(db_session, "generate", user_id=user.id)
+    create_job(db_session, "score", user_id=user.id)
     db_session.commit()
 
     update_job_status(db_session, j2.id, "completed", progress=1.0)
     db_session.commit()
 
     assert count_user_active_jobs(db_session, user.id) == 2
+    assert count_user_active_jobs(db_session, user.id, "generate") == 1
+    assert count_user_active_jobs(db_session, user.id, "score") == 1
+    assert count_user_active_jobs(db_session, user.id, "chat") == 0
 
 
 def test_count_total_queued_jobs(db_session: Session) -> None:

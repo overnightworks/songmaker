@@ -21,6 +21,7 @@ from songmaker_cli.claude.provider import (
     call_claude,
     is_available,
 )
+from songmaker_cli.db.queries import update_job_status
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
@@ -86,7 +87,8 @@ def api_chat(
     session: Session = Depends(get_db_session),
 ) -> ChatResponse:
     check_redis_health(request)
-    create_job_with_rate_limit(session, user, "chat")
+    job = create_job_with_rate_limit(session, user, "chat")
+    job_id = job.id
     session.commit()
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -106,6 +108,14 @@ def api_chat(
         response = call_claude(prompt, api_key=api_key, system=system)
     except UnavailableError as e:
         log.warning("Claude chat unavailable: %s", e)
+        update_job_status(session, job_id, "failed", error="Claude unavailable")
+        session.commit()
         raise HTTPException(503, "Claude is currently unavailable")
+    except Exception:
+        update_job_status(session, job_id, "failed", error="Chat request failed")
+        session.commit()
+        raise
 
+    update_job_status(session, job_id, "completed", progress=1.0)
+    session.commit()
     return ChatResponse(response=response.text)

@@ -1,68 +1,107 @@
 # Job Queue Improvements
 
-> **Status: PROBLEM 2 DONE** — Stale jobs auto-cleared on submission + cron catches queued jobs. Problems 1 and 3 remain.
+> **Status: IN PROGRESS** — Problem 2 done. Problem 0 up next, then Problem 1.
 
-## Problem 1: Scoring blocks generation
+## Problem 0: Chat jobs never finalize (BUG)
 
-When a score job is running, the user gets "already has an active job" error when trying to generate. Scoring (CPU/Whisper) and generating (GPU/ACE-Step) use completely different resources and should run in parallel.
+`chat_api.py` creates a job via `create_job_with_rate_limit()` and commits, but never sets the job to `completed` or `failed`. If the Claude call is slow or errors out, the job stays `queued` forever — blocking the user from submitting new jobs.
+
+This is what blocked Julia on 2026-03-29.
 
 ### Root Cause
 
-`create_job_with_rate_limit()` in `api_helpers.py` checks for ANY active job regardless of type:
-
 ```python
-active = count_active_jobs(session, user.id)  # counts ALL types
-if active >= 1:
-    raise HTTPException(409, "Already has an active job")
+create_job_with_rate_limit(session, user, "chat")
+session.commit()
+# ... call Claude ...
+# job never finalized
 ```
 
 ### Fix
 
-Change the active job check to be **per job type** — a running `score` job should not block a `generate` job and vice versa.
+Wrap the Claude call in `try/finally`. Set job status to `completed` on success, `failed` on error. Use `update_job_status()` from `db.queries`.
 
-- `count_active_jobs()` should accept a `job_type` filter
-- Or split into `count_active_generation_jobs()` and `count_active_score_jobs()`
-- Chat jobs should also be independent
-
-## Problem 2: Stale jobs block new submissions
-
-If a job crashes or the worker restarts, jobs can get stuck in `running` or `queued` status forever. The user then can't submit new jobs.
-
-### Root Cause
-
-The `cleanup_stale` cron exists but may not catch all edge cases (e.g., the permission error crash left a stale `chat` job in `queued` status).
-
-### Fix
-
-- Review `cleanup_stale` logic — ensure it catches jobs stuck in `running` for longer than a reasonable timeout (e.g., 30min for generate, 15min for score)
-- On job submission, if there's a stale job older than the timeout, auto-clear it instead of rejecting the new submission
-- Consider adding a "Cancel" button in the UI for stuck jobs
-
-## Problem 3: Job queue visibility
-
-Users don't see queued jobs or understand why their request was rejected.
-
-### Fix
-
-- When a job is rejected due to rate limit or active job, return a clear message with what's running and estimated time
-- Show all active/queued jobs in the UI (not just current song's jobs)
-- Consider actually queuing jobs instead of rejecting — let the worker process them in order
-
-## Files to Touch
+### Files to Touch
 
 | File | Change |
 |------|--------|
-| `api_helpers.py` | Per-type active job check |
-| `db/queries/jobs.py` | Add `job_type` filter to `count_active_jobs()` |
-| `worker.py` | Review cleanup_stale timeout logic |
-| Frontend: `+page.svelte` | Show global job status, not just per-song |
+| `chat_api.py` | Finalize chat job status after Claude call |
+| `tests/test_chat_api.py` or relevant test | Verify job reaches terminal status |
+
+---
+
+## Problem 1: Active job check ignores job type
+
+`count_user_active_jobs()` counts ALL active jobs regardless of type. A running score job blocks a new generate request, even though they use different resources (CPU/GPU). Chat jobs also block generate/score.
+
+### Root Cause
+
+`db/queries/jobs.py:count_user_active_jobs()` filters only by user and status, not by job type.
+
+### Fix
+
+- Add `job_type: str` parameter to `count_user_active_jobs()`
+- Pass `job_type` from `create_job_with_rate_limit()` in `api_helpers.py`
+- Raise `MAX_USER_ACTIVE_JOBS` default from 1 to 10 (jobs queue in arq anyway)
+- Raise `MAX_QUEUE_DEPTH` default from 10 to 100
+
+### Files to Touch
+
+| File | Change |
+|------|--------|
+| `db/queries/jobs.py` | Add `job_type` param to `count_user_active_jobs()` |
+| `api_helpers.py` | Pass `job_type` through to the check |
+| `auth.py` | Update default constants |
+| `tests/test_db.py` | Update test for new signature |
+| `tests/test_rate_limit.py` | Verify cross-type jobs don't block each other |
+
+---
+
+## Problem 2: Stale jobs block new submissions (DONE)
+
+Stale job recovery works via:
+- `clear_stale_user_jobs()` called on every job submission (`api_helpers.py`)
+- `cleanup_stale` cron runs every 2 minutes (`worker.py`)
+- Configurable threshold via `STALE_JOB_THRESHOLD_SECONDS` (default 360s)
+
+---
+
+## Problem 3: Job cancellation
+
+Users should be able to cancel queued jobs. The worker already skips jobs with terminal status, so cancellation is just a DB status update.
+
+### Fix
+
+- Add `"cancelled"` to `TERMINAL_STATUSES` in `worker.py`
+- Add `POST /api/jobs/{id}/cancel` endpoint with ownership check
+- Frontend: show job queue with cancel buttons (separate PR)
+
+### Files to Touch
+
+| File | Change |
+|------|--------|
+| `worker.py` | Add `"cancelled"` to `TERMINAL_STATUSES` |
+| New: `job_api.py` or in existing API | Cancel endpoint |
+| `api_helpers.py` | Ownership check helper |
+| Frontend (later PR) | Job queue UI with cancel |
+
+---
+
+## Problem 4: Job queue visibility (future)
+
+- Show all active/queued jobs in the UI (not just per-song)
+- Show queue position and estimated wait time
+- This depends on Problem 3 (cancel) being done first
+
+---
 
 ## Priority
 
-Problem 1 (scoring blocks generation) → Problem 2 (stale jobs) → Problem 3 (visibility)
+Problem 0 (chat finalization) → Problem 1 (per-type active check) → Problem 3 (cancel) → Problem 4 (visibility)
 
 ## Constraints
 
-- The `create_job_with_rate_limit` function commits the transaction before acquiring the lock — see known tech debt in CLAUDE.md. Be careful with transaction ordering.
-- Rate limits per type are already separate (`GENERATION_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_USER`, etc.) — the issue is only the active job count check.
-- Don't change the arq worker architecture — just fix the API-side gating logic.
+- `create_job_with_rate_limit()` commits before acquiring the lock — see CLAUDE.md known tech debt
+- Rate limits per type are already separate — only the active job count check is wrong
+- Don't change the arq worker architecture — fix API-side gating only
+- `max_jobs=1` on the worker serializes execution — the API should allow queueing
