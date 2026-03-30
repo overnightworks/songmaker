@@ -1314,3 +1314,50 @@ def test_list_songs_limit_validation(client: TestClient) -> None:
 
     resp = client.get("/api/songs?offset=-1")
     assert resp.status_code == 422
+
+
+# ── Default generation config ────────────────────────────────────────
+
+
+def test_default_config_get_returns_null(client: TestClient) -> None:
+    resp = client.get("/api/settings/default-config")
+    assert resp.status_code == 200
+    assert resp.json()["config"] is None
+
+
+def test_default_config_set_builtin(client: TestClient) -> None:
+    resp = client.put("/api/settings/default-config", json={"config": "sft"})
+    assert resp.status_code == 200
+    assert resp.json()["config"] == "sft"
+
+    resp = client.get("/api/settings/default-config")
+    assert resp.json()["config"] == "sft"
+
+
+def test_default_config_set_null(client: TestClient) -> None:
+    client.put("/api/settings/default-config", json={"config": "turbo"})
+    resp = client.put("/api/settings/default-config", json={"config": None})
+    assert resp.status_code == 200
+    assert resp.json()["config"] is None
+
+
+def test_default_config_invalid_id(client: TestClient) -> None:
+    resp = client.put("/api/settings/default-config", json={"config": "nonexistent-uuid"})
+    assert resp.status_code == 400
+
+
+def test_default_config_set_own_preset(client: TestClient) -> None:
+    preset = client.post("/api/settings/presets", json={
+        "name": "my config", "model_mode": "sft", "params": {"inference_steps": 50},
+    }).json()
+
+    resp = client.put("/api/settings/default-config", json={"config": preset["id"]})
+    assert resp.status_code == 200
+    assert resp.json()["config"] == preset["id"]
+
+
+def test_presets_include_shared_flag(client: TestClient) -> None:
+    resp = client.get("/api/settings/presets")
+    assert resp.status_code == 200
+    for p in resp.json():
+        assert "is_shared" in p
