@@ -177,10 +177,12 @@ export type JobStatus = JobItem;
 export async function generateSong(
 	songId: string,
 	count: number = 1,
-	model?: string | null
+	model?: string | null,
+	versionId?: string | null
 ): Promise<JobStatus> {
 	const payload: Record<string, unknown> = { count };
 	if (model) payload.model = model;
+	if (versionId) payload.version_id = versionId;
 	return apiFetch<JobStatus>(`/api/songs/${songId}/generate`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },

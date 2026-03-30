@@ -88,7 +88,12 @@ async def api_generate_song(
 ) -> JobResponse:
     check_redis_health(request)
     song = check_song_access(session, song_id, user)
-    version = song.latest_version
+    if req.version_id:
+        version = next((v for v in song.versions if v.id == req.version_id), None)
+        if not version:
+            raise HTTPException(404, "Version not found")
+    else:
+        version = song.latest_version
     if not version or not version.lyrics or not version.prompt:
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 

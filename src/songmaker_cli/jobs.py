@@ -246,13 +246,17 @@ def _finalize_generation_job(
         )
 
 
-_STEP_PATTERN = re.compile(r"(\d+)\s*/\s*(\d+)")
+_DIFFUSION_STEP_PATTERN = re.compile(r"(\d+)/(\d+)\s*\[")
 _PROGRESS_THROTTLE_SECONDS = 2.0
 
 
 def _parse_step_fraction(progress_text: str) -> float | None:
-    """Extract a 0..1 fraction from text like 'Step 12/50'."""
-    m = _STEP_PATTERN.search(progress_text)
+    """Extract a 0..1 fraction from diffusion step text like '8/50 [00:02<00:13]'.
+
+    Only matches the tqdm-style progress format with a bracket suffix to avoid
+    false positives from non-progress text like 'LM chunk 1/1'.
+    """
+    m = _DIFFUSION_STEP_PATTERN.search(progress_text)
     if m:
         current, total = int(m.group(1)), int(m.group(2))
         if total > 0:
@@ -268,10 +272,12 @@ def _make_generation_progress_callback(
 
     def _on_progress(progress_text: str) -> None:
         nonlocal last_update
+        step_fraction = _parse_step_fraction(progress_text)
+        if step_fraction is None:
+            return
         now = time.monotonic()
         if now - last_update < _PROGRESS_THROTTLE_SECONDS:
             return
-        step_fraction = _parse_step_fraction(progress_text) or 0.0
         combined = (variant_index + step_fraction) / count
         _update_job(db_factory, job_id, "running", progress=combined)
         last_update = now

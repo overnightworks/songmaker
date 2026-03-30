@@ -58,6 +58,7 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
       GENERATION_RATE_LIMIT_USER: ${GENERATION_RATE_LIMIT_USER:-20}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       HOST: "0.0.0.0"
     ports:
       - "8080:8080"
@@ -81,6 +82,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       ACESTEP_API_HOST: "127.0.0.1"
       ACESTEP_API_PORT: "8001"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - audiofiles:/app/data/audio
       - ./_models/acestep:/app/_models/acestep

@@ -1,65 +1,100 @@
-# Token Cost Budget
+# Token Cost Budget & Model Configuration
 
 **Status**: Planned
-**Motivation**: Security audit finding — rate limits are request-based, not token-based. A user can submit 30 chat requests/hour × (10k message + 20k context) = ~900k input tokens/hour.
+**Motivation**: API key replaces CLI for Docker deployment. Admin needs model control and cost visibility. Rate limits are request-based, not token-based.
 
-## Problem
+## Cost Comparison (per request, with prompt caching)
 
-The chat endpoint enforces per-user request counts (`CHAT_RATE_LIMIT_USER = 30/hr`) but not token consumption. A malicious or careless user can maximize cost by sending maximum-length messages with maximum-length context on every request.
+### Scoring — lyrical coherence (cached prompt ~800 tok, input ~500 tok, output ~100 tok)
 
-Server-side API calls use `max_tokens=1024` for output, but input tokens are bounded only by field `max_length` (10k message + 20k context = 30k chars ≈ 7.5k tokens per request, worst case ~225k input tokens/hour).
+| Model | Per score | Songs for $20 |
+|---|---|---|
+| Opus 4.6 | $0.017 | ~1,170 |
+| Sonnet 4.6 | $0.003 | ~6,600 |
+| Haiku 4.5 | $0.0009 | ~22,000 |
 
-The frontend direct-to-Anthropic path (BYOK) is not affected — users pay their own costs there.
+### Chat — per message (cached prompt ~350 tok, input ~600 tok, output ~300 tok)
+
+| Model | Per message | Messages for $20 |
+|---|---|---|
+| Opus 4.6 | $0.032 | ~625 |
+| Sonnet 4.6 | $0.006 | ~3,300 |
+| Haiku 4.5 | $0.002 | ~10,000 |
+
+### Combined — generate + score + N chat messages
+
+| Scenario | Opus | Sonnet | Haiku |
+|---|---|---|---|
+| Score only (no chat) | $0.017 | $0.003 | $0.0009 |
+| + 3 chat messages | $0.113 | $0.021 | $0.007 |
+| + 10 chat messages | $0.337 | $0.063 | $0.021 |
+| + 30 chat messages | $0.977 | $0.183 | $0.061 |
+
+**$20 budget at "score + 5 chat msgs per song":**
+Opus ~120 songs | Sonnet ~660 songs | Haiku ~2,200 songs
+
+### Pricing reference (per 1M tokens)
+
+| Model | Input | Cached input | Output |
+|---|---|---|---|
+| Opus 4.6 | $15.00 | $1.875 | $75.00 |
+| Sonnet 4.6 | $3.00 | $0.375 | $15.00 |
+| Haiku 4.5 | $0.80 | $0.10 | $4.00 |
 
 ## Design
 
-### Option A: Input character budget (recommended)
+### Phase 1: Admin model configuration + prompt caching
 
-Track cumulative input characters per user per hour. Simple, no external API calls needed.
+Admin can set which model to use for chat and scoring independently.
+
+**New settings** (env vars with admin UI override):
+- `CLAUDE_CHAT_MODEL` — model for chat co-writing (default: `claude-sonnet-4-6`)
+- `CLAUDE_SCORING_MODEL` — model for lyrical coherence (default: `claude-sonnet-4-6`)
+
+Sonnet is the sensible default: 5x cheaper than Opus on output, quality is sufficient for both tasks. Admin can upgrade to Opus for scoring if quality matters more than cost.
+
+**Prompt caching**: Add `cache_control` to the system prompt in both chat and scoring paths. The system prompts are identical across requests — caching saves 87.5% on those tokens.
+
+**Files to change:**
+
+| File | Change |
+|---|---|
+| `constants.py` | `CLAUDE_CHAT_MODEL`, `CLAUDE_SCORING_MODEL` defaults |
+| `claude/provider.py` | Add prompt caching via `cache_control` on system message |
+| `chat_api.py` | Read model from config, pass to `call_claude` |
+| `scoring/lyrical_coherence.py` | Read scoring model from config, pass to `call_claude` |
+| `api_models.py` | Add model fields to admin settings response |
+| `docker-compose.yml` | Pass `ANTHROPIC_API_KEY` to web + worker (done) |
+
+### Phase 2: Input budget enforcement
+
+Track cumulative input characters per user per hour. Prevents cost runaway from large context submissions.
 
 ```python
-CHAT_INPUT_BUDGET_USER = 200_000   # chars per hour (≈50k tokens)
+CHAT_INPUT_BUDGET_USER = 200_000   # chars per hour (~50k tokens)
 CHAT_INPUT_BUDGET_ADMIN = 2_000_000
 ```
 
-Store per-request input length in the `jobs` table (add `input_chars` column) or a new `chat_usage` table. Sum within the rate window before allowing new requests.
+Store per-request `input_chars` in the `jobs` table. Sum within the rate window before allowing new requests.
 
-**Pros**: Simple, no token counting API needed, correlates well enough with cost.
-**Cons**: Chars ≠ tokens (varies by language), slightly over-conservative.
+### Phase 3: Reduce field limits (quick hardening)
 
-### Option B: Token tracking via API response
-
-Use `response.usage.input_tokens` from the Anthropic API response to track actual token consumption. More accurate but requires storing usage after the fact (post-hoc enforcement — current request succeeds, budget checked on next request).
-
-**Pros**: Accurate.
-**Cons**: Lag — the expensive request already happened before the budget updates. Requires API response parsing changes.
-
-### Option C: Reduce field limits
-
-Simply lower `max_length` on `ChatRequest.context` (20k → 5k) and `ChatRequest.message` (10k → 3k). Reduces worst-case cost per request without tracking.
-
-**Pros**: Zero complexity, immediate effect.
-**Cons**: Limits legitimate use cases (long lyrics + context).
+Lower `max_length` on `ChatRequest.context` from 20k → 10k chars. 20k chars of context is excessive for a songwriting assistant. One-line change.
 
 ## Recommendation
 
-Option A for tracking, combined with Option C as a quick hardening step (context 20k → 10k is reasonable — 20k chars of context is excessive for a songwriting assistant).
+**Start with Phase 1.** Model selection + prompt caching gives the most impact:
+- Switching from Opus to Sonnet = 5x cost reduction
+- Prompt caching = additional 30% reduction
+- Combined: ~7x cheaper than current Opus-without-caching baseline
+- Admin retains control to use Opus where quality justifies cost
 
-## Files to change
-
-| File | Change |
-|------|--------|
-| `api_models.py` | Reduce `context` max_length (Option C, immediate) |
-| `db/models.py` | Add `input_chars` to Job or new ChatUsage model (Option A) |
-| `chat_api.py` | Track input length, check budget before calling Claude |
-| `api_helpers.py` | Add `check_chat_budget()` helper |
-| `constants.py` | New budget constants |
-| `tests/` | Budget enforcement tests |
+Phase 2 + 3 are hardening — implement when opening to other users.
 
 ## Scope
 
-Small for Option C (1 line). Medium for Option A (~80 lines production + tests).
+Phase 1: ~60 lines production + tests. Phase 2: ~80 lines. Phase 3: 1 line.
 
 ## Dependencies
 
-None. Independent of other plans.
+Requires `ANTHROPIC_API_KEY` in environment (docker-compose.yml change already done).

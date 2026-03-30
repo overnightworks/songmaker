@@ -33,6 +33,7 @@
 		editKey,
 		isDirty,
 		versions,
+		currentVersionIndex,
 		saving,
 		status,
 		loadSongData,
@@ -112,7 +113,8 @@
 	async function onGenerate(): Promise<void> {
 		if (!song) return;
 		try {
-			const job = await generateSong(song.id, genCount);
+			const ver = $versions[$currentVersionIndex];
+			const job = await generateSong(song.id, genCount, null, ver?.id);
 			trackJob(job, { songId: song.id });
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
@@ -206,17 +208,22 @@
 							{/if}
 						{/if}
 						{#each songJobs as j (j.job.id)}
-							<span class="job-indicator" class:failed={j.job.status === 'failed'}>
-								{#if j.job.status === 'queued'}
-									{j.job.type} queued
-								{:else if j.job.status === 'running'}
-									{j.job.type} {Math.round(j.job.progress * 100)}%
-								{:else if j.job.status === 'completed'}
-									Done
-								{:else if j.job.status === 'failed'}
+							{#if j.job.status === 'failed'}
+								<span class="job-indicator failed">
 									{j.job.error || 'Failed'}
-								{/if}
-								{#if j.job.status === 'queued' || j.job.status === 'running'}
+								</span>
+							{:else if j.job.status === 'queued' || j.job.status === 'running'}
+								<span class="job-indicator">
+									<span class="job-progress-bar">
+										<span
+											class="job-progress-fill"
+											style="width: {Math.round(j.job.progress * 100)}%"
+										></span>
+									</span>
+									<span class="job-progress-label">
+										{j.job.type}
+										{j.job.status === 'queued' ? 'queued' : `${Math.round(j.job.progress * 100)}%`}
+									</span>
 									<button
 										class="job-cancel"
 										onclick={() =>
@@ -225,8 +232,8 @@
 												.catch(() => {})}
 										title="Cancel job">×</button
 									>
-								{/if}
-							</span>
+								</span>
+							{/if}
 						{/each}
 						{#if statusMsg}
 							<span class="status-msg">{statusMsg}</span>
@@ -455,6 +462,9 @@
 	}
 
 	.job-indicator {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
 		font-size: 10px;
 		color: var(--score-ok);
 		font-family: var(--font-display);
@@ -464,6 +474,26 @@
 
 	.job-indicator.failed {
 		color: var(--score-bad);
+	}
+
+	.job-progress-bar {
+		width: 60px;
+		height: 4px;
+		background: var(--border);
+		border-radius: 2px;
+		overflow: hidden;
+	}
+
+	.job-progress-fill {
+		display: block;
+		height: 100%;
+		background: var(--score-ok);
+		border-radius: 2px;
+		transition: width 0.3s ease;
+	}
+
+	.job-progress-label {
+		min-width: 70px;
 	}
 
 	.job-cancel {

@@ -63,6 +63,7 @@
 	const nextSong = $derived($canPlayNextSong);
 
 	let prevFile = $state('');
+	let loadedFile = $state('');
 
 	let audioCtx: AudioContext | undefined;
 	let analyser: AnalyserNode | undefined;
@@ -381,6 +382,7 @@
 		});
 		wavesurfer.on('ready', () => {
 			isLoading = false;
+			loadedFile = prevFile;
 			duration = wavesurfer?.getDuration() ?? 0;
 			playbackDuration.set(duration);
 			connectAnalyser();
@@ -402,19 +404,29 @@
 		});
 	}
 
+	let pendingAutoplay: (() => void) | null = null;
+
 	$effect(() => {
 		if (!gen || !waveContainer) return;
 		if (gen.mp3_path !== prevFile) {
 			prevFile = gen.mp3_path;
 			isLoading = true;
 			if (!wavesurfer) createWavesurfer();
+			wavesurfer?.pause();
+			isPlaying = false;
+			isAudioPlaying.set(false);
+			if (pendingAutoplay) {
+				wavesurfer?.un('ready', pendingAutoplay);
+				pendingAutoplay = null;
+			}
 			try {
 				wavesurfer?.load(`/audio/${gen.mp3_path}`);
 			} catch {
 				/* harmless */
 			}
 			if (pb?.autoplay) {
-				wavesurfer?.once('ready', () => wavesurfer?.play());
+				pendingAutoplay = () => wavesurfer?.play();
+				wavesurfer?.once('ready', pendingAutoplay);
 			}
 		}
 	});
@@ -423,7 +435,9 @@
 	$effect(() => {
 		if (toggleRequest !== prevToggle) {
 			prevToggle = toggleRequest;
-			if (wavesurfer) wavesurfer.playPause();
+			if (wavesurfer && !isLoading && loadedFile === gen?.mp3_path) {
+				wavesurfer.playPause();
+			}
 		}
 	});
 

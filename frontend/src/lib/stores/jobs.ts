@@ -64,9 +64,10 @@ async function pollJob(jobId: string): Promise<void> {
 						isRestart ? 'info' : 'error'
 					);
 				}
+				const removeDelay = updated.status === 'failed' ? 5000 : 0;
 				setTimeout(() => {
 					activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
-				}, 5000);
+				}, removeDelay);
 				return;
 			}
 
