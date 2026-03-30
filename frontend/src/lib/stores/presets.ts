@@ -4,6 +4,7 @@ import {
 	fetchPresets,
 	fetchBuiltinDefaults,
 	createPreset as createPresetApi,
+	updatePreset as updatePresetApi,
 	deletePresetApi,
 	setPresetDefault as setPresetDefaultApi
 } from '$lib/api/client';
@@ -39,6 +40,14 @@ export async function savePreset(
 	presets.update((list) => [...list, preset]);
 }
 
+export async function updateExistingPreset(
+	presetId: string,
+	data: { name?: string; params?: VersionGenerationParams; is_default?: boolean }
+): Promise<void> {
+	const updated = await updatePresetApi(presetId, data);
+	presets.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
+}
+
 export async function setDefault(presetId: string): Promise<void> {
 	const updated = await setPresetDefaultApi(presetId);
 	presets.update((list) =>
@@ -48,6 +57,11 @@ export async function setDefault(presetId: string): Promise<void> {
 			return p;
 		})
 	);
+}
+
+export async function unsetDefault(presetId: string): Promise<void> {
+	const updated = await updatePresetApi(presetId, { is_default: false });
+	presets.update((list) => list.map((p) => (p.id === updated.id ? updated : p)));
 }
 
 export async function deletePreset(presetId: string): Promise<void> {

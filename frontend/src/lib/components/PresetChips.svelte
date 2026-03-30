@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { presets } from '$lib/stores/presets';
+	import { presets, builtinDefaults } from '$lib/stores/presets';
 	import type { VersionGenerationParams } from '$lib/api/types';
 
 	interface Props {
@@ -10,15 +10,30 @@
 
 	let { hasOverrides, onload, onreset }: Props = $props();
 
+	const builtinModes = $derived(Object.entries($builtinDefaults));
+
+	function loadBuiltinParams(params: VersionGenerationParams): void {
+		onload({ ...params });
+	}
+
 	function loadPresetParams(presetId: string): void {
 		const preset = $presets.find((p) => p.id === presetId);
 		if (preset) onload({ ...preset.params });
 	}
 </script>
 
-{#if $presets.length > 0}
+{#if builtinModes.length > 0 || $presets.length > 0}
 	<div class="presets-row">
 		<span class="presets-label">Presets:</span>
+		{#each builtinModes as [mode, params] (mode)}
+			<button
+				class="preset-chip builtin"
+				onclick={() => loadBuiltinParams(params)}
+				title="{mode} defaults"
+			>
+				{mode.toUpperCase()}
+			</button>
+		{/each}
 		{#each $presets as preset (preset.id)}
 			<button
 				class="preset-chip"
@@ -69,6 +84,16 @@
 	.preset-chip:hover {
 		border-color: var(--primary);
 		color: var(--primary);
+	}
+
+	.preset-chip.builtin {
+		border-color: var(--accent);
+		color: var(--accent);
+		letter-spacing: 1px;
+	}
+
+	.preset-chip.builtin:hover {
+		background: color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 
 	.preset-chip.is-default {

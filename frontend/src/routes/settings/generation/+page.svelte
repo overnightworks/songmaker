@@ -7,7 +7,9 @@
 		loadBuiltins,
 		builtinDefaults,
 		savePreset,
+		updateExistingPreset,
 		setDefault,
+		unsetDefault,
 		deletePreset
 	} from '$lib/stores/presets';
 	import { fetchGenerationDefaults, updateGenerationDefaults } from '$lib/api/client';
@@ -22,7 +24,8 @@
 	let saving = $state(false);
 	let error = $state('');
 
-	let showSavePreset = $state(false);
+	let showPresetForm = $state(false);
+	let editingPresetId = $state<string | null>(null);
 	let presetName = $state('');
 	let presetModel = $state('');
 	let presetParams = $state<VersionGenerationParams>({});
@@ -30,6 +33,12 @@
 	let savingPreset = $state(false);
 
 	const modelModes = $derived(Object.keys($builtinDefaults));
+
+	function fullParams(mode: string, overrides: VersionGenerationParams): VersionGenerationParams {
+		const builtin = $builtinDefaults[mode] ?? {};
+		const global = globalDefaults[mode] ?? {};
+		return { ...builtin, ...global, ...overrides };
+	}
 
 	onMount(async () => {
 		await Promise.all([
@@ -72,28 +81,62 @@
 		editDefaults = { ...(globalDefaults[editModel] ?? {}) };
 	}
 
+	function openNewPreset(): void {
+		editingPresetId = null;
+		presetName = '';
+		presetModel = modelModes[0] ?? '';
+		presetParams = {};
+		presetAsDefault = false;
+		showPresetForm = true;
+	}
+
+	function openEditPreset(presetId: string): void {
+		const preset = $presets.find((p) => p.id === presetId);
+		if (!preset) return;
+		editingPresetId = preset.id;
+		presetName = preset.name;
+		presetModel = preset.model_mode;
+		presetParams = { ...preset.params };
+		presetAsDefault = preset.is_default;
+		showPresetForm = true;
+	}
+
+	function closePresetForm(): void {
+		showPresetForm = false;
+		editingPresetId = null;
+	}
+
 	async function handleSavePreset(): Promise<void> {
 		if (!presetName.trim()) return;
 		savingPreset = true;
 		try {
-			await savePreset(presetName.trim(), presetModel, presetParams, presetAsDefault);
-			showSavePreset = false;
-			presetName = '';
-			presetModel = modelModes[0] ?? '';
-			presetParams = {};
-			presetAsDefault = false;
+			const merged = fullParams(presetModel, presetParams);
+			if (editingPresetId) {
+				await updateExistingPreset(editingPresetId, {
+					name: presetName.trim(),
+					params: merged,
+					is_default: presetAsDefault
+				});
+			} else {
+				await savePreset(presetName.trim(), presetModel, merged, presetAsDefault);
+			}
+			closePresetForm();
 		} catch {
-			error = 'Failed to save preset';
+			error = editingPresetId ? 'Failed to update preset' : 'Failed to save preset';
 		} finally {
 			savingPreset = false;
 		}
 	}
 
-	async function handleSetDefault(presetId: string): Promise<void> {
+	async function handleToggleDefault(presetId: string, isDefault: boolean): Promise<void> {
 		try {
-			await setDefault(presetId);
+			if (isDefault) {
+				await unsetDefault(presetId);
+			} else {
+				await setDefault(presetId);
+			}
 		} catch {
-			error = 'Failed to set default';
+			error = 'Failed to update default';
 		}
 	}
 
@@ -153,10 +196,10 @@
 		<section>
 			<div class="section-header">
 				<h2>Presets</h2>
-				<button class="add-btn" onclick={() => (showSavePreset = true)}>New Preset</button>
+				<button class="add-btn" onclick={openNewPreset}>New Preset</button>
 			</div>
 
-			{#if showSavePreset}
+			{#if showPresetForm}
 				<div class="panel">
 					<div class="save-preset-form">
 						<input
@@ -165,11 +208,15 @@
 							bind:value={presetName}
 							class="preset-name-input"
 						/>
-						<select class="model-select" bind:value={presetModel}>
-							{#each modelModes as mode (mode)}
-								<option value={mode}>{mode.toUpperCase()}</option>
-							{/each}
-						</select>
+						{#if !editingPresetId}
+							<select class="model-select" bind:value={presetModel}>
+								{#each modelModes as mode (mode)}
+									<option value={mode}>{mode.toUpperCase()}</option>
+								{/each}
+							</select>
+						{:else}
+							<span class="model-badge">{presetModel.toUpperCase()}</span>
+						{/if}
 						<label class="preset-default-label">
 							<input type="checkbox" bind:checked={presetAsDefault} />
 							<span>Set as default</span>
@@ -187,9 +234,9 @@
 							onclick={handleSavePreset}
 							disabled={savingPreset || !presetName.trim()}
 						>
-							{savingPreset ? 'Saving...' : 'Save'}
+							{savingPreset ? 'Saving...' : editingPresetId ? 'Update' : 'Save'}
 						</button>
-						<button class="reset-btn" onclick={() => (showSavePreset = false)}>Cancel</button>
+						<button class="reset-btn" onclick={closePresetForm}>Cancel</button>
 					</div>
 				</div>
 			{/if}
@@ -200,13 +247,15 @@
 						<div class="preset-row">
 							<span class="preset-name">{preset.name}</span>
 							<span class="preset-mode-tag">{preset.model_mode}</span>
-							{#if preset.is_default}
-								<span class="preset-default-tag">default</span>
-							{:else}
-								<button class="preset-action" onclick={() => handleSetDefault(preset.id)}>
-									set default
-								</button>
-							{/if}
+							<button
+								class="preset-action"
+								onclick={() => handleToggleDefault(preset.id, preset.is_default)}
+							>
+								{preset.is_default ? 'unset default' : 'set default'}
+							</button>
+							<button class="preset-action" onclick={() => openEditPreset(preset.id)}>
+								edit
+							</button>
 							<button class="preset-action delete" onclick={() => handleDeletePreset(preset.id)}>
 								delete
 							</button>
@@ -425,6 +474,16 @@
 		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
 	}
 
+	.model-badge {
+		padding: 0.3rem 0.6rem;
+		border: 1px solid var(--accent);
+		border-radius: 4px;
+		color: var(--accent);
+		font-size: 0.8rem;
+		font-family: var(--font-display);
+		letter-spacing: 1px;
+	}
+
 	.preset-default-label {
 		display: flex;
 		align-items: center;
@@ -461,15 +520,6 @@
 		font-size: 0.7rem;
 		color: var(--text-dim);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
-	}
-
-	.preset-default-tag {
-		font-size: 0.7rem;
-		padding: 1px 6px;
-		border-radius: 3px;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
 		letter-spacing: 0.5px;
 	}
 
