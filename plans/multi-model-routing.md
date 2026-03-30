@@ -314,6 +314,58 @@ Phase 1 (model tag) → Phase 2 (model selection UI) → Phase 3 (health discove
 Phase 5 (single-GPU model switching) is an alternative to Phase 4+7 for budget setups.
 Phase 6 (song model persistence) can happen anytime after Phase 2.
 
+## Phase 9: Database role separation
+
+Currently one PostgreSQL user (`songmaker`) for everything. With remote workers, a compromised worker has full DB access. Separate roles limit blast radius.
+
+### Roles
+
+| Role | Access | Used by |
+|------|--------|---------|
+| `songmaker_web` | Read/write all tables | Web server (FastAPI) |
+| `songmaker_worker` | Read/write: jobs, generations, scores, generation_presets. Read-only: songs, versions, albums, users | arq worker |
+| `songmaker_migrate` | Full DDL (CREATE, ALTER, DROP) + read/write all | Alembic migrations only |
+
+### Changes
+
+| File | Change |
+|------|--------|
+| `scripts/setup_db_roles.sql` | New: SQL script creating roles + grants |
+| `.env.docker.example` | Separate `DATABASE_URL_WEB`, `DATABASE_URL_WORKER`, `DATABASE_URL_MIGRATE` |
+| `db/engine.py` | `init_db()` uses `DATABASE_URL_MIGRATE` for migrations, returns session factory with `DATABASE_URL_WEB` or `DATABASE_URL_WORKER` |
+| `worker.py` | Uses `DATABASE_URL_WORKER` |
+| `server.py` | Uses `DATABASE_URL_WEB` |
+| `docker-compose.yml` | Pass different URLs to web vs worker |
+
+### Setup script (example)
+
+```sql
+-- Run once as postgres superuser
+CREATE ROLE songmaker_web LOGIN PASSWORD 'web_pass';
+CREATE ROLE songmaker_worker LOGIN PASSWORD 'worker_pass';
+CREATE ROLE songmaker_migrate LOGIN PASSWORD 'migrate_pass';
+
+-- Web: full read/write
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO songmaker_web;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO songmaker_web;
+
+-- Worker: limited tables
+GRANT SELECT, INSERT, UPDATE ON jobs, generations, scores, generation_presets TO songmaker_worker;
+GRANT SELECT ON songs, versions, albums, users TO songmaker_worker;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO songmaker_worker;
+
+-- Migrate: full DDL
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO songmaker_migrate;
+GRANT ALL PRIVILEGES ON SCHEMA public TO songmaker_migrate;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO songmaker_migrate;
+```
+
+### Backward compatibility
+
+If only `DATABASE_URL` is set (no role separation), all services use it — identical to today. Role separation is opt-in.
+
+---
+
 ## Constraints
 
 - arq supports custom queue names via `_queue_name` parameter on `enqueue_job`
