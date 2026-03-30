@@ -6,6 +6,9 @@
 		sharedPresets,
 		loadPresets,
 		loadBuiltins,
+		loadActiveModels,
+		activeModels,
+		activeModelIds,
 		builtinDefaults,
 		defaultConfig,
 		loadDefaultConfig,
@@ -21,6 +24,7 @@
 	import ParamControls from '$lib/components/ParamControls.svelte';
 
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
+	const activeIds = $derived($activeModelIds);
 	let error = $state('');
 
 	let showPresetForm = $state(false);
@@ -31,7 +35,7 @@
 	let presetAsDefault = $state(false);
 	let savingPreset = $state(false);
 
-	const modelModes = $derived(Object.keys($builtinDefaults));
+	const modelModes = $derived($activeModels.map((m) => m.id));
 
 	function fullParams(mode: string, overrides: VersionGenerationParams): VersionGenerationParams {
 		const builtin = $builtinDefaults[mode] ?? {};
@@ -43,6 +47,7 @@
 		await Promise.all([
 			loadBuiltins(),
 			loadPresets(),
+			loadActiveModels(),
 			loadDefaultConfig(),
 			fetchGenerationDefaults()
 				.then((d) => {
@@ -50,9 +55,8 @@
 				})
 				.catch(() => {})
 		]);
-		const modes = Object.keys($builtinDefaults);
-		if (modes.length > 0) {
-			presetModel = modes[0];
+		if (modelModes.length > 0) {
+			presetModel = modelModes[0];
 		}
 	});
 
@@ -150,19 +154,11 @@
 			>
 				Inherit
 			</button>
-			{#each modelModes as mode (mode)}
-				<button
-					class="default-chip"
-					class:active={$defaultConfig === mode}
-					onclick={() => handleSetDefaultConfig(mode)}
-				>
-					{mode.toUpperCase()}
-				</button>
-			{/each}
 			{#each $userPresets as preset (preset.id)}
 				<button
 					class="default-chip"
 					class:active={$defaultConfig === preset.id}
+					class:unavailable={!activeIds.has(preset.model_mode)}
 					onclick={() => handleSetDefaultConfig(preset.id)}
 				>
 					{preset.name}
@@ -172,6 +168,7 @@
 				<button
 					class="default-chip shared"
 					class:active={$defaultConfig === preset.id}
+					class:unavailable={!activeIds.has(preset.model_mode)}
 					onclick={() => handleSetDefaultConfig(preset.id)}
 				>
 					{preset.name}
@@ -340,6 +337,11 @@
 
 	.default-chip.shared {
 		border-style: dotted;
+	}
+
+	.default-chip.unavailable {
+		opacity: 0.4;
+		text-decoration: line-through;
 	}
 
 	.actions-row {

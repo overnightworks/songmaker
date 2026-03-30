@@ -78,6 +78,11 @@ class DefaultConfigResponse(BaseModel):
     config: str | None = None
 
 
+class AvailableModelResponse(BaseModel):
+    id: str
+    is_active: bool
+
+
 class ChatRequest(BaseModel):
     message: str = Field(max_length=50_000)
     context: str = Field("", max_length=100_000)

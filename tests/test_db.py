@@ -1346,7 +1346,8 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
     expected = {
         "albums", "songs", "versions", "generations", "scores", "ratings",
         "jobs", "users", "user_sessions", "login_attempts", "audit_log",
-        "generation_presets", "rate_limit_settings", "alembic_version",
+        "generation_presets", "rate_limit_settings", "available_models",
+        "alembic_version",
     }
     assert tables == expected
 

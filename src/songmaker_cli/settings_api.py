@@ -17,7 +17,11 @@ from songmaker_cli.api_models import (
     StatusResponse,
     UserRateLimitsResponse,
 )
-from songmaker_cli.api_models.settings import DefaultConfigRequest, DefaultConfigResponse
+from songmaker_cli.api_models.settings import (
+    AvailableModelResponse,
+    DefaultConfigRequest,
+    DefaultConfigResponse,
+)
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.config import (
     get_builtin_defaults,
@@ -37,10 +41,13 @@ from songmaker_cli.db.queries.settings import (
     create_preset,
     delete_preset,
     get_preset,
+    list_active_models,
+    list_all_models,
     list_presets,
     list_shared_presets,
     name_exists,
     set_default_preset,
+    toggle_model,
     update_preset,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user, require_admin
@@ -90,6 +97,9 @@ def api_create_preset(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> PresetResponse:
+    active_ids = {m.id for m in list_active_models(session)}
+    if req.model_mode not in active_ids:
+        raise HTTPException(400, f"Model '{req.model_mode}' is not available")
     if name_exists(session, user.id, req.model_mode, req.name):
         raise HTTPException(409, "A preset with that name already exists")
     preset = create_preset(
@@ -155,6 +165,42 @@ def api_set_default_preset(
     set_default_preset(session, preset)
     session.commit()
     return PresetResponse.from_orm(preset)
+
+
+# ── Available models ───────────────────────────────────────────────
+
+
+@router.get("/settings/models")
+def api_list_active_models(
+    _user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> list[AvailableModelResponse]:
+    models = list_active_models(session)
+    return [AvailableModelResponse(id=m.id, is_active=m.is_active) for m in models]
+
+
+@router.get("/settings/models/all")
+def api_list_all_models(
+    _admin: AuthenticatedUser = Depends(require_admin),
+    session: Session = Depends(get_db_session),
+) -> list[AvailableModelResponse]:
+    models = list_all_models(session)
+    return [AvailableModelResponse(id=m.id, is_active=m.is_active) for m in models]
+
+
+@router.put("/settings/models/{model_id}")
+def api_toggle_model(
+    model_id: str,
+    active: bool,
+    admin: AuthenticatedUser = Depends(require_admin),
+    session: Session = Depends(get_db_session),
+) -> AvailableModelResponse:
+    model = toggle_model(session, model_id, active)
+    if not model:
+        raise HTTPException(404, "Model not found")
+    record_audit(session, admin.id, "update", "model", model_id, f"active={active}")
+    session.commit()
+    return AvailableModelResponse(id=model.id, is_active=model.is_active)
 
 
 # ── Default generation config ──────────────────────────────────────

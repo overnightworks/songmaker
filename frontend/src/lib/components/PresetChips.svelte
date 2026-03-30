@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { userPresets, sharedPresets, builtinDefaults } from '$lib/stores/presets';
+	import { userPresets, sharedPresets, activeModelIds } from '$lib/stores/presets';
 	import type { VersionGenerationParams } from '$lib/api/types';
 
 	interface Props {
@@ -9,8 +9,6 @@
 	}
 
 	let { hasOverrides, onload, onreset }: Props = $props();
-
-	const builtinModes = $derived(Object.entries($builtinDefaults));
 </script>
 
 <div class="presets-row">
@@ -22,38 +20,33 @@
 	>
 		Inherit
 	</button>
-	{#each builtinModes as [mode, params] (mode)}
-		<button
-			class="preset-chip builtin"
-			onclick={() => onload({ ...params })}
-			title="{mode} defaults"
-		>
-			{mode.toUpperCase()}
-		</button>
-	{/each}
 	{#each $userPresets as preset (preset.id)}
+		{@const unavailable = !$activeModelIds.has(preset.model_mode)}
 		<button
 			class="preset-chip"
 			class:is-default={preset.is_default}
+			class:unavailable
 			onclick={() => onload({ ...preset.params })}
-			title="My preset: {preset.name}"
+			title={unavailable
+				? `Model "${preset.model_mode}" not available`
+				: `My preset: ${preset.name}`}
 		>
 			{preset.name}
 			<span class="preset-mode-tag">{preset.model_mode}</span>
 		</button>
 	{/each}
-	{#if $sharedPresets.length > 0}
-		{#each $sharedPresets as preset (preset.id)}
-			<button
-				class="preset-chip shared"
-				onclick={() => onload({ ...preset.params })}
-				title="Shared preset: {preset.name}"
-			>
-				{preset.name}
-				<span class="preset-mode-tag">{preset.model_mode}</span>
-			</button>
-		{/each}
-	{/if}
+	{#each $sharedPresets as preset (preset.id)}
+		{@const unavailable = !$activeModelIds.has(preset.model_mode)}
+		<button
+			class="preset-chip shared"
+			class:unavailable
+			onclick={() => onload({ ...preset.params })}
+			title={unavailable ? `Model "${preset.model_mode}" not available` : `Shared: ${preset.name}`}
+		>
+			{preset.name}
+			<span class="preset-mode-tag">{preset.model_mode}</span>
+		</button>
+	{/each}
 </div>
 
 <style>
@@ -92,15 +85,6 @@
 		border-style: solid;
 	}
 
-	.preset-chip.builtin {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
-	.preset-chip.builtin:hover {
-		background: color-mix(in srgb, var(--accent) 10%, transparent);
-	}
-
 	.preset-chip.is-default {
 		border-color: var(--primary);
 		color: var(--primary);
@@ -108,6 +92,11 @@
 
 	.preset-chip.shared {
 		border-style: dotted;
+	}
+
+	.preset-chip.unavailable {
+		opacity: 0.4;
+		text-decoration: line-through;
 	}
 
 	.preset-mode-tag {

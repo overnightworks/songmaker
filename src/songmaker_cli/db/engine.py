@@ -94,4 +94,16 @@ def init_test_db(db_path: Path) -> sessionmaker[Session]:
     _enable_sqlite_pragmas(engine)
 
     Base.metadata.create_all(engine)
+    _seed_available_models(engine)
     return sessionmaker(bind=engine)
+
+
+def _seed_available_models(engine) -> None:
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        conn.execute(text(
+            "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('sft', 1)"
+        ))
+        conn.execute(text(
+            "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('turbo', 0)"
+        ))

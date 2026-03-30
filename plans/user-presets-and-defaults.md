@@ -1,6 +1,6 @@
 # User Presets & Default Generation Config
 
-> **Status: DONE** — Phases 1-5 implemented. Phase 6 (auto-apply on song creation) deferred — songs inherit at generation time, explicit apply on creation is optional.
+> **Status: DONE** — All phases implemented including Phase 7 (available models registry).
 
 ## Summary
 
@@ -144,14 +144,48 @@ ADMIN PRESETS (read-only)
 
 ---
 
+## Phase 7: Available models registry
+
+Replace hardcoded SFT/TURBO builtin chips with a DB-driven model list that admins control.
+
+### Backend
+
+| File | Change |
+|------|--------|
+| `db/models.py` | Add `AvailableModel` table: `id` (str PK, e.g. "sft"), `is_active` (bool) |
+| `db/migrations/versions/` | Alembic migration, seed with current builtins |
+| `db/queries/settings.py` | `list_active_models()`, `list_all_models()`, `toggle_model()` |
+| `api_models/settings.py` | `AvailableModelResponse` |
+| `settings_api.py` | `GET /api/settings/models` (all users, active only), `GET/PUT /api/admin/models` (admin, toggle) |
+
+### Frontend
+
+| File | Change |
+|------|--------|
+| `PresetChips.svelte` | Remove SFT/TURBO builtin chips. Show only Inherit + presets. Grey out presets whose `model_mode` is not in active models |
+| `GenerationSettings.svelte` | Remove `builtinDefaults` dependency for chips (keep for placeholders) |
+| `settings/generation/+page.svelte` | Default config selector: remove SFT/TURBO, show Inherit + presets only. Preset creation: model dropdown filtered to active models |
+| `settings/users/+page.svelte` | Generation tab: show model toggles (on/off per model) |
+| `stores/presets.ts` | Add `activeModels` store, `loadActiveModels()` |
+| `api/client.ts` | `fetchActiveModels()`, `fetchAllModels()`, `toggleModel()` |
+
+### Behavior
+
+- Admin enables "sft" → users can create SFT presets, SFT presets show normally on songs
+- Admin disables "turbo" → users can't create turbo presets, existing turbo presets greyed out on songs
+- Health endpoint still reports the running model — model registry is about what's *allowed*, not what's *running*
+- Builtin defaults stay in code as internal fallbacks for `build_ace_config` — never shown in UI
+
+---
+
 ## Priority
 
-Phase 1 → Phase 2 → Phase 3+4 (parallel) → Phase 5 → Phase 6
+Phase 1 → Phase 2 → Phase 3+4 (parallel) → Phase 5 → Phase 6 → Phase 7
 
 ## Constraints
 
 - No breaking changes to existing API — admin preset endpoints stay as-is
 - `created_by=NULL` means admin/shared preset, `created_by=user_id` means private
-- Preset `model_mode` is informational — doesn't restrict which model runs the generation
+- Preset `model_mode` validated against active models on creation
 - Generation resolution chain (jobs.py `build_ace_config`) must stay backward-compatible
 - Frontend type generation (`generate_types.py`) must run after API model changes

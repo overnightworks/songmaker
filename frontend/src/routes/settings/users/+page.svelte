@@ -24,7 +24,13 @@
 	} from '$lib/api/types';
 	import { currentUser, isAdmin } from '$lib/stores/auth';
 	import { loadBuiltins, builtinDefaults } from '$lib/stores/presets';
-	import { fetchGenerationDefaults, updateGenerationDefaults } from '$lib/api/client';
+	import {
+		fetchGenerationDefaults,
+		updateGenerationDefaults,
+		fetchAllModels,
+		toggleModel as toggleModelApi
+	} from '$lib/api/client';
+	import type { AvailableModel } from '$lib/api/client';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
 
@@ -65,6 +71,7 @@
 	let newRole = $state('user');
 	let creating = $state(false);
 
+	let allModels = $state<AvailableModel[]>([]);
 	let genDefaults = $state<Record<string, VersionGenerationParams>>({});
 	let genEditModel = $state('');
 	let genEditDefaults = $state<VersionGenerationParams>({});
@@ -242,6 +249,11 @@
 	async function loadGenDefaults() {
 		await loadBuiltins();
 		try {
+			allModels = await fetchAllModels();
+		} catch {
+			allModels = [];
+		}
+		try {
 			genDefaults = await fetchGenerationDefaults();
 		} catch {
 			genDefaults = {};
@@ -250,6 +262,15 @@
 		if (modes.length > 0 && !genEditModel) {
 			genEditModel = modes[0];
 			genEditDefaults = { ...(genDefaults[modes[0]] ?? {}) };
+		}
+	}
+
+	async function handleToggleModel(modelId: string, currentActive: boolean): Promise<void> {
+		try {
+			const updated = await toggleModelApi(modelId, !currentActive);
+			allModels = allModels.map((m) => (m.id === updated.id ? updated : m));
+		} catch {
+			error = 'Failed to toggle model';
 		}
 	}
 
@@ -591,6 +612,23 @@
 						{genSaving ? 'Saving...' : 'Save Defaults'}
 					</button>
 					<button class="clear-btn" onclick={handleResetGenDefaults}>Reset</button>
+				</div>
+			</section>
+
+			<section>
+				<h2>Available Models</h2>
+				<p class="hint">Toggle which models users can create presets for.</p>
+				<div class="model-toggles">
+					{#each allModels as model (model.id)}
+						<button
+							class="model-toggle"
+							class:active={model.is_active}
+							onclick={() => handleToggleModel(model.id, model.is_active)}
+						>
+							{model.id.toUpperCase()}
+							<span class="model-status">{model.is_active ? 'ON' : 'OFF'}</span>
+						</button>
+					{/each}
 				</div>
 			</section>
 		{/if}
@@ -1013,5 +1051,41 @@
 	.gen-actions-row {
 		display: flex;
 		gap: 0.5rem;
+	}
+
+	.model-toggles {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+
+	.model-toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 0.5rem 1rem;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 0.85rem;
+		cursor: pointer;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.model-toggle.active {
+		border-color: var(--score-ok);
+		color: var(--score-ok);
+	}
+
+	.model-toggle:hover {
+		border-color: var(--primary);
+	}
+
+	.model-status {
+		font-size: 0.7rem;
+		opacity: 0.6;
 	}
 </style>

@@ -1,8 +1,10 @@
 import { writable, derived } from 'svelte/store';
 import type { PresetItem, VersionGenerationParams } from '$lib/api/types';
+import type { AvailableModel } from '$lib/api/client';
 import {
 	fetchPresets,
 	fetchBuiltinDefaults,
+	fetchActiveModels,
 	fetchDefaultConfig,
 	updateDefaultConfig as updateDefaultConfigApi,
 	createPreset as createPresetApi,
@@ -14,6 +16,8 @@ import {
 export const presets = writable<PresetItem[]>([]);
 export const builtinDefaults = writable<Record<string, VersionGenerationParams>>({});
 export const defaultConfig = writable<string | null>(null);
+export const activeModels = writable<AvailableModel[]>([]);
+export const activeModelIds = derived(activeModels, ($m) => new Set($m.map((m) => m.id)));
 
 export const userPresets = derived(presets, ($p) => $p.filter((p) => !p.is_shared));
 export const sharedPresets = derived(presets, ($p) => $p.filter((p) => p.is_shared));
@@ -33,6 +37,15 @@ export async function loadBuiltins(): Promise<void> {
 		builtinDefaults.set(data);
 	} catch {
 		/* builtins unavailable */
+	}
+}
+
+export async function loadActiveModels(): Promise<void> {
+	try {
+		const data = await fetchActiveModels();
+		activeModels.set(data);
+	} catch {
+		/* models unavailable */
 	}
 }
 

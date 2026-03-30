@@ -248,6 +248,25 @@ export async function updateGenerationDefaults(
 	});
 }
 
+export interface AvailableModel {
+	id: string;
+	is_active: boolean;
+}
+
+export async function fetchActiveModels(): Promise<AvailableModel[]> {
+	return apiFetch<AvailableModel[]>('/api/settings/models');
+}
+
+export async function fetchAllModels(): Promise<AvailableModel[]> {
+	return apiFetch<AvailableModel[]>('/api/settings/models/all');
+}
+
+export async function toggleModel(modelId: string, active: boolean): Promise<AvailableModel> {
+	return apiFetch<AvailableModel>(`/api/settings/models/${modelId}?active=${active}`, {
+		method: 'PUT'
+	});
+}
+
 export async function fetchBuiltinDefaults(): Promise<Record<string, VersionGenerationParams>> {
 	return apiFetch<Record<string, VersionGenerationParams>>('/api/settings/generation-builtins');
 }

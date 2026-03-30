@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { editGenParams } from '$lib/stores/editor';
-	import { loadPresets, loadBuiltins, builtinDefaults } from '$lib/stores/presets';
+	import {
+		loadPresets,
+		loadBuiltins,
+		loadActiveModels,
+		builtinDefaults
+	} from '$lib/stores/presets';
 	import { fetchGenerationDefaults } from '$lib/api/client';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from './ParamControls.svelte';
@@ -25,6 +30,7 @@
 		await Promise.all([
 			loadBuiltins(),
 			loadPresets(),
+			loadActiveModels(),
 			fetchGenerationDefaults()
 				.then((d) => (globalDefaults = d))
 				.catch(() => {})

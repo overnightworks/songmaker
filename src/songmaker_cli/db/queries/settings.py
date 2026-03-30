@@ -7,7 +7,29 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import GLOBAL_DEFAULTS_PRESET_NAME
-from songmaker_cli.db.models import GenerationPreset
+from songmaker_cli.db.models import AvailableModel, GenerationPreset
+
+
+def list_active_models(session: Session) -> list[AvailableModel]:
+    return (
+        session.query(AvailableModel)
+        .filter(AvailableModel.is_active.is_(True))
+        .order_by(AvailableModel.id)
+        .all()
+    )
+
+
+def list_all_models(session: Session) -> list[AvailableModel]:
+    return session.query(AvailableModel).order_by(AvailableModel.id).all()
+
+
+def toggle_model(session: Session, model_id: str, is_active: bool) -> AvailableModel | None:
+    model = session.query(AvailableModel).filter_by(id=model_id).first()
+    if not model:
+        return None
+    model.is_active = is_active
+    session.flush()
+    return model
 
 
 def list_presets(session: Session, user_id: str) -> list[GenerationPreset]:

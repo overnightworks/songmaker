@@ -165,6 +165,13 @@ class Rating(Base):
     generation: Mapped[Generation] = relationship(back_populates="rating")
 
 
+class AvailableModel(Base):
+    __tablename__ = "available_models"
+
+    id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 class GenerationPreset(Base):
     __tablename__ = "generation_presets"
 
