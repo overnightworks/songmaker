@@ -16,6 +16,18 @@ RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
     uv sync --frozen --no-dev --extra server --extra scoring --extra whisper && \
     rm -rf src/songmaker_cli/__init__.py
 
+# Pre-download scorer models while deps are cached — this layer only
+# rebuilds when pyproject.toml/uv.lock change, not on code changes.
+# HF_HUB_CACHE ensures models land where the runtime user can find them.
+ENV HF_HUB_CACHE=/app/.cache/huggingface/hub
+RUN uv run python -c "\
+from faster_whisper import WhisperModel; \
+WhisperModel('large-v3', device='cpu', compute_type='int8')"
+RUN uv run python -c "\
+from audiobox_aesthetics.infer import AesPredictor; \
+import os; os.environ['CUDA_VISIBLE_DEVICES'] = ''; \
+AesPredictor(checkpoint_pth='default')"
+
 # Copy source code (only this layer rebuilds on code changes)
 COPY src/ src/
 COPY alembic.ini ./
@@ -24,18 +36,6 @@ RUN uv sync --frozen --no-dev --extra server --extra scoring --extra whisper
 RUN useradd --create-home --shell /bin/bash songmaker
 RUN chown -R songmaker:songmaker /app
 USER songmaker
-
-# Pre-download scorer models so first scoring job doesn't need network access.
-# faster-whisper (CTranslate2 format) and audiobox-aesthetics both cache to
-# ~/.cache/huggingface/hub/ — baking them into the image avoids runtime
-# downloads that can timeout behind rate limits.
-RUN uv run python -c "\
-from faster_whisper import WhisperModel; \
-WhisperModel('large-v3', device='cpu', compute_type='int8')"
-RUN uv run python -c "\
-from audiobox_aesthetics.infer import AesPredictor; \
-import os; os.environ['CUDA_VISIBLE_DEVICES'] = ''; \
-AesPredictor(checkpoint_pth='default')"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
   CMD uv run arq songmaker_cli.worker.WorkerSettings --check || exit 1
