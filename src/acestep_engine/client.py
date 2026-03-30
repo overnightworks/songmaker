@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import time
+from collections.abc import Callable
 from typing import Final
 from urllib.error import URLError
 from urllib.parse import quote, urlparse
@@ -125,14 +126,15 @@ class AceStepClient:
         except (URLError, OSError, json.JSONDecodeError):
             return None
 
-    def generate(self, config: AceStepConfig) -> AceStepResult:
+    def generate(
+        self, config: AceStepConfig,
+        on_progress: Callable[[str], None] | None = None,
+    ) -> AceStepResult:
         """Generate music via ACE-Step and return audio samples.
-
-        Submits a generation job, polls until complete, downloads the
-        audio, and returns an AceStepResult.
 
         Args:
             config: Generation parameters.
+            on_progress: Called with raw progress text on each poll tick.
 
         Raises:
             TaskSubmissionError: Failed to submit the generation task.
@@ -141,7 +143,7 @@ class AceStepClient:
             AudioDownloadError: Failed to download or parse audio.
         """
         task_id = self._submit_task(config)
-        audio_path, seed = self._poll_result(task_id)
+        audio_path, seed = self._poll_result(task_id, on_progress=on_progress)
         return self._download_audio(audio_path, seed)
 
     def _submit_task(self, config: AceStepConfig) -> str:
@@ -228,7 +230,10 @@ class AceStepClient:
         log.info("ACE-Step task submitted: %s", task_id)
         return task_id
 
-    def _poll_result(self, task_id: str) -> tuple[str, int]:
+    def _poll_result(
+        self, task_id: str,
+        on_progress: Callable[[str], None] | None = None,
+    ) -> tuple[str, int]:
         """Poll until the generation task completes.
 
         Returns:
@@ -278,6 +283,8 @@ class AceStepClient:
                 elapsed = time.monotonic() - start
                 if entry.progress_text:
                     log.info("ACE-Step: %s (%.0fs)", entry.progress_text, elapsed)
+                    if on_progress:
+                        on_progress(entry.progress_text)
                 else:
                     log.info("ACE-Step generating... (%.0fs elapsed)", elapsed)
 

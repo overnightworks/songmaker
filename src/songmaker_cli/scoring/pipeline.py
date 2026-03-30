@@ -255,6 +255,7 @@ def _submit_scorers(
 def _collect_futures(
     futures: dict[Future[object], str],
     results: dict[str, object],
+    on_scorer_done: Callable[[str], None] | None = None,
 ) -> None:
     for future in as_completed(futures):
         name = futures[future]
@@ -262,6 +263,8 @@ def _collect_futures(
             results[name] = future.result()
         except Exception:  # noqa: BLE001 — scorer failures must not block others
             log.exception("Scorer '%s' failed", name)
+        if on_scorer_done:
+            on_scorer_done(name)
 
 
 def run_scoring_pipeline(
@@ -270,6 +273,7 @@ def run_scoring_pipeline(
     scorers: list[str] | None = None,
     config: PipelineConfig | None = None,
     registry: ScorerRegistry | None = None,
+    on_progress: Callable[[int, int, str], None] | None = None,
 ) -> SongScores:
     """Run all (or selected) scorers on an MP3 and return aggregated scores.
 
@@ -298,6 +302,15 @@ def run_scoring_pipeline(
     cpu_names = [n for n in scorers if not reg.scorer_uses_gpu(n) and not reg.scorer_after_gpu(n)]
     deferred_cpu_names = [n for n in scorers if reg.scorer_after_gpu(n)]
 
+    total_scorers = sum(1 for n in scorers if reg.get(n) is not None)
+    completed_count = 0
+
+    def _on_scorer_done(name: str) -> None:
+        nonlocal completed_count
+        completed_count += 1
+        if on_progress:
+            on_progress(completed_count, total_scorers, name)
+
     shared_data = SharedScorerData()
     results: dict[str, object] = {}
 
@@ -318,13 +331,14 @@ def run_scoring_pipeline(
                 )
             except Exception:  # noqa: BLE001 — scorer failures must not block others
                 log.exception("Scorer '%s' failed", name)
+            _on_scorer_done(name)
 
         deferred_futures = _submit_scorers(
             pool, deferred_cpu_names, reg, mp3_path, meta, audio_data, config, shared_data,
         )
 
-        _collect_futures(cpu_futures, results)
-        _collect_futures(deferred_futures, results)
+        _collect_futures(cpu_futures, results, on_scorer_done=_on_scorer_done)
+        _collect_futures(deferred_futures, results, on_scorer_done=_on_scorer_done)
 
     return SongScores(
         text_accuracy=_validated(results, "text_accuracy", TextAccuracyScore),

@@ -77,8 +77,11 @@ def _run_child_with_messages(messages: list, timeout: float = 10.0) -> list:
         parent_conn.send(msg)
         if isinstance(msg, ShutdownRequest):
             break
-        if parent_conn.poll(timeout=timeout):
-            responses.append(parent_conn.recv())
+        while parent_conn.poll(timeout=timeout):
+            resp = parent_conn.recv()
+            responses.append(resp)
+            if isinstance(resp, (ScoreResponse, ReleaseGpuResponse)):
+                break
 
     proc.join(timeout=5)
     parent_conn.close()
@@ -143,9 +146,9 @@ def test_child_handles_score_error(tmp_path: Path) -> None:
         ),
         ShutdownRequest(),
     ])
-    assert len(responses) == 1
-    resp = responses[0]
-    assert isinstance(resp, ScoreResponse)
+    score_responses = [r for r in responses if isinstance(r, ScoreResponse)]
+    assert len(score_responses) == 1
+    resp = score_responses[0]
     assert resp.error is not None or (
         resp.scores is not None and resp.scores.text_accuracy is None
     )

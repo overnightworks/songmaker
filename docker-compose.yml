@@ -84,6 +84,7 @@ services:
     volumes:
       - audiofiles:/app/data/audio
       - ./_models/acestep:/app/_models/acestep
+      - hfcache:/home/songmaker/.cache/huggingface
     deploy:
       resources:
         reservations:
@@ -126,5 +127,6 @@ volumes:
   pgdata:
   redisdata:
   audiofiles:
+  hfcache:
   promdata:
   grafdata:

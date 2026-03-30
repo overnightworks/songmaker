@@ -11,6 +11,8 @@ import logging
 import multiprocessing
 import os
 import signal
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
@@ -50,6 +52,13 @@ class ReleaseGpuResponse:
 
 
 @dataclass(frozen=True)
+class ScoreProgressUpdate:
+    completed: int
+    total: int
+    scorer_name: str
+
+
+@dataclass(frozen=True)
 class ShutdownRequest:
     pass
 
@@ -81,12 +90,17 @@ def _child_main(conn: Connection) -> None:
                 structlog.contextvars.bind_contextvars(
                     job_id=request.job_id, process="scorer",
                 )
+
+            def _progress_cb(completed: int, total: int, name: str) -> None:
+                conn.send(ScoreProgressUpdate(completed=completed, total=total, scorer_name=name))
+
             try:
                 scores = run_scoring_pipeline(
                     request.mp3_path,
                     meta=request.meta,
                     scorers=request.scorers,
                     config=request.config,
+                    on_progress=_progress_cb,
                 )
                 conn.send(ScoreResponse(scores=scores, error=None))
             except Exception as exc:
@@ -123,6 +137,7 @@ class ScorerProcess:
         scorers: list[str] | None = None,
         config: PipelineConfig | None = None,
         job_id: str | None = None,
+        on_progress: Callable[[int, int, str], None] | None = None,
     ) -> SongScores:
         effective_config = config or PipelineConfig()
         conn = self._ensure_started()
@@ -133,12 +148,24 @@ class ScorerProcess:
         ))
 
         timeout = effective_config.pipeline_timeout
-        if conn.poll(timeout=timeout):
-            response: ScoreResponse = conn.recv()
-            if response.error:
-                raise RuntimeError(response.error)
-            assert response.scores is not None
-            return response.scores
+        deadline = time.monotonic() + timeout
+
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+
+            if not conn.poll(timeout=remaining):
+                break
+
+            msg = conn.recv()
+            if isinstance(msg, ScoreResponse):
+                if msg.error:
+                    raise RuntimeError(msg.error)
+                assert msg.scores is not None
+                return msg.scores
+            if isinstance(msg, ScoreProgressUpdate) and on_progress:
+                on_progress(msg.completed, msg.total, msg.scorer_name)
 
         log.error("Scorer subprocess timed out after %ds — killing", timeout)
         self._kill()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,6 +45,7 @@ def generate_single(
     user_id: str,
     generation_id: str,
     client: AceStepClient | None = None,
+    on_progress: Callable[[str], None] | None = None,
 ) -> GenerationResult:
     if client is None:
         client = AceStepClient()
@@ -53,7 +55,7 @@ def generate_single(
     mp3_path = audio_file_path(audio_dir, user_id, generation_id, ".mp3")
     wav_path = audio_file_path(audio_dir, user_id, generation_id, ".wav")
     try:
-        ace_result, elapsed = _run_generation(ace_config, client)
+        ace_result, elapsed = _run_generation(ace_config, client, on_progress=on_progress)
         audio = _decode_audio(ace_result)
         _write_output(audio, ace_result.seed, mp3_path, wav_path, meta, album_meta)
     except Exception:
@@ -71,11 +73,12 @@ def generate_single(
 
 def _run_generation(
     ace_config: AceStepConfig, client: AceStepClient,
+    on_progress: Callable[[str], None] | None = None,
 ) -> tuple[AceStepResult, float]:
     log.info("Generating via ACE-Step...")
     start_time = time.time()
     try:
-        result: AceStepResult = client.generate(ace_config)
+        result: AceStepResult = client.generate(ace_config, on_progress=on_progress)
     except AceStepError as exc:
         raise GenerationError(str(exc)) from exc
     return result, time.time() - start_time

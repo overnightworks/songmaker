@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import re
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -173,6 +176,7 @@ def _build_generation_context(
 def _run_single_generation(
     ctx: GenerationContext, generation_id: str,
     db_factory: sessionmaker[Session],
+    on_progress: Callable[[str], None] | None = None,
 ) -> None:
     """Generate one song variant, master it, and persist the DB record.
 
@@ -183,6 +187,7 @@ def _run_single_generation(
         ctx.meta, ctx.album_meta, ctx.ace_config,
         ctx.audio_dir, ctx.user_id, generation_id,
         client=ctx.client,
+        on_progress=on_progress,
     )
 
     mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
@@ -241,6 +246,39 @@ def _finalize_generation_job(
         )
 
 
+_STEP_PATTERN = re.compile(r"(\d+)\s*/\s*(\d+)")
+_PROGRESS_THROTTLE_SECONDS = 2.0
+
+
+def _parse_step_fraction(progress_text: str) -> float | None:
+    """Extract a 0..1 fraction from text like 'Step 12/50'."""
+    m = _STEP_PATTERN.search(progress_text)
+    if m:
+        current, total = int(m.group(1)), int(m.group(2))
+        if total > 0:
+            return min(current / total, 1.0)
+    return None
+
+
+def _make_generation_progress_callback(
+    db_factory: sessionmaker[Session], job_id: str,
+    variant_index: int, count: int,
+) -> Callable[[str], None]:
+    last_update = 0.0
+
+    def _on_progress(progress_text: str) -> None:
+        nonlocal last_update
+        now = time.monotonic()
+        if now - last_update < _PROGRESS_THROTTLE_SECONDS:
+            return
+        step_fraction = _parse_step_fraction(progress_text) or 0.0
+        combined = (variant_index + step_fraction) / count
+        _update_job(db_factory, job_id, "running", progress=combined)
+        last_update = now
+
+    return _on_progress
+
+
 def run_generation_job(
     job_id: str, song_id: str, version_id: str, count: int,
     user_id: str,
@@ -279,8 +317,9 @@ def run_generation_job(
 
         for i in range(count):
             _update_job(db_factory, job_id, "running", progress=i / count)
+            on_progress = _make_generation_progress_callback(db_factory, job_id, i, count)
             try:
-                _run_single_generation(ctx, str(uuid.uuid4()), db_factory)
+                _run_single_generation(ctx, str(uuid.uuid4()), db_factory, on_progress=on_progress)
                 completed += 1
             except Exception as exc:
                 log.exception("Generation %d/%d failed: %s", i + 1, count, exc)
@@ -356,8 +395,13 @@ def run_scoring_job(
         device = _detect_device()
         config = PipelineConfig(device=device)
         meta = SongMeta(**meta_kwargs) if meta_kwargs else None
+
+        def _score_progress(completed: int, total: int, scorer_name: str) -> None:
+            _update_job(db_factory, job_id, "running", progress=completed / total)
+
         song_scores = scorer.score(
             mp3_full, meta=meta, scorers=scorers, config=config, job_id=job_id,
+            on_progress=_score_progress,
         )
         scores_dict = song_scores.to_dict()
 
