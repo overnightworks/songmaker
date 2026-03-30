@@ -1,8 +1,10 @@
-import { writable } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
 import type { PresetItem, VersionGenerationParams } from '$lib/api/types';
 import {
 	fetchPresets,
 	fetchBuiltinDefaults,
+	fetchDefaultConfig,
+	updateDefaultConfig as updateDefaultConfigApi,
 	createPreset as createPresetApi,
 	updatePreset as updatePresetApi,
 	deletePresetApi,
@@ -11,6 +13,10 @@ import {
 
 export const presets = writable<PresetItem[]>([]);
 export const builtinDefaults = writable<Record<string, VersionGenerationParams>>({});
+export const defaultConfig = writable<string | null>(null);
+
+export const userPresets = derived(presets, ($p) => $p.filter((p) => !p.is_shared));
+export const sharedPresets = derived(presets, ($p) => $p.filter((p) => p.is_shared));
 
 export async function loadPresets(): Promise<void> {
 	try {
@@ -28,6 +34,20 @@ export async function loadBuiltins(): Promise<void> {
 	} catch {
 		/* builtins unavailable */
 	}
+}
+
+export async function loadDefaultConfig(): Promise<void> {
+	try {
+		const res = await fetchDefaultConfig();
+		defaultConfig.set(res.config);
+	} catch {
+		/* default config unavailable */
+	}
+}
+
+export async function saveDefaultConfig(config: string | null): Promise<void> {
+	const res = await updateDefaultConfigApi(config);
+	defaultConfig.set(res.config);
 }
 
 export async function savePreset(

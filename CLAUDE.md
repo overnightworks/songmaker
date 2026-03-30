@@ -93,7 +93,7 @@ These are conventions that aren't obvious from reading a single file:
 
 ## Docker
 
-Always use `--wait` with `docker compose up -d` (e.g. `docker compose up -d --build --wait`). Without it, the command can hang indefinitely after containers are already running, blocking the calling process.
+Always use `--wait` with `docker compose up -d` but wrap it in `timeout` to prevent hanging after healthchecks pass (known Docker Compose bug): `timeout 120 docker compose up -d --build --wait`. If timeout fires, check `docker compose ps` — containers are likely already healthy.
 
 ## Workflow — Speed
 

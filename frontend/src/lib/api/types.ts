@@ -184,6 +184,7 @@ export interface PresetItem {
 	model_mode: string;
 	params: VersionGenerationParams;
 	is_default: boolean;
+	is_shared: boolean;
 	created_at: string;
 	updated_at: string;
 }

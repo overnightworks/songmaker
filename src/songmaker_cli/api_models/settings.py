@@ -52,6 +52,7 @@ class PresetResponse(BaseModel):
     model_mode: str
     params: dict
     is_default: bool
+    is_shared: bool
     created_at: str
     updated_at: str
 
@@ -63,9 +64,18 @@ class PresetResponse(BaseModel):
             model_mode=preset.model_mode,
             params=preset.params or {},
             is_default=preset.is_default,
+            is_shared=preset.created_by is None,
             created_at=preset.created_at.isoformat() if preset.created_at else "",
             updated_at=preset.updated_at.isoformat() if preset.updated_at else "",
         )
+
+
+class DefaultConfigRequest(BaseModel):
+    config: str | None = None
+
+
+class DefaultConfigResponse(BaseModel):
+    config: str | None = None
 
 
 class ChatRequest(BaseModel):

@@ -1,6 +1,6 @@
 # User Presets & Default Generation Config
 
-> **Status: TODO**
+> **Status: DONE** — Phases 1-5 implemented. Phase 6 (auto-apply on song creation) deferred — songs inherit at generation time, explicit apply on creation is optional.
 
 ## Summary
 

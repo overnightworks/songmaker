@@ -1,11 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { isAdmin } from '$lib/stores/auth';
 	import {
 		presets,
+		userPresets,
+		sharedPresets,
 		loadPresets,
 		loadBuiltins,
 		builtinDefaults,
+		defaultConfig,
+		loadDefaultConfig,
+		saveDefaultConfig,
 		savePreset,
 		updateExistingPreset,
 		setDefault,
@@ -15,8 +19,6 @@
 	import { fetchGenerationDefaults } from '$lib/api/client';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
-
-	const admin = $derived($isAdmin);
 
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
 	let error = $state('');
@@ -41,6 +43,7 @@
 		await Promise.all([
 			loadBuiltins(),
 			loadPresets(),
+			loadDefaultConfig(),
 			fetchGenerationDefaults()
 				.then((d) => {
 					globalDefaults = d;
@@ -52,6 +55,14 @@
 			presetModel = modes[0];
 		}
 	});
+
+	async function handleSetDefaultConfig(config: string | null): Promise<void> {
+		try {
+			await saveDefaultConfig(config);
+		} catch {
+			error = 'Failed to set default config';
+		}
+	}
 
 	function openNewPreset(): void {
 		editingPresetId = null;
@@ -128,98 +139,128 @@
 		<p class="error">{error}</p>
 	{/if}
 
-	{#if admin}
-		<section>
-			<div class="section-header">
-				<h2>Presets</h2>
-				<button class="add-btn" onclick={openNewPreset}>New Preset</button>
-			</div>
+	<section>
+		<h2>Default for New Songs</h2>
+		<p class="hint">When you create a song, this config is applied automatically.</p>
+		<div class="default-chips">
+			<button
+				class="default-chip"
+				class:active={$defaultConfig === null}
+				onclick={() => handleSetDefaultConfig(null)}
+			>
+				Inherit
+			</button>
+			{#each modelModes as mode (mode)}
+				<button
+					class="default-chip"
+					class:active={$defaultConfig === mode}
+					onclick={() => handleSetDefaultConfig(mode)}
+				>
+					{mode.toUpperCase()}
+				</button>
+			{/each}
+			{#each $userPresets as preset (preset.id)}
+				<button
+					class="default-chip"
+					class:active={$defaultConfig === preset.id}
+					onclick={() => handleSetDefaultConfig(preset.id)}
+				>
+					{preset.name}
+				</button>
+			{/each}
+			{#each $sharedPresets as preset (preset.id)}
+				<button
+					class="default-chip shared"
+					class:active={$defaultConfig === preset.id}
+					onclick={() => handleSetDefaultConfig(preset.id)}
+				>
+					{preset.name}
+				</button>
+			{/each}
+		</div>
+	</section>
 
-			{#if showPresetForm}
-				<div class="panel">
-					<div class="save-preset-form">
-						<input
-							type="text"
-							placeholder="Preset name"
-							bind:value={presetName}
-							class="preset-name-input"
-						/>
-						{#if !editingPresetId}
-							<select class="model-select" bind:value={presetModel}>
-								{#each modelModes as mode (mode)}
-									<option value={mode}>{mode.toUpperCase()}</option>
-								{/each}
-							</select>
-						{:else}
-							<span class="model-badge">{presetModel.toUpperCase()}</span>
-						{/if}
-						<label class="preset-default-label">
-							<input type="checkbox" bind:checked={presetAsDefault} />
-							<span>Set as default</span>
-						</label>
-					</div>
-					<ParamControls
-						values={presetParams}
-						placeholders={($builtinDefaults[presetModel] ??
-							{}) as Required<VersionGenerationParams>}
-						onchange={(p) => (presetParams = p)}
+	<section>
+		<div class="section-header">
+			<h2>My Presets</h2>
+			<button class="add-btn" onclick={openNewPreset}>New Preset</button>
+		</div>
+
+		{#if showPresetForm}
+			<div class="panel">
+				<div class="save-preset-form">
+					<input
+						type="text"
+						placeholder="Preset name"
+						bind:value={presetName}
+						class="preset-name-input"
 					/>
-					<div class="actions-row">
-						<button
-							class="save-btn"
-							onclick={handleSavePreset}
-							disabled={savingPreset || !presetName.trim()}
-						>
-							{savingPreset ? 'Saving...' : editingPresetId ? 'Update' : 'Save'}
-						</button>
-						<button class="reset-btn" onclick={closePresetForm}>Cancel</button>
-					</div>
+					{#if !editingPresetId}
+						<select class="model-select" bind:value={presetModel}>
+							{#each modelModes as mode (mode)}
+								<option value={mode}>{mode.toUpperCase()}</option>
+							{/each}
+						</select>
+					{:else}
+						<span class="model-badge">{presetModel.toUpperCase()}</span>
+					{/if}
 				</div>
-			{/if}
+				<ParamControls
+					values={presetParams}
+					placeholders={($builtinDefaults[presetModel] ?? {}) as Required<VersionGenerationParams>}
+					onchange={(p) => (presetParams = p)}
+				/>
+				<div class="actions-row">
+					<button
+						class="save-btn"
+						onclick={handleSavePreset}
+						disabled={savingPreset || !presetName.trim()}
+					>
+						{savingPreset ? 'Saving...' : editingPresetId ? 'Update' : 'Save'}
+					</button>
+					<button class="reset-btn" onclick={closePresetForm}>Cancel</button>
+				</div>
+			</div>
+		{/if}
 
-			{#if $presets.length > 0}
-				<div class="preset-list">
-					{#each $presets as preset (preset.id)}
-						<div class="preset-row">
-							<span class="preset-name">{preset.name}</span>
-							<span class="preset-mode-tag">{preset.model_mode}</span>
-							<button
-								class="preset-action"
-								onclick={() => handleToggleDefault(preset.id, preset.is_default)}
-							>
-								{preset.is_default ? 'unset default' : 'set default'}
-							</button>
-							<button class="preset-action" onclick={() => openEditPreset(preset.id)}>
-								edit
-							</button>
-							<button class="preset-action delete" onclick={() => handleDeletePreset(preset.id)}>
-								delete
-							</button>
-						</div>
-					{/each}
-				</div>
-			{:else}
-				<p class="empty">No presets saved yet.</p>
-			{/if}
-		</section>
-	{:else}
+		{#if $userPresets.length > 0}
+			<div class="preset-list">
+				{#each $userPresets as preset (preset.id)}
+					<div class="preset-row">
+						<span class="preset-name">{preset.name}</span>
+						<span class="preset-mode-tag">{preset.model_mode}</span>
+						<button
+							class="preset-action"
+							onclick={() => handleToggleDefault(preset.id, preset.is_default)}
+						>
+							{preset.is_default ? 'unset default' : 'set default'}
+						</button>
+						<button class="preset-action" onclick={() => openEditPreset(preset.id)}> edit </button>
+						<button class="preset-action delete" onclick={() => handleDeletePreset(preset.id)}>
+							delete
+						</button>
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<p class="empty">No presets saved yet.</p>
+		{/if}
+	</section>
+
+	{#if $sharedPresets.length > 0}
 		<section>
-			<h2>Presets</h2>
-			{#if $presets.length > 0}
-				<div class="preset-list">
-					{#each $presets as preset (preset.id)}
-						<div class="preset-row">
-							<span class="preset-name">{preset.name}</span>
-							<span class="preset-mode-tag">{preset.model_mode}</span>
-							{#if preset.is_default}
-								<span class="preset-default-tag">default</span>
-							{/if}
-						</div>
-					{/each}
-				</div>
-			{:else}
-				<p class="empty">No presets available.</p>
-			{/if}
+			<h2>Shared Presets</h2>
+			<div class="preset-list">
+				{#each $sharedPresets as preset (preset.id)}
+					<div class="preset-row">
+						<span class="preset-name">{preset.name}</span>
+						<span class="preset-mode-tag">{preset.model_mode}</span>
+						{#if preset.is_default}
+							<span class="preset-default-tag">default</span>
+						{/if}
+					</div>
+				{/each}
+			</div>
 		</section>
 	{/if}
 </div>
@@ -251,6 +292,12 @@
 		letter-spacing: 0.5px;
 	}
 
+	.hint {
+		color: var(--text-dim);
+		font-size: 0.85rem;
+		margin-bottom: 1rem;
+	}
+
 	.error {
 		color: var(--score-bad);
 		font-size: 0.85rem;
@@ -259,6 +306,40 @@
 
 	section {
 		margin-bottom: 2rem;
+	}
+
+	.default-chips {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+	}
+
+	.default-chip {
+		padding: 0.4rem 0.8rem;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 0.8rem;
+		cursor: pointer;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.default-chip:hover {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.default-chip.active {
+		border-color: transparent;
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		color: #fff;
+	}
+
+	.default-chip.shared {
+		border-style: dotted;
 	}
 
 	.actions-row {
@@ -393,16 +474,6 @@
 		font-size: 0.8rem;
 		font-family: var(--font-display);
 		letter-spacing: 1px;
-	}
-
-	.preset-default-label {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		font-size: 0.8rem;
-		color: var(--text-muted);
-		cursor: pointer;
-		white-space: nowrap;
 	}
 
 	.preset-list {

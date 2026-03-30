@@ -252,6 +252,20 @@ export async function fetchBuiltinDefaults(): Promise<Record<string, VersionGene
 	return apiFetch<Record<string, VersionGenerationParams>>('/api/settings/generation-builtins');
 }
 
+export async function fetchDefaultConfig(): Promise<{ config: string | null }> {
+	return apiFetch<{ config: string | null }>('/api/settings/default-config');
+}
+
+export async function updateDefaultConfig(
+	config: string | null
+): Promise<{ config: string | null }> {
+	return apiFetch<{ config: string | null }>('/api/settings/default-config', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ config })
+	});
+}
+
 export async function fetchPresets(): Promise<PresetItem[]> {
 	return apiFetch<PresetItem[]>('/api/settings/presets');
 }

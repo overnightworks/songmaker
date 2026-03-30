@@ -17,6 +17,7 @@ from songmaker_cli.api_models import (
     StatusResponse,
     UserRateLimitsResponse,
 )
+from songmaker_cli.api_models.settings import DefaultConfigRequest, DefaultConfigResponse
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.config import (
     get_builtin_defaults,
@@ -37,6 +38,7 @@ from songmaker_cli.db.queries.settings import (
     delete_preset,
     get_preset,
     list_presets,
+    list_shared_presets,
     name_exists,
     set_default_preset,
     update_preset,
@@ -77,8 +79,9 @@ def api_list_presets(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> list[PresetResponse]:
-    presets = list_presets(session, user.id)
-    return [PresetResponse.from_orm(p) for p in presets]
+    own = list_presets(session, user.id)
+    shared = list_shared_presets(session)
+    return [PresetResponse.from_orm(p) for p in [*own, *shared]]
 
 
 @router.post("/settings/presets")
@@ -152,6 +155,47 @@ def api_set_default_preset(
     set_default_preset(session, preset)
     session.commit()
     return PresetResponse.from_orm(preset)
+
+
+# ── Default generation config ──────────────────────────────────────
+
+
+VALID_BUILTIN_CONFIGS = frozenset({"sft", "turbo"})
+
+
+@router.get("/settings/default-config")
+def api_get_default_config(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> DefaultConfigResponse:
+    from songmaker_cli.db.models import User
+    db_user = session.query(User).filter_by(id=user.id).first()
+    return DefaultConfigResponse(config=db_user.default_generation_config if db_user else None)
+
+
+@router.put("/settings/default-config")
+def api_set_default_config(
+    req: DefaultConfigRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> DefaultConfigResponse:
+    from songmaker_cli.db.models import User
+    if req.config is not None and req.config not in VALID_BUILTIN_CONFIGS:
+        preset = get_preset(session, req.config, user.id)
+        if not preset:
+            from songmaker_cli.db.queries.settings import list_shared_presets as _shared
+            shared_ids = {p.id for p in _shared(session)}
+            if req.config not in shared_ids:
+                raise HTTPException(
+                    400, "Invalid config: must be null, 'sft', 'turbo', or a preset ID",
+                )
+    db_user = session.query(User).filter_by(id=user.id).first()
+    if not db_user:
+        raise HTTPException(404, "User not found")
+    db_user.default_generation_config = req.config
+    record_audit(session, user.id, "update", "default_config", detail=req.config or "inherit")
+    session.commit()
+    return DefaultConfigResponse(config=req.config)
 
 
 # ── Rate limits ────────────────────────────────────────────────────

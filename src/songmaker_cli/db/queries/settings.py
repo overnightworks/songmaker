@@ -19,6 +19,18 @@ def list_presets(session: Session, user_id: str) -> list[GenerationPreset]:
     )
 
 
+def list_shared_presets(session: Session) -> list[GenerationPreset]:
+    return (
+        session.query(GenerationPreset)
+        .filter(
+            GenerationPreset.created_by.is_(None),
+            GenerationPreset.name != GLOBAL_DEFAULTS_PRESET_NAME,
+        )
+        .order_by(GenerationPreset.model_mode, GenerationPreset.name)
+        .all()
+    )
+
+
 def get_preset(session: Session, preset_id: str, user_id: str) -> GenerationPreset | None:
     return (
         session.query(GenerationPreset)

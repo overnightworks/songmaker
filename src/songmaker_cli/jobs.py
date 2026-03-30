@@ -12,6 +12,7 @@ from acestep_engine import AceStepClient
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.api_models import StoredGenerationParams
 from songmaker_cli.config import build_ace_config, load_generation_defaults
+from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries import (
     create_generation,
     get_default_preset,
@@ -112,10 +113,22 @@ def _load_preset_params(
 ) -> dict | None:
     if not user_id:
         return None
-    from songmaker_cli.config import resolve_model_mode
-    model_mode = resolve_model_mode(model_name)
+    from songmaker_cli.config import get_builtin_defaults, resolve_model_mode
+    from songmaker_cli.db.models import User
+
     with db_factory() as session:
-        preset = get_default_preset(session, user_id, model_mode)
+        user = session.query(User).filter_by(id=user_id).first()
+        if not user or not user.default_generation_config:
+            model_mode = resolve_model_mode(model_name)
+            preset = get_default_preset(session, user_id, model_mode)
+            return dict(preset.params) if preset else None
+
+        config = user.default_generation_config
+        builtins = get_builtin_defaults()
+        if config in builtins:
+            return dict(builtins[config])
+
+        preset = session.query(GenerationPreset).filter_by(id=config).first()
         return dict(preset.params) if preset else None
 
 
