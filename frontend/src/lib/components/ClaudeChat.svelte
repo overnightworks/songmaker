@@ -2,7 +2,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { claudeApiKey } from '$lib/stores/settings';
 	import { chatWithClaude, updateSong, ApiError } from '$lib/api/client';
-	import { trimChatHistory } from '$lib/utils/chat';
+	import { pruneOldChatKeys, trimChatHistory } from '$lib/utils/chat';
 	import { songList } from '$lib/stores/player';
 	import { addToast } from '$lib/stores/toast';
 	import type { SongItem } from '$lib/api/types';
@@ -108,6 +108,7 @@
 			applyData
 		}));
 		localStorage.setItem(storageKey(), JSON.stringify(toSave));
+		pruneOldChatKeys();
 	}
 
 	function formatSongContext(s: SongItem): string {
