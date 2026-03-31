@@ -19,7 +19,9 @@
 		shareGeneration,
 		unshareGeneration,
 		deleteGeneration,
-		rateGeneration
+		rateGeneration,
+		keepGeneration,
+		unkeepGeneration
 	} from '$lib/api/client';
 	import { activeJobs, trackJob, removeJob } from '$lib/stores/jobs';
 	import {
@@ -199,6 +201,21 @@
 			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Pick failed', 'error');
+		}
+	}
+
+	async function onKeep(genId: string, kept: boolean): Promise<void> {
+		if (!song) return;
+		try {
+			if (kept) {
+				await keepGeneration(genId);
+			} else {
+				await unkeepGeneration(genId);
+			}
+			const updated = await fetchSong(song.id);
+			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Keep failed', 'error');
 		}
 	}
 
@@ -598,6 +615,7 @@
 								onversionclick={onVersionClick}
 								onscore={onScore}
 								onpick={onPick}
+								onkeep={onKeep}
 								ondelete={onDeleteGeneration}
 								onshare={onGenShareEnable}
 								onunshare={onGenShareDisable}

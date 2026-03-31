@@ -12,6 +12,7 @@
 		onversionclick?: (versionId: string) => void;
 		onscore?: (genId: string) => void;
 		onpick?: (genId: string, picked: boolean) => void;
+		onkeep?: (genId: string, kept: boolean) => void;
 		ondelete?: (genId: string) => void;
 		onshare?: (genId: string) => Promise<ShareResult>;
 		onunshare?: (genId: string) => Promise<void>;
@@ -25,6 +26,7 @@
 		onversionclick,
 		onscore,
 		onpick,
+		onkeep,
 		ondelete,
 		onshare,
 		onunshare,
@@ -137,6 +139,18 @@
 				</button>
 			{:else if generation.is_picked}
 				<span class="picked-badge">★ Album Pick</span>
+			{/if}
+			{#if onkeep}
+				<button
+					class="keep-btn"
+					class:kept={generation.is_kept}
+					onclick={() => onkeep(generation.id, !generation.is_kept)}
+					aria-label={generation.is_kept ? 'Remove from kept' : 'Keep this generation'}
+				>
+					{generation.is_kept ? '♥ Kept' : '♡ Keep'}
+				</button>
+			{:else if generation.is_kept}
+				<span class="kept-badge">♥ Kept</span>
 			{/if}
 		</div>
 		<div class="gen-meta">
@@ -354,6 +368,37 @@
 		color: var(--accent);
 		font-family: var(--font-display);
 		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
+	}
+
+	.keep-btn {
+		padding: var(--btn-padding-sm);
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		color: var(--text-dim);
+		font-size: 11px;
+		font-family: var(--font-display);
+		cursor: pointer;
+		letter-spacing: var(--btn-letter-spacing);
+	}
+
+	.keep-btn:hover {
+		border-color: var(--score-ok);
+		color: var(--score-ok);
+	}
+
+	.keep-btn.kept {
+		border-color: var(--score-ok);
+		background: rgba(0, 200, 100, 0.1);
+		color: var(--score-ok);
+		box-shadow: 0 0 8px rgba(0, 200, 100, 0.15);
+	}
+
+	.kept-badge {
+		font-size: 11px;
+		color: var(--score-ok);
+		font-family: var(--font-display);
+		text-shadow: 0 0 6px rgba(0, 200, 100, 0.4);
 	}
 
 	.gen-heading {
