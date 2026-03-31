@@ -1,31 +1,40 @@
 <script lang="ts">
 	interface MenuItem {
 		label: string;
+		confirmLabel?: string;
 		onclick: () => void;
 		destructive?: boolean;
 	}
 
 	interface Props {
 		items: MenuItem[];
-		onclose?: () => void;
 	}
 
-	let { items, onclose }: Props = $props();
+	let { items }: Props = $props();
 	let open = $state(false);
 	let menuRef = $state<HTMLDivElement | null>(null);
+	let confirming = $state<string | null>(null);
 
 	function toggle(): void {
-		open = !open;
+		if (open) {
+			close();
+		} else {
+			open = true;
+		}
 	}
 
 	function handleClick(item: MenuItem): void {
+		if (item.confirmLabel && confirming !== item.label) {
+			confirming = item.label;
+			return;
+		}
 		close();
 		item.onclick();
 	}
 
 	function close(): void {
 		open = false;
-		onclose?.();
+		confirming = null;
 	}
 
 	function handleClickOutside(event: MouseEvent): void {
@@ -50,12 +59,13 @@
 		{#if open}
 			<div class="overflow-dropdown">
 				{#each items as item (item.label)}
+					{@const isConfirming = confirming === item.label}
 					<button
 						class="overflow-item"
-						class:destructive={item.destructive}
+						class:destructive={item.destructive || isConfirming}
 						onclick={() => handleClick(item)}
 					>
-						{item.label}
+						{isConfirming && item.confirmLabel ? item.confirmLabel : item.label}
 					</button>
 				{/each}
 			</div>

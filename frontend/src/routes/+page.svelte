@@ -106,10 +106,6 @@
 			: []
 	);
 
-	let confirmAlbumCleanup = $state(false);
-	let confirmAlbumDelete = $state(false);
-	let confirmSongDelete = $state(false);
-
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
 	const isGenerating = $derived(
 		songJobs.some(
@@ -243,7 +239,6 @@
 		if (!selectedAlbum) return;
 		try {
 			const result = await cleanupAlbum(selectedAlbum.id);
-			confirmAlbumCleanup = false;
 			const refreshed = await fetchSongs();
 			songList.set(refreshed.items);
 			addToast(`Deleted ${result.deleted} generation${result.deleted !== 1 ? 's' : ''}`, 'success');
@@ -258,7 +253,6 @@
 			await deleteAlbum(selectedAlbum.id);
 			albumList.update((list) => list.filter((a) => a.id !== selectedAlbum.id));
 			songList.update((list) => list.filter((s) => s.album_id !== selectedAlbum.id));
-			confirmAlbumDelete = false;
 			addToast('Album deleted', 'success');
 		} catch {
 			addToast('Delete failed', 'error');
@@ -297,7 +291,6 @@
 			await deleteSong(songId);
 			songList.update((list) => list.filter((s) => s.id !== songId));
 			backToAlbum();
-			confirmSongDelete = false;
 			addToast('Song deleted', 'success');
 		} catch {
 			addToast('Delete failed', 'error');
@@ -388,18 +381,12 @@
 						<OverflowMenu
 							items={[
 								{
-									label: confirmSongDelete ? 'Confirm Delete' : 'Delete Song',
+									label: 'Delete Song',
+									confirmLabel: 'Confirm Delete',
 									destructive: true,
-									onclick: () => {
-										if (confirmSongDelete) {
-											onDeleteSong();
-										} else {
-											confirmSongDelete = true;
-										}
-									}
+									onclick: onDeleteSong
 								}
 							]}
-							onclose={() => (confirmSongDelete = false)}
 						/>
 						{#each songJobs as j (j.job.id)}
 							{#if j.job.status === 'failed'}
@@ -434,6 +421,20 @@
 						{/if}
 					</div>
 				</div>
+
+				{#if song.is_shared && song.share_slug}
+					<button
+						class="share-link"
+						onclick={() => {
+							const url = `${window.location.origin}/share/song/${song.share_slug}`;
+							navigator.clipboard.writeText(url);
+							addToast('Link copied', 'success');
+						}}
+						title="Click to copy share link"
+					>
+						{window.location.origin}/share/song/{song.share_slug}
+					</button>
+				{/if}
 
 				<div class="tab-bar">
 					<button
@@ -525,40 +526,33 @@
 						<OverflowMenu
 							items={[
 								{
-									label: confirmAlbumCleanup ? 'Confirm Clean Up' : 'Clean Up Generations',
-									destructive: confirmAlbumCleanup,
-									onclick: () => {
-										if (confirmAlbumCleanup) {
-											onAlbumCleanup();
-										} else {
-											confirmAlbumCleanup = true;
-										}
-									}
+									label: 'Clean Up Generations',
+									confirmLabel: 'Confirm Clean Up',
+									onclick: onAlbumCleanup
 								},
 								{
-									label: confirmAlbumDelete ? 'Confirm Delete' : 'Delete Album',
+									label: 'Delete Album',
+									confirmLabel: 'Confirm Delete',
 									destructive: true,
-									onclick: () => {
-										if (confirmAlbumDelete) {
-											onAlbumDelete();
-										} else {
-											confirmAlbumDelete = true;
-										}
-									}
+									onclick: onAlbumDelete
 								}
 							]}
-							onclose={() => {
-								confirmAlbumCleanup = false;
-								confirmAlbumDelete = false;
-							}}
 						/>
 					</div>
 				</div>
 
 				{#if selectedAlbum.is_shared && selectedAlbum.share_slug}
-					<p class="share-info">
-						Shared at <code>/share/{selectedAlbum.share_slug}</code>
-					</p>
+					<button
+						class="share-link"
+						onclick={() => {
+							const url = `${window.location.origin}/share/${selectedAlbum.share_slug}`;
+							navigator.clipboard.writeText(url);
+							addToast('Link copied', 'success');
+						}}
+						title="Click to copy share link"
+					>
+						{window.location.origin}/share/{selectedAlbum.share_slug}
+					</button>
 				{/if}
 
 				<div class="album-song-list">
@@ -986,16 +980,6 @@
 		font-size: 11px;
 		color: var(--text-dim);
 		flex-shrink: 0;
-	}
-
-	.share-info {
-		font-size: 13px;
-		color: var(--text-muted);
-	}
-
-	.share-info code {
-		font-size: 12px;
-		color: var(--accent);
 	}
 
 	.empty-tab {

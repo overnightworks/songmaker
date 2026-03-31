@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { GenerationItem, ShareResult } from '$lib/api/types';
 	import { scoreColor } from '$lib/utils/scores';
+	import { addToast } from '$lib/stores/toast';
 	import OverflowMenu from './OverflowMenu.svelte';
 	import ShareButton from './ShareButton.svelte';
 
@@ -25,8 +26,6 @@
 		onshare,
 		onunshare
 	}: Props = $props();
-
-	let confirmDelete = $state(false);
 
 	const scores = $derived(generation.scores);
 	const params = $derived(generation.generation_params);
@@ -148,23 +147,31 @@
 					...(ondelete
 						? [
 								{
-									label: confirmDelete ? 'Confirm Delete' : 'Delete Generation',
+									label: 'Delete Generation',
+									confirmLabel: 'Confirm Delete',
 									destructive: true,
-									onclick: () => {
-										if (confirmDelete) {
-											ondelete(generation.id);
-										} else {
-											confirmDelete = true;
-										}
-									}
+									onclick: () => ondelete(generation.id)
 								}
 							]
 						: [])
 				]}
-				onclose={() => (confirmDelete = false)}
 			/>
 		</div>
 	</div>
+
+	{#if generation.is_shared && generation.share_slug}
+		<button
+			class="share-link"
+			onclick={() => {
+				const url = `${window.location.origin}/share/gen/${generation.share_slug}`;
+				navigator.clipboard.writeText(url);
+				addToast('Link copied', 'success');
+			}}
+			title="Click to copy share link"
+		>
+			{window.location.origin}/share/gen/{generation.share_slug}
+		</button>
+	{/if}
 
 	<section class="section">
 		<div class="section-header">
