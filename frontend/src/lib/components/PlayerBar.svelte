@@ -57,12 +57,16 @@
 
 	const viz = new AudioVisualizer();
 
+	let connectedMedia: HTMLMediaElement | undefined;
+
 	function connectAnalyser(): void {
-		if (!wavesurfer || audioCtx) return;
+		if (!wavesurfer) return;
+		const media = wavesurfer.getMediaElement();
+		if (!media || media === connectedMedia) return;
 		try {
-			const media = wavesurfer.getMediaElement();
-			if (!media) return;
-			audioCtx = new AudioContext();
+			if (!audioCtx) {
+				audioCtx = new AudioContext();
+			}
 			analyser = audioCtx.createAnalyser();
 			analyser.fftSize = FFT_SIZE;
 			analyser.smoothingTimeConstant = 0.82;
@@ -71,8 +75,9 @@
 			analyser.connect(audioCtx.destination);
 			frequencyData = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
 			waveformData = new Uint8Array(analyser.fftSize) as Uint8Array<ArrayBuffer>;
-		} catch {
-			/* Already connected */
+			connectedMedia = media;
+		} catch (e) {
+			console.warn('Audio visualizer unavailable:', e);
 		}
 	}
 
