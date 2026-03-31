@@ -42,7 +42,7 @@
 		selectSong,
 		initNavigation
 	} from '$lib/stores/navigation';
-	import { playAlbum } from '$lib/stores/player';
+	import { playAlbum, playPlaylistEntries } from '$lib/stores/player';
 	import {
 		selectedPlaylistDetail,
 		loadPlaylists,
@@ -75,14 +75,26 @@
 	import GenerationsList from '$lib/components/GenerationsList.svelte';
 	import SongEditor from '$lib/components/SongEditor.svelte';
 	import OverflowMenu from '$lib/components/OverflowMenu.svelte';
+	import PlaylistPicker from '$lib/components/PlaylistPicker.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import { addToast } from '$lib/stores/toast';
+	import {
+		addGenerationToPlaylist,
+		addSongToPlaylist,
+		addAlbumToPlaylist
+	} from '$lib/stores/playlists';
 
 	let loading = $state(true);
 	let loadError = $state(false);
 	let showCreate = $state(false);
 	let genCount = $state(1);
+	let playlistPickerFor = $state<
+		| { type: 'song'; id: string }
+		| { type: 'album'; id: string }
+		| { type: 'generation'; id: string }
+		| null
+	>(null);
 
 	const song = $derived($selectedSong);
 	const activeGen = $derived($selectedGeneration);
@@ -377,6 +389,24 @@
 		}
 	}
 
+	async function onAddToPlaylist(playlistId: string): Promise<void> {
+		if (!playlistPickerFor) return;
+		try {
+			if (playlistPickerFor.type === 'generation') {
+				await addGenerationToPlaylist(playlistId, playlistPickerFor.id);
+			} else if (playlistPickerFor.type === 'song') {
+				await addSongToPlaylist(playlistId, playlistPickerFor.id);
+			} else if (playlistPickerFor.type === 'album') {
+				await addAlbumToPlaylist(playlistId, playlistPickerFor.id);
+			}
+			addToast('Added to playlist', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Failed to add', 'error');
+		} finally {
+			playlistPickerFor = null;
+		}
+	}
+
 	async function onRemovePlaylistEntry(entryId: string): Promise<void> {
 		if (!playlistDetail) return;
 		try {
@@ -464,16 +494,28 @@
 							onshare={onSongShareEnable}
 							onunshare={onSongShareDisable}
 						/>
-						<OverflowMenu
-							items={[
-								{
-									label: 'Delete Song',
-									confirmLabel: 'Confirm Delete',
-									destructive: true,
-									onclick: onDeleteSong
-								}
-							]}
-						/>
+						<div class="picker-anchor">
+							<OverflowMenu
+								items={[
+									{
+										label: 'Add to Playlist',
+										onclick: () => (playlistPickerFor = { type: 'song', id: song.id })
+									},
+									{
+										label: 'Delete Song',
+										confirmLabel: 'Confirm Delete',
+										destructive: true,
+										onclick: onDeleteSong
+									}
+								]}
+							/>
+							{#if playlistPickerFor?.type === 'song' && playlistPickerFor.id === song.id}
+								<PlaylistPicker
+									onselect={onAddToPlaylist}
+									onclose={() => (playlistPickerFor = null)}
+								/>
+							{/if}
+						</div>
 						{#each songJobs as j (j.job.id)}
 							{#if j.job.status === 'failed'}
 								<span class="job-indicator failed">
@@ -550,17 +592,27 @@
 							<button class="back-btn" onclick={clearGenerationSelection}>
 								<span class="back-arrow">←</span> All generations
 							</button>
-							<GenerationDetail
-								generation={activeGen}
-								scoring={genScoring}
-								onversionclick={onVersionClick}
-								onscore={onScore}
-								onpick={onPick}
-								ondelete={onDeleteGeneration}
-								onshare={onGenShareEnable}
-								onunshare={onGenShareDisable}
-								onrate={onRate}
-							/>
+							<div class="picker-anchor">
+								<GenerationDetail
+									generation={activeGen}
+									scoring={genScoring}
+									onversionclick={onVersionClick}
+									onscore={onScore}
+									onpick={onPick}
+									ondelete={onDeleteGeneration}
+									onshare={onGenShareEnable}
+									onunshare={onGenShareDisable}
+									onrate={onRate}
+									onaddtoplaylist={(genId) =>
+										(playlistPickerFor = { type: 'generation', id: genId })}
+								/>
+								{#if playlistPickerFor?.type === 'generation'}
+									<PlaylistPicker
+										onselect={onAddToPlaylist}
+										onclose={() => (playlistPickerFor = null)}
+									/>
+								{/if}
+							</div>
 						</div>
 					{:else}
 						<GenerationsList
@@ -610,21 +662,33 @@
 							onshare={onAlbumShareEnable}
 							onunshare={onAlbumShareDisable}
 						/>
-						<OverflowMenu
-							items={[
-								{
-									label: 'Clean Up Generations',
-									confirmLabel: 'Confirm Clean Up',
-									onclick: onAlbumCleanup
-								},
-								{
-									label: 'Delete Album',
-									confirmLabel: 'Confirm Delete',
-									destructive: true,
-									onclick: onAlbumDelete
-								}
-							]}
-						/>
+						<div class="picker-anchor">
+							<OverflowMenu
+								items={[
+									{
+										label: 'Add to Playlist',
+										onclick: () => (playlistPickerFor = { type: 'album', id: selectedAlbum.id })
+									},
+									{
+										label: 'Clean Up Generations',
+										confirmLabel: 'Confirm Clean Up',
+										onclick: onAlbumCleanup
+									},
+									{
+										label: 'Delete Album',
+										confirmLabel: 'Confirm Delete',
+										destructive: true,
+										onclick: onAlbumDelete
+									}
+								]}
+							/>
+							{#if playlistPickerFor?.type === 'album' && playlistPickerFor.id === selectedAlbum.id}
+								<PlaylistPicker
+									onselect={onAddToPlaylist}
+									onclose={() => (playlistPickerFor = null)}
+								/>
+							{/if}
+						</div>
 					</div>
 				</div>
 
@@ -670,6 +734,14 @@
 						</span>
 					</div>
 					<div class="detail-actions">
+						{#if playlistDetail.entries.length > 0}
+							<button
+								class="generate-btn"
+								onclick={() => playPlaylistEntries(playlistDetail.entries)}
+							>
+								Play
+							</button>
+						{/if}
 						<ShareButton
 							isShared={playlistDetail.is_shared}
 							shareSlug={playlistDetail.share_slug}
@@ -1152,6 +1224,10 @@
 		font-size: 11px;
 		color: var(--text-dim);
 		flex-shrink: 0;
+	}
+
+	.picker-anchor {
+		position: relative;
 	}
 
 	.playlist-entry-row {

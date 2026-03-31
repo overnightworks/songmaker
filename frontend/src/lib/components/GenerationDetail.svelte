@@ -15,6 +15,7 @@
 		onshare?: (genId: string) => Promise<ShareResult>;
 		onunshare?: (genId: string) => Promise<void>;
 		onrate?: (genId: string, rating: number, notes: string) => Promise<void>;
+		onaddtoplaylist?: (genId: string) => void;
 	}
 
 	let {
@@ -26,7 +27,8 @@
 		ondelete,
 		onshare,
 		onunshare,
-		onrate
+		onrate,
+		onaddtoplaylist
 	}: Props = $props();
 
 	let ratingValue = $state(50);
@@ -161,6 +163,14 @@
 			{/if}
 			<OverflowMenu
 				items={[
+					...(onaddtoplaylist
+						? [
+								{
+									label: 'Add to Playlist',
+									onclick: () => onaddtoplaylist(generation.id)
+								}
+							]
+						: []),
 					...(onscore
 						? [
 								{
