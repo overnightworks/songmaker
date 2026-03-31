@@ -7,7 +7,7 @@ import {
 } from '$lib/api/client';
 import { songList } from '$lib/stores/player';
 import type { SongItem, VersionGenerationParams, VersionItem } from '$lib/api/types';
-import type { ApplyData } from '$lib/components/ClaudeChat.svelte';
+import type { ApplyData } from '$lib/utils/chat-context';
 
 // --- Editable fields ---
 export const editLyrics = writable('');

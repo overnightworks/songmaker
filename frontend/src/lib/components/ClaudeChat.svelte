@@ -3,6 +3,14 @@
 	import { claudeApiKey } from '$lib/stores/settings';
 	import { chatWithClaude, updateSong, ApiError } from '$lib/api/client';
 	import { pruneOldChatKeys, trimChatHistory } from '$lib/utils/chat';
+	import {
+		buildFullContext,
+		buildConversation,
+		extractApplyData,
+		cleanDisplayText,
+		isCurrentSong,
+		type ApplyData
+	} from '$lib/utils/chat-context';
 	import { songList } from '$lib/stores/player';
 	import { addToast } from '$lib/stores/toast';
 	import type { SongItem } from '$lib/api/types';
@@ -13,16 +21,6 @@
 		allSongs?: SongItem[];
 		currentAlbumId?: string;
 		onapply?: (data: ApplyData) => void;
-	}
-
-	export interface ApplyData {
-		song?: string;
-		songId?: string;
-		lyrics?: string;
-		prompt?: string;
-		bpm?: number;
-		duration?: number;
-		key?: string;
 	}
 
 	type ContextScope = 'song' | 'album';
@@ -111,91 +109,6 @@
 		pruneOldChatKeys();
 	}
 
-	function formatSongContext(s: SongItem): string {
-		const parts = [`[Track ${s.track_number}] ${s.title}`];
-		if (s.prompt) parts.push(`Style: ${s.prompt}`);
-		const meta: string[] = [];
-		if (s.key) meta.push(`Key: ${s.key}`);
-		if (s.bpm) meta.push(`BPM: ${s.bpm}`);
-		if (s.duration) meta.push(`Duration: ${s.duration}s`);
-		if (meta.length) parts.push(meta.join(' | '));
-		if (s.lyrics) parts.push(`Lyrics:\n${s.lyrics}`);
-		return parts.join('\n');
-	}
-
-	function buildFullContext(): string {
-		const parts: string[] = [];
-
-		if (songContext) {
-			parts.push(`[Current Song]\n${songContext}`);
-		}
-
-		const extraSongs: SongItem[] = [];
-
-		if (contextScope === 'album' && currentAlbumId) {
-			const albumSongs = allSongs
-				.filter((s) => s.album_id === currentAlbumId && s.id !== songId)
-				.sort((a, b) => a.track_number - b.track_number);
-			extraSongs.push(...albumSongs);
-		}
-
-		for (const id of mentionedSongIds) {
-			if (!extraSongs.some((s) => s.id === id)) {
-				const s = allSongs.find((s) => s.id === id);
-				if (s) extraSongs.push(s);
-			}
-		}
-
-		if (extraSongs.length > 0) {
-			parts.push('--- Other songs ---\n\n' + extraSongs.map(formatSongContext).join('\n\n'));
-		}
-
-		return parts.join('\n\n');
-	}
-
-	function buildConversation(newMessage: string): string {
-		const parts: string[] = [];
-		for (const msg of messages) {
-			const prefix = msg.role === 'user' ? 'User' : 'Assistant';
-			parts.push(`${prefix}: ${cleanDisplayText(msg.text)}`);
-		}
-		parts.push(`User: ${newMessage}`);
-		return parts.join('\n\n');
-	}
-
-	function extractApplyData(text: string): ApplyData | undefined {
-		const match = text.match(/```songmaker\s*\n([\s\S]*?)```/);
-		if (!match) return undefined;
-		try {
-			const raw = JSON.parse(match[1].trim());
-			const data: ApplyData = {};
-			if (typeof raw.lyrics === 'string' && raw.lyrics.length <= 50_000) data.lyrics = raw.lyrics;
-			if (typeof raw.prompt === 'string' && raw.prompt.length <= 5_000) data.prompt = raw.prompt;
-			if (typeof raw.key === 'string' && raw.key.length <= 10) data.key = raw.key;
-			if (typeof raw.bpm === 'number' && raw.bpm >= 0 && raw.bpm <= 999) data.bpm = raw.bpm;
-			if (typeof raw.duration === 'number' && raw.duration >= 1 && raw.duration <= 600)
-				data.duration = raw.duration;
-			if (typeof raw.song === 'string') {
-				data.song = raw.song;
-				const q = raw.song.toLowerCase();
-				const albumMatch = currentAlbumId
-					? allSongs.find((s) => s.title.toLowerCase() === q && s.album_id === currentAlbumId)
-					: undefined;
-				const target = albumMatch ?? allSongs.find((s) => s.title.toLowerCase() === q);
-				if (target) data.songId = target.id;
-			}
-			return Object.keys(data).filter((k) => k !== 'song' && k !== 'songId').length > 0
-				? data
-				: undefined;
-		} catch {
-			return undefined;
-		}
-	}
-
-	function isCurrentSong(data: ApplyData): boolean {
-		return !data.songId || data.songId === songId;
-	}
-
 	async function applyCrossSong(data: ApplyData): Promise<void> {
 		if (!data.songId || !data.song) return;
 		try {
@@ -213,10 +126,6 @@
 		}
 	}
 
-	function cleanDisplayText(text: string): string {
-		return text.replace(/```songmaker\s*\n[\s\S]*?```/, '').trim();
-	}
-
 	async function send(): Promise<void> {
 		const msg = input.trim();
 		if (!msg || loading) return;
@@ -229,10 +138,17 @@
 
 		try {
 			let responseText: string | undefined;
-			const ctx = buildFullContext();
+			const ctx = buildFullContext(
+				songContext,
+				songId,
+				contextScope,
+				currentAlbumId,
+				allSongs,
+				mentionedSongIds
+			);
 
 			for (let attempt = 0; attempt < 3; attempt++) {
-				const conversation = buildConversation(msg);
+				const conversation = buildConversation(messages, msg);
 				try {
 					responseText = await chatWithClaude(conversation, ctx);
 					break;
@@ -249,10 +165,10 @@
 
 			if (!responseText) throw new Error('Chat failed after trimming history');
 
-			const applyData = extractApplyData(responseText);
+			const applyData = extractApplyData(responseText, currentAlbumId, allSongs);
 			const newMsg: Message = { role: 'assistant', text: responseText, applyData };
 
-			if (applyData && isCurrentSong(applyData) && onapply) {
+			if (applyData && isCurrentSong(applyData, songId) && onapply) {
 				onapply(applyData);
 				newMsg.applied = true;
 			}
@@ -270,7 +186,7 @@
 	async function applyMessage(index: number): Promise<void> {
 		const msg = messages[index];
 		if (!msg?.applyData) return;
-		if (isCurrentSong(msg.applyData)) {
+		if (isCurrentSong(msg.applyData, songId)) {
 			if (onapply) onapply(msg.applyData);
 		} else {
 			await applyCrossSong(msg.applyData);
@@ -420,7 +336,7 @@
 							>
 						{:else}
 							<button class="apply-btn" onclick={() => applyMessage(i)}>
-								{#if msg.applyData.song && !isCurrentSong(msg.applyData)}
+								{#if msg.applyData.song && !isCurrentSong(msg.applyData, songId)}
 									Apply to {msg.applyData.song}
 								{:else}
 									Apply to editor
