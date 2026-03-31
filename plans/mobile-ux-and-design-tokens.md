@@ -4,87 +4,116 @@
 
 ## Phase 2: Mobile List Density ✅ DONE
 
-## Phase 3: Simplify Navigation — Actions and Gens Out of Sidebar
+## Phase 3: Unified Detail Panel — Album / Song / Generation
 
-**Principle:** The sidebar is for navigating (Album → Song). Actions and
-generation browsing live in the detail panel.
+**Principle:** The sidebar is purely for navigation. The detail panel shows
+context and actions for whatever is selected. Every level (album, song,
+generation) follows the same pattern: header + tabs.
 
-### What changes
+### Navigation model
 
-**Sidebar becomes a clean two-level tree:**
 ```
-▸ AAA                    2
-    Bbb                  2 gens
-    Ccc                  1 gen
-▸ APOLOGIEZ              2
-    Sunny Side Up        1 gen
+Sidebar (tree)              Detail panel (tabs)
+─────────────               ────────────────────
+▸ AAA            2          Album: AAA
+  Bbb        2 gens        Artist · 5 songs · 12 gens
+  Ccc        1 gen         [Songs]  [Share]  [Manage]
+▸ APOLOGIEZ      2
 ```
 
-No buttons, no gen rows, no version labels, no expand toggles for gens.
+- Click album in sidebar → album detail (Songs tab)
+- Click song in sidebar OR in album's Songs tab → song detail (Generations tab)
+- Click generation in Generations tab → generation detail
+- ← back button goes up one level
 
-**Detail panel gains:**
-- Album overview (when album selected, no song open): title, stats, Share/Clean Up/Delete
-- Song view (when song selected): editor + GenerationsList (already exists)
-- Gen detail (when gen selected from GenerationsList): existing GenerationDetail + delete button
+### 3a. Album detail view
 
-### 3a. Strip sidebar to Album → Song only
+When an album is selected but no song is open, the detail panel shows:
 
-**SongNode.svelte:**
-- Remove gen-list, version labels, gen rows, expand toggle, gen play button
-- Remove gen delete confirm, move button, show-all button
-- Keep: song title, gen count badge, click to select song
-- The component becomes much simpler — just a clickable row
+**Header:**
+```
+ALBUM TITLE                              [Play Album]
+Artist · N songs · M generations
+```
 
-**AlbumNode.svelte:**
-- Remove SHARE, CLEAN UP, DELETE buttons
-- Keep: album title, song count, expand/collapse chevron
+**Tabs:**
+- **Songs** (default): list of songs in this album — click one to drill into song detail
+- **Share**: sharing toggle, copy link button, share URL display
+- **Manage**: Clean Up (delete unpicked), Delete Album — with confirmation steps
 
-### 3b. Album overview in detail panel
+### 3b. Song detail view (existing — minimal changes)
 
-**+page.svelte:**
-- When `selectedAlbumId && !selectedSongId` → show album overview
-- Content: album title, artist, song count, gen count
-- Actions: Share, Clean Up, Delete Album (moved from AlbumNode)
-- Reuse existing API calls / handlers
+Already works:
+```
+SONG TITLE                    [Save] / [Generate ×N]
+Album · Artist
+[Generations]  [Edit]  [Co-Writer]
+```
 
-### 3c. Generation delete in detail view
+**Changes:**
+- Add ← back button that returns to album detail (currently goes to empty state)
+- Future: add Share tab when song sharing is implemented
 
-**GenerationDetail.svelte:**
-- Add delete button at the bottom (destructive action, separated from pick/score)
-- Confirmation step before delete
-- On confirm: call API, update songList store, close detail
+### 3c. Generation detail view (existing — minimal changes)
 
-### 3d. SongNode click behavior
+Already works:
+```
+← All generations
+Generation 2  seed:4114085939
+[Pick]  [Score]  [Delete]
+```
 
-Currently clicking a song expands it to show gens. New behavior:
-- Clicking a song selects it → detail panel shows song editor + GenerationsList
-- No expand/collapse in sidebar — the song row is a flat link
-- GenerationsList in the detail panel handles gen browsing
+No changes needed. Already has back button to song's generation list.
 
-### Files to change
+### 3d. Sidebar
+
+Pure navigation tree, no buttons:
+```
+▸ ALBUM TITLE          N
+    Song One       M gens
+    Song Two       K gens
+```
+
+- Album row: click to select album + expand, chevron to toggle expand/collapse
+- Song row: click to select song (opens song detail)
+- No play buttons, no action buttons, no ⋯ menus
+
+### 3e. Files to change
 
 | File | Change |
 |---|---|
-| `SongNode.svelte` | Strip to flat song row (title + gen count) |
-| `AlbumNode.svelte` | Remove action buttons |
-| `+page.svelte` | Add album overview panel, adjust song selection flow |
-| `GenerationDetail.svelte` | Add delete button with confirmation |
+| `AlbumNode.svelte` | Add onselect callback, remove play button |
+| `SongList.svelte` | Pass onselect to AlbumNode |
+| `+page.svelte` | Album detail with tabs (Songs/Share/Manage), back navigation from song to album |
+| `navigation.ts` | Add selectAlbum function, back-to-album logic |
 
-### What NOT to change
+### 3f. What stays the same
 
-- GenerationsList.svelte — already shows gens in detail view, no changes needed
-- Player bar — prev/next gen buttons still cycle gens, unaffected
-- API layer — no changes
-- Settings pages — no changes
+- Song detail panel (Generations/Edit/Co-Writer tabs) — no changes
+- GenerationDetail — already has delete, pick, score
+- GenerationsList — already works in song detail
+- Player bar — prev/next buttons cycle gens, unaffected
+- API layer — no changes needed
+
+### 3g. Future extensibility
+
+This pattern scales cleanly:
+- Song sharing → add "Share" tab to song detail
+- Generation sharing → add share action to generation detail
+- Album settings (colors, metadata) → add tab to album detail
+- Same drill-down/back pattern at every level
 
 ## Phase 4: Mobile Layout (future, separate task)
 
 - Song editor: full-screen sheet on mobile
 - Claude Chat: full-screen overlay on mobile
+- Album detail tabs stack naturally on mobile (same as settings pages)
 
 ## Execution order
 
 1. ~~Phase 1~~ ✅
 2. ~~Phase 2~~ ✅
-3. Phase 3a (strip SongNode + AlbumNode) + 3b (album overview) + 3c (gen delete) — one pass
-4. Phase 4 — separate task
+3. Phase 3d (fix AlbumNode — onselect, remove play) — small
+4. Phase 3a (album detail with tabs) — main work
+5. Phase 3b (back button from song to album) — small
+6. Phase 4 — separate task
