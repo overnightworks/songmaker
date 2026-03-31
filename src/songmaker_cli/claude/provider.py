@@ -10,6 +10,7 @@ use this module. The backend is selected based on available credentials:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -159,6 +160,113 @@ def _call_cli(
         text = proc.stdout
 
     log.debug("Claude CLI response: %d chars", len(text))
+    return ClaudeResponse(text=text.strip())
+
+
+async def acall_claude(
+    prompt: str,
+    api_key: str | None = None,
+    system: str | None = None,
+    model: str = CLAUDE_CHAT_MODEL,
+    max_tokens: int = 1024,
+) -> ClaudeResponse:
+    if api_key:
+        log.info("Claude: using async API backend (model=%s)", model)
+        return await _acall_api(prompt, api_key, system, model, max_tokens)
+    log.info("Claude: using async CLI backend (model=%s)", model)
+    return await _acall_cli(prompt, system, model)
+
+
+async def _acall_api(
+    prompt: str,
+    api_key: str,
+    system: str | None,
+    model: str,
+    max_tokens: int,
+) -> ClaudeResponse:
+    try:
+        import anthropic
+    except ImportError:
+        raise UnavailableError(
+            "anthropic package not installed. Run: pip install anthropic"
+        )
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if system:
+        kwargs["system"] = [
+            {
+                "type": "text",
+                "text": system,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+
+    response = await client.messages.create(**kwargs)
+    text = response.content[0].text if response.content else ""
+    log.debug("Claude async API response: %d chars", len(text))
+    return ClaudeResponse(text=text)
+
+
+async def _acall_cli(
+    prompt: str, system: str | None = None, model: str = CLAUDE_CHAT_MODEL,
+) -> ClaudeResponse:
+    binary = _find_claude_binary()
+    if not binary:
+        raise UnavailableError(
+            "Claude CLI not found. Install Claude Code or provide an API key."
+        )
+
+    cmd = [
+        binary, "-p", prompt,
+        "--model", model,
+        "--output-format", "json",
+        "--disallowedTools", _DISALLOWED_TOOLS,
+    ]
+    if system:
+        cmd.extend(["--system-prompt", system])
+
+    env = os.environ.copy()
+    for secret_key in ("ANTHROPIC_API_KEY", "SESSION_SECRET", "DATABASE_URL", "REDIS_URL"):
+        env.pop(secret_key, None)
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=120,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise UnavailableError("Claude CLI timed out after 120s")
+    except FileNotFoundError:
+        raise UnavailableError("Claude CLI binary not found")
+
+    stdout = stdout_bytes.decode()
+    stderr = stderr_bytes.decode()
+
+    if proc.returncode != 0:
+        log.warning("Claude CLI failed (rc=%d): %s", proc.returncode, stderr[:500])
+        raise UnavailableError("Claude CLI is unavailable. Check server logs for details.")
+
+    try:
+        outer = json.loads(stdout)
+        text = outer.get("result", stdout)
+    except json.JSONDecodeError:
+        text = stdout
+
+    log.debug("Claude async CLI response: %d chars", len(text))
     return ClaudeResponse(text=text.strip())
 
 

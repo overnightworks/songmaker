@@ -14,6 +14,7 @@ from songmaker_cli.claude.provider import (
     _call_api,
     _call_cli,
     _find_claude_binary,
+    acall_claude,
     call_claude,
     is_available,
     parse_json_response,
@@ -36,6 +37,33 @@ def test_call_claude_routes_to_cli_without_key() -> None:
         result = call_claude("hello")
     mock.assert_called_once()
     assert result.text == "yo"
+
+
+# ── acall_claude routing ──────────────────────────────────────────
+
+
+def test_acall_claude_routes_to_api_with_key() -> None:
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    resp = ClaudeResponse(text="async hi")
+    mock = AsyncMock(return_value=resp)
+    with patch("songmaker_cli.claude.provider._acall_api", mock):
+        result = asyncio.run(acall_claude("hello", api_key="sk-test"))
+    mock.assert_called_once()
+    assert result.text == "async hi"
+
+
+def test_acall_claude_routes_to_cli_without_key() -> None:
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    resp = ClaudeResponse(text="async yo")
+    mock = AsyncMock(return_value=resp)
+    with patch("songmaker_cli.claude.provider._acall_cli", mock):
+        result = asyncio.run(acall_claude("hello"))
+    mock.assert_called_once()
+    assert result.text == "async yo"
 
 
 # ── is_available ────────────────────────────────────────────────────

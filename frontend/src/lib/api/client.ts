@@ -24,7 +24,7 @@ import type {
 } from './types';
 
 const API_TIMEOUT_MS = 30_000;
-const CHAT_TIMEOUT_MS = 90_000;
+const CHAT_TIMEOUT_MS = 120_000;
 
 export class ApiError extends Error {
 	constructor(
