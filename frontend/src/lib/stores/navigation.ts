@@ -8,6 +8,10 @@ import {
 	clearGenerationSelection as playerClearGeneration,
 	ensureGenerationsLoaded
 } from '$lib/stores/player';
+import {
+	deselectPlaylist as storeDeselectPlaylist,
+	selectPlaylist as storeSelectPlaylist
+} from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
@@ -29,6 +33,7 @@ function replaceSongUrl(songId: string | null): void {
 }
 
 export function selectAlbumOverview(albumId: string): void {
+	storeDeselectPlaylist();
 	playerSelectAlbum(albumId);
 	closeSidebar();
 }
@@ -44,11 +49,24 @@ export function backToAlbum(): void {
 }
 
 export function selectSong(songId: string): void {
+	storeDeselectPlaylist();
 	playerSelectSong(songId);
 	ensureGenerationsLoaded(songId);
 	detailTab.set('generations');
 	closeSidebar();
 	pushSongUrl(songId);
+}
+
+export function selectPlaylistView(playlistId: string): void {
+	playerSelectAlbum(null);
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
+	storeSelectPlaylist(playlistId);
+	closeSidebar();
+}
+
+export function deselectPlaylistView(): void {
+	storeDeselectPlaylist();
 }
 
 export function deselectSong(): void {

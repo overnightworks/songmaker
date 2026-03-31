@@ -65,6 +65,7 @@ function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		status: 'completed',
 		is_archived: false,
 		is_picked: false,
+		is_kept: false,
 		whisper_text: null,
 		scores: null,
 		generation_params: null,

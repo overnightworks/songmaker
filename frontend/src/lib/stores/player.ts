@@ -198,6 +198,46 @@ export async function playAlbum(albumId: string): Promise<void> {
 	}
 }
 
+export function playPlaylistEntries(
+	entries: Array<{
+		generation_id: string;
+		mp3_path: string;
+		song_title: string;
+		artist: string;
+		generation_number: number;
+		seed: number | null;
+	}>
+): void {
+	if (entries.length === 0) return;
+	const first = entries[0];
+	const fakeGen = {
+		id: first.generation_id,
+		song_id: '',
+		version_id: null,
+		version_number: null,
+		generation_number: first.generation_number,
+		mp3_path: first.mp3_path,
+		wav_path: null,
+		seed: first.seed,
+		status: 'completed',
+		is_archived: false,
+		is_picked: false,
+		is_kept: true,
+		is_shared: false,
+		whisper_text: null,
+		scores: null,
+		generation_params: null,
+		created_at: null
+	};
+	playback.set({
+		generation: fakeGen,
+		songId: '',
+		songTitle: first.song_title,
+		artist: first.artist,
+		autoplay: true
+	});
+}
+
 export function navigateToPlaying(): void {
 	const pb = get(playback);
 	if (!pb) return;

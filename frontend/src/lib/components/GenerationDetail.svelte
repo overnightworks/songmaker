@@ -14,6 +14,7 @@
 		ondelete?: (genId: string) => void;
 		onshare?: (genId: string) => Promise<ShareResult>;
 		onunshare?: (genId: string) => Promise<void>;
+		onrate?: (genId: string, rating: number, notes: string) => Promise<void>;
 	}
 
 	let {
@@ -24,8 +25,32 @@
 		onpick,
 		ondelete,
 		onshare,
-		onunshare
+		onunshare,
+		onrate
 	}: Props = $props();
+
+	let ratingValue = $state(50);
+	let ratingNotes = $state('');
+	let ratingSaving = $state(false);
+
+	const savedRating = $derived(generation.scores?.user_rating ?? 50);
+	const savedNotes = $derived(generation.scores?.user_notes ?? '');
+	let ratingDirty = $derived(ratingValue !== savedRating || ratingNotes !== savedNotes);
+
+	$effect(() => {
+		ratingValue = savedRating;
+		ratingNotes = savedNotes;
+	});
+
+	async function saveRating(): Promise<void> {
+		if (!onrate || ratingSaving) return;
+		ratingSaving = true;
+		try {
+			await onrate(generation.id, ratingValue, ratingNotes);
+		} finally {
+			ratingSaving = false;
+		}
+	}
 
 	const scores = $derived(generation.scores);
 	const params = $derived(generation.generation_params);
@@ -197,10 +222,31 @@
 			</div>
 		{/if}
 
-		{#if scores?.user_notes}
-			<div class="summary">
-				<span class="summary-label">Notes</span>
-				<p class="summary-text">{scores.user_notes}</p>
+		{#if onrate}
+			<div class="rating-section">
+				<div class="rating-row">
+					<span class="rating-label">Your Rating</span>
+					<input
+						type="range"
+						class="rating-slider"
+						min="0"
+						max="100"
+						step="1"
+						bind:value={ratingValue}
+					/>
+					<span class="rating-number">{ratingValue}</span>
+				</div>
+				<textarea
+					class="rating-notes"
+					placeholder="Notes (optional)"
+					bind:value={ratingNotes}
+					rows="2"
+				></textarea>
+				{#if ratingDirty}
+					<button class="rating-save" onclick={saveRating} disabled={ratingSaving}>
+						{ratingSaving ? 'Saving...' : 'Save Rating'}
+					</button>
+				{/if}
 			</div>
 		{/if}
 	</section>
@@ -405,6 +451,82 @@
 		font-size: 11px;
 		color: var(--text-dim);
 		font-style: italic;
+	}
+
+	.rating-section {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-top: 8px;
+		padding-top: 8px;
+		border-top: 1px solid var(--border);
+	}
+
+	.rating-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+
+	.rating-label {
+		font-size: 9px;
+		color: var(--text-dim);
+		text-transform: uppercase;
+		font-family: var(--font-display);
+		letter-spacing: 0.5px;
+		flex-shrink: 0;
+	}
+
+	.rating-slider {
+		flex: 1;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+
+	.rating-number {
+		font-size: 18px;
+		font-family: var(--font-display);
+		color: var(--text);
+		min-width: 32px;
+		text-align: right;
+	}
+
+	.rating-notes {
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text-muted);
+		font-size: 12px;
+		font-family: var(--font-body);
+		padding: 6px 8px;
+		resize: vertical;
+	}
+
+	.rating-notes:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
+
+	.rating-save {
+		align-self: flex-end;
+		padding: var(--btn-padding-sm);
+		border: 1px solid var(--accent);
+		border-radius: var(--btn-radius-sm);
+		background: rgba(160, 32, 240, 0.1);
+		color: var(--accent);
+		font-size: 11px;
+		font-family: var(--font-display);
+		letter-spacing: var(--btn-letter-spacing);
+		cursor: pointer;
+	}
+
+	.rating-save:hover:not(:disabled) {
+		background: rgba(160, 32, 240, 0.2);
+	}
+
+	.rating-save:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.summary {

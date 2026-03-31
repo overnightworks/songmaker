@@ -18,7 +18,8 @@
 		unshareSong,
 		shareGeneration,
 		unshareGeneration,
-		deleteGeneration
+		deleteGeneration,
+		rateGeneration
 	} from '$lib/api/client';
 	import { activeJobs, trackJob, removeJob } from '$lib/stores/jobs';
 	import {
@@ -36,11 +37,21 @@
 		switchTab,
 		backToAlbum,
 		deselectAlbum,
+		deselectPlaylistView,
 		detailTab,
 		selectSong,
 		initNavigation
 	} from '$lib/stores/navigation';
 	import { playAlbum } from '$lib/stores/player';
+	import {
+		selectedPlaylistDetail,
+		loadPlaylists,
+		deletePlaylist,
+		renamePlaylist,
+		removePlaylistEntry,
+		movePlaylistEntry
+	} from '$lib/stores/playlists';
+	import { sharePlaylist, unsharePlaylist } from '$lib/api/client';
 	import {
 		editLyrics,
 		editPrompt,
@@ -106,6 +117,8 @@
 			: []
 	);
 
+	const playlistDetail = $derived($selectedPlaylistDetail);
+
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
 	const isGenerating = $derived(
 		songJobs.some(
@@ -126,7 +139,7 @@
 
 		(async () => {
 			try {
-				const [a, s] = await Promise.all([fetchAlbums(), fetchSongs()]);
+				const [a, s] = await Promise.all([fetchAlbums(), fetchSongs(), loadPlaylists()]);
 				albumList.set(a.items);
 				songList.set(s.items);
 			} catch (e) {
@@ -174,6 +187,18 @@
 			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Pick failed', 'error');
+		}
+	}
+
+	async function onRate(genId: string, rating: number, notes: string): Promise<void> {
+		if (!song) return;
+		try {
+			await rateGeneration(genId, rating, notes);
+			const updated = await fetchSong(song.id);
+			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+			addToast('Rating saved', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Rating failed', 'error');
 		}
 	}
 
@@ -315,6 +340,61 @@
 		}
 	}
 
+	async function onPlaylistShareEnable() {
+		if (!playlistDetail) throw new Error('No playlist');
+		const result = await sharePlaylist(playlistDetail.id);
+		selectedPlaylistDetail.update((d) =>
+			d ? { ...d, is_shared: true, share_slug: result.share_slug } : d
+		);
+		return result;
+	}
+
+	async function onPlaylistShareDisable() {
+		if (!playlistDetail) return;
+		await unsharePlaylist(playlistDetail.id);
+		selectedPlaylistDetail.update((d) => (d ? { ...d, is_shared: false, share_slug: null } : d));
+	}
+
+	async function onPlaylistDelete(): Promise<void> {
+		if (!playlistDetail) return;
+		try {
+			await deletePlaylist(playlistDetail.id);
+			addToast('Playlist deleted', 'success');
+		} catch {
+			addToast('Delete failed', 'error');
+		}
+	}
+
+	async function onPlaylistRename(): Promise<void> {
+		if (!playlistDetail) return;
+		const newTitle = prompt('Rename playlist:', playlistDetail.title);
+		if (newTitle && newTitle.trim()) {
+			try {
+				await renamePlaylist(playlistDetail.id, newTitle.trim());
+			} catch {
+				addToast('Rename failed', 'error');
+			}
+		}
+	}
+
+	async function onRemovePlaylistEntry(entryId: string): Promise<void> {
+		if (!playlistDetail) return;
+		try {
+			await removePlaylistEntry(playlistDetail.id, entryId);
+		} catch {
+			addToast('Remove failed', 'error');
+		}
+	}
+
+	async function onMovePlaylistEntry(entryId: string, newPos: number): Promise<void> {
+		if (!playlistDetail) return;
+		try {
+			await movePlaylistEntry(playlistDetail.id, entryId, newPos);
+		} catch {
+			addToast('Reorder failed', 'error');
+		}
+	}
+
 	const songContext = $derived(
 		song
 			? `Song: ${song.title}\nAlbum: ${song.album_title}\nStyle: ${$editPrompt}\nKey: ${$editKey}\nBPM: ${$editBpm}\n\nLyrics:\n${$editLyrics}`
@@ -327,7 +407,10 @@
 {:else if loadError}
 	<div class="error">Failed to load. Please refresh.</div>
 {:else}
-	<aside class="sidebar" class:has-detail={!!song || showCreate || !!selectedAlbum}>
+	<aside
+		class="sidebar"
+		class:has-detail={!!song || showCreate || !!selectedAlbum || !!playlistDetail}
+	>
 		<SongList
 			onNewSong={() => {
 				showCreate = !showCreate;
@@ -335,7 +418,10 @@
 		/>
 	</aside>
 
-	<main class="main-content" class:has-detail={!!song || showCreate || !!selectedAlbum}>
+	<main
+		class="main-content"
+		class:has-detail={!!song || showCreate || !!selectedAlbum || !!playlistDetail}
+	>
 		{#if showCreate}
 			<CreateForm {albums} />
 		{:else if song}
@@ -473,6 +559,7 @@
 								ondelete={onDeleteGeneration}
 								onshare={onGenShareEnable}
 								onunshare={onGenShareDisable}
+								onrate={onRate}
 							/>
 						</div>
 					{:else}
@@ -566,6 +653,91 @@
 					{/each}
 					{#if albumSongs.length === 0}
 						<p class="empty-tab">No songs in this album yet.</p>
+					{/if}
+				</div>
+			</div>
+		{:else if playlistDetail}
+			<div class="detail-panel">
+				<button class="back-btn" onclick={deselectPlaylistView}>
+					<span class="back-arrow">←</span>
+					Playlists
+				</button>
+				<div class="detail-header">
+					<div>
+						<h2 class="song-title">{playlistDetail.title}</h2>
+						<span class="song-album">
+							{playlistDetail.entries.length} track{playlistDetail.entries.length !== 1 ? 's' : ''}
+						</span>
+					</div>
+					<div class="detail-actions">
+						<ShareButton
+							isShared={playlistDetail.is_shared}
+							shareSlug={playlistDetail.share_slug}
+							onshare={onPlaylistShareEnable}
+							onunshare={onPlaylistShareDisable}
+						/>
+						<OverflowMenu
+							items={[
+								{ label: 'Rename', onclick: onPlaylistRename },
+								{
+									label: 'Delete Playlist',
+									confirmLabel: 'Confirm Delete',
+									destructive: true,
+									onclick: onPlaylistDelete
+								}
+							]}
+						/>
+					</div>
+				</div>
+
+				{#if playlistDetail.is_shared && playlistDetail.share_slug}
+					<button
+						class="share-link"
+						onclick={() => {
+							const url = `${window.location.origin}/share/playlist/${playlistDetail.share_slug}`;
+							navigator.clipboard.writeText(url);
+							addToast('Link copied', 'success');
+						}}
+						title="Click to copy share link"
+					>
+						{window.location.origin}/share/playlist/{playlistDetail.share_slug}
+					</button>
+				{/if}
+
+				<div class="album-song-list">
+					{#each playlistDetail.entries as entry, i (entry.id)}
+						<div class="playlist-entry-row">
+							<div class="playlist-entry-controls">
+								{#if i > 0}
+									<button
+										class="move-btn"
+										onclick={() => onMovePlaylistEntry(entry.id, i - 1)}
+										title="Move up">↑</button
+									>
+								{/if}
+								{#if i < playlistDetail.entries.length - 1}
+									<button
+										class="move-btn"
+										onclick={() => onMovePlaylistEntry(entry.id, i + 1)}
+										title="Move down">↓</button
+									>
+								{/if}
+							</div>
+							<div class="playlist-entry-info">
+								<span class="album-song-title">{entry.song_title}</span>
+								<span class="album-song-meta">
+									{entry.artist} · Gen #{entry.generation_number}
+								</span>
+							</div>
+							<button
+								class="remove-btn"
+								onclick={() => onRemovePlaylistEntry(entry.id)}
+								title="Remove from playlist">×</button
+							>
+						</div>
+					{/each}
+					{#if playlistDetail.entries.length === 0}
+						<p class="empty-tab">No tracks in this playlist yet.</p>
 					{/if}
 				</div>
 			</div>
@@ -980,6 +1152,74 @@
 		font-size: 11px;
 		color: var(--text-dim);
 		flex-shrink: 0;
+	}
+
+	.playlist-entry-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+	}
+
+	.playlist-entry-controls {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		flex-shrink: 0;
+	}
+
+	.move-btn {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 3px;
+		color: var(--text-muted);
+		font-size: 10px;
+		width: 18px;
+		height: 16px;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
+		line-height: 1;
+	}
+
+	.move-btn:hover {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.playlist-entry-info {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
+	.remove-btn {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 3px;
+		color: var(--text-muted);
+		font-size: 14px;
+		width: 22px;
+		height: 22px;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		padding: 0;
+		line-height: 1;
+	}
+
+	.remove-btn:hover {
+		border-color: var(--score-bad);
+		color: var(--score-bad);
 	}
 
 	.empty-tab {

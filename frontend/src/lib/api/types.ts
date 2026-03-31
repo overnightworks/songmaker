@@ -78,6 +78,7 @@ export interface GenerationItem {
 	status: string;
 	is_archived: boolean;
 	is_picked: boolean;
+	is_kept: boolean;
 	is_shared: boolean;
 	share_slug?: string | null;
 	whisper_text: string | null;
@@ -247,4 +248,29 @@ export interface ShareResult {
 	status: string;
 	share_url: string;
 	share_slug: string;
+}
+
+export interface PlaylistItem {
+	id: string;
+	title: string;
+	entry_count: number;
+	is_shared: boolean;
+	share_slug?: string | null;
+	created_at?: string | null;
+}
+
+export interface PlaylistEntryItem {
+	id: string;
+	position: number;
+	generation_id: string;
+	song_title: string;
+	album_title: string;
+	artist: string;
+	generation_number: number;
+	mp3_path: string;
+	seed: number | null;
+}
+
+export interface PlaylistDetailItem extends PlaylistItem {
+	entries: PlaylistEntryItem[];
 }
