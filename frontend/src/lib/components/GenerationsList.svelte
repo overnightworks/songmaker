@@ -5,7 +5,9 @@
 		togglePlayPause,
 		isAudioPlaying,
 		isAudioBuffering,
-		playback
+		playback,
+		queueContext,
+		selectedAlbumId
 	} from '$lib/stores/player';
 	import { scoreColor } from '$lib/utils/scores';
 
@@ -57,7 +59,11 @@
 	function handlePlay(e: Event, gen: GenerationItem): void {
 		e.stopPropagation();
 		if (isGenPlaying(gen)) togglePlayPause();
-		else playGeneration(gen, song);
+		else {
+			const albumId = $selectedAlbumId;
+			queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
+			playGeneration(gen, song);
+		}
 	}
 </script>
 

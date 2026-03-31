@@ -16,7 +16,8 @@
 		canPlayPrevGen,
 		canPlayNextGen,
 		canPlayPrevSong,
-		canPlayNextSong
+		canPlayNextSong,
+		queueContext
 	} from '$lib/stores/player';
 	import { formatTime } from '$lib/utils/format';
 	import {
@@ -76,7 +77,11 @@
 			currentTime = audio?.currentTime ?? 0;
 			playbackTime.set(currentTime);
 		});
-		audio.addEventListener('ended', () => playNextGeneration());
+		audio.addEventListener('ended', () => {
+			const ctx = $queueContext;
+			if (ctx.type === 'playlist') playNextSong();
+			else playNextGeneration();
+		});
 		audio.addEventListener('play', () => {
 			isPlaying = true;
 			isAudioPlaying.set(true);

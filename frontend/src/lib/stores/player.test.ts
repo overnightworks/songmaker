@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import type { GenerationItem, PlaylistEntryItem, SongItem } from '$lib/api/types';
 import {
+	canPlayNextSong,
+	canPlayPrevSong,
 	clearGenerationSelection,
 	filteredSongs,
 	isAudioPlaying,
@@ -11,6 +13,8 @@ import {
 	playbackDuration,
 	playbackTime,
 	playingGeneration,
+	playPlaylistEntries,
+	queueContext,
 	requestTogglePlay,
 	selectAlbum,
 	selectGenerationInSidebar,
@@ -72,6 +76,21 @@ function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		created_at: null,
 		is_shared: false,
 		share_slug: null,
+		...overrides
+	};
+}
+
+function makePlaylistEntry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntryItem {
+	return {
+		id: 'pe1',
+		position: 0,
+		generation_id: 'g1',
+		song_title: 'Playlist Song',
+		album_title: 'Album',
+		artist: 'Artist',
+		generation_number: 1,
+		mp3_path: 'a1/song_v1.mp3',
+		seed: 42,
 		...overrides
 	};
 }
@@ -203,6 +222,105 @@ describe('playback', () => {
 
 	it('isAudioPlaying defaults to false', () => {
 		expect(get(isAudioPlaying)).toBe(false);
+	});
+});
+
+describe('queue context', () => {
+	it('defaults to library', () => {
+		expect(get(queueContext)).toEqual({ type: 'library' });
+	});
+
+	it('canPlayNextSong scoped to album in album context', () => {
+		const s1 = makeSong({ id: 's1', album_id: 'a1' });
+		const s2 = makeSong({ id: 's2', album_id: 'a2' });
+		songList.set([s1, s2]);
+		queueContext.set({ type: 'album', albumId: 'a1' });
+		playGeneration(makeGen({ id: 'g1' }), s1);
+		expect(get(canPlayNextSong)).toBe(false);
+	});
+
+	it('canPlayNextSong true for next song in same album', () => {
+		const s1 = makeSong({ id: 's1', album_id: 'a1' });
+		const s2 = makeSong({ id: 's2', album_id: 'a1', generations: [makeGen({ id: 'g2' })] });
+		songList.set([s1, s2]);
+		queueContext.set({ type: 'album', albumId: 'a1' });
+		playGeneration(makeGen({ id: 'g1' }), s1);
+		expect(get(canPlayNextSong)).toBe(true);
+	});
+
+	it('canPlayPrevSong false at start of album', () => {
+		const s1 = makeSong({ id: 's1', album_id: 'a1' });
+		songList.set([s1]);
+		queueContext.set({ type: 'album', albumId: 'a1' });
+		playGeneration(makeGen({ id: 'g1' }), s1);
+		expect(get(canPlayPrevSong)).toBe(false);
+	});
+
+	it('playlist context: canPlayNextSong based on index', () => {
+		const entries = [
+			makePlaylistEntry({ id: 'pe1', position: 0 }),
+			makePlaylistEntry({ id: 'pe2', position: 1, generation_id: 'g2', mp3_path: 'b.mp3' })
+		];
+		queueContext.set({ type: 'playlist', entries, index: 0 });
+		playback.set({
+			generation: makeGen(),
+			songId: '',
+			songTitle: 'Song',
+			artist: 'Artist',
+			autoplay: true
+		});
+		expect(get(canPlayNextSong)).toBe(true);
+		expect(get(canPlayPrevSong)).toBe(false);
+	});
+
+	it('playlist context: canPlayPrevSong true when not at start', () => {
+		const entries = [
+			makePlaylistEntry({ id: 'pe1', position: 0 }),
+			makePlaylistEntry({ id: 'pe2', position: 1 })
+		];
+		queueContext.set({ type: 'playlist', entries, index: 1 });
+		playback.set({
+			generation: makeGen(),
+			songId: '',
+			songTitle: 'Song',
+			artist: 'Artist',
+			autoplay: true
+		});
+		expect(get(canPlayPrevSong)).toBe(true);
+	});
+
+	it('playlist context: canPlayNextSong false at last entry', () => {
+		const entries = [makePlaylistEntry({ id: 'pe1', position: 0 })];
+		queueContext.set({ type: 'playlist', entries, index: 0 });
+		playback.set({
+			generation: makeGen(),
+			songId: '',
+			songTitle: 'Song',
+			artist: 'Artist',
+			autoplay: true
+		});
+		expect(get(canPlayNextSong)).toBe(false);
+	});
+
+	it('playPlaylistEntries sets playlist context and playback', () => {
+		const entries = [
+			makePlaylistEntry({ id: 'pe1', song_title: 'First', generation_id: 'g10', mp3_path: 'x.mp3' }),
+			makePlaylistEntry({ id: 'pe2', song_title: 'Second', generation_id: 'g11', mp3_path: 'y.mp3' })
+		];
+		playPlaylistEntries(entries);
+		const ctx = get(queueContext);
+		expect(ctx).toEqual({ type: 'playlist', entries, index: 0 });
+		const pb = get(playback);
+		expect(pb?.songTitle).toBe('First');
+		expect(pb?.generation.id).toBe('g10');
+	});
+
+	it('playPlaylistEntries does nothing for empty entries', () => {
+		playback.set(null);
+		queueContext.set({ type: 'library' });
+		playPlaylistEntries([]);
+		expect(get(playback)).toBeNull();
+		expect(get(queueContext)).toEqual({ type: 'library' });
 	});
 });
 
