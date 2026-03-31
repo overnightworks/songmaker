@@ -59,6 +59,9 @@ _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "RateResponse": "RateResult",
     "CleanupResponse": "CleanupResult",
     "ShareResponse": "ShareResult",
+    "PlaylistResponse": "PlaylistItem",
+    "PlaylistEntryResponse": "PlaylistEntryItem",
+    "PlaylistDetailResponse": "PlaylistDetailItem",
 }
 
 _FIELD_TYPE_OVERRIDES: dict[tuple[str, str], str] = {
@@ -94,6 +97,9 @@ _EMIT_ORDER: list[str] = [
     "RateResult",
     "CleanupResult",
     "ShareResult",
+    "PlaylistEntryItem",
+    "PlaylistItem",
+    "PlaylistDetailItem",
 ]
 
 
@@ -253,6 +259,9 @@ def generate() -> str:
         GenerationResponse,
         JobResponse,
         LoginAttemptResponse,
+        PlaylistDetailResponse,
+        PlaylistEntryResponse,
+        PlaylistResponse,
         PresetResponse,
         RateLimitItem,
         RateLimitsResponse,
@@ -288,6 +297,9 @@ def generate() -> str:
         "RateResult": RateResponse,
         "CleanupResult": CleanupResponse,
         "ShareResult": ShareResponse,
+        "PlaylistEntryItem": PlaylistEntryResponse,
+        "PlaylistItem": PlaylistResponse,
+        "PlaylistDetailItem": PlaylistDetailResponse,
     }
 
     blocks: list[str] = [HEADER]

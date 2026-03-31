@@ -202,6 +202,12 @@ def create_app(
             "/_app", StaticFiles(directory=str(sveltekit_app_dir)), name="sveltekit-app",
         )
 
+    favicon_path = sveltekit_dir / "favicon.svg"
+
+    @app.get("/favicon.svg", include_in_schema=False)
+    async def serve_favicon() -> FileResponse:
+        return FileResponse(favicon_path, media_type="image/svg+xml")
+
     sk_index = sveltekit_dir / "index.html"
 
     @app.exception_handler(404)

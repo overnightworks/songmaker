@@ -249,15 +249,6 @@ export interface ShareResult {
 	share_slug: string;
 }
 
-export interface PlaylistItem {
-	id: string;
-	title: string;
-	entry_count: number;
-	is_shared: boolean;
-	share_slug?: string | null;
-	created_at?: string | null;
-}
-
 export interface PlaylistEntryItem {
 	id: string;
 	position: number;
@@ -270,6 +261,21 @@ export interface PlaylistEntryItem {
 	seed: number | null;
 }
 
-export interface PlaylistDetailItem extends PlaylistItem {
+export interface PlaylistItem {
+	id: string;
+	title: string;
+	entry_count: number;
+	is_shared: boolean;
+	share_slug?: string | null;
+	created_at?: string | null;
+}
+
+export interface PlaylistDetailItem {
+	id: string;
+	title: string;
+	entry_count: number;
+	is_shared: boolean;
+	share_slug?: string | null;
+	created_at?: string | null;
 	entries: PlaylistEntryItem[];
 }
