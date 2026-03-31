@@ -72,6 +72,10 @@ class Song(Base):
     album_id: Mapped[str] = mapped_column(ForeignKey("albums.id"), index=True)
     language: Mapped[str] = mapped_column(String(10), default="")
     track_number: Mapped[int] = mapped_column(Integer, default=0)
+    share_slug: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, index=True,
+    )
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -129,6 +133,10 @@ class Generation(Base):
     status: Mapped[str] = mapped_column(String(20), default="completed")
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     is_picked: Mapped[bool] = mapped_column(Boolean, default=False)
+    share_slug: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, index=True,
+    )
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
 
     song: Mapped[Song] = relationship(back_populates="generations")

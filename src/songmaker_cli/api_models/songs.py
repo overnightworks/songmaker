@@ -128,6 +128,22 @@ class SharedAlbumResponse(BaseModel):
     songs: list[SharedSongItem]
 
 
+class SharedSongResponse(BaseModel):
+    title: str
+    artist: str
+    album_title: str
+    audio_url: str | None
+
+
+class SharedGenerationResponse(BaseModel):
+    title: str
+    artist: str
+    album_title: str
+    generation_number: int
+    seed: int | None
+    audio_url: str | None
+
+
 class GenerationResponse(BaseModel):
     id: str
     song_id: str
@@ -140,6 +156,8 @@ class GenerationResponse(BaseModel):
     status: str
     is_archived: bool
     is_picked: bool
+    is_shared: bool = False
+    share_slug: str | None = None
     whisper_text: str | None
     scores: dict | None
     generation_params: dict | None
@@ -180,6 +198,8 @@ class GenerationResponse(BaseModel):
             status=gen.status,
             is_archived=gen.is_archived,
             is_picked=gen.is_picked,
+            is_shared=gen.is_shared,
+            share_slug=gen.share_slug,
             whisper_text=gen.whisper_text,
             scores=scores if scores else None,
             generation_params=generation_params,
@@ -230,6 +250,8 @@ class SongSummaryResponse(BaseModel):
     generation_params: dict | None = None
     version_count: int = 0
     generation_count: int = 0
+    is_shared: bool = False
+    share_slug: str | None = None
     best_scores: dict | None = None
     best_rating: float | None = None
     created_at: str | None = None
@@ -257,6 +279,8 @@ class SongSummaryResponse(BaseModel):
             generation_params=generation_params,
             version_count=len(song.versions),
             generation_count=len(song.generations),
+            is_shared=song.is_shared,
+            share_slug=song.share_slug,
             created_at=song.created_at.isoformat() if song.created_at else None,
         )
 

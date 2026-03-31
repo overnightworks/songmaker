@@ -1,8 +1,9 @@
-"""Query functions for songs — CRUD, move, archive."""
+"""Query functions for songs — CRUD, move, archive, sharing."""
 
 from __future__ import annotations
 
 import logging
+import uuid
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -188,6 +189,22 @@ def update_song(
     return version
 
 
+def delete_song(session: Session, song_id: str) -> list[str]:
+    """Delete a song and all its versions/generations. Returns file paths for cleanup."""
+    song = session.query(Song).filter_by(id=song_id).first()
+    if not song:
+        raise ValueError(f"Song not found: {song_id}")
+
+    paths = [
+        p for g in song.generations
+        for p in [g.mp3_path, g.wav_path] if p
+    ]
+    session.delete(song)
+    session.flush()
+    log.info("Deleted song %s", song_id)
+    return paths
+
+
 def move_song(session: Session, song_id: str, new_album_id: str) -> Song:
     song = session.query(Song).filter_by(id=song_id).first()
     if not song:
@@ -204,4 +221,39 @@ def move_song(session: Session, song_id: str, new_album_id: str) -> Song:
     song.album_id = new_album_id
     session.flush()
     log.info("Moved song %s from album %s to %s", song_id, old_album_id, new_album_id)
+    return song
+
+
+def get_song_by_slug(session: Session, slug: str) -> Song | None:
+    return (
+        session.query(Song)
+        .options(
+            joinedload(Song.generations),
+            joinedload(Song.album),
+        )
+        .filter_by(share_slug=slug, is_shared=True)
+        .first()
+    )
+
+
+def enable_song_sharing(session: Session, song_id: str) -> Song:
+    song = session.query(Song).filter_by(id=song_id).first()
+    if not song:
+        raise ValueError(f"Song not found: {song_id}")
+    if not song.share_slug:
+        song.share_slug = str(uuid.uuid4())
+    song.is_shared = True
+    session.flush()
+    log.info("Enabled sharing for song %s (slug=%s)", song_id, song.share_slug)
+    return song
+
+
+def disable_song_sharing(session: Session, song_id: str) -> Song:
+    song = session.query(Song).filter_by(id=song_id).first()
+    if not song:
+        raise ValueError(f"Song not found: {song_id}")
+    song.share_slug = None
+    song.is_shared = False
+    session.flush()
+    log.info("Disabled sharing for song %s", song_id)
     return song

@@ -12,10 +12,8 @@ import { closeSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
 export type DetailTab = 'generations' | 'edit' | 'chat';
-export type AlbumTab = 'songs' | 'share' | 'manage';
 
 export const detailTab = writable<DetailTab>('generations');
-export const albumTab = writable<AlbumTab>('songs');
 
 let suppressPush = false;
 
@@ -32,14 +30,12 @@ function replaceSongUrl(songId: string | null): void {
 
 export function selectAlbumOverview(albumId: string): void {
 	playerSelectAlbum(albumId);
-	albumTab.set('songs');
 	closeSidebar();
 }
 
 export function backToAlbum(): void {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
-	albumTab.set('songs');
 	pushSongUrl(null);
 }
 
@@ -73,10 +69,6 @@ export function navigateToSongTab(tab: DetailTab): void {
 
 export function switchTab(tab: DetailTab): void {
 	detailTab.set(tab);
-}
-
-export function switchAlbumTab(tab: AlbumTab): void {
-	albumTab.set(tab);
 }
 
 export function initNavigation(): () => void {

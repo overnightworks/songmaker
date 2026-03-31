@@ -93,6 +93,22 @@ export async function unshareAlbum(albumId: string): Promise<void> {
 	await apiFetch(`/api/albums/${albumId}/share`, { method: 'DELETE' });
 }
 
+export async function shareSong(songId: string): Promise<ShareResult> {
+	return apiFetch<ShareResult>(`/api/songs/${songId}/share`, { method: 'POST' });
+}
+
+export async function unshareSong(songId: string): Promise<void> {
+	await apiFetch(`/api/songs/${songId}/share`, { method: 'DELETE' });
+}
+
+export async function shareGeneration(genId: string): Promise<ShareResult> {
+	return apiFetch<ShareResult>(`/api/generations/${genId}/share`, { method: 'POST' });
+}
+
+export async function unshareGeneration(genId: string): Promise<void> {
+	await apiFetch(`/api/generations/${genId}/share`, { method: 'DELETE' });
+}
+
 export async function fetchSongs(
 	albumId?: string,
 	offset: number = 0,
@@ -158,6 +174,10 @@ export async function deleteVersion(versionId: string, deleteGenerations: boolea
 
 export async function deleteGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}`, { method: 'DELETE' });
+}
+
+export async function deleteSong(songId: string): Promise<void> {
+	await apiFetch(`/api/songs/${songId}`, { method: 'DELETE' });
 }
 
 export async function deleteAlbum(albumId: string): Promise<void> {

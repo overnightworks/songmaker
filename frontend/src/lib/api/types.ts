@@ -78,6 +78,8 @@ export interface GenerationItem {
 	status: string;
 	is_archived: boolean;
 	is_picked: boolean;
+	is_shared: boolean;
+	share_slug?: string | null;
 	whisper_text: string | null;
 	scores: TrackScores | null;
 	generation_params: GenerationParams | null;
@@ -112,6 +114,8 @@ export interface SongItem {
 	generation_params?: VersionGenerationParams | null;
 	version_count: number;
 	generation_count: number;
+	is_shared: boolean;
+	share_slug?: string | null;
 	best_scores?: TrackScores | null;
 	best_rating?: number | null;
 	created_at?: string | null;

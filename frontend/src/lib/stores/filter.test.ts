@@ -37,6 +37,8 @@ function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 		best_rating: 75,
 		generations: [],
 		created_at: null,
+		is_shared: false,
+		share_slug: null,
 		...overrides
 	};
 }

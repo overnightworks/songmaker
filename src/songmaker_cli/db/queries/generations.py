@@ -1,8 +1,9 @@
-"""Query functions for generations — CRUD, pick/unpick, scores, ratings, file deletion."""
+"""Query functions for generations — CRUD, pick/unpick, scores, ratings, sharing, file deletion."""
 
 from __future__ import annotations
 
 import logging
+import uuid
 from pathlib import Path
 
 from sqlalchemy.orm import Session, joinedload
@@ -123,6 +124,42 @@ def delete_generation(session: Session, generation_id: str) -> list[str]:
 
     log.info("Deleted generation %s", generation_id)
     return paths
+
+
+def get_generation_by_slug(session: Session, slug: str) -> Generation | None:
+    return (
+        session.query(Generation)
+        .options(
+            joinedload(Generation.scores),
+            joinedload(Generation.rating),
+            joinedload(Generation.song).joinedload(Song.album),
+        )
+        .filter_by(share_slug=slug, is_shared=True)
+        .first()
+    )
+
+
+def enable_generation_sharing(session: Session, generation_id: str) -> Generation:
+    gen = session.query(Generation).filter_by(id=generation_id).first()
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    if not gen.share_slug:
+        gen.share_slug = str(uuid.uuid4())
+    gen.is_shared = True
+    session.flush()
+    log.info("Enabled sharing for generation %s (slug=%s)", generation_id, gen.share_slug)
+    return gen
+
+
+def disable_generation_sharing(session: Session, generation_id: str) -> Generation:
+    gen = session.query(Generation).filter_by(id=generation_id).first()
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    gen.share_slug = None
+    gen.is_shared = False
+    session.flush()
+    log.info("Disabled sharing for generation %s", generation_id)
+    return gen
 
 
 _GENERATION_FILE_SUFFIXES = [".mp3", ".wav", ".md", ".whisper"]

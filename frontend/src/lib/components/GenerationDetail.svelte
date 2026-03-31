@@ -1,6 +1,8 @@
 <script lang="ts">
-	import type { GenerationItem } from '$lib/api/types';
+	import type { GenerationItem, ShareResult } from '$lib/api/types';
 	import { scoreColor } from '$lib/utils/scores';
+	import OverflowMenu from './OverflowMenu.svelte';
+	import ShareButton from './ShareButton.svelte';
 
 	interface Props {
 		generation: GenerationItem;
@@ -9,9 +11,20 @@
 		onscore?: (genId: string) => void;
 		onpick?: (genId: string, picked: boolean) => void;
 		ondelete?: (genId: string) => void;
+		onshare?: (genId: string) => Promise<ShareResult>;
+		onunshare?: (genId: string) => Promise<void>;
 	}
 
-	let { generation, scoring = false, onversionclick, onscore, onpick, ondelete }: Props = $props();
+	let {
+		generation,
+		scoring = false,
+		onversionclick,
+		onscore,
+		onpick,
+		ondelete,
+		onshare,
+		onunshare
+	}: Props = $props();
 
 	let confirmDelete = $state(false);
 
@@ -114,17 +127,48 @@
 			{#if generation.seed}
 				<span class="seed">seed:{generation.seed}</span>
 			{/if}
+			{#if onshare && onunshare}
+				<ShareButton
+					isShared={generation.is_shared}
+					shareSlug={generation.share_slug}
+					onshare={() => onshare(generation.id)}
+					onunshare={() => onunshare(generation.id)}
+				/>
+			{/if}
+			<OverflowMenu
+				items={[
+					...(onscore
+						? [
+								{
+									label: scoring ? 'Scoring...' : 'Re-Score',
+									onclick: () => onscore(generation.id)
+								}
+							]
+						: []),
+					...(ondelete
+						? [
+								{
+									label: confirmDelete ? 'Confirm Delete' : 'Delete Generation',
+									destructive: true,
+									onclick: () => {
+										if (confirmDelete) {
+											ondelete(generation.id);
+										} else {
+											confirmDelete = true;
+										}
+									}
+								}
+							]
+						: [])
+				]}
+				onclose={() => (confirmDelete = false)}
+			/>
 		</div>
 	</div>
 
 	<section class="section">
 		<div class="section-header">
 			<h5 class="section-title">Scores</h5>
-			{#if onscore}
-				<button class="score-btn" onclick={() => onscore(generation.id)} disabled={scoring}>
-					{scoring ? 'Scoring...' : 'Re-score'}
-				</button>
-			{/if}
 		</div>
 		{#if scoreEntries.length > 0}
 			<div class="scores-grid">
@@ -175,21 +219,6 @@
 				</div>
 			</section>
 		{/if}
-	{/if}
-
-	{#if ondelete}
-		<div class="delete-section">
-			{#if confirmDelete}
-				<button class="delete-btn confirming" onclick={() => ondelete(generation.id)}>
-					Delete this generation?
-				</button>
-				<button class="delete-cancel" onclick={() => (confirmDelete = false)}>Cancel</button>
-			{:else}
-				<button class="delete-btn" onclick={() => (confirmDelete = true)}>
-					Delete Generation
-				</button>
-			{/if}
-		</div>
 	{/if}
 </div>
 
@@ -322,29 +351,6 @@
 		letter-spacing: 0.5px;
 	}
 
-	.score-btn {
-		padding: var(--btn-padding-sm);
-		border: 1px solid var(--primary);
-		border-radius: var(--btn-radius-sm);
-		background: none;
-		color: var(--primary);
-		font-size: 10px;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: var(--btn-letter-spacing);
-		cursor: pointer;
-	}
-
-	.score-btn:hover:not(:disabled) {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		border-color: transparent;
-		color: #fff;
-	}
-
-	.score-btn:disabled {
-		opacity: 0.4;
-	}
-
 	.scores-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
@@ -438,56 +444,5 @@
 		margin: 0;
 		max-height: 400px;
 		overflow-y: auto;
-	}
-
-	.delete-section {
-		display: flex;
-		gap: 8px;
-		margin-top: 8px;
-		padding-top: 12px;
-		border-top: 1px solid var(--border);
-	}
-
-	.delete-btn {
-		padding: var(--btn-padding-sm);
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		background: transparent;
-		color: var(--text-dim);
-		font-size: var(--btn-font-size-sm);
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: var(--btn-letter-spacing);
-		cursor: pointer;
-	}
-
-	.delete-btn:hover {
-		border-color: var(--score-bad);
-		color: var(--score-bad);
-	}
-
-	.delete-btn.confirming {
-		border-color: var(--score-bad);
-		color: var(--score-bad);
-	}
-
-	.delete-btn.confirming:hover {
-		background: var(--score-bad);
-		color: #fff;
-	}
-
-	.delete-cancel {
-		padding: var(--btn-padding-sm);
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		background: transparent;
-		color: var(--text-muted);
-		font-size: var(--btn-font-size-sm);
-		cursor: pointer;
-	}
-
-	.delete-cancel:hover {
-		border-color: var(--text-muted);
-		color: var(--text);
 	}
 </style>

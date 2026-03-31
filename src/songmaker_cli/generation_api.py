@@ -21,6 +21,7 @@ from songmaker_cli.api_models import (
     RateRequest,
     RateResponse,
     ScoreRequest,
+    ShareResponse,
     StatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
@@ -29,6 +30,8 @@ from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries import (
     delete_generation,
+    disable_generation_sharing,
+    enable_generation_sharing,
     get_job,
     pick_generation,
     record_audit,
@@ -233,6 +236,43 @@ def api_unpick_generation(
         unpick_generation(session, gen_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
+    session.commit()
+    return StatusResponse()
+
+
+@router.post("/generations/{gen_id}/share")
+def api_share_generation(
+    gen_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> ShareResponse:
+    check_generation_access(session, gen_id, user)
+    try:
+        gen = enable_generation_sharing(session, gen_id)
+    except ValueError:
+        raise HTTPException(404, "Generation not found")
+    record_audit(session, user.id, "share", "generation", gen_id)
+    session.commit()
+    base_url = str(request.base_url).rstrip("/")
+    return ShareResponse(
+        share_url=f"{base_url}/share/gen/{gen.share_slug}",
+        share_slug=gen.share_slug,
+    )
+
+
+@router.delete("/generations/{gen_id}/share")
+def api_unshare_generation(
+    gen_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> StatusResponse:
+    check_generation_access(session, gen_id, user)
+    try:
+        disable_generation_sharing(session, gen_id)
+    except ValueError:
+        raise HTTPException(404, "Generation not found")
+    record_audit(session, user.id, "unshare", "generation", gen_id)
     session.commit()
     return StatusResponse()
 

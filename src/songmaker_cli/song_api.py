@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
@@ -15,6 +15,7 @@ from songmaker_cli.api_helpers import (
 )
 from songmaker_cli.api_models import (
     PaginatedResponse,
+    ShareResponse,
     SongCreateRequest,
     SongMoveRequest,
     SongResponse,
@@ -27,7 +28,10 @@ from songmaker_cli.app_context import AppContext, get_app_context, get_db_sessio
 from songmaker_cli.db.queries import (
     count_songs,
     create_song,
+    delete_song,
     delete_version,
+    disable_song_sharing,
+    enable_song_sharing,
     get_album,
     list_songs,
     move_song,
@@ -125,6 +129,61 @@ def api_move_song(
     record_audit(session, user.id, "move", "song", song_id, f"album={req.album_id}")
     session.commit()
     return SongResponse.from_orm(song)
+
+
+@router.delete("/songs/{song_id}")
+def api_delete_song(
+    song_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> StatusResponse:
+    check_song_access(session, song_id, user)
+    try:
+        paths = delete_song(session, song_id)
+    except ValueError:
+        raise HTTPException(404, "Song not found")
+    record_audit(session, user.id, "delete", "song", song_id)
+    session.commit()
+    cleanup_generation_files(ctx.audio_dir, paths)
+    return StatusResponse()
+
+
+@router.post("/songs/{song_id}/share")
+def api_share_song(
+    song_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> ShareResponse:
+    check_song_access(session, song_id, user)
+    try:
+        song = enable_song_sharing(session, song_id)
+    except ValueError:
+        raise HTTPException(404, "Song not found")
+    record_audit(session, user.id, "share", "song", song_id)
+    session.commit()
+    base_url = str(request.base_url).rstrip("/")
+    return ShareResponse(
+        share_url=f"{base_url}/share/song/{song.share_slug}",
+        share_slug=song.share_slug,
+    )
+
+
+@router.delete("/songs/{song_id}/share")
+def api_unshare_song(
+    song_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> StatusResponse:
+    check_song_access(session, song_id, user)
+    try:
+        disable_song_sharing(session, song_id)
+    except ValueError:
+        raise HTTPException(404, "Song not found")
+    record_audit(session, user.id, "unshare", "song", song_id)
+    session.commit()
+    return StatusResponse()
 
 
 @router.get("/songs/{song_id}/versions")

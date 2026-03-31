@@ -46,6 +46,8 @@ function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 		best_rating: null,
 		generations: [makeGen()],
 		created_at: null,
+		is_shared: false,
+		share_slug: null,
 		...overrides
 	};
 }
@@ -67,6 +69,8 @@ function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		scores: null,
 		generation_params: null,
 		created_at: null,
+		is_shared: false,
+		share_slug: null,
 		...overrides
 	};
 }

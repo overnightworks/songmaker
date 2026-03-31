@@ -10,14 +10,23 @@ from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 import songmaker_cli.constants as _consts
-from songmaker_cli.api_models import SharedAlbumResponse, SharedSongItem
+from songmaker_cli.api_models import (
+    SharedAlbumResponse,
+    SharedGenerationResponse,
+    SharedSongItem,
+    SharedSongResponse,
+)
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import get_client_ip
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
     REDIS_RL_SHARED_PREFIX,
 )
-from songmaker_cli.db.queries import get_album_by_slug
+from songmaker_cli.db.queries import (
+    get_album_by_slug,
+    get_generation_by_slug,
+    get_song_by_slug,
+)
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.redis_client import RedisRateLimiter
 
@@ -139,6 +148,93 @@ async def get_shared_audio(
         if (fn := _picked_filename(s))
     }
     if filename not in valid_filenames:
+        raise HTTPException(404, "Not found")
+
+    audio_path = _resolve_audio_path(ctx.audio_dir, filename)
+    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+    return FileResponse(audio_path, media_type=media_type)
+
+
+@router.get("/shared/song/{slug}")
+def get_shared_song(
+    slug: str,
+    request: Request,
+    db: Session = Depends(get_db_session),
+) -> JSONResponse:
+    _check_shared_rate_limit(request)
+    song = get_song_by_slug(db, slug)
+    if not song:
+        raise HTTPException(404, "Not found")
+    picked_path = _picked_filename(song)
+    response = SharedSongResponse(
+        title=song.title,
+        artist=song.album.artist if song.album else "",
+        album_title=song.album.title if song.album else "",
+        audio_url=(
+            f"/shared/song/{slug}/audio/{picked_path}"
+            if picked_path else None
+        ),
+    )
+    return JSONResponse(response.model_dump())
+
+
+@router.get("/shared/song/{slug}/audio/{filename:path}")
+async def get_shared_song_audio(
+    slug: str,
+    filename: str,
+    request: Request,
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    _check_shared_rate_limit(request)
+    song = get_song_by_slug(db, slug)
+    if not song:
+        raise HTTPException(404, "Not found")
+
+    picked_path = _picked_filename(song)
+    if not picked_path or filename != picked_path:
+        raise HTTPException(404, "Not found")
+
+    audio_path = _resolve_audio_path(ctx.audio_dir, filename)
+    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+    return FileResponse(audio_path, media_type=media_type)
+
+
+@router.get("/shared/gen/{slug}")
+def get_shared_generation(
+    slug: str,
+    request: Request,
+    db: Session = Depends(get_db_session),
+) -> JSONResponse:
+    _check_shared_rate_limit(request)
+    gen = get_generation_by_slug(db, slug)
+    if not gen:
+        raise HTTPException(404, "Not found")
+    response = SharedGenerationResponse(
+        title=gen.song.title if gen.song else "",
+        artist=gen.song.album.artist if gen.song and gen.song.album else "",
+        album_title=gen.song.album.title if gen.song and gen.song.album else "",
+        generation_number=gen.generation_number,
+        seed=gen.seed,
+        audio_url=f"/shared/gen/{slug}/audio/{gen.mp3_path}",
+    )
+    return JSONResponse(response.model_dump())
+
+
+@router.get("/shared/gen/{slug}/audio/{filename:path}")
+async def get_shared_gen_audio(
+    slug: str,
+    filename: str,
+    request: Request,
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    _check_shared_rate_limit(request)
+    gen = get_generation_by_slug(db, slug)
+    if not gen:
+        raise HTTPException(404, "Not found")
+
+    if filename != gen.mp3_path:
         raise HTTPException(404, "Not found")
 
     audio_path = _resolve_audio_path(ctx.audio_dir, filename)
