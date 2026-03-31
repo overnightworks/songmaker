@@ -286,13 +286,13 @@
 		z-index: 1;
 	}
 	.play-btn {
-		width: 40px;
-		height: 40px;
+		width: 48px;
+		height: 48px;
 		border-radius: 50%;
 		border: 2px solid var(--primary);
 		background: transparent;
 		color: var(--primary);
-		font-size: 16px;
+		font-size: 18px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -313,20 +313,25 @@
 	.play-btn.loading {
 		border-color: var(--text-dim);
 	}
-	@media (prefers-reduced-motion: no-preference) {
-		.play-btn.playing {
-			border-color: transparent;
-			background-origin: border-box;
-			background-clip: padding-box, border-box;
-			background-image:
-				linear-gradient(var(--header-bg), var(--header-bg)),
-				conic-gradient(
-					from var(--border-angle, 0deg),
-					var(--primary),
-					var(--accent),
-					var(--primary)
-				);
-			animation: rotate-border 2s linear infinite;
+	.play-btn.playing {
+		border-color: var(--accent);
+	}
+	@supports (animation-timeline: auto) or (background-clip: border-box) {
+		@media (prefers-reduced-motion: no-preference) {
+			.play-btn.playing {
+				border-color: transparent;
+				background-origin: border-box;
+				background-clip: padding-box, border-box;
+				background-image:
+					linear-gradient(var(--header-bg), var(--header-bg)),
+					conic-gradient(
+						from var(--border-angle, 0deg),
+						var(--primary),
+						var(--accent),
+						var(--primary)
+					);
+				animation: rotate-border 2s linear infinite;
+			}
 		}
 	}
 	@keyframes rotate-border {
@@ -480,7 +485,7 @@
 	}
 	@media (max-width: 768px) {
 		.player-bar {
-			gap: 8px;
+			gap: 6px;
 			padding: 0 8px;
 		}
 		.track-info {
@@ -488,9 +493,9 @@
 		}
 		.nav-btn {
 			font-size: 12px;
-			min-width: 28px;
-			min-height: 28px;
-			padding: 4px;
+			min-width: 36px;
+			min-height: 36px;
+			padding: 6px;
 		}
 		.time {
 			font-size: 10px;
