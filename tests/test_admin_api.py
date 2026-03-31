@@ -534,3 +534,134 @@ def test_update_user_role_clears_redis(client: TestClient) -> None:
 
     sids_after = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{bob_id}")
     assert len(sids_after) == 0
+
+
+# -- Hard delete user ---------------------------------------------------------
+
+
+def _create_user_with_data(client: TestClient, username: str) -> str:
+    """Create a user with an album, song, and generation. Returns user_id."""
+    factory = client.app.state.ctx.db
+    audio_dir = client.app.state.ctx.audio_dir
+
+    with factory() as session:
+        from songmaker_cli.db.queries import (
+            create_album,
+            create_generation,
+            create_song,
+        )
+
+        user = create_user(session, username, hash_password("t3stP@ssw0rd"))
+        album = create_album(session, f"{username}-album", "Test Album", created_by=user.id)
+        song = create_song(session, "Test Song", album.id)
+        mp3_rel = f"{user.id}/{song.id}.mp3"
+        wav_rel = f"{user.id}/{song.id}.wav"
+        create_generation(session, song.id, None, mp3_rel, wav_path=wav_rel)
+        session.commit()
+
+        mp3_path = audio_dir / mp3_rel
+        mp3_path.parent.mkdir(parents=True, exist_ok=True)
+        mp3_path.write_bytes(b"fake-mp3")
+        (audio_dir / wav_rel).write_bytes(b"fake-wav")
+
+        return user.id
+
+
+def test_hard_delete_user(client: TestClient) -> None:
+    _login_as_admin(client)
+    user_id = _create_user_with_data(client, "victim")
+    audio_dir = client.app.state.ctx.audio_dir
+
+    resp = client.delete(f"/api/admin/users/{user_id}/permanent")
+    assert resp.status_code == 200
+
+    users = client.get("/api/admin/users").json()
+    assert not any(u["id"] == user_id for u in users)
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        from songmaker_cli.db.queries import get_user, list_albums
+
+        assert get_user(session, user_id) is None
+        user_albums = [a for a in list_albums(session) if a.created_by == user_id]
+        assert len(user_albums) == 0
+
+    assert not (audio_dir / user_id).exists()
+
+
+def test_hard_delete_user_no_data(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "empty", "password": "t3stP@ssw0rd"},
+    )
+    user_id = resp.json()["id"]
+
+    resp = client.delete(f"/api/admin/users/{user_id}/permanent")
+    assert resp.status_code == 200
+
+    users = client.get("/api/admin/users").json()
+    assert not any(u["id"] == user_id for u in users)
+
+
+def test_hard_delete_preserves_audit_log(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "audited", "password": "t3stP@ssw0rd"},
+    )
+    user_id = resp.json()["id"]
+
+    resp = client.delete(f"/api/admin/users/{user_id}/permanent")
+    assert resp.status_code == 200
+
+    audit = client.get("/api/admin/audit-log").json()
+    delete_entries = [
+        e for e in audit["items"]
+        if e["action"] == "hard_delete" and e["resource_id"] == user_id
+    ]
+    assert len(delete_entries) == 1
+    assert "username=audited" in delete_entries[0]["detail"]
+
+
+def test_hard_delete_self_blocked(client: TestClient) -> None:
+    _login_as_admin(client)
+    me = client.get("/api/auth/me").json()
+    resp = client.delete(f"/api/admin/users/{me['id']}/permanent")
+    assert resp.status_code == 400
+
+
+def test_hard_delete_last_admin_blocked(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "admin2", "password": "t3stP@ssw0rd", "role": "admin"},
+    )
+    admin2_id = resp.json()["id"]
+
+    client.put(f"/api/admin/users/{admin2_id}", json={"is_active": False})
+
+    resp = client.delete(f"/api/admin/users/{admin2_id}/permanent")
+    assert resp.status_code == 400
+    assert "last active admin" in resp.json()["detail"]
+
+
+def test_hard_delete_non_last_admin_allowed(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/users",
+        json={"username": "admin2", "password": "t3stP@ssw0rd", "role": "admin"},
+    )
+    admin2_id = resp.json()["id"]
+
+    resp = client.delete(f"/api/admin/users/{admin2_id}/permanent")
+    assert resp.status_code == 200
+
+    users = client.get("/api/admin/users").json()
+    assert not any(u["id"] == admin2_id for u in users)
+
+
+def test_hard_delete_not_found(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.delete("/api/admin/users/nonexistent/permanent")
+    assert resp.status_code == 404

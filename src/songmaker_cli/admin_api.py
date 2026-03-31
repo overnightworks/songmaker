@@ -10,7 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from songmaker_cli.api_helpers import AdminPagination, ensure_not_last_admin
+from songmaker_cli.api_helpers import (
+    AdminPagination,
+    cleanup_generation_files,
+    ensure_not_last_admin,
+)
 from songmaker_cli.api_models import (
     AuditLogResponse,
     CreateUserRequest,
@@ -22,8 +26,9 @@ from songmaker_cli.api_models import (
     UserResponse,
 )
 from songmaker_cli.api_models.settings import AceStepStatusResponse
-from songmaker_cli.app_context import get_db_session
+from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import hash_password
+from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     count_active_sessions,
     count_audit_log,
@@ -33,6 +38,7 @@ from songmaker_cli.db.queries import (
     delete_user_sessions,
     get_user,
     get_user_by_username,
+    hard_delete_user,
     list_active_sessions,
     list_audit_log,
     list_login_attempts,
@@ -147,6 +153,45 @@ def deactivate_user_endpoint(
     record_audit(db, admin.id, "deactivate", "user", user_id)
     db.commit()
     _clear_user_session_cache(request, user_id)
+    return StatusResponse(status="ok")
+
+
+@router.delete("/users/{user_id}/permanent")
+def hard_delete_user_endpoint(
+    user_id: str,
+    request: Request,
+    db: Session = Depends(get_db_session),
+    admin: AuthenticatedUser = Depends(require_admin),
+    ctx: AppContext = Depends(get_app_context),
+) -> StatusResponse:
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if user_id == admin.id:
+        raise HTTPException(400, "Cannot delete your own account")
+
+    if user.role == "admin":
+        ensure_not_last_admin(db, user_id)
+
+    user_albums = db.query(Album).filter_by(created_by=user_id).all()
+    album_count = len(user_albums)
+    song_count = sum(len(a.songs) for a in user_albums)
+    record_audit(
+        db, admin.id, "hard_delete", "user", user_id,
+        f"username={user.username}, albums={album_count}, songs={song_count}",
+    )
+
+    paths = hard_delete_user(db, user_id)
+    db.commit()
+
+    _clear_user_session_cache(request, user_id)
+    cleanup_generation_files(ctx.audio_dir, paths)
+    user_dir = ctx.audio_dir / user_id
+    if user_dir.is_dir() and not any(user_dir.iterdir()):
+        user_dir.rmdir()
+        log.info("Removed empty user audio directory: %s", user_dir)
+
     return StatusResponse(status="ok")
 
 

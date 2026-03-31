@@ -4,6 +4,7 @@
 		fetchUsers,
 		createUser,
 		updateUser,
+		hardDeleteUser,
 		fetchSessions,
 		forceLogout,
 		fetchLoginAttempts,
@@ -70,6 +71,14 @@
 	let newPassword = $state('');
 	let newRole = $state('user');
 	let creating = $state(false);
+
+	let resetPasswordUserId = $state<string | null>(null);
+	let resetPasswordValue = $state('');
+	let resettingPassword = $state(false);
+
+	let deleteUserId = $state<string | null>(null);
+	let deleteConfirmInput = $state('');
+	let deleting = $state(false);
 
 	let allModels = $state<AvailableModel[]>([]);
 	let genDefaults = $state<Record<string, VersionGenerationParams>>({});
@@ -237,6 +246,39 @@
 		}
 	}
 
+	async function handleResetPassword(userId: string) {
+		if (!resetPasswordValue || resetPasswordValue.length < 8) {
+			error = 'Password must be at least 8 characters';
+			return;
+		}
+		resettingPassword = true;
+		error = '';
+		try {
+			await updateUser(userId, { password: resetPasswordValue });
+			resetPasswordUserId = null;
+			resetPasswordValue = '';
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to reset password';
+		} finally {
+			resettingPassword = false;
+		}
+	}
+
+	async function handleHardDelete(userId: string) {
+		deleting = true;
+		error = '';
+		try {
+			await hardDeleteUser(userId);
+			deleteUserId = null;
+			deleteConfirmInput = '';
+			users = await fetchUsers();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to delete user';
+		} finally {
+			deleting = false;
+		}
+	}
+
 	async function handleForceLogout(sessionId: string) {
 		try {
 			await forceLogout(sessionId);
@@ -396,11 +438,107 @@
 										<button class="small" onclick={() => handleToggleActive(user)}>
 											{user.is_active ? 'Disable' : 'Enable'}
 										</button>
+										<button
+											class="small"
+											onclick={() => {
+												resetPasswordUserId = resetPasswordUserId === user.id ? null : user.id;
+												resetPasswordValue = '';
+											}}
+										>
+											Reset PW
+										</button>
+										<button
+											class="small danger"
+											onclick={() => {
+												deleteUserId = deleteUserId === user.id ? null : user.id;
+												deleteConfirmInput = '';
+											}}
+										>
+											Delete
+										</button>
 									{:else}
 										<span class="text-muted">You</span>
 									{/if}
 								</td>
 							</tr>
+							{#if resetPasswordUserId === user.id}
+								<tr class="inline-form-row">
+									<td colspan="5">
+										<form
+											class="inline-form"
+											onsubmit={(e) => {
+												e.preventDefault();
+												handleResetPassword(user.id);
+											}}
+										>
+											<input
+												type="password"
+												bind:value={resetPasswordValue}
+												placeholder="New password (min 8 chars)"
+												minlength={8}
+												required
+												autocomplete="new-password"
+											/>
+											<button type="submit" class="small" disabled={resettingPassword}>
+												{resettingPassword ? 'Saving...' : 'Save'}
+											</button>
+											<button
+												type="button"
+												class="small"
+												onclick={() => {
+													resetPasswordUserId = null;
+													resetPasswordValue = '';
+												}}
+											>
+												Cancel
+											</button>
+										</form>
+									</td>
+								</tr>
+							{/if}
+							{#if deleteUserId === user.id}
+								<tr class="inline-form-row">
+									<td colspan="5">
+										<div class="delete-confirm">
+											<p class="delete-warning">
+												Permanently delete <strong>{user.username}</strong> and all their albums, songs,
+												and generations. This cannot be undone.
+											</p>
+											<form
+												class="inline-form"
+												onsubmit={(e) => {
+													e.preventDefault();
+													handleHardDelete(user.id);
+												}}
+											>
+												<input
+													type="text"
+													bind:value={deleteConfirmInput}
+													placeholder="Type username to confirm"
+													autocomplete="off"
+												/>
+												<button
+													type="submit"
+													class="small danger"
+													disabled={deleting || deleteConfirmInput !== user.username}
+												>
+													{deleting ? 'Deleting...' : 'Confirm Delete'}
+												</button>
+												<button
+													type="button"
+													class="small"
+													onclick={() => {
+														deleteUserId = null;
+														deleteConfirmInput = '';
+													}}
+												>
+													Cancel
+												</button>
+											</form>
+										</div>
+									</td>
+								</tr>
+							{/if}
 						{/each}
 					</tbody>
 				</table>
@@ -846,6 +984,40 @@
 	button.small.danger {
 		color: var(--score-bad);
 		border-color: var(--score-bad);
+	}
+
+	tr.inline-form-row td {
+		padding: 0.5rem;
+		background: var(--surface);
+		border-bottom: 1px solid var(--border);
+	}
+
+	.inline-form {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.inline-form input {
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: var(--input-radius);
+		color: var(--text);
+		padding: var(--input-padding);
+		font-size: var(--input-font-size);
+		font-family: var(--font-body);
+	}
+
+	.delete-confirm {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.delete-warning {
+		color: var(--score-bad);
+		font-size: 0.8rem;
+		margin: 0;
 	}
 
 	.text-muted {

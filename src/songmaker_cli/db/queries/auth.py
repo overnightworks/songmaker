@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import (
+    Album,
     AuditLog,
     LoginAttempt,
     User,
@@ -44,6 +45,30 @@ def create_user(
     session.flush()
     log.info("Created user '%s' (role=%s)", username, role)
     return user
+
+
+def hard_delete_user(session: Session, user_id: str) -> list[str]:
+    """Hard-delete a user and all their albums/songs/generations.
+
+    Returns relative audio file paths for post-commit cleanup.
+    """
+    albums = session.query(Album).filter_by(created_by=user_id).all()
+    audio_paths: list[str] = []
+    for album in albums:
+        for song in album.songs:
+            for gen in song.generations:
+                for p in [gen.mp3_path, gen.wav_path]:
+                    if p:
+                        audio_paths.append(p)
+        session.delete(album)
+
+    user = session.query(User).filter_by(id=user_id).first()
+    if not user:
+        raise ValueError(f"User not found: {user_id}")
+    session.delete(user)
+    session.flush()
+    log.info("Hard-deleted user %s and %d album(s)", user_id, len(albums))
+    return audio_paths
 
 
 def update_user(

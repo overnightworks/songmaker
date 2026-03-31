@@ -456,6 +456,10 @@ export async function deactivateUser(userId: string): Promise<void> {
 	await apiFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
 }
 
+export async function hardDeleteUser(userId: string): Promise<void> {
+	await apiFetch(`/api/admin/users/${userId}/permanent`, { method: 'DELETE' });
+}
+
 export async function fetchSessions(
 	offset: number = 0,
 	limit: number = 100
