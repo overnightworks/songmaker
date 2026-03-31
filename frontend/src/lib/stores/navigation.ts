@@ -33,6 +33,10 @@ export function selectAlbumOverview(albumId: string): void {
 	closeSidebar();
 }
 
+export function deselectAlbum(): void {
+	playerSelectAlbum(null);
+}
+
 export function backToAlbum(): void {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);

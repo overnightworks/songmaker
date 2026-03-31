@@ -35,6 +35,7 @@
 		navigateToSongTab,
 		switchTab,
 		backToAlbum,
+		deselectAlbum,
 		detailTab,
 		selectSong,
 		initNavigation
@@ -497,6 +498,10 @@
 			</div>
 		{:else if selectedAlbum}
 			<div class="detail-panel">
+				<button class="back-btn mobile-only" onclick={deselectAlbum}>
+					<span class="back-arrow">←</span>
+					Albums
+				</button>
 				<div class="detail-header">
 					<div>
 						<h2 class="song-title">{selectedAlbum.title}</h2>
@@ -1000,7 +1005,15 @@
 		padding: 12px 0;
 	}
 
+	.mobile-only {
+		display: none;
+	}
+
 	@media (max-width: 768px) {
+		.mobile-only {
+			display: flex;
+		}
+
 		.sidebar {
 			position: static;
 			width: 100%;
