@@ -289,6 +289,28 @@ def test_cleanup_album_api(client: TestClient) -> None:
     assert resp.json()["deleted"] == 1
 
 
+def test_cleanup_song_api(client: TestClient) -> None:
+    client.post("/api/generations/g1/pick")
+    resp = client.post("/api/songs/s1/cleanup")
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] == 1
+    assert client.get("/api/generations/g1").status_code == 200
+    assert client.get("/api/generations/g2").status_code == 404
+
+
+def test_cleanup_song_skips_kept(client: TestClient) -> None:
+    client.post("/api/generations/g1/keep")
+    resp = client.post("/api/songs/s1/cleanup")
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] == 1
+    assert client.get("/api/generations/g1").status_code == 200
+
+
+def test_cleanup_song_not_found(client: TestClient) -> None:
+    resp = client.post("/api/songs/nonexistent/cleanup")
+    assert resp.status_code == 404
+
+
 # ── Job endpoints ────────────────────────────────────────────────────
 
 

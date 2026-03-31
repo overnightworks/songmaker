@@ -94,6 +94,7 @@
 
 						<div class="gen-info">
 							<span class="gen-name">
+								{#if gen.is_kept}<span class="kept-heart">♥</span>{/if}
 								{#if gen.is_picked}<span class="picked-star">★</span>{/if}
 								gen{gen.generation_number}
 							</span>
@@ -277,6 +278,11 @@
 		font-size: 13px;
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
+	}
+
+	.kept-heart {
+		color: #e04050;
+		text-shadow: 0 0 6px rgba(224, 64, 80, 0.4);
 	}
 
 	.picked-star {

@@ -260,3 +260,26 @@ def disable_song_sharing(session: Session, song_id: str) -> Song:
     session.flush()
     log.info("Disabled sharing for song %s", song_id)
     return song
+
+
+def cleanup_song(session: Session, song_id: str) -> tuple[int, list[str]]:
+    """Remove unpicked+unkept generations from a song. Returns (count, paths)."""
+    gens = (
+        session.query(Generation)
+        .options(joinedload(Generation.scores), joinedload(Generation.rating))
+        .filter(
+            Generation.song_id == song_id,
+            Generation.is_picked == False,  # noqa: E712
+            Generation.is_kept == False,  # noqa: E712
+        )
+        .all()
+    )
+    count = len(gens)
+    paths: list[str] = []
+    for gen in gens:
+        for p in [gen.mp3_path, gen.wav_path]:
+            if p:
+                paths.append(p)
+        session.delete(gen)
+    session.flush()
+    return count, paths

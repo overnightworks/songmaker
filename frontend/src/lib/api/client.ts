@@ -254,6 +254,10 @@ export async function cleanupAlbum(albumId: string): Promise<CleanupResult> {
 	return apiFetch<CleanupResult>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
 }
 
+export async function cleanupSong(songId: string): Promise<CleanupResult> {
+	return apiFetch<CleanupResult>(`/api/songs/${songId}/cleanup`, { method: 'POST' });
+}
+
 export async function fetchCapabilities(): Promise<Capabilities> {
 	return apiFetch<Capabilities>('/api/capabilities');
 }

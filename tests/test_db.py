@@ -31,6 +31,7 @@ from songmaker_cli.db.models import (
 from songmaker_cli.db.queries import (
     UNSET,
     cleanup_album,
+    cleanup_song,
     clear_stale_user_jobs,
     count_recent_failed_attempts,
     count_total_queued_jobs,
@@ -367,6 +368,26 @@ def test_cleanup_album_skips_picked_and_kept(seeded_session: Session) -> None:
     seeded_session.commit()
     assert count == 0
     assert get_generation(seeded_session, "g1") is not None
+    assert get_generation(seeded_session, "g2") is not None
+
+
+def test_cleanup_song_deletes_unpicked(seeded_session: Session) -> None:
+    pick_generation(seeded_session, "g1")
+    seeded_session.commit()
+    count, paths = cleanup_song(seeded_session, "s1")
+    seeded_session.commit()
+    assert count == 1
+    assert get_generation(seeded_session, "g1") is not None
+    assert get_generation(seeded_session, "g2") is None
+
+
+def test_cleanup_song_skips_kept(seeded_session: Session) -> None:
+    keep_generation(seeded_session, "g2")
+    seeded_session.commit()
+    count, paths = cleanup_song(seeded_session, "s1")
+    seeded_session.commit()
+    assert count == 1
+    assert get_generation(seeded_session, "g1") is None
     assert get_generation(seeded_session, "g2") is not None
 
 

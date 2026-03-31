@@ -383,22 +383,22 @@
 	}
 
 	.keep-btn:hover {
-		border-color: var(--score-ok);
-		color: var(--score-ok);
+		border-color: #e04050;
+		color: #e04050;
 	}
 
 	.keep-btn.kept {
-		border-color: var(--score-ok);
-		background: rgba(0, 200, 100, 0.1);
-		color: var(--score-ok);
-		box-shadow: 0 0 8px rgba(0, 200, 100, 0.15);
+		border-color: #e04050;
+		background: rgba(224, 64, 80, 0.1);
+		color: #e04050;
+		box-shadow: 0 0 8px rgba(224, 64, 80, 0.15);
 	}
 
 	.kept-badge {
 		font-size: 11px;
-		color: var(--score-ok);
+		color: #e04050;
 		font-family: var(--font-display);
-		text-shadow: 0 0 6px rgba(0, 200, 100, 0.4);
+		text-shadow: 0 0 6px rgba(224, 64, 80, 0.4);
 	}
 
 	.gen-heading {

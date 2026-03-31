@@ -157,14 +157,18 @@
 		messages = [...messages, { role: 'user', text: msg }];
 		loading = true;
 
+		const originSongId = songId;
+		const originAlbumId = currentAlbumId;
+		const originSongs = allSongs;
+
 		try {
 			let responseText: string | undefined;
 			const ctx = buildFullContext(
 				songContext,
-				songId,
+				originSongId,
 				contextScope,
-				currentAlbumId,
-				allSongs,
+				originAlbumId,
+				originSongs,
 				mentionedSongIds,
 				versions,
 				mentionedVersionNumbers
@@ -188,18 +192,24 @@
 
 			if (!responseText) throw new Error('Chat failed after trimming history');
 
-			const applyData = extractApplyData(responseText, currentAlbumId, allSongs);
+			const applyData = extractApplyData(responseText, originAlbumId, originSongs);
 			const newMsg: Message = { role: 'assistant', text: responseText, applyData };
 
-			if (applyData && isCurrentSong(applyData, songId) && onapply) {
+			const switchedAway = songId !== originSongId;
+
+			if (!switchedAway && applyData && isCurrentSong(applyData, originSongId) && onapply) {
 				onapply(applyData);
 				newMsg.applied = true;
 			}
 
-			messages = [...messages, newMsg];
-			saveHistory();
+			if (!switchedAway) {
+				messages = [...messages, newMsg];
+				saveHistory();
+			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Chat failed';
+			if (songId === originSongId) {
+				error = e instanceof Error ? e.message : 'Chat failed';
+			}
 		} finally {
 			loading = false;
 			scrollToBottom();

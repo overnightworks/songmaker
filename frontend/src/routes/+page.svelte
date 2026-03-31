@@ -12,6 +12,7 @@
 		deleteAlbum,
 		deleteSong,
 		cleanupAlbum,
+		cleanupSong,
 		shareAlbum,
 		unshareAlbum,
 		shareSong,
@@ -352,6 +353,18 @@
 		}
 	}
 
+	async function onSongCleanup(): Promise<void> {
+		if (!song) return;
+		try {
+			const result = await cleanupSong(song.id);
+			const updated = await fetchSong(song.id);
+			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+			addToast(`Deleted ${result.deleted} generation${result.deleted !== 1 ? 's' : ''}`, 'success');
+		} catch {
+			addToast('Cleanup failed', 'error');
+		}
+	}
+
 	async function onDeleteGeneration(genId: string): Promise<void> {
 		if (!song) return;
 		try {
@@ -519,6 +532,11 @@
 									{
 										label: 'Add to Playlist',
 										onclick: () => (playlistPickerFor = { type: 'song', id: song.id })
+									},
+									{
+										label: 'Clean Up Generations',
+										confirmLabel: 'Confirm Clean Up',
+										onclick: onSongCleanup
 									},
 									{
 										label: 'Delete Song',

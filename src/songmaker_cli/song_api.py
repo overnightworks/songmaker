@@ -14,6 +14,7 @@ from songmaker_cli.api_helpers import (
     owner_filter,
 )
 from songmaker_cli.api_models import (
+    CleanupResponse,
     PaginatedResponse,
     ShareResponse,
     SongCreateRequest,
@@ -26,6 +27,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.db.queries import (
+    cleanup_song,
     count_songs,
     create_song,
     delete_song,
@@ -147,6 +149,21 @@ def api_delete_song(
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
+
+
+@router.post("/songs/{song_id}/cleanup")
+def api_cleanup_song(
+    song_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> CleanupResponse:
+    check_song_access(session, song_id, user)
+    count, paths = cleanup_song(session, song_id)
+    record_audit(session, user.id, "cleanup", "song", song_id, f"deleted={count}")
+    session.commit()
+    cleanup_generation_files(ctx.audio_dir, paths)
+    return CleanupResponse(deleted=count)
 
 
 @router.post("/songs/{song_id}/share")

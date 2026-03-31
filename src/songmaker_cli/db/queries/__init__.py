@@ -108,6 +108,7 @@ from songmaker_cli.db.queries.settings import (
 )
 from songmaker_cli.db.queries.songs import (
     UNSET,
+    cleanup_song,
     count_songs,
     create_song,
     delete_song,
@@ -133,6 +134,7 @@ __all__ = [
     "add_generation_to_playlist",
     "add_song_to_playlist",
     "cleanup_album",
+    "cleanup_song",
     "delete_all_user_rate_limits",
     "delete_rate_limit_setting",
     "cleanup_old_login_attempts",
