@@ -158,4 +158,16 @@
 		text-align: center;
 		font-size: 12px;
 	}
+
+	@media (max-width: 768px) {
+		.search {
+			font-size: 14px;
+			padding: 8px 12px;
+		}
+
+		.new-btn {
+			width: 36px;
+			height: 36px;
+		}
+	}
 </style>

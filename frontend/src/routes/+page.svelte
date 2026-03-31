@@ -393,14 +393,14 @@
 	}
 
 	.save-btn {
-		padding: 0.5rem 1.2rem;
+		padding: var(--btn-padding-pill);
 		border: none;
-		border-radius: 16px;
+		border-radius: var(--btn-radius-pill);
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 		font-family: var(--font-display);
-		font-size: 0.85rem;
-		letter-spacing: 0.5px;
+		font-size: var(--btn-font-size);
+		letter-spacing: var(--btn-letter-spacing);
 		text-transform: uppercase;
 		cursor: pointer;
 		white-space: nowrap;
@@ -416,14 +416,14 @@
 	}
 
 	.generate-btn {
-		padding: 0.5rem 1.2rem;
+		padding: var(--btn-padding-pill);
 		border: none;
-		border-radius: 16px;
+		border-radius: var(--btn-radius-pill);
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 		font-family: var(--font-display);
-		font-size: 0.85rem;
-		letter-spacing: 0.5px;
+		font-size: var(--btn-font-size);
+		letter-spacing: var(--btn-letter-spacing);
 		text-transform: uppercase;
 		cursor: pointer;
 		white-space: nowrap;
@@ -460,7 +460,7 @@
 		border: 1px solid var(--border);
 		color: var(--text-light);
 		padding: 4px 8px;
-		border-radius: 4px;
+		border-radius: var(--input-radius);
 		font-size: 11px;
 	}
 
@@ -565,7 +565,7 @@
 		font-family: var(--font-display);
 		font-size: 11px;
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 		cursor: pointer;
 	}
 
@@ -705,6 +705,10 @@
 
 		.detail-panel {
 			padding: 12px 12px calc(var(--player-height) + 12px);
+		}
+
+		.song-title {
+			font-size: 18px;
 		}
 	}
 </style>

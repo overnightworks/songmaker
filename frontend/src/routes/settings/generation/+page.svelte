@@ -353,14 +353,14 @@
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: white;
 		border: none;
-		border-radius: 16px;
-		padding: 0.5rem 1.2rem;
-		font-size: 0.85rem;
+		border-radius: var(--btn-radius-pill);
+		padding: var(--btn-padding-pill);
+		font-size: var(--btn-font-size);
 		font-weight: 600;
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 		transition: box-shadow 0.2s;
 	}
 
@@ -377,13 +377,13 @@
 		background: transparent;
 		color: var(--text-muted);
 		border: 1px solid var(--border);
-		border-radius: 16px;
-		padding: 0.5rem 1.2rem;
-		font-size: 0.85rem;
+		border-radius: var(--btn-radius-pill);
+		padding: var(--btn-padding-pill);
+		font-size: var(--btn-font-size);
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 	}
 
 	.reset-btn:hover {
@@ -403,12 +403,12 @@
 	}
 
 	.add-btn {
-		padding: 3px 10px;
+		padding: var(--btn-padding-sm);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 		background: transparent;
 		color: var(--text-muted);
-		font-size: 0.75rem;
+		font-size: var(--btn-font-size-sm);
 		cursor: pointer;
 		font-family: var(--font-display);
 	}
@@ -425,7 +425,7 @@
 		padding: 1rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--card-radius);
 		margin-bottom: 1rem;
 	}
 
@@ -437,12 +437,12 @@
 	}
 
 	.preset-name-input {
-		padding: 0.5rem 0.7rem;
+		padding: var(--input-padding);
 		background: var(--bg);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--input-radius);
 		color: var(--text);
-		font-size: 0.85rem;
+		font-size: var(--input-font-size);
 		flex: 1;
 		min-width: 150px;
 		font-family: var(--font-body);
@@ -455,12 +455,12 @@
 	}
 
 	.model-select {
-		padding: 0.5rem 0.7rem;
+		padding: var(--input-padding);
 		background: var(--bg);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--input-radius);
 		color: var(--text);
-		font-size: 0.85rem;
+		font-size: var(--input-font-size);
 		font-family: var(--font-body);
 	}
 
@@ -490,10 +490,10 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
+		padding: var(--row-padding);
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 	}
 
 	.preset-name {
@@ -519,12 +519,12 @@
 	}
 
 	.preset-action {
-		padding: 3px 10px;
+		padding: var(--btn-padding-sm);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 		background: transparent;
 		color: var(--text-muted);
-		font-size: 0.75rem;
+		font-size: var(--btn-font-size-sm);
 		cursor: pointer;
 		font-family: var(--font-body);
 	}

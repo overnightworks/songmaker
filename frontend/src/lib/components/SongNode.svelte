@@ -579,4 +579,42 @@
 	.show-all-btn:hover {
 		color: var(--primary);
 	}
+
+	@media (max-width: 768px) {
+		.song-item {
+			padding: 8px 12px 8px 20px;
+			font-size: 14px;
+		}
+
+		.gen-list {
+			padding-left: 24px;
+		}
+
+		.gen-row {
+			padding: 6px 12px;
+			font-size: 12px;
+		}
+
+		.gen-seed {
+			font-size: 9px;
+		}
+
+		.expand-toggle {
+			width: 20px;
+			font-size: 12px;
+		}
+
+		.gen-play-btn {
+			font-size: 12px;
+			min-width: 28px;
+			min-height: 28px;
+		}
+
+		.gen-delete-confirm,
+		.move-btn {
+			min-height: 28px;
+			font-size: 10px;
+			padding: 2px 6px;
+		}
+	}
 </style>

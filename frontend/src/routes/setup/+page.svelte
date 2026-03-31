@@ -108,7 +108,7 @@
 	.setup-card {
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--card-radius);
 		padding: 2rem;
 		width: 360px;
 	}
@@ -147,9 +147,9 @@
 	input {
 		background: var(--bg);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--input-radius);
 		color: var(--text);
-		padding: 0.5rem 0.7rem;
+		padding: var(--input-padding);
 		font-size: 0.95rem;
 		font-family: var(--font-body);
 		width: 100%;
@@ -189,15 +189,15 @@
 		background: var(--primary);
 		color: white;
 		border: none;
-		border-radius: 16px;
-		padding: 0.5rem 1.2rem;
-		font-size: 0.85rem;
+		border-radius: var(--btn-radius-pill);
+		padding: var(--btn-padding-pill);
+		font-size: var(--btn-font-size);
 		font-weight: 600;
 		cursor: pointer;
 		margin-top: 0.5rem;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 	}
 
 	button:hover:not(:disabled) {

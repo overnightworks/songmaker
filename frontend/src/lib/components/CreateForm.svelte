@@ -132,10 +132,10 @@
 	.create-fields input,
 	.create-fields select {
 		flex: 1;
-		padding: 0.5rem 0.7rem;
+		padding: var(--input-padding);
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--input-radius);
 		color: var(--text);
 		font-size: 13px;
 	}
@@ -148,17 +148,17 @@
 	}
 
 	.create-fields button {
-		padding: 0.5rem 1.2rem;
+		padding: var(--btn-padding-pill);
 		border: none;
-		border-radius: 16px;
+		border-radius: var(--btn-radius-pill);
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 		font-family: var(--font-display);
-		font-size: 0.85rem;
+		font-size: var(--btn-font-size);
 		cursor: pointer;
 		white-space: nowrap;
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 		transition: box-shadow 0.2s;
 	}
 

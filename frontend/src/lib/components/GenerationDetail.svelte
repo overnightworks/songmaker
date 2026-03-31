@@ -189,7 +189,7 @@
 		padding: 12px;
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--card-radius);
 	}
 
 	.gen-header-left {
@@ -199,15 +199,15 @@
 	}
 
 	.pick-btn {
-		padding: 3px 10px;
+		padding: var(--btn-padding-sm);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 		background: none;
 		color: var(--text-dim);
 		font-size: 11px;
 		font-family: var(--font-display);
 		cursor: pointer;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 	}
 
 	.pick-btn:hover {
@@ -248,11 +248,11 @@
 		border: 1px solid var(--primary);
 		color: var(--primary);
 		padding: 2px 10px;
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 		font-size: 11px;
 		cursor: pointer;
 		font-family: var(--font-display);
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 	}
 
 	.version-link:hover {
@@ -265,7 +265,7 @@
 		color: var(--text-muted);
 		background: var(--surface);
 		padding: 2px 10px;
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 		border: 1px solid var(--border);
 		font-family: var(--font-display);
 	}
@@ -287,7 +287,7 @@
 		padding: 12px;
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--card-radius);
 	}
 
 	.section-header {
@@ -305,15 +305,15 @@
 	}
 
 	.score-btn {
-		padding: 3px 10px;
+		padding: var(--btn-padding-sm);
 		border: 1px solid var(--primary);
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 		background: none;
 		color: var(--primary);
 		font-size: 10px;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 		cursor: pointer;
 	}
 

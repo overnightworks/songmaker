@@ -183,7 +183,7 @@
 		padding: 10px 12px;
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: var(--card-radius);
 		cursor: pointer;
 		text-align: left;
 		color: var(--text);
@@ -351,15 +351,15 @@
 	}
 
 	.score-action {
-		padding: 3px 10px;
+		padding: var(--btn-padding-sm);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 		background: none;
 		color: var(--text-dim);
 		font-size: 10px;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 		cursor: pointer;
 	}
 
@@ -388,6 +388,20 @@
 
 		.score-action {
 			display: none;
+		}
+
+		.gen-name {
+			font-size: 14px;
+		}
+
+		.gen-seed {
+			font-size: 11px;
+		}
+
+		.play-btn {
+			width: 40px;
+			height: 40px;
+			font-size: 14px;
 		}
 	}
 </style>

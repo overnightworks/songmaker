@@ -285,4 +285,18 @@
 		color: var(--accent);
 		box-shadow: 0 0 6px rgba(160, 32, 240, 0.2);
 	}
+
+	@media (max-width: 768px) {
+		.album-header {
+			padding: 10px 12px;
+			font-size: 12px;
+		}
+
+		.cleanup-btn,
+		.share-btn {
+			font-size: 9px;
+			padding: 3px 8px;
+			min-height: 28px;
+		}
+	}
 </style>

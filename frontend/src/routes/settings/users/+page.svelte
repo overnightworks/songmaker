@@ -723,7 +723,7 @@
 		font-family: var(--font-display);
 		font-size: 0.9rem;
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 	}
 
 	.tabs button.active {
@@ -759,10 +759,10 @@
 	.create-form select {
 		background: var(--bg);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--input-radius);
 		color: var(--text);
-		padding: 0.5rem 0.7rem;
-		font-size: 0.85rem;
+		padding: var(--input-padding);
+		font-size: var(--input-font-size);
 		font-family: var(--font-body);
 	}
 
@@ -770,12 +770,12 @@
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: white;
 		border: none;
-		border-radius: 16px;
+		border-radius: var(--btn-radius-pill);
 		padding: 0.5rem 1rem;
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 		transition: box-shadow 0.2s;
 	}
 
@@ -893,13 +893,13 @@
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: white;
 		border: none;
-		border-radius: 16px;
+		border-radius: var(--btn-radius-pill);
 		padding: 0.5rem 1rem;
-		font-size: 0.85rem;
+		font-size: var(--btn-font-size);
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 		transition: box-shadow 0.2s;
 	}
 
@@ -946,7 +946,7 @@
 		width: 80px;
 		background: var(--bg);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--input-radius);
 		color: var(--text);
 		padding: 0.35rem 0.5rem;
 		font-size: 0.85rem;
@@ -963,13 +963,13 @@
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: white;
 		border: none;
-		border-radius: 16px;
+		border-radius: var(--btn-radius-pill);
 		padding: 0.4rem 1rem;
 		font-size: 0.8rem;
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 		margin-top: 0.5rem;
 	}
 
@@ -986,13 +986,13 @@
 		background: transparent;
 		color: var(--text-muted);
 		border: 1px solid var(--border);
-		border-radius: 16px;
-		padding: 0.5rem 1.2rem;
-		font-size: 0.85rem;
+		border-radius: var(--btn-radius-pill);
+		padding: var(--btn-padding-pill);
+		font-size: var(--btn-font-size);
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 	}
 
 	.clear-btn:hover {
@@ -1034,14 +1034,14 @@
 	.gen-model-tab {
 		padding: 0.5rem 1.4rem;
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 		background: transparent;
 		color: var(--text-muted);
-		font-size: 0.85rem;
+		font-size: var(--btn-font-size);
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 	}
 
 	.gen-model-tab:hover:not(.active) {
@@ -1077,14 +1077,14 @@
 		gap: 8px;
 		padding: 0.5rem 1.4rem;
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--btn-radius-sm);
 		background: transparent;
 		color: var(--text-muted);
-		font-size: 0.85rem;
+		font-size: var(--btn-font-size);
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: var(--btn-letter-spacing);
 	}
 
 	.model-toggle.active {
