@@ -80,6 +80,9 @@ services:
       - "8080:8080"
     volumes:
       - audiofiles:/app/data/audio
+      - ~/.local/bin/claude:/usr/local/bin/claude:ro
+      - ~/.claude:/home/songmaker/.claude
+      - ~/.claude.json:/home/songmaker/.claude.json
     cap_drop:
       - ALL
 
