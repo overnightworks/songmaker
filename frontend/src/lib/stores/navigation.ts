@@ -1,13 +1,11 @@
-import { get, writable, derived } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
 import {
 	selectedSongId,
 	selectedGenerationId,
 	selectSong as playerSelectSong,
 	selectGenerationInSidebar as playerSelectGeneration,
 	clearGenerationSelection as playerClearGeneration,
-	ensureGenerationsLoaded,
-	expandedSongIds,
-	toggleSongExpanded
+	ensureGenerationsLoaded
 } from '$lib/stores/player';
 import { closeSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
@@ -30,8 +28,6 @@ function replaceSongUrl(songId: string | null): void {
 
 export function selectSong(songId: string): void {
 	playerSelectSong(songId);
-	const expanded = get(expandedSongIds);
-	if (!expanded.has(songId)) toggleSongExpanded(songId);
 	ensureGenerationsLoaded(songId);
 	detailTab.set('generations');
 	closeSidebar();
@@ -71,8 +67,6 @@ export function initNavigation(): () => void {
 	if (songId) {
 		suppressPush = true;
 		playerSelectSong(songId);
-		const expanded = get(expandedSongIds);
-		if (!expanded.has(songId)) toggleSongExpanded(songId);
 		ensureGenerationsLoaded(songId);
 		suppressPush = false;
 	}
@@ -82,8 +76,6 @@ export function initNavigation(): () => void {
 		const state = (e.state as { songId: string | null } | null) ?? { songId: null };
 		if (state.songId) {
 			playerSelectSong(state.songId);
-			const expanded = get(expandedSongIds);
-			if (!expanded.has(state.songId)) toggleSongExpanded(state.songId);
 			ensureGenerationsLoaded(state.songId);
 		} else {
 			selectedSongId.set(null);

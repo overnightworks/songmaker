@@ -3,7 +3,6 @@ import { get } from 'svelte/store';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import {
 	clearGenerationSelection,
-	expandedSongIds,
 	filteredSongs,
 	isAudioPlaying,
 	navigateToPlaying,
@@ -23,7 +22,6 @@ import {
 	selectedSongId,
 	songList,
 	togglePlayPause,
-	toggleSongExpanded,
 	updateGenerationScores
 } from './player';
 
@@ -131,14 +129,6 @@ describe('browsing state', () => {
 		songList.set([makeSong(), makeSong({ id: 's2', album_id: 'a2' })]);
 		selectedAlbumId.set(null);
 		expect(get(filteredSongs)).toHaveLength(2);
-	});
-
-	it('toggleSongExpanded adds and removes', () => {
-		expandedSongIds.set(new Set());
-		toggleSongExpanded('s1');
-		expect(get(expandedSongIds).has('s1')).toBe(true);
-		toggleSongExpanded('s1');
-		expect(get(expandedSongIds).has('s1')).toBe(false);
 	});
 
 	it('selectGenerationInSidebar sets song and gen', () => {

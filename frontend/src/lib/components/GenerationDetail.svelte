@@ -8,9 +8,12 @@
 		onversionclick?: (versionId: string) => void;
 		onscore?: (genId: string) => void;
 		onpick?: (genId: string, picked: boolean) => void;
+		ondelete?: (genId: string) => void;
 	}
 
-	let { generation, scoring = false, onversionclick, onscore, onpick }: Props = $props();
+	let { generation, scoring = false, onversionclick, onscore, onpick, ondelete }: Props = $props();
+
+	let confirmDelete = $state(false);
 
 	const scores = $derived(generation.scores);
 	const params = $derived(generation.generation_params);
@@ -172,6 +175,21 @@
 				</div>
 			</section>
 		{/if}
+	{/if}
+
+	{#if ondelete}
+		<div class="delete-section">
+			{#if confirmDelete}
+				<button class="delete-btn confirming" onclick={() => ondelete(generation.id)}>
+					Delete this generation?
+				</button>
+				<button class="delete-cancel" onclick={() => (confirmDelete = false)}>Cancel</button>
+			{:else}
+				<button class="delete-btn" onclick={() => (confirmDelete = true)}>
+					Delete Generation
+				</button>
+			{/if}
+		</div>
 	{/if}
 </div>
 
@@ -420,5 +438,56 @@
 		margin: 0;
 		max-height: 400px;
 		overflow-y: auto;
+	}
+
+	.delete-section {
+		display: flex;
+		gap: 8px;
+		margin-top: 8px;
+		padding-top: 12px;
+		border-top: 1px solid var(--border);
+	}
+
+	.delete-btn {
+		padding: var(--btn-padding-sm);
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		background: transparent;
+		color: var(--text-dim);
+		font-size: var(--btn-font-size-sm);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: var(--btn-letter-spacing);
+		cursor: pointer;
+	}
+
+	.delete-btn:hover {
+		border-color: var(--score-bad);
+		color: var(--score-bad);
+	}
+
+	.delete-btn.confirming {
+		border-color: var(--score-bad);
+		color: var(--score-bad);
+	}
+
+	.delete-btn.confirming:hover {
+		background: var(--score-bad);
+		color: #fff;
+	}
+
+	.delete-cancel {
+		padding: var(--btn-padding-sm);
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		background: transparent;
+		color: var(--text-muted);
+		font-size: var(--btn-font-size-sm);
+		cursor: pointer;
+	}
+
+	.delete-cancel:hover {
+		border-color: var(--text-muted);
+		color: var(--text);
 	}
 </style>

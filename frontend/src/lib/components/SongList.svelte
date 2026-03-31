@@ -6,9 +6,7 @@
 	let { onNewSong }: Props = $props();
 
 	import { albumList, songList } from '$lib/stores/player';
-	import { deleteAlbum } from '$lib/api/client';
 	import { searchQuery } from '$lib/stores/filter';
-	import { addToast } from '$lib/stores/toast';
 	import AlbumNode from './AlbumNode.svelte';
 	import type { SongItem, AlbumItem } from '$lib/api/types';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -53,17 +51,6 @@
 		if (expandedAlbums.has(albumId)) expandedAlbums.delete(albumId);
 		else expandedAlbums.add(albumId);
 	}
-
-	async function handleDeleteAlbum(albumId: string): Promise<void> {
-		try {
-			await deleteAlbum(albumId);
-			albumList.update((list) => list.filter((a) => a.id !== albumId));
-			songList.update((list) => list.filter((s) => s.album_id !== albumId));
-			addToast('Album deleted', 'success');
-		} catch (err) {
-			addToast(err instanceof Error ? err.message : 'Delete failed', 'error');
-		}
-	}
 </script>
 
 <div class="search-bar">
@@ -87,7 +74,6 @@
 			songs={group.songs}
 			expanded={expandedAlbums.has(group.album.id)}
 			ontoggle={() => toggleAlbum(group.album.id)}
-			ondeletealbum={handleDeleteAlbum}
 		/>
 	{/each}
 

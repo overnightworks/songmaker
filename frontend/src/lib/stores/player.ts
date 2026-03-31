@@ -9,7 +9,6 @@ export const songList = writable<SongItem[]>([]);
 // --- Browsing state ---
 export const selectedAlbumId = writable<string | null>(null);
 export const selectedSongId = writable<string | null>(null);
-export const expandedSongIds = writable<Set<string>>(new Set());
 export const selectedGenerationId = writable<string | null>(null);
 
 export const selectedSong = derived(
@@ -38,15 +37,6 @@ export function selectAlbum(albumId: string | null): void {
 export function selectSong(songId: string): void {
 	selectedSongId.set(songId);
 	selectedGenerationId.set(null);
-}
-
-export function toggleSongExpanded(songId: string): void {
-	expandedSongIds.update((ids) => {
-		const next = new Set(ids);
-		if (next.has(songId)) next.delete(songId);
-		else next.add(songId);
-		return next;
-	});
 }
 
 const _loadingIds = new Set<string>();

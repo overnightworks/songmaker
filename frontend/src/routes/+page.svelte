@@ -8,7 +8,12 @@
 		generateSong,
 		scoreGeneration,
 		pickGeneration,
-		unpickGeneration
+		unpickGeneration,
+		deleteAlbum,
+		cleanupAlbum,
+		shareAlbum,
+		unshareAlbum,
+		deleteGeneration
 	} from '$lib/api/client';
 	import { activeJobs, trackJob, removeJob } from '$lib/stores/jobs';
 	import {
@@ -16,6 +21,7 @@
 		songList,
 		selectedSong,
 		selectedGeneration,
+		selectedAlbumId,
 		ensureGenerationsLoaded
 	} from '$lib/stores/player';
 	import {
@@ -59,11 +65,30 @@
 	const song = $derived($selectedSong);
 	const activeGen = $derived($selectedGeneration);
 	const albums = $derived($albumList);
+	const allSongs = $derived($songList);
+	const currentAlbumId = $derived($selectedAlbumId);
 	const dirty = $derived($isDirty);
 	const isSaving = $derived($saving);
 	const statusMsg = $derived($status);
 	const jobs = $derived($activeJobs);
 	const tab = $derived($detailTab);
+
+	const selectedAlbum = $derived(
+		currentAlbumId ? (albums.find((a) => a.id === currentAlbumId) ?? null) : null
+	);
+	const albumSongCount = $derived(
+		currentAlbumId ? allSongs.filter((s) => s.album_id === currentAlbumId).length : 0
+	);
+	const albumGenCount = $derived(
+		currentAlbumId
+			? allSongs
+					.filter((s) => s.album_id === currentAlbumId)
+					.reduce((sum, s) => sum + s.generation_count, 0)
+			: 0
+	);
+
+	let confirmAlbumCleanup = $state(false);
+	let confirmAlbumDelete = $state(false);
 
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
 	const isGenerating = $derived(
@@ -150,6 +175,76 @@
 		const idx = $versions.findIndex((v) => v.id === versionId);
 		if (idx !== -1) loadVersion(idx);
 		navigateToSongTab('edit');
+	}
+
+	async function onAlbumShare(): Promise<void> {
+		if (!selectedAlbum) return;
+		try {
+			if (selectedAlbum.is_shared) {
+				await unshareAlbum(selectedAlbum.id);
+				albumList.update((list) =>
+					list.map((a) =>
+						a.id === selectedAlbum.id ? { ...a, is_shared: false, share_slug: null } : a
+					)
+				);
+				addToast('Sharing disabled', 'success');
+			} else {
+				const result = await shareAlbum(selectedAlbum.id);
+				albumList.update((list) =>
+					list.map((a) =>
+						a.id === selectedAlbum.id ? { ...a, is_shared: true, share_slug: result.share_slug } : a
+					)
+				);
+				await navigator.clipboard.writeText(result.share_url);
+				addToast('Link copied to clipboard', 'success');
+			}
+		} catch {
+			addToast('Share failed', 'error');
+		}
+	}
+
+	async function onAlbumCleanup(): Promise<void> {
+		if (!selectedAlbum) return;
+		try {
+			const result = await cleanupAlbum(selectedAlbum.id);
+			confirmAlbumCleanup = false;
+			const refreshed = await fetchSongs();
+			songList.set(refreshed.items);
+			addToast(`Deleted ${result.deleted} generation${result.deleted !== 1 ? 's' : ''}`, 'success');
+		} catch {
+			addToast('Cleanup failed', 'error');
+		}
+	}
+
+	async function onAlbumDelete(): Promise<void> {
+		if (!selectedAlbum) return;
+		try {
+			await deleteAlbum(selectedAlbum.id);
+			albumList.update((list) => list.filter((a) => a.id !== selectedAlbum.id));
+			songList.update((list) => list.filter((s) => s.album_id !== selectedAlbum.id));
+			confirmAlbumDelete = false;
+			addToast('Album deleted', 'success');
+		} catch {
+			addToast('Delete failed', 'error');
+		}
+	}
+
+	async function onDeleteGeneration(genId: string): Promise<void> {
+		if (!song) return;
+		try {
+			await deleteGeneration(genId);
+			songList.update((songs) =>
+				songs.map((s) => ({
+					...s,
+					generations: s.generations.filter((g) => g.id !== genId),
+					generation_count: s.id === song.id ? s.generation_count - 1 : s.generation_count
+				}))
+			);
+			clearGenerationSelection();
+			addToast('Generation deleted', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Delete failed', 'error');
+		}
 	}
 
 	const songContext = $derived(
@@ -273,6 +368,7 @@
 								onversionclick={onVersionClick}
 								onscore={onScore}
 								onpick={onPick}
+								ondelete={onDeleteGeneration}
 							/>
 						</div>
 					{:else}
@@ -296,6 +392,47 @@
 						/>
 					</div>
 				{/if}
+			</div>
+		{:else if selectedAlbum}
+			<div class="detail-panel album-overview">
+				<h2 class="song-title">{selectedAlbum.title}</h2>
+				<span class="song-album">
+					{albumSongCount} song{albumSongCount !== 1 ? 's' : ''} · {albumGenCount} generation{albumGenCount !==
+					1
+						? 's'
+						: ''}
+				</span>
+				<div class="album-actions">
+					<button
+						class="album-action-btn"
+						class:active={selectedAlbum.is_shared}
+						onclick={onAlbumShare}
+					>
+						{selectedAlbum.is_shared ? 'Shared ✓' : 'Share'}
+					</button>
+					{#if confirmAlbumCleanup}
+						<button class="album-action-btn destructive" onclick={onAlbumCleanup}>
+							Delete unpicked?
+						</button>
+						<button class="album-action-btn" onclick={() => (confirmAlbumCleanup = false)}>
+							Cancel
+						</button>
+					{:else if confirmAlbumDelete}
+						<button class="album-action-btn destructive" onclick={onAlbumDelete}>
+							Delete album?
+						</button>
+						<button class="album-action-btn" onclick={() => (confirmAlbumDelete = false)}>
+							Cancel
+						</button>
+					{:else}
+						<button class="album-action-btn" onclick={() => (confirmAlbumCleanup = true)}>
+							Clean Up
+						</button>
+						<button class="album-action-btn" onclick={() => (confirmAlbumDelete = true)}>
+							Delete
+						</button>
+					{/if}
+				</div>
 			</div>
 		{:else}
 			<div class="empty-state">
@@ -670,6 +807,50 @@
 
 	.error {
 		color: var(--score-bad);
+	}
+
+	.album-overview {
+		gap: 8px;
+	}
+
+	.album-actions {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+		margin-top: 8px;
+	}
+
+	.album-action-btn {
+		padding: var(--btn-padding-pill);
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-pill);
+		background: transparent;
+		color: var(--text-muted);
+		font-size: var(--btn-font-size);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: var(--btn-letter-spacing);
+		cursor: pointer;
+	}
+
+	.album-action-btn:hover {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.album-action-btn.active {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.album-action-btn.destructive {
+		border-color: var(--score-bad);
+		color: var(--score-bad);
+	}
+
+	.album-action-btn.destructive:hover {
+		background: var(--score-bad);
+		color: #fff;
 	}
 
 	@media (max-width: 768px) {
