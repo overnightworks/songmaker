@@ -81,6 +81,7 @@
 			Powered by <a href="/">{APP_NAME}</a>
 			· <button class="link-btn" onclick={() => (legalSection = 'impressum')}>Impressum</button>
 			· <button class="link-btn" onclick={() => (legalSection = 'datenschutz')}>Datenschutz</button>
+			· <button class="link-btn" onclick={() => (legalSection = 'nutzungsbedingungen')}>Nutzungsbedingungen</button>
 		</p>
 	{/if}
 </div>
