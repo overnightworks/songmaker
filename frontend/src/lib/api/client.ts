@@ -22,7 +22,6 @@ import type {
 	VersionGenerationParams,
 	VersionItem
 } from './types';
-import { getClaudeKey } from '$lib/stores/settings';
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -254,22 +253,8 @@ export async function cleanupAlbum(albumId: string): Promise<CleanupResult> {
 	return apiFetch<CleanupResult>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
 }
 
-let _chatModel = '';
-let _chatSystemPrompt = '';
-
 export async function fetchCapabilities(): Promise<Capabilities> {
-	const caps = await apiFetch<Capabilities>('/api/capabilities');
-	_chatModel = caps.chat_model;
-	_chatSystemPrompt = caps.chat_system_prompt;
-	return caps;
-}
-
-export function getChatModel(): string {
-	return _chatModel;
-}
-
-export function getChatSystemPrompt(): string {
-	return _chatSystemPrompt;
+	return apiFetch<Capabilities>('/api/capabilities');
 }
 
 export async function fetchGenerationDefaults(): Promise<Record<string, VersionGenerationParams>> {
@@ -478,48 +463,7 @@ export async function fetchMe(): Promise<AuthUser> {
 	return apiFetch<AuthUser>('/api/auth/me');
 }
 
-const CONTEXT_TAG = 'song_context';
-
-const FALLBACK_CHAT_MODEL = 'claude-opus-4-6';
-
-async function chatDirect(message: string, apiKey: string): Promise<string> {
-	const system = getChatSystemPrompt();
-	if (!system) {
-		throw new Error('Chat system prompt not loaded — call fetchCapabilities first');
-	}
-	const resp = await fetch('https://api.anthropic.com/v1/messages', {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			'x-api-key': apiKey,
-			'anthropic-version': '2023-06-01',
-			'anthropic-dangerous-direct-browser-access': 'true'
-		},
-		body: JSON.stringify({
-			model: _chatModel || FALLBACK_CHAT_MODEL,
-			max_tokens: 4096,
-			system,
-			messages: [{ role: 'user', content: message }]
-		})
-	});
-	if (!resp.ok) {
-		const err = await resp.json().catch(() => ({}));
-		throw new Error(err.error?.message ?? `Anthropic API error: ${resp.status}`);
-	}
-	const data = await resp.json();
-	return data.content?.[0]?.text ?? '';
-}
-
 export async function chatWithClaude(message: string, context: string = ''): Promise<string> {
-	const claudeKey = getClaudeKey();
-	const fullMessage = context
-		? `<${CONTEXT_TAG}>\n${context}\n</${CONTEXT_TAG}>\n\n${message}`
-		: message;
-
-	if (claudeKey) {
-		return chatDirect(fullMessage, claudeKey);
-	}
-
 	const data = await apiFetch<ChatResult>('/api/chat', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },

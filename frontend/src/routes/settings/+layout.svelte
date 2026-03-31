@@ -16,7 +16,6 @@
 
 	const NAV_ITEMS: NavItem[] = [
 		{ href: '/settings/generation', label: 'Generation', adminOnly: false },
-		{ href: '/settings/integrations', label: 'Integrations', adminOnly: false },
 		{ href: '/settings/account', label: 'Account', adminOnly: false },
 		{ href: '/settings/users', label: 'Admin', adminOnly: true },
 		{ href: '/settings/legal', label: 'Legal', adminOnly: false }

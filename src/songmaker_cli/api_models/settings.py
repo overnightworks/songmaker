@@ -98,7 +98,6 @@ class CapabilitiesResponse(BaseModel):
     generation: bool
     scoring: bool
     chat_model: str
-    chat_system_prompt: str
 
 
 class RateLimitItem(BaseModel):

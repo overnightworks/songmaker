@@ -1,6 +1,4 @@
 <script lang="ts">
-	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { claudeApiKey } from '$lib/stores/settings';
 	import { chatWithClaude, updateSong, ApiError } from '$lib/api/client';
 	import { pruneOldChatKeys, trimChatHistory } from '$lib/utils/chat';
 	import {
@@ -46,7 +44,6 @@
 	let error = $state('');
 	let container: HTMLDivElement | undefined = $state();
 	let inputEl: HTMLTextAreaElement | undefined = $state();
-	const hasKey = $derived(!!$claudeApiKey);
 
 	let contextScope: ContextScope = $state('song');
 	let mentionedSongIds: string[] = $state([]);
@@ -297,12 +294,6 @@
 		</div>
 	</div>
 
-	{#if !hasKey}
-		<div class="key-hint">
-			<a href="/settings/integrations">Configure API key in Settings</a>
-		</div>
-	{/if}
-
 	{#if mentionedSongs.length > 0}
 		<div class="mentions-bar">
 			{#each mentionedSongs as s (s.id)}
@@ -460,22 +451,6 @@
 
 	.clear-btn:hover {
 		color: var(--score-bad);
-	}
-
-	.key-hint {
-		padding: 6px 12px;
-		border-bottom: 1px solid var(--border);
-		flex-shrink: 0;
-		font-size: 10px;
-	}
-
-	.key-hint a {
-		color: var(--text-dim);
-		text-decoration: none;
-	}
-
-	.key-hint a:hover {
-		color: var(--primary);
 	}
 
 	.mentions-bar {

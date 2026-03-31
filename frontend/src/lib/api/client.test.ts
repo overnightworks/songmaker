@@ -1,9 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-vi.mock('$lib/stores/settings', () => ({
-	getClaudeKey: vi.fn().mockReturnValue('')
-}));
-
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
@@ -233,7 +229,7 @@ describe('API client', () => {
 });
 
 describe('chatWithClaude', () => {
-	it('uses server endpoint when no user key', async () => {
+	it('calls server endpoint', async () => {
 		mockFetch.mockResolvedValueOnce({
 			ok: true,
 			status: 200,
@@ -245,37 +241,6 @@ describe('chatWithClaude', () => {
 			expect.stringContaining('/api/chat'),
 			expect.objectContaining({ method: 'POST' })
 		);
-	});
-
-	it('calls Anthropic API directly when user has key', async () => {
-		const { getClaudeKey } = await import('$lib/stores/settings');
-		vi.mocked(getClaudeKey).mockReturnValue('sk-ant-test');
-
-		mockOk({
-			claude_api: true,
-			claude_cli: false,
-			generation: true,
-			scoring: true,
-			chat_model: 'claude-test',
-			chat_system_prompt: 'test prompt'
-		});
-		await fetchCapabilities();
-
-		mockFetch.mockResolvedValueOnce({
-			ok: true,
-			json: () => Promise.resolve({ content: [{ type: 'text', text: 'Direct response' }] })
-		});
-		const result = await chatWithClaude('hi');
-		expect(result).toBe('Direct response');
-		expect(mockFetch).toHaveBeenLastCalledWith(
-			'https://api.anthropic.com/v1/messages',
-			expect.objectContaining({
-				method: 'POST',
-				headers: expect.objectContaining({ 'x-api-key': 'sk-ant-test' })
-			})
-		);
-
-		vi.mocked(getClaudeKey).mockReturnValue('');
 	});
 
 	it('throws ApiError on 503 unavailable from server', async () => {
@@ -294,30 +259,6 @@ describe('chatWithClaude', () => {
 			json: () => Promise.resolve({ detail: 'Internal error' })
 		});
 		await expect(chatWithClaude('hi')).rejects.toThrow(ApiError);
-	});
-
-	it('throws on Anthropic API error with message', async () => {
-		const { getClaudeKey } = await import('$lib/stores/settings');
-		vi.mocked(getClaudeKey).mockReturnValue('sk-ant-bad');
-
-		mockOk({
-			claude_api: true,
-			claude_cli: false,
-			generation: true,
-			scoring: true,
-			chat_model: 'claude-test',
-			chat_system_prompt: 'test prompt'
-		});
-		await fetchCapabilities();
-
-		mockFetch.mockResolvedValueOnce({
-			ok: false,
-			status: 401,
-			json: () => Promise.resolve({ error: { message: 'Invalid API key' } })
-		});
-		await expect(chatWithClaude('hi')).rejects.toThrow('Invalid API key');
-
-		vi.mocked(getClaudeKey).mockReturnValue('');
 	});
 });
 

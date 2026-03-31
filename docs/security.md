@@ -68,7 +68,7 @@ All responses include:
 
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
-- `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' https://api.anthropic.com; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'`
+- `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only; `X-Forwarded-Proto` only honored from `TRUSTED_PROXIES`)
@@ -167,13 +167,11 @@ Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory 
 ## Known Limitations
 
 - **Claude CLI tool denylist**: Uses `--disallowedTools` (denylist, not allowlist) because `--tools ""` doesn't reliably block tools. New Claude Code tools require updating the list in `provider.py`.
-- **Frontend API key in localStorage**: When users provide their own Anthropic API key (BYOK), it's stored in `localStorage`. This is readable by any JavaScript on the same origin. CSP headers mitigate XSS risk, but browser extensions could potentially access it. The key is sent directly to Anthropic's API, never to the songmaker server.
 - **No IP binding on sessions**: A stolen session cookie works from any IP. IP/UA changes are logged to the audit trail but not blocked, to avoid breaking mobile users who switch networks.
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
 - **Redis session staleness**: If Redis delete fails during user deactivation, the cached session remains valid until the next background sync (up to 5 minutes) or Redis TTL expiry. The background sync detects and cleans up orphaned/deactivated sessions.
 - **ACE-Step reinitialize**: No cooldown on `POST /api/admin/acestep/reinitialize`. Repeated calls by a compromised admin could cause GPU disruption.
 - **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics (request counts, latencies, queue depth, VRAM usage) without auth. When deployed behind Cloudflare Tunnel or a reverse proxy, the proxy should block `/metrics` from public access. This is sufficient for single-user / friends-only deployments. If exposing to untrusted traffic, add `require_auth` or bind metrics to a separate internal port.
-- **Chat system prompt exposed via `/api/capabilities`**: The full system prompt (including untrusted-data handling instructions) is returned to authenticated users. This is intentional — the BYOK chat path (`chatDirect()` in the frontend) calls the Anthropic API directly and needs the same system prompt the server uses, so both paths behave identically. The prompt contains behavioral instructions, not secrets.
 
 ## Hardening Roadmap (for public internet exposure)
 

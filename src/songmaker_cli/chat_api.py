@@ -43,7 +43,6 @@ def api_capabilities(
         generation=True,
         scoring=True,
         chat_model=CHAT_MODEL,
-        chat_system_prompt=SYSTEM_PROMPT,
     )
 
 

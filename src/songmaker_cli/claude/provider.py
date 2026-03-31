@@ -3,7 +3,7 @@
 Both the lyrical_coherence scorer and the chat co-writing endpoint
 use this module. The backend is selected based on available credentials:
 
-1. API key provided (BYOK or env var) → ApiProvider
+1. API key provided (env var) → ApiProvider
 2. Claude CLI on PATH or in VS Code → CliProvider
 3. Neither → raises UnavailableError
 """
@@ -43,7 +43,7 @@ def call_claude(
 
     Args:
         prompt: The user message to send.
-        api_key: Anthropic API key (BYOK). If provided, uses API.
+        api_key: Anthropic API key (from env). If provided, uses API.
         system: Optional system prompt.
         model: Model ID for API calls.
         max_tokens: Max response tokens for API calls.
