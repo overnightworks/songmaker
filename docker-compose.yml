@@ -38,6 +38,20 @@ services:
       - SETUID
       - SETGID
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
+    entrypoint: ["uv", "run", "alembic", "upgrade", "head"]
+    restart: "no"
+    cap_drop:
+      - ALL
+
   songmaker-web:
     build:
       context: .
@@ -48,6 +62,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
@@ -77,6 +93,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
