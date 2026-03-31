@@ -592,27 +592,21 @@
 							<button class="back-btn" onclick={clearGenerationSelection}>
 								<span class="back-arrow">←</span> All generations
 							</button>
-							<div class="picker-anchor">
-								<GenerationDetail
-									generation={activeGen}
-									scoring={genScoring}
-									onversionclick={onVersionClick}
-									onscore={onScore}
-									onpick={onPick}
-									ondelete={onDeleteGeneration}
-									onshare={onGenShareEnable}
-									onunshare={onGenShareDisable}
-									onrate={onRate}
-									onaddtoplaylist={(genId) =>
-										(playlistPickerFor = { type: 'generation', id: genId })}
-								/>
-								{#if playlistPickerFor?.type === 'generation'}
-									<PlaylistPicker
-										onselect={onAddToPlaylist}
-										onclose={() => (playlistPickerFor = null)}
-									/>
-								{/if}
-							</div>
+							<GenerationDetail
+								generation={activeGen}
+								scoring={genScoring}
+								onversionclick={onVersionClick}
+								onscore={onScore}
+								onpick={onPick}
+								ondelete={onDeleteGeneration}
+								onshare={onGenShareEnable}
+								onunshare={onGenShareDisable}
+								onrate={onRate}
+								onaddtoplaylist={async (playlistId, genId) => {
+									await addGenerationToPlaylist(playlistId, genId);
+									addToast('Added to playlist', 'success');
+								}}
+							/>
 						</div>
 					{:else}
 						<GenerationsList

@@ -3,6 +3,7 @@
 	import { scoreColor } from '$lib/utils/scores';
 	import { addToast } from '$lib/stores/toast';
 	import OverflowMenu from './OverflowMenu.svelte';
+	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
 
 	interface Props {
@@ -15,7 +16,7 @@
 		onshare?: (genId: string) => Promise<ShareResult>;
 		onunshare?: (genId: string) => Promise<void>;
 		onrate?: (genId: string, rating: number, notes: string) => Promise<void>;
-		onaddtoplaylist?: (genId: string) => void;
+		onaddtoplaylist?: (playlistId: string, genId: string) => Promise<void>;
 	}
 
 	let {
@@ -33,6 +34,7 @@
 
 	let ratingValue = $state(50);
 	let ratingNotes = $state('');
+	let showPlaylistPicker = $state(false);
 	let ratingSaving = $state(false);
 
 	const savedRating = $derived(generation.scores?.user_rating ?? 50);
@@ -161,36 +163,47 @@
 					onunshare={() => onunshare(generation.id)}
 				/>
 			{/if}
-			<OverflowMenu
-				items={[
-					...(onaddtoplaylist
-						? [
-								{
-									label: 'Add to Playlist',
-									onclick: () => onaddtoplaylist(generation.id)
-								}
-							]
-						: []),
-					...(onscore
-						? [
-								{
-									label: scoring ? 'Scoring...' : 'Re-Score',
-									onclick: () => onscore(generation.id)
-								}
-							]
-						: []),
-					...(ondelete
-						? [
-								{
-									label: 'Delete Generation',
-									confirmLabel: 'Confirm Delete',
-									destructive: true,
-									onclick: () => ondelete(generation.id)
-								}
-							]
-						: [])
-				]}
-			/>
+			<div class="picker-anchor">
+				<OverflowMenu
+					items={[
+						...(onaddtoplaylist
+							? [
+									{
+										label: 'Add to Playlist',
+										onclick: () => (showPlaylistPicker = true)
+									}
+								]
+							: []),
+						...(onscore
+							? [
+									{
+										label: scoring ? 'Scoring...' : 'Re-Score',
+										onclick: () => onscore(generation.id)
+									}
+								]
+							: []),
+						...(ondelete
+							? [
+									{
+										label: 'Delete Generation',
+										confirmLabel: 'Confirm Delete',
+										destructive: true,
+										onclick: () => ondelete(generation.id)
+									}
+								]
+							: [])
+					]}
+				/>
+				{#if showPlaylistPicker && onaddtoplaylist}
+					<PlaylistPicker
+						onselect={async (playlistId) => {
+							await onaddtoplaylist(playlistId, generation.id);
+							showPlaylistPicker = false;
+						}}
+						onclose={() => (showPlaylistPicker = false)}
+					/>
+				{/if}
+			</div>
 		</div>
 	</div>
 
@@ -286,6 +299,10 @@
 </div>
 
 <style>
+	.picker-anchor {
+		position: relative;
+	}
+
 	.gen-detail {
 		display: flex;
 		flex-direction: column;
