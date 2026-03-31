@@ -14,10 +14,15 @@
 		audioUrl: string;
 		title: string;
 		subtitle?: string;
+		autoplay?: boolean;
 		onended?: () => void;
+		onnext?: () => void;
+		onprev?: () => void;
+		onstatechange?: (playing: boolean, loading: boolean) => void;
 	}
 
-	let { audioUrl, title, subtitle, onended }: Props = $props();
+	let { audioUrl, title, subtitle, autoplay, onended, onnext, onprev, onstatechange }: Props =
+		$props();
 
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
 	let isPlaying = $state(false);
@@ -102,14 +107,20 @@
 
 	let prevUrl: string | undefined = $state(undefined);
 	$effect(() => {
-		if (prevUrl !== undefined && audioUrl !== prevUrl && audio) {
-			audio.src = audioUrl;
-			currentTime = 0;
-			duration = 0;
-			isLoading = true;
-			audio.play().catch(() => {});
-		}
+		if (audioUrl === prevUrl) return;
+		const isInitial = prevUrl === undefined;
 		prevUrl = audioUrl;
+		if (isInitial && !autoplay) return;
+		const el = ensureAudio();
+		if (!isInitial) el.src = audioUrl;
+		currentTime = 0;
+		duration = 0;
+		isLoading = true;
+		el.play().catch(() => {});
+	});
+
+	$effect(() => {
+		onstatechange?.(isPlaying, isLoading);
 	});
 
 	function togglePlay(): void {
@@ -138,6 +149,9 @@
 </script>
 
 <div class="shared-player" style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}>
+	{#if onprev}
+		<button class="nav-btn" onclick={onprev} aria-label="Previous">⏮</button>
+	{/if}
 	<button
 		class="play-btn"
 		class:loading={isLoading}
@@ -149,6 +163,9 @@
 	>
 		{#if isLoading}<span class="spinner"></span>{:else}{isPlaying ? '⏸' : '▶'}{/if}
 	</button>
+	{#if onnext}
+		<button class="nav-btn" onclick={onnext} aria-label="Next">⏭</button>
+	{/if}
 	<div class="track-info">
 		<span
 			class="track-title"
@@ -193,6 +210,21 @@
 		z-index: 100;
 		overflow: visible;
 		transition: box-shadow 0.3s;
+	}
+
+	.nav-btn {
+		background: none;
+		border: none;
+		color: var(--text-muted, #888);
+		font-size: 16px;
+		cursor: pointer;
+		padding: 4px;
+		flex-shrink: 0;
+		transition: color 0.15s;
+	}
+
+	.nav-btn:hover {
+		color: var(--text, #e0e0e0);
 	}
 
 	.play-btn {

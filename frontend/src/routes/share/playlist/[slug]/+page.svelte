@@ -21,6 +21,8 @@
 	let error: string | null = $state(null);
 	let loading = $state(true);
 	let currentTrack: SharedEntry | null = $state(null);
+	let playerPlaying = $state(false);
+	let playerLoading = $state(false);
 	let legalSection: string | null = $state(null);
 
 	const slug = $derived(page.params.slug ?? '');
@@ -53,9 +55,21 @@
 
 	function onEnded() {
 		if (!playlist || !currentTrack) return;
+		advanceTrack(1);
+	}
+
+	function advanceTrack(direction: number) {
+		if (!playlist || !currentTrack) return;
 		const idx = playlist.entries.indexOf(currentTrack);
-		const next = playlist.entries.slice(idx + 1).find((e) => e.audio_url);
+		const entries =
+			direction > 0 ? playlist.entries.slice(idx + 1) : playlist.entries.slice(0, idx).reverse();
+		const next = entries.find((e) => e.audio_url);
 		if (next) play(next);
+	}
+
+	function onStateChange(playing: boolean, isLoading: boolean) {
+		playerPlaying = playing;
+		playerLoading = isLoading;
 	}
 </script>
 
@@ -95,16 +109,25 @@
 					onclick={() => play(entry)}
 					disabled={!entry.audio_url}
 				>
-					<span class="track-num">{i + 1}</span>
+					<span
+						class="play-indicator"
+						class:playing={currentTrack === entry && playerPlaying}
+						class:buffering={currentTrack === entry && playerLoading}
+					>
+						{#if currentTrack === entry && playerLoading}
+							<span class="spinner"></span>
+						{:else if currentTrack === entry && playerPlaying}
+							⏸
+						{:else if entry.audio_url}
+							▶
+						{:else}
+							--
+						{/if}
+					</span>
 					<span class="track-title">
 						{entry.song_title}
 						<span class="track-artist">{entry.artist}</span>
 					</span>
-					{#if currentTrack === entry}
-						<span class="track-status">&#9654;</span>
-					{:else if !entry.audio_url}
-						<span class="track-status dim">--</span>
-					{/if}
 				</button>
 			{/each}
 		</div>
@@ -126,7 +149,11 @@
 		audioUrl={currentTrack.audio_url}
 		title={currentTrack.song_title}
 		subtitle={currentTrack.artist}
+		autoplay
 		onended={onEnded}
+		onnext={() => advanceTrack(1)}
+		onprev={() => advanceTrack(-1)}
+		onstatechange={onStateChange}
 	/>
 {/if}
 
@@ -280,11 +307,51 @@
 		cursor: default;
 	}
 
-	.track-num {
+	.play-indicator {
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		border: 2px solid var(--border, #333);
+		background: transparent;
 		color: var(--text-muted, #888);
-		min-width: 1.5rem;
-		text-align: right;
-		font-size: 0.85rem;
+		font-size: 14px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		transition:
+			border-color 0.15s,
+			color 0.15s;
+	}
+
+	.track:hover:not(.disabled) .play-indicator {
+		border-color: var(--primary, #ff3220);
+		color: var(--primary, #ff3220);
+	}
+
+	.play-indicator.playing {
+		border-color: var(--accent, #a020f0);
+		color: var(--accent, #a020f0);
+	}
+
+	.play-indicator.buffering {
+		border-color: var(--accent, #a020f0);
+	}
+
+	.spinner {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border: 2px solid var(--accent, #a020f0);
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.track-title {
@@ -297,15 +364,6 @@
 	.track-artist {
 		font-size: 0.75rem;
 		color: var(--text-muted, #888);
-	}
-
-	.track-status {
-		color: var(--primary, #ff3220);
-		font-size: 0.8rem;
-	}
-
-	.dim {
-		color: var(--text-dim, #444);
 	}
 
 	.powered {
