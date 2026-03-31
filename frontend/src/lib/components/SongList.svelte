@@ -6,7 +6,7 @@
 	let { onNewSong }: Props = $props();
 
 	import { albumList, songList, selectedAlbumId } from '$lib/stores/player';
-	import { selectAlbumOverview, selectPlaylistView } from '$lib/stores/navigation';
+	import { selectAlbumOverview, selectPlaylistView, selectSong } from '$lib/stores/navigation';
 	import { searchQuery } from '$lib/stores/filter';
 	import { playlistList, selectedPlaylistId } from '$lib/stores/playlists';
 	import AlbumNode from './AlbumNode.svelte';
@@ -20,8 +20,37 @@
 	const playlists = $derived($playlistList);
 	const currentPlaylistId = $derived($selectedPlaylistId);
 
+	interface SharedItem {
+		id: string;
+		type: 'album' | 'song' | 'generation';
+		label: string;
+		parentSongId?: string;
+	}
+
+	const sharedItems = $derived.by(() => {
+		const items: SharedItem[] = [];
+		for (const a of albums) {
+			if (a.is_shared) items.push({ id: a.id, type: 'album', label: a.title });
+		}
+		for (const s of songs) {
+			if (s.is_shared) items.push({ id: s.id, type: 'song', label: s.title });
+			for (const g of s.generations) {
+				if (g.is_shared) {
+					items.push({
+						id: g.id,
+						type: 'generation',
+						label: `Gen #${g.generation_number} — ${s.title}`,
+						parentSongId: s.id
+					});
+				}
+			}
+		}
+		return items;
+	});
+
 	let expandedAlbums = new SvelteSet<string>();
 	let playlistsExpanded = $state(true);
+	let sharedExpanded = $state(true);
 
 	$effect(() => {
 		if (albums.length > 0 && expandedAlbums.size === 0) {
@@ -74,6 +103,32 @@
 </div>
 
 <div class="tree" role="tree" aria-label="Albums and songs">
+	{#if sharedItems.length > 0}
+		<div class="section-group">
+			<button class="section-header" onclick={() => (sharedExpanded = !sharedExpanded)}>
+				<span class="section-arrow" class:collapsed={!sharedExpanded}>▸</span>
+				<span class="section-label">Shared</span>
+				<span class="section-count">{sharedItems.length}</span>
+			</button>
+			{#if sharedExpanded}
+				{#each sharedItems as item (item.type + item.id)}
+					<button
+						class="playlist-row"
+						onclick={() => {
+							if (item.type === 'album') selectAlbumOverview(item.id);
+							else if (item.type === 'song') selectSong(item.id);
+							else if (item.parentSongId) selectSong(item.parentSongId);
+						}}
+					>
+						<span class="shared-icon">&#128279;</span>
+						<span class="playlist-title">{item.label}</span>
+						<span class="playlist-count">{item.type}</span>
+					</button>
+				{/each}
+			{/if}
+		</div>
+	{/if}
+
 	{#if playlists.length > 0}
 		<div class="section-group">
 			<button class="section-header" onclick={() => (playlistsExpanded = !playlistsExpanded)}>
@@ -235,6 +290,11 @@
 	.playlist-row.selected {
 		color: var(--primary);
 		background: var(--surface-hover);
+	}
+
+	.shared-icon {
+		font-size: 10px;
+		flex-shrink: 0;
 	}
 
 	.playlist-title {
