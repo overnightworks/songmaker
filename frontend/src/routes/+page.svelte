@@ -665,6 +665,7 @@
 						currentAlbumId={song?.album_id ?? ''}
 						versions={$versions}
 						onapply={handleApply}
+						oncreate={(s) => selectSong(s.id)}
 					/>
 				</div>
 			</div>

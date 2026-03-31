@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { chatWithClaude, updateSong, ApiError } from '$lib/api/client';
+	import { chatWithClaude, createSong, updateSong, ApiError } from '$lib/api/client';
 	import { pruneOldChatKeys, trimChatHistory } from '$lib/utils/chat';
 	import {
 		buildFullContext,
 		buildConversation,
-		extractApplyData,
+		extractAllApplyData,
 		cleanDisplayText,
 		isCurrentSong,
 		type ApplyData
@@ -20,9 +20,8 @@
 		currentAlbumId?: string;
 		versions?: VersionItem[];
 		onapply?: (data: ApplyData) => void;
+		oncreate?: (song: SongItem) => void;
 	}
-
-	type ContextScope = 'song' | 'album';
 
 	let {
 		songId = '',
@@ -30,14 +29,15 @@
 		allSongs = [],
 		currentAlbumId = '',
 		versions = [],
-		onapply
+		onapply,
+		oncreate
 	}: Props = $props();
 
 	interface Message {
 		role: 'user' | 'assistant';
 		text: string;
-		applied?: boolean;
-		applyData?: ApplyData;
+		appliedIndices?: number[];
+		applyDataList?: ApplyData[];
 	}
 
 	let messages: Message[] = $state([]);
@@ -47,16 +47,17 @@
 	let container: HTMLDivElement | undefined = $state();
 	let inputEl: HTMLTextAreaElement | undefined = $state();
 
-	let contextScope: ContextScope = $state('song');
 	let mentionedSongIds: string[] = $state([]);
+	let albumMentioned: boolean = $state(false);
 	let mentionedVersionNumbers: number[] = $state([]);
 	let mentionQuery = $state('');
-	let mentionMode: 'song' | 'version' | null = $state(null);
+	let mentionMode: 'song' | 'version' | 'album' | null = $state(null);
 	let showMentions = $state(false);
 	let mentionCursorPos = $state(0);
 	let selectedMentionIdx = $state(0);
 
 	const VERSION_MENTION_RE = /^v(?:ersion)?\s*(\d*)$/i;
+	const ALBUM_MENTION_RE = /^album$/i;
 
 	const mentionResults = $derived.by(() => {
 		if (!mentionQuery || mentionMode !== 'song') return [];
@@ -82,16 +83,20 @@
 			.slice(0, 8);
 	});
 
-	const activeMentionResults = $derived(
-		mentionMode === 'version' ? versionMentionResults : mentionResults
-	);
+	const albumMentionAvailable = $derived.by(() => {
+		if (!mentionQuery || mentionMode !== 'album') return false;
+		return !albumMentioned && !!currentAlbumId;
+	});
+
+	const activeMentionResults = $derived.by(() => {
+		if (mentionMode === 'version') return versionMentionResults;
+		if (mentionMode === 'album') return albumMentionAvailable ? [{ type: 'album' as const }] : [];
+		return mentionResults;
+	});
 
 	let prevChatKey = $state('');
 
 	function storageKey(): string {
-		if (contextScope === 'album' && currentAlbumId) {
-			return `songmaker:chat:album:${currentAlbumId}`;
-		}
 		return songId ? `songmaker:chat:${songId}` : 'songmaker:chat:new';
 	}
 
@@ -99,7 +104,9 @@
 		const key = storageKey();
 		if (key !== prevChatKey) {
 			prevChatKey = key;
+			mentionedSongIds = [];
 			mentionedVersionNumbers = [];
+			albumMentioned = false;
 			loadHistory();
 		}
 	});
@@ -120,11 +127,11 @@
 
 	function saveHistory(): void {
 		const trimmed = trimChatHistory(messages);
-		const toSave = trimmed.map(({ role, text, applied, applyData }) => ({
+		const toSave = trimmed.map(({ role, text, appliedIndices, applyDataList }) => ({
 			role,
 			text,
-			applied,
-			applyData
+			appliedIndices,
+			applyDataList
 		}));
 		localStorage.setItem(storageKey(), JSON.stringify(toSave));
 		pruneOldChatKeys();
@@ -147,6 +154,31 @@
 		}
 	}
 
+	async function createNewSong(data: ApplyData): Promise<void> {
+		if (!data.title) return;
+		const albumId = currentAlbumId;
+		if (!albumId) {
+			addToast('No album selected for song creation', 'error');
+			return;
+		}
+		try {
+			const song = await createSong({
+				title: data.title,
+				album_id: albumId,
+				lyrics: data.lyrics,
+				prompt: data.prompt,
+				bpm: data.bpm,
+				duration: data.duration,
+				key: data.key
+			});
+			songList.update((songs) => [...songs, song]);
+			addToast(`Created "${data.title}"`, 'success');
+			if (oncreate) oncreate(song);
+		} catch {
+			addToast(`Failed to create "${data.title}"`, 'error');
+		}
+	}
+
 	async function send(): Promise<void> {
 		const msg = input.trim();
 		if (!msg || loading) return;
@@ -166,10 +198,10 @@
 			const ctx = buildFullContext(
 				songContext,
 				originSongId,
-				contextScope,
 				originAlbumId,
 				originSongs,
 				mentionedSongIds,
+				albumMentioned,
 				versions,
 				mentionedVersionNumbers
 			);
@@ -192,17 +224,19 @@
 
 			if (!responseText) throw new Error('Chat failed after trimming history');
 
-			const applyData = extractApplyData(responseText, originAlbumId, originSongs);
-			const newMsg: Message = { role: 'assistant', text: responseText, applyData };
+			const applyDataList = extractAllApplyData(responseText, originAlbumId, originSongs);
+			const newMsg: Message = { role: 'assistant', text: responseText, applyDataList, appliedIndices: [] };
 
 			const switchedAway = songId !== originSongId;
 
-			if (!switchedAway && applyData && isCurrentSong(applyData, originSongId) && onapply) {
-				onapply(applyData);
-				newMsg.applied = true;
-			}
-
 			if (!switchedAway) {
+				for (let i = 0; i < applyDataList.length; i++) {
+					const data = applyDataList[i];
+					if (!data.create && isCurrentSong(data, originSongId) && onapply) {
+						onapply(data);
+						newMsg.appliedIndices = [...(newMsg.appliedIndices ?? []), i];
+					}
+				}
 				messages = [...messages, newMsg];
 				saveHistory();
 			}
@@ -216,15 +250,20 @@
 		}
 	}
 
-	async function applyMessage(index: number): Promise<void> {
-		const msg = messages[index];
-		if (!msg?.applyData) return;
-		if (isCurrentSong(msg.applyData, songId)) {
-			if (onapply) onapply(msg.applyData);
+	async function applyAtIndex(msgIndex: number, dataIndex: number): Promise<void> {
+		const msg = messages[msgIndex];
+		const data = msg?.applyDataList?.[dataIndex];
+		if (!data) return;
+		if (data.create) {
+			await createNewSong(data);
+		} else if (isCurrentSong(data, songId)) {
+			if (onapply) onapply(data);
 		} else {
-			await applyCrossSong(msg.applyData);
+			await applyCrossSong(data);
 		}
-		messages[index] = { ...msg, applied: true };
+		const applied = new Set(msg.appliedIndices ?? []);
+		applied.add(dataIndex);
+		messages[msgIndex] = { ...msg, appliedIndices: [...applied] };
 		saveHistory();
 	}
 
@@ -255,6 +294,18 @@
 		inputEl.focus();
 	}
 
+	function selectAlbumMention(): void {
+		if (!inputEl) return;
+		const before = input.slice(0, mentionCursorPos);
+		const atIdx = before.lastIndexOf('@');
+		const after = input.slice(mentionCursorPos);
+		input = before.slice(0, atIdx) + after;
+		albumMentioned = true;
+		showMentions = false;
+		mentionQuery = '';
+		inputEl.focus();
+	}
+
 	function selectVersionMention(v: VersionItem): void {
 		if (!inputEl) return;
 		const before = input.slice(0, mentionCursorPos);
@@ -271,6 +322,10 @@
 		mentionedVersionNumbers = mentionedVersionNumbers.filter((n) => n !== vn);
 	}
 
+	function removeAlbumMention(): void {
+		albumMentioned = false;
+	}
+
 	function handleInput(): void {
 		if (!inputEl) return;
 		const pos = inputEl.selectionStart ?? 0;
@@ -279,7 +334,13 @@
 		if (atMatch) {
 			mentionQuery = atMatch[1];
 			mentionCursorPos = pos;
-			mentionMode = VERSION_MENTION_RE.test(mentionQuery) ? 'version' : 'song';
+			if (ALBUM_MENTION_RE.test(mentionQuery)) {
+				mentionMode = 'album';
+			} else if (VERSION_MENTION_RE.test(mentionQuery)) {
+				mentionMode = 'version';
+			} else {
+				mentionMode = 'song';
+			}
 			showMentions = true;
 			selectedMentionIdx = 0;
 		} else {
@@ -304,7 +365,9 @@
 			}
 			if (e.key === 'Enter' || e.key === 'Tab') {
 				e.preventDefault();
-				if (mentionMode === 'version') {
+				if (mentionMode === 'album') {
+					selectAlbumMention();
+				} else if (mentionMode === 'version') {
 					selectVersionMention(versionMentionResults[selectedMentionIdx]);
 				} else {
 					selectMention(mentionResults[selectedMentionIdx]);
@@ -323,37 +386,49 @@
 		}
 	}
 
+	function applyLabel(data: ApplyData): string {
+		if (data.create) return `Create "${data.title}"`;
+		if (data.song && !isCurrentSong(data, songId)) return `Apply to ${data.song}`;
+		return 'Apply to editor';
+	}
+
+	function appliedLabel(data: ApplyData): string {
+		if (data.create) return `Created "${data.title}"`;
+		if (data.song) return `Applied to ${data.song}`;
+		return 'Applied';
+	}
+
 	const mentionedSongs = $derived(
 		mentionedSongIds
 			.map((id) => allSongs.find((s) => s.id === id))
 			.filter((s): s is SongItem => !!s)
 	);
+
+	const currentAlbumTitle = $derived.by(() => {
+		if (!currentAlbumId) return '';
+		const albumSong = allSongs.find((s) => s.album_id === currentAlbumId);
+		return albumSong?.album_title ?? '';
+	});
 </script>
 
 <div class="chat">
 	<div class="chat-header">
 		<h3>Claude Co-Writer</h3>
 		<div class="header-actions">
-			<div class="scope-toggle">
-				<button
-					class="scope-btn"
-					class:active={contextScope === 'song'}
-					onclick={() => (contextScope = 'song')}>Song</button
-				>
-				<button
-					class="scope-btn"
-					class:active={contextScope === 'album'}
-					onclick={() => (contextScope = 'album')}>Album</button
-				>
-			</div>
 			{#if messages.length > 0}
 				<button class="clear-btn" onclick={clearHistory} aria-label="Clear chat">✕</button>
 			{/if}
 		</div>
 	</div>
 
-	{#if mentionedSongs.length > 0 || mentionedVersionNumbers.length > 0}
+	{#if mentionedSongs.length > 0 || mentionedVersionNumbers.length > 0 || albumMentioned}
 		<div class="mentions-bar">
+			{#if albumMentioned}
+				<span class="mention-tag album">
+					{currentAlbumTitle || 'Album'}
+					<button class="mention-remove" onclick={removeAlbumMention}>✕</button>
+				</span>
+			{/if}
 			{#each mentionedSongs as s (s.id)}
 				<span class="mention-tag">
 					{s.title}
@@ -372,9 +447,9 @@
 	<div class="messages" bind:this={container}>
 		{#if messages.length === 0}
 			<p class="empty-hint">
-				Ask Claude to write lyrics, brainstorm ideas, or refine your song. Suggestions auto-apply to
-				the editor. Use <strong>@song</strong> to reference other songs or <strong>@v1</strong> for version
-				history.
+				Ask Claude to write lyrics, brainstorm ideas, or refine your song. Use <strong>@song</strong> to
+				reference other songs, <strong>@album</strong> for full album context, or <strong>@v1</strong> for
+				version history.
 			</p>
 		{/if}
 		{#each messages as msg, i (i)}
@@ -384,22 +459,18 @@
 				class:assistant={msg.role === 'assistant'}
 			>
 				<pre class="message-text">{cleanDisplayText(msg.text)}</pre>
-				{#if msg.role === 'assistant' && msg.applyData}
-					<div class="apply-row">
-						{#if msg.applied}
-							<span class="applied-badge"
-								>✓ Applied{msg.applyData.song ? ` to ${msg.applyData.song}` : ''}</span
-							>
-						{:else}
-							<button class="apply-btn" onclick={() => applyMessage(i)}>
-								{#if msg.applyData.song && !isCurrentSong(msg.applyData, songId)}
-									Apply to {msg.applyData.song}
-								{:else}
-									Apply to editor
-								{/if}
-							</button>
-						{/if}
-					</div>
+				{#if msg.role === 'assistant' && msg.applyDataList && msg.applyDataList.length > 0}
+					{#each msg.applyDataList as data, di (di)}
+						<div class="apply-row">
+							{#if msg.appliedIndices?.includes(di)}
+								<span class="applied-badge">{appliedLabel(data)}</span>
+							{:else}
+								<button class="apply-btn" onclick={() => applyAtIndex(i, di)}>
+									{applyLabel(data)}
+								</button>
+							{/if}
+						</div>
+					{/each}
 				{/if}
 			</div>
 		{/each}
@@ -416,7 +487,15 @@
 	<div class="input-area">
 		{#if showMentions && activeMentionResults.length > 0}
 			<div class="mention-dropdown">
-				{#if mentionMode === 'version'}
+				{#if mentionMode === 'album'}
+					<button
+						class="mention-option selected"
+						onclick={selectAlbumMention}
+					>
+						<span class="mention-title">Album</span>
+						<span class="mention-album">{currentAlbumTitle}</span>
+					</button>
+				{:else if mentionMode === 'version'}
 					{#each versionMentionResults as v, idx (v.id)}
 						<button
 							class="mention-option"
@@ -448,7 +527,7 @@
 			<textarea
 				class="chat-input"
 				rows="2"
-				placeholder="Ask Claude... (@song or @v1 for versions)"
+				placeholder="Ask Claude... (@song, @album, or @v1)"
 				bind:value={input}
 				bind:this={inputEl}
 				onkeydown={handleKeydown}
@@ -497,30 +576,6 @@
 		align-items: center;
 	}
 
-	.scope-toggle {
-		display: flex;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		overflow: hidden;
-	}
-
-	.scope-btn {
-		background: none;
-		border: none;
-		color: var(--text-dim);
-		font-size: 9px;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		padding: 2px 8px;
-		cursor: pointer;
-	}
-
-	.scope-btn.active {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
-	}
-
 	.clear-btn {
 		background: none;
 		border: none;
@@ -558,6 +613,11 @@
 	.mention-tag.version {
 		border-color: var(--accent);
 		color: var(--accent);
+	}
+
+	.mention-tag.album {
+		border-color: var(--success, #4caf50);
+		color: var(--success, #4caf50);
 	}
 
 	.mention-remove {

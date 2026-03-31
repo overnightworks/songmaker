@@ -56,7 +56,7 @@ DEFAULT_CHAT_STYLE = (
 
 STRUCTURAL_PROMPT = (
     "When suggesting lyrics or song parameters, include a ```songmaker block "
-    "at the end of your response with the applicable fields as JSON:\n"
+    "with the applicable fields as JSON:\n"
     '```songmaker\n{"lyrics": "[verse]\\n...", "prompt": "style...",'
     ' "bpm": 120, "key": "Am"}\n```\n\n'
     "Only include fields you are suggesting changes for. The lyrics field should use "
@@ -64,6 +64,10 @@ STRUCTURAL_PROMPT = (
     "If you are suggesting changes for a song OTHER than the current song, "
     'add a "song" field with the exact song title: '
     '```songmaker\n{"song": "Song Title", "lyrics": "..."}\n```\n'
+    "To create a NEW song, use the same format with a new title in the "
+    '"song" field. The song will be created in the current album.\n'
+    "You may include multiple ```songmaker blocks in a single response "
+    "to address multiple songs at once.\n"
     "If the user just asks a question without needing changes, skip the songmaker block."
 )
 
