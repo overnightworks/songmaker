@@ -27,11 +27,8 @@
 		titleGlowStyle,
 		type VizColors
 	} from '$lib/utils/visualizer';
-	import WaveSurfer from 'wavesurfer.js';
 
-	let waveContainer: HTMLDivElement | undefined = $state();
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
-	let wavesurfer: WaveSurfer | undefined = $state();
 	let isPlaying = $state(false);
 	let isLoading = $state(false);
 	const toggleRequest = $derived($requestTogglePlay);
@@ -47,6 +44,7 @@
 
 	let prevFile = $state('');
 
+	let audio: HTMLAudioElement | undefined;
 	let audioCtx: AudioContext | undefined;
 	let analyser: AnalyserNode | undefined;
 	let frequencyData: Uint8Array<ArrayBuffer> | undefined;
@@ -57,25 +55,55 @@
 
 	const viz = new AudioVisualizer();
 
-	let connectedMedia: HTMLMediaElement | undefined;
+	function ensureAudio(): HTMLAudioElement {
+		if (audio) return audio;
+		audio = new Audio();
+		audio.crossOrigin = 'anonymous';
+		audio.preload = 'auto';
+
+		audio.addEventListener('loadstart', () => {
+			isLoading = true;
+			isAudioBuffering.set(true);
+		});
+		audio.addEventListener('canplay', () => {
+			isLoading = false;
+			isAudioBuffering.set(false);
+			duration = audio?.duration ?? 0;
+			playbackDuration.set(duration);
+			connectAnalyser();
+		});
+		audio.addEventListener('timeupdate', () => {
+			currentTime = audio?.currentTime ?? 0;
+			playbackTime.set(currentTime);
+		});
+		audio.addEventListener('ended', () => playNextGeneration());
+		audio.addEventListener('play', () => {
+			isPlaying = true;
+			isAudioPlaying.set(true);
+			startVisualizerLoop();
+		});
+		audio.addEventListener('pause', () => {
+			isPlaying = false;
+			isAudioPlaying.set(false);
+			stopVisualizerLoop();
+		});
+
+		return audio;
+	}
 
 	function connectAnalyser(): void {
-		if (!wavesurfer) return;
-		const media = wavesurfer.getMediaElement();
-		if (!media || media === connectedMedia) return;
+		if (!audio) return;
+		if (audioCtx) return;
 		try {
-			if (!audioCtx) {
-				audioCtx = new AudioContext();
-			}
+			audioCtx = new AudioContext();
 			analyser = audioCtx.createAnalyser();
 			analyser.fftSize = FFT_SIZE;
 			analyser.smoothingTimeConstant = 0.82;
-			const source = audioCtx.createMediaElementSource(media);
+			const source = audioCtx.createMediaElementSource(audio);
 			source.connect(analyser);
 			analyser.connect(audioCtx.destination);
 			frequencyData = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
 			waveformData = new Uint8Array(analyser.fftSize) as Uint8Array<ArrayBuffer>;
-			connectedMedia = media;
 		} catch (e) {
 			console.warn('Audio visualizer unavailable:', e);
 		}
@@ -99,76 +127,25 @@
 	}
 
 	function seekFromClick(e: MouseEvent, el?: HTMLElement): void {
-		if (!wavesurfer || duration <= 0) return;
+		if (!audio || duration <= 0) return;
 		const target = el ?? (e.currentTarget as HTMLElement);
 		const rect = target.getBoundingClientRect();
-		wavesurfer.seekTo(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
+		const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+		audio.currentTime = ratio * duration;
 	}
-
-	function createWavesurfer(): void {
-		if (!waveContainer) return;
-		wavesurfer?.destroy();
-		wavesurfer = WaveSurfer.create({
-			container: waveContainer,
-			height: 0,
-			waveColor: 'transparent',
-			progressColor: 'transparent',
-			cursorColor: 'transparent',
-			cursorWidth: 0,
-			normalize: true,
-			hideScrollbar: true,
-			interact: false
-		});
-		wavesurfer.on('loading', () => {
-			isLoading = true;
-			isAudioBuffering.set(true);
-		});
-		wavesurfer.on('ready', () => {
-			isLoading = false;
-			isAudioBuffering.set(false);
-			duration = wavesurfer?.getDuration() ?? 0;
-			playbackDuration.set(duration);
-			connectAnalyser();
-		});
-		wavesurfer.on('timeupdate', (time: number) => {
-			currentTime = time;
-			playbackTime.set(time);
-		});
-		wavesurfer.on('finish', () => playNextGeneration());
-		wavesurfer.on('play', () => {
-			isPlaying = true;
-			isAudioPlaying.set(true);
-			startVisualizerLoop();
-		});
-		wavesurfer.on('pause', () => {
-			isPlaying = false;
-			isAudioPlaying.set(false);
-			stopVisualizerLoop();
-		});
-	}
-
-	let pendingAutoplay: (() => void) | null = null;
 
 	$effect(() => {
-		if (!gen || !waveContainer) return;
+		if (!gen) return;
 		if (gen.mp3_path !== prevFile) {
 			prevFile = gen.mp3_path;
+			const el = ensureAudio();
+			el.pause();
 			isLoading = true;
 			isAudioBuffering.set(true);
-			if (!wavesurfer) createWavesurfer();
-			wavesurfer?.pause();
-			if (pendingAutoplay) {
-				wavesurfer?.un('ready', pendingAutoplay);
-				pendingAutoplay = null;
-			}
-			try {
-				wavesurfer?.load(`/audio/${gen.mp3_path}`);
-			} catch {
-				/* harmless */
-			}
+			el.src = `/audio/${gen.mp3_path}`;
+			el.load();
 			if (pb?.autoplay) {
-				pendingAutoplay = () => wavesurfer?.play();
-				wavesurfer?.once('ready', pendingAutoplay);
+				el.play().catch(() => {});
 			}
 		}
 	});
@@ -177,21 +154,26 @@
 	$effect(() => {
 		if (toggleRequest !== prevToggle) {
 			prevToggle = toggleRequest;
-			if (wavesurfer && !isLoading) {
-				wavesurfer.playPause();
+			if (audio && !isLoading) {
+				if (audio.paused) audio.play().catch(() => {});
+				else audio.pause();
 			}
 		}
 	});
 
 	onDestroy(() => {
 		viz.destroy();
-		wavesurfer?.destroy();
+		if (audio) {
+			audio.pause();
+			audio.src = '';
+		}
 		if (audioCtx) audioCtx.close();
 	});
 
 	function togglePlay(): void {
-		if (!gen || !wavesurfer || isLoading) return;
-		wavesurfer.playPause();
+		if (!gen || !audio || isLoading) return;
+		if (audio.paused) audio.play().catch(() => {});
+		else audio.pause();
 	}
 </script>
 
@@ -266,9 +248,7 @@
 	<span class="time">{formatTime(currentTime)}</span>
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="viz-area" onclick={(e) => seekFromClick(e, vizCanvas)}>
-		<div class="wave-hidden" bind:this={waveContainer}></div>
-	</div>
+	<div class="viz-area" onclick={(e) => seekFromClick(e, vizCanvas)}></div>
 	<span class="time">{formatTime(duration)}</span>
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -410,8 +390,6 @@
 		padding: 4px 8px;
 		border-radius: 4px;
 		flex-shrink: 0;
-	}
-	.track-info {
 		z-index: 1;
 	}
 	.track-info:hover {
@@ -461,13 +439,6 @@
 		height: 52px;
 		position: relative;
 		cursor: pointer;
-	}
-	.wave-hidden {
-		position: absolute;
-		width: 0;
-		height: 0;
-		overflow: hidden;
-		pointer-events: none;
 	}
 	.viz-fullscreen {
 		position: absolute;
