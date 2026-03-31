@@ -243,6 +243,9 @@ def enable_song_sharing(session: Session, song_id: str) -> Song:
     if not song.share_slug:
         song.share_slug = str(uuid.uuid4())
     song.is_shared = True
+    picked = next((g for g in song.generations if g.is_picked), None)
+    if picked:
+        picked.is_kept = True
     session.flush()
     log.info("Enabled sharing for song %s (slug=%s)", song_id, song.share_slug)
     return song

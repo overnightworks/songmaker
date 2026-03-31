@@ -133,6 +133,7 @@ class Generation(Base):
     status: Mapped[str] = mapped_column(String(20), default="completed")
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     is_picked: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_kept: Mapped[bool] = mapped_column(Boolean, default=False)
     share_slug: Mapped[str | None] = mapped_column(
         String(36), unique=True, nullable=True, index=True,
     )

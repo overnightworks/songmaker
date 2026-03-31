@@ -259,6 +259,29 @@ def test_unpick_generation_api(client: TestClient) -> None:
     assert resp.json()["is_picked"] is False
 
 
+def test_keep_generation_api(client: TestClient) -> None:
+    resp = client.post("/api/generations/g1/keep")
+    assert resp.status_code == 200
+    resp = client.get("/api/generations/g1")
+    assert resp.json()["is_kept"] is True
+
+
+def test_unkeep_generation_api(client: TestClient) -> None:
+    client.post("/api/generations/g1/keep")
+    resp = client.post("/api/generations/g1/unkeep")
+    assert resp.status_code == 200
+    resp = client.get("/api/generations/g1")
+    assert resp.json()["is_kept"] is False
+
+
+def test_cleanup_album_skips_kept_api(client: TestClient) -> None:
+    client.post("/api/generations/g1/keep")
+    resp = client.post("/api/albums/rock/cleanup")
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] == 1
+    assert client.get("/api/generations/g1").status_code == 200
+
+
 def test_cleanup_album_api(client: TestClient) -> None:
     client.post("/api/generations/g1/pick")
     resp = client.post("/api/albums/rock/cleanup")
@@ -408,6 +431,16 @@ def test_pick_generation_not_found(client: TestClient) -> None:
 
 def test_unpick_generation_not_found(client: TestClient) -> None:
     resp = client.post("/api/generations/nonexistent/unpick")
+    assert resp.status_code == 404
+
+
+def test_keep_generation_not_found(client: TestClient) -> None:
+    resp = client.post("/api/generations/nonexistent/keep")
+    assert resp.status_code == 404
+
+
+def test_unkeep_generation_not_found(client: TestClient) -> None:
+    resp = client.post("/api/generations/nonexistent/unkeep")
     assert resp.status_code == 404
 
 
@@ -1062,6 +1095,26 @@ def test_unpick_generation_value_error(client: TestClient) -> None:
     err = ValueError("Generation not found")
     with patch("songmaker_cli.generation_api.unpick_generation", side_effect=err):
         resp = client.post("/api/generations/g1/unpick")
+
+    assert resp.status_code == 404
+
+
+def test_keep_generation_value_error(client: TestClient) -> None:
+    from unittest.mock import patch
+
+    err = ValueError("Generation not found")
+    with patch("songmaker_cli.generation_api.keep_generation", side_effect=err):
+        resp = client.post("/api/generations/g1/keep")
+
+    assert resp.status_code == 404
+
+
+def test_unkeep_generation_value_error(client: TestClient) -> None:
+    from unittest.mock import patch
+
+    err = ValueError("Generation not found")
+    with patch("songmaker_cli.generation_api.unkeep_generation", side_effect=err):
+        resp = client.post("/api/generations/g1/unkeep")
 
     assert resp.status_code == 404
 

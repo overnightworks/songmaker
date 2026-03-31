@@ -43,9 +43,11 @@ from songmaker_cli.db.queries.generations import (
     enable_generation_sharing,
     get_generation,
     get_generation_by_slug,
+    keep_generation,
     pick_generation,
     save_rating,
     save_scores,
+    unkeep_generation,
     unpick_generation,
 )
 from songmaker_cli.db.queries.jobs import (
@@ -179,6 +181,7 @@ __all__ = [
     "list_users",
     "move_song",
     "name_exists",
+    "keep_generation",
     "pick_generation",
     "record_audit",
     "record_login_attempt",
@@ -189,6 +192,7 @@ __all__ = [
     "save_rating",
     "save_scores",
     "set_default_preset",
+    "unkeep_generation",
     "unpick_generation",
     "update_job_status",
     "update_preset",

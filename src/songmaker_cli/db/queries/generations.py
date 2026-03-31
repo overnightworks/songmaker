@@ -108,6 +108,22 @@ def unpick_generation(session: Session, generation_id: str) -> None:
     session.flush()
 
 
+def keep_generation(session: Session, generation_id: str) -> None:
+    gen = session.query(Generation).filter_by(id=generation_id).first()
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    gen.is_kept = True
+    session.flush()
+
+
+def unkeep_generation(session: Session, generation_id: str) -> None:
+    gen = session.query(Generation).filter_by(id=generation_id).first()
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    gen.is_kept = False
+    session.flush()
+
+
 def delete_generation(session: Session, generation_id: str) -> list[str]:
     """Delete a generation record and return relative file paths for cleanup.
 
@@ -146,6 +162,7 @@ def enable_generation_sharing(session: Session, generation_id: str) -> Generatio
     if not gen.share_slug:
         gen.share_slug = str(uuid.uuid4())
     gen.is_shared = True
+    gen.is_kept = True
     session.flush()
     log.info("Enabled sharing for generation %s (slug=%s)", generation_id, gen.share_slug)
     return gen

@@ -47,6 +47,8 @@ from songmaker_cli.db.queries import (
     delete_generation_files,
     delete_session,
     delete_version,
+    enable_generation_sharing,
+    enable_song_sharing,
     get_album,
     get_generation,
     get_job,
@@ -54,6 +56,7 @@ from songmaker_cli.db.queries import (
     get_song,
     get_user,
     get_user_by_username,
+    keep_generation,
     list_active_sessions,
     list_albums,
     list_login_attempts,
@@ -66,6 +69,7 @@ from songmaker_cli.db.queries import (
     recover_stale_jobs_by_age,
     save_rating,
     save_scores,
+    unkeep_generation,
     unpick_generation,
     update_job_status,
     update_song,
@@ -316,6 +320,70 @@ def test_cleanup_album_no_picks_deletes_all(seeded_session: Session) -> None:
     count, _paths = cleanup_album(seeded_session, "test")
     seeded_session.commit()
     assert count == 2
+
+
+# ── Keep tests ──────────────────────────────────────────────────────
+
+
+def test_keep_generation(seeded_session: Session) -> None:
+    keep_generation(seeded_session, "g1")
+    seeded_session.commit()
+    assert get_generation(seeded_session, "g1").is_kept is True
+
+
+def test_unkeep_generation(seeded_session: Session) -> None:
+    keep_generation(seeded_session, "g1")
+    seeded_session.commit()
+    unkeep_generation(seeded_session, "g1")
+    seeded_session.commit()
+    assert get_generation(seeded_session, "g1").is_kept is False
+
+
+def test_keep_generation_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Generation not found"):
+        keep_generation(seeded_session, "nonexistent")
+
+
+def test_unkeep_generation_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Generation not found"):
+        unkeep_generation(seeded_session, "nonexistent")
+
+
+def test_cleanup_album_skips_kept(seeded_session: Session) -> None:
+    keep_generation(seeded_session, "g2")
+    seeded_session.commit()
+    count, paths = cleanup_album(seeded_session, "test")
+    seeded_session.commit()
+    assert count == 1
+    assert get_generation(seeded_session, "g1") is None
+    assert get_generation(seeded_session, "g2") is not None
+
+
+def test_cleanup_album_skips_picked_and_kept(seeded_session: Session) -> None:
+    pick_generation(seeded_session, "g1")
+    keep_generation(seeded_session, "g2")
+    seeded_session.commit()
+    count, paths = cleanup_album(seeded_session, "test")
+    seeded_session.commit()
+    assert count == 0
+    assert get_generation(seeded_session, "g1") is not None
+    assert get_generation(seeded_session, "g2") is not None
+
+
+def test_sharing_generation_auto_sets_kept(seeded_session: Session) -> None:
+    assert get_generation(seeded_session, "g1").is_kept is False
+    enable_generation_sharing(seeded_session, "g1")
+    seeded_session.commit()
+    assert get_generation(seeded_session, "g1").is_kept is True
+
+
+def test_sharing_song_auto_sets_kept_on_picked(seeded_session: Session) -> None:
+    pick_generation(seeded_session, "g1")
+    seeded_session.commit()
+    assert get_generation(seeded_session, "g1").is_kept is False
+    enable_song_sharing(seeded_session, "s1")
+    seeded_session.commit()
+    assert get_generation(seeded_session, "g1").is_kept is True
 
 
 def test_delete_album(seeded_session: Session) -> None:

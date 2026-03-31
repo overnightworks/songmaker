@@ -156,6 +156,7 @@ class GenerationResponse(BaseModel):
     status: str
     is_archived: bool
     is_picked: bool
+    is_kept: bool
     is_shared: bool = False
     share_slug: str | None = None
     whisper_text: str | None
@@ -198,6 +199,7 @@ class GenerationResponse(BaseModel):
             status=gen.status,
             is_archived=gen.is_archived,
             is_picked=gen.is_picked,
+            is_kept=gen.is_kept,
             is_shared=gen.is_shared,
             share_slug=gen.share_slug,
             whisper_text=gen.whisper_text,

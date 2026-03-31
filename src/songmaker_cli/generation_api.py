@@ -33,9 +33,11 @@ from songmaker_cli.db.queries import (
     disable_generation_sharing,
     enable_generation_sharing,
     get_job,
+    keep_generation,
     pick_generation,
     record_audit,
     save_rating,
+    unkeep_generation,
     unpick_generation,
     update_job_status,
 )
@@ -234,6 +236,36 @@ def api_unpick_generation(
     check_generation_access(session, gen_id, user)
     try:
         unpick_generation(session, gen_id)
+    except ValueError:
+        raise HTTPException(404, "Generation not found")
+    session.commit()
+    return StatusResponse()
+
+
+@router.post("/generations/{gen_id}/keep")
+def api_keep_generation(
+    gen_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> StatusResponse:
+    check_generation_access(session, gen_id, user)
+    try:
+        keep_generation(session, gen_id)
+    except ValueError:
+        raise HTTPException(404, "Generation not found")
+    session.commit()
+    return StatusResponse()
+
+
+@router.post("/generations/{gen_id}/unkeep")
+def api_unkeep_generation(
+    gen_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> StatusResponse:
+    check_generation_access(session, gen_id, user)
+    try:
+        unkeep_generation(session, gen_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
     session.commit()

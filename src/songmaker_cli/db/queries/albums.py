@@ -93,7 +93,11 @@ def cleanup_album(session: Session, album_id: str) -> tuple[int, list[str]]:
         session.query(Generation)
         .join(Song)
         .options(joinedload(Generation.scores), joinedload(Generation.rating))
-        .filter(Song.album_id == album_id, Generation.is_picked == False)  # noqa: E712
+        .filter(
+            Song.album_id == album_id,
+            Generation.is_picked == False,  # noqa: E712
+            Generation.is_kept == False,  # noqa: E712
+        )
         .all()
     )
     count = len(gens)
