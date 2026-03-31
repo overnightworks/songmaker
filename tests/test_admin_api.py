@@ -548,6 +548,7 @@ def _create_user_with_data(client: TestClient, username: str) -> str:
         from songmaker_cli.db.queries import (
             create_album,
             create_generation,
+            create_playlist,
             create_song,
         )
 
@@ -557,6 +558,7 @@ def _create_user_with_data(client: TestClient, username: str) -> str:
         mp3_rel = f"{user.id}/{song.id}.mp3"
         wav_rel = f"{user.id}/{song.id}.wav"
         create_generation(session, song.id, None, mp3_rel, wav_path=wav_rel)
+        create_playlist(session, "User Playlist", user.id)
         session.commit()
 
         mp3_path = audio_dir / mp3_rel
@@ -585,6 +587,8 @@ def test_hard_delete_user(client: TestClient) -> None:
         assert get_user(session, user_id) is None
         user_albums = [a for a in list_albums(session) if a.created_by == user_id]
         assert len(user_albums) == 0
+        from songmaker_cli.db.queries import list_playlists
+        assert len(list_playlists(session, user_id)) == 0
 
     assert not (audio_dir / user_id).exists()
 

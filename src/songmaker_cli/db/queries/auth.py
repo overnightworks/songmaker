@@ -11,6 +11,7 @@ from songmaker_cli.db.models import (
     Album,
     AuditLog,
     LoginAttempt,
+    Playlist,
     User,
     UserSession,
 )
@@ -61,6 +62,9 @@ def hard_delete_user(session: Session, user_id: str) -> list[str]:
                     if p:
                         audio_paths.append(p)
         session.delete(album)
+
+    for playlist in session.query(Playlist).filter_by(created_by=user_id).all():
+        session.delete(playlist)
 
     user = session.query(User).filter_by(id=user_id).first()
     if not user:
