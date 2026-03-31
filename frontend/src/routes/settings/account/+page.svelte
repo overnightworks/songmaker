@@ -156,7 +156,7 @@
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		color: var(--text);
-		padding: 0.6rem 0.8rem;
+		padding: 0.5rem 0.7rem;
 		font-size: 0.95rem;
 		width: 100%;
 		font-family: var(--font-body);
@@ -198,8 +198,8 @@
 		color: white;
 		border: none;
 		border-radius: 16px;
-		padding: 0.7rem;
-		font-size: 0.95rem;
+		padding: 0.5rem 1.2rem;
+		font-size: 0.85rem;
 		font-weight: 600;
 		cursor: pointer;
 		margin-top: 0.5rem;

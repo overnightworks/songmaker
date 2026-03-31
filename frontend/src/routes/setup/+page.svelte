@@ -108,7 +108,7 @@
 	.setup-card {
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 8px;
+		border-radius: 6px;
 		padding: 2rem;
 		width: 360px;
 	}
@@ -149,7 +149,7 @@
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		color: var(--text);
-		padding: 0.6rem 0.8rem;
+		padding: 0.5rem 0.7rem;
 		font-size: 0.95rem;
 		font-family: var(--font-body);
 		width: 100%;
@@ -189,13 +189,15 @@
 		background: var(--primary);
 		color: white;
 		border: none;
-		border-radius: 4px;
-		padding: 0.7rem;
-		font-size: 0.95rem;
+		border-radius: 16px;
+		padding: 0.5rem 1.2rem;
+		font-size: 0.85rem;
 		font-weight: 600;
 		cursor: pointer;
 		margin-top: 0.5rem;
-		font-family: var(--font-body);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
 	}
 
 	button:hover:not(:disabled) {

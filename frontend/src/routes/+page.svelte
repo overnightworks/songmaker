@@ -393,14 +393,14 @@
 	}
 
 	.save-btn {
-		padding: 6px 16px;
+		padding: 0.5rem 1.2rem;
 		border: none;
 		border-radius: 16px;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 		font-family: var(--font-display);
-		font-size: 11px;
-		letter-spacing: 1px;
+		font-size: 0.85rem;
+		letter-spacing: 0.5px;
 		text-transform: uppercase;
 		cursor: pointer;
 		white-space: nowrap;
@@ -416,14 +416,14 @@
 	}
 
 	.generate-btn {
-		padding: 6px 16px;
+		padding: 0.5rem 1.2rem;
 		border: none;
 		border-radius: 16px;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		color: #fff;
 		font-family: var(--font-display);
-		font-size: 11px;
-		letter-spacing: 1px;
+		font-size: 0.85rem;
+		letter-spacing: 0.5px;
 		text-transform: uppercase;
 		cursor: pointer;
 		white-space: nowrap;
@@ -565,7 +565,7 @@
 		font-family: var(--font-display);
 		font-size: 11px;
 		text-transform: uppercase;
-		letter-spacing: 1px;
+		letter-spacing: 0.5px;
 		cursor: pointer;
 	}
 

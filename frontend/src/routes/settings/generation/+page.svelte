@@ -377,11 +377,13 @@
 		background: transparent;
 		color: var(--text-muted);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: 16px;
 		padding: 0.5rem 1.2rem;
 		font-size: 0.85rem;
 		cursor: pointer;
-		font-family: var(--font-body);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
 	}
 
 	.reset-btn:hover {
@@ -401,14 +403,14 @@
 	}
 
 	.add-btn {
-		padding: 0.35rem 0.8rem;
+		padding: 3px 10px;
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		background: transparent;
 		color: var(--text-muted);
-		font-size: 0.8rem;
+		font-size: 0.75rem;
 		cursor: pointer;
-		font-family: var(--font-body);
+		font-family: var(--font-display);
 	}
 
 	.add-btn:hover {
@@ -423,7 +425,7 @@
 		padding: 1rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: 6px;
 		margin-bottom: 1rem;
 	}
 
@@ -435,7 +437,7 @@
 	}
 
 	.preset-name-input {
-		padding: 0.4rem 0.6rem;
+		padding: 0.5rem 0.7rem;
 		background: var(--bg);
 		border: 1px solid var(--border);
 		border-radius: 4px;
@@ -453,7 +455,7 @@
 	}
 
 	.model-select {
-		padding: 0.4rem 0.6rem;
+		padding: 0.5rem 0.7rem;
 		background: var(--bg);
 		border: 1px solid var(--border);
 		border-radius: 4px;
@@ -475,7 +477,7 @@
 		color: var(--accent);
 		font-size: 0.8rem;
 		font-family: var(--font-display);
-		letter-spacing: 1px;
+		letter-spacing: 0.5px;
 	}
 
 	.preset-list {
@@ -517,9 +519,9 @@
 	}
 
 	.preset-action {
-		padding: 2px 8px;
+		padding: 3px 10px;
 		border: 1px solid var(--border);
-		border-radius: 3px;
+		border-radius: 4px;
 		background: transparent;
 		color: var(--text-muted);
 		font-size: 0.75rem;

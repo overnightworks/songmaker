@@ -199,9 +199,9 @@
 	}
 
 	.pick-btn {
-		padding: 3px 12px;
+		padding: 3px 10px;
 		border: 1px solid var(--border);
-		border-radius: 10px;
+		border-radius: 4px;
 		background: none;
 		color: var(--text-dim);
 		font-size: 11px;
@@ -234,7 +234,7 @@
 		font-size: 18px;
 		color: var(--text);
 		text-transform: uppercase;
-		letter-spacing: 1px;
+		letter-spacing: 0.5px;
 	}
 
 	.gen-meta {
@@ -248,7 +248,7 @@
 		border: 1px solid var(--primary);
 		color: var(--primary);
 		padding: 2px 10px;
-		border-radius: 10px;
+		border-radius: 4px;
 		font-size: 11px;
 		cursor: pointer;
 		font-family: var(--font-display);
@@ -265,7 +265,7 @@
 		color: var(--text-muted);
 		background: var(--surface);
 		padding: 2px 10px;
-		border-radius: 10px;
+		border-radius: 4px;
 		border: 1px solid var(--border);
 		font-family: var(--font-display);
 	}
@@ -301,13 +301,13 @@
 		font-size: 11px;
 		color: var(--text-dim);
 		text-transform: uppercase;
-		letter-spacing: 1px;
+		letter-spacing: 0.5px;
 	}
 
 	.score-btn {
-		padding: 3px 12px;
+		padding: 3px 10px;
 		border: 1px solid var(--primary);
-		border-radius: 10px;
+		border-radius: 4px;
 		background: none;
 		color: var(--primary);
 		font-size: 10px;

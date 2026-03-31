@@ -761,7 +761,7 @@
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		color: var(--text);
-		padding: 0.5rem;
+		padding: 0.5rem 0.7rem;
 		font-size: 0.85rem;
 		font-family: var(--font-body);
 	}
@@ -1041,7 +1041,7 @@
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 1px;
+		letter-spacing: 0.5px;
 	}
 
 	.gen-model-tab:hover:not(.active) {
@@ -1084,7 +1084,7 @@
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 1px;
+		letter-spacing: 0.5px;
 	}
 
 	.model-toggle.active {

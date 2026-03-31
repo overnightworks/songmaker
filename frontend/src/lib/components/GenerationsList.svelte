@@ -172,7 +172,7 @@
 		color: var(--text-dim);
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 1px;
+		letter-spacing: 0.5px;
 		padding: 4px 0;
 	}
 
@@ -351,9 +351,9 @@
 	}
 
 	.score-action {
-		padding: 3px 8px;
+		padding: 3px 10px;
 		border: 1px solid var(--border);
-		border-radius: 10px;
+		border-radius: 4px;
 		background: none;
 		color: var(--text-dim);
 		font-size: 10px;

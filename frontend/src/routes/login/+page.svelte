@@ -362,9 +362,9 @@
 	input {
 		background: color-mix(in srgb, var(--bg) 80%, transparent);
 		border: 1px solid var(--border);
-		border-radius: 6px;
+		border-radius: 4px;
 		color: var(--text);
-		padding: 0.7rem 0.9rem;
+		padding: 0.5rem 0.7rem;
 		font-size: 0.9rem;
 		font-family: var(--font-body);
 		width: 100%;
@@ -417,15 +417,15 @@
 		);
 		color: white;
 		border: none;
-		border-radius: 6px;
-		padding: 0.75rem;
-		font-size: 0.9rem;
+		border-radius: 16px;
+		padding: 0.5rem 1.2rem;
+		font-size: 0.85rem;
 		font-weight: 600;
 		cursor: pointer;
 		margin-top: 0.5rem;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.15em;
+		letter-spacing: 0.5px;
 		transition:
 			transform 0.15s,
 			box-shadow 0.15s;
