@@ -46,11 +46,9 @@
 	const nextSong = $derived($canPlayNextSong);
 
 	let prevFile = $state('');
-	let loadedFile = $state('');
 
 	let audioCtx: AudioContext | undefined;
 	let analyser: AnalyserNode | undefined;
-	let sourceNode: MediaElementAudioSourceNode | undefined;
 	let frequencyData: Uint8Array<ArrayBuffer> | undefined;
 	let waveformData: Uint8Array<ArrayBuffer> | undefined;
 	let bassLevel = $state(0);
@@ -68,8 +66,8 @@
 			analyser = audioCtx.createAnalyser();
 			analyser.fftSize = FFT_SIZE;
 			analyser.smoothingTimeConstant = 0.82;
-			sourceNode = audioCtx.createMediaElementSource(media);
-			sourceNode.connect(analyser);
+			const source = audioCtx.createMediaElementSource(media);
+			source.connect(analyser);
 			analyser.connect(audioCtx.destination);
 			frequencyData = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
 			waveformData = new Uint8Array(analyser.fftSize) as Uint8Array<ArrayBuffer>;
@@ -84,14 +82,10 @@
 		if (!analyser || !frequencyData || !waveformData) return;
 		if (audioCtx?.state === 'suspended') audioCtx.resume();
 		vizColors = readVizColors();
-		viz.startLoop(vizCanvas, analyser, frequencyData, waveformData, vizColors);
-		syncVizLevels();
-	}
-
-	function syncVizLevels(): void {
-		bassLevel = viz.bassLevel;
-		energyLevel = viz.energyLevel;
-		if (isPlaying) requestAnimationFrame(syncVizLevels);
+		viz.startLoop(vizCanvas, analyser, frequencyData, waveformData, vizColors, (bass, energy) => {
+			bassLevel = bass;
+			energyLevel = energy;
+		});
 	}
 
 	function stopVisualizerLoop(): void {
@@ -99,16 +93,10 @@
 		viz.stopLoop(vizCanvas);
 	}
 
-	function handleCanvasClick(e: MouseEvent): void {
-		if (!vizCanvas || !wavesurfer || duration <= 0) return;
-		const rect = vizCanvas.getBoundingClientRect();
-		wavesurfer.seekTo(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
-	}
-
-	function handleProgressClick(e: MouseEvent): void {
+	function seekFromClick(e: MouseEvent, el?: HTMLElement): void {
 		if (!wavesurfer || duration <= 0) return;
-		const bar = e.currentTarget as HTMLElement;
-		const rect = bar.getBoundingClientRect();
+		const target = el ?? (e.currentTarget as HTMLElement);
+		const rect = target.getBoundingClientRect();
 		wavesurfer.seekTo(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
 	}
 
@@ -133,7 +121,6 @@
 		wavesurfer.on('ready', () => {
 			isLoading = false;
 			isAudioBuffering.set(false);
-			loadedFile = prevFile;
 			duration = wavesurfer?.getDuration() ?? 0;
 			playbackDuration.set(duration);
 			connectAnalyser();
@@ -142,7 +129,7 @@
 			currentTime = time;
 			playbackTime.set(time);
 		});
-		wavesurfer.on('finish', handleEnded);
+		wavesurfer.on('finish', () => playNextGeneration());
 		wavesurfer.on('play', () => {
 			isPlaying = true;
 			isAudioPlaying.set(true);
@@ -165,8 +152,6 @@
 			isAudioBuffering.set(true);
 			if (!wavesurfer) createWavesurfer();
 			wavesurfer?.pause();
-			isPlaying = false;
-			isAudioPlaying.set(false);
 			if (pendingAutoplay) {
 				wavesurfer?.un('ready', pendingAutoplay);
 				pendingAutoplay = null;
@@ -187,7 +172,7 @@
 	$effect(() => {
 		if (toggleRequest !== prevToggle) {
 			prevToggle = toggleRequest;
-			if (wavesurfer && !isLoading && loadedFile === gen?.mp3_path) {
+			if (wavesurfer && !isLoading) {
 				wavesurfer.playPause();
 			}
 		}
@@ -202,13 +187,6 @@
 	function togglePlay(): void {
 		if (!gen || !wavesurfer || isLoading) return;
 		wavesurfer.playPause();
-	}
-
-	function handleEnded(): void {
-		isPlaying = false;
-		isAudioPlaying.set(false);
-		stopVisualizerLoop();
-		playNextGeneration();
 	}
 </script>
 
@@ -283,14 +261,14 @@
 	<span class="time">{formatTime(currentTime)}</span>
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="viz-area" onclick={handleCanvasClick}>
+	<div class="viz-area" onclick={(e) => seekFromClick(e, vizCanvas)}>
 		<div class="wave-hidden" bind:this={waveContainer}></div>
 	</div>
 	<span class="time">{formatTime(duration)}</span>
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="progress-bar" onclick={handleProgressClick}>
+	<div class="progress-bar" onclick={seekFromClick}>
 		<div
 			class="progress-fill"
 			style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"

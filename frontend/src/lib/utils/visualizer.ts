@@ -265,8 +265,7 @@ export class AudioVisualizer {
 	private _opacity = 0;
 	private _animFrameId: number | undefined;
 
-	bassLevel = 0;
-	energyLevel = 0;
+	private _onEnergy: ((bass: number, energy: number) => void) | undefined;
 
 	drawFrame(
 		canvas: HTMLCanvasElement,
@@ -303,8 +302,7 @@ export class AudioVisualizer {
 
 		const cy = h / 2;
 		const energy = computeEnergy(this.smoothedFreq, binCount);
-		this.bassLevel = energy.bass;
-		this.energyLevel = energy.avg;
+		if (this._onEnergy) this._onEnergy(energy.bass, energy.avg);
 
 		ctx.globalAlpha = this._opacity;
 		drawBars(ctx, this.smoothedFreq, binCount, w, h, cy, colors);
@@ -326,10 +324,12 @@ export class AudioVisualizer {
 		analyser: AnalyserNode,
 		frequencyData: Uint8Array<ArrayBuffer>,
 		waveformData: Uint8Array<ArrayBuffer>,
-		colors: VizColors
+		colors: VizColors,
+		onEnergy?: (bass: number, energy: number) => void
 	): void {
 		if (this._animFrameId) return;
 		this._opacity = 0;
+		this._onEnergy = onEnergy;
 
 		const loop = () => {
 			this.drawFrame(canvas, analyser, frequencyData, waveformData, colors);
