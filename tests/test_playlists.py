@@ -1,0 +1,585 @@
+"""Tests for playlists — DB queries, API endpoints, sharing."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from songmaker_cli.app_context import AppContext
+from songmaker_cli.auth import hash_password
+from songmaker_cli.db.engine import init_test_db as init_db
+from songmaker_cli.db.models import (
+    Album,
+    Generation,
+    Playlist,
+    PlaylistEntry,
+    Song,
+    User,
+    Version,
+)
+from songmaker_cli.db.queries import (
+    add_album_to_playlist,
+    add_generation_to_playlist,
+    add_song_to_playlist,
+    create_playlist,
+    delete_playlist,
+    disable_playlist_sharing,
+    enable_playlist_sharing,
+    get_generation,
+    get_playlist,
+    get_playlist_by_slug,
+    list_playlists,
+    remove_from_playlist,
+    reorder_playlist_entry,
+    update_playlist,
+)
+from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+
+_DEFAULT_USER_ID = "u-test"
+
+
+# ── Fixtures ──────────────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def db_factory(tmp_path: Path):
+    return init_db(tmp_path / "test.db")
+
+
+def _seed_test_data(session: Session) -> None:
+    session.add(User(id=_DEFAULT_USER_ID, username="test", password_hash="x", role="user"))
+    session.flush()
+    session.add(Album(id="a1", title="Album One", artist="Artist", created_by=_DEFAULT_USER_ID))
+    session.add(Song(id="s1", title="Song One", album_id="a1", track_number=1))
+    session.add(Song(id="s2", title="Song Two", album_id="a1", track_number=2))
+    session.flush()
+    session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="hi", prompt="rock"))
+    session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="hi", prompt="pop"))
+    session.flush()
+    session.add(Generation(
+        id="g1", song_id="s1", version_id="v1", generation_number=1,
+        mp3_path="u-test/g1.mp3", seed=42, is_picked=True,
+    ))
+    session.add(Generation(
+        id="g2", song_id="s1", version_id="v1", generation_number=2,
+        mp3_path="u-test/g2.mp3", seed=99,
+    ))
+    session.add(Generation(
+        id="g3", song_id="s2", version_id="v2", generation_number=1,
+        mp3_path="u-test/g3.mp3", seed=77, is_picked=True,
+    ))
+
+
+@pytest.fixture()
+def seeded_session(db_factory) -> Session:
+    session = db_factory()
+    _seed_test_data(session)
+    session.commit()
+    yield session
+    session.close()
+
+
+def _fake_user():
+    user = AuthenticatedUser(
+        id=_DEFAULT_USER_ID, username="test", role="user", is_active=True,
+    )
+    return lambda: user
+
+
+@pytest.fixture()
+def client(tmp_path: Path) -> TestClient:
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        _seed_test_data(session)
+        session.commit()
+
+    ctx = AppContext(
+        db=factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+    from songmaker_cli.api import router
+    app = FastAPI()
+    app.state.ctx = ctx
+    app.dependency_overrides[get_current_user] = _fake_user()
+    app.include_router(router)
+    yield TestClient(app)
+
+
+# ── DB query tests ────────────────────────────────────────────────────
+
+
+def test_create_and_list_playlists(seeded_session: Session) -> None:
+    create_playlist(seeded_session, "My Mix", _DEFAULT_USER_ID)
+    create_playlist(seeded_session, "Chill", _DEFAULT_USER_ID)
+    seeded_session.commit()
+    playlists = list_playlists(seeded_session, _DEFAULT_USER_ID)
+    assert len(playlists) == 2
+    assert {p.title for p in playlists} == {"Chill", "My Mix"}
+
+
+def test_get_playlist_with_entries(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    add_generation_to_playlist(seeded_session, playlist.id, "g1")
+    seeded_session.commit()
+    loaded = get_playlist(seeded_session, playlist.id)
+    assert loaded is not None
+    assert len(loaded.entries) == 1
+    assert loaded.entries[0].generation.id == "g1"
+
+
+def test_update_playlist(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Old", _DEFAULT_USER_ID)
+    seeded_session.commit()
+    updated = update_playlist(seeded_session, playlist.id, "New")
+    seeded_session.commit()
+    assert updated.title == "New"
+
+
+def test_delete_playlist(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Doomed", _DEFAULT_USER_ID)
+    seeded_session.commit()
+    delete_playlist(seeded_session, playlist.id)
+    seeded_session.commit()
+    assert get_playlist(seeded_session, playlist.id) is None
+
+
+def test_delete_playlist_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Playlist not found"):
+        delete_playlist(seeded_session, "nonexistent")
+
+
+def test_update_playlist_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Playlist not found"):
+        update_playlist(seeded_session, "nonexistent", "x")
+
+
+def test_add_generation_sets_is_kept(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    assert get_generation(seeded_session, "g2").is_kept is False
+    add_generation_to_playlist(seeded_session, playlist.id, "g2")
+    seeded_session.commit()
+    assert get_generation(seeded_session, "g2").is_kept is True
+
+
+def test_add_generation_not_found(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    seeded_session.commit()
+    with pytest.raises(ValueError, match="Generation not found"):
+        add_generation_to_playlist(seeded_session, playlist.id, "nonexistent")
+
+
+def test_add_song_adds_picked_generation(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    entry = add_song_to_playlist(seeded_session, playlist.id, "s1")
+    seeded_session.commit()
+    assert entry is not None
+    assert entry.generation_id == "g1"
+
+
+def test_add_song_no_pick_returns_none(seeded_session: Session) -> None:
+    seeded_session.query(Generation).filter_by(id="g3").update({"is_picked": False})
+    seeded_session.commit()
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    result = add_song_to_playlist(seeded_session, playlist.id, "s2")
+    assert result is None
+
+
+def test_add_song_not_found(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    seeded_session.commit()
+    with pytest.raises(ValueError, match="Song not found"):
+        add_song_to_playlist(seeded_session, playlist.id, "nonexistent")
+
+
+def test_add_album_adds_all_picked(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    entries = add_album_to_playlist(seeded_session, playlist.id, "a1")
+    seeded_session.commit()
+    assert len(entries) == 2
+    gen_ids = {e.generation_id for e in entries}
+    assert gen_ids == {"g1", "g3"}
+
+
+def test_add_album_not_found(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    seeded_session.commit()
+    with pytest.raises(ValueError, match="Album not found"):
+        add_album_to_playlist(seeded_session, playlist.id, "nonexistent")
+
+
+def test_remove_from_playlist(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    entry = add_generation_to_playlist(seeded_session, playlist.id, "g1")
+    add_generation_to_playlist(seeded_session, playlist.id, "g2")
+    seeded_session.commit()
+
+    remove_from_playlist(seeded_session, playlist.id, entry.id)
+    seeded_session.commit()
+
+    loaded = get_playlist(seeded_session, playlist.id)
+    assert len(loaded.entries) == 1
+    assert loaded.entries[0].generation_id == "g2"
+    assert loaded.entries[0].position == 0
+
+
+def test_remove_from_playlist_not_found(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    seeded_session.commit()
+    with pytest.raises(ValueError, match="Playlist entry not found"):
+        remove_from_playlist(seeded_session, playlist.id, "nonexistent")
+
+
+def test_reorder_playlist_entry_forward(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    e1 = add_generation_to_playlist(seeded_session, playlist.id, "g1")
+    add_generation_to_playlist(seeded_session, playlist.id, "g2")
+    add_generation_to_playlist(seeded_session, playlist.id, "g3")
+    seeded_session.commit()
+
+    reorder_playlist_entry(seeded_session, playlist.id, e1.id, 2)
+    seeded_session.commit()
+
+    loaded = get_playlist(seeded_session, playlist.id)
+    positions = {e.generation_id: e.position for e in loaded.entries}
+    assert positions["g2"] == 0
+    assert positions["g3"] == 1
+    assert positions["g1"] == 2
+
+
+def test_reorder_playlist_entry_backward(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    add_generation_to_playlist(seeded_session, playlist.id, "g1")
+    add_generation_to_playlist(seeded_session, playlist.id, "g2")
+    e3 = add_generation_to_playlist(seeded_session, playlist.id, "g3")
+    seeded_session.commit()
+
+    reorder_playlist_entry(seeded_session, playlist.id, e3.id, 0)
+    seeded_session.commit()
+
+    loaded = get_playlist(seeded_session, playlist.id)
+    positions = {e.generation_id: e.position for e in loaded.entries}
+    assert positions["g3"] == 0
+    assert positions["g1"] == 1
+    assert positions["g2"] == 2
+
+
+def test_reorder_same_position_noop(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    e1 = add_generation_to_playlist(seeded_session, playlist.id, "g1")
+    seeded_session.commit()
+    reorder_playlist_entry(seeded_session, playlist.id, e1.id, 0)
+    seeded_session.commit()
+    loaded = get_playlist(seeded_session, playlist.id)
+    assert loaded.entries[0].position == 0
+
+
+def test_reorder_entry_not_found(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    seeded_session.commit()
+    with pytest.raises(ValueError, match="Playlist entry not found"):
+        reorder_playlist_entry(seeded_session, playlist.id, "nonexistent", 0)
+
+
+def test_enable_disable_playlist_sharing(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    seeded_session.commit()
+
+    shared = enable_playlist_sharing(seeded_session, playlist.id)
+    seeded_session.commit()
+    assert shared.is_shared is True
+    assert shared.share_slug is not None
+    slug = shared.share_slug
+
+    found = get_playlist_by_slug(seeded_session, slug)
+    assert found is not None
+    assert found.id == playlist.id
+
+    disable_playlist_sharing(seeded_session, playlist.id)
+    seeded_session.commit()
+    assert get_playlist_by_slug(seeded_session, slug) is None
+
+
+def test_enable_sharing_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Playlist not found"):
+        enable_playlist_sharing(seeded_session, "nonexistent")
+
+
+def test_disable_sharing_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Playlist not found"):
+        disable_playlist_sharing(seeded_session, "nonexistent")
+
+
+def test_cascade_delete_generation_removes_entry(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    add_generation_to_playlist(seeded_session, playlist.id, "g2")
+    seeded_session.commit()
+
+    gen = seeded_session.query(Generation).filter_by(id="g2").first()
+    seeded_session.delete(gen)
+    seeded_session.commit()
+
+    loaded = get_playlist(seeded_session, playlist.id)
+    assert len(loaded.entries) == 0
+
+
+def test_multiple_gens_same_song_allowed(seeded_session: Session) -> None:
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    add_generation_to_playlist(seeded_session, playlist.id, "g1")
+    add_generation_to_playlist(seeded_session, playlist.id, "g2")
+    seeded_session.commit()
+    loaded = get_playlist(seeded_session, playlist.id)
+    assert len(loaded.entries) == 2
+
+
+# ── API endpoint tests ────────────────────────────────────────────────
+
+
+def test_api_create_and_list_playlists(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "My Mix"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["title"] == "My Mix"
+    assert data["entry_count"] == 0
+
+    resp = client.get("/api/playlists")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+
+
+def test_api_get_playlist(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Detail"})
+    pid = resp.json()["id"]
+
+    resp = client.get(f"/api/playlists/{pid}")
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "Detail"
+    assert resp.json()["entries"] == []
+
+
+def test_api_update_playlist(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Old"})
+    pid = resp.json()["id"]
+
+    resp = client.put(f"/api/playlists/{pid}", json={"title": "New"})
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "New"
+
+
+def test_api_delete_playlist(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Doomed"})
+    pid = resp.json()["id"]
+
+    resp = client.delete(f"/api/playlists/{pid}")
+    assert resp.status_code == 200
+
+    resp = client.get(f"/api/playlists/{pid}")
+    assert resp.status_code == 404
+
+
+def test_api_add_generation_to_playlist(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Test"})
+    pid = resp.json()["id"]
+
+    resp = client.post(
+        f"/api/playlists/{pid}/entries/generation",
+        json={"generation_id": "g1"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["generation_id"] == "g1"
+
+    resp = client.get(f"/api/playlists/{pid}")
+    assert len(resp.json()["entries"]) == 1
+
+
+def test_api_add_song_to_playlist(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Test"})
+    pid = resp.json()["id"]
+
+    resp = client.post(
+        f"/api/playlists/{pid}/entries/song", json={"song_id": "s1"},
+    )
+    assert resp.status_code == 200
+
+    resp = client.get(f"/api/playlists/{pid}")
+    entries = resp.json()["entries"]
+    assert len(entries) == 1
+    assert entries[0]["generation_id"] == "g1"
+
+
+def test_api_add_album_to_playlist(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Test"})
+    pid = resp.json()["id"]
+
+    resp = client.post(
+        f"/api/playlists/{pid}/entries/album", json={"album_id": "a1"},
+    )
+    assert resp.status_code == 200
+
+    resp = client.get(f"/api/playlists/{pid}")
+    assert len(resp.json()["entries"]) == 2
+
+
+def test_api_remove_entry(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Test"})
+    pid = resp.json()["id"]
+    client.post(f"/api/playlists/{pid}/entries/generation", json={"generation_id": "g1"})
+    client.post(f"/api/playlists/{pid}/entries/generation", json={"generation_id": "g2"})
+
+    resp = client.get(f"/api/playlists/{pid}")
+    entry_id = resp.json()["entries"][0]["id"]
+
+    resp = client.delete(f"/api/playlists/{pid}/entries/{entry_id}")
+    assert resp.status_code == 200
+
+    resp = client.get(f"/api/playlists/{pid}")
+    assert len(resp.json()["entries"]) == 1
+
+
+def test_api_reorder_entry(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Test"})
+    pid = resp.json()["id"]
+    client.post(f"/api/playlists/{pid}/entries/generation", json={"generation_id": "g1"})
+    client.post(f"/api/playlists/{pid}/entries/generation", json={"generation_id": "g2"})
+
+    resp = client.get(f"/api/playlists/{pid}")
+    first_entry_id = resp.json()["entries"][0]["id"]
+
+    resp = client.patch(
+        f"/api/playlists/{pid}/entries/{first_entry_id}/position",
+        json={"new_position": 1},
+    )
+    assert resp.status_code == 200
+
+    resp = client.get(f"/api/playlists/{pid}")
+    entries = resp.json()["entries"]
+    assert entries[0]["generation_id"] == "g2"
+    assert entries[1]["generation_id"] == "g1"
+
+
+def test_api_playlist_not_found(client: TestClient) -> None:
+    assert client.get("/api/playlists/nonexistent").status_code == 404
+    assert client.put("/api/playlists/nonexistent", json={"title": "x"}).status_code == 404
+    assert client.delete("/api/playlists/nonexistent").status_code == 404
+
+
+def test_api_entry_not_found(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Test"})
+    pid = resp.json()["id"]
+    assert client.delete(f"/api/playlists/{pid}/entries/nonexistent").status_code == 404
+    resp = client.patch(
+        f"/api/playlists/{pid}/entries/nonexistent/position",
+        json={"new_position": 0},
+    )
+    assert resp.status_code == 404
+
+
+def test_api_add_song_no_pick(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Test"})
+    pid = resp.json()["id"]
+    client.post("/api/generations/g3/unpick")
+    resp = client.post(f"/api/playlists/{pid}/entries/song", json={"song_id": "s2"})
+    assert resp.status_code == 400
+
+
+def test_api_add_nonexistent_generation(client: TestClient) -> None:
+    resp = client.post("/api/playlists", json={"title": "Test"})
+    pid = resp.json()["id"]
+    resp = client.post(
+        f"/api/playlists/{pid}/entries/generation",
+        json={"generation_id": "nonexistent"},
+    )
+    assert resp.status_code == 404
+
+
+# ── Sharing API tests ─────────────────────────────────────────────────
+
+
+def _seed_sharing_data(session) -> None:
+    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    session.add(admin)
+    session.add(Album(id="a1", title="Album", artist="Artist"))
+    session.add(Song(id="s1", title="Song One", album_id="a1", track_number=1))
+    session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="hi"))
+    session.add(Generation(
+        id="g1", song_id="s1", version_id="v1", generation_number=1,
+        mp3_path="admin_user/g1.mp3", seed=42, is_picked=True,
+    ))
+    playlist = Playlist(id="pl1", title="Shared Mix", created_by=admin.id)
+    session.add(playlist)
+    session.add(PlaylistEntry(
+        id="pe1", playlist_id="pl1", generation_id="g1", position=0,
+    ))
+
+
+def test_shared_playlist_view(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+    login_and_csrf(client, "admin", "admin12345")
+
+    audio_dir = tmp_path / "audio" / "admin_user"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    (audio_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+
+    resp = client.post("/api/playlists/pl1/share")
+    assert resp.status_code == 200
+    slug = resp.json()["share_slug"]
+
+    unauthed = TestClient(client.app, cookies={})
+    resp = unauthed.get(f"/shared/playlist/{slug}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["title"] == "Shared Mix"
+    assert len(data["entries"]) == 1
+    assert data["entries"][0]["song_title"] == "Song One"
+    assert data["entries"][0]["audio_url"] is not None
+
+
+def test_shared_playlist_audio(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+    login_and_csrf(client, "admin", "admin12345")
+
+    audio_dir = tmp_path / "audio" / "admin_user"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    (audio_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+
+    resp = client.post("/api/playlists/pl1/share")
+    slug = resp.json()["share_slug"]
+
+    unauthed = TestClient(client.app, cookies={})
+    resp = unauthed.get(f"/shared/playlist/{slug}/audio/admin_user/g1.mp3")
+    assert resp.status_code == 200
+
+
+def test_shared_playlist_not_found(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+    unauthed = TestClient(client.app, cookies={})
+    resp = unauthed.get("/shared/playlist/nonexistent-slug")
+    assert resp.status_code == 404
+
+
+def test_shared_playlist_audio_wrong_file(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+    login_and_csrf(client, "admin", "admin12345")
+
+    resp = client.post("/api/playlists/pl1/share")
+    slug = resp.json()["share_slug"]
+
+    unauthed = TestClient(client.app, cookies={})
+    resp = unauthed.get(f"/shared/playlist/{slug}/audio/wrong.mp3")
+    assert resp.status_code == 404
+
+
+def test_unshare_playlist(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+    login_and_csrf(client, "admin", "admin12345")
+
+    client.post("/api/playlists/pl1/share")
+    resp = client.delete("/api/playlists/pl1/share")
+    assert resp.status_code == 200

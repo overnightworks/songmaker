@@ -13,6 +13,8 @@ import songmaker_cli.constants as _consts
 from songmaker_cli.api_models import (
     SharedAlbumResponse,
     SharedGenerationResponse,
+    SharedPlaylistEntryResponse,
+    SharedPlaylistResponse,
     SharedSongItem,
     SharedSongResponse,
 )
@@ -25,6 +27,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.queries import (
     get_album_by_slug,
     get_generation_by_slug,
+    get_playlist_by_slug,
     get_song_by_slug,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -235,6 +238,66 @@ async def get_shared_gen_audio(
         raise HTTPException(404, "Not found")
 
     if filename != gen.mp3_path:
+        raise HTTPException(404, "Not found")
+
+    audio_path = _resolve_audio_path(ctx.audio_dir, filename)
+    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
+    return FileResponse(audio_path, media_type=media_type)
+
+
+@router.get("/shared/playlist/{slug}")
+def get_shared_playlist(
+    slug: str,
+    request: Request,
+    db: Session = Depends(get_db_session),
+) -> JSONResponse:
+    _check_shared_rate_limit(request)
+    playlist = get_playlist_by_slug(db, slug)
+    if not playlist:
+        raise HTTPException(404, "Not found")
+    entries = sorted(playlist.entries, key=lambda e: e.position)
+    response = SharedPlaylistResponse(
+        title=playlist.title,
+        entries=[
+            SharedPlaylistEntryResponse(
+                song_title=e.generation.song.title if e.generation and e.generation.song else "",
+                artist=(
+                    e.generation.song.album.artist
+                    if e.generation and e.generation.song and e.generation.song.album
+                    else ""
+                ),
+                generation_number=e.generation.generation_number if e.generation else 0,
+                audio_url=(
+                    f"/shared/playlist/{slug}/audio/{e.generation.mp3_path}"
+                    if e.generation else None
+                ),
+            )
+            for e in entries
+            if e.generation is not None
+        ],
+    )
+    return JSONResponse(response.model_dump())
+
+
+@router.get("/shared/playlist/{slug}/audio/{filename:path}")
+async def get_shared_playlist_audio(
+    slug: str,
+    filename: str,
+    request: Request,
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    _check_shared_rate_limit(request)
+    playlist = get_playlist_by_slug(db, slug)
+    if not playlist:
+        raise HTTPException(404, "Not found")
+
+    valid_filenames = {
+        e.generation.mp3_path
+        for e in playlist.entries
+        if e.generation is not None
+    }
+    if filename not in valid_filenames:
         raise HTTPException(404, "Not found")
 
     audio_path = _resolve_audio_path(ctx.audio_dir, filename)

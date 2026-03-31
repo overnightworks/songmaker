@@ -150,6 +150,42 @@ class Generation(Base):
     )
 
 
+class Playlist(Base):
+    __tablename__ = "playlists"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    title: Mapped[str] = mapped_column(String(200))
+    created_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    share_slug: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, index=True,
+    )
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
+
+    entries: Mapped[list[PlaylistEntry]] = relationship(
+        back_populates="playlist", cascade="all, delete-orphan",
+        order_by="PlaylistEntry.position",
+    )
+
+
+class PlaylistEntry(Base):
+    __tablename__ = "playlist_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    playlist_id: Mapped[str] = mapped_column(ForeignKey("playlists.id"), index=True)
+    generation_id: Mapped[str] = mapped_column(
+        ForeignKey("generations.id", ondelete="CASCADE"), index=True,
+    )
+    position: Mapped[int] = mapped_column(Integer)
+    added_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+
+    playlist: Mapped[Playlist] = relationship(back_populates="entries")
+    generation: Mapped[Generation] = relationship()
+
+
 class Score(Base):
     __tablename__ = "scores"
 
