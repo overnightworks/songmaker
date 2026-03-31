@@ -18,9 +18,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-log = logging.getLogger(__name__)
+from songmaker_cli.constants import CLAUDE_CHAT_MODEL
 
-CHAT_MODEL = "claude-opus-4-6"
+log = logging.getLogger(__name__)
 
 
 class UnavailableError(Exception):
@@ -36,7 +36,7 @@ def call_claude(
     prompt: str,
     api_key: str | None = None,
     system: str | None = None,
-    model: str = CHAT_MODEL,
+    model: str = CLAUDE_CHAT_MODEL,
     max_tokens: int = 1024,
 ) -> ClaudeResponse:
     """Call Claude using the best available backend.
@@ -54,8 +54,8 @@ def call_claude(
     if api_key:
         log.info("Claude: using API backend (model=%s)", model)
         return _call_api(prompt, api_key, system, model, max_tokens)
-    log.info("Claude: using CLI backend")
-    return _call_cli(prompt, system)
+    log.info("Claude: using CLI backend (model=%s)", model)
+    return _call_cli(prompt, system, model)
 
 
 def is_available(api_key: str | None = None) -> bool:
@@ -88,7 +88,13 @@ def _call_api(
         "messages": [{"role": "user", "content": prompt}],
     }
     if system:
-        kwargs["system"] = system
+        kwargs["system"] = [
+            {
+                "type": "text",
+                "text": system,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
 
     response = client.messages.create(**kwargs)
     text = response.content[0].text if response.content else ""
@@ -106,7 +112,9 @@ _DISALLOWED_TOOLS = (
 )
 
 
-def _call_cli(prompt: str, system: str | None = None) -> ClaudeResponse:
+def _call_cli(
+    prompt: str, system: str | None = None, model: str = CLAUDE_CHAT_MODEL,
+) -> ClaudeResponse:
     """Call Claude via the Claude Code CLI (uses Max subscription).
 
     All known tools are denied via --disallowedTools. This is a denylist
@@ -122,6 +130,7 @@ def _call_cli(prompt: str, system: str | None = None) -> ClaudeResponse:
 
     cmd = [
         binary, "-p", prompt,
+        "--model", model,
         "--output-format", "json",
         "--disallowedTools", _DISALLOWED_TOOLS,
     ]

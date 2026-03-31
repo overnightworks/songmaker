@@ -86,7 +86,9 @@ def test_call_api_with_system_prompt() -> None:
         _call_api("hello", "sk-test", "be helpful", "claude-sonnet-4-20250514", 1024)
 
     kwargs = mock_client.messages.create.call_args[1]
-    assert kwargs["system"] == "be helpful"
+    assert kwargs["system"] == [
+        {"type": "text", "text": "be helpful", "cache_control": {"type": "ephemeral"}},
+    ]
 
 
 def test_call_api_empty_response() -> None:
@@ -136,6 +138,21 @@ def test_call_cli_with_system_prompt() -> None:
     cmd = mock_run.call_args[0][0]
     assert "--system-prompt" in cmd
     assert "be helpful" in cmd
+
+
+def test_call_cli_passes_model() -> None:
+    mock_proc = MagicMock(returncode=0, stdout='{"result": "ok"}', stderr="")
+
+    with (
+        patch("songmaker_cli.claude.provider._find_claude_binary", return_value="/usr/bin/claude"),
+        patch("subprocess.run", return_value=mock_proc) as mock_run,
+    ):
+        _call_cli("hello", model="claude-haiku-4-5-20251001")
+
+    cmd = mock_run.call_args[0][0]
+    assert "--model" in cmd
+    model_idx = cmd.index("--model")
+    assert cmd[model_idx + 1] == "claude-haiku-4-5-20251001"
 
 
 def test_call_cli_plain_text_output() -> None:

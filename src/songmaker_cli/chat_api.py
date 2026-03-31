@@ -16,11 +16,11 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.claude.provider import (
-    CHAT_MODEL,
     UnavailableError,
     call_claude,
     is_available,
 )
+from songmaker_cli.constants import CLAUDE_CHAT_MODEL, CLAUDE_SCORING_MODEL
 from songmaker_cli.db.queries import update_job_status
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
@@ -42,7 +42,8 @@ def api_capabilities(
         claude_cli=is_available(api_key=None),
         generation=True,
         scoring=True,
-        chat_model=CHAT_MODEL,
+        chat_model=CLAUDE_CHAT_MODEL,
+        scoring_model=CLAUDE_SCORING_MODEL,
     )
 
 
@@ -104,7 +105,7 @@ def api_chat(
     system = SYSTEM_PROMPT
 
     try:
-        response = call_claude(prompt, api_key=api_key, system=system)
+        response = call_claude(prompt, api_key=api_key, system=system, model=CLAUDE_CHAT_MODEL)
     except UnavailableError as e:
         log.warning("Claude chat unavailable: %s", e)
         update_job_status(session, job_id, "failed", error="Claude unavailable")

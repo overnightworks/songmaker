@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 APP_NAME = "Hallucinai"
 
 DATA_ROOT = "data"
@@ -39,6 +41,9 @@ WHISPER_COMPUTE_TYPE = "int8_float16"
 WHISPER_BEAM_SIZE = 5
 WHISPER_TEMPERATURE = 0.0
 ACESTEP_DEFAULT_VRAM_GB = "18"
+
+CLAUDE_CHAT_MODEL = os.environ.get("CLAUDE_CHAT_MODEL", "claude-opus-4-6")
+CLAUDE_SCORING_MODEL = os.environ.get("CLAUDE_SCORING_MODEL", "claude-opus-4-6")
 
 # Whisper hallucination detection
 HALLUCINATION_MIN_LINES = 5
