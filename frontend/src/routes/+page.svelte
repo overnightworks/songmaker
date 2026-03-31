@@ -498,7 +498,7 @@
 			</div>
 		{:else if selectedAlbum}
 			<div class="detail-panel">
-				<button class="back-btn mobile-only" onclick={deselectAlbum}>
+				<button class="back-btn" onclick={deselectAlbum}>
 					<span class="back-arrow">←</span>
 					Albums
 				</button>
@@ -1005,15 +1005,7 @@
 		padding: 12px 0;
 	}
 
-	.mobile-only {
-		display: none;
-	}
-
 	@media (max-width: 768px) {
-		.mobile-only {
-			display: flex;
-		}
-
 		.sidebar {
 			position: static;
 			width: 100%;
