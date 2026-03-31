@@ -29,9 +29,14 @@
 		clearGenerationSelection,
 		navigateToSongTab,
 		switchTab,
+		switchAlbumTab,
+		backToAlbum,
 		detailTab,
+		albumTab,
+		selectSong,
 		initNavigation
 	} from '$lib/stores/navigation';
+	import { playAlbum } from '$lib/stores/player';
 	import {
 		editLyrics,
 		editPrompt,
@@ -72,6 +77,7 @@
 	const statusMsg = $derived($status);
 	const jobs = $derived($activeJobs);
 	const tab = $derived($detailTab);
+	const aTab = $derived($albumTab);
 
 	const selectedAlbum = $derived(
 		currentAlbumId ? (albums.find((a) => a.id === currentAlbumId) ?? null) : null
@@ -85,6 +91,14 @@
 					.filter((s) => s.album_id === currentAlbumId)
 					.reduce((sum, s) => sum + s.generation_count, 0)
 			: 0
+	);
+
+	const albumSongs = $derived(
+		currentAlbumId
+			? allSongs
+					.filter((s) => s.album_id === currentAlbumId)
+					.sort((a, b) => a.track_number - b.track_number)
+			: []
 	);
 
 	let confirmAlbumCleanup = $state(false);
@@ -272,12 +286,16 @@
 			<CreateForm {albums} />
 		{:else if song}
 			<div class="detail-panel">
+				<button class="back-btn" onclick={backToAlbum}>
+					<span class="back-arrow">←</span>
+					{song.album_title}
+				</button>
 				<div class="detail-header">
 					<div>
 						<button class="song-title-btn" onclick={clearGenerationSelection}>
 							<h2 class="song-title">{song.title}</h2>
 						</button>
-						<span class="song-album">{song.album_title} · {song.artist}</span>
+						<span class="song-album">{song.artist}</span>
 					</div>
 					<div class="detail-actions">
 						{#if tab === 'edit' && dirty}
@@ -394,45 +412,117 @@
 				{/if}
 			</div>
 		{:else if selectedAlbum}
-			<div class="detail-panel album-overview">
-				<h2 class="song-title">{selectedAlbum.title}</h2>
-				<span class="song-album">
-					{albumSongCount} song{albumSongCount !== 1 ? 's' : ''} · {albumGenCount} generation{albumGenCount !==
-					1
-						? 's'
-						: ''}
-				</span>
-				<div class="album-actions">
-					<button
-						class="album-action-btn"
-						class:active={selectedAlbum.is_shared}
-						onclick={onAlbumShare}
-					>
-						{selectedAlbum.is_shared ? 'Shared ✓' : 'Share'}
-					</button>
-					{#if confirmAlbumCleanup}
-						<button class="album-action-btn destructive" onclick={onAlbumCleanup}>
-							Delete unpicked?
+			<div class="detail-panel">
+				<div class="detail-header">
+					<div>
+						<h2 class="song-title">{selectedAlbum.title}</h2>
+						<span class="song-album">
+							{albumSongCount} song{albumSongCount !== 1 ? 's' : ''} · {albumGenCount} generation{albumGenCount !==
+							1
+								? 's'
+								: ''}
+						</span>
+					</div>
+					<div class="detail-actions">
+						<button class="generate-btn" onclick={() => playAlbum(selectedAlbum.id)}>
+							Play Album
 						</button>
-						<button class="album-action-btn" onclick={() => (confirmAlbumCleanup = false)}>
-							Cancel
-						</button>
-					{:else if confirmAlbumDelete}
-						<button class="album-action-btn destructive" onclick={onAlbumDelete}>
-							Delete album?
-						</button>
-						<button class="album-action-btn" onclick={() => (confirmAlbumDelete = false)}>
-							Cancel
-						</button>
-					{:else}
-						<button class="album-action-btn" onclick={() => (confirmAlbumCleanup = true)}>
-							Clean Up
-						</button>
-						<button class="album-action-btn" onclick={() => (confirmAlbumDelete = true)}>
-							Delete
-						</button>
-					{/if}
+					</div>
 				</div>
+
+				<div class="tab-bar">
+					<button
+						class="tab-btn"
+						class:active={aTab === 'songs'}
+						onclick={() => switchAlbumTab('songs')}
+					>
+						Songs
+					</button>
+					<button
+						class="tab-btn"
+						class:active={aTab === 'share'}
+						onclick={() => switchAlbumTab('share')}
+					>
+						Share
+					</button>
+					<button
+						class="tab-btn"
+						class:active={aTab === 'manage'}
+						onclick={() => switchAlbumTab('manage')}
+					>
+						Manage
+					</button>
+				</div>
+
+				{#if aTab === 'songs'}
+					<div class="album-song-list">
+						{#each albumSongs as s (s.id)}
+							<button class="album-song-row" onclick={() => selectSong(s.id)}>
+								<span class="album-song-title">{s.title}</span>
+								<span class="album-song-meta">
+									{s.generation_count} gen{s.generation_count !== 1 ? 's' : ''}
+								</span>
+							</button>
+						{/each}
+						{#if albumSongs.length === 0}
+							<p class="empty-tab">No songs in this album yet.</p>
+						{/if}
+					</div>
+				{:else if aTab === 'share'}
+					<div class="album-tab-content">
+						<div class="share-section">
+							<button
+								class="album-action-btn"
+								class:active={selectedAlbum.is_shared}
+								onclick={onAlbumShare}
+							>
+								{selectedAlbum.is_shared ? 'Disable Sharing' : 'Enable Sharing'}
+							</button>
+							{#if selectedAlbum.is_shared && selectedAlbum.share_slug}
+								<p class="share-info">
+									Shared at <code>/share/{selectedAlbum.share_slug}</code>
+								</p>
+							{/if}
+						</div>
+					</div>
+				{:else if aTab === 'manage'}
+					<div class="album-tab-content">
+						{#if confirmAlbumCleanup}
+							<p class="manage-warning">
+								This will delete all non-picked generations in this album.
+							</p>
+							<div class="manage-actions">
+								<button class="album-action-btn destructive" onclick={onAlbumCleanup}>
+									Delete Unpicked
+								</button>
+								<button class="album-action-btn" onclick={() => (confirmAlbumCleanup = false)}>
+									Cancel
+								</button>
+							</div>
+						{:else if confirmAlbumDelete}
+							<p class="manage-warning">
+								This will permanently delete the album and all its songs.
+							</p>
+							<div class="manage-actions">
+								<button class="album-action-btn destructive" onclick={onAlbumDelete}>
+									Delete Album
+								</button>
+								<button class="album-action-btn" onclick={() => (confirmAlbumDelete = false)}>
+									Cancel
+								</button>
+							</div>
+						{:else}
+							<div class="manage-actions">
+								<button class="album-action-btn" onclick={() => (confirmAlbumCleanup = true)}>
+									Clean Up Generations
+								</button>
+								<button class="album-action-btn" onclick={() => (confirmAlbumDelete = true)}>
+									Delete Album
+								</button>
+							</div>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		{:else}
 			<div class="empty-state">
@@ -809,15 +899,74 @@
 		color: var(--score-bad);
 	}
 
-	.album-overview {
-		gap: 8px;
+	.album-song-list {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
 	}
 
-	.album-actions {
+	.album-song-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 12px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		cursor: pointer;
+		text-align: left;
+		color: var(--text);
+		font-size: 14px;
+	}
+
+	.album-song-row:hover {
+		border-color: var(--primary);
+		background: var(--surface-hover);
+	}
+
+	.album-song-title {
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.album-song-meta {
+		font-size: 11px;
+		color: var(--text-dim);
+		flex-shrink: 0;
+	}
+
+	.album-tab-content {
+		padding: 8px 0;
+	}
+
+	.share-section {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.share-info {
+		font-size: 13px;
+		color: var(--text-muted);
+	}
+
+	.share-info code {
+		font-size: 12px;
+		color: var(--accent);
+	}
+
+	.manage-warning {
+		font-size: 13px;
+		color: var(--score-bad);
+		margin-bottom: 12px;
+	}
+
+	.manage-actions {
 		display: flex;
 		gap: 8px;
 		flex-wrap: wrap;
-		margin-top: 8px;
 	}
 
 	.album-action-btn {
@@ -851,6 +1000,13 @@
 	.album-action-btn.destructive:hover {
 		background: var(--score-bad);
 		color: #fff;
+	}
+
+	.empty-tab {
+		color: var(--text-dim);
+		font-size: 13px;
+		font-style: italic;
+		padding: 12px 0;
 	}
 
 	@media (max-width: 768px) {

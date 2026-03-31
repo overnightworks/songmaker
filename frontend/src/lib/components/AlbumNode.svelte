@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { playAlbum } from '$lib/stores/player';
 	import SongNode from './SongNode.svelte';
 	import type { SongItem, AlbumItem } from '$lib/api/types';
 
@@ -8,31 +7,37 @@
 		songs: SongItem[];
 		expanded: boolean;
 		ontoggle: () => void;
+		onselect: () => void;
 	}
 
-	let { album, songs, expanded, ontoggle }: Props = $props();
+	let { album, songs, expanded, ontoggle, onselect }: Props = $props();
+
+	function handleClick(): void {
+		if (!expanded) ontoggle();
+		onselect();
+	}
 </script>
 
 <div class="album-group">
 	<div
 		class="album-header"
 		class:expanded
-		onclick={ontoggle}
-		onkeydown={(e) => e.key === 'Enter' && ontoggle()}
+		onclick={handleClick}
+		onkeydown={(e) => e.key === 'Enter' && handleClick()}
 		role="button"
 		tabindex="0"
 	>
-		<span class="album-chevron">{expanded ? '▾' : '▸'}</span>
-		<span class="album-title">{album.title}</span>
 		<button
-			class="album-play"
+			class="album-chevron"
 			onclick={(e) => {
 				e.stopPropagation();
-				playAlbum(album.id);
+				ontoggle();
 			}}
-			title="Play album"
-			aria-label="Play album {album.title}">▶</button
+			aria-label={expanded ? 'Collapse' : 'Expand'}
 		>
+			{expanded ? '▾' : '▸'}
+		</button>
+		<span class="album-title">{album.title}</span>
 		<span class="album-count">{songs.length}</span>
 	</div>
 
@@ -70,10 +75,18 @@
 	}
 
 	.album-chevron {
+		background: none;
+		border: none;
 		font-size: 10px;
 		color: var(--text-dim);
-		width: 12px;
+		width: 16px;
 		flex-shrink: 0;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	.album-chevron:hover {
+		color: var(--text-muted);
 	}
 
 	.album-title {
@@ -81,26 +94,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.album-play {
-		background: none;
-		border: none;
-		color: var(--text-dim);
-		font-size: 10px;
-		cursor: pointer;
-		padding: 2px 4px;
-		flex-shrink: 0;
-		opacity: 0;
-		transition: opacity 0.15s;
-	}
-
-	.album-header:hover .album-play {
-		opacity: 1;
-	}
-
-	.album-play:hover {
-		color: var(--primary);
 	}
 
 	.album-count {

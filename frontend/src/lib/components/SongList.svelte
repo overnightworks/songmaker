@@ -6,6 +6,7 @@
 	let { onNewSong }: Props = $props();
 
 	import { albumList, songList } from '$lib/stores/player';
+	import { selectAlbumOverview } from '$lib/stores/navigation';
 	import { searchQuery } from '$lib/stores/filter';
 	import AlbumNode from './AlbumNode.svelte';
 	import type { SongItem, AlbumItem } from '$lib/api/types';
@@ -74,6 +75,7 @@
 			songs={group.songs}
 			expanded={expandedAlbums.has(group.album.id)}
 			ontoggle={() => toggleAlbum(group.album.id)}
+			onselect={() => selectAlbumOverview(group.album.id)}
 		/>
 	{/each}
 
