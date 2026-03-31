@@ -303,10 +303,11 @@
 
 	async function onAlbumDelete(): Promise<void> {
 		if (!selectedAlbum) return;
+		const albumId = selectedAlbum.id;
 		try {
-			await deleteAlbum(selectedAlbum.id);
-			albumList.update((list) => list.filter((a) => a.id !== selectedAlbum.id));
-			songList.update((list) => list.filter((s) => s.album_id !== selectedAlbum.id));
+			await deleteAlbum(albumId);
+			albumList.update((list) => list.filter((a) => a.id !== albumId));
+			songList.update((list) => list.filter((s) => s.album_id !== albumId));
 			addToast('Album deleted', 'success');
 		} catch {
 			addToast('Delete failed', 'error');
