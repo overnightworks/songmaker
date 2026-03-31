@@ -983,15 +983,21 @@
 	}
 
 	.clear-btn {
-		display: inline-block;
+		background: transparent;
 		color: var(--text-muted);
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		padding: 0.5rem 1.2rem;
+		font-size: 0.85rem;
 		cursor: pointer;
-		font-size: 0.8rem;
-		padding: 0.4rem 0.5rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
 	}
 
 	.clear-btn:hover {
-		color: var(--score-bad);
+		border-color: var(--text-muted);
+		color: var(--text);
 	}
 
 	.override-actions {
@@ -1021,12 +1027,12 @@
 
 	.gen-model-tabs {
 		display: flex;
-		gap: 4px;
+		gap: 6px;
 		margin-bottom: 1rem;
 	}
 
 	.gen-model-tab {
-		padding: 0.4rem 1rem;
+		padding: 0.5rem 1.4rem;
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		background: transparent;
@@ -1035,7 +1041,12 @@
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: 1px;
+	}
+
+	.gen-model-tab:hover:not(.active) {
+		border-color: var(--primary);
+		color: var(--primary);
 	}
 
 	.gen-model-tab.active {
@@ -1050,7 +1061,8 @@
 
 	.gen-actions-row {
 		display: flex;
-		gap: 0.5rem;
+		gap: 0.75rem;
+		align-items: center;
 	}
 
 	.model-toggles {
@@ -1063,7 +1075,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 0.5rem 1rem;
+		padding: 0.5rem 1.4rem;
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		background: transparent;
@@ -1072,20 +1084,22 @@
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		letter-spacing: 1px;
 	}
 
 	.model-toggle.active {
-		border-color: var(--score-ok);
-		color: var(--score-ok);
+		border-color: transparent;
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		color: #fff;
 	}
 
-	.model-toggle:hover {
+	.model-toggle:hover:not(.active) {
 		border-color: var(--primary);
+		color: var(--primary);
 	}
 
 	.model-status {
 		font-size: 0.7rem;
-		opacity: 0.6;
+		opacity: 0.7;
 	}
 </style>
