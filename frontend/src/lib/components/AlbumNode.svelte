@@ -6,11 +6,12 @@
 		album: AlbumItem;
 		songs: SongItem[];
 		expanded: boolean;
+		selected: boolean;
 		ontoggle: () => void;
 		onselect: () => void;
 	}
 
-	let { album, songs, expanded, ontoggle, onselect }: Props = $props();
+	let { album, songs, expanded, selected, ontoggle, onselect }: Props = $props();
 
 	function handleClick(): void {
 		if (!expanded) ontoggle();
@@ -22,6 +23,7 @@
 	<div
 		class="album-header"
 		class:expanded
+		class:selected
 		onclick={handleClick}
 		onkeydown={(e) => e.key === 'Enter' && handleClick()}
 		role="button"
@@ -72,6 +74,12 @@
 
 	.album-header:hover {
 		background: var(--surface-hover);
+	}
+
+	.album-header.selected {
+		background: rgba(160, 32, 240, 0.06);
+		border-left: 3px solid var(--accent);
+		padding-left: 9px;
 	}
 
 	.album-chevron {

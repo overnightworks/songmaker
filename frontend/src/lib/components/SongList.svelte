@@ -5,7 +5,7 @@
 
 	let { onNewSong }: Props = $props();
 
-	import { albumList, songList } from '$lib/stores/player';
+	import { albumList, songList, selectedAlbumId } from '$lib/stores/player';
 	import { selectAlbumOverview } from '$lib/stores/navigation';
 	import { searchQuery } from '$lib/stores/filter';
 	import AlbumNode from './AlbumNode.svelte';
@@ -15,6 +15,7 @@
 	const albums = $derived($albumList);
 	const songs = $derived($songList);
 	const search = $derived($searchQuery);
+	const currentAlbumId = $derived($selectedAlbumId);
 
 	let expandedAlbums = new SvelteSet<string>();
 
@@ -74,6 +75,7 @@
 			album={group.album}
 			songs={group.songs}
 			expanded={expandedAlbums.has(group.album.id)}
+			selected={group.album.id === currentAlbumId}
 			ontoggle={() => toggleAlbum(group.album.id)}
 			onselect={() => selectAlbumOverview(group.album.id)}
 		/>
