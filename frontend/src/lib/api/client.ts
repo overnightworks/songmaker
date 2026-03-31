@@ -24,6 +24,7 @@ import type {
 } from './types';
 
 const API_TIMEOUT_MS = 30_000;
+const CHAT_TIMEOUT_MS = 90_000;
 
 export class ApiError extends Error {
 	constructor(
@@ -41,10 +42,10 @@ function getCsrfToken(): string {
 	return match ? decodeURIComponent(match[1]) : '';
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function apiFetch<T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
 	const method = init?.method?.toUpperCase() ?? 'GET';
 	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+	const timeout = setTimeout(() => controller.abort(), timeoutMs ?? API_TIMEOUT_MS);
 	let opts: RequestInit = { credentials: 'include', signal: controller.signal, ...init };
 	if (method !== 'GET' && method !== 'HEAD') {
 		const token = getCsrfToken();
@@ -464,11 +465,15 @@ export async function fetchMe(): Promise<AuthUser> {
 }
 
 export async function chatWithClaude(message: string, context: string = ''): Promise<string> {
-	const data = await apiFetch<ChatResult>('/api/chat', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ message, context })
-	});
+	const data = await apiFetch<ChatResult>(
+		'/api/chat',
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ message, context })
+		},
+		CHAT_TIMEOUT_MS
+	);
 	return data.response;
 }
 

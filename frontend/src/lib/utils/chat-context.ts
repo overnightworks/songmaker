@@ -1,4 +1,4 @@
-import type { SongItem } from '$lib/api/types';
+import type { SongItem, VersionItem } from '$lib/api/types';
 
 export interface ApplyData {
 	song?: string;
@@ -22,13 +22,28 @@ export function formatSongContext(s: SongItem): string {
 	return parts.join('\n');
 }
 
+export function formatVersionContext(v: VersionItem): string {
+	const parts = [`[Version ${v.version_number}]`];
+	if (v.created_at) parts.push(`Date: ${new Date(v.created_at).toLocaleDateString()}`);
+	if (v.prompt) parts.push(`Style: ${v.prompt}`);
+	const meta: string[] = [];
+	if (v.key) meta.push(`Key: ${v.key}`);
+	if (v.bpm) meta.push(`BPM: ${v.bpm}`);
+	if (v.duration) meta.push(`Duration: ${v.duration}s`);
+	if (meta.length) parts.push(meta.join(' | '));
+	if (v.lyrics) parts.push(`Lyrics:\n${v.lyrics}`);
+	return parts.join('\n');
+}
+
 export function buildFullContext(
 	songContext: string,
 	songId: string,
 	contextScope: 'song' | 'album',
 	currentAlbumId: string,
 	allSongs: SongItem[],
-	mentionedSongIds: string[]
+	mentionedSongIds: string[],
+	versions: VersionItem[] = [],
+	mentionedVersionNumbers: number[] = []
 ): string {
 	const parts: string[] = [];
 
@@ -54,6 +69,16 @@ export function buildFullContext(
 
 	if (extraSongs.length > 0) {
 		parts.push('--- Other songs ---\n\n' + extraSongs.map(formatSongContext).join('\n\n'));
+	}
+
+	if (mentionedVersionNumbers.length > 0) {
+		const versionContexts = mentionedVersionNumbers
+			.map((vn) => versions.find((v) => v.version_number === vn))
+			.filter((v): v is VersionItem => !!v)
+			.map(formatVersionContext);
+		if (versionContexts.length > 0) {
+			parts.push('--- Referenced versions ---\n\n' + versionContexts.join('\n\n'));
+		}
 	}
 
 	return parts.join('\n\n');

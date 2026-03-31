@@ -443,9 +443,10 @@
 		}
 	}
 
+	const currentVersion = $derived($versions[$currentVersionIndex]);
 	const songContext = $derived(
 		song
-			? `Song: ${song.title}\nAlbum: ${song.album_title}\nStyle: ${$editPrompt}\nKey: ${$editKey}\nBPM: ${$editBpm}\n\nLyrics:\n${$editLyrics}`
+			? `Song: ${song.title}\nAlbum: ${song.album_title}\nVersion: v${currentVersion?.version_number ?? 1}\nStyle: ${$editPrompt}\nKey: ${$editKey}\nBPM: ${$editBpm}\n\nLyrics:\n${$editLyrics}`
 			: ''
 	);
 </script>
@@ -637,17 +638,17 @@
 					{/if}
 				{:else if tab === 'edit'}
 					<SongEditor ondeleteversion={onDeleteVersion} />
-				{:else if tab === 'chat'}
-					<div class="chat-tab">
-						<ClaudeChat
-							songId={song?.id ?? ''}
-							{songContext}
-							allSongs={$songList}
-							currentAlbumId={song?.album_id ?? ''}
-							onapply={handleApply}
-						/>
-					</div>
 				{/if}
+				<div class="chat-tab" class:hidden={tab !== 'chat'}>
+					<ClaudeChat
+						songId={song?.id ?? ''}
+						{songContext}
+						allSongs={$songList}
+						currentAlbumId={song?.album_id ?? ''}
+						versions={$versions}
+						onapply={handleApply}
+					/>
+				</div>
 			</div>
 		{:else if selectedAlbum}
 			<div class="detail-panel">
@@ -1113,6 +1114,10 @@
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
+	}
+
+	.chat-tab.hidden {
+		display: none;
 	}
 
 	.loading,

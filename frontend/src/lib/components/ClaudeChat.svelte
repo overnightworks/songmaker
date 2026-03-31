@@ -11,13 +11,14 @@
 	} from '$lib/utils/chat-context';
 	import { songList } from '$lib/stores/player';
 	import { addToast } from '$lib/stores/toast';
-	import type { SongItem } from '$lib/api/types';
+	import type { SongItem, VersionItem } from '$lib/api/types';
 
 	interface Props {
 		songId?: string;
 		songContext?: string;
 		allSongs?: SongItem[];
 		currentAlbumId?: string;
+		versions?: VersionItem[];
 		onapply?: (data: ApplyData) => void;
 	}
 
@@ -28,6 +29,7 @@
 		songContext = '',
 		allSongs = [],
 		currentAlbumId = '',
+		versions = [],
 		onapply
 	}: Props = $props();
 
@@ -47,13 +49,17 @@
 
 	let contextScope: ContextScope = $state('song');
 	let mentionedSongIds: string[] = $state([]);
+	let mentionedVersionNumbers: number[] = $state([]);
 	let mentionQuery = $state('');
+	let mentionMode: 'song' | 'version' | null = $state(null);
 	let showMentions = $state(false);
 	let mentionCursorPos = $state(0);
 	let selectedMentionIdx = $state(0);
 
+	const VERSION_MENTION_RE = /^v(?:ersion)?\s*(\d*)$/i;
+
 	const mentionResults = $derived.by(() => {
-		if (!mentionQuery) return [];
+		if (!mentionQuery || mentionMode !== 'song') return [];
 		const q = mentionQuery.toLowerCase();
 		return allSongs
 			.filter(
@@ -62,6 +68,23 @@
 			)
 			.slice(0, 8);
 	});
+
+	const versionMentionResults = $derived.by(() => {
+		if (!mentionQuery || mentionMode !== 'version') return [];
+		const numMatch = mentionQuery.match(VERSION_MENTION_RE);
+		const prefix = numMatch?.[1] ?? '';
+		return versions
+			.filter(
+				(v) =>
+					!mentionedVersionNumbers.includes(v.version_number) &&
+					String(v.version_number).startsWith(prefix)
+			)
+			.slice(0, 8);
+	});
+
+	const activeMentionResults = $derived(
+		mentionMode === 'version' ? versionMentionResults : mentionResults
+	);
 
 	let prevChatKey = $state('');
 
@@ -76,6 +99,7 @@
 		const key = storageKey();
 		if (key !== prevChatKey) {
 			prevChatKey = key;
+			mentionedVersionNumbers = [];
 			loadHistory();
 		}
 	});
@@ -141,7 +165,9 @@
 				contextScope,
 				currentAlbumId,
 				allSongs,
-				mentionedSongIds
+				mentionedSongIds,
+				versions,
+				mentionedVersionNumbers
 			);
 
 			for (let attempt = 0; attempt < 3; attempt++) {
@@ -219,6 +245,22 @@
 		inputEl.focus();
 	}
 
+	function selectVersionMention(v: VersionItem): void {
+		if (!inputEl) return;
+		const before = input.slice(0, mentionCursorPos);
+		const atIdx = before.lastIndexOf('@');
+		const after = input.slice(mentionCursorPos);
+		input = before.slice(0, atIdx) + after;
+		mentionedVersionNumbers = [...mentionedVersionNumbers, v.version_number];
+		showMentions = false;
+		mentionQuery = '';
+		inputEl.focus();
+	}
+
+	function removeVersionMention(vn: number): void {
+		mentionedVersionNumbers = mentionedVersionNumbers.filter((n) => n !== vn);
+	}
+
 	function handleInput(): void {
 		if (!inputEl) return;
 		const pos = inputEl.selectionStart ?? 0;
@@ -227,30 +269,36 @@
 		if (atMatch) {
 			mentionQuery = atMatch[1];
 			mentionCursorPos = pos;
+			mentionMode = VERSION_MENTION_RE.test(mentionQuery) ? 'version' : 'song';
 			showMentions = true;
 			selectedMentionIdx = 0;
 		} else {
 			showMentions = false;
 			mentionQuery = '';
+			mentionMode = null;
 		}
 	}
 
 	function handleKeydown(e: KeyboardEvent): void {
-		if (showMentions && mentionResults.length > 0) {
+		if (showMentions && activeMentionResults.length > 0) {
 			if (e.key === 'ArrowDown') {
 				e.preventDefault();
-				selectedMentionIdx = (selectedMentionIdx + 1) % mentionResults.length;
+				selectedMentionIdx = (selectedMentionIdx + 1) % activeMentionResults.length;
 				return;
 			}
 			if (e.key === 'ArrowUp') {
 				e.preventDefault();
 				selectedMentionIdx =
-					(selectedMentionIdx - 1 + mentionResults.length) % mentionResults.length;
+					(selectedMentionIdx - 1 + activeMentionResults.length) % activeMentionResults.length;
 				return;
 			}
 			if (e.key === 'Enter' || e.key === 'Tab') {
 				e.preventDefault();
-				selectMention(mentionResults[selectedMentionIdx]);
+				if (mentionMode === 'version') {
+					selectVersionMention(versionMentionResults[selectedMentionIdx]);
+				} else {
+					selectMention(mentionResults[selectedMentionIdx]);
+				}
 				return;
 			}
 			if (e.key === 'Escape') {
@@ -294,12 +342,18 @@
 		</div>
 	</div>
 
-	{#if mentionedSongs.length > 0}
+	{#if mentionedSongs.length > 0 || mentionedVersionNumbers.length > 0}
 		<div class="mentions-bar">
 			{#each mentionedSongs as s (s.id)}
 				<span class="mention-tag">
 					{s.title}
 					<button class="mention-remove" onclick={() => removeMention(s.id)}>✕</button>
+				</span>
+			{/each}
+			{#each mentionedVersionNumbers as vn (vn)}
+				<span class="mention-tag version">
+					v{vn}
+					<button class="mention-remove" onclick={() => removeVersionMention(vn)}>✕</button>
 				</span>
 			{/each}
 		</div>
@@ -309,7 +363,8 @@
 		{#if messages.length === 0}
 			<p class="empty-hint">
 				Ask Claude to write lyrics, brainstorm ideas, or refine your song. Suggestions auto-apply to
-				the editor. Use <strong>@song name</strong> to reference other songs.
+				the editor. Use <strong>@song</strong> to reference other songs or <strong>@v1</strong> for version
+				history.
 			</p>
 		{/if}
 		{#each messages as msg, i (i)}
@@ -349,25 +404,41 @@
 	</div>
 
 	<div class="input-area">
-		{#if showMentions && mentionResults.length > 0}
+		{#if showMentions && activeMentionResults.length > 0}
 			<div class="mention-dropdown">
-				{#each mentionResults as s, idx (s.id)}
-					<button
-						class="mention-option"
-						class:selected={idx === selectedMentionIdx}
-						onclick={() => selectMention(s)}
-					>
-						<span class="mention-title">{s.title}</span>
-						<span class="mention-album">{s.album_title}</span>
-					</button>
-				{/each}
+				{#if mentionMode === 'version'}
+					{#each versionMentionResults as v, idx (v.id)}
+						<button
+							class="mention-option"
+							class:selected={idx === selectedMentionIdx}
+							onclick={() => selectVersionMention(v)}
+						>
+							<span class="mention-title">v{v.version_number}</span>
+							<span class="mention-album">
+								{v.created_at ? new Date(v.created_at).toLocaleDateString() : ''}
+								{v.prompt ? `· ${v.prompt.slice(0, 40)}` : ''}
+							</span>
+						</button>
+					{/each}
+				{:else}
+					{#each mentionResults as s, idx (s.id)}
+						<button
+							class="mention-option"
+							class:selected={idx === selectedMentionIdx}
+							onclick={() => selectMention(s)}
+						>
+							<span class="mention-title">{s.title}</span>
+							<span class="mention-album">{s.album_title}</span>
+						</button>
+					{/each}
+				{/if}
 			</div>
 		{/if}
 		<div class="input-row">
 			<textarea
 				class="chat-input"
 				rows="2"
-				placeholder="Ask Claude... (@song to reference)"
+				placeholder="Ask Claude... (@song or @v1 for versions)"
 				bind:value={input}
 				bind:this={inputEl}
 				onkeydown={handleKeydown}
@@ -472,6 +543,11 @@
 		padding: 1px 8px;
 		border-radius: 10px;
 		font-size: 10px;
+	}
+
+	.mention-tag.version {
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.mention-remove {
