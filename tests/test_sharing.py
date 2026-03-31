@@ -175,7 +175,8 @@ def test_shared_album_song_without_picked_generation(tmp_path: Path) -> None:
     unauthed = TestClient(app, cookies={})
     resp = unauthed.get(f"/shared/{slug}")
     data = resp.json()
-    assert data["songs"][0]["audio_url"] is None
+    assert data["songs"][0]["audio_url"] is not None
+    assert "g1.mp3" in data["songs"][0]["audio_url"]
 
 
 def test_shared_audio_not_found_wrong_file(sharing_app: TestClient) -> None:

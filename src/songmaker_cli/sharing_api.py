@@ -74,6 +74,12 @@ def _picked_filename(song) -> str | None:
     picked = [g for g in song.generations if g.is_picked and not g.is_archived]
     if picked:
         return picked[0].mp3_path
+    available = sorted(
+        (g for g in song.generations if g.mp3_path and not g.is_archived),
+        key=lambda g: g.generation_number,
+    )
+    if available:
+        return available[-1].mp3_path
     return None
 
 

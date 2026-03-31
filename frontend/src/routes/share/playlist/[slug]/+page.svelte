@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { APP_NAME } from '$lib/constants';
 	import LegalContent from '$lib/components/LegalContent.svelte';
+	import SharedPlayer from '$lib/components/SharedPlayer.svelte';
 
 	interface SharedEntry {
 		song_title: string;
@@ -20,9 +21,6 @@
 	let error: string | null = $state(null);
 	let loading = $state(true);
 	let currentTrack: SharedEntry | null = $state(null);
-	let audioEl: HTMLAudioElement | null = $state(null);
-	let isPlaying = $state(false);
-	let progress = $state(0);
 	let legalSection: string | null = $state(null);
 
 	const slug = $derived(page.params.slug ?? '');
@@ -50,46 +48,14 @@
 
 	function play(entry: SharedEntry) {
 		if (!entry.audio_url) return;
-		if (currentTrack === entry && isPlaying) {
-			audioEl?.pause();
-			isPlaying = false;
-			return;
-		}
 		currentTrack = entry;
-		if (audioEl) {
-			audioEl.src = entry.audio_url;
-			audioEl.play();
-			isPlaying = true;
-		}
-	}
-
-	function onTimeUpdate() {
-		if (audioEl && audioEl.duration) {
-			progress = (audioEl.currentTime / audioEl.duration) * 100;
-		}
 	}
 
 	function onEnded() {
-		isPlaying = false;
-		progress = 0;
 		if (!playlist || !currentTrack) return;
 		const idx = playlist.entries.indexOf(currentTrack);
 		const next = playlist.entries.slice(idx + 1).find((e) => e.audio_url);
 		if (next) play(next);
-	}
-
-	function seek(e: MouseEvent) {
-		if (!audioEl || !audioEl.duration) return;
-		const bar = e.currentTarget as HTMLElement;
-		const rect = bar.getBoundingClientRect();
-		const pct = (e.clientX - rect.left) / rect.width;
-		audioEl.currentTime = pct * audioEl.duration;
-	}
-
-	function formatTime(seconds: number): string {
-		const m = Math.floor(seconds / 60);
-		const s = Math.floor(seconds % 60);
-		return `${m}:${s.toString().padStart(2, '0')}`;
 	}
 </script>
 
@@ -102,14 +68,6 @@
 		if (e.key === 'Escape') legalSection = null;
 	}}
 />
-
-<audio
-	bind:this={audioEl}
-	ontimeupdate={onTimeUpdate}
-	onended={onEnded}
-	onpause={() => (isPlaying = false)}
-	onplay={() => (isPlaying = true)}
-></audio>
 
 <div class="shared-page">
 	<div class="bg-effects" aria-hidden="true">
@@ -142,7 +100,7 @@
 						{entry.song_title}
 						<span class="track-artist">{entry.artist}</span>
 					</span>
-					{#if currentTrack === entry && isPlaying}
+					{#if currentTrack === entry}
 						<span class="track-status">&#9654;</span>
 					{:else if !entry.audio_url}
 						<span class="track-status dim">--</span>
@@ -150,22 +108,6 @@
 				</button>
 			{/each}
 		</div>
-
-		{#if currentTrack && audioEl}
-			<div class="now-playing">
-				<div class="now-info">
-					<span class="now-title">{currentTrack.song_title}</span>
-					<span class="now-time">
-						{formatTime(audioEl.currentTime || 0)} / {formatTime(audioEl.duration || 0)}
-					</span>
-				</div>
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<div class="progress-bar" onclick={seek}>
-					<div class="progress-fill" style="width: {progress}%"></div>
-				</div>
-			</div>
-		{/if}
 
 		<p class="powered">
 			Powered by <a href="/">{APP_NAME}</a>
@@ -178,6 +120,15 @@
 		</p>
 	{/if}
 </div>
+
+{#if currentTrack?.audio_url}
+	<SharedPlayer
+		audioUrl={currentTrack.audio_url}
+		title={currentTrack.song_title}
+		subtitle={currentTrack.artist}
+		onended={onEnded}
+	/>
+{/if}
 
 {#if legalSection}
 	<div class="legal-overlay">
@@ -355,54 +306,6 @@
 
 	.dim {
 		color: var(--text-dim, #444);
-	}
-
-	.now-playing {
-		position: fixed;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		background: var(--header-bg);
-		border-top: 2px solid transparent;
-		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
-		padding: 0.6rem 1rem 0.8rem;
-		z-index: 10;
-	}
-
-	.now-info {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 0.4rem;
-	}
-
-	.now-title {
-		font-size: 0.9rem;
-		color: var(--text);
-		font-family: var(--font-display, 'Oswald', sans-serif);
-		text-transform: uppercase;
-		letter-spacing: 1px;
-	}
-
-	.now-time {
-		font-size: 0.75rem;
-		color: var(--text-muted, #888);
-		font-variant-numeric: tabular-nums;
-	}
-
-	.progress-bar {
-		height: 4px;
-		background: var(--border, #333);
-		border-radius: 2px;
-		cursor: pointer;
-		overflow: hidden;
-	}
-
-	.progress-fill {
-		height: 100%;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
-		border-radius: 2px;
-		transition: width 0.1s linear;
 	}
 
 	.powered {

@@ -14,9 +14,10 @@
 		audioUrl: string;
 		title: string;
 		subtitle?: string;
+		onended?: () => void;
 	}
 
-	let { audioUrl, title, subtitle }: Props = $props();
+	let { audioUrl, title, subtitle, onended }: Props = $props();
 
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
 	let isPlaying = $state(false);
@@ -54,6 +55,7 @@
 		audio.addEventListener('ended', () => {
 			isPlaying = false;
 			stopVisualizerLoop();
+			onended?.();
 		});
 		audio.addEventListener('play', () => {
 			isPlaying = true;
@@ -97,6 +99,18 @@
 	function stopVisualizerLoop(): void {
 		if (vizCanvas) viz.stopLoop(vizCanvas);
 	}
+
+	let prevUrl: string | undefined = $state(undefined);
+	$effect(() => {
+		if (prevUrl !== undefined && audioUrl !== prevUrl && audio) {
+			audio.src = audioUrl;
+			currentTime = 0;
+			duration = 0;
+			isLoading = true;
+			audio.play().catch(() => {});
+		}
+		prevUrl = audioUrl;
+	});
 
 	function togglePlay(): void {
 		const el = ensureAudio();
