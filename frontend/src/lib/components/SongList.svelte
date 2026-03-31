@@ -22,7 +22,7 @@
 
 	interface SharedItem {
 		id: string;
-		type: 'album' | 'song' | 'generation';
+		type: 'album' | 'song' | 'generation' | 'playlist';
 		label: string;
 		parentSongId?: string;
 	}
@@ -44,6 +44,9 @@
 					});
 				}
 			}
+		}
+		for (const p of playlists) {
+			if (p.is_shared) items.push({ id: p.id, type: 'playlist', label: p.title });
 		}
 		return items;
 	});
@@ -117,6 +120,7 @@
 						onclick={() => {
 							if (item.type === 'album') selectAlbumOverview(item.id);
 							else if (item.type === 'song') selectSong(item.id);
+							else if (item.type === 'playlist') selectPlaylistView(item.id);
 							else if (item.parentSongId) selectSong(item.parentSongId);
 						}}
 					>
