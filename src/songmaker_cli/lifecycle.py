@@ -70,18 +70,39 @@ async def session_sync_loop(app: FastAPI) -> None:
                     consecutive_failures = 0
                     continue
                 synced = 0
+                session_ids = [sid for sid, _ in active]
+                ttl_by_id = {sid: ttl for sid, ttl in active}
                 with ctx.db() as db:
-                    for session_id, ttl in active:
-                        user_session = db.query(UserSession).filter_by(id=session_id).first()
+                    db_sessions = (
+                        db.query(UserSession)
+                        .filter(UserSession.id.in_(session_ids))
+                        .all()
+                    )
+                    db_session_by_id = {s.id: s for s in db_sessions}
+                    found_user_ids = {s.user_id for s in db_sessions}
+                    inactive_user_ids = set()
+                    if found_user_ids:
+                        inactive_users = (
+                            db.query(UserModel.id)
+                            .filter(
+                                UserModel.id.in_(found_user_ids),
+                                UserModel.is_active.is_(False),
+                            )
+                            .all()
+                        )
+                        inactive_user_ids = {u.id for u in inactive_users}
+
+                    for session_id in session_ids:
+                        user_session = db_session_by_id.get(session_id)
                         if not user_session:
                             cached = session_cache.get(session_id)
                             if cached:
-                                session_cache.delete(session_id, cached["user_id"])
+                                session_cache.delete(session_id, cached.user_id)
                             continue
-                        user = db.query(UserModel).filter_by(id=user_session.user_id).first()
-                        if user and not user.is_active:
-                            session_cache.delete_user_sessions(user.id)
+                        if user_session.user_id in inactive_user_ids:
+                            session_cache.delete_user_sessions(user_session.user_id)
                             continue
+                        ttl = ttl_by_id[session_id]
                         real_expires = datetime.now(timezone.utc) + timedelta(seconds=ttl)
                         user_session.expires_at = real_expires
                         synced += 1

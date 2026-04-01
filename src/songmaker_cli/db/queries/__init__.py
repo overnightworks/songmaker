@@ -1,245 +1,157 @@
 """Database query functions — split by domain, re-exported here for compatibility."""
 
-from songmaker_cli.db.queries.albums import (
-    cleanup_album,
-    count_albums,
-    create_album,
-    delete_album,
-    disable_album_sharing,
-    enable_album_sharing,
-    get_album,
-    get_album_by_slug,
-    list_albums,
+from songmaker_cli.db.queries.albums import cleanup_album as cleanup_album
+from songmaker_cli.db.queries.albums import count_albums as count_albums
+from songmaker_cli.db.queries.albums import create_album as create_album
+from songmaker_cli.db.queries.albums import delete_album as delete_album
+from songmaker_cli.db.queries.albums import disable_album_sharing as disable_album_sharing
+from songmaker_cli.db.queries.albums import enable_album_sharing as enable_album_sharing
+from songmaker_cli.db.queries.albums import get_album as get_album
+from songmaker_cli.db.queries.albums import get_album_by_slug as get_album_by_slug
+from songmaker_cli.db.queries.albums import list_albums as list_albums
+from songmaker_cli.db.queries.auth import (
+    LOGIN_ATTEMPT_RETENTION_DAYS as LOGIN_ATTEMPT_RETENTION_DAYS,
 )
 from songmaker_cli.db.queries.auth import (
-    LOGIN_ATTEMPT_RETENTION_DAYS,
-    cleanup_old_login_attempts,
-    count_active_sessions,
-    count_audit_log,
-    count_login_attempts,
-    count_recent_failed_attempts,
-    create_session,
-    create_user,
-    delete_expired_sessions,
-    delete_session,
-    delete_user_sessions,
-    get_session_with_user,
-    get_user,
-    get_user_by_username,
-    hard_delete_user,
-    list_active_sessions,
-    list_audit_log,
-    list_login_attempts,
-    list_users,
-    record_audit,
-    record_login_attempt,
-    update_user,
-    user_count,
+    cleanup_old_login_attempts as cleanup_old_login_attempts,
+)
+from songmaker_cli.db.queries.auth import count_active_sessions as count_active_sessions
+from songmaker_cli.db.queries.auth import count_audit_log as count_audit_log
+from songmaker_cli.db.queries.auth import count_login_attempts as count_login_attempts
+from songmaker_cli.db.queries.auth import (
+    count_recent_failed_attempts as count_recent_failed_attempts,
+)
+from songmaker_cli.db.queries.auth import create_session as create_session
+from songmaker_cli.db.queries.auth import create_user as create_user
+from songmaker_cli.db.queries.auth import delete_expired_sessions as delete_expired_sessions
+from songmaker_cli.db.queries.auth import delete_session as delete_session
+from songmaker_cli.db.queries.auth import delete_user_sessions as delete_user_sessions
+from songmaker_cli.db.queries.auth import get_session_with_user as get_session_with_user
+from songmaker_cli.db.queries.auth import get_user as get_user
+from songmaker_cli.db.queries.auth import get_user_by_username as get_user_by_username
+from songmaker_cli.db.queries.auth import hard_delete_user as hard_delete_user
+from songmaker_cli.db.queries.auth import list_active_sessions as list_active_sessions
+from songmaker_cli.db.queries.auth import list_audit_log as list_audit_log
+from songmaker_cli.db.queries.auth import list_login_attempts as list_login_attempts
+from songmaker_cli.db.queries.auth import list_users as list_users
+from songmaker_cli.db.queries.auth import record_audit as record_audit
+from songmaker_cli.db.queries.auth import record_login_attempt as record_login_attempt
+from songmaker_cli.db.queries.auth import update_user as update_user
+from songmaker_cli.db.queries.auth import user_count as user_count
+from songmaker_cli.db.queries.generations import create_generation as create_generation
+from songmaker_cli.db.queries.generations import delete_generation as delete_generation
+from songmaker_cli.db.queries.generations import (
+    delete_generation_files as delete_generation_files,
 )
 from songmaker_cli.db.queries.generations import (
-    create_generation,
-    delete_generation,
-    delete_generation_files,
-    disable_generation_sharing,
-    enable_generation_sharing,
-    get_generation,
-    get_generation_by_slug,
-    keep_generation,
-    pick_generation,
-    save_rating,
-    save_scores,
-    unkeep_generation,
-    unpick_generation,
+    disable_generation_sharing as disable_generation_sharing,
+)
+from songmaker_cli.db.queries.generations import (
+    enable_generation_sharing as enable_generation_sharing,
+)
+from songmaker_cli.db.queries.generations import get_generation as get_generation
+from songmaker_cli.db.queries.generations import (
+    get_generation_by_slug as get_generation_by_slug,
+)
+from songmaker_cli.db.queries.generations import keep_generation as keep_generation
+from songmaker_cli.db.queries.generations import pick_generation as pick_generation
+from songmaker_cli.db.queries.generations import save_rating as save_rating
+from songmaker_cli.db.queries.generations import save_scores as save_scores
+from songmaker_cli.db.queries.generations import unkeep_generation as unkeep_generation
+from songmaker_cli.db.queries.generations import unpick_generation as unpick_generation
+from songmaker_cli.db.queries.jobs import (
+    STALE_JOB_THRESHOLD_SECONDS as STALE_JOB_THRESHOLD_SECONDS,
+)
+from songmaker_cli.db.queries.jobs import JobDurationStats as JobDurationStats
+from songmaker_cli.db.queries.jobs import clear_stale_user_jobs as clear_stale_user_jobs
+from songmaker_cli.db.queries.jobs import count_total_queued_jobs as count_total_queued_jobs
+from songmaker_cli.db.queries.jobs import count_user_active_jobs as count_user_active_jobs
+from songmaker_cli.db.queries.jobs import (
+    count_user_jobs_in_window as count_user_jobs_in_window,
+)
+from songmaker_cli.db.queries.jobs import create_job as create_job
+from songmaker_cli.db.queries.jobs import get_job as get_job
+from songmaker_cli.db.queries.jobs import get_queue_position as get_queue_position
+from songmaker_cli.db.queries.jobs import (
+    job_counts_by_type_and_status as job_counts_by_type_and_status,
+)
+from songmaker_cli.db.queries.jobs import job_duration_stats as job_duration_stats
+from songmaker_cli.db.queries.jobs import recover_stale_jobs as recover_stale_jobs
+from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_age as recover_stale_jobs_by_age
+from songmaker_cli.db.queries.jobs import (
+    recover_stale_jobs_by_age_and_type as recover_stale_jobs_by_age_and_type,
 )
 from songmaker_cli.db.queries.jobs import (
-    STALE_JOB_THRESHOLD_SECONDS,
-    JobDurationStats,
-    clear_stale_user_jobs,
-    count_total_queued_jobs,
-    count_user_active_jobs,
-    count_user_jobs_in_window,
-    create_job,
-    get_job,
-    get_queue_position,
-    job_counts_by_type_and_status,
-    job_duration_stats,
-    recover_stale_jobs,
-    recover_stale_jobs_by_age,
-    recover_stale_jobs_by_age_and_type,
-    recover_stale_jobs_by_type,
-    update_job_status,
+    recover_stale_jobs_by_type as recover_stale_jobs_by_type,
+)
+from songmaker_cli.db.queries.jobs import update_job_status as update_job_status
+from songmaker_cli.db.queries.playlists import (
+    add_album_to_playlist as add_album_to_playlist,
 )
 from songmaker_cli.db.queries.playlists import (
-    add_album_to_playlist,
-    add_generation_to_playlist,
-    add_song_to_playlist,
-    create_playlist,
-    delete_playlist,
-    disable_playlist_sharing,
-    enable_playlist_sharing,
-    get_playlist,
-    get_playlist_by_slug,
-    list_playlists,
-    remove_from_playlist,
-    reorder_playlist_entry,
-    update_playlist,
+    add_generation_to_playlist as add_generation_to_playlist,
+)
+from songmaker_cli.db.queries.playlists import add_song_to_playlist as add_song_to_playlist
+from songmaker_cli.db.queries.playlists import create_playlist as create_playlist
+from songmaker_cli.db.queries.playlists import delete_playlist as delete_playlist
+from songmaker_cli.db.queries.playlists import (
+    disable_playlist_sharing as disable_playlist_sharing,
+)
+from songmaker_cli.db.queries.playlists import (
+    enable_playlist_sharing as enable_playlist_sharing,
+)
+from songmaker_cli.db.queries.playlists import get_playlist as get_playlist
+from songmaker_cli.db.queries.playlists import get_playlist_by_slug as get_playlist_by_slug
+from songmaker_cli.db.queries.playlists import list_playlists as list_playlists
+from songmaker_cli.db.queries.playlists import remove_from_playlist as remove_from_playlist
+from songmaker_cli.db.queries.playlists import (
+    reorder_playlist_entry as reorder_playlist_entry,
+)
+from songmaker_cli.db.queries.playlists import update_playlist as update_playlist
+from songmaker_cli.db.queries.rate_limits import (
+    delete_all_user_rate_limits as delete_all_user_rate_limits,
 )
 from songmaker_cli.db.queries.rate_limits import (
-    delete_all_user_rate_limits,
-    delete_rate_limit_setting,
-    get_all_global_rate_limits,
-    get_rate_limit_setting,
-    get_user_rate_limits,
-    resolve_rate_limit,
-    upsert_rate_limit_setting,
+    delete_rate_limit_setting as delete_rate_limit_setting,
 )
-from songmaker_cli.db.queries.settings import (
-    create_preset,
-    delete_preset,
-    get_claude_model,
-    get_default_preset,
-    get_global_defaults,
-    get_preset,
-    list_active_models,
-    list_all_models,
-    list_presets,
-    list_shared_presets,
-    name_exists,
-    save_global_defaults,
-    set_claude_model,
-    set_default_preset,
-    toggle_model,
-    update_preset,
+from songmaker_cli.db.queries.rate_limits import (
+    get_all_global_rate_limits as get_all_global_rate_limits,
 )
-from songmaker_cli.db.queries.songs import (
-    UNSET,
-    cleanup_song,
-    count_songs,
-    create_song,
-    delete_song,
-    disable_song_sharing,
-    enable_song_sharing,
-    get_song,
-    get_song_by_slug,
-    list_songs,
-    move_song,
-    update_song,
+from songmaker_cli.db.queries.rate_limits import (
+    get_rate_limit_setting as get_rate_limit_setting,
 )
-from songmaker_cli.db.queries.versions import (
-    delete_version,
-    get_version,
+from songmaker_cli.db.queries.rate_limits import get_user_rate_limits as get_user_rate_limits
+from songmaker_cli.db.queries.rate_limits import resolve_rate_limit as resolve_rate_limit
+from songmaker_cli.db.queries.rate_limits import (
+    upsert_rate_limit_setting as upsert_rate_limit_setting,
 )
-
-__all__ = [
-    "LOGIN_ATTEMPT_RETENTION_DAYS",
-    "STALE_JOB_THRESHOLD_SECONDS",
-    "UNSET",
-    "clear_stale_user_jobs",
-    "add_album_to_playlist",
-    "add_generation_to_playlist",
-    "add_song_to_playlist",
-    "cleanup_album",
-    "cleanup_song",
-    "delete_all_user_rate_limits",
-    "delete_rate_limit_setting",
-    "cleanup_old_login_attempts",
-    "count_active_sessions",
-    "count_albums",
-    "count_audit_log",
-    "count_login_attempts",
-    "count_recent_failed_attempts",
-    "count_songs",
-    "count_total_queued_jobs",
-    "count_user_active_jobs",
-    "count_user_jobs_in_window",
-    "create_album",
-    "create_playlist",
-    "create_generation",
-    "create_job",
-    "create_preset",
-    "create_session",
-    "create_song",
-    "delete_song",
-    "create_user",
-    "delete_album",
-    "delete_expired_sessions",
-    "delete_playlist",
-    "delete_generation",
-    "delete_generation_files",
-    "disable_generation_sharing",
-    "disable_song_sharing",
-    "delete_preset",
-    "delete_session",
-    "delete_user_sessions",
-    "delete_version",
-    "disable_playlist_sharing",
-    "disable_album_sharing",
-    "enable_playlist_sharing",
-    "enable_album_sharing",
-    "enable_generation_sharing",
-    "enable_song_sharing",
-    "get_all_global_rate_limits",
-    "get_album",
-    "get_claude_model",
-    "get_album_by_slug",
-    "get_default_preset",
-    "get_playlist",
-    "get_playlist_by_slug",
-    "get_generation",
-    "get_generation_by_slug",
-    "get_global_defaults",
-    "get_job",
-    "get_queue_position",
-    "get_preset",
-    "get_rate_limit_setting",
-    "get_session_with_user",
-    "get_song",
-    "get_song_by_slug",
-    "hard_delete_user",
-    "get_user",
-    "get_user_rate_limits",
-    "get_user_by_username",
-    "get_version",
-    "JobDurationStats",
-    "job_counts_by_type_and_status",
-    "job_duration_stats",
-    "list_active_sessions",
-    "list_playlists",
-    "list_albums",
-    "list_audit_log",
-    "list_login_attempts",
-    "list_active_models",
-    "list_all_models",
-    "list_presets",
-    "list_shared_presets",
-    "list_songs",
-    "toggle_model",
-    "list_users",
-    "move_song",
-    "name_exists",
-    "keep_generation",
-    "pick_generation",
-    "remove_from_playlist",
-    "reorder_playlist_entry",
-    "record_audit",
-    "record_login_attempt",
-    "resolve_rate_limit",
-    "recover_stale_jobs",
-    "recover_stale_jobs_by_age",
-    "recover_stale_jobs_by_age_and_type",
-    "recover_stale_jobs_by_type",
-    "save_global_defaults",
-    "set_claude_model",
-    "save_rating",
-    "save_scores",
-    "set_default_preset",
-    "unkeep_generation",
-    "unpick_generation",
-    "update_job_status",
-    "update_preset",
-    "upsert_rate_limit_setting",
-    "update_playlist",
-    "update_song",
-    "update_user",
-    "user_count",
-]
+from songmaker_cli.db.queries.settings import create_preset as create_preset
+from songmaker_cli.db.queries.settings import delete_preset as delete_preset
+from songmaker_cli.db.queries.settings import get_claude_model as get_claude_model
+from songmaker_cli.db.queries.settings import get_default_preset as get_default_preset
+from songmaker_cli.db.queries.settings import get_global_defaults as get_global_defaults
+from songmaker_cli.db.queries.settings import get_preset as get_preset
+from songmaker_cli.db.queries.settings import list_active_models as list_active_models
+from songmaker_cli.db.queries.settings import list_all_models as list_all_models
+from songmaker_cli.db.queries.settings import list_presets as list_presets
+from songmaker_cli.db.queries.settings import list_shared_presets as list_shared_presets
+from songmaker_cli.db.queries.settings import name_exists as name_exists
+from songmaker_cli.db.queries.settings import save_global_defaults as save_global_defaults
+from songmaker_cli.db.queries.settings import set_claude_model as set_claude_model
+from songmaker_cli.db.queries.settings import set_default_preset as set_default_preset
+from songmaker_cli.db.queries.settings import toggle_model as toggle_model
+from songmaker_cli.db.queries.settings import update_preset as update_preset
+from songmaker_cli.db.queries.songs import UNSET as UNSET
+from songmaker_cli.db.queries.songs import cleanup_song as cleanup_song
+from songmaker_cli.db.queries.songs import count_songs as count_songs
+from songmaker_cli.db.queries.songs import create_song as create_song
+from songmaker_cli.db.queries.songs import delete_song as delete_song
+from songmaker_cli.db.queries.songs import disable_song_sharing as disable_song_sharing
+from songmaker_cli.db.queries.songs import enable_song_sharing as enable_song_sharing
+from songmaker_cli.db.queries.songs import get_song as get_song
+from songmaker_cli.db.queries.songs import get_song_by_slug as get_song_by_slug
+from songmaker_cli.db.queries.songs import list_songs as list_songs
+from songmaker_cli.db.queries.songs import move_song as move_song
+from songmaker_cli.db.queries.songs import update_song as update_song
+from songmaker_cli.db.queries.versions import delete_version as delete_version
+from songmaker_cli.db.queries.versions import get_version as get_version

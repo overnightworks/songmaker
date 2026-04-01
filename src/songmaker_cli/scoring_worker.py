@@ -6,6 +6,7 @@ Started as a separate process:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
@@ -43,7 +44,8 @@ async def score(ctx, job_id, gen_id, scorers):
     structlog.contextvars.bind_contextvars(job_id=job_id, task="score")
 
     device = os.environ.get("SCORING_DEVICE", _SCORING_DEVICE_DEFAULT)
-    run_scoring_job(
+    await asyncio.to_thread(
+        run_scoring_job,
         job_id, gen_id, scorers,
         db_factory=_get_db_factory(), audio_dir=_audio_dir(),
         device=device,

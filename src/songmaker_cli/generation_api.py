@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -225,19 +226,26 @@ def api_rate_generation(
 # ── Pick ─────────────────────────────────────────────────────────────
 
 
+def _toggle_generation(
+    gen_id: str, user: AuthenticatedUser, session: Session,
+    action: Callable[[Session, str], None],
+) -> StatusResponse:
+    check_generation_access(session, gen_id, user)
+    try:
+        action(session, gen_id)
+    except ValueError:
+        raise HTTPException(404, "Generation not found")
+    session.commit()
+    return StatusResponse()
+
+
 @router.post("/generations/{gen_id}/pick")
 def api_pick_generation(
     gen_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    check_generation_access(session, gen_id, user)
-    try:
-        pick_generation(session, gen_id)
-    except ValueError:
-        raise HTTPException(404, "Generation not found")
-    session.commit()
-    return StatusResponse()
+    return _toggle_generation(gen_id, user, session, pick_generation)
 
 
 @router.post("/generations/{gen_id}/unpick")
@@ -246,13 +254,7 @@ def api_unpick_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    check_generation_access(session, gen_id, user)
-    try:
-        unpick_generation(session, gen_id)
-    except ValueError:
-        raise HTTPException(404, "Generation not found")
-    session.commit()
-    return StatusResponse()
+    return _toggle_generation(gen_id, user, session, unpick_generation)
 
 
 @router.post("/generations/{gen_id}/keep")
@@ -261,13 +263,7 @@ def api_keep_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    check_generation_access(session, gen_id, user)
-    try:
-        keep_generation(session, gen_id)
-    except ValueError:
-        raise HTTPException(404, "Generation not found")
-    session.commit()
-    return StatusResponse()
+    return _toggle_generation(gen_id, user, session, keep_generation)
 
 
 @router.post("/generations/{gen_id}/unkeep")
@@ -276,13 +272,7 @@ def api_unkeep_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    check_generation_access(session, gen_id, user)
-    try:
-        unkeep_generation(session, gen_id)
-    except ValueError:
-        raise HTTPException(404, "Generation not found")
-    session.commit()
-    return StatusResponse()
+    return _toggle_generation(gen_id, user, session, unkeep_generation)
 
 
 @router.post("/generations/{gen_id}/share")

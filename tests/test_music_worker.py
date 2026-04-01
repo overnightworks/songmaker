@@ -178,27 +178,26 @@ def test_on_shutdown_deletes_active_model_key() -> None:
     mw_mod._acestep_manager = original_mgr
 
 
-def _mock_urlopen_response(payload: bytes):
-    cm = MagicMock()
-    cm.__enter__ = MagicMock(
-        return_value=MagicMock(read=MagicMock(return_value=payload)),
-    )
-    cm.__exit__ = MagicMock(return_value=False)
-    return cm
+def _mock_httpx_response(data: dict, status_code: int = 200):
+    resp = MagicMock()
+    resp.json.return_value = data
+    resp.status_code = status_code
+    return resp
 
 
 def test_reinitialize_acestep_success() -> None:
-    import json
-
     mock_mgr = MagicMock()
     mock_mgr.active_model = "sft"
     ctx = _mock_ctx()
 
-    cm = _mock_urlopen_response(json.dumps({"code": 200}).encode())
+    mock_client = AsyncMock()
+    mock_client.post.return_value = _mock_httpx_response({"code": 200})
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
 
     with (
         patch.object(mw_mod, "_acestep_manager", mock_mgr),
-        patch("urllib.request.urlopen", return_value=cm),
+        patch("httpx.AsyncClient", return_value=mock_client),
         patch("songmaker_cli.music_worker._publish_acestep_status", new_callable=AsyncMock),
     ):
         _run(mw_mod.reinitialize_acestep(ctx))
@@ -208,17 +207,18 @@ def test_reinitialize_acestep_success() -> None:
 
 
 def test_reinitialize_acestep_failure() -> None:
-    import json
-
     mock_mgr = MagicMock()
     ctx = _mock_ctx()
 
-    cm = _mock_urlopen_response(json.dumps({"code": 500}).encode())
+    mock_client = AsyncMock()
+    mock_client.post.return_value = _mock_httpx_response({"code": 500})
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
 
     with pytest.raises(RuntimeError, match="reinitialize failed"):
         with (
             patch.object(mw_mod, "_acestep_manager", mock_mgr),
-            patch("urllib.request.urlopen", return_value=cm),
+            patch("httpx.AsyncClient", return_value=mock_client),
         ):
             _run(mw_mod.reinitialize_acestep(ctx))
 
@@ -230,15 +230,15 @@ def test_publish_acestep_status_online() -> None:
     health_data = {"data": {"loaded_model": "sft", "loaded_lm_model": "4B"}}
     stats_data = {"data": {"jobs": {"pending": 1}}}
 
-    call_count = 0
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = [
+        _mock_httpx_response(health_data),
+        _mock_httpx_response(stats_data),
+    ]
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
 
-    def fake_urlopen(req, timeout=None):
-        nonlocal call_count
-        data = health_data if call_count == 0 else stats_data
-        call_count += 1
-        return _mock_urlopen_response(json.dumps(data).encode())
-
-    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+    with patch("httpx.AsyncClient", return_value=mock_client):
         _run(mw_mod._publish_acestep_status(redis))
 
     redis.set.assert_called_once()
@@ -252,7 +252,12 @@ def test_publish_acestep_status_offline() -> None:
 
     redis = AsyncMock()
 
-    with patch("urllib.request.urlopen", side_effect=OSError("refused")):
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.get.side_effect = OSError("refused")
+
+    with patch("httpx.AsyncClient", return_value=mock_client):
         _run(mw_mod._publish_acestep_status(redis))
 
     redis.set.assert_called_once()

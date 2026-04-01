@@ -6,6 +6,7 @@ Started as a separate process:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import threading
@@ -64,7 +65,8 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None):
     import structlog
     structlog.contextvars.bind_contextvars(job_id=job_id, task="generate")
 
-    run_generation_job(
+    await asyncio.to_thread(
+        run_generation_job,
         job_id, song_id, version_id, count, user_id,
         db_factory=_get_db_factory(), audio_dir=_audio_dir(), data_dir=_data_dir(),
         seed=seed,
@@ -72,18 +74,15 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None):
 
 
 async def reinitialize_acestep(ctx):
-    import json
-    from urllib.request import Request, urlopen
+    import httpx
 
     from songmaker_cli.acestep_manager import _ACESTEP_PORT
 
     mgr = _require_acestep_manager()
     acestep_url = f"http://localhost:{_ACESTEP_PORT}/v1/reinitialize"
-    req = Request(
-        acestep_url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST",
-    )
-    with urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read())
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(acestep_url, json={})
+    data = resp.json()
     if data.get("code") != 200:
         raise RuntimeError(f"ACE-Step reinitialize failed: {data}")
     mgr.refresh_cached_model()
@@ -95,18 +94,20 @@ async def reinitialize_acestep(ctx):
 
 async def _publish_acestep_status(redis) -> None:
     import json
-    from urllib.request import Request, urlopen
+
+    import httpx
 
     from songmaker_cli.acestep_manager import _ACESTEP_PORT
 
     try:
-        req = Request(f"http://localhost:{_ACESTEP_PORT}/health", method="GET")
-        with urlopen(req, timeout=5) as resp:
-            health = json.loads(resp.read())
-
-        req2 = Request(f"http://localhost:{_ACESTEP_PORT}/v1/stats", method="GET")
-        with urlopen(req2, timeout=5) as resp:
-            stats = json.loads(resp.read())
+        async with httpx.AsyncClient(timeout=5) as client:
+            base = f"http://localhost:{_ACESTEP_PORT}"
+            health_resp, stats_resp = await asyncio.gather(
+                client.get(f"{base}/health"),
+                client.get(f"{base}/v1/stats"),
+            )
+        health = health_resp.json()
+        stats = stats_resp.json()
 
         status = {
             "online": True,
