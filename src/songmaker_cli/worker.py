@@ -18,6 +18,7 @@ from songmaker_cli.constants import (
     ACESTEP_STATUS_REDIS_KEY,
     ACESTEP_STATUS_TTL_SECONDS,
     ACTIVE_MODEL_REDIS_KEY,
+    ACTIVE_MODEL_TTL_SECONDS,
     AUDIO_ROOT,
     DATA_ROOT,
     RECOVERY_LOCK_KEY,
@@ -79,7 +80,7 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None):
     mgr.prepare_generate_mode()
     model = mgr.active_model
     if model:
-        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model)
+        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)
 
     import structlog
     structlog.contextvars.bind_contextvars(job_id=job_id, task="generate")
@@ -126,7 +127,7 @@ async def reinitialize_acestep(ctx):
     mgr.refresh_cached_model()
     model = mgr.active_model
     if model:
-        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model)
+        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)
     await _publish_acestep_status(ctx["redis"])
 
 
@@ -165,6 +166,10 @@ async def cleanup_stale(ctx):
         count = recover_stale_jobs_by_age(session)
         if count:
             session.commit()
+    mgr = _require_acestep_manager()
+    model = mgr.active_model
+    if model:
+        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)
     await _publish_acestep_status(ctx["redis"])
 
 
@@ -208,7 +213,7 @@ async def on_startup(ctx):
     model = mgr.active_model
     log.info("ACE-Step model: %s", model or "unknown")
     if model:
-        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model)
+        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)
 
     redis = ctx["redis"]
     if await redis.set(RECOVERY_LOCK_KEY, "1", ex=RECOVERY_LOCK_TTL_SECONDS, nx=True):
@@ -230,6 +235,7 @@ async def on_startup(ctx):
 
 async def on_shutdown(ctx):
     redis = ctx["redis"]
+    await redis.delete(ACTIVE_MODEL_REDIS_KEY)
     if await redis.set(RECOVERY_LOCK_KEY, "1", ex=RECOVERY_LOCK_TTL_SECONDS, nx=True):
         try:
             db_factory = _get_db_factory()

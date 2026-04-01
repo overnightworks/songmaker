@@ -1270,6 +1270,50 @@ def test_clear_stale_user_jobs_none_stale(db_session: Session) -> None:
     assert clear_stale_user_jobs(db_session, user.id, threshold_seconds=3600) == 0
 
 
+# ── queue_position ────────────────────────────────────────────────
+
+
+def test_queue_position_queued_jobs(db_session: Session) -> None:
+    from songmaker_cli.db.queries import get_queue_position
+
+    j1 = create_job(db_session, "generate")
+    j2 = create_job(db_session, "generate")
+    j3 = create_job(db_session, "generate")
+    db_session.commit()
+
+    assert get_queue_position(db_session, j1) == 1
+    assert get_queue_position(db_session, j2) == 2
+    assert get_queue_position(db_session, j3) == 3
+
+
+def test_queue_position_not_queued(db_session: Session) -> None:
+    from songmaker_cli.db.queries import get_queue_position, update_job_status
+
+    j1 = create_job(db_session, "generate")
+    db_session.commit()
+
+    update_job_status(db_session, j1.id, "running", progress=0.5)
+    db_session.commit()
+
+    assert get_queue_position(db_session, j1) is None
+
+
+def test_queue_position_mixed_statuses(db_session: Session) -> None:
+    from songmaker_cli.db.queries import get_queue_position, update_job_status
+
+    j1 = create_job(db_session, "generate")
+    j2 = create_job(db_session, "generate")
+    j3 = create_job(db_session, "generate")
+    db_session.commit()
+
+    update_job_status(db_session, j1.id, "running")
+    db_session.commit()
+
+    assert get_queue_position(db_session, j1) is None
+    assert get_queue_position(db_session, j2) == 1
+    assert get_queue_position(db_session, j3) == 2
+
+
 # ── rate_limit_settings ───────────────────────────────────────────
 
 

@@ -79,6 +79,21 @@ def get_job(session: Session, job_id: str) -> Job | None:
     return session.query(Job).filter_by(id=job_id).first()
 
 
+def get_queue_position(session: Session, job: Job) -> int | None:
+    """Return 1-based queue position for a queued job, or None if not queued."""
+    if job.status != "queued":
+        return None
+    ahead = (
+        session.query(Job)
+        .filter(
+            Job.status == "queued",
+            Job.started_at < job.started_at,
+        )
+        .count()
+    )
+    return ahead + 1
+
+
 def recover_stale_jobs(session: Session) -> int:
     """Mark all running/queued jobs as failed on startup. Returns count recovered."""
     now = datetime.now(timezone.utc)

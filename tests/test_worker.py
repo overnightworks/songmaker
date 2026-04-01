@@ -157,9 +157,12 @@ def test_cleanup_stale_commits_on_recovery() -> None:
     mock_factory = MagicMock()
     mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
     mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+    mock_mgr = MagicMock()
+    mock_mgr.active_model = "turbo"
 
     with (
         patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
+        patch.object(worker_mod, "_require_acestep_manager", return_value=mock_mgr),
         patch("songmaker_cli.worker.recover_stale_jobs_by_age", return_value=2),
         patch("songmaker_cli.worker._publish_acestep_status", new_callable=AsyncMock),
     ):
@@ -173,9 +176,12 @@ def test_cleanup_stale_no_commit_when_zero() -> None:
     mock_factory = MagicMock()
     mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
     mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+    mock_mgr = MagicMock()
+    mock_mgr.active_model = "turbo"
 
     with (
         patch.object(worker_mod, "_get_db_factory", return_value=mock_factory),
+        patch.object(worker_mod, "_require_acestep_manager", return_value=mock_mgr),
         patch("songmaker_cli.worker.recover_stale_jobs_by_age", return_value=0),
         patch("songmaker_cli.worker._publish_acestep_status", new_callable=AsyncMock),
     ):

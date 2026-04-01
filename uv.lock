@@ -1342,7 +1342,6 @@ dependencies = [
     { name = "numpy" },
     { name = "pydantic" },
     { name = "pyloudnorm" },
-    { name = "pytest-xdist" },
     { name = "python-slugify" },
     { name = "scipy" },
 ]
@@ -1355,6 +1354,7 @@ dev = [
     { name = "fakeredis", extra = ["lua"] },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "pytest-xdist" },
     { name = "ruff" },
 ]
 scoring = [
@@ -1409,7 +1409,7 @@ requires-dist = [
     { name = "pyloudnorm", specifier = ">=0.1,<1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0,<10" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.0,<8" },
-    { name = "pytest-xdist", extras = ["dev"], specifier = ">=3.8.0" },
+    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.8,<4" },
     { name = "python-dotenv", marker = "extra == 'server'", specifier = ">=1.0,<2" },
     { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.7,<1" },
     { name = "python-slugify", specifier = ">=8.0,<9" },
@@ -1642,7 +1642,7 @@ dependencies = [
     { name = "filelock" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/triton-3.1.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c8182f42fd8080a7d39d666814fa36c5e30cc00ea7eeeb1a2983dbb4c99a0fdc" },
+    { url = "https://download-r2.pytorch.org/whl/triton-3.1.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c8182f42fd8080a7d39d666814fa36c5e30cc00ea7eeeb1a2983dbb4c99a0fdc" },
 ]
 
 [[package]]

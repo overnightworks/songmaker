@@ -118,6 +118,9 @@ class Generation(Base):
     """A generated audio output from a specific version."""
 
     __tablename__ = "generations"
+    __table_args__ = (
+        UniqueConstraint("song_id", "generation_number", name="uq_generation_song_number"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     song_id: Mapped[str] = mapped_column(ForeignKey("songs.id"), index=True)

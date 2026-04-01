@@ -33,6 +33,7 @@ from songmaker_cli.db.queries import (
     disable_generation_sharing,
     enable_generation_sharing,
     get_job,
+    get_queue_position,
     keep_generation,
     pick_generation,
     record_audit,
@@ -126,7 +127,7 @@ async def api_generate_song(
         _fail_job(ctx, job.id)
         raise HTTPException(503, "Job queue unavailable")
 
-    return JobResponse.from_orm(job)
+    return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
 @router.post("/generations/{gen_id}/score")
@@ -154,7 +155,7 @@ async def api_score_generation(
         _fail_job(ctx, job.id)
         raise HTTPException(503, "Job queue unavailable")
 
-    return JobResponse.from_orm(job)
+    return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
 # ── Jobs ────────────────────────────────────────────────────────────
@@ -167,7 +168,7 @@ def api_get_job(
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
     job = _check_job_access(session, job_id, user)
-    return JobResponse.from_orm(job)
+    return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
 @router.post("/jobs/{job_id}/cancel")
