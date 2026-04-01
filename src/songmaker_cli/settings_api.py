@@ -19,6 +19,8 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.settings import (
     AvailableModelResponse,
+    ClaudeModelsRequest,
+    ClaudeModelsResponse,
     DefaultConfigRequest,
     DefaultConfigResponse,
 )
@@ -40,12 +42,14 @@ from songmaker_cli.db.queries import (
 from songmaker_cli.db.queries.settings import (
     create_preset,
     delete_preset,
+    get_claude_model,
     get_preset,
     list_active_models,
     list_all_models,
     list_presets,
     list_shared_presets,
     name_exists,
+    set_claude_model,
     set_default_preset,
     toggle_model,
     update_preset,
@@ -242,6 +246,61 @@ def api_set_default_config(
     record_audit(session, user.id, "update", "default_config", detail=req.config or "inherit")
     session.commit()
     return DefaultConfigResponse(config=req.config)
+
+
+# ── Claude model settings ─────────────────────────────────────────
+
+
+@router.get("/settings/claude-models")
+def api_get_claude_models(
+    _admin: AuthenticatedUser = Depends(require_admin),
+    session: Session = Depends(get_db_session),
+) -> ClaudeModelsResponse:
+    from songmaker_cli.constants import (
+        ALLOWED_CLAUDE_MODELS,
+        CLAUDE_CHAT_MODEL,
+        CLAUDE_SCORING_MODEL,
+        SETTING_CLAUDE_CHAT_MODEL,
+        SETTING_CLAUDE_SCORING_MODEL,
+    )
+
+    return ClaudeModelsResponse(
+        chat_model=get_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, CLAUDE_CHAT_MODEL),
+        scoring_model=get_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, CLAUDE_SCORING_MODEL),
+        allowed_models=sorted(ALLOWED_CLAUDE_MODELS),
+    )
+
+
+@router.put("/settings/claude-models")
+def api_set_claude_models(
+    req: ClaudeModelsRequest,
+    admin: AuthenticatedUser = Depends(require_admin),
+    session: Session = Depends(get_db_session),
+) -> ClaudeModelsResponse:
+    from songmaker_cli.constants import (
+        ALLOWED_CLAUDE_MODELS,
+        CLAUDE_CHAT_MODEL,
+        CLAUDE_SCORING_MODEL,
+        SETTING_CLAUDE_CHAT_MODEL,
+        SETTING_CLAUDE_SCORING_MODEL,
+    )
+
+    if req.chat_model not in ALLOWED_CLAUDE_MODELS:
+        raise HTTPException(400, f"Invalid chat model. Allowed: {sorted(ALLOWED_CLAUDE_MODELS)}")
+    if req.scoring_model not in ALLOWED_CLAUDE_MODELS:
+        raise HTTPException(400, f"Invalid scoring model. Allowed: {sorted(ALLOWED_CLAUDE_MODELS)}")
+
+    set_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, req.chat_model)
+    set_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, req.scoring_model)
+    record_audit(session, admin.id, "update", "claude_models",
+                 detail=f"chat={req.chat_model} scoring={req.scoring_model}")
+    session.commit()
+
+    return ClaudeModelsResponse(
+        chat_model=get_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, CLAUDE_CHAT_MODEL),
+        scoring_model=get_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, CLAUDE_SCORING_MODEL),
+        allowed_models=sorted(ALLOWED_CLAUDE_MODELS),
+    )
 
 
 # ── Rate limits ────────────────────────────────────────────────────

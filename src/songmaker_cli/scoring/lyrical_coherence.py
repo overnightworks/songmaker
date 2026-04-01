@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 
 from songmaker_cli.claude.provider import call_claude, parse_json_response
-from songmaker_cli.constants import CLAUDE_SCORING_MODEL
+from songmaker_cli.constants import CLAUDE_SCORING_MODEL as _ENV_SCORING_MODEL
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import LyricalCoherenceScore, SharedScorerData
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
@@ -92,8 +92,10 @@ def score_lyrical_coherence(
     n_intended = len(intended.splitlines())
     n_transcribed = len(transcribed.splitlines())
     log.debug("Sending %d intended + %d transcribed lines to Claude", n_intended, n_transcribed)
+    scoring_model = (config.claude_scoring_model if config and config.claude_scoring_model
+                     else _ENV_SCORING_MODEL)
     api_key = os.environ.get("ANTHROPIC_API_KEY")
-    response = call_claude(prompt, api_key=api_key, model=CLAUDE_SCORING_MODEL)
+    response = call_claude(prompt, api_key=api_key, model=scoring_model)
     log.debug("Claude response: %d chars", len(response.text))
     data = parse_json_response(response.text)
 

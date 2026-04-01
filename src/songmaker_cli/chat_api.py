@@ -20,8 +20,13 @@ from songmaker_cli.claude.provider import (
     acall_claude,
     is_available,
 )
-from songmaker_cli.constants import CLAUDE_CHAT_MODEL, CLAUDE_SCORING_MODEL
-from songmaker_cli.db.queries import update_job_status
+from songmaker_cli.constants import (
+    CLAUDE_CHAT_MODEL,
+    CLAUDE_SCORING_MODEL,
+    SETTING_CLAUDE_CHAT_MODEL,
+    SETTING_CLAUDE_SCORING_MODEL,
+)
+from songmaker_cli.db.queries import get_claude_model, update_job_status
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
@@ -35,15 +40,18 @@ router = APIRouter()
 @router.get("/capabilities")
 def api_capabilities(
     _user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
 ) -> CapabilitiesResponse:
     env_key = os.environ.get("ANTHROPIC_API_KEY")
+    chat_model = get_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, CLAUDE_CHAT_MODEL)
+    scoring_model = get_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, CLAUDE_SCORING_MODEL)
     return CapabilitiesResponse(
         claude_api=bool(env_key),
         claude_cli=is_available(api_key=None),
         generation=True,
         scoring=True,
-        chat_model=CLAUDE_CHAT_MODEL,
-        scoring_model=CLAUDE_SCORING_MODEL,
+        chat_model=chat_model,
+        scoring_model=scoring_model,
     )
 
 
@@ -108,9 +116,11 @@ async def api_chat(
 
     system = SYSTEM_PROMPT
 
+    chat_model = get_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, CLAUDE_CHAT_MODEL)
+
     try:
         response = await acall_claude(
-            prompt, api_key=api_key, system=system, model=CLAUDE_CHAT_MODEL,
+            prompt, api_key=api_key, system=system, model=chat_model,
         )
     except UnavailableError as e:
         log.warning("Claude chat unavailable: %s", e)

@@ -29,9 +29,11 @@
 		fetchGenerationDefaults,
 		updateGenerationDefaults,
 		fetchAllModels,
-		toggleModel as toggleModelApi
+		toggleModel as toggleModelApi,
+		fetchClaudeModels,
+		updateClaudeModels
 	} from '$lib/api/client';
-	import type { AvailableModel } from '$lib/api/client';
+	import type { AvailableModel, ClaudeModelsResponse } from '$lib/api/client';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
 
@@ -45,9 +47,9 @@
 		jobs: Record<string, number>;
 	} | null>(null);
 	let error = $state('');
-	let tab = $state<'users' | 'sessions' | 'attempts' | 'acestep' | 'ratelimits' | 'generation'>(
-		'users'
-	);
+	let tab = $state<
+		'users' | 'sessions' | 'attempts' | 'acestep' | 'ratelimits' | 'generation' | 'claude'
+	>('users');
 	let reinitializing = $state(false);
 
 	let globalLimits = $state<RateLimitItem[]>([]);
@@ -71,6 +73,11 @@
 	let newPassword = $state('');
 	let newRole = $state('user');
 	let creating = $state(false);
+
+	let claudeModels = $state<ClaudeModelsResponse | null>(null);
+	let claudeChatModel = $state('');
+	let claudeScoringModel = $state('');
+	let savingClaude = $state(false);
 
 	let resetPasswordUserId = $state<string | null>(null);
 	let resetPasswordValue = $state('');
@@ -195,6 +202,30 @@
 			error = e instanceof Error ? e.message : 'Failed to clear';
 		} finally {
 			savingUser = false;
+		}
+	}
+
+	async function loadClaudeModels() {
+		try {
+			claudeModels = await fetchClaudeModels();
+			claudeChatModel = claudeModels.chat_model;
+			claudeScoringModel = claudeModels.scoring_model;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load Claude models';
+		}
+	}
+
+	async function handleSaveClaudeModels() {
+		savingClaude = true;
+		error = '';
+		try {
+			claudeModels = await updateClaudeModels(claudeChatModel, claudeScoringModel);
+			claudeChatModel = claudeModels.chat_model;
+			claudeScoringModel = claudeModels.scoring_model;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to save Claude models';
+		} finally {
+			savingClaude = false;
 		}
 	}
 
@@ -365,6 +396,13 @@
 					tab = 'generation';
 					loadGenDefaults();
 				}}>Generation</button
+			>
+			<button
+				class:active={tab === 'claude'}
+				onclick={() => {
+					tab = 'claude';
+					loadClaudeModels();
+				}}>Claude</button
 			>
 			<button class:active={tab === 'acestep'} onclick={() => (tab = 'acestep')}>ACE-Step</button>
 		</div>
@@ -771,6 +809,42 @@
 			</section>
 		{/if}
 
+		{#if tab === 'claude'}
+			<section>
+				<h2>Claude Models</h2>
+				<p class="hint">Select which Claude model to use for chat and scoring.</p>
+				{#if claudeModels}
+					<div class="claude-form">
+						<div class="claude-field">
+							<label for="chat-model">Chat Model</label>
+							<select id="chat-model" bind:value={claudeChatModel}>
+								{#each claudeModels.allowed_models as model (model)}
+									<option value={model}>{model}</option>
+								{/each}
+							</select>
+						</div>
+						<div class="claude-field">
+							<label for="scoring-model">Scoring Model</label>
+							<select id="scoring-model" bind:value={claudeScoringModel}>
+								{#each claudeModels.allowed_models as model (model)}
+									<option value={model}>{model}</option>
+								{/each}
+							</select>
+						</div>
+						<button
+							class="save-btn"
+							onclick={handleSaveClaudeModels}
+							disabled={savingClaude}
+						>
+							{savingClaude ? 'Saving...' : 'Save'}
+						</button>
+					</div>
+				{:else}
+					<p>Loading...</p>
+				{/if}
+			</section>
+		{/if}
+
 		{#if tab === 'acestep'}
 			<section>
 				<h2>ACE-Step Server</h2>
@@ -1031,6 +1105,43 @@
 
 	.fail {
 		color: var(--score-bad);
+	}
+
+	.claude-form {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		max-width: 400px;
+	}
+
+	.claude-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.claude-field label {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		font-family: var(--font-display);
+	}
+
+	.claude-field select {
+		padding: var(--input-padding);
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: var(--input-radius);
+		color: var(--text);
+		font-size: var(--input-font-size);
+		font-family: var(--font-body);
+	}
+
+	.claude-field select:focus {
+		border-color: var(--accent);
+		outline: none;
+		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
 	}
 
 	.ace-status {

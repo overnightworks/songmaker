@@ -19,6 +19,7 @@ from songmaker_cli.config import build_ace_config, load_generation_defaults
 from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries import (
     create_generation,
+    get_claude_model,
     get_default_preset,
     get_generation,
     get_song,
@@ -364,6 +365,8 @@ def run_scoring_job(
     try:
         _update_job(db_factory, job_id, "running", worker_pid=os.getpid())
 
+        from songmaker_cli.constants import CLAUDE_SCORING_MODEL, SETTING_CLAUDE_SCORING_MODEL
+
         with db_factory() as session:
             gen = get_generation(session, gen_id)
             if not gen:
@@ -384,6 +387,9 @@ def run_scoring_job(
                         "prompt": ver.prompt,
                         "lyrics": ver.lyrics,
                     }
+            resolved_model = get_claude_model(
+                session, SETTING_CLAUDE_SCORING_MODEL, CLAUDE_SCORING_MODEL,
+            )
 
         mp3_full = audio_dir / mp3_path_rel
 
@@ -400,7 +406,7 @@ def run_scoring_job(
             log.info("Scorer subprocess not running — spawning before scoring")
 
         device = _detect_device()
-        config = PipelineConfig(device=device)
+        config = PipelineConfig(device=device, claude_scoring_model=resolved_model)
         meta = SongMeta(**meta_kwargs) if meta_kwargs else None
 
         def _score_progress(completed: int, total: int, scorer_name: str) -> None:

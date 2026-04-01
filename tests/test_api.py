@@ -1455,3 +1455,85 @@ def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
         "name": "turbo test", "model_mode": "turbo", "params": {"inference_steps": 8},
     })
     assert resp.status_code == 400
+
+
+# ── Claude model settings ───────────────────────────────────────────
+
+
+def test_claude_models_get_requires_admin(client: TestClient) -> None:
+    resp = client.get("/api/settings/claude-models")
+    assert resp.status_code == 403
+
+
+def test_claude_models_put_requires_admin(client: TestClient) -> None:
+    resp = client.put("/api/settings/claude-models", json={
+        "chat_model": "claude-sonnet-4-6",
+        "scoring_model": "claude-sonnet-4-6",
+    })
+    assert resp.status_code == 403
+
+
+def test_claude_models_get_defaults(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="admin")
+    resp = c.get("/api/settings/claude-models")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["chat_model"] == "claude-opus-4-6"
+    assert data["scoring_model"] == "claude-opus-4-6"
+    assert "claude-opus-4-6" in data["allowed_models"]
+    assert "claude-sonnet-4-6" in data["allowed_models"]
+    assert "claude-haiku-4-5-20251001" in data["allowed_models"]
+
+
+def test_claude_models_roundtrip(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="admin")
+    resp = c.put("/api/settings/claude-models", json={
+        "chat_model": "claude-sonnet-4-6",
+        "scoring_model": "claude-haiku-4-5-20251001",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["chat_model"] == "claude-sonnet-4-6"
+    assert data["scoring_model"] == "claude-haiku-4-5-20251001"
+
+    resp = c.get("/api/settings/claude-models")
+    data = resp.json()
+    assert data["chat_model"] == "claude-sonnet-4-6"
+    assert data["scoring_model"] == "claude-haiku-4-5-20251001"
+
+
+def test_claude_models_rejects_invalid(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="admin")
+    resp = c.put("/api/settings/claude-models", json={
+        "chat_model": "gpt-4",
+        "scoring_model": "claude-opus-4-6",
+    })
+    assert resp.status_code == 400
+
+    resp = c.put("/api/settings/claude-models", json={
+        "chat_model": "claude-opus-4-6",
+        "scoring_model": "not-a-real-model",
+    })
+    assert resp.status_code == 400
+
+
+def test_capabilities_reflects_db_model(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="admin")
+    c.put("/api/settings/claude-models", json={
+        "chat_model": "claude-sonnet-4-6",
+        "scoring_model": "claude-haiku-4-5-20251001",
+    })
+    resp = c.get("/api/capabilities")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["chat_model"] == "claude-sonnet-4-6"
+    assert data["scoring_model"] == "claude-haiku-4-5-20251001"
+
+
+def test_chat_context_max_length(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="user")
+    resp = c.post("/api/chat", json={
+        "message": "hi",
+        "context": "x" * 10_001,
+    })
+    assert resp.status_code == 422

@@ -53,6 +53,7 @@ class PipelineConfig:
     device: str = "cpu"
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
     pipeline_timeout: int = 0
+    claude_scoring_model: str = ""
 
     def __post_init__(self) -> None:
         if self.pipeline_timeout <= 0:

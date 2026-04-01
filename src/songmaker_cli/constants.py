@@ -45,6 +45,15 @@ ACESTEP_DEFAULT_VRAM_GB = "18"
 CLAUDE_CHAT_MODEL = os.environ.get("CLAUDE_CHAT_MODEL", "claude-opus-4-6")
 CLAUDE_SCORING_MODEL = os.environ.get("CLAUDE_SCORING_MODEL", "claude-opus-4-6")
 
+SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
+SETTING_CLAUDE_SCORING_MODEL = "claude_scoring_model"
+
+ALLOWED_CLAUDE_MODELS = frozenset({
+    "claude-opus-4-6",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5-20251001",
+})
+
 # Whisper hallucination detection
 HALLUCINATION_MIN_LINES = 5
 HALLUCINATION_MAX_UNIQUE = 2

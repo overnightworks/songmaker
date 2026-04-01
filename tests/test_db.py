@@ -1462,3 +1462,27 @@ def test_init_db_stamps_existing_db(tmp_path: Path) -> None:
         row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
         assert row is not None
     engine.dispose()
+
+
+# ── Claude model settings ───────────────────────────────────────────
+
+
+def test_get_claude_model_fallback(db_session: Session) -> None:
+    from songmaker_cli.db.queries.settings import get_claude_model
+    result = get_claude_model(db_session, "claude_chat_model", "claude-opus-4-6")
+    assert result == "claude-opus-4-6"
+
+
+def test_set_and_get_claude_model(db_session: Session) -> None:
+    from songmaker_cli.db.queries.settings import get_claude_model, set_claude_model
+    set_claude_model(db_session, "claude_chat_model", "claude-sonnet-4-6")
+    result = get_claude_model(db_session, "claude_chat_model", "claude-opus-4-6")
+    assert result == "claude-sonnet-4-6"
+
+
+def test_set_claude_model_updates_existing(db_session: Session) -> None:
+    from songmaker_cli.db.queries.settings import get_claude_model, set_claude_model
+    set_claude_model(db_session, "claude_chat_model", "claude-sonnet-4-6")
+    set_claude_model(db_session, "claude_chat_model", "claude-haiku-4-5-20251001")
+    result = get_claude_model(db_session, "claude_chat_model", "claude-opus-4-6")
+    assert result == "claude-haiku-4-5-20251001"

@@ -83,9 +83,20 @@ class AvailableModelResponse(BaseModel):
     is_active: bool
 
 
+class ClaudeModelsRequest(BaseModel):
+    chat_model: str
+    scoring_model: str
+
+
+class ClaudeModelsResponse(BaseModel):
+    chat_model: str
+    scoring_model: str
+    allowed_models: list[str]
+
+
 class ChatRequest(BaseModel):
     message: str = Field(max_length=50_000)
-    context: str = Field("", max_length=100_000)
+    context: str = Field("", max_length=10_000)
 
 
 class ChatResponse(BaseModel):

@@ -306,6 +306,7 @@ class RateLimitSetting(Base):
     )
     setting_key: Mapped[str] = mapped_column(String(50))
     value: Mapped[int] = mapped_column(Integer)
+    value_text: Mapped[str | None] = mapped_column(String(100), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
 
 

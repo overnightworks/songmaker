@@ -1,4 +1,4 @@
-"""Query functions for generation presets."""
+"""Query functions for generation presets and admin settings."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import GLOBAL_DEFAULTS_PRESET_NAME
-from songmaker_cli.db.models import AvailableModel, GenerationPreset
+from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:
@@ -180,6 +180,37 @@ def save_global_defaults(session: Session, model_mode: str, params: dict) -> Non
             created_by=None,
         )
         session.add(preset)
+    session.flush()
+
+
+def get_claude_model(session: Session, setting_key: str, env_fallback: str) -> str:
+    row = (
+        session.query(RateLimitSetting)
+        .filter(
+            RateLimitSetting.setting_key == setting_key,
+            RateLimitSetting.user_id.is_(None),
+        )
+        .first()
+    )
+    if row is not None:
+        return str(row.value_text) if row.value_text else env_fallback
+    return env_fallback
+
+
+def set_claude_model(session: Session, setting_key: str, value: str) -> None:
+    row = (
+        session.query(RateLimitSetting)
+        .filter(
+            RateLimitSetting.setting_key == setting_key,
+            RateLimitSetting.user_id.is_(None),
+        )
+        .first()
+    )
+    if row:
+        row.value_text = value
+    else:
+        row = RateLimitSetting(setting_key=setting_key, value=0, value_text=value)
+        session.add(row)
     session.flush()
 
 
