@@ -404,7 +404,13 @@
 					loadClaudeModels();
 				}}>Claude</button
 			>
-			<button class:active={tab === 'acestep'} onclick={() => (tab = 'acestep')}>ACE-Step</button>
+			<button
+				class:active={tab === 'acestep'}
+				onclick={async () => {
+					tab = 'acestep';
+					aceStatus = await getAceStepStatus();
+				}}>ACE-Step</button
+			>
 		</div>
 
 		{#if error}
