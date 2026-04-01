@@ -3,21 +3,92 @@
 ## Overview
 
 ```
-┌──────────────────────────────────────┐
-│   SvelteKit Frontend                 │
-│   Song editor, player, Claude chat,  │
-│   generation settings, filters       │
-└───────────────┬──────────────────────┘
-                │ REST API (JSON)
-                ▼
-┌──────────────────────────────────────┐
-│   FastAPI Backend                    │
-│   Auth middleware → API endpoints    │
-│   Pydantic request/response models   │
-└───┬──────────┬──────────┬────────────┘
-    │          │          │
- PostgreSQL  Redis              External Services
- (all data)  (queue,RL,sessions) (ACE-Step, Claude, Whisper)
+                    ┌─────────────────────────────────────┐
+                    │        SvelteKit Frontend            │
+                    │  Song editor, player, Claude chat,   │
+                    │  generation settings, filters        │
+                    └──────────────┬──────────────────────┘
+                                  │ REST API (JSON)
+                                  ▼
+                    ┌─────────────────────────────────────┐
+                    │        FastAPI Backend               │
+                    │  Auth middleware → API endpoints     │
+                    │  Pydantic request/response models    │
+                    └──┬─────────┬──────────┬─────────────┘
+                       │         │          │
+                       ▼         ▼          ▼
+                 PostgreSQL    Redis    Claude API
+                 (all data)   (queues,  (chat, scoring)
+                              sessions,
+                              rate limits)
+```
+
+## Docker Compose Layout
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ Docker Compose                                                       │
+│                                                                      │
+│  ┌──────────────────┐   ┌────────────┐   ┌─────────────────────┐    │
+│  │  songmaker-web    │   │  postgres   │   │  redis              │    │
+│  │  FastAPI + Svelte │──▶│  all data   │◀──│  sessions, queues,  │    │
+│  │  port 8080        │   │  port 5432  │   │  rate limits        │    │
+│  └────────┬─────────┘   └────────────┘   └──────────┬──────────┘    │
+│           │                                          │               │
+│           │  enqueue jobs to named Redis queues       │               │
+│           │                                          │               │
+│           ▼                                          ▼               │
+│  ┌────────────────────┐            ┌──────────────────────────────┐  │
+│  │  music-worker       │            │  scoring-worker              │  │
+│  │                     │            │                              │  │
+│  │  GPU + ACE-Step     │            │  CPU (or GPU)                │  │
+│  │  subprocess         │            │  Whisper + AudioBox          │  │
+│  │                     │            │  subprocess                  │  │
+│  │  queue: music       │            │  queue: scoring              │  │
+│  │  max_jobs: 2        │            │  max_jobs: 1                 │  │
+│  │  CUDA_VISIBLE_      │            │  SCORING_DEVICE=cpu|cuda     │  │
+│  │  DEVICES=0          │            │                              │  │
+│  └─────────────────────┘            └──────────────────────────────┘  │
+│                                                                      │
+│  ┌──────────────┐  ┌──────────────┐                                  │
+│  │  prometheus   │  │  grafana     │                                  │
+│  │  scrapes      │──│  dashboards  │                                  │
+│  │  /metrics     │  │  port 3000   │                                  │
+│  └──────────────┘  └──────────────┘                                  │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+## Job Routing
+
+```
+User clicks "Generate"                    User clicks "Score"
+        │                                         │
+        ▼                                         ▼
+  POST /songs/{id}/generate               POST /generations/{id}/score
+        │                                         │
+        ├── rate limit check                      ├── rate limit check
+        ├── ownership check                       ├── ownership check
+        ├── create Job record                     ├── create Job record
+        │                                         │
+        ▼                                         ▼
+  arq:queue:music                          arq:queue:scoring
+  (Redis sorted set)                       (Redis sorted set)
+        │                                         │
+        ▼                                         ▼
+  Music Worker                             Scoring Worker
+  ├── prepare_generate_mode()              ├── spawn scorer subprocess
+  ├── ACE-Step HTTP → WAV                  ├── Whisper transcription
+  ├── master → MP3                         ├── AudioBox aesthetics
+  ├── save Generation to DB                ├── BPM, dynamics, silence, spectral
+  └── Job status: completed                ├── lyrical coherence (Claude)
+                                           ├── save scores to DB
+  User clicks "Chat"                       └── Job status: completed
+        │
+        ▼
+  POST /chat
+  (runs inline in API process,
+   no arq queue — just an HTTP
+   call to Claude API)
 ```
 
 ## Layers
@@ -70,10 +141,11 @@ User (username, role: admin|user, bcrypt hash)
   │           └── Generation (MP3, seed, status, whisper_text)
   │                 ├── Score (scorer, value JSON)
   │                 └── Rating (0-100, notes)
-  ├── Job (type, status, progress, error)
+  ├── Job (type, status, progress, error, queue_position)
   └── AuditLog (action, resource_type, resource_id, detail)
 
-Also: UserSession, LoginAttempt
+Also: UserSession, LoginAttempt, Playlist, PlaylistEntry,
+      GenerationPreset, AvailableModel, RateLimitSetting
 ```
 
 PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
@@ -88,17 +160,17 @@ PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is
 | GET/PUT | `/api/songs/{id}` | user | Get/update song |
 | PUT | `/api/songs/{id}/album` | user | Move song to different album |
 | POST | `/api/songs` | user | Create song in album |
-| POST | `/api/songs/{id}/generate` | user | Submit generation job |
-| POST | `/api/generations/{id}/score` | user | Submit scoring job |
+| POST | `/api/songs/{id}/generate` | user | Submit generation job (→ music queue) |
+| POST | `/api/generations/{id}/score` | user | Submit scoring job (→ scoring queue) |
 | POST | `/api/generations/{id}/rate` | user | Rate a generation |
 | POST | `/api/generations/{id}/pick` | user | Pick best generation |
-| GET | `/api/jobs/{id}` | user | Poll job status |
-| POST | `/api/chat` | user | Claude chat (rate-limited) |
+| GET | `/api/jobs/{id}` | user | Poll job status (includes queue_position) |
+| POST | `/api/chat` | user | Claude chat (inline, rate-limited) |
 | GET | `/api/capabilities` | user | Feature flags |
 | * | `/api/admin/*` | admin | User CRUD, sessions, audit log, ACE-Step control |
 | * | `/api/auth/*` | public | Login, logout, setup, password change |
-| GET | `/health` | public | Liveness/readiness probe (DB, GPU queue, ACE-Step, active model) |
-| GET | `/metrics` | public | Job stats, HTTP request counters, VRAM usage |
+| GET | `/health` | public | Per-worker status, DB, Redis, ACE-Step, queue depths |
+| GET | `/metrics` | public | Job stats, HTTP counters, VRAM usage (Prometheus) |
 | POST | `/api/albums/{id}/share` | user | Enable sharing, return secret link |
 | DELETE | `/api/albums/{id}/share` | user | Revoke sharing |
 | GET | `/shared/{slug}` | public | Read-only album view (no auth, rate-limited) |
@@ -110,7 +182,7 @@ PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is
 
 ```
 POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
-  → rate limit check (per-user)
+  → rate limit check (per-user, advisory lock)
   → ownership check
   → model validation (if specified — reject 409 if active model doesn't match)
   → create Job record + audit log entry
@@ -129,13 +201,13 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
 
 ```
 POST /api/generations/{id}/score
-  → rate limit check (per-user)
+  → rate limit check (per-user, advisory lock)
   → ownership check
   → create Job record + audit log entry
   → enqueue to arq (Redis-backed, scoring queue)
-  → scoring worker: run_scoring_job()
+  → scoring worker: run_scoring_job(device=SCORING_DEVICE)
     → ScorerProcess.score() dispatches to a long-lived subprocess:
-      Subprocess calls run_scoring_pipeline() with parallel CPU/GPU execution:
+      Subprocess calls run_scoring_pipeline() with parallel execution:
         GPU scorers (audiobox) run sequentially
         CPU scorers (text_accuracy via faster-whisper, emotional_dynamics,
           bpm_accuracy, silence_detection, spectral_quality) run concurrently
@@ -148,19 +220,50 @@ POST /api/generations/{id}/score
 
 ## Worker Architecture
 
-Separate arq workers per job type, each on its own Redis queue:
-
 ```
-API → arq:queue:music   → Music Worker   (GPU, ACE-Step subprocess)
-    → arq:queue:scoring → Scoring Worker (GPU or CPU, Whisper/AudioBox)
-    → (chat runs inline in API process, no arq queue)
+                         ┌─ arq:queue:music ──→ Music Worker(s)
+  API ─→ route by type ──┤
+                         └─ arq:queue:scoring → Scoring Worker(s)
+
+  Chat runs inline in the API process (no arq queue).
 ```
 
-**Music worker** (`music_worker.py`): owns ACE-Step subprocess lifecycle, handles `generate` and `reinitialize_acestep` tasks. `max_jobs=2` (one active in ACE-Step, one pre-fetched).
+**Music worker** (`music_worker.py`):
+- Owns ACE-Step subprocess lifecycle (start, stop, health check, model switch)
+- Handles `generate` and `reinitialize_acestep` tasks
+- `max_jobs=2` (one active in ACE-Step, one pre-fetched and waiting)
+- Cron: recovers stale generate jobs every 2 minutes
+- Publishes active model and ACE-Step status to Redis
 
-**Scoring worker** (`scoring_worker.py`): owns scorer subprocess (Whisper, AudioBox), handles `score` tasks. Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`).
+**Scoring worker** (`scoring_worker.py`):
+- Owns scorer subprocess (Whisper, AudioBox, Claude coherence)
+- Handles `score` tasks
+- Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`)
+- `max_jobs=1` (default, configurable via `SCORING_MAX_JOBS`)
+- Cron: recovers stale score jobs every 2 minutes
 
-Shared infrastructure in `worker_base.py` (DB singleton, path helpers, stale recovery).
+**Shared infrastructure** (`worker_base.py`):
+- DB singleton with thread-safe initialization
+- Path helpers (`_audio_dir`, `_data_dir`)
+- Timeout constants, terminal status set
+- Common startup (env loading, logging, Redis URL validation)
+- Common shutdown (per-type stale recovery with Redis advisory lock, DB disposal)
+
+**Backwards-compatible shim** (`worker.py`):
+- Imports tasks from music_worker and scoring_worker
+- Runs both on the legacy `arq:queue` queue
+- Logs a deprecation warning on startup
+
+### Adding a new modality
+
+1. Write task function (e.g. `generate_image()`)
+2. Add queue constant (`ARQ_IMAGE_QUEUE_NAME`)
+3. Add health check function (`is_image_worker_healthy()`)
+4. Add API routing (`pool.enqueue_job("generate_image", ..., _queue_name=...)`)
+5. Create worker module (`image_worker.py` with `ImageWorkerSettings`)
+6. Add Docker Compose service
+
+No existing code changes needed.
 
 ## VRAM Management
 
@@ -170,7 +273,13 @@ faster-whisper:  ~3 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
 AudioBox:        ~1 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
 ```
 
-With separate workers, no VRAM coordination is needed at the application level. The operator configures each worker's device via env vars to match available hardware. ACE-Step owns the GPU exclusively when `SCORING_DEVICE=cpu`.
+With separate workers, no VRAM coordination is needed at the application level. The operator configures each worker's device via env vars to match available hardware:
+
+| Deployment | Music worker | Scoring worker | Notes |
+|-----------|-------------|----------------|-------|
+| Single GPU, 24 GB | GPU 0 | CPU | ACE-Step owns GPU exclusively |
+| Single GPU, 48 GB+ | GPU 0 | GPU 0 | Both fit in VRAM |
+| Two GPUs | GPU 0 | GPU 1 | Full parallel |
 
 ## Key Design Decisions
 
@@ -194,7 +303,12 @@ Prometheus + Grafana stack in `docker-compose.yml`. Prometheus scrapes `/metrics
 
 Exported metrics: `songmaker_http_requests_total`, `songmaker_http_request_duration_milliseconds_total`, `songmaker_active_sessions`, `songmaker_jobs_total`, `songmaker_job_duration_seconds`, `songmaker_queue_depth`, `songmaker_gpu_vram_megabytes`.
 
-Health endpoint at `/health` reports component status (worker, DB, Redis, ACE-Step) and returns `"degraded"` if any component is down.
+Health endpoint at `/health` reports:
+- `music_worker`: running/stopped
+- `scoring_worker`: running/stopped
+- `music_queue_depth`, `scoring_queue_depth`: jobs waiting per queue
+- `db`, `redis`, `acestep`: component health
+- `status`: "ok" or "degraded" (degraded if both workers down, DB down, or Redis down)
 
 ## Backup & Restore
 
