@@ -18,6 +18,7 @@
 		onunshare?: (genId: string) => Promise<void>;
 		onrate?: (genId: string, rating: number, notes: string) => Promise<void>;
 		onaddtoplaylist?: (playlistId: string, genId: string) => Promise<void>;
+		onpinseed?: (seed: number) => void;
 	}
 
 	let {
@@ -31,7 +32,8 @@
 		onshare,
 		onunshare,
 		onrate,
-		onaddtoplaylist
+		onaddtoplaylist,
+		onpinseed
 	}: Props = $props();
 
 	let ratingValue = $state(50);
@@ -167,7 +169,13 @@
 				<span class="version-tag unknown">unknown version</span>
 			{/if}
 			{#if generation.seed}
-				<span class="seed">seed:{generation.seed}</span>
+				{#if onpinseed}
+					<button class="seed" onclick={() => onpinseed(generation.seed!)}>
+						seed:{generation.seed}
+					</button>
+				{:else}
+					<span class="seed">seed:{generation.seed}</span>
+				{/if}
 			{/if}
 			{#if onshare && onunshare}
 				<ShareButton
@@ -450,6 +458,14 @@
 		font-size: 10px;
 		color: var(--text-dim);
 		font-family: var(--font-body);
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+	}
+
+	.seed:hover {
+		color: var(--primary);
 	}
 
 	.section {

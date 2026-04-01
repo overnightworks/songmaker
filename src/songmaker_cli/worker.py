@@ -67,7 +67,7 @@ def _require_acestep_manager():
     return mgr
 
 
-async def generate(ctx, job_id, song_id, version_id, count, user_id):
+async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None):
     db_factory = _get_db_factory()
 
     with db_factory() as session:
@@ -87,6 +87,7 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id):
     run_generation_job(
         job_id, song_id, version_id, count, user_id,
         db_factory=db_factory, audio_dir=_audio_dir(), data_dir=_data_dir(),
+        seed=seed,
     )
 
 

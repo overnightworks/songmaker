@@ -353,6 +353,7 @@ class GenerateRequest(BaseModel):
     count: int = Field(1, ge=1, le=10)
     model: str | None = None
     version_id: str | None = None
+    seed: int | None = Field(None, ge=-1)
 
     @field_validator("model")
     @classmethod

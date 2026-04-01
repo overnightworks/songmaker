@@ -119,7 +119,9 @@ async def api_generate_song(
         if not await is_worker_healthy():
             _fail_job(ctx, job.id)
             raise HTTPException(503, "Worker not running")
-        await pool.enqueue_job("generate", job.id, song_id, version.id, req.count, user.id)
+        await pool.enqueue_job(
+            "generate", job.id, song_id, version.id, req.count, user.id, req.seed,
+        )
     except ConnectionError:
         _fail_job(ctx, job.id)
         raise HTTPException(503, "Job queue unavailable")

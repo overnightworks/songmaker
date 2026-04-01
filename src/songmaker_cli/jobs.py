@@ -140,7 +140,7 @@ def _load_preset_params(
 def _build_generation_context(
     song_id: str, version_id: str,
     db_factory: sessionmaker[Session], audio_dir: Path, data_dir: Path,
-    user_id: str,
+    user_id: str, seed: int | None = None,
 ) -> GenerationContext:
     """Load song/version from DB and build all config needed for generation."""
     meta, album_meta = _load_song_meta(song_id, version_id, db_factory)
@@ -159,6 +159,7 @@ def _build_generation_context(
         model_name=model_name,
         global_defaults=load_generation_defaults(db_factory, data_dir),
         preset_params=preset_params,
+        seed=seed,
     )
 
     return GenerationContext(
@@ -293,6 +294,7 @@ def run_generation_job(
     db_factory: sessionmaker[Session] | None = None,
     audio_dir: Path | None = None,
     data_dir: Path | None = None,
+    seed: int | None = None,
 ) -> None:
     """Run generation in a background thread, updating DB status."""
     assert db_factory is not None, "db_factory is required"
@@ -314,7 +316,8 @@ def run_generation_job(
 
         try:
             ctx = _build_generation_context(
-                song_id, version_id, db_factory, audio_dir, data_dir, user_id=user_id,
+                song_id, version_id, db_factory, audio_dir, data_dir,
+                user_id=user_id, seed=seed,
             )
         except GenerationSetupError as exc:
             _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")

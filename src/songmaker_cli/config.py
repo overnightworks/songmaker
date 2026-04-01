@@ -138,6 +138,7 @@ def build_ace_config(
     model_name: str | None = None,
     global_defaults: dict | None = None,
     preset_params: dict | None = None,
+    seed: int | None = None,
 ) -> AceStepConfig:
     """Build an AceStepConfig from SongMeta + optional CLI overrides.
 
@@ -163,6 +164,8 @@ def build_ace_config(
         _apply_params(fields, layer)
 
     fields = _sanitize_params(fields)
+    if seed is not None and seed >= 0:
+        fields["seed"] = seed
     return AceStepConfig(**fields)
 
 

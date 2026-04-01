@@ -92,6 +92,7 @@
 	let loadError = $state(false);
 	let showCreate = $state(false);
 	let genCount = $state(1);
+	let pinnedSeed = $state<number | null>(null);
 	let playlistPickerFor = $state<
 		| { type: 'song'; id: string }
 		| { type: 'album'; id: string }
@@ -183,7 +184,8 @@
 		if (!song) return;
 		try {
 			const ver = $versions[$currentVersionIndex];
-			const job = await generateSong(song.id, genCount, null, ver?.id);
+			const job = await generateSong(song.id, genCount, null, ver?.id, pinnedSeed);
+			pinnedSeed = null;
 			trackJob(job, { songId: song.id });
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
@@ -519,6 +521,15 @@
 									<option value={n}>×{n}</option>
 								{/each}
 							</select>
+							{#if pinnedSeed != null}
+								<button
+									class="pinned-seed"
+									onclick={() => (pinnedSeed = null)}
+									title="Click to clear pinned seed"
+								>
+									seed:{pinnedSeed} ✕
+								</button>
+							{/if}
 						{/if}
 						<ShareButton
 							isShared={song.is_shared}
@@ -643,6 +654,10 @@
 								onaddtoplaylist={async (playlistId, genId) => {
 									await addGenerationToPlaylist(playlistId, genId);
 									addToast('Added to playlist', 'success');
+								}}
+								onpinseed={(seed) => {
+									pinnedSeed = seed;
+									addToast(`Seed ${seed} pinned for next generation`, 'success');
 								}}
 							/>
 						</div>
@@ -1011,6 +1026,22 @@
 		padding: 4px 8px;
 		border-radius: var(--input-radius);
 		font-size: 11px;
+	}
+
+	.pinned-seed {
+		font-size: 10px;
+		padding: 2px 6px;
+		border-radius: 3px;
+		background: var(--surface);
+		border: 1px solid var(--accent);
+		color: var(--accent);
+		cursor: pointer;
+		font-family: var(--font-body);
+	}
+
+	.pinned-seed:hover {
+		background: var(--accent);
+		color: #fff;
 	}
 
 	.job-indicator {

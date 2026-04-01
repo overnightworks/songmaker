@@ -614,6 +614,26 @@ def test_generate_song_invalid_model(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
+def test_generate_song_seed_accepted(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    mock_pool = AsyncMock()
+    with (
+        patch("songmaker_cli.generation_api.is_worker_healthy", AsyncMock(return_value=True)),
+        patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
+    ):
+        resp = client.post("/api/songs/s1/generate", json={"count": 1, "seed": 42})
+    assert resp.status_code == 200
+    mock_pool.enqueue_job.assert_called_once()
+    call_args = mock_pool.enqueue_job.call_args[0]
+    assert call_args[-1] == 42
+
+
+def test_generate_song_seed_invalid(client: TestClient) -> None:
+    resp = client.post("/api/songs/s1/generate", json={"count": 1, "seed": -2})
+    assert resp.status_code == 422
+
+
 def test_generate_song_redis_down(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 

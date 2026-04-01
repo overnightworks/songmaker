@@ -209,3 +209,21 @@ def test_build_ace_config_cli_overrides_global_defaults() -> None:
     defaults = {"turbo": {"shift": 5.0}}
     config = build_ace_config(meta, cli_overrides={"shift": 1.0}, global_defaults=defaults)
     assert config.shift == 1.0
+
+
+def test_build_ace_config_seed_applied() -> None:
+    meta = SongMeta(prompt="test", lyrics="test")
+    config = build_ace_config(meta, seed=42)
+    assert config.seed == 42
+
+
+def test_build_ace_config_seed_none_uses_default() -> None:
+    meta = SongMeta(prompt="test", lyrics="test")
+    config = build_ace_config(meta, seed=None)
+    assert config.seed == -1
+
+
+def test_build_ace_config_seed_negative_one_uses_default() -> None:
+    meta = SongMeta(prompt="test", lyrics="test")
+    config = build_ace_config(meta, seed=-1)
+    assert config.seed == -1
