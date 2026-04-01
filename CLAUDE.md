@@ -10,6 +10,20 @@ Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [secur
 
 **Parallel agents**: If you're implementing a plan alongside other agents, read [plans/COORDINATION.md](plans/COORDINATION.md) before editing any files. It tracks file ownership to prevent merge conflicts.
 
+## Product Context
+
+A musician creates an **album** (a coherent collection of songs — an EP, LP, or concept album). Each **song** belongs to one album. **Playlists** let the user collect favorite songs across albums for listening.
+
+The workflow for a song: write lyrics and a style prompt → **generate** audio via ACE-Step → listen → tweak lyrics/prompt/params → generate again. Each edit creates a **version** (an immutable snapshot of lyrics, prompt, and generation params). Each generation attempt produces a **generation** (an audio file tied to a specific version). One song can have many versions, each version can have many generations.
+
+Two special flags on generations: **pick** marks "this is THE one for this song on the album" (one per song, replaces the previous pick). **Keep** marks "I like this, don't delete it" — survives cleanup but isn't the album pick.
+
+**Scoring** is auto-rating: BPM accuracy, spectral quality, silence detection, emotional dynamics, text accuracy (Whisper transcription of what was actually sung vs the lyrics). Purely informational — helps the user decide which generation sounds best. The Whisper transcript also shows the user what the AI actually sang.
+
+**Co-writer** is a Claude chat per song. The user discusses lyrics, brainstorming, and refinement. Claude can propose changes that the user applies to the current song's editor. Using @-mentions, the user can reference other songs or album context, and Claude can create entirely new songs.
+
+**Seed pinning** lets the user reproduce a generation: pin a seed from a previous generation, regenerate with tweaked params, and get a comparable result (same random noise, different settings). This enables A/B testing of parameter changes.
+
 ## Setup & Run
 
 ```bash
