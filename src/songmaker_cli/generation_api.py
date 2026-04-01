@@ -25,8 +25,14 @@ from songmaker_cli.api_models import (
     StatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.arq_pool import get_active_model, get_arq_pool, is_worker_healthy
+from songmaker_cli.arq_pool import (
+    get_active_model,
+    get_arq_pool,
+    is_music_worker_healthy,
+    is_scoring_worker_healthy,
+)
 from songmaker_cli.auth import ROLE_ADMIN
+from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME, ARQ_SCORING_QUEUE_NAME
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries import (
     delete_generation,
@@ -117,11 +123,12 @@ async def api_generate_song(
 
     try:
         pool = get_arq_pool()
-        if not await is_worker_healthy():
+        if not await is_music_worker_healthy():
             _fail_job(ctx, job.id)
             raise HTTPException(503, "Worker not running")
         await pool.enqueue_job(
             "generate", job.id, song_id, version.id, req.count, user.id, req.seed,
+            _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
         _fail_job(ctx, job.id)
@@ -147,10 +154,13 @@ async def api_score_generation(
     session.commit()
 
     try:
-        if not await is_worker_healthy():
+        if not await is_scoring_worker_healthy():
             _fail_job(ctx, job.id)
             raise HTTPException(503, "Worker not running")
-        await get_arq_pool().enqueue_job("score", job.id, gen_id, req.scorers)
+        await get_arq_pool().enqueue_job(
+            "score", job.id, gen_id, req.scorers,
+            _queue_name=ARQ_SCORING_QUEUE_NAME,
+        )
     except ConnectionError:
         _fail_job(ctx, job.id)
         raise HTTPException(503, "Job queue unavailable")

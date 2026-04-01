@@ -371,7 +371,10 @@ def test_reinitialize_acestep_success(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
-    mock_pool.enqueue_job.assert_called_once_with("reinitialize_acestep")
+    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
+    mock_pool.enqueue_job.assert_called_once_with(
+        "reinitialize_acestep", _queue_name=ARQ_MUSIC_QUEUE_NAME,
+    )
 
 
 def test_reinitialize_acestep_already_queued(client: TestClient) -> None:

@@ -53,7 +53,11 @@ def _get_user_id(client: TestClient) -> str:
 def _mock_arq():
     with (
         patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
-        patch("songmaker_cli.generation_api.is_worker_healthy", AsyncMock(return_value=True)),
+        patch("songmaker_cli.generation_api.is_music_worker_healthy", AsyncMock(return_value=True)),
+        patch(
+            "songmaker_cli.generation_api.is_scoring_worker_healthy",
+            AsyncMock(return_value=True),
+        ),
     ):
         yield
 

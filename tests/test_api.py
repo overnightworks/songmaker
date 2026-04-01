@@ -523,7 +523,14 @@ def _mock_worker(mock_pool=None):
     def _ctx():
         with (
             patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
-            patch("songmaker_cli.generation_api.is_worker_healthy", AsyncMock(return_value=True)),
+            patch(
+                "songmaker_cli.generation_api.is_music_worker_healthy",
+                AsyncMock(return_value=True),
+            ),
+            patch(
+                "songmaker_cli.generation_api.is_scoring_worker_healthy",
+                AsyncMock(return_value=True),
+            ),
         ):
             yield mock_pool
 
@@ -619,7 +626,14 @@ def test_generate_song_seed_accepted(client: TestClient) -> None:
 
     mock_pool = AsyncMock()
     with (
-        patch("songmaker_cli.generation_api.is_worker_healthy", AsyncMock(return_value=True)),
+        patch(
+            "songmaker_cli.generation_api.is_music_worker_healthy",
+            AsyncMock(return_value=True),
+        ),
+        patch(
+            "songmaker_cli.generation_api.is_scoring_worker_healthy",
+            AsyncMock(return_value=True),
+        ),
         patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
     ):
         resp = client.post("/api/songs/s1/generate", json={"count": 1, "seed": 42})
@@ -638,7 +652,14 @@ def test_generate_song_redis_down(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
     with (
-        patch("songmaker_cli.generation_api.is_worker_healthy", AsyncMock(return_value=True)),
+        patch(
+            "songmaker_cli.generation_api.is_music_worker_healthy",
+            AsyncMock(return_value=True),
+        ),
+        patch(
+            "songmaker_cli.generation_api.is_scoring_worker_healthy",
+            AsyncMock(return_value=True),
+        ),
         patch(
             "songmaker_cli.generation_api.get_arq_pool",
             side_effect=ConnectionError("redis down"),
@@ -657,7 +678,14 @@ def test_score_generation_redis_down(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
     with (
-        patch("songmaker_cli.generation_api.is_worker_healthy", AsyncMock(return_value=True)),
+        patch(
+            "songmaker_cli.generation_api.is_music_worker_healthy",
+            AsyncMock(return_value=True),
+        ),
+        patch(
+            "songmaker_cli.generation_api.is_scoring_worker_healthy",
+            AsyncMock(return_value=True),
+        ),
         patch(
             "songmaker_cli.generation_api.get_arq_pool",
             side_effect=ConnectionError("redis down"),

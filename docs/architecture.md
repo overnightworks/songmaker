@@ -45,7 +45,7 @@ The API client and `types.ts` are the frontend's contract with the backend. When
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models.py` |
 | Jobs | Background generation + scoring runners | `jobs.py` |
-| Worker | arq-based job queue, ACE-Step lifecycle, VRAM management | `worker.py`, `acestep_manager.py`, `arq_pool.py` |
+| Worker | arq-based job queues (music + scoring), ACE-Step lifecycle | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `acestep_manager.py`, `arq_pool.py` |
 | Generation | ACE-Step call → decode WAV → master → MP3 | `generate.py` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
@@ -114,8 +114,8 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
   → ownership check
   → model validation (if specified — reject 409 if active model doesn't match)
   → create Job record + audit log entry
-  → enqueue to arq (Redis-backed)
-  → arq worker: prepare_generate_mode()
+  → enqueue to arq (Redis-backed, music queue)
+  → music worker: prepare_generate_mode()
     → ensure ACE-Step server is running (start if needed)
   → run_generation_job()
     → build config (song params + admin defaults + model defaults)
@@ -132,8 +132,8 @@ POST /api/generations/{id}/score
   → rate limit check (per-user)
   → ownership check
   → create Job record + audit log entry
-  → enqueue to arq (Redis-backed)
-  → arq worker: run_scoring_job()
+  → enqueue to arq (Redis-backed, scoring queue)
+  → scoring worker: run_scoring_job()
     → ScorerProcess.score() dispatches to a long-lived subprocess:
       Subprocess calls run_scoring_pipeline() with parallel CPU/GPU execution:
         GPU scorers (audiobox) run sequentially
@@ -146,19 +146,31 @@ POST /api/generations/{id}/score
   → Job status: completed
 ```
 
-## VRAM Management
+## Worker Architecture
 
-Single RTX 3090 shared between generation and scoring. `max_jobs=1` serializes all GPU work.
+Separate arq workers per job type, each on its own Redis queue:
+
+```
+API → arq:queue:music   → Music Worker   (GPU, ACE-Step subprocess)
+    → arq:queue:scoring → Scoring Worker (GPU or CPU, Whisper/AudioBox)
+    → (chat runs inline in API process, no arq queue)
+```
+
+**Music worker** (`music_worker.py`): owns ACE-Step subprocess lifecycle, handles `generate` and `reinitialize_acestep` tasks. `max_jobs=2` (one active in ACE-Step, one pre-fetched).
+
+**Scoring worker** (`scoring_worker.py`): owns scorer subprocess (Whisper, AudioBox), handles `score` tasks. Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`).
+
+Shared infrastructure in `worker_base.py` (DB singleton, path helpers, stale recovery).
+
+## VRAM Management
 
 ```
 ACE-Step server: ~18 GB VRAM (DiT + LM models, stays loaded as subprocess)
-faster-whisper:  ~3 GB VRAM (int8_float16, CTranslate2 backend, loads on demand, cached)
-AudioBox:        CPU only  (forced via CUDA_VISIBLE_DEVICES="" context manager)
+faster-whisper:  ~3 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
+AudioBox:        ~1 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
 ```
 
-Mode switching via `prepare_generate_mode()` in `acestep_manager.py`. Before generation, the scorer subprocess is asked to release GPU memory (`release_gpu()`), falling back to `clear_scoring_models()` if no subprocess is running. VRAM release is verified via pynvml polling before ACE-Step starts.
-
-VRAM verification uses pynvml (NVML) for system-wide GPU memory measurement with a delta-based check: snapshots VRAM before clearing scoring models, then polls until usage drops back to baseline + margin. Raises `RuntimeError` if not freed, failing the job cleanly instead of OOMing ACE-Step. Falls back gracefully if pynvml is unavailable.
+With separate workers, no VRAM coordination is needed at the application level. The operator configures each worker's device via env vars to match available hardware. ACE-Step owns the GPU exclusively when `SCORING_DEVICE=cpu`.
 
 ## Key Design Decisions
 
@@ -166,7 +178,7 @@ VRAM verification uses pynvml (NVML) for system-wide GPU memory measurement with
 |----------|--------|-----|
 | Single code path | CLI → API → DB | No duplication between CLI and web |
 | Pydantic from_orm() | Response models serialize ORM objects | No manual dict layer to maintain |
-| GPU queue | Single-threaded, in-process | One GPU, ACE-Step + scoring share VRAM |
+| Worker split | Separate arq queues per job type | Independent scaling, device config per worker |
 | Scoring subprocess | Long-lived child process, killed on timeout | Real cleanup via SIGKILL, GPU memory freed immediately |
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
 | Session auth | Cookies + Redis cache | Revocable, HttpOnly, Redis-first reads. Redis TTL is authoritative for session expiry; DB synced every 5 min as backup |

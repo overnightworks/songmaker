@@ -263,9 +263,10 @@ async def reinitialize_acestep(
     _admin: AuthenticatedUser = Depends(require_admin),
 ) -> StatusResponse:
     from songmaker_cli.arq_pool import get_arq_pool
+    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
 
     pool = get_arq_pool()
-    job = await pool.enqueue_job("reinitialize_acestep")
+    job = await pool.enqueue_job("reinitialize_acestep", _queue_name=ARQ_MUSIC_QUEUE_NAME)
     if job is None:
         raise HTTPException(409, "Reinitialize job already queued")
     return StatusResponse(status="ok")

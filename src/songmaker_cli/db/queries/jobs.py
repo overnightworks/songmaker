@@ -195,6 +195,66 @@ def recover_stale_jobs_by_age(
     return recovered
 
 
+def recover_stale_jobs_by_type(session: Session, job_type: str) -> int:
+    """Mark all running/queued jobs of a given type as failed. Returns count recovered."""
+    now = datetime.now(timezone.utc)
+    stale = (
+        session.query(Job)
+        .filter(
+            Job.status.in_(("queued", "running")),
+            Job.type == job_type,
+        )
+        .all()
+    )
+    for job in stale:
+        job.status = "failed"
+        job.error = "Server restarted while job was in progress"
+        job.error_type = "server_restart"
+        job.completed_at = now
+    session.flush()
+    if stale:
+        log.info("Recovered %d stale %s jobs", len(stale), job_type)
+    return len(stale)
+
+
+def recover_stale_jobs_by_age_and_type(
+    session: Session, job_type: str,
+    threshold_seconds: int = STALE_JOB_THRESHOLD_SECONDS,
+) -> int:
+    """Mark running/queued jobs of a given type older than threshold as failed.
+
+    Jobs whose worker_pid is still alive are skipped.
+    """
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=threshold_seconds)
+    candidates = (
+        session.query(Job)
+        .filter(
+            Job.status.in_(("queued", "running")),
+            Job.type == job_type,
+            Job.started_at < cutoff,
+        )
+        .all()
+    )
+    recovered = 0
+    for job in candidates:
+        if _is_worker_alive(job.worker_pid):
+            log.info("Skipping stale job %s — worker PID %d still alive", job.id, job.worker_pid)
+            continue
+        job.status = "failed"
+        job.error = "Job timed out (exceeded maximum run time)"
+        job.error_type = "stale_timeout"
+        job.completed_at = now
+        recovered += 1
+    session.flush()
+    if recovered:
+        log.info(
+            "Recovered %d stale %s jobs (threshold=%ds)",
+            recovered, job_type, threshold_seconds,
+        )
+    return recovered
+
+
 def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]:
     """Return {type: {status: count}} for all jobs."""
     rows = (

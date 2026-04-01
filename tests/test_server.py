@@ -985,7 +985,11 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
     with (
         client,
         patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=False)),
+        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
+        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=0)),
+        patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
+        patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value=None)),
         patch("songmaker_cli.acestep_manager.AceStepManager") as mock_mgr_cls,
     ):
@@ -995,6 +999,8 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
     data = resp.json()
     assert data["db"] == "ok"
     assert data["worker"] == "stopped"
+    assert data["music_worker"] == "stopped"
+    assert data["scoring_worker"] == "stopped"
     assert data["queue_depth"] == 0
     assert data["acestep"] == "unknown"
     assert data["acestep_model"] is None
@@ -1029,7 +1035,11 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
     with (
         client,
         patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=True)),
+        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
+        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
         patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=3)),
+        patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=2)),
+        patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=1)),
         patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value="sft")),
     ):
         resp = client.get("/health")
@@ -1037,6 +1047,8 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
     data = resp.json()
     assert data["status"] == "ok"
     assert data["worker"] == "running"
+    assert data["music_worker"] == "running"
+    assert data["scoring_worker"] == "running"
     assert data["queue_depth"] == 3
     assert data["acestep"] == "healthy"
     assert data["acestep_model"] == "sft"
@@ -1070,7 +1082,11 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path, mock_arq_pool) -> N
     with (
         client,
         patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=False)),
+        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=False)),
+        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=False)),
         patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=0)),
+        patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=0)),
+        patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.arq_pool.get_active_model", AsyncMock(return_value=None)),
     ):
         resp = client.get("/health")

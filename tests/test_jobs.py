@@ -10,7 +10,7 @@ import pytest
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, Version
 from songmaker_cli.db.queries import get_generation, get_job
-from songmaker_cli.jobs import _detect_device, _update_job, run_generation_job, run_scoring_job
+from songmaker_cli.jobs import _update_job, run_generation_job, run_scoring_job
 
 
 @pytest.fixture()
@@ -57,45 +57,6 @@ def test_update_job_raises_after_retries(db_factory) -> None:
     broken_factory = MagicMock(side_effect=RuntimeError("db broken"))
     with pytest.raises(RuntimeError, match="status update to 'running' failed after 2 attempts"):
         _update_job(broken_factory, "j1", "running")
-
-
-# ── _detect_device ──────────────────────────────────────────────────
-
-
-def test_cleanup_gpu_with_cuda() -> None:
-    from songmaker_cli.jobs import _cleanup_gpu
-
-    mock_torch = MagicMock()
-    mock_torch.cuda.is_available.return_value = True
-    with patch.dict("sys.modules", {"torch": mock_torch}):
-        _cleanup_gpu()
-    mock_torch.cuda.empty_cache.assert_called_once()
-
-
-def test_cleanup_gpu_no_torch() -> None:
-    from songmaker_cli.jobs import _cleanup_gpu
-
-    with patch.dict("sys.modules", {"torch": None}):
-        _cleanup_gpu()
-
-
-def test_detect_device_cuda() -> None:
-    mock_torch = MagicMock()
-    mock_torch.cuda.is_available.return_value = True
-    with patch.dict("sys.modules", {"torch": mock_torch}):
-        assert _detect_device() == "cuda"
-
-
-def test_detect_device_no_cuda() -> None:
-    mock_torch = MagicMock()
-    mock_torch.cuda.is_available.return_value = False
-    with patch.dict("sys.modules", {"torch": mock_torch}):
-        assert _detect_device() == "cpu"
-
-
-def test_detect_device_no_torch() -> None:
-    with patch.dict("sys.modules", {"torch": None}):
-        assert _detect_device() == "cpu"
 
 
 # ── run_generation_job ──────────────────────────────────────────────
@@ -334,7 +295,6 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
     mock_result = _mock_scores()
 
     with (
-        patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch(
             "songmaker_cli.jobs.get_scorer_process",
             return_value=MagicMock(score=MagicMock(return_value=mock_result)),
@@ -366,7 +326,6 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
     mock_result = _mock_scores(with_whisper=True)
 
     with (
-        patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch(
             "songmaker_cli.jobs.get_scorer_process",
             return_value=MagicMock(score=MagicMock(return_value=mock_result)),
@@ -420,7 +379,6 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
         session.commit()
 
     with (
-        patch("songmaker_cli.jobs._detect_device", create=True, return_value="cpu"),
         patch(
             "songmaker_cli.jobs.get_scorer_process",
             return_value=MagicMock(

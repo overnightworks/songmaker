@@ -73,6 +73,30 @@ def _cleanup_gpu_and_exit(_signum: int, _frame: object) -> None:
     raise SystemExit(0)
 
 
+def _release_scorer_models() -> None:
+    import gc
+
+    try:
+        from songmaker_cli.scoring.text_accuracy import clear_cache as clear_whisper
+        clear_whisper()
+    except ImportError:
+        pass
+
+    try:
+        from songmaker_cli.scoring.audiobox_aesthetics import clear_cache as clear_audiobox
+        clear_audiobox()
+    except ImportError:
+        pass
+
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except ImportError:
+        pass
+
+
 def _child_main(conn: Connection) -> None:
     from songmaker_cli.scoring.pipeline import default_registry, run_scoring_pipeline
 
@@ -90,8 +114,7 @@ def _child_main(conn: Connection) -> None:
             break
 
         if isinstance(request, ReleaseGpuRequest):
-            from songmaker_cli.acestep_manager import clear_scoring_models
-            clear_scoring_models()
+            _release_scorer_models()
             conn.send(ReleaseGpuResponse(success=True))
             continue
 

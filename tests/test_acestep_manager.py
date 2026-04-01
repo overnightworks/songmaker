@@ -9,12 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from songmaker_cli.acestep_manager import (
-    AceStepManager,
-    clear_scoring_models,
-    gc_gpu,
-    verify_vram_freed,
-)
+from songmaker_cli.acestep_manager import AceStepManager
 
 # ── start / stop ───────────────────────────────────────────────────
 
@@ -83,8 +78,7 @@ def test_stop_graceful() -> None:
     proc.wait.return_value = 0
     mgr._process = proc
 
-    with patch("songmaker_cli.acestep_manager.gc_gpu"):
-        mgr.stop()
+    mgr.stop()
 
     proc.send_signal.assert_called_once_with(signal.SIGTERM)
     assert mgr._process is None
@@ -97,8 +91,7 @@ def test_stop_force_kill() -> None:
     proc.wait.side_effect = [subprocess.TimeoutExpired(cmd="acestep", timeout=15), None]
     mgr._process = proc
 
-    with patch("songmaker_cli.acestep_manager.gc_gpu"):
-        mgr.stop()
+    mgr.stop()
 
     proc.kill.assert_called_once()
     assert mgr._process is None
@@ -228,156 +221,23 @@ def test_active_model_exception() -> None:
 def test_prepare_generate_mode() -> None:
     mgr = AceStepManager()
     with (
-        patch("songmaker_cli.gpu_util.get_gpu_memory_used_mb", return_value=18000.0),
-        patch("songmaker_cli.acestep_manager._release_scorer_gpu") as mock_release,
-        patch("songmaker_cli.acestep_manager.verify_vram_freed") as mock_verify,
         patch.object(mgr, "ensure") as mock_ensure,
         patch.object(mgr, "refresh_cached_model"),
     ):
         mgr.prepare_generate_mode()
-    mock_release.assert_called_once()
-    mock_verify.assert_called_once_with(baseline_mb=18000.0)
     mock_ensure.assert_called_once()
+    assert mgr.current_mode == "generate"
 
 
-def test_prepare_generate_mode_vram_failure_propagates() -> None:
+def test_prepare_generate_mode_sets_mode_on_repeat() -> None:
     mgr = AceStepManager()
+    mgr._current_mode = "generate"
     with (
-        patch("songmaker_cli.gpu_util.get_gpu_memory_used_mb", return_value=18000.0),
-        patch("songmaker_cli.acestep_manager._release_scorer_gpu"),
-        patch(
-            "songmaker_cli.acestep_manager.verify_vram_freed",
-            side_effect=RuntimeError("GPU memory not freed"),
-        ),
+        patch.object(mgr, "ensure") as mock_ensure,
+        patch.object(mgr, "refresh_cached_model"),
     ):
-        with pytest.raises(RuntimeError, match="GPU memory not freed"):
-            mgr.prepare_generate_mode()
-
-
-# ── clear_scoring_models ───────────────────────────────────────────
-
-
-def test_clear_scoring_models_calls_clear_cache() -> None:
-    with (
-        patch("songmaker_cli.scoring.text_accuracy.clear_cache") as mock_whisper,
-        patch("songmaker_cli.scoring.audiobox_aesthetics.clear_cache") as mock_audiobox,
-        patch("songmaker_cli.acestep_manager.gc_gpu"),
-    ):
-        clear_scoring_models()
-
-    mock_whisper.assert_called_once()
-    mock_audiobox.assert_called_once()
-
-
-def test_clear_scoring_models_handles_import_error() -> None:
-    with patch("songmaker_cli.acestep_manager.gc_gpu"):
-        clear_scoring_models()
-
-
-def test_clear_scoring_models_whisper_import_error() -> None:
-    with (
-        patch.dict("sys.modules", {"songmaker_cli.scoring.text_accuracy": None}),
-        patch("songmaker_cli.acestep_manager.gc_gpu"),
-    ):
-        clear_scoring_models()
-
-
-def test_clear_scoring_models_audiobox_import_error() -> None:
-    with (
-        patch(
-            "songmaker_cli.scoring.text_accuracy.clear_cache",
-            side_effect=ImportError,
-        ),
-        patch.dict("sys.modules", {"songmaker_cli.scoring.audiobox_aesthetics": None}),
-        patch("songmaker_cli.acestep_manager.gc_gpu"),
-    ):
-        clear_scoring_models()
-
-
-# ── verify_vram_freed ──────────────────────────────────────────────
-
-
-def test_verify_vram_freed_no_pynvml() -> None:
-    with patch("songmaker_cli.gpu_util.get_gpu_memory_used_mb", return_value=None):
-        verify_vram_freed(baseline_mb=None)
-
-
-def test_verify_vram_freed_delta_success() -> None:
-    mock_get = MagicMock(return_value=18100.0)
-    with (
-        patch("songmaker_cli.gpu_util.get_gpu_memory_used_mb", mock_get),
-        patch("songmaker_cli.acestep_manager.gc_gpu"),
-    ):
-        verify_vram_freed(baseline_mb=18000.0, max_wait=1)
-    mock_get.assert_called_once()
-
-
-def test_verify_vram_freed_just_over_margin_fails() -> None:
-    with (
-        patch(
-            "songmaker_cli.gpu_util.get_gpu_memory_used_mb",
-            return_value=18201.0,
-        ),
-        patch("songmaker_cli.acestep_manager.gc_gpu"),
-        patch("time.sleep"),
-    ):
-        with pytest.raises(RuntimeError, match="GPU memory not freed"):
-            verify_vram_freed(baseline_mb=18000.0, max_wait=1)
-
-
-def test_verify_vram_freed_gradual_release() -> None:
-    readings = [21000.0, 19000.0, 18100.0]
-    with (
-        patch(
-            "songmaker_cli.gpu_util.get_gpu_memory_used_mb",
-            side_effect=readings,
-        ),
-        patch("songmaker_cli.acestep_manager.gc_gpu"),
-        patch("time.sleep"),
-    ):
-        verify_vram_freed(baseline_mb=18000.0, max_wait=5)
-
-
-def test_verify_vram_freed_not_freed_raises() -> None:
-    with (
-        patch(
-            "songmaker_cli.gpu_util.get_gpu_memory_used_mb",
-            return_value=21000.0,
-        ),
-        patch("songmaker_cli.acestep_manager.gc_gpu"),
-        patch("time.sleep"),
-    ):
-        with pytest.raises(RuntimeError, match="GPU memory not freed"):
-            verify_vram_freed(baseline_mb=18000.0, max_wait=2)
-
-
-def test_verify_vram_freed_nvml_fails_midpoll() -> None:
-    readings = [21000.0, None]
-    with (
-        patch(
-            "songmaker_cli.gpu_util.get_gpu_memory_used_mb",
-            side_effect=readings,
-        ),
-        patch("songmaker_cli.acestep_manager.gc_gpu"),
-        patch("time.sleep"),
-    ):
-        verify_vram_freed(baseline_mb=18000.0, max_wait=5)
-
-
-# ── gc_gpu ─────────────────────────────────────────────────────────
-
-
-def test_gc_gpu_with_cuda() -> None:
-    mock_torch = MagicMock()
-    mock_torch.cuda.is_available.return_value = True
-    with patch.dict("sys.modules", {"torch": mock_torch}):
-        gc_gpu()
-    mock_torch.cuda.empty_cache.assert_called_once()
-
-
-def test_gc_gpu_no_torch() -> None:
-    with patch.dict("sys.modules", {"torch": None}):
-        gc_gpu()
+        mgr.prepare_generate_mode()
+    mock_ensure.assert_called_once()
 
 
 # ── _find_uv ──────────────────────────────────────────────────────

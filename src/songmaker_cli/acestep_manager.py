@@ -28,8 +28,6 @@ _ACESTEP_HEALTH_URL = ACESTEP_HEALTH_URL_TEMPLATE.format(port=_ACESTEP_PORT)
 _SHUTDOWN_GRACE_SECONDS = 15
 _SHUTDOWN_KILL_SECONDS = 5
 _HEALTH_POLL_SECONDS = 2
-_VRAM_MARGIN_MB = float(os.environ.get("SONGMAKER_VRAM_MARGIN_MB", "200"))
-_VRAM_POLL_SECONDS = 1
 
 
 class AceStepManager:
@@ -99,7 +97,6 @@ class AceStepManager:
             self._process.wait(timeout=_SHUTDOWN_KILL_SECONDS)
         self._process = None
         self._cached_model = None
-        gc_gpu()
         log.info("ACE-Step server stopped")
 
     def is_healthy(self) -> bool:
@@ -161,11 +158,6 @@ class AceStepManager:
         return self._current_mode
 
     def prepare_generate_mode(self) -> None:
-        if self._current_mode != "generate":
-            from songmaker_cli.gpu_util import get_gpu_memory_used_mb
-            baseline_mb = get_gpu_memory_used_mb()
-            _release_scorer_gpu()
-            verify_vram_freed(baseline_mb=baseline_mb)
         self.ensure()
         self.refresh_cached_model()
         self._current_mode = "generate"
@@ -187,76 +179,3 @@ class AceStepManager:
         return None
 
 
-def _release_scorer_gpu() -> None:
-    try:
-        from songmaker_cli.scoring.subprocess_runner import get_scorer_process
-        get_scorer_process().release_gpu()
-        return
-    except RuntimeError:
-        pass
-    clear_scoring_models()
-
-
-def clear_scoring_models() -> None:
-    try:
-        from songmaker_cli.scoring.text_accuracy import clear_cache as clear_whisper
-        clear_whisper()
-    except ImportError:
-        pass
-
-    try:
-        from songmaker_cli.scoring.audiobox_aesthetics import clear_cache as clear_audiobox
-        clear_audiobox()
-    except ImportError:
-        pass
-
-    gc_gpu()
-
-
-def verify_vram_freed(
-    max_wait: int = 10, baseline_mb: float | None = None,
-) -> None:
-    from songmaker_cli.gpu_util import get_gpu_memory_used_mb
-
-    if baseline_mb is None:
-        baseline_mb = get_gpu_memory_used_mb()
-
-    if baseline_mb is None:
-        log.warning("Cannot query GPU memory (pynvml unavailable) — skipping verification")
-        return
-
-    target_mb = baseline_mb + _VRAM_MARGIN_MB
-
-    for attempt in range(max_wait):
-        gc_gpu()
-        used_mb = get_gpu_memory_used_mb()
-        if used_mb is None:
-            log.warning("NVML query failed mid-poll — skipping verification")
-            return
-        if used_mb <= target_mb:
-            log.info("VRAM freed: %.0f MB used (baseline=%.0f)", used_mb, baseline_mb)
-            return
-        log.info(
-            "Waiting for VRAM release... %.0f MB used, target <=%.0f (attempt %d/%d)",
-            used_mb, target_mb, attempt + 1, max_wait,
-        )
-        time.sleep(_VRAM_POLL_SECONDS)
-
-    final_mb = get_gpu_memory_used_mb() or 0
-    raise RuntimeError(
-        f"GPU memory not freed after {max_wait}s: {final_mb:.0f} MB in use "
-        f"(baseline was {baseline_mb:.0f} MB, margin {_VRAM_MARGIN_MB} MB). "
-        f"Scoring model cleanup may have failed."
-    )
-
-
-def gc_gpu() -> None:
-    import gc
-    gc.collect()
-    try:
-        import torch
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            log.info("Cleared CUDA cache")
-    except ImportError:
-        pass

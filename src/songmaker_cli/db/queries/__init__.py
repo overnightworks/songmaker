@@ -65,6 +65,8 @@ from songmaker_cli.db.queries.jobs import (
     job_duration_stats,
     recover_stale_jobs,
     recover_stale_jobs_by_age,
+    recover_stale_jobs_by_age_and_type,
+    recover_stale_jobs_by_type,
     update_job_status,
 )
 from songmaker_cli.db.queries.playlists import (
@@ -224,6 +226,8 @@ __all__ = [
     "resolve_rate_limit",
     "recover_stale_jobs",
     "recover_stale_jobs_by_age",
+    "recover_stale_jobs_by_age_and_type",
+    "recover_stale_jobs_by_type",
     "save_global_defaults",
     "set_claude_model",
     "save_rating",

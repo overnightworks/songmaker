@@ -157,9 +157,21 @@ async def health_check(request: Request) -> JSONResponse:
 
     db_ok = _check_db(ctx)
 
-    from songmaker_cli.arq_pool import get_active_model, get_queue_depth, is_worker_healthy
+    from songmaker_cli.arq_pool import (
+        get_active_model,
+        get_music_queue_depth,
+        get_queue_depth,
+        get_scoring_queue_depth,
+        is_music_worker_healthy,
+        is_scoring_worker_healthy,
+        is_worker_healthy,
+    )
     worker_running = await is_worker_healthy()
+    music_running = await is_music_worker_healthy()
+    scoring_running = await is_scoring_worker_healthy()
     queue_depth = await get_queue_depth()
+    music_queue_depth = await get_music_queue_depth()
+    scoring_queue_depth = await get_scoring_queue_depth()
     acestep_model = await get_active_model()
 
     if acestep_model is not None:
@@ -177,11 +189,19 @@ async def health_check(request: Request) -> JSONResponse:
         session_cache.consecutive_failures if session_cache else 0
     )
 
-    degraded = not db_ok or not worker_running or not redis_ok
+    degraded = (
+        not db_ok
+        or (not music_running and not scoring_running)
+        or not redis_ok
+    )
     return JSONResponse({
         "status": "degraded" if degraded else "ok",
         "worker": "running" if worker_running else "stopped",
+        "music_worker": "running" if music_running else "stopped",
+        "scoring_worker": "running" if scoring_running else "stopped",
         "queue_depth": queue_depth,
+        "music_queue_depth": music_queue_depth,
+        "scoring_queue_depth": scoring_queue_depth,
         "db": "ok" if db_ok else "error",
         "redis": "ok" if redis_ok else "error",
         "redis_session_cache_failures": session_cache_failures,

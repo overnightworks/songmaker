@@ -344,14 +344,13 @@ def run_generation_job(
             db_factory, job_id, "failed",
             error=_sanitize_error(exc), error_type="generation_error",
         )
-    finally:
-        _cleanup_gpu()
 
 
 def run_scoring_job(
     job_id: str, gen_id: str, scorers: list[str] | None,
     db_factory: sessionmaker[Session] | None = None,
     audio_dir: Path | None = None,
+    device: str = "cpu",
 ) -> None:
     """Run scoring in a background thread, updating DB status."""
     assert db_factory is not None, "db_factory is required"
@@ -408,7 +407,6 @@ def run_scoring_job(
         if not scorer.alive:
             log.info("Scorer subprocess not running — spawning before scoring")
 
-        device = _detect_device()
         config = PipelineConfig(device=device, claude_scoring_model=resolved_model)
         meta = SongMeta(**meta_kwargs) if meta_kwargs else None
 
@@ -449,30 +447,6 @@ def run_scoring_job(
             db_factory, job_id, "failed",
             error=_sanitize_error(exc), error_type="scoring_error",
         )
-    finally:
-        _cleanup_gpu()
-
-
-def _cleanup_gpu() -> None:
-    try:
-        import gc
-
-        import torch
-        if torch.cuda.is_available():
-            gc.collect()
-            torch.cuda.empty_cache()
-    except ImportError:
-        pass
-
-
-def _detect_device() -> str:
-    try:
-        import torch
-        if torch.cuda.is_available():
-            return "cuda"
-    except ImportError:
-        pass
-    return "cpu"
 
 
 def _update_job(factory, job_id: str, status: str, **kwargs) -> None:

@@ -1,4 +1,8 @@
-"""arq worker — runs GPU-bound generation and scoring jobs.
+"""arq worker — backwards-compatible shim.
+
+Delegates to music_worker and scoring_worker for task implementations.
+Use music_worker.MusicWorkerSettings or scoring_worker.ScoringWorkerSettings
+for new deployments.
 
 Started as a separate process:
     arq songmaker_cli.worker.WorkerSettings
@@ -9,158 +13,47 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from pathlib import Path
 
 from arq import cron
-from arq.connections import RedisSettings
 
 from songmaker_cli.constants import (
-    ACESTEP_STATUS_REDIS_KEY,
-    ACESTEP_STATUS_TTL_SECONDS,
     ACTIVE_MODEL_REDIS_KEY,
     ACTIVE_MODEL_TTL_SECONDS,
-    AUDIO_ROOT,
-    DATA_ROOT,
     RECOVERY_LOCK_KEY,
     RECOVERY_LOCK_TTL_SECONDS,
-    REDIS_URL_MISMATCH_WARNING,
 )
-from songmaker_cli.db.engine import init_db, resolve_database_url
-from songmaker_cli.db.queries import get_job, recover_stale_jobs, recover_stale_jobs_by_age
-from songmaker_cli.jobs import run_generation_job, run_scoring_job
+from songmaker_cli.db.queries import recover_stale_jobs
+from songmaker_cli.music_worker import (
+    _publish_acestep_status,
+    generate,
+    reinitialize_acestep,
+)
+from songmaker_cli.scoring_worker import score
+from songmaker_cli.worker_base import (
+    DRAIN_TIMEOUT_SECONDS,
+    HEALTH_CHECK_INTERVAL_SECONDS,
+    JOB_TIMEOUT_SECONDS,
+    _get_db_factory,
+    build_redis_settings,
+    common_startup,
+)
 
 log = logging.getLogger(__name__)
 
-_db_factory = None
-_db_engine = None
-_db_lock = threading.Lock()
 _acestep_manager = None
 _acestep_lock = threading.Lock()
 
-JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "300"))
-DRAIN_TIMEOUT_SECONDS = int(os.environ.get("ARQ_DRAIN_TIMEOUT", "300"))
-HEALTH_CHECK_INTERVAL_SECONDS = 30
-TERMINAL_STATUSES = frozenset({"completed", "partial", "failed", "cancelled"})
+_LEGACY_WORKER_DEPRECATION = (
+    "Using legacy combined worker — migrate to music_worker/scoring_worker"
+)
 
-
-def _get_db_factory():
-    global _db_factory, _db_engine
-    with _db_lock:
-        if _db_factory is None:
-            _db_factory = init_db(resolve_database_url())
-            _db_engine = _db_factory.kw["bind"]
-    return _db_factory
-
-
-def _audio_dir() -> Path:
-    return Path(os.environ.get("AUDIO_DIR", AUDIO_ROOT))
-
-
-def _data_dir() -> Path:
-    return Path(os.environ.get("DATA_DIR", DATA_ROOT))
-
-
-def _require_acestep_manager():
-    with _acestep_lock:
-        mgr = _acestep_manager
-    if mgr is None:
-        raise RuntimeError("ACE-Step manager not initialized — on_startup may have failed")
-    return mgr
-
-
-async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None):
-    db_factory = _get_db_factory()
-
-    with db_factory() as session:
-        job = get_job(session, job_id)
-        if not job or job.status in TERMINAL_STATUSES:
-            return
-
-    mgr = _require_acestep_manager()
-    mgr.prepare_generate_mode()
-    model = mgr.active_model
-    if model:
-        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)
-
-    import structlog
-    structlog.contextvars.bind_contextvars(job_id=job_id, task="generate")
-
-    run_generation_job(
-        job_id, song_id, version_id, count, user_id,
-        db_factory=db_factory, audio_dir=_audio_dir(), data_dir=_data_dir(),
-        seed=seed,
-    )
-
-
-async def score(ctx, job_id, gen_id, scorers):
-    db_factory = _get_db_factory()
-
-    with db_factory() as session:
-        job = get_job(session, job_id)
-        if not job or job.status in TERMINAL_STATUSES:
-            return
-
-    import structlog
-    structlog.contextvars.bind_contextvars(job_id=job_id, task="score")
-
-    run_scoring_job(
-        job_id, gen_id, scorers,
-        db_factory=db_factory, audio_dir=_audio_dir(),
-    )
-
-
-async def reinitialize_acestep(ctx):
-    import json
-    from urllib.request import Request, urlopen
-
-    from songmaker_cli.acestep_manager import _ACESTEP_PORT
-
-    mgr = _require_acestep_manager()
-    acestep_url = f"http://localhost:{_ACESTEP_PORT}/v1/reinitialize"
-    req = Request(
-        acestep_url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST",
-    )
-    with urlopen(req, timeout=30) as resp:
-        data = json.loads(resp.read())
-    if data.get("code") != 200:
-        raise RuntimeError(f"ACE-Step reinitialize failed: {data}")
-    mgr.refresh_cached_model()
-    model = mgr.active_model
-    if model:
-        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)
-    await _publish_acestep_status(ctx["redis"])
-
-
-async def _publish_acestep_status(redis) -> None:
-    import json
-    from urllib.request import Request, urlopen
-
-    from songmaker_cli.acestep_manager import _ACESTEP_PORT
-
-    try:
-        req = Request(f"http://localhost:{_ACESTEP_PORT}/health", method="GET")
-        with urlopen(req, timeout=5) as resp:
-            health = json.loads(resp.read())
-
-        req2 = Request(f"http://localhost:{_ACESTEP_PORT}/v1/stats", method="GET")
-        with urlopen(req2, timeout=5) as resp:
-            stats = json.loads(resp.read())
-
-        status = {
-            "online": True,
-            "model": health.get("data", {}).get("loaded_model"),
-            "lm_model": health.get("data", {}).get("loaded_lm_model"),
-            "jobs": stats.get("data", {}).get("jobs", {}),
-        }
-    except Exception:
-        status = {"online": False, "model": None, "lm_model": None, "jobs": {}}
-
-    await redis.set(
-        ACESTEP_STATUS_REDIS_KEY, json.dumps(status), ex=ACESTEP_STATUS_TTL_SECONDS,
-    )
+_MAX_CONCURRENT_JOBS = 1
+_IMPORT_TIME_REDIS_URL = os.environ.get("REDIS_URL")
 
 
 async def cleanup_stale(ctx):
+    from songmaker_cli.db.queries import recover_stale_jobs_by_age
+
     db_factory = _get_db_factory()
     with db_factory() as session:
         count = recover_stale_jobs_by_age(session)
@@ -173,27 +66,18 @@ async def cleanup_stale(ctx):
     await _publish_acestep_status(ctx["redis"])
 
 
+def _require_acestep_manager():
+    with _acestep_lock:
+        mgr = _acestep_manager
+    if mgr is None:
+        raise RuntimeError("ACE-Step manager not initialized — on_startup may have failed")
+    return mgr
+
+
 async def on_startup(ctx):
-    assert WorkerSettings.max_jobs == _MAX_CONCURRENT_JOBS, (
-        f"max_jobs must be {_MAX_CONCURRENT_JOBS} — GPU mode switching and "
-        "CUDA_VISIBLE_DEVICES mutation are not safe under concurrency"
-    )
+    log.warning(_LEGACY_WORKER_DEPRECATION)
 
-    from songmaker_cli.config import find_project_root, load_env_file
-    from songmaker_cli.logging_config import configure_logging
-
-    project_root = find_project_root(Path.cwd()) or Path.cwd()
-    load_env_file(project_root)
-    configure_logging()
-
-    current_redis_url = os.environ.get("REDIS_URL")
-    if current_redis_url and current_redis_url != _IMPORT_TIME_REDIS_URL:
-        log.warning(
-            REDIS_URL_MISMATCH_WARNING.format(
-                env_value=current_redis_url,
-                import_value=_IMPORT_TIME_REDIS_URL or "redis://localhost:6379/0",
-            ),
-        )
+    await common_startup(ctx, _IMPORT_TIME_REDIS_URL)
 
     log.info("Worker starting up...")
 
@@ -249,6 +133,7 @@ async def on_shutdown(ctx):
     else:
         log.warning("Shutdown recovery skipped — another worker holds the lock")
 
+    from songmaker_cli.worker_base import _db_engine
     if _db_engine is not None:
         _db_engine.dispose()
         log.info("Database connection pool disposed")
@@ -264,17 +149,11 @@ async def on_shutdown(ctx):
         _acestep_manager.stop()
 
 
-_MAX_CONCURRENT_JOBS = 1
-_IMPORT_TIME_REDIS_URL = os.environ.get("REDIS_URL")
-
-
 class WorkerSettings:
     functions = [generate, score, reinitialize_acestep]
     on_startup = on_startup
     on_shutdown = on_shutdown
-    redis_settings = RedisSettings.from_dsn(
-        os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    )
+    redis_settings = build_redis_settings()
     max_jobs = _MAX_CONCURRENT_JOBS
     job_timeout = JOB_TIMEOUT_SECONDS
     job_completion_wait = DRAIN_TIMEOUT_SECONDS

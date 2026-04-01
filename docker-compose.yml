@@ -86,10 +86,11 @@ services:
     cap_drop:
       - ALL
 
-  songmaker-worker:
+  songmaker-music-worker:
     build:
       context: .
       dockerfile: Dockerfile.worker
+    command: ["uv", "run", "arq", "songmaker_cli.music_worker.MusicWorkerSettings"]
     restart: unless-stopped
     depends_on:
       postgres:
@@ -103,11 +104,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       ACESTEP_API_HOST: "127.0.0.1"
       ACESTEP_API_PORT: "8001"
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MUSIC_MAX_JOBS: "${MUSIC_MAX_JOBS:-2}"
     volumes:
       - audiofiles:/app/data/audio
       - ./_models/acestep:/app/_models/acestep
-      - hfcache:/app/.cache/huggingface/hub
     deploy:
       resources:
         reservations:
@@ -115,6 +115,29 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+
+  songmaker-scoring-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: ["uv", "run", "arq", "songmaker_cli.scoring_worker.ScoringWorkerSettings"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
+      REDIS_URL: redis://redis:6379/0
+      SCORING_DEVICE: "${SCORING_DEVICE:-cpu}"
+      SCORING_MAX_JOBS: "${SCORING_MAX_JOBS:-1}"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - audiofiles:/app/data/audio
+      - hfcache:/app/.cache/huggingface/hub
 
   prometheus:
     image: prom/prometheus:latest
