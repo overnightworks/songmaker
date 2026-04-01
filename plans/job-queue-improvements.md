@@ -72,11 +72,11 @@ Stale job recovery works via:
 
 ---
 
-## Problem 4: Job queue visibility (future)
+## Problem 4: Job queue visibility (WONTFIX for users, future admin feature)
 
-- Show all active/queued jobs in the UI (not just per-song)
-- Show queue position and estimated wait time
-- This depends on Problem 3 (cancel) being done first
+Queue position and estimated wait time are meaningless for a single-user deployment (queue depth is always 0 or 1). SSE streaming already provides real-time progress. Per-song job tracking in the UI is sufficient.
+
+If multi-user admin dashboard is needed later, add a `/settings/jobs` page showing all queued/running jobs across users with cancel buttons.
 
 ---
 

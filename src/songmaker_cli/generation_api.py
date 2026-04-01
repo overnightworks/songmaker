@@ -214,9 +214,7 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
                 job = get_job(db_session, job_id)
                 if not job:
                     return
-                response = JobResponse.from_orm(
-                    job, queue_position=get_queue_position(db_session, job),
-                )
+                response = JobResponse.from_orm(job)
 
             status_changed = (
                 response.status != previous_status
