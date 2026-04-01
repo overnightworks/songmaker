@@ -91,6 +91,7 @@ These are conventions that aren't obvious from reading a single file:
 - **`slugify()` uses `python-slugify`.** Transliterates Unicode to ASCII (CJK, emoji, accented characters all produce meaningful slugs). The `"untitled"` fallback covers edge cases where transliteration yields an empty string.
 - **Backup/restore requires both DB and audio files.** `scripts/backup.sh` dumps PostgreSQL + copies the audio volume to `BACKUP_DIR`. `scripts/restore.sh` restores both atomically. The two must stay in sync — restoring one without the other leaves orphaned records or unreachable files.
 - **Trust boundaries: subprocesses share OS user.** ACE-Step and scorer subprocesses run as the same `songmaker` user in Docker with `cap_drop: ALL`. Compromised model weights or ACE-Step code get full user-level disk access. Container-level isolation mitigates this; OS user separation would require separate containers for marginal benefit. Accepted risk for a single-user deployment.
+- **Seed is sent to ACE-Step but the stored seed comes from the server response.** When `seed` is passed to `generate`, `build_ace_config` sets it on `AceStepConfig`, the client sends it in the API payload (`seed` field), and ACE-Step should use it for reproducible output. However, the DB stores the seed from the server's `seed_value` response field, not the requested seed. If ACE-Step doesn't echo the seed back (empty `seed_value`), the DB stores `-1`. The audio should still be deterministic for a given seed — only the stored metadata may be wrong.
 
 ## Docker
 
