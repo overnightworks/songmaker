@@ -90,7 +90,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    command: ["uv", "run", "arq", "songmaker_cli.music_worker.MusicWorkerSettings"]
+    entrypoint: ["uv", "run", "arq", "songmaker_cli.music_worker.MusicWorkerSettings"]
+    command: []
     restart: unless-stopped
     depends_on:
       postgres:
@@ -120,7 +121,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
-    command: ["uv", "run", "arq", "songmaker_cli.scoring_worker.ScoringWorkerSettings"]
+    entrypoint: ["uv", "run", "arq", "songmaker_cli.scoring_worker.ScoringWorkerSettings"]
+    command: []
     restart: unless-stopped
     depends_on:
       postgres:
