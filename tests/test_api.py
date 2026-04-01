@@ -1028,6 +1028,104 @@ def test_cancel_job_other_user_blocked(tmp_path: Path) -> None:
     assert resp.status_code == 404
 
 
+# ── Job SSE streaming ─────────────────────────────────────────────────
+
+
+def test_stream_job_initial_state(client: TestClient) -> None:
+    import json
+
+    from songmaker_cli.db.queries import create_job, update_job_status
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        update_job_status(session, job.id, "completed", progress=1.0)
+        session.commit()
+        job_id = job.id
+
+    events = []
+    with client.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+        assert resp.headers["cache-control"] == "no-cache"
+        assert resp.headers["x-accel-buffering"] == "no"
+        for line in resp.iter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[len("data: "):]))
+
+    assert len(events) == 1
+    assert events[0]["id"] == job_id
+    assert events[0]["status"] == "completed"
+
+
+def test_stream_job_sends_updates(client: TestClient) -> None:
+    import json
+    import threading
+
+    from songmaker_cli.db.queries import create_job, update_job_status
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        session.commit()
+        job_id = job.id
+
+    def _complete_after_delay():
+        import time
+        time.sleep(0.3)
+        with ctx.db() as session:
+            update_job_status(session, job_id, "completed", progress=1.0)
+            session.commit()
+
+    updater = threading.Thread(target=_complete_after_delay, daemon=True)
+    updater.start()
+
+    events = []
+    with client.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
+        for line in resp.iter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[len("data: "):]))
+
+    updater.join(timeout=5)
+
+    statuses = [e["status"] for e in events]
+    assert "queued" in statuses
+    assert "completed" in statuses
+
+
+def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
+    import json
+
+    from songmaker_cli.db.queries import create_job, update_job_status
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        update_job_status(session, job.id, "failed", error="test error")
+        session.commit()
+        job_id = job.id
+
+    events = []
+    with client.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
+        for line in resp.iter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[len("data: "):]))
+
+    assert len(events) == 1
+    assert events[0]["status"] == "failed"
+    assert events[0]["error"] == "test error"
+
+
+def test_stream_job_not_found(client: TestClient) -> None:
+    resp = client.get("/api/jobs/nonexistent/stream")
+    assert resp.status_code == 404
+
+
+def test_stream_job_auth_required(unauthed_client: TestClient) -> None:
+    resp = unauthed_client.get("/api/jobs/some-job/stream")
+    assert resp.status_code in (401, 403)
+
+
 # ── Coverage gap tests ───────────────────────────────────────────────
 
 

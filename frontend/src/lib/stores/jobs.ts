@@ -1,12 +1,10 @@
 import { writable, get } from 'svelte/store';
-import { fetchJob, fetchSong, type JobStatus } from '$lib/api/client';
+import { fetchSong, type JobStatus } from '$lib/api/client';
 import { songList } from '$lib/stores/player';
 import { addToast } from '$lib/stores/toast';
 
-const POLL_INTERVAL_FAST = 2000;
-const POLL_INTERVAL_SLOW = 8000;
-const POLL_BACKOFF_AFTER = 30_000;
 const MAX_POLL_ERRORS = 10;
+const FAILED_JOB_REMOVE_DELAY_MS = 5000;
 
 export interface ActiveJob {
 	job: JobStatus;
@@ -16,83 +14,92 @@ export interface ActiveJob {
 
 export const activeJobs = writable<ActiveJob[]>([]);
 
+const eventSources = new Map<string, EventSource>();
+
 export function trackJob(job: JobStatus, context: { songId?: string; genId?: string }): void {
 	activeJobs.update((jobs) => [...jobs, { job, ...context }]);
-	pollJob(job.id);
+	streamJob(job.id);
 }
 
 export function removeJob(jobId: string): void {
+	stopTracking(jobId);
 	activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
 }
 
-async function pollJob(jobId: string): Promise<void> {
-	let errorCount = 0;
-	const startTime = Date.now();
-
-	function interval(): number {
-		return Date.now() - startTime > POLL_BACKOFF_AFTER ? POLL_INTERVAL_SLOW : POLL_INTERVAL_FAST;
+export function stopTracking(jobId: string): void {
+	const source = eventSources.get(jobId);
+	if (source) {
+		source.close();
+		eventSources.delete(jobId);
 	}
+}
 
-	const poll = async (): Promise<void> => {
-		try {
-			const updated = await fetchJob(jobId);
-			errorCount = 0;
-			activeJobs.update((jobs) =>
-				jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j))
-			);
+function streamJob(jobId: string): void {
+	let errorCount = 0;
 
-			if (
-				updated.status === 'completed' ||
-				updated.status === 'partial' ||
-				updated.status === 'failed' ||
-				updated.status === 'cancelled'
-			) {
-				if (updated.status === 'completed') {
-					await refreshSongData(jobId);
-					addToast(`${updated.type} completed`, 'success');
-				} else if (updated.status === 'partial') {
-					await refreshSongData(jobId);
-					addToast(updated.error || `${updated.type} partially completed`, 'info');
-				} else if (updated.status === 'cancelled') {
-					addToast(`${updated.type} cancelled`, 'info');
-				} else {
-					const isRestart = updated.error_type === 'server_restart';
-					addToast(
-						isRestart
-							? 'Server restarted — please retry'
-							: updated.error || `${updated.type} failed`,
-						isRestart ? 'info' : 'error'
-					);
-				}
-				const removeDelay = updated.status === 'failed' ? 5000 : 0;
-				setTimeout(() => {
-					activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
-				}, removeDelay);
-				return;
-			}
+	const source = new EventSource(`/api/jobs/${jobId}/stream`, { withCredentials: true });
+	eventSources.set(jobId, source);
 
-			setTimeout(poll, interval());
-		} catch {
-			errorCount++;
-			if (errorCount >= MAX_POLL_ERRORS) {
-				activeJobs.update((jobs) =>
-					jobs.map((j) =>
-						j.job.id === jobId
-							? { ...j, job: { ...j.job, status: 'failed', error: 'Lost connection' } }
-							: j
-					)
+	source.onmessage = async (event: MessageEvent) => {
+		errorCount = 0;
+		const updated: JobStatus = JSON.parse(event.data);
+
+		activeJobs.update((jobs) =>
+			jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j))
+		);
+
+		if (
+			updated.status === 'completed' ||
+			updated.status === 'partial' ||
+			updated.status === 'failed' ||
+			updated.status === 'cancelled'
+		) {
+			source.close();
+			eventSources.delete(jobId);
+
+			if (updated.status === 'completed') {
+				await refreshSongData(jobId);
+				addToast(`${updated.type} completed`, 'success');
+			} else if (updated.status === 'partial') {
+				await refreshSongData(jobId);
+				addToast(updated.error || `${updated.type} partially completed`, 'info');
+			} else if (updated.status === 'cancelled') {
+				addToast(`${updated.type} cancelled`, 'info');
+			} else {
+				const isRestart = updated.error_type === 'server_restart';
+				addToast(
+					isRestart
+						? 'Server restarted — please retry'
+						: updated.error || `${updated.type} failed`,
+					isRestart ? 'info' : 'error'
 				);
-				addToast('Lost connection to server', 'error');
-				setTimeout(() => {
-					activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
-				}, 5000);
-				return;
 			}
-			setTimeout(poll, interval());
+
+			const removeDelay = updated.status === 'failed' ? FAILED_JOB_REMOVE_DELAY_MS : 0;
+			setTimeout(() => {
+				activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
+			}, removeDelay);
 		}
 	};
 
-	setTimeout(poll, POLL_INTERVAL_FAST);
+	source.onerror = () => {
+		errorCount++;
+		if (errorCount >= MAX_POLL_ERRORS) {
+			source.close();
+			eventSources.delete(jobId);
+			activeJobs.update((jobs) =>
+				jobs.map((j) =>
+					j.job.id === jobId
+						? { ...j, job: { ...j.job, status: 'failed', error: 'Lost connection' } }
+						: j
+				)
+			);
+			addToast('Lost connection to server', 'error');
+			setTimeout(() => {
+				activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
+			}, FAILED_JOB_REMOVE_DELAY_MS);
+		}
+	};
 }
 
 async function refreshSongData(jobId: string): Promise<void> {

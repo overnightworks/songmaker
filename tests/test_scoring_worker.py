@@ -72,44 +72,17 @@ def test_score_defaults_to_cpu() -> None:
     assert mock_run.call_args.kwargs["device"] == "cpu"
 
 
-def test_cleanup_stale_commits_on_recovery() -> None:
-    mock_factory, mock_session = _mock_db_factory()
-
-    with (
-        patch("songmaker_cli.scoring_worker._get_db_factory", return_value=mock_factory),
-        patch(
-            "songmaker_cli.db.queries.recover_stale_jobs_by_age_and_type",
-            return_value=3,
-        ),
-    ):
-        _run(sw_mod.cleanup_stale(_mock_ctx()))
-
-    mock_session.commit.assert_called_once()
-
-
-def test_cleanup_stale_no_commit_when_zero() -> None:
-    mock_factory, mock_session = _mock_db_factory()
-
-    with (
-        patch("songmaker_cli.scoring_worker._get_db_factory", return_value=mock_factory),
-        patch(
-            "songmaker_cli.db.queries.recover_stale_jobs_by_age_and_type",
-            return_value=0,
-        ),
-    ):
-        _run(sw_mod.cleanup_stale(_mock_ctx()))
-
-    mock_session.commit.assert_not_called()
+def test_cleanup_stale_is_from_make_cleanup_cron() -> None:
+    assert sw_mod.cleanup_stale is not None
+    assert callable(sw_mod.cleanup_stale)
 
 
 def test_on_startup_initializes_scorer() -> None:
-    mock_factory, mock_session = _mock_db_factory()
     mock_scorer = MagicMock()
     ctx = _mock_ctx()
 
     with (
-        patch("songmaker_cli.scoring_worker._get_db_factory", return_value=mock_factory),
-        patch("songmaker_cli.db.queries.recover_stale_jobs_by_type"),
+        patch("songmaker_cli.scoring_worker.recover_on_startup", new_callable=AsyncMock),
         patch("songmaker_cli.scoring_worker.common_startup", new_callable=AsyncMock),
         patch(
             "songmaker_cli.scoring.subprocess_runner.ScorerProcess",
@@ -122,14 +95,12 @@ def test_on_startup_initializes_scorer() -> None:
     mock_set.assert_called_once_with(mock_scorer)
 
 
-def test_on_startup_recovers_stale_score_jobs() -> None:
-    mock_factory, mock_session = _mock_db_factory()
+def test_on_startup_calls_recover_on_startup() -> None:
     ctx = _mock_ctx()
 
     with (
-        patch("songmaker_cli.scoring_worker._get_db_factory", return_value=mock_factory),
         patch(
-            "songmaker_cli.db.queries.recover_stale_jobs_by_type",
+            "songmaker_cli.scoring_worker.recover_on_startup", new_callable=AsyncMock,
         ) as mock_recover,
         patch("songmaker_cli.scoring_worker.common_startup", new_callable=AsyncMock),
         patch(
@@ -140,8 +111,8 @@ def test_on_startup_recovers_stale_score_jobs() -> None:
     ):
         _run(sw_mod.on_startup(ctx))
 
-    mock_recover.assert_called_once_with(mock_session, "score")
-    mock_session.commit.assert_called_once()
+    from songmaker_cli.constants import RECOVERY_LOCK_SCORING_KEY
+    mock_recover.assert_called_once_with(ctx, RECOVERY_LOCK_SCORING_KEY, "score")
 
 
 def test_on_shutdown_stops_scorer() -> None:

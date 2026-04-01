@@ -73,53 +73,47 @@ def test_generate_passes_seed() -> None:
     assert mock_run.call_args.kwargs["seed"] == 42
 
 
-def test_cleanup_stale_commits_on_recovery() -> None:
-    mock_factory, mock_session = _mock_db_factory()
+def test_cleanup_stale_calls_base_cleanup_and_publishes() -> None:
     mock_mgr = MagicMock()
     mock_mgr.active_model = "turbo"
 
     with (
-        patch("songmaker_cli.music_worker._get_db_factory", return_value=mock_factory),
+        patch.object(mw_mod, "_base_cleanup", new_callable=AsyncMock) as mock_base,
         patch.object(mw_mod, "_require_acestep_manager", return_value=mock_mgr),
         patch(
-            "songmaker_cli.db.queries.recover_stale_jobs_by_age_and_type",
-            return_value=2,
-        ),
-        patch("songmaker_cli.music_worker._publish_acestep_status", new_callable=AsyncMock),
+            "songmaker_cli.music_worker._publish_acestep_status",
+            new_callable=AsyncMock,
+        ) as mock_publish,
     ):
-        _run(mw_mod.cleanup_stale(_mock_ctx()))
+        ctx = _mock_ctx()
+        _run(mw_mod.cleanup_stale(ctx))
 
-    mock_session.commit.assert_called_once()
+    mock_base.assert_called_once_with(ctx)
+    mock_publish.assert_called_once()
 
 
-def test_cleanup_stale_no_commit_when_zero() -> None:
-    mock_factory, mock_session = _mock_db_factory()
+def test_cleanup_stale_publishes_active_model() -> None:
     mock_mgr = MagicMock()
     mock_mgr.active_model = "turbo"
 
     with (
-        patch("songmaker_cli.music_worker._get_db_factory", return_value=mock_factory),
+        patch.object(mw_mod, "_base_cleanup", new_callable=AsyncMock),
         patch.object(mw_mod, "_require_acestep_manager", return_value=mock_mgr),
-        patch(
-            "songmaker_cli.db.queries.recover_stale_jobs_by_age_and_type",
-            return_value=0,
-        ),
         patch("songmaker_cli.music_worker._publish_acestep_status", new_callable=AsyncMock),
     ):
-        _run(mw_mod.cleanup_stale(_mock_ctx()))
+        ctx = _mock_ctx()
+        _run(mw_mod.cleanup_stale(ctx))
 
-    mock_session.commit.assert_not_called()
+    ctx["redis"].set.assert_called()
 
 
 def test_on_startup_initializes_acestep() -> None:
-    mock_factory, mock_session = _mock_db_factory()
     mock_mgr = MagicMock()
     mock_mgr.active_model = "sft"
     ctx = _mock_ctx()
 
     with (
-        patch("songmaker_cli.music_worker._get_db_factory", return_value=mock_factory),
-        patch("songmaker_cli.db.queries.recover_stale_jobs_by_type"),
+        patch("songmaker_cli.music_worker.recover_on_startup", new_callable=AsyncMock),
         patch("songmaker_cli.acestep_manager.AceStepManager", return_value=mock_mgr),
         patch("songmaker_cli.music_worker._publish_acestep_status", new_callable=AsyncMock),
         patch("songmaker_cli.music_worker.common_startup", new_callable=AsyncMock),
@@ -130,16 +124,14 @@ def test_on_startup_initializes_acestep() -> None:
     mock_mgr.refresh_cached_model.assert_called_once()
 
 
-def test_on_startup_recovers_stale_generate_jobs() -> None:
-    mock_factory, mock_session = _mock_db_factory()
+def test_on_startup_calls_recover_on_startup() -> None:
     mock_mgr = MagicMock()
     mock_mgr.active_model = "sft"
     ctx = _mock_ctx()
 
     with (
-        patch("songmaker_cli.music_worker._get_db_factory", return_value=mock_factory),
         patch(
-            "songmaker_cli.db.queries.recover_stale_jobs_by_type",
+            "songmaker_cli.music_worker.recover_on_startup", new_callable=AsyncMock,
         ) as mock_recover,
         patch("songmaker_cli.acestep_manager.AceStepManager", return_value=mock_mgr),
         patch("songmaker_cli.music_worker._publish_acestep_status", new_callable=AsyncMock),
@@ -147,8 +139,8 @@ def test_on_startup_recovers_stale_generate_jobs() -> None:
     ):
         _run(mw_mod.on_startup(ctx))
 
-    mock_recover.assert_called_once_with(mock_session, "generate")
-    mock_session.commit.assert_called_once()
+    from songmaker_cli.constants import RECOVERY_LOCK_MUSIC_KEY
+    mock_recover.assert_called_once_with(ctx, RECOVERY_LOCK_MUSIC_KEY, "generate")
 
 
 def test_on_shutdown_stops_acestep() -> None:

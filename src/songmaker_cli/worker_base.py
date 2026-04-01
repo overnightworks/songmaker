@@ -102,6 +102,40 @@ async def common_shutdown(recovery_lock_key: str, job_type: str, redis) -> None:
         log.info("Database connection pool disposed")
 
 
+async def recover_on_startup(ctx, lock_key: str, job_type: str) -> int:
+    from songmaker_cli.db.queries import recover_stale_jobs_by_type
+
+    redis = ctx["redis"]
+    if not await redis.set(lock_key, "1", ex=RECOVERY_LOCK_TTL_SECONDS, nx=True):
+        log.info("Stale job recovery skipped — another worker holds the lock")
+        return 0
+
+    try:
+        db_factory = _get_db_factory()
+        with db_factory() as session:
+            recovered = recover_stale_jobs_by_type(session, job_type)
+            if recovered:
+                log.info("Recovered %d stale %s jobs", recovered, job_type)
+            session.commit()
+    finally:
+        await redis.delete(lock_key)
+    return recovered
+
+
+def make_cleanup_cron(job_type: str):
+    async def _cleanup_stale(ctx):
+        from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
+
+        db_factory = _get_db_factory()
+        with db_factory() as session:
+            count = recover_stale_jobs_by_age_and_type(session, job_type)
+            if count:
+                session.commit()
+        return count
+
+    return _cleanup_stale
+
+
 def build_redis_settings() -> RedisSettings:
     return RedisSettings.from_dsn(
         os.environ.get("REDIS_URL", "redis://localhost:6379/0"),

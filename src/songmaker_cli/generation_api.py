@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
@@ -33,7 +36,11 @@ from songmaker_cli.arq_pool import (
     is_scoring_worker_healthy,
 )
 from songmaker_cli.auth import ROLE_ADMIN
-from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME, ARQ_SCORING_QUEUE_NAME
+from songmaker_cli.constants import (
+    ARQ_MUSIC_QUEUE_NAME,
+    ARQ_SCORING_QUEUE_NAME,
+    SSE_POLL_INTERVAL_SECONDS,
+)
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries import (
     delete_generation,
@@ -50,6 +57,7 @@ from songmaker_cli.db.queries import (
     update_job_status,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from songmaker_cli.worker_base import TERMINAL_STATUSES
 
 log = logging.getLogger(__name__)
 
@@ -180,6 +188,51 @@ def api_get_job(
 ) -> JobResponse:
     job = _check_job_access(session, job_id, user)
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
+
+
+@router.get("/jobs/{job_id}/stream")
+async def api_stream_job(
+    job_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> StreamingResponse:
+    _check_job_access(session, job_id, user)
+    return StreamingResponse(
+        _job_event_generator(ctx, job_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[str, None]:
+    previous_status: str | None = None
+    previous_progress: float | None = None
+    try:
+        while True:
+            with ctx.db() as db_session:
+                job = get_job(db_session, job_id)
+                if not job:
+                    return
+                response = JobResponse.from_orm(
+                    job, queue_position=get_queue_position(db_session, job),
+                )
+
+            status_changed = (
+                response.status != previous_status
+                or response.progress != previous_progress
+            )
+            if status_changed:
+                previous_status = response.status
+                previous_progress = response.progress
+                yield f"data: {json.dumps(response.model_dump())}\n\n"
+
+            if response.status in TERMINAL_STATUSES:
+                return
+
+            await asyncio.sleep(SSE_POLL_INTERVAL_SECONDS)
+    except asyncio.CancelledError:
+        return
 
 
 @router.post("/jobs/{job_id}/cancel")

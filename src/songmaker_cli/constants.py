@@ -144,6 +144,9 @@ RATE_LIMIT_SETTING_KEYS = frozenset({
     SETTING_MAX_USER_ACTIVE_JOBS,
 })
 
+# SSE streaming
+SSE_POLL_INTERVAL_SECONDS = 1
+
 # Audio file serving
 AUDIO_MEDIA_TYPES: dict[str, str] = {
     ".mp3": "audio/mpeg",

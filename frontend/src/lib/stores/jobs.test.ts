@@ -1,11 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 
-const mockFetchJob = vi.fn();
 const mockFetchSong = vi.fn();
 
 vi.mock('$lib/api/client', () => ({
-	fetchJob: (...args: unknown[]) => mockFetchJob(...args),
 	fetchSong: (...args: unknown[]) => mockFetchSong(...args)
 }));
 
@@ -14,8 +12,42 @@ vi.mock('$lib/stores/player', async () => {
 	return { songList: writable([]) };
 });
 
-import { activeJobs, trackJob } from './jobs';
+import { activeJobs, trackJob, removeJob, stopTracking } from './jobs';
 import type { JobStatus } from '$lib/api/client';
+
+type EventSourceHandler = ((event: MessageEvent) => void) | null;
+type ErrorHandler = (() => void) | null;
+
+class MockEventSource {
+	static instances: MockEventSource[] = [];
+	url: string;
+	withCredentials: boolean;
+	onmessage: EventSourceHandler = null;
+	onerror: ErrorHandler = null;
+	closed = false;
+
+	constructor(url: string, init?: { withCredentials?: boolean }) {
+		this.url = url;
+		this.withCredentials = init?.withCredentials ?? false;
+		MockEventSource.instances.push(this);
+	}
+
+	close(): void {
+		this.closed = true;
+	}
+
+	simulateMessage(data: JobStatus): void {
+		if (this.onmessage) {
+			this.onmessage(new MessageEvent('message', { data: JSON.stringify(data) }));
+		}
+	}
+
+	simulateError(): void {
+		if (this.onerror) {
+			this.onerror();
+		}
+	}
+}
 
 function makeJob(overrides: Partial<JobStatus> = {}): JobStatus {
 	return {
@@ -31,138 +63,152 @@ function makeJob(overrides: Partial<JobStatus> = {}): JobStatus {
 	};
 }
 
+function latestSource(): MockEventSource {
+	return MockEventSource.instances[MockEventSource.instances.length - 1];
+}
+
 beforeEach(() => {
 	activeJobs.set([]);
-	mockFetchJob.mockReset();
 	mockFetchSong.mockReset();
+	MockEventSource.instances = [];
+	vi.stubGlobal('EventSource', MockEventSource);
 	vi.useFakeTimers();
 });
 
 afterEach(() => {
 	vi.useRealTimers();
+	vi.unstubAllGlobals();
 });
 
 describe('jobs store', () => {
-	it('trackJob adds job to activeJobs', () => {
-		mockFetchJob.mockResolvedValue(makeJob({ status: 'completed' }));
+	it('trackJob adds job to activeJobs and opens EventSource', () => {
 		trackJob(makeJob(), { songId: 's1' });
 		const jobs = get(activeJobs);
 		expect(jobs).toHaveLength(1);
 		expect(jobs[0].job.id).toBe('j1');
 		expect(jobs[0].songId).toBe('s1');
+		expect(MockEventSource.instances).toHaveLength(1);
+		expect(latestSource().url).toBe('/api/jobs/j1/stream');
 	});
 
-	it('polls and removes completed job immediately', async () => {
-		mockFetchJob.mockResolvedValue(makeJob({ status: 'completed', progress: 1.0 }));
-		mockFetchSong.mockRejectedValue(new Error('no song'));
-
+	it('updates job on SSE message', () => {
 		trackJob(makeJob(), {});
-		await vi.advanceTimersByTimeAsync(2100);
+		latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.5 }));
+		expect(get(activeJobs)[0].job.status).toBe('running');
+		expect(get(activeJobs)[0].job.progress).toBe(0.5);
+	});
 
-		expect(mockFetchJob).toHaveBeenCalledWith('j1');
+	it('closes EventSource and removes job on completed', async () => {
+		mockFetchSong.mockRejectedValue(new Error('no song'));
+		trackJob(makeJob(), {});
+		const source = latestSource();
+		latestSource().simulateMessage(makeJob({ status: 'completed', progress: 1.0 }));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(source.closed).toBe(true);
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
-	it('removes failed job after 5s delay', async () => {
-		mockFetchJob.mockResolvedValue(makeJob({ status: 'failed', error: 'boom' }));
-
+	it('removes failed job after delay', async () => {
 		trackJob(makeJob(), {});
-		await vi.advanceTimersByTimeAsync(2100);
+		latestSource().simulateMessage(makeJob({ status: 'failed', error: 'boom' }));
+		await vi.advanceTimersByTimeAsync(0);
 		expect(get(activeJobs)[0].job.status).toBe('failed');
-
 		await vi.advanceTimersByTimeAsync(5100);
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
-	it('continues polling for running jobs', async () => {
-		mockFetchJob
-			.mockResolvedValueOnce(makeJob({ status: 'running', progress: 0.5 }))
-			.mockResolvedValueOnce(makeJob({ status: 'completed', progress: 1.0 }));
-
+	it('handles partial completion', async () => {
+		mockFetchSong.mockRejectedValue(new Error('no song'));
 		trackJob(makeJob(), {});
-
-		await vi.advanceTimersByTimeAsync(2100);
-		expect(mockFetchJob).toHaveBeenCalledTimes(1);
-		expect(get(activeJobs)[0].job.progress).toBe(0.5);
-
-		await vi.advanceTimersByTimeAsync(2100);
-		expect(mockFetchJob).toHaveBeenCalledTimes(2);
+		latestSource().simulateMessage(
+			makeJob({ status: 'partial', error: 'some generations failed' })
+		);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(latestSource().closed).toBe(true);
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
-	it('retries on fetch error', async () => {
-		mockFetchJob
-			.mockRejectedValueOnce(new Error('network'))
-			.mockResolvedValueOnce(makeJob({ status: 'completed' }));
-
+	it('handles cancelled status', async () => {
 		trackJob(makeJob(), {});
-
-		await vi.advanceTimersByTimeAsync(2100);
-		expect(mockFetchJob).toHaveBeenCalledTimes(1);
-
-		await vi.advanceTimersByTimeAsync(2100);
-		expect(mockFetchJob).toHaveBeenCalledTimes(2);
+		latestSource().simulateMessage(makeJob({ status: 'cancelled' }));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(latestSource().closed).toBe(true);
+		expect(get(activeJobs)).toHaveLength(0);
 	});
 
-	it('slows polling after 30 seconds', async () => {
-		mockFetchJob.mockResolvedValue(makeJob({ status: 'running', progress: 0.5 }));
-
+	it('marks job failed after max errors', async () => {
 		trackJob(makeJob(), {});
-
-		vi.setSystemTime(Date.now() + 31_000);
-		await vi.advanceTimersByTimeAsync(2100);
-		expect(mockFetchJob).toHaveBeenCalledTimes(1);
-
-		await vi.advanceTimersByTimeAsync(2100);
-		expect(mockFetchJob).toHaveBeenCalledTimes(1);
-
-		await vi.advanceTimersByTimeAsync(6000);
-		expect(mockFetchJob).toHaveBeenCalledTimes(2);
-	});
-
-	it('marks job failed after max poll errors', async () => {
-		mockFetchJob.mockRejectedValue(new Error('network'));
-
-		trackJob(makeJob(), {});
-
+		const source = latestSource();
 		for (let i = 0; i < 10; i++) {
-			await vi.advanceTimersByTimeAsync(2100);
+			source.simulateError();
 		}
-
 		const jobs = get(activeJobs);
 		expect(jobs[0].job.status).toBe('failed');
 		expect(jobs[0].job.error).toBe('Lost connection');
-
+		expect(source.closed).toBe(true);
 		await vi.advanceTimersByTimeAsync(5100);
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
+	it('tolerates errors below max threshold', () => {
+		trackJob(makeJob(), {});
+		const source = latestSource();
+		for (let i = 0; i < 5; i++) {
+			source.simulateError();
+		}
+		expect(source.closed).toBe(false);
+		expect(get(activeJobs)[0].job.status).toBe('queued');
+	});
+
 	it('refreshes song data on completion with songId', async () => {
-		mockFetchJob.mockResolvedValue(makeJob({ status: 'completed' }));
 		mockFetchSong.mockResolvedValue({ id: 's1', title: 'Updated' });
-
 		trackJob(makeJob(), { songId: 's1' });
-		await vi.advanceTimersByTimeAsync(2100);
-
+		latestSource().simulateMessage(makeJob({ status: 'completed' }));
+		await vi.advanceTimersByTimeAsync(0);
 		expect(mockFetchSong).toHaveBeenCalledWith('s1');
 	});
 
 	it('handles refreshSongData failure silently', async () => {
-		mockFetchJob.mockResolvedValue(makeJob({ status: 'completed' }));
 		mockFetchSong.mockRejectedValue(new Error('refresh failed'));
-
 		trackJob(makeJob(), { songId: 's1' });
-		await vi.advanceTimersByTimeAsync(2100);
-
+		latestSource().simulateMessage(makeJob({ status: 'completed' }));
+		await vi.advanceTimersByTimeAsync(0);
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
 	it('skips refresh when no songId', async () => {
-		mockFetchJob.mockResolvedValue(makeJob({ status: 'completed' }));
-
 		trackJob(makeJob(), {});
-		await vi.advanceTimersByTimeAsync(2100);
-
+		latestSource().simulateMessage(makeJob({ status: 'completed' }));
+		await vi.advanceTimersByTimeAsync(0);
 		expect(mockFetchSong).not.toHaveBeenCalled();
+	});
+
+	it('removeJob closes EventSource and removes from store', () => {
+		trackJob(makeJob(), {});
+		const source = latestSource();
+		removeJob('j1');
+		expect(source.closed).toBe(true);
+		expect(get(activeJobs)).toHaveLength(0);
+	});
+
+	it('stopTracking closes EventSource without removing from store', () => {
+		trackJob(makeJob(), {});
+		const source = latestSource();
+		stopTracking('j1');
+		expect(source.closed).toBe(true);
+		expect(get(activeJobs)).toHaveLength(1);
+	});
+
+	it('stopTracking is safe for unknown jobId', () => {
+		expect(() => stopTracking('unknown')).not.toThrow();
+	});
+
+	it('shows server restart message for restart errors', async () => {
+		trackJob(makeJob(), {});
+		latestSource().simulateMessage(
+			makeJob({ status: 'failed', error: 'Server restarted', error_type: 'server_restart' })
+		);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(get(activeJobs)[0].job.error_type).toBe('server_restart');
 	});
 });

@@ -6,13 +6,15 @@
 		buildFullContext,
 		buildConversation,
 		extractAllApplyData,
-		cleanDisplayText,
 		isCurrentSong,
 		type ApplyData
 	} from '$lib/utils/chat-context';
 	import { songList } from '$lib/stores/player';
 	import { addToast } from '$lib/stores/toast';
 	import type { SongItem, VersionItem } from '$lib/api/types';
+	import MentionDropdown from './MentionDropdown.svelte';
+	import MessageList from './MessageList.svelte';
+	import ChatInput from './ChatInput.svelte';
 
 	interface Props {
 		songId?: string;
@@ -124,7 +126,8 @@
 	function loadHistory(): void {
 		try {
 			const saved = localStorage.getItem(storageKey());
-			const parsed: Message[] = saved ? JSON.parse(saved) : [];
+			const raw: Message[] = saved ? JSON.parse(saved) : [];
+			const parsed = raw.filter((m): m is Message => m != null && typeof m.role === 'string');
 			const trimmed = trimChatHistory(parsed);
 			messages = trimmed;
 			if (trimmed.length < parsed.length) {
@@ -387,18 +390,6 @@
 		}
 	}
 
-	function applyLabel(data: ApplyData): string {
-		if (data.create) return `Create "${data.title}"`;
-		if (data.song && !isCurrentSong(data, songId)) return `Apply to ${data.song}`;
-		return 'Apply to editor';
-	}
-
-	function appliedLabel(data: ApplyData): string {
-		if (data.create) return `Created "${data.title}"`;
-		if (data.song) return `Applied to ${data.song}`;
-		return 'Applied';
-	}
-
 	const mentionedSongs = $derived(
 		mentionedSongIds
 			.map((id) => allSongs.find((s) => s.id === id))
@@ -445,86 +436,32 @@
 		</div>
 	{/if}
 
-	<div class="messages" bind:this={container}>
-		{#if messages.length === 0}
-			<p class="empty-hint">
-				Ask Claude to write lyrics, brainstorm ideas, or refine your song. Use <strong>@song</strong> to
-				reference other songs, <strong>@album</strong> for full album context, or <strong>@v1</strong> for
-				version history.
-			</p>
-		{/if}
-		{#each messages as msg, i (i)}
-			<div
-				class="message"
-				class:user={msg.role === 'user'}
-				class:assistant={msg.role === 'assistant'}
-			>
-				<pre class="message-text">{cleanDisplayText(msg.text)}</pre>
-				{#if msg.role === 'assistant' && msg.applyDataList && msg.applyDataList.length > 0}
-					{#each msg.applyDataList as data, di (di)}
-						<div class="apply-row">
-							{#if msg.appliedIndices?.includes(di)}
-								<span class="applied-badge">{appliedLabel(data)}</span>
-							{:else}
-								<button class="apply-btn" onclick={() => applyAtIndex(i, di)}>
-									{applyLabel(data)}
-								</button>
-							{/if}
-						</div>
-					{/each}
-				{/if}
-			</div>
-		{/each}
-		{#if loading}
-			<div class="message assistant">
-				<span class="typing">Thinking...</span>
-			</div>
-		{/if}
-		{#if error}
-			<div class="chat-error">{error}</div>
-		{/if}
-	</div>
+	<MessageList
+		{messages}
+		{loading}
+		{error}
+		{songId}
+		bind:containerRef={container}
+		onapply={applyAtIndex}
+	/>
 
 	<div class="input-area">
 		{#if showMentions && activeMentionResults.length > 0}
-			<div class="mention-dropdown">
-				{#each activeMentionResults as result, idx}
-					<button
-						class="mention-option"
-						class:selected={idx === selectedMentionIdx}
-						onclick={() => selectMentionItem(result)}
-					>
-						{#if result.type === 'album'}
-							<span class="mention-title">@album</span>
-							<span class="mention-album">{currentAlbumTitle}</span>
-						{:else if result.type === 'version'}
-							<span class="mention-title">@v{result.item.version_number}</span>
-							<span class="mention-album">
-								{result.item.created_at ? new Date(result.item.created_at).toLocaleDateString() : ''}
-								{result.item.prompt ? `· ${result.item.prompt.slice(0, 40)}` : ''}
-							</span>
-						{:else}
-							<span class="mention-title">{result.item.title}</span>
-							<span class="mention-album">{result.item.album_title}</span>
-						{/if}
-					</button>
-				{/each}
-			</div>
+			<MentionDropdown
+				items={activeMentionResults}
+				selectedIndex={selectedMentionIdx}
+				albumTitle={currentAlbumTitle}
+				onselect={selectMentionItem}
+			/>
 		{/if}
-		<div class="input-row">
-			<textarea
-				class="chat-input"
-				rows="2"
-				placeholder="Ask Claude... (@song, @album, or @v1)"
-				bind:value={input}
-				bind:this={inputEl}
-				onkeydown={handleKeydown}
-				oninput={handleInput}
-			></textarea>
-			<button class="send-btn" onclick={send} disabled={loading || !input.trim()} aria-label="Send">
-				↑
-			</button>
-		</div>
+		<ChatInput
+			bind:value={input}
+			disabled={loading || !input.trim()}
+			bind:inputRef={inputEl}
+			oninput={handleInput}
+			onkeydown={handleKeydown}
+			onsend={send}
+		/>
 	</div>
 </div>
 
@@ -622,182 +559,8 @@
 		color: var(--score-bad);
 	}
 
-	.messages {
-		flex: 1;
-		overflow-y: auto;
-		padding: 8px;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.empty-hint {
-		color: var(--text-dim);
-		font-size: 12px;
-		text-align: center;
-		padding: 20px;
-		font-style: italic;
-	}
-
-	.message {
-		max-width: 90%;
-		padding: 8px 12px;
-		border-radius: 8px;
-		font-size: 12px;
-		line-height: 1.5;
-	}
-
-	.message.user {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
-		align-self: flex-end;
-		border-bottom-right-radius: 2px;
-	}
-
-	.message.assistant {
-		background: var(--surface);
-		color: var(--text);
-		align-self: flex-start;
-		border-bottom-left-radius: 2px;
-	}
-
-	.message-text {
-		white-space: pre-wrap;
-		font-family: var(--font-body);
-		font-size: 12px;
-		margin: 0;
-	}
-
-	.apply-row {
-		margin-top: 6px;
-		padding-top: 6px;
-		border-top: 1px solid var(--border);
-	}
-
-	.apply-btn {
-		background: none;
-		border: 1px solid var(--primary);
-		color: var(--primary);
-		padding: 3px 12px;
-		border-radius: 12px;
-		font-size: 10px;
-		cursor: pointer;
-	}
-
-	.apply-btn:hover {
-		background: var(--primary);
-		color: #fff;
-	}
-
-	.applied-badge {
-		color: var(--success);
-		font-size: 10px;
-	}
-
-	.typing {
-		color: var(--text-muted);
-		font-style: italic;
-	}
-
-	.chat-error {
-		color: var(--score-bad);
-		font-size: 11px;
-		padding: 4px 8px;
-	}
-
 	.input-area {
 		flex-shrink: 0;
 		position: relative;
-	}
-
-	.mention-dropdown {
-		position: absolute;
-		bottom: 100%;
-		left: 8px;
-		right: 8px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		max-height: 200px;
-		overflow-y: auto;
-		box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
-		z-index: 10;
-	}
-
-	.mention-option {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		width: 100%;
-		padding: 6px 12px;
-		background: none;
-		border: none;
-		color: var(--text);
-		font-size: 12px;
-		cursor: pointer;
-		text-align: left;
-	}
-
-	.mention-option:hover,
-	.mention-option.selected {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
-	}
-
-	.mention-title {
-		font-weight: 500;
-	}
-
-	.mention-album {
-		font-size: 10px;
-		opacity: 0.6;
-	}
-
-	.input-row {
-		display: flex;
-		gap: 6px;
-		padding: 8px;
-		border-top: 1px solid var(--border);
-	}
-
-	.chat-input {
-		flex: 1;
-		padding: 6px 10px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text);
-		font-family: var(--font-body);
-		font-size: 12px;
-		resize: none;
-	}
-
-	.chat-input:focus {
-		border-color: var(--accent);
-		outline: none;
-		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
-	}
-
-	.send-btn {
-		width: 36px;
-		height: 36px;
-		border-radius: 50%;
-		border: 2px solid var(--primary);
-		background: transparent;
-		color: var(--primary);
-		font-size: 16px;
-		flex-shrink: 0;
-		align-self: flex-end;
-	}
-
-	.send-btn:hover:not(:disabled) {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		border-color: transparent;
-		color: #fff;
-	}
-
-	.send-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
 	}
 </style>

@@ -157,6 +157,105 @@ def test_common_shutdown_skips_when_lock_held() -> None:
     mock_recover.assert_not_called()
 
 
+def test_recover_on_startup_acquires_lock_and_recovers() -> None:
+    mock_session = MagicMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+
+    ctx = {"redis": AsyncMock()}
+
+    with (
+        patch.object(wb_mod, "_get_db_factory", return_value=mock_factory),
+        patch(
+            "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value=3,
+        ) as mock_recover,
+    ):
+        result = _run(wb_mod.recover_on_startup(ctx, "test:lock", "generate"))
+
+    assert result == 3
+    mock_recover.assert_called_once_with(mock_session, "generate")
+    mock_session.commit.assert_called_once()
+    ctx["redis"].delete.assert_called_once_with("test:lock")
+
+
+def test_recover_on_startup_skips_when_lock_held() -> None:
+    ctx = {"redis": AsyncMock()}
+    ctx["redis"].set = AsyncMock(return_value=False)
+
+    with patch(
+        "songmaker_cli.db.queries.recover_stale_jobs_by_type",
+    ) as mock_recover:
+        result = _run(wb_mod.recover_on_startup(ctx, "test:lock", "score"))
+
+    assert result == 0
+    mock_recover.assert_not_called()
+
+
+def test_recover_on_startup_releases_lock_on_error() -> None:
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(
+        side_effect=RuntimeError("db error"),
+    )
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+
+    ctx = {"redis": AsyncMock()}
+
+    with (
+        patch.object(wb_mod, "_get_db_factory", return_value=mock_factory),
+        patch("songmaker_cli.db.queries.recover_stale_jobs_by_type"),
+    ):
+        try:
+            _run(wb_mod.recover_on_startup(ctx, "test:lock", "generate"))
+        except RuntimeError:
+            pass
+
+    ctx["redis"].delete.assert_called_once_with("test:lock")
+
+
+def test_make_cleanup_cron_commits_on_recovery() -> None:
+    mock_session = MagicMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+
+    cleanup = wb_mod.make_cleanup_cron("generate")
+
+    with (
+        patch.object(wb_mod, "_get_db_factory", return_value=mock_factory),
+        patch(
+            "songmaker_cli.db.queries.recover_stale_jobs_by_age_and_type",
+            return_value=2,
+        ) as mock_recover,
+    ):
+        result = _run(cleanup({"redis": AsyncMock()}))
+
+    assert result == 2
+    mock_recover.assert_called_once_with(mock_session, "generate")
+    mock_session.commit.assert_called_once()
+
+
+def test_make_cleanup_cron_no_commit_when_zero() -> None:
+    mock_session = MagicMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+
+    cleanup = wb_mod.make_cleanup_cron("score")
+
+    with (
+        patch.object(wb_mod, "_get_db_factory", return_value=mock_factory),
+        patch(
+            "songmaker_cli.db.queries.recover_stale_jobs_by_age_and_type",
+            return_value=0,
+        ),
+    ):
+        result = _run(cleanup({"redis": AsyncMock()}))
+
+    assert result == 0
+    mock_session.commit.assert_not_called()
+
+
 def test_build_redis_settings() -> None:
     settings = wb_mod.build_redis_settings()
     assert settings is not None

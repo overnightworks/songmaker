@@ -20,7 +20,6 @@ from songmaker_cli.constants import (
     ACTIVE_MODEL_TTL_SECONDS,
     ARQ_MUSIC_QUEUE_NAME,
     RECOVERY_LOCK_MUSIC_KEY,
-    RECOVERY_LOCK_TTL_SECONDS,
 )
 from songmaker_cli.jobs import run_generation_job
 from songmaker_cli.worker_base import (
@@ -34,6 +33,8 @@ from songmaker_cli.worker_base import (
     check_job_still_valid,
     common_shutdown,
     common_startup,
+    make_cleanup_cron,
+    recover_on_startup,
 )
 
 log = logging.getLogger(__name__)
@@ -123,14 +124,11 @@ async def _publish_acestep_status(redis) -> None:
     )
 
 
-async def cleanup_stale(ctx):
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
+_base_cleanup = make_cleanup_cron("generate")
 
-    db_factory = _get_db_factory()
-    with db_factory() as session:
-        count = recover_stale_jobs_by_age_and_type(session, "generate")
-        if count:
-            session.commit()
+
+async def cleanup_stale(ctx):
+    await _base_cleanup(ctx)
     mgr = _require_acestep_manager()
     model = mgr.active_model
     if model:
@@ -156,21 +154,7 @@ async def on_startup(ctx):
     if model:
         await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)
 
-    redis = ctx["redis"]
-    if await redis.set(RECOVERY_LOCK_MUSIC_KEY, "1", ex=RECOVERY_LOCK_TTL_SECONDS, nx=True):
-        try:
-            from songmaker_cli.db.queries import recover_stale_jobs_by_type
-
-            db_factory = _get_db_factory()
-            with db_factory() as session:
-                recovered = recover_stale_jobs_by_type(session, "generate")
-                if recovered:
-                    log.info("Recovered %d stale generate jobs", recovered)
-                session.commit()
-        finally:
-            await redis.delete(RECOVERY_LOCK_MUSIC_KEY)
-    else:
-        log.info("Stale job recovery skipped — another worker holds the lock")
+    await recover_on_startup(ctx, RECOVERY_LOCK_MUSIC_KEY, "generate")
 
     await _publish_acestep_status(ctx["redis"])
     log.info("Music worker ready")

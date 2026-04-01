@@ -15,7 +15,6 @@ from arq import cron
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
     RECOVERY_LOCK_SCORING_KEY,
-    RECOVERY_LOCK_TTL_SECONDS,
 )
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.worker_base import (
@@ -28,6 +27,8 @@ from songmaker_cli.worker_base import (
     check_job_still_valid,
     common_shutdown,
     common_startup,
+    make_cleanup_cron,
+    recover_on_startup,
 )
 
 log = logging.getLogger(__name__)
@@ -52,14 +53,7 @@ async def score(ctx, job_id, gen_id, scorers):
     )
 
 
-async def cleanup_stale(ctx):
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
-
-    db_factory = _get_db_factory()
-    with db_factory() as session:
-        count = recover_stale_jobs_by_age_and_type(session, "score")
-        if count:
-            session.commit()
+cleanup_stale = make_cleanup_cron("score")
 
 
 async def on_startup(ctx):
@@ -72,21 +66,7 @@ async def on_startup(ctx):
     set_scorer_process(scorer)
     log.info("Scorer subprocess manager initialized")
 
-    redis = ctx["redis"]
-    if await redis.set(RECOVERY_LOCK_SCORING_KEY, "1", ex=RECOVERY_LOCK_TTL_SECONDS, nx=True):
-        try:
-            from songmaker_cli.db.queries import recover_stale_jobs_by_type
-
-            db_factory = _get_db_factory()
-            with db_factory() as session:
-                recovered = recover_stale_jobs_by_type(session, "score")
-                if recovered:
-                    log.info("Recovered %d stale score jobs", recovered)
-                session.commit()
-        finally:
-            await redis.delete(RECOVERY_LOCK_SCORING_KEY)
-    else:
-        log.info("Stale job recovery skipped — another worker holds the lock")
+    await recover_on_startup(ctx, RECOVERY_LOCK_SCORING_KEY, "score")
 
     log.info("Scoring worker ready")
 
