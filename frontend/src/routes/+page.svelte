@@ -485,6 +485,7 @@
 	<main
 		class="main-content"
 		class:has-detail={!!song || showCreate || !!selectedAlbum || !!playlistDetail}
+		class:chat-active={!!song && tab === 'chat'}
 	>
 		{#if showCreate}
 			<CreateForm {albums} />
@@ -912,7 +913,12 @@
 		max-width: 800px;
 		width: 100%;
 		min-width: 0;
+		min-height: 0;
 		margin: 0 auto;
+	}
+
+	.main-content.chat-active {
+		overflow-y: hidden;
 	}
 
 	.detail-header {
