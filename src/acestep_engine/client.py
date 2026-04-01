@@ -165,6 +165,7 @@ class AceStepClient:
             "vocal_language": config.vocal_language,
             "instrumental": config.instrumental,
             "seed": config.seed,
+            "use_random_seed": config.seed < 0,
             "inference_steps": config.inference_steps,
             "guidance_scale": config.guidance_scale,
             "shift": config.shift,
