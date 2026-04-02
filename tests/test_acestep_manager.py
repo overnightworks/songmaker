@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import signal
 import subprocess
 from pathlib import Path
@@ -238,6 +239,59 @@ def test_prepare_generate_mode_sets_mode_on_repeat() -> None:
     ):
         mgr.prepare_generate_mode()
     mock_ensure.assert_called_once()
+
+
+# ── switch_model ──────────────────────────────────────────────────
+
+
+def test_switch_model_success() -> None:
+    mgr = AceStepManager()
+    old = os.environ.get("ACESTEP_CONFIG_PATH")
+    try:
+        with (
+            patch.object(mgr, "stop") as mock_stop,
+            patch.object(mgr, "start") as mock_start,
+            patch.object(mgr, "wait_for_health") as mock_wait,
+            patch.object(mgr, "refresh_cached_model") as mock_refresh,
+        ):
+            mgr.switch_model("turbo")
+
+        mock_stop.assert_called_once()
+        mock_start.assert_called_once()
+        mock_wait.assert_called_once()
+        mock_refresh.assert_called_once()
+        assert os.environ.get("ACESTEP_CONFIG_PATH") == "acestep-v15-turbo"
+    finally:
+        if old is None:
+            os.environ.pop("ACESTEP_CONFIG_PATH", None)
+        else:
+            os.environ["ACESTEP_CONFIG_PATH"] = old
+
+
+def test_switch_model_sft() -> None:
+    mgr = AceStepManager()
+    old = os.environ.get("ACESTEP_CONFIG_PATH")
+    try:
+        with (
+            patch.object(mgr, "stop"),
+            patch.object(mgr, "start"),
+            patch.object(mgr, "wait_for_health"),
+            patch.object(mgr, "refresh_cached_model"),
+        ):
+            mgr.switch_model("sft")
+
+        assert os.environ.get("ACESTEP_CONFIG_PATH") == "acestep-v15-sft"
+    finally:
+        if old is None:
+            os.environ.pop("ACESTEP_CONFIG_PATH", None)
+        else:
+            os.environ["ACESTEP_CONFIG_PATH"] = old
+
+
+def test_switch_model_unknown() -> None:
+    mgr = AceStepManager()
+    with pytest.raises(ValueError, match="Unknown model mode"):
+        mgr.switch_model("nonexistent")
 
 
 # ── _find_uv ──────────────────────────────────────────────────────

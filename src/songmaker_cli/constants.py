@@ -83,6 +83,10 @@ GLOBAL_DEFAULTS_PRESET_NAME = "__global_defaults__"
 
 # ACE-Step server
 ACESTEP_PORT = 8001
+MODEL_CONFIG_PATHS: dict[str, str] = {
+    "turbo": "acestep-v15-turbo",
+    "sft": "acestep-v15-sft",
+}
 ACESTEP_HEALTH_URL_TEMPLATE = "http://localhost:{port}/health"
 ACESTEP_STARTUP_TIMEOUT_SECONDS = 300
 

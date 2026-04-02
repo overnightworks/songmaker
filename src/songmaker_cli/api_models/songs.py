@@ -159,6 +159,7 @@ class GenerationResponse(BaseModel):
     is_kept: bool
     is_shared: bool = False
     share_slug: str | None = None
+    model_mode: str | None = None
     whisper_text: str | None
     scores: dict | None
     generation_params: dict | None
@@ -202,6 +203,7 @@ class GenerationResponse(BaseModel):
             is_kept=gen.is_kept,
             is_shared=gen.is_shared,
             share_slug=gen.share_slug,
+            model_mode=gen.model_mode,
             whisper_text=gen.whisper_text,
             scores=scores if scores else None,
             generation_params=generation_params,

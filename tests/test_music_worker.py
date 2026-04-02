@@ -73,6 +73,63 @@ def test_generate_passes_seed() -> None:
     assert mock_run.call_args.kwargs["seed"] == 42
 
 
+def test_generate_auto_switches_model() -> None:
+    mock_mgr = MagicMock()
+    mock_mgr.active_model = "sft"
+    ctx = _mock_ctx()
+
+    with (
+        patch("songmaker_cli.music_worker.check_job_still_valid", return_value=True),
+        patch("songmaker_cli.music_worker.run_generation_job") as mock_run,
+        patch.object(mw_mod, "_acestep_manager", mock_mgr),
+        patch("songmaker_cli.music_worker._audio_dir", return_value="audio"),
+        patch("songmaker_cli.music_worker._data_dir", return_value="data"),
+        patch("songmaker_cli.music_worker._get_db_factory", return_value=MagicMock()),
+    ):
+        _run(mw_mod.generate(ctx, "j1", "s1", "v1", 1, "u1", seed=None,
+                             requested_model="turbo"))
+
+    mock_mgr.switch_model.assert_called_once_with("turbo")
+    mock_run.assert_called_once()
+
+
+def test_generate_skips_switch_when_model_matches() -> None:
+    mock_mgr = MagicMock()
+    mock_mgr.active_model = "turbo"
+    ctx = _mock_ctx()
+
+    with (
+        patch("songmaker_cli.music_worker.check_job_still_valid", return_value=True),
+        patch("songmaker_cli.music_worker.run_generation_job"),
+        patch.object(mw_mod, "_acestep_manager", mock_mgr),
+        patch("songmaker_cli.music_worker._audio_dir", return_value="audio"),
+        patch("songmaker_cli.music_worker._data_dir", return_value="data"),
+        patch("songmaker_cli.music_worker._get_db_factory", return_value=MagicMock()),
+    ):
+        _run(mw_mod.generate(ctx, "j1", "s1", "v1", 1, "u1", seed=None,
+                             requested_model="turbo"))
+
+    mock_mgr.switch_model.assert_not_called()
+
+
+def test_generate_no_switch_when_no_model_requested() -> None:
+    mock_mgr = MagicMock()
+    mock_mgr.active_model = "sft"
+    ctx = _mock_ctx()
+
+    with (
+        patch("songmaker_cli.music_worker.check_job_still_valid", return_value=True),
+        patch("songmaker_cli.music_worker.run_generation_job"),
+        patch.object(mw_mod, "_acestep_manager", mock_mgr),
+        patch("songmaker_cli.music_worker._audio_dir", return_value="audio"),
+        patch("songmaker_cli.music_worker._data_dir", return_value="data"),
+        patch("songmaker_cli.music_worker._get_db_factory", return_value=MagicMock()),
+    ):
+        _run(mw_mod.generate(ctx, "j1", "s1", "v1", 1, "u1"))
+
+    mock_mgr.switch_model.assert_not_called()
+
+
 def test_cleanup_stale_calls_base_cleanup_only() -> None:
     with (
         patch.object(mw_mod, "_base_cleanup", new_callable=AsyncMock) as mock_base,
@@ -231,7 +288,7 @@ def test_reinitialize_acestep_failure() -> None:
             _run(mw_mod.reinitialize_acestep(ctx, "j1"))
 
 
-def test_reinitialize_acestep_model_switch_rejected() -> None:
+def test_reinitialize_acestep_model_switch() -> None:
     mock_mgr = MagicMock()
     mock_mgr.active_model = "sft"
     ctx = _mock_ctx()
@@ -240,10 +297,12 @@ def test_reinitialize_acestep_model_switch_rejected() -> None:
     with (
         patch.object(mw_mod, "_acestep_manager", mock_mgr),
         patch("songmaker_cli.music_worker._get_db_factory", return_value=mock_factory),
+        patch("songmaker_cli.music_worker._publish_acestep_status", new_callable=AsyncMock),
     ):
         _run(mw_mod.reinitialize_acestep(ctx, "j1", target_model="turbo"))
 
-    assert mock_session.commit.call_count >= 2
+    mock_mgr.switch_model.assert_called_once_with("turbo")
+    ctx["redis"].set.assert_called()
 
 
 def test_publish_acestep_status_online() -> None:

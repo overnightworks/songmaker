@@ -30,7 +30,6 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import (
-    get_active_model,
     get_arq_pool,
     is_music_worker_healthy,
     is_scoring_worker_healthy,
@@ -119,16 +118,17 @@ async def api_generate_song(
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
     if req.model:
-        active = await get_active_model()
-        if active is None:
-            raise HTTPException(503, "ACE-Step server not available")
-        if req.model != active:
-            raise HTTPException(409, f"Model '{req.model}' not available, active: '{active}'")
+        from songmaker_cli.db.queries import list_active_models
+
+        active_ids = {m.id for m in list_active_models(session)}
+        if req.model not in active_ids:
+            raise HTTPException(400, f"Model '{req.model}' is not available")
 
     job = create_job_with_rate_limit(session, user, "generate")
     record_audit(session, user.id, "generate", "song", song_id, f"count={req.count}")
     session.commit()
-    log.info("Generate: song='%s', count=%d, job=%s", song.title, req.count, job.id)
+    log.info("Generate: song='%s', count=%d, job=%s, model=%s",
+             song.title, req.count, job.id, req.model)
 
     try:
         pool = get_arq_pool()
@@ -137,6 +137,7 @@ async def api_generate_song(
             raise HTTPException(503, "Worker not running")
         await pool.enqueue_job(
             "generate", job.id, song_id, version.id, req.count, user.id, req.seed,
+            req.model,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:

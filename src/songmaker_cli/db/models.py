@@ -141,6 +141,7 @@ class Generation(Base):
         String(36), unique=True, nullable=True, index=True,
     )
     is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
+    model_mode: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
 
     song: Mapped[Song] = relationship(back_populates="generations")

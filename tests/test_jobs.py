@@ -102,6 +102,7 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
         assert len(gens) == 1
         assert gens[0].seed == 42
         assert gens[0].generation_params["acestep_model"] == "acestep-v15-turbo"
+        assert gens[0].model_mode == "turbo"
 
 
 def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:

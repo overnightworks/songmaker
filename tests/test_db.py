@@ -528,6 +528,23 @@ def test_create_generation(seeded_session: Session) -> None:
     assert gen.mp3_path == "test/new_gen.mp3"
 
 
+def test_create_generation_with_model_mode(seeded_session: Session) -> None:
+    gen = create_generation(
+        seeded_session, "s1", "v1", "test/gen.mp3", seed=1,
+        model_mode="turbo",
+    )
+    seeded_session.commit()
+    assert gen.model_mode == "turbo"
+
+
+def test_create_generation_without_model_mode(seeded_session: Session) -> None:
+    gen = create_generation(
+        seeded_session, "s1", "v1", "test/gen.mp3", seed=1,
+    )
+    seeded_session.commit()
+    assert gen.model_mode is None
+
+
 def test_create_generation_with_wav_path(seeded_session: Session) -> None:
     gen = create_generation(
         seeded_session, "s1", "v1", "test/gen.mp3", seed=1,

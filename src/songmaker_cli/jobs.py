@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from acestep_engine import AceStepClient
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.api_models import StoredGenerationParams
-from songmaker_cli.config import build_ace_config, load_generation_defaults
+from songmaker_cli.config import build_ace_config, load_generation_defaults, resolve_model_mode
 from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries import (
     create_generation,
@@ -218,6 +218,7 @@ def _run_single_generation(
                 seed=result.seed,
                 generation_params=gen_params,
                 wav_path=wav_rel,
+                model_mode=resolve_model_mode(ctx.model_name),
             )
             session.commit()
     except Exception:

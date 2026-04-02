@@ -53,12 +53,18 @@ def _require_acestep_manager():
     return mgr
 
 
-async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None):
+async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None,
+                   requested_model=None):
     if not check_job_still_valid(job_id):
         return
 
     mgr = _require_acestep_manager()
     mgr.prepare_generate_mode()
+
+    if requested_model and requested_model != mgr.active_model:
+        log.info("Auto-switching model: %s -> %s", mgr.active_model, requested_model)
+        await asyncio.to_thread(mgr.switch_model, requested_model)
+
     model = mgr.active_model
     if model:
         await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)
@@ -91,21 +97,18 @@ async def reinitialize_acestep(ctx, job_id, target_model=None):
 
         if target_model is not None and target_model != mgr.active_model:
             with db_factory() as session:
-                update_job_status(
-                    session, job_id, "failed",
-                    error="Model switching not yet implemented",
-                )
+                update_job_status(session, job_id, "running", progress=0.0)
                 session.commit()
-            return
+            await asyncio.to_thread(mgr.switch_model, target_model)
+        else:
+            acestep_url = f"http://localhost:{_ACESTEP_PORT}/v1/reinitialize"
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(acestep_url, json={})
+            data = resp.json()
+            if data.get("code") != 200:
+                raise RuntimeError(f"ACE-Step reinitialize failed: {data}")
+            mgr.refresh_cached_model()
 
-        acestep_url = f"http://localhost:{_ACESTEP_PORT}/v1/reinitialize"
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(acestep_url, json={})
-        data = resp.json()
-        if data.get("code") != 200:
-            raise RuntimeError(f"ACE-Step reinitialize failed: {data}")
-
-        mgr.refresh_cached_model()
         model = mgr.active_model
         if model:
             await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)

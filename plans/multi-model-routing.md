@@ -1,88 +1,30 @@
 # Multi-Model Generation Routing
 
-> **Status: FUTURE** — depends on having multiple GPUs or model-switching capability
+> **Status: FUTURE** — Single-GPU model switching, model tagging, model selection UI, and per-generation model dropdown all consolidated into `plans/acestep-modes.md` Phase 1. This plan covers multi-GPU routing and scaling only.
 
 ## Goal
 
-Users select which model to use when generating. Jobs are routed to the correct model backend. The system knows which models are available and healthy.
+Route generation jobs to model-specific workers across multiple GPUs. Scale horizontally with multiple workers per model.
 
-## Current State
+## Prerequisites
 
-- Single ACE-Step server, single arq worker, single GPU
-- `model_mode` on presets is informational only — doesn't influence routing
-- All jobs go to the same worker regardless of params
-- Admin `available_models` table controls which models users can create presets for
-- Health endpoint reports one active model from the single ACE-Step server
+- **acestep-modes Phase 1** (per-generation model selection, worker auto-switch, model tagging) — must be complete before any of this.
 
-## Architecture Options
+## Current State (after acestep-modes Phase 1)
 
-### Option A: One worker per model
+Once acestep-modes Phase 1 is done, we'll have:
+- Per-generation model dropdown in song editor
+- Generate request carries `model_mode`
+- Worker auto-switches model if loaded model doesn't match requested
+- Model tag on every generation (`model_mode` column)
+- Model capability metadata in API
+- Parameter visibility adapts to selected model
 
-Each GPU runs its own ACE-Step server + arq worker. Jobs are routed to the right queue.
-
-```
-User generates (model_mode=turbo)
-  → API enqueues to "arq:queue:turbo"
-  → Worker-turbo picks it up
-  → ACE-Step-turbo processes it
-
-User generates (model_mode=sft)
-  → API enqueues to "arq:queue:sft"
-  → Worker-sft picks it up
-  → ACE-Step-sft processes it
-```
-
-**Pros:** Simple routing (queue per model), no model switching, workers are independent
-**Cons:** Requires one GPU per model, no sharing
-
-### Option B: Model-switching single worker
-
-One worker, one GPU. Worker loads/unloads models on demand. Similar to current `prepare_generate_mode` / scorer mode switching.
-
-```
-User generates (model_mode=turbo)
-  → API enqueues to single queue with model_mode tag
-  → Worker checks: is turbo loaded?
-  → If not: stop current model, load turbo, wait for health
-  → Process job
-```
-
-**Pros:** Works with one GPU, no infrastructure change
-**Cons:** Model switching takes 30-60s, blocks all other jobs during switch. Thrashing if users alternate models.
-
-### Recommendation
-
-**Option A for production, Option B as interim.** Option B already partially exists (ACE-Step manager can restart with different config). Option A is the clean solution when you have 2+ GPUs.
+What we WON'T have: multi-GPU routing, automatic health discovery, distributed workers. The UI already works correctly — this plan just removes the switching overhead by running multiple models simultaneously.
 
 ---
 
-## Phase 1: Model tag on generations (prerequisite)
-
-Store which model produced each generation, so users know what they got.
-
-| File | Change |
-|------|--------|
-| `db/models.py` | Add `model_mode: str` column to `Generation` |
-| `db/migrations/` | Alembic migration |
-| `jobs.py` | Save `model_mode` when creating generation record |
-| `api_models/songs.py` | Include `model_mode` in `GenerationResponse` |
-| Frontend | Show model badge on generation cards |
-
----
-
-## Phase 2: Model selection on generate
-
-User chooses model when hitting Generate. Defaults to their preset's model.
-
-| File | Change |
-|------|--------|
-| `api_models/songs.py` | `GenerateRequest.model_mode: str` (required or default from preset) |
-| `generation_api.py` | Validate `model_mode` against active models. Pass to worker |
-| Frontend `+page.svelte` | Model selector next to Generate button (if multiple active models) |
-
----
-
-## Phase 3: Health-based model discovery
+## Phase 1: Health-Based Model Discovery
 
 Replace admin-only model toggles with automatic discovery from running servers.
 
@@ -104,9 +46,9 @@ The API reads these keys to determine which models are available. TTL-based: if 
 
 ---
 
-## Phase 4: Job routing (Option A)
+## Phase 2: Job Routing (Multi-GPU)
 
-Route jobs to model-specific queues.
+Route jobs to model-specific queues. One worker per GPU, each running a different model.
 
 | File | Change |
 |------|--------|
@@ -145,58 +87,21 @@ songmaker-worker-turbo:
 
 ---
 
-## Phase 5: Job routing (Option B — single GPU fallback)
+## Phase 3: Distributed Workers
 
-If only one GPU, worker switches models on demand.
-
-| File | Change |
-|------|--------|
-| `worker.py` | Before processing job, check if requested model matches loaded model. If not, call `acestep_manager.switch_model(mode)` |
-| `acestep_manager.py` | Add `switch_model(mode)` — stop current server, start with new config, wait for health |
-| `constants.py` | Model config paths: `{"sft": "acestep-v15-sft", "turbo": "acestep-v15-turbo"}` |
-
-### Optimization: batch by model
-
-Sort queue by model_mode to minimize switches:
-```
-Queue: [sft, sft, turbo, sft, turbo]
-Reorder: [sft, sft, sft, turbo, turbo]  → 1 switch instead of 4
-```
-
-This requires custom job scheduling, not default arq FIFO.
-
----
-
-## Phase 6: Song model_mode persistence
-
-Store the model used for generation on the song version, so the UI can warn about mismatches.
-
-| File | Change |
-|------|--------|
-| `db/models.py` | Add `model_mode: str \| None` to `Version` |
-| `song_api.py` | When saving generation_params, also save model_mode |
-| Frontend | If song's model_mode doesn't match an active model, show warning on Generate button |
-
----
-
-## Phase 7: Distributed workers
-
-Workers run on remote GPU servers instead of the web server's machine. Multiple workers can serve the same model for horizontal scaling.
+Workers run on remote GPU servers. Multiple workers can serve the same model.
 
 ### What needs to change
 
-**ACE-Step URL (small):**
-Currently hardcoded to `localhost:8001`. Each worker manages its own ACE-Step subprocess, so this stays as-is — the worker and its ACE-Step server are co-located on the same GPU machine. No change needed.
-
-**Audio file storage (medium):**
-Currently audio files are written to a local `data/audio/` directory shared between web server and worker via Docker volume. With remote workers, this breaks.
+**Audio file storage:**
+Currently audio files are in a local `data/audio/` directory shared via Docker volume. With remote workers, this breaks.
 
 Options:
-- **A) Object storage (S3/MinIO):** Worker uploads audio after generation, web server serves from storage. Clean, standard, works at any scale.
-- **B) Shared NFS mount:** All machines mount the same network filesystem. Simple but adds infrastructure dependency and latency.
-- **C) Worker pushes via API:** Worker uploads audio to the web server via HTTP after generation. No shared storage needed, but adds an endpoint and network transfer.
+- **A) Object storage (S3/MinIO):** Worker uploads audio after generation, web server serves from storage.
+- **B) Shared NFS mount:** All machines mount the same network filesystem.
+- **C) Worker pushes via API:** Worker uploads audio to web server via HTTP after generation.
 
-**Recommendation:** Option C for simplicity. Add `POST /api/internal/upload-audio` (worker-authenticated) that accepts the audio file. Migrate to S3 later if file volume grows. Option B works if all machines are on the same network.
+**Recommendation:** Option C for simplicity. Add `POST /api/internal/upload-audio` (worker-authenticated). Migrate to S3 later if file volume grows.
 
 | File | Change |
 |------|--------|
@@ -204,11 +109,9 @@ Options:
 | `server.py` or new `internal_api.py` | Internal upload endpoint (worker auth via shared secret) |
 | `audio_io.py` | Abstract file storage behind interface (local / S3 / remote) |
 
-**Database access (none):**
-Workers already connect to PostgreSQL and Redis via network URLs. Remote workers just need `DATABASE_URL` and `REDIS_URL` pointing to the web server's DB/Redis. No code change.
+**Database access:** No change — workers already connect via network URLs.
 
-**Worker registration:**
-Workers register in Redis on startup with their model, host, and health status. The web server reads these to populate `available_models` automatically.
+**Worker registration:** Workers register in Redis on startup with their model, host, and health status.
 
 ```
 Redis key: songmaker:worker:{worker_id}
@@ -216,155 +119,45 @@ Value: { "model_mode": "sft", "host": "gpu-1.internal", "last_seen": "...", "job
 TTL: 60s (auto-expires if worker dies)
 ```
 
-| File | Change |
-|------|--------|
-| `worker.py` | On startup and periodically, write worker info to Redis |
-| `health_api.py` | Read all `songmaker:worker:*` keys to report available capacity |
-| `settings_api.py` | Auto-update `available_models.is_active` based on registered workers |
-
-### Deployment (example)
-
-```
-Web server (no GPU):
-  - songmaker-web (FastAPI)
-  - PostgreSQL
-  - Redis
-  - Prometheus + Grafana
-
-GPU server 1:
-  - songmaker-worker (ACESTEP_CONFIG_PATH=acestep-v15-sft)
-  - ACE-Step server (managed by worker)
-  - Connects to: Redis @ web-server, PostgreSQL @ web-server
-
-GPU server 2:
-  - songmaker-worker (ACESTEP_CONFIG_PATH=acestep-v15-turbo)
-  - ACE-Step server (managed by worker)
-  - Connects to: Redis @ web-server, PostgreSQL @ web-server
-```
-
 ---
 
-## Phase 8: Horizontal scaling (multiple workers per model)
+## Phase 4: Horizontal Scaling
 
-Run N workers with the same model to handle concurrent users. arq handles this natively.
-
-### How it works
-
-arq workers listening on the same queue compete for jobs. If 3 SFT workers are running, up to 3 SFT jobs run in parallel. No code change needed for basic round-robin — arq does this out of the box.
-
-```
-Queue: arq:queue:sft
-  ← Worker-sft-1 (gpu-server-1) picks job A
-  ← Worker-sft-2 (gpu-server-2) picks job B
-  ← Worker-sft-3 (gpu-server-3) picks job C
-```
+Run N workers with the same model. arq handles this natively — workers on the same queue compete for jobs.
 
 ### What needs to change
 
-**Rate limiting:**
-Current `MAX_QUEUE_DEPTH=10` is a global limit. With 3 workers, you'd want a higher limit. Make queue depth configurable per model or auto-scale based on registered workers.
+**Rate limiting:** Current `MAX_QUEUE_DEPTH=10` is global. With N workers, scale limit: queue depth = base × number of healthy workers for that model.
+
+**Monitoring:** Per-worker metrics so you can see which GPU is busy/idle.
 
 | File | Change |
 |------|--------|
 | `api_helpers.py` | Queue depth limit = base × number of healthy workers for that model |
-| `health_api.py` | Report per-model capacity (workers × max_jobs) |
-
-**Scoring:**
-Currently scoring runs on the same worker as generation (GPU needed for some scorers). With horizontal scaling, scoring jobs should go to whichever worker is free — they already do via the shared queue.
-
-**Monitoring:**
-Per-worker metrics so you can see which GPU is busy/idle.
-
-| File | Change |
-|------|--------|
 | `worker.py` | Include `worker_id` in job metrics |
 | `health_api.py` | Report per-worker stats from Redis |
-| Grafana | Dashboard showing worker load distribution |
-
-### Deployment (example — 3 SFT workers)
-
-```yaml
-# On gpu-server-1
-songmaker-worker:
-  environment:
-    ACESTEP_CONFIG_PATH: acestep-v15-sft
-    ARQ_QUEUE_NAME: arq:queue:sft
-    REDIS_URL: redis://web-server:6379/0
-    DATABASE_URL: postgresql://user:pass@web-server/songmaker
-    WORKER_ID: sft-1
-
-# On gpu-server-2 (identical config, different WORKER_ID)
-songmaker-worker:
-  environment:
-    ACESTEP_CONFIG_PATH: acestep-v15-sft
-    ARQ_QUEUE_NAME: arq:queue:sft
-    REDIS_URL: redis://web-server:6379/0
-    DATABASE_URL: postgresql://user:pass@web-server/songmaker
-    WORKER_ID: sft-2
-```
-
-No code change needed for this to work. arq handles the distribution.
 
 ---
 
-## Priority
+## Phase 5: Database Role Separation
 
-Phase 1 (model tag) → Phase 2 (model selection UI) → Phase 3 (health discovery) → Phase 4 (queue routing) → Phase 7 (distributed) → Phase 8 (horizontal scaling)
-
-Phase 5 (single-GPU model switching) is an alternative to Phase 4+7 for budget setups.
-Phase 6 (song model persistence) can happen anytime after Phase 2.
-
-## Phase 9: Database role separation
-
-Currently one PostgreSQL user (`songmaker`) for everything. With remote workers, a compromised worker has full DB access. Separate roles limit blast radius.
-
-### Roles
+Separate PostgreSQL roles to limit blast radius of a compromised remote worker.
 
 | Role | Access | Used by |
 |------|--------|---------|
 | `songmaker_web` | Read/write all tables | Web server (FastAPI) |
 | `songmaker_worker` | Read/write: jobs, generations, scores, generation_presets. Read-only: songs, versions, albums, users | arq worker |
-| `songmaker_migrate` | Full DDL (CREATE, ALTER, DROP) + read/write all | Alembic migrations only |
+| `songmaker_migrate` | Full DDL | Alembic migrations only |
 
-### Changes
-
-| File | Change |
-|------|--------|
-| `scripts/setup_db_roles.sql` | New: SQL script creating roles + grants |
-| `.env.docker.example` | Separate `DATABASE_URL_WEB`, `DATABASE_URL_WORKER`, `DATABASE_URL_MIGRATE` |
-| `db/engine.py` | `init_db()` uses `DATABASE_URL_MIGRATE` for migrations, returns session factory with `DATABASE_URL_WEB` or `DATABASE_URL_WORKER` |
-| `worker.py` | Uses `DATABASE_URL_WORKER` |
-| `server.py` | Uses `DATABASE_URL_WEB` |
-| `docker-compose.yml` | Pass different URLs to web vs worker |
-
-### Setup script (example)
-
-```sql
--- Run once as postgres superuser
-CREATE ROLE songmaker_web LOGIN PASSWORD 'web_pass';
-CREATE ROLE songmaker_worker LOGIN PASSWORD 'worker_pass';
-CREATE ROLE songmaker_migrate LOGIN PASSWORD 'migrate_pass';
-
--- Web: full read/write
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO songmaker_web;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO songmaker_web;
-
--- Worker: limited tables
-GRANT SELECT, INSERT, UPDATE ON jobs, generations, scores, generation_presets TO songmaker_worker;
-GRANT SELECT ON songs, versions, albums, users TO songmaker_worker;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO songmaker_worker;
-
--- Migrate: full DDL
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO songmaker_migrate;
-GRANT ALL PRIVILEGES ON SCHEMA public TO songmaker_migrate;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO songmaker_migrate;
-```
-
-### Backward compatibility
-
-If only `DATABASE_URL` is set (no role separation), all services use it — identical to today. Role separation is opt-in.
+Opt-in: if only `DATABASE_URL` is set, all services use it (identical to today).
 
 ---
+
+## Priority
+
+Phase 1 (health discovery) → Phase 2 (queue routing) → Phase 3 (distributed) → Phase 4 (horizontal scaling) → Phase 5 (DB roles)
+
+All phases depend on acestep-modes Phase 1 being complete first.
 
 ## Constraints
 
@@ -375,4 +168,4 @@ If only `DATABASE_URL` is set (no role separation), all services use it — iden
 - Rate limiting is per-user, not per-model — no change needed
 - ACE-Step startup takes 30-60s — model switching has visible latency
 - Remote workers need network access to Redis and PostgreSQL
-- Audio file transfer is the main distributed challenge (local volume doesn't work remotely)
+- Audio file transfer is the main distributed challenge

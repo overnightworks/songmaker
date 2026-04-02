@@ -11,7 +11,16 @@ from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
+from songmaker_cli.db.models import (
+    Album,
+    AvailableModel,
+    Generation,
+    Job,
+    Score,
+    Song,
+    User,
+    Version,
+)
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 _DEFAULT_USER_ID = "u-test"
@@ -119,6 +128,7 @@ def _seed_db(session, owner_id: str | None = None) -> None:
         mp3_path="u-test/g2.mp3", seed=77,
     )
     session.add_all([gen1, gen2])
+    session.query(AvailableModel).filter_by(id="turbo").update({"is_active": True})
     score = Score(id="sc1", generation_id="g1", scorer="batch", value={"dynamics": 65.0})
     session.add(score)
     session.commit()
@@ -176,6 +186,7 @@ def test_get_generation(client: TestClient) -> None:
     resp = client.get("/api/generations/g1")
     assert resp.status_code == 200
     assert resp.json()["seed"] == 42
+    assert resp.json()["model_mode"] is None
 
 
 def test_rate_generation(client: TestClient) -> None:
@@ -549,50 +560,29 @@ def test_generate_song_submits_job(client: TestClient) -> None:
     mock_pool.enqueue_job.assert_called_once()
 
 
-def test_generate_song_model_mismatch(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, patch
+def test_generate_song_model_not_enabled(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.query(AvailableModel).filter_by(id="turbo").update({"is_active": False})
+        session.commit()
 
-    mock_pool = AsyncMock()
-
-    with (
-        _mock_worker(mock_pool),
-        patch("songmaker_cli.generation_api.get_active_model", AsyncMock(return_value="sft")),
-    ):
+    with _mock_worker() as mock_pool:
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 1, "model": "turbo"},
         )
 
-    assert resp.status_code == 409
+    assert resp.status_code == 400
     assert "turbo" in resp.json()["detail"]
     mock_pool.enqueue_job.assert_not_called()
 
-
-def test_generate_song_model_unavailable(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, patch
-
-    mock_pool = AsyncMock()
-
-    with (
-        _mock_worker(mock_pool),
-        patch("songmaker_cli.generation_api.get_active_model", AsyncMock(return_value=None)),
-    ):
-        resp = client.post(
-            "/api/songs/s1/generate",
-            json={"count": 1, "model": "sft"},
-        )
-
-    assert resp.status_code == 503
-    mock_pool.enqueue_job.assert_not_called()
+    with factory() as session:
+        session.query(AvailableModel).filter_by(id="turbo").update({"is_active": True})
+        session.commit()
 
 
-def test_generate_song_model_match(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, patch
-
-    with (
-        _mock_worker() as mock_pool,
-        patch("songmaker_cli.generation_api.get_active_model", AsyncMock(return_value="sft")),
-    ):
+def test_generate_song_model_accepted(client: TestClient) -> None:
+    with _mock_worker() as mock_pool:
         resp = client.post(
             "/api/songs/s1/generate",
             json={"count": 1, "model": "sft"},
@@ -600,6 +590,20 @@ def test_generate_song_model_match(client: TestClient) -> None:
 
     assert resp.status_code == 200
     mock_pool.enqueue_job.assert_called_once()
+    args = mock_pool.enqueue_job.call_args
+    assert args[0][-1] == "sft"
+
+
+def test_generate_song_passes_model_to_worker(client: TestClient) -> None:
+    with _mock_worker() as mock_pool:
+        resp = client.post(
+            "/api/songs/s1/generate",
+            json={"count": 1, "model": "turbo"},
+        )
+
+    assert resp.status_code == 200
+    args = mock_pool.enqueue_job.call_args
+    assert args[0][-1] == "turbo"
 
 
 def test_generate_song_no_model_skips_check(client: TestClient) -> None:
@@ -611,6 +615,8 @@ def test_generate_song_no_model_skips_check(client: TestClient) -> None:
 
     assert resp.status_code == 200
     mock_pool.enqueue_job.assert_called_once()
+    args = mock_pool.enqueue_job.call_args
+    assert args[0][-1] is None
 
 
 def test_generate_song_invalid_model(client: TestClient) -> None:
@@ -640,7 +646,8 @@ def test_generate_song_seed_accepted(client: TestClient) -> None:
     assert resp.status_code == 200
     mock_pool.enqueue_job.assert_called_once()
     call_args = mock_pool.enqueue_job.call_args[0]
-    assert call_args[-1] == 42
+    assert call_args[-2] == 42
+    assert call_args[-1] is None
 
 
 def test_generate_song_seed_invalid(client: TestClient) -> None:
@@ -1593,14 +1600,23 @@ def test_list_active_models(client: TestClient) -> None:
     models = resp.json()
     active_ids = [m["id"] for m in models]
     assert "sft" in active_ids
-    assert "turbo" not in active_ids
+    assert "turbo" in active_ids
 
 
 def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.query(AvailableModel).filter_by(id="turbo").update({"is_active": False})
+        session.commit()
+
     resp = client.post("/api/settings/presets", json={
         "name": "turbo test", "model_mode": "turbo", "params": {"inference_steps": 8},
     })
     assert resp.status_code == 400
+
+    with factory() as session:
+        session.query(AvailableModel).filter_by(id="turbo").update({"is_active": True})
+        session.commit()
 
 
 # ── Claude model settings ───────────────────────────────────────────

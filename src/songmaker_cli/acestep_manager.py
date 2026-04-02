@@ -18,6 +18,7 @@ from songmaker_cli.constants import (
     ACESTEP_HEALTH_URL_TEMPLATE,
     ACESTEP_PORT,
     ACESTEP_STARTUP_TIMEOUT_SECONDS,
+    MODEL_CONFIG_PATHS,
 )
 
 log = logging.getLogger(__name__)
@@ -156,6 +157,18 @@ class AceStepManager:
     @property
     def current_mode(self) -> str | None:
         return self._current_mode
+
+    def switch_model(self, target_model: str) -> None:
+        config_path = MODEL_CONFIG_PATHS.get(target_model)
+        if not config_path:
+            raise ValueError(f"Unknown model mode: {target_model}")
+        log.info("Switching ACE-Step model to %s (%s)...", target_model, config_path)
+        self.stop()
+        os.environ["ACESTEP_CONFIG_PATH"] = config_path
+        self.start()
+        self.wait_for_health()
+        self.refresh_cached_model()
+        log.info("Model switch complete: %s", self._cached_model)
 
     def prepare_generate_mode(self) -> None:
         self.ensure()
