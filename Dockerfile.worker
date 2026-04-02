@@ -38,7 +38,4 @@ COPY --chown=songmaker src/ src/
 COPY --chown=songmaker alembic.ini ./
 RUN uv sync --frozen --no-dev --extra server --extra scoring --extra whisper
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
-  CMD uv run arq songmaker_cli.worker.WorkerSettings --check || exit 1
-
-ENTRYPOINT ["uv", "run", "arq", "songmaker_cli.worker.WorkerSettings"]
+ENTRYPOINT ["uv", "run", "arq"]

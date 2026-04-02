@@ -55,7 +55,8 @@ cd frontend && pnpm install && pnpm build && cd ..
 
 # 5. Start
 uv run songmaker server                         # terminal 1 — web server
-uv run arq songmaker_cli.worker.WorkerSettings   # terminal 2 — GPU worker
+uv run arq songmaker_cli.music_worker.MusicWorkerSettings     # terminal 2 — music generation worker
+uv run arq songmaker_cli.scoring_worker.ScoringWorkerSettings # terminal 3 — scoring worker
 ```
 
 Configure `DATABASE_URL`, `REDIS_URL`, and optional `ADMIN_USERNAME`/`ADMIN_PASSWORD` in `.server.env`.
