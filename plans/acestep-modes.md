@@ -1,6 +1,6 @@
 # ACE-Step Advanced Generation Modes
 
-> **Status: NOT STARTED**
+> **Status: IN PROGRESS** — Phase 1 complete, starting Phase 2 (Repaint)
 
 ## Goal
 
@@ -35,54 +35,32 @@
 
 ---
 
-## Phase 1: Per-Generation Model Selection + Parameter Visibility
+## Phase 1: Per-Generation Model Selection + Parameter Visibility ✅
 
-### Phase 1a: Model Tagging (backend only, low risk)
+### Phase 1a: Model Tagging ✅
 
-**What**: Every generation records which model produced it.
+- [x] Add `model_mode: str` column to `Generation` (Alembic migration `e5f6a7b8c9d0`)
+- [x] Save `model_mode` via `resolve_model_mode(ctx.model_name)` in `jobs.py`
+- [x] Include `model_mode` in `GenerationResponse`
 
-- [ ] Add `model_mode: str` column to `Generation` (Alembic migration)
-- [ ] Save `model_mode` when creating generation record in `jobs.py` (read from active model in Redis)
-- [ ] Include `model_mode` in `GenerationResponse`
+### Phase 1b: Worker Auto-Switch ✅
 
-### Phase 1b: Worker Auto-Switch
+- [x] `AceStepManager.switch_model(target_model)` — stop, set env, restart, wait, refresh
+- [x] `MODEL_CONFIG_PATHS` constant: `{"sft": "acestep-v15-sft", "turbo": "acestep-v15-turbo"}`
+- [x] `reinitialize_acestep` calls `switch_model()` (replaces stub)
+- [x] `generate()` worker auto-switches when `requested_model != active_model`
+- [x] Generate API validates model against admin-enabled `AvailableModel` list (not active model)
+- [x] Model passed from API → arq → worker as positional arg
 
-**What**: Worker checks if the requested model matches the loaded model. If not, switches before processing.
+### Phase 1c: Model Dropdown + Parameter Visibility ✅
 
-**Depends on:** `plans/admin-sse-and-auth.md` Phase 3 (reinitialize as Job with SSE, `target_model` parameter, admin model dropdown). That plan provides the endpoint, Job tracking, SSE streaming, and admin UI. This phase implements the actual switching logic.
-
-- [ ] Implement `AceStepManager.switch_model(target_model)` method
-  - Kill ACE-Step subprocess
-  - Restart with new `ACESTEP_CONFIG_PATH`
-  - Wait for health
-  - Update cached model in Redis
-- [ ] In `reinitialize_acestep` worker function: replace the "not yet implemented" stub with `switch_model()` call
-  - Update job progress: 0.0 (killing subprocess) → 0.5 (restarting) → 1.0 (health check passed)
-  - SSE delivers progress to admin UI automatically (infrastructure from admin-sse-and-auth plan)
-- [ ] In generate job: compare `requested_model` vs `active_model`
-  - If different: call `switch_model()`, update job progress so frontend shows "Switching model..."
-- [ ] Model config mapping in constants: `{"sft": "acestep-v15-sft", "turbo": "acestep-v15-turbo"}`
-- [ ] If requested model is not in `AvailableModel` active list → fail the job with clear error
-
-### Phase 1c: Model Dropdown + Parameter Visibility (frontend)
-
-**What**: Users pick a model per generation. Parameters adapt to the selected model.
-
-- [ ] Model dropdown in song editor generation settings
-  - Shows only admin-enabled models from `GET /settings/models`
-  - Defaults to user's preferred model (from preset or last used)
-  - Selection is sent as `model_mode` on the generate request
-- [ ] Add model capability metadata to `GET /settings/models` response
-  - Which params each model supports (e.g. turbo: no `guidance_scale`)
-  - Default values per model
-  - Step range per model (turbo: 1-20, SFT: 1-200)
-- [ ] Conditional parameter visibility based on **selected** model in dropdown
-  - Hide `guidance_scale` when turbo is selected
-  - Adjust `inference_steps` range/default per model
-  - Preset chips filter to selected model_mode only
-  - Hide inapplicable params entirely (no grayed-out fields)
-- [ ] Show model badge on generation cards (which model produced it)
-- [ ] Backend: log warning if ignored params are sent (e.g. guidance_scale with turbo), don't reject
+- [x] `ModelCapabilities` on `GET /settings/models` response (defaults, max_inference_steps, hidden_params)
+- [x] Model dropdown in song editor (shows when >1 model active, sends `model_mode` to generate)
+- [x] `ParamControls` hides params via `hiddenParams` prop (turbo: hides guidance_scale)
+- [x] `ParamControls` adjusts inference_steps max via `maxInferenceSteps` prop
+- [x] `PresetChips` filters to selected model_mode only
+- [x] Model badge on generation cards in `GenerationsList`
+- [x] Props threaded: `+page.svelte` → `SongEditor` → `GenerationSettings` → `ParamControls`/`PresetChips`
 
 ---
 
