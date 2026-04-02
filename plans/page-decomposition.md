@@ -81,8 +81,21 @@ Already mostly encapsulated in `ClaudeChat.svelte`. The thin wrapper in `+page.s
 - Cross-panel coordination:
   - Song selection: `LibraryPanel` emits → page updates `selectedSongId` → `DetailPanel` reacts
   - Job tracking: `trackJob()` / `removeJob()` (stays in page, passed down or via context)
-  - Playlist picker modal (stays in page — it's a global overlay)
+  - Playlist picker modal (stays in page — it's a global overlay). `DetailPanel` opens it via a callback prop or store.
   - Initial data load (`onMount` → fetch albums/songs)
+
+#### Local state migration
+These are currently `let` variables in `+page.svelte` that must move to `DetailPanel`:
+- `pinnedSeed: number | null` — set from GenerationDetail, consumed by generate
+- `repaintTarget: GenerationItem | null` — set from GenerationDetail, consumed by RepaintDialog
+- `coverTarget: GenerationItem | null` — set from GenerationDetail, consumed by CoverDialog
+- `genCount: number` — generation count from GenerationSettings
+- `selectedModel: string | null` — model selection from GenerationSettings
+
+These stay in `+page.svelte`:
+- `loading`, `loadError` — initial data load state
+- `showCreate` — create form toggle (could move to LibraryPanel)
+- `playlistPickerFor` — global modal state
 
 ### Step 3: Move initial data loading
 
@@ -117,9 +130,10 @@ The `onMount` fetch of albums and songs stays in `+page.svelte` (it's app-level 
 ## Risks
 
 - **Component communication**: Cross-panel events (e.g., "song just generated, refresh detail") currently work because everything is in one component. After splitting, need explicit store subscriptions or events. The existing store architecture already supports this — panels just read from stores.
+- **Svelte context lifecycle**: `setContext`/`getContext` only works during component initialization (top-level script). Cannot call `getContext` inside event handlers or `$effect`. The `GenerationActions` context must be read once at component init and stored in a local variable. Document this in the context file.
 - **Playlist picker modal**: Currently lives in `+page.svelte` with state. Keep it there (it's a global overlay) or extract to its own modal component.
 - **Testing**: Vitest component tests (if any exist for `+page.svelte`) will need updating. Store-level tests should be unaffected.
-- **Large diff**: This is a ~1000-line refactor. Do it in one focused session to avoid partial states.
+- **Large diff**: This is a ~1000-line refactor. Verify the app works after each panel extraction (steps 2, 4). Don't try to do all steps without intermediate verification.
 
 ## Success criteria
 

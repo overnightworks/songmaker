@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { editGenParams } from '$lib/stores/editor';
+	import { editGenParams, setDraftGenParams } from '$lib/stores/editor';
 	import {
 		loadPresets,
 		loadBuiltins,
@@ -52,7 +52,7 @@
 		uploading = true;
 		try {
 			const result = await uploadReferenceAudio(file);
-			$editGenParams = { ...($editGenParams ?? {}), reference_audio: result.path };
+			setDraftGenParams({ ...($editGenParams ?? {}), reference_audio: result.path });
 			referenceFilename = result.filename;
 		} catch (err) {
 			addToast(err instanceof Error ? err.message : 'Upload failed', 'error');
@@ -64,7 +64,7 @@
 
 	function clearReference(): void {
 		const { reference_audio: _, ...rest } = $editGenParams ?? {};
-		$editGenParams = Object.keys(rest).length > 0 ? rest : null;
+		setDraftGenParams(Object.keys(rest).length > 0 ? rest : null);
 		referenceFilename = null;
 	}
 
@@ -92,14 +92,14 @@
 		<PresetChips
 			{hasOverrides}
 			{selectedModel}
-			onload={(p) => ($editGenParams = { ...p })}
-			onreset={() => ($editGenParams = null)}
+			onload={(p) => setDraftGenParams({ ...p })}
+			onreset={() => setDraftGenParams(null)}
 		/>
 
 		<ParamControls
 			values={$editGenParams ?? {}}
 			placeholders={effectiveDefaults}
-			onchange={(p) => ($editGenParams = Object.keys(p).length > 0 ? p : null)}
+			onchange={(p) => setDraftGenParams(Object.keys(p).length > 0 ? p : null)}
 			{hiddenParams}
 			{maxInferenceSteps}
 		/>

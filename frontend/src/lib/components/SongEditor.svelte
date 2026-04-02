@@ -5,6 +5,11 @@
 		editBpm,
 		editDuration,
 		editKey,
+		setDraftLyrics,
+		setDraftPrompt,
+		setDraftBpm,
+		setDraftDuration,
+		setDraftKey,
 		versions,
 		currentVersionIndex,
 		isDirty,
@@ -145,21 +150,21 @@
 	{:else}
 		<label class="edit-field">
 			<span>Style Prompt</span>
-			<textarea rows="4" bind:value={$editPrompt}></textarea>
+			<textarea rows="4" value={$editPrompt} oninput={(e) => setDraftPrompt(e.currentTarget.value)}></textarea>
 		</label>
 
 		<div class="params-row">
 			<label class="edit-field small">
 				<span>BPM</span>
-				<input type="number" bind:value={$editBpm} />
+				<input type="number" value={$editBpm} oninput={(e) => setDraftBpm(Number(e.currentTarget.value))} />
 			</label>
 			<label class="edit-field small">
 				<span>Duration</span>
-				<input type="number" bind:value={$editDuration} />
+				<input type="number" value={$editDuration} oninput={(e) => setDraftDuration(Number(e.currentTarget.value))} />
 			</label>
 			<label class="edit-field small">
 				<span>Key</span>
-				<input type="text" bind:value={$editKey} />
+				<input type="text" value={$editKey} oninput={(e) => setDraftKey(e.currentTarget.value)} />
 			</label>
 		</div>
 
@@ -167,7 +172,7 @@
 
 		<label class="edit-field">
 			<span>Lyrics</span>
-			<textarea class="lyrics-area" rows="15" bind:value={$editLyrics}></textarea>
+			<textarea class="lyrics-area" rows="15" value={$editLyrics} oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
 		</label>
 	{/if}
 </div>

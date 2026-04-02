@@ -5,25 +5,37 @@ import {
 	deleteVersion as apiDeleteVersion,
 	fetchSong
 } from '$lib/api/client';
-import { songList } from '$lib/stores/player';
+import { replaceSongInList } from '$lib/stores/player';
 import type { SongItem, VersionGenerationParams, VersionItem } from '$lib/api/types';
 import type { ApplyData } from '$lib/utils/chat-context';
 
-// --- Editable fields ---
-export const editLyrics = writable('');
-export const editPrompt = writable('');
-export const editBpm = writable(0);
-export const editDuration = writable(180);
-export const editKey = writable('');
-export const editGenParams = writable<VersionGenerationParams | null>(null);
+export interface SongData {
+	lyrics: string;
+	prompt: string;
+	bpm: number;
+	duration: number;
+	key: string;
+	genParams: VersionGenerationParams | null;
+}
 
-// --- Saved state (for dirty tracking) ---
-const savedLyrics = writable('');
-const savedPrompt = writable('');
-const savedBpm = writable(0);
-const savedDuration = writable(180);
-const savedKey = writable('');
-const savedGenParams = writable<VersionGenerationParams | null>(null);
+const EMPTY_SONG_DATA: SongData = {
+	lyrics: '',
+	prompt: '',
+	bpm: 0,
+	duration: 180,
+	key: '',
+	genParams: null
+};
+
+interface EditorState {
+	saved: SongData;
+	draft: SongData;
+}
+
+export const editorState = writable<EditorState>({
+	saved: { ...EMPTY_SONG_DATA },
+	draft: { ...EMPTY_SONG_DATA }
+});
 
 function genParamsEqual(
 	a: VersionGenerationParams | null,
@@ -40,29 +52,48 @@ function genParamsEqual(
 	return true;
 }
 
-export const isDirty = derived(
-	[
-		editLyrics,
-		editPrompt,
-		editBpm,
-		editDuration,
-		editKey,
-		editGenParams,
-		savedLyrics,
-		savedPrompt,
-		savedBpm,
-		savedDuration,
-		savedKey,
-		savedGenParams
-	],
-	([$el, $ep, $eb, $ed, $ek, $egp, $sl, $sp, $sb, $sd, $sk, $sgp]) =>
-		$el !== $sl ||
-		$ep !== $sp ||
-		$eb !== $sb ||
-		$ed !== $sd ||
-		$ek !== $sk ||
-		!genParamsEqual($egp, $sgp)
-);
+export const isDirty = derived(editorState, (s) => {
+	const { saved, draft } = s;
+	return (
+		draft.lyrics !== saved.lyrics ||
+		draft.prompt !== saved.prompt ||
+		draft.bpm !== saved.bpm ||
+		draft.duration !== saved.duration ||
+		draft.key !== saved.key ||
+		!genParamsEqual(draft.genParams, saved.genParams)
+	);
+});
+
+export const editLyrics = derived(editorState, (s) => s.draft.lyrics);
+export const editPrompt = derived(editorState, (s) => s.draft.prompt);
+export const editBpm = derived(editorState, (s) => s.draft.bpm);
+export const editDuration = derived(editorState, (s) => s.draft.duration);
+export const editKey = derived(editorState, (s) => s.draft.key);
+export const editGenParams = derived(editorState, (s) => s.draft.genParams);
+
+export function setDraftLyrics(lyrics: string): void {
+	editorState.update((s) => ({ ...s, draft: { ...s.draft, lyrics } }));
+}
+
+export function setDraftPrompt(prompt: string): void {
+	editorState.update((s) => ({ ...s, draft: { ...s.draft, prompt } }));
+}
+
+export function setDraftBpm(bpm: number): void {
+	editorState.update((s) => ({ ...s, draft: { ...s.draft, bpm } }));
+}
+
+export function setDraftDuration(duration: number): void {
+	editorState.update((s) => ({ ...s, draft: { ...s.draft, duration } }));
+}
+
+export function setDraftKey(key: string): void {
+	editorState.update((s) => ({ ...s, draft: { ...s.draft, key } }));
+}
+
+export function setDraftGenParams(genParams: VersionGenerationParams | null): void {
+	editorState.update((s) => ({ ...s, draft: { ...s.draft, genParams } }));
+}
 
 // --- Versions ---
 export const versions = writable<VersionItem[]>([]);
@@ -101,37 +132,31 @@ export const activeDiff = derived(
 	}
 );
 
-function setSavedState(
-	lyrics: string,
-	prompt: string,
-	bpm: number,
-	dur: number,
-	key: string,
-	genParams: VersionGenerationParams | null
-): void {
-	savedLyrics.set(lyrics);
-	savedPrompt.set(prompt);
-	savedBpm.set(bpm);
-	savedDuration.set(dur);
-	savedKey.set(key);
-	savedGenParams.set(genParams);
+function songDataFromSong(s: SongItem): SongData {
+	return {
+		lyrics: s.lyrics,
+		prompt: s.prompt,
+		bpm: s.bpm ?? 0,
+		duration: s.duration ?? 180,
+		key: s.key,
+		genParams: s.generation_params ?? null
+	};
+}
+
+function songDataFromVersion(v: VersionItem): SongData {
+	return {
+		lyrics: v.lyrics,
+		prompt: v.prompt,
+		bpm: v.bpm,
+		duration: v.duration,
+		key: v.key,
+		genParams: v.generation_params
+	};
 }
 
 export function loadSongData(s: SongItem): void {
-	editLyrics.set(s.lyrics);
-	editPrompt.set(s.prompt);
-	editBpm.set(s.bpm ?? 0);
-	editDuration.set(s.duration ?? 180);
-	editKey.set(s.key);
-	editGenParams.set(s.generation_params ?? null);
-	setSavedState(
-		s.lyrics,
-		s.prompt,
-		s.bpm ?? 0,
-		s.duration ?? 180,
-		s.key,
-		s.generation_params ?? null
-	);
+	const data = songDataFromSong(s);
+	editorState.set({ saved: data, draft: { ...data } });
 	dismissAppliedDiff();
 	loadVersions(s.id);
 }
@@ -146,35 +171,24 @@ export function loadVersion(index: number): void {
 	const v = vers[index];
 	if (!v) return;
 	currentVersionIndex.set(index);
-	editLyrics.set(v.lyrics);
-	editPrompt.set(v.prompt);
-	editBpm.set(v.bpm);
-	editDuration.set(v.duration);
-	editKey.set(v.key);
-	editGenParams.set(v.generation_params);
-	setSavedState(v.lyrics, v.prompt, v.bpm, v.duration, v.key, v.generation_params);
+	const data = songDataFromVersion(v);
+	editorState.set({ saved: data, draft: { ...data } });
 }
 
 export async function handleSave(songId: string): Promise<void> {
 	saving.set(true);
 	try {
+		const { draft } = get(editorState);
 		const updated = await updateSong(songId, {
-			lyrics: get(editLyrics),
-			prompt: get(editPrompt),
-			bpm: get(editBpm),
-			duration: get(editDuration),
-			key: get(editKey),
-			generation_params: get(editGenParams)
+			lyrics: draft.lyrics,
+			prompt: draft.prompt,
+			bpm: draft.bpm,
+			duration: draft.duration,
+			key: draft.key,
+			generation_params: draft.genParams
 		});
-		setSavedState(
-			get(editLyrics),
-			get(editPrompt),
-			get(editBpm),
-			get(editDuration),
-			get(editKey),
-			get(editGenParams)
-		);
-		songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+		editorState.update((s) => ({ ...s, saved: { ...s.draft } }));
+		replaceSongInList(updated);
 		await loadVersions(songId);
 		dismissAppliedDiff();
 		showStatus(`Saved version ${updated.version_count}`);
@@ -193,7 +207,7 @@ export async function handleDeleteVersion(
 	try {
 		await apiDeleteVersion(versionId, deleteGenerations);
 		const updated = await fetchSong(songId);
-		songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+		replaceSongInList(updated);
 		await loadVersions(songId);
 	} catch {
 		showStatus('Delete failed');
@@ -211,31 +225,39 @@ export function handleDiffChange(pair: [VersionItem, VersionItem] | null): void 
 }
 
 export function handleApply(data: ApplyData): void {
+	const { draft } = get(editorState);
 	const before: VersionItem = {
 		id: 'before',
 		version_number: 0,
-		lyrics: get(editLyrics),
-		prompt: get(editPrompt),
-		bpm: get(editBpm),
-		duration: get(editDuration),
-		key: get(editKey),
-		generation_params: get(editGenParams),
+		lyrics: draft.lyrics,
+		prompt: draft.prompt,
+		bpm: draft.bpm,
+		duration: draft.duration,
+		key: draft.key,
+		generation_params: draft.genParams,
 		created_at: null
 	};
-	if (data.lyrics !== undefined) editLyrics.set(data.lyrics);
-	if (data.prompt !== undefined) editPrompt.set(data.prompt);
-	if (data.bpm !== undefined) editBpm.set(data.bpm);
-	if (data.duration !== undefined) editDuration.set(data.duration);
-	if (data.key !== undefined) editKey.set(data.key);
+	editorState.update((s) => ({
+		...s,
+		draft: {
+			...s.draft,
+			...(data.lyrics !== undefined && { lyrics: data.lyrics }),
+			...(data.prompt !== undefined && { prompt: data.prompt }),
+			...(data.bpm !== undefined && { bpm: data.bpm }),
+			...(data.duration !== undefined && { duration: data.duration }),
+			...(data.key !== undefined && { key: data.key })
+		}
+	}));
+	const afterDraft = get(editorState).draft;
 	const after: VersionItem = {
 		id: 'after',
 		version_number: 0,
-		lyrics: get(editLyrics),
-		prompt: get(editPrompt),
-		bpm: get(editBpm),
-		duration: get(editDuration),
-		key: get(editKey),
-		generation_params: get(editGenParams),
+		lyrics: afterDraft.lyrics,
+		prompt: afterDraft.prompt,
+		bpm: afterDraft.bpm,
+		duration: afterDraft.duration,
+		key: afterDraft.key,
+		generation_params: afterDraft.genParams,
 		created_at: null
 	};
 	appliedDiffBase.set(before);

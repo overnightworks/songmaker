@@ -49,7 +49,7 @@ export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	_loadingIds.add(songId);
 	try {
 		const full = await fetchSong(songId);
-		songList.update((list) => list.map((s) => (s.id === songId ? full : s)));
+		replaceSongInList(full);
 	} finally {
 		_loadingIds.delete(songId);
 	}
@@ -300,18 +300,61 @@ export function togglePlayPause(): void {
 export const playbackTime = writable(0);
 export const playbackDuration = writable(0);
 
-// --- Update scores in memory ---
-export function updateGenerationScores(
+// --- Song/album list mutations ---
+export function replaceSongInList(song: SongItem): void {
+	songList.update((list) => list.map((s) => (s.id === song.id ? song : s)));
+}
+
+export function updateSongInList(songId: string, updater: (s: SongItem) => SongItem): void {
+	songList.update((list) => list.map((s) => (s.id === songId ? updater(s) : s)));
+}
+
+export function addSongToList(song: SongItem): void {
+	songList.update((list) => [...list, song]);
+}
+
+export function removeSongFromList(songId: string): void {
+	songList.update((list) => list.filter((s) => s.id !== songId));
+}
+
+export function removeSongsForAlbum(albumId: string): void {
+	songList.update((list) => list.filter((s) => s.album_id !== albumId));
+}
+
+export function updateAlbumInList(albumId: string, updater: (a: AlbumItem) => AlbumItem): void {
+	albumList.update((list) => list.map((a) => (a.id === albumId ? updater(a) : a)));
+}
+
+export function removeAlbumFromList(albumId: string): void {
+	albumList.update((list) => list.filter((a) => a.id !== albumId));
+}
+
+export function updateGenerationInList(
 	genId: string,
-	update: Record<string, number | string>
+	updater: (g: GenerationItem) => GenerationItem
 ): void {
 	songList.update((songs) =>
 		songs.map((song) => ({
 			...song,
-			generations: song.generations.map((gen) => {
-				if (gen.id !== genId) return gen;
-				return { ...gen, scores: { ...gen.scores, ...update } };
-			})
+			generations: song.generations.map((g) => (g.id === genId ? updater(g) : g))
 		}))
 	);
+}
+
+export function removeGenerationFromSong(songId: string, genId: string): void {
+	updateSongInList(songId, (s) => ({
+		...s,
+		generations: s.generations.filter((g) => g.id !== genId),
+		generation_count: s.generation_count - 1
+	}));
+}
+
+export function updateGenerationScores(
+	genId: string,
+	update: Record<string, number | string>
+): void {
+	updateGenerationInList(genId, (gen) => ({
+		...gen,
+		scores: { ...gen.scores, ...update }
+	}));
 }

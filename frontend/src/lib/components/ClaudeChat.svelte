@@ -15,7 +15,7 @@
 		isCurrentSong,
 		type ApplyData
 	} from '$lib/utils/chat-context';
-	import { songList } from '$lib/stores/player';
+	import { replaceSongInList, addSongToList } from '$lib/stores/player';
 	import { addToast } from '$lib/stores/toast';
 	import type { SongItem, VersionItem } from '$lib/api/types';
 	import MentionDropdown from './MentionDropdown.svelte';
@@ -159,7 +159,7 @@
 				duration: data.duration,
 				key: data.key
 			});
-			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+			replaceSongInList(updated);
 			addToast(`Applied to ${data.song}`, 'success');
 		} catch {
 			addToast(`Failed to apply to ${data.song}`, 'error');
@@ -183,7 +183,7 @@
 				duration: data.duration,
 				key: data.key
 			});
-			songList.update((songs) => [...songs, song]);
+			addSongToList(song);
 			addToast(`Created "${data.title}"`, 'success');
 			if (oncreate) oncreate(song);
 		} catch {

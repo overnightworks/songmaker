@@ -33,7 +33,15 @@
 		selectedSong,
 		selectedGeneration,
 		selectedAlbumId,
-		ensureGenerationsLoaded
+		ensureGenerationsLoaded,
+		replaceSongInList,
+		updateSongInList,
+		removeSongFromList,
+		removeSongsForAlbum,
+		updateAlbumInList,
+		removeAlbumFromList,
+		updateGenerationInList,
+		removeGenerationFromSong
 	} from '$lib/stores/player';
 	import {
 		selectGeneration,
@@ -58,10 +66,6 @@
 	} from '$lib/stores/playlists';
 	import { sharePlaylist, unsharePlaylist } from '$lib/api/client';
 	import {
-		editLyrics,
-		editPrompt,
-		editBpm,
-		editKey,
 		isDirty,
 		versions,
 		currentVersionIndex,
@@ -247,7 +251,7 @@
 				await unpickGeneration(genId);
 			}
 			const updated = await fetchSong(song.id);
-			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+			replaceSongInList(updated);
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Pick failed', 'error');
 		}
@@ -262,7 +266,7 @@
 				await unkeepGeneration(genId);
 			}
 			const updated = await fetchSong(song.id);
-			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+			replaceSongInList(updated);
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Keep failed', 'error');
 		}
@@ -273,7 +277,7 @@
 		try {
 			await rateGeneration(genId, rating, notes);
 			const updated = await fetchSong(song.id);
-			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+			replaceSongInList(updated);
 			addToast('Rating saved', 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Rating failed', 'error');
@@ -300,11 +304,7 @@
 		if (!selectedAlbum) throw new Error('No album');
 		const albumId = selectedAlbum.id;
 		const result = await shareAlbum(albumId);
-		albumList.update((list) =>
-			list.map((a) =>
-				a.id === albumId ? { ...a, is_shared: true, share_slug: result.share_slug } : a
-			)
-		);
+		updateAlbumInList(albumId, (a) => ({ ...a, is_shared: true, share_slug: result.share_slug }));
 		return result;
 	}
 
@@ -312,20 +312,14 @@
 		if (!selectedAlbum) return;
 		const albumId = selectedAlbum.id;
 		await unshareAlbum(albumId);
-		albumList.update((list) =>
-			list.map((a) => (a.id === albumId ? { ...a, is_shared: false, share_slug: null } : a))
-		);
+		updateAlbumInList(albumId, (a) => ({ ...a, is_shared: false, share_slug: null }));
 	}
 
 	async function onSongShareEnable() {
 		if (!song) throw new Error('No song');
 		const songId = song.id;
 		const result = await shareSong(songId);
-		songList.update((songs) =>
-			songs.map((s) =>
-				s.id === songId ? { ...s, is_shared: true, share_slug: result.share_slug } : s
-			)
-		);
+		updateSongInList(songId, (s) => ({ ...s, is_shared: true, share_slug: result.share_slug }));
 		return result;
 	}
 
@@ -333,9 +327,7 @@
 		if (!song) return;
 		const songId = song.id;
 		await unshareSong(songId);
-		songList.update((songs) =>
-			songs.map((s) => (s.id === songId ? { ...s, is_shared: false, share_slug: null } : s))
-		);
+		updateSongInList(songId, (s) => ({ ...s, is_shared: false, share_slug: null }));
 	}
 
 	async function onAlbumCleanup(): Promise<void> {
@@ -355,8 +347,8 @@
 		const albumId = selectedAlbum.id;
 		try {
 			await deleteAlbum(albumId);
-			albumList.update((list) => list.filter((a) => a.id !== albumId));
-			songList.update((list) => list.filter((s) => s.album_id !== albumId));
+			removeAlbumFromList(albumId);
+			removeSongsForAlbum(albumId);
 			addToast('Album deleted', 'success');
 		} catch {
 			addToast('Delete failed', 'error');
@@ -365,27 +357,13 @@
 
 	async function onGenShareEnable(genId: string) {
 		const result = await shareGeneration(genId);
-		songList.update((songs) =>
-			songs.map((s) => ({
-				...s,
-				generations: s.generations.map((g) =>
-					g.id === genId ? { ...g, is_shared: true, share_slug: result.share_slug } : g
-				)
-			}))
-		);
+		updateGenerationInList(genId, (g) => ({ ...g, is_shared: true, share_slug: result.share_slug }));
 		return result;
 	}
 
 	async function onGenShareDisable(genId: string) {
 		await unshareGeneration(genId);
-		songList.update((songs) =>
-			songs.map((s) => ({
-				...s,
-				generations: s.generations.map((g) =>
-					g.id === genId ? { ...g, is_shared: false, share_slug: null } : g
-				)
-			}))
-		);
+		updateGenerationInList(genId, (g) => ({ ...g, is_shared: false, share_slug: null }));
 	}
 
 	async function onDeleteSong(): Promise<void> {
@@ -393,7 +371,7 @@
 		const songId = song.id;
 		try {
 			await deleteSong(songId);
-			songList.update((list) => list.filter((s) => s.id !== songId));
+			removeSongFromList(songId);
 			backToAlbum();
 			addToast('Song deleted', 'success');
 		} catch {
@@ -406,7 +384,7 @@
 		try {
 			const result = await cleanupSong(song.id);
 			const updated = await fetchSong(song.id);
-			songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+			replaceSongInList(updated);
 			addToast(`Deleted ${result.deleted} generation${result.deleted !== 1 ? 's' : ''}`, 'success');
 		} catch {
 			addToast('Cleanup failed', 'error');
@@ -417,13 +395,7 @@
 		if (!song) return;
 		try {
 			await deleteGeneration(genId);
-			songList.update((songs) =>
-				songs.map((s) => ({
-					...s,
-					generations: s.generations.filter((g) => g.id !== genId),
-					generation_count: s.id === song.id ? s.generation_count - 1 : s.generation_count
-				}))
-			);
+			removeGenerationFromSong(song.id, genId);
 			clearGenerationSelection();
 			addToast('Generation deleted', 'success');
 		} catch (e) {

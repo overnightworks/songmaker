@@ -8,10 +8,9 @@ vi.mock('$lib/api/client', () => ({
 	fetchSong: vi.fn()
 }));
 
-vi.mock('$lib/stores/player', async () => {
-	const { writable } = await import('svelte/store');
-	return { songList: writable([]) };
-});
+vi.mock('$lib/stores/player', async () => ({
+	replaceSongInList: vi.fn()
+}));
 
 import {
 	editGenParams,
@@ -20,6 +19,8 @@ import {
 	editBpm,
 	editDuration,
 	editKey,
+	setDraftGenParams,
+	setDraftLyrics,
 	isDirty,
 	saving,
 	versions,
@@ -86,14 +87,14 @@ describe('editGenParams dirty tracking', () => {
 
 	it('is dirty when gen params change', () => {
 		loadSongData(makeSong());
-		editGenParams.set({ inference_steps: 50 });
+		setDraftGenParams({ inference_steps: 50 });
 		expect(get(isDirty)).toBe(true);
 	});
 
 	it('is not dirty when gen params are set back to null', () => {
 		loadSongData(makeSong());
-		editGenParams.set({ inference_steps: 50 });
-		editGenParams.set(null);
+		setDraftGenParams({ inference_steps: 50 });
+		setDraftGenParams(null);
 		expect(get(isDirty)).toBe(false);
 	});
 
@@ -107,13 +108,13 @@ describe('editGenParams dirty tracking', () => {
 	it('order-independent comparison', () => {
 		const params = { shift: 5.0, inference_steps: 25 };
 		loadSongData(makeSong({ generation_params: params }));
-		editGenParams.set({ inference_steps: 25, shift: 5.0 });
+		setDraftGenParams({ inference_steps: 25, shift: 5.0 });
 		expect(get(isDirty)).toBe(false);
 	});
 
 	it('detects dirty when only lyrics change with gen params present', () => {
 		loadSongData(makeSong({ generation_params: { shift: 2.0 } }));
-		editLyrics.set('changed');
+		setDraftLyrics('changed');
 		expect(get(isDirty)).toBe(true);
 	});
 });
@@ -156,7 +157,7 @@ describe('handleSave', () => {
 		mockUpdate.mockResolvedValueOnce(makeSong({ version_count: 2 }));
 
 		loadSongData(makeSong());
-		editLyrics.set('new lyrics');
+		setDraftLyrics('new lyrics');
 		expect(get(isDirty)).toBe(true);
 
 		await handleSave('s1');

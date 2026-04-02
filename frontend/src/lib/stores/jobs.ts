@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { fetchSong, type JobStatus } from '$lib/api/client';
-import { songList } from '$lib/stores/player';
+import { replaceSongInList } from '$lib/stores/player';
 import { addToast } from '$lib/stores/toast';
 
 const MAX_POLL_ERRORS = 10;
@@ -109,7 +109,7 @@ async function refreshSongData(jobId: string): Promise<void> {
 
 	try {
 		const updated = await fetchSong(activeJob.songId);
-		songList.update((songs) => songs.map((s) => (s.id === updated.id ? updated : s)));
+		replaceSongInList(updated);
 	} catch {
 		// song refresh failed silently — user can manually reload
 	}
