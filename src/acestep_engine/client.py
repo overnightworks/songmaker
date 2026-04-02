@@ -187,6 +187,8 @@ class AceStepClient:
             payload["repainting_end"] = config.repainting_end
         if config.task_type == "cover":
             payload["audio_cover_strength"] = config.audio_cover_strength
+        if config.reference_audio:
+            payload["reference_audio"] = config.reference_audio
 
         last_exc: Exception | None = None
         for attempt in range(SUBMIT_RETRIES):

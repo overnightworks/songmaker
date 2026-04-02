@@ -169,12 +169,13 @@ async def acall_claude(
     system: str | None = None,
     model: str = CLAUDE_CHAT_MODEL,
     max_tokens: int = 1024,
+    messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
     if api_key:
         log.info("Claude: using async API backend (model=%s)", model)
-        return await _acall_api(prompt, api_key, system, model, max_tokens)
+        return await _acall_api(prompt, api_key, system, model, max_tokens, messages)
     log.info("Claude: using async CLI backend (model=%s)", model)
-    return await _acall_cli(prompt, system, model)
+    return await _acall_cli(prompt, system, model, messages)
 
 
 async def _acall_api(
@@ -183,6 +184,7 @@ async def _acall_api(
     system: str | None,
     model: str,
     max_tokens: int,
+    messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
     try:
         import anthropic
@@ -193,10 +195,15 @@ async def _acall_api(
 
     client = anthropic.AsyncAnthropic(api_key=api_key)
 
+    if messages is not None:
+        api_messages = messages
+    else:
+        api_messages = [{"role": "user", "content": prompt}]
+
     kwargs: dict = {
         "model": model,
         "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": api_messages,
     }
     if system:
         kwargs["system"] = [
@@ -215,12 +222,20 @@ async def _acall_api(
 
 async def _acall_cli(
     prompt: str, system: str | None = None, model: str = CLAUDE_CHAT_MODEL,
+    messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
     binary = _find_claude_binary()
     if not binary:
         raise UnavailableError(
             "Claude CLI not found. Install Claude Code or provide an API key."
         )
+
+    if messages is not None:
+        parts = []
+        for msg in messages:
+            prefix = "User" if msg["role"] == "user" else "Assistant"
+            parts.append(f"{prefix}: {msg['content']}")
+        prompt = "\n\n".join(parts)
 
     cmd = [
         binary, "-p", prompt,

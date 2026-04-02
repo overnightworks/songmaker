@@ -314,6 +314,18 @@ class RateLimitSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    song_id: Mapped[str] = mapped_column(
+        ForeignKey("songs.id", ondelete="CASCADE"), index=True,
+    )
+    role: Mapped[str] = mapped_column(String(10))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
 

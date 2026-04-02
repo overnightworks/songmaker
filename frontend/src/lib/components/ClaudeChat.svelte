@@ -1,10 +1,14 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { chatWithClaude, createSong, updateSong, ApiError } from '$lib/api/client';
-	import { pruneOldChatKeys, trimChatHistory } from '$lib/utils/chat';
 	import {
-		buildFullContext,
-		buildConversation,
+		sendChatMessage,
+		clearChatHistory,
+		fetchChatHistory,
+		createSong,
+		updateSong,
+		ApiError
+	} from '$lib/api/client';
+	import {
 		extractAllApplyData,
 		isCurrentSong,
 		type ApplyData
@@ -18,20 +22,20 @@
 
 	interface Props {
 		songId?: string;
-		songContext?: string;
 		allSongs?: SongItem[];
 		currentAlbumId?: string;
 		versions?: VersionItem[];
+		visible?: boolean;
 		onapply?: (data: ApplyData) => void;
 		oncreate?: (song: SongItem) => void;
 	}
 
 	let {
 		songId = '',
-		songContext = '',
 		allSongs = [],
 		currentAlbumId = '',
 		versions = [],
+		visible = true,
 		onapply,
 		oncreate
 	}: Props = $props();
@@ -51,6 +55,7 @@
 	let messages: Message[] = $state([]);
 	let input = $state('');
 	let loading = $state(false);
+	let historyLoading = $state(false);
 	let error = $state('');
 	let container: HTMLDivElement | undefined = $state();
 	let inputEl: HTMLTextAreaElement | undefined = $state();
@@ -106,16 +111,11 @@
 		return results;
 	});
 
-	let prevChatKey = $state('');
-
-	function storageKey(): string {
-		return songId ? `songmaker:chat:${songId}` : 'songmaker:chat:new';
-	}
+	let prevSongId = $state('');
 
 	$effect(() => {
-		const key = storageKey();
-		if (key !== prevChatKey) {
-			prevChatKey = key;
+		if (songId !== prevSongId) {
+			prevSongId = songId;
 			mentionedSongIds = [];
 			mentionedVersionNumbers = [];
 			albumMentioned = false;
@@ -123,31 +123,23 @@
 		}
 	});
 
-	function loadHistory(): void {
+	async function loadHistory(): Promise<void> {
+		if (!songId) {
+			messages = [];
+			return;
+		}
+		historyLoading = true;
 		try {
-			const saved = localStorage.getItem(storageKey());
-			const raw: Message[] = saved ? JSON.parse(saved) : [];
-			const parsed = raw.filter((m): m is Message => m != null && typeof m.role === 'string');
-			const trimmed = trimChatHistory(parsed);
-			messages = trimmed;
-			if (trimmed.length < parsed.length) {
-				saveHistory();
-			}
+			const result = await fetchChatHistory(songId);
+			messages = result.messages.map((m) => ({
+				role: m.role as 'user' | 'assistant',
+				text: m.content
+			}));
 		} catch {
 			messages = [];
+		} finally {
+			historyLoading = false;
 		}
-	}
-
-	function saveHistory(): void {
-		const trimmed = trimChatHistory(messages);
-		const toSave = trimmed.map(({ role, text, appliedIndices, applyDataList }) => ({
-			role,
-			text,
-			appliedIndices,
-			applyDataList
-		}));
-		localStorage.setItem(storageKey(), JSON.stringify(toSave));
-		pruneOldChatKeys();
 	}
 
 	async function applyCrossSong(data: ApplyData): Promise<void> {
@@ -194,7 +186,7 @@
 
 	async function send(): Promise<void> {
 		const msg = input.trim();
-		if (!msg || loading) return;
+		if (!msg || loading || !songId) return;
 
 		input = '';
 		error = '';
@@ -206,49 +198,49 @@
 		const originAlbumId = currentAlbumId;
 		const originSongs = allSongs;
 
+		const mentionedVersionIds = mentionedVersionNumbers
+			.map((vn) => versions.find((v) => v.version_number === vn)?.id)
+			.filter((id): id is string => !!id);
+
+		const songIdsToSend = albumMentioned && currentAlbumId
+			? [
+					...new Set([
+						...mentionedSongIds,
+						...allSongs
+							.filter((s) => s.album_id === currentAlbumId && s.id !== songId)
+							.map((s) => s.id)
+					])
+				]
+			: mentionedSongIds;
+
 		try {
-			let responseText: string | undefined;
-			const ctx = buildFullContext(
-				songContext,
+			const result = await sendChatMessage(
 				originSongId,
-				originAlbumId,
-				originSongs,
-				mentionedSongIds,
-				albumMentioned,
-				versions,
-				mentionedVersionNumbers
+				msg,
+				songIdsToSend,
+				mentionedVersionIds
 			);
 
-			for (let attempt = 0; attempt < 3; attempt++) {
-				const conversation = buildConversation(messages, msg);
-				try {
-					responseText = await chatWithClaude(conversation, ctx);
-					break;
-				} catch (e) {
-					if (e instanceof ApiError && e.status === 422 && messages.length > 1) {
-						const half = Math.max(1, Math.floor(messages.length / 2));
-						messages = messages.slice(half);
-						saveHistory();
-						continue;
-					}
-					throw e;
-				}
-			}
-
-			if (!responseText) throw new Error('Chat failed after trimming history');
-
+			const responseText = result.assistant_message.content;
 			const applyDataList = extractAllApplyData(responseText, originAlbumId, originSongs);
-			const newMsg: Message = { role: 'assistant', text: responseText, applyDataList, appliedIndices: [] };
+			const newMsg: Message = {
+				role: 'assistant',
+				text: responseText,
+				applyDataList,
+				appliedIndices: []
+			};
 
-			const switchedAway = songId !== originSongId;
-
-			if (!switchedAway) {
+			if (songId === originSongId) {
 				messages = [...messages, newMsg];
-				saveHistory();
 			}
 		} catch (e) {
 			if (songId === originSongId) {
-				error = e instanceof Error ? e.message : 'Chat failed';
+				if (e instanceof ApiError && e.status === 409) {
+					error = 'Chat history full — clear to continue';
+				} else {
+					error = e instanceof Error ? e.message : 'Chat failed';
+				}
+				messages = messages.slice(0, -1);
 			}
 		} finally {
 			loading = false;
@@ -270,12 +262,16 @@
 		const applied = new Set(msg.appliedIndices ?? []);
 		applied.add(dataIndex);
 		messages[msgIndex] = { ...msg, appliedIndices: [...applied] };
-		saveHistory();
 	}
 
-	function clearHistory(): void {
-		messages = [];
-		localStorage.removeItem(storageKey());
+	async function handleClear(): Promise<void> {
+		if (!songId) return;
+		try {
+			await clearChatHistory(songId);
+			messages = [];
+		} catch {
+			addToast('Failed to clear chat', 'error');
+		}
 	}
 
 	async function scrollToBottom(): Promise<void> {
@@ -287,6 +283,10 @@
 		messages.length;
 		loading;
 		scrollToBottom();
+	});
+
+	$effect(() => {
+		if (visible) scrollToBottom();
 	});
 
 	function removeMention(id: string): void {
@@ -408,7 +408,7 @@
 		<h3>Claude Co-Writer</h3>
 		<div class="header-actions">
 			{#if messages.length > 0}
-				<button class="clear-btn" onclick={clearHistory} aria-label="Clear chat">✕</button>
+				<button class="clear-btn" onclick={handleClear} aria-label="Clear chat">&#x2715;</button>
 			{/if}
 		</div>
 	</div>
@@ -418,32 +418,36 @@
 			{#if albumMentioned}
 				<span class="mention-tag album">
 					{currentAlbumTitle || 'Album'}
-					<button class="mention-remove" onclick={removeAlbumMention}>✕</button>
+					<button class="mention-remove" onclick={removeAlbumMention}>&#x2715;</button>
 				</span>
 			{/if}
 			{#each mentionedSongs as s (s.id)}
 				<span class="mention-tag">
 					{s.title}
-					<button class="mention-remove" onclick={() => removeMention(s.id)}>✕</button>
+					<button class="mention-remove" onclick={() => removeMention(s.id)}>&#x2715;</button>
 				</span>
 			{/each}
 			{#each mentionedVersionNumbers as vn (vn)}
 				<span class="mention-tag version">
 					v{vn}
-					<button class="mention-remove" onclick={() => removeVersionMention(vn)}>✕</button>
+					<button class="mention-remove" onclick={() => removeVersionMention(vn)}>&#x2715;</button>
 				</span>
 			{/each}
 		</div>
 	{/if}
 
-	<MessageList
-		{messages}
-		{loading}
-		{error}
-		{songId}
-		bind:containerRef={container}
-		onapply={applyAtIndex}
-	/>
+	{#if historyLoading}
+		<div class="history-loading">Loading chat...</div>
+	{:else}
+		<MessageList
+			{messages}
+			{loading}
+			{error}
+			{songId}
+			bind:containerRef={container}
+			onapply={applyAtIndex}
+		/>
+	{/if}
 
 	<div class="input-area">
 		{#if showMentions && activeMentionResults.length > 0}
@@ -557,6 +561,15 @@
 
 	.mention-remove:hover {
 		color: var(--score-bad);
+	}
+
+	.history-loading {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text-dim);
+		font-size: 12px;
 	}
 
 	.input-area {

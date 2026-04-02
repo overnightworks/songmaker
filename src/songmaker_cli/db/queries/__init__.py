@@ -38,6 +38,11 @@ from songmaker_cli.db.queries.auth import record_audit as record_audit
 from songmaker_cli.db.queries.auth import record_login_attempt as record_login_attempt
 from songmaker_cli.db.queries.auth import update_user as update_user
 from songmaker_cli.db.queries.auth import user_count as user_count
+from songmaker_cli.db.queries.chat import count_chat_messages as count_chat_messages
+from songmaker_cli.db.queries.chat import create_chat_message as create_chat_message
+from songmaker_cli.db.queries.chat import delete_chat_messages as delete_chat_messages
+from songmaker_cli.db.queries.chat import list_chat_messages as list_chat_messages
+from songmaker_cli.db.queries.chat import songs_with_chat as songs_with_chat
 from songmaker_cli.db.queries.generations import create_generation as create_generation
 from songmaker_cli.db.queries.generations import delete_generation as delete_generation
 from songmaker_cli.db.queries.generations import (

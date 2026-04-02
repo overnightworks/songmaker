@@ -505,11 +505,6 @@
 	}
 
 	const currentVersion = $derived($versions[$currentVersionIndex]);
-	const songContext = $derived(
-		song
-			? `Song: ${song.title}\nAlbum: ${song.album_title}\nVersion: v${currentVersion?.version_number ?? 1}\nStyle: ${$editPrompt}\nKey: ${$editKey}\nBPM: ${$editBpm}\n\nLyrics:\n${$editLyrics}`
-			: ''
-	);
 </script>
 
 {#if loading}
@@ -731,7 +726,6 @@
 				<div class="chat-tab" class:hidden={tab !== 'chat'}>
 					<ClaudeChat
 						songId={song?.id ?? ''}
-						{songContext}
 						allSongs={$songList}
 						currentAlbumId={song?.album_id ?? ''}
 						versions={$versions}

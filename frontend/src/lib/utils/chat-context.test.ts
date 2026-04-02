@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SongItem, VersionItem } from '$lib/api/types';
-import {
-	formatSongContext,
-	formatVersionContext,
-	buildFullContext,
-	buildConversation,
-	cleanDisplayText,
-	extractAllApplyData,
-	isCurrentSong,
-	type ApplyData
-} from './chat-context';
+import type { SongItem } from '$lib/api/types';
+import { cleanDisplayText, extractAllApplyData, isCurrentSong } from './chat-context';
 
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
@@ -32,115 +23,6 @@ function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 		...overrides
 	};
 }
-
-function makeVersion(overrides: Partial<VersionItem> = {}): VersionItem {
-	return {
-		id: 'ver-1',
-		version_number: 1,
-		lyrics: '',
-		prompt: '',
-		bpm: 0,
-		duration: 180,
-		key: '',
-		generation_params: null,
-		created_at: null,
-		...overrides
-	};
-}
-
-describe('formatSongContext', () => {
-	it('formats a song with all fields', () => {
-		const s = makeSong({ title: 'My Song', prompt: 'rock', key: 'Am', bpm: 120, duration: 200, lyrics: 'hello' });
-		const result = formatSongContext(s);
-		expect(result).toContain('[Track 1] My Song');
-		expect(result).toContain('Style: rock');
-		expect(result).toContain('Key: Am');
-		expect(result).toContain('BPM: 120');
-		expect(result).toContain('Duration: 200s');
-		expect(result).toContain('Lyrics:\nhello');
-	});
-
-	it('omits empty fields', () => {
-		const s = makeSong({ title: 'Empty', prompt: '', key: '', bpm: 0, duration: 0, lyrics: '' });
-		const result = formatSongContext(s);
-		expect(result).toBe('[Track 1] Empty');
-	});
-});
-
-describe('formatVersionContext', () => {
-	it('formats a version with fields', () => {
-		const v = makeVersion({ version_number: 3, prompt: 'jazz', key: 'C', bpm: 100 });
-		const result = formatVersionContext(v);
-		expect(result).toContain('[Version 3]');
-		expect(result).toContain('Style: jazz');
-		expect(result).toContain('Key: C');
-	});
-});
-
-describe('buildFullContext', () => {
-	const songs = [
-		makeSong({ id: 's1', title: 'Song A', album_id: 'a1', track_number: 1 }),
-		makeSong({ id: 's2', title: 'Song B', album_id: 'a1', track_number: 2 }),
-		makeSong({ id: 's3', title: 'Song C', album_id: 'a2', track_number: 1 })
-	];
-
-	it('includes current song context', () => {
-		const result = buildFullContext('my context', 's1', 'a1', songs, [], false);
-		expect(result).toContain('[Current Song]\nmy context');
-	});
-
-	it('adds album songs when albumMentioned is true', () => {
-		const result = buildFullContext('ctx', 's1', 'a1', songs, [], true);
-		expect(result).toContain('Song B');
-		expect(result).not.toContain('Song C');
-	});
-
-	it('does not add album songs when albumMentioned is false', () => {
-		const result = buildFullContext('ctx', 's1', 'a1', songs, [], false);
-		expect(result).not.toContain('Song B');
-	});
-
-	it('adds mentioned songs by id', () => {
-		const result = buildFullContext('ctx', 's1', 'a1', songs, ['s3'], false);
-		expect(result).toContain('Song C');
-	});
-
-	it('deduplicates album songs and mentioned songs', () => {
-		const result = buildFullContext('ctx', 's1', 'a1', songs, ['s2'], true);
-		const matches = result.match(/Song B/g);
-		expect(matches).toHaveLength(1);
-	});
-
-	it('includes mentioned versions', () => {
-		const versions = [makeVersion({ version_number: 1 }), makeVersion({ id: 'v2', version_number: 2, prompt: 'v2 style' })];
-		const result = buildFullContext('ctx', 's1', 'a1', songs, [], false, versions, [2]);
-		expect(result).toContain('[Version 2]');
-		expect(result).toContain('v2 style');
-		expect(result).not.toContain('[Version 1]');
-	});
-});
-
-describe('buildConversation', () => {
-	it('builds conversation with user and assistant messages', () => {
-		const msgs = [
-			{ role: 'user' as const, text: 'hello' },
-			{ role: 'assistant' as const, text: 'hi there' }
-		];
-		const result = buildConversation(msgs, 'new message');
-		expect(result).toContain('User: hello');
-		expect(result).toContain('Assistant: hi there');
-		expect(result).toContain('User: new message');
-	});
-
-	it('strips songmaker blocks from history', () => {
-		const msgs = [
-			{ role: 'assistant' as const, text: 'Here you go\n```songmaker\n{"lyrics": "test"}\n```' }
-		];
-		const result = buildConversation(msgs, 'thanks');
-		expect(result).not.toContain('songmaker');
-		expect(result).toContain('Here you go');
-	});
-});
 
 describe('cleanDisplayText', () => {
 	it('removes songmaker blocks', () => {
@@ -235,7 +117,8 @@ describe('extractAllApplyData', () => {
 	});
 
 	it('validates field bounds', () => {
-		const text = '```songmaker\n{"bpm": 1500, "duration": -1, "key": "this is way too long key"}\n```';
+		const text =
+			'```songmaker\n{"bpm": 1500, "duration": -1, "key": "this is way too long key"}\n```';
 		const result = extractAllApplyData(text, 'a1', songs);
 		expect(result).toEqual([]);
 	});

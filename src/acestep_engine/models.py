@@ -37,6 +37,7 @@ class AceStepConfig:
     repainting_start: float = 0.0
     repainting_end: float = 1.0
     audio_cover_strength: float = 1.0
+    reference_audio: str = ""
 
 
 @dataclass(frozen=True)

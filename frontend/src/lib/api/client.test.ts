@@ -27,7 +27,9 @@ import {
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
-	chatWithClaude,
+	sendChatMessage,
+	fetchChatHistory,
+	clearChatHistory,
 	checkSetupRequired,
 	setupAdmin,
 	login,
@@ -236,37 +238,39 @@ describe('API client', () => {
 	});
 });
 
-describe('chatWithClaude', () => {
-	it('calls server endpoint', async () => {
-		mockFetch.mockResolvedValueOnce({
-			ok: true,
-			status: 200,
-			json: () => Promise.resolve({ response: 'Hello from Claude' })
-		});
-		const result = await chatWithClaude('hi', 'context');
-		expect(result).toBe('Hello from Claude');
+describe('Chat API', () => {
+	it('sendChatMessage calls POST /api/songs/{id}/chat', async () => {
+		const turn = {
+			user_message: { id: 'm1', role: 'user', content: 'hi', created_at: '' },
+			assistant_message: { id: 'm2', role: 'assistant', content: 'hello', created_at: '' }
+		};
+		mockOk(turn);
+		const result = await sendChatMessage('s1', 'hi', ['s2'], ['v1']);
+		expect(result.assistant_message.content).toBe('hello');
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/songs/s1/chat');
+		expect(init.method).toBe('POST');
+		const body = JSON.parse(init.body);
+		expect(body.message).toBe('hi');
+		expect(body.mentioned_song_ids).toEqual(['s2']);
+	});
+
+	it('fetchChatHistory calls GET /api/songs/{id}/chat', async () => {
+		mockOk({ messages: [] });
+		const result = await fetchChatHistory('s1');
+		expect(result.messages).toEqual([]);
 		expect(mockFetch).toHaveBeenCalledWith(
-			expect.stringContaining('/api/chat'),
-			expect.objectContaining({ method: 'POST' })
+			'/api/songs/s1/chat',
+			expect.objectContaining({ credentials: 'include' })
 		);
 	});
 
-	it('throws ApiError on 503 unavailable from server', async () => {
-		mockFetch.mockResolvedValueOnce({
-			ok: false,
-			status: 503,
-			json: () => Promise.resolve({ detail: 'Claude unavailable' })
-		});
-		await expect(chatWithClaude('hi')).rejects.toThrow(ApiError);
-	});
-
-	it('throws ApiError on other server errors', async () => {
-		mockFetch.mockResolvedValueOnce({
-			ok: false,
-			status: 500,
-			json: () => Promise.resolve({ detail: 'Internal error' })
-		});
-		await expect(chatWithClaude('hi')).rejects.toThrow(ApiError);
+	it('clearChatHistory calls DELETE /api/songs/{id}/chat', async () => {
+		mockOk({ status: 'ok' });
+		await clearChatHistory('s1');
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/songs/s1/chat');
+		expect(init.method).toBe('DELETE');
 	});
 });
 

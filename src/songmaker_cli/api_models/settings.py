@@ -110,6 +110,44 @@ class ChatResponse(BaseModel):
     response: str
 
 
+class SendChatRequest(BaseModel):
+    message: str = Field(max_length=50_000)
+    mentioned_song_ids: list[str] = Field(default_factory=list)
+    mentioned_version_ids: list[str] = Field(default_factory=list)
+
+
+class ChatMessageResponse(BaseModel):
+    id: str
+    role: str
+    content: str
+    created_at: str
+
+    @classmethod
+    def from_orm(cls, msg) -> ChatMessageResponse:
+        return cls(
+            id=msg.id,
+            role=msg.role,
+            content=msg.content,
+            created_at=msg.created_at.isoformat() if msg.created_at else "",
+        )
+
+
+class ChatTurnResponse(BaseModel):
+    user_message: ChatMessageResponse
+    assistant_message: ChatMessageResponse
+
+
+class ChatHistoryResponse(BaseModel):
+    messages: list[ChatMessageResponse]
+
+
+class RecentChatItem(BaseModel):
+    song_id: str
+    title: str
+    message_count: int
+    last_message_at: str | None
+
+
 class CapabilitiesResponse(BaseModel):
     claude_api: bool
     claude_cli: bool
