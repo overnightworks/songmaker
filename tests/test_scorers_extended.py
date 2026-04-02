@@ -521,18 +521,18 @@ def test_emotional_dynamics_short_section() -> None:
     assert result == 0.0
 
 
-def test_bpm_detect_scalar_return() -> None:
+def test_bpm_detect_extracts_first_element() -> None:
     from songmaker_cli.scoring.bpm_accuracy import _detect_bpm
 
-    with patch("librosa.beat.beat_track", return_value=(120.0, None)):
+    with patch("librosa.feature.tempo", return_value=np.array([120.0])):
         bpm = _detect_bpm(np.zeros(SR), SR)
     assert bpm == 120.0
 
 
-def test_bpm_detect_array_return() -> None:
+def test_bpm_detect_multi_element_array() -> None:
     from songmaker_cli.scoring.bpm_accuracy import _detect_bpm
 
-    with patch("librosa.beat.beat_track", return_value=(np.array([130.0]), None)):
+    with patch("librosa.feature.tempo", return_value=np.array([130.0, 65.0])):
         bpm = _detect_bpm(np.zeros(SR), SR)
     assert bpm == 130.0
 

@@ -56,10 +56,8 @@ def _extract_requested_bpm(meta: SongMeta | None) -> int | None:
 
 
 def _detect_bpm(audio: np.ndarray, sr: int) -> float:
-    tempo, _ = librosa.beat.beat_track(y=audio, sr=sr)
-    if hasattr(tempo, "__len__"):
-        return float(tempo[0])
-    return float(tempo)
+    tempo = librosa.feature.tempo(y=audio, sr=sr)
+    return float(tempo[0])
 
 
 def _closest_octave_match(
