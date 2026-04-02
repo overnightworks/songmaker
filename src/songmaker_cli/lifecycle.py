@@ -47,19 +47,28 @@ def _sync_sessions(ctx: AppContext, session_cache) -> int:
     """Sync Redis session TTLs to the database. Returns count of synced sessions.
 
     Removes cached sessions for inactive users or sessions missing from the DB.
+    Also purges expired sessions from the database (they accumulate because Redis
+    evicts them on TTL but the DB rows stay forever).
     """
     from songmaker_cli.db.models import User as UserModel
     from songmaker_cli.db.models import UserSession
+    from songmaker_cli.db.queries import delete_expired_sessions
 
     active = session_cache.get_all_sessions()
-    if not active:
-        return 0
-
-    session_ids = [sid for sid, _ in active]
-    ttl_by_id = {sid: ttl for sid, ttl in active}
-    synced = 0
 
     with ctx.db() as db:
+        purged = delete_expired_sessions(db)
+        if purged:
+            log.info("Session sync: purged %d expired sessions from DB", purged)
+
+        if not active:
+            db.commit()
+            return 0
+
+        session_ids = [sid for sid, _ in active]
+        ttl_by_id = {sid: ttl for sid, ttl in active}
+        synced = 0
+
         db_sessions = (
             db.query(UserSession)
             .filter(UserSession.id.in_(session_ids))

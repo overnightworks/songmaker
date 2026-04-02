@@ -68,14 +68,19 @@ ScorerFunc = Callable[
 _VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
 
 
+@dataclass(frozen=True)
+class ScorerEntry:
+    func: ScorerFunc
+    needs_audio: bool = True
+    device: str = DEVICE_CPU
+    after_gpu: bool = False
+
+
 class ScorerRegistry:
     """Registry of scorer functions. Supports lazy loading and test isolation."""
 
     def __init__(self, *, autoload: bool = False) -> None:
-        self._scorers: dict[str, ScorerFunc] = {}
-        self._needs_audio: dict[str, bool] = {}
-        self._device: dict[str, str] = {}
-        self._after_gpu: dict[str, bool] = {}
+        self._scorers: dict[str, ScorerEntry] = {}
         self._loaded: bool = False
         self._autoload: bool = autoload
 
@@ -97,10 +102,9 @@ class ScorerRegistry:
                     f"Scorer name '{name}' does not match any SongScores field. "
                     f"Valid names: {sorted(_VALID_SCORER_NAMES)}"
                 )
-            self._scorers[name] = func
-            self._needs_audio[name] = needs_audio
-            self._device[name] = device
-            self._after_gpu[name] = after_gpu
+            self._scorers[name] = ScorerEntry(
+                func=func, needs_audio=needs_audio, device=device, after_gpu=after_gpu,
+            )
             return func
 
         return decorator
@@ -110,16 +114,20 @@ class ScorerRegistry:
         return list(self._scorers.keys())
 
     def get(self, name: str) -> ScorerFunc | None:
-        return self._scorers.get(name)
+        entry = self._scorers.get(name)
+        return entry.func if entry else None
 
     def scorer_needs_audio(self, name: str) -> bool:
-        return self._needs_audio.get(name, True)
+        entry = self._scorers.get(name)
+        return entry.needs_audio if entry else True
 
     def scorer_uses_gpu(self, name: str) -> bool:
-        return self._device.get(name, DEVICE_CPU) == DEVICE_GPU
+        entry = self._scorers.get(name)
+        return entry.device == DEVICE_GPU if entry else False
 
     def scorer_after_gpu(self, name: str) -> bool:
-        return self._after_gpu.get(name, False)
+        entry = self._scorers.get(name)
+        return entry.after_gpu if entry else False
 
     def all_names(self) -> list[str]:
         return list(self._scorers.keys())
@@ -154,9 +162,6 @@ class ScorerRegistry:
     def reset_for_testing(self) -> None:
         """Clear all scorers for test isolation."""
         self._scorers.clear()
-        self._needs_audio.clear()
-        self._device.clear()
-        self._after_gpu.clear()
         self._loaded = False
 
 

@@ -536,7 +536,7 @@ def _touch_heartbeat(factory, job_id: str) -> None:
             update_job_heartbeat(session, job_id)
             session.commit()
     except Exception:
-        log.debug("Heartbeat update failed for job %s", job_id)
+        log.warning("Heartbeat update failed for job %s", job_id)
 
 
 def _cleanup_orphaned_files(audio_dir: Path, *rel_paths: str) -> None:

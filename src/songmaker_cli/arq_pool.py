@@ -6,6 +6,7 @@ Initialized eagerly during app lifespan via ``init_arq_pool``.
 from __future__ import annotations
 
 import os
+import threading
 
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
@@ -21,29 +22,33 @@ from songmaker_cli.constants import (
 )
 
 _pool: ArqRedis | None = None
+_pool_lock = threading.Lock()
 
 
 async def init_arq_pool() -> ArqRedis:
-    """Create the pool once during app startup. Not safe to call concurrently."""
     global _pool
-    _pool = await create_pool(
+    pool = await create_pool(
         RedisSettings.from_dsn(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
     )
-    return _pool
+    with _pool_lock:
+        _pool = pool
+    return pool
 
 
 def get_arq_pool() -> ArqRedis:
-    """Return the pool created by ``init_arq_pool``. Raises if not initialized."""
-    if _pool is None:
-        raise RuntimeError("arq pool not initialized — call init_arq_pool() during startup")
-    return _pool
+    with _pool_lock:
+        if _pool is None:
+            raise RuntimeError("arq pool not initialized — call init_arq_pool() during startup")
+        return _pool
 
 
 async def close_arq_pool() -> None:
     global _pool
-    if _pool is not None:
-        await _pool.aclose()
+    with _pool_lock:
+        pool = _pool
         _pool = None
+    if pool is not None:
+        await pool.aclose()
 
 
 async def get_queue_depth() -> int:

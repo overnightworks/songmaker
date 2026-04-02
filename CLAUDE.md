@@ -107,6 +107,7 @@ These are conventions that aren't obvious from reading a single file:
 - **Backup/restore requires both DB and audio files.** `scripts/backup.sh` dumps PostgreSQL + copies the audio volume to `BACKUP_DIR`. `scripts/restore.sh` restores both atomically. The two must stay in sync — restoring one without the other leaves orphaned records or unreachable files.
 - **Trust boundaries: subprocesses share OS user.** ACE-Step and scorer subprocesses run as the same `songmaker` user in Docker with `cap_drop: ALL`. Compromised model weights or ACE-Step code get full user-level disk access. Container-level isolation mitigates this; OS user separation would require separate containers for marginal benefit. Accepted risk for a single-user deployment.
 - **Seed reproducibility requires `use_random_seed: false`.** ACE-Step's API ignores the `seed` field unless `use_random_seed` is explicitly `false`. The client sets this automatically based on `config.seed`: `-1` means random, any non-negative value means fixed. The DB stores the seed from the server's response (`seed_value`), not the requested seed.
+- **Claude CLI `_DISALLOWED_TOOLS` is a denylist** in `claude/provider.py`. It blocks all known tools, but fails open — new tools added to future Claude Code versions are implicitly allowed. Accepted risk for an invite-only platform. When going public, switch to `ANTHROPIC_API_KEY` (which uses the SDK, not the CLI) and this issue disappears.
 
 ## Docker
 

@@ -410,8 +410,6 @@ def test_pipeline_warns_on_unknown_gpu_scorer(
     ) -> SilenceScore:
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
-    clean_registry._device["text_accuracy"] = "gpu"
-
     with caplog.at_level(logging.WARNING):
         scores = run_scoring_pipeline(
             fake_mp3, scorers=["silence", "text_accuracy"], registry=clean_registry,
