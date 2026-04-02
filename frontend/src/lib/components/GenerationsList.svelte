@@ -10,17 +10,16 @@
 		selectedAlbumId
 	} from '$lib/stores/player';
 	import { scoreColor } from '$lib/utils/scores';
+	import { getGenerationActions } from '$lib/contexts/generation-actions';
 
 	interface Props {
 		song: SongItem;
 		onselect: (gen: GenerationItem) => void;
-		onscore: (genId: string) => void;
-		onpick: (genId: string, picked: boolean) => void;
-		onrepaint?: (gen: GenerationItem) => void;
-		oncover?: (gen: GenerationItem) => void;
 	}
 
-	let { song, onselect, onscore, onpick, onrepaint, oncover }: Props = $props();
+	let { song, onselect }: Props = $props();
+
+	const actions = getGenerationActions();
 
 	const pb = $derived($playback);
 	const audioPlaying = $derived($isAudioPlaying);
@@ -142,7 +141,7 @@
 								class:picked={gen.is_picked}
 								onclick={(e) => {
 									e.stopPropagation();
-									onpick(gen.id, !gen.is_picked);
+									actions.pick(gen.id, !gen.is_picked);
 								}}
 								aria-label={gen.is_picked ? 'Unpick' : 'Pick for album'}
 							>
@@ -152,30 +151,28 @@
 								class="score-action"
 								onclick={(e) => {
 									e.stopPropagation();
-									onscore(gen.id);
+									actions.score(gen.id);
 								}}
 								aria-label="Score generation"
 							>
 								Score
 							</button>
-							{#if onrepaint && gen.wav_path}
+							{#if gen.wav_path}
 								<button
 									class="score-action"
 									onclick={(e) => {
 										e.stopPropagation();
-										onrepaint(gen);
+										actions.repaint(gen);
 									}}
 									aria-label="Repaint section"
 								>
 									Repaint
 								</button>
-							{/if}
-							{#if oncover && gen.wav_path}
 								<button
 									class="score-action"
 									onclick={(e) => {
 										e.stopPropagation();
-										oncover(gen);
+										actions.cover(gen);
 									}}
 									aria-label="Cover with new style"
 								>

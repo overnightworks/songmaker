@@ -1,7 +1,8 @@
 <script lang="ts">
-	import type { GenerationItem, ShareResult } from '$lib/api/types';
+	import type { GenerationItem } from '$lib/api/types';
 	import { scoreColor } from '$lib/utils/scores';
 	import { addToast } from '$lib/stores/toast';
+	import { getGenerationActions } from '$lib/contexts/generation-actions';
 	import OverflowMenu from './OverflowMenu.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
@@ -9,32 +10,11 @@
 	interface Props {
 		generation: GenerationItem;
 		scoring?: boolean;
-		onversionclick?: (versionId: string) => void;
-		onscore?: (genId: string) => void;
-		onpick?: (genId: string, picked: boolean) => void;
-		onkeep?: (genId: string, kept: boolean) => void;
-		ondelete?: (genId: string) => void;
-		onshare?: (genId: string) => Promise<ShareResult>;
-		onunshare?: (genId: string) => Promise<void>;
-		onrate?: (genId: string, rating: number, notes: string) => Promise<void>;
-		onaddtoplaylist?: (playlistId: string, genId: string) => Promise<void>;
-		onpinseed?: (seed: number) => void;
 	}
 
-	let {
-		generation,
-		scoring = false,
-		onversionclick,
-		onscore,
-		onpick,
-		onkeep,
-		ondelete,
-		onshare,
-		onunshare,
-		onrate,
-		onaddtoplaylist,
-		onpinseed
-	}: Props = $props();
+	let { generation, scoring = false }: Props = $props();
+
+	const actions = getGenerationActions();
 
 	let ratingValue = $state(50);
 	let ratingNotes = $state('');
@@ -51,10 +31,10 @@
 	});
 
 	async function saveRating(): Promise<void> {
-		if (!onrate || ratingSaving) return;
+		if (ratingSaving) return;
 		ratingSaving = true;
 		try {
-			await onrate(generation.id, ratingValue, ratingNotes);
+			await actions.rate(generation.id, ratingValue, ratingNotes);
 		} finally {
 			ratingSaving = false;
 		}
@@ -130,36 +110,28 @@
 			<h4 class="gen-heading">
 				Generation {generation.generation_number}
 			</h4>
-			{#if onpick}
-				<button
-					class="pick-btn"
-					class:picked={generation.is_picked}
-					onclick={() => onpick(generation.id, !generation.is_picked)}
-					aria-label={generation.is_picked ? 'Unpick as album version' : 'Pick as album version'}
-				>
-					{generation.is_picked ? '★ Album Pick' : '☆ Pick for Album'}
-				</button>
-			{:else if generation.is_picked}
-				<span class="picked-badge">★ Album Pick</span>
-			{/if}
-			{#if onkeep}
-				<button
-					class="keep-btn"
-					class:kept={generation.is_kept}
-					onclick={() => onkeep(generation.id, !generation.is_kept)}
-					aria-label={generation.is_kept ? 'Remove from kept' : 'Keep this generation'}
-				>
-					{generation.is_kept ? '♥ Kept' : '♡ Keep'}
-				</button>
-			{:else if generation.is_kept}
-				<span class="kept-badge">♥ Kept</span>
-			{/if}
+			<button
+				class="pick-btn"
+				class:picked={generation.is_picked}
+				onclick={() => actions.pick(generation.id, !generation.is_picked)}
+				aria-label={generation.is_picked ? 'Unpick as album version' : 'Pick as album version'}
+			>
+				{generation.is_picked ? '★ Album Pick' : '☆ Pick for Album'}
+			</button>
+			<button
+				class="keep-btn"
+				class:kept={generation.is_kept}
+				onclick={() => actions.keep(generation.id, !generation.is_kept)}
+				aria-label={generation.is_kept ? 'Remove from kept' : 'Keep this generation'}
+			>
+				{generation.is_kept ? '♥ Kept' : '♡ Keep'}
+			</button>
 		</div>
 		<div class="gen-meta">
 			{#if generation.version_number !== null}
-				{#if onversionclick && generation.version_id}
+				{#if generation.version_id}
 					{@const vid = generation.version_id}
-					<button class="version-link" onclick={() => onversionclick(vid)}>
+					<button class="version-link" onclick={() => actions.clickVersion(vid)}>
 						v{generation.version_number}
 					</button>
 				{:else}
@@ -169,57 +141,39 @@
 				<span class="version-tag unknown">unknown version</span>
 			{/if}
 			{#if generation.seed}
-				{#if onpinseed}
-					<button class="seed" onclick={() => onpinseed(generation.seed!)}>
-						seed:{generation.seed}
-					</button>
-				{:else}
-					<span class="seed">seed:{generation.seed}</span>
-				{/if}
+				<button class="seed" onclick={() => actions.pinSeed(generation.seed!)}>
+					seed:{generation.seed}
+				</button>
 			{/if}
-			{#if onshare && onunshare}
-				<ShareButton
-					isShared={generation.is_shared}
-					shareSlug={generation.share_slug}
-					onshare={() => onshare(generation.id)}
-					onunshare={() => onunshare(generation.id)}
-				/>
-			{/if}
+			<ShareButton
+				isShared={generation.is_shared}
+				shareSlug={generation.share_slug}
+				onshare={() => actions.share(generation.id)}
+				onunshare={() => actions.unshare(generation.id)}
+			/>
 			<div class="picker-anchor">
 				<OverflowMenu
 					items={[
-						...(onaddtoplaylist
-							? [
-									{
-										label: 'Add to Playlist',
-										onclick: () => (showPlaylistPicker = true)
-									}
-								]
-							: []),
-						...(onscore
-							? [
-									{
-										label: scoring ? 'Scoring...' : 'Re-Score',
-										onclick: () => onscore(generation.id)
-									}
-								]
-							: []),
-						...(ondelete
-							? [
-									{
-										label: 'Delete Generation',
-										confirmLabel: 'Confirm Delete',
-										destructive: true,
-										onclick: () => ondelete(generation.id)
-									}
-								]
-							: [])
+						{
+							label: 'Add to Playlist',
+							onclick: () => (showPlaylistPicker = true)
+						},
+						{
+							label: scoring ? 'Scoring...' : 'Re-Score',
+							onclick: () => actions.score(generation.id)
+						},
+						{
+							label: 'Delete Generation',
+							confirmLabel: 'Confirm Delete',
+							destructive: true,
+							onclick: () => actions.del(generation.id)
+						}
 					]}
 				/>
-				{#if showPlaylistPicker && onaddtoplaylist}
+				{#if showPlaylistPicker}
 					<PlaylistPicker
 						onselect={async (playlistId) => {
-							await onaddtoplaylist(playlistId, generation.id);
+							await actions.addToPlaylist(playlistId, generation.id);
 							showPlaylistPicker = false;
 						}}
 						onclose={() => (showPlaylistPicker = false)}
@@ -267,33 +221,31 @@
 			</div>
 		{/if}
 
-		{#if onrate}
-			<div class="rating-section">
-				<div class="rating-row">
-					<span class="rating-label">Your Rating</span>
-					<input
-						type="range"
-						class="rating-slider"
-						min="0"
-						max="100"
-						step="1"
-						bind:value={ratingValue}
-					/>
-					<span class="rating-number">{ratingValue}</span>
-				</div>
-				<textarea
-					class="rating-notes"
-					placeholder="Notes (optional)"
-					bind:value={ratingNotes}
-					rows="2"
-				></textarea>
-				{#if ratingDirty}
-					<button class="rating-save" onclick={saveRating} disabled={ratingSaving}>
-						{ratingSaving ? 'Saving...' : 'Save Rating'}
-					</button>
-				{/if}
+		<div class="rating-section">
+			<div class="rating-row">
+				<span class="rating-label">Your Rating</span>
+				<input
+					type="range"
+					class="rating-slider"
+					min="0"
+					max="100"
+					step="1"
+					bind:value={ratingValue}
+				/>
+				<span class="rating-number">{ratingValue}</span>
 			</div>
-		{/if}
+			<textarea
+				class="rating-notes"
+				placeholder="Notes (optional)"
+				bind:value={ratingNotes}
+				rows="2"
+			></textarea>
+			{#if ratingDirty}
+				<button class="rating-save" onclick={saveRating} disabled={ratingSaving}>
+					{ratingSaving ? 'Saving...' : 'Save Rating'}
+				</button>
+			{/if}
+		</div>
 	</section>
 
 	{#if generation.whisper_text}
