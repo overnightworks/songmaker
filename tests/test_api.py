@@ -847,82 +847,100 @@ def test_score_generation_submits_job(client: TestClient) -> None:
     mock_pool.enqueue_job.assert_called_once()
 
 
-# ── Chat endpoint ───────────────────────────────────────────────────
+# ── Song chat endpoint ──────────────────────────────────────────────
 
 
-def test_chat_success(tmp_path: Path) -> None:
+def _mock_acall():
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    c = _make_authed_client(tmp_path)
     mock_response = MagicMock()
     mock_response.text = "Hello from Claude"
+    mock_fn = AsyncMock(return_value=mock_response)
+    return patch("songmaker_cli.chat_api.acall_claude", mock_fn), mock_fn
 
-    mock_acall = AsyncMock(return_value=mock_response)
-    with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = c.post("/api/chat", json={
-            "message": "hi",
-            "context": "Song: Test",
-        })
+
+def test_song_chat_send(client: TestClient) -> None:
+    patcher, mock_fn = _mock_acall()
+    with patcher:
+        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
 
     assert resp.status_code == 200
-    assert resp.json()["response"] == "Hello from Claude"
+    data = resp.json()
+    assert data["user_message"]["role"] == "user"
+    assert data["user_message"]["content"] == "hi"
+    assert data["assistant_message"]["role"] == "assistant"
+    assert data["assistant_message"]["content"] == "Hello from Claude"
 
 
-def test_chat_unavailable(tmp_path: Path) -> None:
+def test_song_chat_multi_turn(client: TestClient) -> None:
+    patcher, mock_fn = _mock_acall()
+    with patcher:
+        client.post("/api/songs/s1/chat", json={"message": "first"})
+        client.post("/api/songs/s1/chat", json={"message": "second"})
+
+    last_call = mock_fn.call_args
+    messages_arg = last_call.kwargs["messages"]
+    assert len(messages_arg) == 3
+    assert messages_arg[0]["role"] == "user"
+    assert messages_arg[1]["role"] == "assistant"
+    assert messages_arg[2]["role"] == "user"
+
+
+def test_song_chat_history(client: TestClient) -> None:
+    patcher, _ = _mock_acall()
+    with patcher:
+        client.post("/api/songs/s1/chat", json={"message": "hi"})
+
+    resp = client.get("/api/songs/s1/chat")
+    assert resp.status_code == 200
+    msgs = resp.json()["messages"]
+    assert len(msgs) == 2
+    assert msgs[0]["role"] == "user"
+    assert msgs[1]["role"] == "assistant"
+
+
+def test_song_chat_clear(client: TestClient) -> None:
+    patcher, _ = _mock_acall()
+    with patcher:
+        client.post("/api/songs/s1/chat", json={"message": "hi"})
+
+    resp = client.delete("/api/songs/s1/chat")
+    assert resp.status_code == 200
+
+    history = client.get("/api/songs/s1/chat").json()
+    assert len(history["messages"]) == 0
+
+
+def test_song_chat_unavailable(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
     from songmaker_cli.claude.provider import UnavailableError
 
-    c = _make_authed_client(tmp_path)
     mock_acall = AsyncMock(side_effect=UnavailableError("no backend"))
     with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = c.post("/api/chat", json={"message": "hi"})
+        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
 
     assert resp.status_code == 503
 
 
-def test_chat_with_context(tmp_path: Path) -> None:
-    from unittest.mock import AsyncMock, MagicMock, patch
-
-    c = _make_authed_client(tmp_path)
-    mock_response = MagicMock()
-    mock_response.text = "Rock on!"
-
-    mock_acall = AsyncMock(return_value=mock_response)
-    with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = c.post("/api/chat", json={
-            "message": "write a verse",
-            "context": "Title: My Song\nLyrics: hello world",
-        })
-
-    assert resp.status_code == 200
-    prompt_arg = mock_acall.call_args.args[0]
-    assert "<song_context>" in prompt_arg
-    assert "My Song" in prompt_arg
-    assert "write a verse" in prompt_arg
-
-
-def test_chat_default_style(tmp_path: Path) -> None:
-    from unittest.mock import AsyncMock, MagicMock, patch
-
+def test_song_chat_builds_context(client: TestClient) -> None:
     from songmaker_cli.chat_api import CHAT_ROLE
 
-    c = _make_authed_client(tmp_path)
-    mock_response = MagicMock()
-    mock_response.text = "Hello"
-
-    mock_acall = AsyncMock(return_value=mock_response)
-    with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = c.post("/api/chat", json={"message": "hi"})
+    patcher, mock_fn = _mock_acall()
+    with patcher:
+        resp = client.post("/api/songs/s1/chat", json={"message": "write a verse"})
 
     assert resp.status_code == 200
-    system_arg = mock_acall.call_args.kwargs["system"]
+    system_arg = mock_fn.call_args.kwargs["system"]
     assert CHAT_ROLE in system_arg
-    assert "```songmaker" in system_arg
+    messages_arg = mock_fn.call_args.kwargs["messages"]
+    user_msg = messages_arg[-1]["content"]
+    assert "<song_context>" in user_msg
+    assert "Thunder" in user_msg
 
 
-def test_chat_requires_auth(unauthed_client: TestClient) -> None:
-    resp = unauthed_client.post("/api/chat", json={"message": "hi"})
+def test_song_chat_requires_auth(unauthed_client: TestClient) -> None:
+    resp = unauthed_client.post("/api/songs/s1/chat", json={"message": "hi"})
     assert resp.status_code == 401
 
 
@@ -1443,28 +1461,22 @@ def test_audit_log_admin_endpoint(tmp_path: Path) -> None:
 # ── Chat rate limiting ───────────────────────────────────────────────
 
 
-def test_chat_rate_limit(tmp_path: Path) -> None:
-    from unittest.mock import AsyncMock, MagicMock, patch
-
+def test_chat_rate_limit(client: TestClient) -> None:
+    import songmaker_cli.api_helpers as api_mod
     import songmaker_cli.auth as auth_mod
 
     original = auth_mod.CHAT_RATE_LIMIT_USER
     auth_mod.CHAT_RATE_LIMIT_USER = 2
-    import songmaker_cli.api_helpers as api_mod
     api_mod._ENV_RATE_LIMITS["chat"] = (2, 300, "chat_rate_limit")
 
-    c = _make_authed_client(tmp_path)
-    mock_resp = MagicMock()
-    mock_resp.text = "ok"
-
     try:
-        mock_acall = AsyncMock(return_value=mock_resp)
-        with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
+        patcher, _ = _mock_acall()
+        with patcher:
             for _ in range(2):
-                r = c.post("/api/chat", json={"message": "hi"})
+                r = client.post("/api/songs/s1/chat", json={"message": "hi"})
                 assert r.status_code == 200
 
-            r = c.post("/api/chat", json={"message": "hi"})
+            r = client.post("/api/songs/s1/chat", json={"message": "hi"})
             assert r.status_code == 429
     finally:
         auth_mod.CHAT_RATE_LIMIT_USER = original
@@ -1551,20 +1563,14 @@ def test_sanitize_error_generation_setup() -> None:
     assert _sanitize_error(GenerationSetupError("Song not found")) == "Song not found"
 
 
-def test_chat_success_finalizes_job(tmp_path: Path) -> None:
-    from unittest.mock import AsyncMock, MagicMock, patch
-
-    c = _make_authed_client(tmp_path)
-    mock_response = MagicMock()
-    mock_response.text = "Hello"
-
-    mock_acall = AsyncMock(return_value=mock_response)
-    with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = c.post("/api/chat", json={"message": "hi"})
+def test_chat_success_finalizes_job(client: TestClient) -> None:
+    patcher, _ = _mock_acall()
+    with patcher:
+        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
 
     assert resp.status_code == 200
 
-    factory = c.app.state.ctx.db
+    factory = client.app.state.ctx.db
     with factory() as session:
         job = session.query(Job).filter_by(type="chat").first()
         assert job is not None
@@ -1572,19 +1578,18 @@ def test_chat_success_finalizes_job(tmp_path: Path) -> None:
         assert job.completed_at is not None
 
 
-def test_chat_failure_finalizes_job(tmp_path: Path) -> None:
+def test_chat_failure_finalizes_job(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
     from songmaker_cli.claude.provider import UnavailableError
 
-    c = _make_authed_client(tmp_path)
     mock_acall = AsyncMock(side_effect=UnavailableError("down"))
     with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = c.post("/api/chat", json={"message": "hi"})
+        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
 
     assert resp.status_code == 503
 
-    factory = c.app.state.ctx.db
+    factory = client.app.state.ctx.db
     with factory() as session:
         job = session.query(Job).filter_by(type="chat").first()
         assert job is not None
@@ -1592,16 +1597,15 @@ def test_chat_failure_finalizes_job(tmp_path: Path) -> None:
         assert job.completed_at is not None
 
 
-def test_chat_unavailable_hides_details(tmp_path: Path) -> None:
+def test_chat_unavailable_hides_details(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
     from songmaker_cli.claude.provider import UnavailableError
 
-    c = _make_authed_client(tmp_path)
     err = UnavailableError("Claude CLI error: /home/user/.local/bin...")
     mock_acall = AsyncMock(side_effect=err)
     with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = c.post("/api/chat", json={"message": "hi"})
+        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
 
     assert resp.status_code == 503
     assert "Claude is currently unavailable" in resp.json()["detail"]
@@ -1820,10 +1824,17 @@ def test_capabilities_reflects_db_model(tmp_path: Path) -> None:
     assert data["scoring_model"] == "claude-haiku-4-5-20251001"
 
 
-def test_chat_context_max_length(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="user")
-    resp = c.post("/api/chat", json={
-        "message": "hi",
-        "context": "x" * 10_001,
-    })
-    assert resp.status_code == 422
+def test_song_chat_message_limit(client: TestClient) -> None:
+    from songmaker_cli.db.queries.chat import MAX_CHAT_MESSAGES
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        from songmaker_cli.db.queries import create_chat_message
+        for i in range(MAX_CHAT_MESSAGES):
+            role = "user" if i % 2 == 0 else "assistant"
+            create_chat_message(session, "s1", role, f"msg {i}")
+        session.commit()
+
+    resp = client.post("/api/songs/s1/chat", json={"message": "overflow"})
+    assert resp.status_code == 409
+    assert "full" in resp.json()["detail"].lower()
