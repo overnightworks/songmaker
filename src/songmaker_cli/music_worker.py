@@ -74,23 +74,51 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None):
     )
 
 
-async def reinitialize_acestep(ctx):
+async def reinitialize_acestep(ctx, job_id, target_model=None):
     import httpx
 
     from songmaker_cli.acestep_manager import _ACESTEP_PORT
+    from songmaker_cli.db.queries import update_job_status
 
-    mgr = _require_acestep_manager()
-    acestep_url = f"http://localhost:{_ACESTEP_PORT}/v1/reinitialize"
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(acestep_url, json={})
-    data = resp.json()
-    if data.get("code") != 200:
-        raise RuntimeError(f"ACE-Step reinitialize failed: {data}")
-    mgr.refresh_cached_model()
-    model = mgr.active_model
-    if model:
-        await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)
-    await _publish_acestep_status(ctx["redis"])
+    db_factory = _get_db_factory()
+
+    with db_factory() as session:
+        update_job_status(session, job_id, "running", worker_pid=os.getpid())
+        session.commit()
+
+    try:
+        mgr = _require_acestep_manager()
+
+        if target_model is not None and target_model != mgr.active_model:
+            with db_factory() as session:
+                update_job_status(
+                    session, job_id, "failed",
+                    error="Model switching not yet implemented",
+                )
+                session.commit()
+            return
+
+        acestep_url = f"http://localhost:{_ACESTEP_PORT}/v1/reinitialize"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(acestep_url, json={})
+        data = resp.json()
+        if data.get("code") != 200:
+            raise RuntimeError(f"ACE-Step reinitialize failed: {data}")
+
+        mgr.refresh_cached_model()
+        model = mgr.active_model
+        if model:
+            await ctx["redis"].set(ACTIVE_MODEL_REDIS_KEY, model, ex=ACTIVE_MODEL_TTL_SECONDS)
+        await _publish_acestep_status(ctx["redis"])
+
+        with db_factory() as session:
+            update_job_status(session, job_id, "completed", progress=1.0)
+            session.commit()
+    except Exception as exc:
+        with db_factory() as session:
+            update_job_status(session, job_id, "failed", error=str(exc))
+            session.commit()
+        raise
 
 
 async def _publish_acestep_status(redis) -> None:
@@ -129,6 +157,9 @@ _base_cleanup = make_cleanup_cron("generate")
 
 async def cleanup_stale(ctx):
     await _base_cleanup(ctx)
+
+
+async def publish_acestep_heartbeat(ctx):
     mgr = _require_acestep_manager()
     model = mgr.active_model
     if model:
@@ -182,4 +213,5 @@ class MusicWorkerSettings:
     health_check_interval = HEALTH_CHECK_INTERVAL_SECONDS
     cron_jobs = [
         cron(cleanup_stale, minute={i for i in range(0, 60, 2)}, second={0}),
+        cron(publish_acestep_heartbeat, second={i for i in range(0, 60, 45)}),
     ]

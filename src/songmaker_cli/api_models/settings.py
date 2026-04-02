@@ -145,3 +145,7 @@ class AceStepStatusResponse(BaseModel):
     model: str | None
     lm_model: str | None
     jobs: dict
+
+
+class ReinitializeRequest(BaseModel):
+    target_model: str | None = None

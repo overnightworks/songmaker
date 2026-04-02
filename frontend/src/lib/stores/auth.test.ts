@@ -15,7 +15,16 @@ vi.mock('$lib/api/client', async () => {
 	};
 });
 
-import { currentUser, authLoading, authError, isAdmin, checkAuth, login, logout } from './auth';
+import {
+	currentUser,
+	authLoading,
+	authError,
+	isAdmin,
+	checkAuth,
+	login,
+	logout,
+	clearAuth
+} from './auth';
 import { ApiError } from '$lib/api/client';
 
 beforeEach(() => {
@@ -90,6 +99,14 @@ describe('login', () => {
 		mockApiLogin.mockRejectedValueOnce(new Error('Network failure'));
 		await expect(login('alice', 'x')).rejects.toThrow();
 		expect(get(authError)).toBe('Network failure');
+	});
+});
+
+describe('clearAuth', () => {
+	it('sets currentUser to null', () => {
+		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
+		clearAuth();
+		expect(get(currentUser)).toBeNull();
 	});
 });
 

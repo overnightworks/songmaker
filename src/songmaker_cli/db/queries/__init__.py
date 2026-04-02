@@ -72,6 +72,7 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.jobs import create_job as create_job
 from songmaker_cli.db.queries.jobs import get_job as get_job
 from songmaker_cli.db.queries.jobs import get_queue_position as get_queue_position
+from songmaker_cli.db.queries.jobs import has_active_job_of_type as has_active_job_of_type
 from songmaker_cli.db.queries.jobs import (
     job_counts_by_type_and_status as job_counts_by_type_and_status,
 )

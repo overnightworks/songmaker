@@ -51,6 +51,7 @@
 		'users' | 'sessions' | 'attempts' | 'acestep' | 'ratelimits' | 'generation' | 'claude'
 	>('users');
 	let reinitializing = $state(false);
+	let reinitSelectedModel = $state<string | null>(null);
 
 	let globalLimits = $state<RateLimitItem[]>([]);
 	let globalEdits = $state<Record<string, string>>({});
@@ -111,6 +112,7 @@
 			sessions = s.items;
 			attempts = a.items;
 			aceStatus = ace;
+			reinitSelectedModel = ace.model;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
 		}
@@ -233,11 +235,34 @@
 		reinitializing = true;
 		error = '';
 		try {
-			await reinitializeAceStep();
-			aceStatus = await getAceStepStatus();
+			const targetModel =
+				reinitSelectedModel && reinitSelectedModel !== aceStatus?.model
+					? reinitSelectedModel
+					: undefined;
+			const job = await reinitializeAceStep(targetModel);
+			const source = new EventSource(`/api/jobs/${job.id}/stream`, {
+				withCredentials: true
+			});
+			source.onmessage = async (event: MessageEvent) => {
+				const updated = JSON.parse(event.data);
+				if (['completed', 'partial', 'failed', 'cancelled'].includes(updated.status)) {
+					source.close();
+					reinitializing = false;
+					if (updated.status === 'completed') {
+						aceStatus = await getAceStepStatus();
+						reinitSelectedModel = aceStatus.model;
+					} else if (updated.error) {
+						error = updated.error;
+					}
+				}
+			};
+			source.onerror = () => {
+				source.close();
+				reinitializing = false;
+				error = 'Lost connection to server';
+			};
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Reinitialize failed';
-		} finally {
 			reinitializing = false;
 		}
 	}
@@ -881,9 +906,28 @@
 							</div>
 						{/if}
 					</div>
-					<button class="reinit-btn" onclick={handleReinitialize} disabled={reinitializing}>
-						{reinitializing ? 'Reinitializing...' : 'Reinitialize ACE-Step'}
-					</button>
+					<div class="reinit-row">
+						{#if allModels.length > 1}
+							<select
+								class="model-select"
+								bind:value={reinitSelectedModel}
+								disabled={reinitializing}
+							>
+								{#each allModels.filter((m) => m.is_active) as model}
+									<option value={model.id}>{model.id}</option>
+								{/each}
+							</select>
+						{/if}
+						<button class="reinit-btn" onclick={handleReinitialize} disabled={reinitializing}>
+							{#if reinitializing}
+								Reinitializing...
+							{:else if reinitSelectedModel && reinitSelectedModel !== aceStatus?.model}
+								Switch to {reinitSelectedModel}
+							{:else}
+								Reinitialize ACE-Step
+							{/if}
+						</button>
+					</div>
 					<p class="hint">
 						Use this if generations fail. Resets the model without restarting the server.
 					</p>
@@ -1176,6 +1220,22 @@
 	.offline {
 		color: var(--score-bad);
 		font-weight: 600;
+	}
+
+	.reinit-row {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.model-select {
+		background: var(--surface);
+		color: var(--text);
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-pill);
+		padding: 0.5rem 0.75rem;
+		font-size: var(--btn-font-size);
+		font-family: var(--font-display);
 	}
 
 	.reinit-btn {

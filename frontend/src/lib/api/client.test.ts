@@ -3,6 +3,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
+const mockClearAuth = vi.fn();
+const mockGoto = vi.fn();
+
+vi.mock('$lib/stores/auth', () => ({ clearAuth: (...args: unknown[]) => mockClearAuth(...args) }));
+vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => mockGoto(...args) }));
+
 import {
 	fetchAlbums,
 	fetchSongs,
@@ -55,6 +61,8 @@ function mockError(status: number, detail: string = '') {
 
 beforeEach(() => {
 	mockFetch.mockReset();
+	mockClearAuth.mockReset();
+	mockGoto.mockReset();
 });
 
 describe('API client', () => {
@@ -307,6 +315,36 @@ describe('Auth API', () => {
 		expect(url).toBe('/api/auth/password');
 		expect(init.method).toBe('PUT');
 		expect(JSON.parse(init.body)).toEqual({ current: 'old', new_password: 'newpass123' });
+	});
+});
+
+describe('401 session expiry handler', () => {
+	it('clears auth and redirects on 401 from non-auth endpoint', async () => {
+		mockError(401, 'Session expired');
+		await expect(fetchAlbums()).rejects.toThrow(ApiError);
+		expect(mockClearAuth).toHaveBeenCalled();
+		expect(mockGoto).toHaveBeenCalledWith('/login');
+	});
+
+	it('does not redirect on 401 from login endpoint', async () => {
+		mockError(401, 'Invalid credentials');
+		await expect(login('alice', 'wrong')).rejects.toThrow(ApiError);
+		expect(mockClearAuth).not.toHaveBeenCalled();
+		expect(mockGoto).not.toHaveBeenCalled();
+	});
+
+	it('does not redirect on 401 from setup endpoint', async () => {
+		mockError(401, 'Bad request');
+		await expect(setupAdmin('admin', 'pass')).rejects.toThrow(ApiError);
+		expect(mockClearAuth).not.toHaveBeenCalled();
+		expect(mockGoto).not.toHaveBeenCalled();
+	});
+
+	it('does not redirect on non-401 errors', async () => {
+		mockError(500, 'Internal error');
+		await expect(fetchAlbums()).rejects.toThrow(ApiError);
+		expect(mockClearAuth).not.toHaveBeenCalled();
+		expect(mockGoto).not.toHaveBeenCalled();
 	});
 });
 

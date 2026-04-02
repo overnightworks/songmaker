@@ -18,6 +18,7 @@ from songmaker_cli.api_helpers import (
 from songmaker_cli.api_models import (
     AuditLogResponse,
     CreateUserRequest,
+    JobResponse,
     LoginAttemptResponse,
     PaginatedResponse,
     SessionResponse,
@@ -25,7 +26,7 @@ from songmaker_cli.api_models import (
     UpdateUserRequest,
     UserResponse,
 )
-from songmaker_cli.api_models.settings import AceStepStatusResponse
+from songmaker_cli.api_models.settings import AceStepStatusResponse, ReinitializeRequest
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import hash_password
 from songmaker_cli.db.models import Album
@@ -260,16 +261,44 @@ def force_logout_endpoint(
 
 @router.post("/acestep/reinitialize")
 async def reinitialize_acestep(
-    _admin: AuthenticatedUser = Depends(require_admin),
-) -> StatusResponse:
+    req: ReinitializeRequest,
+    admin: AuthenticatedUser = Depends(require_admin),
+    session: Session = Depends(get_db_session),
+) -> JobResponse:
     from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
+    from songmaker_cli.db.queries import (
+        create_job,
+        get_queue_position,
+        has_active_job_of_type,
+        update_job_status,
+    )
 
-    pool = get_arq_pool()
-    job = await pool.enqueue_job("reinitialize_acestep", _queue_name=ARQ_MUSIC_QUEUE_NAME)
-    if job is None:
-        raise HTTPException(409, "Reinitialize job already queued")
-    return StatusResponse(status="ok")
+    if req.target_model is not None:
+        from songmaker_cli.db.queries import list_active_models
+
+        active_ids = {m.id for m in list_active_models(session)}
+        if req.target_model not in active_ids:
+            raise HTTPException(400, f"Model '{req.target_model}' is not available")
+
+    if has_active_job_of_type(session, "reinitialize_acestep"):
+        raise HTTPException(409, "Reinitialize job already in progress")
+
+    job = create_job(session, "reinitialize_acestep", user_id=admin.id)
+    session.commit()
+
+    try:
+        pool = get_arq_pool()
+        await pool.enqueue_job(
+            "reinitialize_acestep", job.id, req.target_model,
+            _queue_name=ARQ_MUSIC_QUEUE_NAME,
+        )
+    except ConnectionError:
+        update_job_status(session, job.id, "failed", error="Job queue unavailable")
+        session.commit()
+        raise HTTPException(503, "Job queue unavailable")
+
+    return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
 @router.get("/acestep/status")

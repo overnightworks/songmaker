@@ -42,6 +42,8 @@ function getCsrfToken(): string {
 	return match ? decodeURIComponent(match[1]) : '';
 }
 
+const AUTH_ENDPOINTS = ['/api/auth/login', '/api/auth/setup'];
+
 async function apiFetch<T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
 	const method = init?.method?.toUpperCase() ?? 'GET';
 	const controller = new AbortController();
@@ -65,6 +67,12 @@ async function apiFetch<T>(path: string, init?: RequestInit, timeoutMs?: number)
 				detail = body.detail ?? '';
 			} catch {
 				// response body not JSON — use empty detail
+			}
+			if (resp.status === 401 && !AUTH_ENDPOINTS.includes(path)) {
+				const { clearAuth } = await import('$lib/stores/auth');
+				const { goto } = await import('$app/navigation');
+				clearAuth();
+				await goto('/login');
 			}
 			throw new ApiError(resp.status, detail, path);
 		}
@@ -572,8 +580,12 @@ export async function getAceStepStatus(): Promise<{
 	return apiFetch('/api/admin/acestep/status');
 }
 
-export async function reinitializeAceStep(): Promise<void> {
-	await apiFetch('/api/admin/acestep/reinitialize', { method: 'POST' });
+export async function reinitializeAceStep(targetModel?: string): Promise<JobStatus> {
+	return apiFetch<JobStatus>('/api/admin/acestep/reinitialize', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ target_model: targetModel ?? null })
+	});
 }
 
 // ── Rate limits ───────────────────────────────────────────────────

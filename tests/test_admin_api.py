@@ -367,28 +367,72 @@ def test_reinitialize_acestep_success(client: TestClient) -> None:
     mock_pool.enqueue_job = AsyncMock(return_value=AsyncMock())
 
     with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
-        resp = client.post("/api/admin/acestep/reinitialize")
+        resp = client.post(
+            "/api/admin/acestep/reinitialize",
+            json={},
+        )
 
     assert resp.status_code == 200
-    assert resp.json()["status"] == "ok"
+    data = resp.json()
+    assert data["type"] == "reinitialize_acestep"
+    assert data["status"] == "queued"
+    assert "id" in data
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
     mock_pool.enqueue_job.assert_called_once_with(
-        "reinitialize_acestep", _queue_name=ARQ_MUSIC_QUEUE_NAME,
+        "reinitialize_acestep", data["id"], None,
+        _queue_name=ARQ_MUSIC_QUEUE_NAME,
     )
 
 
-def test_reinitialize_acestep_already_queued(client: TestClient) -> None:
+def test_reinitialize_acestep_already_in_progress(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
     _login_as_admin(client)
 
     mock_pool = AsyncMock()
-    mock_pool.enqueue_job = AsyncMock(return_value=None)
+    mock_pool.enqueue_job = AsyncMock(return_value=AsyncMock())
 
     with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
-        resp = client.post("/api/admin/acestep/reinitialize")
+        resp1 = client.post(
+            "/api/admin/acestep/reinitialize",
+            json={},
+        )
+        assert resp1.status_code == 200
 
-    assert resp.status_code == 409
+        resp2 = client.post(
+            "/api/admin/acestep/reinitialize",
+            json={},
+        )
+        assert resp2.status_code == 409
+
+
+def test_reinitialize_acestep_queue_unavailable(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    _login_as_admin(client)
+
+    mock_pool = AsyncMock()
+    mock_pool.enqueue_job = AsyncMock(side_effect=ConnectionError("redis down"))
+
+    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+        resp = client.post(
+            "/api/admin/acestep/reinitialize",
+            json={},
+        )
+
+    assert resp.status_code == 503
+    assert "queue unavailable" in resp.json()["detail"].lower()
+
+
+def test_reinitialize_acestep_invalid_model(client: TestClient) -> None:
+    _login_as_admin(client)
+
+    resp = client.post(
+        "/api/admin/acestep/reinitialize",
+        json={"target_model": "nonexistent"},
+    )
+    assert resp.status_code == 400
+    assert "not available" in resp.json()["detail"]
 
 
 # -- ACE-Step status ----------------------------------------------------------

@@ -15,6 +15,14 @@ from songmaker_cli.db.models import Job
 log = logging.getLogger(__name__)
 
 
+def has_active_job_of_type(session: Session, job_type: str) -> bool:
+    return (
+        session.query(Job)
+        .filter(Job.type == job_type, Job.status.in_(("queued", "running")))
+        .first()
+    ) is not None
+
+
 def create_job(session: Session, job_type: str, user_id: str | None = None) -> Job:
     job = Job(type=job_type, user_id=user_id)
     session.add(job)

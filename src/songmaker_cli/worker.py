@@ -59,6 +59,9 @@ async def cleanup_stale(ctx):
         count = recover_stale_jobs_by_age(session)
         if count:
             session.commit()
+
+
+async def publish_acestep_heartbeat(ctx):
     mgr = _require_acestep_manager()
     model = mgr.active_model
     if model:
@@ -160,4 +163,5 @@ class WorkerSettings:
     health_check_interval = HEALTH_CHECK_INTERVAL_SECONDS
     cron_jobs = [
         cron(cleanup_stale, minute={i for i in range(0, 60, 2)}, second={0}),
+        cron(publish_acestep_heartbeat, second={i for i in range(0, 60, 45)}),
     ]

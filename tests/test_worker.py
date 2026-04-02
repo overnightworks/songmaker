@@ -24,7 +24,7 @@ def test_worker_settings_max_jobs() -> None:
 
 def test_worker_settings_has_cron() -> None:
     from songmaker_cli.worker import WorkerSettings
-    assert len(WorkerSettings.cron_jobs) == 1
+    assert len(WorkerSettings.cron_jobs) == 2
 
 
 def test_worker_settings_drain_timeout() -> None:

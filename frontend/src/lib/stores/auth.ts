@@ -43,12 +43,16 @@ export async function login(username: string, password: string): Promise<AuthUse
 	}
 }
 
+export function clearAuth(): void {
+	currentUser.set(null);
+}
+
 export async function logout(): Promise<void> {
 	try {
 		await apiLogout();
 	} catch {
 		// swallow — always clear local state
 	} finally {
-		currentUser.set(null);
+		clearAuth();
 	}
 }

@@ -73,12 +73,21 @@ def test_generate_passes_seed() -> None:
     assert mock_run.call_args.kwargs["seed"] == 42
 
 
-def test_cleanup_stale_calls_base_cleanup_and_publishes() -> None:
+def test_cleanup_stale_calls_base_cleanup_only() -> None:
+    with (
+        patch.object(mw_mod, "_base_cleanup", new_callable=AsyncMock) as mock_base,
+    ):
+        ctx = _mock_ctx()
+        _run(mw_mod.cleanup_stale(ctx))
+
+    mock_base.assert_called_once_with(ctx)
+
+
+def test_heartbeat_publishes_status_and_model() -> None:
     mock_mgr = MagicMock()
     mock_mgr.active_model = "turbo"
 
     with (
-        patch.object(mw_mod, "_base_cleanup", new_callable=AsyncMock) as mock_base,
         patch.object(mw_mod, "_require_acestep_manager", return_value=mock_mgr),
         patch(
             "songmaker_cli.music_worker._publish_acestep_status",
@@ -86,25 +95,28 @@ def test_cleanup_stale_calls_base_cleanup_and_publishes() -> None:
         ) as mock_publish,
     ):
         ctx = _mock_ctx()
-        _run(mw_mod.cleanup_stale(ctx))
+        _run(mw_mod.publish_acestep_heartbeat(ctx))
 
-    mock_base.assert_called_once_with(ctx)
     mock_publish.assert_called_once()
+    ctx["redis"].set.assert_called()
 
 
-def test_cleanup_stale_publishes_active_model() -> None:
+def test_heartbeat_skips_model_when_none() -> None:
     mock_mgr = MagicMock()
-    mock_mgr.active_model = "turbo"
+    mock_mgr.active_model = None
 
     with (
-        patch.object(mw_mod, "_base_cleanup", new_callable=AsyncMock),
         patch.object(mw_mod, "_require_acestep_manager", return_value=mock_mgr),
-        patch("songmaker_cli.music_worker._publish_acestep_status", new_callable=AsyncMock),
+        patch(
+            "songmaker_cli.music_worker._publish_acestep_status",
+            new_callable=AsyncMock,
+        ) as mock_publish,
     ):
         ctx = _mock_ctx()
-        _run(mw_mod.cleanup_stale(ctx))
+        _run(mw_mod.publish_acestep_heartbeat(ctx))
 
-    ctx["redis"].set.assert_called()
+    mock_publish.assert_called_once()
+    ctx["redis"].set.assert_not_called()
 
 
 def test_on_startup_initializes_acestep() -> None:
@@ -181,6 +193,7 @@ def test_reinitialize_acestep_success() -> None:
     mock_mgr = MagicMock()
     mock_mgr.active_model = "sft"
     ctx = _mock_ctx()
+    mock_factory, mock_session = _mock_db_factory()
 
     mock_client = AsyncMock()
     mock_client.post.return_value = _mock_httpx_response({"code": 200})
@@ -191,8 +204,9 @@ def test_reinitialize_acestep_success() -> None:
         patch.object(mw_mod, "_acestep_manager", mock_mgr),
         patch("httpx.AsyncClient", return_value=mock_client),
         patch("songmaker_cli.music_worker._publish_acestep_status", new_callable=AsyncMock),
+        patch("songmaker_cli.music_worker._get_db_factory", return_value=mock_factory),
     ):
-        _run(mw_mod.reinitialize_acestep(ctx))
+        _run(mw_mod.reinitialize_acestep(ctx, "j1"))
 
     mock_mgr.refresh_cached_model.assert_called_once()
     ctx["redis"].set.assert_called()
@@ -201,6 +215,7 @@ def test_reinitialize_acestep_success() -> None:
 def test_reinitialize_acestep_failure() -> None:
     mock_mgr = MagicMock()
     ctx = _mock_ctx()
+    mock_factory, mock_session = _mock_db_factory()
 
     mock_client = AsyncMock()
     mock_client.post.return_value = _mock_httpx_response({"code": 500})
@@ -211,8 +226,24 @@ def test_reinitialize_acestep_failure() -> None:
         with (
             patch.object(mw_mod, "_acestep_manager", mock_mgr),
             patch("httpx.AsyncClient", return_value=mock_client),
+            patch("songmaker_cli.music_worker._get_db_factory", return_value=mock_factory),
         ):
-            _run(mw_mod.reinitialize_acestep(ctx))
+            _run(mw_mod.reinitialize_acestep(ctx, "j1"))
+
+
+def test_reinitialize_acestep_model_switch_rejected() -> None:
+    mock_mgr = MagicMock()
+    mock_mgr.active_model = "sft"
+    ctx = _mock_ctx()
+    mock_factory, mock_session = _mock_db_factory()
+
+    with (
+        patch.object(mw_mod, "_acestep_manager", mock_mgr),
+        patch("songmaker_cli.music_worker._get_db_factory", return_value=mock_factory),
+    ):
+        _run(mw_mod.reinitialize_acestep(ctx, "j1", target_model="turbo"))
+
+    assert mock_session.commit.call_count >= 2
 
 
 def test_publish_acestep_status_online() -> None:
@@ -265,7 +296,7 @@ def test_music_worker_settings_queue_name() -> None:
 
 def test_music_worker_settings_has_cron() -> None:
     from songmaker_cli.music_worker import MusicWorkerSettings
-    assert len(MusicWorkerSettings.cron_jobs) == 1
+    assert len(MusicWorkerSettings.cron_jobs) == 2
 
 
 def test_music_worker_settings_functions() -> None:
