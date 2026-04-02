@@ -55,6 +55,13 @@ class GenerationParams(BaseModel):
     batch_size: int | None = Field(None, ge=1, le=8)
     reference_audio: str | None = Field(None, max_length=500)
 
+    @field_validator("reference_audio")
+    @classmethod
+    def _validate_reference_audio(cls, v: str | None) -> str | None:
+        if v is not None and ".." in v:
+            raise ValueError("reference_audio must not contain '..'")
+        return v
+
     @field_validator("infer_method")
     @classmethod
     def _validate_infer_method(cls, v: str | None) -> str | None:

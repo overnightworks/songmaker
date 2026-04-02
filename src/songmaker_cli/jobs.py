@@ -164,8 +164,12 @@ def _build_generation_context(
 
     if ace_config.reference_audio:
         from dataclasses import replace
-        abs_ref = audio_dir / ace_config.reference_audio
-        if abs_ref.exists():
+        abs_ref = (audio_dir / ace_config.reference_audio).resolve()
+        inside_audio_dir = str(abs_ref).startswith(str(audio_dir.resolve()))
+        if ".." in ace_config.reference_audio or not inside_audio_dir:
+            log.warning("Reference audio path traversal blocked: %s", ace_config.reference_audio)
+            ace_config = replace(ace_config, reference_audio="")
+        elif abs_ref.exists():
             ace_config = replace(ace_config, reference_audio=str(abs_ref))
         else:
             log.warning("Reference audio not found: %s", abs_ref)
