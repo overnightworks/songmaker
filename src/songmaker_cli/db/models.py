@@ -43,7 +43,16 @@ class Base(DeclarativeBase):
     pass
 
 
-class Album(Base):
+class ShareMixin:
+    """Mixin providing share_slug + is_shared columns for public sharing."""
+
+    share_slug: Mapped[str | None] = mapped_column(
+        String(36), unique=True, nullable=True, index=True,
+    )
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class Album(ShareMixin, Base):
     __tablename__ = "albums"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -52,10 +61,6 @@ class Album(Base):
     subtitle: Mapped[str] = mapped_column(String(400), default="")
     year: Mapped[str] = mapped_column(String(10), default="")
     colors: Mapped[dict] = mapped_column(JSON, default=dict)
-    share_slug: Mapped[str | None] = mapped_column(
-        String(36), unique=True, nullable=True, index=True,
-    )
-    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
     )
@@ -64,7 +69,7 @@ class Album(Base):
     songs: Mapped[list[Song]] = relationship(back_populates="album", cascade="all, delete-orphan")
 
 
-class Song(Base):
+class Song(ShareMixin, Base):
     __tablename__ = "songs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -72,10 +77,6 @@ class Song(Base):
     album_id: Mapped[str] = mapped_column(ForeignKey("albums.id"), index=True)
     language: Mapped[str] = mapped_column(String(10), default="")
     track_number: Mapped[int] = mapped_column(Integer, default=0)
-    share_slug: Mapped[str | None] = mapped_column(
-        String(36), unique=True, nullable=True, index=True,
-    )
-    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -114,7 +115,7 @@ class Version(Base):
     generations: Mapped[list[Generation]] = relationship(back_populates="version")
 
 
-class Generation(Base):
+class Generation(ShareMixin, Base):
     """A generated audio output from a specific version."""
 
     __tablename__ = "generations"
@@ -137,10 +138,6 @@ class Generation(Base):
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     is_picked: Mapped[bool] = mapped_column(Boolean, default=False)
     is_kept: Mapped[bool] = mapped_column(Boolean, default=False)
-    share_slug: Mapped[str | None] = mapped_column(
-        String(36), unique=True, nullable=True, index=True,
-    )
-    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     model_mode: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
 
@@ -154,7 +151,7 @@ class Generation(Base):
     )
 
 
-class Playlist(Base):
+class Playlist(ShareMixin, Base):
     __tablename__ = "playlists"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -162,10 +159,6 @@ class Playlist(Base):
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
     )
-    share_slug: Mapped[str | None] = mapped_column(
-        String(36), unique=True, nullable=True, index=True,
-    )
-    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
 

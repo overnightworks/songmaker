@@ -29,6 +29,7 @@ from songmaker_cli.worker_base import (
     _audio_dir,
     _data_dir,
     _get_db_factory,
+    audit_orphaned_files,
     build_redis_settings,
     check_job_still_valid,
     common_shutdown,
@@ -165,6 +166,7 @@ _base_cleanup = make_cleanup_cron("generate")
 
 async def cleanup_stale(ctx):
     await _base_cleanup(ctx)
+    await asyncio.to_thread(audit_orphaned_files)
 
 
 async def publish_acestep_heartbeat(ctx):

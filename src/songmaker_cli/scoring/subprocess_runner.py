@@ -11,6 +11,7 @@ import logging
 import multiprocessing
 import os
 import signal
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -260,8 +261,8 @@ class ScorerProcess:
             if self._conn:
                 self._conn.send(ShutdownRequest())
                 self._process.join(timeout=5)
-        except Exception:
-            pass
+        except (OSError, BrokenPipeError, EOFError):
+            log.debug("Shutdown send failed — subprocess may have already exited", exc_info=True)
         if self.alive:
             self._kill()
         self._cleanup_dead()
@@ -280,21 +281,25 @@ class ScorerProcess:
         if self._conn:
             try:
                 self._conn.close()
-            except Exception:
-                pass
+            except (OSError, BrokenPipeError):
+                log.debug("Failed to close scorer connection during cleanup", exc_info=True)
         self._conn = None
         self._process = None
 
 
 _scorer_process: ScorerProcess | None = None
+_scorer_process_lock = threading.Lock()
 
 
 def set_scorer_process(process: ScorerProcess) -> None:
     global _scorer_process
-    _scorer_process = process
+    with _scorer_process_lock:
+        _scorer_process = process
 
 
 def get_scorer_process() -> ScorerProcess:
-    if _scorer_process is None:
+    with _scorer_process_lock:
+        proc = _scorer_process
+    if proc is None:
         raise RuntimeError("ScorerProcess not initialized — worker startup may have failed")
-    return _scorer_process
+    return proc

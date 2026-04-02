@@ -13,6 +13,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine import AceStepClient
+from acestep_engine.errors import AudioDownloadError
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.api_models import StoredGenerationParams
 from songmaker_cli.config import build_ace_config, load_generation_defaults, resolve_model_mode
@@ -35,21 +36,21 @@ from songmaker_cli.scoring.subprocess_runner import get_scorer_process
 
 log = logging.getLogger(__name__)
 
-_USER_FACING_ERRORS: dict[str, str] = {
-    "AudioDownloadError": "Failed to download generated audio",
-    "ConnectionError": "ACE-Step server not reachable",
-    "TimeoutError": "Generation timed out",
-    "RuntimeError": "Internal error during processing",
-}
+_USER_FACING_ERRORS: tuple[tuple[type[Exception], str], ...] = (
+    (AudioDownloadError, "Failed to download generated audio"),
+    (ConnectionError, "ACE-Step server not reachable"),
+    (TimeoutError, "Generation timed out"),
+    (RuntimeError, "Internal error during processing"),
+)
 
 
 def _sanitize_error(exc: Exception) -> str:
     """Return a user-safe error message, logging the full exception."""
     if isinstance(exc, GenerationSetupError):
         return str(exc)
-    type_name = type(exc).__name__
-    if type_name in _USER_FACING_ERRORS:
-        return _USER_FACING_ERRORS[type_name]
+    for exc_type, message in _USER_FACING_ERRORS:
+        if isinstance(exc, exc_type):
+            return message
     return "An unexpected error occurred"
 
 

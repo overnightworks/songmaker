@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-import uuid
 
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import Album, Generation, Song
+from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 
 log = logging.getLogger(__name__)
 
@@ -65,26 +65,11 @@ def get_album_by_slug(session: Session, slug: str) -> Album | None:
 
 
 def enable_album_sharing(session: Session, album_id: str) -> Album:
-    album = session.query(Album).filter_by(id=album_id).first()
-    if not album:
-        raise ValueError(f"Album not found: {album_id}")
-    if not album.share_slug:
-        album.share_slug = str(uuid.uuid4())
-    album.is_shared = True
-    session.flush()
-    log.info("Enabled sharing for album %s (slug=%s)", album_id, album.share_slug)
-    return album
+    return enable_sharing(session, Album, album_id)
 
 
 def disable_album_sharing(session: Session, album_id: str) -> Album:
-    album = session.query(Album).filter_by(id=album_id).first()
-    if not album:
-        raise ValueError(f"Album not found: {album_id}")
-    album.share_slug = None
-    album.is_shared = False
-    session.flush()
-    log.info("Disabled sharing for album %s", album_id)
-    return album
+    return disable_sharing(session, Album, album_id)
 
 
 def cleanup_album(session: Session, album_id: str) -> tuple[int, list[str]]:

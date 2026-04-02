@@ -243,7 +243,7 @@ POST /api/generations/{id}/score
 - Owns ACE-Step subprocess lifecycle (start, stop, health check, model switch)
 - Handles `generate` and `reinitialize_acestep` tasks
 - `max_jobs=2` (one active in ACE-Step, one pre-fetched and waiting)
-- Cron: recovers stale generate jobs every 2 minutes
+- Cron: recovers stale generate jobs every 2 minutes, audits orphaned audio files
 - Publishes active model and ACE-Step status to Redis
 
 **Scoring worker** (`scoring_worker.py`):
@@ -259,6 +259,7 @@ POST /api/generations/{id}/score
 - Timeout constants, terminal status set
 - Common startup (env loading, logging, Redis URL validation)
 - Common shutdown (per-type stale recovery with Redis advisory lock, DB disposal)
+- Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
 **Backwards-compatible shim** (`worker.py`):
 - Imports tasks from music_worker and scoring_worker
@@ -302,7 +303,7 @@ With separate workers, no VRAM coordination is needed at the application level. 
 | Scoring subprocess | Long-lived child process, killed on timeout | Real cleanup via SIGKILL, GPU memory freed immediately |
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
 | Session auth | Cookies + Redis cache | Revocable, HttpOnly, Redis-first reads. Redis TTL is authoritative for session expiry; DB synced every 5 min as backup |
-| Redis required | Fail-fast at startup, fail-open rate limiting | Server won't start without Redis; if Redis drops mid-operation, rate limiting allows requests through |
+| Redis required | Fail-fast at startup, fail-closed rate limiting | Server won't start without Redis; if Redis drops mid-operation, IP rate limiting returns 503 |
 | Album ownership | `created_by` on Album | Songs inherit access; sharing via secret UUID slug |
 | PostgreSQL | Connection pooling, concurrent writes | Required alongside Redis |
 | ACE-Step as subprocess | Separate server, managed lifecycle | Clean VRAM release, independent restarts |

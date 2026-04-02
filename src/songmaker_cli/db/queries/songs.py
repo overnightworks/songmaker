@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -13,6 +12,7 @@ from songmaker_cli.db.models import (
     Song,
     Version,
 )
+from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 
 log = logging.getLogger(__name__)
 
@@ -237,29 +237,16 @@ def get_song_by_slug(session: Session, slug: str) -> Song | None:
 
 
 def enable_song_sharing(session: Session, song_id: str) -> Song:
-    song = session.query(Song).filter_by(id=song_id).first()
-    if not song:
-        raise ValueError(f"Song not found: {song_id}")
-    if not song.share_slug:
-        song.share_slug = str(uuid.uuid4())
-    song.is_shared = True
+    song = enable_sharing(session, Song, song_id)
     picked = next((g for g in song.generations if g.is_picked), None)
     if picked:
         picked.is_kept = True
-    session.flush()
-    log.info("Enabled sharing for song %s (slug=%s)", song_id, song.share_slug)
+        session.flush()
     return song
 
 
 def disable_song_sharing(session: Session, song_id: str) -> Song:
-    song = session.query(Song).filter_by(id=song_id).first()
-    if not song:
-        raise ValueError(f"Song not found: {song_id}")
-    song.share_slug = None
-    song.is_shared = False
-    session.flush()
-    log.info("Disabled sharing for song %s", song_id)
-    return song
+    return disable_sharing(session, Song, song_id)
 
 
 def cleanup_song(session: Session, song_id: str) -> tuple[int, list[str]]:

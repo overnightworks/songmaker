@@ -244,6 +244,12 @@ def test_prepare_generate_mode_sets_mode_on_repeat() -> None:
 # ── switch_model ──────────────────────────────────────────────────
 
 
+def _mock_refresh_with_model(mgr, model):
+    def _side_effect():
+        mgr._cached_model = model
+    return _side_effect
+
+
 def test_switch_model_success() -> None:
     mgr = AceStepManager()
     old = os.environ.get("ACESTEP_CONFIG_PATH")
@@ -252,7 +258,10 @@ def test_switch_model_success() -> None:
             patch.object(mgr, "stop") as mock_stop,
             patch.object(mgr, "start") as mock_start,
             patch.object(mgr, "wait_for_health") as mock_wait,
-            patch.object(mgr, "refresh_cached_model") as mock_refresh,
+            patch.object(
+                mgr, "refresh_cached_model",
+                side_effect=_mock_refresh_with_model(mgr, "turbo"),
+            ) as mock_refresh,
         ):
             mgr.switch_model("turbo")
 
@@ -276,11 +285,36 @@ def test_switch_model_sft() -> None:
             patch.object(mgr, "stop"),
             patch.object(mgr, "start"),
             patch.object(mgr, "wait_for_health"),
-            patch.object(mgr, "refresh_cached_model"),
+            patch.object(
+                mgr, "refresh_cached_model",
+                side_effect=_mock_refresh_with_model(mgr, "sft"),
+            ),
         ):
             mgr.switch_model("sft")
 
         assert os.environ.get("ACESTEP_CONFIG_PATH") == "acestep-v15-sft"
+    finally:
+        if old is None:
+            os.environ.pop("ACESTEP_CONFIG_PATH", None)
+        else:
+            os.environ["ACESTEP_CONFIG_PATH"] = old
+
+
+def test_switch_model_verification_failure() -> None:
+    mgr = AceStepManager()
+    old = os.environ.get("ACESTEP_CONFIG_PATH")
+    try:
+        with (
+            patch.object(mgr, "stop"),
+            patch.object(mgr, "start"),
+            patch.object(mgr, "wait_for_health"),
+            patch.object(
+                mgr, "refresh_cached_model",
+                side_effect=_mock_refresh_with_model(mgr, "sft"),
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="Model switch to turbo failed"):
+                mgr.switch_model("turbo")
     finally:
         if old is None:
             os.environ.pop("ACESTEP_CONFIG_PATH", None)

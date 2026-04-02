@@ -42,8 +42,11 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
         try:
             allowed = self._get_limiter(ctx).is_allowed(ip)
         except Exception:
-            log.warning("IP rate limiter unavailable -- allowing request")
-            return await call_next(request)
+            log.warning("IP rate limiter unavailable -- rejecting request")
+            return JSONResponse(
+                {"detail": "Rate limiter unavailable"}, status_code=503,
+                headers={"Retry-After": "5"},
+            )
         if not allowed:
             return JSONResponse(
                 {"detail": "Too many requests"}, status_code=429,

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -14,6 +13,7 @@ from songmaker_cli.db.models import (
     PlaylistEntry,
     Song,
 )
+from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 
 log = logging.getLogger(__name__)
 
@@ -200,23 +200,8 @@ def get_playlist_by_slug(session: Session, slug: str) -> Playlist | None:
 
 
 def enable_playlist_sharing(session: Session, playlist_id: str) -> Playlist:
-    playlist = session.query(Playlist).filter_by(id=playlist_id).first()
-    if not playlist:
-        raise ValueError(f"Playlist not found: {playlist_id}")
-    if not playlist.share_slug:
-        playlist.share_slug = str(uuid.uuid4())
-    playlist.is_shared = True
-    session.flush()
-    log.info("Enabled sharing for playlist %s (slug=%s)", playlist_id, playlist.share_slug)
-    return playlist
+    return enable_sharing(session, Playlist, playlist_id)
 
 
 def disable_playlist_sharing(session: Session, playlist_id: str) -> Playlist:
-    playlist = session.query(Playlist).filter_by(id=playlist_id).first()
-    if not playlist:
-        raise ValueError(f"Playlist not found: {playlist_id}")
-    playlist.share_slug = None
-    playlist.is_shared = False
-    session.flush()
-    log.info("Disabled sharing for playlist %s", playlist_id)
-    return playlist
+    return disable_sharing(session, Playlist, playlist_id)

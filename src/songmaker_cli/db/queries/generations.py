@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from pathlib import Path
 
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import Generation, Rating, Score, Song
+from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +24,12 @@ def get_generation(session: Session, gen_id: str) -> Generation | None:
         .filter_by(id=gen_id)
         .first()
     )
+
+
+def all_generation_paths(session: Session) -> set[str]:
+    """Return set of all mp3_path and wav_path values in the DB."""
+    rows = session.query(Generation.mp3_path, Generation.wav_path).all()
+    return {p for mp3, wav in rows for p in (mp3, wav) if p}
 
 
 def create_generation(
@@ -158,27 +164,14 @@ def get_generation_by_slug(session: Session, slug: str) -> Generation | None:
 
 
 def enable_generation_sharing(session: Session, generation_id: str) -> Generation:
-    gen = session.query(Generation).filter_by(id=generation_id).first()
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
-    if not gen.share_slug:
-        gen.share_slug = str(uuid.uuid4())
-    gen.is_shared = True
+    gen = enable_sharing(session, Generation, generation_id)
     gen.is_kept = True
     session.flush()
-    log.info("Enabled sharing for generation %s (slug=%s)", generation_id, gen.share_slug)
     return gen
 
 
 def disable_generation_sharing(session: Session, generation_id: str) -> Generation:
-    gen = session.query(Generation).filter_by(id=generation_id).first()
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
-    gen.share_slug = None
-    gen.is_shared = False
-    session.flush()
-    log.info("Disabled sharing for generation %s", generation_id)
-    return gen
+    return disable_sharing(session, Generation, generation_id)
 
 
 _GENERATION_FILE_SUFFIXES = [".mp3", ".wav", ".md", ".whisper"]

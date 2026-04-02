@@ -168,6 +168,15 @@ class AceStepManager:
         self.start()
         self.wait_for_health()
         self.refresh_cached_model()
+        if self._cached_model != target_model:
+            log.error(
+                "Model switch verification failed: expected %s, got %s",
+                target_model, self._cached_model,
+            )
+            raise RuntimeError(
+                f"Model switch to {target_model} failed — "
+                f"server reports {self._cached_model or 'unknown'}"
+            )
         log.info("Model switch complete: %s", self._cached_model)
 
     def prepare_generate_mode(self) -> None:

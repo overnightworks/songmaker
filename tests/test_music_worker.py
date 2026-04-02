@@ -130,14 +130,16 @@ def test_generate_no_switch_when_no_model_requested() -> None:
     mock_mgr.switch_model.assert_not_called()
 
 
-def test_cleanup_stale_calls_base_cleanup_only() -> None:
+def test_cleanup_stale_calls_base_cleanup_and_orphan_audit() -> None:
     with (
         patch.object(mw_mod, "_base_cleanup", new_callable=AsyncMock) as mock_base,
+        patch.object(mw_mod, "audit_orphaned_files") as mock_audit,
     ):
         ctx = _mock_ctx()
         _run(mw_mod.cleanup_stale(ctx))
 
     mock_base.assert_called_once_with(ctx)
+    mock_audit.assert_called_once()
 
 
 def test_heartbeat_publishes_status_and_model() -> None:

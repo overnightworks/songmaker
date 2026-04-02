@@ -136,6 +136,44 @@ def make_cleanup_cron(job_type: str):
     return _cleanup_stale
 
 
+def audit_orphaned_files() -> None:
+    """Log audio files on disk that have no matching DB record."""
+    try:
+        _audit_orphaned_files_inner()
+    except Exception:
+        log.warning("Orphaned file audit failed", exc_info=True)
+
+
+def _audit_orphaned_files_inner() -> None:
+    from songmaker_cli.db.queries import all_generation_paths
+
+    audio_dir = _audio_dir()
+    if not audio_dir.exists():
+        return
+
+    db_factory = _get_db_factory()
+    with db_factory() as session:
+        known_paths = all_generation_paths(session)
+
+    orphans: list[Path] = []
+    for user_dir in audio_dir.iterdir():
+        if not user_dir.is_dir():
+            continue
+        for audio_file in user_dir.iterdir():
+            if audio_file.suffix not in (".mp3", ".wav"):
+                continue
+            rel = f"{user_dir.name}/{audio_file.name}"
+            if rel not in known_paths:
+                orphans.append(audio_file)
+
+    if orphans:
+        log.warning(
+            "Found %d orphaned audio files (no DB record): %s",
+            len(orphans),
+            ", ".join(str(f) for f in orphans[:10]),
+        )
+
+
 def build_redis_settings() -> RedisSettings:
     return RedisSettings.from_dsn(
         os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
