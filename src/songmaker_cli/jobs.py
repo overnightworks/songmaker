@@ -195,7 +195,7 @@ def _run_single_generation(
 
     mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
     wav_rel = f"{ctx.user_id}/{generation_id}.wav"
-    gen_params = StoredGenerationParams(
+    stored = StoredGenerationParams(
         acestep_model=ctx.model_name,
         bpm=ctx.ace_config.bpm,
         duration=ctx.ace_config.duration,
@@ -206,7 +206,17 @@ def _run_single_generation(
         lm_temperature=ctx.ace_config.lm_temperature,
         infer_method=ctx.ace_config.infer_method,
         think_mode=ctx.ace_config.think_mode,
-    ).model_dump(exclude_none=True)
+        task_type=(
+            ctx.ace_config.task_type if ctx.ace_config.task_type != "text2music" else None
+        ),
+        repainting_start=(
+            ctx.ace_config.repainting_start if ctx.ace_config.task_type == "repaint" else None
+        ),
+        repainting_end=(
+            ctx.ace_config.repainting_end if ctx.ace_config.task_type == "repaint" else None
+        ),
+    )
+    gen_params = stored.model_dump(exclude_none=True)
 
     try:
         with db_factory() as session:
@@ -289,6 +299,34 @@ def _make_generation_progress_callback(
     return _on_progress
 
 
+def _apply_repaint_params(ctx: GenerationContext, repaint_params: dict) -> GenerationContext:
+    """Replace ace_config with repaint-specific overrides."""
+    from dataclasses import replace
+
+    updated_config = replace(
+        ctx.ace_config,
+        task_type="repaint",
+        src_audio=repaint_params["src_wav_path"],
+        repainting_start=repaint_params["repainting_start"],
+        repainting_end=repaint_params["repainting_end"],
+        think_mode="off",
+        prompt=repaint_params.get("prompt", ctx.ace_config.prompt),
+        lyrics=repaint_params.get("lyrics", ctx.ace_config.lyrics),
+    )
+    return GenerationContext(
+        song_id=ctx.song_id,
+        version_id=ctx.version_id,
+        meta=ctx.meta,
+        album_meta=ctx.album_meta,
+        ace_config=updated_config,
+        audio_dir=ctx.audio_dir,
+        user_id=ctx.user_id,
+        model_name=ctx.model_name,
+        client=ctx.client,
+        base_params=ctx.base_params,
+    )
+
+
 def run_generation_job(
     job_id: str, song_id: str, version_id: str, count: int,
     user_id: str,
@@ -296,6 +334,7 @@ def run_generation_job(
     audio_dir: Path | None = None,
     data_dir: Path | None = None,
     seed: int | None = None,
+    repaint_params: dict | None = None,
 ) -> None:
     """Run generation in a background thread, updating DB status."""
     assert db_factory is not None, "db_factory is required"
@@ -310,7 +349,8 @@ def run_generation_job(
         job_id=job_id, job_type="generate", song_id=song_id,
     )
 
-    log.info("Generation job %s: song=%s, count=%d", job_id, song_id, count)
+    task_type = "repaint" if repaint_params else "generate"
+    log.info("Generation job %s: song=%s, count=%d, task=%s", job_id, song_id, count, task_type)
 
     try:
         _update_job(db_factory, job_id, "running", worker_pid=os.getpid())
@@ -320,6 +360,8 @@ def run_generation_job(
                 song_id, version_id, db_factory, audio_dir, data_dir,
                 user_id=user_id, seed=seed,
             )
+            if repaint_params:
+                ctx = _apply_repaint_params(ctx, repaint_params)
         except GenerationSetupError as exc:
             _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return

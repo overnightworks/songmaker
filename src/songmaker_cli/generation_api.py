@@ -24,6 +24,7 @@ from songmaker_cli.api_models import (
     JobResponse,
     RateRequest,
     RateResponse,
+    RepaintRequest,
     ScoreRequest,
     ShareResponse,
     StatusResponse,
@@ -138,6 +139,73 @@ async def api_generate_song(
         await pool.enqueue_job(
             "generate", job.id, song_id, version.id, req.count, user.id, req.seed,
             req.model,
+            _queue_name=ARQ_MUSIC_QUEUE_NAME,
+        )
+    except ConnectionError:
+        _fail_job(ctx, job.id)
+        raise HTTPException(503, "Job queue unavailable")
+
+    return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
+
+
+@router.post("/generations/{gen_id}/repaint")
+async def api_repaint_generation(
+    gen_id: str,
+    req: RepaintRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> JobResponse:
+    check_redis_health(request)
+    gen = check_generation_access(session, gen_id, user)
+    song = gen.song
+    version = gen.version
+
+    if not version:
+        raise HTTPException(400, "Generation has no linked version")
+
+    if req.model:
+        from songmaker_cli.db.queries import list_active_models
+
+        active_ids = {m.id for m in list_active_models(session)}
+        if req.model not in active_ids:
+            raise HTTPException(400, f"Model '{req.model}' is not available")
+
+    if req.repainting_start >= req.repainting_end:
+        raise HTTPException(400, "repainting_start must be less than repainting_end")
+
+    wav_path = ctx.audio_dir / gen.wav_path if gen.wav_path else None
+    if not wav_path or not wav_path.exists():
+        raise HTTPException(400, "Source generation has no WAV file")
+
+    lyrics = req.lyrics if req.lyrics is not None else version.lyrics
+    prompt = req.prompt if req.prompt is not None else version.prompt
+
+    job = create_job_with_rate_limit(session, user, "generate")
+    record_audit(
+        session, user.id, "repaint", "generation", gen_id,
+        f"range={req.repainting_start:.2f}-{req.repainting_end:.2f}",
+    )
+    session.commit()
+    log.info("Repaint: gen=%s, range=%.2f-%.2f, job=%s",
+             gen_id, req.repainting_start, req.repainting_end, job.id)
+
+    try:
+        pool = get_arq_pool()
+        if not await is_music_worker_healthy():
+            _fail_job(ctx, job.id)
+            raise HTTPException(503, "Worker not running")
+        repaint_params = {
+            "src_wav_path": str(wav_path),
+            "repainting_start": req.repainting_start,
+            "repainting_end": req.repainting_end,
+            "lyrics": lyrics,
+            "prompt": prompt,
+        }
+        await pool.enqueue_job(
+            "generate", job.id, song.id, version.id, 1, user.id, req.seed,
+            req.model, repaint_params,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:

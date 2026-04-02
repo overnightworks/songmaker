@@ -21,6 +21,7 @@
 		unshareGeneration,
 		deleteGeneration,
 		rateGeneration,
+		repaintGeneration,
 		keepGeneration,
 		unkeepGeneration
 	} from '$lib/api/client';
@@ -79,6 +80,7 @@
 	import SongEditor from '$lib/components/SongEditor.svelte';
 	import OverflowMenu from '$lib/components/OverflowMenu.svelte';
 	import PlaylistPicker from '$lib/components/PlaylistPicker.svelte';
+	import RepaintDialog from '$lib/components/RepaintDialog.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import { addToast } from '$lib/stores/toast';
@@ -95,6 +97,7 @@
 	let genCount = $state(1);
 	let selectedModel = $state<string | null>(null);
 	let pinnedSeed = $state<number | null>(null);
+	let repaintTarget = $state<import('$lib/api/types').GenerationItem | null>(null);
 	let playlistPickerFor = $state<
 		| { type: 'song'; id: string }
 		| { type: 'album'; id: string }
@@ -199,6 +202,21 @@
 			trackJob(job, { songId: song.id });
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
+		}
+	}
+
+	async function onRepaintSubmit(
+		start: number, end: number, lyrics: string | null, prompt: string | null,
+	): Promise<void> {
+		if (!song || !repaintTarget) return;
+		try {
+			const job = await repaintGeneration(
+				repaintTarget.id, start, end, lyrics, prompt, selectedModel,
+			);
+			repaintTarget = null;
+			trackJob(job, { songId: song.id });
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Repaint failed', 'error');
 		}
 	}
 
@@ -685,6 +703,7 @@
 							onselect={(gen) => selectGeneration(gen, song)}
 							onscore={onScore}
 							onpick={onPick}
+							onrepaint={(gen) => (repaintTarget = gen)}
 						/>
 					{/if}
 				{:else if tab === 'edit'}
@@ -697,6 +716,7 @@
 						allSongs={$songList}
 						currentAlbumId={song?.album_id ?? ''}
 						versions={$versions}
+						visible={tab === 'chat'}
 						onapply={handleApply}
 						oncreate={(s) => selectSong(s.id)}
 					/>
@@ -894,6 +914,14 @@
 	</main>
 {/if}
 
+{#if repaintTarget}
+	<RepaintDialog
+		generation={repaintTarget}
+		onsubmit={onRepaintSubmit}
+		oncancel={() => (repaintTarget = null)}
+	/>
+{/if}
+
 <ToastContainer />
 
 <style>
@@ -927,11 +955,17 @@
 		flex-direction: column;
 		gap: 12px;
 		flex: 1;
-		max-width: 800px;
+		max-width: 1000px;
 		width: 100%;
 		min-width: 0;
 		min-height: 0;
 		margin: 0 auto;
+	}
+
+	.main-content.chat-active .detail-panel {
+		max-width: 100%;
+		padding-left: 32px;
+		padding-right: 32px;
 	}
 
 	.main-content.chat-active {
@@ -1185,7 +1219,7 @@
 
 	.chat-tab {
 		flex: 1;
-		min-height: 0;
+		min-height: 400px;
 		display: flex;
 		flex-direction: column;
 	}

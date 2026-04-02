@@ -43,9 +43,14 @@ def client(tmp_path: Path) -> TestClient:
         session.flush()
         _seed_db(session, owner_id=_DEFAULT_USER_ID)
 
+    audio_dir = tmp_path / "audio"
+    wav_dir = audio_dir / "u-test"
+    wav_dir.mkdir(parents=True, exist_ok=True)
+    (wav_dir / "g1.wav").write_bytes(b"RIFF" + b"\x00" * 40)
+
     ctx = AppContext(
         db=factory,
-        audio_dir=tmp_path / "audio",
+        audio_dir=audio_dir,
         data_dir=tmp_path / "data",
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
@@ -120,7 +125,7 @@ def _seed_db(session, owner_id: str | None = None) -> None:
     session.add(ver)
     gen1 = Generation(
         id="g1", song_id="s1", version_id="v1", generation_number=1,
-        mp3_path="u-test/g1.mp3", seed=42,
+        mp3_path="u-test/g1.mp3", wav_path="u-test/g1.wav", seed=42,
         generation_params={"bpm": 140},
     )
     gen2 = Generation(
@@ -655,6 +660,72 @@ def test_generate_song_seed_invalid(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
+# ── Repaint ─────────────────────────────────────────────────────────
+
+
+def test_repaint_submits_job(client: TestClient) -> None:
+    with _mock_worker() as mock_pool:
+        resp = client.post("/api/generations/g1/repaint", json={
+            "src_generation_id": "g1",
+            "repainting_start": 0.2,
+            "repainting_end": 0.8,
+        })
+
+    assert resp.status_code == 200
+    assert resp.json()["type"] == "generate"
+    mock_pool.enqueue_job.assert_called_once()
+    args = mock_pool.enqueue_job.call_args[0]
+    repaint = args[-1]
+    assert repaint["repainting_start"] == 0.2
+    assert repaint["repainting_end"] == 0.8
+
+
+def test_repaint_invalid_range(client: TestClient) -> None:
+    resp = client.post("/api/generations/g1/repaint", json={
+        "src_generation_id": "g1",
+        "repainting_start": 0.8,
+        "repainting_end": 0.2,
+    })
+    assert resp.status_code == 400
+    assert "repainting_start" in resp.json()["detail"]
+
+
+def test_repaint_no_wav(client: TestClient) -> None:
+    resp = client.post("/api/generations/g2/repaint", json={
+        "src_generation_id": "g2",
+        "repainting_start": 0.0,
+        "repainting_end": 0.5,
+    })
+    assert resp.status_code == 400
+    assert "WAV" in resp.json()["detail"]
+
+
+def test_repaint_not_found(client: TestClient) -> None:
+    resp = client.post("/api/generations/nonexistent/repaint", json={
+        "src_generation_id": "nonexistent",
+        "repainting_start": 0.0,
+        "repainting_end": 0.5,
+    })
+    assert resp.status_code == 404
+
+
+def test_repaint_with_lyrics_override(client: TestClient) -> None:
+    with _mock_worker() as mock_pool:
+        resp = client.post("/api/generations/g1/repaint", json={
+            "src_generation_id": "g1",
+            "repainting_start": 0.3,
+            "repainting_end": 0.7,
+            "lyrics": "new lyrics here",
+            "prompt": "jazz ballad",
+        })
+
+    assert resp.status_code == 200
+    args = mock_pool.enqueue_job.call_args[0]
+    repaint = args[-1]
+    assert repaint["lyrics"] == "new lyrics here"
+    assert repaint["prompt"] == "jazz ballad"
+
+
 def test_generate_song_redis_down(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
@@ -785,7 +856,7 @@ def test_chat_with_context(tmp_path: Path) -> None:
 def test_chat_default_style(tmp_path: Path) -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from songmaker_cli.chat_api import DEFAULT_CHAT_STYLE
+    from songmaker_cli.chat_api import CHAT_ROLE
 
     c = _make_authed_client(tmp_path)
     mock_response = MagicMock()
@@ -797,7 +868,7 @@ def test_chat_default_style(tmp_path: Path) -> None:
 
     assert resp.status_code == 200
     system_arg = mock_acall.call_args.kwargs["system"]
-    assert DEFAULT_CHAT_STYLE in system_arg
+    assert CHAT_ROLE in system_arg
     assert "```songmaker" in system_arg
 
 
@@ -1491,10 +1562,10 @@ def test_chat_unavailable_hides_details(tmp_path: Path) -> None:
 # ── System prompt ──────────────────────────────────────────────────
 
 
-def test_system_prompt_contains_style_and_structure() -> None:
-    from songmaker_cli.chat_api import DEFAULT_CHAT_STYLE, STRUCTURAL_PROMPT, SYSTEM_PROMPT
+def test_system_prompt_contains_role_and_structure() -> None:
+    from songmaker_cli.chat_api import CHAT_ROLE, STRUCTURAL_PROMPT, SYSTEM_PROMPT
 
-    assert DEFAULT_CHAT_STYLE in SYSTEM_PROMPT
+    assert CHAT_ROLE in SYSTEM_PROMPT
     assert STRUCTURAL_PROMPT in SYSTEM_PROMPT
 
 

@@ -155,7 +155,7 @@ class AceStepClient:
             TaskSubmissionError: On persistent network error or missing task_id.
         """
         payload = {
-            "task_type": "text2music",
+            "task_type": config.task_type,
             "caption": config.prompt,
             "lyrics": config.lyrics,
             "bpm": config.bpm,
@@ -180,6 +180,13 @@ class AceStepClient:
         }
         if config.lm_negative_prompt:
             payload["lm_negative_prompt"] = config.lm_negative_prompt
+        if config.src_audio:
+            payload["src_audio"] = config.src_audio
+        if config.task_type == "repaint":
+            payload["repainting_start"] = config.repainting_start
+            payload["repainting_end"] = config.repainting_end
+        if config.task_type == "cover":
+            payload["audio_cover_strength"] = config.audio_cover_strength
 
         last_exc: Exception | None = None
         for attempt in range(SUBMIT_RETRIES):

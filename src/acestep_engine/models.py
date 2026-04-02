@@ -32,6 +32,11 @@ class AceStepConfig:
     lm_negative_prompt: str = ""
     infer_method: str = "ode"
     batch_size: int = 1
+    task_type: str = "text2music"
+    src_audio: str = ""
+    repainting_start: float = 0.0
+    repainting_end: float = 1.0
+    audio_cover_strength: float = 1.0
 
 
 @dataclass(frozen=True)

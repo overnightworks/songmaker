@@ -29,6 +29,9 @@ export interface GenerationParams {
 	bpm?: number | null;
 	duration?: number | null;
 	key?: string | null;
+	task_type?: string | null;
+	repainting_start?: number | null;
+	repainting_end?: number | null;
 }
 
 export interface VersionGenerationParams {

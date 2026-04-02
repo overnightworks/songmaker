@@ -224,6 +224,31 @@ export async function generateSong(
 	});
 }
 
+export async function repaintGeneration(
+	genId: string,
+	repaintingStart: number,
+	repaintingEnd: number,
+	lyrics?: string | null,
+	prompt?: string | null,
+	model?: string | null,
+	seed?: number | null
+): Promise<JobStatus> {
+	const payload: Record<string, unknown> = {
+		src_generation_id: genId,
+		repainting_start: repaintingStart,
+		repainting_end: repaintingEnd
+	};
+	if (lyrics != null) payload.lyrics = lyrics;
+	if (prompt != null) payload.prompt = prompt;
+	if (model) payload.model = model;
+	if (seed != null) payload.seed = seed;
+	return apiFetch<JobStatus>(`/api/generations/${genId}/repaint`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload)
+	});
+}
+
 export async function rateGeneration(
 	genId: string,
 	rating: number,
