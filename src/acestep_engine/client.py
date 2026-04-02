@@ -291,12 +291,10 @@ class AceStepClient:
                     )
 
                 elapsed = time.monotonic() - start
-                if entry.progress_text:
-                    log.info("ACE-Step: %s (%.0fs)", entry.progress_text, elapsed)
-                    if on_progress:
-                        on_progress(entry.progress_text)
-                else:
-                    log.info("ACE-Step generating... (%.0fs elapsed)", elapsed)
+                progress = entry.progress_text or f"generating ({elapsed:.0f}s)"
+                log.info("ACE-Step: %s", progress)
+                if on_progress:
+                    on_progress(progress)
 
             except KeyboardInterrupt:
                 log.warning("Generation cancelled by user (task_id=%s)", task_id)

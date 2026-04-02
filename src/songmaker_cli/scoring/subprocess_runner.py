@@ -174,15 +174,47 @@ class ScorerProcess:
         on_progress: Callable[[int, int, str], None] | None = None,
     ) -> SongScores:
         effective_config = config or PipelineConfig()
+        return self._score_with_retry(
+            mp3_path, meta, scorers, effective_config, job_id, on_progress,
+        )
+
+    def _score_with_retry(
+        self,
+        mp3_path: Path,
+        meta: SongMeta | None,
+        scorers: list[str] | None,
+        config: PipelineConfig,
+        job_id: str | None,
+        on_progress: Callable[[int, int, str], None] | None,
+        _retried: bool = False,
+    ) -> SongScores:
         conn = self._ensure_started()
-
-        conn.send(ScoreRequest(
+        request = ScoreRequest(
             mp3_path=mp3_path, meta=meta, scorers=scorers,
-            config=effective_config, job_id=job_id,
-        ))
+            config=config, job_id=job_id,
+        )
 
-        timeout = effective_config.pipeline_timeout
-        deadline = time.monotonic() + timeout
+        try:
+            conn.send(request)
+            return self._poll_response(conn, scorers, config, on_progress)
+        except (BrokenPipeError, EOFError, ConnectionResetError):
+            if _retried:
+                raise RuntimeError("Scorer subprocess crashed twice — aborting")
+            log.warning("Scorer subprocess died mid-scoring — respawning and retrying")
+            self._cleanup_dead()
+            return self._score_with_retry(
+                mp3_path, meta, scorers, config, job_id, on_progress,
+                _retried=True,
+            )
+
+    def _poll_response(
+        self,
+        conn: Connection,
+        scorers: list[str] | None,
+        config: PipelineConfig,
+        on_progress: Callable[[int, int, str], None] | None,
+    ) -> SongScores:
+        deadline = time.monotonic() + config.pipeline_timeout
 
         while True:
             remaining = deadline - time.monotonic()
@@ -204,10 +236,10 @@ class ScorerProcess:
         scorer_desc = ", ".join(scorers) if scorers else "all"
         log.error(
             "Scorer subprocess timed out after %ds — killing (requested scorers: %s)",
-            timeout, scorer_desc,
+            config.pipeline_timeout, scorer_desc,
         )
         self._kill()
-        raise TimeoutError(f"Scoring timed out after {timeout}s")
+        raise TimeoutError(f"Scoring timed out after {config.pipeline_timeout}s")
 
     def release_gpu(self, timeout: int = 30) -> None:
         if not self.alive:

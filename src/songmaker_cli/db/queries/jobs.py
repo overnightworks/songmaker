@@ -79,7 +79,7 @@ def update_job_status(
     job.error_type = error_type
     if worker_pid is not None:
         job.worker_pid = worker_pid
-    if status == "running":
+    if status in ("running", "partial"):
         job.heartbeat_at = now
     if status in ("completed", "failed"):
         job.completed_at = now

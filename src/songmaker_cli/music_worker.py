@@ -63,6 +63,11 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None,
 
     if requested_model and requested_model != mgr.active_model:
         log.info("Auto-switching model: %s -> %s", mgr.active_model, requested_model)
+        from songmaker_cli.db.queries import update_job_status
+        db_factory = _get_db_factory()
+        with db_factory() as session:
+            update_job_status(session, job_id, "running", worker_pid=os.getpid())
+            session.commit()
         await asyncio.to_thread(mgr.switch_model, requested_model)
 
     model = mgr.active_model

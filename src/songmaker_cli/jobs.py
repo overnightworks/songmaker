@@ -25,6 +25,7 @@ from songmaker_cli.db.queries import (
     get_song,
     get_version,
     save_scores,
+    update_job_heartbeat,
     update_job_status,
 )
 from songmaker_cli.generate import generate_single
@@ -278,6 +279,7 @@ def _finalize_generation_job(
 
 _DIFFUSION_STEP_PATTERN = re.compile(r"(\d+)/(\d+)\s*\[")
 _PROGRESS_THROTTLE_SECONDS = 2.0
+_HEARTBEAT_INTERVAL_SECONDS = 30.0
 
 
 def _parse_step_fraction(progress_text: str) -> float | None:
@@ -299,18 +301,23 @@ def _make_generation_progress_callback(
     variant_index: int, count: int,
 ) -> Callable[[str], None]:
     last_update = 0.0
+    last_heartbeat = 0.0
 
     def _on_progress(progress_text: str) -> None:
-        nonlocal last_update
-        step_fraction = _parse_step_fraction(progress_text)
-        if step_fraction is None:
-            return
+        nonlocal last_update, last_heartbeat
         now = time.monotonic()
-        if now - last_update < _PROGRESS_THROTTLE_SECONDS:
+        step_fraction = _parse_step_fraction(progress_text)
+        if step_fraction is not None:
+            if now - last_update < _PROGRESS_THROTTLE_SECONDS:
+                return
+            combined = (variant_index + step_fraction) / count
+            _update_job(db_factory, job_id, "running", progress=combined)
+            last_update = now
+            last_heartbeat = now
             return
-        combined = (variant_index + step_fraction) / count
-        _update_job(db_factory, job_id, "running", progress=combined)
-        last_update = now
+        if now - last_heartbeat >= _HEARTBEAT_INTERVAL_SECONDS:
+            _touch_heartbeat(db_factory, job_id)
+            last_heartbeat = now
 
     return _on_progress
 
@@ -520,6 +527,15 @@ def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
     raise RuntimeError(
         f"Job {job_id} status update to {status!r} failed after 2 attempts"
     ) from last_exc
+
+
+def _touch_heartbeat(factory, job_id: str) -> None:
+    try:
+        with factory() as session:
+            update_job_heartbeat(session, job_id)
+            session.commit()
+    except Exception:
+        log.debug("Heartbeat update failed for job %s", job_id)
 
 
 def _cleanup_orphaned_files(audio_dir: Path, *rel_paths: str) -> None:
