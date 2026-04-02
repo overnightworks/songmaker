@@ -157,28 +157,26 @@
 							>
 								Score
 							</button>
-							{#if gen.wav_path}
-								<button
-									class="score-action"
-									onclick={(e) => {
-										e.stopPropagation();
-										actions.repaint(gen);
-									}}
-									aria-label="Repaint section"
-								>
-									Repaint
-								</button>
-								<button
-									class="score-action"
-									onclick={(e) => {
-										e.stopPropagation();
-										actions.cover(gen);
-									}}
-									aria-label="Cover with new style"
-								>
-									Cover
-								</button>
-							{/if}
+							<button
+								class="score-action"
+								onclick={(e) => {
+									e.stopPropagation();
+									actions.repaint(gen);
+								}}
+								aria-label="Repaint section"
+							>
+								Repaint
+							</button>
+							<button
+								class="score-action"
+								onclick={(e) => {
+									e.stopPropagation();
+									actions.cover(gen);
+								}}
+								aria-label="Cover with new style"
+							>
+								Cover
+							</button>
 						</div>
 					</div>
 				{/each}

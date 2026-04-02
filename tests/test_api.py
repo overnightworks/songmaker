@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -690,14 +691,43 @@ def test_repaint_invalid_range(client: TestClient) -> None:
     assert "repainting_start" in resp.json()["detail"]
 
 
-def test_repaint_no_wav(client: TestClient) -> None:
+def test_repaint_no_audio(client: TestClient) -> None:
     resp = client.post("/api/generations/g2/repaint", json={
         "src_generation_id": "g2",
         "repainting_start": 0.0,
         "repainting_end": 0.5,
     })
     assert resp.status_code == 400
-    assert "WAV" in resp.json()["detail"]
+    assert "no audio file" in resp.json()["detail"]
+
+
+def test_repaint_converts_mp3_to_wav(client: TestClient) -> None:
+    from unittest.mock import patch
+
+    audio_dir = Path(client.app.state.ctx.audio_dir)
+    mp3_file = audio_dir / "u-test" / "g2.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3-data")
+
+    def fake_ffmpeg(cmd, **kwargs):
+        wav_out = Path(cmd[-1])
+        wav_out.write_bytes(b"RIFF" + b"\x00" * 40)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    with (
+        _mock_worker() as mock_pool,
+        patch("songmaker_cli.generation_api.subprocess.run", side_effect=fake_ffmpeg),
+    ):
+        resp = client.post("/api/generations/g2/repaint", json={
+            "src_generation_id": "g2",
+            "repainting_start": 0.0,
+            "repainting_end": 0.5,
+        })
+
+    assert resp.status_code == 200
+    mock_pool.enqueue_job.assert_called_once()
+    repaint = mock_pool.enqueue_job.call_args[0][-1]
+    assert repaint["src_wav_path"].endswith(".wav")
 
 
 def test_repaint_not_found(client: TestClient) -> None:
@@ -746,13 +776,13 @@ def test_cover_submits_job(client: TestClient) -> None:
     assert cover["prompt"] == "jazz version"
 
 
-def test_cover_no_wav(client: TestClient) -> None:
+def test_cover_no_audio(client: TestClient) -> None:
     resp = client.post("/api/generations/g2/cover", json={
         "src_generation_id": "g2",
         "audio_cover_strength": 0.5,
     })
     assert resp.status_code == 400
-    assert "WAV" in resp.json()["detail"]
+    assert "no audio file" in resp.json()["detail"]
 
 
 def test_cover_not_found(client: TestClient) -> None:

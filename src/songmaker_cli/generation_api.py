@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import subprocess
 import uuid
 from collections.abc import AsyncGenerator, Callable
 from pathlib import Path
@@ -45,7 +46,7 @@ from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
     SSE_POLL_INTERVAL_SECONDS,
 )
-from songmaker_cli.db.models import Job
+from songmaker_cli.db.models import Generation, Job
 from songmaker_cli.db.queries import (
     delete_generation,
     disable_generation_sharing,
@@ -66,6 +67,33 @@ from songmaker_cli.worker_base import TERMINAL_STATUSES
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _resolve_source_wav(audio_dir: Path, gen: Generation, session: Session) -> Path:
+    if gen.wav_path:
+        wav = audio_dir / gen.wav_path
+        if wav.exists():
+            return wav
+
+    mp3 = audio_dir / gen.mp3_path
+    if not mp3.exists():
+        raise HTTPException(400, "Source generation has no audio file")
+
+    wav = mp3.with_suffix(".wav")
+    if not wav.exists():
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(mp3), str(wav)],
+                check=True, capture_output=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise HTTPException(500, "Failed to convert MP3 to WAV") from exc
+
+    wav_rel = str(wav.relative_to(audio_dir))
+    gen.wav_path = wav_rel
+    session.flush()
+
+    return wav
 
 
 # ── Reference audio upload ───────────────────────────────────────────
@@ -225,9 +253,7 @@ async def api_repaint_generation(
     if req.repainting_start >= req.repainting_end:
         raise HTTPException(400, "repainting_start must be less than repainting_end")
 
-    wav_path = ctx.audio_dir / gen.wav_path if gen.wav_path else None
-    if not wav_path or not wav_path.exists():
-        raise HTTPException(400, "Source generation has no WAV file")
+    wav_path = _resolve_source_wav(ctx.audio_dir, gen, session)
 
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
@@ -289,9 +315,7 @@ async def api_cover_generation(
         if req.model not in active_ids:
             raise HTTPException(400, f"Model '{req.model}' is not available")
 
-    wav_path = ctx.audio_dir / gen.wav_path if gen.wav_path else None
-    if not wav_path or not wav_path.exists():
-        raise HTTPException(400, "Source generation has no WAV file")
+    wav_path = _resolve_source_wav(ctx.audio_dir, gen, session)
 
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
