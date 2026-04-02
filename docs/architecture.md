@@ -68,21 +68,28 @@ User clicks "Generate"                    User clicks "Score"
         │                                         │
         ├── rate limit check                      ├── rate limit check
         ├── ownership check                       ├── ownership check
-        ├── create Job record                     ├── create Job record
-        │                                         │
-        ▼                                         ▼
-  arq:queue:music                          arq:queue:scoring
-  (Redis sorted set)                       (Redis sorted set)
-        │                                         │
-        ▼                                         ▼
-  Music Worker                             Scoring Worker
-  ├── prepare_generate_mode()              ├── spawn scorer subprocess
-  ├── ACE-Step HTTP → WAV                  ├── Whisper transcription
-  ├── master → MP3                         ├── AudioBox aesthetics
-  ├── save Generation to DB                ├── BPM, dynamics, silence, spectral
-  └── Job status: completed                ├── lyrical coherence (Claude)
-                                           ├── save scores to DB
-  User clicks "Chat"                       └── Job status: completed
+        ├── validate model (admin-enabled)        ├── create Job record
+        ├── create Job record                     │
+        │                                         ▼
+        ▼                                   arq:queue:scoring
+  arq:queue:music                          (Redis sorted set)
+  (Redis sorted set)                              │
+        │                                         ▼
+        ▼                                   Scoring Worker
+  Music Worker                             ├── spawn scorer subprocess
+  ├── auto-switch model if needed          ├── Whisper transcription
+  ├── prepare_generate_mode()              ├── AudioBox aesthetics
+  ├── apply repaint/cover overrides        ├── BPM, dynamics, silence, spectral
+  ├── ACE-Step HTTP → WAV                  ├── lyrical coherence (Claude)
+  ├── master → MP3                         ├── save scores to DB
+  ├── save Generation (model_mode) to DB   └── Job status: completed
+  └── Job status: completed
+
+  Repaint: POST /generations/{id}/repaint
+  Cover:   POST /generations/{id}/cover
+  Upload:  POST /api/audio/upload (reference audio)
+
+  User clicks "Chat"
         │
         ▼
   POST /songs/{id}/chat
@@ -138,9 +145,10 @@ User (username, role: admin|user, bcrypt hash)
   ├── Album (title, artist, share_slug?, is_shared — owned via created_by)
   │     └── Song (title, track_number)
   │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params)
-  │           └── Generation (MP3, seed, status, whisper_text)
-  │                 ├── Score (scorer, value JSON)
-  │                 └── Rating (0-100, notes)
+  │           ├── Generation (MP3, seed, status, whisper_text, model_mode)
+  │           │     ├── Score (scorer, value JSON)
+  │           │     └── Rating (0-100, notes)
+  │           └── ChatMessage (role, content — per-song conversation history)
   ├── Job (type, status, progress, error, queue_position)
   └── AuditLog (action, resource_type, resource_id, detail)
 

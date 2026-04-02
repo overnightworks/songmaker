@@ -54,16 +54,24 @@ Priority: song params > admin defaults > model defaults.
 | `duration` | 1-600 | 180 | 180 | Output length in seconds |
 | `bpm` | 0-999 | 120 | 120 | 0 = let model decide |
 
-## Modes (future — see plans/acestep-modes.md)
+## Modes
 
-ACE-Step 1.5 supports modes beyond text-to-music:
-- **Cover**: Generate from existing audio reference
-- **Repaint**: Selectively re-generate parts of a track
-- **Reference audio**: Guide style from an audio example
-- **Extend**: Continue a track beyond its current length
-- **Stem separation**: Split into vocals/drums/bass/other
+All modes use the same `/release_task` endpoint with different `task_type` + audio inputs. The worker auto-switches models if the requested model differs from the loaded one.
 
-These are not yet integrated into Songmaker.
+| Mode | task_type | Trigger | What It Does |
+|------|-----------|---------|--------------|
+| Text2Music | `text2music` | Generate button | Generate from scratch (default) |
+| Repaint | `repaint` | Repaint button on generation | Edit a time section — fix wrong lyrics, redo a chorus |
+| Cover | `cover` | Cover button on generation | Re-interpret with different style/lyrics, keep melody |
+| Reference | `text2music` + `reference_audio` | Upload in generation settings | Guide timbre/style from an external audio track |
+
+**Repaint** sends `src_audio` (the original WAV), `repainting_start` and `repainting_end` (0.0-1.0 fractions). `think_mode` is auto-disabled. The result is a new generation — non-destructive.
+
+**Cover** sends `src_audio` and `audio_cover_strength` (0.0 = free reinterpretation, 1.0 = strict structure). `think_mode` is auto-disabled.
+
+**Reference audio** uploads via `POST /api/audio/upload` (max 50MB, .mp3/.wav/.flac/.ogg). The path is stored in version `generation_params.reference_audio` and resolved to an absolute path before sending to ACE-Step. Path traversal is blocked at both API validation and job execution levels.
+
+**Not yet integrated**: Lego, Extract, Complete (require Base model — see `plans/base-model-tasks.md`). Infinite duration (exploratory — see `plans/acestep-modes.md` Phase 5).
 
 ## Environment Variables
 
