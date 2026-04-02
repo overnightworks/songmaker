@@ -1,6 +1,6 @@
 # ACE-Step Advanced Generation Modes
 
-> **Status: IN PROGRESS** — Phases 1-3 complete, Phase 4 (Reference Audio) next
+> **Status: IN PROGRESS** — Phases 1-4 complete, Phase 5 (Infinite Duration) is exploratory
 
 ## Goal
 
@@ -92,28 +92,16 @@
 
 ---
 
-## Phase 4: Reference Audio
+## Phase 4: Reference Audio ✅
 
-**What**: Upload an external audio track to influence timbre/style of new generations. Works with any model + any task type.
-
-### Backend
-
-- [ ] File upload endpoint: `POST /api/audio/upload` → validate audio, save to persistent location, return ID
-  - Accept common formats (mp3, wav, flac, ogg)
-  - Size limit (50MB)
-  - Store in audio directory (persistent, not temp — reusable across generations)
-- [ ] Add `reference_audio` field to `AceStepConfig`
-- [ ] Pass `reference_audio` path to ACE-Step `/release_task` payload
-- [ ] Store reference_audio ID in version `generation_params`
-- [ ] Cleanup: orphaned reference files (no version references them) via periodic task
-
-### Frontend
-
-- [ ] "Reference Track" upload button in generation settings
-  - Drag-and-drop or file picker
-  - Show filename + remove button when set
-  - Audio preview/playback of uploaded reference
-- [ ] Per-version storage — reference track is part of the version snapshot, reusable across regenerations
+- [x] `reference_audio` field on AceStepConfig, sent in client payload
+- [x] `POST /api/audio/upload` — validates format (.mp3/.wav/.flac/.ogg), size (50MB), stores in `{user}/refs/{uuid}.ext`
+- [x] `reference_audio` field on GenerationParams (stored in version generation_params)
+- [x] Path resolved to absolute in `_build_generation_context()` (warns + clears if missing)
+- [x] Reference track upload UI in GenerationSettings (file picker + clear button)
+- [x] `uploadReferenceAudio()` frontend API function
+- [ ] Cleanup: orphaned reference files (deferred — periodic task, low priority)
+- [ ] Audio preview/playback of uploaded reference (deferred — nice-to-have)
 
 ---
 

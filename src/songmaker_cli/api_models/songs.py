@@ -53,6 +53,7 @@ class GenerationParams(BaseModel):
     lm_negative_prompt: str | None = Field(None, max_length=_GEN_PARAM_MAX_STRING_LENGTH)
     infer_method: str | None = Field(None, max_length=10)
     batch_size: int | None = Field(None, ge=1, le=8)
+    reference_audio: str | None = Field(None, max_length=500)
 
     @field_validator("infer_method")
     @classmethod

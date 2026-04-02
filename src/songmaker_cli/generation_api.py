@@ -5,10 +5,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 from collections.abc import AsyncGenerator, Callable
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
@@ -63,6 +66,52 @@ from songmaker_cli.worker_base import TERMINAL_STATUSES
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ── Reference audio upload ───────────────────────────────────────────
+
+
+class ReferenceAudioResponse(BaseModel):
+    path: str
+    filename: str
+
+
+@router.post("/audio/upload")
+async def api_upload_reference_audio(
+    file: UploadFile,
+    user: AuthenticatedUser = Depends(get_current_user),
+    ctx: AppContext = Depends(get_app_context),
+) -> ReferenceAudioResponse:
+    from songmaker_cli.constants import (
+        REFERENCE_AUDIO_DIR,
+        REFERENCE_AUDIO_EXTENSIONS,
+        REFERENCE_AUDIO_MAX_BYTES,
+    )
+
+    if not file.filename:
+        raise HTTPException(400, "No filename provided")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext not in REFERENCE_AUDIO_EXTENSIONS:
+        accepted = ", ".join(sorted(REFERENCE_AUDIO_EXTENSIONS))
+        raise HTTPException(400, f"Unsupported format '{ext}'. Accepted: {accepted}")
+
+    content = await file.read()
+    if len(content) > REFERENCE_AUDIO_MAX_BYTES:
+        max_mb = REFERENCE_AUDIO_MAX_BYTES // 1024 // 1024
+        raise HTTPException(400, f"File too large (max {max_mb}MB)")
+    if len(content) < 100:
+        raise HTTPException(400, "File is empty or too small")
+
+    ref_dir = ctx.audio_dir / user.id / REFERENCE_AUDIO_DIR
+    ref_dir.mkdir(parents=True, exist_ok=True)
+    file_id = str(uuid.uuid4())
+    rel_path = f"{user.id}/{REFERENCE_AUDIO_DIR}/{file_id}{ext}"
+    dest = ctx.audio_dir / rel_path
+    dest.write_bytes(content)
+
+    log.info("Reference audio uploaded: %s (%d bytes)", rel_path, len(content))
+    return ReferenceAudioResponse(path=rel_path, filename=file.filename)
 
 
 # ── Generations ──────────────────────────────────────────────────────

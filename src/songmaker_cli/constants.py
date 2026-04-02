@@ -156,3 +156,8 @@ AUDIO_MEDIA_TYPES: dict[str, str] = {
     ".mp3": "audio/mpeg",
     ".wav": "audio/wav",
 }
+
+# Reference audio upload
+REFERENCE_AUDIO_DIR = "refs"
+REFERENCE_AUDIO_EXTENSIONS = frozenset({".mp3", ".wav", ".flac", ".ogg"})
+REFERENCE_AUDIO_MAX_BYTES = 50 * 1024 * 1024

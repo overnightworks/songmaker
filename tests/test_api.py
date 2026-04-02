@@ -775,6 +775,42 @@ def test_cover_default_strength(client: TestClient) -> None:
     assert cover["audio_cover_strength"] == 0.8
 
 
+# ── Reference audio upload ──────────────────────────────────────────
+
+
+def test_upload_reference_audio(client: TestClient) -> None:
+    import io
+    resp = client.post(
+        "/api/audio/upload",
+        files={"file": ("ref.wav", io.BytesIO(b"RIFF" + b"\x00" * 200), "audio/wav")},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["filename"] == "ref.wav"
+    assert data["path"].endswith(".wav")
+    assert "refs/" in data["path"]
+
+
+def test_upload_reference_audio_bad_format(client: TestClient) -> None:
+    import io
+    resp = client.post(
+        "/api/audio/upload",
+        files={"file": ("ref.txt", io.BytesIO(b"hello world" * 20), "text/plain")},
+    )
+    assert resp.status_code == 400
+    assert "Unsupported format" in resp.json()["detail"]
+
+
+def test_upload_reference_audio_too_small(client: TestClient) -> None:
+    import io
+    resp = client.post(
+        "/api/audio/upload",
+        files={"file": ("ref.wav", io.BytesIO(b"tiny"), "audio/wav")},
+    )
+    assert resp.status_code == 400
+    assert "too small" in resp.json()["detail"]
+
+
 def test_generate_song_redis_down(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 

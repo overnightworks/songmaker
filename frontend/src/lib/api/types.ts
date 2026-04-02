@@ -24,6 +24,7 @@ export interface GenerationParams {
 	lm_negative_prompt?: string | null;
 	infer_method?: string | null;
 	batch_size?: number | null;
+	reference_audio?: string | null;
 	seed?: number | null;
 	acestep_model?: string | null;
 	bpm?: number | null;
@@ -47,6 +48,7 @@ export interface VersionGenerationParams {
 	lm_negative_prompt?: string | null;
 	infer_method?: string | null;
 	batch_size?: number | null;
+	reference_audio?: string | null;
 }
 
 export interface TrackScores {

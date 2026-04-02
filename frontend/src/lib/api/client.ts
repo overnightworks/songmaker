@@ -274,6 +274,20 @@ export async function coverGeneration(
 	});
 }
 
+export interface ReferenceAudioResult {
+	path: string;
+	filename: string;
+}
+
+export async function uploadReferenceAudio(file: File): Promise<ReferenceAudioResult> {
+	const formData = new FormData();
+	formData.append('file', file);
+	return apiFetch<ReferenceAudioResult>('/api/audio/upload', {
+		method: 'POST',
+		body: formData
+	});
+}
+
 export async function rateGeneration(
 	genId: string,
 	rating: number,

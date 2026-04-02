@@ -162,6 +162,15 @@ def _build_generation_context(
         seed=seed,
     )
 
+    if ace_config.reference_audio:
+        from dataclasses import replace
+        abs_ref = audio_dir / ace_config.reference_audio
+        if abs_ref.exists():
+            ace_config = replace(ace_config, reference_audio=str(abs_ref))
+        else:
+            log.warning("Reference audio not found: %s", abs_ref)
+            ace_config = replace(ace_config, reference_audio="")
+
     return GenerationContext(
         song_id=song_id,
         version_id=version_id,
