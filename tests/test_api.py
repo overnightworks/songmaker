@@ -726,6 +726,55 @@ def test_repaint_with_lyrics_override(client: TestClient) -> None:
     assert repaint["prompt"] == "jazz ballad"
 
 
+# ── Cover ───────────────────────────────────────────────────────────
+
+
+def test_cover_submits_job(client: TestClient) -> None:
+    with _mock_worker() as mock_pool:
+        resp = client.post("/api/generations/g1/cover", json={
+            "src_generation_id": "g1",
+            "audio_cover_strength": 0.7,
+            "prompt": "jazz version",
+        })
+
+    assert resp.status_code == 200
+    assert resp.json()["type"] == "generate"
+    mock_pool.enqueue_job.assert_called_once()
+    args = mock_pool.enqueue_job.call_args[0]
+    cover = args[-1]
+    assert cover["audio_cover_strength"] == 0.7
+    assert cover["prompt"] == "jazz version"
+
+
+def test_cover_no_wav(client: TestClient) -> None:
+    resp = client.post("/api/generations/g2/cover", json={
+        "src_generation_id": "g2",
+        "audio_cover_strength": 0.5,
+    })
+    assert resp.status_code == 400
+    assert "WAV" in resp.json()["detail"]
+
+
+def test_cover_not_found(client: TestClient) -> None:
+    resp = client.post("/api/generations/nonexistent/cover", json={
+        "src_generation_id": "nonexistent",
+        "audio_cover_strength": 0.5,
+    })
+    assert resp.status_code == 404
+
+
+def test_cover_default_strength(client: TestClient) -> None:
+    with _mock_worker() as mock_pool:
+        resp = client.post("/api/generations/g1/cover", json={
+            "src_generation_id": "g1",
+        })
+
+    assert resp.status_code == 200
+    args = mock_pool.enqueue_job.call_args[0]
+    cover = args[-1]
+    assert cover["audio_cover_strength"] == 0.8
+
+
 def test_generate_song_redis_down(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 

@@ -1,6 +1,6 @@
 # ACE-Step Advanced Generation Modes
 
-> **Status: IN PROGRESS** — Phase 1 complete, starting Phase 2 (Repaint)
+> **Status: IN PROGRESS** — Phases 1-3 complete, Phase 4 (Reference Audio) next
 
 ## Goal
 
@@ -64,65 +64,31 @@
 
 ---
 
-## Phase 2: Repaint Mode
+## Phase 2: Repaint Mode ✅
 
-**What**: Edit a specific time section of an existing generation. Fix a wrong lyric, redo a chorus, change one verse. Works with Turbo + SFT. **Highest user value — directly solves "AI sang the wrong words."**
-
-### Backend
-
-- [ ] Add `task_type` field to `AceStepConfig` (default: `"text2music"`)
-- [ ] Add `src_audio`, `repainting_start`, `repainting_end` fields
-- [ ] `repainting_start` and `repainting_end` are floats 0.0-1.0 (fraction of duration, not seconds)
-- [ ] Pass to ACE-Step: `task_type: "repaint"`, `src_audio`, `repainting_start`, `repainting_end`
-- [ ] think_mode auto-disabled for repaint (ACE-Step requirement)
-- [ ] Store task_type + repaint params in generation record
-- [ ] Resolve src_audio from generation ID → file path on disk
-
-### Frontend
-
-- [ ] Waveform selection UI on existing generations
-  - Display waveform of the generation
-  - Drag handles to select a time range
-  - Show selected range in seconds + as fraction
-- [ ] Repaint dialog
-  - Shows selected time range
-  - User provides new lyrics/caption for that section
-  - Option to keep or change style prompt
-- [ ] Result: new generation (non-destructive — original preserved)
-- [ ] Visual indicator showing repainted region on generation card
-
-### UX Flow
-
-Generation sounds great except 0:45-1:15 where the AI sings wrong lyrics → select that range on the waveform → write corrected lyrics → repaint → new generation with fixed section, surrounding audio intact.
+- [x] `task_type`, `src_audio`, `repainting_start/end`, `audio_cover_strength` on AceStepConfig
+- [x] AceStepClient sends dynamic task_type + conditional repaint/cover fields
+- [x] `POST /generations/{gen_id}/repaint` endpoint with range validation, WAV check, ownership
+- [x] `RepaintRequest` model (range 0.0-1.0, optional lyrics/prompt override, model, seed)
+- [x] `_apply_repaint_params()` — overrides config, forces think_mode=off
+- [x] `StoredGenerationParams` stores task_type + repaint range
+- [x] `RepaintDialog` component with range sliders, lyrics/prompt override
+- [x] Repaint button on generation cards (only when WAV available)
+- [x] `repaintGeneration()` frontend API function
+- [ ] Waveform visualization (deferred — using range sliders for now, upgrade to canvas waveform later)
 
 ---
 
-## Phase 3: Cover Mode
+## Phase 3: Cover Mode ✅
 
-**What**: Take an existing generation and re-interpret it with different style/lyrics while keeping melody structure. Works with Turbo + SFT.
-
-> No dependency on file upload — cover uses an existing generation's audio file, already on disk.
-
-### Backend
-
-- [ ] Add `src_audio` and `audio_cover_strength` fields to `AceStepConfig` (if not already added in Phase 2)
-- [ ] Pass to ACE-Step: `task_type: "cover"`, `src_audio: <path>`, `audio_cover_strength: <float>`
-- [ ] Resolve src_audio from generation ID → file path
-- [ ] Store task_type + cover params in generation record
-
-### Frontend
-
-- [ ] "Cover" action button on each generation in the generations list
-  - Opens cover dialog/panel
-  - Source: the selected generation's audio file (shown, not editable)
-  - Strength slider (0.0 = free reinterpretation, 1.0 = strict structure)
-  - User can modify caption + lyrics for the cover
-- [ ] Result appears as a new generation linked to the same song version
-- [ ] Visual indicator that a generation was produced via cover mode
-
-### UX Flow
-
-Listen to a generation → like the melody but not the style → click "Cover" → change prompt to "jazz version" → adjust strength → generate → new generation with same melody, different style.
+- [x] `CoverRequest` model (strength 0.0-1.0, optional lyrics/prompt, model, seed)
+- [x] `POST /generations/{gen_id}/cover` endpoint with ownership check, WAV validation
+- [x] `_apply_cover_params()` — sets task_type=cover, forces think_mode=off
+- [x] `audio_cover_strength` stored in `StoredGenerationParams`
+- [x] `CoverDialog` component — strength slider, lyrics/prompt override
+- [x] "Cover" button on generation cards (only when WAV available)
+- [x] `coverGeneration()` frontend API function
+- [x] `cover_params` threaded: API → arq → worker → `run_generation_job()`
 
 ---
 

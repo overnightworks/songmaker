@@ -22,6 +22,7 @@
 		deleteGeneration,
 		rateGeneration,
 		repaintGeneration,
+		coverGeneration,
 		keepGeneration,
 		unkeepGeneration
 	} from '$lib/api/client';
@@ -80,6 +81,7 @@
 	import SongEditor from '$lib/components/SongEditor.svelte';
 	import OverflowMenu from '$lib/components/OverflowMenu.svelte';
 	import PlaylistPicker from '$lib/components/PlaylistPicker.svelte';
+	import CoverDialog from '$lib/components/CoverDialog.svelte';
 	import RepaintDialog from '$lib/components/RepaintDialog.svelte';
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -98,6 +100,7 @@
 	let selectedModel = $state<string | null>(null);
 	let pinnedSeed = $state<number | null>(null);
 	let repaintTarget = $state<import('$lib/api/types').GenerationItem | null>(null);
+	let coverTarget = $state<import('$lib/api/types').GenerationItem | null>(null);
 	let playlistPickerFor = $state<
 		| { type: 'song'; id: string }
 		| { type: 'album'; id: string }
@@ -217,6 +220,21 @@
 			trackJob(job, { songId: song.id });
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Repaint failed', 'error');
+		}
+	}
+
+	async function onCoverSubmit(
+		strength: number, lyrics: string | null, prompt: string | null,
+	): Promise<void> {
+		if (!song || !coverTarget) return;
+		try {
+			const job = await coverGeneration(
+				coverTarget.id, strength, lyrics, prompt, selectedModel,
+			);
+			coverTarget = null;
+			trackJob(job, { songId: song.id });
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Cover failed', 'error');
 		}
 	}
 
@@ -704,6 +722,7 @@
 							onscore={onScore}
 							onpick={onPick}
 							onrepaint={(gen) => (repaintTarget = gen)}
+							oncover={(gen) => (coverTarget = gen)}
 						/>
 					{/if}
 				{:else if tab === 'edit'}
@@ -919,6 +938,14 @@
 		generation={repaintTarget}
 		onsubmit={onRepaintSubmit}
 		oncancel={() => (repaintTarget = null)}
+	/>
+{/if}
+
+{#if coverTarget}
+	<CoverDialog
+		generation={coverTarget}
+		onsubmit={onCoverSubmit}
+		oncancel={() => (coverTarget = null)}
 	/>
 {/if}
 

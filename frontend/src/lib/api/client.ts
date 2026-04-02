@@ -2,7 +2,8 @@ import type {
 	AlbumItem,
 	AuthUser,
 	Capabilities,
-	ChatResult,
+	ChatHistoryResult,
+	ChatTurnResult,
 	CleanupResult,
 	JobItem,
 	LoginAttemptItem,
@@ -13,6 +14,7 @@ import type {
 	PresetItem,
 	RateLimitsResponse,
 	RateResult,
+	RecentChatItem,
 	SessionItem,
 	SetupRequired,
 	ShareResult,
@@ -243,6 +245,29 @@ export async function repaintGeneration(
 	if (model) payload.model = model;
 	if (seed != null) payload.seed = seed;
 	return apiFetch<JobStatus>(`/api/generations/${genId}/repaint`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload)
+	});
+}
+
+export async function coverGeneration(
+	genId: string,
+	audioCoverStrength: number,
+	lyrics?: string | null,
+	prompt?: string | null,
+	model?: string | null,
+	seed?: number | null
+): Promise<JobStatus> {
+	const payload: Record<string, unknown> = {
+		src_generation_id: genId,
+		audio_cover_strength: audioCoverStrength
+	};
+	if (lyrics != null) payload.lyrics = lyrics;
+	if (prompt != null) payload.prompt = prompt;
+	if (model) payload.model = model;
+	if (seed != null) payload.seed = seed;
+	return apiFetch<JobStatus>(`/api/generations/${genId}/cover`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(payload)
@@ -531,17 +556,37 @@ export async function fetchMe(): Promise<AuthUser> {
 	return apiFetch<AuthUser>('/api/auth/me');
 }
 
-export async function chatWithClaude(message: string, context: string = ''): Promise<string> {
-	const data = await apiFetch<ChatResult>(
-		'/api/chat',
+export async function sendChatMessage(
+	songId: string,
+	message: string,
+	mentionedSongIds: string[] = [],
+	mentionedVersionIds: string[] = []
+): Promise<ChatTurnResult> {
+	return apiFetch<ChatTurnResult>(
+		`/api/songs/${songId}/chat`,
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ message, context })
+			body: JSON.stringify({
+				message,
+				mentioned_song_ids: mentionedSongIds,
+				mentioned_version_ids: mentionedVersionIds
+			})
 		},
 		CHAT_TIMEOUT_MS
 	);
-	return data.response;
+}
+
+export async function fetchChatHistory(songId: string): Promise<ChatHistoryResult> {
+	return apiFetch<ChatHistoryResult>(`/api/songs/${songId}/chat`);
+}
+
+export async function clearChatHistory(songId: string): Promise<void> {
+	await apiFetch(`/api/songs/${songId}/chat`, { method: 'DELETE' });
+}
+
+export async function fetchRecentChats(): Promise<RecentChatItem[]> {
+	return apiFetch<RecentChatItem[]>('/api/chat/recent');
 }
 
 // ── Admin ─────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ from songmaker_cli.api_helpers import (
     create_job_with_rate_limit,
 )
 from songmaker_cli.api_models import (
+    CoverRequest,
     GenerateRequest,
     GenerationResponse,
     JobResponse,
@@ -206,6 +207,69 @@ async def api_repaint_generation(
         await pool.enqueue_job(
             "generate", job.id, song.id, version.id, 1, user.id, req.seed,
             req.model, repaint_params,
+            _queue_name=ARQ_MUSIC_QUEUE_NAME,
+        )
+    except ConnectionError:
+        _fail_job(ctx, job.id)
+        raise HTTPException(503, "Job queue unavailable")
+
+    return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
+
+
+@router.post("/generations/{gen_id}/cover")
+async def api_cover_generation(
+    gen_id: str,
+    req: CoverRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> JobResponse:
+    check_redis_health(request)
+    gen = check_generation_access(session, gen_id, user)
+    song = gen.song
+    version = gen.version
+
+    if not version:
+        raise HTTPException(400, "Generation has no linked version")
+
+    if req.model:
+        from songmaker_cli.db.queries import list_active_models
+
+        active_ids = {m.id for m in list_active_models(session)}
+        if req.model not in active_ids:
+            raise HTTPException(400, f"Model '{req.model}' is not available")
+
+    wav_path = ctx.audio_dir / gen.wav_path if gen.wav_path else None
+    if not wav_path or not wav_path.exists():
+        raise HTTPException(400, "Source generation has no WAV file")
+
+    lyrics = req.lyrics if req.lyrics is not None else version.lyrics
+    prompt = req.prompt if req.prompt is not None else version.prompt
+
+    job = create_job_with_rate_limit(session, user, "generate")
+    record_audit(
+        session, user.id, "cover", "generation", gen_id,
+        f"strength={req.audio_cover_strength:.2f}",
+    )
+    session.commit()
+    log.info("Cover: gen=%s, strength=%.2f, job=%s",
+             gen_id, req.audio_cover_strength, job.id)
+
+    try:
+        pool = get_arq_pool()
+        if not await is_music_worker_healthy():
+            _fail_job(ctx, job.id)
+            raise HTTPException(503, "Worker not running")
+        cover_params = {
+            "src_wav_path": str(wav_path),
+            "audio_cover_strength": req.audio_cover_strength,
+            "lyrics": lyrics,
+            "prompt": prompt,
+        }
+        await pool.enqueue_job(
+            "generate", job.id, song.id, version.id, 1, user.id, req.seed,
+            req.model, None, cover_params,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:

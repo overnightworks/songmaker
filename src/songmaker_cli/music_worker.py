@@ -54,7 +54,7 @@ def _require_acestep_manager():
 
 
 async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None,
-                   requested_model=None, repaint_params=None):
+                   requested_model=None, repaint_params=None, cover_params=None):
     if not check_job_still_valid(job_id):
         return
 
@@ -76,7 +76,7 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None,
         run_generation_job,
         job_id, song_id, version_id, count, user_id,
         db_factory=_get_db_factory(), audio_dir=_audio_dir(), data_dir=_data_dir(),
-        seed=seed, repaint_params=repaint_params,
+        seed=seed, repaint_params=repaint_params, cover_params=cover_params,
     )
 
 

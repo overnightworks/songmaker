@@ -17,9 +17,10 @@
 		onscore: (genId: string) => void;
 		onpick: (genId: string, picked: boolean) => void;
 		onrepaint?: (gen: GenerationItem) => void;
+		oncover?: (gen: GenerationItem) => void;
 	}
 
-	let { song, onselect, onscore, onpick, onrepaint }: Props = $props();
+	let { song, onselect, onscore, onpick, onrepaint, oncover }: Props = $props();
 
 	const pb = $derived($playback);
 	const audioPlaying = $derived($isAudioPlaying);
@@ -167,6 +168,18 @@
 									aria-label="Repaint section"
 								>
 									Repaint
+								</button>
+							{/if}
+							{#if oncover && gen.wav_path}
+								<button
+									class="score-action"
+									onclick={(e) => {
+										e.stopPropagation();
+										oncover(gen);
+									}}
+									aria-label="Cover with new style"
+								>
+									Cover
 								</button>
 							{/if}
 						</div>

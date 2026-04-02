@@ -83,6 +83,7 @@ class StoredGenerationParams(GenerationParams):
     task_type: str | None = None
     repainting_start: float | None = None
     repainting_end: float | None = None
+    audio_cover_strength: float | None = None
 
 
 class AlbumResponse(BaseModel):
@@ -373,6 +374,23 @@ class RepaintRequest(BaseModel):
     src_generation_id: str = Field(max_length=36)
     repainting_start: float = Field(ge=0.0, le=1.0)
     repainting_end: float = Field(ge=0.0, le=1.0)
+    lyrics: str | None = Field(None, max_length=50_000)
+    prompt: str | None = Field(None, max_length=5_000)
+    model: str | None = None
+    seed: int | None = Field(None, ge=-1)
+
+    @field_validator("model")
+    @classmethod
+    def _validate_model(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_MODEL_MODES:
+            msg = f"model must be one of {sorted(_VALID_MODEL_MODES)}"
+            raise ValueError(msg)
+        return v
+
+
+class CoverRequest(BaseModel):
+    src_generation_id: str = Field(max_length=36)
+    audio_cover_strength: float = Field(0.8, ge=0.0, le=1.0)
     lyrics: str | None = Field(None, max_length=50_000)
     prompt: str | None = Field(None, max_length=5_000)
     model: str | None = None

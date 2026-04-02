@@ -215,6 +215,9 @@ def _run_single_generation(
         repainting_end=(
             ctx.ace_config.repainting_end if ctx.ace_config.task_type == "repaint" else None
         ),
+        audio_cover_strength=(
+            ctx.ace_config.audio_cover_strength if ctx.ace_config.task_type == "cover" else None
+        ),
     )
     gen_params = stored.model_dump(exclude_none=True)
 
@@ -327,6 +330,32 @@ def _apply_repaint_params(ctx: GenerationContext, repaint_params: dict) -> Gener
     )
 
 
+def _apply_cover_params(ctx: GenerationContext, cover_params: dict) -> GenerationContext:
+    from dataclasses import replace
+
+    updated_config = replace(
+        ctx.ace_config,
+        task_type="cover",
+        src_audio=cover_params["src_wav_path"],
+        audio_cover_strength=cover_params["audio_cover_strength"],
+        think_mode="off",
+        prompt=cover_params.get("prompt", ctx.ace_config.prompt),
+        lyrics=cover_params.get("lyrics", ctx.ace_config.lyrics),
+    )
+    return GenerationContext(
+        song_id=ctx.song_id,
+        version_id=ctx.version_id,
+        meta=ctx.meta,
+        album_meta=ctx.album_meta,
+        ace_config=updated_config,
+        audio_dir=ctx.audio_dir,
+        user_id=ctx.user_id,
+        model_name=ctx.model_name,
+        client=ctx.client,
+        base_params=ctx.base_params,
+    )
+
+
 def run_generation_job(
     job_id: str, song_id: str, version_id: str, count: int,
     user_id: str,
@@ -335,8 +364,8 @@ def run_generation_job(
     data_dir: Path | None = None,
     seed: int | None = None,
     repaint_params: dict | None = None,
+    cover_params: dict | None = None,
 ) -> None:
-    """Run generation in a background thread, updating DB status."""
     assert db_factory is not None, "db_factory is required"
     assert audio_dir is not None, "audio_dir is required"
     assert data_dir is not None, "data_dir is required"
@@ -349,7 +378,7 @@ def run_generation_job(
         job_id=job_id, job_type="generate", song_id=song_id,
     )
 
-    task_type = "repaint" if repaint_params else "generate"
+    task_type = "cover" if cover_params else ("repaint" if repaint_params else "generate")
     log.info("Generation job %s: song=%s, count=%d, task=%s", job_id, song_id, count, task_type)
 
     try:
@@ -362,6 +391,8 @@ def run_generation_job(
             )
             if repaint_params:
                 ctx = _apply_repaint_params(ctx, repaint_params)
+            elif cover_params:
+                ctx = _apply_cover_params(ctx, cover_params)
         except GenerationSetupError as exc:
             _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return

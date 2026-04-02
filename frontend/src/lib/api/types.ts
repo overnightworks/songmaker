@@ -32,6 +32,7 @@ export interface GenerationParams {
 	task_type?: string | null;
 	repainting_start?: number | null;
 	repainting_end?: number | null;
+	audio_cover_strength?: number | null;
 }
 
 export interface VersionGenerationParams {
@@ -235,6 +236,29 @@ export interface UserRateLimitsResponse {
 
 export interface ChatResult {
 	response: string;
+}
+
+export interface ChatMessageItem {
+	id: string;
+	role: string;
+	content: string;
+	created_at: string;
+}
+
+export interface ChatTurnResult {
+	user_message: ChatMessageItem;
+	assistant_message: ChatMessageItem;
+}
+
+export interface ChatHistoryResult {
+	messages: ChatMessageItem[];
+}
+
+export interface RecentChatItem {
+	song_id: string;
+	title: string;
+	message_count: number;
+	last_message_at: string | null;
 }
 
 export interface RateResult {
