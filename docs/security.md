@@ -102,7 +102,9 @@ Uvicorn's `timeout-keep-alive` is set to `REQUEST_TIMEOUT` (default 30s). Idle c
 
 ## Claude Chat Security
 
-- **System prompt**: Hardcoded server-side (`_CHAT_SYSTEM_PROMPT` in `api.py`). Clients cannot override it.
+- **System prompt**: Hardcoded server-side (`SYSTEM_PROMPT` in `chat_api.py`). Clients cannot override it. Song context is wrapped in `<song_context>` XML tags with an untrusted-data notice instructing Claude to ignore instructions inside tags.
+- **Multi-turn history**: Stored in `chat_messages` table, scoped to song. Ownership enforced via `check_song_access()` on every endpoint. Max 50 messages per song.
+- **Context built server-side**: Mentioned song/version IDs are sent by the frontend, but the backend resolves them from the DB — the client never sends raw context. Each mentioned song is ownership-checked.
 - **CLI backend**: All known tools disabled via `--disallowedTools` denylist. Note: `--tools ""` and `--allowedTools ""` do not reliably block tools in current Claude CLI versions, so a comprehensive denylist is used instead. This list must be updated when new tools are added to Claude Code.
 - **API backend**: Uses the Anthropic Python SDK with `max_tokens=1024` to limit response cost.
 

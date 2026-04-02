@@ -20,7 +20,7 @@ Two special flags on generations: **pick** marks "this is THE one for this song 
 
 **Scoring** is auto-rating: BPM accuracy, spectral quality, silence detection, emotional dynamics, text accuracy (Whisper transcription of what was actually sung vs the lyrics). Purely informational — helps the user decide which generation sounds best. The Whisper transcript also shows the user what the AI actually sang.
 
-**Co-writer** is a Claude chat per song. The user discusses lyrics, brainstorming, and refinement. Claude can propose changes that the user applies to the current song's editor. Using @-mentions, the user can reference other songs or album context, and Claude can create entirely new songs.
+**Co-writer** is a multi-turn Claude conversation per song, stored in PostgreSQL (`chat_messages` table). The user discusses lyrics, brainstorming, and refinement. Full conversation history is sent to the Claude API on each turn. Claude can propose changes via `songmaker` blocks that the user applies to the current song's editor. Using @-mentions, the user can reference other songs or album context — the backend resolves mentions from the DB and builds context server-side. Claude can also create entirely new songs.
 
 **Seed pinning** lets the user reproduce a generation: pin a seed from a previous generation, regenerate with tweaked params, and get a comparable result (same random noise, different settings). This enables A/B testing of parameter changes.
 

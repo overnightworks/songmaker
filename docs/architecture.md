@@ -85,10 +85,10 @@ User clicks "Generate"                    User clicks "Score"
   User clicks "Chat"                       └── Job status: completed
         │
         ▼
-  POST /chat
-  (runs inline in API process,
-   no arq queue — just an HTTP
-   call to Claude API)
+  POST /songs/{id}/chat
+  (multi-turn: loads history from DB,
+   sends full messages array to Claude,
+   stores user + assistant messages)
 ```
 
 ## Layers
@@ -165,7 +165,10 @@ PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is
 | POST | `/api/generations/{id}/rate` | user | Rate a generation |
 | POST | `/api/generations/{id}/pick` | user | Pick best generation |
 | GET | `/api/jobs/{id}` | user | Poll job status (includes queue_position) |
-| POST | `/api/chat` | user | Claude chat (inline, rate-limited) |
+| POST | `/api/songs/{id}/chat` | user | Send chat message (multi-turn, rate-limited) |
+| GET | `/api/songs/{id}/chat` | user | Load chat history |
+| DELETE | `/api/songs/{id}/chat` | user | Clear chat history |
+| GET | `/api/chat/recent` | user | Songs with active chats |
 | GET | `/api/capabilities` | user | Feature flags |
 | * | `/api/admin/*` | admin | User CRUD, sessions, audit log, ACE-Step control |
 | * | `/api/auth/*` | public | Login, logout, setup, password change |
