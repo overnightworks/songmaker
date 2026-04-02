@@ -43,14 +43,68 @@ def auto_setup_admin(ctx: AppContext) -> None:
         log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
 
 
+def _sync_sessions(ctx: AppContext, session_cache) -> int:
+    """Sync Redis session TTLs to the database. Returns count of synced sessions.
+
+    Removes cached sessions for inactive users or sessions missing from the DB.
+    """
+    from songmaker_cli.db.models import User as UserModel
+    from songmaker_cli.db.models import UserSession
+
+    active = session_cache.get_all_sessions()
+    if not active:
+        return 0
+
+    session_ids = [sid for sid, _ in active]
+    ttl_by_id = {sid: ttl for sid, ttl in active}
+    synced = 0
+
+    with ctx.db() as db:
+        db_sessions = (
+            db.query(UserSession)
+            .filter(UserSession.id.in_(session_ids))
+            .all()
+        )
+        db_session_by_id = {s.id: s for s in db_sessions}
+        found_user_ids = {s.user_id for s in db_sessions}
+
+        inactive_user_ids: set[str] = set()
+        if found_user_ids:
+            inactive_users = (
+                db.query(UserModel.id)
+                .filter(
+                    UserModel.id.in_(found_user_ids),
+                    UserModel.is_active.is_(False),
+                )
+                .all()
+            )
+            inactive_user_ids = {u.id for u in inactive_users}
+
+        for session_id in session_ids:
+            user_session = db_session_by_id.get(session_id)
+            if not user_session:
+                cached = session_cache.get(session_id)
+                if cached:
+                    session_cache.delete(session_id, cached.user_id)
+                continue
+            if user_session.user_id in inactive_user_ids:
+                session_cache.delete_user_sessions(user_session.user_id)
+                continue
+            ttl = ttl_by_id[session_id]
+            real_expires = datetime.now(timezone.utc) + timedelta(seconds=ttl)
+            user_session.expires_at = real_expires
+            synced += 1
+        db.commit()
+
+    return synced
+
+
 async def session_sync_loop(app: FastAPI) -> None:
     from songmaker_cli.constants import (
         REDIS_SESSION_SYNC_INTERVAL_SECONDS,
         SESSION_SYNC_LOCK_KEY,
         SESSION_SYNC_LOCK_TTL_SECONDS,
     )
-    from songmaker_cli.db.models import User as UserModel
-    from songmaker_cli.db.models import UserSession
 
     ctx: AppContext = app.state.ctx
     session_cache = app.state.session_cache
@@ -65,48 +119,7 @@ async def session_sync_loop(app: FastAPI) -> None:
             ):
                 continue
             try:
-                active = session_cache.get_all_sessions()
-                if not active:
-                    consecutive_failures = 0
-                    continue
-                synced = 0
-                session_ids = [sid for sid, _ in active]
-                ttl_by_id = {sid: ttl for sid, ttl in active}
-                with ctx.db() as db:
-                    db_sessions = (
-                        db.query(UserSession)
-                        .filter(UserSession.id.in_(session_ids))
-                        .all()
-                    )
-                    db_session_by_id = {s.id: s for s in db_sessions}
-                    found_user_ids = {s.user_id for s in db_sessions}
-                    inactive_user_ids = set()
-                    if found_user_ids:
-                        inactive_users = (
-                            db.query(UserModel.id)
-                            .filter(
-                                UserModel.id.in_(found_user_ids),
-                                UserModel.is_active.is_(False),
-                            )
-                            .all()
-                        )
-                        inactive_user_ids = {u.id for u in inactive_users}
-
-                    for session_id in session_ids:
-                        user_session = db_session_by_id.get(session_id)
-                        if not user_session:
-                            cached = session_cache.get(session_id)
-                            if cached:
-                                session_cache.delete(session_id, cached.user_id)
-                            continue
-                        if user_session.user_id in inactive_user_ids:
-                            session_cache.delete_user_sessions(user_session.user_id)
-                            continue
-                        ttl = ttl_by_id[session_id]
-                        real_expires = datetime.now(timezone.utc) + timedelta(seconds=ttl)
-                        user_session.expires_at = real_expires
-                        synced += 1
-                    db.commit()
+                synced = _sync_sessions(ctx, session_cache)
                 consecutive_failures = 0
                 if synced:
                     log.info("Session sync: updated %d sessions", synced)

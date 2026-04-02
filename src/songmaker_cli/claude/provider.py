@@ -23,6 +23,14 @@ from songmaker_cli.constants import CLAUDE_CHAT_MODEL
 
 log = logging.getLogger(__name__)
 
+_sync_clients: dict[str, object] = {}
+_async_clients: dict[str, object] = {}
+
+
+def clear_client_cache() -> None:
+    _sync_clients.clear()
+    _async_clients.clear()
+
 
 class UnavailableError(Exception):
     """Raised when no Claude backend is available."""
@@ -81,7 +89,9 @@ def _call_api(
             "anthropic package not installed. Run: pip install anthropic"
         )
 
-    client = anthropic.Anthropic(api_key=api_key)
+    if api_key not in _sync_clients:
+        _sync_clients[api_key] = anthropic.Anthropic(api_key=api_key)
+    client = _sync_clients[api_key]
 
     kwargs: dict = {
         "model": model,
@@ -193,7 +203,9 @@ async def _acall_api(
             "anthropic package not installed. Run: pip install anthropic"
         )
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
+    if api_key not in _async_clients:
+        _async_clients[api_key] = anthropic.AsyncAnthropic(api_key=api_key)
+    client = _async_clients[api_key]
 
     if messages is not None:
         api_messages = messages

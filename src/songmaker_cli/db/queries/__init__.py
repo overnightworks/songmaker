@@ -90,6 +90,7 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.jobs import (
     recover_stale_jobs_by_type as recover_stale_jobs_by_type,
 )
+from songmaker_cli.db.queries.jobs import update_job_heartbeat as update_job_heartbeat
 from songmaker_cli.db.queries.jobs import update_job_status as update_job_status
 from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist as add_album_to_playlist,

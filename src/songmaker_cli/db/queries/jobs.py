@@ -72,15 +72,25 @@ def update_job_status(
     job = session.query(Job).filter_by(id=job_id).first()
     if not job:
         return
+    now = datetime.now(timezone.utc)
     job.status = status
     job.progress = progress
     job.error = error
     job.error_type = error_type
     if worker_pid is not None:
         job.worker_pid = worker_pid
+    if status == "running":
+        job.heartbeat_at = now
     if status in ("completed", "failed"):
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = now
     session.flush()
+
+
+def update_job_heartbeat(session: Session, job_id: str) -> None:
+    job = session.query(Job).filter_by(id=job_id).first()
+    if job:
+        job.heartbeat_at = datetime.now(timezone.utc)
+        session.flush()
 
 
 def get_job(session: Session, job_id: str) -> Job | None:
@@ -169,13 +179,28 @@ def _is_worker_alive(pid: int | None) -> bool:
         return True
 
 
+def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
+    """Check if the job's heartbeat indicates a hung worker.
+
+    If heartbeat_at exists, use it (more reliable than PID — catches hung
+    workers that are alive but not making progress). If heartbeat_at is null
+    (pre-migration jobs), fall back to PID liveness check.
+    """
+    if job.heartbeat_at is not None:
+        hb = job.heartbeat_at
+        if hb.tzinfo is None:
+            hb = hb.replace(tzinfo=timezone.utc)
+        return hb < cutoff
+    return not _is_worker_alive(job.worker_pid)
+
+
 def recover_stale_jobs_by_age(
     session: Session, threshold_seconds: int = STALE_JOB_THRESHOLD_SECONDS,
 ) -> int:
     """Mark running/queued jobs older than threshold as failed. Returns count recovered.
 
-    Jobs whose worker_pid is still alive are skipped — the worker may be
-    legitimately slow (e.g. GPU mode switching, long scoring pipeline).
+    Uses heartbeat_at to detect hung workers (alive but not progressing).
+    Falls back to PID check for pre-migration jobs without heartbeat_at.
     """
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=threshold_seconds)
@@ -189,8 +214,8 @@ def recover_stale_jobs_by_age(
     )
     recovered = 0
     for job in candidates:
-        if _is_worker_alive(job.worker_pid):
-            log.info("Skipping stale job %s — worker PID %d still alive", job.id, job.worker_pid)
+        if not _is_heartbeat_stale(job, cutoff):
+            log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
             continue
         job.status = "failed"
         job.error = "Job timed out (exceeded maximum run time)"
@@ -231,7 +256,8 @@ def recover_stale_jobs_by_age_and_type(
 ) -> int:
     """Mark running/queued jobs of a given type older than threshold as failed.
 
-    Jobs whose worker_pid is still alive are skipped.
+    Uses heartbeat_at to detect hung workers. Falls back to PID check
+    for pre-migration jobs without heartbeat_at.
     """
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=threshold_seconds)
@@ -246,8 +272,8 @@ def recover_stale_jobs_by_age_and_type(
     )
     recovered = 0
     for job in candidates:
-        if _is_worker_alive(job.worker_pid):
-            log.info("Skipping stale job %s — worker PID %d still alive", job.id, job.worker_pid)
+        if not _is_heartbeat_stale(job, cutoff):
+            log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
             continue
         job.status = "failed"
         job.error = "Job timed out (exceeded maximum run time)"

@@ -1160,7 +1160,9 @@ def test_recover_stale_jobs_by_age(db_session: Session) -> None:
     update_job_status(db_session, j_completed.id, "completed", progress=1.0)
     db_session.commit()
 
-    j_old.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    old_time = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    j_old.started_at = old_time
+    j_old.heartbeat_at = old_time
     db_session.commit()
 
     count = recover_stale_jobs_by_age(db_session, threshold_seconds=1800)

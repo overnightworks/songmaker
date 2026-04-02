@@ -16,9 +16,17 @@ from songmaker_cli.claude.provider import (
     _find_claude_binary,
     acall_claude,
     call_claude,
+    clear_client_cache,
     is_available,
     parse_json_response,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_claude_clients():
+    clear_client_cache()
+    yield
+    clear_client_cache()
 
 # ── call_claude routing ─────────────────────────────────────────────
 
