@@ -1,6 +1,6 @@
 # ACE-Step Advanced Generation Modes
 
-> **Status: IN PROGRESS** — Phases 1-4 complete, Phase 5 (Infinite Duration) is exploratory
+> **Status: COMPLETE** — All phases implemented.
 
 ## Goal
 
@@ -105,38 +105,8 @@
 
 ---
 
-## Phase 5: Infinite Duration Generation
+## Related Plans
 
-**What**: Chain repaint operations to generate songs longer than the model's limit (~4 min).
-
-> Idea-stage, not fully designed. Needs exploration before implementation.
-
-- [ ] Auto-chain: generate first segment, then repaint-extend from the end
-- [ ] Seamless transitions via overlap + crossfade
-- [ ] How do lyrics align across segments? Need to split lyrics by time
-- [ ] Progress tracking for multi-segment generation
-- [ ] Frontend: "Extend" button on generations
-
----
-
-## What We're NOT Doing (Now)
-
-- **Lego/Extract/Complete** — Base model only, deferred to `plans/base-model-tasks.md`
-- **LoRA training UI** — too complex, use ACE-Step's Gradio UI directly
-- **Audio codes manipulation** — power user feature, defer
-- **Multi-model parallel loading** — one model at a time, single-GPU. Multi-GPU routing in `plans/multi-model-routing.md`
-- **XL (4B DiT) models** — needs 12GB+ VRAM without offload, revisit when hardware allows
-- **New turbo variants** (shift1, shift3, continuous) — add to AvailableModel when users request
-- **Job queue sorting by model** — optimization for later if switching overhead becomes a problem
-
-## Dependencies
-
-- `plans/admin-sse-and-auth.md` → Phase 1b (provides Job/SSE infrastructure + admin model dropdown)
-- Phase 1a → 1b → 1c (sequential within Phase 1)
-- Phase 2 and 3 are **independent siblings** — both need `task_type` + `src_audio` on `AceStepConfig`, either can go first
-- Phase 4 is independent (file upload, no dependency on 2 or 3)
-- Phase 5 needs Phase 2 (repaint)
-
-## Priority
-
-Phase 1 (model selection) unblocks correct parameter handling. Phase 2 (repaint) is highest user value — directly fixes "wrong lyrics" problem. Phase 3 (cover) enables style iteration. Phase 4 (reference audio) is nice-to-have. Phase 5 is exploratory.
+- **Infinite duration generation** — chained repaint for songs > 4 min → `plans/infinite-duration.md`
+- **Lego/Extract/Complete** — Base model tasks → `plans/base-model-tasks.md`
+- **Multi-GPU routing** — distributed workers → `plans/multi-model-routing.md`
