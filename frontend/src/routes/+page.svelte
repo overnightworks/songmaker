@@ -732,6 +732,10 @@
 						visible={tab === 'chat'}
 						onapply={handleApply}
 						oncreate={(s) => selectSong(s.id)}
+						onnavigate={(id) => {
+							selectSong(id);
+							switchTab('chat');
+						}}
 					/>
 				</div>
 			</div>

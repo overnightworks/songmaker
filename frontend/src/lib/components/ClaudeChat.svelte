@@ -4,10 +4,12 @@
 		sendChatMessage,
 		clearChatHistory,
 		fetchChatHistory,
+		fetchRecentChats,
 		createSong,
 		updateSong,
 		ApiError
 	} from '$lib/api/client';
+	import type { RecentChatItem } from '$lib/api/types';
 	import {
 		extractAllApplyData,
 		isCurrentSong,
@@ -28,6 +30,7 @@
 		visible?: boolean;
 		onapply?: (data: ApplyData) => void;
 		oncreate?: (song: SongItem) => void;
+		onnavigate?: (songId: string) => void;
 	}
 
 	let {
@@ -37,7 +40,8 @@
 		versions = [],
 		visible = true,
 		onapply,
-		oncreate
+		oncreate,
+		onnavigate
 	}: Props = $props();
 
 	interface Message {
@@ -59,6 +63,9 @@
 	let error = $state('');
 	let container: HTMLDivElement | undefined = $state();
 	let inputEl: HTMLTextAreaElement | undefined = $state();
+
+	let recentChats: RecentChatItem[] = $state([]);
+	let showRecentChats = $state(false);
 
 	let mentionedSongIds: string[] = $state([]);
 	let albumMentioned: boolean = $state(false);
@@ -286,7 +293,10 @@
 	});
 
 	$effect(() => {
-		if (visible) scrollToBottom();
+		if (visible) {
+			scrollToBottom();
+			fetchRecentChats().then((r) => (recentChats = r)).catch(() => {});
+		}
 	});
 
 	function removeMention(id: string): void {
@@ -405,7 +415,37 @@
 
 <div class="chat">
 	<div class="chat-header">
-		<h3>Claude Co-Writer</h3>
+		<div class="header-left">
+			<h3>Claude Co-Writer</h3>
+			{#if recentChats.length > 0 && onnavigate}
+				<div class="recent-wrapper">
+					<button
+						class="recent-toggle"
+						onclick={() => (showRecentChats = !showRecentChats)}
+						aria-label="Recent chats"
+					>
+						{recentChats.length}
+					</button>
+					{#if showRecentChats}
+						<div class="recent-dropdown">
+							{#each recentChats as chat (chat.song_id)}
+								<button
+									class="recent-item"
+									class:active={chat.song_id === songId}
+									onclick={() => {
+										showRecentChats = false;
+										if (chat.song_id !== songId) onnavigate(chat.song_id);
+									}}
+								>
+									<span class="recent-title">{chat.title}</span>
+									<span class="recent-count">{chat.message_count}</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</div>
 		<div class="header-actions">
 			{#if messages.length > 0}
 				<button class="clear-btn" onclick={handleClear} aria-label="Clear chat">&#x2715;</button>
@@ -497,6 +537,83 @@
 		background-clip: text;
 		text-transform: uppercase;
 		letter-spacing: 1px;
+	}
+
+	.header-left {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.recent-wrapper {
+		position: relative;
+	}
+
+	.recent-toggle {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		color: var(--text-dim);
+		font-size: 10px;
+		padding: 1px 6px;
+		border-radius: 8px;
+		cursor: pointer;
+		line-height: 1.4;
+	}
+
+	.recent-toggle:hover {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.recent-dropdown {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		margin-top: 4px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		min-width: 200px;
+		max-height: 300px;
+		overflow-y: auto;
+		z-index: 100;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.recent-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		width: 100%;
+		padding: 6px 10px;
+		background: none;
+		border: none;
+		color: var(--text);
+		font-size: 11px;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.recent-item:hover {
+		background: var(--border);
+	}
+
+	.recent-item.active {
+		color: var(--primary);
+	}
+
+	.recent-title {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		flex: 1;
+		margin-right: 8px;
+	}
+
+	.recent-count {
+		color: var(--text-dim);
+		font-size: 10px;
+		flex-shrink: 0;
 	}
 
 	.header-actions {
