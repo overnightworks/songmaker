@@ -13,13 +13,26 @@
 	import ParamControls from './ParamControls.svelte';
 	import PresetChips from './PresetChips.svelte';
 
+	interface Props {
+		selectedModel?: string | null;
+	}
+
+	let { selectedModel = null }: Props = $props();
+
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
 
-	const firstMode = $derived($activeModels[0]?.id ?? Object.keys($builtinDefaults)[0] ?? '');
+	const activeMode = $derived(
+		selectedModel ?? $activeModels[0]?.id ?? Object.keys($builtinDefaults)[0] ?? ''
+	);
+
+	const activeModelData = $derived($activeModels.find((m) => m.id === activeMode));
+
+	const hiddenParams = $derived(activeModelData?.capabilities?.hidden_params ?? []);
+	const maxInferenceSteps = $derived(activeModelData?.capabilities?.max_inference_steps ?? 200);
 
 	const effectiveDefaults = $derived.by((): Required<VersionGenerationParams> => {
-		const builtin = firstMode ? ($builtinDefaults[firstMode] ?? {}) : {};
-		const global = firstMode ? (globalDefaults[firstMode] ?? {}) : {};
+		const builtin = activeMode ? ($builtinDefaults[activeMode] ?? {}) : {};
+		const global = activeMode ? (globalDefaults[activeMode] ?? {}) : {};
 		return { ...builtin, ...global } as Required<VersionGenerationParams>;
 	});
 
@@ -50,6 +63,7 @@
 	<div class="settings-body">
 		<PresetChips
 			{hasOverrides}
+			{selectedModel}
 			onload={(p) => ($editGenParams = { ...p })}
 			onreset={() => ($editGenParams = null)}
 		/>
@@ -58,6 +72,8 @@
 			values={$editGenParams ?? {}}
 			placeholders={effectiveDefaults}
 			onchange={(p) => ($editGenParams = Object.keys(p).length > 0 ? p : null)}
+			{hiddenParams}
+			{maxInferenceSteps}
 		/>
 	</div>
 </details>

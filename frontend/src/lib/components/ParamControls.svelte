@@ -5,9 +5,12 @@
 		values: VersionGenerationParams;
 		placeholders: Required<VersionGenerationParams>;
 		onchange: (params: VersionGenerationParams) => void;
+		hiddenParams?: string[];
+		maxInferenceSteps?: number;
 	}
 
-	let { values, placeholders, onchange }: Props = $props();
+	let { values, placeholders, onchange, hiddenParams = [], maxInferenceSteps = 200 }: Props =
+		$props();
 
 	interface NumberField {
 		key: keyof VersionGenerationParams;
@@ -23,7 +26,7 @@
 		options: string[];
 	}
 
-	const NUMBER_FIELDS: NumberField[] = [
+	const ALL_NUMBER_FIELDS: NumberField[] = [
 		{ key: 'inference_steps', label: 'Inference Steps', min: 1, max: 200, step: 1 },
 		{ key: 'guidance_scale', label: 'Guidance Scale', min: 0, max: 20, step: 0.5 },
 		{ key: 'shift', label: 'Shift', min: 0, max: 20, step: 0.5 },
@@ -33,6 +36,14 @@
 		{ key: 'lm_cfg_scale', label: 'LM CFG Scale', min: 0, max: 10, step: 0.5 },
 		{ key: 'batch_size', label: 'Batch Size', min: 1, max: 8, step: 1 }
 	];
+
+	const hiddenSet = $derived(new Set(hiddenParams));
+
+	const NUMBER_FIELDS = $derived(
+		ALL_NUMBER_FIELDS.filter((f) => !hiddenSet.has(f.key)).map((f) =>
+			f.key === 'inference_steps' ? { ...f, max: maxInferenceSteps } : f
+		)
+	);
 
 	const SELECT_FIELDS: SelectField[] = [
 		{ key: 'infer_method', label: 'Infer Method', options: ['ode', 'sde'] },

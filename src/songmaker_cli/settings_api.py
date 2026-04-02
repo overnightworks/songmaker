@@ -174,13 +174,29 @@ def api_set_default_preset(
 # ── Available models ───────────────────────────────────────────────
 
 
+def _build_model_response(model) -> AvailableModelResponse:
+    from songmaker_cli.api_models.settings import ModelCapabilities
+    from songmaker_cli.config import get_builtin_defaults, get_model_capabilities
+
+    defaults = get_builtin_defaults().get(model.id, {})
+    caps = get_model_capabilities().get(model.id)
+    capabilities = ModelCapabilities(
+        defaults=defaults,
+        max_inference_steps=caps["max_inference_steps"] if caps else 200,
+        hidden_params=caps["hidden_params"] if caps else [],
+    ) if caps or defaults else None
+    return AvailableModelResponse(
+        id=model.id, is_active=model.is_active, capabilities=capabilities,
+    )
+
+
 @router.get("/settings/models")
 def api_list_active_models(
     _user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> list[AvailableModelResponse]:
     models = list_active_models(session)
-    return [AvailableModelResponse(id=m.id, is_active=m.is_active) for m in models]
+    return [_build_model_response(m) for m in models]
 
 
 @router.get("/settings/models/all")
@@ -189,7 +205,7 @@ def api_list_all_models(
     session: Session = Depends(get_db_session),
 ) -> list[AvailableModelResponse]:
     models = list_all_models(session)
-    return [AvailableModelResponse(id=m.id, is_active=m.is_active) for m in models]
+    return [_build_model_response(m) for m in models]
 
 
 @router.put("/settings/models/{model_id}")

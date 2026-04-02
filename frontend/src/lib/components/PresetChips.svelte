@@ -6,9 +6,21 @@
 		hasOverrides: boolean;
 		onload: (params: VersionGenerationParams) => void;
 		onreset: () => void;
+		selectedModel?: string | null;
 	}
 
-	let { hasOverrides, onload, onreset }: Props = $props();
+	let { hasOverrides, onload, onreset, selectedModel = null }: Props = $props();
+
+	const filteredUserPresets = $derived(
+		selectedModel
+			? $userPresets.filter((p) => p.model_mode === selectedModel)
+			: $userPresets
+	);
+	const filteredSharedPresets = $derived(
+		selectedModel
+			? $sharedPresets.filter((p) => p.model_mode === selectedModel)
+			: $sharedPresets
+	);
 </script>
 
 <div class="presets-row">
@@ -20,7 +32,7 @@
 	>
 		Inherit
 	</button>
-	{#each $userPresets as preset (preset.id)}
+	{#each filteredUserPresets as preset (preset.id)}
 		{@const unavailable = !$activeModelIds.has(preset.model_mode)}
 		<button
 			class="preset-chip"
@@ -35,7 +47,7 @@
 			<span class="preset-mode-tag">{preset.model_mode}</span>
 		</button>
 	{/each}
-	{#each $sharedPresets as preset (preset.id)}
+	{#each filteredSharedPresets as preset (preset.id)}
 		{@const unavailable = !$activeModelIds.has(preset.model_mode)}
 		<button
 			class="preset-chip shared"

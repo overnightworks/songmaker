@@ -119,8 +119,18 @@ _BUILTIN_DEFAULTS: dict[str, dict[str, object]] = {
 }
 
 
+_MODEL_CAPABILITIES: dict[str, dict[str, object]] = {
+    "turbo": {"max_inference_steps": 20, "hidden_params": ["guidance_scale"]},
+    "sft": {"max_inference_steps": 200, "hidden_params": []},
+}
+
+
 def get_builtin_defaults() -> dict[str, dict[str, object]]:
     return _BUILTIN_DEFAULTS
+
+
+def get_model_capabilities() -> dict[str, dict[str, object]]:
+    return _MODEL_CAPABILITIES
 
 
 def resolve_model_mode(model_name: str | None) -> str:

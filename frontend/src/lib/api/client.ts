@@ -286,9 +286,16 @@ export async function updateGenerationDefaults(
 	});
 }
 
+export interface ModelCapabilities {
+	defaults: Record<string, unknown>;
+	max_inference_steps: number;
+	hidden_params: string[];
+}
+
 export interface AvailableModel {
 	id: string;
 	is_active: boolean;
+	capabilities?: ModelCapabilities | null;
 }
 
 export async function fetchActiveModels(): Promise<AvailableModel[]> {

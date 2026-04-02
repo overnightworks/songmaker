@@ -107,6 +107,9 @@
 							{#if gen.seed}
 								<span class="gen-seed">seed:{gen.seed}</span>
 							{/if}
+							{#if gen.model_mode}
+								<span class="model-badge">{gen.model_mode}</span>
+							{/if}
 						</div>
 
 						<div class="gen-actions">
@@ -299,6 +302,17 @@
 	.gen-seed {
 		font-size: 10px;
 		color: var(--text-dim);
+	}
+
+	.model-badge {
+		font-size: 9px;
+		padding: 1px 4px;
+		border-radius: 3px;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
 	}
 
 	.gen-actions {

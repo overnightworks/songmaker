@@ -78,9 +78,16 @@ class DefaultConfigResponse(BaseModel):
     config: str | None = None
 
 
+class ModelCapabilities(BaseModel):
+    defaults: dict[str, object]
+    max_inference_steps: int
+    hidden_params: list[str]
+
+
 class AvailableModelResponse(BaseModel):
     id: str
     is_active: bool
+    capabilities: ModelCapabilities | None = None
 
 
 class ClaudeModelsRequest(BaseModel):

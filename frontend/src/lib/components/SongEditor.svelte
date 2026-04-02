@@ -21,9 +21,10 @@
 
 	interface Props {
 		ondeleteversion: (versionId: string, deleteGenerations: boolean) => void;
+		selectedModel?: string | null;
 	}
 
-	let { ondeleteversion }: Props = $props();
+	let { ondeleteversion, selectedModel = null }: Props = $props();
 
 	const vers = $derived($versions);
 	const verIndex = $derived($currentVersionIndex);
@@ -162,7 +163,7 @@
 			</label>
 		</div>
 
-		<GenerationSettings />
+		<GenerationSettings {selectedModel} />
 
 		<label class="edit-field">
 			<span>Lyrics</span>

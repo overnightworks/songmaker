@@ -82,6 +82,7 @@
 	import ShareButton from '$lib/components/ShareButton.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import { addToast } from '$lib/stores/toast';
+	import { activeModels, loadActiveModels } from '$lib/stores/presets';
 	import {
 		addGenerationToPlaylist,
 		addSongToPlaylist,
@@ -92,6 +93,7 @@
 	let loadError = $state(false);
 	let showCreate = $state(false);
 	let genCount = $state(1);
+	let selectedModel = $state<string | null>(null);
 	let pinnedSeed = $state<number | null>(null);
 	let playlistPickerFor = $state<
 		| { type: 'song'; id: string }
@@ -150,12 +152,20 @@
 		}
 	});
 
+	$effect(() => {
+		if (selectedModel === null && $activeModels.length > 0) {
+			selectedModel = $activeModels[0].id;
+		}
+	});
+
 	onMount(() => {
 		let cleanup: (() => void) | undefined;
 
 		(async () => {
 			try {
-				const [a, s] = await Promise.all([fetchAlbums(), fetchSongs(), loadPlaylists()]);
+				const [a, s] = await Promise.all([
+					fetchAlbums(), fetchSongs(), loadPlaylists(), loadActiveModels(),
+				]);
 				albumList.set(a.items);
 				songList.set(s.items);
 			} catch (e) {
@@ -184,7 +194,7 @@
 		if (!song) return;
 		try {
 			const ver = $versions[$currentVersionIndex];
-			const job = await generateSong(song.id, genCount, null, ver?.id, pinnedSeed);
+			const job = await generateSong(song.id, genCount, selectedModel, ver?.id, pinnedSeed);
 			pinnedSeed = null;
 			trackJob(job, { songId: song.id });
 		} catch (e) {
@@ -522,6 +532,13 @@
 									<option value={n}>×{n}</option>
 								{/each}
 							</select>
+							{#if $activeModels.length > 1}
+								<select class="model-select" bind:value={selectedModel}>
+									{#each $activeModels as m (m.id)}
+										<option value={m.id}>{m.id.toUpperCase()}</option>
+									{/each}
+								</select>
+							{/if}
 							{#if pinnedSeed != null}
 								<button
 									class="pinned-seed"
@@ -671,7 +688,7 @@
 						/>
 					{/if}
 				{:else if tab === 'edit'}
-					<SongEditor ondeleteversion={onDeleteVersion} />
+					<SongEditor ondeleteversion={onDeleteVersion} {selectedModel} />
 				{/if}
 				<div class="chat-tab" class:hidden={tab !== 'chat'}>
 					<ClaudeChat
@@ -1025,7 +1042,8 @@
 		}
 	}
 
-	.gen-count-select {
+	.gen-count-select,
+	.model-select {
 		background: var(--surface);
 		border: 1px solid var(--border);
 		color: var(--text-light);

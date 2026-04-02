@@ -1602,6 +1602,14 @@ def test_list_active_models(client: TestClient) -> None:
     assert "sft" in active_ids
     assert "turbo" in active_ids
 
+    by_id = {m["id"]: m for m in models}
+    turbo_caps = by_id["turbo"]["capabilities"]
+    assert turbo_caps["max_inference_steps"] == 20
+    assert "guidance_scale" in turbo_caps["hidden_params"]
+    sft_caps = by_id["sft"]["capabilities"]
+    assert sft_caps["max_inference_steps"] == 200
+    assert sft_caps["hidden_params"] == []
+
 
 def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
     factory = client.app.state.ctx.db
