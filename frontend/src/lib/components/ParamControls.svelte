@@ -9,8 +9,13 @@
 		maxInferenceSteps?: number;
 	}
 
-	let { values, placeholders, onchange, hiddenParams = [], maxInferenceSteps = 200 }: Props =
-		$props();
+	let {
+		values,
+		placeholders,
+		onchange,
+		hiddenParams = [],
+		maxInferenceSteps = 200
+	}: Props = $props();
 
 	interface NumberField {
 		key: keyof VersionGenerationParams;

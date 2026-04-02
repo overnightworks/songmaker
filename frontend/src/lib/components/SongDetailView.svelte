@@ -73,9 +73,7 @@
 	let repaintTarget = $state<GenerationItem | null>(null);
 	let coverTarget = $state<GenerationItem | null>(null);
 	let playlistPickerFor = $state<
-		| { type: 'song'; id: string }
-		| { type: 'generation'; id: string }
-		| null
+		{ type: 'song'; id: string } | { type: 'generation'; id: string } | null
 	>(null);
 
 	const song = $derived($selectedSong);
@@ -148,12 +146,20 @@
 	}
 
 	async function onRepaintSubmit(
-		start: number, end: number, lyrics: string | null, prompt: string | null,
+		start: number,
+		end: number,
+		lyrics: string | null,
+		prompt: string | null
 	): Promise<void> {
 		if (!song || !repaintTarget) return;
 		try {
 			const job = await repaintGeneration(
-				repaintTarget.id, start, end, lyrics, prompt, selectedModel,
+				repaintTarget.id,
+				start,
+				end,
+				lyrics,
+				prompt,
+				selectedModel
 			);
 			repaintTarget = null;
 			trackJob(job, { songId: song.id });
@@ -163,13 +169,13 @@
 	}
 
 	async function onCoverSubmit(
-		strength: number, lyrics: string | null, prompt: string | null,
+		strength: number,
+		lyrics: string | null,
+		prompt: string | null
 	): Promise<void> {
 		if (!song || !coverTarget) return;
 		try {
-			const job = await coverGeneration(
-				coverTarget.id, strength, lyrics, prompt, selectedModel,
-			);
+			const job = await coverGeneration(coverTarget.id, strength, lyrics, prompt, selectedModel);
 			coverTarget = null;
 			trackJob(job, { songId: song.id });
 		} catch (e) {
@@ -271,7 +277,11 @@
 
 	async function onGenShareEnable(genId: string) {
 		const result = await shareGeneration(genId);
-		updateGenerationInList(genId, (g) => ({ ...g, is_shared: true, share_slug: result.share_slug }));
+		updateGenerationInList(genId, (g) => ({
+			...g,
+			is_shared: true,
+			share_slug: result.share_slug
+		}));
 		return result;
 	}
 
@@ -308,7 +318,6 @@
 			playlistPickerFor = null;
 		}
 	}
-
 </script>
 
 {#if song}
@@ -388,10 +397,7 @@
 						]}
 					/>
 					{#if playlistPickerFor?.type === 'song' && playlistPickerFor.id === song.id}
-						<PlaylistPicker
-							onselect={onAddToPlaylist}
-							onclose={() => (playlistPickerFor = null)}
-						/>
+						<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistPickerFor = null)} />
 					{/if}
 				</div>
 				{#each songJobs as j (j.job.id)}
@@ -402,9 +408,7 @@
 					{:else if j.job.status === 'queued' || j.job.status === 'running'}
 						<span class="job-indicator">
 							<span class="job-progress-bar">
-								<span
-									class="job-progress-fill"
-									style="width: {Math.round(j.job.progress * 100)}%"
+								<span class="job-progress-fill" style="width: {Math.round(j.job.progress * 100)}%"
 								></span>
 							</span>
 							<span class="job-progress-label">
@@ -470,16 +474,10 @@
 					<button class="back-btn" onclick={clearGenerationSelection}>
 						<span class="back-arrow">←</span> All generations
 					</button>
-					<GenerationDetail
-						generation={activeGen}
-						scoring={genScoring}
-					/>
+					<GenerationDetail generation={activeGen} scoring={genScoring} />
 				</div>
 			{:else}
-				<GenerationsList
-					{song}
-					onselect={(gen) => selectGeneration(gen, song)}
-				/>
+				<GenerationsList {song} onselect={(gen) => selectGeneration(gen, song)} />
 			{/if}
 		{:else if tab === 'edit'}
 			<SongEditor ondeleteversion={onDeleteVersion} {selectedModel} />

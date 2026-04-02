@@ -141,7 +141,7 @@
 				<span class="version-tag unknown">unknown version</span>
 			{/if}
 			{#if generation.seed}
-				<button class="seed" onclick={() => actions.pinSeed(generation.seed!)}>
+				<button class="seed" onclick={() => actions.pinSeed(generation.seed ?? 0)}>
 					seed:{generation.seed}
 				</button>
 			{/if}

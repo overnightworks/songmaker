@@ -304,8 +304,18 @@ describe('queue context', () => {
 
 	it('playPlaylistEntries sets playlist context and playback', () => {
 		const entries = [
-			makePlaylistEntry({ id: 'pe1', song_title: 'First', generation_id: 'g10', mp3_path: 'x.mp3' }),
-			makePlaylistEntry({ id: 'pe2', song_title: 'Second', generation_id: 'g11', mp3_path: 'y.mp3' })
+			makePlaylistEntry({
+				id: 'pe1',
+				song_title: 'First',
+				generation_id: 'g10',
+				mp3_path: 'x.mp3'
+			}),
+			makePlaylistEntry({
+				id: 'pe2',
+				song_title: 'Second',
+				generation_id: 'g11',
+				mp3_path: 'y.mp3'
+			})
 		];
 		playPlaylistEntries(entries);
 		const ctx = get(queueContext);

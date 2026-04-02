@@ -22,7 +22,8 @@
 	<div class="cover-dialog">
 		<h3>Cover gen{generation.generation_number}</h3>
 		<p class="description">
-			Re-interpret this generation with different style or lyrics while keeping the melody structure.
+			Re-interpret this generation with different style or lyrics while keeping the melody
+			structure.
 		</p>
 
 		<label class="field">
@@ -36,7 +37,8 @@
 
 		<label class="field">
 			<span>New lyrics (optional)</span>
-			<textarea rows="4" bind:value={lyrics} placeholder="Leave empty to keep current lyrics"></textarea>
+			<textarea rows="4" bind:value={lyrics} placeholder="Leave empty to keep current lyrics"
+			></textarea>
 		</label>
 
 		<label class="field">

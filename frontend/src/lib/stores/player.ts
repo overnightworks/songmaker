@@ -117,27 +117,33 @@ export const canPlayNextGen = derived([playback, songList], ([$pb, $songs]) => {
 	return idx < song.generations.length - 1;
 });
 
-export const canPlayPrevSong = derived([playback, songList, queueContext], ([$pb, $songs, $ctx]) => {
-	if (!$pb) return false;
-	if ($ctx.type === 'playlist') return $ctx.index > 0;
-	const pool = $ctx.type === 'album' ? $songs.filter((s) => s.album_id === $ctx.albumId) : $songs;
-	const idx = pool.findIndex((s) => s.id === $pb.songId);
-	for (let i = idx - 1; i >= 0; i--) {
-		if (pool[i].generation_count > 0) return true;
+export const canPlayPrevSong = derived(
+	[playback, songList, queueContext],
+	([$pb, $songs, $ctx]) => {
+		if (!$pb) return false;
+		if ($ctx.type === 'playlist') return $ctx.index > 0;
+		const pool = $ctx.type === 'album' ? $songs.filter((s) => s.album_id === $ctx.albumId) : $songs;
+		const idx = pool.findIndex((s) => s.id === $pb.songId);
+		for (let i = idx - 1; i >= 0; i--) {
+			if (pool[i].generation_count > 0) return true;
+		}
+		return false;
 	}
-	return false;
-});
+);
 
-export const canPlayNextSong = derived([playback, songList, queueContext], ([$pb, $songs, $ctx]) => {
-	if (!$pb) return false;
-	if ($ctx.type === 'playlist') return $ctx.index < $ctx.entries.length - 1;
-	const pool = $ctx.type === 'album' ? $songs.filter((s) => s.album_id === $ctx.albumId) : $songs;
-	const idx = pool.findIndex((s) => s.id === $pb.songId);
-	for (let i = idx + 1; i < pool.length; i++) {
-		if (pool[i].generation_count > 0) return true;
+export const canPlayNextSong = derived(
+	[playback, songList, queueContext],
+	([$pb, $songs, $ctx]) => {
+		if (!$pb) return false;
+		if ($ctx.type === 'playlist') return $ctx.index < $ctx.entries.length - 1;
+		const pool = $ctx.type === 'album' ? $songs.filter((s) => s.album_id === $ctx.albumId) : $songs;
+		const idx = pool.findIndex((s) => s.id === $pb.songId);
+		for (let i = idx + 1; i < pool.length; i++) {
+			if (pool[i].generation_count > 0) return true;
+		}
+		return false;
 	}
-	return false;
-});
+);
 
 export function playNextGeneration(): void {
 	const pb = get(playback);
@@ -250,7 +256,10 @@ function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 	};
 }
 
-function playPlaylistIndex(ctx: { entries: PlaylistEntryItem[]; index: number }, newIndex: number): void {
+function playPlaylistIndex(
+	ctx: { entries: PlaylistEntryItem[]; index: number },
+	newIndex: number
+): void {
 	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
 	const entry = ctx.entries[newIndex];
 	queueContext.set({ type: 'playlist', entries: ctx.entries, index: newIndex });

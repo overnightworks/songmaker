@@ -1,12 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { fetchAlbums, fetchSongs } from '$lib/api/client';
-	import {
-		albumList,
-		songList,
-		selectedSong,
-		selectedAlbumId
-	} from '$lib/stores/player';
+	import { albumList, songList, selectedSong, selectedAlbumId } from '$lib/stores/player';
 	import { detailTab, initNavigation } from '$lib/stores/navigation';
 	import { selectedPlaylistDetail, loadPlaylists } from '$lib/stores/playlists';
 	import { loadActiveModels } from '$lib/stores/presets';
@@ -42,7 +37,10 @@
 		(async () => {
 			try {
 				const [a, s] = await Promise.all([
-					fetchAlbums(), fetchSongs(), loadPlaylists(), loadActiveModels(),
+					fetchAlbums(),
+					fetchSongs(),
+					loadPlaylists(),
+					loadActiveModels()
 				]);
 				albumList.set(a.items);
 				songList.set(s.items);

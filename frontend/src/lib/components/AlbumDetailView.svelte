@@ -1,11 +1,5 @@
 <script lang="ts">
-	import {
-		fetchSongs,
-		deleteAlbum,
-		cleanupAlbum,
-		shareAlbum,
-		unshareAlbum
-	} from '$lib/api/client';
+	import { fetchSongs, deleteAlbum, cleanupAlbum, shareAlbum, unshareAlbum } from '$lib/api/client';
 	import {
 		albumList,
 		songList,
@@ -17,9 +11,7 @@
 	} from '$lib/stores/player';
 	import { deselectAlbum, selectSong } from '$lib/stores/navigation';
 	import { addToast } from '$lib/stores/toast';
-	import {
-		addAlbumToPlaylist
-	} from '$lib/stores/playlists';
+	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import OverflowMenu from './OverflowMenu.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
@@ -41,9 +33,7 @@
 			: []
 	);
 	const albumSongCount = $derived(albumSongs.length);
-	const albumGenCount = $derived(
-		albumSongs.reduce((sum, s) => sum + s.generation_count, 0)
-	);
+	const albumGenCount = $derived(albumSongs.reduce((sum, s) => sum + s.generation_count, 0));
 
 	async function onAlbumShareEnable() {
 		if (!selectedAlbum) throw new Error('No album');
@@ -108,7 +98,10 @@
 			<div>
 				<h2 class="detail-title">{selectedAlbum.title}</h2>
 				<span class="detail-subtitle">
-					{albumSongCount} song{albumSongCount !== 1 ? 's' : ''} · {albumGenCount} generation{albumGenCount !== 1 ? 's' : ''}
+					{albumSongCount} song{albumSongCount !== 1 ? 's' : ''} · {albumGenCount} generation{albumGenCount !==
+					1
+						? 's'
+						: ''}
 				</span>
 			</div>
 			<div class="detail-actions">
@@ -142,10 +135,7 @@
 						]}
 					/>
 					{#if playlistPickerFor === selectedAlbum.id}
-						<PlaylistPicker
-							onselect={onAddToPlaylist}
-							onclose={() => (playlistPickerFor = null)}
-						/>
+						<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistPickerFor = null)} />
 					{/if}
 				</div>
 			</div>

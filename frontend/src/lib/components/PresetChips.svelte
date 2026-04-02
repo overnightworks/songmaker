@@ -12,14 +12,10 @@
 	let { hasOverrides, onload, onreset, selectedModel = null }: Props = $props();
 
 	const filteredUserPresets = $derived(
-		selectedModel
-			? $userPresets.filter((p) => p.model_mode === selectedModel)
-			: $userPresets
+		selectedModel ? $userPresets.filter((p) => p.model_mode === selectedModel) : $userPresets
 	);
 	const filteredSharedPresets = $derived(
-		selectedModel
-			? $sharedPresets.filter((p) => p.model_mode === selectedModel)
-			: $sharedPresets
+		selectedModel ? $sharedPresets.filter((p) => p.model_mode === selectedModel) : $sharedPresets
 	);
 </script>
 

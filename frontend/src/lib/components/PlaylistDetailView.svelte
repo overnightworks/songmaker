@@ -1,8 +1,5 @@
 <script lang="ts">
-	import {
-		sharePlaylist,
-		unsharePlaylist
-	} from '$lib/api/client';
+	import { sharePlaylist, unsharePlaylist } from '$lib/api/client';
 	import { playPlaylistEntries } from '$lib/stores/player';
 	import {
 		selectedPlaylistDetail,
@@ -135,10 +132,8 @@
 				<div class="entry-row">
 					<div class="entry-controls">
 						{#if i > 0}
-							<button
-								class="move-btn"
-								onclick={() => onMoveEntry(entry.id, i - 1)}
-								title="Move up">↑</button
+							<button class="move-btn" onclick={() => onMoveEntry(entry.id, i - 1)} title="Move up"
+								>↑</button
 							>
 						{/if}
 						{#if i < playlistDetail.entries.length - 1}

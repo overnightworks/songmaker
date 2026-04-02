@@ -62,6 +62,7 @@ export function extractAllApplyData(
 			const data = parseSongmakerBlock(raw, currentAlbumId, allSongs);
 			if (data) results.push(data);
 		} catch {
+			/* invalid JSON in songmaker block — skip */
 		}
 	}
 	return results;

@@ -26,12 +26,7 @@
 	}
 
 	function handleSubmit(): void {
-		onsubmit(
-			startPercent / 100,
-			endPercent / 100,
-			lyrics || null,
-			prompt || null
-		);
+		onsubmit(startPercent / 100, endPercent / 100, lyrics || null, prompt || null);
 	}
 </script>
 
@@ -62,7 +57,8 @@
 
 		<label class="field">
 			<span>New lyrics for this section (optional)</span>
-			<textarea rows="4" bind:value={lyrics} placeholder="Leave empty to keep current lyrics"></textarea>
+			<textarea rows="4" bind:value={lyrics} placeholder="Leave empty to keep current lyrics"
+			></textarea>
 		</label>
 
 		<label class="field">
@@ -72,11 +68,7 @@
 
 		<div class="actions">
 			<button class="cancel-btn" onclick={oncancel}>Cancel</button>
-			<button
-				class="submit-btn"
-				onclick={handleSubmit}
-				disabled={startPercent >= endPercent}
-			>
+			<button class="submit-btn" onclick={handleSubmit} disabled={startPercent >= endPercent}>
 				Repaint
 			</button>
 		</div>

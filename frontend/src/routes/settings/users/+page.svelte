@@ -862,11 +862,7 @@
 								{/each}
 							</select>
 						</div>
-						<button
-							class="save-btn"
-							onclick={handleSaveClaudeModels}
-							disabled={savingClaude}
-						>
+						<button class="save-btn" onclick={handleSaveClaudeModels} disabled={savingClaude}>
 							{savingClaude ? 'Saving...' : 'Save'}
 						</button>
 					</div>
@@ -913,7 +909,7 @@
 								bind:value={reinitSelectedModel}
 								disabled={reinitializing}
 							>
-								{#each allModels.filter((m) => m.is_active) as model}
+								{#each allModels.filter((m) => m.is_active) as model (model.id)}
 									<option value={model.id}>{model.id}</option>
 								{/each}
 							</select>

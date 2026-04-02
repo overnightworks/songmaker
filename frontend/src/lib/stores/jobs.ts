@@ -44,9 +44,7 @@ function streamJob(jobId: string): void {
 		errorCount = 0;
 		const updated: JobStatus = JSON.parse(event.data);
 
-		activeJobs.update((jobs) =>
-			jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j))
-		);
+		activeJobs.update((jobs) => jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j)));
 
 		if (
 			updated.status === 'completed' ||
@@ -68,9 +66,7 @@ function streamJob(jobId: string): void {
 			} else {
 				const isRestart = updated.error_type === 'server_restart';
 				addToast(
-					isRestart
-						? 'Server restarted — please retry'
-						: updated.error || `${updated.type} failed`,
+					isRestart ? 'Server restarted — please retry' : updated.error || `${updated.type} failed`,
 					isRestart ? 'info' : 'error'
 				);
 			}

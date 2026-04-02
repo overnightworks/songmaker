@@ -10,11 +10,7 @@
 		ApiError
 	} from '$lib/api/client';
 	import type { RecentChatItem } from '$lib/api/types';
-	import {
-		extractAllApplyData,
-		isCurrentSong,
-		type ApplyData
-	} from '$lib/utils/chat-context';
+	import { extractAllApplyData, isCurrentSong, type ApplyData } from '$lib/utils/chat-context';
 	import { replaceSongInList, addSongToList } from '$lib/stores/player';
 	import { addToast } from '$lib/stores/toast';
 	import type { SongItem, VersionItem } from '$lib/api/types';
@@ -102,9 +98,7 @@
 			const sResults = allSongs
 				.filter(
 					(s) =>
-						s.title.toLowerCase().includes(q) &&
-						s.id !== songId &&
-						!mentionedSongIds.includes(s.id)
+						s.title.toLowerCase().includes(q) && s.id !== songId && !mentionedSongIds.includes(s.id)
 				)
 				.slice(0, 8);
 			results.push(...sResults.map((s) => ({ type: 'song' as const, item: s })));
@@ -209,24 +203,20 @@
 			.map((vn) => versions.find((v) => v.version_number === vn)?.id)
 			.filter((id): id is string => !!id);
 
-		const songIdsToSend = albumMentioned && currentAlbumId
-			? [
-					...new Set([
-						...mentionedSongIds,
-						...allSongs
-							.filter((s) => s.album_id === currentAlbumId && s.id !== songId)
-							.map((s) => s.id)
-					])
-				]
-			: mentionedSongIds;
+		const songIdsToSend =
+			albumMentioned && currentAlbumId
+				? [
+						...new Set([
+							...mentionedSongIds,
+							...allSongs
+								.filter((s) => s.album_id === currentAlbumId && s.id !== songId)
+								.map((s) => s.id)
+						])
+					]
+				: mentionedSongIds;
 
 		try {
-			const result = await sendChatMessage(
-				originSongId,
-				msg,
-				songIdsToSend,
-				mentionedVersionIds
-			);
+			const result = await sendChatMessage(originSongId, msg, songIdsToSend, mentionedVersionIds);
 
 			const responseText = result.assistant_message.content;
 			const applyDataList = extractAllApplyData(responseText, originAlbumId, originSongs);
@@ -266,9 +256,8 @@
 		} else {
 			await applyCrossSong(data);
 		}
-		const applied = new Set(msg.appliedIndices ?? []);
-		applied.add(dataIndex);
-		messages[msgIndex] = { ...msg, appliedIndices: [...applied] };
+		const applied = [...(msg.appliedIndices ?? []), dataIndex];
+		messages[msgIndex] = { ...msg, appliedIndices: [...new Set(applied)] };
 	}
 
 	async function handleClear(): Promise<void> {
@@ -287,15 +276,17 @@
 	}
 
 	$effect(() => {
-		messages.length;
-		loading;
+		void messages.length;
+		void loading;
 		scrollToBottom();
 	});
 
 	$effect(() => {
 		if (visible) {
 			scrollToBottom();
-			fetchRecentChats().then((r) => (recentChats = r)).catch(() => {});
+			fetchRecentChats()
+				.then((r) => (recentChats = r))
+				.catch(() => {});
 		}
 	});
 

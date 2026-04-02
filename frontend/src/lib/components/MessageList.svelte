@@ -36,9 +36,9 @@
 <div class="messages" bind:this={containerRef}>
 	{#if messages.length === 0}
 		<p class="empty-hint">
-			Ask Claude to write lyrics, brainstorm ideas, or refine your song. Use <strong>@song</strong> to
-			reference other songs, <strong>@album</strong> for full album context, or <strong>@v1</strong> for
-			version history.
+			Ask Claude to write lyrics, brainstorm ideas, or refine your song. Use <strong>@song</strong>
+			to reference other songs, <strong>@album</strong> for full album context, or
+			<strong>@v1</strong> for version history.
 		</p>
 	{/if}
 	{#each messages as msg, i (i)}

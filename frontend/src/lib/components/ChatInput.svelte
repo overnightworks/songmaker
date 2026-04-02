@@ -25,12 +25,10 @@
 		placeholder="Ask Claude... (@song, @album, or @v1)"
 		bind:value
 		bind:this={inputRef}
-		onkeydown={onkeydown}
-		oninput={oninput}
+		{onkeydown}
+		{oninput}
 	></textarea>
-	<button class="send-btn" onclick={onsend} disabled={disabled} aria-label="Send">
-		↑
-	</button>
+	<button class="send-btn" onclick={onsend} {disabled} aria-label="Send"> ↑ </button>
 </div>
 
 <style>
