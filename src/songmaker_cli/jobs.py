@@ -315,58 +315,26 @@ def _make_generation_progress_callback(
     return _on_progress
 
 
-def _apply_repaint_params(ctx: GenerationContext, repaint_params: dict) -> GenerationContext:
-    """Replace ace_config with repaint-specific overrides."""
+def _apply_task_overrides(
+    ctx: GenerationContext, task_type: str, params: dict,
+) -> GenerationContext:
     from dataclasses import replace
 
-    updated_config = replace(
-        ctx.ace_config,
-        task_type="repaint",
-        src_audio=repaint_params["src_wav_path"],
-        repainting_start=repaint_params["repainting_start"],
-        repainting_end=repaint_params["repainting_end"],
-        think_mode="off",
-        prompt=repaint_params.get("prompt", ctx.ace_config.prompt),
-        lyrics=repaint_params.get("lyrics", ctx.ace_config.lyrics),
-    )
-    return GenerationContext(
-        song_id=ctx.song_id,
-        version_id=ctx.version_id,
-        meta=ctx.meta,
-        album_meta=ctx.album_meta,
-        ace_config=updated_config,
-        audio_dir=ctx.audio_dir,
-        user_id=ctx.user_id,
-        model_name=ctx.model_name,
-        client=ctx.client,
-        base_params=ctx.base_params,
-    )
+    overrides: dict = {
+        "task_type": task_type,
+        "src_audio": params["src_wav_path"],
+        "think_mode": "off",
+        "prompt": params.get("prompt", ctx.ace_config.prompt),
+        "lyrics": params.get("lyrics", ctx.ace_config.lyrics),
+    }
+    if task_type == "repaint":
+        overrides["repainting_start"] = params["repainting_start"]
+        overrides["repainting_end"] = params["repainting_end"]
+    elif task_type == "cover":
+        overrides["audio_cover_strength"] = params["audio_cover_strength"]
 
-
-def _apply_cover_params(ctx: GenerationContext, cover_params: dict) -> GenerationContext:
-    from dataclasses import replace
-
-    updated_config = replace(
-        ctx.ace_config,
-        task_type="cover",
-        src_audio=cover_params["src_wav_path"],
-        audio_cover_strength=cover_params["audio_cover_strength"],
-        think_mode="off",
-        prompt=cover_params.get("prompt", ctx.ace_config.prompt),
-        lyrics=cover_params.get("lyrics", ctx.ace_config.lyrics),
-    )
-    return GenerationContext(
-        song_id=ctx.song_id,
-        version_id=ctx.version_id,
-        meta=ctx.meta,
-        album_meta=ctx.album_meta,
-        ace_config=updated_config,
-        audio_dir=ctx.audio_dir,
-        user_id=ctx.user_id,
-        model_name=ctx.model_name,
-        client=ctx.client,
-        base_params=ctx.base_params,
-    )
+    updated_config = replace(ctx.ace_config, **overrides)
+    return replace(ctx, ace_config=updated_config)
 
 
 def run_generation_job(
@@ -403,9 +371,9 @@ def run_generation_job(
                 user_id=user_id, seed=seed,
             )
             if repaint_params:
-                ctx = _apply_repaint_params(ctx, repaint_params)
+                ctx = _apply_task_overrides(ctx, "repaint", repaint_params)
             elif cover_params:
-                ctx = _apply_cover_params(ctx, cover_params)
+                ctx = _apply_task_overrides(ctx, "cover", cover_params)
         except GenerationSetupError as exc:
             _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return

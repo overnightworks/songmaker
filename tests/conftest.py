@@ -18,6 +18,15 @@ from fastapi.testclient import TestClient
 TEST_SECRET = b"a" * 64
 
 
+@pytest.fixture(autouse=True)
+def _reset_worker_singletons():
+    yield
+    import songmaker_cli.worker_base as wb
+
+    wb._db_factory = None
+    wb._db_engine = None
+
+
 @pytest.fixture
 def mock_arq_pool():
     """Prevent lifespan from connecting to real Redis via arq."""

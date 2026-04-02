@@ -1,0 +1,89 @@
+import type { CleanupResult, PaginatedResponse, ShareResult, SongItem, VersionItem } from './types';
+import { apiFetch } from './fetch';
+
+export async function fetchSongs(
+	albumId?: string,
+	offset: number = 0,
+	limit: number = 50
+): Promise<PaginatedResponse<SongItem>> {
+	const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+	if (albumId) params.set('album_id', albumId);
+	const resp = await apiFetch<PaginatedResponse<SongItem>>(`/api/songs?${params}`);
+	return {
+		...resp,
+		items: resp.items.map((s) => ({ ...s, generations: s.generations ?? [] }))
+	};
+}
+
+export async function fetchSong(songId: string): Promise<SongItem> {
+	return apiFetch<SongItem>(`/api/songs/${songId}`);
+}
+
+export async function createSong(params: {
+	title: string;
+	album_id: string;
+	lyrics?: string;
+	prompt?: string;
+	bpm?: number;
+	duration?: number;
+	key?: string;
+	language?: string;
+}): Promise<SongItem> {
+	return apiFetch<SongItem>('/api/songs', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(params)
+	});
+}
+
+export async function updateSong(
+	songId: string,
+	params: {
+		lyrics?: string;
+		prompt?: string;
+		bpm?: number;
+		duration?: number;
+		key?: string;
+		generation_params?: import('./types').VersionGenerationParams | null;
+	}
+): Promise<SongItem> {
+	return apiFetch<SongItem>(`/api/songs/${songId}`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(params)
+	});
+}
+
+export async function fetchVersions(songId: string): Promise<VersionItem[]> {
+	return apiFetch<VersionItem[]>(`/api/songs/${songId}/versions`);
+}
+
+export async function deleteVersion(versionId: string, deleteGenerations: boolean): Promise<void> {
+	await apiFetch(`/api/versions/${versionId}?delete_generations=${deleteGenerations}`, {
+		method: 'DELETE'
+	});
+}
+
+export async function deleteSong(songId: string): Promise<void> {
+	await apiFetch(`/api/songs/${songId}`, { method: 'DELETE' });
+}
+
+export async function moveSong(songId: string, albumId: string): Promise<SongItem> {
+	return apiFetch<SongItem>(`/api/songs/${songId}/album`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ album_id: albumId })
+	});
+}
+
+export async function shareSong(songId: string): Promise<ShareResult> {
+	return apiFetch<ShareResult>(`/api/songs/${songId}/share`, { method: 'POST' });
+}
+
+export async function unshareSong(songId: string): Promise<void> {
+	await apiFetch(`/api/songs/${songId}/share`, { method: 'DELETE' });
+}
+
+export async function cleanupSong(songId: string): Promise<CleanupResult> {
+	return apiFetch<CleanupResult>(`/api/songs/${songId}/cleanup`, { method: 'POST' });
+}
