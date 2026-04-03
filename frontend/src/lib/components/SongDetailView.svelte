@@ -18,6 +18,7 @@
 		keepGeneration,
 		unkeepGeneration
 	} from '$lib/api/client';
+	import type { RepaintSettings } from '$lib/api/generations';
 	import { activeJobs, trackJob, removeJob } from '$lib/stores/jobs';
 	import {
 		selectedSong,
@@ -64,10 +65,12 @@
 	import ShareButton from './ShareButton.svelte';
 	import CoverDialog from './CoverDialog.svelte';
 	import RepaintDialog from './RepaintDialog.svelte';
+	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import { selectSong } from '$lib/stores/navigation';
 
 	let genCount = $state(1);
 	let selectedModel = $state<string | null>(null);
+	let showDeleteConfirm = $state(false);
 	let pinnedSeed = $state<number | null>(null);
 	let repaintTarget = $state<GenerationItem | null>(null);
 	let coverTarget = $state<GenerationItem | null>(null);
@@ -148,7 +151,8 @@
 		start: number,
 		end: number,
 		lyrics: string | null,
-		prompt: string | null
+		prompt: string | null,
+		settings: RepaintSettings
 	): Promise<void> {
 		if (!song || !repaintTarget) return;
 		try {
@@ -158,7 +162,9 @@
 				end,
 				lyrics,
 				prompt,
-				selectedModel
+				selectedModel,
+				null,
+				settings
 			);
 			repaintTarget = null;
 			trackJob(job, { songId: song.id });
@@ -373,7 +379,12 @@
 						<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistPickerFor = null)} />
 					{/if}
 				</div>
-				<ActionButton icon="trash" label="Delete Song" destructive confirm onclick={onDeleteSong} />
+				<ActionButton
+					icon="trash"
+					label="Delete Song"
+					destructive
+					onclick={() => (showDeleteConfirm = true)}
+				/>
 				{#each songJobs as j (j.job.id)}
 					{#if j.job.status === 'failed'}
 						<span class="job-indicator failed">
@@ -487,6 +498,23 @@
 		generation={coverTarget}
 		onsubmit={onCoverSubmit}
 		oncancel={() => (coverTarget = null)}
+	/>
+{/if}
+
+{#if showDeleteConfirm && song}
+	<ConfirmDeleteDialog
+		title={`Delete "${song.title}"?`}
+		items={[
+			`${song.generation_count} generation${song.generation_count !== 1 ? 's' : ''}`,
+			`${song.version_count} version${song.version_count !== 1 ? 's' : ''}`,
+			'All scores, ratings, and chat history'
+		]}
+		confirmLabel="Delete Song"
+		onconfirm={() => {
+			showDeleteConfirm = false;
+			onDeleteSong();
+		}}
+		oncancel={() => (showDeleteConfirm = false)}
 	/>
 {/if}
 

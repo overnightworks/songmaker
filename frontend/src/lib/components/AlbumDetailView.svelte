@@ -15,8 +15,10 @@
 	import ActionButton from './ActionButton.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
+	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
 	let playlistPickerFor = $state<string | null>(null);
+	let showDeleteConfirm = $state(false);
 
 	const albums = $derived($albumList);
 	const allSongs = $derived($songList);
@@ -116,8 +118,7 @@
 					icon="trash"
 					label="Delete Album"
 					destructive
-					confirm
-					onclick={onAlbumDelete}
+					onclick={() => (showDeleteConfirm = true)}
 				/>
 			</div>
 		</div>
@@ -150,6 +151,24 @@
 			{/if}
 		</div>
 	</div>
+{/if}
+
+{#if showDeleteConfirm && selectedAlbum}
+	{@const totalGens = albumSongs.reduce((sum, s) => sum + s.generation_count, 0)}
+	<ConfirmDeleteDialog
+		title={`Delete "${selectedAlbum.title}"?`}
+		items={[
+			`${albumSongs.length} song${albumSongs.length !== 1 ? 's' : ''} (${albumSongs.map((s) => s.title).join(', ')})`,
+			`${totalGens} generation${totalGens !== 1 ? 's' : ''}`,
+			'All versions, scores, and chat history'
+		]}
+		confirmLabel="Delete Album"
+		onconfirm={() => {
+			showDeleteConfirm = false;
+			onAlbumDelete();
+		}}
+		oncancel={() => (showDeleteConfirm = false)}
+	/>
 {/if}
 
 <style>
