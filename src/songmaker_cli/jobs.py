@@ -323,6 +323,17 @@ def _make_generation_progress_callback(
     return _on_progress
 
 
+def _symlink_to_tmp(src_path: str) -> str:
+    import tempfile
+
+    suffix = Path(src_path).suffix
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix, prefix="songmaker_src_")
+    os.close(fd)
+    os.unlink(tmp_path)
+    os.symlink(src_path, tmp_path)
+    return tmp_path
+
+
 def _apply_task_overrides(
     ctx: GenerationContext, task_type: str, params: dict,
 ) -> GenerationContext:
@@ -330,7 +341,7 @@ def _apply_task_overrides(
 
     overrides: dict = {
         "task_type": task_type,
-        "src_audio": params["src_wav_path"],
+        "src_audio": _symlink_to_tmp(params["src_wav_path"]),
         "think_mode": "off",
         "prompt": params.get("prompt", ctx.ace_config.prompt),
         "lyrics": params.get("lyrics", ctx.ace_config.lyrics),
@@ -387,20 +398,32 @@ def run_generation_job(
             _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return
 
-        completed = 0
-        last_error: Exception | None = None
+        tmp_symlink = ""
+        if ctx.ace_config.src_audio and os.path.islink(ctx.ace_config.src_audio):
+            tmp_symlink = ctx.ace_config.src_audio
 
-        for i in range(count):
-            _update_job(db_factory, job_id, "running", progress=i / count)
-            on_progress = _make_generation_progress_callback(db_factory, job_id, i, count)
-            try:
-                _run_single_generation(ctx, str(uuid.uuid4()), db_factory, on_progress=on_progress)
-                completed += 1
-            except Exception as exc:
-                log.exception("Generation %d/%d failed: %s", i + 1, count, exc)
-                last_error = exc
+        try:
+            completed = 0
+            last_error: Exception | None = None
 
-        _finalize_generation_job(db_factory, job_id, count, completed, last_error)
+            for i in range(count):
+                _update_job(db_factory, job_id, "running", progress=i / count)
+                on_progress = _make_generation_progress_callback(db_factory, job_id, i, count)
+                try:
+                    gen_id = str(uuid.uuid4())
+                    _run_single_generation(ctx, gen_id, db_factory, on_progress=on_progress)
+                    completed += 1
+                except Exception as exc:
+                    log.exception("Generation %d/%d failed: %s", i + 1, count, exc)
+                    last_error = exc
+
+            _finalize_generation_job(db_factory, job_id, count, completed, last_error)
+        finally:
+            if tmp_symlink:
+                try:
+                    os.unlink(tmp_symlink)
+                except OSError:
+                    pass
 
     except Exception as exc:
         log.exception("Generation job failed: %s", exc)
