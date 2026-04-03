@@ -7,10 +7,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from acestep_engine.models import AceStepConfig
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, Version
 from songmaker_cli.db.queries import get_generation, get_job
-from songmaker_cli.jobs import _update_job, run_generation_job, run_scoring_job
+from songmaker_cli.jobs import (
+    GenerationContext,
+    _apply_task_overrides,
+    _update_job,
+    run_generation_job,
+    run_scoring_job,
+)
 
 
 @pytest.fixture()
@@ -460,3 +467,53 @@ def test_job_duration_stats_no_completed(db_factory) -> None:
     assert stats.avg is None
     assert stats.min is None
     assert stats.max is None
+
+
+# ── _apply_task_overrides ──────────────────────────────────────────
+
+
+def test_repaint_converts_fractions_to_seconds() -> None:
+    from songmaker_cli.parser import AlbumMeta, SongMeta
+
+    config = AceStepConfig(prompt="test", lyrics="la la", duration=180)
+    ctx = GenerationContext(
+        song_id="s1", version_id="v1",
+        meta=SongMeta(title="t", lyrics="la la", prompt="test"),
+        album_meta=AlbumMeta(title="a", artist="b"),
+        ace_config=config, audio_dir=Path("/tmp"), user_id="u1",
+        model_name="turbo", client=MagicMock(),
+    )
+    params = {
+        "src_wav_path": "/tmp/src.wav",
+        "repainting_start": 0.3,
+        "repainting_end": 0.8,
+        "lyrics": "la la",
+        "prompt": "test",
+    }
+    result = _apply_task_overrides(ctx, "repaint", params)
+    assert result.ace_config.repainting_start == pytest.approx(54.0)
+    assert result.ace_config.repainting_end == pytest.approx(144.0)
+    assert result.ace_config.task_type == "repaint"
+    assert result.ace_config.think_mode == "off"
+
+
+def test_cover_does_not_convert_fractions() -> None:
+    from songmaker_cli.parser import AlbumMeta, SongMeta
+
+    config = AceStepConfig(prompt="test", lyrics="la la", duration=180)
+    ctx = GenerationContext(
+        song_id="s1", version_id="v1",
+        meta=SongMeta(title="t", lyrics="la la", prompt="test"),
+        album_meta=AlbumMeta(title="a", artist="b"),
+        ace_config=config, audio_dir=Path("/tmp"), user_id="u1",
+        model_name="turbo", client=MagicMock(),
+    )
+    params = {
+        "src_wav_path": "/tmp/src.wav",
+        "audio_cover_strength": 0.7,
+        "lyrics": "la la",
+        "prompt": "test",
+    }
+    result = _apply_task_overrides(ctx, "cover", params)
+    assert result.ace_config.audio_cover_strength == 0.7
+    assert result.ace_config.task_type == "cover"

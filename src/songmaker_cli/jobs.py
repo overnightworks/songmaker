@@ -336,8 +336,9 @@ def _apply_task_overrides(
         "lyrics": params.get("lyrics", ctx.ace_config.lyrics),
     }
     if task_type == "repaint":
-        overrides["repainting_start"] = params["repainting_start"]
-        overrides["repainting_end"] = params["repainting_end"]
+        duration = ctx.ace_config.duration
+        overrides["repainting_start"] = params["repainting_start"] * duration
+        overrides["repainting_end"] = params["repainting_end"] * duration
     elif task_type == "cover":
         overrides["audio_cover_strength"] = params["audio_cover_strength"]
 
