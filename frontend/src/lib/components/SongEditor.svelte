@@ -19,7 +19,7 @@
 		loadVersion,
 		handleDiffChange
 	} from '$lib/stores/editor';
-	import type { GenerationItem, VersionGenerationParams } from '$lib/api/types';
+	import type { GenerationItem, SongItem, VersionGenerationParams } from '$lib/api/types';
 	import GenerationSettings from '$lib/components/GenerationSettings.svelte';
 	import WaveformRangePicker from '$lib/components/WaveformRangePicker.svelte';
 	import LyricsDiff from '$lib/components/LyricsDiff.svelte';
@@ -28,6 +28,7 @@
 	interface Props {
 		ondeleteversion: (versionId: string, deleteGenerations: boolean) => void;
 		selectedModel?: string | null;
+		song?: SongItem | null;
 		sourceGeneration?: GenerationItem | null;
 		sourceMode?: 'repaint' | 'cover';
 		repaintStart?: number;
@@ -37,11 +38,13 @@
 		oncoverstrengthchange?: (strength: number) => void;
 		onsourcemodechange?: (mode: 'repaint' | 'cover') => void;
 		onsourceclear?: () => void;
+		onsourceselect?: (gen: GenerationItem) => void;
 	}
 
 	let {
 		ondeleteversion,
 		selectedModel = null,
+		song = null,
 		sourceGeneration = null,
 		sourceMode = 'repaint',
 		repaintStart = 0,
@@ -50,8 +53,13 @@
 		onrepaintrangechange,
 		oncoverstrengthchange,
 		onsourcemodechange,
-		onsourceclear
+		onsourceclear,
+		onsourceselect
 	}: Props = $props();
+
+	let showSourcePicker = $state(false);
+
+	const generations = $derived(song?.generations?.filter((g) => g.status === 'completed') ?? []);
 
 	const vers = $derived($versions);
 	const verIndex = $derived($currentVersionIndex);
@@ -92,6 +100,38 @@
 </script>
 
 <div class="lyrics-edit">
+	{#if !sourceGeneration && generations.length > 0}
+		<div class="source-picker-row">
+			<button class="select-source-btn" onclick={() => (showSourcePicker = !showSourcePicker)}>
+				{showSourcePicker ? 'Cancel' : 'Select Source for Repaint / Cover'}
+			</button>
+			{#if showSourcePicker}
+				<div class="source-picker-list">
+					{#each generations as gen (gen.id)}
+						<button
+							class="source-picker-item"
+							onclick={() => {
+								showSourcePicker = false;
+								onsourceselect?.(gen);
+							}}
+						>
+							<span class="source-picker-num">Gen #{gen.generation_number}</span>
+							{#if gen.version_number !== null}
+								<span class="source-picker-ver">v{gen.version_number}</span>
+							{/if}
+							{#if gen.model_mode}
+								<span class="source-picker-model">{gen.model_mode}</span>
+							{/if}
+							{#if gen.is_picked}
+								<span class="source-picker-badge">★</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	{/if}
+
 	{#if sourceGeneration}
 		<div class="source-bar">
 			<div class="source-info">
@@ -124,7 +164,7 @@
 		{#if sourceMode === 'repaint'}
 			{@const duration = sourceGeneration.generation_params?.duration ?? 180}
 			<WaveformRangePicker
-				audioUrl={`/api/audio/${sourceGeneration.mp3_path}`}
+				audioUrl={`/audio/${sourceGeneration.mp3_path}`}
 				{duration}
 				startPercent={repaintStart}
 				endPercent={repaintEnd}
@@ -480,5 +520,88 @@
 		color: var(--text);
 		min-width: 32px;
 		text-align: right;
+	}
+
+	.source-picker-row {
+		position: relative;
+	}
+
+	.select-source-btn {
+		width: 100%;
+		padding: 0.5rem 0.8rem;
+		background: var(--surface);
+		border: 1px dashed var(--border);
+		border-radius: var(--card-radius);
+		color: var(--text-muted);
+		font-size: 0.8rem;
+		font-family: var(--font-display);
+		letter-spacing: 0.5px;
+		cursor: pointer;
+		text-align: center;
+	}
+
+	.select-source-btn:hover {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.source-picker-list {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		max-height: 240px;
+		overflow-y: auto;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		z-index: 10;
+		display: flex;
+		flex-direction: column;
+		margin-top: 0.2rem;
+	}
+
+	.source-picker-item {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		padding: 0.5rem 0.8rem;
+		background: none;
+		border: none;
+		border-bottom: 1px solid var(--border);
+		color: var(--text);
+		font-size: 0.8rem;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.source-picker-item:last-child {
+		border-bottom: none;
+	}
+
+	.source-picker-item:hover {
+		background: rgba(160, 32, 240, 0.1);
+	}
+
+	.source-picker-num {
+		font-family: var(--font-display);
+		letter-spacing: 0.5px;
+	}
+
+	.source-picker-ver {
+		font-size: 0.7rem;
+		color: var(--primary);
+		background: rgba(160, 32, 240, 0.1);
+		padding: 0.1rem 0.4rem;
+		border-radius: 3px;
+	}
+
+	.source-picker-model {
+		font-size: 0.7rem;
+		color: var(--text-dim);
+	}
+
+	.source-picker-badge {
+		color: var(--score-ok);
 	}
 </style>

@@ -462,6 +462,7 @@
 			<SongEditor
 				ondeleteversion={onDeleteVersion}
 				{selectedModel}
+				{song}
 				{sourceGeneration}
 				{sourceMode}
 				{repaintStart}
@@ -474,6 +475,12 @@
 				oncoverstrengthchange={(s) => (coverStrength = s)}
 				onsourcemodechange={(m) => (sourceMode = m)}
 				onsourceclear={() => (sourceGeneration = null)}
+				onsourceselect={(gen) => {
+					sourceGeneration = gen;
+					sourceMode = 'repaint';
+					repaintStart = 0;
+					repaintEnd = 1;
+				}}
 			/>
 		{/if}
 		<div class="chat-tab" class:hidden={tab !== 'chat'}>

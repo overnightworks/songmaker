@@ -179,8 +179,8 @@
 
 	.handle {
 		position: absolute;
-		top: 0;
-		width: 12px;
+		top: 0.4rem;
+		width: 24px;
 		height: 64px;
 		transform: translateX(-50%);
 		cursor: ew-resize;
@@ -188,23 +188,36 @@
 		z-index: 1;
 	}
 
-	.handle::after {
+	.handle::before {
 		content: '';
 		position: absolute;
 		top: 0;
 		left: 50%;
 		transform: translateX(-50%);
-		width: 3px;
+		width: 4px;
 		height: 100%;
-		background: var(--accent);
+		background: #fff;
 		border-radius: 2px;
+		box-shadow: 0 0 6px rgba(160, 32, 240, 0.8);
 	}
 
-	.handle:hover::after,
-	.handle:active::after {
-		width: 4px;
+	.handle::after {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 12px;
+		height: 20px;
 		background: #fff;
-		box-shadow: 0 0 8px var(--accent);
+		border-radius: 3px;
+		border: 2px solid var(--accent);
+	}
+
+	.handle:hover::before,
+	.handle:active::before {
+		width: 5px;
+		box-shadow: 0 0 12px rgba(160, 32, 240, 1);
 	}
 
 	@media (pointer: coarse) {
