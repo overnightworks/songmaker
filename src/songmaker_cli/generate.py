@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.io import wavfile as scipy_wavfile
 
 from acestep_engine import AceStepClient, AceStepError
 from acestep_engine.models import AceStepConfig, AceStepResult
@@ -19,6 +20,8 @@ from songmaker_cli.errors import GenerationError
 from songmaker_cli.parser import AlbumMeta, SongMeta
 
 log = logging.getLogger(__name__)
+
+CROSSFADE_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -46,6 +49,7 @@ def generate_single(
     generation_id: str,
     client: AceStepClient | None = None,
     on_progress: Callable[[str], None] | None = None,
+    raw_src_audio: str | None = None,
 ) -> GenerationResult:
     if client is None:
         client = AceStepClient()
@@ -54,12 +58,17 @@ def generate_single(
 
     mp3_path = audio_file_path(audio_dir, user_id, generation_id, ".mp3")
     wav_path = audio_file_path(audio_dir, user_id, generation_id, ".wav")
+    raw_wav_path = audio_file_path(audio_dir, user_id, generation_id, ".raw.wav")
     try:
         ace_result, elapsed = _run_generation(ace_config, client, on_progress=on_progress)
         audio = _decode_audio(ace_result)
+        if ace_config.task_type == "repaint" and ace_config.src_audio:
+            splice_src = raw_src_audio or ace_config.src_audio
+            audio = _splice_repaint_raw(audio, ace_config, splice_src)
+        write_stereo_wav(str(raw_wav_path), audio.left, audio.right, audio.sample_rate)
         _write_output(audio, ace_result.seed, mp3_path, wav_path, meta, album_meta)
     except Exception:
-        _cleanup_partial_files(mp3_path, wav_path)
+        _cleanup_partial_files(mp3_path, wav_path, raw_wav_path)
         raise
 
     log.info("Generated: %s (seed=%s, %.0fs)", mp3_path.name, ace_result.seed, elapsed)
@@ -129,6 +138,74 @@ def _write_output(
         )
     except MasteringError as exc:
         raise GenerationError(str(exc)) from exc
+
+
+def _read_source_wav(path: str) -> DecodedAudio:
+    sr, raw = scipy_wavfile.read(path)
+    from audio_engine.audio_io import _normalize_dtype
+    samples = _normalize_dtype(raw)
+    if samples is None:
+        raise GenerationError(f"Unsupported source WAV dtype: {raw.dtype}")
+    if samples.ndim == 2 and samples.shape[1] >= 2:
+        left, right = samples[:, 0], samples[:, 1]
+    else:
+        if samples.ndim == 2:
+            samples = samples[:, 0]
+        left, right = samples, samples.copy()
+    return DecodedAudio(left=left, right=right, sample_rate=sr, duration=len(left) / sr)
+
+
+def _splice_repaint_raw(
+    repainted: DecodedAudio, ace_config: AceStepConfig, src_path: str,
+) -> DecodedAudio:
+    source = _read_source_wav(src_path)
+    sr = repainted.sample_rate
+
+    start = int(ace_config.repainting_start * sr)
+    end = int(ace_config.repainting_end * sr)
+    fade_len = int(CROSSFADE_SECONDS * sr)
+
+    n = min(len(source.left), len(repainted.left))
+    start = min(start, n)
+    end = min(end, n)
+
+    left = source.left[:n].copy()
+    right = source.right[:n].copy()
+
+    fade_in_len = min(fade_len, end - start)
+    fade_out_len = min(fade_len, end - start)
+
+    if start > 0 and fade_in_len > 0:
+        ramp = np.linspace(0.0, 1.0, fade_in_len)
+        for ch_src, ch_rep in ((left, repainted.left), (right, repainted.right)):
+            ch_src[start:start + fade_in_len] = (
+                ch_src[start:start + fade_in_len] * (1.0 - ramp)
+                + ch_rep[start:start + fade_in_len] * ramp
+            )
+        splice_start = start + fade_in_len
+    else:
+        splice_start = start
+
+    if end < n and fade_out_len > 0:
+        ramp = np.linspace(1.0, 0.0, fade_out_len)
+        for ch_src, ch_rep in ((left, repainted.left), (right, repainted.right)):
+            ch_src[end - fade_out_len:end] = (
+                ch_rep[end - fade_out_len:end] * ramp
+                + ch_src[end - fade_out_len:end] * (1.0 - ramp)
+            )
+        splice_end = end - fade_out_len
+    else:
+        splice_end = end
+
+    if splice_start < splice_end:
+        left[splice_start:splice_end] = repainted.left[splice_start:splice_end]
+        right[splice_start:splice_end] = repainted.right[splice_start:splice_end]
+
+    log.info(
+        "Spliced repaint: %.2fs-%.2fs into source (%.0fms crossfade)",
+        ace_config.repainting_start, ace_config.repainting_end, CROSSFADE_SECONDS * 1000,
+    )
+    return DecodedAudio(left=left, right=right, sample_rate=sr, duration=n / sr)
 
 
 def _cleanup_partial_files(*paths: Path) -> None:

@@ -69,6 +69,7 @@ class GenerationContext:
     client: AceStepClient
     base_params: dict = field(default_factory=dict)
     src_generation_id: str | None = None
+    raw_src_audio: str | None = None
 
 
 class GenerationSetupError(Exception):
@@ -209,6 +210,7 @@ def _run_single_generation(
         ctx.audio_dir, ctx.user_id, generation_id,
         client=ctx.client,
         on_progress=on_progress,
+        raw_src_audio=ctx.raw_src_audio,
     )
 
     mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
@@ -335,14 +337,22 @@ def _copy_to_tmp(src_path: str) -> str:
     return tmp_path
 
 
+def _resolve_raw_wav(mastered_wav_path: str) -> str | None:
+    raw_path = Path(mastered_wav_path).with_suffix(".raw.wav")
+    return str(raw_path) if raw_path.exists() else None
+
+
 def _apply_task_overrides(
     ctx: GenerationContext, task_type: str, params: dict,
 ) -> GenerationContext:
     from dataclasses import replace
 
+    src_wav = params["src_wav_path"]
+    raw_wav = _resolve_raw_wav(src_wav)
+
     overrides: dict = {
         "task_type": task_type,
-        "src_audio": _copy_to_tmp(params["src_wav_path"]),
+        "src_audio": _copy_to_tmp(src_wav),
         "prompt": params.get("prompt", ctx.ace_config.prompt),
         "lyrics": params.get("lyrics", ctx.ace_config.lyrics),
     }
@@ -354,7 +364,10 @@ def _apply_task_overrides(
         overrides["audio_cover_strength"] = params["audio_cover_strength"]
 
     updated_config = replace(ctx.ace_config, **overrides)
-    return replace(ctx, ace_config=updated_config)
+    new_ctx = replace(ctx, ace_config=updated_config)
+    if task_type == "repaint" and raw_wav:
+        new_ctx = replace(new_ctx, raw_src_audio=_copy_to_tmp(raw_wav))
+    return new_ctx
 
 
 def run_generation_job(
@@ -400,11 +413,13 @@ def run_generation_job(
             _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return
 
-        tmp_copy = ""
+        tmp_copies: list[str] = []
         if ctx.ace_config.src_audio and ctx.ace_config.src_audio.startswith(
             tempfile.gettempdir()
         ):
-            tmp_copy = ctx.ace_config.src_audio
+            tmp_copies.append(ctx.ace_config.src_audio)
+        if ctx.raw_src_audio and ctx.raw_src_audio.startswith(tempfile.gettempdir()):
+            tmp_copies.append(ctx.raw_src_audio)
 
         try:
             completed = 0
@@ -423,9 +438,9 @@ def run_generation_job(
 
             _finalize_generation_job(db_factory, job_id, count, completed, last_error)
         finally:
-            if tmp_copy:
+            for tmp in tmp_copies:
                 try:
-                    os.unlink(tmp_copy)
+                    os.unlink(tmp)
                 except OSError:
                     pass
 

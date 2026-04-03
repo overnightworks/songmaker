@@ -17,7 +17,8 @@
 		canPlayNextGen,
 		canPlayPrevSong,
 		canPlayNextSong,
-		queueContext
+		queueContext,
+		requestSeekTo
 	} from '$lib/stores/player';
 	import { formatTime } from '$lib/utils/format';
 	import {
@@ -33,6 +34,7 @@
 	let isPlaying = $state(false);
 	let isLoading = $state(false);
 	const toggleRequest = $derived($requestTogglePlay);
+	const seekRequest = $derived($requestSeekTo);
 	let currentTime = $state(0);
 	let duration = $state(0);
 
@@ -163,6 +165,13 @@
 				if (audio.paused) audio.play().catch(() => {});
 				else audio.pause();
 			}
+		}
+	});
+
+	$effect(() => {
+		if (seekRequest !== null && audio) {
+			audio.currentTime = seekRequest;
+			requestSeekTo.set(null);
 		}
 	});
 

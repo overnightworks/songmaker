@@ -308,6 +308,11 @@ export function togglePlayPause(): void {
 // --- Playback time ---
 export const playbackTime = writable(0);
 export const playbackDuration = writable(0);
+export const requestSeekTo = writable<number | null>(null);
+
+export function seekTo(seconds: number): void {
+	requestSeekTo.set(seconds);
+}
 
 // --- Song/album list mutations ---
 export function replaceSongInList(song: SongItem): void {

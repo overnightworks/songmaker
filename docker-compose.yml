@@ -111,6 +111,7 @@ services:
       ACESTEP_API_HOST: "127.0.0.1"
       ACESTEP_API_PORT: "8001"
       MUSIC_MAX_JOBS: "${MUSIC_MAX_JOBS:-2}"
+      HF_TOKEN: "${HF_TOKEN}"
     volumes:
       - audiofiles:/app/data/audio
       - ./_models/acestep:/app/_models/acestep

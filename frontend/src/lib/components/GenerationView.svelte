@@ -15,7 +15,10 @@
 		selectedSong,
 		selectedGeneration,
 		replaceSongInList,
-		removeGenerationFromSong
+		removeGenerationFromSong,
+		playGeneration,
+		playingGeneration,
+		seekTo
 	} from '$lib/stores/player';
 	import { backToSong } from '$lib/stores/navigation';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
@@ -318,6 +321,10 @@
 		{/if}
 
 		{#if generation.src_generation_number}
+			{@const srcGen = song?.generations.find((g) => g.id === generation.src_generation_id)}
+			{@const repaintStartSec = generation.generation_params?.repainting_start != null && generation.generation_params?.duration
+				? generation.generation_params.repainting_start * generation.generation_params.duration
+				: null}
 			<div class="lineage">
 				<span class="lineage-label">Source</span>
 				<span class="lineage-chain">
@@ -337,6 +344,20 @@
 						From Gen #{generation.src_generation_number}
 					{/if}
 				</span>
+				{#if srcGen && song && repaintStartSec !== null}
+					<div class="compare-buttons">
+						<button
+							class="compare-btn"
+							class:active={$playingGeneration?.id === srcGen.id}
+							onclick={() => { playGeneration(srcGen, song); seekTo(repaintStartSec); }}
+						>Source</button>
+						<button
+							class="compare-btn"
+							class:active={$playingGeneration?.id === generation.id}
+							onclick={() => { playGeneration(generation, song); seekTo(repaintStartSec); }}
+						>Result</button>
+					</div>
+				{/if}
 			</div>
 		{/if}
 
@@ -562,6 +583,7 @@
 	.lineage {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 0.55rem;
 		padding: 0.5rem 0.8rem;
 		background: var(--surface);
@@ -581,6 +603,35 @@
 	.lineage-chain {
 		font-size: 0.8rem;
 		color: var(--text-muted);
+	}
+
+	.compare-buttons {
+		display: flex;
+		gap: 0.3rem;
+		margin-left: auto;
+	}
+
+	.compare-btn {
+		font-size: 0.7rem;
+		padding: 0.15rem 0.5rem;
+		border: 1px solid var(--border);
+		border-radius: 3px;
+		background: none;
+		color: var(--text-dim);
+		cursor: pointer;
+		font-family: var(--font-display);
+		letter-spacing: 0.3px;
+	}
+
+	.compare-btn:hover {
+		color: var(--accent);
+		border-color: var(--accent);
+	}
+
+	.compare-btn.active {
+		color: var(--accent);
+		border-color: var(--accent);
+		background: rgba(160, 32, 240, 0.1);
 	}
 
 	.section {

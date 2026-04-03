@@ -13,16 +13,22 @@
 
 	let canvas: HTMLCanvasElement | undefined = $state();
 	let container: HTMLDivElement | undefined = $state();
+	let audioEl: HTMLAudioElement | undefined = $state();
 	let peaks: number[] = $state([]);
 	let dragging = $state<'start' | 'end' | null>(null);
 	let containerRect = $state<DOMRect | null>(null);
+	let playing = $state(false);
+	let playbackRaf = 0;
 
 	const BAR_COUNT = 300;
+	const LATENT_FRAME_SECONDS = 0.04;
 
 	function formatTime(seconds: number): string {
 		const m = Math.floor(seconds / 60);
-		const s = Math.floor(seconds % 60);
-		return `${m}:${s.toString().padStart(2, '0')}`;
+		const s = seconds % 60;
+		const whole = Math.floor(s);
+		const ms = Math.round((s - whole) * 100);
+		return `${m}:${whole.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
 	}
 
 	const startTime = $derived(formatTime(startPercent * duration));
@@ -115,18 +121,51 @@
 	function onPointerMove(e: PointerEvent): void {
 		if (!dragging) return;
 		const pct = getPercent(e.clientX);
-		const snap = Math.round(pct * duration * 2) / (duration * 2);
+		const stepSize = LATENT_FRAME_SECONDS / duration;
+		const snap = Math.round(pct / stepSize) * stepSize;
 		if (dragging === 'start') {
-			const newStart = Math.min(snap, endPercent - 0.01);
+			const newStart = Math.min(snap, endPercent - stepSize);
 			onchange(Math.max(0, newStart), endPercent);
 		} else {
-			const newEnd = Math.max(snap, startPercent + 0.01);
+			const newEnd = Math.max(snap, startPercent + stepSize);
 			onchange(startPercent, Math.min(1, newEnd));
 		}
 	}
 
 	function onPointerUp(): void {
 		dragging = null;
+	}
+
+	function togglePreview(): void {
+		if (playing) {
+			stopPreview();
+			return;
+		}
+		if (!audioEl) return;
+		audioEl.currentTime = startPercent * duration;
+		audioEl.play();
+		playing = true;
+		scheduleStop();
+	}
+
+	function scheduleStop(): void {
+		cancelAnimationFrame(playbackRaf);
+		playbackRaf = requestAnimationFrame(() => {
+			if (!audioEl || !playing) return;
+			if (audioEl.currentTime >= endPercent * duration) {
+				stopPreview();
+				return;
+			}
+			scheduleStop();
+		});
+	}
+
+	function stopPreview(): void {
+		cancelAnimationFrame(playbackRaf);
+		if (audioEl) {
+			audioEl.pause();
+		}
+		playing = false;
 	}
 </script>
 
@@ -154,8 +193,12 @@
 		aria-valuenow={Math.round(endPercent * 100)}
 		tabindex="0"
 	></div>
+	<audio bind:this={audioEl} src={audioUrl} preload="auto" onended={stopPreview}></audio>
 	<div class="time-display">
 		<span>{startTime}</span>
+		<button class="preview-btn" onclick={togglePreview} title="Preview selected range">
+			{playing ? '\u25A0' : '\u25B6'}
+		</button>
 		<span>{endTime}</span>
 	</div>
 </div>
@@ -233,9 +276,26 @@
 		right: 0.4rem;
 		display: flex;
 		justify-content: space-between;
+		align-items: center;
 		font-size: 0.7rem;
 		color: var(--text-dim);
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
+	}
+
+	.preview-btn {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 3px;
+		color: var(--text-dim);
+		cursor: pointer;
+		font-size: 0.65rem;
+		padding: 0 0.35rem;
+		line-height: 1.4;
+	}
+
+	.preview-btn:hover {
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 </style>
