@@ -172,10 +172,23 @@ def _splice_repaint_raw(
     left = source.left[:n].copy()
     right = source.right[:n].copy()
 
-    fade_in_len = min(fade_len, end - start)
-    fade_out_len = min(fade_len, end - start)
+    region_len = end - start
+    has_fade_in = start > 0
+    has_fade_out = end < n
+    if has_fade_in and has_fade_out:
+        fade_in_len = min(fade_len, region_len // 2)
+        fade_out_len = min(fade_len, region_len - fade_in_len)
+    elif has_fade_in:
+        fade_in_len = min(fade_len, region_len)
+        fade_out_len = 0
+    elif has_fade_out:
+        fade_in_len = 0
+        fade_out_len = min(fade_len, region_len)
+    else:
+        fade_in_len = 0
+        fade_out_len = 0
 
-    if start > 0 and fade_in_len > 0:
+    if has_fade_in and fade_in_len > 0:
         ramp = np.linspace(0.0, 1.0, fade_in_len)
         for ch_src, ch_rep in ((left, repainted.left), (right, repainted.right)):
             ch_src[start:start + fade_in_len] = (
@@ -186,7 +199,7 @@ def _splice_repaint_raw(
     else:
         splice_start = start
 
-    if end < n and fade_out_len > 0:
+    if has_fade_out and fade_out_len > 0:
         ramp = np.linspace(1.0, 0.0, fade_out_len)
         for ch_src, ch_rep in ((left, repainted.left), (right, repainted.right)):
             ch_src[end - fade_out_len:end] = (

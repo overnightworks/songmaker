@@ -322,9 +322,11 @@
 
 		{#if generation.src_generation_number}
 			{@const srcGen = song?.generations.find((g) => g.id === generation.src_generation_id)}
-			{@const repaintStartSec = generation.generation_params?.repainting_start != null && generation.generation_params?.duration
-				? generation.generation_params.repainting_start * generation.generation_params.duration
-				: null}
+			{@const repaintStartSec =
+				generation.generation_params?.repainting_start != null &&
+				generation.generation_params?.duration
+					? generation.generation_params.repainting_start * generation.generation_params.duration
+					: null}
 			<div class="lineage">
 				<span class="lineage-label">Source</span>
 				<span class="lineage-chain">
@@ -349,13 +351,19 @@
 						<button
 							class="compare-btn"
 							class:active={$playingGeneration?.id === srcGen.id}
-							onclick={() => { playGeneration(srcGen, song); seekTo(repaintStartSec); }}
-						>Source</button>
+							onclick={() => {
+								playGeneration(srcGen, song);
+								seekTo(repaintStartSec);
+							}}>Source</button
+						>
 						<button
 							class="compare-btn"
 							class:active={$playingGeneration?.id === generation.id}
-							onclick={() => { playGeneration(generation, song); seekTo(repaintStartSec); }}
-						>Result</button>
+							onclick={() => {
+								playGeneration(generation, song);
+								seekTo(repaintStartSec);
+							}}>Result</button
+						>
 					</div>
 				{/if}
 			</div>
