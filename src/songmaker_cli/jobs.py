@@ -341,7 +341,6 @@ def _apply_task_overrides(
     overrides: dict = {
         "task_type": task_type,
         "src_audio": _copy_to_tmp(params["src_wav_path"]),
-        "think_mode": "off",
         "prompt": params.get("prompt", ctx.ace_config.prompt),
         "lyrics": params.get("lyrics", ctx.ace_config.lyrics),
     }

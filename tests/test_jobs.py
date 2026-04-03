@@ -497,9 +497,38 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
     assert result.ace_config.repainting_start == pytest.approx(54.0)
     assert result.ace_config.repainting_end == pytest.approx(144.0)
     assert result.ace_config.task_type == "repaint"
-    assert result.ace_config.think_mode == "off"
+    assert result.ace_config.think_mode == "deep"
     assert result.ace_config.src_audio.startswith("/tmp/")
     assert Path(result.ace_config.src_audio).exists()
+
+
+def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
+    from songmaker_cli.parser import AlbumMeta, SongMeta
+
+    src_wav = tmp_path / "src.wav"
+    src_wav.write_bytes(b"RIFF" + b"\x00" * 40)
+
+    config = AceStepConfig(
+        prompt="test", lyrics="la la", duration=120,
+        guidance_scale=5.0, inference_steps=50, shift=2.0, think_mode="deep",
+    )
+    ctx = GenerationContext(
+        song_id="s1", version_id="v1",
+        meta=SongMeta(title="t", lyrics="la la", prompt="test"),
+        album_meta=AlbumMeta(title="a", artist="b"),
+        ace_config=config, audio_dir=tmp_path, user_id="u1",
+        model_name="sft", client=MagicMock(),
+    )
+    params = {
+        "src_wav_path": str(src_wav),
+        "repainting_start": 0.1,
+        "repainting_end": 0.3,
+    }
+    result = _apply_task_overrides(ctx, "repaint", params)
+    assert result.ace_config.guidance_scale == 5.0
+    assert result.ace_config.inference_steps == 50
+    assert result.ace_config.shift == 2.0
+    assert result.ace_config.think_mode == "deep"
 
 
 def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
