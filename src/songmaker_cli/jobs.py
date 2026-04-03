@@ -251,7 +251,7 @@ def _run_single_generation(
         ),
         repainting_start=ctx.ace_config.repainting_start if is_repaint else None,
         repainting_end=ctx.ace_config.repainting_end if is_repaint else None,
-        repaint_mode=ctx.ace_config.repaint_mode or None if is_repaint else None,
+        repaint_mode=(ctx.ace_config.repaint_mode or None) if is_repaint else None,
         repaint_strength=(
             ctx.ace_config.repaint_strength
             if is_repaint and ctx.ace_config.repaint_mode else None
