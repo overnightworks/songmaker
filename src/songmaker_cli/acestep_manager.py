@@ -51,7 +51,7 @@ class AceStepManager:
         env["ACESTEP_API_PORT"] = str(_ACESTEP_PORT)
         env["ACESTEP_API_HOST"] = "127.0.0.1"
         env.setdefault("ACESTEP_DEVICE", "cuda")
-        env.setdefault("ACESTEP_CONFIG_PATH", "acestep-v15-xl-sft")
+        env.setdefault("ACESTEP_CONFIG_PATH", "acestep-v15-sft")
         env.setdefault("ACESTEP_INIT_LLM", "1")
         env.setdefault("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-4B")
         env.setdefault("ACESTEP_LM_BACKEND", "vllm")
