@@ -447,18 +447,19 @@
 	}
 
 	.back-btn {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 		background: none;
 		border: none;
 		color: var(--text-muted);
-		font-size: 0.8rem;
+		font-size: 0.87rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		padding: 0.55rem 1.1rem;
 		cursor: pointer;
-		padding: 0.3rem 0.5rem;
-		margin: -0.3rem -0.5rem;
-		display: flex;
-		align-items: center;
-		gap: 0.3rem;
-		position: relative;
-		z-index: 1;
+		border-bottom: 1px solid var(--border);
 	}
 
 	.back-btn:hover {
@@ -466,7 +467,7 @@
 	}
 
 	.back-arrow {
-		font-size: 1rem;
+		font-size: 0.93rem;
 	}
 
 	.detail-header {
