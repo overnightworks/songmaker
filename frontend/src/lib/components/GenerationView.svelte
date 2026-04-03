@@ -452,10 +452,13 @@
 		color: var(--text-muted);
 		font-size: 0.8rem;
 		cursor: pointer;
-		padding: 0;
+		padding: 0.3rem 0.5rem;
+		margin: -0.3rem -0.5rem;
 		display: flex;
 		align-items: center;
 		gap: 0.3rem;
+		position: relative;
+		z-index: 1;
 	}
 
 	.back-btn:hover {
