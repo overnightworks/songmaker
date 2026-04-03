@@ -56,7 +56,7 @@
 		</div>
 
 		<label class="field">
-			<span>New lyrics for this section (optional)</span>
+			<span>Lyrics for this section (optional)</span>
 			<textarea rows="4" bind:value={lyrics} placeholder="Leave empty to keep current lyrics"
 			></textarea>
 		</label>

@@ -18,7 +18,6 @@
 		keepGeneration,
 		unkeepGeneration
 	} from '$lib/api/client';
-	import type { RepaintSettings } from '$lib/api/generations';
 	import { activeJobs, trackJob, removeJob } from '$lib/stores/jobs';
 	import {
 		selectedSong,
@@ -151,8 +150,7 @@
 		start: number,
 		end: number,
 		lyrics: string | null,
-		prompt: string | null,
-		settings: RepaintSettings
+		prompt: string | null
 	): Promise<void> {
 		if (!song || !repaintTarget) return;
 		try {
@@ -162,9 +160,7 @@
 				end,
 				lyrics,
 				prompt,
-				selectedModel,
-				null,
-				settings
+				selectedModel
 			);
 			repaintTarget = null;
 			trackJob(job, { songId: song.id });
