@@ -23,6 +23,8 @@ from songmaker_cli.api_helpers import (
     create_job_with_rate_limit,
 )
 from songmaker_cli.api_models import (
+    BulkDeleteRequest,
+    BulkDeleteResponse,
     CoverRequest,
     GenerateRequest,
     GenerationResponse,
@@ -48,6 +50,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import Generation, Job
 from songmaker_cli.db.queries import (
+    bulk_delete_generations,
     delete_generation,
     disable_generation_sharing,
     enable_generation_sharing,
@@ -171,6 +174,29 @@ def api_delete_generation(
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
+
+
+@router.post("/generations/bulk-delete")
+def api_bulk_delete_generations(
+    req: BulkDeleteRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> BulkDeleteResponse:
+    if not req.generation_ids:
+        return BulkDeleteResponse(deleted=0)
+    deduplicated_ids = list(set(req.generation_ids))
+    try:
+        count, paths = bulk_delete_generations(session, deduplicated_ids, user.id)
+    except ValueError:
+        raise HTTPException(404, "One or more generations not found")
+    except PermissionError:
+        raise HTTPException(404, "One or more generations not found")
+    for gen_id in deduplicated_ids:
+        record_audit(session, user.id, "delete", "generation", gen_id)
+    session.commit()
+    cleanup_generation_files(ctx.audio_dir, paths)
+    return BulkDeleteResponse(deleted=count)
 
 
 # ── Generation + Scoring ─────────────────────────────────────────────

@@ -90,17 +90,17 @@
 		background: var(--surface-dark, #1a1a2e);
 		border: 1px solid var(--border);
 		border-radius: 8px;
-		padding: 20px;
+		padding: 1.33rem;
 		width: 400px;
 		max-width: 90vw;
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 0.8rem;
 	}
 
 	h3 {
 		margin: 0;
-		font-size: 14px;
+		font-size: 0.93rem;
 		font-family: var(--font-display);
 		color: var(--text);
 		text-transform: uppercase;
@@ -110,14 +110,14 @@
 	.range-section {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: 0.4rem;
 	}
 
 	.range-label {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		font-size: 11px;
+		font-size: var(--label-font-size);
 		color: var(--text-muted);
 	}
 
@@ -145,7 +145,7 @@
 
 	.range-info {
 		text-align: center;
-		font-size: 12px;
+		font-size: var(--label-font-size);
 		color: var(--text-light);
 		font-family: var(--font-body);
 	}
@@ -153,11 +153,11 @@
 	.field {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 0.27rem;
 	}
 
 	.field span {
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--text-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
@@ -165,12 +165,12 @@
 
 	.field textarea,
 	.field input[type='text'] {
-		padding: 6px 8px;
+		padding: 0.4rem 0.53rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		color: var(--text);
-		font-size: 12px;
+		font-size: var(--label-font-size);
 		resize: vertical;
 	}
 
@@ -183,15 +183,15 @@
 	.actions {
 		display: flex;
 		justify-content: flex-end;
-		gap: 8px;
-		margin-top: 4px;
+		gap: 0.53rem;
+		margin-top: 0.27rem;
 	}
 
 	.cancel-btn,
 	.submit-btn {
-		padding: 6px 16px;
+		padding: 0.4rem 1.07rem;
 		border-radius: 4px;
-		font-size: 12px;
+		font-size: var(--label-font-size);
 		cursor: pointer;
 		border: 1px solid var(--border);
 	}

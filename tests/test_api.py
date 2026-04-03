@@ -1904,3 +1904,155 @@ def test_song_chat_message_limit(client: TestClient) -> None:
     resp = client.post("/api/songs/s1/chat", json={"message": "overflow"})
     assert resp.status_code == 409
     assert "full" in resp.json()["detail"].lower()
+
+
+# ── Bulk delete generations ─────────────────────────────────────────
+
+
+def test_bulk_delete_generations(client: TestClient) -> None:
+    resp = client.post(
+        "/api/generations/bulk-delete",
+        json={"generation_ids": ["g1", "g2"]},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] == 2
+
+    assert client.get("/api/generations/g1").status_code == 404
+    assert client.get("/api/generations/g2").status_code == 404
+
+
+def test_bulk_delete_empty_list(client: TestClient) -> None:
+    resp = client.post(
+        "/api/generations/bulk-delete",
+        json={"generation_ids": []},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] == 0
+
+
+def test_bulk_delete_not_found(client: TestClient) -> None:
+    resp = client.post(
+        "/api/generations/bulk-delete",
+        json={"generation_ids": ["g1", "nonexistent"]},
+    )
+    assert resp.status_code == 404
+
+
+def test_bulk_delete_other_user(tmp_path: Path) -> None:
+    other_user_id = "u-other"
+
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        session.add(User(
+            id="u-test", username="test_user",
+            password_hash="unused", role="user",
+        ))
+        session.add(User(
+            id=other_user_id, username="other_user",
+            password_hash="unused", role="user",
+        ))
+        session.flush()
+
+        album_mine = Album(id="mine", title="My Album", artist="Me", created_by="u-test")
+        album_other = Album(
+            id="other", title="Other Album", artist="Them", created_by=other_user_id,
+        )
+        session.add_all([album_mine, album_other])
+
+        song_mine = Song(id="s-mine", title="My Song", album_id="mine", track_number=1)
+        song_other = Song(id="s-other", title="Other Song", album_id="other", track_number=1)
+        session.add_all([song_mine, song_other])
+
+        ver_mine = Version(id="v-mine", song_id="s-mine", version_number=1, lyrics="a", prompt="b")
+        ver_other = Version(
+            id="v-other", song_id="s-other", version_number=1, lyrics="c", prompt="d",
+        )
+        session.add_all([ver_mine, ver_other])
+
+        gen_mine = Generation(
+            id="g-mine", song_id="s-mine", version_id="v-mine",
+            generation_number=1, mp3_path="mine.mp3",
+        )
+        gen_other = Generation(
+            id="g-other", song_id="s-other", version_id="v-other",
+            generation_number=1, mp3_path="other.mp3",
+        )
+        session.add_all([gen_mine, gen_other])
+        session.commit()
+
+    ctx = AppContext(
+        db=factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+    from songmaker_cli.api import router
+
+    app = FastAPI()
+    app.state.ctx = ctx
+    app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
+    app.include_router(router)
+    tc = TestClient(app)
+
+    resp = tc.post(
+        "/api/generations/bulk-delete",
+        json={"generation_ids": ["g-mine", "g-other"]},
+    )
+    assert resp.status_code == 404
+
+    with factory() as session:
+        assert session.query(Generation).filter_by(id="g-mine").first() is not None
+        assert session.query(Generation).filter_by(id="g-other").first() is not None
+
+
+def test_bulk_delete_cleans_up_files(tmp_path: Path) -> None:
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        session.add(User(
+            id="u-test", username="test_user",
+            password_hash="unused", role="user",
+        ))
+        session.flush()
+        _seed_db(session, owner_id="u-test")
+
+    audio_dir = tmp_path / "audio"
+    gen_dir = audio_dir / "u-test"
+    gen_dir.mkdir(parents=True, exist_ok=True)
+    (gen_dir / "g1.mp3").write_bytes(b"fake")
+    (gen_dir / "g1.wav").write_bytes(b"fake")
+    (gen_dir / "g2.mp3").write_bytes(b"fake")
+
+    ctx = AppContext(
+        db=factory,
+        audio_dir=audio_dir,
+        data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+    from songmaker_cli.api import router
+
+    app = FastAPI()
+    app.state.ctx = ctx
+    app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
+    app.include_router(router)
+    tc = TestClient(app)
+
+    resp = tc.post(
+        "/api/generations/bulk-delete",
+        json={"generation_ids": ["g1", "g2"]},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] == 2
+
+    assert not (gen_dir / "g1.mp3").exists()
+    assert not (gen_dir / "g1.wav").exists()
+    assert not (gen_dir / "g2.mp3").exists()
+
+
+def test_bulk_delete_requires_auth(unauthed_client: TestClient) -> None:
+    resp = unauthed_client.post(
+        "/api/generations/bulk-delete",
+        json={"generation_ids": ["g1"]},
+    )
+    assert resp.status_code in (401, 403)

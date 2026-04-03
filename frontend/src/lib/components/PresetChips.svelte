@@ -61,17 +61,17 @@
 	.presets-row {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 0.4rem;
 		flex-wrap: wrap;
 	}
 
 	.preset-chip {
-		padding: 2px 8px;
+		padding: 0.2rem 0.6rem;
 		border: 1px solid var(--border);
 		border-radius: 3px;
 		background: transparent;
 		color: var(--text-muted);
-		font-size: 10px;
+		font-size: 0.75rem;
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
@@ -108,7 +108,7 @@
 	}
 
 	.preset-mode-tag {
-		font-size: 8px;
+		font-size: 0.55rem;
 		opacity: 0.6;
 		margin-left: 2px;
 	}

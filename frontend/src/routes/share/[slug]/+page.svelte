@@ -341,13 +341,13 @@
 	}
 
 	.play-indicator {
-		width: 36px;
-		height: 36px;
+		width: 2.4rem;
+		height: 2.4rem;
 		border-radius: 50%;
 		border: 2px solid var(--border, #333);
 		background: transparent;
 		color: var(--text-muted, #888);
-		font-size: 14px;
+		font-size: 0.933rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -373,8 +373,8 @@
 
 	.spinner {
 		display: inline-block;
-		width: 14px;
-		height: 14px;
+		width: 0.933rem;
+		height: 0.933rem;
 		border: 2px solid var(--accent, #a020f0);
 		border-top-color: transparent;
 		border-radius: 50%;

@@ -135,17 +135,17 @@
 	.settings-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr 1fr;
-		gap: 8px;
+		gap: 0.7rem;
 	}
 
 	.setting {
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
+		gap: 0.25rem;
 	}
 
 	.setting span {
-		font-size: 10px;
+		font-size: var(--label-font-size);
 		color: var(--text-muted);
 		text-transform: uppercase;
 		font-family: var(--font-display);
@@ -159,12 +159,12 @@
 	.setting input[type='text'],
 	.setting input[type='number'],
 	.setting select {
-		padding: 5px 8px;
+		padding: 0.4rem 0.6rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		color: var(--text);
-		font-size: 12px;
+		font-size: 1rem;
 		width: 100%;
 	}
 

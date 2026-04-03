@@ -226,7 +226,7 @@
 	}
 
 	.label {
-		font-size: 8px;
+		font-size: 0.55rem;
 		color: var(--text-dim);
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
@@ -272,7 +272,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--accent);
 		font-family: var(--font-display);
 		text-transform: uppercase;
@@ -285,7 +285,7 @@
 		border: none;
 		color: var(--text-dim);
 		cursor: pointer;
-		font-size: 11px;
+		font-size: 0.75rem;
 		padding: 0 4px;
 	}
 
@@ -297,7 +297,7 @@
 		background: none;
 		border: none;
 		color: var(--text-dim);
-		font-size: 9px;
+		font-size: 0.6rem;
 		cursor: pointer;
 		padding: 0 4px;
 		margin-left: auto;
@@ -318,7 +318,7 @@
 		background: var(--surface);
 		border: 1px solid var(--score-bad);
 		border-radius: 4px;
-		font-size: 11px;
+		font-size: 0.75rem;
 		color: var(--text-muted);
 	}
 
@@ -330,7 +330,7 @@
 	.choice {
 		padding: 3px 10px;
 		border-radius: 3px;
-		font-size: 10px;
+		font-size: 0.7rem;
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;

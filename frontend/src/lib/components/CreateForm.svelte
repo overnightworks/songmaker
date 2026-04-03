@@ -106,7 +106,7 @@
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
-		font-size: 20px;
+		font-size: 1.33rem;
 		margin: 0;
 		text-transform: uppercase;
 	}
@@ -118,7 +118,7 @@
 	.create-section h3 {
 		font-family: var(--font-display);
 		color: var(--text-muted);
-		font-size: 11px;
+		font-size: var(--label-font-size);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 		margin: 0 0 8px;
@@ -137,7 +137,7 @@
 		border: 1px solid var(--border);
 		border-radius: var(--input-radius);
 		color: var(--text);
-		font-size: 13px;
+		font-size: 0.87rem;
 	}
 
 	.create-fields input:focus,

@@ -7,10 +7,22 @@
 		isAudioBuffering,
 		playback,
 		queueContext,
-		selectedAlbumId
+		selectedAlbumId,
+		removeGenerationFromSong
 	} from '$lib/stores/player';
 	import { scoreColor } from '$lib/utils/scores';
 	import { getGenerationActions } from '$lib/contexts/generation-actions';
+	import {
+		selectionMode,
+		selectedIds,
+		toggleSelection,
+		selectAllUnkept,
+		clearSelection,
+		selectionCount
+	} from '$lib/stores/selection';
+	import { addToast } from '$lib/stores/toast';
+	import { bulkDeleteGenerations } from '$lib/api/client';
+	import Icon from './Icon.svelte';
 
 	interface Props {
 		song: SongItem;
@@ -66,6 +78,33 @@
 			playGeneration(gen, song);
 		}
 	}
+
+	function handleCardClick(gen: GenerationItem, e: MouseEvent): void {
+		if (e.ctrlKey || e.metaKey) {
+			toggleSelection(gen.id);
+			return;
+		}
+		if ($selectionMode) {
+			toggleSelection(gen.id);
+			return;
+		}
+		onselect(gen);
+	}
+
+	async function handleBulkDelete(): Promise<void> {
+		const ids = [...$selectedIds];
+		if (ids.length === 0) return;
+		try {
+			await bulkDeleteGenerations(ids);
+			for (const id of ids) {
+				removeGenerationFromSong(song.id, id);
+			}
+			clearSelection();
+			addToast(`Deleted ${ids.length} generation${ids.length !== 1 ? 's' : ''}`, 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Bulk delete failed', 'error');
+		}
+	}
 </script>
 
 {#if song.generations.length === 0}
@@ -80,11 +119,23 @@
 						class="gen-card"
 						class:playing={isGenPlaying(gen)}
 						class:buffering={isGenLoading(gen)}
-						onclick={() => onselect(gen)}
-						onkeydown={(e) => e.key === 'Enter' && onselect(gen)}
+						class:selected={$selectedIds.has(gen.id)}
+						onclick={(e) => handleCardClick(gen, e)}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								if ($selectionMode) toggleSelection(gen.id);
+								else onselect(gen);
+							}
+						}}
 						role="button"
 						tabindex="0"
 					>
+						{#if $selectionMode}
+							<span class="selection-checkbox">
+								<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
+							</span>
+						{/if}
+
 						<button
 							class="play-btn"
 							class:loading={isGenLoading(gen)}
@@ -101,7 +152,6 @@
 
 						<div class="gen-info">
 							<span class="gen-name">
-								{#if gen.is_kept}<span class="kept-heart">♥</span>{/if}
 								{#if gen.is_picked}<span class="picked-star">★</span>{/if}
 								gen{gen.generation_number}
 							</span>
@@ -148,40 +198,34 @@
 								{gen.is_picked ? '★' : '☆'}
 							</button>
 							<button
-								class="score-action"
+								class="keep-btn"
+								class:kept={gen.is_kept}
 								onclick={(e) => {
 									e.stopPropagation();
-									actions.score(gen.id);
+									actions.keep(gen.id, !gen.is_kept);
 								}}
-								aria-label="Score generation"
+								aria-label={gen.is_kept ? 'Unkeep' : 'Keep'}
 							>
-								Score
-							</button>
-							<button
-								class="score-action"
-								onclick={(e) => {
-									e.stopPropagation();
-									actions.repaint(gen);
-								}}
-								aria-label="Repaint section"
-							>
-								Repaint
-							</button>
-							<button
-								class="score-action"
-								onclick={(e) => {
-									e.stopPropagation();
-									actions.cover(gen);
-								}}
-								aria-label="Cover with new style"
-							>
-								Cover
+								{gen.is_kept ? '♥' : '♡'}
 							</button>
 						</div>
 					</div>
 				{/each}
 			</div>
 		{/each}
+
+		{#if $selectionMode}
+			<div class="selection-toolbar">
+				<button class="toolbar-btn" onclick={() => selectAllUnkept(song.generations)}>
+					Select All Unkept
+				</button>
+				<span class="toolbar-count">{$selectionCount} selected</span>
+				<button class="toolbar-btn destructive" onclick={handleBulkDelete}>
+					Delete Selected
+				</button>
+				<button class="toolbar-btn" onclick={clearSelection}> Cancel </button>
+			</div>
+		{/if}
 	</div>
 {/if}
 
@@ -189,29 +233,29 @@
 	.gen-list {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 0.8rem;
 	}
 
 	.version-section {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 0.15rem;
 	}
 
 	.version-header {
-		font-size: 10px;
+		font-size: var(--label-font-size);
 		color: var(--text-dim);
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
-		padding: 4px 0;
+		padding: 0.3rem 0;
 	}
 
 	.gen-card {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 10px 12px;
+		gap: 0.7rem;
+		padding: 0.7rem 0.8rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
@@ -235,6 +279,11 @@
 	.gen-card.buffering {
 		border-color: var(--accent);
 		animation: buffer-pulse 1.5s ease-in-out infinite;
+	}
+
+	.gen-card.selected {
+		border-color: var(--accent);
+		background: rgba(160, 32, 240, 0.05);
 	}
 
 	@keyframes buffer-pulse {
@@ -271,13 +320,13 @@
 	}
 
 	.play-btn {
-		width: 36px;
-		height: 36px;
+		width: 2.4rem;
+		height: 2.4rem;
 		border-radius: 50%;
 		border: 2px solid var(--border);
 		background: transparent;
 		color: var(--text-muted);
-		font-size: 14px;
+		font-size: 0.93rem;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -305,14 +354,9 @@
 
 	.gen-name {
 		font-family: var(--font-display);
-		font-size: 13px;
+		font-size: 0.93rem;
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
-	}
-
-	.kept-heart {
-		color: #e04050;
-		text-shadow: 0 0 6px rgba(224, 64, 80, 0.4);
 	}
 
 	.picked-star {
@@ -321,13 +365,13 @@
 	}
 
 	.gen-seed {
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--text-dim);
 	}
 
 	.model-badge {
-		font-size: 9px;
-		padding: 1px 4px;
+		font-size: 0.6rem;
+		padding: 0.1rem 0.3rem;
 		border-radius: 3px;
 		background: var(--surface);
 		border: 1px solid var(--border);
@@ -339,13 +383,13 @@
 	.gen-actions {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 0.4rem;
 		flex-shrink: 0;
 	}
 
 	.score-badge {
 		font-family: var(--font-display);
-		font-size: 16px;
+		font-size: 1.07rem;
 		min-width: 28px;
 		text-align: center;
 	}
@@ -363,7 +407,7 @@
 	}
 
 	.score-mini {
-		font-size: 10px;
+		font-size: 0.7rem;
 		font-family: var(--font-display);
 	}
 
@@ -382,7 +426,7 @@
 	.pick-btn {
 		background: none;
 		border: none;
-		font-size: 16px;
+		font-size: 1.07rem;
 		cursor: pointer;
 		color: var(--text-dim);
 		padding: 2px;
@@ -397,58 +441,111 @@
 		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
 	}
 
-	.score-action {
-		padding: var(--btn-padding-sm);
+	.keep-btn {
+		background: none;
+		border: none;
+		font-size: 1.07rem;
+		cursor: pointer;
+		color: var(--text-dim);
+		padding: 2px;
+	}
+
+	.keep-btn:hover {
+		color: var(--keep);
+	}
+
+	.keep-btn.kept {
+		color: var(--keep);
+		text-shadow: 0 0 6px color-mix(in srgb, var(--keep) 40%, transparent);
+	}
+
+	.selection-checkbox {
+		display: flex;
+		align-items: center;
+		color: var(--text-dim);
+		flex-shrink: 0;
+	}
+
+	.gen-card.selected .selection-checkbox {
+		color: var(--accent);
+	}
+
+	.selection-toolbar {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		padding: 0.7rem 0.8rem;
+		background: var(--surface);
+		border: 1px solid var(--accent);
+		border-radius: var(--card-radius);
+		position: sticky;
+		bottom: 0;
+	}
+
+	.toolbar-btn {
+		padding: 0.3rem 0.8rem;
 		border: 1px solid var(--border);
 		border-radius: var(--btn-radius-sm);
 		background: none;
-		color: var(--text-dim);
-		font-size: 10px;
+		color: var(--text-muted);
+		font-size: var(--label-font-size);
 		font-family: var(--font-display);
 		text-transform: uppercase;
-		letter-spacing: var(--btn-letter-spacing);
+		letter-spacing: 0.5px;
 		cursor: pointer;
 	}
 
-	.score-action:hover {
+	.toolbar-btn:hover {
 		border-color: var(--primary);
 		color: var(--primary);
 	}
 
+	.toolbar-btn.destructive {
+		border-color: var(--score-bad);
+		color: var(--score-bad);
+	}
+
+	.toolbar-btn.destructive:hover {
+		background: rgba(255, 68, 68, 0.1);
+	}
+
+	.toolbar-count {
+		font-size: var(--label-font-size);
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
 	.empty {
-		padding: 40px 20px;
+		padding: 2.7rem 1.3rem;
 		text-align: center;
 		color: var(--text-dim);
 		font-style: italic;
-		font-size: 13px;
+		font-size: 0.87rem;
 	}
 
 	@media (max-width: 768px) {
 		.gen-card {
-			padding: 8px 10px;
-			gap: 8px;
+			padding: 0.55rem 0.7rem;
+			gap: 0.55rem;
 		}
 
 		.score-mini {
 			display: none;
 		}
 
-		.score-action {
-			display: none;
-		}
-
 		.gen-name {
-			font-size: 14px;
+			font-size: 0.93rem;
 		}
 
 		.gen-seed {
-			font-size: 11px;
+			font-size: 0.75rem;
 		}
 
 		.play-btn {
-			width: 40px;
-			height: 40px;
-			font-size: 14px;
+			width: 2.7rem;
+			height: 2.7rem;
 		}
 	}
 </style>

@@ -216,7 +216,7 @@
 		background: none;
 		border: none;
 		color: var(--text-muted, #888);
-		font-size: 16px;
+		font-size: 1rem;
 		cursor: pointer;
 		padding: 4px;
 		flex-shrink: 0;
@@ -234,7 +234,7 @@
 		border: 2px solid var(--primary, #ff3220);
 		background: transparent;
 		color: var(--primary, #ff3220);
-		font-size: 16px;
+		font-size: 1rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -325,7 +325,7 @@
 
 	.track-title {
 		font-family: var(--font-display, 'Oswald', sans-serif);
-		font-size: 13px;
+		font-size: 0.87rem;
 		color: var(--text, #e0e0e0);
 		text-transform: uppercase;
 		letter-spacing: 1px;
@@ -344,7 +344,7 @@
 	}
 
 	.track-detail {
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--text-muted, #888);
 		white-space: nowrap;
 		overflow: hidden;
@@ -353,7 +353,7 @@
 
 	.time {
 		font-family: var(--font-display, 'Oswald', sans-serif);
-		font-size: 12px;
+		font-size: var(--label-font-size);
 		color: var(--text-muted, #888);
 		min-width: 36px;
 		text-align: center;
@@ -418,7 +418,7 @@
 		}
 
 		.time {
-			font-size: 10px;
+			font-size: 0.7rem;
 			min-width: 28px;
 		}
 	}

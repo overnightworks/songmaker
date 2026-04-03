@@ -3,7 +3,7 @@
 	import { scoreColor } from '$lib/utils/scores';
 	import { addToast } from '$lib/stores/toast';
 	import { getGenerationActions } from '$lib/contexts/generation-actions';
-	import OverflowMenu from './OverflowMenu.svelte';
+	import ActionButton from './ActionButton.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
 
@@ -106,26 +106,82 @@
 
 <div class="gen-detail">
 	<div class="gen-header">
-		<div class="gen-header-left">
-			<h4 class="gen-heading">
-				Generation {generation.generation_number}
-			</h4>
-			<button
-				class="pick-btn"
-				class:picked={generation.is_picked}
-				onclick={() => actions.pick(generation.id, !generation.is_picked)}
-				aria-label={generation.is_picked ? 'Unpick as album version' : 'Pick as album version'}
-			>
-				{generation.is_picked ? '★ Album Pick' : '☆ Pick for Album'}
-			</button>
-			<button
-				class="keep-btn"
-				class:kept={generation.is_kept}
-				onclick={() => actions.keep(generation.id, !generation.is_kept)}
-				aria-label={generation.is_kept ? 'Remove from kept' : 'Keep this generation'}
-			>
-				{generation.is_kept ? '♥ Kept' : '♡ Keep'}
-			</button>
+		<h4 class="gen-heading">
+			Generation {generation.generation_number}
+		</h4>
+		<div class="gen-actions-bar">
+			<div class="action-group">
+				<ActionButton
+					icon="star"
+					activeIcon="star-filled"
+					label={generation.is_picked ? 'Unpick' : 'Pick for Album'}
+					active={generation.is_picked}
+					showLabel
+					onclick={() => actions.pick(generation.id, !generation.is_picked)}
+				/>
+				<ActionButton
+					icon="heart"
+					activeIcon="heart-filled"
+					label={generation.is_kept ? 'Remove from kept' : 'Keep'}
+					active={generation.is_kept}
+					showLabel
+					onclick={() => actions.keep(generation.id, !generation.is_kept)}
+				/>
+			</div>
+			<div class="action-group">
+				<ActionButton
+					icon="paintbrush"
+					label="Repaint"
+					showLabel
+					onclick={() => actions.repaint(generation)}
+				/>
+				<ActionButton
+					icon="layers"
+					label="Cover"
+					showLabel
+					onclick={() => actions.cover(generation)}
+				/>
+			</div>
+			<div class="action-group">
+				<ActionButton
+					icon="refresh-cw"
+					label={scoring ? 'Scoring...' : 'Score'}
+					showLabel
+					disabled={scoring}
+					onclick={() => actions.score(generation.id)}
+				/>
+				<div class="picker-anchor">
+					<ActionButton
+						icon="list-plus"
+						label="Add to Playlist"
+						showLabel
+						onclick={() => (showPlaylistPicker = true)}
+					/>
+					{#if showPlaylistPicker}
+						<PlaylistPicker
+							onselect={async (playlistId) => {
+								await actions.addToPlaylist(playlistId, generation.id);
+								showPlaylistPicker = false;
+							}}
+							onclose={() => (showPlaylistPicker = false)}
+						/>
+					{/if}
+				</div>
+				<ShareButton
+					isShared={generation.is_shared}
+					shareSlug={generation.share_slug}
+					onshare={() => actions.share(generation.id)}
+					onunshare={() => actions.unshare(generation.id)}
+				/>
+				<ActionButton
+					icon="trash"
+					label="Delete"
+					destructive
+					confirm
+					showLabel
+					onclick={() => actions.del(generation.id)}
+				/>
+			</div>
 		</div>
 		<div class="gen-meta">
 			{#if generation.version_number !== null}
@@ -145,41 +201,6 @@
 					seed:{generation.seed}
 				</button>
 			{/if}
-			<ShareButton
-				isShared={generation.is_shared}
-				shareSlug={generation.share_slug}
-				onshare={() => actions.share(generation.id)}
-				onunshare={() => actions.unshare(generation.id)}
-			/>
-			<div class="picker-anchor">
-				<OverflowMenu
-					items={[
-						{
-							label: 'Add to Playlist',
-							onclick: () => (showPlaylistPicker = true)
-						},
-						{
-							label: scoring ? 'Scoring...' : 'Re-Score',
-							onclick: () => actions.score(generation.id)
-						},
-						{
-							label: 'Delete Generation',
-							confirmLabel: 'Confirm Delete',
-							destructive: true,
-							onclick: () => actions.del(generation.id)
-						}
-					]}
-				/>
-				{#if showPlaylistPicker}
-					<PlaylistPicker
-						onselect={async (playlistId) => {
-							await actions.addToPlaylist(playlistId, generation.id);
-							showPlaylistPicker = false;
-						}}
-						onclose={() => (showPlaylistPicker = false)}
-					/>
-				{/if}
-			</div>
 		</div>
 	</div>
 
@@ -280,90 +301,35 @@
 	.gen-detail {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: 1.1rem;
 	}
 
 	.gen-header {
 		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 12px;
+		flex-direction: column;
+		gap: 0.6rem;
+		padding: 0.8rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
 	}
 
-	.gen-header-left {
+	.gen-actions-bar {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 1.5rem;
+		flex-wrap: wrap;
 	}
 
-	.pick-btn {
-		padding: var(--btn-padding-sm);
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		background: none;
-		color: var(--text-dim);
-		font-size: 11px;
-		font-family: var(--font-display);
-		cursor: pointer;
-		letter-spacing: var(--btn-letter-spacing);
-	}
-
-	.pick-btn:hover {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
-	.pick-btn.picked {
-		border-color: var(--accent);
-		background: rgba(160, 32, 240, 0.1);
-		color: var(--accent);
-		box-shadow: 0 0 8px rgba(160, 32, 240, 0.15);
-	}
-
-	.picked-badge {
-		font-size: 11px;
-		color: var(--accent);
-		font-family: var(--font-display);
-		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
-	}
-
-	.keep-btn {
-		padding: var(--btn-padding-sm);
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		background: none;
-		color: var(--text-dim);
-		font-size: 11px;
-		font-family: var(--font-display);
-		cursor: pointer;
-		letter-spacing: var(--btn-letter-spacing);
-	}
-
-	.keep-btn:hover {
-		border-color: #e04050;
-		color: #e04050;
-	}
-
-	.keep-btn.kept {
-		border-color: #e04050;
-		background: rgba(224, 64, 80, 0.1);
-		color: #e04050;
-		box-shadow: 0 0 8px rgba(224, 64, 80, 0.15);
-	}
-
-	.kept-badge {
-		font-size: 11px;
-		color: #e04050;
-		font-family: var(--font-display);
-		text-shadow: 0 0 6px rgba(224, 64, 80, 0.4);
+	.action-group {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
 	}
 
 	.gen-heading {
 		font-family: var(--font-display);
-		font-size: 18px;
+		font-size: 1.2rem;
 		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
@@ -372,16 +338,16 @@
 	.gen-meta {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 0.55rem;
 	}
 
 	.version-link {
 		background: none;
 		border: 1px solid var(--primary);
 		color: var(--primary);
-		padding: 2px 10px;
+		padding: 0.15rem 0.7rem;
 		border-radius: var(--btn-radius-sm);
-		font-size: 11px;
+		font-size: 0.75rem;
 		cursor: pointer;
 		font-family: var(--font-display);
 		letter-spacing: var(--btn-letter-spacing);
@@ -393,10 +359,10 @@
 	}
 
 	.version-tag {
-		font-size: 11px;
+		font-size: 0.75rem;
 		color: var(--text-muted);
 		background: var(--surface);
-		padding: 2px 10px;
+		padding: 0.15rem 0.7rem;
 		border-radius: var(--btn-radius-sm);
 		border: 1px solid var(--border);
 		font-family: var(--font-display);
@@ -407,7 +373,7 @@
 	}
 
 	.seed {
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--text-dim);
 		font-family: var(--font-body);
 		background: none;
@@ -423,8 +389,8 @@
 	.section {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		padding: 12px;
+		gap: 0.55rem;
+		padding: 0.8rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
@@ -438,7 +404,7 @@
 
 	.section-title {
 		font-family: var(--font-display);
-		font-size: 11px;
+		font-size: var(--label-font-size);
 		color: var(--text-dim);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
@@ -447,13 +413,13 @@
 	.scores-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-		gap: 8px;
+		gap: 0.55rem;
 	}
 
 	.score-cell {
 		display: flex;
 		flex-direction: column;
-		padding: 8px 10px;
+		padding: 0.55rem 0.7rem;
 		border-radius: 4px;
 		background: var(--bg);
 		transition: box-shadow 0.2s;
@@ -474,7 +440,7 @@
 	}
 
 	.score-label {
-		font-size: 9px;
+		font-size: 0.7rem;
 		color: var(--text-dim);
 		text-transform: uppercase;
 		font-family: var(--font-display);
@@ -482,13 +448,13 @@
 	}
 
 	.score-value {
-		font-size: 18px;
+		font-size: 1.2rem;
 		font-family: var(--font-display);
 		color: var(--text);
 	}
 
 	.no-scores {
-		font-size: 11px;
+		font-size: 0.75rem;
 		color: var(--text-dim);
 		font-style: italic;
 	}
@@ -496,20 +462,20 @@
 	.rating-section {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		margin-top: 8px;
-		padding-top: 8px;
+		gap: 0.55rem;
+		margin-top: 0.55rem;
+		padding-top: 0.55rem;
 		border-top: 1px solid var(--border);
 	}
 
 	.rating-row {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 0.7rem;
 	}
 
 	.rating-label {
-		font-size: 9px;
+		font-size: 0.7rem;
 		color: var(--text-dim);
 		text-transform: uppercase;
 		font-family: var(--font-display);
@@ -524,7 +490,7 @@
 	}
 
 	.rating-number {
-		font-size: 18px;
+		font-size: 1.2rem;
 		font-family: var(--font-display);
 		color: var(--text);
 		min-width: 32px;
@@ -536,9 +502,9 @@
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		color: var(--text-muted);
-		font-size: 12px;
+		font-size: 1rem;
 		font-family: var(--font-body);
-		padding: 6px 8px;
+		padding: 0.4rem 0.55rem;
 		resize: vertical;
 	}
 
@@ -554,7 +520,7 @@
 		border-radius: var(--btn-radius-sm);
 		background: rgba(160, 32, 240, 0.1);
 		color: var(--accent);
-		font-size: 11px;
+		font-size: 0.75rem;
 		font-family: var(--font-display);
 		letter-spacing: var(--btn-letter-spacing);
 		cursor: pointer;
@@ -577,7 +543,7 @@
 	}
 
 	.summary-label {
-		font-size: 9px;
+		font-size: 0.7rem;
 		color: var(--text-dim);
 		text-transform: uppercase;
 		font-family: var(--font-display);
@@ -585,7 +551,7 @@
 	}
 
 	.summary-text {
-		font-size: 12px;
+		font-size: 0.87rem;
 		color: var(--text-muted);
 		line-height: 1.5;
 	}
@@ -593,21 +559,21 @@
 	.params-grid {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 6px;
+		gap: 0.4rem;
 	}
 
 	.param {
-		font-size: 11px;
+		font-size: 0.75rem;
 		color: var(--text-muted);
 		background: var(--bg);
-		padding: 3px 8px;
+		padding: 0.2rem 0.55rem;
 		border-radius: 3px;
 	}
 
 	.whisper-text {
 		white-space: pre-wrap;
 		font-family: 'Courier New', monospace;
-		font-size: 13px;
+		font-size: 0.87rem;
 		line-height: 1.6;
 		color: var(--text-muted);
 		margin: 0;

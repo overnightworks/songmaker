@@ -297,7 +297,7 @@
 		border: 2px solid var(--primary);
 		background: transparent;
 		color: var(--primary);
-		font-size: 18px;
+		font-size: 1.2rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -370,9 +370,9 @@
 		background: none;
 		border: none;
 		color: var(--text-muted);
-		font-size: 14px;
+		font-size: 0.93rem;
 		cursor: pointer;
-		padding: 6px;
+		padding: 0.4rem;
 		display: flex;
 		align-items: center;
 		min-width: 32px;
@@ -397,7 +397,7 @@
 		border: none;
 		cursor: pointer;
 		text-align: left;
-		padding: 4px 8px;
+		padding: 0.27rem 0.53rem;
 		border-radius: 4px;
 		flex-shrink: 0;
 		z-index: 1;
@@ -407,7 +407,7 @@
 	}
 	.track-title {
 		font-family: var(--font-display);
-		font-size: 13px;
+		font-size: 0.87rem;
 		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 1px;
@@ -424,7 +424,7 @@
 		}
 	}
 	.track-detail {
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--text-muted);
 		white-space: nowrap;
 		overflow: hidden;
@@ -436,7 +436,7 @@
 	}
 	.time {
 		font-family: var(--font-display);
-		font-size: 12px;
+		font-size: var(--label-font-size);
 		color: var(--text-muted);
 		min-width: 36px;
 		text-align: center;
@@ -497,13 +497,13 @@
 			display: none;
 		}
 		.nav-btn {
-			font-size: 12px;
+			font-size: var(--label-font-size);
 			min-width: 36px;
 			min-height: 36px;
 			padding: 6px;
 		}
 		.time {
-			font-size: 10px;
+			font-size: 0.7rem;
 			min-width: 28px;
 		}
 	}

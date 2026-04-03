@@ -186,7 +186,7 @@
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		color: var(--text);
-		font-size: 12px;
+		font-size: var(--label-font-size);
 		outline: none;
 		min-width: 0;
 	}
@@ -198,7 +198,7 @@
 		color: var(--text-muted);
 		width: 30px;
 		height: 30px;
-		font-size: 16px;
+		font-size: 1rem;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -242,7 +242,7 @@
 		background: none;
 		border: none;
 		color: var(--text-muted);
-		font-size: 10px;
+		font-size: 0.7rem;
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 1px;
@@ -255,7 +255,7 @@
 	}
 
 	.section-arrow {
-		font-size: 9px;
+		font-size: 0.6rem;
 		transition: transform 0.15s;
 		display: inline-block;
 	}
@@ -269,7 +269,7 @@
 	}
 
 	.section-count {
-		font-size: 9px;
+		font-size: 0.6rem;
 		color: var(--text-dim);
 	}
 
@@ -281,7 +281,7 @@
 		background: none;
 		border: none;
 		color: var(--text-light);
-		font-size: 12px;
+		font-size: var(--label-font-size);
 		cursor: pointer;
 		text-align: left;
 	}
@@ -297,7 +297,7 @@
 	}
 
 	.shared-icon {
-		font-size: 10px;
+		font-size: 0.7rem;
 		flex-shrink: 0;
 	}
 
@@ -309,7 +309,7 @@
 	}
 
 	.playlist-count {
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--text-dim);
 		flex-shrink: 0;
 		margin-left: 8px;
@@ -319,12 +319,12 @@
 		padding: 20px;
 		color: var(--text-dim);
 		text-align: center;
-		font-size: 12px;
+		font-size: var(--label-font-size);
 	}
 
 	@media (max-width: 768px) {
 		.search {
-			font-size: 14px;
+			font-size: 1rem;
 			padding: 8px 12px;
 		}
 

@@ -29,6 +29,8 @@ export {
 	rateGeneration,
 	scoreGeneration,
 	deleteGeneration,
+	type BulkDeleteResult,
+	bulkDeleteGenerations,
 	pickGeneration,
 	unpickGeneration,
 	keepGeneration,

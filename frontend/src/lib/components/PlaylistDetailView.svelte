@@ -10,7 +10,8 @@
 	} from '$lib/stores/playlists';
 	import { deselectPlaylistView } from '$lib/stores/navigation';
 	import { addToast } from '$lib/stores/toast';
-	import OverflowMenu from './OverflowMenu.svelte';
+	import ActionButton from './ActionButton.svelte';
+	import Icon from './Icon.svelte';
 	import ShareButton from './ShareButton.svelte';
 
 	const playlistDetail = $derived($selectedPlaylistDetail);
@@ -99,16 +100,13 @@
 					onshare={onPlaylistShareEnable}
 					onunshare={onPlaylistShareDisable}
 				/>
-				<OverflowMenu
-					items={[
-						{ label: 'Rename', onclick: onPlaylistRename },
-						{
-							label: 'Delete Playlist',
-							confirmLabel: 'Confirm Delete',
-							destructive: true,
-							onclick: onPlaylistDelete
-						}
-					]}
+				<ActionButton icon="pencil" label="Rename" onclick={onPlaylistRename} />
+				<ActionButton
+					icon="trash"
+					label="Delete Playlist"
+					destructive
+					confirm
+					onclick={onPlaylistDelete}
 				/>
 			</div>
 		</div>
@@ -133,14 +131,14 @@
 					<div class="entry-controls">
 						{#if i > 0}
 							<button class="move-btn" onclick={() => onMoveEntry(entry.id, i - 1)} title="Move up"
-								>↑</button
+								><Icon name="chevron-up" size={14} /></button
 							>
 						{/if}
 						{#if i < playlistDetail.entries.length - 1}
 							<button
 								class="move-btn"
 								onclick={() => onMoveEntry(entry.id, i + 1)}
-								title="Move down">↓</button
+								title="Move down"><Icon name="chevron-down" size={14} /></button
 							>
 						{/if}
 					</div>
@@ -153,7 +151,7 @@
 					<button
 						class="remove-btn"
 						onclick={() => onRemoveEntry(entry.id)}
-						title="Remove from playlist">×</button
+						title="Remove from playlist"><Icon name="x" size={14} /></button
 					>
 				</div>
 			{/each}
@@ -166,16 +164,15 @@
 
 <style>
 	.detail-panel {
-		padding: 16px 20px calc(var(--player-height) + 16px);
+		padding: 1.2rem 1.5rem calc(var(--player-height) + 1.2rem);
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 0.8rem;
 		flex: 1;
-		max-width: 1000px;
+		max-width: 1200px;
 		width: 100%;
 		min-width: 0;
 		min-height: 0;
-		margin: 0 auto;
 	}
 
 	.detail-header {
@@ -186,20 +183,20 @@
 
 	.detail-title {
 		font-family: var(--font-display);
-		font-size: 22px;
+		font-size: 1.73rem;
 		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 2px;
 	}
 
 	.detail-subtitle {
-		font-size: 12px;
+		font-size: 0.87rem;
 		color: var(--text-muted);
 	}
 
 	.detail-actions {
 		display: flex;
-		gap: 8px;
+		gap: 0.5rem;
 		align-items: center;
 	}
 
@@ -225,15 +222,15 @@
 	.back-btn {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 0.4rem;
 		background: none;
 		border: none;
 		color: var(--text-muted);
-		font-size: 11px;
+		font-size: 0.87rem;
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
-		padding: 8px 16px;
+		padding: 0.5rem 1rem;
 		cursor: pointer;
 		border-bottom: 1px solid var(--border);
 	}
@@ -243,7 +240,7 @@
 	}
 
 	.back-arrow {
-		font-size: 14px;
+		font-size: 0.93rem;
 	}
 
 	.entry-list {
@@ -255,8 +252,8 @@
 	.entry-row {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 8px 12px;
+		gap: 0.5rem;
+		padding: 0.5rem 0.8rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
@@ -274,7 +271,6 @@
 		border: 1px solid var(--border);
 		border-radius: 3px;
 		color: var(--text-muted);
-		font-size: 10px;
 		width: 18px;
 		height: 16px;
 		cursor: pointer;
@@ -306,7 +302,7 @@
 	}
 
 	.entry-meta {
-		font-size: 11px;
+		font-size: 0.75rem;
 		color: var(--text-dim);
 	}
 
@@ -315,7 +311,6 @@
 		border: 1px solid var(--border);
 		border-radius: 3px;
 		color: var(--text-muted);
-		font-size: 14px;
 		width: 22px;
 		height: 22px;
 		cursor: pointer;
@@ -334,15 +329,15 @@
 
 	.empty-tab {
 		color: var(--text-dim);
-		font-size: 13px;
+		font-size: 0.87rem;
 		font-style: italic;
-		padding: 12px 0;
+		padding: 0.8rem 0;
 	}
 
 	@media (max-width: 768px) {
 		.detail-header {
 			flex-direction: column;
-			gap: 8px;
+			gap: 0.5rem;
 		}
 
 		.detail-actions {
@@ -350,11 +345,11 @@
 		}
 
 		.detail-panel {
-			padding: 12px 12px calc(var(--player-height) + 12px);
+			padding: 0.8rem 0.8rem calc(var(--player-height) + 0.8rem);
 		}
 
 		.detail-title {
-			font-size: 18px;
+			font-size: 1.2rem;
 		}
 	}
 </style>

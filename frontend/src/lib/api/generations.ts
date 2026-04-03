@@ -105,6 +105,18 @@ export async function deleteGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}`, { method: 'DELETE' });
 }
 
+export interface BulkDeleteResult {
+	deleted: number;
+}
+
+export async function bulkDeleteGenerations(generationIds: string[]): Promise<BulkDeleteResult> {
+	return apiFetch<BulkDeleteResult>('/api/generations/bulk-delete', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ generation_ids: generationIds })
+	});
+}
+
 export async function pickGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}/pick`, { method: 'POST' });
 }

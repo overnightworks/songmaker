@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ShareResult } from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
+	import Icon from './Icon.svelte';
 
 	interface Props {
 		isShared: boolean;
@@ -39,7 +40,7 @@
 	disabled={busy}
 	title={isShared ? `Shared: /share/${shareSlug ?? ''}` : 'Share'}
 >
-	{isShared ? '🔗' : '↗'}
+	{#if isShared}<Icon name="link" size={14} />{:else}<Icon name="share" size={14} />{/if}
 </button>
 
 <style>
@@ -48,8 +49,8 @@
 		border: 1px solid var(--border);
 		border-radius: var(--btn-radius-sm);
 		color: var(--text-muted);
-		font-size: 14px;
-		padding: 4px 10px;
+		font-size: 0.93rem;
+		padding: 0.3rem 0.7rem;
 		cursor: pointer;
 		line-height: 1;
 	}

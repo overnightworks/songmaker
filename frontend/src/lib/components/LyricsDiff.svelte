@@ -44,7 +44,7 @@
 		padding: 6px 10px;
 		background: var(--surface);
 		border-bottom: 1px solid var(--border);
-		font-size: 10px;
+		font-size: 0.7rem;
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
@@ -70,7 +70,7 @@
 		margin: 0;
 		padding: 8px 0;
 		font-family: 'Courier New', monospace;
-		font-size: 12px;
+		font-size: var(--label-font-size);
 		line-height: 1.5;
 		overflow-x: auto;
 		max-height: 300px;
@@ -97,7 +97,7 @@
 	}
 
 	.no-changes {
-		font-size: 11px;
+		font-size: var(--label-font-size);
 		color: var(--text-dim);
 		font-style: italic;
 	}

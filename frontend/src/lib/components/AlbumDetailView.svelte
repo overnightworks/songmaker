@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fetchSongs, deleteAlbum, cleanupAlbum, shareAlbum, unshareAlbum } from '$lib/api/client';
+	import { deleteAlbum, shareAlbum, unshareAlbum } from '$lib/api/client';
 	import {
 		albumList,
 		songList,
@@ -12,7 +12,7 @@
 	import { deselectAlbum, selectSong } from '$lib/stores/navigation';
 	import { addToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
-	import OverflowMenu from './OverflowMenu.svelte';
+	import ActionButton from './ActionButton.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
 
@@ -48,18 +48,6 @@
 		const albumId = selectedAlbum.id;
 		await unshareAlbum(albumId);
 		updateAlbumInList(albumId, (a) => ({ ...a, is_shared: false, share_slug: null }));
-	}
-
-	async function onAlbumCleanup(): Promise<void> {
-		if (!selectedAlbum) return;
-		try {
-			const result = await cleanupAlbum(selectedAlbum.id);
-			const refreshed = await fetchSongs();
-			songList.set(refreshed.items);
-			addToast(`Deleted ${result.deleted} generation${result.deleted !== 1 ? 's' : ''}`, 'success');
-		} catch {
-			addToast('Cleanup failed', 'error');
-		}
 	}
 
 	async function onAlbumDelete(): Promise<void> {
@@ -115,29 +103,22 @@
 					onunshare={onAlbumShareDisable}
 				/>
 				<div class="picker-anchor">
-					<OverflowMenu
-						items={[
-							{
-								label: 'Add to Playlist',
-								onclick: () => (playlistPickerFor = selectedAlbum.id)
-							},
-							{
-								label: 'Clean Up Generations',
-								confirmLabel: 'Confirm Clean Up',
-								onclick: onAlbumCleanup
-							},
-							{
-								label: 'Delete Album',
-								confirmLabel: 'Confirm Delete',
-								destructive: true,
-								onclick: onAlbumDelete
-							}
-						]}
+					<ActionButton
+						icon="list-plus"
+						label="Add to Playlist"
+						onclick={() => (playlistPickerFor = selectedAlbum.id)}
 					/>
 					{#if playlistPickerFor === selectedAlbum.id}
 						<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistPickerFor = null)} />
 					{/if}
 				</div>
+				<ActionButton
+					icon="trash"
+					label="Delete Album"
+					destructive
+					confirm
+					onclick={onAlbumDelete}
+				/>
 			</div>
 		</div>
 
@@ -173,16 +154,15 @@
 
 <style>
 	.detail-panel {
-		padding: 16px 20px calc(var(--player-height) + 16px);
+		padding: 1.2rem 1.5rem calc(var(--player-height) + 1.2rem);
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 0.8rem;
 		flex: 1;
-		max-width: 1000px;
+		max-width: 1200px;
 		width: 100%;
 		min-width: 0;
 		min-height: 0;
-		margin: 0 auto;
 	}
 
 	.detail-header {
@@ -193,20 +173,20 @@
 
 	.detail-title {
 		font-family: var(--font-display);
-		font-size: 22px;
+		font-size: 1.73rem;
 		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 2px;
 	}
 
 	.detail-subtitle {
-		font-size: 12px;
+		font-size: 0.87rem;
 		color: var(--text-muted);
 	}
 
 	.detail-actions {
 		display: flex;
-		gap: 8px;
+		gap: 0.5rem;
 		align-items: center;
 	}
 
@@ -232,15 +212,15 @@
 	.back-btn {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: 0.4rem;
 		background: none;
 		border: none;
 		color: var(--text-muted);
-		font-size: 11px;
+		font-size: 0.87rem;
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
-		padding: 8px 16px;
+		padding: 0.5rem 1rem;
 		cursor: pointer;
 		border-bottom: 1px solid var(--border);
 	}
@@ -250,7 +230,7 @@
 	}
 
 	.back-arrow {
-		font-size: 14px;
+		font-size: 0.93rem;
 	}
 
 	.picker-anchor {
@@ -266,15 +246,15 @@
 	.item-row {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 10px 12px;
+		gap: 0.5rem;
+		padding: 0.65rem 0.8rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
 		cursor: pointer;
 		text-align: left;
 		color: var(--text);
-		font-size: 14px;
+		font-size: 0.93rem;
 	}
 
 	.item-row:hover {
@@ -290,22 +270,22 @@
 	}
 
 	.item-meta {
-		font-size: 11px;
+		font-size: 0.75rem;
 		color: var(--text-dim);
 		flex-shrink: 0;
 	}
 
 	.empty-tab {
 		color: var(--text-dim);
-		font-size: 13px;
+		font-size: 0.87rem;
 		font-style: italic;
-		padding: 12px 0;
+		padding: 0.8rem 0;
 	}
 
 	@media (max-width: 768px) {
 		.detail-header {
 			flex-direction: column;
-			gap: 8px;
+			gap: 0.5rem;
 		}
 
 		.detail-actions {
@@ -313,11 +293,11 @@
 		}
 
 		.detail-panel {
-			padding: 12px 12px calc(var(--player-height) + 12px);
+			padding: 0.8rem 0.8rem calc(var(--player-height) + 0.8rem);
 		}
 
 		.detail-title {
-			font-size: 18px;
+			font-size: 1.2rem;
 		}
 	}
 </style>

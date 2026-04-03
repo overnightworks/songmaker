@@ -47,7 +47,7 @@
 		border-radius: 4px;
 		color: var(--text);
 		font-family: var(--font-body);
-		font-size: 12px;
+		font-size: 1rem;
 		resize: none;
 	}
 
@@ -64,7 +64,7 @@
 		border: 2px solid var(--primary);
 		background: transparent;
 		color: var(--primary);
-		font-size: 16px;
+		font-size: 1.07rem;
 		flex-shrink: 0;
 		align-self: flex-end;
 	}

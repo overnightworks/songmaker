@@ -85,7 +85,7 @@
 
 	.empty-hint {
 		color: var(--text-dim);
-		font-size: 12px;
+		font-size: 0.8rem;
 		text-align: center;
 		padding: 20px;
 		font-style: italic;
@@ -95,7 +95,7 @@
 		max-width: 90%;
 		padding: 8px 12px;
 		border-radius: 8px;
-		font-size: 12px;
+		font-size: 1rem;
 		line-height: 1.5;
 	}
 
@@ -116,7 +116,7 @@
 	.message-text {
 		white-space: pre-wrap;
 		font-family: var(--font-body);
-		font-size: 12px;
+		font-size: 1rem;
 		margin: 0;
 	}
 
@@ -132,7 +132,7 @@
 		color: var(--primary);
 		padding: 3px 12px;
 		border-radius: 12px;
-		font-size: 10px;
+		font-size: 0.7rem;
 		cursor: pointer;
 	}
 
@@ -143,7 +143,7 @@
 
 	.applied-badge {
 		color: var(--success);
-		font-size: 10px;
+		font-size: 0.7rem;
 	}
 
 	.typing {
@@ -153,7 +153,7 @@
 
 	.chat-error {
 		color: var(--score-bad);
-		font-size: 11px;
+		font-size: 0.75rem;
 		padding: 4px 8px;
 	}
 </style>

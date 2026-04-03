@@ -64,7 +64,7 @@
 		background: var(--surface);
 		border: none;
 		color: var(--text);
-		font-size: 11px;
+		font-size: var(--label-font-size);
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 1px;
@@ -85,7 +85,7 @@
 	.album-chevron {
 		background: none;
 		border: none;
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--text-dim);
 		width: 16px;
 		flex-shrink: 0;
@@ -105,7 +105,7 @@
 	}
 
 	.album-count {
-		font-size: 9px;
+		font-size: 0.6rem;
 		color: var(--text-dim);
 		flex-shrink: 0;
 	}
@@ -113,7 +113,7 @@
 	@media (max-width: 768px) {
 		.album-header {
 			padding: 10px 12px;
-			font-size: 12px;
+			font-size: var(--label-font-size);
 		}
 	}
 </style>

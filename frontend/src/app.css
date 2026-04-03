@@ -30,6 +30,7 @@
 	--score-ok: #f0a030;
 	--score-bad-bg: #3a1a1a;
 	--score-bad: #f44;
+	--keep: #e04050;
 	--success: #4a4;
 	--viz-primary-r: 255;
 	--viz-primary-g: 50;
@@ -45,33 +46,34 @@
 	/* Button tokens */
 	--btn-radius-pill: 16px;
 	--btn-radius-sm: 4px;
-	--btn-padding-pill: 0.5rem 1.2rem;
-	--btn-padding-sm: 3px 10px;
-	--btn-font-size: 0.85rem;
-	--btn-font-size-sm: 0.75rem;
+	--btn-padding-pill: 0.55rem 1.3rem;
+	--btn-padding-sm: 0.25rem 0.7rem;
+	--btn-font-size: 0.93rem;
+	--btn-font-size-sm: 0.8rem;
 	--btn-letter-spacing: 0.5px;
 
 	/* Input tokens */
 	--input-radius: 4px;
-	--input-padding: 0.5rem 0.7rem;
-	--input-font-size: 0.85rem;
+	--input-padding: 0.6rem 0.8rem;
+	--input-font-size: 1rem;
 
 	/* Card tokens */
 	--card-radius: 6px;
 
 	/* Spacing tokens */
-	--row-padding: 0.5rem 0.75rem;
-	--row-gap: 8px;
+	--row-padding: 0.55rem 0.8rem;
+	--row-gap: 0.6rem;
+	--label-font-size: 0.8rem;
 }
 
 @media (max-width: 768px) {
 	:root {
-		--btn-padding-pill: 0.6rem 1.4rem;
-		--btn-font-size: 0.95rem;
-		--input-padding: 0.6rem 0.8rem;
-		--input-font-size: 0.95rem;
-		--row-padding: 0.75rem 0.75rem;
-		--row-gap: 10px;
+		--btn-padding-pill: 0.65rem 1.5rem;
+		--btn-font-size: 1rem;
+		--input-padding: 0.65rem 0.85rem;
+		--input-font-size: 1.07rem;
+		--row-padding: 0.8rem 0.8rem;
+		--row-gap: 0.7rem;
 	}
 }
 
@@ -97,6 +99,7 @@
 	--score-ok: #b07000;
 	--score-bad-bg: #fde8e8;
 	--score-bad: #c02020;
+	--keep: #c03040;
 	--success: #1e7a1e;
 	--viz-primary-r: 212;
 	--viz-primary-g: 26;
@@ -104,6 +107,10 @@
 	--viz-accent-r: 122;
 	--viz-accent-g: 24;
 	--viz-accent-b: 192;
+}
+
+html {
+	font-size: 15px;
 }
 
 html,

@@ -132,6 +132,38 @@ def unkeep_generation(session: Session, generation_id: str) -> None:
     session.flush()
 
 
+def bulk_delete_generations(
+    session: Session, generation_ids: list[str], user_id: str,
+) -> tuple[int, list[str]]:
+    generations = (
+        session.query(Generation)
+        .options(joinedload(Generation.song).joinedload(Song.album))
+        .filter(Generation.id.in_(generation_ids))
+        .all()
+    )
+
+    found_ids = {g.id for g in generations}
+    missing = set(generation_ids) - found_ids
+    if missing:
+        raise ValueError(f"Generations not found: {', '.join(sorted(missing))}")
+
+    for gen in generations:
+        album = gen.song.album if gen.song else None
+        if not album or album.created_by != user_id:
+            raise PermissionError(f"Generation {gen.id} not owned by user")
+
+    paths: list[str] = []
+    for gen in generations:
+        for p in [gen.mp3_path, gen.wav_path]:
+            if p:
+                paths.append(p)
+        session.delete(gen)
+
+    session.flush()
+    log.info("Bulk deleted %d generations", len(generations))
+    return len(generations), paths
+
+
 def delete_generation(session: Session, generation_id: str) -> list[str]:
     """Delete a generation record and return relative file paths for cleanup.
 

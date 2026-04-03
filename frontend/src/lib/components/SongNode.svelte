@@ -41,7 +41,7 @@
 		gap: 8px;
 		padding: 8px 12px 8px 28px;
 		color: var(--text);
-		font-size: 13px;
+		font-size: 0.87rem;
 		cursor: pointer;
 		border-top: 1px solid var(--surface-hover);
 	}
@@ -83,7 +83,7 @@
 	}
 
 	.song-meta {
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--text-dim);
 		flex-shrink: 0;
 	}
@@ -91,7 +91,7 @@
 	@media (max-width: 768px) {
 		.song-row {
 			padding: 10px 12px 10px 24px;
-			font-size: 15px;
+			font-size: 1rem;
 		}
 	}
 </style>

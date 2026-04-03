@@ -46,6 +46,9 @@ from songmaker_cli.db.queries.chat import songs_with_chat as songs_with_chat
 from songmaker_cli.db.queries.generations import (
     all_generation_paths as all_generation_paths,
 )
+from songmaker_cli.db.queries.generations import (
+    bulk_delete_generations as bulk_delete_generations,
+)
 from songmaker_cli.db.queries.generations import create_generation as create_generation
 from songmaker_cli.db.queries.generations import delete_generation as delete_generation
 from songmaker_cli.db.queries.generations import (

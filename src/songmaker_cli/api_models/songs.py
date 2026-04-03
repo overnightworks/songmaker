@@ -430,3 +430,11 @@ class ScoreRequest(BaseModel):
 class RateRequest(BaseModel):
     rating: float = Field(ge=0, le=100)
     notes: str = Field("", max_length=2_000)
+
+
+class BulkDeleteRequest(BaseModel):
+    generation_ids: list[str] = Field(max_length=100)
+
+
+class BulkDeleteResponse(BaseModel):
+    deleted: int

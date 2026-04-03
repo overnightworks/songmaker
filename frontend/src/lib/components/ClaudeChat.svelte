@@ -521,7 +521,7 @@
 
 	.chat-header h3 {
 		font-family: var(--font-display);
-		font-size: 13px;
+		font-size: 0.87rem;
 		background: linear-gradient(90deg, var(--primary), var(--accent));
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
@@ -544,7 +544,7 @@
 		background: var(--surface);
 		border: 1px solid var(--border);
 		color: var(--text-dim);
-		font-size: 10px;
+		font-size: 0.7rem;
 		padding: 1px 6px;
 		border-radius: 8px;
 		cursor: pointer;
@@ -580,7 +580,7 @@
 		background: none;
 		border: none;
 		color: var(--text);
-		font-size: 11px;
+		font-size: 0.75rem;
 		cursor: pointer;
 		text-align: left;
 	}
@@ -603,7 +603,7 @@
 
 	.recent-count {
 		color: var(--text-dim);
-		font-size: 10px;
+		font-size: 0.7rem;
 		flex-shrink: 0;
 	}
 
@@ -617,7 +617,7 @@
 		background: none;
 		border: none;
 		color: var(--text-dim);
-		font-size: 12px;
+		font-size: 0.8rem;
 		cursor: pointer;
 		padding: 2px 6px;
 	}
@@ -644,7 +644,7 @@
 		color: var(--primary);
 		padding: 1px 8px;
 		border-radius: 10px;
-		font-size: 10px;
+		font-size: 0.7rem;
 	}
 
 	.mention-tag.version {
@@ -661,7 +661,7 @@
 		background: none;
 		border: none;
 		color: var(--text-dim);
-		font-size: 10px;
+		font-size: 0.7rem;
 		cursor: pointer;
 		padding: 0;
 		line-height: 1;
@@ -677,7 +677,7 @@
 		align-items: center;
 		justify-content: center;
 		color: var(--text-dim);
-		font-size: 12px;
+		font-size: 0.8rem;
 	}
 
 	.input-area {

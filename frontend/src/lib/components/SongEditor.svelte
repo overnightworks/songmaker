@@ -177,8 +177,6 @@
 			</label>
 		</div>
 
-		<GenerationSettings {selectedModel} />
-
 		<label class="edit-field">
 			<span>Lyrics</span>
 			<textarea
@@ -188,6 +186,8 @@
 				oninput={(e) => setDraftLyrics(e.currentTarget.value)}
 			></textarea>
 		</label>
+
+		<GenerationSettings {selectedModel} />
 	{/if}
 </div>
 
@@ -195,15 +195,15 @@
 	.lyrics-edit {
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 1rem;
 	}
 
 	.diff-banner {
-		padding: 6px 10px;
+		padding: 0.4rem 0.7rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 4px;
-		font-size: 11px;
+		font-size: 0.75rem;
 		color: var(--text-muted);
 		font-family: var(--font-display);
 		text-transform: uppercase;
@@ -212,19 +212,19 @@
 
 	.params-diff {
 		display: flex;
-		gap: 12px;
+		gap: 0.8rem;
 		flex-wrap: wrap;
-		padding: 6px 10px;
+		padding: 0.4rem 0.7rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 4px;
-		font-size: 12px;
+		font-size: 0.8rem;
 	}
 
 	.param-change {
 		color: var(--text-muted);
 		font-family: var(--font-display);
-		font-size: 11px;
+		font-size: 0.75rem;
 	}
 
 	.param-change .old {
@@ -237,17 +237,17 @@
 	}
 
 	.diff-readonly {
-		padding: 6px 10px;
+		padding: 0.4rem 0.7rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		color: var(--text-muted);
-		font-size: 13px;
+		font-size: 0.87rem;
 	}
 
 	.lyrics-readonly {
 		font-family: 'Courier New', monospace;
-		font-size: 14px;
+		font-size: 1rem;
 		line-height: 1.6;
 		white-space: pre-wrap;
 		margin: 0;
@@ -258,11 +258,11 @@
 	.edit-field {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 0.4rem;
 	}
 
 	.edit-field span {
-		font-size: 10px;
+		font-size: var(--label-font-size);
 		color: var(--text-muted);
 		text-transform: uppercase;
 		font-family: var(--font-display);
@@ -271,12 +271,12 @@
 
 	.edit-field input,
 	.edit-field textarea {
-		padding: 6px 10px;
+		padding: 0.6rem 0.8rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		color: var(--text);
-		font-size: 13px;
+		font-size: 1rem;
 		width: 100%;
 		min-width: 0;
 	}
@@ -290,7 +290,7 @@
 
 	.params-row {
 		display: flex;
-		gap: 10px;
+		gap: 0.7rem;
 	}
 
 	.edit-field.small {
@@ -299,7 +299,7 @@
 
 	.lyrics-area {
 		font-family: 'Courier New', monospace;
-		font-size: 14px;
+		font-size: 1rem;
 		line-height: 1.6;
 		min-height: 200px;
 		resize: vertical;

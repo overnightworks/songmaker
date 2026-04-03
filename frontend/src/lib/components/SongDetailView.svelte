@@ -7,7 +7,6 @@
 		pickGeneration,
 		unpickGeneration,
 		deleteSong,
-		cleanupSong,
 		shareSong,
 		unshareSong,
 		shareGeneration,
@@ -60,7 +59,7 @@
 	import GenerationsList from './GenerationsList.svelte';
 	import SongEditor from './SongEditor.svelte';
 	import ClaudeChat from './ClaudeChat.svelte';
-	import OverflowMenu from './OverflowMenu.svelte';
+	import ActionButton from './ActionButton.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
 	import CoverDialog from './CoverDialog.svelte';
@@ -250,18 +249,6 @@
 		updateSongInList(songId, (s) => ({ ...s, is_shared: false, share_slug: null }));
 	}
 
-	async function onSongCleanup(): Promise<void> {
-		if (!song) return;
-		try {
-			const result = await cleanupSong(song.id);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-			addToast(`Deleted ${result.deleted} generation${result.deleted !== 1 ? 's' : ''}`, 'success');
-		} catch {
-			addToast('Cleanup failed', 'error');
-		}
-	}
-
 	async function onDeleteSong(): Promise<void> {
 		if (!song) return;
 		const songId = song.id;
@@ -377,29 +364,16 @@
 					onunshare={onSongShareDisable}
 				/>
 				<div class="picker-anchor">
-					<OverflowMenu
-						items={[
-							{
-								label: 'Add to Playlist',
-								onclick: () => (playlistPickerFor = { type: 'song', id: song.id })
-							},
-							{
-								label: 'Clean Up Generations',
-								confirmLabel: 'Confirm Clean Up',
-								onclick: onSongCleanup
-							},
-							{
-								label: 'Delete Song',
-								confirmLabel: 'Confirm Delete',
-								destructive: true,
-								onclick: onDeleteSong
-							}
-						]}
+					<ActionButton
+						icon="list-plus"
+						label="Add to Playlist"
+						onclick={() => (playlistPickerFor = { type: 'song', id: song.id })}
 					/>
 					{#if playlistPickerFor?.type === 'song' && playlistPickerFor.id === song.id}
 						<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistPickerFor = null)} />
 					{/if}
 				</div>
+				<ActionButton icon="trash" label="Delete Song" destructive confirm onclick={onDeleteSong} />
 				{#each songJobs as j (j.job.id)}
 					{#if j.job.status === 'failed'}
 						<span class="job-indicator failed">
@@ -518,22 +492,20 @@
 
 <style>
 	.detail-panel {
-		padding: 16px 20px calc(var(--player-height) + 16px);
+		padding: 1.2rem 1.5rem calc(var(--player-height) + 1.2rem);
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 0.8rem;
 		flex: 1;
-		max-width: 1000px;
+		max-width: 1200px;
 		width: 100%;
 		min-width: 0;
 		min-height: 0;
-		margin: 0 auto;
 	}
 
 	.detail-panel.chat-active {
-		max-width: 100%;
-		padding-left: 32px;
-		padding-right: 32px;
+		padding-left: 2.1rem;
+		padding-right: 2.1rem;
 	}
 
 	.detail-header {
@@ -551,10 +523,10 @@
 
 	.song-title {
 		font-family: var(--font-display);
-		font-size: 22px;
+		font-size: 1.73rem;
 		color: var(--text);
 		text-transform: uppercase;
-		letter-spacing: 2px;
+		letter-spacing: 0.13rem;
 	}
 
 	.song-title-btn:hover .song-title {
@@ -562,18 +534,18 @@
 	}
 
 	.song-album {
-		font-size: 12px;
+		font-size: 0.87rem;
 		color: var(--text-muted);
 	}
 
 	.detail-actions {
 		display: flex;
-		gap: 8px;
+		gap: 0.55rem;
 		align-items: center;
 	}
 
 	.status-msg {
-		font-size: 11px;
+		font-size: 0.75rem;
 		color: var(--success);
 	}
 
@@ -645,14 +617,14 @@
 		background: var(--surface);
 		border: 1px solid var(--border);
 		color: var(--text-light);
-		padding: 4px 8px;
+		padding: 0.3rem 0.55rem;
 		border-radius: var(--input-radius);
-		font-size: 11px;
+		font-size: 0.75rem;
 	}
 
 	.pinned-seed {
-		font-size: 10px;
-		padding: 2px 6px;
+		font-size: 0.7rem;
+		padding: 0.15rem 0.4rem;
 		border-radius: 3px;
 		background: var(--surface);
 		border: 1px solid var(--accent);
@@ -670,7 +642,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--score-ok);
 		font-family: var(--font-display);
 		text-transform: uppercase;
@@ -706,9 +678,9 @@
 		border: none;
 		color: var(--text-muted);
 		cursor: pointer;
-		font-size: 10px;
+		font-size: 0.7rem;
 		font-family: var(--font-display);
-		padding: 1px 4px;
+		padding: 0.1rem 0.3rem;
 		margin-left: 4px;
 		line-height: 1;
 		border-radius: 3px;
@@ -734,11 +706,11 @@
 		background: none;
 		border: none;
 		color: var(--text-muted);
-		font-size: 11px;
+		font-size: 0.87rem;
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
-		padding: 8px 16px;
+		padding: 0.55rem 1.1rem;
 		cursor: pointer;
 		border-bottom: 1px solid var(--border);
 	}
@@ -748,7 +720,7 @@
 	}
 
 	.back-arrow {
-		font-size: 14px;
+		font-size: 0.93rem;
 	}
 
 	.tab-bar {
@@ -759,13 +731,13 @@
 	}
 
 	.tab-btn {
-		padding: 8px 16px;
+		padding: 0.55rem 1.1rem;
 		background: none;
 		border: none;
 		border-bottom: 2px solid transparent;
 		color: var(--text-muted);
 		font-family: var(--font-display);
-		font-size: 11px;
+		font-size: 0.87rem;
 		text-transform: uppercase;
 		letter-spacing: var(--btn-letter-spacing);
 		cursor: pointer;
@@ -807,11 +779,11 @@
 		}
 
 		.detail-panel {
-			padding: 12px 12px calc(var(--player-height) + 12px);
+			padding: 0.8rem 0.8rem calc(var(--player-height) + 0.8rem);
 		}
 
 		.song-title {
-			font-size: 18px;
+			font-size: 1.2rem;
 		}
 	}
 </style>

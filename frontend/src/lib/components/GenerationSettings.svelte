@@ -80,7 +80,7 @@
 	});
 </script>
 
-<details class="gen-settings">
+<details class="gen-settings" open>
 	<summary class="toggle">
 		Generation Settings
 		{#if hasOverrides}
@@ -130,7 +130,7 @@
 	.gen-settings {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: 0.55rem;
 	}
 
 	.toggle {
@@ -138,7 +138,7 @@
 		align-items: center;
 		gap: 6px;
 		cursor: pointer;
-		font-size: 10px;
+		font-size: var(--label-font-size);
 		color: var(--text-muted);
 		text-transform: uppercase;
 		font-family: var(--font-display);
@@ -156,7 +156,7 @@
 
 	.toggle::marker {
 		color: var(--text-muted);
-		font-size: 10px;
+		font-size: var(--label-font-size);
 	}
 
 	.toggle:hover::marker {
@@ -166,12 +166,12 @@
 	.settings-body {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: 0.55rem;
 	}
 
 	.override-badge {
-		font-size: 9px;
-		padding: 1px 5px;
+		font-size: 0.6rem;
+		padding: 0.1rem 0.35rem;
 		border-radius: 3px;
 		background: var(--primary);
 		color: #fff;
@@ -181,11 +181,11 @@
 	.reference-section {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 0.55rem;
 	}
 
 	.ref-label {
-		font-size: 10px;
+		font-size: var(--label-font-size);
 		color: var(--text-muted);
 		text-transform: uppercase;
 		font-family: var(--font-display);
@@ -197,12 +197,12 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		font-size: 11px;
+		font-size: 0.75rem;
 		color: var(--text-light);
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 4px;
-		padding: 2px 6px;
+		padding: 0.15rem 0.4rem;
 	}
 
 	.ref-name {
@@ -217,12 +217,12 @@
 		border: none;
 		color: var(--text-muted);
 		cursor: pointer;
-		font-size: 12px;
+		font-size: 0.8rem;
 		padding: 0 2px;
 	}
 
 	.ref-upload {
-		font-size: 10px;
+		font-size: 0.7rem;
 		color: var(--text-muted);
 		cursor: pointer;
 	}
