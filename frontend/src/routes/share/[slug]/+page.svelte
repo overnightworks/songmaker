@@ -26,6 +26,7 @@
 	let playerPlaying = $state(false);
 	let playerLoading = $state(false);
 	let legalSection: string | null = $state(null);
+	let playerRef: ReturnType<typeof SharedPlayer> | undefined = $state();
 
 	const slug = $derived(page.params.slug ?? '');
 
@@ -52,6 +53,10 @@
 
 	function play(song: SharedSong) {
 		if (!song.audio_url) return;
+		if (currentTrack === song) {
+			playerRef?.togglePlay();
+			return;
+		}
 		currentTrack = song;
 	}
 
@@ -144,6 +149,7 @@
 
 {#if currentTrack?.audio_url}
 	<SharedPlayer
+		bind:this={playerRef}
 		audioUrl={currentTrack.audio_url}
 		title={currentTrack.title}
 		subtitle={album?.artist}

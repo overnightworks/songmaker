@@ -225,7 +225,10 @@ def get_shared_generation(
         album_title=gen.song.album.title if gen.song and gen.song.album else "",
         generation_number=gen.generation_number,
         seed=gen.seed,
-        audio_url=f"/shared/gen/{slug}/audio/{gen.mp3_path}",
+        audio_url=(
+            f"/shared/gen/{slug}/audio/{gen.mp3_path}"
+            if gen.mp3_path else None
+        ),
     )
     return JSONResponse(response.model_dump())
 

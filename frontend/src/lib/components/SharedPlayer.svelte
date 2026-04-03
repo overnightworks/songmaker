@@ -123,7 +123,7 @@
 		onstatechange?.(isPlaying, isLoading);
 	});
 
-	function togglePlay(): void {
+	export function togglePlay(): void {
 		const el = ensureAudio();
 		if (isLoading) return;
 		if (el.paused) el.play().catch(() => {});

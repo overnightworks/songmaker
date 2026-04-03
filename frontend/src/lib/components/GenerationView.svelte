@@ -16,6 +16,7 @@
 		selectedGeneration,
 		replaceSongInList,
 		removeGenerationFromSong,
+		updateGenerationInList,
 		playGeneration,
 		playingGeneration,
 		seekTo
@@ -173,12 +174,20 @@
 
 	async function onShareEnable() {
 		if (!generation) throw new Error('No generation');
-		return await shareGeneration(generation.id);
+		const result = await shareGeneration(generation.id);
+		updateGenerationInList(generation.id, (g) => ({
+			...g,
+			is_shared: true,
+			share_slug: result.share_slug,
+		}));
+		return result;
 	}
 
 	async function onShareDisable() {
 		if (!generation) return;
-		await unshareGeneration(generation.id);
+		const genId = generation.id;
+		await unshareGeneration(genId);
+		updateGenerationInList(genId, (g) => ({ ...g, is_shared: false, share_slug: null }));
 	}
 
 	async function onRate(): Promise<void> {
