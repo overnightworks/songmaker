@@ -8,7 +8,8 @@
 	import { APP_NAME } from '$lib/constants';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { playback } from '$lib/stores/player';
-	import { canGoBack, deselectSong } from '$lib/stores/navigation';
+	import { canGoBack, deselectSong, backToSong } from '$lib/stores/navigation';
+	import { selectedGeneration } from '$lib/stores/player';
 	import { theme, toggleTheme, initTheme } from '$lib/stores/ui';
 
 	let { children } = $props();
@@ -74,7 +75,11 @@
 			{#if isSettings}
 				<a href="/" class="back-btn" aria-label="Back to home">←</a>
 			{:else if hasBack}
-				<button class="back-btn" onclick={deselectSong} aria-label="Back to songs">←</button>
+				<button
+					class="back-btn"
+					onclick={() => ($selectedGeneration ? backToSong() : deselectSong())}
+					aria-label="Back">←</button
+				>
 			{/if}
 			<a href="/" class="brand" data-text={APP_NAME}>{APP_NAME}</a>
 		</div>
