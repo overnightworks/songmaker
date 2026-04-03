@@ -116,12 +116,18 @@ _SHARED_LM_DEFAULTS: dict[str, object] = {
 _BUILTIN_DEFAULTS: dict[str, dict[str, object]] = {
     "turbo": {"inference_steps": 8, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
     "sft": {"inference_steps": 50, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
+    "xl-turbo": {"inference_steps": 8, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
+    "xl-sft": {"inference_steps": 50, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
+    "xl-base": {"inference_steps": 50, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
 }
 
 
 _MODEL_CAPABILITIES: dict[str, dict[str, object]] = {
     "turbo": {"max_inference_steps": 20, "hidden_params": ["guidance_scale"]},
     "sft": {"max_inference_steps": 200, "hidden_params": []},
+    "xl-turbo": {"max_inference_steps": 20, "hidden_params": ["guidance_scale"]},
+    "xl-sft": {"max_inference_steps": 200, "hidden_params": []},
+    "xl-base": {"max_inference_steps": 200, "hidden_params": []},
 }
 
 
@@ -133,10 +139,21 @@ def get_model_capabilities() -> dict[str, dict[str, object]]:
     return _MODEL_CAPABILITIES
 
 
+_MODEL_NAME_TO_MODE: dict[str, str] = {
+    "acestep-v15-turbo": "turbo",
+    "acestep-v15-sft": "sft",
+    "acestep-v15-xl-turbo": "xl-turbo",
+    "acestep-v15-xl-sft": "xl-sft",
+    "acestep-v15-xl-base": "xl-base",
+}
+
+
 def resolve_model_mode(model_name: str | None) -> str:
     """Map an ACE-Step model name (e.g. 'acestep-v15-sft') to a builtin mode key."""
     if model_name:
-        for mode in _BUILTIN_DEFAULTS:
+        if model_name in _MODEL_NAME_TO_MODE:
+            return _MODEL_NAME_TO_MODE[model_name]
+        for mode in sorted(_BUILTIN_DEFAULTS, key=len, reverse=True):
             if mode in model_name:
                 return mode
     return next(iter(_BUILTIN_DEFAULTS))

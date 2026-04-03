@@ -86,6 +86,9 @@ ACESTEP_PORT = 8001
 MODEL_CONFIG_PATHS: dict[str, str] = {
     "turbo": "acestep-v15-turbo",
     "sft": "acestep-v15-sft",
+    "xl-turbo": "acestep-v15-xl-turbo",
+    "xl-sft": "acestep-v15-xl-sft",
+    "xl-base": "acestep-v15-xl-base",
 }
 ACESTEP_HEALTH_URL_TEMPLATE = "http://localhost:{port}/health"
 ACESTEP_STARTUP_TIMEOUT_SECONDS = 300

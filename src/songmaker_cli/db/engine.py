@@ -107,3 +107,12 @@ def _seed_available_models(engine) -> None:
         conn.execute(text(
             "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('turbo', 0)"
         ))
+        conn.execute(text(
+            "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('xl-turbo', 0)"
+        ))
+        conn.execute(text(
+            "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('xl-sft', 0)"
+        ))
+        conn.execute(text(
+            "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('xl-base', 0)"
+        ))
