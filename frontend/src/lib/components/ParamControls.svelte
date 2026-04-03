@@ -39,7 +39,10 @@
 		{ key: 'lm_top_k', label: 'LM Top-K', min: 0, max: 200, step: 1 },
 		{ key: 'lm_top_p', label: 'LM Top-P', min: 0, max: 1, step: 0.05 },
 		{ key: 'lm_cfg_scale', label: 'LM CFG Scale', min: 0, max: 10, step: 0.5 },
-		{ key: 'batch_size', label: 'Batch Size', min: 1, max: 8, step: 1 }
+		{ key: 'lm_repetition_penalty', label: 'LM Rep. Penalty', min: 0.5, max: 5, step: 0.1 },
+		{ key: 'batch_size', label: 'Batch Size', min: 1, max: 8, step: 1 },
+		{ key: 'cfg_interval_start', label: 'CFG Interval Start', min: 0, max: 1, step: 0.05 },
+		{ key: 'cfg_interval_end', label: 'CFG Interval End', min: 0, max: 1, step: 0.05 }
 	];
 
 	const hiddenSet = $derived(new Set(hiddenParams));
@@ -50,10 +53,24 @@
 		)
 	);
 
+	interface BoolField {
+		key: keyof VersionGenerationParams;
+		label: string;
+		defaultValue: boolean;
+	}
+
 	const SELECT_FIELDS: SelectField[] = [
 		{ key: 'infer_method', label: 'Infer Method', options: ['ode', 'sde'] },
 		{ key: 'think_mode', label: 'Think Mode', options: ['deep', 'off'] }
 	];
+
+	const ALL_BOOL_FIELDS: BoolField[] = [
+		{ key: 'use_cot_caption', label: 'CoT Caption', defaultValue: true },
+		{ key: 'use_cot_language', label: 'CoT Language', defaultValue: true },
+		{ key: 'use_adg', label: 'Adaptive Dual Guidance', defaultValue: false }
+	];
+
+	const BOOL_FIELDS = $derived(ALL_BOOL_FIELDS.filter((f) => !hiddenSet.has(f.key)));
 
 	function setParam(key: keyof VersionGenerationParams, value: unknown): void {
 		if (value === undefined || value === '') {
@@ -129,6 +146,22 @@
 			oninput={(e) => setParam('lm_negative_prompt', e.currentTarget.value || undefined)}
 		/>
 	</label>
+
+	{#if BOOL_FIELDS.length > 0}
+		{#each BOOL_FIELDS as f (f.key)}
+			<label class="setting toggle">
+				<span>{f.label}</span>
+				<input
+					type="checkbox"
+					checked={(values[f.key] as boolean | null | undefined) ?? f.defaultValue}
+					onchange={(e) => {
+						const checked = e.currentTarget.checked;
+						setParam(f.key, checked === f.defaultValue ? undefined : checked);
+					}}
+				/>
+			</label>
+		{/each}
+	{/if}
 </div>
 
 <style>
@@ -154,6 +187,16 @@
 
 	.setting.full-width {
 		grid-column: 1 / -1;
+	}
+
+	.setting.toggle {
+		flex-direction: row;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.setting.toggle input[type='checkbox'] {
+		accent-color: var(--accent);
 	}
 
 	.setting input[type='text'],

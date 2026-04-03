@@ -19,28 +19,42 @@ export async function generateSong(
 	});
 }
 
+export interface RepaintOptions {
+	lyrics?: string | null;
+	prompt?: string | null;
+	model?: string | null;
+	seed?: number | null;
+	versionId?: string | null;
+	count?: number;
+	repaintMode?: string | null;
+	repaintStrength?: number | null;
+	repaintLatentCrossfadeFrames?: number | null;
+	repaintWavCrossfadeSec?: number | null;
+}
+
 export async function repaintGeneration(
 	genId: string,
 	repaintingStart: number,
 	repaintingEnd: number,
-	lyrics?: string | null,
-	prompt?: string | null,
-	model?: string | null,
-	seed?: number | null,
-	versionId?: string | null,
-	count?: number
+	opts: RepaintOptions = {}
 ): Promise<JobStatus> {
 	const payload: Record<string, unknown> = {
 		src_generation_id: genId,
 		repainting_start: repaintingStart,
 		repainting_end: repaintingEnd
 	};
-	if (lyrics != null) payload.lyrics = lyrics;
-	if (prompt != null) payload.prompt = prompt;
-	if (model) payload.model = model;
-	if (seed != null) payload.seed = seed;
-	if (versionId) payload.version_id = versionId;
-	if (count != null && count > 1) payload.count = count;
+	if (opts.lyrics != null) payload.lyrics = opts.lyrics;
+	if (opts.prompt != null) payload.prompt = opts.prompt;
+	if (opts.model) payload.model = opts.model;
+	if (opts.seed != null) payload.seed = opts.seed;
+	if (opts.versionId) payload.version_id = opts.versionId;
+	if (opts.count != null && opts.count > 1) payload.count = opts.count;
+	if (opts.repaintMode) payload.repaint_mode = opts.repaintMode;
+	if (opts.repaintStrength != null) payload.repaint_strength = opts.repaintStrength;
+	if (opts.repaintLatentCrossfadeFrames != null)
+		payload.repaint_latent_crossfade_frames = opts.repaintLatentCrossfadeFrames;
+	if (opts.repaintWavCrossfadeSec != null)
+		payload.repaint_wav_crossfade_sec = opts.repaintWavCrossfadeSec;
 	return apiFetch<JobStatus>(`/api/generations/${genId}/repaint`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -48,26 +62,32 @@ export async function repaintGeneration(
 	});
 }
 
+export interface CoverOptions {
+	lyrics?: string | null;
+	prompt?: string | null;
+	model?: string | null;
+	seed?: number | null;
+	versionId?: string | null;
+	count?: number;
+	coverNoiseStrength?: number | null;
+}
+
 export async function coverGeneration(
 	genId: string,
 	audioCoverStrength: number,
-	lyrics?: string | null,
-	prompt?: string | null,
-	model?: string | null,
-	seed?: number | null,
-	versionId?: string | null,
-	count?: number
+	opts: CoverOptions = {}
 ): Promise<JobStatus> {
 	const payload: Record<string, unknown> = {
 		src_generation_id: genId,
 		audio_cover_strength: audioCoverStrength
 	};
-	if (lyrics != null) payload.lyrics = lyrics;
-	if (prompt != null) payload.prompt = prompt;
-	if (model) payload.model = model;
-	if (seed != null) payload.seed = seed;
-	if (versionId) payload.version_id = versionId;
-	if (count != null && count > 1) payload.count = count;
+	if (opts.lyrics != null) payload.lyrics = opts.lyrics;
+	if (opts.prompt != null) payload.prompt = opts.prompt;
+	if (opts.model) payload.model = opts.model;
+	if (opts.seed != null) payload.seed = opts.seed;
+	if (opts.versionId) payload.version_id = opts.versionId;
+	if (opts.count != null && opts.count > 1) payload.count = opts.count;
+	if (opts.coverNoiseStrength != null) payload.cover_noise_strength = opts.coverNoiseStrength;
 	return apiFetch<JobStatus>(`/api/generations/${genId}/cover`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },

@@ -105,7 +105,8 @@ def test_poll_result_success() -> None:
         result = client._poll_result("abc")
 
     assert result is not None
-    assert result == ("/v1/audio?path=test.wav", 42)
+    assert result.audio_path == "/v1/audio?path=test.wav"
+    assert result.seed == 42
 
 
 def test_poll_result_failure() -> None:
@@ -402,7 +403,8 @@ def test_poll_result_empty_data_continues() -> None:
         ]
         result = client._poll_result("abc")
 
-    assert result == ("/v1/audio?path=test.wav", 42)
+    assert result.audio_path == "/v1/audio?path=test.wav"
+    assert result.seed == 42
 
 
 # ── poll with progress_text logging ────────────────────────────────
@@ -437,7 +439,8 @@ def test_poll_result_logs_progress_text() -> None:
         ]
         result = client._poll_result("abc")
 
-    assert result == ("/v1/audio?path=test.wav", 1)
+    assert result.audio_path == "/v1/audio?path=test.wav"
+    assert result.seed == 1
 
 
 # ── poll with no progress_text logging ─────────────────────────────
@@ -472,7 +475,8 @@ def test_poll_result_logs_elapsed_without_progress_text() -> None:
         ]
         result = client._poll_result("abc")
 
-    assert result == ("/v1/audio?path=test.wav", 1)
+    assert result.audio_path == "/v1/audio?path=test.wav"
+    assert result.seed == 1
 
 
 # ── poll KeyboardInterrupt ─────────────────────────────────────────
@@ -513,7 +517,8 @@ def test_poll_result_retries_on_transient_error() -> None:
         ]
         result = client._poll_result("abc")
 
-    assert result == ("/v1/audio?path=test.wav", 1)
+    assert result.audio_path == "/v1/audio?path=test.wav"
+    assert result.seed == 1
 
 
 # ── acestep_engine/models.py coverage ─────────────────────────────

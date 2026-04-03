@@ -167,9 +167,10 @@ def _build_generation_context(
         preset_params=preset_params,
         seed=seed,
     )
+    if model_name:
+        ace_config = replace(ace_config, model=model_name)
 
     if ace_config.reference_audio:
-        from dataclasses import replace
         abs_ref = (audio_dir / ace_config.reference_audio).resolve()
         inside_audio_dir = str(abs_ref).startswith(str(audio_dir.resolve()))
         if ".." in ace_config.reference_audio or not inside_audio_dir:
@@ -215,6 +216,8 @@ def _run_single_generation(
 
     mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
     wav_rel = f"{ctx.user_id}/{generation_id}.wav"
+    is_repaint = ctx.ace_config.task_type == "repaint"
+    is_cover = ctx.ace_config.task_type == "cover"
     stored = StoredGenerationParams(
         acestep_model=ctx.model_name,
         bpm=ctx.ace_config.bpm,
@@ -226,18 +229,48 @@ def _run_single_generation(
         lm_temperature=ctx.ace_config.lm_temperature,
         infer_method=ctx.ace_config.infer_method,
         think_mode=ctx.ace_config.think_mode,
+        lm_repetition_penalty=(
+            ctx.ace_config.lm_repetition_penalty
+            if ctx.ace_config.lm_repetition_penalty != 1.0 else None
+        ),
+        use_cot_caption=False if not ctx.ace_config.use_cot_caption else None,
+        use_cot_language=False if not ctx.ace_config.use_cot_language else None,
+        use_adg=True if ctx.ace_config.use_adg else None,
+        cfg_interval_start=(
+            ctx.ace_config.cfg_interval_start
+            if ctx.ace_config.cfg_interval_start > 0.0 else None
+        ),
+        cfg_interval_end=(
+            ctx.ace_config.cfg_interval_end
+            if ctx.ace_config.cfg_interval_end < 1.0 else None
+        ),
+        constrained_decoding=True if ctx.ace_config.constrained_decoding else None,
+        timesteps=ctx.ace_config.timesteps or None,
         task_type=(
             ctx.ace_config.task_type if ctx.ace_config.task_type != "text2music" else None
         ),
-        repainting_start=(
-            ctx.ace_config.repainting_start if ctx.ace_config.task_type == "repaint" else None
+        repainting_start=ctx.ace_config.repainting_start if is_repaint else None,
+        repainting_end=ctx.ace_config.repainting_end if is_repaint else None,
+        repaint_mode=ctx.ace_config.repaint_mode or None if is_repaint else None,
+        repaint_strength=(
+            ctx.ace_config.repaint_strength
+            if is_repaint and ctx.ace_config.repaint_mode else None
         ),
-        repainting_end=(
-            ctx.ace_config.repainting_end if ctx.ace_config.task_type == "repaint" else None
+        repaint_latent_crossfade_frames=(
+            ctx.ace_config.repaint_latent_crossfade_frames
+            if is_repaint and ctx.ace_config.repaint_latent_crossfade_frames > 0 else None
         ),
-        audio_cover_strength=(
-            ctx.ace_config.audio_cover_strength if ctx.ace_config.task_type == "cover" else None
+        repaint_wav_crossfade_sec=(
+            ctx.ace_config.repaint_wav_crossfade_sec
+            if is_repaint and ctx.ace_config.repaint_wav_crossfade_sec > 0 else None
         ),
+        audio_cover_strength=ctx.ace_config.audio_cover_strength if is_cover else None,
+        cover_noise_strength=(
+            ctx.ace_config.cover_noise_strength
+            if is_cover and ctx.ace_config.cover_noise_strength > 0 else None
+        ),
+        cot_caption=result.cot_caption or None,
+        cot_lyrics=result.cot_lyrics or None,
     )
     gen_params = stored.model_dump(exclude_none=True)
 
@@ -345,8 +378,6 @@ def _resolve_raw_wav(mastered_wav_path: str) -> str | None:
 def _apply_task_overrides(
     ctx: GenerationContext, task_type: str, params: dict,
 ) -> GenerationContext:
-    from dataclasses import replace
-
     src_wav = params["src_wav_path"]
     raw_wav = _resolve_raw_wav(src_wav)
 
@@ -360,8 +391,18 @@ def _apply_task_overrides(
         duration = ctx.ace_config.duration
         overrides["repainting_start"] = params["repainting_start"] * duration
         overrides["repainting_end"] = params["repainting_end"] * duration
+        if params.get("repaint_mode"):
+            overrides["repaint_mode"] = params["repaint_mode"]
+        if params.get("repaint_strength") is not None:
+            overrides["repaint_strength"] = params["repaint_strength"]
+        if params.get("repaint_latent_crossfade_frames") is not None:
+            overrides["repaint_latent_crossfade_frames"] = params["repaint_latent_crossfade_frames"]
+        if params.get("repaint_wav_crossfade_sec") is not None:
+            overrides["repaint_wav_crossfade_sec"] = params["repaint_wav_crossfade_sec"]
     elif task_type == "cover":
         overrides["audio_cover_strength"] = params["audio_cover_strength"]
+        if params.get("cover_noise_strength") is not None:
+            overrides["cover_noise_strength"] = params["cover_noise_strength"]
 
     updated_config = replace(ctx.ace_config, **overrides)
     new_ctx = replace(ctx, ace_config=updated_config)

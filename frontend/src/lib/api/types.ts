@@ -25,6 +25,14 @@ export interface GenerationParams {
 	infer_method?: string | null;
 	batch_size?: number | null;
 	reference_audio?: string | null;
+	repaint_mode?: string | null;
+	repaint_strength?: number | null;
+	lm_repetition_penalty?: number | null;
+	use_cot_caption?: boolean | null;
+	use_cot_language?: boolean | null;
+	use_adg?: boolean | null;
+	cfg_interval_start?: number | null;
+	cfg_interval_end?: number | null;
 	seed?: number | null;
 	acestep_model?: string | null;
 	bpm?: number | null;
@@ -34,6 +42,13 @@ export interface GenerationParams {
 	repainting_start?: number | null;
 	repainting_end?: number | null;
 	audio_cover_strength?: number | null;
+	repaint_latent_crossfade_frames?: number | null;
+	repaint_wav_crossfade_sec?: number | null;
+	cover_noise_strength?: number | null;
+	timesteps?: string | null;
+	constrained_decoding?: boolean | null;
+	cot_caption?: string | null;
+	cot_lyrics?: string | null;
 }
 
 export interface VersionGenerationParams {
@@ -49,6 +64,14 @@ export interface VersionGenerationParams {
 	infer_method?: string | null;
 	batch_size?: number | null;
 	reference_audio?: string | null;
+	repaint_mode?: string | null;
+	repaint_strength?: number | null;
+	lm_repetition_penalty?: number | null;
+	use_cot_caption?: boolean | null;
+	use_cot_language?: boolean | null;
+	use_adg?: boolean | null;
+	cfg_interval_start?: number | null;
+	cfg_interval_end?: number | null;
 }
 
 export interface TrackScores {

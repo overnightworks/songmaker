@@ -304,7 +304,7 @@ async def api_repaint_generation(
         if not await is_music_worker_healthy():
             _fail_job(ctx, job.id)
             raise HTTPException(503, "Worker not running")
-        repaint_params = {
+        repaint_params: dict = {
             "src_wav_path": str(wav_path),
             "repainting_start": req.repainting_start,
             "repainting_end": req.repainting_end,
@@ -312,6 +312,14 @@ async def api_repaint_generation(
             "prompt": prompt,
             "src_generation_id": gen_id,
         }
+        if req.repaint_mode is not None:
+            repaint_params["repaint_mode"] = req.repaint_mode
+        if req.repaint_strength is not None:
+            repaint_params["repaint_strength"] = req.repaint_strength
+        if req.repaint_latent_crossfade_frames is not None:
+            repaint_params["repaint_latent_crossfade_frames"] = req.repaint_latent_crossfade_frames
+        if req.repaint_wav_crossfade_sec is not None:
+            repaint_params["repaint_wav_crossfade_sec"] = req.repaint_wav_crossfade_sec
         await pool.enqueue_job(
             "generate", job.id, song.id, version.id, req.count, user.id,
             req.seed, req.model, repaint_params,
@@ -373,13 +381,15 @@ async def api_cover_generation(
         if not await is_music_worker_healthy():
             _fail_job(ctx, job.id)
             raise HTTPException(503, "Worker not running")
-        cover_params = {
+        cover_params: dict = {
             "src_wav_path": str(wav_path),
             "audio_cover_strength": req.audio_cover_strength,
             "lyrics": lyrics,
             "prompt": prompt,
             "src_generation_id": gen_id,
         }
+        if req.cover_noise_strength is not None:
+            cover_params["cover_noise_strength"] = req.cover_noise_strength
         await pool.enqueue_job(
             "generate", job.id, song.id, version.id, req.count, user.id,
             req.seed, req.model, None, cover_params,

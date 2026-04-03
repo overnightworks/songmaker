@@ -15,6 +15,7 @@ import os
 import re
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, replace
 from typing import Final
 from urllib.error import URLError
 from urllib.parse import quote, urlparse
@@ -37,6 +38,14 @@ from acestep_engine.models import (
 )
 
 log = logging.getLogger(__name__)
+
+@dataclass(frozen=True)
+class _PollResult:
+    audio_path: str
+    seed: int
+    cot_caption: str = ""
+    cot_lyrics: str = ""
+
 
 _FALLBACK_HOST: Final[str] = "http://localhost"
 _FALLBACK_PORT: Final[int] = 8001
@@ -143,8 +152,15 @@ class AceStepClient:
             AudioDownloadError: Failed to download or parse audio.
         """
         task_id = self._submit_task(config)
-        audio_path, seed = self._poll_result(task_id, on_progress=on_progress)
-        return self._download_audio(audio_path, seed)
+        poll_result = self._poll_result(task_id, on_progress=on_progress)
+        result = self._download_audio(poll_result.audio_path, poll_result.seed)
+        if poll_result.cot_caption or poll_result.cot_lyrics:
+            result = replace(
+                result,
+                cot_caption=poll_result.cot_caption,
+                cot_lyrics=poll_result.cot_lyrics,
+            )
+        return result
 
     def _submit_task(self, config: AceStepConfig) -> str:
         """Submit a generation task to the server with retry.
@@ -185,10 +201,38 @@ class AceStepClient:
         if config.task_type == "repaint":
             payload["repainting_start"] = config.repainting_start
             payload["repainting_end"] = config.repainting_end
+            if config.repaint_mode:
+                payload["repaint_mode"] = config.repaint_mode
+            if config.repaint_strength != 0.5:
+                payload["repaint_strength"] = config.repaint_strength
+            if config.repaint_latent_crossfade_frames > 0:
+                payload["repaint_latent_crossfade_frames"] = config.repaint_latent_crossfade_frames
+            if config.repaint_wav_crossfade_sec > 0:
+                payload["repaint_wav_crossfade_sec"] = config.repaint_wav_crossfade_sec
         if config.task_type == "cover":
             payload["audio_cover_strength"] = config.audio_cover_strength
+            if config.cover_noise_strength > 0:
+                payload["cover_noise_strength"] = config.cover_noise_strength
         if config.reference_audio:
             payload["reference_audio_path"] = config.reference_audio
+        if config.timesteps:
+            payload["timesteps"] = config.timesteps
+        if not config.use_cot_caption:
+            payload["use_cot_caption"] = False
+        if not config.use_cot_language:
+            payload["use_cot_language"] = False
+        if config.constrained_decoding:
+            payload["constrained_decoding"] = True
+        if config.lm_repetition_penalty != 1.0:
+            payload["lm_repetition_penalty"] = config.lm_repetition_penalty
+        if config.use_adg:
+            payload["use_adg"] = True
+        if config.cfg_interval_start > 0.0:
+            payload["cfg_interval_start"] = config.cfg_interval_start
+        if config.cfg_interval_end < 1.0:
+            payload["cfg_interval_end"] = config.cfg_interval_end
+        if config.model:
+            payload["model"] = config.model
 
         last_exc: Exception | None = None
         for attempt in range(SUBMIT_RETRIES):
@@ -243,11 +287,11 @@ class AceStepClient:
     def _poll_result(
         self, task_id: str,
         on_progress: Callable[[str], None] | None = None,
-    ) -> tuple[str, int]:
+    ) -> _PollResult:
         """Poll until the generation task completes.
 
         Returns:
-            Tuple of (audio_file_path, seed) on success.
+            _PollResult with audio path, seed, and optional CoT data.
 
         Raises:
             GenerationFailedError: Server reported failure.
@@ -285,7 +329,13 @@ class AceStepClient:
                     if items and items[0].file:
                         elapsed = time.monotonic() - start
                         log.info("ACE-Step generation complete (%.1fs)", elapsed)
-                        return items[0].file, items[0].seed
+                        item = items[0]
+                        return _PollResult(
+                            audio_path=item.file,
+                            seed=item.seed,
+                            cot_caption=item.cot_caption,
+                            cot_lyrics=item.cot_lyrics,
+                        )
                     raise GenerationFailedError(
                         f"ACE-Step completed but no audio returned: {entry.result}"
                     )

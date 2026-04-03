@@ -70,6 +70,9 @@
 	let repaintStart = $state(0);
 	let repaintEnd = $state(1);
 	let coverStrength = $state(0.7);
+	let repaintMode = $state<string>('');
+	let repaintStrength = $state(0.5);
+	let coverNoiseStrength = $state(0);
 	let playlistPickerFor = $state<
 		{ type: 'song'; id: string } | { type: 'generation'; id: string } | null
 	>(null);
@@ -158,31 +161,25 @@
 
 			if (sourceGeneration && sourceMode === 'repaint') {
 				const { repaintGeneration } = await import('$lib/api/client');
-				const job = await repaintGeneration(
-					sourceGeneration.id,
-					repaintStart,
-					repaintEnd,
-					null,
-					null,
-					selectedModel,
-					pinnedSeed,
+				const job = await repaintGeneration(sourceGeneration.id, repaintStart, repaintEnd, {
+					model: selectedModel,
+					seed: pinnedSeed,
 					versionId,
-					genCount
-				);
+					count: genCount,
+					repaintMode: repaintMode || undefined,
+					repaintStrength: repaintMode === 'balanced' ? repaintStrength : undefined
+				});
 				pinnedSeed = null;
 				trackJob(job, { songId: song.id });
 			} else if (sourceGeneration && sourceMode === 'cover') {
 				const { coverGeneration } = await import('$lib/api/client');
-				const job = await coverGeneration(
-					sourceGeneration.id,
-					coverStrength,
-					null,
-					null,
-					selectedModel,
-					pinnedSeed,
+				const job = await coverGeneration(sourceGeneration.id, coverStrength, {
+					model: selectedModel,
+					seed: pinnedSeed,
 					versionId,
-					genCount
-				);
+					count: genCount,
+					coverNoiseStrength: coverNoiseStrength > 0 ? coverNoiseStrength : undefined
+				});
 				pinnedSeed = null;
 				trackJob(job, { songId: song.id });
 			} else {
@@ -468,11 +465,17 @@
 				{repaintStart}
 				{repaintEnd}
 				{coverStrength}
+				{repaintMode}
+				{repaintStrength}
+				{coverNoiseStrength}
 				onrepaintrangechange={(s, e) => {
 					repaintStart = s;
 					repaintEnd = e;
 				}}
 				oncoverstrengthchange={(s) => (coverStrength = s)}
+				onrepaintmodechange={(m) => (repaintMode = m)}
+				onrepaintstrengthchange={(s) => (repaintStrength = s)}
+				oncovernoisestrengthchange={(s) => (coverNoiseStrength = s)}
 				onsourcemodechange={(m) => (sourceMode = m)}
 				onsourceclear={() => (sourceGeneration = null)}
 				onsourceselect={(gen) => {

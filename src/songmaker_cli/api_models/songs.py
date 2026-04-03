@@ -31,6 +31,7 @@ def _safe_json_dict(
 
 _VALID_INFER_METHODS = frozenset({"ode", "sde"})
 _VALID_THINK_MODES = frozenset({"deep", "off", ""})
+_VALID_REPAINT_MODES = frozenset({"conservative", "balanced", "aggressive"})
 _VALID_MODEL_MODES = frozenset(get_builtin_defaults().keys())
 
 VALID_SCORER_NAMES = frozenset({
@@ -54,6 +55,14 @@ class GenerationParams(BaseModel):
     infer_method: str | None = Field(None, max_length=10)
     batch_size: int | None = Field(None, ge=1, le=8)
     reference_audio: str | None = Field(None, max_length=500)
+    repaint_mode: str | None = Field(None, max_length=20)
+    repaint_strength: float | None = Field(None, ge=0, le=1)
+    lm_repetition_penalty: float | None = Field(None, ge=0.5, le=5)
+    use_cot_caption: bool | None = None
+    use_cot_language: bool | None = None
+    use_adg: bool | None = None
+    cfg_interval_start: float | None = Field(None, ge=0, le=1)
+    cfg_interval_end: float | None = Field(None, ge=0, le=1)
 
     @field_validator("reference_audio")
     @classmethod
@@ -78,6 +87,14 @@ class GenerationParams(BaseModel):
             raise ValueError(msg)
         return v
 
+    @field_validator("repaint_mode")
+    @classmethod
+    def _validate_repaint_mode(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_REPAINT_MODES:
+            msg = f"repaint_mode must be one of {sorted(_VALID_REPAINT_MODES)}"
+            raise ValueError(msg)
+        return v
+
     def to_dict(self) -> dict:
         return {k: v for k, v in self.model_dump().items() if v is not None}
 
@@ -92,6 +109,13 @@ class StoredGenerationParams(GenerationParams):
     repainting_start: float | None = None
     repainting_end: float | None = None
     audio_cover_strength: float | None = None
+    repaint_latent_crossfade_frames: int | None = None
+    repaint_wav_crossfade_sec: float | None = None
+    cover_noise_strength: float | None = None
+    timesteps: str | None = None
+    constrained_decoding: bool | None = None
+    cot_caption: str | None = None
+    cot_lyrics: str | None = None
 
 
 class AlbumResponse(BaseModel):
@@ -395,6 +419,10 @@ class RepaintRequest(BaseModel):
     count: int = Field(1, ge=1, le=10)
     model: str | None = None
     seed: int | None = Field(None, ge=-1)
+    repaint_mode: str | None = Field(None, max_length=20)
+    repaint_strength: float | None = Field(None, ge=0, le=1)
+    repaint_latent_crossfade_frames: int | None = Field(None, ge=0)
+    repaint_wav_crossfade_sec: float | None = Field(None, ge=0)
 
     @field_validator("model")
     @classmethod
@@ -404,10 +432,19 @@ class RepaintRequest(BaseModel):
             raise ValueError(msg)
         return v
 
+    @field_validator("repaint_mode")
+    @classmethod
+    def _validate_repaint_mode(cls, v: str | None) -> str | None:
+        if v is not None and v not in _VALID_REPAINT_MODES:
+            msg = f"repaint_mode must be one of {sorted(_VALID_REPAINT_MODES)}"
+            raise ValueError(msg)
+        return v
+
 
 class CoverRequest(BaseModel):
     src_generation_id: str = Field(max_length=36)
     audio_cover_strength: float = Field(0.8, ge=0.0, le=1.0)
+    cover_noise_strength: float | None = Field(None, ge=0, le=1)
     lyrics: str | None = Field(None, max_length=50_000)
     prompt: str | None = Field(None, max_length=5_000)
     version_id: str | None = Field(None, max_length=36)

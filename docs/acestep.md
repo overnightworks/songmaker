@@ -1,6 +1,6 @@
 # ACE-Step Integration
 
-Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5)
+Upstream: [ACE-Step 1.5 v0.1.6](https://github.com/ace-step/ACE-Step-1.5)
 
 ## How Songmaker Uses ACE-Step
 
@@ -26,12 +26,17 @@ Config: `src/songmaker_cli/config.py` (`build_ace_config()` merges defaults + us
 
 | Model | Steps | Speed | Quality | Use case |
 |-------|-------|-------|---------|----------|
-| `acestep-v15-turbo` | 8 | ~10s on 3090 | Very good | Default, fast iteration |
-| `acestep-v15-sft` | 50 | ~60s on 3090 | Best | Final renders, critical tracks |
+| `acestep-v15-turbo` | 8 | ~10s on 3090 | Very good | Fast iteration |
+| `acestep-v15-sft` | 50 | ~60s on 3090 | Best (2B) | Final renders |
+| `acestep-v15-xl-turbo` | 8 | ~15s on 3090 | Excellent | Fast iteration (4B) |
+| `acestep-v15-xl-sft` | 50 | ~90s on 3090 | Best overall | Final renders, default |
+| `acestep-v15-xl-base` | 50 | ~90s on 3090 | Excellent | Supports ADG, extract, lego |
+
+XL models (4B DiT) require ~12GB VRAM with offload, 20GB+ recommended.
 
 LM models (text planner):
-- `acestep-5Hz-lm-0.6B` — creative, good structure (recommended)
-- `acestep-5Hz-lm-4B` — over-planned, can sound sterile
+- `acestep-5Hz-lm-0.6B` — creative, good structure
+- `acestep-5Hz-lm-4B` — more thorough planning (recommended with XL)
 
 ## Generation Parameters
 
@@ -51,9 +56,17 @@ Priority: song params > admin defaults > model defaults.
 | `lm_negative_prompt` | string | — | — | What to avoid |
 | `infer_method` | ode/sde | ode | ode | sde = more textured/alive |
 | `think_mode` | string | true | true | false = more creative, true = more structured |
+| `lm_repetition_penalty` | 0.5-5 | 1.0 | 1.0 | Penalize LM token repetition |
 | `batch_size` | 1-8 | 1 | 1 | Parallel generations per request |
 | `duration` | 1-600 | 180 | 180 | Output length in seconds |
 | `bpm` | 0-999 | 120 | 120 | 0 = let model decide |
+| `use_cot_caption` | bool | true | true | LM chain-of-thought caption rewriting |
+| `use_cot_language` | bool | true | true | LM chain-of-thought language detection |
+| `constrained_decoding` | bool | false | false | FSM-based structured LM output |
+| `timesteps` | string | — | — | Custom diffusion schedule (comma-separated floats) |
+| `use_adg` | bool | false | false | Adaptive Dual Guidance (base model only) |
+| `cfg_interval_start` | 0-1 | 0.0 | 0.0 | CFG application start fraction |
+| `cfg_interval_end` | 0-1 | 1.0 | 1.0 | CFG application end fraction |
 
 ## Modes
 
@@ -66,11 +79,21 @@ All modes use the same `/release_task` endpoint with different `task_type` + aud
 | Cover | `cover` | Cover button on generation | Re-interpret with different style/lyrics, keep melody |
 | Reference | `text2music` + `reference_audio` | Upload in generation settings | Guide timbre/style from an external audio track |
 
-**Repaint** sends `src_audio` (the original WAV), `repainting_start` and `repainting_end` (0.0-1.0 fractions). `think_mode` is auto-disabled. The result is a new generation — non-destructive.
+**Repaint** sends `src_audio` (the original WAV), `repainting_start` and `repainting_end` (0.0-1.0 fractions). `think_mode` is auto-disabled. The result is a new generation — non-destructive. v0.1.6 adds server-side crossfade controls:
+- `repaint_mode`: `conservative` / `balanced` / `aggressive` — how much source audio is preserved
+- `repaint_strength`: 0-1, intensity for balanced mode
+- `repaint_latent_crossfade_frames`: latent-level boundary blend width
+- `repaint_wav_crossfade_sec`: waveform-level splice crossfade
 
-**Cover** sends `src_audio` and `audio_cover_strength` (0.0 = free reinterpretation, 1.0 = strict structure). `think_mode` is auto-disabled.
+When `repaint_mode` or `repaint_wav_crossfade_sec` is set, the server handles crossfading and the client-side splice (`_splice_repaint_raw`) is skipped.
+
+**Cover** sends `src_audio` and `audio_cover_strength` (0.0 = free reinterpretation, 1.0 = strict structure). `think_mode` is auto-disabled. v0.1.6 adds `cover_noise_strength` (0-1) for noise blending control.
 
 **Reference audio** uploads via `POST /api/audio/upload` (max 50MB, .mp3/.wav/.flac/.ogg). The path is stored in version `generation_params.reference_audio` and resolved to an absolute path before sending to ACE-Step. Path traversal is blocked at both API validation and job execution levels.
+
+## CoT Response Data
+
+The server returns `cot_caption` and `cot_lyrics` in generation results — the LM's chain-of-thought rewritten caption and lyrics. These are stored in `generation_params` and displayed in the frontend generation detail. Useful for understanding how the LM interpreted your prompt. Disable with `use_cot_caption: false` / `use_cot_language: false`.
 
 **Not yet integrated**: Lego, Extract, Complete (require Base model — see `plans/base-model-tasks.md`). Infinite duration (exploratory — see `plans/acestep-modes.md` Phase 5).
 

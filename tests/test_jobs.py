@@ -75,6 +75,8 @@ def _mock_generate_result(mp3_name: str = "01_song_one_v1.mp3", seed: int = 42):
     result.mp3_path = Path(f"/output/rock/{mp3_name}")
     result.wav_path = Path(f"/output/rock/{wav_name}")
     result.seed = seed
+    result.cot_caption = ""
+    result.cot_lyrics = ""
     return result
 
 

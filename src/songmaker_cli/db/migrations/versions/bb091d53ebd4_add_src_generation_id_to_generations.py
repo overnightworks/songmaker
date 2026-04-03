@@ -20,18 +20,17 @@ FK_NAME = "fk_generations_src_generation_id"
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
-    op.add_column(
-        'generations',
-        sa.Column('src_generation_id', sa.String(length=36), nullable=True),
-    )
-    op.create_foreign_key(
-        FK_NAME, 'generations', 'generations',
-        ['src_generation_id'], ['id'], ondelete='SET NULL',
-    )
+    with op.batch_alter_table('generations', schema=None) as batch_op:
+        batch_op.add_column(
+            sa.Column('src_generation_id', sa.String(length=36), nullable=True),
+        )
+        batch_op.create_foreign_key(
+            FK_NAME, 'generations',
+            ['src_generation_id'], ['id'], ondelete='SET NULL',
+        )
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
-    op.drop_constraint(FK_NAME, 'generations', type_='foreignkey')
-    op.drop_column('generations', 'src_generation_id')
+    with op.batch_alter_table('generations', schema=None) as batch_op:
+        batch_op.drop_constraint(FK_NAME, type_='foreignkey')
+        batch_op.drop_column('src_generation_id')

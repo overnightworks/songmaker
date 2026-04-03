@@ -33,6 +33,9 @@ uv run songmaker server --port 8080   # Reads DATABASE_URL + REDIS_URL from .ser
 
 # Frontend (dev mode)
 cd frontend && pnpm install && pnpm dev
+
+# Download ACE-Step model weights (requires HF_TOKEN in .env)
+bash scripts/download_models.sh       # Downloads all model variants to _models/acestep/checkpoints/
 ```
 
 ## Checks

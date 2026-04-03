@@ -34,8 +34,14 @@
 		repaintStart?: number;
 		repaintEnd?: number;
 		coverStrength?: number;
+		repaintMode?: string;
+		repaintStrength?: number;
+		coverNoiseStrength?: number;
 		onrepaintrangechange?: (start: number, end: number) => void;
 		oncoverstrengthchange?: (strength: number) => void;
+		onrepaintmodechange?: (mode: string) => void;
+		onrepaintstrengthchange?: (strength: number) => void;
+		oncovernoisestrengthchange?: (strength: number) => void;
 		onsourcemodechange?: (mode: 'repaint' | 'cover') => void;
 		onsourceclear?: () => void;
 		onsourceselect?: (gen: GenerationItem) => void;
@@ -50,8 +56,14 @@
 		repaintStart = 0,
 		repaintEnd = 1,
 		coverStrength = 0.7,
+		repaintMode = '',
+		repaintStrength = 0.5,
+		coverNoiseStrength = 0,
 		onrepaintrangechange,
 		oncoverstrengthchange,
+		onrepaintmodechange,
+		onrepaintstrengthchange,
+		oncovernoisestrengthchange,
 		onsourcemodechange,
 		onsourceclear,
 		onsourceselect
@@ -170,6 +182,35 @@
 				endPercent={repaintEnd}
 				onchange={(s, e) => onrepaintrangechange?.(s, e)}
 			/>
+			<div class="repaint-options">
+				<label class="setting">
+					<span>Repaint Mode</span>
+					<select
+						value={repaintMode}
+						onchange={(e) => onrepaintmodechange?.(e.currentTarget.value)}
+					>
+						<option value="">default</option>
+						<option value="conservative">conservative</option>
+						<option value="balanced">balanced</option>
+						<option value="aggressive">aggressive</option>
+					</select>
+				</label>
+				{#if repaintMode === 'balanced'}
+					<label class="setting">
+						<span>Repaint Strength</span>
+						<input
+							type="range"
+							class="strength-slider"
+							min="0"
+							max="100"
+							step="1"
+							value={repaintStrength * 100}
+							oninput={(e) => onrepaintstrengthchange?.(Number(e.currentTarget.value) / 100)}
+						/>
+						<span class="strength-value">{Math.round(repaintStrength * 100)}%</span>
+					</label>
+				{/if}
+			</div>
 		{:else}
 			<div class="cover-strength">
 				<span class="strength-label">Free</span>
@@ -184,6 +225,21 @@
 				/>
 				<span class="strength-label">Strict</span>
 				<span class="strength-value">{Math.round(coverStrength * 100)}%</span>
+			</div>
+			<div class="cover-noise">
+				<label class="setting">
+					<span>Noise Strength</span>
+					<input
+						type="range"
+						class="strength-slider"
+						min="0"
+						max="100"
+						step="1"
+						value={coverNoiseStrength * 100}
+						oninput={(e) => oncovernoisestrengthchange?.(Number(e.currentTarget.value) / 100)}
+					/>
+					<span class="strength-value">{Math.round(coverNoiseStrength * 100)}%</span>
+				</label>
 			</div>
 		{/if}
 	{/if}
@@ -488,6 +544,44 @@
 
 	.source-dismiss:hover {
 		color: var(--text);
+	}
+
+	.repaint-options,
+	.cover-noise {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		padding: 0.5rem 0.8rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+	}
+
+	.repaint-options .setting,
+	.cover-noise .setting {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex: 1;
+	}
+
+	.repaint-options .setting span,
+	.cover-noise .setting span {
+		font-size: var(--label-font-size);
+		color: var(--text-muted);
+		text-transform: uppercase;
+		font-family: var(--font-display);
+		letter-spacing: 0.5px;
+		flex-shrink: 0;
+	}
+
+	.repaint-options select {
+		padding: 0.3rem 0.5rem;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text);
+		font-size: 0.85rem;
 	}
 
 	.cover-strength {

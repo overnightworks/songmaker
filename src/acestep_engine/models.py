@@ -38,6 +38,20 @@ class AceStepConfig:
     repainting_end: float = -1.0
     audio_cover_strength: float = 1.0
     reference_audio: str = ""
+    repaint_mode: str = ""
+    repaint_strength: float = 0.5
+    repaint_latent_crossfade_frames: int = 0
+    repaint_wav_crossfade_sec: float = 0.0
+    cover_noise_strength: float = 0.0
+    timesteps: str = ""
+    use_cot_caption: bool = True
+    use_cot_language: bool = True
+    constrained_decoding: bool = False
+    lm_repetition_penalty: float = 1.0
+    use_adg: bool = False
+    cfg_interval_start: float = 0.0
+    cfg_interval_end: float = 1.0
+    model: str = ""
 
 
 @dataclass(frozen=True)
@@ -50,6 +64,8 @@ class AceStepResult:
 
     wav_bytes: bytes
     seed: int
+    cot_caption: str = ""
+    cot_lyrics: str = ""
 
 
 @dataclass(frozen=True)
@@ -80,6 +96,8 @@ class ResultItem(BaseModel):
 
     file: str = ""
     seed_value: str = ""
+    cot_caption: str = ""
+    cot_lyrics: str = ""
 
     @property
     def seed(self) -> int:

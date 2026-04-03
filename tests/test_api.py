@@ -1798,7 +1798,7 @@ def test_list_active_models(client: TestClient) -> None:
     assert "guidance_scale" in turbo_caps["hidden_params"]
     sft_caps = by_id["sft"]["capabilities"]
     assert sft_caps["max_inference_steps"] == 200
-    assert sft_caps["hidden_params"] == []
+    assert sft_caps["hidden_params"] == ["use_adg"]
 
 
 def test_create_preset_inactive_model_rejected(client: TestClient) -> None:

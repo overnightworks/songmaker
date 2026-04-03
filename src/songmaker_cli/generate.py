@@ -38,6 +38,8 @@ class GenerationResult:
     wav_path: Path
     seed: int
     duration: float
+    cot_caption: str = ""
+    cot_lyrics: str = ""
 
 
 def generate_single(
@@ -62,7 +64,14 @@ def generate_single(
     try:
         ace_result, elapsed = _run_generation(ace_config, client, on_progress=on_progress)
         audio = _decode_audio(ace_result)
-        if ace_config.task_type == "repaint" and ace_config.src_audio:
+        server_handles_crossfade = bool(
+            ace_config.repaint_mode or ace_config.repaint_wav_crossfade_sec > 0
+        )
+        needs_splice = (
+            ace_config.task_type == "repaint" and ace_config.src_audio
+            and not server_handles_crossfade
+        )
+        if needs_splice:
             splice_src = raw_src_audio or ace_config.src_audio
             audio = _splice_repaint_raw(audio, ace_config, splice_src)
         write_stereo_wav(str(raw_wav_path), audio.left, audio.right, audio.sample_rate)
@@ -77,6 +86,8 @@ def generate_single(
         wav_path=wav_path,
         seed=ace_result.seed,
         duration=audio.duration,
+        cot_caption=ace_result.cot_caption,
+        cot_lyrics=ace_result.cot_lyrics,
     )
 
 

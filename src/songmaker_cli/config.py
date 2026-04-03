@@ -111,6 +111,9 @@ _SHARED_LM_DEFAULTS: dict[str, object] = {
     "lm_negative_prompt": "",
     "infer_method": "ode",
     "batch_size": 1,
+    "lm_repetition_penalty": 1.0,
+    "use_cot_caption": True,
+    "use_cot_language": True,
 }
 
 _BUILTIN_DEFAULTS: dict[str, dict[str, object]] = {
@@ -123,10 +126,20 @@ _BUILTIN_DEFAULTS: dict[str, dict[str, object]] = {
 
 
 _MODEL_CAPABILITIES: dict[str, dict[str, object]] = {
-    "turbo": {"max_inference_steps": 20, "hidden_params": ["guidance_scale"]},
-    "sft": {"max_inference_steps": 200, "hidden_params": []},
-    "xl-turbo": {"max_inference_steps": 20, "hidden_params": ["guidance_scale"]},
-    "xl-sft": {"max_inference_steps": 200, "hidden_params": []},
+    "turbo": {
+        "max_inference_steps": 20,
+        "hidden_params": [
+            "guidance_scale", "use_adg", "cfg_interval_start", "cfg_interval_end",
+        ],
+    },
+    "sft": {"max_inference_steps": 200, "hidden_params": ["use_adg"]},
+    "xl-turbo": {
+        "max_inference_steps": 20,
+        "hidden_params": [
+            "guidance_scale", "use_adg", "cfg_interval_start", "cfg_interval_end",
+        ],
+    },
+    "xl-sft": {"max_inference_steps": 200, "hidden_params": ["use_adg"]},
     "xl-base": {"max_inference_steps": 200, "hidden_params": []},
 }
 
@@ -219,5 +232,21 @@ def _sanitize_params(fields: dict) -> dict:
         raise ValidationError(
             f"infer_method='{infer}' is invalid, must be 'ode' or 'sde'"
         )
+
+    repaint_mode = fields.get("repaint_mode")
+    if repaint_mode and repaint_mode not in ("conservative", "balanced", "aggressive"):
+        raise ValidationError(
+            f"repaint_mode='{repaint_mode}' is invalid, "
+            "must be 'conservative', 'balanced', or 'aggressive'"
+        )
+
+    timesteps = fields.get("timesteps")
+    if timesteps:
+        try:
+            [float(t) for t in timesteps.split(",")]
+        except ValueError:
+            raise ValidationError(
+                f"timesteps='{timesteps}' is invalid, must be comma-separated numbers"
+            )
 
     return fields

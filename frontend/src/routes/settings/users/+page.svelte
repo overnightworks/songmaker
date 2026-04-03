@@ -433,7 +433,8 @@
 				class:active={tab === 'acestep'}
 				onclick={async () => {
 					tab = 'acestep';
-					aceStatus = await getAceStepStatus();
+					const [ace] = await Promise.all([getAceStepStatus(), loadGenDefaults()]);
+					aceStatus = ace;
 				}}>ACE-Step</button
 			>
 		</div>
@@ -821,23 +822,6 @@
 					<button class="clear-btn" onclick={handleResetGenDefaults}>Reset</button>
 				</div>
 			</section>
-
-			<section>
-				<h2>Available Models</h2>
-				<p class="hint">Toggle which models users can create presets for.</p>
-				<div class="model-toggles">
-					{#each allModels as model (model.id)}
-						<button
-							class="model-toggle"
-							class:active={model.is_active}
-							onclick={() => handleToggleModel(model.id, model.is_active)}
-						>
-							{model.id.toUpperCase()}
-							<span class="model-status">{model.is_active ? 'ON' : 'OFF'}</span>
-						</button>
-					{/each}
-				</div>
-			</section>
 		{/if}
 
 		{#if tab === 'claude'}
@@ -873,6 +857,23 @@
 		{/if}
 
 		{#if tab === 'acestep'}
+			<section>
+				<h2>Available Models</h2>
+				<p class="hint">Toggle which models users can create presets for.</p>
+				<div class="model-toggles">
+					{#each allModels as model (model.id)}
+						<button
+							class="model-toggle"
+							class:active={model.is_active}
+							onclick={() => handleToggleModel(model.id, model.is_active)}
+						>
+							{model.id.toUpperCase()}
+							<span class="model-status">{model.is_active ? 'ON' : 'OFF'}</span>
+						</button>
+					{/each}
+				</div>
+			</section>
+
 			<section>
 				<h2>ACE-Step Server</h2>
 				{#if aceStatus}
