@@ -181,14 +181,14 @@ class AceStepClient:
         if config.lm_negative_prompt:
             payload["lm_negative_prompt"] = config.lm_negative_prompt
         if config.src_audio:
-            payload["src_audio"] = config.src_audio
+            payload["src_audio_path"] = config.src_audio
         if config.task_type == "repaint":
             payload["repainting_start"] = config.repainting_start
             payload["repainting_end"] = config.repainting_end
         if config.task_type == "cover":
             payload["audio_cover_strength"] = config.audio_cover_strength
         if config.reference_audio:
-            payload["reference_audio"] = config.reference_audio
+            payload["reference_audio_path"] = config.reference_audio
 
         last_exc: Exception | None = None
         for attempt in range(SUBMIT_RETRIES):
