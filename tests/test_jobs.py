@@ -499,7 +499,7 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
     assert result.ace_config.task_type == "repaint"
     assert result.ace_config.think_mode == "off"
     assert result.ace_config.src_audio.startswith("/tmp/")
-    assert Path(result.ace_config.src_audio).is_symlink()
+    assert Path(result.ace_config.src_audio).exists()
 
 
 def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:

@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shutil
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -323,14 +325,11 @@ def _make_generation_progress_callback(
     return _on_progress
 
 
-def _symlink_to_tmp(src_path: str) -> str:
-    import tempfile
-
+def _copy_to_tmp(src_path: str) -> str:
     suffix = Path(src_path).suffix
     fd, tmp_path = tempfile.mkstemp(suffix=suffix, prefix="songmaker_src_")
     os.close(fd)
-    os.unlink(tmp_path)
-    os.symlink(src_path, tmp_path)
+    shutil.copy2(src_path, tmp_path)
     return tmp_path
 
 
@@ -341,7 +340,7 @@ def _apply_task_overrides(
 
     overrides: dict = {
         "task_type": task_type,
-        "src_audio": _symlink_to_tmp(params["src_wav_path"]),
+        "src_audio": _copy_to_tmp(params["src_wav_path"]),
         "think_mode": "off",
         "prompt": params.get("prompt", ctx.ace_config.prompt),
         "lyrics": params.get("lyrics", ctx.ace_config.lyrics),
@@ -398,9 +397,11 @@ def run_generation_job(
             _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return
 
-        tmp_symlink = ""
-        if ctx.ace_config.src_audio and os.path.islink(ctx.ace_config.src_audio):
-            tmp_symlink = ctx.ace_config.src_audio
+        tmp_copy = ""
+        if ctx.ace_config.src_audio and ctx.ace_config.src_audio.startswith(
+            tempfile.gettempdir()
+        ):
+            tmp_copy = ctx.ace_config.src_audio
 
         try:
             completed = 0
@@ -419,9 +420,9 @@ def run_generation_job(
 
             _finalize_generation_job(db_factory, job_id, count, completed, last_error)
         finally:
-            if tmp_symlink:
+            if tmp_copy:
                 try:
-                    os.unlink(tmp_symlink)
+                    os.unlink(tmp_copy)
                 except OSError:
                     pass
 
