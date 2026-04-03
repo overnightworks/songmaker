@@ -172,6 +172,8 @@ class GenerationResponse(BaseModel):
     is_shared: bool = False
     share_slug: str | None = None
     model_mode: str | None = None
+    src_generation_id: str | None = None
+    src_generation_number: int | None = None
     whisper_text: str | None
     scores: dict | None
     generation_params: dict | None
@@ -216,6 +218,11 @@ class GenerationResponse(BaseModel):
             is_shared=gen.is_shared,
             share_slug=gen.share_slug,
             model_mode=gen.model_mode,
+            src_generation_id=gen.src_generation_id,
+            src_generation_number=(
+                gen.src_generation.generation_number
+                if gen.src_generation else None
+            ),
             whisper_text=gen.whisper_text,
             scores=scores if scores else None,
             generation_params=generation_params,
@@ -384,6 +391,8 @@ class RepaintRequest(BaseModel):
     repainting_end: float = Field(ge=0.0, le=1.0)
     lyrics: str | None = Field(None, max_length=50_000)
     prompt: str | None = Field(None, max_length=5_000)
+    version_id: str | None = Field(None, max_length=36)
+    count: int = Field(1, ge=1, le=10)
     model: str | None = None
     seed: int | None = Field(None, ge=-1)
 
@@ -401,6 +410,8 @@ class CoverRequest(BaseModel):
     audio_cover_strength: float = Field(0.8, ge=0.0, le=1.0)
     lyrics: str | None = Field(None, max_length=50_000)
     prompt: str | None = Field(None, max_length=5_000)
+    version_id: str | None = Field(None, max_length=36)
+    count: int = Field(1, ge=1, le=10)
     model: str | None = None
     seed: int | None = Field(None, ge=-1)
 

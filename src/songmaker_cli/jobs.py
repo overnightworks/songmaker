@@ -9,7 +9,7 @@ import shutil
 import tempfile
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -68,6 +68,7 @@ class GenerationContext:
     model_name: str | None
     client: AceStepClient
     base_params: dict = field(default_factory=dict)
+    src_generation_id: str | None = None
 
 
 class GenerationSetupError(Exception):
@@ -249,6 +250,7 @@ def _run_single_generation(
                 generation_params=gen_params,
                 wav_path=wav_rel,
                 model_mode=resolve_model_mode(ctx.model_name),
+                src_generation_id=ctx.src_generation_id,
             )
             session.commit()
     except Exception:
@@ -390,8 +392,10 @@ def run_generation_job(
             )
             if repaint_params:
                 ctx = _apply_task_overrides(ctx, "repaint", repaint_params)
+                ctx = replace(ctx, src_generation_id=repaint_params.get("src_generation_id"))
             elif cover_params:
                 ctx = _apply_task_overrides(ctx, "cover", cover_params)
+                ctx = replace(ctx, src_generation_id=cover_params.get("src_generation_id"))
         except GenerationSetupError as exc:
             _update_job(db_factory, job_id, "failed", error=str(exc), error_type="setup_error")
             return

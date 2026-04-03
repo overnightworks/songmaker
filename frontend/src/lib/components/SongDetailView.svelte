@@ -13,15 +13,12 @@
 		unshareGeneration,
 		deleteGeneration,
 		rateGeneration,
-		repaintGeneration,
-		coverGeneration,
 		keepGeneration,
 		unkeepGeneration
 	} from '$lib/api/client';
 	import { activeJobs, trackJob, removeJob } from '$lib/stores/jobs';
 	import {
 		selectedSong,
-		selectedGeneration,
 		ensureGenerationsLoaded,
 		replaceSongInList,
 		updateSongInList,
@@ -31,7 +28,6 @@
 	} from '$lib/stores/player';
 	import {
 		selectGeneration,
-		clearGenerationSelection,
 		navigateToSongTab,
 		switchTab,
 		backToAlbum,
@@ -53,17 +49,15 @@
 	import { songList } from '$lib/stores/player';
 	import { addToast } from '$lib/stores/toast';
 	import { addGenerationToPlaylist, addSongToPlaylist } from '$lib/stores/playlists';
+	import { pendingSource } from '$lib/stores/source';
 	import { setGenerationActions } from '$lib/contexts/generation-actions';
 	import type { GenerationItem } from '$lib/api/types';
-	import GenerationDetail from './GenerationDetail.svelte';
 	import GenerationsList from './GenerationsList.svelte';
 	import SongEditor from './SongEditor.svelte';
 	import ClaudeChat from './ClaudeChat.svelte';
 	import ActionButton from './ActionButton.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
-	import CoverDialog from './CoverDialog.svelte';
-	import RepaintDialog from './RepaintDialog.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import { selectSong } from '$lib/stores/navigation';
 
@@ -71,14 +65,16 @@
 	let selectedModel = $state<string | null>(null);
 	let showDeleteConfirm = $state(false);
 	let pinnedSeed = $state<number | null>(null);
-	let repaintTarget = $state<GenerationItem | null>(null);
-	let coverTarget = $state<GenerationItem | null>(null);
+	let sourceGeneration = $state<GenerationItem | null>(null);
+	let sourceMode = $state<'repaint' | 'cover'>('repaint');
+	let repaintStart = $state(0);
+	let repaintEnd = $state(1);
+	let coverStrength = $state(0.7);
 	let playlistPickerFor = $state<
 		{ type: 'song'; id: string } | { type: 'generation'; id: string } | null
 	>(null);
 
 	const song = $derived($selectedSong);
-	const activeGen = $derived($selectedGeneration);
 	const jobs = $derived($activeJobs);
 	const tab = $derived($detailTab);
 	const dirty = $derived($isDirty);
@@ -89,6 +85,18 @@
 		if (song) {
 			loadSongData(song);
 			ensureGenerationsLoaded(song.id);
+		}
+	});
+
+	$effect(() => {
+		const pending = $pendingSource;
+		if (pending) {
+			sourceGeneration = pending;
+			sourceMode = 'repaint';
+			repaintStart = 0;
+			repaintEnd = 1;
+			pendingSource.set(null);
+			switchTab('edit');
 		}
 	});
 
@@ -122,8 +130,13 @@
 			addToast(`Seed ${seed} pinned for next generation`, 'success');
 		},
 		clickVersion: onVersionClick,
-		repaint: (gen) => (repaintTarget = gen),
-		cover: (gen) => (coverTarget = gen)
+		useAsSource: (gen) => {
+			sourceGeneration = gen;
+			sourceMode = 'repaint';
+			repaintStart = 0;
+			repaintEnd = 1;
+			switchTab('edit');
+		}
 	});
 
 	function onSave(): void {
@@ -137,50 +150,48 @@
 	async function onGenerate(): Promise<void> {
 		if (!song) return;
 		try {
+			if (dirty) {
+				await handleSave(song.id);
+			}
 			const ver = $versions[$currentVersionIndex];
-			const job = await generateSong(song.id, genCount, selectedModel, ver?.id, pinnedSeed);
-			pinnedSeed = null;
-			trackJob(job, { songId: song.id });
+			const versionId = ver?.id;
+
+			if (sourceGeneration && sourceMode === 'repaint') {
+				const { repaintGeneration } = await import('$lib/api/client');
+				const job = await repaintGeneration(
+					sourceGeneration.id,
+					repaintStart,
+					repaintEnd,
+					null,
+					null,
+					selectedModel,
+					pinnedSeed,
+					versionId,
+					genCount
+				);
+				pinnedSeed = null;
+				trackJob(job, { songId: song.id });
+			} else if (sourceGeneration && sourceMode === 'cover') {
+				const { coverGeneration } = await import('$lib/api/client');
+				const job = await coverGeneration(
+					sourceGeneration.id,
+					coverStrength,
+					null,
+					null,
+					selectedModel,
+					pinnedSeed,
+					versionId,
+					genCount
+				);
+				pinnedSeed = null;
+				trackJob(job, { songId: song.id });
+			} else {
+				const job = await generateSong(song.id, genCount, selectedModel, versionId, pinnedSeed);
+				pinnedSeed = null;
+				trackJob(job, { songId: song.id });
+			}
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
-		}
-	}
-
-	async function onRepaintSubmit(
-		start: number,
-		end: number,
-		lyrics: string | null,
-		prompt: string | null
-	): Promise<void> {
-		if (!song || !repaintTarget) return;
-		try {
-			const job = await repaintGeneration(
-				repaintTarget.id,
-				start,
-				end,
-				lyrics,
-				prompt,
-				selectedModel
-			);
-			repaintTarget = null;
-			trackJob(job, { songId: song.id });
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Repaint failed', 'error');
-		}
-	}
-
-	async function onCoverSubmit(
-		strength: number,
-		lyrics: string | null,
-		prompt: string | null
-	): Promise<void> {
-		if (!song || !coverTarget) return;
-		try {
-			const job = await coverGeneration(coverTarget.id, strength, lyrics, prompt, selectedModel);
-			coverTarget = null;
-			trackJob(job, { songId: song.id });
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Cover failed', 'error');
 		}
 	}
 
@@ -284,7 +295,6 @@
 		try {
 			await deleteGeneration(genId);
 			removeGenerationFromSong(song.id, genId);
-			clearGenerationSelection();
 			addToast('Generation deleted', 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Delete failed', 'error');
@@ -317,17 +327,16 @@
 		</button>
 		<div class="detail-header">
 			<div>
-				<button class="song-title-btn" onclick={clearGenerationSelection}>
-					<h2 class="song-title">{song.title}</h2>
-				</button>
+				<h2 class="song-title">{song.title}</h2>
 				<span class="song-album">{song.artist}</span>
 			</div>
 			<div class="detail-actions">
-				{#if tab === 'edit' && dirty}
-					<button class="save-btn" onclick={onSave} disabled={isSaving}>
-						{isSaving ? 'Saving...' : 'Save'}
-					</button>
-				{:else}
+				{#if tab === 'edit' || tab === 'chat'}
+					{#if dirty}
+						<button class="save-btn" onclick={onSave} disabled={isSaving}>
+							{isSaving ? 'Saving...' : 'Save'}
+						</button>
+					{/if}
 					<button
 						class="generate-btn"
 						class:generating={isGenerating}
@@ -335,7 +344,11 @@
 						disabled={isGenerating || !song?.lyrics || !song?.prompt}
 						title={!song?.lyrics || !song?.prompt ? 'Add lyrics and style prompt first' : ''}
 					>
-						{isGenerating ? 'Generating...' : 'Generate'}
+						{#if sourceGeneration}
+							{isGenerating ? 'Generating...' : sourceMode === 'repaint' ? 'Repaint' : 'Cover'}
+						{:else}
+							{isGenerating ? 'Generating...' : 'Generate'}
+						{/if}
 					</button>
 					<select class="gen-count-select" bind:value={genCount}>
 						{#each [1, 2, 3, 5, 10] as n (n)}
@@ -444,24 +457,24 @@
 		</div>
 
 		{#if tab === 'generations'}
-			{#if activeGen}
-				{@const genScoring = jobs.some(
-					(j) =>
-						j.genId === activeGen.id &&
-						j.job.type === 'score' &&
-						(j.job.status === 'running' || j.job.status === 'queued')
-				)}
-				<div class="gen-detail-wrapper">
-					<button class="back-btn" onclick={clearGenerationSelection}>
-						<span class="back-arrow">←</span> All generations
-					</button>
-					<GenerationDetail generation={activeGen} scoring={genScoring} />
-				</div>
-			{:else}
-				<GenerationsList {song} onselect={(gen) => selectGeneration(gen, song)} />
-			{/if}
+			<GenerationsList {song} onselect={(gen) => selectGeneration(gen, song)} />
 		{:else if tab === 'edit'}
-			<SongEditor ondeleteversion={onDeleteVersion} {selectedModel} />
+			<SongEditor
+				ondeleteversion={onDeleteVersion}
+				{selectedModel}
+				{sourceGeneration}
+				{sourceMode}
+				{repaintStart}
+				{repaintEnd}
+				{coverStrength}
+				onrepaintrangechange={(s, e) => {
+					repaintStart = s;
+					repaintEnd = e;
+				}}
+				oncoverstrengthchange={(s) => (coverStrength = s)}
+				onsourcemodechange={(m) => (sourceMode = m)}
+				onsourceclear={() => (sourceGeneration = null)}
+			/>
 		{/if}
 		<div class="chat-tab" class:hidden={tab !== 'chat'}>
 			<ClaudeChat
@@ -479,22 +492,6 @@
 			/>
 		</div>
 	</div>
-{/if}
-
-{#if repaintTarget}
-	<RepaintDialog
-		generation={repaintTarget}
-		onsubmit={onRepaintSubmit}
-		oncancel={() => (repaintTarget = null)}
-	/>
-{/if}
-
-{#if coverTarget}
-	<CoverDialog
-		generation={coverTarget}
-		onsubmit={onCoverSubmit}
-		oncancel={() => (coverTarget = null)}
-	/>
 {/if}
 
 {#if showDeleteConfirm && song}
@@ -538,23 +535,12 @@
 		align-items: flex-start;
 	}
 
-	.song-title-btn {
-		background: none;
-		border: none;
-		padding: 0;
-		cursor: pointer;
-	}
-
 	.song-title {
 		font-family: var(--font-display);
 		font-size: 1.73rem;
 		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 0.13rem;
-	}
-
-	.song-title-btn:hover .song-title {
-		color: var(--primary);
 	}
 
 	.song-album {
@@ -714,13 +700,6 @@
 	.job-cancel:hover {
 		color: var(--score-bad);
 		border-color: var(--score-bad);
-	}
-
-	.gen-detail-wrapper {
-		display: flex;
-		flex-direction: column;
-		flex: 1;
-		overflow: auto;
 	}
 
 	.back-btn {

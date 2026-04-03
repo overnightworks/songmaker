@@ -139,10 +139,16 @@ class Generation(ShareMixin, Base):
     is_picked: Mapped[bool] = mapped_column(Boolean, default=False)
     is_kept: Mapped[bool] = mapped_column(Boolean, default=False)
     model_mode: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    src_generation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("generations.id", ondelete="SET NULL"), nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
 
     song: Mapped[Song] = relationship(back_populates="generations")
     version: Mapped[Version | None] = relationship(back_populates="generations")
+    src_generation: Mapped[Generation | None] = relationship(
+        remote_side=[id], foreign_keys=[src_generation_id],
+    )
     scores: Mapped[list[Score]] = relationship(
         back_populates="generation", cascade="all, delete-orphan",
     )

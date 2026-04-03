@@ -48,6 +48,7 @@ def list_songs(
                 joinedload(Song.versions),
                 joinedload(Song.generations).joinedload(Generation.scores),
                 joinedload(Song.generations).joinedload(Generation.rating),
+                joinedload(Song.generations).joinedload(Generation.src_generation),
                 joinedload(Song.album),
             )
             .order_by(Song.album_id, Song.track_number)
@@ -82,6 +83,7 @@ def get_song(session: Session, song_id: str) -> Song | None:
             joinedload(Song.versions),
             joinedload(Song.generations).joinedload(Generation.scores),
             joinedload(Song.generations).joinedload(Generation.rating),
+            joinedload(Song.generations).joinedload(Generation.src_generation),
             joinedload(Song.album),
         )
         .filter_by(id=song_id)

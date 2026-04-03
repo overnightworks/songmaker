@@ -20,6 +20,7 @@ def get_generation(session: Session, gen_id: str) -> Generation | None:
             joinedload(Generation.scores),
             joinedload(Generation.rating),
             joinedload(Generation.song).joinedload(Song.album),
+            joinedload(Generation.src_generation),
         )
         .filter_by(id=gen_id)
         .first()
@@ -41,6 +42,7 @@ def create_generation(
     generation_params: dict | None = None,
     wav_path: str | None = None,
     model_mode: str | None = None,
+    src_generation_id: str | None = None,
 ) -> Generation:
     max_num = (
         session.query(Generation.generation_number)
@@ -59,6 +61,7 @@ def create_generation(
         seed=seed,
         generation_params=generation_params,
         model_mode=model_mode,
+        src_generation_id=src_generation_id,
         status="completed",
     )
     session.add(gen)

@@ -88,6 +88,8 @@ export interface GenerationItem {
 	is_shared: boolean;
 	share_slug?: string | null;
 	model_mode?: string | null;
+	src_generation_id?: string | null;
+	src_generation_number?: number | null;
 	whisper_text: string | null;
 	scores: TrackScores | null;
 	generation_params: GenerationParams | null;

@@ -264,7 +264,13 @@ async def api_repaint_generation(
     check_redis_health(request)
     gen = check_generation_access(session, gen_id, user)
     song = gen.song
-    version = gen.version
+
+    if req.version_id:
+        version = next((v for v in song.versions if v.id == req.version_id), None)
+        if not version:
+            raise HTTPException(404, "Version not found")
+    else:
+        version = gen.version
 
     if not version:
         raise HTTPException(400, "Generation has no linked version")
@@ -304,10 +310,11 @@ async def api_repaint_generation(
             "repainting_end": req.repainting_end,
             "lyrics": lyrics,
             "prompt": prompt,
+            "src_generation_id": gen_id,
         }
         await pool.enqueue_job(
-            "generate", job.id, song.id, version.id, 1, user.id, req.seed,
-            req.model, repaint_params,
+            "generate", job.id, song.id, version.id, req.count, user.id,
+            req.seed, req.model, repaint_params,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
@@ -329,7 +336,13 @@ async def api_cover_generation(
     check_redis_health(request)
     gen = check_generation_access(session, gen_id, user)
     song = gen.song
-    version = gen.version
+
+    if req.version_id:
+        version = next((v for v in song.versions if v.id == req.version_id), None)
+        if not version:
+            raise HTTPException(404, "Version not found")
+    else:
+        version = gen.version
 
     if not version:
         raise HTTPException(400, "Generation has no linked version")
@@ -365,10 +378,11 @@ async def api_cover_generation(
             "audio_cover_strength": req.audio_cover_strength,
             "lyrics": lyrics,
             "prompt": prompt,
+            "src_generation_id": gen_id,
         }
         await pool.enqueue_job(
-            "generate", job.id, song.id, version.id, 1, user.id, req.seed,
-            req.model, None, cover_params,
+            "generate", job.id, song.id, version.id, req.count, user.id,
+            req.seed, req.model, None, cover_params,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:

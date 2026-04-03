@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { fetchAlbums, fetchSongs } from '$lib/api/client';
-	import { albumList, songList, selectedSong, selectedAlbumId } from '$lib/stores/player';
+	import {
+		albumList,
+		songList,
+		selectedSong,
+		selectedGeneration,
+		selectedAlbumId
+	} from '$lib/stores/player';
 	import { detailTab, initNavigation } from '$lib/stores/navigation';
 	import { selectedPlaylistDetail, loadPlaylists } from '$lib/stores/playlists';
 	import { loadActiveModels } from '$lib/stores/presets';
@@ -9,6 +15,7 @@
 	import SongList from '$lib/components/SongList.svelte';
 	import CreateForm from '$lib/components/CreateForm.svelte';
 	import SongDetailView from '$lib/components/SongDetailView.svelte';
+	import GenerationView from '$lib/components/GenerationView.svelte';
 	import AlbumDetailView from '$lib/components/AlbumDetailView.svelte';
 	import PlaylistDetailView from '$lib/components/PlaylistDetailView.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -18,6 +25,7 @@
 	let showCreate = $state(false);
 
 	const song = $derived($selectedSong);
+	const activeGen = $derived($selectedGeneration);
 	const currentAlbumId = $derived($selectedAlbumId);
 	const albums = $derived($albumList);
 	const selectedAlbum = $derived(
@@ -25,7 +33,9 @@
 	);
 	const playlistDetail = $derived($selectedPlaylistDetail);
 	const tab = $derived($detailTab);
-	const hasDetail = $derived(!!song || showCreate || !!selectedAlbum || !!playlistDetail);
+	const hasDetail = $derived(
+		!!song || !!activeGen || showCreate || !!selectedAlbum || !!playlistDetail
+	);
 
 	$effect(() => {
 		if (song) showCreate = false;
@@ -79,6 +89,8 @@
 	>
 		{#if showCreate}
 			<CreateForm albums={$albumList} />
+		{:else if activeGen && song}
+			<GenerationView />
 		{:else if song}
 			<SongDetailView />
 		{:else if selectedAlbum}

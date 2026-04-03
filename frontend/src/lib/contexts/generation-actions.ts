@@ -12,8 +12,7 @@ export interface GenerationActions {
 	addToPlaylist: (playlistId: string, genId: string) => Promise<void>;
 	pinSeed: (seed: number) => void;
 	clickVersion: (versionId: string) => void;
-	repaint: (gen: GenerationItem) => void;
-	cover: (gen: GenerationItem) => void;
+	useAsSource: (gen: GenerationItem) => void;
 }
 
 const KEY = Symbol('generation-actions');

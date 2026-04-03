@@ -19,17 +19,39 @@
 		loadVersion,
 		handleDiffChange
 	} from '$lib/stores/editor';
-	import type { VersionGenerationParams } from '$lib/api/types';
+	import type { GenerationItem, VersionGenerationParams } from '$lib/api/types';
 	import GenerationSettings from '$lib/components/GenerationSettings.svelte';
+	import WaveformRangePicker from '$lib/components/WaveformRangePicker.svelte';
 	import LyricsDiff from '$lib/components/LyricsDiff.svelte';
 	import VersionTimeline from '$lib/components/VersionTimeline.svelte';
 
 	interface Props {
 		ondeleteversion: (versionId: string, deleteGenerations: boolean) => void;
 		selectedModel?: string | null;
+		sourceGeneration?: GenerationItem | null;
+		sourceMode?: 'repaint' | 'cover';
+		repaintStart?: number;
+		repaintEnd?: number;
+		coverStrength?: number;
+		onrepaintrangechange?: (start: number, end: number) => void;
+		oncoverstrengthchange?: (strength: number) => void;
+		onsourcemodechange?: (mode: 'repaint' | 'cover') => void;
+		onsourceclear?: () => void;
 	}
 
-	let { ondeleteversion, selectedModel = null }: Props = $props();
+	let {
+		ondeleteversion,
+		selectedModel = null,
+		sourceGeneration = null,
+		sourceMode = 'repaint',
+		repaintStart = 0,
+		repaintEnd = 1,
+		coverStrength = 0.7,
+		onrepaintrangechange,
+		oncoverstrengthchange,
+		onsourcemodechange,
+		onsourceclear
+	}: Props = $props();
 
 	const vers = $derived($versions);
 	const verIndex = $derived($currentVersionIndex);
@@ -70,6 +92,62 @@
 </script>
 
 <div class="lyrics-edit">
+	{#if sourceGeneration}
+		<div class="source-bar">
+			<div class="source-info">
+				<span class="source-label">Source: Gen #{sourceGeneration.generation_number}</span>
+				{#if sourceGeneration.version_number !== null}
+					<span class="source-version">(v{sourceGeneration.version_number})</span>
+				{/if}
+			</div>
+			<div class="source-mode-toggle">
+				<button
+					class="mode-btn"
+					class:active={sourceMode === 'repaint'}
+					onclick={() => onsourcemodechange?.('repaint')}
+				>
+					Repaint
+				</button>
+				<button
+					class="mode-btn"
+					class:active={sourceMode === 'cover'}
+					onclick={() => onsourcemodechange?.('cover')}
+				>
+					Cover
+				</button>
+			</div>
+			<button class="source-dismiss" onclick={() => onsourceclear?.()} title="Clear source"
+				>×</button
+			>
+		</div>
+
+		{#if sourceMode === 'repaint'}
+			{@const duration = sourceGeneration.generation_params?.duration ?? 180}
+			<WaveformRangePicker
+				audioUrl={`/api/audio/${sourceGeneration.mp3_path}`}
+				{duration}
+				startPercent={repaintStart}
+				endPercent={repaintEnd}
+				onchange={(s, e) => onrepaintrangechange?.(s, e)}
+			/>
+		{:else}
+			<div class="cover-strength">
+				<span class="strength-label">Free</span>
+				<input
+					type="range"
+					class="strength-slider"
+					min="0"
+					max="100"
+					step="1"
+					value={coverStrength * 100}
+					oninput={(e) => oncoverstrengthchange?.(Number(e.currentTarget.value) / 100)}
+				/>
+				<span class="strength-label">Strict</span>
+				<span class="strength-value">{Math.round(coverStrength * 100)}%</span>
+			</div>
+		{/if}
+	{/if}
+
 	{#if vers.length > 0}
 		<VersionTimeline
 			versions={vers}
@@ -303,5 +381,104 @@
 		line-height: 1.6;
 		min-height: 200px;
 		resize: vertical;
+	}
+
+	.source-bar {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		padding: 0.5rem 0.8rem;
+		background: var(--surface);
+		border: 1px solid var(--primary);
+		border-radius: var(--card-radius);
+	}
+
+	.source-info {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.source-label {
+		font-size: 0.8rem;
+		font-family: var(--font-display);
+		color: var(--text);
+		letter-spacing: 0.5px;
+	}
+
+	.source-version {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+
+	.source-mode-toggle {
+		display: flex;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		overflow: hidden;
+	}
+
+	.mode-btn {
+		padding: 0.25rem 0.6rem;
+		border: none;
+		background: var(--bg);
+		color: var(--text-muted);
+		font-size: 0.7rem;
+		font-family: var(--font-display);
+		letter-spacing: var(--btn-letter-spacing);
+		cursor: pointer;
+	}
+
+	.mode-btn.active {
+		background: var(--primary);
+		color: #fff;
+	}
+
+	.source-dismiss {
+		background: none;
+		border: none;
+		color: var(--text-dim);
+		font-size: 1.1rem;
+		cursor: pointer;
+		padding: 0 0.2rem;
+		line-height: 1;
+	}
+
+	.source-dismiss:hover {
+		color: var(--text);
+	}
+
+	.cover-strength {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		padding: 0.5rem 0.8rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+	}
+
+	.strength-label {
+		font-size: 0.7rem;
+		color: var(--text-dim);
+		font-family: var(--font-display);
+		letter-spacing: 0.5px;
+		flex-shrink: 0;
+	}
+
+	.strength-slider {
+		flex: 1;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+
+	.strength-value {
+		font-size: 0.85rem;
+		font-family: var(--font-display);
+		color: var(--text);
+		min-width: 32px;
+		text-align: right;
 	}
 </style>

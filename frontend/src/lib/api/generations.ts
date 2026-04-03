@@ -26,7 +26,9 @@ export async function repaintGeneration(
 	lyrics?: string | null,
 	prompt?: string | null,
 	model?: string | null,
-	seed?: number | null
+	seed?: number | null,
+	versionId?: string | null,
+	count?: number
 ): Promise<JobStatus> {
 	const payload: Record<string, unknown> = {
 		src_generation_id: genId,
@@ -37,6 +39,8 @@ export async function repaintGeneration(
 	if (prompt != null) payload.prompt = prompt;
 	if (model) payload.model = model;
 	if (seed != null) payload.seed = seed;
+	if (versionId) payload.version_id = versionId;
+	if (count != null && count > 1) payload.count = count;
 	return apiFetch<JobStatus>(`/api/generations/${genId}/repaint`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -50,7 +54,9 @@ export async function coverGeneration(
 	lyrics?: string | null,
 	prompt?: string | null,
 	model?: string | null,
-	seed?: number | null
+	seed?: number | null,
+	versionId?: string | null,
+	count?: number
 ): Promise<JobStatus> {
 	const payload: Record<string, unknown> = {
 		src_generation_id: genId,
@@ -60,6 +66,8 @@ export async function coverGeneration(
 	if (prompt != null) payload.prompt = prompt;
 	if (model) payload.model = model;
 	if (seed != null) payload.seed = seed;
+	if (versionId) payload.version_id = versionId;
+	if (count != null && count > 1) payload.count = count;
 	return apiFetch<JobStatus>(`/api/generations/${genId}/cover`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },

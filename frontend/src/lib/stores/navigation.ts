@@ -21,15 +21,21 @@ export const detailTab = writable<DetailTab>('generations');
 
 let suppressPush = false;
 
-function pushSongUrl(songId: string | null): void {
-	if (suppressPush) return;
-	const url = songId ? `/?song=${songId}` : '/';
-	history.pushState({ songId }, '', url);
+function buildUrl(songId: string | null, genId: string | null): string {
+	if (songId && genId) return `/?song=${songId}&gen=${genId}`;
+	if (songId) return `/?song=${songId}`;
+	return '/';
 }
 
-function replaceSongUrl(songId: string | null): void {
-	const url = songId ? `/?song=${songId}` : '/';
-	history.replaceState({ songId }, '', url);
+function pushUrl(songId: string | null, genId: string | null = null): void {
+	if (suppressPush) return;
+	const url = buildUrl(songId, genId);
+	history.pushState({ songId, genId }, '', url);
+}
+
+function replaceUrl(songId: string | null, genId: string | null = null): void {
+	const url = buildUrl(songId, genId);
+	history.replaceState({ songId, genId }, '', url);
 }
 
 export function selectAlbumOverview(albumId: string): void {
@@ -45,7 +51,7 @@ export function deselectAlbum(): void {
 export function backToAlbum(): void {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
-	pushSongUrl(null);
+	pushUrl(null);
 }
 
 export function selectSong(songId: string): void {
@@ -54,7 +60,7 @@ export function selectSong(songId: string): void {
 	ensureGenerationsLoaded(songId);
 	detailTab.set('generations');
 	closeSidebar();
-	pushSongUrl(songId);
+	pushUrl(songId);
 }
 
 export function selectPlaylistView(playlistId: string): void {
@@ -73,11 +79,20 @@ export function deselectSong(): void {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	detailTab.set('generations');
-	pushSongUrl(null);
+	pushUrl(null);
 }
 
 export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 	playerSelectGeneration(gen, song);
+	pushUrl(song.id, gen.id);
+}
+
+export function backToSong(): void {
+	const songId = playerGetSongId();
+	playerClearGeneration();
+	if (songId) {
+		pushUrl(songId);
+	}
 }
 
 export function clearGenerationSelection(): void {
@@ -93,25 +108,44 @@ export function switchTab(tab: DetailTab): void {
 	detailTab.set(tab);
 }
 
+function playerGetSongId(): string | null {
+	let id: string | null = null;
+	const unsub = selectedSongId.subscribe((v) => (id = v));
+	unsub();
+	return id;
+}
+
 export function initNavigation(): () => void {
 	const params = new URLSearchParams(window.location.search);
 	const songId = params.get('song');
+	const genId = params.get('gen');
 
-	replaceSongUrl(songId);
+	replaceUrl(songId, genId);
 
 	if (songId) {
 		suppressPush = true;
 		playerSelectSong(songId);
 		ensureGenerationsLoaded(songId);
+		if (genId) {
+			selectedGenerationId.set(genId);
+		}
 		suppressPush = false;
 	}
 
 	function onPopstate(e: PopStateEvent): void {
 		suppressPush = true;
-		const state = (e.state as { songId: string | null } | null) ?? { songId: null };
+		const state = (e.state as { songId: string | null; genId: string | null } | null) ?? {
+			songId: null,
+			genId: null
+		};
 		if (state.songId) {
 			playerSelectSong(state.songId);
 			ensureGenerationsLoaded(state.songId);
+			if (state.genId) {
+				selectedGenerationId.set(state.genId);
+			} else {
+				selectedGenerationId.set(null);
+			}
 		} else {
 			selectedSongId.set(null);
 			selectedGenerationId.set(null);
