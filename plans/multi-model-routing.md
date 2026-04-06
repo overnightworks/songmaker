@@ -1,26 +1,22 @@
 # Multi-Model Generation Routing
 
-> **Status: FUTURE** — Single-GPU model switching, model tagging, model selection UI, and per-generation model dropdown all consolidated into `plans/acestep-modes.md` Phase 1. This plan covers multi-GPU routing and scaling only.
+> **Status: FUTURE** — Single-GPU dynamic model switching is shipped (`AceStepManager.switch_model`, per-generation `model_mode`, model dropdown, worker auto-switch). This plan covers multi-GPU routing and horizontal scaling only.
 
 ## Goal
 
 Route generation jobs to model-specific workers across multiple GPUs. Scale horizontally with multiple workers per model.
 
-## Prerequisites
+## Current State
 
-- **acestep-modes Phase 1** (per-generation model selection, worker auto-switch, model tagging) — must be complete before any of this.
-
-## Current State (after acestep-modes Phase 1)
-
-Once acestep-modes Phase 1 is done, we'll have:
+Already shipped:
 - Per-generation model dropdown in song editor
 - Generate request carries `model_mode`
-- Worker auto-switches model if loaded model doesn't match requested
-- Model tag on every generation (`model_mode` column)
+- Worker auto-switches model if loaded model doesn't match requested (single-GPU, blocking)
+- Model tag on every generation (`model_mode` column on `Generation`)
 - Model capability metadata in API
 - Parameter visibility adapts to selected model
 
-What we WON'T have: multi-GPU routing, automatic health discovery, distributed workers. The UI already works correctly — this plan just removes the switching overhead by running multiple models simultaneously.
+What we WON'T have until this plan lands: multi-GPU routing, automatic health discovery, distributed workers. The UI already works correctly — this plan removes the switching overhead by running multiple models simultaneously on separate workers/GPUs.
 
 ---
 

@@ -47,10 +47,10 @@ Read the entire codebase. Then tear it apart across these dimensions:
 - **Global singletons**: How many `reset_*()` functions exist for testing? Could these block parallel test execution?
 
 ### 6. Concurrency & State
-- **Thread safety**: The GPU queue runs a background thread while FastAPI handles concurrent requests. Are shared resources protected? Can the worker thread and request threads race on DB state?
-- **TOCTOU in check-then-act**: Rate limit checks, job count checks, setup endpoint — are these atomic or can concurrent requests slip through the gap between "check" and "act"?
-- **Singleton lifecycle**: What happens if a singleton is accessed before initialization or after reset? Are there ordering dependencies between singletons?
-- **SQLite under concurrency**: WAL mode allows concurrent reads, but writes still serialize. Under concurrent write load, what breaks first? Are there long-held transactions that would block other writers?
+- **Thread safety**: arq workers run jobs concurrently (`max_jobs > 1`) while FastAPI handles concurrent requests. The ACE-Step subprocess is a shared singleton per worker. Are shared resources protected? Can concurrent jobs race on subprocess state, model switching, or DB rows?
+- **TOCTOU in check-then-act**: Rate limit checks, job count checks, setup endpoint — are these atomic or can concurrent requests slip through the gap between "check" and "act"? Are advisory locks held for the right duration?
+- **Singleton lifecycle**: Module-level globals like `_acestep_manager`, `_arq_pool`, `_db_factory`, `_scorer_process` — what happens if accessed before init or after shutdown? Are there ordering dependencies?
+- **PostgreSQL under concurrent writes**: Long-held transactions (advisory locks across enqueue + commit) — can they block other writers? Are there missing indexes that turn point lookups into seq scans under load?
 
 ### 7. API Contracts & Boundaries
 - Are external API contracts (ACE-Step server) documented and validated?
@@ -61,10 +61,10 @@ Read the entire codebase. Then tear it apart across these dimensions:
 
 ### 8. Operational Readiness
 - **Observability**: Are there metrics (queue depth, job duration, VRAM usage, error rates), or only text logs? Can you build a dashboard or set up alerts, or would you be reading log files?
-- **Deployment**: Can you deploy a new version without losing in-flight jobs? Is there a graceful shutdown path?
-- **Recovery**: After a crash, what state is the system in? Are there orphaned jobs, leaked temp files, or stale locks?
-- **Monitoring the GPU queue**: Can an operator tell if the worker thread is alive, how deep the queue is, or how long the current job has been running?
-- **Backpressure**: If the GPU is slow (mode switching, long generations), does the system communicate this to users or just silently queue?
+- **Deployment**: Can you deploy a new version without losing in-flight arq jobs? Is there a graceful shutdown path that drains running jobs?
+- **Recovery**: After a worker crash, what state is the system in? Are there orphaned jobs (queued or running), leaked temp files, stale Redis locks, or stuck advisory locks? Does stale-job recovery actually run?
+- **Monitoring the worker**: Can an operator tell if the arq worker is alive, how deep each queue is, or how long the current job has been running? Is the heartbeat path observable?
+- **Backpressure**: If ACE-Step is slow (model switching, long generations, OOM recovery), does the system communicate this to users or just silently queue?
 
 ### 9. Configuration & Hardcoding
 - Are there magic numbers, hardcoded paths, or buried config?

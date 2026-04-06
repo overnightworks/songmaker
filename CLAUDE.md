@@ -8,8 +8,6 @@ AI-powered song generation platform. SvelteKit web UI + FastAPI backend + Postgr
 
 Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [security](docs/security.md) | [ACE-Step](docs/acestep.md)
 
-**Parallel agents**: If you're implementing a plan alongside other agents, read [plans/COORDINATION.md](plans/COORDINATION.md) before editing any files. It tracks file ownership to prevent merge conflicts.
-
 ## Product Context
 
 A musician creates an **album** (a coherent collection of songs — an EP, LP, or concept album). Each **song** belongs to one album. **Playlists** let the user collect favorite songs across albums for listening.
