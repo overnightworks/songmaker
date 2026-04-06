@@ -57,6 +57,7 @@ class AceStepManager:
         env.setdefault("ACESTEP_LM_BACKEND", "vllm")
         from songmaker_cli.constants import ACESTEP_DEFAULT_VRAM_GB
         env.setdefault("MAX_CUDA_VRAM", ACESTEP_DEFAULT_VRAM_GB)
+        env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
         env.setdefault("ACESTEP_COMPILE_MODEL", "0")
 
         for secret_key in ("ANTHROPIC_API_KEY", "SESSION_SECRET"):

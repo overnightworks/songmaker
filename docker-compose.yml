@@ -90,6 +90,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
+      secrets:
+        - hf_token
     command: ["songmaker_cli.music_worker.MusicWorkerSettings"]
     restart: unless-stopped
     healthcheck:
@@ -127,6 +129,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
+      secrets:
+        - hf_token
     command: ["songmaker_cli.scoring_worker.ScoringWorkerSettings"]
     restart: unless-stopped
     healthcheck:
@@ -181,6 +185,10 @@ services:
       - prometheus
     cap_drop:
       - ALL
+
+secrets:
+  hf_token:
+    environment: HF_TOKEN
 
 volumes:
   pgdata:
