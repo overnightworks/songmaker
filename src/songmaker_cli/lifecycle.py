@@ -122,18 +122,20 @@ async def session_sync_loop(app: FastAPI) -> None:
     while True:
         await asyncio.sleep(REDIS_SESSION_SYNC_INTERVAL_SECONDS)
         try:
-            if not ctx.redis.set(
+            acquired = await asyncio.to_thread(
+                ctx.redis.set,
                 SESSION_SYNC_LOCK_KEY, "1",
                 ex=SESSION_SYNC_LOCK_TTL_SECONDS, nx=True,
-            ):
+            )
+            if not acquired:
                 continue
             try:
-                synced = _sync_sessions(ctx, session_cache)
+                synced = await asyncio.to_thread(_sync_sessions, ctx, session_cache)
                 consecutive_failures = 0
                 if synced:
                     log.info("Session sync: updated %d sessions", synced)
             finally:
-                ctx.redis.delete(SESSION_SYNC_LOCK_KEY)
+                await asyncio.to_thread(ctx.redis.delete, SESSION_SYNC_LOCK_KEY)
         except Exception:
             consecutive_failures += 1
             if consecutive_failures >= 3:

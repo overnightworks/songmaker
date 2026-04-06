@@ -25,7 +25,10 @@ def _safe_json_dict(
         return None
     if isinstance(value, dict):
         return value
-    log.warning("Corrupted JSON dict in %s %s", entity_type, entity_id)
+    log.error(
+        "Corrupted JSON dict in %s %s: expected dict, got %s",
+        entity_type, entity_id, type(value).__name__,
+    )
     return None
 
 
@@ -219,7 +222,9 @@ class GenerationResponse(BaseModel):
                 scores["user_rating"] = gen.rating.rating
                 scores["user_notes"] = gen.rating.notes
         except (TypeError, AttributeError, KeyError):
-            log.warning("Corrupted score data in generation %s", gen.id)
+            log.error(
+                "Corrupted score data in generation %s", gen.id, exc_info=True,
+            )
             scores = {}
 
         generation_params = _safe_json_dict(

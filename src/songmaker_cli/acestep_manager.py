@@ -10,6 +10,7 @@ import logging
 import os
 import signal
 import subprocess
+import threading
 import time
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -40,6 +41,8 @@ class AceStepManager:
         self._current_mode: str | None = None
         self._stderr_path: Path | None = None
         self._stderr_file = None
+        self._switch_lock = threading.Lock()
+        self._active_config_path: str | None = None
 
     def start(self) -> None:
         log.info("Starting ACE-Step server...")
@@ -51,6 +54,8 @@ class AceStepManager:
         env["ACESTEP_API_PORT"] = str(_ACESTEP_PORT)
         env["ACESTEP_API_HOST"] = "127.0.0.1"
         env.setdefault("ACESTEP_DEVICE", "cuda")
+        if self._active_config_path is not None:
+            env["ACESTEP_CONFIG_PATH"] = self._active_config_path
         env.setdefault("ACESTEP_CONFIG_PATH", "acestep-v15-sft")
         env.setdefault("ACESTEP_INIT_LLM", "1")
         env.setdefault("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-4B")
@@ -163,22 +168,28 @@ class AceStepManager:
         config_path = MODEL_CONFIG_PATHS.get(target_model)
         if not config_path:
             raise ValueError(f"Unknown model mode: {target_model}")
-        log.info("Switching ACE-Step model to %s (%s)...", target_model, config_path)
-        self.stop()
-        os.environ["ACESTEP_CONFIG_PATH"] = config_path
-        self.start()
-        self.wait_for_health()
-        self.refresh_cached_model()
-        if self._cached_model != target_model:
-            log.error(
-                "Model switch verification failed: expected %s, got %s",
-                target_model, self._cached_model,
-            )
-            raise RuntimeError(
-                f"Model switch to {target_model} failed — "
-                f"server reports {self._cached_model or 'unknown'}"
-            )
-        log.info("Model switch complete: %s", self._cached_model)
+        with self._switch_lock:
+            log.info("Switching ACE-Step model to %s (%s)...", target_model, config_path)
+            previous_config_path = self._active_config_path
+            self.stop()
+            self._active_config_path = config_path
+            try:
+                self.start()
+                self.wait_for_health()
+                self.refresh_cached_model()
+                if self._cached_model != target_model:
+                    log.error(
+                        "Model switch verification failed: expected %s, got %s",
+                        target_model, self._cached_model,
+                    )
+                    raise RuntimeError(
+                        f"Model switch to {target_model} failed — "
+                        f"server reports {self._cached_model or 'unknown'}"
+                    )
+            except Exception:
+                self._active_config_path = previous_config_path
+                raise
+            log.info("Model switch complete: %s", self._cached_model)
 
     def prepare_generate_mode(self) -> None:
         self.ensure()

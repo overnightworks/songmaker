@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import signal
 import subprocess
 from pathlib import Path
@@ -250,76 +249,102 @@ def _mock_refresh_with_model(mgr, model):
     return _side_effect
 
 
+def _capture_active_on_start(mgr, captured: dict):
+    def _side_effect():
+        captured["config_path"] = mgr._active_config_path
+    return _side_effect
+
+
 def test_switch_model_success() -> None:
     mgr = AceStepManager()
-    old = os.environ.get("ACESTEP_CONFIG_PATH")
-    try:
-        with (
-            patch.object(mgr, "stop") as mock_stop,
-            patch.object(mgr, "start") as mock_start,
-            patch.object(mgr, "wait_for_health") as mock_wait,
-            patch.object(
-                mgr, "refresh_cached_model",
-                side_effect=_mock_refresh_with_model(mgr, "turbo"),
-            ) as mock_refresh,
-        ):
-            mgr.switch_model("turbo")
+    captured: dict = {}
+    with (
+        patch.object(mgr, "stop") as mock_stop,
+        patch.object(
+            mgr, "start",
+            side_effect=_capture_active_on_start(mgr, captured),
+        ) as mock_start,
+        patch.object(mgr, "wait_for_health") as mock_wait,
+        patch.object(
+            mgr, "refresh_cached_model",
+            side_effect=_mock_refresh_with_model(mgr, "turbo"),
+        ) as mock_refresh,
+    ):
+        mgr.switch_model("turbo")
 
-        mock_stop.assert_called_once()
-        mock_start.assert_called_once()
-        mock_wait.assert_called_once()
-        mock_refresh.assert_called_once()
-        assert os.environ.get("ACESTEP_CONFIG_PATH") == "acestep-v15-turbo"
-    finally:
-        if old is None:
-            os.environ.pop("ACESTEP_CONFIG_PATH", None)
-        else:
-            os.environ["ACESTEP_CONFIG_PATH"] = old
+    mock_stop.assert_called_once()
+    mock_start.assert_called_once()
+    mock_wait.assert_called_once()
+    mock_refresh.assert_called_once()
+    assert captured["config_path"] == "acestep-v15-turbo"
+    assert mgr._active_config_path == "acestep-v15-turbo"
 
 
 def test_switch_model_sft() -> None:
     mgr = AceStepManager()
-    old = os.environ.get("ACESTEP_CONFIG_PATH")
-    try:
-        with (
-            patch.object(mgr, "stop"),
-            patch.object(mgr, "start"),
-            patch.object(mgr, "wait_for_health"),
-            patch.object(
-                mgr, "refresh_cached_model",
-                side_effect=_mock_refresh_with_model(mgr, "sft"),
-            ),
-        ):
-            mgr.switch_model("sft")
+    captured: dict = {}
+    with (
+        patch.object(mgr, "stop"),
+        patch.object(mgr, "start", side_effect=_capture_active_on_start(mgr, captured)),
+        patch.object(mgr, "wait_for_health"),
+        patch.object(
+            mgr, "refresh_cached_model",
+            side_effect=_mock_refresh_with_model(mgr, "sft"),
+        ),
+    ):
+        mgr.switch_model("sft")
 
-        assert os.environ.get("ACESTEP_CONFIG_PATH") == "acestep-v15-sft"
-    finally:
-        if old is None:
-            os.environ.pop("ACESTEP_CONFIG_PATH", None)
-        else:
-            os.environ["ACESTEP_CONFIG_PATH"] = old
+    assert captured["config_path"] == "acestep-v15-sft"
+    assert mgr._active_config_path == "acestep-v15-sft"
 
 
-def test_switch_model_verification_failure() -> None:
+def test_switch_model_persists_across_restart() -> None:
     mgr = AceStepManager()
-    old = os.environ.get("ACESTEP_CONFIG_PATH")
-    try:
-        with (
-            patch.object(mgr, "stop"),
-            patch.object(mgr, "start"),
-            patch.object(mgr, "wait_for_health"),
-            patch.object(
-                mgr, "refresh_cached_model",
-                side_effect=_mock_refresh_with_model(mgr, "sft"),
-            ),
-        ):
-            with pytest.raises(RuntimeError, match="Model switch to turbo failed"):
-                mgr.switch_model("turbo")
-    finally:
-        if old is None:
-            os.environ.pop("ACESTEP_CONFIG_PATH", None)
-        else:
-            os.environ["ACESTEP_CONFIG_PATH"] = old
+    with (
+        patch.object(mgr, "stop"),
+        patch.object(mgr, "start"),
+        patch.object(mgr, "wait_for_health"),
+        patch.object(
+            mgr, "refresh_cached_model",
+            side_effect=_mock_refresh_with_model(mgr, "turbo"),
+        ),
+    ):
+        mgr.switch_model("turbo")
+
+    captured_env: dict = {}
+
+    def _capture_popen_env(*args, **kwargs):
+        captured_env.update(kwargs.get("env", {}))
+        proc = MagicMock()
+        proc.pid = 1234
+        proc.poll.return_value = None
+        return proc
+
+    with (
+        patch("songmaker_cli.acestep_manager.subprocess.Popen", side_effect=_capture_popen_env),
+        patch.object(mgr, "_find_uv", return_value=["uv"]),
+    ):
+        mgr.start()
+
+    assert captured_env.get("ACESTEP_CONFIG_PATH") == "acestep-v15-turbo"
+
+
+def test_switch_model_verification_failure_rolls_back() -> None:
+    mgr = AceStepManager()
+    mgr._active_config_path = "acestep-v15-sft"
+    with (
+        patch.object(mgr, "stop"),
+        patch.object(mgr, "start"),
+        patch.object(mgr, "wait_for_health"),
+        patch.object(
+            mgr, "refresh_cached_model",
+            side_effect=_mock_refresh_with_model(mgr, "sft"),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="Model switch to turbo failed"):
+            mgr.switch_model("turbo")
+
+    assert mgr._active_config_path == "acestep-v15-sft"
 
 
 def test_switch_model_unknown() -> None:
