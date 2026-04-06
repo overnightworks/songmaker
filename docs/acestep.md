@@ -106,5 +106,35 @@ The server returns `cot_caption` and `cot_lyrics` in generation results — the 
 | `ACESTEP_INIT_LLM` | 1 | Load LM on startup |
 | `ACESTEP_LM_MODEL_PATH` | acestep-5Hz-lm-4B | LM model |
 | `ACESTEP_LM_BACKEND` | vllm | LM inference backend |
-| `MAX_CUDA_VRAM` | 18 | VRAM budget in GB |
+| `MAX_CUDA_VRAM` | 24 | VRAM budget in GB |
 | `ACESTEP_COMPILE_MODEL` | 0 | torch.compile (slower startup, faster inference) |
+
+## Local Submodule Patch — VRAM Pre-flight
+
+The `_models/acestep` submodule (pinned at v0.1.6) has a **local patch** that must be reapplied after any `git submodule update`.
+
+**File:** `_models/acestep/acestep/core/generation/handler/generate_music.py` (around line 325)
+
+**Change:** Replace the `_vram_preflight_check()` call with `gc.collect()` + `torch.cuda.empty_cache()`.
+
+**Why:** v0.1.6 added a VRAM pre-flight check that's overly conservative on 24 GB cards when the desktop shares the GPU. It reports e.g. "1.3 GB free, needs 1.4 GB" and blocks generation, even though PyTorch's caching allocator can handle it. The check did not exist in v0.1.5 and songs generated fine. See ACE-Step issue #822 for similar reports.
+
+**Patch:**
+```python
+# In GenerateMusicMixin.generate_music(), replace:
+vram_error = self._vram_preflight_check(
+    actual_batch_size=actual_batch_size,
+    audio_duration=audio_duration,
+    guidance_scale=guidance_scale,
+)
+if vram_error is not None:
+    return vram_error
+
+# With:
+gc.collect()
+torch.cuda.empty_cache()
+```
+
+**No upstream option exists** — no env var, config flag, or API parameter disables the pre-flight. Only `offload_to_cpu=True` bypasses it (too slow).
+
+**When you can remove this patch:** When the GPU has enough spare VRAM that the check passes reliably (e.g., after adding a second GPU for desktop+scoring, freeing the 3090). Or when ACE-Step adds an official skip flag upstream.
