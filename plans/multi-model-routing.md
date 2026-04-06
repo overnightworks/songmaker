@@ -1,6 +1,13 @@
 # Multi-Model Generation Routing
 
-> **Status: FUTURE** — Single-GPU dynamic model switching is shipped (`AceStepManager.switch_model`, per-generation `model_mode`, model dropdown, worker auto-switch). This plan covers multi-GPU routing and horizontal scaling only.
+> **Status: DEFERRED** — Single-GPU dynamic model switching is shipped (`AceStepManager.switch_model`, per-generation `model_mode`, model dropdown, worker auto-switch). This plan covers multi-GPU routing and horizontal scaling only. It is mutually exclusive with `switch_model`: when this lands, `switch_model` and its lock/persistence machinery get deleted.
+>
+> **Triggers to revisit (any one is enough):**
+> 1. A second GPU is added to the deployment.
+> 2. Sustained multi-user load on a single GPU — the moment two users with different model preferences hit the worker concurrently, `switch_model` thrashes (30–90s dead time per swap).
+> 3. A `switch_model` production bug costs more than an hour to debug — signal that the state machine has outgrown its single-GPU usefulness.
+>
+> Until one of these fires, do not build this plan and do not extend `switch_model`. Pick one strategy per deployment.
 
 ## Goal
 
