@@ -136,7 +136,7 @@ Intermediate phases on the feature branch are not expected to be production-runn
 
 ## Phases
 
-Six phases, organized as commit/PR-review boundaries on the feature branch.
+Seven phases, organized as commit/PR-review boundaries on the feature branch. Phases 1–6 are the implementation; Phase 7 is a cross-cutting cleanup sweep.
 
 ---
 
@@ -727,6 +727,20 @@ Everything that's "make it production-ready" but not blocking for the cutover.
 8. **Memory update** — write a memory: "Always check `plans/` folder before drafting plans — the project has multi-phase plan files in there, and new plans should either supersede or extend existing ones, never silently overlap."
 
 Phase 6 can be split into 2 PRs (observability + everything else).
+
+---
+
+### Phase 7 — Cross-cutting cleanup sweep
+
+**Goal:** one final pass to catch cross-cutting stale references that no single phase's self-review is positioned to find — `CLAUDE.md` debt entries, `docs/` consistency across the Phase 3 + Phase 6 writes, frontend grep after Phase 4 rewrites the admin tab, stale env files, repo-wide dead symbol sweep. **Deletions and doc updates only, no new features.**
+
+**Why a dedicated phase and not a sub-step of Phase 6:** each phase's own self-review catches the dead code *that phase* creates. Cross-cutting cleanup benefits from a single pass at the end when everything is in its final state. Rolling it into Phase 6 would conflate polish-feature work with cleanup; keeping it as Phase 7 makes the cleanup commit reviewable on its own.
+
+**Sub-plan:** [plans/acestep-worker-pool-phase7-subplan.md](acestep-worker-pool-phase7-subplan.md) — 11-step procedure with concrete grep commands, over-cleaning watch list, and verification checklist. Read it before starting.
+
+**Size:** 1–2 hours. One commit.
+
+**Run when:** after Phases 1–6 are all committed and the full test suite is green at the Phase 6 commit. Not earlier.
 
 ---
 
