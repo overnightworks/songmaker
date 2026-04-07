@@ -125,6 +125,45 @@ services:
               count: 1
               capabilities: [gpu]
 
+  songmaker-acestep-worker-0:
+    build:
+      context: .
+      dockerfile: docker/acestep-worker.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      WORKER_ID: "acestep-worker-0"
+      WORKER_HOST: "songmaker-acestep-worker-0"
+      WORKER_PORT: "8001"
+      GPU_ID: "0"
+      VRAM_BUDGET_GB: "${ACESTEP_WORKER_VRAM_GB:-22}"
+      ACESTEP_CHECKPOINT_DIR: "/app/_models/acestep"
+      AUDIO_OUTPUT_DIR: "/app/data/audio/worker_output"
+      ACESTEP_LOG_DIR: "/app/_models/acestep"
+      REDIS_URL: redis://redis:6379/0
+      CONTROL_PLANE_URL: "${ACESTEP_WORKER_CONTROL_PLANE_URL:-}"
+      SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
+      HF_TOKEN: "${HF_TOKEN:-}"
+      HF_HUB_DISABLE_XET: "1"
+    volumes:
+      - ./_models/acestep:/app/_models/acestep
+      - audiofiles:/app/data/audio
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
   songmaker-scoring-worker:
     build:
       context: .
