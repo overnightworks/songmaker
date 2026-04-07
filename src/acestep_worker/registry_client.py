@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
@@ -10,8 +12,20 @@ import httpx
 log = logging.getLogger(__name__)
 
 REGISTER_PATH = "/api/internal/workers/register"
-DEFAULT_RETRY_DELAYS_SECONDS: tuple[float, ...] = (1.0, 2.0, 5.0, 10.0, 30.0)
 DEFAULT_TIMEOUT_SECONDS = 10.0
+
+INITIAL_BACKOFF_SCHEDULE: tuple[float, ...] = (1.0, 2.0, 5.0, 10.0, 30.0)
+INDEFINITE_BACKOFF_SECONDS = 60.0
+JITTER_FRACTION = 0.2
+
+DelaysFactory = Callable[[], Iterator[float]]
+
+
+def default_retry_delays() -> Iterator[float]:
+    yield from INITIAL_BACKOFF_SCHEDULE
+    while True:
+        jitter = INDEFINITE_BACKOFF_SECONDS * JITTER_FRACTION * (2 * random.random() - 1)
+        yield INDEFINITE_BACKOFF_SECONDS + jitter
 
 
 class RegistrationFailedError(RuntimeError):
@@ -43,13 +57,24 @@ class RegistryClient:
         control_plane_url: str,
         internal_token: str,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-        retry_delays_seconds: tuple[float, ...] = DEFAULT_RETRY_DELAYS_SECONDS,
+        retry_delays_seconds: tuple[float, ...] | None = None,
+        delays_factory: DelaysFactory | None = None,
         sleeper: Any = asyncio.sleep,
     ) -> None:
         self._control_plane_url = control_plane_url.rstrip("/")
         self._internal_token = internal_token
         self._timeout = timeout_seconds
-        self._delays = retry_delays_seconds
+        if delays_factory is not None and retry_delays_seconds is not None:
+            raise ValueError(
+                "Pass either delays_factory or retry_delays_seconds, not both",
+            )
+        if delays_factory is not None:
+            self._delays_factory: DelaysFactory = delays_factory
+        elif retry_delays_seconds is not None:
+            fixed = tuple(retry_delays_seconds)
+            self._delays_factory = lambda: iter(fixed)
+        else:
+            self._delays_factory = default_retry_delays
         self._sleeper = sleeper
 
     async def register(self, registration: WorkerRegistration) -> None:
@@ -57,28 +82,28 @@ class RegistryClient:
         headers = {"X-Internal-Token": self._internal_token}
         payload = registration.to_payload()
         last_error: Exception | None = None
-        total_attempts = len(self._delays)
-        for attempt, delay in enumerate(self._delays):
+        attempt = 0
+        for delay in self._delays_factory():
+            attempt += 1
             try:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
                     response = await client.post(url, json=payload, headers=headers)
                     response.raise_for_status()
-                    log.info("Worker %s registered with control plane", registration.worker_id)
+                    log.info(
+                        "Worker %s registered with control plane",
+                        registration.worker_id,
+                    )
                     return
             except (httpx.HTTPError, httpx.TimeoutException) as exc:
                 last_error = exc
-                is_last_attempt = attempt == total_attempts - 1
-                if is_last_attempt:
-                    log.warning("Registration attempt %d failed: %s", attempt + 1, exc)
-                    break
                 log.warning(
                     "Registration attempt %d failed: %s. Retrying in %.1fs",
-                    attempt + 1,
+                    attempt,
                     exc,
                     delay,
                 )
                 await self._sleeper(delay)
         raise RegistrationFailedError(
             f"Could not register worker {registration.worker_id} after "
-            f"{total_attempts} attempts: {last_error}"
+            f"{attempt} attempts: {last_error}"
         )

@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import fakeredis.aioredis
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -451,3 +452,126 @@ def test_lifespan_calls_registry(tmp_path: Path) -> None:
     with TestClient(app):
         pass
     assert len(register_calls) == 1
+
+
+def test_health_returns_503_until_registered_then_200(tmp_path: Path) -> None:
+    import asyncio as _asyncio
+
+    from acestep_worker.registry_client import WorkerRegistration
+    from acestep_worker.wrapper import lifespan
+
+    async def go():
+        deps, _ = _make_deps(tmp_path)
+        register_started = _asyncio.Event()
+        register_release = _asyncio.Event()
+
+        class SlowRegistry:
+            async def register(self, registration):
+                register_started.set()
+                await register_release.wait()
+
+        deps.registry_client = SlowRegistry()  # type: ignore[assignment]
+        deps.registration = WorkerRegistration(
+            worker_id="acestep-worker-0",
+            host="acestep-worker-0",
+            port=8001,
+            gpu_id=0,
+            vram_total_gb=24.0,
+        )
+
+        app = create_app(deps)
+        async with lifespan(app):
+            await register_started.wait()
+            assert deps.registered is False
+
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://test",
+            ) as client:
+                resp = await client.get("/health")
+                assert resp.status_code == 503
+                assert "awaiting control plane registration" in resp.json()["detail"]
+
+                register_release.set()
+                for _ in range(50):
+                    if deps.registered:
+                        break
+                    await _asyncio.sleep(0.01)
+                assert deps.registered is True
+
+                resp = await client.get("/health")
+                assert resp.status_code == 200
+                assert resp.json() == {"status": "ok"}
+
+    _run(go())
+
+
+def test_lifespan_cancels_pending_registration_on_shutdown(tmp_path: Path) -> None:
+    import asyncio as _asyncio
+
+    deps, _ = _make_deps(tmp_path)
+    cancelled = _asyncio.Event()
+
+    class HangingRegistry:
+        async def register(self, registration):
+            try:
+                await _asyncio.sleep(60)
+            except _asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+    from acestep_worker.registry_client import WorkerRegistration
+
+    deps.registry_client = HangingRegistry()  # type: ignore[assignment]
+    deps.registration = WorkerRegistration(
+        worker_id="acestep-worker-0",
+        host="acestep-worker-0",
+        port=8001,
+        gpu_id=0,
+        vram_total_gb=24.0,
+    )
+
+    async def go():
+        from acestep_worker.wrapper import lifespan
+
+        app = create_app(deps)
+        async with lifespan(app):
+            await _asyncio.sleep(0.01)
+            assert deps.registration_task is not None
+            assert not deps.registration_task.done()
+        assert cancelled.is_set()
+        assert deps.registration_task is not None
+        assert deps.registration_task.cancelled() or deps.registration_task.done()
+
+    _run(go())
+
+
+def test_lifespan_swallows_registration_exception_on_shutdown(tmp_path: Path) -> None:
+    import asyncio as _asyncio
+
+    deps, _ = _make_deps(tmp_path)
+
+    class FailingRegistry:
+        async def register(self, registration):
+            await _asyncio.sleep(60)
+            raise RuntimeError("should not reach this")
+
+    from acestep_worker.registry_client import WorkerRegistration
+
+    deps.registry_client = FailingRegistry()  # type: ignore[assignment]
+    deps.registration = WorkerRegistration(
+        worker_id="acestep-worker-0",
+        host="acestep-worker-0",
+        port=8001,
+        gpu_id=0,
+        vram_total_gb=24.0,
+    )
+
+    async def go():
+        from acestep_worker.wrapper import lifespan
+
+        app = create_app(deps)
+        async with lifespan(app):
+            await _asyncio.sleep(0.01)
+
+    _run(go())

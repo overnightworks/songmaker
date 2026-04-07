@@ -58,6 +58,8 @@ class WorkerDeps:
     checkpoint_dir: Path
     audio_output_dir: Path
     generate_runner: GenerateRunner
+    registered: bool = False
+    registration_task: asyncio.Task[None] | None = None
 
 
 def _format_sse(event: WorkerTaskEvent) -> bytes:
@@ -87,6 +89,11 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
+        if not deps.registered:
+            raise HTTPException(
+                status_code=503,
+                detail="awaiting control plane registration",
+            )
         return HealthResponse(status="ok")
 
     @router.get("/loaded_models", response_model=LoadedModelsResponse)
@@ -178,13 +185,33 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     deps: WorkerDeps = app.state.deps
-    if deps.registry_client is not None and deps.registration is not None:
-        await deps.registry_client.register(deps.registration)
+    control_plane = (
+        getattr(deps.registry_client, "_control_plane_url", "(unknown)")
+        if deps.registry_client is not None
+        else "(disabled)"
+    )
+    log.info(
+        "acestep-worker %s starting; awaiting control plane at %s",
+        deps.worker_id, control_plane,
+    )
+
+    async def _register_and_flag() -> None:
+        if deps.registry_client is not None and deps.registration is not None:
+            await deps.registry_client.register(deps.registration)
+        deps.registered = True
+
+    deps.registration_task = asyncio.create_task(_register_and_flag())
     await deps.heartbeat.clear_orphaned_queue()
     deps.heartbeat.start()
     try:
         yield
     finally:
+        if deps.registration_task is not None and not deps.registration_task.done():
+            deps.registration_task.cancel()
+            try:
+                await deps.registration_task
+            except (asyncio.CancelledError, Exception):
+                pass
         await deps.heartbeat.shutdown()
         await deps.cache.evict_all()
 
