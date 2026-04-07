@@ -43,7 +43,6 @@ tests/
 ├── test_claude_provider.py  Claude API/CLI backend tests
 ├── test_config.py           ACE-Step config building, path resolution
 ├── test_db.py               DB models, queries, engine, migrations
-├── test_acestep_manager.py    ACE-Step lifecycle, VRAM management
 ├── test_arq_pool.py           arq connection pool, Redis health queries
 ├── test_worker.py             arq worker tasks, idempotency, startup/shutdown
 ├── test_jobs.py               Background generation + scoring job runners
@@ -81,8 +80,8 @@ frontend/src/
 
 - **Real SQLite** for DB tests (`tmp_path` per test, `reset_engine()` in fixtures)
 - **Synthesized audio** for mastering/scoring tests (sine waves via numpy)
-- **Mock external services**: ACE-Step client, Whisper model, Claude API, ffmpeg
-- **Patch at the import location**, not the source: `patch("songmaker_cli.jobs.AceStepClient")`
+- **Mock external services**: scheduler dispatch, Whisper model, Claude API, ffmpeg
+- **Patch at the import location**, not the source: `patch("songmaker_cli.jobs.dispatch_generation")`
 - **Factory fixtures** in conftest.py for WAV bytes, stereo audio, song files
 
 ### Frontend

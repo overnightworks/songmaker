@@ -1,5 +1,16 @@
 # ACE-Step Worker Pool Architecture
 
+> **STATUS: IMPLEMENTED** — All 7 phases shipped on `feat/acestep-worker-pool`.
+> - Phase 1 (wrapper container, model cache, task store): c416194
+> - Phase 2 (control plane registration + Redis state): 275518c
+> - Phase 3 (cutover, delete acestep_manager): 74b8576
+> - Phase 4 (admin Worker Pool + Model Registry panels): a1ca504
+> - Phase 5 (UI-driven downloads): a0e5136 + 574c84c + 7ab326a
+> - Phase 6 (observability + refcount/pin/restart): 6780f9e + 550e249 + 8d285e5 + ed7ee07
+> - Phase 7 (cleanup sweep): this commit
+>
+> Phase 8 (image architecture refactor) is a separate follow-up — see its own sub-plan.
+
 > **Final destination after plan approval**: this content gets saved to `plans/acestep-worker-pool.md` as the first step of implementation, and `plans/multi-model-routing.md` gets marked **STATUS: SUPERSEDED** with a pointer to this plan.
 
 ## Plan Revisions (2026-04-07)

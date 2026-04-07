@@ -132,5 +132,4 @@ def test_music_worker_settings_functions() -> None:
     assert "generate" in func_names
     assert "load_model_on_worker" in func_names
     assert "download_model_on_worker" in func_names
-    assert "reinitialize_acestep" not in func_names
     assert len(MusicWorkerSettings.functions) == 3

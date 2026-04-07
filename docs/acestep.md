@@ -167,7 +167,7 @@ Pin/unpin from the admin UI: each loaded-mode row in the Worker Pool card has a 
 
 ### Load-while-generating refcount
 
-Generations and model loads share the same cache. Without coordination, an admin who loads a different mode mid-generation would evict the in-use model and crash the running generation with a stale subprocess handle. Phase 6 fixes this with a **per-mode refcount**:
+Generations and model loads share the same cache. Without coordination, an admin who loads a different mode mid-generation would evict the in-use model and crash the running generation with a stale subprocess handle. The worker uses a **per-mode refcount**:
 
 - The worker's `/generate` endpoint calls `cache.acquire_for_use(mode)` before spawning the runner. If the mode isn't loaded the endpoint returns 409.
 - The runner spawn is wrapped in a `try/finally` that calls `cache.release(mode)` on completion (success **or** exception **or** cancellation).
