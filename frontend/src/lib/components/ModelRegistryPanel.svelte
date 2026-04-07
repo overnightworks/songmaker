@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { getRegistry } from '$lib/api/client';
 	import { createPollingStore } from '$lib/stores/adminPolling';
+	import { ApiError } from '$lib/api/fetch';
 	import type { RegistryResponse } from '$lib/api/types';
 
 	const POLL_INTERVAL_MS = 5000;
@@ -17,10 +18,22 @@
 	const error = store.error;
 
 	const models = $derived($data?.models ?? []);
+	const forbidden = $derived($error instanceof ApiError && $error.status === 403);
+
+	let lastModesKey = '';
 
 	$effect(() => {
-		if (onModesChange && models.length > 0) {
-			onModesChange(models.map((m) => m.mode));
+		if (!onModesChange || models.length === 0) return;
+		const modes = models.map((m) => m.mode);
+		const key = modes.join('|');
+		if (key === lastModesKey) return;
+		lastModesKey = key;
+		onModesChange(modes);
+	});
+
+	$effect(() => {
+		if (forbidden) {
+			store.stop();
 		}
 	});
 
@@ -31,7 +44,9 @@
 <section class="panel">
 	<h2>Model Registry</h2>
 
-	{#if $error && models.length === 0}
+	{#if forbidden}
+		<p class="panel-error">Admin access required.</p>
+	{:else if $error && models.length === 0}
 		<p class="panel-error">Cannot reach the registry API. {$error.message}</p>
 	{:else if models.length === 0}
 		<p class="hint">Loading registry…</p>

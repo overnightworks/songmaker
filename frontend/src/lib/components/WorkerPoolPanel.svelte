@@ -4,6 +4,7 @@
 	import { createPollingStore } from '$lib/stores/adminPolling';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { addToast } from '$lib/stores/toast';
+	import { ApiError } from '$lib/api/fetch';
 	import type { WorkerPoolResponse, WorkerInfoItem } from '$lib/api/types';
 
 	const POLL_INTERVAL_MS = 3000;
@@ -24,7 +25,7 @@
 	let selectedMode = $state<Record<string, string>>({});
 	let actionError = $state('');
 	let busyAction = $state<Record<string, boolean>>({});
-	let trackedLoadJobIds = $state(new Set<string>());
+	let trackedLoadJobIds = new Set<string>();
 
 	const loadingByWorker = $derived(
 		new Map(
@@ -33,6 +34,8 @@
 				.map((j) => [j.workerId as string, j])
 		)
 	);
+
+	const forbidden = $derived($error instanceof ApiError && $error.status === 403);
 
 	$effect(() => {
 		const currentLoadJobIds = new Set(
@@ -49,6 +52,12 @@
 			void store.refresh();
 		}
 		trackedLoadJobIds = currentLoadJobIds;
+	});
+
+	$effect(() => {
+		if (forbidden) {
+			store.stop();
+		}
 	});
 
 	onMount(() => store.start());
@@ -147,7 +156,9 @@
 <section class="panel">
 	<h2>Worker Pool</h2>
 
-	{#if $error && workers.length === 0}
+	{#if forbidden}
+		<p class="panel-error">Admin access required.</p>
+	{:else if $error && workers.length === 0}
 		<p class="panel-error">Cannot reach the worker pool API. {$error.message}</p>
 	{:else if workers.length === 0}
 		<p class="hint">
@@ -166,6 +177,8 @@
 			{#each workers as worker (worker.identity.id)}
 				{@const busy = isCardBusy(worker)}
 				{@const trackedJob = loadingByWorker.get(worker.identity.id)}
+				{@const offline = worker.state === null}
+				{@const vramUsage = formatVramUsage(worker.state)}
 				<div class="card" class:busy>
 					<div class="card-header">
 						<span class={statusClass(worker.status)}>{statusIcon(worker.status)}</span>
@@ -197,10 +210,10 @@
 							<span class="row-label">Queue:</span>
 							<span class="row-value">{worker.state.queue_depth} jobs</span>
 						</div>
-						{#if formatVramUsage(worker.state)}
+						{#if vramUsage}
 							<div class="card-row">
 								<span class="row-label">VRAM:</span>
-								<span class="row-value">{formatVramUsage(worker.state)}</span>
+								<span class="row-value">{vramUsage}</span>
 							</div>
 						{/if}
 						<div class="card-row">
@@ -217,7 +230,7 @@
 						<select
 							class="mode-select"
 							bind:value={selectedMode[worker.identity.id]}
-							disabled={busy || availableModes.length === 0}
+							disabled={busy || offline || availableModes.length === 0}
 						>
 							<option value="" disabled selected>Load model…</option>
 							{#each availableModes as mode (mode)}
@@ -227,7 +240,10 @@
 						<button
 							class="action-btn"
 							onclick={() => handleLoad(worker.identity.id)}
-							disabled={busy || !selectedMode[worker.identity.id] || busyAction[worker.identity.id]}
+							disabled={busy ||
+								offline ||
+								!selectedMode[worker.identity.id] ||
+								busyAction[worker.identity.id]}
 						>
 							{busyAction[worker.identity.id] ? 'Loading…' : 'Load'}
 						</button>
