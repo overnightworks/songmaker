@@ -28,7 +28,7 @@ from dataclasses import asdict, dataclass, is_dataclass
 import httpx
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.acestep_state import (
@@ -270,10 +270,11 @@ async def dispatch_generation(
     on_progress: ProgressCallback | None = None,
     on_heartbeat: HeartbeatCallback | None = None,
     redis: Redis,
-    db: Session,
+    db_factory: sessionmaker[Session],
     options: DispatchOptions = DispatchOptions(),
 ) -> GenerationTaskResultDTO:
-    worker = await pick_worker(db, redis, target_mode)
+    with db_factory() as session:
+        worker = await pick_worker(session, redis, target_mode)
 
     await incr_queue_depth(redis, worker.id)
     try:

@@ -221,6 +221,28 @@ def test_generation_job_no_capacity(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
+        assert job.error == "No ACE-Step workers available"
+
+
+def test_generation_job_worker_task_failed_message(seeded_db, tmp_path: Path) -> None:
+    from songmaker_cli.scheduler import WorkerTaskFailed
+
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
+        WorkerTaskFailed("GPU OOM on worker"),
+    )
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+        ))
+
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "failed"
+        assert job.error == "Worker generation failed"
 
 
 def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:

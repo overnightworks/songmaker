@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.errors import AudioDownloadError
@@ -56,6 +57,8 @@ _USER_FACING_ERRORS: tuple[tuple[type[Exception], str], ...] = (
     (AudioDownloadError, "Failed to download generated audio"),
     (ConnectionError, "ACE-Step server not reachable"),
     (TimeoutError, "Generation timed out"),
+    (NoCapacityError, "No ACE-Step workers available"),
+    (WorkerTaskFailed, "Worker generation failed"),
     (RuntimeError, "Internal error during processing"),
 )
 
@@ -485,7 +488,7 @@ async def run_generation_job(
     repaint_params: dict | None = None,
     cover_params: dict | None = None,
     target_model: str | None = None,
-    redis: object | None = None,
+    redis: Redis | None = None,
 ) -> None:
     assert db_factory is not None, "db_factory is required"
     assert audio_dir is not None, "audio_dir is required"
@@ -541,15 +544,14 @@ async def run_generation_job(
                 on_heartbeat = _make_heartbeat_callback(db_factory, job_id)
                 try:
                     gen_id = str(uuid.uuid4())
-                    with db_factory() as session:
-                        worker_result = await dispatch_generation(
-                            ace_config=ctx.ace_config,
-                            target_mode=ctx.model_name,
-                            on_progress=on_progress,
-                            on_heartbeat=on_heartbeat,
-                            redis=redis,
-                            db=session,
-                        )
+                    worker_result = await dispatch_generation(
+                        ace_config=ctx.ace_config,
+                        target_mode=ctx.model_name,
+                        on_progress=on_progress,
+                        on_heartbeat=on_heartbeat,
+                        redis=redis,
+                        db_factory=db_factory,
+                    )
                     await asyncio.to_thread(
                         post_process_generation,
                         worker_audio_path=worker_result.audio_path,
