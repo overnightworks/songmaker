@@ -34,6 +34,8 @@
 	import type { AvailableModel, ClaudeModelsResponse } from '$lib/api/client';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
+	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
+	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
 
 	let users = $state<UserItem[]>([]);
 	let sessions = $state<SessionItem[]>([]);
@@ -77,6 +79,8 @@
 	let deleteUserId = $state<string | null>(null);
 	let deleteConfirmInput = $state('');
 	let deleting = $state(false);
+
+	let registryModes = $state<string[]>([]);
 
 	let allModels = $state<AvailableModel[]>([]);
 	let genDefaults = $state<Record<string, VersionGenerationParams>>({});
@@ -217,7 +221,6 @@
 			savingClaude = false;
 		}
 	}
-
 
 	async function handleCreate() {
 		error = '';
@@ -808,6 +811,9 @@
 		{/if}
 
 		{#if tab === 'acestep'}
+			<WorkerPoolPanel availableModes={registryModes} />
+			<ModelRegistryPanel onModesChange={(modes) => (registryModes = modes)} />
+
 			<section>
 				<h2>Available Models</h2>
 				<p class="hint">Toggle which models users can create presets for.</p>
@@ -823,14 +829,6 @@
 						</button>
 					{/each}
 				</div>
-			</section>
-
-			<section>
-				<h2>ACE-Step Workers</h2>
-				<p class="hint">
-					Worker pool monitoring and model management UI is coming in Phase 4. Use the
-					backend admin endpoints (/api/admin/workers, /api/admin/registry) for now.
-				</p>
 			</section>
 		{/if}
 	</div>
