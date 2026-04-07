@@ -125,6 +125,9 @@ PROM_JOBS_TOTAL = "songmaker_jobs_total"
 PROM_JOB_DURATION_SECONDS = "songmaker_job_duration_seconds"
 PROM_QUEUE_DEPTH = "songmaker_queue_depth"
 PROM_GPU_VRAM_MB = "songmaker_gpu_vram_megabytes"
+PROM_ACESTEP_WORKERS_TOTAL = "songmaker_acestep_workers_total"
+PROM_ACESTEP_WORKER_LOADED_MODELS = "songmaker_acestep_worker_loaded_models"
+PROM_ACESTEP_WORKER_QUEUE_DEPTH = "songmaker_acestep_worker_queue_depth"
 PROM_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
 # Rate limit setting keys (stored in rate_limit_settings table)

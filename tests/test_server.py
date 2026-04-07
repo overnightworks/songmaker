@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -514,7 +515,6 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
         mock_get.assert_called_once()
         mock_close.assert_called_once()
 
-    import asyncio
     asyncio.run(_run())
 
 
@@ -545,7 +545,6 @@ def test_lifespan_fails_on_redis_unavailable(tmp_path: Path) -> None:
             async with _lifespan(mock_app):
                 pass
 
-    import asyncio
     asyncio.run(_run())
 
 
@@ -562,7 +561,6 @@ def test_body_size_limit_invalid_content_length(server_app: TestClient) -> None:
 
 
 def test_body_size_streaming_too_large(tmp_path: Path) -> None:
-    import asyncio
 
     import songmaker_cli.middleware.body_size as srv
     from songmaker_cli.middleware.body_size import BodySizeLimitMiddleware
@@ -1239,6 +1237,213 @@ def test_metrics_format_prometheus_no_gpu_no_duration() -> None:
     assert "songmaker_job_duration_seconds{" not in body
     assert "songmaker_active_sessions 0" in body
     assert "songmaker_queue_depth 0" in body
+
+
+def test_metrics_format_prometheus_acestep_worker_gauges() -> None:
+    from songmaker_cli.health_api import _format_prometheus
+
+    body = _format_prometheus(
+        http_snapshot={
+            "http_requests_total": {},
+            "http_requests_count": 0,
+            "http_request_duration_total_ms": 0.0,
+        },
+        jobs_by_type={},
+        duration_avg=None,
+        duration_min=None,
+        duration_max=None,
+        queue_depth=0,
+        gpu_vram_mb=None,
+        active_sessions=0,
+        acestep_workers_online=2,
+        acestep_workers_loading=1,
+        acestep_workers_offline=0,
+        acestep_worker_loaded_counts={
+            "acestep-worker-0": 2,
+            "acestep-worker-1": 0,
+            "acestep-worker-2": 1,
+        },
+        acestep_worker_queue_depths={
+            "acestep-worker-0": 3,
+            "acestep-worker-1": 0,
+            "acestep-worker-2": 0,
+        },
+    )
+    assert '# TYPE songmaker_acestep_workers_total gauge' in body
+    assert 'songmaker_acestep_workers_total{status="online"} 2' in body
+    assert 'songmaker_acestep_workers_total{status="loading"} 1' in body
+    assert 'songmaker_acestep_workers_total{status="offline"} 0' in body
+    assert '# TYPE songmaker_acestep_worker_loaded_models gauge' in body
+    assert 'songmaker_acestep_worker_loaded_models{worker_id="acestep-worker-0"} 2' in body
+    assert 'songmaker_acestep_worker_loaded_models{worker_id="acestep-worker-1"} 0' in body
+    assert 'songmaker_acestep_worker_loaded_models{worker_id="acestep-worker-2"} 1' in body
+    assert '# TYPE songmaker_acestep_worker_queue_depth gauge' in body
+    assert 'songmaker_acestep_worker_queue_depth{worker_id="acestep-worker-0"} 3' in body
+
+
+def test_metrics_format_prometheus_acestep_no_workers() -> None:
+    from songmaker_cli.health_api import _format_prometheus
+
+    body = _format_prometheus(
+        http_snapshot={
+            "http_requests_total": {},
+            "http_requests_count": 0,
+            "http_request_duration_total_ms": 0.0,
+        },
+        jobs_by_type={},
+        duration_avg=None,
+        duration_min=None,
+        duration_max=None,
+        queue_depth=0,
+        gpu_vram_mb=None,
+        active_sessions=0,
+    )
+    assert 'songmaker_acestep_workers_total{status="online"} 0' in body
+    assert 'songmaker_acestep_workers_total{status="loading"} 0' in body
+    assert 'songmaker_acestep_workers_total{status="offline"} 0' in body
+    assert "# TYPE songmaker_acestep_worker_loaded_models gauge" in body
+    assert "# TYPE songmaker_acestep_worker_queue_depth gauge" in body
+
+
+def _override_arq_pool(pool_obj) -> object:
+    import songmaker_cli.arq_pool as arq_mod
+    saved = arq_mod._pool
+    arq_mod._pool = pool_obj
+    return saved
+
+
+def _restore_arq_pool(saved) -> None:
+    import songmaker_cli.arq_pool as arq_mod
+    arq_mod._pool = saved
+
+
+def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
+    tmp_path: Path, mock_arq_pool,
+) -> None:
+    import json
+
+    import fakeredis
+    import fakeredis.aioredis
+
+    from songmaker_cli.acestep_state import (
+        queue_depth_key,
+        worker_state_key,
+    )
+    from songmaker_cli.db.queries import register_worker
+
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = tmp_path / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+
+    factory = init_db(data_dir / "songmaker.db")
+    with factory() as session:
+        register_worker(
+            session,
+            worker_id="acestep-worker-0",
+            host="acestep-worker-0",
+            port=8001,
+            gpu_id=0,
+            vram_total_gb=24.0,
+        )
+        session.commit()
+
+    server = fakeredis.FakeServer()
+    sync_redis = fakeredis.FakeRedis(server=server, decode_responses=True)
+    async_pool = fakeredis.aioredis.FakeRedis(server=server)
+
+    sync_redis.set(
+        worker_state_key("acestep-worker-0"),
+        json.dumps({
+            "loaded": ["sft", "xl-sft"],
+            "target_loading": None,
+            "queue_depth": 0,
+            "vram_used_gb": 18.0,
+            "vram_total_gb": 24.0,
+            "available_modes": ["sft", "xl-sft"],
+        }),
+    )
+    sync_redis.set(queue_depth_key("acestep-worker-0"), "0")
+
+    ctx = AppContext(
+        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        session_secret=TEST_SECRET, redis=sync_redis,
+    )
+    client = TestClient(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
+
+    with client:
+        saved = _override_arq_pool(async_pool)
+        try:
+            resp = client.get("/metrics")
+        finally:
+            _restore_arq_pool(saved)
+
+    body = resp.text
+    assert resp.status_code == 200
+    assert 'songmaker_acestep_workers_total{status="online"} 1' in body
+    assert 'songmaker_acestep_workers_total{status="loading"} 0' in body
+    assert 'songmaker_acestep_workers_total{status="offline"} 0' in body
+    assert (
+        'songmaker_acestep_worker_loaded_models{worker_id="acestep-worker-0"} 2'
+        in body
+    )
+
+
+def test_metrics_endpoint_offline_worker(
+    tmp_path: Path, mock_arq_pool,
+) -> None:
+    import fakeredis.aioredis
+
+    from songmaker_cli.db.queries import register_worker
+
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = tmp_path / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+
+    factory = init_db(data_dir / "songmaker.db")
+    with factory() as session:
+        register_worker(
+            session,
+            worker_id="acestep-worker-0",
+            host="acestep-worker-0",
+            port=8001,
+            gpu_id=0,
+            vram_total_gb=24.0,
+        )
+        session.commit()
+
+    redis = make_fake_redis()
+    async_pool = fakeredis.aioredis.FakeRedis()
+
+    ctx = AppContext(
+        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        session_secret=TEST_SECRET, redis=redis,
+    )
+    client = TestClient(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
+
+    with client:
+        saved = _override_arq_pool(async_pool)
+        try:
+            resp = client.get("/metrics")
+        finally:
+            _restore_arq_pool(saved)
+
+    body = resp.text
+    assert 'songmaker_acestep_workers_total{status="online"} 0' in body
+    assert 'songmaker_acestep_workers_total{status="offline"} 1' in body
+    assert (
+        'songmaker_acestep_worker_loaded_models{worker_id="acestep-worker-0"} 0'
+        in body
+    )
 
 
 # ── Auto-setup admin ──────────────────────────────────────────────

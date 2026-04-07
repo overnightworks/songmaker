@@ -72,7 +72,76 @@ Concurrency guard: a Redis flag (`songmaker:acestep:download:{mode}`, 30-minute 
 
 For bootstrap (no worker yet running, fresh install, CI), use the CLI escape hatch instead: `bash scripts/download_models.sh` calls `huggingface_hub.snapshot_download` directly into `_models/acestep/checkpoints/`. Requires `HF_TOKEN` exported in the host shell.
 
-## Generation Parameters
+## Operating the worker pool
+
+This section is the operator-facing reference for the ACE-Step worker pool architecture (Phases 1–6). For the cross-cutting flow (web → music-worker → acestep-worker) see [architecture.md](architecture.md). For trust boundaries and the internal token, see [security.md](security.md).
+
+### Prometheus metric keys
+
+The web container's `/metrics` endpoint exposes the following worker pool gauges (in addition to the existing HTTP, jobs, queue depth, and GPU VRAM metrics):
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `songmaker_acestep_workers_total` | gauge | `status="online\|loading\|offline"` | Count of registered workers in each status. `online` = heartbeat fresh and not currently loading a model. `loading` = heartbeat fresh and `target_loading` is non-null. `offline` = no heartbeat in the last 15 s (Redis TTL). |
+| `songmaker_acestep_worker_loaded_models` | gauge | `worker_id="..."` | Number of models currently in the cache for that worker. Always emitted for every registered worker, including offline ones (offline workers report 0). |
+| `songmaker_acestep_worker_queue_depth` | gauge | `worker_id="..."` | Per-worker generation queue depth, read from Redis. |
+
+**Useful Prometheus queries:**
+
+- `sum(songmaker_acestep_workers_total) > 0` — at least one worker is registered
+- `songmaker_acestep_workers_total{status="online"} == 0 and songmaker_acestep_workers_total{status="loading"} == 0` — pool is unhealthy (alert!)
+- `sum(songmaker_acestep_worker_queue_depth)` — total backlog across all workers
+- `max by (worker_id) (songmaker_acestep_worker_loaded_models)` — distribution of cached models per worker
+
+**Histograms (deferred):** `songmaker_acestep_model_load_duration_seconds`, `songmaker_acestep_generation_duration_seconds`, and `songmaker_acestep_download_duration_seconds` are NOT in the current `/metrics` output. They need persistent state across requests (`prometheus_client.Histogram`), which would force a new dependency. They're listed for a follow-up phase. For now, use the `Job.started_at`/`completed_at` columns directly via SQL for ad-hoc duration analysis.
+
+### Redis key namespace reference
+
+Operators need to know what's in Redis to debug stuck state. Keys to know:
+
+| Key pattern | Set by | Read by | TTL | Purpose |
+|---|---|---|---|---|
+| `songmaker:acestep:worker:{worker_id}` | `acestep-worker` heartbeat loop (every 5 s) | `admin_api` `/admin/workers`, `scheduler.pick_worker`, `/health`, `/metrics` | 15 s | Ephemeral worker state — JSON object with `loaded`, `target_loading`, `vram_used_gb`, `vram_total_gb`, `available_modes`, `queue_depth`, `last_heartbeat_at` |
+| `songmaker:acestep:queue:{worker_id}` | `scheduler.incr_queue_depth` / `decr_queue_depth` (per generation dispatch) | `admin_api`, `scheduler.pick_worker`, `/metrics` | none | Per-worker generation queue depth (atomic counter) |
+| `songmaker:acestep:download:{mode}` | `download_model_on_worker` arq job (atomic SET-NX) | admin endpoint pre-check, arq job duplicate guard | 1800 s | Download-in-progress flag; value is the job_id of the arq job that owns it |
+
+**Useful debug commands:**
+
+```bash
+docker compose exec redis redis-cli KEYS 'songmaker:acestep:*'
+docker compose exec redis redis-cli GET 'songmaker:acestep:worker:acestep-worker-0'
+docker compose exec redis redis-cli TTL 'songmaker:acestep:worker:acestep-worker-0'
+docker compose exec redis redis-cli GET 'songmaker:acestep:download:xl-base'
+```
+
+If a download appears stuck, check the `download:{mode}` key. If it exists but no arq job is running with that ID, it's a stale flag — delete it manually and the next click will re-acquire:
+
+```bash
+docker compose exec redis redis-cli DEL 'songmaker:acestep:download:xl-base'
+```
+
+The flag's 30-minute TTL is the automatic safety net for crashed arq workers.
+
+### Worker startup procedure
+
+When an `acestep-worker` container starts:
+
+1. The FastAPI server comes up immediately and binds `0.0.0.0:8001`.
+2. `/health` returns **503** with detail `"awaiting control plane registration"`.
+3. A background task tries to register with the control plane (`POST /api/internal/workers/register`). Backoff schedule: **1s → 2s → 5s → 10s → 30s → 60s ± 20% jitter forever**. The worker does not give up.
+4. Container logs show one startup banner (`"acestep-worker {id} starting; awaiting control plane at {url}"`) plus per-attempt warnings on each failed registration.
+5. Once registration succeeds, the log emits `"Worker {id} registered with control plane"`, `/health` flips to **200 OK**, the docker healthcheck flips to healthy, and traffic flows.
+6. The heartbeat loop (separate from the registration task) starts publishing to `songmaker:acestep:worker:{id}` every 5 s.
+
+If a worker is stuck in step 3:
+
+- Check container logs for the per-attempt warning lines (`"Registration attempt N failed: ..."`)
+- Verify the control plane URL is reachable from inside the worker container: `docker compose exec acestep-worker-0 curl -v http://songmaker-web:8080/health`
+- Verify `SONGMAKER_INTERNAL_TOKEN` matches between the worker and the web container env
+
+The cancel-on-shutdown behavior: if the worker is shut down (SIGTERM, container stop) while still in the registration loop, the lifespan finally block cancels the registration task and awaits its cleanup before exiting. No orphaned tasks survive shutdown.
+
+
 
 Parameters can be set per-song (`generation_params` in version), per-model-type (admin defaults), or globally.
 

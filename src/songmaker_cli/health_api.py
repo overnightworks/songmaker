@@ -10,6 +10,9 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
+    PROM_ACESTEP_WORKER_LOADED_MODELS,
+    PROM_ACESTEP_WORKER_QUEUE_DEPTH,
+    PROM_ACESTEP_WORKERS_TOTAL,
     PROM_ACTIVE_SESSIONS,
     PROM_CONTENT_TYPE,
     PROM_GPU_VRAM_MB,
@@ -61,6 +64,11 @@ def _format_prometheus(
     queue_depth: int,
     gpu_vram_mb: float | None,
     active_sessions: int,
+    acestep_workers_online: int = 0,
+    acestep_workers_loading: int = 0,
+    acestep_workers_offline: int = 0,
+    acestep_worker_loaded_counts: dict[str, int] | None = None,
+    acestep_worker_queue_depths: dict[str, int] | None = None,
 ) -> str:
     lines: list[str] = []
 
@@ -110,6 +118,40 @@ def _format_prometheus(
         lines.append(f"# TYPE {PROM_GPU_VRAM_MB} gauge")
         lines.append(f"{PROM_GPU_VRAM_MB} {gpu_vram_mb}")
 
+    lines.append(
+        f"# HELP {PROM_ACESTEP_WORKERS_TOTAL} Total registered acestep workers by status.",
+    )
+    lines.append(f"# TYPE {PROM_ACESTEP_WORKERS_TOTAL} gauge")
+    lines.append(
+        f'{PROM_ACESTEP_WORKERS_TOTAL}{{status="online"}} {acestep_workers_online}',
+    )
+    lines.append(
+        f'{PROM_ACESTEP_WORKERS_TOTAL}{{status="loading"}} {acestep_workers_loading}',
+    )
+    lines.append(
+        f'{PROM_ACESTEP_WORKERS_TOTAL}{{status="offline"}} {acestep_workers_offline}',
+    )
+
+    loaded_counts = acestep_worker_loaded_counts or {}
+    lines.append(
+        f"# HELP {PROM_ACESTEP_WORKER_LOADED_MODELS} Number of loaded models per worker.",
+    )
+    lines.append(f"# TYPE {PROM_ACESTEP_WORKER_LOADED_MODELS} gauge")
+    for worker_id, count in sorted(loaded_counts.items()):
+        lines.append(
+            f'{PROM_ACESTEP_WORKER_LOADED_MODELS}{{worker_id="{worker_id}"}} {count}',
+        )
+
+    queue_depths = acestep_worker_queue_depths or {}
+    lines.append(
+        f"# HELP {PROM_ACESTEP_WORKER_QUEUE_DEPTH} Per-worker generation queue depth.",
+    )
+    lines.append(f"# TYPE {PROM_ACESTEP_WORKER_QUEUE_DEPTH} gauge")
+    for worker_id, depth in sorted(queue_depths.items()):
+        lines.append(
+            f'{PROM_ACESTEP_WORKER_QUEUE_DEPTH}{{worker_id="{worker_id}"}} {depth}',
+        )
+
     lines.append("")
     return "\n".join(lines)
 
@@ -118,21 +160,43 @@ def _format_prometheus(
 async def metrics_endpoint(request: Request) -> PlainTextResponse:
     http_metrics = request.app.state.http_metrics
 
+    from songmaker_cli.acestep_state import read_queue_depth, read_worker_state
+    from songmaker_cli.arq_pool import get_arq_pool, get_queue_depth
     from songmaker_cli.db.queries import (
         count_active_sessions,
         job_counts_by_type_and_status,
         job_duration_stats,
+        list_worker_identities,
     )
     ctx: AppContext = request.app.state.ctx
     with ctx.db() as session:
         jobs_by_type = job_counts_by_type_and_status(session)
         duration = job_duration_stats(session)
         active_sessions = count_active_sessions(session)
+        acestep_workers = list_worker_identities(session)
 
     gpu_vram_mb = _get_gpu_vram_mb()
-
-    from songmaker_cli.arq_pool import get_queue_depth
     queue_depth = await get_queue_depth()
+
+    pool = get_arq_pool()
+    workers_online = 0
+    workers_loading = 0
+    workers_offline = 0
+    loaded_counts: dict[str, int] = {}
+    queue_depths: dict[str, int] = {}
+    for w in acestep_workers:
+        state = await read_worker_state(pool, w.id)
+        if state is None:
+            workers_offline += 1
+            loaded_counts[w.id] = 0
+            queue_depths[w.id] = 0
+            continue
+        if state.get("target_loading"):
+            workers_loading += 1
+        else:
+            workers_online += 1
+        loaded_counts[w.id] = len(state.get("loaded", []))
+        queue_depths[w.id] = await read_queue_depth(pool, w.id)
 
     body = _format_prometheus(
         http_snapshot=http_metrics.snapshot(),
@@ -143,6 +207,11 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
         queue_depth=queue_depth,
         gpu_vram_mb=gpu_vram_mb,
         active_sessions=active_sessions,
+        acestep_workers_online=workers_online,
+        acestep_workers_loading=workers_loading,
+        acestep_workers_offline=workers_offline,
+        acestep_worker_loaded_counts=loaded_counts,
+        acestep_worker_queue_depths=queue_depths,
     )
     return PlainTextResponse(body, media_type=PROM_CONTENT_TYPE)
 
