@@ -9,7 +9,13 @@ const mockGoto = vi.fn();
 vi.mock('$lib/stores/auth', () => ({ clearAuth: (...args: unknown[]) => mockClearAuth(...args) }));
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => mockGoto(...args) }));
 
-import { listWorkers, getRegistry, loadModelOnWorker, evictModelOnWorker } from './admin';
+import {
+	listWorkers,
+	getRegistry,
+	loadModelOnWorker,
+	evictModelOnWorker,
+	downloadModel
+} from './admin';
 
 function mockOk(data: unknown) {
 	mockFetch.mockResolvedValueOnce({
@@ -99,5 +105,15 @@ describe('admin worker pool API', () => {
 		expect(url).toBe('/api/admin/workers/acestep-worker-0/evict_model');
 		expect(init.method).toBe('POST');
 		expect(JSON.parse(init.body)).toEqual({ mode: 'sft' });
+	});
+
+	it('downloadModel POSTs to registry endpoint and returns JobItem', async () => {
+		mockOk({ id: 'j1', type: 'download_model_on_worker', status: 'queued', progress: 0 });
+		const result = await downloadModel('xl-base');
+		expect(result.id).toBe('j1');
+		expect(result.type).toBe('download_model_on_worker');
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/admin/registry/xl-base/download');
+		expect(init.method).toBe('POST');
 	});
 });

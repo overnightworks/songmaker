@@ -93,5 +93,6 @@ export {
 	listWorkers,
 	getRegistry,
 	loadModelOnWorker,
-	evictModelOnWorker
+	evictModelOnWorker,
+	downloadModel
 } from './admin';

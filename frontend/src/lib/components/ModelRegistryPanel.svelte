@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { getRegistry } from '$lib/api/client';
+	import { getRegistry, downloadModel } from '$lib/api/client';
 	import { createPollingStore } from '$lib/stores/adminPolling';
+	import { activeJobs, trackJob } from '$lib/stores/jobs';
+	import { addToast } from '$lib/stores/toast';
 	import { ApiError } from '$lib/api/fetch';
 	import type { RegistryResponse } from '$lib/api/types';
 
 	const POLL_INTERVAL_MS = 5000;
+	const DOWNLOAD_JOB_TYPE = 'download_model_on_worker';
 
 	interface Props {
 		onModesChange?: (modes: string[]) => void;
@@ -19,6 +22,33 @@
 
 	const models = $derived($data?.models ?? []);
 	const forbidden = $derived($error instanceof ApiError && $error.status === 403);
+
+	const downloadingByMode = $derived(
+		new Map(
+			$activeJobs
+				.filter((j) => j.job.type === DOWNLOAD_JOB_TYPE && j.mode)
+				.map((j) => [j.mode as string, j])
+		)
+	);
+
+	let busyMode = $state<Record<string, boolean>>({});
+	let actionError = $state('');
+
+	let trackedDownloadJobIds = new Set<string>();
+	$effect(() => {
+		const current = new Set(
+			$activeJobs.filter((j) => j.job.type === DOWNLOAD_JOB_TYPE && j.mode).map((j) => j.job.id)
+		);
+		let disappeared = false;
+		for (const id of trackedDownloadJobIds) {
+			if (!current.has(id)) {
+				disappeared = true;
+				break;
+			}
+		}
+		if (disappeared) void store.refresh();
+		trackedDownloadJobIds = current;
+	});
 
 	let lastModesKey = '';
 
@@ -37,6 +67,20 @@
 		}
 	});
 
+	async function handleDownload(mode: string): Promise<void> {
+		actionError = '';
+		busyMode = { ...busyMode, [mode]: true };
+		try {
+			const job = await downloadModel(mode);
+			trackJob(job, { mode });
+			addToast(`Downloading ${mode}…`, 'info');
+		} catch (e) {
+			actionError = e instanceof Error ? e.message : 'Failed to start download';
+		} finally {
+			busyMode = { ...busyMode, [mode]: false };
+		}
+	}
+
 	onMount(() => store.start());
 	onDestroy(() => store.stop());
 </script>
@@ -51,6 +95,9 @@
 	{:else if models.length === 0}
 		<p class="hint">Loading registry…</p>
 	{:else}
+		{#if actionError}
+			<p class="panel-error">{actionError}</p>
+		{/if}
 		<table class="registry-table">
 			<thead>
 				<tr>
@@ -63,6 +110,7 @@
 			</thead>
 			<tbody>
 				{#each models as model (model.mode)}
+					{@const dlJob = downloadingByMode.get(model.mode)}
 					<tr>
 						<td class="mode-cell">{model.mode}</td>
 						<td>
@@ -81,7 +129,21 @@
 							{/if}
 						</td>
 						<td class="actions-col">
-							<button class="action-btn" disabled title="Coming in Phase 5"> Download </button>
+							{#if dlJob}
+								<span class="dl-progress">
+									Downloading… {Math.round((dlJob.job.progress ?? 0) * 100)}%
+								</span>
+							{:else if model.downloaded}
+								<span class="dim">—</span>
+							{:else}
+								<button
+									class="action-btn"
+									onclick={() => handleDownload(model.mode)}
+									disabled={busyMode[model.mode]}
+								>
+									{busyMode[model.mode] ? 'Starting…' : 'Download'}
+								</button>
+							{/if}
 						</td>
 					</tr>
 				{/each}
@@ -191,5 +253,11 @@
 	.action-btn:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
+	}
+
+	.dl-progress {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
 	}
 </style>

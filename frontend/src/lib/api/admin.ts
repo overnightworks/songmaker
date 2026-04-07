@@ -89,3 +89,9 @@ export async function evictModelOnWorker(workerId: string, mode: string): Promis
 		body: JSON.stringify({ mode })
 	});
 }
+
+export async function downloadModel(mode: string): Promise<JobItem> {
+	return apiFetch<JobItem>(`/api/admin/registry/${encodeURIComponent(mode)}/download`, {
+		method: 'POST'
+	});
+}
