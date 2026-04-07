@@ -258,7 +258,7 @@ WORKDIR /opt/acestep
 # into. Downstream `uv sync` discovers /opt/acestep/.venv, sees torch already
 # installed at the upstream-pinned version, and only installs the delta deps.
 RUN uv venv --python 3.12 .venv \
-    && uv pip install --python .venv \
+    && uv pip install --python .venv/bin/python \
         --index-url https://download.pytorch.org/whl/cu128 \
         torch==2.10.0+cu128 \
         torchvision==0.25.0+cu128 \
@@ -584,7 +584,7 @@ Add one line to the existing Docker section:
 | `.env` | Remove `ARQ_JOB_TIMEOUT=1800` workaround |
 | `CLAUDE.md` | One-line addition to the Docker section about the new build script |
 | `plans/acestep-worker-pool.md` | (Optional, end of phase) Mark Phase 8 status as DONE |
-| `docs/acestep.md` | (Optional, end of phase) Note new image hierarchy |
+| `docs/acestep.md` | **REQUIRED** — add a new "Building the worker images" section (or extend the existing "Operating the worker pool" section from Phase 6 PR 1) covering: the new image hierarchy (`gpu-torch-base → acestep-base → acestep-worker`, plus the standalone `music-worker` and `scoring-worker` leaves), the `scripts/build_images.sh` orchestration, the rule "if you edit any `docker/base/*.Dockerfile` you must run the build script before `docker compose up --build`", and the new bind mount layout (`./_models/acestep/checkpoints` only, not the whole directory). Operator docs must reflect the post-Phase-8 state, not the pre-Phase-8 one. |
 
 **Not touched (per "things to NOT do"):** `pyproject.toml`, `uv.lock`, `model_cache.py`, heartbeat schema, scheduler, admin endpoints, frontend, alembic, web `Dockerfile`, `subprocess_runner.py` source.
 
@@ -607,9 +607,30 @@ Add one line to the existing Docker section:
 - **HARD checkpoint A:** `timeout 1500 docker build -f docker/base/gpu-torch-base.Dockerfile -t songmaker/gpu-torch-base:latest . --progress=plain 2>&1 | tee /tmp/phase8-gpu-base.log`
   - Expected: completes in 5-15 min (multi-GB torch + cudnn download). Look for `Successfully tagged songmaker/gpu-torch-base:latest`.
   - Verify the venv: `docker run --rm songmaker/gpu-torch-base:latest /opt/acestep/.venv/bin/python -c "import torch; print(torch.__version__)"` should print `2.10.0+cu128`.
+  - **Verify CUDA is functional at runtime:** `docker run --rm --gpus all songmaker/gpu-torch-base:latest /opt/acestep/.venv/bin/python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available'; print(torch.cuda.get_device_name(0))"` should print the GPU name. **If this fails, the cu128 wheels don't match the host's NVIDIA driver — STOP and reconcile (downgrade torch, upgrade host driver, or change CUDA version) before building anything on top.**
+
+- **HARD checkpoint A.5 — verify the gpu-torch-base layer cache will actually be reused by acestep-base.** This is the single biggest risk in the design. The optimization assumes `uv sync --frozen` in `acestep-base` will preserve the pre-installed torch from `gpu-torch-base` and only install the delta (diffusers/transformers/peft/etc.). If uv sync's lockfile-vs-installed metadata check decides the pre-installed torch doesn't match the upstream lockfile's expected fingerprint, it will tear down and reinstall torch from scratch, defeating the entire layering. Verify with a dry-run BEFORE the heavy build:
+
+  ```bash
+  # Mount the upstream source into a throwaway container running the gpu-torch-base
+  # and run uv sync --frozen with --no-install-project to see what uv decides to do.
+  docker run --rm \
+      -v "$(pwd)/_models/acestep:/opt/acestep:ro" \
+      --workdir /opt/acestep \
+      songmaker/gpu-torch-base:latest \
+      bash -c "cp pyproject.toml uv.lock /tmp/ && cd /tmp && uv sync --frozen --no-dev --no-install-project --dry-run 2>&1" \
+      | grep -iE "torch|reinstall|install|remove"
+  ```
+
+  - **Pass condition:** the dry-run output shows torch as already-satisfied (no `torch` lines under "Would install" or "Would reinstall"). The delta-install optimization works.
+  - **Fail condition:** torch appears under "Would install" or "Would reinstall". **Fall-back rule:** delete `docker/base/gpu-torch-base.Dockerfile` entirely and fold its contents into `acestep-base.Dockerfile` as a single image. The downstream `acestep-base` build still works — it just takes 5-10 min longer because the torch download happens once in `acestep-base` instead of once in `gpu-torch-base`. Update `scripts/build_images.sh` to drop the gpu-torch-base step. Update the Files Touched table accordingly. The image hierarchy becomes `python:3.12-slim → acestep-base → acestep-worker` (one less layer, simpler). Document the fall-back in the commit message.
+
+  This checkpoint exists because the design's "delta install" claim is plausible-but-unverified. Don't proceed past it without confirming.
+
 - **HARD checkpoint B:** `timeout 1500 docker build -f docker/base/acestep-base.Dockerfile -t songmaker/acestep-base:latest . --progress=plain 2>&1 | tee /tmp/phase8-acestep-base.log`
   - Expected: completes in 5-15 min on top of gpu-torch-base. Most of the time is spent installing diffusers/transformers/peft/nano-vllm/gradio.
   - Specifically grep the log for `error: distribution` (uv conflict signature) and `Failed to fetch`.
+  - **If checkpoint A.5 already failed and the fall-back was applied:** this step builds the merged single-image variant instead, expected wall-clock 15-25 min on first build (torch + cudnn + delta deps in one layer).
   - Verify the entry point exists: `docker run --rm songmaker/acestep-base:latest ls /opt/acestep/.venv/bin/acestep-api`.
   - Verify `_get_project_root()` resolves correctly: `docker run --rm songmaker/acestep-base:latest /opt/acestep/.venv/bin/python -c "import os, acestep.api_server as a; print(os.path.dirname(os.path.dirname(a.__file__)))"` should print `/opt/acestep`.
 
@@ -645,6 +666,16 @@ Add one line to the existing Docker section:
 
 ### Step 9 — Frontend smoke (defensive)
 - `cd frontend && pnpm check && pnpm lint && pnpm test` — Phase 8 doesn't touch frontend, but run anyway to catch any compose env var rename ripple effect.
+
+### Step 9.5 — Operator docs update (REQUIRED)
+- Update `docs/acestep.md` per the Files Touched table entry. Add a "Building the worker images" subsection (or extend the existing "Operating the worker pool" section from Phase 6 PR 1) covering:
+  - The new image hierarchy: `python:3.12-slim → gpu-torch-base → acestep-base → acestep-worker` (or the merged variant if HARD checkpoint A.5 fall-back was applied)
+  - `scripts/build_images.sh` usage and the bases-vs-leaves split
+  - The rule "if you edit any `docker/base/*.Dockerfile`, run the build script before `docker compose up --build` or compose will fail with `manifest unknown`"
+  - The new bind mount layout (`./_models/acestep/checkpoints:/opt/acestep/checkpoints` instead of the whole `_models/acestep/`)
+  - The fact that the inner ACE-Step venv is now baked into `acestep-base` at `/opt/acestep/.venv` and is no longer subject to host-bind-mount clobbering
+  - The `ARQ_JOB_TIMEOUT` rollback (workers no longer need the 30-minute override)
+- Cross-link from the existing CLAUDE.md Docker section update.
 
 ### Step 10 — End-to-end smoke test (THE deliverable)
 - `docker compose down -v`
@@ -716,6 +747,8 @@ Total cold smoke test wall clock: **~30-50 minutes** (dominated by the one-time 
 - [ ] No frontend, scheduler, model_cache, heartbeat, or admin_api files touched
 
 ## Watchpoints
+
+0. **The `gpu-torch-base` → `acestep-base` "delta install" cache assumption is the single biggest design risk.** The optimization assumes uv sync's lockfile-vs-installed metadata check will preserve the pre-installed torch from `gpu-torch-base` and only install the delta (diffusers/transformers/peft/etc.). If uv decides the pre-installed torch fingerprint doesn't match the upstream lockfile's expected metadata, it tears down and reinstalls torch from scratch — defeating the entire layering. **HARD checkpoint A.5 (Step 3) verifies this with a dry-run BEFORE building anything heavy on top.** If the dry-run fails, the fall-back is to delete `gpu-torch-base.Dockerfile` entirely and fold its contents into `acestep-base.Dockerfile` as a single image — the design still works with one less layer. The fall-back is documented in the implementation order; do NOT proceed past A.5 without confirming.
 
 1. **`uv sync` in `acestep-base` failing with conflict error.** The upstream `uv.lock` is pinned (`--frozen`), so this should be deterministic. If it fails, run `(cd _models/acestep && uv lock --check)` on the host first to confirm the lockfile matches its pyproject. Common failure: a recent host edit to `_models/acestep/pyproject.toml` without re-locking.
 2. **The `nano-vllm` path source.** The Dockerfile copies `_models/acestep/acestep/third_parts/` before the first `uv sync`. If `_models/acestep/acestep/third_parts/nano-vllm/pyproject.toml` doesn't exist, `uv sync` fails with "package not found." Verify with `find _models/acestep/acestep/third_parts/nano-vllm -name pyproject.toml` before building.
