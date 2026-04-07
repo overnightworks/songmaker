@@ -700,33 +700,78 @@ Frontend uses the existing `/api/jobs/{id}/stream` SSE endpoint — same client 
 
 Everything that's "make it production-ready" but not blocking for the cutover.
 
+> **Revised after Phases 1–5 shipped.** Several originally-listed items either landed earlier (concurrent same-mode downloads in Phase 5, multi-model-routing.md superseded marker) or have a different starting state than the original draft assumed. New items collected from Phase 4 / Phase 5 deferrals are appended below the original list.
+
 **Items** (in priority order):
 
-1. **Worker metrics in the existing Prometheus endpoint**. The `/metrics` endpoint already exists in [health_api.py:117](../src/songmaker_cli/health_api.py#L117) with HTTP, jobs, queue depth, GPU VRAM. **Extend it** with worker pool metrics (don't build a new endpoint):
+1. **Worker metrics in the existing Prometheus endpoint**. The `/metrics` endpoint already exists in [health_api.py:117](../src/songmaker_cli/health_api.py#L117) with HTTP, jobs_by_type, queue_depth, GPU VRAM, active_sessions. **Extend it** with worker pool metrics (don't build a new endpoint):
    - `songmaker_acestep_workers_total{status="online|loading|offline"}` (gauge)
    - `songmaker_acestep_worker_loaded_models{worker_id="..."}` (gauge per loaded model count)
    - `songmaker_acestep_worker_queue_depth{worker_id="..."}` (gauge — read from Redis)
    - `songmaker_acestep_model_load_duration_seconds{mode="..."}` (histogram)
    - `songmaker_acestep_generation_duration_seconds{mode="..."}` (histogram)
-   The existing Grafana board can be updated to show worker pool capacity and per-model latency.
+   - `songmaker_acestep_download_duration_seconds{mode="..."}` (histogram, added with Phase 5 — measure end-to-end download time for capacity planning)
 
-2. **Admin restart endpoint via the worker** (deferred from Phase 2). Adds `POST /api/internal/restart` to the worker, called by `/api/admin/workers/{id}/restart`. The worker calls `os.kill(os.getpid(), signal.SIGTERM)` and exits; docker healthcheck restarts the container.
+   **Note:** `acestep_workers_total` and `acestep_workers_online` are already exposed via `/health` (added in Phase 3 cutover, [health_api.py:220-221](../src/songmaker_cli/health_api.py#L220-L221)). Phase 6's job is to mirror them into Prometheus format under `/metrics` and add the per-mode histograms. The existing Grafana board can be updated to show worker pool capacity and per-model latency.
 
-3. **`pin_model` LRU exemption**. Wire the cache to skip pinned models in eviction. Pure no-op until LRU > 1, but having the API there means the admin UI button isn't a stub anymore.
+2. **Admin restart endpoint via the worker** (deferred from Phase 2 + Phase 4 admin UI). Adds `POST /api/internal/restart` to the worker, called by `/api/admin/workers/{id}/restart`. The worker calls `os.kill(os.getpid(), signal.SIGTERM)` and exits; docker healthcheck restarts the container. Phase 4 explicitly omitted the Restart button from the Worker Pool card pending this endpoint — wire it back into [WorkerPoolPanel.svelte](../frontend/src/lib/components/WorkerPoolPanel.svelte) when the endpoint ships.
 
-4. **Worker startup failure surfacing**. If a worker can't reach the control plane on startup (web is down), today it just logs and dies. Better: retry indefinitely with backoff, surface "trying to register" in container logs, healthcheck stays unhealthy until registered.
+3. **`pin_model` LRU exemption + admin UI button**. Wire the cache to skip pinned models in eviction. Pure no-op until LRU > 1, but having the API there means the admin UI button isn't a stub anymore. Phase 4 explicitly omitted the Pin button — wire it back into [WorkerPoolPanel.svelte](../frontend/src/lib/components/WorkerPoolPanel.svelte) at the same time.
 
-5. **Concurrent in-flight generation handling**. If a user triggers an admin "Load model on worker" while a generation is in flight on that worker, the worker refuses the load (lock held by the generation). With the SSE task pattern, the natural fix is to queue the load to run after the current task drains. Document the trade-off; default behavior in v1 is "scheduler returns 409 immediately, admin must wait and retry".
+4. **Worker startup failure surfacing — partially shipped, needs finishing.** [registry_client.py:13](../src/acestep_worker/registry_client.py#L13) already does bounded retry: `DEFAULT_RETRY_DELAYS_SECONDS = (1.0, 2.0, 5.0, 10.0, 30.0)` — 5 attempts (~48 s total) with backoff, then raises `RegistrationFailedError` and the worker dies. The original Phase 6 framing said *"today it just logs and dies"*; reality is closer to *"it retries 5 times then logs and dies."* Phase 6 still needs:
+   - **Indefinite retry with cap-and-jitter backoff** instead of the current bounded list (e.g., 1s → 2s → 5s → 10s → 30s → 60s → 60s … forever). Operators should not have to babysit worker startup ordering.
+   - **Healthcheck integration** — the docker healthcheck on `acestep-worker-0` should report unhealthy until the worker has successfully registered with the control plane, so `docker compose up --wait` waits for the registration round-trip rather than just the FastAPI server's `/health`.
+   - **Container log surfacing** — the existing log line is good; add a brief startup banner ("waiting for control plane at $CONTROL_PLANE_URL") so the operator can spot the failure immediately.
 
-6. **Operator documentation**:
-   - `docs/acestep.md` — full rewrite of operator-facing details for the new architecture (worker restart, metrics, troubleshooting). The cutover-relevant parts were already updated in Phase 3.
-   - Note: `docs/architecture.md` was updated in Phase 3 (cutover); `docs/security.md` was updated in Phase 2 (token introduced). No further work here on those files.
+5. **Concurrent in-flight generation handling — describe the actual race.** Original Phase 6 wording said *"the worker refuses the load (lock held by the generation)"*. **That's wrong.** Verified by reading [model_cache.py:92-112](../src/acestep_worker/model_cache.py#L92-L112) and [wrapper.py:124-143](../src/acestep_worker/wrapper.py#L124-L143):
+   - Generations are **lock-free** at the cache layer. `/generate` calls `cache.get_loaded(mode)` (no lock), then spawns the generation as a background task via `spawn_background`.
+   - The cache `asyncio.Lock` is only held by `cache.load()` and `cache.evict()`, NOT by in-flight generations.
+   - **The actual race:** an admin `POST /load_model` for a *different* mode acquires the lock, calls `_evict_to_fit(target_size)`, and can evict the model that the in-flight generation is currently using → generation crashes with a stale model handle.
 
-7. **Mark `plans/multi-model-routing.md` as `STATUS: SUPERSEDED → plans/acestep-worker-pool.md`.** Mark as superseded, do not delete — the routing plan has design context worth preserving in history. (This is largely already done at the top of that file; verify the link still resolves after the rename/move.)
+   **Fix options for Phase 6:**
+   - **(a)** Track in-use models via a per-mode reference count (`{mode: usage_count}` in the cache). `evict()` and `_evict_to_fit()` skip modes with `usage_count > 0`. The generation runner increments on start and decrements on completion. Cleanest, but requires touching the lock-free read path.
+   - **(b)** Refuse `/load_model` (return 409) if any in-flight generation is using a model that would need eviction to make room. Conservative.
+   - **(c)** Queue the `/load_model` to run after the current generation drains (the SSE task pattern naturally supports this). Best UX, most code.
+
+   Recommend **(a)** with **(b)** as the test fallback. Document the trade-off in the operator docs (item 6).
+
+6. **Operator documentation rewrite.** A short download-flow paragraph was added in Phase 5 (`e36fd4e`, [docs/acestep.md](../docs/acestep.md)). Phase 6's full rewrite still needs:
+   - Worker restart procedure (depends on item 2)
+   - Prometheus metric keys + Grafana panel descriptions (depends on item 1)
+   - Troubleshooting playbooks: "worker won't register", "download stalls", "load fails on full GPU", "stale-job reaper killed my generation"
+   - Operator-facing reference for the Redis key namespace (`songmaker:acestep:worker:*`, `songmaker:acestep:queue:*`, `songmaker:acestep:download:*`) and what each key means
+
+   **No rewrite needed for** `docs/architecture.md` (updated in Phase 3 cutover) or `docs/security.md` (updated in Phase 2 when the internal token landed).
+
+7. ~~**Mark `plans/multi-model-routing.md` as SUPERSEDED.**~~ **DONE** before Phase 1 — the file header already has `STATUS: SUPERSEDED → plans/acestep-worker-pool.md` with rationale. Strike from the Phase 6 list.
 
 8. **Memory update** — write a memory: "Always check `plans/` folder before drafting plans — the project has multi-phase plan files in there, and new plans should either supersede or extend existing ones, never silently overlap."
 
-Phase 6 can be split into 2 PRs (observability + everything else).
+#### New items collected from Phase 4 / Phase 5 deferrals
+
+**(a) Per-loaded-model VRAM size in the Worker Pool admin UI.** Phase 4 sub-plan D2 deferred this: *"VRAM size per model is not in the response — the parent plan's '(12 GB)' annotations are aspirational."* Implementation: extend the worker heartbeat payload's `loaded` field from `list[str]` to `list[{mode: str, size_gb: float}]`. This is a heartbeat schema change, so the contract test [test_acestep_state.py::test_heartbeat_payload_keys_match_admin_reader](../tests/test_acestep_state.py) (added in `c5a11e0`) must be extended in the same PR. The control plane reader and frontend display update follow mechanically.
+
+**(b) "Loading X… (1m 23s elapsed)" counter on Worker Pool cards.** Phase 4 sub-plan D2 deferred this: *"the Redis state doesn't carry a `loading_started_at` field. Decision: just say 'Loading {target_loading}…' without an elapsed counter."* Implementation: add `loading_started_at: str | None` to the heartbeat payload. Same heartbeat-schema-change rule applies — extend the contract test in the same PR. Frontend [WorkerPoolPanel.svelte::describeStatus](../frontend/src/lib/components/WorkerPoolPanel.svelte) computes the elapsed time client-side from the timestamp.
+
+**(c) Download auto-retry policy (3 attempts).** Phase 5 sub-plan D14 deferred this: *"Auto-retry is NOT in Phase 5. The parent plan mentions '3 attempts via the admin endpoint' — that's deferred to Phase 6."* Implementation: wrap the SSE consumption + worker POST in `download_model_on_worker` ([jobs.py](../src/songmaker_cli/jobs.py)) in a retry loop. After 3 attempts the job fails with `error_type=download_error`. Be careful not to leak the Redis flag between retries — the existing `try/finally` already handles this since `clear_download_in_progress` runs at the end of every attempt.
+
+#### Items already done that were originally Phase 6 candidates
+
+These shipped in earlier phases and are NOT Phase 6 work:
+
+- **Concurrent same-mode downloads** — solved in Phase 5 via Redis flag with atomic SET-NX (`a0e5136` + the user-applied tightening to `set_download_in_progress` using `nx=True`). The Phase 5 sub-plan originally deferred this; Phase 5 review pushed back and it shipped in Phase 5.
+- **Heartbeat field-name writer/reader contract** — fixed in `cf1fa5d`, pinned by the regression test added in `c5a11e0`. Phase 6 metrics work and items (a)/(b) above must respect this contract test.
+- **Atomic ModelCache state snapshot** — fixed in `c32b246`. The race was discovered during Phase 3 smoke test and fixed inline.
+- **`is_model_downloaded` shard-aware layout detection** — fixed in `b5a984d`. The Phase 5 download flow relies on this as the source of truth.
+
+#### Phase 6 PR split
+
+The original "Phase 6 can be split into 2 PRs (observability + everything else)" is still the right call. Suggested split:
+
+- **PR 1 — Observability:** items 1, 4 (registration retry/healthcheck), 6 (operator docs metric keys section)
+- **PR 2 — UX + correctness:** items 2 (restart), 3 (pin), 5 (load-while-generating race fix), 6 (operator docs troubleshooting), (a), (b), (c)
+
+PR 2 is bigger and depends on more cross-cutting changes; ship PR 1 first to get production observability while PR 2 is in review.
 
 ---
 
