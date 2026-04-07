@@ -82,7 +82,7 @@ def _make_deps(tmp_path: Path) -> tuple[WorkerDeps, fakeredis.aioredis.FakeRedis
 
 async def _state_for_test(deps: WorkerDeps) -> dict[str, Any]:
     return {
-        "loaded_models": deps.cache.loaded_modes(),
+        "loaded": deps.cache.loaded_modes(),
         "queue_depth": await read_queue_depth(deps.redis, deps.worker_id),
     }
 
@@ -421,7 +421,7 @@ def test_build_state_payload(tmp_path: Path) -> None:
         return await build_state_payload(deps)
 
     payload = _run(go())
-    assert payload["loaded_models"] == []
+    assert payload["loaded"] == []
     assert payload["queue_depth"] == 4
     assert payload["vram_total_gb"] == 24.0
     assert payload["target_loading"] is None

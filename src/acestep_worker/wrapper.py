@@ -72,7 +72,7 @@ async def read_queue_depth(redis: Redis, worker_id: str) -> int:
 
 async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
     return {
-        "loaded_models": deps.cache.loaded_modes(),
+        "loaded": deps.cache.loaded_modes(),
         "target_loading": deps.cache.target_loading,
         "vram_used_gb": deps.cache.vram_used_gb(),
         "vram_total_gb": deps.cache.vram_budget_gb,
