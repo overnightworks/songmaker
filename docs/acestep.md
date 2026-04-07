@@ -141,7 +141,7 @@ If a worker is stuck in step 3:
 
 The cancel-on-shutdown behavior: if the worker is shut down (SIGTERM, container stop) while still in the registration loop, the lifespan finally block cancels the registration task and awaits its cleanup before exiting. No orphaned tasks survive shutdown.
 
-
+## Generation Parameters
 
 Parameters can be set per-song (`generation_params` in version), per-model-type (admin defaults), or globally.
 
