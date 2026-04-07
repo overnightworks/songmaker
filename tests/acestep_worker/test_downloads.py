@@ -56,6 +56,25 @@ def test_is_model_downloaded_partial_only_weights(tmp_path: Path) -> None:
     assert is_model_downloaded(tmp_path, "sft") is False
 
 
+def test_is_model_downloaded_sharded_layout(tmp_path: Path) -> None:
+    target = tmp_path / "checkpoints" / "acestep-v15-xl-sft"
+    target.mkdir(parents=True)
+    (target / "config.json").write_text("{}")
+    (target / "model.safetensors.index.json").write_text("{}")
+    for i in range(1, 5):
+        (target / f"model-{i:05d}-of-00004.safetensors").write_bytes(b"shard")
+    assert is_model_downloaded(tmp_path, "xl-sft") is True
+
+
+def test_is_model_downloaded_sharded_missing_index(tmp_path: Path) -> None:
+    target = tmp_path / "checkpoints" / "acestep-v15-xl-sft"
+    target.mkdir(parents=True)
+    (target / "config.json").write_text("{}")
+    for i in range(1, 5):
+        (target / f"model-{i:05d}-of-00004.safetensors").write_bytes(b"shard")
+    assert is_model_downloaded(tmp_path, "xl-sft") is False
+
+
 def test_is_model_downloaded_unknown(tmp_path: Path) -> None:
     assert is_model_downloaded(tmp_path, "ghost") is False
 

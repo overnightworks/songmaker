@@ -21,7 +21,9 @@ ESTIMATED_MODEL_SIZE_BYTES: dict[str, int] = {
     "xl-base": 13_000_000_000,
 }
 
-REQUIRED_SHARDS: tuple[str, ...] = ("config.json", "model.safetensors")
+REQUIRED_CONFIG: str = "config.json"
+SINGLE_WEIGHTS_FILENAME: str = "model.safetensors"
+SHARDED_INDEX_FILENAME: str = "model.safetensors.index.json"
 
 DownloadFn = Callable[[str, Path], Awaitable[None]]
 
@@ -37,7 +39,11 @@ def is_model_downloaded(checkpoint_dir: Path, mode: str) -> bool:
     target = model_dir(checkpoint_dir, mode)
     if target is None or not target.exists():
         return False
-    return all((target / shard).exists() for shard in REQUIRED_SHARDS)
+    if not (target / REQUIRED_CONFIG).exists():
+        return False
+    if (target / SINGLE_WEIGHTS_FILENAME).exists():
+        return True
+    return (target / SHARDED_INDEX_FILENAME).exists()
 
 
 def list_available_modes(checkpoint_dir: Path) -> list[str]:
