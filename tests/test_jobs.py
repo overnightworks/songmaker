@@ -903,6 +903,10 @@ def test_download_model_on_worker_happy_path(seeded_db) -> None:
     assert kwargs["json"] == {"mode": "sft"}
 
 
+async def _instant_sleep(_seconds: float) -> None:
+    return None
+
+
 def test_download_model_on_worker_sse_error(seeded_db) -> None:
     from unittest.mock import AsyncMock
 
@@ -920,7 +924,10 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
     fake_client.__aenter__ = AsyncMock(return_value=fake_client)
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
+    consume_calls = {"count": 0}
+
     async def failing_consume(*args, **kwargs):
+        consume_calls["count"] += 1
         raise WorkerTaskFailed("HF 401 unauthorized")
 
     with (
@@ -930,6 +937,7 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
             "songmaker_cli.scheduler.consume_download_task_stream",
             new=failing_consume,
         ),
+        patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
         _run(download_model_on_worker({"redis": redis}, "dl6", "sft"))
 
@@ -938,6 +946,7 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
         assert job.status == "failed"
         assert job.error_type == "download_error"
         assert "HF 401" in job.error
+    assert consume_calls["count"] == 3
 
 
 def test_download_model_on_worker_sse_transport_error(seeded_db) -> None:
@@ -1038,3 +1047,175 @@ def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> Non
         assert job.error_type == "duplicate_download"
         assert "previous-job" in job.error
     assert redis.store[download_key("sft")] == "previous-job"
+
+
+# ── D9: download retry tests ────────────────────────────────────────
+
+
+def test_download_retries_on_worker_task_failed_then_succeeds(seeded_db) -> None:
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.jobs import download_model_on_worker
+    from songmaker_cli.scheduler import DownloadTaskResultDTO, WorkerTaskFailed
+
+    _seed_download_job(seeded_db, "dl-retry-1")
+    redis = _FakeRedis()
+    _seed_online_worker(seeded_db, redis)
+
+    fake_submit_response = MagicMock(status_code=200)
+    fake_submit_response.json = MagicMock(return_value={"task_id": "t"})
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_submit_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    consume_calls = {"count": 0}
+
+    async def flaky_consume(*args, **kwargs):
+        consume_calls["count"] += 1
+        if consume_calls["count"] == 1:
+            raise WorkerTaskFailed("HF rate limit 429")
+        return DownloadTaskResultDTO(mode="sft", size_bytes=1)
+
+    with (
+        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
+        patch("httpx.AsyncClient", return_value=fake_client),
+        patch(
+            "songmaker_cli.scheduler.consume_download_task_stream",
+            new=flaky_consume,
+        ),
+        patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
+    ):
+        _run(download_model_on_worker({"redis": redis}, "dl-retry-1", "sft"))
+
+    with seeded_db() as session:
+        job = get_job(session, "dl-retry-1")
+        assert job.status == "completed"
+        assert job.progress == 1.0
+    assert consume_calls["count"] == 2
+
+
+def test_download_retries_on_sse_drop_then_succeeds(seeded_db) -> None:
+    from unittest.mock import AsyncMock
+
+    import httpx
+
+    from songmaker_cli.jobs import download_model_on_worker
+    from songmaker_cli.scheduler import DownloadTaskResultDTO
+
+    _seed_download_job(seeded_db, "dl-retry-2")
+    redis = _FakeRedis()
+    _seed_online_worker(seeded_db, redis)
+
+    fake_submit_response = MagicMock(status_code=200)
+    fake_submit_response.json = MagicMock(return_value={"task_id": "t"})
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_submit_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    consume_calls = {"count": 0}
+
+    async def flaky_consume(*args, **kwargs):
+        consume_calls["count"] += 1
+        if consume_calls["count"] == 1:
+            raise httpx.ReadError("dropped")
+        return DownloadTaskResultDTO(mode="sft", size_bytes=1)
+
+    with (
+        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
+        patch("httpx.AsyncClient", return_value=fake_client),
+        patch(
+            "songmaker_cli.scheduler.consume_download_task_stream",
+            new=flaky_consume,
+        ),
+        patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
+    ):
+        _run(download_model_on_worker({"redis": redis}, "dl-retry-2", "sft"))
+
+    with seeded_db() as session:
+        job = get_job(session, "dl-retry-2")
+        assert job.status == "completed"
+    assert consume_calls["count"] == 2
+
+
+def test_download_does_not_retry_on_connect_error(seeded_db) -> None:
+    from unittest.mock import AsyncMock
+
+    import httpx
+
+    from songmaker_cli.jobs import download_model_on_worker
+
+    _seed_download_job(seeded_db, "dl-noretry")
+    redis = _FakeRedis()
+    _seed_online_worker(seeded_db, redis)
+
+    fake_submit_response = MagicMock(status_code=200)
+    fake_submit_response.json = MagicMock(return_value={"task_id": "t"})
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_submit_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    consume_calls = {"count": 0}
+
+    async def connect_error_consume(*args, **kwargs):
+        consume_calls["count"] += 1
+        raise httpx.ConnectError("refused")
+
+    with (
+        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
+        patch("httpx.AsyncClient", return_value=fake_client),
+        patch(
+            "songmaker_cli.scheduler.consume_download_task_stream",
+            new=connect_error_consume,
+        ),
+        patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
+    ):
+        _run(download_model_on_worker({"redis": redis}, "dl-noretry", "sft"))
+
+    with seeded_db() as session:
+        job = get_job(session, "dl-noretry")
+        assert job.status == "failed"
+        assert job.error_type == "sse_transport"
+    assert consume_calls["count"] == 1
+
+
+def test_download_redis_flag_held_across_retries(seeded_db) -> None:
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.acestep_state import download_key
+    from songmaker_cli.jobs import download_model_on_worker
+    from songmaker_cli.scheduler import WorkerTaskFailed
+
+    _seed_download_job(seeded_db, "dl-flag")
+    redis = _FakeRedis()
+    _seed_online_worker(seeded_db, redis)
+
+    fake_submit_response = MagicMock(status_code=200)
+    fake_submit_response.json = MagicMock(return_value={"task_id": "t"})
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_submit_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    flag_key = download_key("sft")
+    seen_during_retries: list[bool] = []
+
+    async def consume_observing_flag(*args, **kwargs):
+        seen_during_retries.append(flag_key in redis.store)
+        raise WorkerTaskFailed("transient")
+
+    with (
+        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
+        patch("httpx.AsyncClient", return_value=fake_client),
+        patch(
+            "songmaker_cli.scheduler.consume_download_task_stream",
+            new=consume_observing_flag,
+        ),
+        patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
+    ):
+        _run(download_model_on_worker({"redis": redis}, "dl-flag", "sft"))
+
+    assert seen_during_retries == [True, True, True]
+    assert flag_key not in redis.store

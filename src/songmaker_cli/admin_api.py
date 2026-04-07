@@ -28,13 +28,16 @@ from songmaker_cli.api_models import (
     CreateUserRequest,
     EvictModelOnWorkerRequest,
     JobResponse,
+    LoadedModelDetail,
     LoadModelOnWorkerRequest,
     LoginAttemptResponse,
     PaginatedResponse,
+    PinModelOnWorkerRequest,
     RegistryModelResponse,
     RegistryResponse,
     SessionResponse,
     StatusResponse,
+    UnpinModelOnWorkerRequest,
     UpdateUserRequest,
     UserResponse,
     WorkerEphemeralState,
@@ -287,16 +290,41 @@ def _derive_worker_status(state: dict | None) -> str:
     return "online"
 
 
+def _parse_loaded(raw_loaded) -> list[LoadedModelDetail]:
+    if not raw_loaded:
+        return []
+    out: list[LoadedModelDetail] = []
+    for entry in raw_loaded:
+        if isinstance(entry, dict) and "mode" in entry:
+            out.append(
+                LoadedModelDetail(
+                    mode=str(entry["mode"]),
+                    size_gb=float(entry.get("size_gb", 0.0)),
+                ),
+            )
+        elif isinstance(entry, str):
+            out.append(LoadedModelDetail(mode=entry, size_gb=0.0))
+    return out
+
+
+def _loaded_modes(state: dict | None) -> list[str]:
+    if state is None:
+        return []
+    return [d.mode for d in _parse_loaded(state.get("loaded", []))]
+
+
 def _state_from_dict(state: dict | None, queue_depth: int) -> WorkerEphemeralState | None:
     if state is None:
         return None
     return WorkerEphemeralState(
-        loaded=list(state.get("loaded", [])),
+        loaded=_parse_loaded(state.get("loaded", [])),
         target_loading=state.get("target_loading"),
+        loading_started_at=state.get("loading_started_at"),
         queue_depth=queue_depth,
         vram_used_gb=state.get("vram_used_gb"),
         vram_total_gb=state.get("vram_total_gb"),
         available_modes=list(state.get("available_modes", [])),
+        pinned=list(state.get("pinned", [])),
         last_heartbeat_at=state.get("last_heartbeat_at"),
     )
 
@@ -356,7 +384,7 @@ async def get_registry_endpoint(
         for worker_id, st in states.items():
             if st is None:
                 continue
-            if mode in st.get("loaded", []):
+            if mode in _loaded_modes(st):
                 loaded_on.append(worker_id)
             if st.get("target_loading") == mode:
                 loading_on.append(worker_id)
@@ -431,6 +459,81 @@ async def evict_model_on_worker_endpoint(
     if response.status_code >= 400:
         raise HTTPException(502, f"Worker returned {response.status_code}")
     return StatusResponse(status="ok")
+
+
+@router.post("/workers/{worker_id}/pin_model")
+async def pin_model_on_worker_endpoint(
+    worker_id: str,
+    req: PinModelOnWorkerRequest,
+    db: Session = Depends(get_db_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> StatusResponse:
+    worker = get_worker_identity(db, worker_id)
+    if worker is None:
+        raise HTTPException(404, f"Worker '{worker_id}' not found")
+    if req.mode not in MODEL_CONFIG_PATHS:
+        raise HTTPException(400, f"Unknown model mode '{req.mode}'")
+
+    try:
+        response = await _post_to_worker(
+            worker.host, worker.port, "/pin_model", {"mode": req.mode},
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"Worker unreachable: {exc}")
+    if response.status_code >= 400:
+        detail = ""
+        try:
+            detail = response.json().get("detail", "")
+        except Exception:
+            pass
+        raise HTTPException(
+            response.status_code if response.status_code in (400, 409) else 502,
+            detail or f"Worker returned {response.status_code}",
+        )
+    return StatusResponse(status="ok")
+
+
+@router.post("/workers/{worker_id}/unpin_model")
+async def unpin_model_on_worker_endpoint(
+    worker_id: str,
+    req: UnpinModelOnWorkerRequest,
+    db: Session = Depends(get_db_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> StatusResponse:
+    worker = get_worker_identity(db, worker_id)
+    if worker is None:
+        raise HTTPException(404, f"Worker '{worker_id}' not found")
+    if req.mode not in MODEL_CONFIG_PATHS:
+        raise HTTPException(400, f"Unknown model mode '{req.mode}'")
+
+    try:
+        response = await _post_to_worker(
+            worker.host, worker.port, "/unpin_model", {"mode": req.mode},
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"Worker unreachable: {exc}")
+    if response.status_code >= 400:
+        raise HTTPException(502, f"Worker returned {response.status_code}")
+    return StatusResponse(status="ok")
+
+
+@router.post("/workers/{worker_id}/restart")
+async def restart_worker_endpoint(
+    worker_id: str,
+    db: Session = Depends(get_db_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> StatusResponse:
+    worker = get_worker_identity(db, worker_id)
+    if worker is None:
+        raise HTTPException(404, f"Worker '{worker_id}' not found")
+
+    try:
+        response = await _post_to_worker(worker.host, worker.port, "/restart")
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"Worker unreachable: {exc}")
+    if response.status_code >= 400:
+        raise HTTPException(502, f"Worker returned {response.status_code}")
+    return StatusResponse(status="restarting")
 
 
 @router.post("/registry/{mode}/download")

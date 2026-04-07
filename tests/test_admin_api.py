@@ -658,11 +658,13 @@ def test_list_workers_online(client: TestClient) -> None:
     _seed_worker(client, "acestep-worker-0")
     pool = _make_fake_pool()
     state = {
-        "loaded": ["sft"],
+        "loaded": [{"mode": "sft", "size_gb": 6.0}],
         "target_loading": None,
+        "loading_started_at": None,
         "vram_used_gb": 12.4,
         "vram_total_gb": 24.0,
         "available_modes": ["sft", "turbo"],
+        "pinned": [],
         "last_heartbeat_at": "2026-04-07T12:00:00+00:00",
     }
     pool._store[worker_state_key("acestep-worker-0")] = json.dumps(state)
@@ -675,8 +677,9 @@ def test_list_workers_online(client: TestClient) -> None:
     w = data["workers"][0]
     assert w["identity"]["id"] == "acestep-worker-0"
     assert w["status"] == "online"
-    assert w["state"]["loaded"] == ["sft"]
+    assert w["state"]["loaded"] == [{"mode": "sft", "size_gb": 6.0}]
     assert w["state"]["available_modes"] == ["sft", "turbo"]
+    assert w["state"]["pinned"] == []
 
 
 def test_list_workers_loading(client: TestClient) -> None:
@@ -889,6 +892,187 @@ def test_evict_model_worker_returns_4xx(client: TestClient) -> None:
             "/api/admin/workers/w1/evict_model", json={"mode": "sft"},
         )
     assert resp.status_code == 502
+
+
+# ── pin_model_on_worker_endpoint ────────────────────────────────────
+
+
+def test_pin_model_on_worker_success(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+
+    fake_response = MagicMock(status_code=200)
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
+        resp = client.post(
+            "/api/admin/workers/w1/pin_model", json={"mode": "sft"},
+        )
+    assert resp.status_code == 200
+    args, kwargs = fake_client.post.call_args
+    assert args[0].endswith("/pin_model")
+    assert kwargs["json"] == {"mode": "sft"}
+
+
+def test_pin_model_unknown_worker(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/workers/missing/pin_model", json={"mode": "sft"},
+    )
+    assert resp.status_code == 404
+
+
+def test_pin_model_unknown_mode(client: TestClient) -> None:
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    resp = client.post(
+        "/api/admin/workers/w1/pin_model", json={"mode": "bogus"},
+    )
+    assert resp.status_code == 400
+
+
+def test_pin_model_worker_409_passes_through(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+
+    fake_response = MagicMock(status_code=409)
+    fake_response.json = MagicMock(return_value={"detail": "Cannot pin sft: not loaded"})
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
+        resp = client.post(
+            "/api/admin/workers/w1/pin_model", json={"mode": "sft"},
+        )
+    assert resp.status_code == 409
+    assert "not loaded" in resp.json()["detail"]
+
+
+def test_pin_model_worker_unreachable(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    import httpx
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(side_effect=httpx.ConnectError("refused"))
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
+        resp = client.post(
+            "/api/admin/workers/w1/pin_model", json={"mode": "sft"},
+        )
+    assert resp.status_code == 502
+
+
+def test_pin_model_requires_admin(client: TestClient) -> None:
+    resp = client.post("/api/admin/workers/w1/pin_model", json={"mode": "sft"})
+    assert resp.status_code in (401, 403)
+
+
+# ── unpin_model_on_worker_endpoint ──────────────────────────────────
+
+
+def test_unpin_model_on_worker_success(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+
+    fake_response = MagicMock(status_code=200)
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
+        resp = client.post(
+            "/api/admin/workers/w1/unpin_model", json={"mode": "sft"},
+        )
+    assert resp.status_code == 200
+    args, _ = fake_client.post.call_args
+    assert args[0].endswith("/unpin_model")
+
+
+def test_unpin_model_unknown_worker(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/workers/missing/unpin_model", json={"mode": "sft"},
+    )
+    assert resp.status_code == 404
+
+
+def test_unpin_model_unknown_mode(client: TestClient) -> None:
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    resp = client.post(
+        "/api/admin/workers/w1/unpin_model", json={"mode": "bogus"},
+    )
+    assert resp.status_code == 400
+
+
+# ── restart_worker_endpoint ─────────────────────────────────────────
+
+
+def test_restart_worker_success(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+
+    fake_response = MagicMock(status_code=200)
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
+        resp = client.post("/api/admin/workers/w1/restart")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "restarting"
+    args, _ = fake_client.post.call_args
+    assert args[0].endswith("/restart")
+
+
+def test_restart_worker_unknown_worker(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post("/api/admin/workers/missing/restart")
+    assert resp.status_code == 404
+
+
+def test_restart_worker_unreachable(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    import httpx
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(side_effect=httpx.ConnectError("refused"))
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
+        resp = client.post("/api/admin/workers/w1/restart")
+    assert resp.status_code == 502
+
+
+def test_restart_worker_requires_admin(client: TestClient) -> None:
+    resp = client.post("/api/admin/workers/w1/restart")
+    assert resp.status_code in (401, 403)
 
 
 # ── download_model_endpoint ─────────────────────────────────────────

@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import signal
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -23,6 +25,7 @@ from acestep_worker.heartbeat import HeartbeatLoop, queue_depth_key
 from acestep_worker.model_cache import (
     CapacityError,
     ModelCache,
+    ModelNotLoadedError,
     UnknownModeError,
 )
 from acestep_worker.models import (
@@ -31,11 +34,16 @@ from acestep_worker.models import (
     EvictModelResponse,
     GenerateRequest,
     HealthResponse,
+    LoadedModelDetailItem,
     LoadedModelsResponse,
     LoadModelRequest,
     LoadModelResponse,
+    PinModelRequest,
+    PinModelResponse,
+    RestartResponse,
     TaskCreatedResponse,
     TaskSnapshot,
+    UnpinModelRequest,
     WorkerTaskEvent,
 )
 from acestep_worker.registry_client import RegistryClient, WorkerRegistration
@@ -75,12 +83,21 @@ async def read_queue_depth(redis: Redis, worker_id: str) -> int:
 async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
     snapshot = deps.cache.snapshot()
     return {
-        "loaded": list(snapshot.loaded),
+        "loaded": [
+            {"mode": info.mode, "size_gb": info.size_gb}
+            for info in snapshot.loaded
+        ],
         "target_loading": snapshot.target_loading,
+        "loading_started_at": (
+            snapshot.loading_started_at.isoformat()
+            if snapshot.loading_started_at is not None
+            else None
+        ),
         "vram_used_gb": snapshot.vram_used_gb,
         "vram_total_gb": snapshot.vram_total_gb,
         "available_modes": list_available_modes(deps.checkpoint_dir),
         "queue_depth": await read_queue_depth(deps.redis, deps.worker_id),
+        "pinned": list(snapshot.pinned),
     }
 
 
@@ -100,12 +117,21 @@ def build_router(deps: WorkerDeps) -> APIRouter:
     async def loaded_models() -> LoadedModelsResponse:
         snapshot = deps.cache.snapshot()
         return LoadedModelsResponse(
-            loaded=list(snapshot.loaded),
+            loaded=[
+                LoadedModelDetailItem(mode=info.mode, size_gb=info.size_gb)
+                for info in snapshot.loaded
+            ],
             target_loading=snapshot.target_loading,
+            loading_started_at=(
+                snapshot.loading_started_at.isoformat()
+                if snapshot.loading_started_at is not None
+                else None
+            ),
             queue_depth=await read_queue_depth(deps.redis, deps.worker_id),
             vram_used_gb=snapshot.vram_used_gb,
             vram_total_gb=snapshot.vram_total_gb,
             available_modes=list_available_modes(deps.checkpoint_dir),
+            pinned=list(snapshot.pinned),
         )
 
     @router.post("/load_model", response_model=LoadModelResponse)
@@ -124,31 +150,66 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.post("/evict_model", response_model=EvictModelResponse)
     async def evict_model(req: EvictModelRequest) -> EvictModelResponse:
-        evicted = await deps.cache.evict(req.mode)
+        try:
+            evicted = await deps.cache.evict(req.mode)
+        except CapacityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         return EvictModelResponse(
             loaded=deps.cache.loaded_modes(),
             evicted=evicted,
         )
 
+    @router.post("/pin_model", response_model=PinModelResponse)
+    async def pin_model(req: PinModelRequest) -> PinModelResponse:
+        try:
+            await deps.cache.pin(req.mode)
+        except ModelNotLoadedError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        snapshot = deps.cache.snapshot()
+        return PinModelResponse(mode=req.mode, pinned=list(snapshot.pinned))
+
+    @router.post("/unpin_model", response_model=PinModelResponse)
+    async def unpin_model(req: UnpinModelRequest) -> PinModelResponse:
+        await deps.cache.unpin(req.mode)
+        snapshot = deps.cache.snapshot()
+        return PinModelResponse(mode=req.mode, pinned=list(snapshot.pinned))
+
+    @router.post("/restart", response_model=RestartResponse)
+    async def restart() -> RestartResponse:
+        log.info("Restart requested via /restart endpoint")
+        pid = os.getpid()
+        loop = asyncio.get_running_loop()
+        loop.call_later(0.1, lambda: os.kill(pid, signal.SIGTERM))
+        return RestartResponse(status="restarting", pid=pid)
+
     @router.post("/generate", response_model=TaskCreatedResponse)
     async def generate(req: GenerateRequest) -> TaskCreatedResponse:
-        loaded = deps.cache.get_loaded(req.mode)
+        loaded = await deps.cache.acquire_for_use(req.mode)
         if loaded is None:
             raise HTTPException(
                 status_code=409,
                 detail=f"Mode {req.mode} not loaded; call /load_model first",
             )
-        task_id = await deps.task_store.create("generate")
-        spawn_background(
-            deps.generate_runner(
-                deps.task_store,
-                task_id,
-                mode=req.mode,
-                config=req.config,
-                port=loaded.port,
-                audio_output_dir=deps.audio_output_dir,
-            )
-        )
+        try:
+            task_id = await deps.task_store.create("generate")
+        except Exception:
+            await deps.cache.release(req.mode)
+            raise
+
+        async def _runner_with_release() -> None:
+            try:
+                await deps.generate_runner(
+                    deps.task_store,
+                    task_id,
+                    mode=req.mode,
+                    config=req.config,
+                    port=loaded.port,
+                    audio_output_dir=deps.audio_output_dir,
+                )
+            finally:
+                await deps.cache.release(req.mode)
+
+        spawn_background(_runner_with_release())
         return TaskCreatedResponse(task_id=task_id)
 
     @router.post("/download_model", response_model=TaskCreatedResponse)

@@ -766,6 +766,10 @@ async def load_model_on_worker(ctx, job_id: str, worker_id: str, mode: str) -> N
     _update_job(factory, job_id, "completed", progress=1.0)
 
 
+DOWNLOAD_MAX_ATTEMPTS = 3
+DOWNLOAD_RETRY_BASE_DELAY_SECONDS = 5.0
+
+
 async def download_model_on_worker(ctx, job_id: str, mode: str) -> None:
     import httpx
 
@@ -806,76 +810,97 @@ async def download_model_on_worker(ctx, job_id: str, mode: str) -> None:
             error_type="duplicate_download",
         )
         return
+
+    def _on_progress(fraction: float) -> None:
+        _update_job(factory, job_id, "running", progress=fraction)
+        _touch_heartbeat(factory, job_id)
+
+    def _on_heartbeat() -> None:
+        _touch_heartbeat(factory, job_id)
+
+    last_error: str | None = None
     try:
-        try:
-            with factory() as session:
-                worker = await pick_any_online_worker(session, redis)
-        except NoCapacityError as exc:
-            _update_job(
-                factory, job_id, "failed",
-                error=str(exc),
-                error_type="no_workers",
-            )
-            return
-
-        token = os.environ.get(INTERNAL_TOKEN_ENV, "")
-        headers = {INTERNAL_TOKEN_HEADER: token}
-        submit_url = f"{worker.base_url}/download_model"
-
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                submit = await client.post(
-                    submit_url, json={"mode": mode}, headers=headers,
+        for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
+            try:
+                with factory() as session:
+                    worker = await pick_any_online_worker(session, redis)
+            except NoCapacityError as exc:
+                _update_job(
+                    factory, job_id, "failed",
+                    error=str(exc),
+                    error_type="no_workers",
                 )
-        except httpx.HTTPError as exc:
-            _update_job(
-                factory, job_id, "failed",
-                error=f"Worker unreachable: {exc}",
-                error_type="worker_unreachable",
-            )
-            return
+                return
 
-        if submit.status_code >= 400:
-            _update_job(
-                factory, job_id, "failed",
-                error=f"Worker returned {submit.status_code}: {submit.text[:200]}",
-                error_type="worker_error",
-            )
-            return
+            token = os.environ.get(INTERNAL_TOKEN_ENV, "")
+            headers = {INTERNAL_TOKEN_HEADER: token}
+            submit_url = f"{worker.base_url}/download_model"
 
-        task_id = submit.json()["task_id"]
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    submit = await client.post(
+                        submit_url, json={"mode": mode}, headers=headers,
+                    )
+            except httpx.HTTPError as exc:
+                _update_job(
+                    factory, job_id, "failed",
+                    error=f"Worker unreachable: {exc}",
+                    error_type="worker_unreachable",
+                )
+                return
 
-        def _on_progress(fraction: float) -> None:
-            _update_job(factory, job_id, "running", progress=fraction)
-            _touch_heartbeat(factory, job_id)
+            if submit.status_code >= 400:
+                _update_job(
+                    factory, job_id, "failed",
+                    error=f"Worker returned {submit.status_code}: {submit.text[:200]}",
+                    error_type="worker_error",
+                )
+                return
 
-        def _on_heartbeat() -> None:
-            _touch_heartbeat(factory, job_id)
+            task_id = submit.json()["task_id"]
 
-        try:
-            await consume_download_task_stream(
-                worker,
-                task_id,
-                on_progress=_on_progress,
-                on_heartbeat=_on_heartbeat,
-                options=DispatchOptions(),
-            )
-        except WorkerTaskFailed as exc:
-            _update_job(
-                factory, job_id, "failed",
-                error=f"Download failed: {exc}",
-                error_type="download_error",
-            )
-            return
-        except httpx.HTTPError as exc:
-            _update_job(
-                factory, job_id, "failed",
-                error=f"SSE transport failed: {exc}",
-                error_type="sse_transport",
-            )
-            return
+            try:
+                await consume_download_task_stream(
+                    worker,
+                    task_id,
+                    on_progress=_on_progress,
+                    on_heartbeat=_on_heartbeat,
+                    options=DispatchOptions(),
+                )
+                _update_job(factory, job_id, "completed", progress=1.0)
+                return
+            except WorkerTaskFailed as exc:
+                last_error = (
+                    f"Download attempt {attempt}/{DOWNLOAD_MAX_ATTEMPTS} failed: {exc}"
+                )
+                log.warning(
+                    "download attempt %d/%d for %s failed: %s",
+                    attempt, DOWNLOAD_MAX_ATTEMPTS, mode, exc,
+                )
+            except (httpx.RemoteProtocolError, httpx.ReadError) as exc:
+                last_error = (
+                    f"SSE drop on attempt {attempt}/{DOWNLOAD_MAX_ATTEMPTS}: {exc}"
+                )
+                log.warning(
+                    "SSE drop on download attempt %d/%d for %s: %s",
+                    attempt, DOWNLOAD_MAX_ATTEMPTS, mode, exc,
+                )
+            except httpx.HTTPError as exc:
+                _update_job(
+                    factory, job_id, "failed",
+                    error=f"SSE transport failed: {exc}",
+                    error_type="sse_transport",
+                )
+                return
 
-        _update_job(factory, job_id, "completed", progress=1.0)
+            if attempt < DOWNLOAD_MAX_ATTEMPTS:
+                await asyncio.sleep(DOWNLOAD_RETRY_BASE_DELAY_SECONDS * attempt)
+
+        _update_job(
+            factory, job_id, "failed",
+            error=last_error or "All download attempts exhausted",
+            error_type="download_error",
+        )
     finally:
         await clear_download_in_progress(redis, mode)
 

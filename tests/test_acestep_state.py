@@ -57,6 +57,7 @@ def test_heartbeat_payload_keys_match_admin_reader() -> None:
     from acestep_worker.model_cache import ModelCache
     from acestep_worker.wrapper import WorkerDeps, build_state_payload
     from songmaker_cli.admin_api import _state_from_dict
+    from songmaker_cli.api_models.workers import LoadedModelDetail  # noqa: F401
 
     async def fake_loader(_: str):
         from acestep_worker.model_cache import LoadedModel
@@ -72,6 +73,7 @@ def test_heartbeat_payload_keys_match_admin_reader() -> None:
         unloader=fake_unloader,
     )
     asyncio.run(cache.load("sft"))
+    asyncio.run(cache.pin("sft"))
 
     fake_redis = MagicMock()
 
@@ -95,14 +97,17 @@ def test_heartbeat_payload_keys_match_admin_reader() -> None:
 
     state = _state_from_dict(payload, queue_depth=0)
     assert state is not None
-    assert state.loaded == ["sft"], (
+    assert len(state.loaded) == 1 and state.loaded[0].mode == "sft", (
         f"writer/reader key mismatch: payload has keys {sorted(payload.keys())}, "
-        f"reader expects 'loaded'"
+        f"reader expects 'loaded' as list[LoadedModelDetail]"
     )
+    assert state.loaded[0].size_gb == 6.0
     assert state.vram_used_gb == 6.0
     assert state.target_loading is None
     assert state.vram_total_gb == 24.0
     assert state.available_modes == []
+    assert state.pinned == ["sft"]
+    assert state.loading_started_at is None
 
 
 def test_worker_state_key_format() -> None:

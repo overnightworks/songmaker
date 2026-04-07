@@ -427,6 +427,24 @@ def test_build_state_payload(tmp_path: Path) -> None:
     assert payload["vram_total_gb"] == 24.0
     assert payload["target_loading"] is None
     assert payload["available_modes"] == []
+    assert payload["pinned"] == []
+    assert payload["loading_started_at"] is None
+
+
+def test_build_state_payload_after_load_uses_detail_shape(tmp_path: Path) -> None:
+    from acestep_worker.wrapper import build_state_payload
+
+    deps, _ = _make_deps(tmp_path)
+
+    async def go():
+        await deps.cache.load("sft")
+        await deps.cache.pin("sft")
+        return await build_state_payload(deps)
+
+    payload = _run(go())
+    assert payload["loaded"] == [{"mode": "sft", "size_gb": 6.0}]
+    assert payload["pinned"] == ["sft"]
+    assert payload["loading_started_at"] is None
 
 
 def test_lifespan_calls_registry(tmp_path: Path) -> None:
@@ -575,3 +593,207 @@ def test_lifespan_swallows_registration_exception_on_shutdown(tmp_path: Path) ->
             await _asyncio.sleep(0.01)
 
     _run(go())
+
+
+# ── D5 wrapper: pin/unpin endpoints ──────────────────────────────
+
+
+def test_pin_model_success(tmp_path: Path) -> None:
+    deps, _ = _make_deps(tmp_path)
+    app = create_app(deps)
+    with TestClient(app) as client:
+        client.post("/load_model", json={"mode": "sft"})
+        resp = client.post("/pin_model", json={"mode": "sft"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["mode"] == "sft"
+        assert body["pinned"] == ["sft"]
+        assert deps.cache.is_pinned("sft")
+
+
+def test_pin_model_not_loaded_returns_409(tmp_path: Path) -> None:
+    deps, _ = _make_deps(tmp_path)
+    app = create_app(deps)
+    with TestClient(app) as client:
+        resp = client.post("/pin_model", json={"mode": "sft"})
+    assert resp.status_code == 409
+    assert "Cannot pin" in resp.json()["detail"]
+
+
+def test_unpin_model_success(tmp_path: Path) -> None:
+    deps, _ = _make_deps(tmp_path)
+    app = create_app(deps)
+    with TestClient(app) as client:
+        client.post("/load_model", json={"mode": "sft"})
+        client.post("/pin_model", json={"mode": "sft"})
+        resp = client.post("/unpin_model", json={"mode": "sft"})
+        assert resp.status_code == 200
+        assert resp.json()["pinned"] == []
+        assert deps.cache.is_pinned("sft") is False
+
+
+def test_unpin_unknown_mode_returns_200(tmp_path: Path) -> None:
+    deps, _ = _make_deps(tmp_path)
+    app = create_app(deps)
+    with TestClient(app) as client:
+        resp = client.post("/unpin_model", json={"mode": "sft"})
+    assert resp.status_code == 200
+
+
+# ── D4 wrapper: /restart endpoint ────────────────────────────────
+
+
+def test_restart_endpoint_schedules_sigterm(tmp_path: Path) -> None:
+    import os as _os
+
+    from acestep_worker import wrapper as wrapper_module
+
+    deps, _ = _make_deps(tmp_path)
+    app = create_app(deps)
+
+    kill_calls: list[tuple[int, int]] = []
+
+    def fake_kill(pid: int, sig: int) -> None:
+        kill_calls.append((pid, sig))
+
+    original_kill = _os.kill
+    wrapper_module.os.kill = fake_kill  # type: ignore[assignment]
+    try:
+        with TestClient(app) as client:
+            resp = client.post("/restart")
+            body = resp.json()
+            assert resp.status_code == 200
+            assert body["status"] == "restarting"
+            assert body["pid"] == _os.getpid()
+            for _ in range(20):
+                if kill_calls:
+                    break
+                _run(_asyncio_sleep(0.05))
+    finally:
+        wrapper_module.os.kill = original_kill  # type: ignore[assignment]
+
+    assert len(kill_calls) == 1
+    assert kill_calls[0][0] == _os.getpid()
+
+
+async def _asyncio_sleep(seconds: float) -> None:
+    await asyncio.sleep(seconds)
+
+
+# ── D6 wrapper: /generate refcount integration ───────────────────
+
+
+def test_generate_acquires_and_releases_refcount(tmp_path: Path) -> None:
+    from acestep_worker.wrapper import lifespan
+
+    deps, _ = _make_deps(tmp_path)
+
+    release_event = asyncio.Event()
+    saw_in_use_one = False
+
+    async def slow_runner(
+        store: TaskStore,
+        task_id: str,
+        *,
+        mode: str,
+        config: dict[str, Any],
+        port: int,
+        audio_output_dir: Path,
+    ) -> None:
+        nonlocal saw_in_use_one
+        await store.mark_running(task_id)
+        if deps.cache.in_use_count(mode) == 1:
+            saw_in_use_one = True
+        await release_event.wait()
+        await store.complete(
+            task_id,
+            {"mode": mode, "audio_path": "/x", "seed": 0},
+        )
+
+    deps.generate_runner = slow_runner
+
+    app = create_app(deps)
+
+    async def go():
+        async with lifespan(app):
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://test",
+            ) as client:
+                await client.post("/load_model", json={"mode": "sft"})
+                resp = await client.post(
+                    "/generate",
+                    json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
+                )
+                assert resp.status_code == 200
+                for _ in range(50):
+                    if deps.cache.in_use_count("sft") > 0:
+                        break
+                    await asyncio.sleep(0.01)
+                assert deps.cache.in_use_count("sft") == 1
+                release_event.set()
+                for _ in range(50):
+                    if deps.cache.in_use_count("sft") == 0:
+                        break
+                    await asyncio.sleep(0.01)
+                assert deps.cache.in_use_count("sft") == 0
+        assert saw_in_use_one
+
+    _run(go())
+
+
+def test_generate_releases_refcount_on_runner_exception(tmp_path: Path) -> None:
+    from acestep_worker.wrapper import lifespan
+
+    deps, _ = _make_deps(tmp_path)
+
+    async def failing_runner(
+        store: TaskStore,
+        task_id: str,
+        *,
+        mode: str,
+        config: dict[str, Any],
+        port: int,
+        audio_output_dir: Path,
+    ) -> None:
+        await store.mark_running(task_id)
+        raise RuntimeError("kaboom")
+
+    deps.generate_runner = failing_runner
+
+    app = create_app(deps)
+
+    async def go():
+        async with lifespan(app):
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://test",
+            ) as client:
+                await client.post("/load_model", json={"mode": "sft"})
+                resp = await client.post(
+                    "/generate",
+                    json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
+                )
+                assert resp.status_code == 200
+                for _ in range(50):
+                    if deps.cache.in_use_count("sft") == 0:
+                        break
+                    await asyncio.sleep(0.01)
+                assert deps.cache.in_use_count("sft") == 0
+
+    _run(go())
+
+
+def test_evict_endpoint_409_when_in_use(tmp_path: Path) -> None:
+    deps, _ = _make_deps(tmp_path)
+    app = create_app(deps)
+    with TestClient(app) as client:
+        client.post("/load_model", json={"mode": "sft"})
+
+        async def hold():
+            await deps.cache.acquire_for_use("sft")
+
+        _run(hold())
+        resp = client.post("/evict_model", json={"mode": "sft"})
+        assert resp.status_code == 409
+        assert "in use" in resp.json()["detail"]

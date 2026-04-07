@@ -45,13 +45,20 @@ class WorkerIdentity(BaseModel):
         )
 
 
+class LoadedModelDetail(BaseModel):
+    mode: str
+    size_gb: float
+
+
 class WorkerEphemeralState(BaseModel):
-    loaded: list[str] = []
+    loaded: list[LoadedModelDetail] = []
     target_loading: str | None = None
+    loading_started_at: str | None = None
     queue_depth: int = 0
     vram_used_gb: float | None = None
     vram_total_gb: float | None = None
     available_modes: list[str] = []
+    pinned: list[str] = []
     last_heartbeat_at: str | None = None
 
 
@@ -84,4 +91,12 @@ class LoadModelOnWorkerRequest(BaseModel):
 
 
 class EvictModelOnWorkerRequest(BaseModel):
+    mode: str = Field(min_length=1, max_length=20)
+
+
+class PinModelOnWorkerRequest(BaseModel):
+    mode: str = Field(min_length=1, max_length=20)
+
+
+class UnpinModelOnWorkerRequest(BaseModel):
     mode: str = Field(min_length=1, max_length=20)

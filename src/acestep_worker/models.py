@@ -18,6 +18,29 @@ class EvictModelRequest(BaseModel):
     mode: str
 
 
+class PinModelRequest(BaseModel):
+    mode: str
+
+
+class UnpinModelRequest(BaseModel):
+    mode: str
+
+
+class PinModelResponse(BaseModel):
+    mode: str
+    pinned: list[str]
+
+
+class RestartResponse(BaseModel):
+    status: Literal["restarting"]
+    pid: int
+
+
+class LoadedModelDetailItem(BaseModel):
+    mode: str
+    size_gb: float
+
+
 class LoadModelResponse(BaseModel):
     loaded: list[str]
     evicted: list[str]
@@ -59,12 +82,14 @@ class TaskSnapshot(BaseModel):
 
 
 class LoadedModelsResponse(BaseModel):
-    loaded: list[str]
+    loaded: list[LoadedModelDetailItem]
     target_loading: str | None
+    loading_started_at: str | None = None
     queue_depth: int
     vram_used_gb: float
     vram_total_gb: float
     available_modes: list[str]
+    pinned: list[str] = []
 
 
 class HealthResponse(BaseModel):

@@ -24,6 +24,7 @@ import logging
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass, is_dataclass
+from typing import Any
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -106,11 +107,23 @@ async def _list_online_workers(
                 id=ident.id,
                 host=ident.host,
                 port=ident.port,
-                loaded_modes=list(state.get("loaded", [])),
+                loaded_modes=_extract_loaded_modes(state.get("loaded", [])),
                 queue_depth=queue_depth,
             ),
         )
     return online
+
+
+def _extract_loaded_modes(raw_loaded: Any) -> list[str]:
+    if not raw_loaded:
+        return []
+    modes: list[str] = []
+    for entry in raw_loaded:
+        if isinstance(entry, dict) and "mode" in entry:
+            modes.append(str(entry["mode"]))
+        elif isinstance(entry, str):
+            modes.append(entry)
+    return modes
 
 
 def _pick_from(workers: list[_PickedWorker], target_mode: str) -> _PickedWorker:

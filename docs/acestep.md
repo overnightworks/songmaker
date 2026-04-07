@@ -141,6 +141,69 @@ If a worker is stuck in step 3:
 
 The cancel-on-shutdown behavior: if the worker is shut down (SIGTERM, container stop) while still in the registration loop, the lifespan finally block cancels the registration task and awaits its cleanup before exiting. No orphaned tasks survive shutdown.
 
+### Restart procedure
+
+The Worker Pool admin panel has a **Restart** button per card. Clicking it (after a confirm dialog) calls `POST /api/admin/workers/{id}/restart`, which proxies to the worker's `POST /restart` endpoint. The worker logs the restart request, schedules `os.kill(os.getpid(), SIGTERM)` after a 100 ms delay (so the HTTP response is flushed first), and returns `{"status": "restarting", "pid": ...}`.
+
+The container is running with `restart: unless-stopped`, so docker compose brings it back up automatically. The new process goes through the normal startup sequence above (FastAPI bind → `/health` 503 → register → `/health` 200). Expected total downtime: ~10–15 s.
+
+**In-flight generations fail.** Restarting kills the worker process, including any subprocess holding a generate task. Affected jobs surface as `error_type=worker_unreachable` in the user's job list. Restart only when the operator is willing to lose the in-flight work.
+
+To verify the restart cycle from the admin UI: the Worker Pool card flips `online → offline → loading → online` over the cycle. The transitions are visible because the heartbeat TTL (15 s) outlasts the brief downtime.
+
+### pin_model semantics
+
+The cache is normally LRU: when a new `load_model` would exceed the VRAM budget, the least-recently-used loaded model is evicted to make room. **Pinning** marks a loaded model as exempt from LRU eviction. Use it when a single-GPU multi-user deployment has a "must always be loaded" preference (e.g. the operator wants `sft` to stay resident regardless of how many other modes get loaded).
+
+How pinning interacts with the cache:
+
+- `POST /api/admin/workers/{id}/pin_model` requires the model to already be loaded (returns 409 otherwise).
+- `_evict_to_fit` skips pinned **and** in-use models when picking an LRU victim.
+- If **all** loaded models are pinned and a new load doesn't fit, the cache raises `CapacityError` with a clear message naming the pinned set. The admin must explicitly unpin one before the next load can succeed.
+- Explicit `evict_model` (the admin "Evict X" button) unpins implicitly — the operator asked for it. `_evict_to_fit` (LRU) does not unpin.
+- Worker shutdown (`evict_all`) drains everything regardless of pin state.
+
+Pin/unpin from the admin UI: each loaded-mode row in the Worker Pool card has a **Pin** / **Unpin** button next to its **Evict** button. The button reflects the current state from the heartbeat (`pinned: list[str]`).
+
+### Load-while-generating refcount
+
+Generations and model loads share the same cache. Without coordination, an admin who loads a different mode mid-generation would evict the in-use model and crash the running generation with a stale subprocess handle. Phase 6 fixes this with a **per-mode refcount**:
+
+- The worker's `/generate` endpoint calls `cache.acquire_for_use(mode)` before spawning the runner. If the mode isn't loaded the endpoint returns 409.
+- The runner spawn is wrapped in a `try/finally` that calls `cache.release(mode)` on completion (success **or** exception **or** cancellation).
+- `_evict_to_fit` skips both pinned and in-use models (refcount > 0). If no eligible victim exists, the load fails with `CapacityError`.
+- Explicit `evict_model` refuses to evict a mode with refcount > 0 (returns 409 with the in-flight count).
+
+The user-visible failure mode: if an admin tries to load a model that would require evicting an in-use one, the load job ends `failed` with a clear "all eligible models are in use or pinned" message in the job-tracking UI. The running generation continues unharmed.
+
+### Download auto-retry
+
+`download_model_on_worker` retries the SSE consumption phase up to **3 attempts** with linear backoff (5s → 10s) on the narrow set of transient failure modes:
+
+- `WorkerTaskFailed` — the worker emitted an `error` SSE event (HF rate limit 429, transient HF blip, file system hiccup). Re-submission triggers a fresh `start_download`; HF `snapshot_download` resumes from cache.
+- `httpx.RemoteProtocolError` / `httpx.ReadError` — the SSE stream broke mid-flight (worker process crashed, connection reset).
+
+Terminal (no retry) failure modes:
+
+- `httpx.ConnectError` — worker unreachable. Surfaced as `error_type=sse_transport`.
+- HTTP 4xx/5xx on the `POST /download_model` submit — `error_type=worker_error`.
+- `NoCapacityError` — no online workers — `error_type=no_workers`.
+- Unknown mode — `error_type=invalid_mode`.
+
+The Redis flag (`songmaker:acestep:download:{mode}`) is held across all retry attempts via the function-level `try/finally` — concurrent admin clicks for the same mode are still rejected with 409 during the retry window. The flag is cleared exactly once when the function returns, regardless of which attempt succeeded or whether the retry budget was exhausted.
+
+### Troubleshooting playbooks
+
+**"Worker won't register"** — `/health` returns 503. Check container logs for `"Registration attempt N failed: ..."`. Verify the control plane URL is reachable from inside the worker container with `docker compose exec songmaker-acestep-worker-0 curl -v http://songmaker-web:8080/health`. Verify `SONGMAKER_INTERNAL_TOKEN` matches between worker and web. The retry loop never gives up — fix the root cause and the next backoff tick will succeed.
+
+**"Download stalls"** — check the download flag: `docker compose exec redis redis-cli GET 'songmaker:acestep:download:{mode}'`. Cross-reference the value (a job_id) with the job's status in the admin UI. If the job is gone but the flag remains, it's stale — `redis-cli DEL` it and retry. The 30-minute TTL is the automatic safety net.
+
+**"Load fails with CapacityError"** — the message includes the loaded set, the pinned set, and the in-use set. If the in-use set is non-empty, wait for those generations to finish; if it's all pinned, unpin one explicitly. The Worker Pool card's per-mode buttons make this directly actionable.
+
+**"Stale-job reaper killed my long generation"** — the reaper looks at `Job.last_heartbeat_at`. The arq job calls `_touch_heartbeat` on every SSE progress event from the worker (which fires every ~2 s for downloads, every ~1–5 s for generation steps). If a long task is being killed unexpectedly, check whether the on_progress callback is wired into the SSE consumer — the contract is that *every* yielded event refreshes the heartbeat, not just the milestone events.
+
+For the cross-cutting flow (web → music-worker → acestep-worker), see [architecture.md](architecture.md). For the trust boundaries and the internal token, see [security.md](security.md).
+
 ## Generation Parameters
 
 Parameters can be set per-song (`generation_params` in version), per-model-type (admin defaults), or globally.
