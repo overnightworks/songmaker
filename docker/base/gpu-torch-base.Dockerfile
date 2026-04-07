@@ -35,5 +35,4 @@ RUN uv venv --python 3.12 .venv \
         torchvision==0.25.0+cu128 \
         torchaudio==2.10.0+cu128
 
-ENV ACESTEP_SRC_DIR=/opt/acestep
 ENV PYTHONUNBUFFERED=1
