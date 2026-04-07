@@ -76,6 +76,36 @@ For bootstrap (no worker yet running, fresh install, CI), use the CLI escape hat
 
 This section is the operator-facing reference for the ACE-Step worker pool architecture (Phases 1–6). For the cross-cutting flow (web → music-worker → acestep-worker) see [architecture.md](architecture.md). For trust boundaries and the internal token, see [security.md](security.md).
 
+### Building the worker images
+
+As of Phase 8, the worker images form a small hierarchy with reusable base layers. Building them naively with `docker compose build` will fail because compose doesn't understand the base→leaf dependency. Use the orchestration script:
+
+```bash
+scripts/build_images.sh           # build everything (bases + leaves)
+scripts/build_images.sh bases     # bases only
+scripts/build_images.sh leaves    # compose leaves only (assumes bases exist)
+```
+
+**Image hierarchy:**
+
+```
+python:3.12-slim
+  ├── songmaker/gpu-torch-base   (torch 2.10+cu128 + cudnn — heavy CUDA layer)
+  │     └── songmaker/acestep-base   (upstream ACE-Step source + delta deps at /opt/acestep)
+  │           └── songmaker-acestep-worker   (wrapper venv + entrypoint)
+  ├── songmaker-music-worker     (server extras only — no torch, no scoring)
+  ├── songmaker-scoring-worker   (server + scoring + whisper, CPU torch)
+  └── songmaker-web              (server extras + frontend build, no torch)
+```
+
+**The rule:** if you edit any `docker/base/*.Dockerfile`, run `scripts/build_images.sh` first before `docker compose up --build`. Otherwise compose fails with `manifest unknown` for `FROM songmaker/acestep-base:latest`.
+
+**The inner ACE-Step venv is baked into `acestep-base` at `/opt/acestep/.venv`.** Pre-Phase-8, it lived in a host bind mount that uv re-resynced from scratch on every fresh container (5–15 minute model-load gate). Now it's in the image. The bind mount on `acestep-worker` only carries `./_models/acestep/checkpoints` → `/opt/acestep/checkpoints` (the multi-GB model weights). The upstream source tree, the `.venv`, and everything else under `_models/acestep/` is COPYed into the image at build time.
+
+The `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. Workers default to the documented 300 s timeout. If you have it set in your local `.env`, drop it.
+
+**Music-worker image bloat fix:** prior to Phase 8, music-worker shared `Dockerfile.worker` with scoring-worker and carried ~5 GB of unused torch + scoring + whisper wheels. Phase 8 split that file into `docker/music-worker.Dockerfile` (server extras only) and `docker/scoring-worker.Dockerfile` (server + scoring + whisper). Music-worker is now ~860 MB. This is safe because music-worker's import chain (`music_worker.py` → `jobs.py` → `scoring.{pipeline,models}`) is torch-free at module load — torch imports inside the scoring stack are lazy (inside function bodies) and music-worker never registers `run_scoring_job`.
+
 ### Prometheus metric keys
 
 The web container's `/metrics` endpoint exposes the following worker pool gauges (in addition to the existing HTTP, jobs, queue depth, and GPU VRAM metrics):

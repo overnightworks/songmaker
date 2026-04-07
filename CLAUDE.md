@@ -116,6 +116,8 @@ These are conventions that aren't obvious from reading a single file:
 
 Always use `--wait` with `docker compose up -d` but wrap it in `timeout` to prevent hanging after healthchecks pass (known Docker Compose bug): `timeout 120 docker compose up -d --build --wait`. If timeout fires, check `docker compose ps` — containers are likely already healthy.
 
+If you've changed any Dockerfile under `docker/base/`, run `scripts/build_images.sh` first to rebuild the base images. Otherwise compose will fail with `manifest unknown` for `FROM songmaker/acestep-base:latest`.
+
 ## Workflow — Speed
 
 - **Batch changes, test once.** All edits first, suite once at the end.

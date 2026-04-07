@@ -21,9 +21,9 @@ from acestep_worker.wrapper import (
 )
 
 DEFAULT_VRAM_BUDGET_GB = 22.0
-DEFAULT_CHECKPOINT_DIR = Path("/app/_models/acestep")
+DEFAULT_CHECKPOINT_DIR = Path("/opt/acestep")
 DEFAULT_AUDIO_DIR = Path("/app/data/audio/worker_output")
-DEFAULT_LOG_DIR = Path("/app/_models/acestep")
+DEFAULT_LOG_DIR = Path("/opt/acestep/logs")
 DEFAULT_ACESTEP_INNER_PORT = 8101
 
 DEFAULT_MODEL_SIZES_GB: dict[str, float] = {

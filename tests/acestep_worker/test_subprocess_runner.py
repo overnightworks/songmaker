@@ -219,6 +219,33 @@ def test_start_acestep_health_failure_stops_process(tmp_path: Path) -> None:
     assert len(stops) == 1
 
 
+def test_start_acestep_subprocess_uses_cwd(tmp_path: Path) -> None:
+    proc = MagicMock()
+    proc.pid = 4242
+    proc.poll.return_value = None
+    captured: dict = {}
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["cwd"] = kwargs.get("cwd")
+        return proc
+
+    with (
+        patch("acestep_worker.subprocess_runner.find_uv", return_value=["uv"]),
+        patch("subprocess.Popen", side_effect=fake_popen),
+        patch("acestep_worker.subprocess_runner.wait_for_health"),
+    ):
+        start_acestep_subprocess(
+            "sft",
+            port=8101,
+            checkpoint_dir=tmp_path,
+            vram_budget_gb=24.0,
+        )
+
+    assert captured["cwd"] == tmp_path
+    assert captured["cmd"] == ["uv", "run", "acestep-api", "--port", "8101"]
+
+
 def test_stop_acestep_subprocess_already_dead() -> None:
     proc = MagicMock()
     proc.poll.return_value = 0

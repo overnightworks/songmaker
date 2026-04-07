@@ -1,5 +1,4 @@
-# GPU worker: runs arq worker + manages ACE-Step subprocess
-# Requires NVIDIA Container Toolkit for GPU access
+# songmaker-scoring-worker — arq worker with scoring + whisper extras
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -12,13 +11,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 
-# Create user early so all files are owned by songmaker from the start,
-# avoiding a slow chown -R over GB of cached model files.
 RUN useradd --create-home --shell /bin/bash songmaker
 RUN chown songmaker:songmaker /app
 USER songmaker
 
-# Install dependencies first (cached unless pyproject.toml/uv.lock change)
 COPY --chown=songmaker pyproject.toml uv.lock ./
 RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
     uv sync --frozen --no-dev --extra server --extra scoring --extra whisper && \
@@ -33,7 +29,6 @@ from audiobox_aesthetics.infer import AesPredictor; \
 import os; os.environ['CUDA_VISIBLE_DEVICES'] = ''; \
 AesPredictor(checkpoint_pth='default')"
 
-# Copy source code (only this layer rebuilds on code changes)
 COPY --chown=songmaker src/ src/
 COPY --chown=songmaker alembic.ini ./
 RUN uv sync --frozen --no-dev --extra server --extra scoring --extra whisper

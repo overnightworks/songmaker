@@ -90,9 +90,7 @@ services:
   songmaker-music-worker:
     build:
       context: .
-      dockerfile: Dockerfile.worker
-      secrets:
-        - hf_token
+      dockerfile: docker/music-worker.Dockerfile
     command: ["songmaker_cli.music_worker.MusicWorkerSettings"]
     restart: unless-stopped
     healthcheck:
@@ -132,16 +130,16 @@ services:
       GPU_ID: "0"
       VRAM_BUDGET_GB: "${ACESTEP_WORKER_VRAM_GB:-22}"
       ACESTEP_STARTUP_TIMEOUT_SECONDS: "${ACESTEP_STARTUP_TIMEOUT_SECONDS:-300}"
-      ACESTEP_CHECKPOINT_DIR: "/app/_models/acestep"
+      ACESTEP_CHECKPOINT_DIR: "/opt/acestep"
       AUDIO_OUTPUT_DIR: "/app/data/audio/worker_output"
-      ACESTEP_LOG_DIR: "/app/_models/acestep"
+      ACESTEP_LOG_DIR: "/opt/acestep/logs"
       REDIS_URL: redis://redis:6379/0
       CONTROL_PLANE_URL: "${ACESTEP_WORKER_CONTROL_PLANE_URL:-http://songmaker-web:8080}"
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
       HF_TOKEN: "${HF_TOKEN:-}"
       HF_HUB_DISABLE_XET: "1"
     volumes:
-      - ./_models/acestep:/app/_models/acestep
+      - ./_models/acestep/checkpoints:/opt/acestep/checkpoints
       - audiofiles:/app/data/audio
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -160,7 +158,7 @@ services:
   songmaker-scoring-worker:
     build:
       context: .
-      dockerfile: Dockerfile.worker
+      dockerfile: docker/scoring-worker.Dockerfile
       secrets:
         - hf_token
     command: ["songmaker_cli.scoring_worker.ScoringWorkerSettings"]

@@ -4,8 +4,18 @@ __pycache__/
 *.pyc
 *.egg-info/
 
-# ACE-Step (mounted as volume, not copied)
-_models/
+# ACE-Step source tree is COPYed into the acestep-base image at /opt/acestep so
+# the inner subprocess venv can be baked at build time. Only host-runtime
+# artifacts and the heavy weights are excluded; weights are bind-mounted at
+# runtime by the acestep-worker leaf service.
+_models/acestep/.venv/
+_models/acestep/.git/
+_models/acestep/.cache/
+_models/acestep/checkpoints/
+_models/acestep/gradio_outputs/
+_models/acestep/manual_uv_sync.log
+_models/acestep/acestep-*.stderr.log
+_models/acestep/acestep_stderr.log
 
 # Frontend dev artifacts
 frontend/node_modules/
