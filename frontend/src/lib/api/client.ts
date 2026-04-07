@@ -89,5 +89,9 @@ export {
 	hardDeleteUser,
 	fetchSessions,
 	forceLogout,
-	fetchLoginAttempts
+	fetchLoginAttempts,
+	listWorkers,
+	getRegistry,
+	loadModelOnWorker,
+	evictModelOnWorker
 } from './admin';

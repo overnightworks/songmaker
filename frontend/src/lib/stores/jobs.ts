@@ -10,13 +10,18 @@ export interface ActiveJob {
 	job: JobStatus;
 	songId?: string;
 	genId?: string;
+	workerId?: string;
+	mode?: string;
 }
 
 export const activeJobs = writable<ActiveJob[]>([]);
 
 const eventSources = new Map<string, EventSource>();
 
-export function trackJob(job: JobStatus, context: { songId?: string; genId?: string }): void {
+export function trackJob(
+	job: JobStatus,
+	context: { songId?: string; genId?: string; workerId?: string; mode?: string }
+): void {
 	activeJobs.update((jobs) => [...jobs, { job, ...context }]);
 	streamJob(job.id);
 }

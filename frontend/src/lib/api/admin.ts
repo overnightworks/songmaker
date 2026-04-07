@@ -1,5 +1,13 @@
-import type { LoginAttemptItem, PaginatedResponse, SessionItem, UserItem } from './types';
-import { apiFetch, type JobStatus } from './fetch';
+import type {
+	JobItem,
+	LoginAttemptItem,
+	PaginatedResponse,
+	RegistryResponse,
+	SessionItem,
+	UserItem,
+	WorkerPoolResponse
+} from './types';
+import { apiFetch } from './fetch';
 
 export async function fetchUsers(): Promise<UserItem[]> {
 	return apiFetch<UserItem[]>('/api/admin/users');
@@ -58,3 +66,26 @@ export async function fetchLoginAttempts(
 	);
 }
 
+export async function listWorkers(): Promise<WorkerPoolResponse> {
+	return apiFetch<WorkerPoolResponse>('/api/admin/workers');
+}
+
+export async function getRegistry(): Promise<RegistryResponse> {
+	return apiFetch<RegistryResponse>('/api/admin/registry');
+}
+
+export async function loadModelOnWorker(workerId: string, mode: string): Promise<JobItem> {
+	return apiFetch<JobItem>(`/api/admin/workers/${workerId}/load_model`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ mode })
+	});
+}
+
+export async function evictModelOnWorker(workerId: string, mode: string): Promise<void> {
+	await apiFetch(`/api/admin/workers/${workerId}/evict_model`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ mode })
+	});
+}

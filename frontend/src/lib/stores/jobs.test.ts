@@ -91,6 +91,17 @@ describe('jobs store', () => {
 		expect(latestSource().url).toBe('/api/jobs/j1/stream');
 	});
 
+	it('trackJob stores workerId and mode in context', () => {
+		trackJob(makeJob({ type: 'load_model_on_worker' }), {
+			workerId: 'acestep-worker-0',
+			mode: 'xl-sft'
+		});
+		const jobs = get(activeJobs);
+		expect(jobs[0].workerId).toBe('acestep-worker-0');
+		expect(jobs[0].mode).toBe('xl-sft');
+		expect(jobs[0].job.type).toBe('load_model_on_worker');
+	});
+
 	it('updates job on SSE message', () => {
 		trackJob(makeJob(), {});
 		latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.5 }));

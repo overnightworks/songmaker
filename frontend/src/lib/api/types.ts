@@ -336,3 +336,44 @@ export interface PlaylistDetailItem {
 	created_at?: string | null;
 	entries: PlaylistEntryItem[];
 }
+
+export interface WorkerIdentityItem {
+	id: string;
+	host: string;
+	port: number;
+	gpu_id: number | null;
+	vram_total_gb: number | null;
+	registered_at: string;
+	last_register_at: string;
+}
+
+export interface WorkerEphemeralStateItem {
+	loaded: string[];
+	target_loading?: string | null;
+	queue_depth: number;
+	vram_used_gb?: number | null;
+	vram_total_gb?: number | null;
+	available_modes: string[];
+	last_heartbeat_at?: string | null;
+}
+
+export interface WorkerInfoItem {
+	identity: WorkerIdentityItem;
+	state: WorkerEphemeralStateItem | null;
+	status: 'online' | 'loading' | 'offline';
+}
+
+export interface WorkerPoolResponse {
+	workers: WorkerInfoItem[];
+}
+
+export interface RegistryModelItem {
+	mode: string;
+	downloaded: boolean;
+	loaded_on: string[];
+	loading_on: string[];
+}
+
+export interface RegistryResponse {
+	models: RegistryModelItem[];
+}

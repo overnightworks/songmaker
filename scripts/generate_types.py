@@ -66,6 +66,12 @@ _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "PlaylistResponse": "PlaylistItem",
     "PlaylistEntryResponse": "PlaylistEntryItem",
     "PlaylistDetailResponse": "PlaylistDetailItem",
+    "WorkerIdentity": "WorkerIdentityItem",
+    "WorkerEphemeralState": "WorkerEphemeralStateItem",
+    "WorkerInfo": "WorkerInfoItem",
+    "WorkerPoolResponse": "WorkerPoolResponse",
+    "RegistryModelResponse": "RegistryModelItem",
+    "RegistryResponse": "RegistryResponse",
 }
 
 _FIELD_TYPE_OVERRIDES: dict[tuple[str, str], str] = {
@@ -108,6 +114,12 @@ _EMIT_ORDER: list[str] = [
     "PlaylistEntryItem",
     "PlaylistItem",
     "PlaylistDetailItem",
+    "WorkerIdentityItem",
+    "WorkerEphemeralStateItem",
+    "WorkerInfoItem",
+    "WorkerPoolResponse",
+    "RegistryModelItem",
+    "RegistryResponse",
 ]
 
 
@@ -278,6 +290,8 @@ def generate() -> str:
         RateLimitsResponse,
         RateResponse,
         RecentChatItem,
+        RegistryModelResponse,
+        RegistryResponse,
         SessionResponse,
         SetupRequiredResponse,
         ShareResponse,
@@ -285,6 +299,10 @@ def generate() -> str:
         UserRateLimitsResponse,
         UserResponse,
         VersionResponse,
+        WorkerEphemeralState,
+        WorkerIdentity,
+        WorkerInfo,
+        WorkerPoolResponse,
     )
 
     models: dict[str, type[BaseModel]] = {
@@ -316,6 +334,12 @@ def generate() -> str:
         "PlaylistEntryItem": PlaylistEntryResponse,
         "PlaylistItem": PlaylistResponse,
         "PlaylistDetailItem": PlaylistDetailResponse,
+        "WorkerIdentityItem": WorkerIdentity,
+        "WorkerEphemeralStateItem": WorkerEphemeralState,
+        "WorkerInfoItem": WorkerInfo,
+        "WorkerPoolResponse": WorkerPoolResponse,
+        "RegistryModelItem": RegistryModelResponse,
+        "RegistryResponse": RegistryResponse,
     }
 
     blocks: list[str] = [HEADER]
