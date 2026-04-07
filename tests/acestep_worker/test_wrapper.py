@@ -329,6 +329,58 @@ def test_default_generate_runner_success(tmp_path: Path, monkeypatch: pytest.Mon
     assert (tmp_path / "audio").exists()
 
 
+def test_default_generate_runner_emits_progress(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_result = MagicMock(wav_bytes=b"WAV", seed=1, cot_caption="", cot_lyrics="")
+
+    captured_progress: list[float] = []
+
+    def _fake_generate(ace_config, on_progress=None):
+        if on_progress is not None:
+            on_progress("8/50 [00:02<00:13]")
+            on_progress("LM chunk 1/1")
+            on_progress("25/50 [00:05<00:08]")
+        return fake_result
+
+    fake_client_cls = MagicMock()
+    fake_client_cls.return_value.generate = _fake_generate
+
+    fake_engine_client = MagicMock(AceStepClient=fake_client_cls)
+    fake_engine_models = MagicMock(AceStepConfig=MagicMock(side_effect=lambda **kw: kw))
+
+    import sys
+    monkeypatch.setitem(sys.modules, "acestep_engine.client", fake_engine_client)
+    monkeypatch.setitem(sys.modules, "acestep_engine.models", fake_engine_models)
+
+    async def go():
+        store = TaskStore()
+        task_id = await store.create("generate")
+        original_update = store.update_progress
+
+        async def _capture(tid, fraction):
+            captured_progress.append(fraction)
+            await original_update(tid, fraction)
+
+        store.update_progress = _capture  # type: ignore[method-assign]
+
+        await default_generate_runner(
+            store,
+            task_id,
+            mode="sft",
+            config={"prompt": "x", "lyrics": ""},
+            port=8101,
+            audio_output_dir=tmp_path / "audio",
+        )
+        await asyncio.sleep(0.05)
+        return await store.get(task_id)
+
+    snap = _run(go())
+    assert snap is not None
+    assert snap.state == "done"
+    assert captured_progress == [8 / 50, 25 / 50]
+
+
 def test_default_generate_runner_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fake_client_cls = MagicMock()
     fake_client_cls.return_value.generate = MagicMock(side_effect=RuntimeError("kaboom"))

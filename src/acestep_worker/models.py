@@ -69,3 +69,11 @@ class LoadedModelsResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
+
+
+class GenerationTaskResult(BaseModel):
+    mode: str
+    audio_path: str
+    seed: int
+    cot_caption: str = ""
+    cot_lyrics: str = ""

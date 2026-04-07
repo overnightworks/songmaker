@@ -205,25 +205,38 @@ async def default_generate_runner(
 ) -> None:
     from acestep_engine.client import AceStepClient
     from acestep_engine.models import AceStepConfig
+    from acestep_worker.models import GenerationTaskResult
+    from acestep_worker.progress import parse_step_fraction
 
     await task_store.mark_running(task_id)
     try:
         ace_config = AceStepConfig(**config)
         client = AceStepClient(host="http://127.0.0.1", port=port)
-        result = await asyncio.to_thread(client.generate, ace_config)
+
+        loop = asyncio.get_running_loop()
+
+        def _on_progress(text: str) -> None:
+            fraction = parse_step_fraction(text)
+            if fraction is None:
+                return
+            asyncio.run_coroutine_threadsafe(
+                task_store.update_progress(task_id, fraction), loop,
+            )
+
+        result = await asyncio.to_thread(
+            client.generate, ace_config, on_progress=_on_progress,
+        )
         audio_output_dir.mkdir(parents=True, exist_ok=True)
         out_path = audio_output_dir / f"{task_id}-{uuid4().hex[:8]}.wav"
         out_path.write_bytes(result.wav_bytes)
-        await task_store.complete(
-            task_id,
-            {
-                "mode": mode,
-                "audio_path": str(out_path),
-                "seed": result.seed,
-                "cot_caption": result.cot_caption,
-                "cot_lyrics": result.cot_lyrics,
-            },
+        payload = GenerationTaskResult(
+            mode=mode,
+            audio_path=str(out_path),
+            seed=result.seed,
+            cot_caption=result.cot_caption,
+            cot_lyrics=result.cot_lyrics,
         )
+        await task_store.complete(task_id, payload.model_dump())
     except Exception as exc:
         log.exception("Generation failed for task %s", task_id)
         await task_store.fail(task_id, f"{type(exc).__name__}: {exc}")
