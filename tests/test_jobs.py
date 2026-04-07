@@ -745,8 +745,11 @@ class _FakeRedis:
     def __init__(self) -> None:
         self.store: dict[str, str] = {}
 
-    async def set(self, key, value, ex=None):
+    async def set(self, key, value, ex=None, nx=False):
+        if nx and key in self.store:
+            return None
         self.store[key] = value if isinstance(value, str) else str(value)
+        return True
 
     async def get(self, key):
         return self.store.get(key)
@@ -1016,3 +1019,22 @@ def test_download_model_on_worker_clears_redis_flag_on_failure(seeded_db) -> Non
         _run(download_model_on_worker({"redis": redis}, "dl9", "sft"))
 
     assert download_key("sft") not in redis.store
+
+
+def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> None:
+    from songmaker_cli.acestep_state import download_key
+    from songmaker_cli.jobs import download_model_on_worker
+
+    _seed_download_job(seeded_db, "dl10")
+    redis = _FakeRedis()
+    redis.store[download_key("sft")] = "previous-job"
+
+    with patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db):
+        _run(download_model_on_worker({"redis": redis}, "dl10", "sft"))
+
+    with seeded_db() as session:
+        job = get_job(session, "dl10")
+        assert job.status == "failed"
+        assert job.error_type == "duplicate_download"
+        assert "previous-job" in job.error
+    assert redis.store[download_key("sft")] == "previous-job"

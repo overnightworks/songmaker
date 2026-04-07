@@ -69,8 +69,11 @@ async def list_worker_states(
     return {wid: await read_worker_state(pool, wid) for wid in worker_ids}
 
 
-async def set_download_in_progress(pool: ArqRedis, mode: str, job_id: str) -> None:
-    await pool.set(download_key(mode), job_id, ex=DOWNLOAD_TTL_SECONDS)
+async def set_download_in_progress(pool: ArqRedis, mode: str, job_id: str) -> bool:
+    result = await pool.set(
+        download_key(mode), job_id, ex=DOWNLOAD_TTL_SECONDS, nx=True,
+    )
+    return bool(result)
 
 
 async def clear_download_in_progress(pool: ArqRedis, mode: str) -> None:

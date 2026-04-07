@@ -771,6 +771,7 @@ async def download_model_on_worker(ctx, job_id: str, mode: str) -> None:
 
     from songmaker_cli.acestep_state import (
         clear_download_in_progress,
+        read_download_in_progress,
         set_download_in_progress,
     )
     from songmaker_cli.constants import MODEL_CONFIG_PATHS
@@ -796,7 +797,15 @@ async def download_model_on_worker(ctx, job_id: str, mode: str) -> None:
         return
 
     redis = ctx["redis"]
-    await set_download_in_progress(redis, mode, job_id)
+    acquired = await set_download_in_progress(redis, mode, job_id)
+    if not acquired:
+        existing = await read_download_in_progress(redis, mode)
+        _update_job(
+            factory, job_id, "failed",
+            error=f"Another download for '{mode}' is already in progress (job {existing})",
+            error_type="duplicate_download",
+        )
+        return
     try:
         try:
             with factory() as session:

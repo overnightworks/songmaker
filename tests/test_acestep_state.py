@@ -195,3 +195,24 @@ def test_set_download_in_progress_has_ttl(redis, event_loop) -> None:
     event_loop.run_until_complete(set_download_in_progress(redis, "turbo", "job-x"))
     ttl = event_loop.run_until_complete(redis.ttl(download_key("turbo")))
     assert 0 < ttl <= DOWNLOAD_TTL_SECONDS
+
+
+def test_set_download_in_progress_returns_true_on_acquire(redis, event_loop) -> None:
+    acquired = event_loop.run_until_complete(
+        set_download_in_progress(redis, "sft", "job-1"),
+    )
+    assert acquired is True
+
+
+def test_set_download_in_progress_returns_false_when_already_set(
+    redis, event_loop,
+) -> None:
+    event_loop.run_until_complete(set_download_in_progress(redis, "sft", "job-1"))
+    again = event_loop.run_until_complete(
+        set_download_in_progress(redis, "sft", "job-2"),
+    )
+    assert again is False
+    assert (
+        event_loop.run_until_complete(read_download_in_progress(redis, "sft"))
+        == "job-1"
+    )
