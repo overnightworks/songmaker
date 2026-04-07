@@ -1,6 +1,20 @@
 # Multi-Model Generation Routing
 
-> **Status: DEFERRED** — Single-GPU dynamic model switching is shipped (`AceStepManager.switch_model`, per-generation `model_mode`, model dropdown, worker auto-switch). This plan covers multi-GPU routing and horizontal scaling only. It is mutually exclusive with `switch_model`: when this lands, `switch_model` and its lock/persistence machinery get deleted.
+> **STATUS: SUPERSEDED → [plans/acestep-worker-pool.md](acestep-worker-pool.md)**
+>
+> This plan proposed per-model arq queues with one worker per model + GPU. After comparing approaches, we chose a different architecture: **first-class worker pool with stateless scheduler** (see `acestep-worker-pool.md`). The worker pool plan supersedes this one because:
+>
+> - Worker identity is a first-class DB entity, not an implicit arq queue consumer → admin UI can show what's actually loaded
+> - Multi-model-per-GPU is built in via LRU cache (future-ready for H100-class GPUs)
+> - Model swap is `POST /load_model` (~5s overhead) instead of `docker compose up --force-recreate` (~30s)
+> - Failure recovery routes around dead workers; per-queue routing stalls if a worker dies
+> - The admin UX confusion (downloaded vs available vs loaded) gets resolved at the architectural root, not patched on top
+>
+> The content below is preserved for historical context and the design discussion. **Do not implement this plan.** Implement `acestep-worker-pool.md` instead.
+>
+> ---
+>
+> **Original status (now obsolete):** DEFERRED — Single-GPU dynamic model switching is shipped (`AceStepManager.switch_model`, per-generation `model_mode`, model dropdown, worker auto-switch). This plan covers multi-GPU routing and horizontal scaling only. It is mutually exclusive with `switch_model`: when this lands, `switch_model` and its lock/persistence machinery get deleted.
 >
 > **Triggers to revisit (any one is enough):**
 > 1. A second GPU is added to the deployment.
