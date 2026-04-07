@@ -83,20 +83,16 @@ MAX_USER_AGENT_LENGTH = 500
 # Global generation defaults
 GLOBAL_DEFAULTS_PRESET_NAME = "__global_defaults__"
 
-# ACE-Step server
-ACESTEP_PORT = 8001
-ACESTEP_HEALTH_URL_TEMPLATE = "http://localhost:{port}/health"
-ACESTEP_STARTUP_TIMEOUT_SECONDS = 300
+# Shared tmp dir for repaint/cover source audio — must be on the audio
+# volume so the acestep-worker container can read what the music-worker
+# wrote (each container has its own /tmp).
+SHARED_TMP_DIRNAME = ".tmp"
 
 # Scoring subprocess
 SCORER_PIPELINE_TIMEOUT_SECONDS = 240
 
 # arq worker
 ARQ_QUEUE_KEY = "arq:queue"
-ACTIVE_MODEL_REDIS_KEY = "songmaker:active_model"
-ACTIVE_MODEL_TTL_SECONDS = 300
-ACESTEP_STATUS_REDIS_KEY = f"{REDIS_KEY_PREFIX}:acestep_status"
-ACESTEP_STATUS_TTL_SECONDS = 150
 ARQ_HEALTH_KEY = f"{ARQ_QUEUE_KEY}:health-check"
 RECOVERY_LOCK_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock"
 RECOVERY_LOCK_TTL_SECONDS = 30

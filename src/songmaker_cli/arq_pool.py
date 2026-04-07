@@ -12,7 +12,6 @@ from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
 
 from songmaker_cli.constants import (
-    ACTIVE_MODEL_REDIS_KEY,
     ARQ_HEALTH_KEY,
     ARQ_MUSIC_HEALTH_KEY,
     ARQ_MUSIC_QUEUE_NAME,
@@ -97,9 +96,3 @@ async def get_scoring_queue_depth() -> int:
         return 0
 
 
-async def get_active_model() -> str | None:
-    try:
-        value = await get_arq_pool().get(ACTIVE_MODEL_REDIS_KEY)
-        return value.decode() if value else None
-    except Exception:
-        return None

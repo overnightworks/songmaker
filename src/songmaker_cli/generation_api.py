@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from songmaker_cli.acestep_state import read_worker_state
 from songmaker_cli.api_helpers import (
     check_generation_access,
     check_redis_health,
@@ -70,6 +71,16 @@ from songmaker_cli.worker_base import TERMINAL_STATUSES
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _has_online_acestep_worker(session: Session) -> bool:
+    from songmaker_cli.db.queries import list_worker_identities
+
+    pool = get_arq_pool()
+    for w in list_worker_identities(session):
+        if await read_worker_state(pool, w.id) is not None:
+            return True
+    return False
 
 
 def _resolve_source_wav(audio_dir: Path, gen: Generation, session: Session) -> Path:
@@ -222,13 +233,6 @@ async def api_generate_song(
     if not version or not version.lyrics or not version.prompt:
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
-    if req.model:
-        from songmaker_cli.db.queries import list_active_models
-
-        active_ids = {m.id for m in list_active_models(session)}
-        if req.model not in active_ids:
-            raise HTTPException(400, f"Model '{req.model}' is not available")
-
     job = create_job_with_rate_limit(session, user, "generate")
     record_audit(session, user.id, "generate", "song", song_id, f"count={req.count}")
     session.commit()
@@ -240,6 +244,9 @@ async def api_generate_song(
         if not await is_music_worker_healthy():
             _fail_job(ctx, job.id)
             raise HTTPException(503, "Worker not running")
+        if not await _has_online_acestep_worker(session):
+            _fail_job(ctx, job.id)
+            raise HTTPException(503, "No online ACE-Step workers")
         await pool.enqueue_job(
             "generate", job.id, song_id, version.id, req.count, user.id, req.seed,
             req.model,
@@ -275,13 +282,6 @@ async def api_repaint_generation(
     if not version:
         raise HTTPException(400, "Generation has no linked version")
 
-    if req.model:
-        from songmaker_cli.db.queries import list_active_models
-
-        active_ids = {m.id for m in list_active_models(session)}
-        if req.model not in active_ids:
-            raise HTTPException(400, f"Model '{req.model}' is not available")
-
     if req.repainting_start >= req.repainting_end:
         raise HTTPException(400, "repainting_start must be less than repainting_end")
 
@@ -304,6 +304,9 @@ async def api_repaint_generation(
         if not await is_music_worker_healthy():
             _fail_job(ctx, job.id)
             raise HTTPException(503, "Worker not running")
+        if not await _has_online_acestep_worker(session):
+            _fail_job(ctx, job.id)
+            raise HTTPException(503, "No online ACE-Step workers")
         repaint_params: dict = {
             "src_wav_path": str(wav_path),
             "repainting_start": req.repainting_start,
@@ -355,13 +358,6 @@ async def api_cover_generation(
     if not version:
         raise HTTPException(400, "Generation has no linked version")
 
-    if req.model:
-        from songmaker_cli.db.queries import list_active_models
-
-        active_ids = {m.id for m in list_active_models(session)}
-        if req.model not in active_ids:
-            raise HTTPException(400, f"Model '{req.model}' is not available")
-
     wav_path = _resolve_source_wav(ctx.audio_dir, gen, session)
 
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
@@ -381,6 +377,9 @@ async def api_cover_generation(
         if not await is_music_worker_healthy():
             _fail_job(ctx, job.id)
             raise HTTPException(503, "Worker not running")
+        if not await _has_online_acestep_worker(session):
+            _fail_job(ctx, job.id)
+            raise HTTPException(503, "No online ACE-Step workers")
         cover_params: dict = {
             "src_wav_path": str(wav_path),
             "audio_cover_strength": req.audio_cover_strength,

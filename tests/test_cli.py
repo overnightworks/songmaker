@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Callable
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -12,11 +12,8 @@ import pytest
 from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.generate import (
     DecodedAudio,
-    GenerationResult,
     _decode_audio,
-    _run_generation,
     _write_output,
-    generate_single,
 )
 from songmaker_cli.main import main
 from songmaker_cli.parser import AlbumMeta, SongMeta
@@ -59,64 +56,6 @@ def test_write_output(tmp_path: Path) -> None:
 
 
 
-def test_run_generation_success() -> None:
-    import json
-    from http.client import HTTPResponse
-
-    from acestep_engine.client import AceStepClient
-    from acestep_engine.models import AceStepConfig
-
-    config = AceStepConfig(prompt="test", lyrics="test")
-    client = AceStepClient()
-
-    submit_resp = MagicMock(spec=HTTPResponse)
-    submit_resp.status = 200
-    submit_resp.read.return_value = json.dumps(
-        {"data": {"task_id": "t1", "status": "queued"}, "code": 200},
-    ).encode()
-    submit_resp.__enter__ = MagicMock(return_value=submit_resp)
-    submit_resp.__exit__ = MagicMock(return_value=False)
-
-    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "7"}])
-    poll_resp = MagicMock(spec=HTTPResponse)
-    poll_resp.status = 200
-    poll_resp.read.return_value = json.dumps(
-        {"data": [{"task_id": "t1", "status": 1, "result": result_items}]},
-    ).encode()
-    poll_resp.__enter__ = MagicMock(return_value=poll_resp)
-    poll_resp.__exit__ = MagicMock(return_value=False)
-
-    wav_resp = MagicMock(spec=HTTPResponse)
-    wav_resp.status = 200
-    wav_resp.read.side_effect = [b"RIFF" + b"\x00" * 40 + b"extra_data", b""]
-    wav_resp.__enter__ = MagicMock(return_value=wav_resp)
-    wav_resp.__exit__ = MagicMock(return_value=False)
-
-    with patch("acestep_engine.client.urlopen") as mock_urlopen:
-        mock_urlopen.side_effect = [submit_resp, poll_resp, wav_resp]
-        result, elapsed = _run_generation(config, client)
-
-    assert result.seed == 7
-    assert elapsed >= 0
-
-
-def test_run_generation_error() -> None:
-    from urllib.error import URLError
-
-    from acestep_engine.client import AceStepClient
-    from acestep_engine.models import AceStepConfig
-
-    config = AceStepConfig(prompt="test", lyrics="test")
-    client = AceStepClient()
-
-    with patch("acestep_engine.client.urlopen") as mock_urlopen:
-        mock_urlopen.side_effect = URLError("Connection refused")
-        with pytest.raises(GenerationError, match="Connection refused"):
-            _run_generation(config, client)
-
-
-
-
 def test_write_output_mastering_error(tmp_path: Path) -> None:
     left = np.array([], dtype=np.float64)
     right = left.copy()
@@ -154,154 +93,3 @@ def test_main_error_handling() -> None:
         main()
 
 
-# ── generate_single ─────────────────────────────────────────────────
-
-
-def test_generate_single_success(tmp_path: Path, make_stereo_wav_bytes) -> None:
-    from acestep_engine.client import AceStepClient
-    from acestep_engine.models import AceStepConfig, AceStepResult
-    from songmaker_cli.generate import generate_single
-
-    wav_bytes = make_stereo_wav_bytes()
-    ace_result = AceStepResult(wav_bytes=wav_bytes, seed=99)
-
-    mock_client = MagicMock(spec=AceStepClient)
-    mock_client.is_available = True
-    mock_client.generate.return_value = ace_result
-
-    meta = SongMeta(title="Test Song", prompt="rock", lyrics="hello", album="test_album")
-    album_meta = AlbumMeta(title="Test Album", artist="Test Artist")
-    ace_config = AceStepConfig(prompt="rock", lyrics="hello")
-
-    with (
-        patch("songmaker_cli.generate.master_audio") as mock_master,
-        patch("songmaker_cli.generate.encode_mp3") as mock_encode,
-    ):
-        mock_master.return_value = (np.zeros(100), np.zeros(100))
-
-        def write_mp3_side_effect(left, right, mp3_path, **kwargs):
-            Path(mp3_path).write_bytes(b"\xff\xfb" * 100)
-
-        mock_encode.side_effect = write_mp3_side_effect
-
-        result = generate_single(
-            meta=meta,
-            album_meta=album_meta,
-            ace_config=ace_config,
-            audio_dir=tmp_path,
-            user_id="u1",
-            generation_id="gen1",
-            client=mock_client,
-        )
-
-    assert isinstance(result, GenerationResult)
-    assert result.seed == 99
-    assert result.duration > 0
-
-
-def test_generate_single_creates_client_when_none(tmp_path: Path, make_stereo_wav_bytes) -> None:
-    from acestep_engine.client import AceStepClient
-    from acestep_engine.models import AceStepConfig, AceStepResult
-
-    wav_bytes = make_stereo_wav_bytes()
-    ace_result = AceStepResult(wav_bytes=wav_bytes, seed=7)
-
-    mock_client = MagicMock(spec=AceStepClient)
-    mock_client.is_available = True
-    mock_client.generate.return_value = ace_result
-
-    meta = SongMeta(title="Auto Client", prompt="pop", lyrics="la la la", album="my_album")
-    album_meta = AlbumMeta(title="My Album", artist="Artist")
-    ace_config = AceStepConfig(prompt="pop", lyrics="la la la")
-
-    with (
-        patch("songmaker_cli.generate.AceStepClient", return_value=mock_client),
-        patch("songmaker_cli.generate.master_audio") as mock_master,
-        patch("songmaker_cli.generate.encode_mp3") as mock_encode,
-    ):
-        mock_master.return_value = (np.zeros(100), np.zeros(100))
-
-        def write_mp3_side_effect(left, right, mp3_path, **kwargs):
-            Path(mp3_path).write_bytes(b"\xff\xfb" * 100)
-
-        mock_encode.side_effect = write_mp3_side_effect
-
-        result = generate_single(
-            meta=meta,
-            album_meta=album_meta,
-            ace_config=ace_config,
-            audio_dir=tmp_path,
-            user_id="u1",
-            generation_id="gen2",
-            client=None,
-        )
-
-    assert result.seed == 7
-
-
-def test_generate_single_server_not_available(tmp_path: Path) -> None:
-    from acestep_engine.client import AceStepClient
-    from acestep_engine.models import AceStepConfig
-    from songmaker_cli.errors import GenerationError
-
-    mock_client = MagicMock(spec=AceStepClient)
-    mock_client.is_available = False
-
-    meta = SongMeta(title="Test", prompt="rock", lyrics="words", album="album")
-    album_meta = AlbumMeta(title="Album", artist="Artist")
-    ace_config = AceStepConfig(prompt="rock", lyrics="words")
-
-    with pytest.raises(GenerationError, match="not reachable"):
-        generate_single(
-            meta=meta,
-            album_meta=album_meta,
-            ace_config=ace_config,
-            audio_dir=tmp_path,
-            user_id="u1",
-            generation_id="gen3",
-            client=mock_client,
-        )
-
-
-def test_generate_single_cleans_up_partial_files_on_failure(
-    tmp_path: Path, make_stereo_wav_bytes,
-) -> None:
-    from acestep_engine.client import AceStepClient
-    from acestep_engine.models import AceStepConfig, AceStepResult
-    from songmaker_cli.errors import GenerationError
-
-    wav_bytes = make_stereo_wav_bytes()
-    ace_result = AceStepResult(wav_bytes=wav_bytes, seed=42)
-
-    mock_client = MagicMock(spec=AceStepClient)
-    mock_client.is_available = True
-    mock_client.generate.return_value = ace_result
-
-    meta = SongMeta(title="Fail Song", prompt="rock", lyrics="nope", album="album")
-    album_meta = AlbumMeta(title="Album", artist="Artist")
-    ace_config = AceStepConfig(prompt="rock", lyrics="nope")
-
-    with (
-        patch("songmaker_cli.generate.master_audio") as mock_master,
-        patch(
-            "songmaker_cli.generate.encode_mp3",
-            side_effect=GenerationError("MP3 encode failed"),
-        ),
-    ):
-        mock_master.return_value = (np.zeros(100), np.zeros(100))
-
-        with pytest.raises(GenerationError, match="MP3 encode failed"):
-            generate_single(
-                meta=meta,
-                album_meta=album_meta,
-                ace_config=ace_config,
-                audio_dir=tmp_path,
-                user_id="u1",
-                generation_id="fail1",
-                client=mock_client,
-            )
-
-    wav_path = tmp_path / "u1" / "fail1.wav"
-    mp3_path = tmp_path / "u1" / "fail1.mp3"
-    assert not mp3_path.exists()
-    assert not wav_path.exists()

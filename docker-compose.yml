@@ -75,6 +75,7 @@ services:
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
       GENERATION_RATE_LIMIT_USER: ${GENERATION_RATE_LIMIT_USER:-20}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
       HOST: "0.0.0.0"
     ports:
       - "8080:8080"
@@ -110,20 +111,10 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
-      ACESTEP_API_HOST: "127.0.0.1"
-      ACESTEP_API_PORT: "8001"
       MUSIC_MAX_JOBS: "${MUSIC_MAX_JOBS:-2}"
-      HF_TOKEN: "${HF_TOKEN}"
+      SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
     volumes:
       - audiofiles:/app/data/audio
-      - ./_models/acestep:/app/_models/acestep
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 
   songmaker-acestep-worker-0:
     build:
@@ -143,7 +134,7 @@ services:
       AUDIO_OUTPUT_DIR: "/app/data/audio/worker_output"
       ACESTEP_LOG_DIR: "/app/_models/acestep"
       REDIS_URL: redis://redis:6379/0
-      CONTROL_PLANE_URL: "${ACESTEP_WORKER_CONTROL_PLANE_URL:-}"
+      CONTROL_PLANE_URL: "${ACESTEP_WORKER_CONTROL_PLANE_URL:-http://songmaker-web:8080}"
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
       HF_TOKEN: "${HF_TOKEN:-}"
       HF_HUB_DISABLE_XET: "1"

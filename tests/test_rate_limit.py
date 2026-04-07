@@ -58,6 +58,10 @@ def _mock_arq():
             "songmaker_cli.generation_api.is_scoring_worker_healthy",
             AsyncMock(return_value=True),
         ),
+        patch(
+            "songmaker_cli.generation_api._has_online_acestep_worker",
+            AsyncMock(return_value=True),
+        ),
     ):
         yield
 

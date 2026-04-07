@@ -89,7 +89,5 @@ export {
 	hardDeleteUser,
 	fetchSessions,
 	forceLogout,
-	fetchLoginAttempts,
-	getAceStepStatus,
-	reinitializeAceStep
+	fetchLoginAttempts
 } from './admin';

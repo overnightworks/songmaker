@@ -58,19 +58,3 @@ export async function fetchLoginAttempts(
 	);
 }
 
-export async function getAceStepStatus(): Promise<{
-	online: boolean;
-	model: string | null;
-	lm_model: string | null;
-	jobs: Record<string, number>;
-}> {
-	return apiFetch('/api/admin/acestep/status');
-}
-
-export async function reinitializeAceStep(targetModel?: string): Promise<JobStatus> {
-	return apiFetch<JobStatus>('/api/admin/acestep/reinitialize', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ target_model: targetModel ?? null })
-	});
-}

@@ -185,12 +185,3 @@ class UserRateLimitsResponse(BaseModel):
     effective: list[RateLimitItem]
 
 
-class AceStepStatusResponse(BaseModel):
-    online: bool
-    model: str | None
-    lm_model: str | None
-    jobs: dict
-
-
-class ReinitializeRequest(BaseModel):
-    target_model: str | None = None

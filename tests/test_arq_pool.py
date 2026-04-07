@@ -125,31 +125,3 @@ def test_is_worker_healthy_error() -> None:
     assert result is False
 
 
-# ── get_active_model ───────────────────────────────────────────────
-
-
-def test_get_active_model() -> None:
-    mock_pool = AsyncMock()
-    mock_pool.get = AsyncMock(return_value=b"sft")
-    pool_mod._pool = mock_pool
-
-    result = _run(pool_mod.get_active_model())
-    assert result == "sft"
-
-
-def test_get_active_model_none() -> None:
-    mock_pool = AsyncMock()
-    mock_pool.get = AsyncMock(return_value=None)
-    pool_mod._pool = mock_pool
-
-    result = _run(pool_mod.get_active_model())
-    assert result is None
-
-
-def test_get_active_model_error() -> None:
-    mock_pool = AsyncMock()
-    mock_pool.get = AsyncMock(side_effect=ConnectionError)
-    pool_mod._pool = mock_pool
-
-    result = _run(pool_mod.get_active_model())
-    assert result is None

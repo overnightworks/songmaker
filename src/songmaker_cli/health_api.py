@@ -157,8 +157,9 @@ async def health_check(request: Request) -> JSONResponse:
 
     db_ok = _check_db(ctx)
 
+    from songmaker_cli.acestep_state import read_worker_state
     from songmaker_cli.arq_pool import (
-        get_active_model,
+        get_arq_pool,
         get_music_queue_depth,
         get_queue_depth,
         get_scoring_queue_depth,
@@ -166,20 +167,30 @@ async def health_check(request: Request) -> JSONResponse:
         is_scoring_worker_healthy,
         is_worker_healthy,
     )
+    from songmaker_cli.db.queries import list_worker_identities
+
     worker_running = await is_worker_healthy()
     music_running = await is_music_worker_healthy()
     scoring_running = await is_scoring_worker_healthy()
     queue_depth = await get_queue_depth()
     music_queue_depth = await get_music_queue_depth()
     scoring_queue_depth = await get_scoring_queue_depth()
-    acestep_model = await get_active_model()
 
-    if acestep_model is not None:
+    pool = get_arq_pool()
+    with ctx.db() as session:
+        acestep_workers = list_worker_identities(session)
+    workers_total = len(acestep_workers)
+    workers_online = 0
+    for w in acestep_workers:
+        if await read_worker_state(pool, w.id) is not None:
+            workers_online += 1
+
+    if workers_online > 0:
         acestep = "healthy"
+    elif workers_total == 0:
+        acestep = "unknown"
     else:
-        from songmaker_cli.acestep_manager import AceStepManager
-        mgr = AceStepManager()
-        acestep = "healthy" if mgr.is_healthy() else "unknown"
+        acestep = "unhealthy"
 
     from songmaker_cli.redis_client import redis_health
     redis_ok = redis_health(ctx.redis)
@@ -206,6 +217,7 @@ async def health_check(request: Request) -> JSONResponse:
         "redis": "ok" if redis_ok else "error",
         "redis_session_cache_failures": session_cache_failures,
         "acestep": acestep,
-        "acestep_model": acestep_model,
+        "acestep_workers_total": workers_total,
+        "acestep_workers_online": workers_online,
         "uptime_seconds": uptime,
     })

@@ -548,6 +548,10 @@ def _mock_worker(mock_pool=None):
                 "songmaker_cli.generation_api.is_scoring_worker_healthy",
                 AsyncMock(return_value=True),
             ),
+            patch(
+                "songmaker_cli.generation_api._has_online_acestep_worker",
+                AsyncMock(return_value=True),
+            ),
         ):
             yield mock_pool
 
@@ -564,27 +568,6 @@ def test_generate_song_submits_job(client: TestClient) -> None:
     assert resp.status_code == 200
     assert resp.json()["type"] == "generate"
     mock_pool.enqueue_job.assert_called_once()
-
-
-def test_generate_song_model_not_enabled(client: TestClient) -> None:
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        session.query(AvailableModel).filter_by(id="turbo").update({"is_active": False})
-        session.commit()
-
-    with _mock_worker() as mock_pool:
-        resp = client.post(
-            "/api/songs/s1/generate",
-            json={"count": 1, "model": "turbo"},
-        )
-
-    assert resp.status_code == 400
-    assert "turbo" in resp.json()["detail"]
-    mock_pool.enqueue_job.assert_not_called()
-
-    with factory() as session:
-        session.query(AvailableModel).filter_by(id="turbo").update({"is_active": True})
-        session.commit()
 
 
 def test_generate_song_model_accepted(client: TestClient) -> None:
@@ -634,20 +617,7 @@ def test_generate_song_invalid_model(client: TestClient) -> None:
 
 
 def test_generate_song_seed_accepted(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, patch
-
-    mock_pool = AsyncMock()
-    with (
-        patch(
-            "songmaker_cli.generation_api.is_music_worker_healthy",
-            AsyncMock(return_value=True),
-        ),
-        patch(
-            "songmaker_cli.generation_api.is_scoring_worker_healthy",
-            AsyncMock(return_value=True),
-        ),
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
-    ):
+    with _mock_worker() as mock_pool:
         resp = client.post("/api/songs/s1/generate", json={"count": 1, "seed": 42})
     assert resp.status_code == 200
     mock_pool.enqueue_job.assert_called_once()
@@ -851,6 +821,10 @@ def test_generate_song_redis_down(client: TestClient) -> None:
         ),
         patch(
             "songmaker_cli.generation_api.is_scoring_worker_healthy",
+            AsyncMock(return_value=True),
+        ),
+        patch(
+            "songmaker_cli.generation_api._has_online_acestep_worker",
             AsyncMock(return_value=True),
         ),
         patch(

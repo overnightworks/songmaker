@@ -8,8 +8,6 @@
 		fetchSessions,
 		forceLogout,
 		fetchLoginAttempts,
-		getAceStepStatus,
-		reinitializeAceStep,
 		fetchRateLimits,
 		updateRateLimits,
 		fetchUserRateLimits,
@@ -40,18 +38,10 @@
 	let users = $state<UserItem[]>([]);
 	let sessions = $state<SessionItem[]>([]);
 	let attempts = $state<LoginAttemptItem[]>([]);
-	let aceStatus = $state<{
-		online: boolean;
-		model: string | null;
-		lm_model: string | null;
-		jobs: Record<string, number>;
-	} | null>(null);
 	let error = $state('');
 	let tab = $state<
 		'users' | 'sessions' | 'attempts' | 'acestep' | 'ratelimits' | 'generation' | 'claude'
 	>('users');
-	let reinitializing = $state(false);
-	let reinitSelectedModel = $state<string | null>(null);
 
 	let globalLimits = $state<RateLimitItem[]>([]);
 	let globalEdits = $state<Record<string, string>>({});
@@ -102,17 +92,14 @@
 
 	async function loadAll() {
 		try {
-			const [u, s, a, ace] = await Promise.all([
+			const [u, s, a] = await Promise.all([
 				fetchUsers(),
 				fetchSessions(),
-				fetchLoginAttempts(0, 50),
-				getAceStepStatus()
+				fetchLoginAttempts(0, 50)
 			]);
 			users = u;
 			sessions = s.items;
 			attempts = a.items;
-			aceStatus = ace;
-			reinitSelectedModel = ace.model;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
 		}
@@ -231,41 +218,6 @@
 		}
 	}
 
-	async function handleReinitialize() {
-		reinitializing = true;
-		error = '';
-		try {
-			const targetModel =
-				reinitSelectedModel && reinitSelectedModel !== aceStatus?.model
-					? reinitSelectedModel
-					: undefined;
-			const job = await reinitializeAceStep(targetModel);
-			const source = new EventSource(`/api/jobs/${job.id}/stream`, {
-				withCredentials: true
-			});
-			source.onmessage = async (event: MessageEvent) => {
-				const updated = JSON.parse(event.data);
-				if (['completed', 'partial', 'failed', 'cancelled'].includes(updated.status)) {
-					source.close();
-					reinitializing = false;
-					if (updated.status === 'completed') {
-						aceStatus = await getAceStepStatus();
-						reinitSelectedModel = aceStatus.model;
-					} else if (updated.error) {
-						error = updated.error;
-					}
-				}
-			};
-			source.onerror = () => {
-				source.close();
-				reinitializing = false;
-				error = 'Lost connection to server';
-			};
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Reinitialize failed';
-			reinitializing = false;
-		}
-	}
 
 	async function handleCreate() {
 		error = '';
@@ -433,8 +385,7 @@
 				class:active={tab === 'acestep'}
 				onclick={async () => {
 					tab = 'acestep';
-					const [ace] = await Promise.all([getAceStepStatus(), loadGenDefaults()]);
-					aceStatus = ace;
+					await loadGenDefaults();
 				}}>ACE-Step</button
 			>
 		</div>
@@ -875,62 +826,11 @@
 			</section>
 
 			<section>
-				<h2>ACE-Step Server</h2>
-				{#if aceStatus}
-					<div class="ace-status">
-						<div class="ace-row">
-							<span class="ace-label">Status</span>
-							<span class:online={aceStatus.online} class:offline={!aceStatus.online}>
-								{aceStatus.online ? 'Online' : 'Offline'}
-							</span>
-						</div>
-						{#if aceStatus.online}
-							<div class="ace-row">
-								<span class="ace-label">Model</span>
-								<span>{aceStatus.model}</span>
-							</div>
-							<div class="ace-row">
-								<span class="ace-label">LM Model</span>
-								<span>{aceStatus.lm_model}</span>
-							</div>
-							<div class="ace-row">
-								<span class="ace-label">Jobs Total</span>
-								<span>{aceStatus.jobs.total ?? 0}</span>
-							</div>
-							<div class="ace-row">
-								<span class="ace-label">Jobs Failed</span>
-								<span>{aceStatus.jobs.failed ?? 0}</span>
-							</div>
-						{/if}
-					</div>
-					<div class="reinit-row">
-						{#if allModels.length > 1}
-							<select
-								class="model-select"
-								bind:value={reinitSelectedModel}
-								disabled={reinitializing}
-							>
-								{#each allModels.filter((m) => m.is_active) as model (model.id)}
-									<option value={model.id}>{model.id}</option>
-								{/each}
-							</select>
-						{/if}
-						<button class="reinit-btn" onclick={handleReinitialize} disabled={reinitializing}>
-							{#if reinitializing}
-								Reinitializing...
-							{:else if reinitSelectedModel && reinitSelectedModel !== aceStatus?.model}
-								Switch to {reinitSelectedModel}
-							{:else}
-								Reinitialize ACE-Step
-							{/if}
-						</button>
-					</div>
-					<p class="hint">
-						Use this if generations fail. Resets the model without restarting the server.
-					</p>
-				{:else}
-					<p>Loading...</p>
-				{/if}
+				<h2>ACE-Step Workers</h2>
+				<p class="hint">
+					Worker pool monitoring and model management UI is coming in Phase 4. Use the
+					backend admin endpoints (/api/admin/workers, /api/admin/registry) for now.
+				</p>
 			</section>
 		{/if}
 	</div>
@@ -1189,73 +1089,6 @@
 		border-color: var(--accent);
 		outline: none;
 		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
-	}
-
-	.ace-status {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		margin-bottom: 1rem;
-	}
-
-	.ace-row {
-		display: flex;
-		gap: 1rem;
-		font-size: 0.85rem;
-	}
-
-	.ace-label {
-		color: var(--text-muted);
-		min-width: 100px;
-	}
-
-	.online {
-		color: var(--score-good);
-		font-weight: 600;
-	}
-
-	.offline {
-		color: var(--score-bad);
-		font-weight: 600;
-	}
-
-	.reinit-row {
-		display: flex;
-		gap: 0.5rem;
-		align-items: center;
-	}
-
-	.model-select {
-		background: var(--surface);
-		color: var(--text);
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-pill);
-		padding: 0.5rem 0.75rem;
-		font-size: var(--btn-font-size);
-		font-family: var(--font-display);
-	}
-
-	.reinit-btn {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: white;
-		border: none;
-		border-radius: var(--btn-radius-pill);
-		padding: 0.5rem 1rem;
-		font-size: var(--btn-font-size);
-		cursor: pointer;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: var(--btn-letter-spacing);
-		transition: box-shadow 0.2s;
-	}
-
-	.reinit-btn:hover:not(:disabled) {
-		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
-	}
-
-	.reinit-btn:disabled {
-		opacity: 0.5;
-		cursor: wait;
 	}
 
 	.hint {

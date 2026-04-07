@@ -4,14 +4,39 @@ Upstream: [ACE-Step 1.5 v0.1.6](https://github.com/ace-step/ACE-Step-1.5)
 
 ## How Songmaker Uses ACE-Step
 
-ACE-Step runs as a separate HTTP server (`localhost:8001`). The `acestep_manager.py` manages its lifecycle — starting it before the first generation job. It stays running; scoring models (faster-whisper, AudioBox) coexist on the GPU.
+ACE-Step runs in dedicated `acestep-worker-N` peer containers, one per GPU. Each
+worker hosts a FastAPI wrapper (`src/acestep_worker/wrapper.py`) that manages
+an LRU cache of loaded models and exposes:
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/load_model` | Load a model variant into VRAM (idempotent) |
+| POST | `/evict_model` | Evict from VRAM |
+| POST | `/generate` | Submit generation, returns `{task_id}` |
+| GET | `/tasks/{id}/stream` | SSE: `progress`/`done`/`error` events |
+| GET | `/loaded_models` | Current state for heartbeat |
+| GET | `/health` | Liveness |
+
+Workers self-register with the web container at startup
+(`POST /api/internal/workers/register`) and heartbeat ephemeral state to
+Redis with a 15s TTL. The `acestep_engine.client.AceStepClient` lives inside
+the worker container and talks to the upstream ACE-Step subprocess on
+`127.0.0.1:8101`.
 
 ```
 music worker (songmaker_cli.music_worker.MusicWorkerSettings)
-  → on_startup: AceStepManager.start()
   → on generate job:
-    → POST to ACE-Step API → get WAV bytes
-    → master → MP3
+    → scheduler.dispatch_generation:
+      → pick worker (PG identities + Redis state)
+      → INCR queue_depth (Redis)
+      → POST /load_model on worker (if needed)
+      → POST /generate on worker → task_id
+      → consume SSE /tasks/{id}/stream until done
+      → DECR queue_depth in finally
+    → post_process_generation (in to_thread):
+      → read worker WAV from shared volume
+      → decode + splice (if repaint) + master + encode MP3
+      → INSERT generation row
 
 scoring worker (songmaker_cli.scoring_worker.ScoringWorkerSettings)
   → on score job:
@@ -21,6 +46,7 @@ scoring worker (songmaker_cli.scoring_worker.ScoringWorkerSettings)
 
 Client: `src/acestep_engine/client.py` (HTTP client with retry, polling, model info)
 Config: `src/songmaker_cli/config.py` (`build_ace_config()` merges defaults + user settings + song params)
+Scheduler: `src/songmaker_cli/scheduler.py` (worker picker + SSE consumer with reconnect)
 
 ## Model Variants
 
@@ -70,7 +96,7 @@ Priority: song params > admin defaults > model defaults.
 
 ## Modes
 
-All modes use the same `/release_task` endpoint with different `task_type` + audio inputs. The worker auto-switches models if the requested model differs from the loaded one.
+All modes use the same upstream ACE-Step task endpoint with different `task_type` + audio inputs. If the requested model isn't loaded on the chosen worker, the scheduler issues `POST /load_model` before `POST /generate`.
 
 | Mode | task_type | Trigger | What It Does |
 |------|-----------|---------|--------------|

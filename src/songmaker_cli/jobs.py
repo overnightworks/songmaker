@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-import re
 import shutil
 import tempfile
 import time
@@ -14,11 +14,16 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from acestep_engine import AceStepClient
 from acestep_engine.errors import AudioDownloadError
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.api_models import StoredGenerationParams
-from songmaker_cli.config import build_ace_config, load_generation_defaults, resolve_model_mode
+from songmaker_cli.config import (
+    audio_file_path,
+    build_ace_config,
+    load_generation_defaults,
+    resolve_model_mode,
+)
+from songmaker_cli.constants import SHARED_TMP_DIRNAME
 from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries import (
     create_generation,
@@ -31,8 +36,17 @@ from songmaker_cli.db.queries import (
     update_job_heartbeat,
     update_job_status,
 )
-from songmaker_cli.generate import generate_single
+from songmaker_cli.generate import (
+    _decode_audio,
+    _splice_repaint_raw,
+    _write_output,
+)
 from songmaker_cli.parser import AlbumMeta, SongMeta
+from songmaker_cli.scheduler import (
+    NoCapacityError,
+    WorkerTaskFailed,
+    dispatch_generation,
+)
 from songmaker_cli.scoring.pipeline import PipelineConfig
 from songmaker_cli.scoring.subprocess_runner import get_scorer_process
 
@@ -65,8 +79,7 @@ class GenerationContext:
     ace_config: AceStepConfig
     audio_dir: Path
     user_id: str
-    model_name: str | None
-    client: AceStepClient
+    model_name: str
     base_params: dict = field(default_factory=dict)
     src_generation_id: str | None = None
     raw_src_audio: str | None = None
@@ -147,17 +160,17 @@ def _build_generation_context(
     song_id: str, version_id: str,
     db_factory: sessionmaker[Session], audio_dir: Path, data_dir: Path,
     user_id: str, seed: int | None = None,
+    target_model: str | None = None,
 ) -> GenerationContext:
-    """Load song/version from DB and build all config needed for generation."""
+    """Load song/version from DB and build all config needed for generation.
+
+    ``target_model`` is the user-requested mode (e.g. "sft", "xl-sft"). If None,
+    falls back to the builtin default via resolve_model_mode.
+    """
     meta, album_meta = _load_song_meta(song_id, version_id, db_factory)
 
-    client = AceStepClient()
-    if not client.is_available:
-        raise GenerationSetupError("ACE-Step server not reachable")
-
-    server_info = client.server_info()
-    model_name = server_info.model if server_info else None
-    log.debug("ACE-Step model: %s", model_name)
+    model_name = resolve_model_mode(target_model)
+    log.debug("Target ACE-Step model: %s", model_name)
 
     preset_params = _load_preset_params(user_id, model_name, db_factory)
     ace_config = build_ace_config(
@@ -167,8 +180,7 @@ def _build_generation_context(
         preset_params=preset_params,
         seed=seed,
     )
-    if model_name:
-        ace_config = replace(ace_config, model=model_name)
+    ace_config = replace(ace_config, model=model_name)
 
     if ace_config.reference_audio:
         abs_ref = (audio_dir / ace_config.reference_audio).resolve()
@@ -191,29 +203,88 @@ def _build_generation_context(
         audio_dir=audio_dir,
         user_id=user_id,
         model_name=model_name,
-        client=client,
         base_params=meta.generation_params,
     )
 
 
-def _run_single_generation(
-    ctx: GenerationContext, generation_id: str,
+@dataclass(frozen=True)
+class _DecodedAudioInput:
+    wav_bytes: bytes
+
+
+def post_process_generation(
+    *,
+    worker_audio_path: str,
+    worker_seed: int,
+    worker_cot_caption: str,
+    worker_cot_lyrics: str,
+    ctx: GenerationContext,
+    generation_id: str,
     db_factory: sessionmaker[Session],
-    on_progress: Callable[[str], None] | None = None,
 ) -> None:
-    """Generate one song variant, master it, and persist the DB record.
+    """Read worker WAV, decode/splice/master/encode, persist DB row.
 
-    On ACE-Step/mastering failure: raises (caller tracks partial progress).
-    On DB failure after files written: cleans up orphaned files, then raises.
+    Synchronous (CPU-bound). Caller wraps in ``asyncio.to_thread`` from
+    the async run_generation_job. Mastering + MP3 encoding release the
+    GIL but still block the asyncio event loop if called directly.
     """
-    result = generate_single(
-        ctx.meta, ctx.album_meta, ctx.ace_config,
-        ctx.audio_dir, ctx.user_id, generation_id,
-        client=ctx.client,
-        on_progress=on_progress,
-        raw_src_audio=ctx.raw_src_audio,
-    )
+    src_wav = Path(worker_audio_path)
+    try:
+        decoded = _decode_audio(_DecodedAudioInput(wav_bytes=src_wav.read_bytes()))
 
+        server_handles_crossfade = bool(
+            ctx.ace_config.repaint_mode or ctx.ace_config.repaint_wav_crossfade_sec > 0
+        )
+        needs_splice = (
+            ctx.ace_config.task_type == "repaint"
+            and ctx.ace_config.src_audio
+            and not server_handles_crossfade
+        )
+        if needs_splice:
+            splice_src = ctx.raw_src_audio or ctx.ace_config.src_audio
+            decoded = _splice_repaint_raw(decoded, ctx.ace_config, splice_src)
+
+        mp3_path = audio_file_path(ctx.audio_dir, ctx.user_id, generation_id, ".mp3")
+        wav_path = audio_file_path(ctx.audio_dir, ctx.user_id, generation_id, ".wav")
+        raw_wav_path = audio_file_path(
+            ctx.audio_dir, ctx.user_id, generation_id, ".raw.wav",
+        )
+        from audio_engine import write_stereo_wav
+
+        write_stereo_wav(
+            str(raw_wav_path), decoded.left, decoded.right, decoded.sample_rate,
+        )
+        _write_output(
+            decoded, worker_seed, mp3_path, wav_path, ctx.meta, ctx.album_meta,
+        )
+        _persist_generation_row(
+            db_factory=db_factory,
+            ctx=ctx,
+            generation_id=generation_id,
+            seed=worker_seed,
+            cot_caption=worker_cot_caption,
+            cot_lyrics=worker_cot_lyrics,
+            mp3_path=mp3_path,
+            wav_path=wav_path,
+        )
+    finally:
+        try:
+            src_wav.unlink()
+        except OSError:
+            log.warning("Failed to delete worker temp WAV: %s", src_wav)
+
+
+def _persist_generation_row(
+    *,
+    db_factory: sessionmaker[Session],
+    ctx: GenerationContext,
+    generation_id: str,
+    seed: int,
+    cot_caption: str,
+    cot_lyrics: str,
+    mp3_path: Path,
+    wav_path: Path,
+) -> None:
     mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
     wav_rel = f"{ctx.user_id}/{generation_id}.wav"
     is_repaint = ctx.ace_config.task_type == "repaint"
@@ -269,8 +340,8 @@ def _run_single_generation(
             ctx.ace_config.cover_noise_strength
             if is_cover and ctx.ace_config.cover_noise_strength > 0 else None
         ),
-        cot_caption=result.cot_caption or None,
-        cot_lyrics=result.cot_lyrics or None,
+        cot_caption=cot_caption or None,
+        cot_lyrics=cot_lyrics or None,
     )
     gen_params = stored.model_dump(exclude_none=True)
 
@@ -281,7 +352,7 @@ def _run_single_generation(
                 song_id=ctx.song_id,
                 version_id=ctx.version_id,
                 mp3_path=mp3_rel,
-                seed=result.seed,
+                seed=seed,
                 generation_params=gen_params,
                 wav_path=wav_rel,
                 model_mode=resolve_model_mode(ctx.model_name),
@@ -292,7 +363,7 @@ def _run_single_generation(
         _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel)
         raise
 
-    log.info("Generated: %s (seed=%s)", mp3_rel, result.seed)
+    log.info("Generated: %s (seed=%s)", mp3_rel, seed)
 
 
 def _finalize_generation_job(
@@ -317,54 +388,47 @@ def _finalize_generation_job(
         )
 
 
-_DIFFUSION_STEP_PATTERN = re.compile(r"(\d+)/(\d+)\s*\[")
 _PROGRESS_THROTTLE_SECONDS = 2.0
-_HEARTBEAT_INTERVAL_SECONDS = 30.0
-
-
-def _parse_step_fraction(progress_text: str) -> float | None:
-    """Extract a 0..1 fraction from diffusion step text like '8/50 [00:02<00:13]'.
-
-    Only matches the tqdm-style progress format with a bracket suffix to avoid
-    false positives from non-progress text like 'LM chunk 1/1'.
-    """
-    m = _DIFFUSION_STEP_PATTERN.search(progress_text)
-    if m:
-        current, total = int(m.group(1)), int(m.group(2))
-        if total > 0:
-            return min(current / total, 1.0)
-    return None
 
 
 def _make_generation_progress_callback(
     db_factory: sessionmaker[Session], job_id: str,
     variant_index: int, count: int,
-) -> Callable[[str], None]:
+) -> Callable[[float], None]:
     last_update = 0.0
-    last_heartbeat = 0.0
 
-    def _on_progress(progress_text: str) -> None:
-        nonlocal last_update, last_heartbeat
+    def _on_progress(step_fraction: float) -> None:
+        nonlocal last_update
         now = time.monotonic()
-        step_fraction = _parse_step_fraction(progress_text)
-        if step_fraction is not None:
-            if now - last_update < _PROGRESS_THROTTLE_SECONDS:
-                return
-            combined = (variant_index + step_fraction) / count
-            _update_job(db_factory, job_id, "running", progress=combined)
-            last_update = now
-            last_heartbeat = now
+        if now - last_update < _PROGRESS_THROTTLE_SECONDS:
             return
-        if now - last_heartbeat >= _HEARTBEAT_INTERVAL_SECONDS:
-            _touch_heartbeat(db_factory, job_id)
-            last_heartbeat = now
+        combined = (variant_index + step_fraction) / count
+        _update_job(db_factory, job_id, "running", progress=combined)
+        last_update = now
 
     return _on_progress
 
 
-def _copy_to_tmp(src_path: str) -> str:
+def _make_heartbeat_callback(
+    db_factory: sessionmaker[Session], job_id: str,
+) -> Callable[[], None]:
+    def _on_heartbeat() -> None:
+        _touch_heartbeat(db_factory, job_id)
+
+    return _on_heartbeat
+
+
+def _shared_tmp_dir(audio_dir: Path) -> Path:
+    d = audio_dir / SHARED_TMP_DIRNAME
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _copy_to_shared_tmp(src_path: str, audio_dir: Path) -> str:
     suffix = Path(src_path).suffix
-    fd, tmp_path = tempfile.mkstemp(suffix=suffix, prefix="songmaker_src_")
+    fd, tmp_path = tempfile.mkstemp(
+        suffix=suffix, prefix="songmaker_src_", dir=_shared_tmp_dir(audio_dir),
+    )
     os.close(fd)
     shutil.copy2(src_path, tmp_path)
     return tmp_path
@@ -383,7 +447,7 @@ def _apply_task_overrides(
 
     overrides: dict = {
         "task_type": task_type,
-        "src_audio": _copy_to_tmp(src_wav),
+        "src_audio": _copy_to_shared_tmp(src_wav, ctx.audio_dir),
         "prompt": params.get("prompt", ctx.ace_config.prompt),
         "lyrics": params.get("lyrics", ctx.ace_config.lyrics),
     }
@@ -407,11 +471,11 @@ def _apply_task_overrides(
     updated_config = replace(ctx.ace_config, **overrides)
     new_ctx = replace(ctx, ace_config=updated_config)
     if task_type == "repaint" and raw_wav:
-        new_ctx = replace(new_ctx, raw_src_audio=_copy_to_tmp(raw_wav))
+        new_ctx = replace(new_ctx, raw_src_audio=_copy_to_shared_tmp(raw_wav, ctx.audio_dir))
     return new_ctx
 
 
-def run_generation_job(
+async def run_generation_job(
     job_id: str, song_id: str, version_id: str, count: int,
     user_id: str,
     db_factory: sessionmaker[Session] | None = None,
@@ -420,14 +484,18 @@ def run_generation_job(
     seed: int | None = None,
     repaint_params: dict | None = None,
     cover_params: dict | None = None,
+    target_model: str | None = None,
+    redis: object | None = None,
 ) -> None:
     assert db_factory is not None, "db_factory is required"
     assert audio_dir is not None, "audio_dir is required"
     assert data_dir is not None, "data_dir is required"
+    assert redis is not None, "redis is required"
 
     import uuid
 
     import structlog
+
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(
         job_id=job_id, job_type="generate", song_id=song_id,
@@ -436,13 +504,16 @@ def run_generation_job(
     task_type = "cover" if cover_params else ("repaint" if repaint_params else "generate")
     log.info("Generation job %s: song=%s, count=%d, task=%s", job_id, song_id, count, task_type)
 
+    shared_tmp_prefix = str(audio_dir / SHARED_TMP_DIRNAME)
+
     try:
         _update_job(db_factory, job_id, "running", worker_pid=os.getpid())
 
         try:
-            ctx = _build_generation_context(
+            ctx = await asyncio.to_thread(
+                _build_generation_context,
                 song_id, version_id, db_factory, audio_dir, data_dir,
-                user_id=user_id, seed=seed,
+                user_id=user_id, seed=seed, target_model=target_model,
             )
             if repaint_params:
                 ctx = _apply_task_overrides(ctx, "repaint", repaint_params)
@@ -455,11 +526,9 @@ def run_generation_job(
             return
 
         tmp_copies: list[str] = []
-        if ctx.ace_config.src_audio and ctx.ace_config.src_audio.startswith(
-            tempfile.gettempdir()
-        ):
+        if ctx.ace_config.src_audio and ctx.ace_config.src_audio.startswith(shared_tmp_prefix):
             tmp_copies.append(ctx.ace_config.src_audio)
-        if ctx.raw_src_audio and ctx.raw_src_audio.startswith(tempfile.gettempdir()):
+        if ctx.raw_src_audio and ctx.raw_src_audio.startswith(shared_tmp_prefix):
             tmp_copies.append(ctx.raw_src_audio)
 
         try:
@@ -469,10 +538,32 @@ def run_generation_job(
             for i in range(count):
                 _update_job(db_factory, job_id, "running", progress=i / count)
                 on_progress = _make_generation_progress_callback(db_factory, job_id, i, count)
+                on_heartbeat = _make_heartbeat_callback(db_factory, job_id)
                 try:
                     gen_id = str(uuid.uuid4())
-                    _run_single_generation(ctx, gen_id, db_factory, on_progress=on_progress)
+                    with db_factory() as session:
+                        worker_result = await dispatch_generation(
+                            ace_config=ctx.ace_config,
+                            target_mode=ctx.model_name,
+                            on_progress=on_progress,
+                            on_heartbeat=on_heartbeat,
+                            redis=redis,
+                            db=session,
+                        )
+                    await asyncio.to_thread(
+                        post_process_generation,
+                        worker_audio_path=worker_result.audio_path,
+                        worker_seed=worker_result.seed,
+                        worker_cot_caption=worker_result.cot_caption,
+                        worker_cot_lyrics=worker_result.cot_lyrics,
+                        ctx=ctx,
+                        generation_id=gen_id,
+                        db_factory=db_factory,
+                    )
                     completed += 1
+                except (NoCapacityError, WorkerTaskFailed) as exc:
+                    log.warning("Generation %d/%d failed: %s", i + 1, count, exc)
+                    last_error = exc
                 except Exception as exc:
                     log.exception("Generation %d/%d failed: %s", i + 1, count, exc)
                     last_error = exc

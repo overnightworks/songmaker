@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -14,10 +15,36 @@ from songmaker_cli.db.queries import get_generation, get_job
 from songmaker_cli.jobs import (
     GenerationContext,
     _apply_task_overrides,
+    _persist_generation_row,
     _update_job,
     run_generation_job,
     run_scoring_job,
 )
+from songmaker_cli.scheduler import GenerationTaskResultDTO
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _make_dto(seed: int = 42, audio_path: str = "/tmp/fake.wav") -> GenerationTaskResultDTO:
+    return GenerationTaskResultDTO(
+        mode="turbo", audio_path=audio_path, seed=seed,
+        cot_caption="", cot_lyrics="",
+    )
+
+
+def _persist_via_post_process(*, ctx, generation_id, db_factory, **kwargs):
+    _persist_generation_row(
+        db_factory=db_factory,
+        ctx=ctx,
+        generation_id=generation_id,
+        seed=kwargs.get("worker_seed", 0),
+        cot_caption=kwargs.get("worker_cot_caption", ""),
+        cot_lyrics=kwargs.get("worker_cot_lyrics", ""),
+        mp3_path=Path(f"/tmp/{generation_id}.mp3"),
+        wav_path=Path(f"/tmp/{generation_id}.wav"),
+    )
 
 
 @pytest.fixture()
@@ -69,38 +96,32 @@ def test_update_job_raises_after_retries(db_factory) -> None:
 # ── run_generation_job ──────────────────────────────────────────────
 
 
-def _mock_generate_result(mp3_name: str = "01_song_one_v1.mp3", seed: int = 42):
-    wav_name = mp3_name.replace(".mp3", ".wav")
-    result = MagicMock()
-    result.mp3_path = Path(f"/output/rock/{mp3_name}")
-    result.wav_path = Path(f"/output/rock/{wav_name}")
-    result.seed = seed
-    result.cot_caption = ""
-    result.cot_lyrics = ""
-    return result
-
-
-def _mock_server_info(model: str = "acestep-v15-turbo"):
-    info = MagicMock()
-    info.model = model
-    return info
+def _patch_dispatch_and_post_process(dto_or_side_effect):
+    if isinstance(dto_or_side_effect, list):
+        dispatch = AsyncMock(side_effect=dto_or_side_effect)
+    elif isinstance(dto_or_side_effect, BaseException) or (
+        isinstance(dto_or_side_effect, type) and issubclass(dto_or_side_effect, BaseException)
+    ):
+        dispatch = AsyncMock(side_effect=dto_or_side_effect)
+    else:
+        dispatch = AsyncMock(return_value=dto_or_side_effect)
+    return (
+        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+    )
 
 
 def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
-    result = _mock_generate_result()
-    client = MagicMock()
-    client.is_available = True
-    client.server_info.return_value = _mock_server_info()
-
-    with (
-        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
-        patch("songmaker_cli.jobs.generate_single", return_value=result),
-    ):
-        run_generation_job(
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
             "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        )
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -110,25 +131,20 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 1
         assert gens[0].seed == 42
-        assert gens[0].generation_params["acestep_model"] == "acestep-v15-turbo"
         assert gens[0].model_mode == "turbo"
 
 
 def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
-    results = [_mock_generate_result(f"song_v{i}.mp3", seed=100 + i) for i in range(3)]
-    client = MagicMock()
-    client.is_available = True
-    client.server_info.return_value = _mock_server_info()
-
-    with (
-        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
-        patch("songmaker_cli.jobs.generate_single", side_effect=results),
-    ):
-        run_generation_job(
+    dtos = [_make_dto(seed=100 + i) for i in range(3)]
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(dtos)
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
             "j1", "s1", "v1", 3, "u1",
-            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        )
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+        ))
 
     with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
@@ -136,23 +152,16 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
 
 
 def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
-    ok_result = _mock_generate_result("song_v1.mp3", seed=100)
-    client = MagicMock()
-    client.is_available = True
-    client.server_info.return_value = _mock_server_info()
-
-    with (
-        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
-        patch(
-            "songmaker_cli.jobs.generate_single",
-            side_effect=[ok_result, RuntimeError("GPU OOM"), RuntimeError("GPU OOM")],
-        ),
-    ):
-        run_generation_job(
+    side_effects = [_make_dto(seed=100), RuntimeError("GPU OOM"), RuntimeError("GPU OOM")]
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(side_effects)
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
             "j1", "s1", "v1", 3, "u1",
-            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        )
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -164,11 +173,14 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
         assert len(gens) == 1
 
 
-def test_generation_job_song_not_found(seeded_db) -> None:
-    run_generation_job(
+def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
+    _run(run_generation_job(
         "j1", "nonexistent", "v1", 1, "u1",
-        db_factory=seeded_db, audio_dir=Path("/tmp/audio"), data_dir=Path("/tmp/data"),
-    )
+        db_factory=seeded_db,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        redis=MagicMock(),
+    ))
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -176,11 +188,14 @@ def test_generation_job_song_not_found(seeded_db) -> None:
         assert "Song not found" in job.error
 
 
-def test_generation_job_version_not_found(seeded_db) -> None:
-    run_generation_job(
+def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
+    _run(run_generation_job(
         "j1", "s1", "nonexistent", 1, "u1",
-        db_factory=seeded_db, audio_dir=Path("/tmp/audio"), data_dir=Path("/tmp/data"),
-    )
+        db_factory=seeded_db,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        redis=MagicMock(),
+    ))
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -188,36 +203,38 @@ def test_generation_job_version_not_found(seeded_db) -> None:
         assert "Version not found" in job.error
 
 
-def test_generation_job_acestep_not_reachable(seeded_db) -> None:
-    client = MagicMock()
-    client.is_available = False
+def test_generation_job_no_capacity(seeded_db, tmp_path: Path) -> None:
+    from songmaker_cli.scheduler import NoCapacityError
 
-    with patch("songmaker_cli.jobs.AceStepClient", return_value=client):
-        run_generation_job(
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
+        NoCapacityError("no workers"),
+    )
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
             "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db, audio_dir=Path("/tmp/audio"), data_dir=Path("/tmp/data"),
-        )
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert "not reachable" in job.error
 
 
-def test_generation_job_exception(seeded_db) -> None:
-    client = MagicMock()
-    client.is_available = True
-    client.server_info.return_value = _mock_server_info()
-
-    with (
-        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
-        patch("songmaker_cli.jobs.generate_single", side_effect=RuntimeError("GPU error")),
-    ):
-        run_generation_job(
+def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
+        RuntimeError("GPU error"),
+    )
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
             "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db, audio_dir=Path("/tmp/audio"), data_dir=Path("/tmp/data"),
-        )
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "j1")
@@ -231,20 +248,15 @@ def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> 
         ver.generation_params = {"inference_steps": 50, "shift": 2.0}
         session.commit()
 
-    result = _mock_generate_result()
-    client = MagicMock()
-    client.is_available = True
-    client.server_info.return_value = _mock_server_info()
-
-    with (
-        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
-        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
-        patch("songmaker_cli.jobs.generate_single", return_value=result),
-    ):
-        run_generation_job(
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
+    with dispatch, post_process, defaults:
+        _run(run_generation_job(
             "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        )
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+        ))
 
     with seeded_db() as session:
         gen = session.query(Generation).filter_by(song_id="s1").first()
@@ -253,25 +265,45 @@ def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> 
 
 
 def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> None:
-    result = _mock_generate_result()
-    client = MagicMock()
-    client.is_available = True
-    client.server_info.return_value = _mock_server_info()
-
+    dispatch = AsyncMock(return_value=_make_dto())
     with (
-        patch("songmaker_cli.jobs.AceStepClient", return_value=client),
+        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
         patch(
             "songmaker_cli.jobs.load_generation_defaults",
             return_value={"turbo": {"shift": 7.0}},
         ) as mock_load,
-        patch("songmaker_cli.jobs.generate_single", return_value=result),
     ):
-        run_generation_job(
+        _run(run_generation_job(
             "j1", "s1", "v1", 1, "u1",
-            db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        )
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+        ))
 
     mock_load.assert_called_once()
+
+
+def test_generation_job_passes_target_model_to_dispatch(seeded_db, tmp_path: Path) -> None:
+    dispatch = AsyncMock(return_value=_make_dto())
+    with (
+        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+    ):
+        _run(run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+            target_model="xl-sft",
+        ))
+
+    dispatch.assert_awaited_once()
+    kwargs = dispatch.await_args.kwargs
+    assert kwargs["target_mode"] == "xl-sft"
 
 
 # ── run_scoring_job ─────────────────────────────────────────────────
@@ -486,7 +518,7 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
         meta=SongMeta(title="t", lyrics="la la", prompt="test"),
         album_meta=AlbumMeta(title="a", artist="b"),
         ace_config=config, audio_dir=tmp_path, user_id="u1",
-        model_name="turbo", client=MagicMock(),
+        model_name="turbo",
     )
     params = {
         "src_wav_path": str(src_wav),
@@ -500,7 +532,7 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
     assert result.ace_config.repainting_end == pytest.approx(144.0)
     assert result.ace_config.task_type == "repaint"
     assert result.ace_config.think_mode == "deep"
-    assert result.ace_config.src_audio.startswith("/tmp/")
+    assert result.ace_config.src_audio.startswith(str(tmp_path / ".tmp"))
     assert Path(result.ace_config.src_audio).exists()
 
 
@@ -519,7 +551,7 @@ def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
         meta=SongMeta(title="t", lyrics="la la", prompt="test"),
         album_meta=AlbumMeta(title="a", artist="b"),
         ace_config=config, audio_dir=tmp_path, user_id="u1",
-        model_name="sft", client=MagicMock(),
+        model_name="sft",
     )
     params = {
         "src_wav_path": str(src_wav),
@@ -545,7 +577,7 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
         meta=SongMeta(title="t", lyrics="la la", prompt="test"),
         album_meta=AlbumMeta(title="a", artist="b"),
         ace_config=config, audio_dir=tmp_path, user_id="u1",
-        model_name="turbo", client=MagicMock(),
+        model_name="turbo",
     )
     params = {
         "src_wav_path": str(src_wav),
@@ -556,7 +588,7 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
     result = _apply_task_overrides(ctx, "cover", params)
     assert result.ace_config.audio_cover_strength == 0.7
     assert result.ace_config.task_type == "cover"
-    assert result.ace_config.src_audio.startswith("/tmp/")
+    assert result.ace_config.src_audio.startswith(str(tmp_path / ".tmp"))
 
 
 # ── load_model_on_worker ────────────────────────────────────────────

@@ -158,7 +158,6 @@ def test_health_reports_redis_ok(tmp_path: Path, fake_redis, mock_arq_pool) -> N
         patch("songmaker_cli.arq_pool.get_queue_depth", return_value=0),
         patch("songmaker_cli.arq_pool.get_music_queue_depth", return_value=0),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", return_value=0),
-        patch("songmaker_cli.arq_pool.get_active_model", return_value=None),
         TestClient(app) as client,
     ):
         resp = client.get("/health")

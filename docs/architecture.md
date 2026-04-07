@@ -32,23 +32,29 @@
 │  ┌──────────────────┐   ┌────────────┐   ┌─────────────────────┐    │
 │  │  songmaker-web    │   │  postgres   │   │  redis              │    │
 │  │  FastAPI + Svelte │──▶│  all data   │◀──│  sessions, queues,  │    │
-│  │  port 8080        │   │  port 5432  │   │  rate limits        │    │
+│  │  port 8080        │   │  port 5432  │   │  rate limits,       │    │
+│  │  + control plane  │   │             │   │  worker state (TTL) │    │
 │  └────────┬─────────┘   └────────────┘   └──────────┬──────────┘    │
 │           │                                          │               │
 │           │  enqueue jobs to named Redis queues       │               │
-│           │                                          │               │
 │           ▼                                          ▼               │
 │  ┌────────────────────┐            ┌──────────────────────────────┐  │
 │  │  music-worker       │            │  scoring-worker              │  │
-│  │                     │            │                              │  │
-│  │  GPU + ACE-Step     │            │  CPU (or GPU)                │  │
-│  │  subprocess         │            │  Whisper + AudioBox          │  │
-│  │                     │            │  subprocess                  │  │
+│  │  no GPU             │            │  CPU (or GPU)                │  │
+│  │  scheduler dispatch │            │  Whisper + AudioBox          │  │
 │  │  queue: music       │            │  queue: scoring              │  │
 │  │  max_jobs: 2        │            │  max_jobs: 1                 │  │
-│  │  CUDA_VISIBLE_      │            │  SCORING_DEVICE=cpu|cuda     │  │
-│  │  DEVICES=0          │            │                              │  │
-│  └─────────────────────┘            └──────────────────────────────┘  │
+│  └──────────┬──────────┘            └──────────────────────────────┘  │
+│             │ HTTP /load_model, /generate, SSE                       │
+│             ▼                                                        │
+│  ┌──────────────────────┐  ┌──────────────────────┐                  │
+│  │  acestep-worker-0    │  │  acestep-worker-1    │ ← future GPU      │
+│  │  GPU + ACE-Step      │  │  (added later, no    │                   │
+│  │  subprocess          │  │   code change)       │                   │
+│  │  /load_model         │  └──────────────────────┘                   │
+│  │  /generate → SSE     │                                             │
+│  │  registers w/ web    │                                             │
+│  └──────────────────────┘                                             │
 │                                                                      │
 │  ┌──────────────┐  ┌──────────────┐                                  │
 │  │  prometheus   │  │  grafana     │                                  │
@@ -57,6 +63,18 @@
 │  └──────────────┘  └──────────────┘                                  │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+
+ACE-Step worker pool: each `acestep-worker-N` is a peer container with its
+own GPU. Workers self-register with the web container at startup
+(`POST /api/internal/workers/register`) and heartbeat ephemeral state to
+Redis with a 15s TTL. The music-worker is now a thin orchestrator: its
+arq `generate` job calls the scheduler (`scheduler.py`), which picks an
+online worker, INCRs queue depth atomically, dispatches via HTTP, and
+consumes the worker's task SSE stream until `done`. The music-worker then
+post-processes the worker's WAV (decode → splice → master → MP3 → DB
+insert) and the job completes. See [acestep.md](acestep.md) for the
+worker API surface and [acestep-worker-pool.md](../plans/acestep-worker-pool.md)
+for the rationale.
 
 ## Job Routing
 
@@ -68,21 +86,26 @@ User clicks "Generate"                    User clicks "Score"
         │                                         │
         ├── rate limit check                      ├── rate limit check
         ├── ownership check                       ├── ownership check
-        ├── validate model (admin-enabled)        ├── create Job record
-        ├── create Job record                     │
-        │                                         ▼
-        ▼                                   arq:queue:scoring
-  arq:queue:music                          (Redis sorted set)
-  (Redis sorted set)                              │
-        │                                         ▼
-        ▼                                   Scoring Worker
-  Music Worker                             ├── spawn scorer subprocess
-  ├── auto-switch model if needed          ├── Whisper transcription
-  ├── prepare_generate_mode()              ├── AudioBox aesthetics
-  ├── apply repaint/cover overrides        ├── BPM, dynamics, silence, spectral
-  ├── ACE-Step HTTP → WAV                  ├── lyrical coherence (Claude)
-  ├── master → MP3                         ├── save scores to DB
-  ├── save Generation (model_mode) to DB   └── Job status: completed
+        ├── create Job record                     ├── create Job record
+        │                                         │
+        ▼                                         ▼
+  arq:queue:music                          arq:queue:scoring
+  (Redis sorted set)                       (Redis sorted set)
+        │                                         │
+        ▼                                         ▼
+  Music Worker (orchestrator)              Scoring Worker
+  ├── apply repaint/cover overrides        ├── spawn scorer subprocess
+  ├── scheduler.dispatch_generation:       ├── Whisper transcription
+  │   ├── pick acestep-worker              ├── AudioBox aesthetics
+  │   ├── INCR queue_depth (Redis)         ├── BPM, dynamics, silence, spectral
+  │   ├── /load_model + /generate (HTTP)   ├── lyrical coherence (Claude)
+  │   ├── consume SSE → task done          ├── save scores to DB
+  │   └── DECR queue_depth (finally)       └── Job status: completed
+  ├── post_process_generation (to_thread):
+  │   ├── read worker WAV from volume
+  │   ├── decode + splice (if repaint)
+  │   ├── master → MP3 + ID3 tags
+  │   └── INSERT generation row
   └── Job status: completed
 
   Repaint: POST /generations/{id}/repaint
@@ -123,8 +146,9 @@ The API client and `types.ts` are the frontend's contract with the backend. When
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models.py` |
 | Jobs | Background generation + scoring runners | `jobs.py` |
-| Worker | arq-based job queues (music + scoring), ACE-Step lifecycle | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `acestep_manager.py`, `arq_pool.py` |
-| Generation | ACE-Step call → decode WAV → master → MP3 | `generate.py` |
+| Worker | arq-based job queues (music + scoring), scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
+| ACE-Step worker pool | Peer containers serving ACE-Step over HTTP/SSE | `src/acestep_worker/` (top-level package, separate from `songmaker_cli`) |
+| Generation post-process | Decode worker WAV → splice → master → MP3 | `generate.py`, `jobs.py:post_process_generation` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics, coherence | `scoring/` |
@@ -240,11 +264,13 @@ POST /api/generations/{id}/score
 ```
 
 **Music worker** (`music_worker.py`):
-- Owns ACE-Step subprocess lifecycle (start, stop, health check, model switch)
-- Handles `generate` and `reinitialize_acestep` tasks
-- `max_jobs=2` (one active in ACE-Step, one pre-fetched and waiting)
+- Thin orchestrator — no GPU, no ACE-Step process. Dispatches generation jobs
+  to acestep-worker peer containers via the scheduler (`scheduler.py`).
+- Handles `generate` and `load_model_on_worker` tasks
+- `max_jobs=2` (concurrent SSE consumers; the actual generation runs on the
+  acestep-worker)
 - Cron: recovers stale generate jobs every 2 minutes, audits orphaned audio files
-- Publishes active model and ACE-Step status to Redis
+- Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
 - Owns scorer subprocess (Whisper, AudioBox, Claude coherence)
@@ -280,18 +306,20 @@ No existing code changes needed.
 ## VRAM Management
 
 ```
-ACE-Step server: ~18 GB VRAM (DiT + LM models, stays loaded as subprocess)
-faster-whisper:  ~3 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
-AudioBox:        ~1 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
+ACE-Step models:  ~6-12 GB VRAM each (varies by mode), live in acestep-worker containers
+faster-whisper:   ~3 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
+AudioBox:         ~1 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
 ```
 
-With separate workers, no VRAM coordination is needed at the application level. The operator configures each worker's device via env vars to match available hardware:
+ACE-Step VRAM is owned by `acestep-worker-N` containers, one per GPU. Each worker
+holds an LRU cache of loaded models bounded by `VRAM_BUDGET_GB` and reports
+its current usage via heartbeat. The music-worker has no GPU access at all.
 
-| Deployment | Music worker | Scoring worker | Notes |
-|-----------|-------------|----------------|-------|
-| Single GPU, 24 GB | GPU 0 | CPU | ACE-Step owns GPU exclusively |
-| Single GPU, 48 GB+ | GPU 0 | GPU 0 | Both fit in VRAM |
-| Two GPUs | GPU 0 | GPU 1 | Full parallel |
+| Deployment | acestep-worker | Scoring worker | Notes |
+|-----------|---------------|----------------|-------|
+| Single GPU, 24 GB | GPU 0 (1 container) | CPU | LRU cache holds 1-2 models |
+| Single GPU, 48 GB+ | GPU 0 (1 container) | GPU 0 | Larger LRU cache + scoring on same GPU |
+| Two GPUs | GPU 0 + GPU 1 (2 containers) | GPU 0 or CPU | Scheduler picks least-busy |
 
 ## Key Design Decisions
 

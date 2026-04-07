@@ -36,7 +36,6 @@ from songmaker_cli.api_models.playlists import (
     SharedPlaylistResponse,
 )
 from songmaker_cli.api_models.settings import (
-    AceStepStatusResponse,
     CapabilitiesResponse,
     ChatHistoryResponse,
     ChatMessageResponse,
@@ -148,7 +147,6 @@ class CleanupResponse(BaseModel):
 
 
 __all__ = [
-    "AceStepStatusResponse",
     "AddAlbumToPlaylistRequest",
     "AddGenerationToPlaylistRequest",
     "AddSongToPlaylistRequest",
