@@ -112,6 +112,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
       MUSIC_MAX_JOBS: "${MUSIC_MAX_JOBS:-2}"
+      ARQ_JOB_TIMEOUT: "${ARQ_JOB_TIMEOUT:-300}"
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
     volumes:
       - audiofiles:/app/data/audio
@@ -130,6 +131,7 @@ services:
       WORKER_PORT: "8001"
       GPU_ID: "0"
       VRAM_BUDGET_GB: "${ACESTEP_WORKER_VRAM_GB:-22}"
+      ACESTEP_STARTUP_TIMEOUT_SECONDS: "${ACESTEP_STARTUP_TIMEOUT_SECONDS:-300}"
       ACESTEP_CHECKPOINT_DIR: "/app/_models/acestep"
       AUDIO_OUTPUT_DIR: "/app/data/audio/worker_output"
       ACESTEP_LOG_DIR: "/app/_models/acestep"
