@@ -168,3 +168,8 @@ from songmaker_cli.db.queries.songs import move_song as move_song
 from songmaker_cli.db.queries.songs import update_song as update_song
 from songmaker_cli.db.queries.versions import delete_version as delete_version
 from songmaker_cli.db.queries.versions import get_version as get_version
+from songmaker_cli.db.queries.workers import get_worker_identity as get_worker_identity
+from songmaker_cli.db.queries.workers import (
+    list_worker_identities as list_worker_identities,
+)
+from songmaker_cli.db.queries.workers import register_worker as register_worker

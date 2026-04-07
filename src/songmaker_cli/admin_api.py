@@ -5,11 +5,15 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import os
 
+import httpx
+from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from songmaker_cli.acestep_state import read_queue_depth, read_worker_state
 from songmaker_cli.api_helpers import (
     AdminPagination,
     cleanup_generation_files,
@@ -18,17 +22,27 @@ from songmaker_cli.api_helpers import (
 from songmaker_cli.api_models import (
     AuditLogResponse,
     CreateUserRequest,
+    EvictModelOnWorkerRequest,
     JobResponse,
+    LoadModelOnWorkerRequest,
     LoginAttemptResponse,
     PaginatedResponse,
+    RegistryModelResponse,
+    RegistryResponse,
     SessionResponse,
     StatusResponse,
     UpdateUserRequest,
     UserResponse,
+    WorkerEphemeralState,
+    WorkerIdentity,
+    WorkerInfo,
+    WorkerPoolResponse,
 )
 from songmaker_cli.api_models.settings import AceStepStatusResponse, ReinitializeRequest
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.auth import hash_password
+from songmaker_cli.constants import MODEL_CONFIG_PATHS
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     count_active_sessions,
@@ -39,14 +53,17 @@ from songmaker_cli.db.queries import (
     delete_user_sessions,
     get_user,
     get_user_by_username,
+    get_worker_identity,
     hard_delete_user,
     list_active_sessions,
     list_audit_log,
     list_login_attempts,
     list_users,
+    list_worker_identities,
     record_audit,
     update_user,
 )
+from songmaker_cli.internal_api import INTERNAL_TOKEN_ENV, INTERNAL_TOKEN_HEADER
 from songmaker_cli.middleware import AuthenticatedUser, require_admin
 from songmaker_cli.redis_client import SessionCache
 
@@ -322,3 +339,157 @@ async def acestep_status(
         lm_model=status.get("lm_model"),
         jobs=status.get("jobs", {}),
     )
+
+
+def _derive_worker_status(state: dict | None) -> str:
+    if state is None:
+        return "offline"
+    if state.get("target_loading"):
+        return "loading"
+    return "online"
+
+
+def _state_from_dict(state: dict | None, queue_depth: int) -> WorkerEphemeralState | None:
+    if state is None:
+        return None
+    return WorkerEphemeralState(
+        loaded=list(state.get("loaded", [])),
+        target_loading=state.get("target_loading"),
+        queue_depth=queue_depth,
+        vram_used_gb=state.get("vram_used_gb"),
+        vram_total_gb=state.get("vram_total_gb"),
+        available_modes=list(state.get("available_modes", [])),
+        last_heartbeat_at=state.get("last_heartbeat_at"),
+    )
+
+
+async def _post_to_worker(
+    host: str, port: int, path: str, json_body: dict | None = None,
+) -> httpx.Response:
+    token = os.environ.get(INTERNAL_TOKEN_ENV, "")
+    headers = {INTERNAL_TOKEN_HEADER: token}
+    async with httpx.AsyncClient(timeout=30) as client:
+        return await client.post(
+            f"http://{host}:{port}{path}", json=json_body, headers=headers,
+        )
+
+
+@router.get("/workers")
+async def list_workers_endpoint(
+    db: Session = Depends(get_db_session),
+    pool: ArqRedis = Depends(get_arq_pool_dep),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> WorkerPoolResponse:
+    workers = list_worker_identities(db)
+    infos: list[WorkerInfo] = []
+    for w in workers:
+        state = await read_worker_state(pool, w.id)
+        queue_depth = await read_queue_depth(pool, w.id)
+        infos.append(
+            WorkerInfo(
+                identity=WorkerIdentity.from_orm(w),
+                state=_state_from_dict(state, queue_depth),
+                status=_derive_worker_status(state),
+            ),
+        )
+    return WorkerPoolResponse(workers=infos)
+
+
+@router.get("/registry")
+async def get_registry_endpoint(
+    db: Session = Depends(get_db_session),
+    pool: ArqRedis = Depends(get_arq_pool_dep),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> RegistryResponse:
+    workers = list_worker_identities(db)
+    states: dict[str, dict | None] = {}
+    for w in workers:
+        states[w.id] = await read_worker_state(pool, w.id)
+
+    downloaded_union: set[str] = set()
+    for st in states.values():
+        if st is not None:
+            downloaded_union.update(st.get("available_modes", []))
+
+    models: list[RegistryModelResponse] = []
+    for mode in MODEL_CONFIG_PATHS:
+        loaded_on: list[str] = []
+        loading_on: list[str] = []
+        for worker_id, st in states.items():
+            if st is None:
+                continue
+            if mode in st.get("loaded", []):
+                loaded_on.append(worker_id)
+            if st.get("target_loading") == mode:
+                loading_on.append(worker_id)
+        models.append(
+            RegistryModelResponse(
+                mode=mode,
+                downloaded=mode in downloaded_union,
+                loaded_on=sorted(loaded_on),
+                loading_on=sorted(loading_on),
+            ),
+        )
+    return RegistryResponse(models=models)
+
+
+@router.post("/workers/{worker_id}/load_model")
+async def load_model_on_worker_endpoint(
+    worker_id: str,
+    req: LoadModelOnWorkerRequest,
+    db: Session = Depends(get_db_session),
+    admin: AuthenticatedUser = Depends(require_admin),
+) -> JobResponse:
+    from songmaker_cli.arq_pool import get_arq_pool
+    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
+    from songmaker_cli.db.queries import (
+        create_job,
+        get_queue_position,
+        update_job_status,
+    )
+
+    worker = get_worker_identity(db, worker_id)
+    if worker is None:
+        raise HTTPException(404, f"Worker '{worker_id}' not found")
+    if req.mode not in MODEL_CONFIG_PATHS:
+        raise HTTPException(400, f"Unknown model mode '{req.mode}'")
+
+    job = create_job(db, "load_model_on_worker", user_id=admin.id)
+    db.commit()
+
+    try:
+        pool = get_arq_pool()
+        await pool.enqueue_job(
+            "load_model_on_worker", job.id, worker_id, req.mode,
+            _queue_name=ARQ_MUSIC_QUEUE_NAME,
+        )
+    except ConnectionError:
+        update_job_status(db, job.id, "failed", error="Job queue unavailable")
+        db.commit()
+        raise HTTPException(503, "Job queue unavailable")
+
+    return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
+
+
+@router.post("/workers/{worker_id}/evict_model")
+async def evict_model_on_worker_endpoint(
+    worker_id: str,
+    req: EvictModelOnWorkerRequest,
+    db: Session = Depends(get_db_session),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> StatusResponse:
+    worker = get_worker_identity(db, worker_id)
+    if worker is None:
+        raise HTTPException(404, f"Worker '{worker_id}' not found")
+    if req.mode not in MODEL_CONFIG_PATHS:
+        raise HTTPException(400, f"Unknown model mode '{req.mode}'")
+
+    try:
+        response = await _post_to_worker(
+            worker.host, worker.port, "/evict_model", {"mode": req.mode},
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"Worker unreachable: {exc}")
+    if response.status_code >= 400:
+        raise HTTPException(502, f"Worker returned {response.status_code}")
+    return StatusResponse(status="ok")

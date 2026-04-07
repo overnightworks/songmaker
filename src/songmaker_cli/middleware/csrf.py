@@ -21,6 +21,7 @@ _FORM_CONTENT_TYPES = frozenset({
 _LOCALHOST_PATTERN = re.compile(r"^(localhost|127\.0\.0\.1)(:\d+)?$")
 
 _CSRF_EXEMPT_PATHS = frozenset({"/api/auth/login", "/api/auth/setup"})
+_CSRF_EXEMPT_PREFIXES: tuple[str, ...] = ("/api/internal/",)
 
 
 class CsrfTokenMiddleware(BaseHTTPMiddleware):
@@ -29,6 +30,7 @@ class CsrfTokenMiddleware(BaseHTTPMiddleware):
             request.method in _MUTATING_METHODS
             and request.url.path.startswith("/api/")
             and request.url.path not in _CSRF_EXEMPT_PATHS
+            and not any(request.url.path.startswith(p) for p in _CSRF_EXEMPT_PREFIXES)
         ):
             from songmaker_cli.auth import CSRF_HEADER, verify_csrf_token, verify_session_cookie
             from songmaker_cli.middleware.auth import SESSION_COOKIE

@@ -42,6 +42,10 @@ def get_arq_pool() -> ArqRedis:
         return _pool
 
 
+def get_arq_pool_dep() -> ArqRedis:
+    return get_arq_pool()
+
+
 async def close_arq_pool() -> None:
     global _pool
     with _pool_lock:

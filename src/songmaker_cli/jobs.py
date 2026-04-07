@@ -627,6 +627,52 @@ def _touch_heartbeat(factory, job_id: str) -> None:
         )
 
 
+async def load_model_on_worker(ctx, job_id: str, worker_id: str, mode: str) -> None:
+    import httpx
+
+    from songmaker_cli.db.queries import get_worker_identity
+    from songmaker_cli.internal_api import INTERNAL_TOKEN_ENV, INTERNAL_TOKEN_HEADER
+    from songmaker_cli.worker_base import _get_db_factory
+
+    factory = _get_db_factory()
+    _update_job(factory, job_id, "running", worker_pid=os.getpid())
+
+    with factory() as session:
+        worker = get_worker_identity(session, worker_id)
+    if worker is None:
+        _update_job(
+            factory, job_id, "failed",
+            error=f"Worker '{worker_id}' not registered",
+            error_type="worker_missing",
+        )
+        return
+
+    token = os.environ.get(INTERNAL_TOKEN_ENV, "")
+    headers = {INTERNAL_TOKEN_HEADER: token}
+    url = f"http://{worker.host}:{worker.port}/load_model"
+
+    try:
+        async with httpx.AsyncClient(timeout=300) as client:
+            response = await client.post(url, json={"mode": mode}, headers=headers)
+    except httpx.HTTPError as exc:
+        _update_job(
+            factory, job_id, "failed",
+            error=f"Worker unreachable: {exc}",
+            error_type="worker_unreachable",
+        )
+        return
+
+    if response.status_code >= 400:
+        _update_job(
+            factory, job_id, "failed",
+            error=f"Worker returned {response.status_code}: {response.text[:200]}",
+            error_type="worker_error",
+        )
+        return
+
+    _update_job(factory, job_id, "completed", progress=1.0)
+
+
 def _cleanup_orphaned_files(audio_dir: Path, *rel_paths: str) -> None:
     for rel in rel_paths:
         path = audio_dir / rel

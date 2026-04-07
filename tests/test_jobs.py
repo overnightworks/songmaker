@@ -557,3 +557,122 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
     assert result.ace_config.audio_cover_strength == 0.7
     assert result.ace_config.task_type == "cover"
     assert result.ace_config.src_audio.startswith("/tmp/")
+
+
+# ── load_model_on_worker ────────────────────────────────────────────
+
+
+def _seed_worker_row(factory, worker_id: str = "w1") -> None:
+    from songmaker_cli.db.queries import register_worker
+
+    with factory() as session:
+        register_worker(
+            session,
+            worker_id=worker_id,
+            host="acestep-worker",
+            port=8001,
+            gpu_id=0,
+            vram_total_gb=24.0,
+        )
+        session.add(Job(id=f"{worker_id}-job", type="load_model_on_worker", status="queued"))
+        session.commit()
+
+
+def _run(coro):
+    import asyncio
+    return asyncio.new_event_loop().run_until_complete(coro)
+
+
+def test_load_model_on_worker_success(seeded_db) -> None:
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.jobs import load_model_on_worker
+
+    _seed_worker_row(seeded_db)
+    fake_response = MagicMock(status_code=200, text="ok")
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
+        patch("httpx.AsyncClient", return_value=fake_client),
+    ):
+        _run(load_model_on_worker({}, "w1-job", "w1", "sft"))
+
+    with seeded_db() as session:
+        job = get_job(session, "w1-job")
+        assert job.status == "completed"
+        assert job.progress == 1.0
+    fake_client.post.assert_called_once()
+    args, kwargs = fake_client.post.call_args
+    assert args[0] == "http://acestep-worker:8001/load_model"
+    assert kwargs["json"] == {"mode": "sft"}
+
+
+def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
+    from songmaker_cli.jobs import load_model_on_worker
+
+    with seeded_db() as session:
+        session.add(Job(id="job1", type="load_model_on_worker", status="queued"))
+        session.commit()
+
+    with patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db):
+        _run(load_model_on_worker({}, "job1", "missing", "sft"))
+
+    with seeded_db() as session:
+        job = get_job(session, "job1")
+        assert job.status == "failed"
+        assert "not registered" in job.error
+        assert job.error_type == "worker_missing"
+
+
+def test_load_model_on_worker_unreachable(seeded_db) -> None:
+    from unittest.mock import AsyncMock
+
+    import httpx
+
+    from songmaker_cli.jobs import load_model_on_worker
+
+    _seed_worker_row(seeded_db)
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(side_effect=httpx.ConnectError("refused"))
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
+        patch("httpx.AsyncClient", return_value=fake_client),
+    ):
+        _run(load_model_on_worker({}, "w1-job", "w1", "sft"))
+
+    with seeded_db() as session:
+        job = get_job(session, "w1-job")
+        assert job.status == "failed"
+        assert job.error_type == "worker_unreachable"
+
+
+def test_load_model_on_worker_returns_5xx(seeded_db) -> None:
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.jobs import load_model_on_worker
+
+    _seed_worker_row(seeded_db)
+    fake_response = MagicMock(status_code=500, text="boom")
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
+        patch("httpx.AsyncClient", return_value=fake_client),
+    ):
+        _run(load_model_on_worker({}, "w1-job", "w1", "sft"))
+
+    with seeded_db() as session:
+        job = get_job(session, "w1-job")
+        assert job.status == "failed"
+        assert job.error_type == "worker_error"
+        assert "500" in job.error

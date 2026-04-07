@@ -326,6 +326,20 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
 
 
+class AceStepWorker(Base):
+    __tablename__ = "acestep_workers"
+
+    id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    host: Mapped[str] = mapped_column(String(255))
+    port: Mapped[int] = mapped_column(Integer)
+    gpu_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vram_total_gb: Mapped[float | None] = mapped_column(Float, nullable=True)
+    registered_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    last_register_at: Mapped[datetime] = mapped_column(
+        TZDateTime, default=_utcnow, onupdate=_utcnow,
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
 

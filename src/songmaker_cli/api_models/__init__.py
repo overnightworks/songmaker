@@ -82,6 +82,18 @@ from songmaker_cli.api_models.songs import (
     StoredGenerationParams,
     VersionResponse,
 )
+from songmaker_cli.api_models.workers import (
+    EvictModelOnWorkerRequest,
+    LoadModelOnWorkerRequest,
+    RegistryModelResponse,
+    RegistryResponse,
+    WorkerEphemeralState,
+    WorkerIdentity,
+    WorkerInfo,
+    WorkerPoolResponse,
+    WorkerRegisterRequest,
+    WorkerRegisterResponse,
+)
 
 T = TypeVar("T")
 
@@ -158,11 +170,13 @@ __all__ = [
     "CreateUserRequest",
     "DefaultConfigRequest",
     "DefaultConfigResponse",
+    "EvictModelOnWorkerRequest",
     "GenerateRequest",
     "GenerationDefaultsRequest",
     "GenerationParams",
     "GenerationResponse",
     "JobResponse",
+    "LoadModelOnWorkerRequest",
     "LoginAttemptResponse",
     "LoginRequest",
     "PaginatedResponse",
@@ -178,6 +192,8 @@ __all__ = [
     "RateLimitUpdateRequest",
     "RateLimitsResponse",
     "RateRequest",
+    "RegistryModelResponse",
+    "RegistryResponse",
     "RepaintRequest",
     "ReorderPlaylistEntryRequest",
     "RateResponse",
@@ -206,4 +222,10 @@ __all__ = [
     "UserResponse",
     "VALID_SCORER_NAMES",
     "VersionResponse",
+    "WorkerEphemeralState",
+    "WorkerIdentity",
+    "WorkerInfo",
+    "WorkerPoolResponse",
+    "WorkerRegisterRequest",
+    "WorkerRegisterResponse",
 ]

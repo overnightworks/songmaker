@@ -716,3 +716,302 @@ def test_hard_delete_not_found(client: TestClient) -> None:
     _login_as_admin(client)
     resp = client.delete("/api/admin/users/nonexistent/permanent")
     assert resp.status_code == 404
+
+
+# -- Worker pool / registry ---------------------------------------------------
+
+
+def _seed_worker(client: TestClient, worker_id: str, **kwargs) -> None:
+    from songmaker_cli.db.queries import register_worker
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        register_worker(
+            session,
+            worker_id=worker_id,
+            host=kwargs.get("host", worker_id),
+            port=kwargs.get("port", 8001),
+            gpu_id=kwargs.get("gpu_id", 0),
+            vram_total_gb=kwargs.get("vram_total_gb", 24.0),
+        )
+        session.commit()
+
+
+class _InMemoryAsyncRedis:
+    def __init__(self) -> None:
+        self._store: dict[str, str] = {}
+
+    async def get(self, key: str):
+        return self._store.get(key)
+
+    async def set(self, key: str, value, ex: int | None = None) -> None:
+        self._store[key] = value
+
+    async def incr(self, key: str) -> int:
+        cur = int(self._store.get(key, 0)) + 1
+        self._store[key] = str(cur)
+        return cur
+
+    async def decr(self, key: str) -> int:
+        cur = int(self._store.get(key, 0)) - 1
+        self._store[key] = str(cur)
+        return cur
+
+
+def _override_pool(client: TestClient, pool) -> None:
+    from songmaker_cli.arq_pool import get_arq_pool_dep
+    client.app.dependency_overrides[get_arq_pool_dep] = lambda: pool
+
+
+def _make_fake_pool() -> _InMemoryAsyncRedis:
+    return _InMemoryAsyncRedis()
+
+
+def test_list_workers_empty(client: TestClient) -> None:
+    _login_as_admin(client)
+    _override_pool(client, _make_fake_pool())
+    resp = client.get("/api/admin/workers")
+    assert resp.status_code == 200
+    assert resp.json() == {"workers": []}
+
+
+def test_list_workers_online(client: TestClient) -> None:
+    import json
+
+    from songmaker_cli.acestep_state import worker_state_key
+
+    _login_as_admin(client)
+    _seed_worker(client, "acestep-worker-0")
+    pool = _make_fake_pool()
+    state = {
+        "loaded": ["sft"],
+        "target_loading": None,
+        "vram_used_gb": 12.4,
+        "vram_total_gb": 24.0,
+        "available_modes": ["sft", "turbo"],
+        "last_heartbeat_at": "2026-04-07T12:00:00+00:00",
+    }
+    pool._store[worker_state_key("acestep-worker-0")] = json.dumps(state)
+    _override_pool(client, pool)
+
+    resp = client.get("/api/admin/workers")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["workers"]) == 1
+    w = data["workers"][0]
+    assert w["identity"]["id"] == "acestep-worker-0"
+    assert w["status"] == "online"
+    assert w["state"]["loaded"] == ["sft"]
+    assert w["state"]["available_modes"] == ["sft", "turbo"]
+
+
+def test_list_workers_loading(client: TestClient) -> None:
+    import json
+
+    from songmaker_cli.acestep_state import worker_state_key
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    pool = _make_fake_pool()
+    pool._store[worker_state_key("w1")] = json.dumps(
+        {"loaded": [], "target_loading": "xl-sft"},
+    )
+    _override_pool(client, pool)
+
+    resp = client.get("/api/admin/workers")
+    assert resp.json()["workers"][0]["status"] == "loading"
+
+
+def test_list_workers_offline_when_redis_missing(client: TestClient) -> None:
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    _override_pool(client, _make_fake_pool())
+    resp = client.get("/api/admin/workers")
+    data = resp.json()
+    assert data["workers"][0]["status"] == "offline"
+    assert data["workers"][0]["state"] is None
+
+
+def test_list_workers_includes_queue_depth(client: TestClient) -> None:
+    import json
+
+    from songmaker_cli.acestep_state import queue_depth_key, worker_state_key
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    pool = _make_fake_pool()
+    pool._store[worker_state_key("w1")] = json.dumps({"loaded": ["sft"]})
+    pool._store[queue_depth_key("w1")] = "3"
+    _override_pool(client, pool)
+
+    resp = client.get("/api/admin/workers")
+    assert resp.json()["workers"][0]["state"]["queue_depth"] == 3
+
+
+def test_registry_union_across_workers(client: TestClient) -> None:
+    import json
+
+    from songmaker_cli.acestep_state import worker_state_key
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    _seed_worker(client, "w2")
+    pool = _make_fake_pool()
+    pool._store[worker_state_key("w1")] = json.dumps(
+        {"loaded": ["sft"], "target_loading": None, "available_modes": ["sft"]},
+    )
+    pool._store[worker_state_key("w2")] = json.dumps(
+        {"loaded": [], "target_loading": "turbo", "available_modes": ["turbo"]},
+    )
+    _override_pool(client, pool)
+
+    resp = client.get("/api/admin/registry")
+    assert resp.status_code == 200
+    by_mode = {m["mode"]: m for m in resp.json()["models"]}
+    assert by_mode["sft"]["downloaded"] is True
+    assert by_mode["sft"]["loaded_on"] == ["w1"]
+    assert by_mode["sft"]["loading_on"] == []
+    assert by_mode["turbo"]["downloaded"] is True
+    assert by_mode["turbo"]["loaded_on"] == []
+    assert by_mode["turbo"]["loading_on"] == ["w2"]
+    assert by_mode["xl-sft"]["downloaded"] is False
+
+
+def test_load_model_on_worker_enqueues_job(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+
+    mock_pool = AsyncMock()
+    mock_pool.enqueue_job = AsyncMock(return_value=AsyncMock())
+
+    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+        resp = client.post(
+            "/api/admin/workers/w1/load_model", json={"mode": "sft"},
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["type"] == "load_model_on_worker"
+    assert data["status"] == "queued"
+    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
+    mock_pool.enqueue_job.assert_called_once_with(
+        "load_model_on_worker", data["id"], "w1", "sft",
+        _queue_name=ARQ_MUSIC_QUEUE_NAME,
+    )
+
+
+def test_load_model_on_worker_unknown_worker(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/workers/missing/load_model", json={"mode": "sft"},
+    )
+    assert resp.status_code == 404
+
+
+def test_load_model_on_worker_unknown_mode(client: TestClient) -> None:
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    resp = client.post(
+        "/api/admin/workers/w1/load_model", json={"mode": "bogus"},
+    )
+    assert resp.status_code == 400
+
+
+def test_load_model_on_worker_queue_unavailable(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+
+    mock_pool = AsyncMock()
+    mock_pool.enqueue_job = AsyncMock(side_effect=ConnectionError("redis down"))
+
+    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+        resp = client.post(
+            "/api/admin/workers/w1/load_model", json={"mode": "sft"},
+        )
+    assert resp.status_code == 503
+
+
+def test_evict_model_proxies_to_worker(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1", host="example", port=8001)
+
+    fake_response = MagicMock()
+    fake_response.status_code = 200
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
+        resp = client.post(
+            "/api/admin/workers/w1/evict_model", json={"mode": "sft"},
+        )
+
+    assert resp.status_code == 200
+    fake_client.post.assert_called_once()
+    args, kwargs = fake_client.post.call_args
+    assert args[0] == "http://example:8001/evict_model"
+    assert kwargs["json"] == {"mode": "sft"}
+
+
+def test_evict_model_unknown_worker(client: TestClient) -> None:
+    _login_as_admin(client)
+    resp = client.post(
+        "/api/admin/workers/missing/evict_model", json={"mode": "sft"},
+    )
+    assert resp.status_code == 404
+
+
+def test_evict_model_unknown_mode(client: TestClient) -> None:
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    resp = client.post(
+        "/api/admin/workers/w1/evict_model", json={"mode": "bogus"},
+    )
+    assert resp.status_code == 400
+
+
+def test_evict_model_worker_unreachable(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    import httpx
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(side_effect=httpx.ConnectError("refused"))
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
+        resp = client.post(
+            "/api/admin/workers/w1/evict_model", json={"mode": "sft"},
+        )
+    assert resp.status_code == 502
+
+
+def test_evict_model_worker_returns_4xx(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+
+    fake_response = MagicMock()
+    fake_response.status_code = 500
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("songmaker_cli.admin_api.httpx.AsyncClient", return_value=fake_client):
+        resp = client.post(
+            "/api/admin/workers/w1/evict_model", json={"mode": "sft"},
+        )
+    assert resp.status_code == 502

@@ -1500,6 +1500,7 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
         "jobs", "users", "user_sessions", "login_attempts", "audit_log",
         "generation_presets", "rate_limit_settings", "available_models",
         "playlists", "playlist_entries", "chat_messages",
+        "acestep_workers",
         "alembic_version",
     }
     assert tables == expected

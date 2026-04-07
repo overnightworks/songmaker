@@ -119,6 +119,59 @@ Uvicorn's `timeout-keep-alive` is set to `REQUEST_TIMEOUT` (default 30s). Idle c
 
 The admin sessions endpoint (`GET /api/admin/sessions`) returns SHA256 hashes of session tokens, not the raw tokens. This prevents session hijacking via the admin panel. Force-logout (`DELETE /api/admin/sessions/{hash}`) looks up sessions by hash.
 
+## ACE-Step Worker Pool Trust Boundary
+
+The ACE-Step worker pool runs each model-serving worker as a separate peer container. Workers self-register with the web container at startup and heartbeat ephemeral state to Redis. The control plane (web container) and the workers communicate over an **internal HTTP API** mounted under `/api/internal/*`.
+
+### Internal token
+
+- **Env var**: `SONGMAKER_INTERNAL_TOKEN` — a shared secret that must be set on both the web container and every worker container before startup.
+- **Header**: Workers send `X-Internal-Token: <token>` on every internal call. The web container does the same when the music-worker scheduler proxies `/load_model` / `/evict_model` to a worker.
+- **Verification**: `internal_api.verify_internal_token` is mounted as a router-level dependency, so every endpoint under `/api/internal/*` automatically requires the header. Comparison uses `hmac.compare_digest` for timing safety.
+- **Failure modes**: Missing env var → 503 ("Internal API not configured"). Wrong/missing token → 401. The 503 vs 401 split tells the operator whether the issue is config or credentials.
+- **CSRF**: `/api/internal/*` is exempt from the CSRF middleware. Workers do not have sessions; the internal token is the only credential that matters.
+
+### Reverse proxy responsibility
+
+The reverse proxy (nginx/caddy/cloudflare) **must not expose `/api/internal/*` to the public internet**. The internal API trusts any caller that knows the token, and the token lives in container env vars — there is no per-user authorization on these endpoints. Example nginx block:
+
+```nginx
+location /api/internal/ {
+    deny all;
+    return 404;
+}
+```
+
+This is the same hardening principle as `/metrics`: an unauthenticated-but-internal endpoint that's safe behind the proxy and unsafe in front of it.
+
+### Token rotation
+
+1. Generate a new token (e.g. `openssl rand -hex 32`).
+2. Update `SONGMAKER_INTERNAL_TOKEN` in the web container env and every worker container env.
+3. Restart all containers. There is no DB state to update — registration is idempotent and the next worker startup re-registers with the new token.
+
+There is no graceful "two valid tokens" overlap. Restarting workers in sequence is acceptable because the music-worker scheduler tolerates worker outages (it routes to surviving workers).
+
+### Trust scope of a compromised worker
+
+A compromised acestep-worker container has:
+
+- The shared internal token (it needs it to register and to receive scheduler calls).
+- The model-weights volume mount (read/write, but only its own checkpoints directory).
+- Network access to the web container, music-worker container, and Redis.
+
+It does **not** have:
+
+- Database credentials (the worker has no `DATABASE_URL`; it only calls `/api/internal/workers/register`, which writes a single identity row).
+- Auth tables, user data, or audio files (no DB connection, no audio volume).
+- The session secret (only the web container has it).
+
+The most a compromised worker can do is publish bogus state to Redis, register with a wrong host/port, or refuse to load models. None of these affect user data integrity. The blast radius is "denial of generation," not data exfiltration.
+
+### Future hardening
+
+If exposure to untrusted traffic becomes a concern, the next step is to bind `/api/internal/*` to a separate port (and bind it to the docker network, not `0.0.0.0`). The current single-port design is acceptable for self-hosted single-tenant deployments behind a reverse proxy that filters paths.
+
 ## Audit Trail
 
 All mutating operations are logged to the `audit_log` table:
