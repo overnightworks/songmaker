@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { listWorkers, loadModelOnWorker, evictModelOnWorker } from '$lib/api/client';
+	import {
+		listWorkers,
+		loadModelOnWorker,
+		evictModelOnWorker,
+		restartWorker,
+		pinModelOnWorker,
+		unpinModelOnWorker
+	} from '$lib/api/client';
 	import { createPollingStore } from '$lib/stores/adminPolling';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { addToast } from '$lib/stores/toast';
@@ -73,10 +80,29 @@
 		return `status-dot status-${status}`;
 	}
 
+	function formatElapsed(iso: string | null | undefined): string | null {
+		if (!iso) return null;
+		const then = new Date(iso).getTime();
+		if (Number.isNaN(then)) return null;
+		const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+		if (seconds < 60) return `${seconds}s`;
+		const minutes = Math.floor(seconds / 60);
+		const remSeconds = seconds % 60;
+		if (minutes < 60) return `${minutes}m ${remSeconds}s`;
+		const hours = Math.floor(minutes / 60);
+		const remMinutes = minutes % 60;
+		return `${hours}h ${remMinutes}m`;
+	}
+
 	function describeStatus(worker: WorkerInfoItem): string {
 		const state = worker.state;
 		if (!state) return 'Offline (no heartbeat)';
-		if (state.target_loading) return `Loading ${state.target_loading}…`;
+		if (state.target_loading) {
+			const elapsed = formatElapsed(state.loading_started_at);
+			return elapsed
+				? `Loading ${state.target_loading}… (${elapsed} elapsed)`
+				: `Loading ${state.target_loading}…`;
+		}
 		if (state.loaded.length === 0) return 'No model loaded';
 		if (state.queue_depth > 0) return `Busy (${state.queue_depth} in queue)`;
 		return 'Idle';
@@ -151,6 +177,46 @@
 			busyAction = { ...busyAction, [key]: false };
 		}
 	}
+
+	async function handleRestart(workerId: string): Promise<void> {
+		if (
+			typeof window !== 'undefined' &&
+			!window.confirm(`Restart worker ${workerId}? In-flight generations will fail.`)
+		) {
+			return;
+		}
+		actionError = '';
+		const key = `${workerId}:restart`;
+		busyAction = { ...busyAction, [key]: true };
+		try {
+			await restartWorker(workerId);
+			addToast(`Restart requested for ${workerId}`, 'info');
+		} catch (e) {
+			actionError = e instanceof Error ? e.message : 'Restart failed';
+		} finally {
+			busyAction = { ...busyAction, [key]: false };
+		}
+	}
+
+	async function handleTogglePin(workerId: string, mode: string, isPinned: boolean): Promise<void> {
+		actionError = '';
+		const key = `${workerId}:pin:${mode}`;
+		busyAction = { ...busyAction, [key]: true };
+		try {
+			if (isPinned) {
+				await unpinModelOnWorker(workerId, mode);
+				addToast(`Unpinned ${mode} on ${workerId}`, 'success');
+			} else {
+				await pinModelOnWorker(workerId, mode);
+				addToast(`Pinned ${mode} on ${workerId}`, 'success');
+			}
+			await store.refresh();
+		} catch (e) {
+			actionError = e instanceof Error ? e.message : 'Pin toggle failed';
+		} finally {
+			busyAction = { ...busyAction, [key]: false };
+		}
+	}
 </script>
 
 <section class="panel">
@@ -194,7 +260,11 @@
 							{#if worker.state.loaded.length === 0}
 								<span class="row-value dim">(none)</span>
 							{:else}
-								<span class="row-value">{worker.state.loaded.join(', ')}</span>
+								<span class="row-value">
+									{worker.state.loaded
+										.map((m) => `${m.mode} (~${m.size_gb.toFixed(0)} GB est.)`)
+										.join(', ')}
+								</span>
 							{/if}
 						</div>
 						<div class="card-row">
@@ -248,16 +318,32 @@
 							{busyAction[worker.identity.id] ? 'Loading…' : 'Load'}
 						</button>
 						{#if worker.state && worker.state.loaded.length > 0}
-							{#each worker.state.loaded as loadedMode (loadedMode)}
+							{#each worker.state.loaded as loadedDetail (loadedDetail.mode)}
+								{@const isPinned = (worker.state?.pinned ?? []).includes(loadedDetail.mode)}
 								<button
 									class="action-btn"
-									onclick={() => handleEvict(worker.identity.id, loadedMode)}
-									disabled={busy || busyAction[`${worker.identity.id}:${loadedMode}`]}
+									onclick={() => handleTogglePin(worker.identity.id, loadedDetail.mode, isPinned)}
+									disabled={busy || busyAction[`${worker.identity.id}:pin:${loadedDetail.mode}`]}
 								>
-									Evict {loadedMode}
+									{isPinned ? 'Unpin' : 'Pin'}
+									{loadedDetail.mode}
+								</button>
+								<button
+									class="action-btn"
+									onclick={() => handleEvict(worker.identity.id, loadedDetail.mode)}
+									disabled={busy || busyAction[`${worker.identity.id}:${loadedDetail.mode}`]}
+								>
+									Evict {loadedDetail.mode}
 								</button>
 							{/each}
 						{/if}
+						<button
+							class="action-btn danger"
+							onclick={() => handleRestart(worker.identity.id)}
+							disabled={busyAction[`${worker.identity.id}:restart`]}
+						>
+							{busyAction[`${worker.identity.id}:restart`] ? 'Restarting…' : 'Restart'}
+						</button>
 					</div>
 				</div>
 			{/each}
@@ -405,6 +491,11 @@
 	.action-btn:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
+	}
+
+	.action-btn.danger {
+		border-color: rgb(220, 80, 80);
+		color: rgb(220, 80, 80);
 	}
 
 	code {

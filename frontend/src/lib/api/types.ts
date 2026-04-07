@@ -347,13 +347,20 @@ export interface WorkerIdentityItem {
 	last_register_at: string;
 }
 
+export interface LoadedModelDetailItem {
+	mode: string;
+	size_gb: number;
+}
+
 export interface WorkerEphemeralStateItem {
-	loaded: string[];
+	loaded: LoadedModelDetailItem[];
 	target_loading?: string | null;
+	loading_started_at?: string | null;
 	queue_depth: number;
 	vram_used_gb?: number | null;
 	vram_total_gb?: number | null;
 	available_modes: string[];
+	pinned: string[];
 	last_heartbeat_at?: string | null;
 }
 

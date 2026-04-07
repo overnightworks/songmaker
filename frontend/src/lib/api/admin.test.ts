@@ -14,7 +14,10 @@ import {
 	getRegistry,
 	loadModelOnWorker,
 	evictModelOnWorker,
-	downloadModel
+	downloadModel,
+	restartWorker,
+	pinModelOnWorker,
+	unpinModelOnWorker
 } from './admin';
 
 function mockOk(data: unknown) {
@@ -45,12 +48,14 @@ describe('admin worker pool API', () => {
 						last_register_at: '2026-04-07T00:00:00Z'
 					},
 					state: {
-						loaded: ['sft'],
+						loaded: [{ mode: 'sft', size_gb: 6.0 }],
 						target_loading: null,
+						loading_started_at: null,
 						queue_depth: 0,
 						vram_used_gb: 12.0,
 						vram_total_gb: 24.0,
 						available_modes: ['sft', 'turbo', 'xl-sft'],
+						pinned: [],
 						last_heartbeat_at: '2026-04-07T00:00:02Z'
 					},
 					status: 'online'
@@ -60,7 +65,8 @@ describe('admin worker pool API', () => {
 		const result = await listWorkers();
 		expect(result.workers).toHaveLength(1);
 		expect(result.workers[0].identity.id).toBe('acestep-worker-0');
-		expect(result.workers[0].state?.loaded).toEqual(['sft']);
+		expect(result.workers[0].state?.loaded).toEqual([{ mode: 'sft', size_gb: 6.0 }]);
+		expect(result.workers[0].state?.pinned).toEqual([]);
 		expect(result.workers[0].status).toBe('online');
 		expect(mockFetch).toHaveBeenCalledWith(
 			'/api/admin/workers',
@@ -115,5 +121,31 @@ describe('admin worker pool API', () => {
 		const [url, init] = mockFetch.mock.calls[0];
 		expect(url).toBe('/api/admin/registry/xl-base/download');
 		expect(init.method).toBe('POST');
+	});
+
+	it('restartWorker POSTs to /restart', async () => {
+		mockOk({});
+		await restartWorker('acestep-worker-0');
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/admin/workers/acestep-worker-0/restart');
+		expect(init.method).toBe('POST');
+	});
+
+	it('pinModelOnWorker POSTs mode', async () => {
+		mockOk({});
+		await pinModelOnWorker('acestep-worker-0', 'sft');
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/admin/workers/acestep-worker-0/pin_model');
+		expect(init.method).toBe('POST');
+		expect(JSON.parse(init.body)).toEqual({ mode: 'sft' });
+	});
+
+	it('unpinModelOnWorker POSTs mode', async () => {
+		mockOk({});
+		await unpinModelOnWorker('acestep-worker-0', 'sft');
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toBe('/api/admin/workers/acestep-worker-0/unpin_model');
+		expect(init.method).toBe('POST');
+		expect(JSON.parse(init.body)).toEqual({ mode: 'sft' });
 	});
 });

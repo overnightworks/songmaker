@@ -95,3 +95,23 @@ export async function downloadModel(mode: string): Promise<JobItem> {
 		method: 'POST'
 	});
 }
+
+export async function restartWorker(workerId: string): Promise<void> {
+	await apiFetch(`/api/admin/workers/${workerId}/restart`, { method: 'POST' });
+}
+
+export async function pinModelOnWorker(workerId: string, mode: string): Promise<void> {
+	await apiFetch(`/api/admin/workers/${workerId}/pin_model`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ mode })
+	});
+}
+
+export async function unpinModelOnWorker(workerId: string, mode: string): Promise<void> {
+	await apiFetch(`/api/admin/workers/${workerId}/unpin_model`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ mode })
+	});
+}

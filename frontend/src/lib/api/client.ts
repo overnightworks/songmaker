@@ -94,5 +94,8 @@ export {
 	getRegistry,
 	loadModelOnWorker,
 	evictModelOnWorker,
-	downloadModel
+	downloadModel,
+	restartWorker,
+	pinModelOnWorker,
+	unpinModelOnWorker
 } from './admin';
