@@ -891,9 +891,26 @@ Splits `Dockerfile.worker` into per-service images, deduplicates the torch layer
 
 **Cons:** much bigger refactor. Touches all four services. Requires a base-image build step in CI (or a `docker build` chain). Image registry decisions (local-only vs push to GHCR). Versioning scheme for the base images (content hash vs semver). One-time full rebuild of everything for the migration.
 
-**Recommendation:** **start with Option A or B for the minimum viable fix in this PR**, and treat Option C as a separate follow-up after we've validated the minimal fix works in production for a few days. Option C is real value but it's not on the critical path to unblocking the smoke test.
+**Recommendation: Option C — the full base-image hierarchy.**
 
-The sub-plan can pick the recommended path with a one-paragraph rationale and either keep Option C as a "future" item or fold it into Phase 8 if it's small enough on top of A/B. **The user explicitly does not want a 1-day refactor to unblock a 1-hour smoke test.**
+The "do it once correctly" math wins decisively. If we ship Option A or B now and decide we want C later, we'll touch `docker/acestep-worker.Dockerfile`, `pyproject.toml`, `subprocess_runner.py`, and `docker-compose.yml` a SECOND time — with a second round of regression risk and a second smoke test cycle. Doing C once is less total churn.
+
+Comparison:
+
+| Axis | A (single shared venv) | B (two baked venvs) | C (base-image hierarchy) |
+|---|---|---|---|
+| Time to ship | 2-3 h | 3-4 h | ~1 day |
+| Fixes the smoke-test blocker | ✓ | ✓ | ✓ |
+| Wrapper image stays small | ✗ (grows to 6-8 GB) | ✓ | ✓ |
+| Deduplicates torch between scoring + acestep | ✗ | ✗ | ✓ |
+| Resolves Phase 7 D1 (Dockerfile.worker split) | ✗ | ✗ | ✓ |
+| Future GPU workers can reuse the base | ✗ | ✗ | ✓ |
+| Cumulative rebuild time across all services | same | same | much faster |
+| Risk of needing to re-touch the same files later | high | medium | low |
+
+**Phase 8 picks Option C.** Options A and B are documented above as the rejected alternatives — the sub-plan should reference them in its decision matrix to make the rationale explicit.
+
+**Fall-back rule:** if during implementation the agent discovers that Option C has a hard blocker (e.g., the upstream ACE-Step `pyproject.toml` doesn't expose its deps cleanly enough to be installed via the base image), fall back to Option B as the salvage. Don't fall back to A — A's "wrapper image grows to 6-8 GB" cost is too high. If both C and B are blocked, stop and ask the user.
 
 #### Decisions the sub-plan must lock in
 
@@ -911,7 +928,7 @@ The sub-plan can pick the recommended path with a one-paragraph rationale and ei
 - ACE-Step model weight downloads (Phase 5 territory — already shipped)
 - Multi-host worker deployment (out of scope for the current single-node architecture)
 - GPU isolation between workers (single-GPU assumption stays)
-- CI/CD changes for image registry pushes (only do this if Option C is picked AND the user explicitly wants it)
+- CI/CD changes for image registry pushes (Option C builds locally only; pushing to GHCR is deferred until multi-host deployment is on the horizon)
 - New runtime features
 
 #### Sub-plan deliverable
@@ -932,11 +949,11 @@ The sub-plan can pick the recommended path with a one-paragraph rationale and ei
 - Rollback plan
 - Quick context for the next session
 
-**Size estimate:** sub-plan write-up ~1-2 hours; implementation depends on chosen option. Option A: ~2-3 hours (mostly waiting for `docker compose build`). Option B: ~3-4 hours. Option C: ~1 day.
+**Size estimate:** sub-plan write-up ~2 hours; implementation ~1 day for Option C. Build verification dominates wall-clock time (each base image rebuild during testing is 15-25 minutes — torch + cudnn + diffusers downloads).
 
 **Run when:** after Phase 7 ships (`90f4c14`). Phases 1–7 are now stable on `feat/acestep-worker-pool` and the only remaining smoke test blocker is this venv-clobbering issue.
 
-**Supersedes:** Phase 7 D1 ("split Dockerfile.worker") — that work is folded into Phase 8 if Option C is picked, or deferred indefinitely if Option A/B is picked (it's nice-to-have, not a blocker).
+**Supersedes:** Phase 7 D1 ("split Dockerfile.worker") — that work is folded into Phase 8 directly. Dockerfile.worker no longer exists after Phase 8; it's replaced by `docker/scoring-base.Dockerfile` + `docker/scoring-worker.Dockerfile` (or similar — final naming locked in the sub-plan).
 
 **Discovered + re-confirmed during:** Phase 3 smoke test (initial discovery), Phase 6 PR 2 smoke test on `2026-04-07` (re-confirmed; the inner subprocess uv sync was observed downloading nvidia-cublas-cu12, nvidia-cudnn-cu12, etc. before timing out at 300s).
 
