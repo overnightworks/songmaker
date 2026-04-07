@@ -210,6 +210,28 @@ The `POST /api/admin/workers/{id}/load_model` endpoint returns a `JobResponse` (
 
 **Expected job duration:** 30–90 s. The existing `MAX_POLL_ERRORS=10` and the SSE keepalive should comfortably handle that; no timeout tuning needed.
 
+**Spinner-disappear race (subtle):** when `trackJob` removes the completed load job from `activeJobs`, the Worker Pool panel's most recent poll snapshot is still the pre-completion state (`loaded: []`, `target_loading: 'sft'` or even `null` if the worker hadn't published a heartbeat yet). The next 3 s poll tick will catch up, but in the meantime the user sees a 1–3 s flicker: spinner gone → "No model loaded" → "Loaded: sft". **Mitigation:** in `WorkerPoolPanel.svelte`, subscribe to `activeJobs` and run an effect that, whenever a load job for a known worker disappears from the list, calls `pollingStore.refresh()` immediately. Roughly:
+
+```svelte
+let trackedLoadJobIds = $state(new Set<string>());
+$effect(() => {
+    const currentLoadJobIds = new Set(
+        $activeJobs
+            .filter((j) => j.job.type === 'load_model_on_worker' && j.workerId)
+            .map((j) => j.job.id),
+    );
+    for (const id of trackedLoadJobIds) {
+        if (!currentLoadJobIds.has(id)) {
+            pollingStore.refresh();
+            break;
+        }
+    }
+    trackedLoadJobIds = currentLoadJobIds;
+});
+```
+
+~5 lines of intent, ~10 with the bookkeeping. The `break` is intentional — one refresh covers all disappeared jobs in the same tick.
+
 **Edge case: server restart mid-load.** The existing pipeline already handles this — the SSE stream emits a `failed` job with `error_type === 'server_restart'` and the toast says "Server restarted — please retry". Verified at [jobs.ts:67-71](../frontend/src/lib/stores/jobs.ts#L67-L71).
 
 **Edge case: user navigates away mid-load.** The Worker Pool panel unmounts. The job continues running on the backend, but `activeJobs` is a global store, so when the user comes back the job is still there and the panel re-renders the spinner. ✓ correct behavior with no extra work.
@@ -389,7 +411,7 @@ Total wall clock: ~5 hours of focused work (frontend is faster than the cutover 
 1. **Re-read every changed file via `git diff HEAD~N`**. No skipping.
 2. **`grep -rn "TODO\|FIXME\|XXX" frontend/src/lib/components/WorkerPoolPanel.svelte frontend/src/lib/components/ModelRegistryPanel.svelte frontend/src/lib/stores/adminPolling.ts`** — zero hits.
 3. **No comments in new TS code** (per `feedback_code_standards.md`). Svelte component `<!-- ... -->` HTML comments are allowed only for non-obvious template logic and only if the structure can't be self-documenting.
-4. **No hardcoded strings reused across files** — model mode names are pulled from the registry response, not hardcoded. Status colors/icons can live as `Final` constants at the top of the panel file (they're file-local, not cross-module config).
+4. **No hardcoded strings reused across files** — model mode names are pulled from the registry response, not hardcoded. Status colors/icons can live as `const` declarations at the top of the panel file (they're file-local, not cross-module config).
 5. **`createPollingStore` cleans up `setInterval` AND the `visibilitychange` listener on `stop()`**. Easy to leak.
 6. **Polling stops when the panel unmounts.** Verified by `onDestroy(() => store.stop())` in both panels. Test it: mount the panel, unmount, advance fake timers — no fetcher calls should fire.
 7. **No SSE invented** — the load-model progress goes through the existing `trackJob` / `EventSource('/api/jobs/{id}/stream')` pipeline. No new EventSource created in Phase 4.
