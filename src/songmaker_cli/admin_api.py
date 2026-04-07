@@ -13,7 +13,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from songmaker_cli.acestep_state import read_queue_depth, read_worker_state
+from songmaker_cli.acestep_state import (
+    read_download_in_progress,
+    read_queue_depth,
+    read_worker_state,
+)
 from songmaker_cli.api_helpers import (
     AdminPagination,
     cleanup_generation_files,
@@ -427,3 +431,60 @@ async def evict_model_on_worker_endpoint(
     if response.status_code >= 400:
         raise HTTPException(502, f"Worker returned {response.status_code}")
     return StatusResponse(status="ok")
+
+
+@router.post("/registry/{mode}/download")
+async def download_model_endpoint(
+    mode: str,
+    db: Session = Depends(get_db_session),
+    pool: ArqRedis = Depends(get_arq_pool_dep),
+    admin: AuthenticatedUser = Depends(require_admin),
+) -> JobResponse:
+    from songmaker_cli.arq_pool import get_arq_pool
+    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
+    from songmaker_cli.db.queries import (
+        create_job,
+        get_queue_position,
+        update_job_status,
+    )
+
+    if mode not in MODEL_CONFIG_PATHS:
+        raise HTTPException(400, f"Unknown model mode '{mode}'")
+
+    workers = list_worker_identities(db)
+    online_states: dict[str, dict | None] = {}
+    for w in workers:
+        online_states[w.id] = await read_worker_state(pool, w.id)
+
+    if not any(state is not None for state in online_states.values()):
+        raise HTTPException(503, "No online workers available to download")
+
+    downloaded_union: set[str] = set()
+    for state in online_states.values():
+        if state is not None:
+            downloaded_union.update(state.get("available_modes", []))
+    if mode in downloaded_union:
+        raise HTTPException(409, f"Model '{mode}' is already downloaded")
+
+    in_progress = await read_download_in_progress(pool, mode)
+    if in_progress is not None:
+        raise HTTPException(
+            409,
+            f"Model '{mode}' is already being downloaded (job {in_progress})",
+        )
+
+    job = create_job(db, "download_model_on_worker", user_id=admin.id)
+    db.commit()
+
+    try:
+        arq_pool = get_arq_pool()
+        await arq_pool.enqueue_job(
+            "download_model_on_worker", job.id, mode,
+            _queue_name=ARQ_MUSIC_QUEUE_NAME,
+        )
+    except ConnectionError:
+        update_job_status(db, job.id, "failed", error="Job queue unavailable")
+        db.commit()
+        raise HTTPException(503, "Job queue unavailable")
+
+    return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))

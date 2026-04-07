@@ -15,7 +15,11 @@ from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     RECOVERY_LOCK_MUSIC_KEY,
 )
-from songmaker_cli.jobs import load_model_on_worker, run_generation_job
+from songmaker_cli.jobs import (
+    download_model_on_worker,
+    load_model_on_worker,
+    run_generation_job,
+)
 from songmaker_cli.worker_base import (
     DRAIN_TIMEOUT_SECONDS,
     HEALTH_CHECK_INTERVAL_SECONDS,
@@ -80,7 +84,7 @@ async def on_shutdown(ctx):
 
 
 class MusicWorkerSettings:
-    functions = [generate, load_model_on_worker]
+    functions = [generate, load_model_on_worker, download_model_on_worker]
     on_startup = on_startup
     on_shutdown = on_shutdown
     redis_settings = build_redis_settings()

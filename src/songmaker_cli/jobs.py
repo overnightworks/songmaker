@@ -766,6 +766,111 @@ async def load_model_on_worker(ctx, job_id: str, worker_id: str, mode: str) -> N
     _update_job(factory, job_id, "completed", progress=1.0)
 
 
+async def download_model_on_worker(ctx, job_id: str, mode: str) -> None:
+    import httpx
+
+    from songmaker_cli.acestep_state import (
+        clear_download_in_progress,
+        set_download_in_progress,
+    )
+    from songmaker_cli.constants import MODEL_CONFIG_PATHS
+    from songmaker_cli.internal_api import INTERNAL_TOKEN_ENV, INTERNAL_TOKEN_HEADER
+    from songmaker_cli.scheduler import (
+        DispatchOptions,
+        NoCapacityError,
+        WorkerTaskFailed,
+        consume_download_task_stream,
+        pick_any_online_worker,
+    )
+    from songmaker_cli.worker_base import _get_db_factory
+
+    factory = _get_db_factory()
+    _update_job(factory, job_id, "running", worker_pid=os.getpid())
+
+    if mode not in MODEL_CONFIG_PATHS:
+        _update_job(
+            factory, job_id, "failed",
+            error=f"Unknown model mode '{mode}'",
+            error_type="invalid_mode",
+        )
+        return
+
+    redis = ctx["redis"]
+    await set_download_in_progress(redis, mode, job_id)
+    try:
+        try:
+            with factory() as session:
+                worker = await pick_any_online_worker(session, redis)
+        except NoCapacityError as exc:
+            _update_job(
+                factory, job_id, "failed",
+                error=str(exc),
+                error_type="no_workers",
+            )
+            return
+
+        token = os.environ.get(INTERNAL_TOKEN_ENV, "")
+        headers = {INTERNAL_TOKEN_HEADER: token}
+        submit_url = f"{worker.base_url}/download_model"
+
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                submit = await client.post(
+                    submit_url, json={"mode": mode}, headers=headers,
+                )
+        except httpx.HTTPError as exc:
+            _update_job(
+                factory, job_id, "failed",
+                error=f"Worker unreachable: {exc}",
+                error_type="worker_unreachable",
+            )
+            return
+
+        if submit.status_code >= 400:
+            _update_job(
+                factory, job_id, "failed",
+                error=f"Worker returned {submit.status_code}: {submit.text[:200]}",
+                error_type="worker_error",
+            )
+            return
+
+        task_id = submit.json()["task_id"]
+
+        def _on_progress(fraction: float) -> None:
+            _update_job(factory, job_id, "running", progress=fraction)
+            _touch_heartbeat(factory, job_id)
+
+        def _on_heartbeat() -> None:
+            _touch_heartbeat(factory, job_id)
+
+        try:
+            await consume_download_task_stream(
+                worker,
+                task_id,
+                on_progress=_on_progress,
+                on_heartbeat=_on_heartbeat,
+                options=DispatchOptions(),
+            )
+        except WorkerTaskFailed as exc:
+            _update_job(
+                factory, job_id, "failed",
+                error=f"Download failed: {exc}",
+                error_type="download_error",
+            )
+            return
+        except httpx.HTTPError as exc:
+            _update_job(
+                factory, job_id, "failed",
+                error=f"SSE transport failed: {exc}",
+                error_type="sse_transport",
+            )
+            return
+
+        _update_job(factory, job_id, "completed", progress=1.0)
+    finally:
+        await clear_download_in_progress(redis, mode)
+
+
 def _cleanup_orphaned_files(audio_dir: Path, *rel_paths: str) -> None:
     for rel in rel_paths:
         path = audio_dir / rel

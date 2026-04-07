@@ -64,6 +64,14 @@ LM models (text planner):
 - `acestep-5Hz-lm-0.6B` — creative, good structure
 - `acestep-5Hz-lm-4B` — more thorough planning (recommended with XL)
 
+### Downloading models
+
+The Admin → ACE-Step → Model Registry panel has a **Download** button on each row that's marked `not downloaded`. Clicking it enqueues a `download_model_on_worker` arq job that picks an online worker, calls `POST /download_model` on the worker, and streams progress (via the worker's `/tasks/{id}/stream` SSE → PG `Job` row → the existing `/api/jobs/{id}/stream` poll loop → the browser). Once `huggingface_hub.snapshot_download` finishes, the worker's next 5-second heartbeat publishes the new `available_modes` and the registry row flips to ✓ downloaded within ~10 seconds.
+
+Concurrency guard: a Redis flag (`songmaker:acestep:download:{mode}`, 30-minute TTL) prevents two concurrent downloads of the same mode. The flag is set in the arq job's `try` block and cleared in `finally`; the TTL is the safety net for crashed workers.
+
+For bootstrap (no worker yet running, fresh install, CI), use the CLI escape hatch instead: `bash scripts/download_models.sh` calls `huggingface_hub.snapshot_download` directly into `_models/acestep/checkpoints/`. Requires `HF_TOKEN` exported in the host shell.
+
 ## Generation Parameters
 
 Parameters can be set per-song (`generation_params` in version), per-model-type (admin defaults), or globally.

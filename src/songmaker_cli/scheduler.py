@@ -22,7 +22,7 @@ import asyncio
 import json
 import logging
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass, is_dataclass
 
 import httpx
@@ -52,6 +52,11 @@ class NoCapacityError(RuntimeError):
 
 class WorkerTaskFailed(RuntimeError):
     """Raised when the worker emits an `error` SSE event."""
+
+
+class DownloadTaskResultDTO(BaseModel):
+    mode: str
+    size_bytes: int
 
 
 class GenerationTaskResultDTO(BaseModel):
@@ -122,6 +127,15 @@ async def pick_worker(
     return _pick_from(await _list_online_workers(db, redis), target_mode)
 
 
+async def pick_any_online_worker(
+    db: Session, redis: Redis,
+) -> _PickedWorker:
+    workers = await _list_online_workers(db, redis)
+    if not workers:
+        raise NoCapacityError("No online ACE-Step workers")
+    return min(workers, key=lambda w: w.id)
+
+
 def _internal_headers() -> dict[str, str]:
     return {INTERNAL_TOKEN_HEADER: os.environ.get(INTERNAL_TOKEN_ENV, "")}
 
@@ -188,19 +202,19 @@ async def _submit_generation(
         return resp.json()["task_id"]
 
 
-async def consume_task_stream(
+async def _iterate_task_events(
     worker: _PickedWorker,
     task_id: str,
     *,
-    on_progress: ProgressCallback | None = None,
-    on_heartbeat: HeartbeatCallback | None = None,
     options: DispatchOptions = DispatchOptions(),
-) -> GenerationTaskResultDTO:
-    """Subscribe to ``/tasks/{id}/stream``. Reconnect on transport drop.
+) -> AsyncIterator[tuple[str, dict]]:
+    """Yield (event_type, data) tuples from a worker's /tasks/{id}/stream.
 
-    Returns when the worker emits ``done``. Raises ``WorkerTaskFailed`` on
-    ``error`` events. Raises the underlying httpx error after exhausting
-    ``max_sse_reconnects``.
+    Reconnects on transport drop with exponential backoff up to
+    ``options.max_sse_reconnects``. Stops yielding after a ``done`` or
+    ``error`` event (both ARE yielded so the caller can validate or
+    surface them). Raises the underlying httpx error after exhausting
+    the reconnect budget.
     """
     reconnects = 0
     timeout = httpx.Timeout(
@@ -227,23 +241,10 @@ async def consume_task_stream(
                             if parsed is None:
                                 continue
                             event_type, data = parsed
-                            await _maybe_invoke(on_heartbeat)
-                            if event_type == "done":
-                                result_payload = data.get("result") or {}
-                                try:
-                                    return GenerationTaskResultDTO.model_validate(
-                                        result_payload,
-                                    )
-                                except ValidationError as exc:
-                                    raise WorkerTaskFailed(
-                                        f"Worker returned invalid result: {exc}",
-                                    ) from exc
-                            if event_type == "error":
-                                message = data.get("error") or "worker error"
-                                raise WorkerTaskFailed(message)
-                            if event_type == "progress":
-                                fraction = float(data.get("progress", 0.0))
-                                await _maybe_invoke(on_progress, fraction)
+                            yield event_type, data
+                            if event_type in ("done", "error"):
+                                return
+            return
         except (httpx.TransportError, httpx.RemoteProtocolError) as exc:
             reconnects += 1
             if reconnects > options.max_sse_reconnects:
@@ -261,6 +262,68 @@ async def consume_task_stream(
                 worker.id, task_id, reconnects, options.max_sse_reconnects, exc, backoff,
             )
             await asyncio.sleep(backoff)
+
+
+async def consume_task_stream(
+    worker: _PickedWorker,
+    task_id: str,
+    *,
+    on_progress: ProgressCallback | None = None,
+    on_heartbeat: HeartbeatCallback | None = None,
+    options: DispatchOptions = DispatchOptions(),
+) -> GenerationTaskResultDTO:
+    """Consume a worker generate task stream. Returns the validated DTO.
+
+    Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
+    """
+    async for event_type, data in _iterate_task_events(worker, task_id, options=options):
+        await _maybe_invoke(on_heartbeat)
+        if event_type == "progress":
+            fraction = float(data.get("progress", 0.0))
+            await _maybe_invoke(on_progress, fraction)
+        elif event_type == "done":
+            result_payload = data.get("result") or {}
+            try:
+                return GenerationTaskResultDTO.model_validate(result_payload)
+            except ValidationError as exc:
+                raise WorkerTaskFailed(
+                    f"Worker returned invalid result: {exc}",
+                ) from exc
+        elif event_type == "error":
+            message = data.get("error") or "worker error"
+            raise WorkerTaskFailed(message)
+    raise WorkerTaskFailed("SSE stream ended without done/error event")
+
+
+async def consume_download_task_stream(
+    worker: _PickedWorker,
+    task_id: str,
+    *,
+    on_progress: ProgressCallback | None = None,
+    on_heartbeat: HeartbeatCallback | None = None,
+    options: DispatchOptions = DispatchOptions(),
+) -> DownloadTaskResultDTO:
+    """Consume a worker download task stream. Returns the validated DTO.
+
+    Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
+    """
+    async for event_type, data in _iterate_task_events(worker, task_id, options=options):
+        await _maybe_invoke(on_heartbeat)
+        if event_type == "progress":
+            fraction = float(data.get("progress", 0.0))
+            await _maybe_invoke(on_progress, fraction)
+        elif event_type == "done":
+            result_payload = data.get("result") or {}
+            try:
+                return DownloadTaskResultDTO.model_validate(result_payload)
+            except ValidationError as exc:
+                raise WorkerTaskFailed(
+                    f"Worker returned invalid download result: {exc}",
+                ) from exc
+        elif event_type == "error":
+            message = data.get("error") or "worker error"
+            raise WorkerTaskFailed(message)
+    raise WorkerTaskFailed("SSE stream ended without done/error event")
 
 
 async def dispatch_generation(

@@ -17,6 +17,8 @@ from arq.connections import ArqRedis
 
 WORKER_KEY_PREFIX = "songmaker:acestep:worker"
 QUEUE_KEY_PREFIX = "songmaker:acestep:queue"
+DOWNLOAD_KEY_PREFIX = "songmaker:acestep:download"
+DOWNLOAD_TTL_SECONDS = 1800
 
 
 def worker_state_key(worker_id: str) -> str:
@@ -25,6 +27,10 @@ def worker_state_key(worker_id: str) -> str:
 
 def queue_depth_key(worker_id: str) -> str:
     return f"{QUEUE_KEY_PREFIX}:{worker_id}"
+
+
+def download_key(mode: str) -> str:
+    return f"{DOWNLOAD_KEY_PREFIX}:{mode}"
 
 
 def _decode(raw: Any) -> str | None:
@@ -61,3 +67,16 @@ async def list_worker_states(
     pool: ArqRedis, worker_ids: list[str],
 ) -> dict[str, dict[str, Any] | None]:
     return {wid: await read_worker_state(pool, wid) for wid in worker_ids}
+
+
+async def set_download_in_progress(pool: ArqRedis, mode: str, job_id: str) -> None:
+    await pool.set(download_key(mode), job_id, ex=DOWNLOAD_TTL_SECONDS)
+
+
+async def clear_download_in_progress(pool: ArqRedis, mode: str) -> None:
+    await pool.delete(download_key(mode))
+
+
+async def read_download_in_progress(pool: ArqRedis, mode: str) -> str | None:
+    raw = await pool.get(download_key(mode))
+    return _decode(raw)

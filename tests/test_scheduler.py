@@ -16,13 +16,17 @@ from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import register_worker
 from songmaker_cli.scheduler import (
     DispatchOptions,
+    DownloadTaskResultDTO,
     GenerationTaskResultDTO,
     NoCapacityError,
     WorkerTaskFailed,
+    _iterate_task_events,
     _pick_from,
     _PickedWorker,
+    consume_download_task_stream,
     consume_task_stream,
     dispatch_generation,
+    pick_any_online_worker,
     pick_worker,
 )
 
@@ -526,3 +530,230 @@ def test_submit_generation_returns_task_id() -> None:
     assert args[0].endswith("/generate")
     assert kwargs["json"]["mode"] == "sft"
     assert "config" in kwargs["json"]
+
+
+# ── _iterate_task_events ─────────────────────────────────────────────
+
+
+def test_iterate_task_events_yields_in_order() -> None:
+    worker = _make_picked()
+    events = [
+        ("progress", {"progress": 0.25}),
+        ("progress", {"progress": 0.75}),
+        ("done", {"task_id": "t", "result": {"mode": "sft", "size_bytes": 100}}),
+    ]
+    client = _make_stream_client(events)
+
+    async def collect():
+        out: list[tuple[str, dict]] = []
+        with _patch_async_client(client):
+            async for evt in _iterate_task_events(worker, "t"):
+                out.append(evt)
+        return out
+
+    result = _run(collect())
+    assert [e[0] for e in result] == ["progress", "progress", "done"]
+    assert result[0][1] == {"progress": 0.25}
+    assert result[2][1]["result"]["mode"] == "sft"
+
+
+def test_iterate_task_events_stops_after_done() -> None:
+    worker = _make_picked()
+    events = [
+        ("done", {"task_id": "t", "result": {"mode": "sft", "size_bytes": 1}}),
+        ("progress", {"progress": 0.99}),
+    ]
+    client = _make_stream_client(events)
+
+    async def collect():
+        out: list[tuple[str, dict]] = []
+        with _patch_async_client(client):
+            async for evt in _iterate_task_events(worker, "t"):
+                out.append(evt)
+        return out
+
+    result = _run(collect())
+    assert len(result) == 1
+    assert result[0][0] == "done"
+
+
+def test_iterate_task_events_stops_after_error() -> None:
+    worker = _make_picked()
+    events = [
+        ("error", {"error": "boom"}),
+        ("progress", {"progress": 0.99}),
+    ]
+    client = _make_stream_client(events)
+
+    async def collect():
+        out: list[tuple[str, dict]] = []
+        with _patch_async_client(client):
+            async for evt in _iterate_task_events(worker, "t"):
+                out.append(evt)
+        return out
+
+    result = _run(collect())
+    assert len(result) == 1
+    assert result[0][0] == "error"
+
+
+def test_iterate_task_events_reconnect_on_transport_drop() -> None:
+    worker = _make_picked()
+    bad_client = _make_stream_client(httpx.ConnectError("refused"))
+    good_client = _make_stream_client([
+        ("done", {"task_id": "t", "result": {"mode": "sft", "size_bytes": 1}}),
+    ])
+    clients = iter([bad_client, good_client])
+
+    def _factory(*args, **kwargs):
+        return next(clients)
+
+    options = DispatchOptions(
+        max_sse_reconnects=2,
+        initial_reconnect_backoff_seconds=0.0,
+        max_reconnect_backoff_seconds=0.0,
+    )
+
+    async def collect():
+        out: list[tuple[str, dict]] = []
+        with patch("songmaker_cli.scheduler.httpx.AsyncClient", side_effect=_factory):
+            async for evt in _iterate_task_events(worker, "t", options=options):
+                out.append(evt)
+        return out
+
+    result = _run(collect())
+    assert len(result) == 1
+    assert result[0][0] == "done"
+
+
+def test_iterate_task_events_max_reconnects_exhausted() -> None:
+    worker = _make_picked()
+
+    def _factory(*args, **kwargs):
+        return _make_stream_client(httpx.ConnectError("refused"))
+
+    options = DispatchOptions(
+        max_sse_reconnects=2,
+        initial_reconnect_backoff_seconds=0.0,
+        max_reconnect_backoff_seconds=0.0,
+    )
+
+    async def collect():
+        with patch("songmaker_cli.scheduler.httpx.AsyncClient", side_effect=_factory):
+            async for _evt in _iterate_task_events(worker, "t", options=options):
+                pass
+
+    with pytest.raises(httpx.ConnectError):
+        _run(collect())
+
+
+# ── pick_any_online_worker ───────────────────────────────────────────
+
+
+def test_pick_any_online_worker_returns_lowest_id(db_session) -> None:
+    _seed(db_session, "w-c")
+    _seed(db_session, "w-a")
+    _seed(db_session, "w-b")
+    redis = _InMemoryRedis()
+    _set_state(redis, "w-c", {"loaded": []})
+    _set_state(redis, "w-a", {"loaded": []})
+    _set_state(redis, "w-b", {"loaded": []})
+
+    result = _run(pick_any_online_worker(db_session, redis))
+    assert result.id == "w-a"
+
+
+def test_pick_any_online_worker_skips_offline(db_session) -> None:
+    _seed(db_session, "w1")
+    _seed(db_session, "w2")
+    redis = _InMemoryRedis()
+    _set_state(redis, "w2", {"loaded": []})
+
+    result = _run(pick_any_online_worker(db_session, redis))
+    assert result.id == "w2"
+
+
+def test_pick_any_online_worker_no_workers_raises(db_session) -> None:
+    redis = _InMemoryRedis()
+    with pytest.raises(NoCapacityError):
+        _run(pick_any_online_worker(db_session, redis))
+
+
+# ── consume_download_task_stream ─────────────────────────────────────
+
+
+def test_consume_download_task_stream_done_returns_dto() -> None:
+    worker = _make_picked()
+    events = [
+        ("done", {"task_id": "d", "result": {"mode": "xl-sft", "size_bytes": 13_000_000_000}}),
+    ]
+    client = _make_stream_client(events)
+    with _patch_async_client(client):
+        result = _run(consume_download_task_stream(worker, "d"))
+    assert isinstance(result, DownloadTaskResultDTO)
+    assert result.mode == "xl-sft"
+    assert result.size_bytes == 13_000_000_000
+
+
+def test_consume_download_task_stream_error_raises() -> None:
+    worker = _make_picked()
+    client = _make_stream_client([("error", {"error": "HF 401 unauthorized"})])
+    with _patch_async_client(client):
+        with pytest.raises(WorkerTaskFailed, match="HF 401"):
+            _run(consume_download_task_stream(worker, "d"))
+
+
+def test_consume_download_task_stream_progress_calls_callback() -> None:
+    worker = _make_picked()
+    captured: list[float] = []
+
+    async def on_progress(fraction: float) -> None:
+        captured.append(fraction)
+
+    events = [
+        ("progress", {"progress": 0.1}),
+        ("progress", {"progress": 0.5}),
+        ("progress", {"progress": 0.9}),
+        ("done", {"task_id": "d", "result": {"mode": "sft", "size_bytes": 100}}),
+    ]
+    client = _make_stream_client(events)
+    with _patch_async_client(client):
+        _run(consume_download_task_stream(worker, "d", on_progress=on_progress))
+
+    assert captured == [0.1, 0.5, 0.9]
+
+
+def test_consume_download_task_stream_invalid_payload_raises() -> None:
+    worker = _make_picked()
+    client = _make_stream_client([("done", {"task_id": "d", "result": {"mode": "sft"}})])
+    with _patch_async_client(client):
+        with pytest.raises(WorkerTaskFailed, match="invalid download result"):
+            _run(consume_download_task_stream(worker, "d"))
+
+
+def test_consume_download_task_stream_heartbeat_on_every_event() -> None:
+    worker = _make_picked()
+    heartbeats = 0
+
+    def on_heartbeat() -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+
+    events = [
+        ("progress", {"progress": 0.25}),
+        ("progress", {"progress": 0.75}),
+        ("done", {"task_id": "d", "result": {"mode": "sft", "size_bytes": 1}}),
+    ]
+    client = _make_stream_client(events)
+    with _patch_async_client(client):
+        _run(consume_download_task_stream(worker, "d", on_heartbeat=on_heartbeat))
+
+    assert heartbeats == 3
+
+
+def test_consume_download_task_stream_empty_stream_raises() -> None:
+    worker = _make_picked()
+    client = _make_stream_client([])
+    with _patch_async_client(client):
+        with pytest.raises(WorkerTaskFailed, match="ended without"):
+            _run(consume_download_task_stream(worker, "d"))

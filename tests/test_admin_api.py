@@ -889,3 +889,111 @@ def test_evict_model_worker_returns_4xx(client: TestClient) -> None:
             "/api/admin/workers/w1/evict_model", json={"mode": "sft"},
         )
     assert resp.status_code == 502
+
+
+# ── download_model_endpoint ─────────────────────────────────────────
+
+
+def _make_pool_with_state(states: dict[str, dict | None]) -> object:
+    import json
+
+    from songmaker_cli.acestep_state import worker_state_key
+
+    pool = _make_fake_pool()
+    for wid, state in states.items():
+        if state is not None:
+            pool._store[worker_state_key(wid)] = json.dumps(state)
+    return pool
+
+
+def test_download_endpoint_unknown_mode(client: TestClient) -> None:
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    _override_pool(client, _make_pool_with_state({"w1": {"available_modes": []}}))
+    resp = client.post("/api/admin/registry/ghost/download")
+    assert resp.status_code == 400
+
+
+def test_download_endpoint_no_workers(client: TestClient) -> None:
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    _override_pool(client, _make_pool_with_state({"w1": None}))
+    resp = client.post("/api/admin/registry/sft/download")
+    assert resp.status_code == 503
+
+
+def test_download_endpoint_already_downloaded(client: TestClient) -> None:
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    _override_pool(
+        client,
+        _make_pool_with_state({"w1": {"available_modes": ["sft", "turbo"]}}),
+    )
+    resp = client.post("/api/admin/registry/sft/download")
+    assert resp.status_code == 409
+    assert "already downloaded" in resp.json()["detail"]
+
+
+def test_download_endpoint_already_in_progress(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    from songmaker_cli.acestep_state import download_key
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    pool = _make_pool_with_state({"w1": {"available_modes": []}})
+    pool._store[download_key("xl-base")] = "previous-job-id"
+    _override_pool(client, pool)
+
+    mock_pool = AsyncMock()
+    mock_pool.enqueue_job = AsyncMock(return_value=AsyncMock())
+    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+        resp = client.post("/api/admin/registry/xl-base/download")
+
+    assert resp.status_code == 409
+    assert "already being downloaded" in resp.json()["detail"]
+    mock_pool.enqueue_job.assert_not_called()
+
+
+def test_download_endpoint_enqueues_job(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    _override_pool(client, _make_pool_with_state({"w1": {"available_modes": []}}))
+
+    mock_pool = AsyncMock()
+    mock_pool.enqueue_job = AsyncMock(return_value=AsyncMock())
+    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+        resp = client.post("/api/admin/registry/xl-base/download")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["type"] == "download_model_on_worker"
+    assert data["status"] == "queued"
+
+    from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
+    mock_pool.enqueue_job.assert_called_once_with(
+        "download_model_on_worker", data["id"], "xl-base",
+        _queue_name=ARQ_MUSIC_QUEUE_NAME,
+    )
+
+
+def test_download_endpoint_queue_unavailable(client: TestClient) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    _override_pool(client, _make_pool_with_state({"w1": {"available_modes": []}}))
+
+    mock_pool = AsyncMock()
+    mock_pool.enqueue_job = AsyncMock(side_effect=ConnectionError("redis down"))
+    with patch("songmaker_cli.arq_pool.get_arq_pool", return_value=mock_pool):
+        resp = client.post("/api/admin/registry/xl-base/download")
+
+    assert resp.status_code == 503
+
+
+def test_download_endpoint_requires_admin(client: TestClient) -> None:
+    resp = client.post("/api/admin/registry/sft/download")
+    assert resp.status_code in (401, 403)

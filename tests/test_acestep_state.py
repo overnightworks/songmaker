@@ -9,14 +9,19 @@ import fakeredis.aioredis
 import pytest
 
 from songmaker_cli.acestep_state import (
+    DOWNLOAD_KEY_PREFIX,
     QUEUE_KEY_PREFIX,
     WORKER_KEY_PREFIX,
+    clear_download_in_progress,
     decr_queue_depth,
+    download_key,
     incr_queue_depth,
     list_worker_states,
     queue_depth_key,
+    read_download_in_progress,
     read_queue_depth,
     read_worker_state,
+    set_download_in_progress,
     worker_state_key,
 )
 
@@ -155,3 +160,38 @@ def test_list_worker_states(redis, event_loop) -> None:
     assert result["w1"] == {"loaded": ["sft"]}
     assert result["w2"] == {"loaded": ["turbo"]}
     assert result["w3"] is None
+
+
+def test_download_key_format() -> None:
+    assert download_key("xl-base") == "songmaker:acestep:download:xl-base"
+    assert DOWNLOAD_KEY_PREFIX == "songmaker:acestep:download"
+
+
+def test_read_download_in_progress_missing(redis, event_loop) -> None:
+    assert event_loop.run_until_complete(read_download_in_progress(redis, "sft")) is None
+
+
+def test_set_then_read_download_in_progress(redis, event_loop) -> None:
+    event_loop.run_until_complete(set_download_in_progress(redis, "xl-sft", "job-abc"))
+    assert (
+        event_loop.run_until_complete(read_download_in_progress(redis, "xl-sft"))
+        == "job-abc"
+    )
+
+
+def test_clear_download_in_progress(redis, event_loop) -> None:
+    event_loop.run_until_complete(set_download_in_progress(redis, "sft", "job-1"))
+    event_loop.run_until_complete(clear_download_in_progress(redis, "sft"))
+    assert event_loop.run_until_complete(read_download_in_progress(redis, "sft")) is None
+
+
+def test_clear_download_in_progress_idempotent(redis, event_loop) -> None:
+    event_loop.run_until_complete(clear_download_in_progress(redis, "never-set"))
+    assert event_loop.run_until_complete(read_download_in_progress(redis, "never-set")) is None
+
+
+def test_set_download_in_progress_has_ttl(redis, event_loop) -> None:
+    from songmaker_cli.acestep_state import DOWNLOAD_TTL_SECONDS
+    event_loop.run_until_complete(set_download_in_progress(redis, "turbo", "job-x"))
+    ttl = event_loop.run_until_complete(redis.ttl(download_key("turbo")))
+    assert 0 < ttl <= DOWNLOAD_TTL_SECONDS
