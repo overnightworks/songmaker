@@ -800,16 +800,71 @@ PR 2 is bigger and depends on more cross-cutting changes; ship PR 1 first to get
 
 ---
 
-### Phase 8 — Image architecture refactor (base images + drop venv bind mount)
+### Phase 8 — Image architecture refactor (bake the inner ACE-Step venv, narrow the bind mount)
 
-**Goal:** restructure the Docker image hierarchy into reusable base images. Today, every `docker compose build` re-resolves heavy CUDA/torch deps and the music-worker re-downloads multi-GB wheels because the host's bind-mounted `_models/acestep/.venv` is incompatible with the container's Python. Phase 8 introduces base images for ACE-Step, scoring, and the application server, dramatically cutting rebuild time and eliminating the host↔container venv-clobbering anti-pattern.
+> **Section revised after Phases 1–7 shipped and after the Phase 6 PR 2 smoke test re-hit the bug.** The original framing in this section talked about a 3-base-image hierarchy and "the music-worker re-downloads multi-GB wheels". Both were imprecise. The actual problem is much narrower (the inner ACE-Step subprocess only) and the fix can be much smaller than a full image-architecture refactor. This section now distinguishes the **minimum viable fix** from the **optional bigger cleanup**, and locks down what the sub-plan must answer.
 
-**Why a dedicated phase:** this is a real refactor with image registry decisions, build dependency reorganization, and per-service Dockerfile changes. Bundling it into Phase 7 would inflate the cleanup sweep beyond "deletions and doc updates" and break its reviewable property. Bundling it into Phases 1–6 wasn't possible because the pain only became visible after the cutover.
+**Goal:** stop the inner ACE-Step subprocess from doing a 5–15 minute `uv sync` on every fresh container start. This is the venv-clobbering anti-pattern documented in `CLAUDE.md` technical debt, and it's the only reason the current smoke test cycle requires `ARQ_JOB_TIMEOUT=1800` as a workaround.
 
-**Discovered during:** Phase 3 smoke test, when the first `/load_model` call against a freshly-built `acestep-worker-0` container triggered a 15+ minute uv re-sync inside the container, ultimately timing out the arq job. Root cause: the host's `_models/acestep/.venv` was bind-mounted in, uv detected the broken host-Python symlink, deleted the host venv, and restarted from scratch. The fix at smoke time was a 30-minute timeout override (`ARQ_JOB_TIMEOUT=1800` in `.env`); the proper architectural fix is Phase 8.
+**Why a dedicated phase:** the fix touches Docker image build order, the bind mount layout in `docker-compose.yml`, and possibly `acestep_worker/subprocess_runner.py`. Bundling it into Phase 7 would inflate the cleanup sweep beyond "deletions and doc updates" and break its reviewable property. The pain only became visible after the Phase 3 cutover (and was re-confirmed during the Phase 6 PR 2 smoke test on `2026-04-07`).
 
-**High-level shape (full design in the sub-plan):**
+#### What's actually broken (verified mechanism)
 
+The current state of the system, as of commit `90f4c14`:
+
+1. **The acestep-worker container's `/app/.venv`** (the wrapper FastAPI server's venv) **is correctly baked into the image**. [`docker/acestep-worker.Dockerfile`](../docker/acestep-worker.Dockerfile) does `uv sync --frozen --no-dev --extra acestep-worker` during the image build. The wrapper starts fast.
+
+2. **The inner ACE-Step subprocess uses a SEPARATE venv** at `/app/_models/acestep/.venv`. This is because [`acestep_worker/subprocess_runner.py:start_acestep_subprocess`](../src/acestep_worker/subprocess_runner.py) invokes `uv run acestep-api` with `cwd=checkpoint_dir` (which resolves to `/app/_models/acestep`). uv looks for a `pyproject.toml` and `.venv` in the cwd, finds the upstream ACE-Step project's `pyproject.toml`, and uses/creates `/app/_models/acestep/.venv` based on that.
+
+3. **`/app/_models/acestep/` is a bind mount** from the host's `./_models/acestep/` ([`docker-compose.yml:144`](../docker-compose.yml#L144)). The host venv was created by Felix's local development against the host's Python (3.13 or whatever) and contains a Python interpreter symlink. The container's Python is 3.12 in `/usr/local/bin/python3.12`. uv detects the symlink mismatch, considers the venv broken, deletes it, and recreates it from scratch by downloading every dependency:
+   - `torch`, `torchvision`, `torchaudio`, `torchcodec`, `torchao`
+   - `nvidia-cublas-cu12` (566 MB), `nvidia-cudnn-cu12` (674 MB), `nvidia-cusparselt-cu12` (274 MB)
+   - `triton` (179 MB), `transformers`, `diffusers`, `tokenizers`
+   - `gradio`, `tensorboard`, `matplotlib`, `pandas`, `numpy`, `numba`, `llvmlite`
+   - plus dozens more
+   
+   Total: ~3-4 GB of wheels. Wall-clock time on a fast connection: 5-15 minutes. On a slow connection: longer than the `ARQ_JOB_TIMEOUT=1800` (30 minute) override.
+
+4. **The pain only affects fresh container starts** (first `/load_model` after `docker compose up --force-recreate` or after the host's `_models/acestep/.venv` is wiped). Once the venv is re-populated in the bind mount, subsequent loads are fast. But `--force-recreate` is needed every time we deploy a new image, so this hits us on every backend release.
+
+5. **The music-worker is NOT affected.** Since the Phase 3 cutover, music-worker doesn't touch ACE-Step at all — its image is already minimal. **Earlier drafts of this section incorrectly mentioned the music-worker; that's outdated.** The bind-mount problem is scoped entirely to `acestep-worker-0`.
+
+#### Fix options (the sub-plan must pick one and justify)
+
+There are three viable fixes, in increasing order of scope. The sub-plan should evaluate all three, pick one, and document the rejected alternatives with rationale. The minimum viable fix is **(A)**.
+
+**Option A — Single shared venv (smallest change, recommended starting point).**
+
+Stop using a separate venv for the inner ACE-Step subprocess. Instead, install the ACE-Step deps INTO `/app/.venv` (the wrapper's venv) during the image build, and change `subprocess_runner.start_acestep_subprocess` to invoke the inner subprocess against that venv directly — either by:
+- Calling `/app/.venv/bin/python -m acestep_api ...` instead of `uv run acestep-api ...`
+- Or invoking `uv run` with `--directory /app` so uv finds `/app/pyproject.toml` and `/app/.venv` instead of the bind-mounted ones
+- Or setting `VIRTUAL_ENV=/app/.venv` in the subprocess env
+
+**Pros:** smallest diff. No new Dockerfile, no compose change beyond optionally narrowing the bind mount. Single venv per container is the simplest mental model.
+
+**Cons:** the wrapper's `--extra acestep-worker` extra in `pyproject.toml` would need to grow significantly to include all of ACE-Step's deps (torch + diffusers + transformers + ...). The current extra is intentionally minimal (`fastapi`, `uvicorn`, `redis[hiredis]`, `huggingface_hub`). Verify the dep set merges cleanly without conflicts. Image size grows from ~500 MB to ~6-8 GB.
+
+**Open questions for the sub-plan:**
+- Does the upstream ACE-Step `pyproject.toml` declare its deps cleanly, or does it rely on `uv sync` resolving against its own `uv.lock`?
+- Are there any version conflicts between `acestep_worker`'s current deps (`fastapi`, `redis[hiredis]`) and ACE-Step's (e.g., a different `pydantic` major)?
+- Does the wrapper need any of ACE-Step's deps at import time, or is the subprocess truly independent?
+
+**Option B — Two venvs, both baked into the image, narrow the bind mount.**
+
+Keep the separate inner-ACE-Step venv at `/app/_models/acestep/.venv`, but bake it into the image during build (run `uv sync` against the upstream `pyproject.toml` as a Dockerfile RUN step). Then narrow the docker-compose bind mount from `./_models/acestep:/app/_models/acestep` to `./_models/acestep/checkpoints:/app/_models/acestep/checkpoints` so the host's broken `.venv` doesn't shadow the baked one.
+
+**Pros:** the two venvs stay isolated. No risk of dep conflicts between wrapper and ACE-Step. The wrapper image stays small (and the ACE-Step deps form their own layer that can be cached independently).
+
+**Cons:** the Dockerfile gets a second `uv sync` step that's slower and harder to cache (the upstream ACE-Step `pyproject.toml` lives inside `_models/acestep/` which is a git-untracked submodule-like directory — the build context needs to include it). The bind mount narrowing requires verifying nothing else in `_models/acestep/` is needed at runtime besides `checkpoints/` (e.g., the upstream `acestep/` source code).
+
+**Open questions for the sub-plan:**
+- What's actually inside `_models/acestep/` besides `.venv` and `checkpoints/`? (Likely the upstream ACE-Step source — `acestep/`, `setup.py`, etc.)
+- Does the inner subprocess import any Python modules from `_models/acestep/acestep/` at runtime, or only from its venv?
+- If the subprocess needs the upstream source at runtime, can we COPY it into the image at a different path (`/opt/acestep/`) and run from there?
+
+**Option C — Full base-image hierarchy refactor (the original plan).**
+
+Introduce three reusable base images:
 ```
                     python:3.12-slim
                           │
@@ -830,21 +885,60 @@ PR 2 is bigger and depends on more cross-cutting changes; ship PR 1 first to get
                                     (~100 MB layer)
 ```
 
-**Key decisions Phase 8 must make:**
+Splits `Dockerfile.worker` into per-service images, deduplicates the torch layer between scoring and acestep, and gives each leaf image a fast rebuild path because the heavy base layers stay cached.
 
-1. ACE-Step model weights stay bind-mounted (`_models/acestep/checkpoints/`); only the `.venv` and `acestep/` source go into the base image
-2. Drop the `_models/acestep/.venv` bind mount entirely — host can have its own separate venv if developers want one
-3. Dockerfile.worker is split (replaces and supersedes the Phase 7 D1 deferred item)
-4. Image registry strategy (local-only vs push to GHCR) — depends on whether multi-host deployment is on the horizon
-5. Base image versioning scheme (content hash vs semver)
+**Pros:** structurally cleaner. Cuts cumulative build time across all services. Sets up the image hierarchy for any future GPU worker that needs torch (e.g., a separate audiobox-only worker). Eliminates the historical baggage of `Dockerfile.worker` being shared between music-worker and scoring-worker (Phase 7 D1 supersession).
 
-**Sub-plan:** to be written after Phase 7 ships. Will live at `plans/acestep-worker-pool-phase8-subplan.md`. Should follow the same depth as the Phase 3 sub-plan: concrete Dockerfile listings, build order, smoke test procedure, rollback plan.
+**Cons:** much bigger refactor. Touches all four services. Requires a base-image build step in CI (or a `docker build` chain). Image registry decisions (local-only vs push to GHCR). Versioning scheme for the base images (content hash vs semver). One-time full rebuild of everything for the migration.
 
-**Size:** ~1 day of focused work + sub-plan write-up. Build verification dominates wall-clock time (15-20 min per base image rebuild during testing).
+**Recommendation:** **start with Option A or B for the minimum viable fix in this PR**, and treat Option C as a separate follow-up after we've validated the minimal fix works in production for a few days. Option C is real value but it's not on the critical path to unblocking the smoke test.
 
-**Run when:** after Phase 7 cleanup ships AND Phases 1–6 have been stable in normal use for at least a few days. Don't bundle with anything else. Deserves its own commit, its own review, its own smoke test.
+The sub-plan can pick the recommended path with a one-paragraph rationale and either keep Option C as a "future" item or fold it into Phase 8 if it's small enough on top of A/B. **The user explicitly does not want a 1-day refactor to unblock a 1-hour smoke test.**
 
-**Supersedes:** the Phase 7 D1 "split Dockerfile.worker" deferred item. Don't do D1 separately — Phase 8 includes it as a side effect of introducing the base image hierarchy.
+#### Decisions the sub-plan must lock in
+
+1. **Which fix option (A, B, or C)** — locked, with rationale for why the others were rejected
+2. **Whether `_models/acestep/checkpoints/` stays a bind mount.** It must — the model weights are 3-13 GB per model and survive container rebuilds. Confirm that narrowing the mount path to just `checkpoints/` doesn't break anything else
+3. **What lives inside `_models/acestep/` besides `checkpoints/` and `.venv`.** Audit the directory and document each subdirectory. Decide which need to move into the image and which can stay on the host (or be deleted)
+4. **The exact `subprocess_runner.start_acestep_subprocess` invocation** after the fix. Concrete `cmd` list and `env` dict. The 300s/1800s startup timeout becomes irrelevant after this — actual subprocess startup is ~30s once the venv exists
+5. **Backward compatibility for developers running locally** without docker. Some developers may have a working host venv that they want to keep. The fix should not break their workflow — at most, document the new convention
+6. **`ARQ_JOB_TIMEOUT` rollback.** After the fix, the `.env:26` `ARQ_JOB_TIMEOUT=1800` workaround becomes unnecessary. The sub-plan should explicitly drop it back to the documented default (`300` per `.env.docker.example:43`) in the same commit
+7. **Smoke test procedure.** End-to-end: `docker compose down -v && docker compose up -d --build --wait songmaker-acestep-worker-0 && time docker compose exec songmaker-acestep-worker-0 curl -X POST -H 'Content-Type: application/json' -d '{"mode":"sft"}' http://localhost:8001/load_model`. Expected: <90 seconds end-to-end
+8. **Rollback plan.** If the new image has a startup regression, what's the recovery path? (Probably: revert the commit, rebuild, restart.)
+
+#### What's NOT in scope for Phase 8
+
+- ACE-Step model weight downloads (Phase 5 territory — already shipped)
+- Multi-host worker deployment (out of scope for the current single-node architecture)
+- GPU isolation between workers (single-GPU assumption stays)
+- CI/CD changes for image registry pushes (only do this if Option C is picked AND the user explicitly wants it)
+- New runtime features
+
+#### Sub-plan deliverable
+
+`plans/acestep-worker-pool-phase8-subplan.md`, same depth as Phase 3/4/5/6 sub-plans. Should include:
+
+- State at start (commit SHA, what's already in place)
+- The "What's actually broken" verified mechanism (cribbed from this section, expanded with line numbers)
+- Decision matrix: A vs B vs C with explicit rationale
+- Concrete Dockerfile diff (full file listing for the chosen option)
+- Concrete `docker-compose.yml` diff
+- Concrete `subprocess_runner.py` diff (if the chosen option touches it)
+- Concrete `pyproject.toml` diff (if the chosen option touches extras)
+- Files Touched table
+- Implementation order with HARD checkpoints (`docker compose build` after each major step)
+- Smoke test plan (the end-to-end load test)
+- Watchpoints (e.g., dep conflicts surfaced during `uv sync`, the cwd change in subprocess_runner, the `ARQ_JOB_TIMEOUT` rollback)
+- Rollback plan
+- Quick context for the next session
+
+**Size estimate:** sub-plan write-up ~1-2 hours; implementation depends on chosen option. Option A: ~2-3 hours (mostly waiting for `docker compose build`). Option B: ~3-4 hours. Option C: ~1 day.
+
+**Run when:** after Phase 7 ships (`90f4c14`). Phases 1–7 are now stable on `feat/acestep-worker-pool` and the only remaining smoke test blocker is this venv-clobbering issue.
+
+**Supersedes:** Phase 7 D1 ("split Dockerfile.worker") — that work is folded into Phase 8 if Option C is picked, or deferred indefinitely if Option A/B is picked (it's nice-to-have, not a blocker).
+
+**Discovered + re-confirmed during:** Phase 3 smoke test (initial discovery), Phase 6 PR 2 smoke test on `2026-04-07` (re-confirmed; the inner subprocess uv sync was observed downloading nvidia-cublas-cu12, nvidia-cudnn-cu12, etc. before timing out at 300s).
 
 ---
 
