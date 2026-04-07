@@ -45,6 +45,61 @@ def test_key_prefixes_match_worker_heartbeat() -> None:
     assert QUEUE_KEY_PREFIX == WORKER_QUEUE_PREFIX
 
 
+def test_heartbeat_payload_keys_match_admin_reader() -> None:
+    from pathlib import Path
+    from unittest.mock import MagicMock
+
+    from acestep_worker.model_cache import ModelCache
+    from acestep_worker.wrapper import WorkerDeps, build_state_payload
+    from songmaker_cli.admin_api import _state_from_dict
+
+    async def fake_loader(_: str):
+        from acestep_worker.model_cache import LoadedModel
+        return LoadedModel(mode="sft", handle=None, port=8101)
+
+    async def fake_unloader(_) -> None:
+        return None
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=fake_loader,
+        unloader=fake_unloader,
+    )
+    asyncio.run(cache.load("sft"))
+
+    fake_redis = MagicMock()
+
+    async def _zero_queue(*_args, **_kwargs):
+        return 0
+
+    fake_redis.get = _zero_queue
+    deps = WorkerDeps(
+        worker_id="acestep-worker-0",
+        cache=cache,
+        task_store=MagicMock(),
+        heartbeat=MagicMock(),
+        redis=fake_redis,
+        registry_client=None,
+        registration=None,
+        checkpoint_dir=Path("/nonexistent"),
+        audio_output_dir=Path("/nonexistent"),
+        generate_runner=MagicMock(),
+    )
+    payload = asyncio.run(build_state_payload(deps))
+
+    state = _state_from_dict(payload, queue_depth=0)
+    assert state is not None
+    assert state.loaded == ["sft"], (
+        f"writer/reader key mismatch: payload has keys {sorted(payload.keys())}, "
+        f"reader expects 'loaded'"
+    )
+    assert state.vram_used_gb == 6.0
+    assert state.target_loading is None
+    assert state.vram_total_gb == 24.0
+    assert state.available_modes == []
+
+
 def test_worker_state_key_format() -> None:
     assert worker_state_key("acestep-worker-0") == "songmaker:acestep:worker:acestep-worker-0"
 
