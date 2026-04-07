@@ -201,7 +201,7 @@
 							<span class="row-label">Status:</span>
 							<span class="row-value">
 								{describeStatus(worker)}
-								{#if trackedJob}
+								{#if trackedJob || worker.state.target_loading}
 									<span class="spinner" aria-label="loading">⏳</span>
 								{/if}
 							</span>
