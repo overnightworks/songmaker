@@ -158,9 +158,42 @@ Remove `RegistrationFailedError` raising at the end of the retry loop. The new c
 
 The worker's `/health` endpoint at [wrapper.py:88](../src/acestep_worker/wrapper.py#L88) currently returns `HealthResponse(status="ok")` unconditionally. Make it return 503 until registration completes:
 
-1. Add `registered: bool = False` to `WorkerDeps`.
+1. Add `registered: bool = False` and `registration_task: asyncio.Task[None] | None = None` to `WorkerDeps`.
 2. The `lifespan` context manager at `wrapper.py:177` currently calls `await deps.registry_client.register(deps.registration)` synchronously. Change it to spawn the registration as a background task and let the FastAPI server come up immediately. When `register()` returns, set `deps.registered = True`.
-3. Update `/health` to check `deps.registered`:
+3. **Store the task reference and cancel+await it in `finally`** so we don't leave dangling tasks on shutdown:
+   ```python
+   @asynccontextmanager
+   async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+       deps: WorkerDeps = app.state.deps
+       log.info(
+           "acestep-worker %s starting; awaiting control plane at %s",
+           deps.worker_id,
+           deps.registry_client._control_plane_url if deps.registry_client else "(disabled)",
+       )
+
+       async def _register_and_flag() -> None:
+           if deps.registry_client is not None and deps.registration is not None:
+               await deps.registry_client.register(deps.registration)
+               deps.registered = True
+           else:
+               deps.registered = True
+
+       deps.registration_task = asyncio.create_task(_register_and_flag())
+       await deps.heartbeat.clear_orphaned_queue()
+       deps.heartbeat.start()
+       try:
+           yield
+       finally:
+           if deps.registration_task is not None and not deps.registration_task.done():
+               deps.registration_task.cancel()
+               try:
+                   await deps.registration_task
+               except (asyncio.CancelledError, Exception):
+                   pass
+           await deps.heartbeat.shutdown()
+           await deps.cache.evict_all()
+   ```
+4. Update `/health` to check `deps.registered`:
    ```python
    @router.get("/health", response_model=HealthResponse)
    async def health() -> HealthResponse:
@@ -168,9 +201,11 @@ The worker's `/health` endpoint at [wrapper.py:88](../src/acestep_worker/wrapper
            raise HTTPException(status_code=503, detail="awaiting control plane registration")
        return HealthResponse(status="ok")
    ```
-4. The docker-compose healthcheck at [docker-compose.yml:147](../docker-compose.yml#L147) is unchanged — `curl -f` already treats 5xx as unhealthy.
+5. The docker-compose healthcheck at [docker-compose.yml:147](../docker-compose.yml#L147) is unchanged — `curl -f` already treats 5xx as unhealthy.
 
 **Why background task instead of blocking startup:** if registration is blocking and the control plane is slow, the worker's HTTP server never comes up, so even debug requests like `curl localhost:8001/health` time out. Background-task means the server is up immediately, the operator can see the failure mode in `/health` (503 with the detail message), and the worker keeps trying forever instead of dying after 48 s.
+
+**Why store the task reference and cancel on shutdown:** without explicit cancellation in the lifespan `finally`, a worker that shuts down before registration completes leaves an orphaned task running against a closed httpx client → noisy traceback at exit. The cancel-and-await pattern (swallowing both `CancelledError` and any exceptions raised during cleanup) is the safe shutdown.
 
 ### Container log surfacing
 
@@ -537,7 +572,12 @@ async def generate(req: GenerateRequest) -> TaskCreatedResponse:
             status_code=409,
             detail=f"Mode {req.mode} not loaded; call /load_model first",
         )
-    task_id = await deps.task_store.create("generate")
+
+    try:
+        task_id = await deps.task_store.create("generate")
+    except Exception:
+        await deps.cache.release(req.mode)
+        raise
 
     async def _runner_with_release() -> None:
         try:
@@ -554,6 +594,8 @@ async def generate(req: GenerateRequest) -> TaskCreatedResponse:
 ```
 
 The `_runner_with_release` wrapper guarantees `release` runs even if the runner crashes. The acquire happens *before* the spawn so the endpoint can return 409 if the model isn't loaded.
+
+**Refcount leak guard on `task_store.create`:** if `task_store.create` raises (e.g., the store has reached an internal limit, or any future failure mode), the refcount has already been incremented but no `_runner_with_release` will run to decrement it. The explicit `try/except` catches any exception, releases the refcount, and re-raises the original exception so the FastAPI error response is unchanged. **Don't omit this** — it's the kind of leak that's invisible until cumulative refcounts prevent eviction days later.
 
 ### Why not the alternatives
 
@@ -593,8 +635,8 @@ The current heartbeat payload publishes `loaded: list[str]`. Change to `loaded: 
 3. **`songmaker_cli/admin_api.py::_state_from_dict`** — change `loaded=list(state.get("loaded", []))` to parse the new shape: `loaded=[LoadedModelDetail(**m) for m in state.get("loaded", [])]`.
 4. **`api_models/workers.py::WorkerEphemeralState`** — change `loaded: list[str]` to `loaded: list[LoadedModelDetail]` where `LoadedModelDetail` is a new Pydantic model.
 5. **`scripts/generate_types.py`** — add `LoadedModelDetail` to the emit list.
-6. **`frontend/src/lib/components/WorkerPoolPanel.svelte`** — update the "Loaded:" row rendering to show "{mode} ({size_gb} GB)".
-7. **`tests/test_acestep_state.py::test_heartbeat_payload_keys_match_admin_reader`** — extend the assertion to check the new shape: `state.loaded[0].mode == "sft"` and `state.loaded[0].size_gb == 6.0`.
+6. **`frontend/src/lib/components/WorkerPoolPanel.svelte`** — update the "Loaded:" row rendering to show **"{mode} (~{size_gb} GB est.)"**, e.g. "sft (~6 GB est.)". The `~` and `est.` are intentional and **must not be removed** — the size comes from `cache._sizes`, which is a static estimate keyed by mode (defined in `__main__.py::DEFAULT_MODEL_SIZES_GB`), NOT a measured `nvidia-smi` reading. Implying it's measured would mislead the operator into thinking the displayed value reflects the actual GPU allocation, which it does not. If/when a future phase wires in real per-model NVML deltas, the `~est.` qualifier can be dropped at the same time.
+7. **`tests/test_acestep_state.py::test_heartbeat_payload_keys_match_admin_reader`** — see D5/D7/D8 contract test extension below for the exact assertions to add.
 8. **`scheduler.py::_PickedWorker.loaded_modes`** — currently `list[str]`. Update to extract just the mode names from the new shape: `loaded_modes=[m["mode"] for m in state.get("loaded", [])]`. The picker doesn't care about size, only presence.
 
 **Watch for cascade:** `pick_worker`'s `_pick_from` does `if target_mode in w.loaded_modes` — this stays `list[str]` for the picker's purposes. The richer shape only flows to the admin UI.
@@ -658,12 +700,84 @@ function describeStatus(worker: WorkerInfoItem): string {
 - `test_heartbeat_publishes_loading_started_at_during_load`
 - `test_loading_started_at_cleared_after_load`
 
+## D8b. Heartbeat contract test extension — exact assertions (PR 2)
+
+D5 (`pinned`), D7 (`loaded` shape change), and D8 (`loading_started_at`) all extend the heartbeat payload. The contract test added in `c5a11e0` ([test_acestep_state.py::test_heartbeat_payload_keys_match_admin_reader](../tests/test_acestep_state.py)) is the regression net. **It must be extended in the same commit as the writer changes.** Spelling out the exact assertions here so the implementer doesn't have to design them mid-implementation:
+
+### Setup additions
+
+The existing test loads `sft` into the cache then calls `build_state_payload`. Two additions to the setup before the assertion block:
+
+```python
+# After: asyncio.run(cache.load("sft"))
+
+# Pin sft so the new pinned field gets a non-empty value
+asyncio.run(cache.pin("sft"))
+
+# (loading_started_at is None when no load is in flight; that's the steady-state
+#  case the test exercises. A separate test_loading_started_at_set_during_load
+#  in tests/acestep_worker/test_model_cache.py covers the non-None branch.)
+```
+
+### New assertions to add (after the existing `assert state.loaded == ["sft"]` block)
+
+```python
+# D7 — loaded is now list[LoadedModelDetail], not list[str]
+assert len(state.loaded) == 1
+assert state.loaded[0].mode == "sft"
+assert state.loaded[0].size_gb == 6.0
+
+# D5 — pinned set is published and round-trips through the reader
+assert state.pinned == ["sft"]
+
+# D8 — loading_started_at is None in steady state (no load in flight)
+assert state.loading_started_at is None
+```
+
+### What to delete from the test
+
+```python
+# OLD:
+assert state.loaded == ["sft"], (
+    f"writer/reader key mismatch: payload has keys {sorted(payload.keys())}, "
+    f"reader expects 'loaded'"
+)
+```
+
+This line stays in spirit but the equality check changes shape. The error message about "writer/reader key mismatch" should be preserved on the new shape — extend it:
+
+```python
+assert len(state.loaded) == 1 and state.loaded[0].mode == "sft", (
+    f"writer/reader key mismatch: payload has keys {sorted(payload.keys())}, "
+    f"reader expects 'loaded' as list[LoadedModelDetail]"
+)
+```
+
+### Required imports to add at the top of the test
+
+```python
+from songmaker_cli.api_models.workers import LoadedModelDetail  # noqa: F401 if unused
+```
+
+(The import isn't strictly required since the test doesn't construct a `LoadedModelDetail` directly — `_state_from_dict` does it. But importing it forces the test module to fail loudly if the new model class is missing, which is the contract semantic we want.)
+
+### Why this matters (Phase 3 incident)
+
+Phase 3 hit the `loaded_models` vs `loaded` writer/reader mismatch because there was no contract test. `c5a11e0` added the test as a regression net. **Adding new heartbeat fields without extending this test reintroduces the same vulnerability** — the writer would publish `pinned` but the reader's `_state_from_dict` could silently ignore it, or vice versa.
+
+The rule (from Watchpoint 4): **every PR 2 commit that adds a heartbeat field must extend this test in the same commit.** Don't split them.
+
 ## D9. Download auto-retry policy (3 attempts) (PR 2)
 
-The Phase 5 sub-plan deferred this. Implementation in [jobs.py::download_model_on_worker](../src/songmaker_cli/jobs.py):
+The Phase 5 sub-plan deferred this. Implementation in [jobs.py::download_model_on_worker](../src/songmaker_cli/jobs.py).
+
+### Structure: pre-flight outside the loop, consume inside the loop
+
+The pre-flight steps (`pick_worker`, submit `POST /download_model`) are **terminal on failure** — no retry. Only the SSE consumption loop is retry-eligible, and only on a narrow set of transient exceptions. Each retry re-submits to get a fresh `task_id` (the previous task on the worker is already done with an error).
 
 ```python
 DOWNLOAD_MAX_ATTEMPTS = 3
+DOWNLOAD_RETRY_BASE_DELAY_SECONDS = 5.0
 
 
 async def download_model_on_worker(ctx, job_id: str, mode: str) -> None:
@@ -671,18 +785,75 @@ async def download_model_on_worker(ctx, job_id: str, mode: str) -> None:
 
     last_error: str | None = None
     for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
+        # Pick a worker each attempt — a previously-offline worker may have
+        # come back; a previously-online worker may have died.
         try:
-            # ... existing pick_worker, POST /download_model, consume_download_task_stream ...
-            _update_job(factory, job_id, "completed", progress=1.0)
-            return
-        except WorkerTaskFailed as exc:
-            last_error = f"Download failed (attempt {attempt}): {exc}"
-            log.warning("download attempt %d/%d failed: %s", attempt, DOWNLOAD_MAX_ATTEMPTS, exc)
+            with factory() as session:
+                worker = await pick_any_online_worker(session, redis)
+        except NoCapacityError as exc:
+            _update_job(
+                factory, job_id, "failed",
+                error=str(exc),
+                error_type="no_workers",
+            )
+            return  # terminal — no retry
+
+        # Submit /download_model — terminal on any failure
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                submit = await client.post(
+                    f"{worker.base_url}/download_model",
+                    json={"mode": mode},
+                    headers=headers,
+                )
         except httpx.HTTPError as exc:
-            last_error = f"SSE transport failed (attempt {attempt}): {exc}"
-        # Wait before retry, with cap-and-jitter
+            _update_job(
+                factory, job_id, "failed",
+                error=f"Worker unreachable: {exc}",
+                error_type="worker_unreachable",
+            )
+            return  # terminal — no retry, ConnectError-class
+
+        if submit.status_code >= 400:
+            _update_job(
+                factory, job_id, "failed",
+                error=f"Worker returned {submit.status_code}: {submit.text[:200]}",
+                error_type="worker_error",
+            )
+            return  # terminal — no retry
+
+        task_id = submit.json()["task_id"]
+
+        # Consume the SSE stream — retry-eligible on the narrow set
+        try:
+            await consume_download_task_stream(
+                worker, task_id,
+                on_progress=_on_progress,
+                on_heartbeat=_on_heartbeat,
+                options=DispatchOptions(),
+            )
+            _update_job(factory, job_id, "completed", progress=1.0)
+            return  # success
+        except WorkerTaskFailed as exc:
+            last_error = f"Download attempt {attempt}/{DOWNLOAD_MAX_ATTEMPTS} failed: {exc}"
+            log.warning(
+                "download attempt %d/%d for %s failed: %s",
+                attempt, DOWNLOAD_MAX_ATTEMPTS, mode, exc,
+            )
+        except (httpx.RemoteProtocolError, httpx.ReadError) as exc:
+            last_error = (
+                f"SSE drop on attempt {attempt}/{DOWNLOAD_MAX_ATTEMPTS}: {exc}"
+            )
+            log.warning(
+                "SSE drop on download attempt %d/%d for %s: %s",
+                attempt, DOWNLOAD_MAX_ATTEMPTS, mode, exc,
+            )
+        # Other httpx exceptions (ConnectError mid-stream, etc.) propagate
+        # out of the loop and are caught by the function's outer handler as
+        # sse_transport (terminal).
+
         if attempt < DOWNLOAD_MAX_ATTEMPTS:
-            await asyncio.sleep(5.0 * attempt)
+            await asyncio.sleep(DOWNLOAD_RETRY_BASE_DELAY_SECONDS * attempt)
 
     _update_job(
         factory, job_id, "failed",
@@ -691,11 +862,28 @@ async def download_model_on_worker(ctx, job_id: str, mode: str) -> None:
     )
 ```
 
-**Critical:** the Redis flag stays acquired across all attempts. The existing `try/finally` already handles this — `clear_download_in_progress` runs at the end of the whole function, not per-attempt. **Don't move the clear inside the loop** or each retry would re-acquire the flag and a concurrent admin click could slip through between attempts.
+### Exception specificity (the critical detail)
 
-**Idempotent retry on the worker side:** HF `snapshot_download` is naturally idempotent — it skips files whose content hash matches. So retry #2 picks up where retry #1 left off via the HF cache. No worker-side change needed.
+**Retry-eligible (narrow):**
+- `WorkerTaskFailed` — the worker emitted an `error` SSE event. Causes: HF rate limit (429), transient HF blip, file system hiccup. Re-submitting may resolve it.
+- `httpx.RemoteProtocolError` — the SSE stream framing broke (worker process crashed, connection reset). The previous task on the worker is dead; re-submit gets a fresh task.
+- `httpx.ReadError` — the SSE read timed out or the connection dropped mid-stream. Same recovery as RemoteProtocolError.
 
-**Don't retry on `invalid_mode`, `no_workers`, `worker_unreachable`, or `worker_error`** — those are pre-flight failures that won't fix themselves in 5 seconds. Only retry on `WorkerTaskFailed` (the SSE error event from the worker, which can be transient HF rate limits or network blips) and `httpx.HTTPError` (transient SSE drops).
+**NOT retry-eligible (terminal):**
+- `httpx.ConnectError` — the worker is unreachable. Not transient; retrying just wastes time. Already handled in the submit pre-flight as `worker_unreachable`. If it happens *after* a successful submit (mid-stream), it means the worker died after accepting the task — propagate to the outer handler as `sse_transport`.
+- `httpx.HTTPStatusError` — the worker returned a 4xx/5xx on the submit. Already handled as `worker_error`. Won't fix itself.
+- `NoCapacityError` — no online workers. Pre-flight; terminal.
+- All `httpx.HTTPError` subclasses NOT in the narrow set above — propagate.
+
+**Why not catch broad `httpx.HTTPError`:** that includes `httpx.ConnectError`, which the user pointed out is "permanently-unreachable, retry is wasteful." Catching `RemoteProtocolError` and `ReadError` specifically targets the stream-died-mid-flight case while letting connect-time failures stay terminal.
+
+### Critical: Redis flag stays acquired across all attempts
+
+The existing `try/finally` already handles this — `clear_download_in_progress` runs at the end of the whole function, not per-attempt. **Don't move the clear inside the loop** or each retry would re-acquire the flag and a concurrent admin click could slip through between attempts.
+
+### Idempotent retry on the worker side
+
+HF `snapshot_download` is naturally idempotent — it skips files whose content hash matches. So retry #2 picks up where retry #1 left off via the HF cache. No worker-side change needed.
 
 ### Tests
 
