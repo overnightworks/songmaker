@@ -270,6 +270,57 @@ This is optional — plan files are historical records, and "this plan was shipp
 
 **Don't delete the sub-plan files.** `plans/acestep-worker-pool-phase2-subplan.md`, `-phase3-subplan.md`, and this `-phase7-subplan.md` are the design record. Future refactors will want to know why decisions were made. Leave them.
 
+## Deferred — requires its own design round before implementation
+
+**These items are NOT executed as part of the Phase 7 sweep.** They are surfaced here so they don't get lost, but each one needs a dedicated planning pass — a sub-plan or its own short design doc — before any code is touched. Phase 7 is a deletions-and-doc-pass sweep; restructuring container images, packaging, or runtime topology is out of scope for "cleanup". Doing them inline would inflate the sweep into a refactor and break the "one self-contained commit, easy to review" property.
+
+### D1. Split `Dockerfile.worker` into `Dockerfile.music-worker` + `Dockerfile.scoring-worker`
+
+**Status: deferred. Needs its own sub-plan before implementation. DO NOT touch in Phase 7.**
+
+**Context.** Today `Dockerfile.worker` is shared between `songmaker-music-worker` and `songmaker-scoring-worker`. Both pull `--extra server --extra scoring --extra whisper`, both run the `WhisperModel('large-v3', ...)` and `AesPredictor(checkpoint_pth='default')` preload steps. Image is ~6 GB, first build is 15–25 minutes (Whisper + AudioBox weight downloads alone are ~4 GB).
+
+**Why it was acceptable historically.** Before Phase 3, the music-worker hosted the ACE-Step subprocess locally and needed torch + the engine deps in-process. Bundling whisper/audiobox into the same image was free — torch was already there.
+
+**Why it's no longer acceptable post-Phase 3.** The music-worker is now a thin orchestrator. Its actual runtime needs are:
+- `acestep_engine.models.AceStepConfig` (pure Python dataclass — no torch)
+- `audio_engine` (numpy/scipy + lame for `_decode_audio` / `_splice_repaint_raw` / `master_audio` / `encode_mp3`)
+- `httpx` (scheduler HTTP/SSE to acestep-worker)
+- `redis`, `sqlalchemy`, `pydantic`, `arq`, `structlog`
+
+It does NOT need: faster-whisper, audiobox-aesthetics, torch, huggingface_hub, the `WhisperModel` preload, the `AesPredictor` preload, or any HF model weights. All of that is dead weight that:
+- Adds ~5 GB to the music-worker image
+- Adds 10–20 min to the music-worker first-build time
+- Forces music-worker rebuilds whenever any line of `Dockerfile.worker` changes (even scoring-only edits)
+- Gives the music-worker container a much bigger trust surface than it needs (HF token if present, model weight access, larger Python dep tree)
+
+**Tentative shape (do NOT implement without a sub-plan).**
+
+- New `Dockerfile.music-worker` — minimal, `--extra music-worker` (or just `--extra server` if the dep set matches; verify)
+- New `--extra music-worker` in `pyproject.toml` if needed — explicitly lists `httpx`, `arq`, `audio_engine` deps; excludes torch/whisper/audiobox
+- `Dockerfile.worker` renamed to `Dockerfile.scoring-worker`, stays as-is with `scoring whisper` extras and the `WhisperModel` + `AesPredictor` preloads
+- `docker-compose.yml`: change `songmaker-music-worker.build.dockerfile` to `Dockerfile.music-worker`; scoring-worker switches to `Dockerfile.scoring-worker`
+- The `Dockerfile.worker` over-cleaning-watch entry below (D6 of "What NOT to touch") gets DELETED as part of this work — at that point Dockerfile.worker no longer exists
+
+**Open questions to resolve in the sub-plan (NOT here).**
+
+1. **What `audio_engine` depends on.** Specifically: does mastering (`master_audio`) pull in any heavy native deps that would force the music-worker to keep some of the current system packages? Audit `audio_engine/pyproject.toml` and `Dockerfile.worker`'s `apt-get install` line.
+2. **Does `--extra server` already cover the music-worker's needs?** If yes, no new extra needed — just point at `--extra server`. If not, what's missing?
+3. **Healthcheck binary.** Today's healthcheck is `uv run arq songmaker_cli.music_worker.MusicWorkerSettings --check`. Verify arq's `--check` mode imports cleanly without the scoring deps.
+4. **`acestep_engine` package availability.** Music-worker imports `from acestep_engine.models import AceStepConfig`. The `acestep_engine` source must be present in the music-worker image. Is it pulled in by `--extra server` already, or via the `COPY src/ src/` line, or does it need to be in `pyproject.toml` as a path dep?
+5. **Container `apt-get` system packages.** Today's `Dockerfile.worker` installs `ffmpeg`, `gcc`, `libc6-dev`. Music-worker still needs `ffmpeg` (or whatever the MP3 encoder backend is). Verify which of those are needed without scoring deps.
+6. **Cache invalidation strategy.** Splitting will force a one-time full rebuild of both images. After that, music-worker rebuilds become near-instant (it has no Python dep churn). Worth a note in the migration commit.
+7. **CI implications.** If CI builds Docker images, the matrix grows by one. Is that fine?
+8. **Testing the split.** Smoke test: build both images, bring them up via compose, run an end-to-end generation, run a scoring job. Both must work in their respective containers.
+9. **Rollback plan.** Should be trivial — revert the compose change to point both services back at the old `Dockerfile.worker`. But verify before merging.
+10. **Trust boundary update for `docs/security.md`.** With the split, the music-worker container loses HF model access entirely. Update the trust scope section to reflect that.
+
+**Estimated effort once the sub-plan exists.** ~2 hours for the implementation, plus the sub-plan write-up itself. Build verification will dominate the wall-clock time.
+
+**When to do this.** After Phase 7 sweep is shipped and Phases 1–6 are stable in production for at least a few days. Don't bundle the split with any other change. It deserves its own commit, its own review, its own smoke test.
+
+**Tracking.** Open a follow-up issue or add a top-level entry to `plans/acestep-worker-pool.md`'s "future work" section once Phase 7 lands. Don't lose this.
+
 ## What NOT to touch (over-cleaning watch)
 
 These look stale but must stay. Over-cleaning is worse than under-cleaning because it breaks things:
@@ -278,7 +329,7 @@ These look stale but must stay. Over-cleaning is worse than under-cleaning becau
 - **`src/acestep_engine/constants.py`** — `MODEL_CONFIG_PATHS` is used by multiple modules. Single source of truth.
 - **`available_models` PG table + `AvailableModel` ORM model** — Phase 2 decided to keep this table as the admin's `is_active` allow-list. Still referenced.
 - **`scripts/download_models.sh`** — CLI escape hatch per parent plan. Useful for fresh installs, CI, and bootstrapping.
-- **`Dockerfile.worker`** — unchanged in Phase 3. Shared between `songmaker-music-worker` and `songmaker-scoring-worker`. Touching it would break the scoring worker.
+- **`Dockerfile.worker`** — unchanged in Phase 3. Shared between `songmaker-music-worker` and `songmaker-scoring-worker`. Touching it would break the scoring worker. Splitting it into per-service Dockerfiles is a known follow-up — see "Deferred — D1" above. **Do NOT do that split as part of Phase 7.** It needs its own sub-plan.
 - **Alembic migration files** — never delete, never rename, never edit committed migrations. Even if the table was later dropped by another migration.
 - **`plans/*.md` files** — all of them, including superseded ones (`multi-model-routing.md`) and sub-plans (`-phase1-subplan.md` etc.). They're history.
 - **Memory files in `~/.claude/projects/.../memory/`** — not project code, not in scope for repo cleanup. The memory system is operational context.
