@@ -109,9 +109,13 @@ The scheduler validates the SSE `done` event payload via `GenerationTaskResult.m
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from pydantic import BaseModel
+from redis.asyncio import Redis
+from sqlalchemy.orm import Session
+
 from acestep_engine.models import AceStepConfig
 
-from songmaker_cli.acestep_worker_dto import GenerationTaskResultDTO  # see D2
+# GenerationTaskResultDTO is defined in this same file (see D2).
 
 ProgressCallback = Callable[[float], Awaitable[None] | None]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
@@ -139,12 +143,14 @@ async def dispatch_generation(
     target_mode: str,
     on_progress: ProgressCallback | None = None,
     on_heartbeat: HeartbeatCallback | None = None,
-    pool: ArqRedis,
+    redis: Redis,
     db: Session,
     options: DispatchOptions = DispatchOptions(),
 ) -> GenerationTaskResultDTO:
     ...
 ```
+
+The `db` Session is opened by the caller (`run_generation_job` via `db_factory()`) and passed in for the lifetime of one dispatch. The scheduler does not commit — it only reads worker identities. The `redis` parameter is typed as `redis.asyncio.Redis` (the base class that both `ArqRedis` and `fakeredis.aioredis.FakeRedis` inherit from), which is the honest contract: the scheduler only needs basic GET/SET/INCR/DECR.
 
 **Why a callback for progress and not a return-of-events?** Because the music-worker still owns the DB job row. The callback updates that row (throttled, same as today's `_make_generation_progress_callback`). Returning events would force the caller to know the SSE shape, which is the scheduler's job to hide.
 
@@ -164,13 +170,11 @@ async def run_generation_job(
     seed: int | None = None,
     repaint_params: dict | None = None,
     cover_params: dict | None = None,
-    pool: ArqRedis | None = None,   # NEW: passed from music_worker.generate
+    redis: Redis | None = None,   # NEW: passed from music_worker.generate
 ) -> None:
 ```
 
-The arq function `music_worker.generate` is already async — it just needs to `await run_generation_job(...)` directly instead of `asyncio.to_thread(run_generation_job, ...)`, and it must pass `ctx["redis"]` (which is the arq pool) as `pool`.
-
-Wait — `ctx["redis"]` in arq is **not** the `ArqRedis` pool, it's the worker's own Redis connection. The scheduler needs the same connection that owns Redis state: `ArqRedis` is fine because it's just a `redis.asyncio.Redis` subclass and we only need basic GET/SET/INCR/DECR. Decision: pass `ctx["redis"]` (it's a `Redis` instance, satisfies the same interface as `ArqRedis` for our use). Type the parameter as `Redis` to be honest about it.
+The arq function `music_worker.generate` is already async — it just needs to `await run_generation_job(...)` directly instead of `asyncio.to_thread(run_generation_job, ...)`, and it passes `ctx["redis"]` as the `redis` argument. `ctx["redis"]` is an `ArqRedis` instance owned by the arq worker process — a different connection from the `arq_pool.py` singleton in the web container, but the same Redis server. Both satisfy the `redis.asyncio.Redis` base type the scheduler asks for.
 
 ### `post_process_generation` signature
 
@@ -265,7 +269,16 @@ The scheduler needs `GenerationTaskResultDTO` as a Pydantic model. Where to put 
 - **Not in `acestep_engine/models.py`** — `acestep_engine` is the HTTP client to the inner ACE-Step process, not the worker wrapper.
 - **In `songmaker_cli/scheduler.py`** — same place as the scheduler. Defined locally as `GenerationTaskResultDTO(BaseModel)`. The worker's `acestep_worker.models.GenerationTaskResult` is a structurally identical twin (same fields, validated independently).
 
-This is duplication, but it's the right kind: the worker owns its output schema, the scheduler owns the contract it expects, and a test asserts they match (`acestep_worker.models.GenerationTaskResult.model_fields == GenerationTaskResultDTO.model_fields` — same check pattern as the Phase 2 Redis prefix sync test).
+This is duplication, but it's the right kind: the worker owns its output schema, the scheduler owns the contract it expects, and a test asserts they match. Concretely:
+
+```python
+assert (
+    GenerationTaskResult.model_fields.keys()
+    == GenerationTaskResultDTO.model_fields.keys()
+)
+```
+
+Same check pattern as the Phase 2 Redis prefix sync test. `.keys()` is the simplest comparison that catches added/removed/renamed fields. (Comparing `model_fields` directly compares `FieldInfo` objects, which is needlessly strict — if one side adds a default value and the other doesn't, the test fails for a non-bug.)
 
 ## D3. Async-all-the-way migration
 
@@ -460,7 +473,7 @@ Delete the field. Update `_build_generation_context` to no longer construct an `
 
 **The model_name resolution problem.** Today, `_build_generation_context` calls `client.server_info()` to learn which ACE-Step model is currently loaded, then passes that as the `model` field on `AceStepConfig` and uses it to load presets. After cutover, the music-worker doesn't know which model the worker has loaded — that's the worker's state.
 
-**Resolution:** the `model_name` comes from the *requested* model (`req.model` in the API endpoint, passed through to the arq job and into `_build_generation_context`). If no model was explicitly requested, the scheduler picks based on `ace_config.lyrics`/`ace_config.duration` defaults — actually no, the scheduler doesn't know about defaults. The cleaner answer: the music-worker reads `req.model`, and if absent, uses a server-side default constant.
+**Resolution:** `model_name` comes from the *requested* model (`req.model` in the API endpoint, passed through to the arq job and into `_build_generation_context`). If no model was explicitly requested, the music-worker falls back to a server-side default constant (`DEFAULT_MODEL_MODE`, see existing `resolve_model_mode` for the value). The scheduler is not in the business of picking defaults — that's the music-worker's job before it calls `dispatch_generation`.
 
 `run_generation_job` already takes `requested_model` (passed via `music_worker.generate(...,  requested_model=None,...)` — wait, let me re-check the current signature).
 
@@ -579,7 +592,7 @@ Strict order — each step leaves the codebase importable and the tests passing 
 
 1. **Read CLAUDE.md and this sub-plan one more time** (1 min)
 2. **`acestep_worker/progress.py`** + tests for `parse_step_fraction` (10 min)
-3. **`acestep_worker/wrapper.py`** wire `on_progress` through `default_generate_runner`. Add `acestep_worker/models.py::GenerationTaskResult`. Validate worker still imports cleanly. (20 min)
+3. **`acestep_worker/wrapper.py`** wire `on_progress` through `default_generate_runner`. Add `acestep_worker/models.py::GenerationTaskResult`. Run `pytest tests/acestep_worker/ -q` to confirm nothing regressed. (20 min)
 4. **`tests/acestep_worker/test_wrapper.py`** add the progress-callback test. Run. (10 min)
 5. **`src/songmaker_cli/scheduler.py`** new file. `pick_worker`, `dispatch_generation`, `consume_task_stream`, DTO, errors, `DispatchOptions`. (60 min)
 6. **`tests/test_scheduler.py`** new file. Mock httpx + Redis. Cover all decision branches. (90 min)
@@ -604,7 +617,7 @@ Strict order — each step leaves the codebase importable and the tests passing 
 25. **Self-review pass** — `git diff HEAD~N` end-to-end. Read every diff. Look for dead imports, unused params, leftover references to deleted symbols. (30 min)
 26. **Run checks**: `ruff check src/ tests/`, full `pytest tests/ --ignore=...`, frontend `pnpm check`. Fix everything. (30 min)
 27. **Coverage**: `--cov=songmaker_cli.scheduler --cov=songmaker_cli.jobs --cov-report=term-missing`. Aim for 100% on new files. (10 min)
-28. **Commit + push** as one big commit (2-3 commits if natural splits emerge). (5 min)
+28. **Commit + push** in 3 commits per the split in D18. (5 min)
 29. **End-to-end smoke test** is the user's job per Phase 3 conversation — I will not `docker compose up` until they say go.
 
 Total wall clock estimate: 8–10 hours of focused work. Don't try to compress this.
@@ -625,7 +638,7 @@ Total wall clock estimate: 8–10 hours of focused work. Don't try to compress t
 10. **`test_scheduler.py::test_consume_task_stream_progress_calls_callback`** — mock SSE yields several progress events. Asserts on_progress was called with the floats.
 11. **`test_scheduler.py::test_consume_task_stream_reconnects_on_transport_error`** — first httpx.stream raises ConnectError, second yields `done`. Asserts the result is returned without error. Reconnect counter increments.
 12. **`test_scheduler.py::test_consume_task_stream_gives_up_after_max_reconnects`** — all 6 attempts fail. Raises the underlying httpx error.
-13. **`test_scheduler.py::test_dto_matches_worker_model_fields`** — imports both `acestep_worker.models.GenerationTaskResult` and `songmaker_cli.scheduler.GenerationTaskResultDTO`, asserts identical `model_fields`. Catches drift between worker output schema and scheduler expectations. Same pattern as Phase 2's prefix-sync test.
+13. **`test_scheduler.py::test_dto_matches_worker_model_fields`** — imports both `acestep_worker.models.GenerationTaskResult` and `songmaker_cli.scheduler.GenerationTaskResultDTO`, asserts `GenerationTaskResult.model_fields.keys() == GenerationTaskResultDTO.model_fields.keys()`. Catches drift between worker output schema and scheduler expectations. Same pattern as Phase 2's prefix-sync test.
 
 ### Tests that would pass even if implementation is wrong (avoid)
 
@@ -649,11 +662,10 @@ Total wall clock estimate: 8–10 hours of focused work. Don't try to compress t
 6. **`grep -rn AceStepStatusResponse\|ReinitializeRequest`** — zero hits.
 7. **No comments in new code** (per `feedback_code_standards.md`).
 8. **Every endpoint that mutates DB calls `db.commit()`** — already true in Phase 2 endpoints, just verify nothing got dropped during refactor.
-9. **`tests/test_jobs.py`'s `_run` helper** — make sure async tests use `asyncio.new_event_loop().run_until_complete(...)` not `asyncio.run()` (creates a fresh loop each time, avoiding the cross-loop fakeredis issue from Phase 2).
-10. **The shared tmp dir cleanup** — `_apply_task_overrides` paths must be cleaned up in `run_generation_job`'s `finally`, even on early-failure paths. The existing logic at lines 481-486 covers this; just verify the prefix check matches the new dir.
-11. **Worker WAV cleanup** — `post_process_generation`'s `finally` deletes the worker's temp WAV. If `post_process_generation` raises before the `try` block (parameter validation, etc.), the cleanup doesn't fire. Verify this can't happen by reading the code.
-12. **`scripts/generate_types.py`** ran at the end and produced a valid TS file with no diff issues.
-13. **Full project test suite passes** — not just new tests. Same `--ignore` set as Phase 2.
+9. **The shared tmp dir cleanup** — `_apply_task_overrides` paths must be cleaned up in `run_generation_job`'s `finally`, even on early-failure paths. The existing logic at lines 481-486 covers this; just verify the prefix check matches the new dir.
+10. **Worker WAV cleanup** — `post_process_generation`'s `finally` deletes the worker's temp WAV. If `post_process_generation` raises before the `try` block (parameter validation, etc.), the cleanup doesn't fire. Verify this can't happen by reading the code.
+11. **`scripts/generate_types.py`** ran at the end and produced a valid TS file with no diff issues.
+12. **Full project test suite passes** — not just new tests. Same `--ignore` set as Phase 2.
 
 ## D16. Things to watch out for
 
@@ -699,7 +711,7 @@ Inside an arq job, `ctx["redis"]` is the worker's Redis connection (a `redis.asy
 
 The web container side keeps using `get_arq_pool_dep` because it's in FastAPI dependency-injection land.
 
-### Watchpoint 11: The diffusion progress format may have other variants
+### Watchpoint 11: Don't simplify the diffusion progress regex
 
 `_DIFFUSION_STEP_PATTERN = re.compile(r"(\d+)/(\d+)\s*\[")` is tuned for tqdm output. ACE-Step also emits LM chunk text like `"LM chunk 1/1"` which the regex avoids by requiring the trailing `[`. **Don't simplify the regex** — the bracket is load-bearing.
 
