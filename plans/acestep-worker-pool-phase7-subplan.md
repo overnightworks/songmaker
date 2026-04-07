@@ -276,7 +276,9 @@ This is optional — plan files are historical records, and "this plan was shipp
 
 ### D1. Split `Dockerfile.worker` into `Dockerfile.music-worker` + `Dockerfile.scoring-worker`
 
-**Status: deferred. Needs its own sub-plan before implementation. DO NOT touch in Phase 7.**
+**Status: SUPERSEDED by Phase 8 — image architecture refactor.** See [acestep-worker-pool.md](acestep-worker-pool.md) Phase 8 section. Phase 8 includes the Dockerfile split as a side effect of introducing base images, plus addresses the venv bind-mount problem that Phase 3 smoke test exposed. Don't do D1 separately; do Phase 8 instead. The original D1 design notes below are kept as historical context for the Phase 8 sub-plan author.
+
+**DO NOT touch in Phase 7 — this is Phase 8 work, requires its own sub-plan.**
 
 **Context.** Today `Dockerfile.worker` is shared between `songmaker-music-worker` and `songmaker-scoring-worker`. Both pull `--extra server --extra scoring --extra whisper`, both run the `WhisperModel('large-v3', ...)` and `AesPredictor(checkpoint_pth='default')` preload steps. Image is ~6 GB, first build is 15–25 minutes (Whisper + AudioBox weight downloads alone are ~4 GB).
 

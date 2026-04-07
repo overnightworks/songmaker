@@ -136,7 +136,7 @@ Intermediate phases on the feature branch are not expected to be production-runn
 
 ## Phases
 
-Seven phases, organized as commit/PR-review boundaries on the feature branch. Phases 1–6 are the implementation; Phase 7 is a cross-cutting cleanup sweep.
+Eight phases, organized as commit/PR-review boundaries on the feature branch. Phases 1–6 are the implementation; Phase 7 is a cross-cutting cleanup sweep; Phase 8 is an image architecture refactor (base images, drop venv bind mount) discovered during Phase 3 smoke test.
 
 ---
 
@@ -741,6 +741,54 @@ Phase 6 can be split into 2 PRs (observability + everything else).
 **Size:** 1–2 hours. One commit.
 
 **Run when:** after Phases 1–6 are all committed and the full test suite is green at the Phase 6 commit. Not earlier.
+
+---
+
+### Phase 8 — Image architecture refactor (base images + drop venv bind mount)
+
+**Goal:** restructure the Docker image hierarchy into reusable base images. Today, every `docker compose build` re-resolves heavy CUDA/torch deps and the music-worker re-downloads multi-GB wheels because the host's bind-mounted `_models/acestep/.venv` is incompatible with the container's Python. Phase 8 introduces base images for ACE-Step, scoring, and the application server, dramatically cutting rebuild time and eliminating the host↔container venv-clobbering anti-pattern.
+
+**Why a dedicated phase:** this is a real refactor with image registry decisions, build dependency reorganization, and per-service Dockerfile changes. Bundling it into Phase 7 would inflate the cleanup sweep beyond "deletions and doc updates" and break its reviewable property. Bundling it into Phases 1–6 wasn't possible because the pain only became visible after the cutover.
+
+**Discovered during:** Phase 3 smoke test, when the first `/load_model` call against a freshly-built `acestep-worker-0` container triggered a 15+ minute uv re-sync inside the container, ultimately timing out the arq job. Root cause: the host's `_models/acestep/.venv` was bind-mounted in, uv detected the broken host-Python symlink, deleted the host venv, and restarted from scratch. The fix at smoke time was a 30-minute timeout override (`ARQ_JOB_TIMEOUT=1800` in `.env`); the proper architectural fix is Phase 8.
+
+**High-level shape (full design in the sub-plan):**
+
+```
+                    python:3.12-slim
+                          │
+         ┌────────────────┼────────────────┐
+         ▼                ▼                ▼
+   acestep-base     scoring-base      app-base
+   (~6-8 GB)        (~4-6 GB)         (~500 MB)
+   torch + cudnn    torch + whisper   fastapi + arq
+   diffusers        + audiobox        + sqlalchemy
+   ACE-Step venv    + HF weights      + audio_engine
+         │                │                │
+         ▼                ▼                ▼
+   acestep-worker   scoring-worker    music-worker
+   (~80 MB layer)   (~30 MB layer)    (~20 MB layer)
+                                          │
+                                          ▼
+                                    songmaker-web
+                                    (~100 MB layer)
+```
+
+**Key decisions Phase 8 must make:**
+
+1. ACE-Step model weights stay bind-mounted (`_models/acestep/checkpoints/`); only the `.venv` and `acestep/` source go into the base image
+2. Drop the `_models/acestep/.venv` bind mount entirely — host can have its own separate venv if developers want one
+3. Dockerfile.worker is split (replaces and supersedes the Phase 7 D1 deferred item)
+4. Image registry strategy (local-only vs push to GHCR) — depends on whether multi-host deployment is on the horizon
+5. Base image versioning scheme (content hash vs semver)
+
+**Sub-plan:** to be written after Phase 7 ships. Will live at `plans/acestep-worker-pool-phase8-subplan.md`. Should follow the same depth as the Phase 3 sub-plan: concrete Dockerfile listings, build order, smoke test procedure, rollback plan.
+
+**Size:** ~1 day of focused work + sub-plan write-up. Build verification dominates wall-clock time (15-20 min per base image rebuild during testing).
+
+**Run when:** after Phase 7 cleanup ships AND Phases 1–6 have been stable in normal use for at least a few days. Don't bundle with anything else. Deserves its own commit, its own review, its own smoke test.
+
+**Supersedes:** the Phase 7 D1 "split Dockerfile.worker" deferred item. Don't do D1 separately — Phase 8 includes it as a side effect of introducing the base image hierarchy.
 
 ---
 
