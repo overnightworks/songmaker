@@ -71,11 +71,12 @@ async def read_queue_depth(redis: Redis, worker_id: str) -> int:
 
 
 async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
+    snapshot = deps.cache.snapshot()
     return {
-        "loaded": deps.cache.loaded_modes(),
-        "target_loading": deps.cache.target_loading,
-        "vram_used_gb": deps.cache.vram_used_gb(),
-        "vram_total_gb": deps.cache.vram_budget_gb,
+        "loaded": list(snapshot.loaded),
+        "target_loading": snapshot.target_loading,
+        "vram_used_gb": snapshot.vram_used_gb,
+        "vram_total_gb": snapshot.vram_total_gb,
         "available_modes": list_available_modes(deps.checkpoint_dir),
         "queue_depth": await read_queue_depth(deps.redis, deps.worker_id),
     }
@@ -90,12 +91,13 @@ def build_router(deps: WorkerDeps) -> APIRouter:
 
     @router.get("/loaded_models", response_model=LoadedModelsResponse)
     async def loaded_models() -> LoadedModelsResponse:
+        snapshot = deps.cache.snapshot()
         return LoadedModelsResponse(
-            loaded=deps.cache.loaded_modes(),
-            target_loading=deps.cache.target_loading,
+            loaded=list(snapshot.loaded),
+            target_loading=snapshot.target_loading,
             queue_depth=await read_queue_depth(deps.redis, deps.worker_id),
-            vram_used_gb=deps.cache.vram_used_gb(),
-            vram_total_gb=deps.cache.vram_budget_gb,
+            vram_used_gb=snapshot.vram_used_gb,
+            vram_total_gb=snapshot.vram_total_gb,
             available_modes=list_available_modes(deps.checkpoint_dir),
         )
 

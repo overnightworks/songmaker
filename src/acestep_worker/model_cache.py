@@ -26,6 +26,14 @@ class LoadResult:
     evicted: list[str]
 
 
+@dataclass(frozen=True)
+class CacheStateSnapshot:
+    loaded: tuple[str, ...]
+    target_loading: str | None
+    vram_used_gb: float
+    vram_total_gb: float
+
+
 class CapacityError(Exception):
     pass
 
@@ -71,6 +79,15 @@ class ModelCache:
 
     def vram_used_gb(self) -> float:
         return sum(self._sizes.get(mode, 0.0) for mode in self._loaded)
+
+    def snapshot(self) -> CacheStateSnapshot:
+        loaded = tuple(self._loaded)
+        return CacheStateSnapshot(
+            loaded=loaded,
+            target_loading=self._target_loading,
+            vram_used_gb=sum(self._sizes.get(mode, 0.0) for mode in loaded),
+            vram_total_gb=self._budget_gb,
+        )
 
     async def load(self, mode: str) -> LoadResult:
         if mode not in self._sizes:

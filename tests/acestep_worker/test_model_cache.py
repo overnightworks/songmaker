@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 
@@ -177,6 +178,83 @@ def test_target_loading_set_during_load() -> None:
     _run(cache.load("sft"))
     assert target_during_load == ["sft"]
     assert cache.target_loading is None
+
+
+def test_snapshot_initial_state() -> None:
+    cache, _, _ = _make_cache()
+    snap = cache.snapshot()
+    assert snap.loaded == ()
+    assert snap.target_loading is None
+    assert snap.vram_used_gb == 0.0
+    assert snap.vram_total_gb == 24.0
+
+
+def test_snapshot_after_load_is_consistent() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    snap = cache.snapshot()
+    assert snap.loaded == ("sft",)
+    assert snap.vram_used_gb == 6.0
+    assert snap.target_loading is None
+
+
+def test_snapshot_is_immutable_against_subsequent_mutation() -> None:
+    cache, _, _ = _make_cache()
+    _run(cache.load("sft"))
+    snap = cache.snapshot()
+    _run(cache.evict("sft"))
+    assert snap.loaded == ("sft",)
+    assert snap.vram_used_gb == 6.0
+
+
+def test_snapshot_during_load_sees_target_loading() -> None:
+    captured: list[Any] = []
+
+    async def slow_loader(mode: str) -> LoadedModel:
+        captured.append(cache.snapshot())
+        return LoadedModel(mode=mode, handle=None, port=8101)
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=slow_loader,
+        unloader=unloader,
+    )
+    _run(cache.load("sft"))
+    assert len(captured) == 1
+    snap = captured[0]
+    assert snap.loaded == ()
+    assert snap.target_loading == "sft"
+    assert snap.vram_used_gb == 0.0
+
+
+def test_snapshot_after_eviction_during_load_is_consistent() -> None:
+    captured: list[Any] = []
+
+    async def loader(mode: str) -> LoadedModel:
+        captured.append(cache.snapshot())
+        return LoadedModel(mode=mode, handle=None, port=8101)
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=12.0,
+        model_sizes={"sft": 6.0, "xl-sft": 12.0},
+        loader=loader,
+        unloader=unloader,
+    )
+    _run(cache.load("sft"))
+    captured.clear()
+    _run(cache.load("xl-sft"))
+    assert len(captured) == 1
+    snap = captured[0]
+    assert snap.loaded == ()
+    assert snap.vram_used_gb == 0.0
+    assert snap.target_loading == "xl-sft"
 
 
 def test_target_loading_cleared_on_loader_failure() -> None:
