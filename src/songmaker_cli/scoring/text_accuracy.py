@@ -39,23 +39,23 @@ def score_text_accuracy(
 
     Stores the transcription in shared_data["whisper_text"] so that
     downstream scorers (lyrical_coherence) can access it without
-    going through the filesystem.
+    going through the filesystem. When no intended lyrics are
+    available, transcription still runs and the similarity ratio is
+    reported as 0.0.
     """
-    if meta is None or not meta.lyrics:
-        raise ValueError("No lyrics metadata — cannot score text accuracy")
-
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
     whisper_size = effective_config.whisper_model
     device = effective_config.whisper_device or effective_config.device
-    language = meta.generation_params.get("vocal_language") or None
+    language = (meta.generation_params.get("vocal_language") or None) if meta else None
     model = _get_whisper_model(whisper_size, device=device)
 
+    lyrics_text = meta.lyrics if meta else ""
     intended_lines = tuple(
-        line.strip() for line in meta.lyrics.splitlines()
+        line.strip() for line in lyrics_text.splitlines()
         if line.strip() and not line.strip().startswith("[")
     )
 
-    initial_prompt = " ".join(intended_lines)
+    initial_prompt = " ".join(intended_lines) if intended_lines else None
     transcribed, segments, detected_language = _transcribe(
         mp3_path, language, model, initial_prompt,
     )
@@ -63,7 +63,7 @@ def score_text_accuracy(
     trans_lines = tuple(
         s.get("text", "").strip() for s in segments if s.get("text", "").strip()
     )
-    ratio = _word_level_accuracy(intended_lines, trans_lines)
+    ratio = _word_level_accuracy(intended_lines, trans_lines) if intended_lines else 0.0
 
     log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
              ratio * 100, len(intended_lines), len(trans_lines))

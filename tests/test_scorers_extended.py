@@ -334,11 +334,36 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
     assert "hello world" in shared_data.whisper_text
 
 
-def test_score_text_accuracy_no_meta() -> None:
+def test_score_text_accuracy_no_meta(tmp_path: Path) -> None:
+    from songmaker_cli.scoring.models import SharedScorerData
+    from songmaker_cli.scoring.pipeline import PipelineConfig
     from songmaker_cli.scoring.text_accuracy import score_text_accuracy
 
-    with pytest.raises(ValueError, match="No lyrics"):
-        score_text_accuracy(Path("test.mp3"), meta=None)
+    seg = MagicMock()
+    seg.text = "la la la"
+    info = MagicMock()
+    info.language = "en"
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (iter([seg]), info)
+    config = PipelineConfig(device="cpu", whisper_model="base")
+    shared = SharedScorerData()
+
+    with patch(
+        "songmaker_cli.scoring.text_accuracy._get_whisper_model",
+        return_value=mock_model,
+    ):
+        result = score_text_accuracy(
+            tmp_path / "test.mp3", meta=None, config=config, shared_data=shared,
+        )
+
+    assert isinstance(result, TextAccuracyScore)
+    assert result.similarity_ratio == 0.0
+    assert result.intended_line_texts == ()
+    assert "la la la" in result.transcribed_line_texts
+    assert shared.whisper_text == "la la la"
+    call_kwargs = mock_model.transcribe.call_args[1]
+    assert call_kwargs["language"] is None
+    assert "initial_prompt" not in call_kwargs
 
 
 # ── TextAccuracyScore properties ────────────────────────────────────

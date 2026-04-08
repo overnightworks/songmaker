@@ -628,15 +628,17 @@ def run_scoring_job(
                 return
             mp3_path_rel = gen.mp3_path
             song = gen.song
+            ver = gen.version
 
             meta_kwargs: dict = {}
-            if song:
-                ver = song.latest_version
+            if song or ver:
+                meta_kwargs["title"] = song.title if song else ""
                 if ver:
-                    meta_kwargs = {
-                        "title": song.title,
-                        "prompt": ver.prompt,
-                        "lyrics": ver.lyrics,
+                    meta_kwargs["prompt"] = ver.prompt
+                    meta_kwargs["lyrics"] = ver.lyrics
+                if song and song.vocal_language:
+                    meta_kwargs["generation_params"] = {
+                        "vocal_language": song.vocal_language,
                     }
             resolved_model = get_claude_model(
                 session, SETTING_CLAUDE_SCORING_MODEL, CLAUDE_SCORING_MODEL,

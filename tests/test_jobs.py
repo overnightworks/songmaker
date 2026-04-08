@@ -125,6 +125,7 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
             audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data",
             redis=MagicMock(),
+            target_model="sft",
         ))
 
     with seeded_db() as session:
@@ -135,7 +136,7 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 1
         assert gens[0].seed == 42
-        assert gens[0].model_mode == "turbo"
+        assert gens[0].model_mode == "sft"
 
 
 def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
@@ -148,6 +149,7 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
             audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data",
             redis=MagicMock(),
+            target_model="sft",
         ))
 
     with seeded_db() as session:
@@ -165,6 +167,7 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
             audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data",
             redis=MagicMock(),
+            target_model="sft",
         ))
 
     with seeded_db() as session:
@@ -184,6 +187,7 @@ def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         redis=MagicMock(),
+        target_model="sft",
     ))
 
     with seeded_db() as session:
@@ -199,6 +203,7 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
         audio_dir=tmp_path / "audio",
         data_dir=tmp_path / "data",
         redis=MagicMock(),
+        target_model="sft",
     ))
 
     with seeded_db() as session:
@@ -220,6 +225,7 @@ def test_generation_job_no_capacity(seeded_db, tmp_path: Path) -> None:
             audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data",
             redis=MagicMock(),
+            target_model="sft",
         ))
 
     with seeded_db() as session:
@@ -241,6 +247,7 @@ def test_generation_job_worker_task_failed_message(seeded_db, tmp_path: Path) ->
             audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data",
             redis=MagicMock(),
+            target_model="sft",
         ))
 
     with seeded_db() as session:
@@ -260,6 +267,7 @@ def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
             audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data",
             redis=MagicMock(),
+            target_model="sft",
         ))
 
     with seeded_db() as session:
@@ -282,6 +290,7 @@ def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> 
             audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data",
             redis=MagicMock(),
+            target_model="sft",
         ))
 
     with seeded_db() as session:
@@ -297,7 +306,7 @@ def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> Non
         patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
         patch(
             "songmaker_cli.jobs.load_generation_defaults",
-            return_value={"turbo": {"shift": 7.0}},
+            return_value={"sft": {"shift": 7.0}},
         ) as mock_load,
     ):
         _run(run_generation_job(
@@ -306,6 +315,7 @@ def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> Non
             audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data",
             redis=MagicMock(),
+            target_model="sft",
         ))
 
     mock_load.assert_called_once()
@@ -404,6 +414,89 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         gen = get_generation(session, "g1")
         assert gen.whisper_text == "hello\nworld"
+
+
+def test_scoring_job_uses_generation_version_not_latest(
+    seeded_db, tmp_path: Path,
+) -> None:
+    """Meta must come from the version this generation was produced with,
+    not from the song's latest_version (which may have been edited since).
+    Vocal language must propagate so Whisper can skip auto-detect."""
+    audio_dir = tmp_path / "audio"
+    mp3_file = audio_dir / "user1" / "g1.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3")
+
+    with seeded_db() as session:
+        session.add(Version(
+            id="v2", song_id="s1", version_number=2,
+            lyrics="Brand new lyrics", prompt="new prompt",
+            bpm=140, audio_duration=60, key_scale="Cm",
+        ))
+        session.add(Generation(
+            id="g1", song_id="s1", version_id="v1", generation_number=1,
+            mp3_path="user1/g1.mp3", seed=42,
+        ))
+        session.commit()
+
+    captured: dict = {}
+
+    def _capture_score(mp3_path, meta=None, scorers=None, config=None,
+                       job_id=None, on_progress=None):
+        captured["meta"] = meta
+        return _mock_scores(with_whisper=True)
+
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process",
+        return_value=MagicMock(score=_capture_score),
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    meta = captured["meta"]
+    assert meta is not None
+    assert meta.lyrics == "Hello world"
+    assert meta.prompt == "rock style"
+    assert meta.generation_params.get("vocal_language") == "en"
+
+
+def test_scoring_job_no_version_still_scores(seeded_db, tmp_path: Path) -> None:
+    """Generations with a deleted/null version still get scored — meta is
+    minimal but text_accuracy can still transcribe."""
+    audio_dir = tmp_path / "audio"
+    mp3_file = audio_dir / "user1" / "g1.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3")
+
+    with seeded_db() as session:
+        session.add(Generation(
+            id="g1", song_id="s1", version_id=None, generation_number=1,
+            mp3_path="user1/g1.mp3", seed=42,
+        ))
+        session.commit()
+
+    captured: dict = {}
+
+    def _capture_score(mp3_path, meta=None, scorers=None, config=None,
+                       job_id=None, on_progress=None):
+        captured["meta"] = meta
+        return _mock_scores(with_whisper=True)
+
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process",
+        return_value=MagicMock(score=_capture_score),
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    with seeded_db() as session:
+        job = get_job(session, "j2")
+        assert job.status == "completed"
+        gen = get_generation(session, "g1")
+        assert gen.whisper_text == "hello\nworld"
+
+    meta = captured["meta"]
+    assert meta is not None
+    assert meta.lyrics == ""
+    assert meta.generation_params.get("vocal_language") == "en"
 
 
 def test_scoring_job_generation_not_found(seeded_db) -> None:
