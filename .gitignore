@@ -6,6 +6,7 @@
 _models/
 _cache/
 _output/
+_recovery/
 
 # ── Audio files (safety net) ──
 *.wav

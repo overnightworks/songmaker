@@ -80,19 +80,19 @@ describe('API client', () => {
 	});
 
 	it('fetchSongs without album', async () => {
-		mockOk({ items: [], total: 0, offset: 0, limit: 50 });
+		mockOk({ items: [], total: 0, offset: 0, limit: 200 });
 		await fetchSongs();
 		expect(mockFetch).toHaveBeenCalledWith(
-			'/api/songs?offset=0&limit=50',
+			'/api/songs?offset=0&limit=200',
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});
 
 	it('fetchSongs with album filter', async () => {
-		mockOk({ items: [], total: 0, offset: 0, limit: 50 });
+		mockOk({ items: [], total: 0, offset: 0, limit: 200 });
 		await fetchSongs('a1');
 		expect(mockFetch).toHaveBeenCalledWith(
-			'/api/songs?offset=0&limit=50&album_id=a1',
+			'/api/songs?offset=0&limit=200&album_id=a1',
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});

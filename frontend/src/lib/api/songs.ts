@@ -4,7 +4,7 @@ import { apiFetch } from './fetch';
 export async function fetchSongs(
 	albumId?: string,
 	offset: number = 0,
-	limit: number = 50
+	limit: number = 200
 ): Promise<PaginatedResponse<SongItem>> {
 	const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
 	if (albumId) params.set('album_id', albumId);

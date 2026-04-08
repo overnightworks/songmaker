@@ -123,6 +123,14 @@
 				value: scores.audiobox_complexity.toFixed(2),
 				color: 'ok'
 			});
+		if (scores.bpm_detected !== undefined) {
+			const dev = scores.bpm_deviation ?? 0;
+			entries.push({
+				label: 'BPM',
+				value: scores.bpm_detected.toFixed(0),
+				color: dev < 5 ? 'good' : dev < 15 ? 'ok' : 'bad'
+			});
+		}
 		return entries;
 	});
 
