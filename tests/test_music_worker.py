@@ -84,12 +84,16 @@ def test_cleanup_stale_calls_base_cleanup_and_orphan_audit() -> None:
     with (
         patch.object(mw_mod, "_base_cleanup", new_callable=AsyncMock) as mock_base,
         patch.object(mw_mod, "audit_orphaned_files") as mock_audit,
+        patch("songmaker_cli.cleanup.run_cleanup_expired") as mock_expired,
+        patch.object(mw_mod, "_get_db_factory", return_value=MagicMock()),
+        patch.object(mw_mod, "_audio_dir", return_value="audio"),
     ):
         ctx = _mock_ctx()
         _run(mw_mod.cleanup_stale(ctx))
 
     mock_base.assert_called_once_with(ctx)
     mock_audit.assert_called_once()
+    mock_expired.assert_called_once()
 
 
 def test_on_startup_calls_recover_on_startup() -> None:

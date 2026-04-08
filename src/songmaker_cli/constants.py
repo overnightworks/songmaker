@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import timedelta
 from enum import StrEnum
 from typing import Final
 
@@ -22,6 +23,13 @@ DEFAULT_MODEL_MODE: Final[str] = "sft"
 DATA_ROOT = "data"
 AUDIO_ROOT = "data/audio"
 DEFAULT_ARTIST = "Flex0r"
+
+DEFAULT_SOFT_DELETE_RETENTION_DAYS: Final[int] = 30
+RESTORE_WINDOW: Final[timedelta] = timedelta(
+    days=int(os.environ.get(
+        "SOFT_DELETE_RETENTION_DAYS", str(DEFAULT_SOFT_DELETE_RETENTION_DAYS),
+    )),
+)
 
 # Pagination defaults and limits
 PAGE_DEFAULT_LIMIT = 50
@@ -219,6 +227,7 @@ class AuditAction(StrEnum):
     CREATE = "create"
     UPDATE = "update"
     DELETE = "delete"
+    RESTORE = "restore"
     HARD_DELETE = "hard_delete"
     DEACTIVATE = "deactivate"
     CANCEL = "cancel"

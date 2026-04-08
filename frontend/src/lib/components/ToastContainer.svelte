@@ -7,6 +7,11 @@
 		{#each $toasts as toast (toast.id)}
 			<div class="toast toast-{toast.type}" role="alert">
 				<span class="toast-message">{toast.message}</span>
+				{#if toast.action}
+					<button class="toast-action" onclick={() => toast.action?.handler()}>
+						{toast.action.label}
+					</button>
+				{/if}
 				<button class="toast-dismiss" onclick={() => dismissToast(toast.id)} aria-label="Dismiss"
 					>&times;</button
 				>
@@ -63,6 +68,22 @@
 
 	.toast-message {
 		flex: 1;
+	}
+
+	.toast-action {
+		background: rgba(255, 255, 255, 0.1);
+		border: 1px solid currentColor;
+		color: inherit;
+		padding: 0.25rem 0.6rem;
+		border-radius: 4px;
+		font-size: 0.8rem;
+		cursor: pointer;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.toast-action:hover {
+		background: rgba(255, 255, 255, 0.2);
 	}
 
 	.toast-dismiss {

@@ -9,6 +9,7 @@ from songmaker_cli.api_helpers import (
     Pagination,
     check_album_access,
     check_song_access,
+    check_song_access_including_deleted,
     cleanup_generation_files,
     gen_params_to_dict,
     owner_filter,
@@ -28,10 +29,10 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.queries import (
+    RestoreWindowExpiredError,
     cleanup_song,
     count_songs,
     create_song,
-    delete_song,
     delete_version,
     disable_song_sharing,
     enable_song_sharing,
@@ -39,6 +40,8 @@ from songmaker_cli.db.queries import (
     list_songs,
     move_song,
     record_audit,
+    restore_song,
+    soft_delete_song,
     update_song,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -143,17 +146,33 @@ def api_delete_song(
     song_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-    ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
     check_song_access(session, song_id, user)
     try:
-        paths = delete_song(session, song_id)
+        soft_delete_song(session, song_id)
     except ValueError:
         raise HTTPException(404, "Song not found")
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.SONG, song_id)
     session.commit()
-    cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
+
+
+@router.post("/songs/{song_id}/restore")
+def api_restore_song(
+    song_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> SongResponse:
+    check_song_access_including_deleted(session, song_id, user)
+    try:
+        restored = restore_song(session, song_id)
+    except RestoreWindowExpiredError as e:
+        raise HTTPException(410, str(e))
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    record_audit(session, user.id, AuditAction.RESTORE, ResourceType.SONG, song_id)
+    session.commit()
+    return SongResponse.from_orm(restored)
 
 
 @router.post("/songs/{song_id}/cleanup")

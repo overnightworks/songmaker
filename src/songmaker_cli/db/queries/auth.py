@@ -53,15 +53,18 @@ def hard_delete_user(session: Session, user_id: str) -> list[str]:
 
     Returns relative audio file paths for post-commit cleanup.
     """
-    albums = session.query(Album).filter_by(created_by=user_id).all()
+    from songmaker_cli.db.soft_delete import include_deleted
+
     audio_paths: list[str] = []
-    for album in albums:
-        for song in album.songs:
-            for gen in song.generations:
-                for p in [gen.mp3_path, gen.wav_path]:
-                    if p:
-                        audio_paths.append(p)
-        session.delete(album)
+    with include_deleted(session):
+        albums = session.query(Album).filter_by(created_by=user_id).all()
+        for album in albums:
+            for song in album.songs:
+                for gen in song.generations:
+                    for p in [gen.mp3_path, gen.wav_path]:
+                        if p:
+                            audio_paths.append(p)
+            session.delete(album)
 
     for playlist in session.query(Playlist).filter_by(created_by=user_id).all():
         session.delete(playlist)

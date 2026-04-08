@@ -344,6 +344,22 @@ export function removeAlbumFromList(albumId: string): void {
 	albumList.update((list) => list.filter((a) => a.id !== albumId));
 }
 
+export function addAlbumToList(album: AlbumItem): void {
+	albumList.update((list) => {
+		if (list.some((a) => a.id === album.id)) return list;
+		return [...list, album].sort((a, b) => a.title.localeCompare(b.title));
+	});
+}
+
+export function addSongsToList(songs: SongItem[]): void {
+	if (songs.length === 0) return;
+	songList.update((list) => {
+		const existingIds = new Set(list.map((s) => s.id));
+		const newOnes = songs.filter((s) => !existingIds.has(s.id));
+		return [...list, ...newOnes];
+	});
+}
+
 export function updateGenerationInList(
 	genId: string,
 	updater: (g: GenerationItem) => GenerationItem

@@ -68,6 +68,8 @@ class Album(ShareMixin, Base):
     )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
 
+    deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+
     songs: Mapped[list[Song]] = relationship(back_populates="album", cascade="all, delete-orphan")
 
 
@@ -81,6 +83,7 @@ class Song(ShareMixin, Base):
     track_number: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
 
     album: Mapped[Album] = relationship(back_populates="songs")
     versions: Mapped[list[Version]] = relationship(

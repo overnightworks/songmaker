@@ -5,6 +5,7 @@ export {
 	shareAlbum,
 	unshareAlbum,
 	deleteAlbum,
+	restoreAlbum,
 	cleanupAlbum
 } from './albums';
 export {
@@ -15,6 +16,7 @@ export {
 	fetchVersions,
 	deleteVersion,
 	deleteSong,
+	restoreSong,
 	moveSong,
 	shareSong,
 	unshareSong,

@@ -1,16 +1,19 @@
 <script lang="ts">
-	import { deleteAlbum, shareAlbum, unshareAlbum } from '$lib/api/client';
+	import { deleteAlbum, restoreAlbum, shareAlbum, unshareAlbum } from '$lib/api/client';
+	import { fetchSongs } from '$lib/api/songs';
 	import {
 		albumList,
 		songList,
 		selectedAlbumId,
 		playAlbum,
+		addAlbumToList,
+		addSongsToList,
 		removeAlbumFromList,
 		removeSongsForAlbum,
 		updateAlbumInList
 	} from '$lib/stores/player';
 	import { deselectAlbum, selectSong } from '$lib/stores/navigation';
-	import { addToast } from '$lib/stores/toast';
+	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import ActionButton from './ActionButton.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
@@ -54,12 +57,26 @@
 
 	async function onAlbumDelete(): Promise<void> {
 		if (!selectedAlbum) return;
-		const albumId = selectedAlbum.id;
+		const album = selectedAlbum;
+		const albumId = album.id;
 		try {
 			await deleteAlbum(albumId);
 			removeAlbumFromList(albumId);
 			removeSongsForAlbum(albumId);
-			addToast('Album deleted', 'success');
+			addUndoToast('Album deleted', {
+				label: 'Undo',
+				handler: async () => {
+					try {
+						const restored = await restoreAlbum(albumId);
+						addAlbumToList(restored);
+						const resp = await fetchSongs(albumId);
+						addSongsToList(resp.items);
+						addToast('Album restored', 'success');
+					} catch {
+						addToast('Restore failed', 'error');
+					}
+				}
+			});
 		} catch {
 			addToast('Delete failed', 'error');
 		}

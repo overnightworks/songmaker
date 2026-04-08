@@ -7,6 +7,7 @@
 		pickGeneration,
 		unpickGeneration,
 		deleteSong,
+		restoreSong,
 		shareSong,
 		unshareSong,
 		shareGeneration,
@@ -24,7 +25,8 @@
 		updateSongInList,
 		updateGenerationInList,
 		removeGenerationFromSong,
-		removeSongFromList
+		removeSongFromList,
+		addSongsToList
 	} from '$lib/stores/player';
 	import {
 		selectGeneration,
@@ -47,7 +49,7 @@
 	} from '$lib/stores/editor';
 	import { activeModels } from '$lib/stores/presets';
 	import { songList } from '$lib/stores/player';
-	import { addToast } from '$lib/stores/toast';
+	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addGenerationToPlaylist, addSongToPlaylist } from '$lib/stores/playlists';
 	import { pendingSource } from '$lib/stores/source';
 	import { setGenerationActions } from '$lib/contexts/generation-actions';
@@ -267,7 +269,18 @@
 			await deleteSong(songId);
 			removeSongFromList(songId);
 			backToAlbum();
-			addToast('Song deleted', 'success');
+			addUndoToast('Song deleted', {
+				label: 'Undo',
+				handler: async () => {
+					try {
+						const restored = await restoreSong(songId);
+						addSongsToList([restored]);
+						addToast('Song restored', 'success');
+					} catch {
+						addToast('Restore failed', 'error');
+					}
+				}
+			});
 		} catch {
 			addToast('Delete failed', 'error');
 		}

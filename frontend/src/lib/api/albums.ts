@@ -28,6 +28,10 @@ export async function deleteAlbum(albumId: string): Promise<void> {
 	await apiFetch(`/api/albums/${albumId}`, { method: 'DELETE' });
 }
 
+export async function restoreAlbum(albumId: string): Promise<AlbumItem> {
+	return apiFetch<AlbumItem>(`/api/albums/${albumId}/restore`, { method: 'POST' });
+}
+
 export async function cleanupAlbum(albumId: string): Promise<CleanupResult> {
 	return apiFetch<CleanupResult>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
 }

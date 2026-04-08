@@ -27,15 +27,17 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.queries import (
+    RestoreWindowExpiredError,
     cleanup_album,
     count_albums,
     create_album,
-    delete_album,
     disable_album_sharing,
     enable_album_sharing,
     get_album,
     list_albums,
     record_audit,
+    restore_album,
+    soft_delete_album,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
@@ -99,15 +101,30 @@ def api_delete_album(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-    ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    paths = delete_album(session, album_id)
+    soft_delete_album(session, album_id)
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.ALBUM, album_id)
     session.commit()
-    cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
+
+
+@router.post("/albums/{album_id}/restore")
+def api_restore_album(
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> AlbumResponse:
+    album = get_album(session, album_id, include_deleted_rows=True)
+    check_album_access(album, user)
+    try:
+        restored = restore_album(session, album_id)
+    except RestoreWindowExpiredError as e:
+        raise HTTPException(410, str(e))
+    record_audit(session, user.id, AuditAction.RESTORE, ResourceType.ALBUM, album_id)
+    session.commit()
+    return AlbumResponse.from_orm(restored)
 
 
 @router.post("/albums/{album_id}/cleanup")

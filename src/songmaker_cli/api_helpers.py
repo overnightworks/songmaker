@@ -181,7 +181,7 @@ def unique_album_id(session: Session, base_slug: str) -> str:
     _begin_exclusive(session, _ALBUM_ID_LOCK_ID)
     candidate = base_slug
     counter = 1
-    while get_album(session, candidate):
+    while get_album(session, candidate, include_deleted_rows=True):
         counter += 1
         candidate = f"{base_slug}-{counter}"
     return candidate
@@ -210,6 +210,25 @@ def check_song_access(
         raise HTTPException(404, "Song not found")
     if user.role != ROLE_ADMIN:
         album = song.album
+        if not album or album.created_by != user.id:
+            raise HTTPException(404, "Song not found")
+    return song
+
+
+def check_song_access_including_deleted(
+    session: Session, song_id: str, user: AuthenticatedUser,
+) -> Song:
+    """Load a song (even soft-deleted) and verify ownership.
+
+    Used by restore endpoints where the global filter would otherwise
+    hide the soft-deleted row. The parent album is also loaded with
+    include_deleted so cascade-deleted albums still pass ownership check.
+    """
+    song = get_song(session, song_id, include_deleted_rows=True)
+    if not song:
+        raise HTTPException(404, "Song not found")
+    if user.role != ROLE_ADMIN:
+        album = get_album(session, song.album_id, include_deleted_rows=True)
         if not album or album.created_by != user.id:
             raise HTTPException(404, "Song not found")
     return song

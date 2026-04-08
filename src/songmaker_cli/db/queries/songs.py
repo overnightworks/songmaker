@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session, joinedload
 
+from songmaker_cli.constants import RESTORE_WINDOW
 from songmaker_cli.db.models import (
     Album,
     Generation,
     Song,
     Version,
 )
+from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
+from songmaker_cli.db.soft_delete import include_deleted
 
 log = logging.getLogger(__name__)
 
@@ -76,19 +80,19 @@ def count_songs(
     return query.count()
 
 
-def get_song(session: Session, song_id: str) -> Song | None:
-    return (
-        session.query(Song)
-        .options(
-            joinedload(Song.versions),
-            joinedload(Song.generations).joinedload(Generation.scores),
-            joinedload(Song.generations).joinedload(Generation.rating),
-            joinedload(Song.generations).joinedload(Generation.src_generation),
-            joinedload(Song.album),
-        )
-        .filter_by(id=song_id)
-        .first()
+def get_song(
+    session: Session, song_id: str, *, include_deleted_rows: bool = False,
+) -> Song | None:
+    query = session.query(Song).options(
+        joinedload(Song.versions),
+        joinedload(Song.generations).joinedload(Generation.scores),
+        joinedload(Song.generations).joinedload(Generation.rating),
+        joinedload(Song.generations).joinedload(Generation.src_generation),
+        joinedload(Song.album),
     )
+    if include_deleted_rows:
+        query = query.execution_options(include_deleted=True)
+    return query.filter_by(id=song_id).first()
 
 
 def create_song(
@@ -109,6 +113,7 @@ def create_song(
 
     track_query = (
         session.query(Song.track_number)
+        .execution_options(include_deleted=True)
         .filter_by(album_id=album_id)
         .order_by(Song.track_number.desc())
     )
@@ -199,19 +204,71 @@ def update_song(
 
 
 def delete_song(session: Session, song_id: str) -> list[str]:
-    """Delete a song and all its versions/generations. Returns file paths for cleanup."""
+    """Hard-delete a song and all its versions/generations.
+
+    Sees soft-deleted songs (used by cleanup_expired). Returns file paths
+    for post-commit cleanup.
+    """
+    with include_deleted(session):
+        song = session.query(Song).filter_by(id=song_id).first()
+        if not song:
+            raise ValueError(f"Song not found: {song_id}")
+
+        paths = [
+            p for g in song.generations
+            for p in [g.mp3_path, g.wav_path] if p
+        ]
+        session.delete(song)
+        session.flush()
+    log.info("Hard-deleted song %s", song_id)
+    return paths
+
+
+def soft_delete_song(session: Session, song_id: str) -> datetime:
+    """Mark a single song as soft-deleted."""
     song = session.query(Song).filter_by(id=song_id).first()
     if not song:
         raise ValueError(f"Song not found: {song_id}")
-
-    paths = [
-        p for g in song.generations
-        for p in [g.mp3_path, g.wav_path] if p
-    ]
-    session.delete(song)
+    now = datetime.now(timezone.utc)
+    song.deleted_at = now
     session.flush()
-    log.info("Deleted song %s", song_id)
-    return paths
+    log.info("Soft-deleted song %s", song_id)
+    return now
+
+
+def restore_song(session: Session, song_id: str) -> Song:
+    """Clear deleted_at on a song. Raises if past RESTORE_WINDOW or album is deleted."""
+    song = (
+        session.query(Song)
+        .execution_options(include_deleted=True)
+        .filter_by(id=song_id)
+        .first()
+    )
+    if not song:
+        raise ValueError(f"Song not found: {song_id}")
+    if song.deleted_at is None:
+        return song
+    deleted_at = song.deleted_at
+    if deleted_at.tzinfo is None:
+        deleted_at = deleted_at.replace(tzinfo=timezone.utc)
+    age = datetime.now(timezone.utc) - deleted_at
+    if age > RESTORE_WINDOW:
+        raise RestoreWindowExpiredError(
+            f"Song {song_id} was deleted {age.days} days ago, "
+            f"past the {RESTORE_WINDOW.days}-day restore window",
+        )
+    album = (
+        session.query(Album)
+        .execution_options(include_deleted=True)
+        .filter_by(id=song.album_id)
+        .first()
+    )
+    if album is None or album.deleted_at is not None:
+        raise ValueError(f"Cannot restore song {song_id}: parent album is deleted")
+    song.deleted_at = None
+    session.flush()
+    log.info("Restored song %s", song_id)
+    return song
 
 
 def move_song(session: Session, song_id: str, new_album_id: str) -> Song:
@@ -231,6 +288,20 @@ def move_song(session: Session, song_id: str, new_album_id: str) -> Song:
     session.flush()
     log.info("Moved song %s from album %s to %s", song_id, old_album_id, new_album_id)
     return song
+
+
+def list_expired_songs(
+    session: Session, cutoff: datetime, exclude_album_ids: list[str],
+) -> list[Song]:
+    """Return soft-deleted orphan songs (album not also expired) past cutoff."""
+    query = (
+        session.query(Song)
+        .execution_options(include_deleted=True)
+        .filter(Song.deleted_at.isnot(None), Song.deleted_at < cutoff)
+    )
+    if exclude_album_ids:
+        query = query.filter(Song.album_id.notin_(exclude_album_ids))
+    return query.all()
 
 
 def get_song_by_slug(session: Session, slug: str) -> Song | None:

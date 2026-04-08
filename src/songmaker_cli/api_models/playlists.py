@@ -51,10 +51,14 @@ class PlaylistResponse(BaseModel):
 
     @classmethod
     def from_orm(cls, playlist: Playlist) -> PlaylistResponse:
+        live_entries = [
+            e for e in (playlist.entries or [])
+            if e.generation is not None and e.generation.song is not None
+        ]
         return cls(
             id=playlist.id,
             title=playlist.title,
-            entry_count=len(playlist.entries) if playlist.entries else 0,
+            entry_count=len(live_entries),
             is_shared=playlist.is_shared,
             share_slug=playlist.share_slug,
             created_at=playlist.created_at.isoformat() if playlist.created_at else None,
@@ -70,7 +74,7 @@ class PlaylistDetailResponse(PlaylistResponse):
         entries = [
             PlaylistEntryResponse.from_orm(e)
             for e in sorted(playlist.entries, key=lambda e: e.position)
-            if e.generation is not None
+            if e.generation is not None and e.generation.song is not None
         ]
         return cls(
             **base.model_dump(),

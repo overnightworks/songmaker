@@ -10,6 +10,9 @@ from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.db.models import Base
+from songmaker_cli.db.soft_delete import install_soft_delete_filter
+
+install_soft_delete_filter()
 
 log = logging.getLogger(__name__)
 

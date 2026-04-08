@@ -69,8 +69,11 @@ _base_cleanup = make_cleanup_cron(JobType.GENERATE)
 async def cleanup_stale(ctx):
     import asyncio
 
+    from songmaker_cli.cleanup import run_cleanup_expired
+
     await _base_cleanup(ctx)
     await asyncio.to_thread(audit_orphaned_files)
+    await asyncio.to_thread(run_cleanup_expired, _get_db_factory(), _audio_dir())
 
 
 async def on_startup(ctx):
