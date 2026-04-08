@@ -47,7 +47,13 @@ from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     ARQ_SCORING_QUEUE_NAME,
+    JOB_ACTIVE_STATUSES,
+    JOB_TERMINAL_STATUSES,
     SSE_POLL_INTERVAL_SECONDS,
+    AuditAction,
+    JobStatus,
+    JobType,
+    ResourceType,
 )
 from songmaker_cli.db.models import Generation, Job
 from songmaker_cli.db.queries import (
@@ -66,7 +72,6 @@ from songmaker_cli.db.queries import (
     update_job_status,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
-from songmaker_cli.worker_base import TERMINAL_STATUSES
 
 log = logging.getLogger(__name__)
 
@@ -181,7 +186,7 @@ def api_delete_generation(
         paths = delete_generation(session, gen_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
-    record_audit(session, user.id, "delete", "generation", gen_id)
+    record_audit(session, user.id, AuditAction.DELETE, ResourceType.GENERATION, gen_id)
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
@@ -204,7 +209,7 @@ def api_bulk_delete_generations(
     except PermissionError:
         raise HTTPException(404, "One or more generations not found")
     for gen_id in deduplicated_ids:
-        record_audit(session, user.id, "delete", "generation", gen_id)
+        record_audit(session, user.id, AuditAction.DELETE, ResourceType.GENERATION, gen_id)
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
     return BulkDeleteResponse(deleted=count)
@@ -233,8 +238,11 @@ async def api_generate_song(
     if not version or not version.lyrics or not version.prompt:
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
-    job = create_job_with_rate_limit(session, user, "generate")
-    record_audit(session, user.id, "generate", "song", song_id, f"count={req.count}")
+    job = create_job_with_rate_limit(session, user, JobType.GENERATE)
+    record_audit(
+        session, user.id, AuditAction.GENERATE, ResourceType.SONG,
+        song_id, f"count={req.count}",
+    )
     session.commit()
     log.info("Generate: song='%s', count=%d, job=%s, model=%s",
              song.title, req.count, job.id, req.model)
@@ -290,9 +298,9 @@ async def api_repaint_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
-    job = create_job_with_rate_limit(session, user, "generate")
+    job = create_job_with_rate_limit(session, user, JobType.GENERATE)
     record_audit(
-        session, user.id, "repaint", "generation", gen_id,
+        session, user.id, AuditAction.REPAINT, ResourceType.GENERATION, gen_id,
         f"range={req.repainting_start:.2f}-{req.repainting_end:.2f}",
     )
     session.commit()
@@ -363,9 +371,9 @@ async def api_cover_generation(
     lyrics = req.lyrics if req.lyrics is not None else version.lyrics
     prompt = req.prompt if req.prompt is not None else version.prompt
 
-    job = create_job_with_rate_limit(session, user, "generate")
+    job = create_job_with_rate_limit(session, user, JobType.GENERATE)
     record_audit(
-        session, user.id, "cover", "generation", gen_id,
+        session, user.id, AuditAction.COVER, ResourceType.GENERATION, gen_id,
         f"strength={req.audio_cover_strength:.2f}",
     )
     session.commit()
@@ -413,8 +421,8 @@ async def api_score_generation(
     check_redis_health(request)
     check_generation_access(session, gen_id, user)
 
-    job = create_job_with_rate_limit(session, user, "score")
-    record_audit(session, user.id, "score", "generation", gen_id)
+    job = create_job_with_rate_limit(session, user, JobType.SCORE)
+    record_audit(session, user.id, AuditAction.SCORE, ResourceType.GENERATION, gen_id)
     session.commit()
 
     try:
@@ -480,7 +488,7 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
                 previous_progress = response.progress
                 yield f"data: {json.dumps(response.model_dump())}\n\n"
 
-            if response.status in TERMINAL_STATUSES:
+            if response.status in JOB_TERMINAL_STATUSES:
                 return
 
             await asyncio.sleep(SSE_POLL_INTERVAL_SECONDS)
@@ -495,10 +503,10 @@ def api_cancel_job(
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
     job = _check_job_access(session, job_id, user)
-    if job.status not in ("queued", "running"):
+    if job.status not in JOB_ACTIVE_STATUSES:
         raise HTTPException(409, "Only queued or running jobs can be cancelled")
-    update_job_status(session, job_id, "cancelled")
-    record_audit(session, user.id, "cancel", "job", job_id)
+    update_job_status(session, job_id, JobStatus.CANCELLED)
+    record_audit(session, user.id, AuditAction.CANCEL, ResourceType.JOB, job_id)
     session.commit()
     job = get_job(session, job_id)
     return JobResponse.from_orm(job)
@@ -593,7 +601,7 @@ def api_share_generation(
         gen = enable_generation_sharing(session, gen_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
-    record_audit(session, user.id, "share", "generation", gen_id)
+    record_audit(session, user.id, AuditAction.SHARE, ResourceType.GENERATION, gen_id)
     session.commit()
     base_url = str(request.base_url).rstrip("/")
     return ShareResponse(
@@ -613,7 +621,7 @@ def api_unshare_generation(
         disable_generation_sharing(session, gen_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
-    record_audit(session, user.id, "unshare", "generation", gen_id)
+    record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.GENERATION, gen_id)
     session.commit()
     return StatusResponse()
 
@@ -621,7 +629,7 @@ def api_unshare_generation(
 def _fail_job(ctx: AppContext, job_id: str) -> None:
     try:
         with ctx.db() as session:
-            update_job_status(session, job_id, "failed", error="Job queue unavailable")
+            update_job_status(session, job_id, JobStatus.FAILED, error="Job queue unavailable")
             session.commit()
     except Exception:
         log.error(

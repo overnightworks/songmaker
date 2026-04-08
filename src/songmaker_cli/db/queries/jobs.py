@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from songmaker_cli.constants import JOB_ACTIVE_STATUSES, JobStatus
 from songmaker_cli.db.models import Job
 
 log = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ log = logging.getLogger(__name__)
 def has_active_job_of_type(session: Session, job_type: str) -> bool:
     return (
         session.query(Job)
-        .filter(Job.type == job_type, Job.status.in_(("queued", "running")))
+        .filter(Job.type == job_type, Job.status.in_(JOB_ACTIVE_STATUSES))
         .first()
     ) is not None
 
@@ -48,7 +49,7 @@ def count_user_jobs_in_window(
 def count_user_active_jobs(session: Session, user_id: str, job_type: str | None = None) -> int:
     query = session.query(Job).filter(
         Job.user_id == user_id,
-        Job.status.in_(("queued", "running")),
+        Job.status.in_(JOB_ACTIVE_STATUSES),
     )
     if job_type is not None:
         query = query.filter(Job.type == job_type)
@@ -58,7 +59,7 @@ def count_user_active_jobs(session: Session, user_id: str, job_type: str | None 
 def count_total_queued_jobs(session: Session) -> int:
     return (
         session.query(Job)
-        .filter(Job.status.in_(("queued", "running")))
+        .filter(Job.status.in_(JOB_ACTIVE_STATUSES))
         .count()
     )
 
@@ -79,9 +80,9 @@ def update_job_status(
     job.error_type = error_type
     if worker_pid is not None:
         job.worker_pid = worker_pid
-    if status in ("running", "partial"):
+    if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
         job.heartbeat_at = now
-    if status in ("completed", "failed"):
+    if status in (JobStatus.COMPLETED, JobStatus.FAILED):
         job.completed_at = now
     session.flush()
 
@@ -99,12 +100,12 @@ def get_job(session: Session, job_id: str) -> Job | None:
 
 def get_queue_position(session: Session, job: Job) -> int | None:
     """Return 1-based queue position for a queued job, or None if not queued."""
-    if job.status != "queued":
+    if job.status != JobStatus.QUEUED:
         return None
     ahead = (
         session.query(Job)
         .filter(
-            Job.status == "queued",
+            Job.status == JobStatus.QUEUED,
             Job.started_at < job.started_at,
         )
         .count()
@@ -117,11 +118,11 @@ def recover_stale_jobs(session: Session) -> int:
     now = datetime.now(timezone.utc)
     stale = (
         session.query(Job)
-        .filter(Job.status.in_(("queued", "running")))
+        .filter(Job.status.in_(JOB_ACTIVE_STATUSES))
         .all()
     )
     for job in stale:
-        job.status = "failed"
+        job.status = JobStatus.FAILED
         job.error = "Server restarted while job was in progress"
         job.error_type = "server_restart"
         job.completed_at = now
@@ -151,13 +152,13 @@ def clear_stale_user_jobs(
         session.query(Job)
         .filter(
             Job.user_id == user_id,
-            Job.status.in_(("queued", "running")),
+            Job.status.in_(JOB_ACTIVE_STATUSES),
             Job.started_at < cutoff,
         )
         .all()
     )
     for job in stale:
-        job.status = "failed"
+        job.status = JobStatus.FAILED
         job.error = "Job timed out (exceeded maximum run time)"
         job.error_type = "stale_timeout"
         job.completed_at = now
@@ -207,7 +208,7 @@ def recover_stale_jobs_by_age(
     candidates = (
         session.query(Job)
         .filter(
-            Job.status.in_(("queued", "running")),
+            Job.status.in_(JOB_ACTIVE_STATUSES),
             Job.started_at < cutoff,
         )
         .all()
@@ -217,7 +218,7 @@ def recover_stale_jobs_by_age(
         if not _is_heartbeat_stale(job, cutoff):
             log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
             continue
-        job.status = "failed"
+        job.status = JobStatus.FAILED
         job.error = "Job timed out (exceeded maximum run time)"
         job.error_type = "stale_timeout"
         job.completed_at = now
@@ -234,13 +235,13 @@ def recover_stale_jobs_by_type(session: Session, job_type: str) -> int:
     stale = (
         session.query(Job)
         .filter(
-            Job.status.in_(("queued", "running")),
+            Job.status.in_(JOB_ACTIVE_STATUSES),
             Job.type == job_type,
         )
         .all()
     )
     for job in stale:
-        job.status = "failed"
+        job.status = JobStatus.FAILED
         job.error = "Server restarted while job was in progress"
         job.error_type = "server_restart"
         job.completed_at = now
@@ -264,7 +265,7 @@ def recover_stale_jobs_by_age_and_type(
     candidates = (
         session.query(Job)
         .filter(
-            Job.status.in_(("queued", "running")),
+            Job.status.in_(JOB_ACTIVE_STATUSES),
             Job.type == job_type,
             Job.started_at < cutoff,
         )
@@ -275,7 +276,7 @@ def recover_stale_jobs_by_age_and_type(
         if not _is_heartbeat_stale(job, cutoff):
             log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
             continue
-        job.status = "failed"
+        job.status = JobStatus.FAILED
         job.error = "Job timed out (exceeded maximum run time)"
         job.error_type = "stale_timeout"
         job.completed_at = now
@@ -331,7 +332,7 @@ def job_duration_stats(session: Session) -> JobDurationStats:
             func.min(duration_expr),
             func.max(duration_expr),
         )
-        .filter(Job.status == "completed", Job.completed_at.isnot(None))
+        .filter(Job.status == JobStatus.COMPLETED, Job.completed_at.isnot(None))
         .one()
     )
     return JobDurationStats(

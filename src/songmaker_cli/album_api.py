@@ -25,6 +25,7 @@ from songmaker_cli.api_models import (
     StatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.queries import (
     cleanup_album,
     count_albums,
@@ -85,7 +86,7 @@ def api_create_album(
             artist=data.artist,
             created_by=user.id,
         )
-        record_audit(session, user.id, "create", "album", album_id)
+        record_audit(session, user.id, AuditAction.CREATE, ResourceType.ALBUM, album_id)
         session.commit()
     except IntegrityError:
         session.rollback()
@@ -103,7 +104,7 @@ def api_delete_album(
     album = get_album(session, album_id)
     check_album_access(album, user)
     paths = delete_album(session, album_id)
-    record_audit(session, user.id, "delete", "album", album_id)
+    record_audit(session, user.id, AuditAction.DELETE, ResourceType.ALBUM, album_id)
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
@@ -119,7 +120,10 @@ def api_cleanup_album(
     album = get_album(session, album_id)
     check_album_access(album, user)
     count, paths = cleanup_album(session, album_id)
-    record_audit(session, user.id, "cleanup", "album", album_id, f"deleted={count}")
+    record_audit(
+        session, user.id, AuditAction.CLEANUP, ResourceType.ALBUM,
+        album_id, f"deleted={count}",
+    )
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
     return CleanupResponse(deleted=count)
@@ -135,7 +139,7 @@ def api_share_album(
     album = get_album(session, album_id)
     check_album_access(album, user)
     album = enable_album_sharing(session, album_id)
-    record_audit(session, user.id, "share", "album", album_id)
+    record_audit(session, user.id, AuditAction.SHARE, ResourceType.ALBUM, album_id)
     session.commit()
     base_url = str(request.base_url).rstrip("/")
     return ShareResponse(
@@ -153,6 +157,6 @@ def api_unshare_album(
     album = get_album(session, album_id)
     check_album_access(album, user)
     disable_album_sharing(session, album_id)
-    record_audit(session, user.id, "unshare", "album", album_id)
+    record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.ALBUM, album_id)
     session.commit()
     return StatusResponse()

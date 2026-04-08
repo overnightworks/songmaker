@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from enum import StrEnum
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
 
@@ -158,3 +159,62 @@ AUDIO_MEDIA_TYPES: dict[str, str] = {
 REFERENCE_AUDIO_DIR = "refs"
 REFERENCE_AUDIO_EXTENSIONS = frozenset({".mp3", ".wav", ".flac", ".ogg"})
 REFERENCE_AUDIO_MAX_BYTES = 50 * 1024 * 1024
+
+
+class JobStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    PARTIAL = "partial"
+    CANCELLED = "cancelled"
+
+
+JOB_ACTIVE_STATUSES = frozenset({JobStatus.QUEUED, JobStatus.RUNNING})
+JOB_TERMINAL_STATUSES = frozenset({
+    JobStatus.COMPLETED,
+    JobStatus.FAILED,
+    JobStatus.PARTIAL,
+    JobStatus.CANCELLED,
+})
+
+
+class JobType(StrEnum):
+    GENERATE = "generate"
+    SCORE = "score"
+    CHAT = "chat"
+
+
+class ResourceType(StrEnum):
+    SONG = "song"
+    ALBUM = "album"
+    GENERATION = "generation"
+    VERSION = "version"
+    PLAYLIST = "playlist"
+    USER = "user"
+    PRESET = "preset"
+    MODEL = "model"
+    DEFAULT_CONFIG = "default_config"
+    CLAUDE_MODELS = "claude_models"
+    RATE_LIMITS = "rate_limits"
+    JOB = "job"
+    SESSION = "session"
+
+
+class AuditAction(StrEnum):
+    GENERATE = "generate"
+    REPAINT = "repaint"
+    COVER = "cover"
+    SCORE = "score"
+    CREATE = "create"
+    UPDATE = "update"
+    DELETE = "delete"
+    HARD_DELETE = "hard_delete"
+    DEACTIVATE = "deactivate"
+    CANCEL = "cancel"
+    SHARE = "share"
+    UNSHARE = "unshare"
+    MOVE = "move"
+    CLEANUP = "cleanup"
+    SESSION_IP_CHANGE = "session_ip_change"
+    SESSION_UA_CHANGE = "session_ua_change"

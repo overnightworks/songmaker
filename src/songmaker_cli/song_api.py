@@ -26,6 +26,7 @@ from songmaker_cli.api_models import (
     VersionResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.queries import (
     cleanup_song,
     count_songs,
@@ -88,7 +89,7 @@ def api_create_song(
         duration=req.duration, key=req.key, language=req.language,
         generation_params=gen_params_to_dict(req.generation_params),
     )
-    record_audit(session, user.id, "create", "song", song.id)
+    record_audit(session, user.id, AuditAction.CREATE, ResourceType.SONG, song.id)
     session.commit()
     return SongResponse.from_orm(song)
 
@@ -110,7 +111,7 @@ def api_update_song(
         version = update_song(session, song_id, **kwargs)
     except ValueError:
         raise HTTPException(404, "Song not found")
-    record_audit(session, user.id, "update", "song", song_id)
+    record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(version.song)
 
@@ -128,7 +129,10 @@ def api_move_song(
         song = move_song(session, song_id, req.album_id)
     except ValueError:
         raise HTTPException(404, "Song or album not found")
-    record_audit(session, user.id, "move", "song", song_id, f"album={req.album_id}")
+    record_audit(
+        session, user.id, AuditAction.MOVE, ResourceType.SONG,
+        song_id, f"album={req.album_id}",
+    )
     session.commit()
     return SongResponse.from_orm(song)
 
@@ -145,7 +149,7 @@ def api_delete_song(
         paths = delete_song(session, song_id)
     except ValueError:
         raise HTTPException(404, "Song not found")
-    record_audit(session, user.id, "delete", "song", song_id)
+    record_audit(session, user.id, AuditAction.DELETE, ResourceType.SONG, song_id)
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()
@@ -160,7 +164,10 @@ def api_cleanup_song(
 ) -> CleanupResponse:
     check_song_access(session, song_id, user)
     count, paths = cleanup_song(session, song_id)
-    record_audit(session, user.id, "cleanup", "song", song_id, f"deleted={count}")
+    record_audit(
+        session, user.id, AuditAction.CLEANUP, ResourceType.SONG,
+        song_id, f"deleted={count}",
+    )
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
     return CleanupResponse(deleted=count)
@@ -178,7 +185,7 @@ def api_share_song(
         song = enable_song_sharing(session, song_id)
     except ValueError:
         raise HTTPException(404, "Song not found")
-    record_audit(session, user.id, "share", "song", song_id)
+    record_audit(session, user.id, AuditAction.SHARE, ResourceType.SONG, song_id)
     session.commit()
     base_url = str(request.base_url).rstrip("/")
     return ShareResponse(
@@ -198,7 +205,7 @@ def api_unshare_song(
         disable_song_sharing(session, song_id)
     except ValueError:
         raise HTTPException(404, "Song not found")
-    record_audit(session, user.id, "unshare", "song", song_id)
+    record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.SONG, song_id)
     session.commit()
     return StatusResponse()
 
@@ -234,7 +241,7 @@ def api_delete_version(
         )
     except ValueError:
         raise HTTPException(404, "Version not found")
-    record_audit(session, user.id, "delete", "version", version_id)
+    record_audit(session, user.id, AuditAction.DELETE, ResourceType.VERSION, version_id)
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
     return StatusResponse()

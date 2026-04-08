@@ -17,7 +17,7 @@ from songmaker_cli.auth import (
     SESSION_MAX_AGE_SECONDS,
     verify_session_cookie,
 )
-from songmaker_cli.constants import MAX_USER_AGENT_LENGTH
+from songmaker_cli.constants import MAX_USER_AGENT_LENGTH, AuditAction, ResourceType
 from songmaker_cli.db.queries import get_session_with_user, record_audit
 
 log = logging.getLogger(__name__)
@@ -46,13 +46,13 @@ def _check_ip_ua_changes(
     ua_changed = bool(cached_ua and cached_ua != current_ua)
     if ip_changed:
         record_audit(
-            db, user_id, "session_ip_change", "session",
+            db, user_id, AuditAction.SESSION_IP_CHANGE, ResourceType.SESSION,
             session_id[:8],
             f"from={cached_ip} to={current_ip}",
         )
     if ua_changed:
         record_audit(
-            db, user_id, "session_ua_change", "session",
+            db, user_id, AuditAction.SESSION_UA_CHANGE, ResourceType.SESSION,
             session_id[:8],
             "ua_changed",
         )

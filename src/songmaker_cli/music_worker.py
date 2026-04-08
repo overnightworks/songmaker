@@ -14,6 +14,7 @@ from arq import cron
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     RECOVERY_LOCK_MUSIC_KEY,
+    JobType,
 )
 from songmaker_cli.jobs import (
     download_model_on_worker,
@@ -47,7 +48,7 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None,
         return
 
     import structlog
-    structlog.contextvars.bind_contextvars(job_id=job_id, task="generate")
+    structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.GENERATE)
 
     await run_generation_job(
         job_id, song_id, version_id, count, user_id,
@@ -62,7 +63,7 @@ async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None,
     )
 
 
-_base_cleanup = make_cleanup_cron("generate")
+_base_cleanup = make_cleanup_cron(JobType.GENERATE)
 
 
 async def cleanup_stale(ctx):
@@ -75,12 +76,12 @@ async def cleanup_stale(ctx):
 async def on_startup(ctx):
     await common_startup(ctx, _IMPORT_TIME_REDIS_URL)
     log.info("Music worker starting up...")
-    await recover_on_startup(ctx, RECOVERY_LOCK_MUSIC_KEY, "generate")
+    await recover_on_startup(ctx, RECOVERY_LOCK_MUSIC_KEY, JobType.GENERATE)
     log.info("Music worker ready")
 
 
 async def on_shutdown(ctx):
-    await common_shutdown(RECOVERY_LOCK_MUSIC_KEY, "generate", ctx["redis"])
+    await common_shutdown(RECOVERY_LOCK_MUSIC_KEY, JobType.GENERATE, ctx["redis"])
 
 
 class MusicWorkerSettings:

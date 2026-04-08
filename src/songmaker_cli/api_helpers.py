@@ -34,6 +34,7 @@ from songmaker_cli.constants import (
     SETTING_MAX_QUEUE_DEPTH,
     SETTING_MAX_USER_ACTIVE_JOBS,
     SETTING_SCORING_RATE_LIMIT,
+    JobType,
 )
 from songmaker_cli.db.models import Album, Generation, Job, Song, User
 from songmaker_cli.db.queries import (
@@ -77,24 +78,26 @@ def check_redis_health(request) -> None:
         raise HTTPException(503, "Service temporarily degraded — try again shortly")
 
 
-_ENV_RATE_LIMITS: dict[str, tuple[int, int, str]] = {
-    "generate": (
+_ENV_RATE_LIMITS: dict[JobType, tuple[int, int, str]] = {
+    JobType.GENERATE: (
         GENERATION_RATE_LIMIT_USER, GENERATION_RATE_LIMIT_ADMIN,
         SETTING_GENERATION_RATE_LIMIT,
     ),
-    "score": (
+    JobType.SCORE: (
         SCORING_RATE_LIMIT_USER, SCORING_RATE_LIMIT_ADMIN,
         SETTING_SCORING_RATE_LIMIT,
     ),
-    "chat": (
+    JobType.CHAT: (
         CHAT_RATE_LIMIT_USER, CHAT_RATE_LIMIT_ADMIN,
         SETTING_CHAT_RATE_LIMIT,
     ),
 }
 
+_QUEUEABLE_JOB_TYPES = frozenset({JobType.GENERATE, JobType.SCORE})
+
 
 def create_job_with_rate_limit(
-    session: Session, user: AuthenticatedUser, job_type: str,
+    session: Session, user: AuthenticatedUser, job_type: JobType,
 ) -> Job:
     """Atomically check rate limits and create a job under BEGIN IMMEDIATE.
 
@@ -121,7 +124,7 @@ def create_job_with_rate_limit(
     is_admin = user.role == ROLE_ADMIN
     clear_stale_user_jobs(session, user.id)
 
-    if job_type in ("generate", "score"):
+    if job_type in _QUEUEABLE_JOB_TYPES:
         max_queue = resolve_rate_limit(
             session, user.id, SETTING_MAX_QUEUE_DEPTH, MAX_QUEUE_DEPTH,
         )

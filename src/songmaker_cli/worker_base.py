@@ -16,6 +16,7 @@ from arq.connections import RedisSettings
 from songmaker_cli.constants import (
     AUDIO_ROOT,
     DATA_ROOT,
+    JOB_TERMINAL_STATUSES,
     RECOVERY_LOCK_TTL_SECONDS,
     REDIS_URL_MISMATCH_WARNING,
 )
@@ -31,7 +32,6 @@ _db_lock = threading.Lock()
 JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "300"))
 DRAIN_TIMEOUT_SECONDS = int(os.environ.get("ARQ_DRAIN_TIMEOUT", "300"))
 HEALTH_CHECK_INTERVAL_SECONDS = 30
-TERMINAL_STATUSES = frozenset({"completed", "partial", "failed", "cancelled"})
 
 
 def _get_db_factory():
@@ -55,7 +55,7 @@ def check_job_still_valid(job_id: str) -> bool:
     db_factory = _get_db_factory()
     with db_factory() as session:
         job = get_job(session, job_id)
-        if not job or job.status in TERMINAL_STATUSES:
+        if not job or job.status in JOB_TERMINAL_STATUSES:
             return False
     return True
 

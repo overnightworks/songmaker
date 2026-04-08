@@ -7,6 +7,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session, joinedload
 
+from songmaker_cli.constants import JobStatus
 from songmaker_cli.db.models import Generation, Rating, Score, Song
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 
@@ -62,7 +63,7 @@ def create_generation(
         generation_params=generation_params,
         model_mode=model_mode,
         src_generation_id=src_generation_id,
-        status="completed",
+        status=JobStatus.COMPLETED,
     )
     session.add(gen)
     session.flush()

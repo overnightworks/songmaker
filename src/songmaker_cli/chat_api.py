@@ -33,6 +33,8 @@ from songmaker_cli.constants import (
     CLAUDE_SCORING_MODEL,
     SETTING_CLAUDE_CHAT_MODEL,
     SETTING_CLAUDE_SCORING_MODEL,
+    JobStatus,
+    JobType,
 )
 from songmaker_cli.db.queries import (
     count_chat_messages,
@@ -196,13 +198,13 @@ async def api_song_chat(
     check_redis_health(request)
     check_song_access(session, song_id, user)
 
-    job = create_job_with_rate_limit(session, user, "chat")
+    job = create_job_with_rate_limit(session, user, JobType.CHAT)
     job_id = job.id
     session.commit()
 
     msg_count = count_chat_messages(session, song_id)
     if msg_count >= MAX_CHAT_MESSAGES:
-        update_job_status(session, job_id, "failed", error="Chat history full")
+        update_job_status(session, job_id, JobStatus.FAILED, error="Chat history full")
         session.commit()
         raise HTTPException(409, "Chat history full — clear to continue")
 
@@ -236,17 +238,17 @@ async def api_song_chat(
         )
     except UnavailableError as e:
         log.warning("Claude chat unavailable: %s", e)
-        update_job_status(session, job_id, "failed", error="Claude unavailable")
+        update_job_status(session, job_id, JobStatus.FAILED, error="Claude unavailable")
         session.commit()
         raise HTTPException(503, "Claude is currently unavailable")
     except Exception:
-        update_job_status(session, job_id, "failed", error="Chat request failed")
+        update_job_status(session, job_id, JobStatus.FAILED, error="Chat request failed")
         session.commit()
         raise
 
     user_msg = create_chat_message(session, song_id, "user", req.message)
     assistant_msg = create_chat_message(session, song_id, "assistant", response.text)
-    update_job_status(session, job_id, "completed", progress=1.0)
+    update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0)
     session.commit()
 
     return ChatTurnResponse(

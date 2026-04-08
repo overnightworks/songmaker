@@ -11,6 +11,8 @@ from pathlib import Path
 
 import httpx
 
+from songmaker_cli.constants import JobStatus
+
 log = logging.getLogger(__name__)
 
 DEFAULT_SERVER = "http://localhost:8080"
@@ -208,12 +210,12 @@ def poll_job(server: str, job_id: str) -> dict:
         status = job["status"]
         progress = job.get("progress", 0)
 
-        if status == "completed":
-            _print_progress(1.0, "completed")
+        if status == JobStatus.COMPLETED:
+            _print_progress(1.0, JobStatus.COMPLETED)
             print()
             return job
-        if status == "failed":
-            _print_progress(progress, "failed")
+        if status == JobStatus.FAILED:
+            _print_progress(progress, JobStatus.FAILED)
             print()
             error = job.get("error", "Unknown error")
             raise ServerError(f"Job failed: {error}")

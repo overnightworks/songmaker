@@ -239,9 +239,11 @@ def _migrate_generation_params(conn, forward: bool) -> None:
   - `StoredGenerationParams`: `duration → audio_duration`, `key → key_scale`.
   - `SongCreateRequest` / `SongUpdateRequest` / `VersionResponse` / `SongSummaryResponse`: same renames where they reference these fields.
 
-### Step 3.5 — Config + parser
-- [src/songmaker_cli/config.py](../src/songmaker_cli/config.py): delete `_FIELD_MAPPING` (line 94) and `_apply_params` (line 97). Replace the loop at lines 203-204 with `fields.update(layer)`. Update `_SHARED_LM_DEFAULTS`: `"think_mode": "deep" → "thinking": True`. Update `_sanitize_params`: `duration → audio_duration`, drop `think_mode` branch. Grep callers: `rg 'language=' src/songmaker_cli tests/` → rename to `vocal_language=`.
-- `src/songmaker_cli/parser.py`: align `SongMeta` fields. **Frontmatter back-compat**: accept old keys (`duration:`, `key:`, `language:`) on read for one release with a deprecation warning, but always emit canonical names on save. Markdown frontmatter is a user-facing DSL — unlike DB JSON, hard breaks are unkind. (The DB migration is forward-only; the frontmatter shim is the *only* place where old names live on, scoped to one file.)
+### Step 3.5 — Config + Song.language column
+- **`Song.language` DB column → `Song.vocal_language`**. Investigation found that `parser.py:SongMeta` does NOT parse Markdown frontmatter — it's a passive Pydantic model built in-memory at [jobs.py:121](../src/songmaker_cli/jobs.py#L121) from DB rows. The `language` key only exists because [jobs.py:116](../src/songmaker_cli/jobs.py#L116) packs `Song.language` into a dict that `_FIELD_MAPPING` then translates. Renaming the DB column eliminates the asymmetry entirely. **No frontmatter shim is needed** (no frontmatter parsing exists). Add `op.alter_column("songs", "language", new_column_name="vocal_language")` to the same Alembic revision as Step 3.2.
+- [src/songmaker_cli/config.py](../src/songmaker_cli/config.py): delete `_FIELD_MAPPING` (line 94) and `_apply_params` (line 97). Replace the loop at lines 203-204 with `fields.update(layer)`. Update `_SHARED_LM_DEFAULTS`: `"think_mode": "deep" → "thinking": True`. Update `_sanitize_params`: `duration → audio_duration`, drop `think_mode` branch.
+- [jobs.py:116](../src/songmaker_cli/jobs.py#L116): emit `"vocal_language": song.vocal_language` instead of `"language": song.language`.
+- Grep callers: `rg '\.language\b|\blanguage=' src/songmaker_cli tests/` → rename to `vocal_language`. Frontend `Song` type and any `song.language` references in Svelte components also need renaming (regenerated via `scripts/generate_types.py`).
 
 ### Step 3.6 — Endpoints + jobs
 Grep and rename: `rg '\b(prompt|duration|key|reference_audio|src_audio|think_mode)\b' src/songmaker_cli/generation_api.py src/songmaker_cli/jobs* src/songmaker_cli/chat_api.py` — audit hit by hit. The `prompt` matches will be loud (mostly correct uses); filter manually.

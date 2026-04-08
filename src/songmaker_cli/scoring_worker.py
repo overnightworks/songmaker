@@ -15,6 +15,7 @@ from arq import cron
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
     RECOVERY_LOCK_SCORING_KEY,
+    JobType,
 )
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.worker_base import (
@@ -42,7 +43,7 @@ async def score(ctx, job_id, gen_id, scorers):
         return
 
     import structlog
-    structlog.contextvars.bind_contextvars(job_id=job_id, task="score")
+    structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.SCORE)
 
     device = os.environ.get("SCORING_DEVICE", _SCORING_DEVICE_DEFAULT)
     await asyncio.to_thread(
@@ -53,7 +54,7 @@ async def score(ctx, job_id, gen_id, scorers):
     )
 
 
-cleanup_stale = make_cleanup_cron("score")
+cleanup_stale = make_cleanup_cron(JobType.SCORE)
 
 
 async def on_startup(ctx):
@@ -66,7 +67,7 @@ async def on_startup(ctx):
     set_scorer_process(scorer)
     log.info("Scorer subprocess manager initialized")
 
-    await recover_on_startup(ctx, RECOVERY_LOCK_SCORING_KEY, "score")
+    await recover_on_startup(ctx, RECOVERY_LOCK_SCORING_KEY, JobType.SCORE)
 
     log.info("Scoring worker ready")
 
@@ -81,7 +82,7 @@ async def on_shutdown(ctx):
     except RuntimeError:
         pass
 
-    await common_shutdown(RECOVERY_LOCK_SCORING_KEY, "score", redis)
+    await common_shutdown(RECOVERY_LOCK_SCORING_KEY, JobType.SCORE, redis)
 
 
 class ScoringWorkerSettings:

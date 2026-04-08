@@ -30,6 +30,7 @@ from songmaker_cli.config import (
     load_generation_defaults,
     save_generation_defaults,
 )
+from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.queries import (
     delete_all_user_rate_limits,
     get_all_global_rate_limits,
@@ -114,7 +115,7 @@ def api_create_preset(
         user_id=user.id,
         is_default=req.is_default,
     )
-    record_audit(session, user.id, "create", "preset", preset.id, req.name)
+    record_audit(session, user.id, AuditAction.CREATE, ResourceType.PRESET, preset.id, req.name)
     try:
         session.commit()
     except IntegrityError:
@@ -152,7 +153,7 @@ def api_delete_preset(
 ) -> StatusResponse:
     if not delete_preset(session, preset_id, user.id):
         raise HTTPException(404, "Preset not found")
-    record_audit(session, user.id, "delete", "preset", preset_id)
+    record_audit(session, user.id, AuditAction.DELETE, ResourceType.PRESET, preset_id)
     session.commit()
     return StatusResponse()
 
@@ -218,7 +219,10 @@ def api_toggle_model(
     model = toggle_model(session, model_id, active)
     if not model:
         raise HTTPException(404, "Model not found")
-    record_audit(session, admin.id, "update", "model", model_id, f"active={active}")
+    record_audit(
+        session, admin.id, AuditAction.UPDATE, ResourceType.MODEL,
+        model_id, f"active={active}",
+    )
     session.commit()
     return AvailableModelResponse(id=model.id, is_active=model.is_active)
 
@@ -259,7 +263,10 @@ def api_set_default_config(
     if not db_user:
         raise HTTPException(404, "User not found")
     db_user.default_generation_config = req.config
-    record_audit(session, user.id, "update", "default_config", detail=req.config or "inherit")
+    record_audit(
+        session, user.id, AuditAction.UPDATE, ResourceType.DEFAULT_CONFIG,
+        detail=req.config or "inherit",
+    )
     session.commit()
     return DefaultConfigResponse(config=req.config)
 
@@ -308,7 +315,7 @@ def api_set_claude_models(
 
     set_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, req.chat_model)
     set_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, req.scoring_model)
-    record_audit(session, admin.id, "update", "claude_models",
+    record_audit(session, admin.id, AuditAction.UPDATE, ResourceType.CLAUDE_MODELS,
                  detail=f"chat={req.chat_model} scoring={req.scoring_model}")
     session.commit()
 
@@ -383,7 +390,7 @@ def api_update_rate_limits(
         if value < 0:
             raise HTTPException(400, f"Value for {key} must be non-negative")
         upsert_rate_limit_setting(session, key, value)
-    record_audit(session, admin.id, "update", "rate_limits", detail="global")
+    record_audit(session, admin.id, AuditAction.UPDATE, ResourceType.RATE_LIMITS, detail="global")
     session.commit()
     return api_get_rate_limits(_admin=admin, session=session)
 
@@ -429,7 +436,7 @@ def api_update_user_rate_limits(
         if value < 0:
             raise HTTPException(400, f"Value for {key} must be non-negative")
         upsert_rate_limit_setting(session, key, value, user_id=user_id)
-    record_audit(session, admin.id, "update", "rate_limits", user_id)
+    record_audit(session, admin.id, AuditAction.UPDATE, ResourceType.RATE_LIMITS, user_id)
     session.commit()
     return api_get_user_rate_limits(user_id, _admin=admin, session=session)
 
@@ -443,6 +450,6 @@ def api_delete_user_rate_limits(
     if not get_user(session, user_id):
         raise HTTPException(404, "User not found")
     delete_all_user_rate_limits(session, user_id)
-    record_audit(session, admin.id, "delete", "rate_limits", user_id)
+    record_audit(session, admin.id, AuditAction.DELETE, ResourceType.RATE_LIMITS, user_id)
     session.commit()
     return StatusResponse()

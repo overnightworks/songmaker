@@ -48,7 +48,12 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.auth import hash_password
-from songmaker_cli.constants import MODEL_CONFIG_PATHS
+from songmaker_cli.constants import (
+    MODEL_CONFIG_PATHS,
+    AuditAction,
+    JobStatus,
+    ResourceType,
+)
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     count_active_sessions,
@@ -107,7 +112,7 @@ def create_user_endpoint(
         raise HTTPException(409, "Username already exists")
 
     user = create_user(db, req.username, hash_password(req.password), role=req.role)
-    record_audit(db, _admin.id, "create", "user", user.id, f"role={req.role}")
+    record_audit(db, _admin.id, AuditAction.CREATE, ResourceType.USER, user.id, f"role={req.role}")
     try:
         db.commit()
     except IntegrityError:
@@ -148,7 +153,7 @@ def update_user_endpoint(
         changes.append("password_changed")
     if invalidate_sessions:
         delete_user_sessions(db, user_id)
-    record_audit(db, admin.id, "update", "user", user_id, ", ".join(changes))
+    record_audit(db, admin.id, AuditAction.UPDATE, ResourceType.USER, user_id, ", ".join(changes))
     db.commit()
     if invalidate_sessions:
         _clear_user_session_cache(request, user_id)
@@ -174,7 +179,7 @@ def deactivate_user_endpoint(
 
     update_user(db, user_id, is_active=False)
     delete_user_sessions(db, user_id)
-    record_audit(db, admin.id, "deactivate", "user", user_id)
+    record_audit(db, admin.id, AuditAction.DEACTIVATE, ResourceType.USER, user_id)
     db.commit()
     _clear_user_session_cache(request, user_id)
     return StatusResponse(status="ok")
@@ -202,7 +207,7 @@ def hard_delete_user_endpoint(
     album_count = len(user_albums)
     song_count = sum(len(a.songs) for a in user_albums)
     record_audit(
-        db, admin.id, "hard_delete", "user", user_id,
+        db, admin.id, AuditAction.HARD_DELETE, ResourceType.USER, user_id,
         f"username={user.username}, albums={album_count}, songs={song_count}",
     )
 
@@ -430,7 +435,7 @@ async def load_model_on_worker_endpoint(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        update_job_status(db, job.id, "failed", error="Job queue unavailable")
+        update_job_status(db, job.id, JobStatus.FAILED, error="Job queue unavailable")
         db.commit()
         raise HTTPException(503, "Job queue unavailable")
 
@@ -586,7 +591,7 @@ async def download_model_endpoint(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        update_job_status(db, job.id, "failed", error="Job queue unavailable")
+        update_job_status(db, job.id, JobStatus.FAILED, error="Job queue unavailable")
         db.commit()
         raise HTTPException(503, "Job queue unavailable")
 

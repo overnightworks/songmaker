@@ -23,6 +23,7 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth import ROLE_ADMIN
+from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.models import Playlist
 from songmaker_cli.db.queries import (
     add_album_to_playlist,
@@ -74,7 +75,7 @@ def api_create_playlist(
     session: Session = Depends(get_db_session),
 ) -> PlaylistResponse:
     playlist = create_playlist(session, req.title, user.id)
-    record_audit(session, user.id, "create", "playlist", playlist.id)
+    record_audit(session, user.id, AuditAction.CREATE, ResourceType.PLAYLIST, playlist.id)
     session.commit()
     return PlaylistResponse.from_orm(playlist)
 
@@ -116,7 +117,7 @@ def api_delete_playlist(
         delete_playlist(session, playlist_id)
     except ValueError:
         raise HTTPException(404, "Playlist not found")
-    record_audit(session, user.id, "delete", "playlist", playlist_id)
+    record_audit(session, user.id, AuditAction.DELETE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     return StatusResponse()
 
@@ -232,7 +233,7 @@ def api_share_playlist(
         playlist = enable_playlist_sharing(session, playlist_id)
     except ValueError:
         raise HTTPException(404, "Playlist not found")
-    record_audit(session, user.id, "share", "playlist", playlist_id)
+    record_audit(session, user.id, AuditAction.SHARE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     base_url = str(request.base_url).rstrip("/")
     return ShareResponse(
@@ -252,6 +253,6 @@ def api_unshare_playlist(
         disable_playlist_sharing(session, playlist_id)
     except ValueError:
         raise HTTPException(404, "Playlist not found")
-    record_audit(session, user.id, "unshare", "playlist", playlist_id)
+    record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.PLAYLIST, playlist_id)
     session.commit()
     return StatusResponse()
