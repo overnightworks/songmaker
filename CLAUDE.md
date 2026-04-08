@@ -85,6 +85,7 @@ These are conventions that aren't obvious from reading a single file:
 - **No inline comments.** Use descriptive names. Comments in code are a smell — if you need to explain what code does, rename things until you don't.
 - **No hardcoded strings.** Use constants in `constants.py` or `Final` module-level variables. Exception: one-off error messages, log messages, and exception descriptions are fine inline — only extract strings that are reused or configure behavior.
 - **Pydantic for structured data, not dicts.** Any function returning or accepting a dict with a known schema should use a Pydantic model (or dataclass for internal-only data). Plain dicts are fine for generic key-value stores, `**kwargs`, or serialization helpers — not for domain objects, API responses, or cross-module contracts.
+- **Validate at boundaries. No silent defaults for required configuration.** If a value is required for a downstream operation, the layer that accepts it from outside (HTTP request, env var, CLI arg, DB seed) must either reject missing input (raise / 422) or use a NAMED constant as the default. Never fall through to `next(iter(some_dict))`, "the first thing in the list", or dict-insertion-order. Those are silent corruption disguised as resilience. Discovered the hard way 2026-04-08 when the `available_models` table got TRUNCATEd and `resolve_model_mode(None)` silently returned `'turbo'` for every generation regardless of which model was actually loaded. See `plans/no-silent-fallbacks.md` for the audit + fix.
 
 ## Key Rules
 
