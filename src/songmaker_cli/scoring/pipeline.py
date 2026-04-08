@@ -6,7 +6,7 @@ import logging
 import os
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, TypeVar
 
@@ -25,10 +25,23 @@ from songmaker_cli.scoring.models import (
     SpectralQualityScore,
     TextAccuracyScore,
 )
+from songmaker_cli.scoring.registry import (
+    DEVICE_CPU,
+    DEVICE_GPU,
+    SCORERS,
+    VALID_SCORER_NAMES,
+)
 
 log = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+__all__ = [
+    "DEVICE_CPU",
+    "DEVICE_GPU",
+    "SCORERS",
+    "VALID_SCORER_NAMES",
+]
 
 
 @dataclass(frozen=True)
@@ -40,8 +53,6 @@ class AudioData:
 
 
 SCORER_TIMEOUT_SECONDS = 120
-DEVICE_CPU = "cpu"
-DEVICE_GPU = "gpu"
 
 
 @dataclass(frozen=True)
@@ -65,46 +76,33 @@ ScorerFunc = Callable[
     [Path, SongMeta | None, AudioData | None, PipelineConfig, SharedScorerData], object,
 ]
 
-_VALID_SCORER_NAMES = frozenset(f.name for f in fields(SongScores))
-
-
-@dataclass(frozen=True)
-class ScorerEntry:
-    func: ScorerFunc
-    needs_audio: bool = True
-    device: str = DEVICE_CPU
-    after_gpu: bool = False
-
 
 class ScorerRegistry:
-    """Registry of scorer functions. Supports lazy loading and test isolation."""
+    """Registry of scorer functions. Supports lazy loading and test isolation.
+
+    Metadata (needs_audio, device, after_gpu, output_keys) lives in the
+    SCORERS table in scoring/registry.py — this class only holds the
+    function refs populated at module-import time by @register.
+    """
 
     def __init__(self, *, autoload: bool = False) -> None:
-        self._scorers: dict[str, ScorerEntry] = {}
+        self._scorers: dict[str, ScorerFunc] = {}
         self._loaded: bool = False
         self._autoload: bool = autoload
 
-    def register(
-        self, name: str, needs_audio: bool = True,
-        device: str = DEVICE_CPU, after_gpu: bool = False,
-    ) -> Callable[[ScorerFunc], ScorerFunc]:
+    def register(self, name: str) -> Callable[[ScorerFunc], ScorerFunc]:
         """Decorator to register a scorer function.
 
-        The name must match a field on SongScores (e.g. "silence", "bpm_accuracy").
-        Set needs_audio=False for scorers that use file paths (e.g. Whisper, AudioBox).
-        Set device="gpu" for scorers that require GPU (serialized to avoid VRAM contention).
-        Set after_gpu=True for CPU scorers that depend on GPU scorer output via shared_data.
+        The name must exist in SCORERS (scoring/registry.py).
         """
 
         def decorator(func: ScorerFunc) -> ScorerFunc:
-            if name not in _VALID_SCORER_NAMES:
+            if name not in VALID_SCORER_NAMES:
                 raise ValueError(
                     f"Scorer name '{name}' does not match any SongScores field. "
-                    f"Valid names: {sorted(_VALID_SCORER_NAMES)}"
+                    f"Valid names: {sorted(VALID_SCORER_NAMES)}"
                 )
-            self._scorers[name] = ScorerEntry(
-                func=func, needs_audio=needs_audio, device=device, after_gpu=after_gpu,
-            )
+            self._scorers[name] = func
             return func
 
         return decorator
@@ -114,20 +112,19 @@ class ScorerRegistry:
         return list(self._scorers.keys())
 
     def get(self, name: str) -> ScorerFunc | None:
-        entry = self._scorers.get(name)
-        return entry.func if entry else None
+        return self._scorers.get(name)
 
     def scorer_needs_audio(self, name: str) -> bool:
-        entry = self._scorers.get(name)
-        return entry.needs_audio if entry else True
+        spec = SCORERS.get(name)
+        return spec.needs_audio if spec else True
 
     def scorer_uses_gpu(self, name: str) -> bool:
-        entry = self._scorers.get(name)
-        return entry.device == DEVICE_GPU if entry else False
+        spec = SCORERS.get(name)
+        return spec.device == DEVICE_GPU if spec else False
 
     def scorer_after_gpu(self, name: str) -> bool:
-        entry = self._scorers.get(name)
-        return entry.after_gpu if entry else False
+        spec = SCORERS.get(name)
+        return spec.after_gpu if spec else False
 
     def all_names(self) -> list[str]:
         return list(self._scorers.keys())

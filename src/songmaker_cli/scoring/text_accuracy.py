@@ -10,7 +10,7 @@ from pathlib import Path
 
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SharedScorerData, TextAccuracyScore
-from songmaker_cli.scoring.pipeline import DEVICE_CPU, AudioData, PipelineConfig, register
+from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def clear_cache() -> None:
     log.info("Cleared Whisper model cache")
 
 
-@register("text_accuracy", needs_audio=False, device=DEVICE_CPU)
+@register("text_accuracy")
 def score_text_accuracy(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
     config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,

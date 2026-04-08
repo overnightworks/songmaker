@@ -867,6 +867,24 @@ def test_score_generation_redis_down(client: TestClient) -> None:
     assert "Job queue unavailable" in resp.json()["detail"]
 
 
+def test_scoring_schema_endpoint(client: TestClient) -> None:
+    from songmaker_cli.scoring.registry import SCORERS
+
+    resp = client.get("/api/scoring/schema")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "scorers" in body
+    returned_names = {s["name"] for s in body["scorers"]}
+    assert returned_names == set(SCORERS.keys())
+
+    by_name = {s["name"]: s for s in body["scorers"]}
+    assert by_name["audiobox"]["device"] == "gpu"
+    assert by_name["audiobox"]["needs_audio"] is False
+    assert by_name["lyrical_coherence"]["after_gpu"] is True
+    assert "audiobox_enjoyment" in by_name["audiobox"]["output_keys"]
+    assert "silence_gaps" in by_name["silence"]["output_keys"]
+
+
 def test_score_generation_not_found(client: TestClient) -> None:
     resp = client.post(
         "/api/generations/nonexistent/score",

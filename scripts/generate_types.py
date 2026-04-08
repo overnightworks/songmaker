@@ -220,47 +220,20 @@ def _build_generation_params_interface() -> str:
     return _model_to_interface(StoredGenerationParams, "GenerationParams")
 
 
-def _build_track_scores_interface() -> str:
-    """Build TrackScores from scoring/models.py SCORE_KEY_* constants."""
-    from songmaker_cli.scoring.models import (
-        SCORE_KEY_AUDIOBOX_COMPLEXITY,
-        SCORE_KEY_AUDIOBOX_ENJOYMENT,
-        SCORE_KEY_AUDIOBOX_QUALITY,
-        SCORE_KEY_AUDIOBOX_UNDERSTANDING,
-        SCORE_KEY_BPM_DETECTED,
-        SCORE_KEY_BPM_DEVIATION,
-        SCORE_KEY_DYNAMICS,
-        SCORE_KEY_DYNAMICS_ONSET_CV,
-        SCORE_KEY_DYNAMICS_PITCH_CV,
-        SCORE_KEY_DYNAMICS_RMS_CONTRAST,
-        SCORE_KEY_LYRICAL_COHERENCE,
-        SCORE_KEY_LYRICAL_SUMMARY,
-        SCORE_KEY_SILENCE_GAPS,
-        SCORE_KEY_SILENCE_LONGEST,
-        SCORE_KEY_SPECTRAL_ARTIFACTS,
-        SCORE_KEY_TEXT_ACCURACY,
-    )
+_STRING_OUTPUT_KEYS = frozenset({"lyrical_summary", "detected_language"})
 
-    fields: list[tuple[str, str]] = [
-        (SCORE_KEY_LYRICAL_COHERENCE, "number"),
-        (SCORE_KEY_LYRICAL_SUMMARY, "string"),
-        (SCORE_KEY_DYNAMICS, "number"),
-        (SCORE_KEY_DYNAMICS_PITCH_CV, "number"),
-        (SCORE_KEY_DYNAMICS_RMS_CONTRAST, "number"),
-        (SCORE_KEY_DYNAMICS_ONSET_CV, "number"),
-        (SCORE_KEY_TEXT_ACCURACY, "number"),
-        (SCORE_KEY_AUDIOBOX_ENJOYMENT, "number"),
-        (SCORE_KEY_AUDIOBOX_UNDERSTANDING, "number"),
-        (SCORE_KEY_AUDIOBOX_COMPLEXITY, "number"),
-        (SCORE_KEY_AUDIOBOX_QUALITY, "number"),
-        (SCORE_KEY_BPM_DETECTED, "number"),
-        (SCORE_KEY_BPM_DEVIATION, "number"),
-        (SCORE_KEY_SILENCE_GAPS, "number"),
-        (SCORE_KEY_SILENCE_LONGEST, "number"),
-        (SCORE_KEY_SPECTRAL_ARTIFACTS, "number"),
-        ("user_rating", "number"),
-        ("user_notes", "string"),
-    ]
+
+def _build_track_scores_interface() -> str:
+    """Build TrackScores from the SCORERS registry plus user_rating/notes."""
+    from songmaker_cli.scoring.registry import SCORERS
+
+    fields: list[tuple[str, str]] = []
+    for spec in SCORERS.values():
+        for key in spec.output_keys:
+            ts_type = "string" if key in _STRING_OUTPUT_KEYS else "number"
+            fields.append((key, ts_type))
+    fields.append(("user_rating", "number"))
+    fields.append(("user_notes", "string"))
 
     lines = ["export interface TrackScores {"]
     for name, ts_type in fields:
@@ -283,6 +256,7 @@ def generate() -> str:
         GenerationParams,
         GenerationResponse,
         JobResponse,
+        LoadedModelDetail,
         LoginAttemptResponse,
         PlaylistDetailResponse,
         PlaylistEntryResponse,
@@ -301,7 +275,6 @@ def generate() -> str:
         UserRateLimitsResponse,
         UserResponse,
         VersionResponse,
-        LoadedModelDetail,
         WorkerEphemeralState,
         WorkerIdentity,
         WorkerInfo,

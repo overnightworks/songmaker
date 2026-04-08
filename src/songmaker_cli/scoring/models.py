@@ -4,24 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-# Score serialization keys — used by to_dict() and returned in API responses.
-SCORE_KEY_DYNAMICS = "dynamics"
-SCORE_KEY_DYNAMICS_PITCH_CV = "dynamics_pitch_cv"
-SCORE_KEY_DYNAMICS_RMS_CONTRAST = "dynamics_rms_contrast"
-SCORE_KEY_DYNAMICS_ONSET_CV = "dynamics_onset_cv"
-SCORE_KEY_TEXT_ACCURACY = "text_accuracy"
-SCORE_KEY_AUDIOBOX_ENJOYMENT = "audiobox_enjoyment"
-SCORE_KEY_AUDIOBOX_UNDERSTANDING = "audiobox_understanding"
-SCORE_KEY_AUDIOBOX_COMPLEXITY = "audiobox_complexity"
-SCORE_KEY_AUDIOBOX_QUALITY = "audiobox_quality"
-SCORE_KEY_BPM_DETECTED = "bpm_detected"
-SCORE_KEY_BPM_DEVIATION = "bpm_deviation"
-SCORE_KEY_SILENCE_GAPS = "silence_gaps"
-SCORE_KEY_SILENCE_LONGEST = "silence_longest"
-SCORE_KEY_SPECTRAL_ARTIFACTS = "spectral_artifacts"
-SCORE_KEY_LYRICAL_COHERENCE = "lyrical_coherence"
-SCORE_KEY_LYRICAL_SUMMARY = "lyrical_summary"
-SCORE_KEY_DETECTED_LANGUAGE = "detected_language"
+from songmaker_cli.scoring.registry import SCORERS
 
 
 @dataclass
@@ -52,6 +35,14 @@ class TextAccuracyScore:
     def transcribed_lines(self) -> int:
         return len(self.transcribed_line_texts)
 
+    def to_dict(self) -> dict[str, object]:
+        result: dict[str, object] = {
+            "text_accuracy": round(self.similarity_ratio * 100, 1),
+        }
+        if self.detected_language:
+            result["detected_language"] = self.detected_language
+        return result
+
 
 @dataclass(frozen=True)
 class EmotionalDynamicsScore:
@@ -62,6 +53,14 @@ class EmotionalDynamicsScore:
     onset_rate_cv: float
     overall_expressiveness: float
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "dynamics": round(min(self.overall_expressiveness * 100, 100.0), 1),
+            "dynamics_pitch_cv": self.pitch_cv,
+            "dynamics_rms_contrast": self.rms_contrast,
+            "dynamics_onset_cv": self.onset_rate_cv,
+        }
+
 
 @dataclass(frozen=True)
 class AudioBoxScore:
@@ -71,6 +70,14 @@ class AudioBoxScore:
     content_understanding: float
     production_complexity: float
     production_quality: float
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "audiobox_enjoyment": self.content_enjoyment,
+            "audiobox_understanding": self.content_understanding,
+            "audiobox_complexity": self.production_complexity,
+            "audiobox_quality": self.production_quality,
+        }
 
 
 @dataclass(frozen=True)
@@ -86,6 +93,9 @@ class SpectralQualityScore:
     def has_artifacts(self) -> bool:
         return self.artifact_count > 0
 
+    def to_dict(self) -> dict[str, object]:
+        return {"spectral_artifacts": self.artifact_count}
+
 
 @dataclass(frozen=True)
 class LyricalCoherenceScore:
@@ -94,6 +104,12 @@ class LyricalCoherenceScore:
     score: int
     issues: tuple[str, ...]
     summary: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "lyrical_coherence": self.score,
+            "lyrical_summary": self.summary,
+        }
 
 
 @dataclass(frozen=True)
@@ -104,6 +120,12 @@ class BpmAccuracyScore:
     requested_bpm: int
     deviation_percent: float
     octave_corrected: bool
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "bpm_detected": self.detected_bpm,
+            "bpm_deviation": self.deviation_percent,
+        }
 
 
 @dataclass(frozen=True)
@@ -118,6 +140,12 @@ class SilenceScore:
     def has_problems(self) -> bool:
         """True if any gap exceeds the minimum threshold."""
         return self.gap_count > 0
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "silence_gaps": self.gap_count,
+            "silence_longest": self.longest_gap_seconds,
+        }
 
 
 @dataclass(frozen=True)
@@ -143,43 +171,24 @@ class SongScores:
     spectral_quality: SpectralQualityScore | None = None
 
     def to_dict(self) -> dict[str, object]:
-        """Structured dict for snapshot persistence.
-
-        Returns empty dict if no scorers produced results.
-        """
         result: dict[str, object] = {}
-
-        if self.emotional_dynamics:
-            expr = self.emotional_dynamics.overall_expressiveness
-            result[SCORE_KEY_DYNAMICS] = round(min(expr * 100, 100.0), 1)
-            result[SCORE_KEY_DYNAMICS_PITCH_CV] = self.emotional_dynamics.pitch_cv
-            result[SCORE_KEY_DYNAMICS_RMS_CONTRAST] = self.emotional_dynamics.rms_contrast
-            result[SCORE_KEY_DYNAMICS_ONSET_CV] = self.emotional_dynamics.onset_rate_cv
-
-        if self.text_accuracy:
-            result[SCORE_KEY_TEXT_ACCURACY] = round(self.text_accuracy.similarity_ratio * 100, 1)
-            if self.text_accuracy.detected_language:
-                result[SCORE_KEY_DETECTED_LANGUAGE] = self.text_accuracy.detected_language
-
-        if self.audiobox:
-            result[SCORE_KEY_AUDIOBOX_ENJOYMENT] = self.audiobox.content_enjoyment
-            result[SCORE_KEY_AUDIOBOX_UNDERSTANDING] = self.audiobox.content_understanding
-            result[SCORE_KEY_AUDIOBOX_COMPLEXITY] = self.audiobox.production_complexity
-            result[SCORE_KEY_AUDIOBOX_QUALITY] = self.audiobox.production_quality
-
-        if self.bpm_accuracy:
-            result[SCORE_KEY_BPM_DETECTED] = self.bpm_accuracy.detected_bpm
-            result[SCORE_KEY_BPM_DEVIATION] = self.bpm_accuracy.deviation_percent
-
-        if self.silence:
-            result[SCORE_KEY_SILENCE_GAPS] = self.silence.gap_count
-            result[SCORE_KEY_SILENCE_LONGEST] = self.silence.longest_gap_seconds
-
-        if self.spectral_quality:
-            result[SCORE_KEY_SPECTRAL_ARTIFACTS] = self.spectral_quality.artifact_count
-
-        if self.lyrical_coherence:
-            result[SCORE_KEY_LYRICAL_COHERENCE] = self.lyrical_coherence.score
-            result[SCORE_KEY_LYRICAL_SUMMARY] = self.lyrical_coherence.summary
-
+        for name in _TO_DICT_ORDER:
+            score = getattr(self, name)
+            if score is not None:
+                result.update(score.to_dict())
         return result
+
+
+_TO_DICT_ORDER: tuple[str, ...] = (
+    "emotional_dynamics",
+    "text_accuracy",
+    "audiobox",
+    "bpm_accuracy",
+    "silence",
+    "spectral_quality",
+    "lyrical_coherence",
+)
+
+assert frozenset(_TO_DICT_ORDER) == frozenset(SCORERS.keys()), (
+    "_TO_DICT_ORDER must contain exactly the scorer names from SCORERS"
+)

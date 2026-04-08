@@ -114,6 +114,58 @@ def test_emotional_dynamics_expressiveness_capped() -> None:
     assert d["dynamics"] == 100.0
 
 
+def test_to_dict_keys_match_scorer_output_keys_exactly() -> None:
+    from songmaker_cli.scoring.models import (
+        BpmAccuracyScore,
+        LyricalCoherenceScore,
+        SilenceScore,
+        SpectralQualityScore,
+    )
+    from songmaker_cli.scoring.registry import SCORERS
+
+    fully_populated = SongScores(
+        text_accuracy=TextAccuracyScore(
+            similarity_ratio=0.5,
+            intended_line_texts=("a",),
+            transcribed_line_texts=("a",),
+            detected_language="en",
+        ),
+        lyrical_coherence=LyricalCoherenceScore(score=5, issues=(), summary="ok"),
+        emotional_dynamics=EmotionalDynamicsScore(
+            pitch_cv=0.1, rms_contrast=0.2, onset_rate_cv=0.3,
+            overall_expressiveness=0.4,
+        ),
+        audiobox=AudioBoxScore(
+            content_enjoyment=1.0, content_understanding=2.0,
+            production_complexity=3.0, production_quality=4.0,
+        ),
+        bpm_accuracy=BpmAccuracyScore(
+            detected_bpm=120, requested_bpm=120,
+            deviation_percent=0.0, octave_corrected=False,
+        ),
+        silence=SilenceScore(
+            total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
+        ),
+        spectral_quality=SpectralQualityScore(
+            mean_flatness=0.1, max_flatness=0.2, artifact_count=0, artifact_windows=(),
+        ),
+    )
+
+    all_declared_keys: set[str] = set()
+    for spec in SCORERS.values():
+        all_declared_keys.update(spec.output_keys)
+
+    actual_keys = set(fully_populated.to_dict().keys())
+    missing = all_declared_keys - actual_keys
+    extra = actual_keys - all_declared_keys
+    assert not missing, (
+        f"SCORERS declares output_keys not emitted by to_dict() when fully populated: {missing}"
+    )
+    assert not extra, (
+        f"to_dict() emitted keys not declared in any SCORERS spec: {extra}"
+    )
+
+
 # ── Registry tests ───────────────────────────────────────────────────
 
 
@@ -315,14 +367,15 @@ def test_gpu_scorers_run_sequentially_with_cpu_overlap(
         time.sleep(SLEEP_SECONDS)
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
-    @clean_registry.register("text_accuracy", needs_audio=False, device="gpu")
+    @clean_registry.register("audiobox")
     def gpu_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None, shared_data: object = None,
-    ) -> TextAccuracyScore:
+    ) -> AudioBoxScore:
         time.sleep(SLEEP_SECONDS)
-        return TextAccuracyScore(
-            similarity_ratio=0.9, intended_line_texts=("hello",), transcribed_line_texts=("hello",),
+        return AudioBoxScore(
+            content_enjoyment=7.0, content_understanding=8.0,
+            production_complexity=6.0, production_quality=9.0,
         )
 
     start = time.monotonic()
@@ -330,7 +383,7 @@ def test_gpu_scorers_run_sequentially_with_cpu_overlap(
     elapsed = time.monotonic() - start
 
     assert scores.silence is not None
-    assert scores.text_accuracy is not None
+    assert scores.audiobox is not None
     serial_time = SLEEP_SECONDS * 2
     assert elapsed < serial_time, f"Expected overlapping execution, took {elapsed:.2f}s"
 
@@ -341,19 +394,20 @@ def test_after_gpu_scorers_run_after_gpu_completes(
 ) -> None:
     """Scorers with after_gpu=True wait for GPU scorers to populate shared_data."""
 
-    @clean_registry.register("text_accuracy", needs_audio=False, device="gpu")
+    @clean_registry.register("audiobox")
     def gpu_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None, shared_data=None,
-    ) -> TextAccuracyScore:
+    ) -> AudioBoxScore:
         time.sleep(SLEEP_SECONDS)
         if shared_data is not None:
             shared_data.whisper_text = "hello world"
-        return TextAccuracyScore(
-            similarity_ratio=0.9, intended_line_texts=("hello",), transcribed_line_texts=("hello",),
+        return AudioBoxScore(
+            content_enjoyment=7.0, content_understanding=8.0,
+            production_complexity=6.0, production_quality=9.0,
         )
 
-    @clean_registry.register("lyrical_coherence", needs_audio=False, after_gpu=True)
+    @clean_registry.register("lyrical_coherence")
     def deferred_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None, shared_data=None,
@@ -365,7 +419,7 @@ def test_after_gpu_scorers_run_after_gpu_completes(
         return LyricalCoherenceScore(score=8, issues=(), summary="good")
 
     scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
-    assert scores.text_accuracy is not None
+    assert scores.audiobox is not None
     assert scores.lyrical_coherence is not None
     assert scores.lyrical_coherence.score == 8
 
@@ -376,7 +430,7 @@ def test_gpu_scorer_failure_does_not_block_cpu(
 ) -> None:
     """A failing GPU scorer does not prevent CPU scorers from completing."""
 
-    @clean_registry.register("text_accuracy", needs_audio=False, device="gpu")
+    @clean_registry.register("audiobox")
     def broken_gpu(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None, shared_data: object = None,
@@ -392,7 +446,7 @@ def test_gpu_scorer_failure_does_not_block_cpu(
 
     scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
     assert scores.silence is not None
-    assert scores.text_accuracy is None
+    assert scores.audiobox is None
 
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)

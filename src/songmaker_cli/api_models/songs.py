@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field, field_validator
 
 from songmaker_cli.config import get_builtin_defaults
+from songmaker_cli.scoring.registry import VALID_SCORER_NAMES
 
 log = logging.getLogger(__name__)
 
@@ -36,11 +37,6 @@ _VALID_INFER_METHODS = frozenset({"ode", "sde"})
 _VALID_THINK_MODES = frozenset({"deep", "off", ""})
 _VALID_REPAINT_MODES = frozenset({"conservative", "balanced", "aggressive"})
 _VALID_MODEL_MODES = frozenset(get_builtin_defaults().keys())
-
-VALID_SCORER_NAMES = frozenset({
-    "text_accuracy", "lyrical_coherence", "emotional_dynamics",
-    "audiobox", "bpm_accuracy", "silence", "spectral_quality",
-})
 
 
 class GenerationParams(BaseModel):
@@ -478,6 +474,35 @@ class ScoreRequest(BaseModel):
                 msg = f"Unknown scorers: {', '.join(sorted(invalid))}"
                 raise ValueError(msg)
         return v
+
+
+class ScorerSchemaItem(BaseModel):
+    name: str
+    output_keys: list[str]
+    needs_audio: bool
+    device: str
+    after_gpu: bool
+
+
+class ScoringSchemaResponse(BaseModel):
+    scorers: list[ScorerSchemaItem]
+
+    @classmethod
+    def from_registry(cls) -> "ScoringSchemaResponse":
+        from songmaker_cli.scoring.registry import SCORERS
+
+        return cls(
+            scorers=[
+                ScorerSchemaItem(
+                    name=spec.name,
+                    output_keys=list(spec.output_keys),
+                    needs_audio=spec.needs_audio,
+                    device=spec.device,
+                    after_gpu=spec.after_gpu,
+                )
+                for spec in SCORERS.values()
+            ],
+        )
 
 
 class RateRequest(BaseModel):

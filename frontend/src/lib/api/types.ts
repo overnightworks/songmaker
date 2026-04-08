@@ -75,13 +75,14 @@ export interface VersionGenerationParams {
 }
 
 export interface TrackScores {
+	text_accuracy?: number;
+	detected_language?: string;
 	lyrical_coherence?: number;
 	lyrical_summary?: string;
 	dynamics?: number;
 	dynamics_pitch_cv?: number;
 	dynamics_rms_contrast?: number;
 	dynamics_onset_cv?: number;
-	text_accuracy?: number;
 	audiobox_enjoyment?: number;
 	audiobox_understanding?: number;
 	audiobox_complexity?: number;
