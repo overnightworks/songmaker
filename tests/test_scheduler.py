@@ -291,7 +291,7 @@ def test_consume_task_stream_gives_up_after_max_reconnects() -> None:
 
 
 def _make_ace_config():
-    return AceStepConfig(prompt="x", lyrics="la la", duration=60)
+    return AceStepConfig(prompt="x", lyrics="la la", audio_duration=60)
 
 
 def test_dispatch_increments_then_decrements_queue_depth(db_factory, db_session) -> None:

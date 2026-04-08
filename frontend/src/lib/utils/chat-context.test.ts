@@ -13,9 +13,9 @@ function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 		prompt: '',
 		lyrics: '',
 		bpm: 0,
-		duration: 180,
-		key: '',
-		language: '',
+		audio_duration: 180,
+		key_scale: '',
+		vocal_language: '',
 		version_count: 0,
 		generation_count: 0,
 		is_shared: false,
@@ -118,7 +118,7 @@ describe('extractAllApplyData', () => {
 
 	it('validates field bounds', () => {
 		const text =
-			'```songmaker\n{"bpm": 1500, "duration": -1, "key": "this is way too long key"}\n```';
+			'```songmaker\n{"bpm": 1500, "audio_duration": -1, "key_scale": "this is way too long key"}\n```';
 		const result = extractAllApplyData(text, 'a1', songs);
 		expect(result).toEqual([]);
 	});

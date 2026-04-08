@@ -3,13 +3,13 @@
 		editLyrics,
 		editPrompt,
 		editBpm,
-		editDuration,
-		editKey,
+		editAudioDuration,
+		editKeyScale,
 		setDraftLyrics,
 		setDraftPrompt,
 		setDraftBpm,
-		setDraftDuration,
-		setDraftKey,
+		setDraftAudioDuration,
+		setDraftKeyScale,
 		versions,
 		currentVersionIndex,
 		isDirty,
@@ -84,7 +84,7 @@
 		inference_steps: 'Steps',
 		guidance_scale: 'Guidance',
 		shift: 'Shift',
-		think_mode: 'Think',
+		thinking: 'Think',
 		lm_temperature: 'LM Temp',
 		infer_method: 'Method'
 	};
@@ -174,7 +174,7 @@
 		</div>
 
 		{#if sourceMode === 'repaint'}
-			{@const duration = sourceGeneration.generation_params?.duration ?? 180}
+			{@const duration = sourceGeneration.generation_params?.audio_duration ?? 180}
 			<WaveformRangePicker
 				audioUrl={`/audio/${sourceGeneration.mp3_path}`}
 				{duration}
@@ -288,20 +288,20 @@
 			</span>
 			<span class="param-change">
 				Duration:
-				{#if d.old.duration !== d.new.duration}
-					<span class="old">{d.old.duration}</span> →
-					<span class="new">{d.new.duration}</span>
+				{#if d.old.audio_duration !== d.new.audio_duration}
+					<span class="old">{d.old.audio_duration}</span> →
+					<span class="new">{d.new.audio_duration}</span>
 				{:else}
-					{d.new.duration}
+					{d.new.audio_duration}
 				{/if}
 			</span>
 			<span class="param-change">
 				Key:
-				{#if d.old.key !== d.new.key}
-					<span class="old">{d.old.key || '—'}</span> →
-					<span class="new">{d.new.key || '—'}</span>
+				{#if d.old.key_scale !== d.new.key_scale}
+					<span class="old">{d.old.key_scale || '—'}</span> →
+					<span class="new">{d.new.key_scale || '—'}</span>
 				{:else}
-					{d.new.key || '—'}
+					{d.new.key_scale || '—'}
 				{/if}
 			</span>
 			{#each genParamChanges(d.old.generation_params, d.new.generation_params) as change (change.key)}
@@ -341,13 +341,17 @@
 				<span>Duration</span>
 				<input
 					type="number"
-					value={$editDuration}
-					oninput={(e) => setDraftDuration(Number(e.currentTarget.value))}
+					value={$editAudioDuration}
+					oninput={(e) => setDraftAudioDuration(Number(e.currentTarget.value))}
 				/>
 			</label>
 			<label class="edit-field small">
 				<span>Key</span>
-				<input type="text" value={$editKey} oninput={(e) => setDraftKey(e.currentTarget.value)} />
+				<input
+					type="text"
+					value={$editKeyScale}
+					oninput={(e) => setDraftKeyScale(e.currentTarget.value)}
+				/>
 			</label>
 		</div>
 

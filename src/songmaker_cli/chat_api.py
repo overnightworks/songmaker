@@ -121,12 +121,12 @@ def _format_song_context(song) -> str:
         if v.prompt:
             parts.append(f"Style: {v.prompt}")
         meta = []
-        if v.key:
-            meta.append(f"Key: {v.key}")
+        if v.key_scale:
+            meta.append(f"Key: {v.key_scale}")
         if v.bpm:
             meta.append(f"BPM: {v.bpm}")
-        if v.duration:
-            meta.append(f"Duration: {v.duration}s")
+        if v.audio_duration:
+            meta.append(f"Duration: {v.audio_duration}s")
         if meta:
             parts.append(" | ".join(meta))
         if v.lyrics:
@@ -170,12 +170,12 @@ def _build_song_context(
                 if v.prompt:
                     vp.append(f"Style: {v.prompt}")
                 meta = []
-                if v.key:
-                    meta.append(f"Key: {v.key}")
+                if v.key_scale:
+                    meta.append(f"Key: {v.key_scale}")
                 if v.bpm:
                     meta.append(f"BPM: {v.bpm}")
-                if v.duration:
-                    meta.append(f"Duration: {v.duration}s")
+                if v.audio_duration:
+                    meta.append(f"Duration: {v.audio_duration}s")
                 if meta:
                     vp.append(" | ".join(meta))
                 if v.lyrics:

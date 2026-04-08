@@ -27,21 +27,21 @@ def test_build_ace_config_basic() -> None:
     meta = SongMeta(
         prompt="rock anthem",
         lyrics="[verse]\nHello",
-        generation_params={"bpm": 140, "duration": 60, "key": "Am"},
+        generation_params={"bpm": 140, "audio_duration": 60, "key_scale": "Am"},
     )
     config = build_ace_config(meta)
     assert config.prompt == "rock anthem"
     assert config.lyrics == "[verse]\nHello"
     assert config.bpm == 140
-    assert config.duration == 60
-    assert config.key == "Am"
+    assert config.audio_duration == 60
+    assert config.key_scale == "Am"
 
 
-def test_build_ace_config_language_mapping() -> None:
+def test_build_ace_config_vocal_language() -> None:
     meta = SongMeta(
         prompt="test",
         lyrics="test",
-        generation_params={"language": "de"},
+        generation_params={"vocal_language": "de"},
     )
     config = build_ace_config(meta)
     assert config.vocal_language == "de"
@@ -51,12 +51,12 @@ def test_build_ace_config_cli_overrides() -> None:
     meta = SongMeta(
         prompt="test",
         lyrics="test",
-        generation_params={"bpm": 120, "duration": 60},
+        generation_params={"bpm": 120, "audio_duration": 60},
     )
     config = build_ace_config(meta, {"bpm": 180, "seed": 42})
     assert config.bpm == 180
     assert config.seed == 42
-    assert config.duration == 60
+    assert config.audio_duration == 60
 
 
 def test_build_ace_config_cli_overrides_none_ignored() -> None:
@@ -101,9 +101,9 @@ def test_build_ace_config_zero_steps_raises() -> None:
         build_ace_config(meta)
 
 
-def test_build_ace_config_zero_duration_raises() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", generation_params={"duration": 0})
-    with pytest.raises(ValidationError, match="duration="):
+def test_build_ace_config_zero_audio_duration_raises() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", generation_params={"audio_duration": 0})
+    with pytest.raises(ValidationError, match="audio_duration="):
         build_ace_config(meta)
 
 

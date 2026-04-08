@@ -91,19 +91,9 @@ def save_generation_defaults(db_factory: sessionmaker[Session], data: dict) -> N
     log.info("Saved generation defaults to database")
 
 
-_FIELD_MAPPING = {"language": "vocal_language"}
-
-
-def _apply_params(fields: dict, source: dict) -> None:
-    """Merge source params into fields, applying field name mapping."""
-    for key, value in source.items():
-        mapped = _FIELD_MAPPING.get(key, key)
-        fields[mapped] = value
-
-
 _SHARED_LM_DEFAULTS: dict[str, object] = {
     "shift": 3.0,
-    "think_mode": "deep",
+    "thinking": True,
     "lm_temperature": 0.85,
     "lm_top_k": 0,
     "lm_top_p": 0.9,
@@ -201,7 +191,7 @@ def build_ace_config(
     if cli_overrides:
         layers.append({k: v for k, v in cli_overrides.items() if v is not None})
     for layer in layers:
-        _apply_params(fields, layer)
+        fields.update(layer)
 
     fields = _sanitize_params(fields)
     if seed is not None and seed >= 0:
@@ -223,9 +213,9 @@ def _sanitize_params(fields: dict) -> dict:
     if steps is not None and steps < 1:
         raise ValidationError(f"inference_steps={steps} is < 1, must be >= 1")
 
-    duration = fields.get("duration")
-    if duration is not None and duration < 1:
-        raise ValidationError(f"duration={duration} is < 1, must be >= 1")
+    audio_duration = fields.get("audio_duration")
+    if audio_duration is not None and audio_duration < 1:
+        raise ValidationError(f"audio_duration={audio_duration} is < 1, must be >= 1")
 
     infer = fields.get("infer_method")
     if infer and infer not in ("ode", "sde"):

@@ -13,8 +13,8 @@ export interface SongData {
 	lyrics: string;
 	prompt: string;
 	bpm: number;
-	duration: number;
-	key: string;
+	audio_duration: number;
+	key_scale: string;
 	genParams: VersionGenerationParams | null;
 }
 
@@ -22,8 +22,8 @@ const EMPTY_SONG_DATA: SongData = {
 	lyrics: '',
 	prompt: '',
 	bpm: 0,
-	duration: 180,
-	key: '',
+	audio_duration: 180,
+	key_scale: '',
 	genParams: null
 };
 
@@ -58,8 +58,8 @@ export const isDirty = derived(editorState, (s) => {
 		draft.lyrics !== saved.lyrics ||
 		draft.prompt !== saved.prompt ||
 		draft.bpm !== saved.bpm ||
-		draft.duration !== saved.duration ||
-		draft.key !== saved.key ||
+		draft.audio_duration !== saved.audio_duration ||
+		draft.key_scale !== saved.key_scale ||
 		!genParamsEqual(draft.genParams, saved.genParams)
 	);
 });
@@ -67,8 +67,8 @@ export const isDirty = derived(editorState, (s) => {
 export const editLyrics = derived(editorState, (s) => s.draft.lyrics);
 export const editPrompt = derived(editorState, (s) => s.draft.prompt);
 export const editBpm = derived(editorState, (s) => s.draft.bpm);
-export const editDuration = derived(editorState, (s) => s.draft.duration);
-export const editKey = derived(editorState, (s) => s.draft.key);
+export const editAudioDuration = derived(editorState, (s) => s.draft.audio_duration);
+export const editKeyScale = derived(editorState, (s) => s.draft.key_scale);
 export const editGenParams = derived(editorState, (s) => s.draft.genParams);
 
 export function setDraftLyrics(lyrics: string): void {
@@ -83,12 +83,12 @@ export function setDraftBpm(bpm: number): void {
 	editorState.update((s) => ({ ...s, draft: { ...s.draft, bpm } }));
 }
 
-export function setDraftDuration(duration: number): void {
-	editorState.update((s) => ({ ...s, draft: { ...s.draft, duration } }));
+export function setDraftAudioDuration(audio_duration: number): void {
+	editorState.update((s) => ({ ...s, draft: { ...s.draft, audio_duration } }));
 }
 
-export function setDraftKey(key: string): void {
-	editorState.update((s) => ({ ...s, draft: { ...s.draft, key } }));
+export function setDraftKeyScale(key_scale: string): void {
+	editorState.update((s) => ({ ...s, draft: { ...s.draft, key_scale } }));
 }
 
 export function setDraftGenParams(genParams: VersionGenerationParams | null): void {
@@ -137,8 +137,8 @@ function songDataFromSong(s: SongItem): SongData {
 		lyrics: s.lyrics,
 		prompt: s.prompt,
 		bpm: s.bpm ?? 0,
-		duration: s.duration ?? 180,
-		key: s.key,
+		audio_duration: s.audio_duration ?? 180,
+		key_scale: s.key_scale,
 		genParams: s.generation_params ?? null
 	};
 }
@@ -148,8 +148,8 @@ function songDataFromVersion(v: VersionItem): SongData {
 		lyrics: v.lyrics,
 		prompt: v.prompt,
 		bpm: v.bpm,
-		duration: v.duration,
-		key: v.key,
+		audio_duration: v.audio_duration,
+		key_scale: v.key_scale,
 		genParams: v.generation_params
 	};
 }
@@ -183,8 +183,8 @@ export async function handleSave(songId: string): Promise<void> {
 			lyrics: draft.lyrics,
 			prompt: draft.prompt,
 			bpm: draft.bpm,
-			duration: draft.duration,
-			key: draft.key,
+			audio_duration: draft.audio_duration,
+			key_scale: draft.key_scale,
 			generation_params: draft.genParams
 		});
 		editorState.update((s) => ({ ...s, saved: { ...s.draft } }));
@@ -232,8 +232,8 @@ export function handleApply(data: ApplyData): void {
 		lyrics: draft.lyrics,
 		prompt: draft.prompt,
 		bpm: draft.bpm,
-		duration: draft.duration,
-		key: draft.key,
+		audio_duration: draft.audio_duration,
+		key_scale: draft.key_scale,
 		generation_params: draft.genParams,
 		created_at: null
 	};
@@ -244,8 +244,8 @@ export function handleApply(data: ApplyData): void {
 			...(data.lyrics !== undefined && { lyrics: data.lyrics }),
 			...(data.prompt !== undefined && { prompt: data.prompt }),
 			...(data.bpm !== undefined && { bpm: data.bpm }),
-			...(data.duration !== undefined && { duration: data.duration }),
-			...(data.key !== undefined && { key: data.key })
+			...(data.audio_duration !== undefined && { audio_duration: data.audio_duration }),
+			...(data.key_scale !== undefined && { key_scale: data.key_scale })
 		}
 	}));
 	const afterDraft = get(editorState).draft;
@@ -255,8 +255,8 @@ export function handleApply(data: ApplyData): void {
 		lyrics: afterDraft.lyrics,
 		prompt: afterDraft.prompt,
 		bpm: afterDraft.bpm,
-		duration: afterDraft.duration,
-		key: afterDraft.key,
+		audio_duration: afterDraft.audio_duration,
+		key_scale: afterDraft.key_scale,
 		generation_params: afterDraft.genParams,
 		created_at: null
 	};

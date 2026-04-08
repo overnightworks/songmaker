@@ -111,9 +111,9 @@ def _load_song_meta(
         base_params: dict = {
             k: v for k, v in {
                 "bpm": version.bpm,
-                "duration": version.duration,
-                "key": version.key,
-                "language": song.language,
+                "audio_duration": version.audio_duration,
+                "key_scale": version.key_scale,
+                "vocal_language": song.vocal_language,
             }.items() if v
         }
         base_params.update(version.generation_params or {})
@@ -185,17 +185,20 @@ def _build_generation_context(
     )
     ace_config = replace(ace_config, model=model_name)
 
-    if ace_config.reference_audio:
-        abs_ref = (audio_dir / ace_config.reference_audio).resolve()
+    if ace_config.reference_audio_path:
+        abs_ref = (audio_dir / ace_config.reference_audio_path).resolve()
         inside_audio_dir = str(abs_ref).startswith(str(audio_dir.resolve()))
-        if ".." in ace_config.reference_audio or not inside_audio_dir:
-            log.warning("Reference audio path traversal blocked: %s", ace_config.reference_audio)
-            ace_config = replace(ace_config, reference_audio="")
+        if ".." in ace_config.reference_audio_path or not inside_audio_dir:
+            log.warning(
+                "Reference audio path traversal blocked: %s",
+                ace_config.reference_audio_path,
+            )
+            ace_config = replace(ace_config, reference_audio_path="")
         elif abs_ref.exists():
-            ace_config = replace(ace_config, reference_audio=str(abs_ref))
+            ace_config = replace(ace_config, reference_audio_path=str(abs_ref))
         else:
             log.warning("Reference audio not found: %s", abs_ref)
-            ace_config = replace(ace_config, reference_audio="")
+            ace_config = replace(ace_config, reference_audio_path="")
 
     return GenerationContext(
         song_id=song_id,
@@ -240,11 +243,11 @@ def post_process_generation(
         )
         needs_splice = (
             ctx.ace_config.task_type == "repaint"
-            and ctx.ace_config.src_audio
+            and ctx.ace_config.src_audio_path
             and not server_handles_crossfade
         )
         if needs_splice:
-            splice_src = ctx.raw_src_audio or ctx.ace_config.src_audio
+            splice_src = ctx.raw_src_audio or ctx.ace_config.src_audio_path
             decoded = _splice_repaint_raw(decoded, ctx.ace_config, splice_src)
 
         mp3_path = audio_file_path(ctx.audio_dir, ctx.user_id, generation_id, ".mp3")
@@ -295,14 +298,14 @@ def _persist_generation_row(
     stored = StoredGenerationParams(
         acestep_model=ctx.model_name,
         bpm=ctx.ace_config.bpm,
-        duration=ctx.ace_config.duration,
-        key=ctx.meta.generation_params.get("key", ""),
+        audio_duration=ctx.ace_config.audio_duration,
+        key_scale=ctx.meta.generation_params.get("key_scale", ""),
         guidance_scale=ctx.ace_config.guidance_scale,
         inference_steps=ctx.ace_config.inference_steps,
         shift=ctx.ace_config.shift,
         lm_temperature=ctx.ace_config.lm_temperature,
         infer_method=ctx.ace_config.infer_method,
-        think_mode=ctx.ace_config.think_mode,
+        thinking=ctx.ace_config.thinking,
         lm_repetition_penalty=(
             ctx.ace_config.lm_repetition_penalty
             if ctx.ace_config.lm_repetition_penalty != 1.0 else None
@@ -450,14 +453,14 @@ def _apply_task_overrides(
 
     overrides: dict = {
         "task_type": task_type,
-        "src_audio": _copy_to_shared_tmp(src_wav, ctx.audio_dir),
+        "src_audio_path": _copy_to_shared_tmp(src_wav, ctx.audio_dir),
         "prompt": params.get("prompt", ctx.ace_config.prompt),
         "lyrics": params.get("lyrics", ctx.ace_config.lyrics),
     }
     if task_type == "repaint":
-        duration = ctx.ace_config.duration
-        overrides["repainting_start"] = params["repainting_start"] * duration
-        overrides["repainting_end"] = params["repainting_end"] * duration
+        audio_duration = ctx.ace_config.audio_duration
+        overrides["repainting_start"] = params["repainting_start"] * audio_duration
+        overrides["repainting_end"] = params["repainting_end"] * audio_duration
         if params.get("repaint_mode"):
             overrides["repaint_mode"] = params["repaint_mode"]
         if params.get("repaint_strength") is not None:
@@ -532,8 +535,11 @@ async def run_generation_job(
             return
 
         tmp_copies: list[str] = []
-        if ctx.ace_config.src_audio and ctx.ace_config.src_audio.startswith(shared_tmp_prefix):
-            tmp_copies.append(ctx.ace_config.src_audio)
+        if (
+            ctx.ace_config.src_audio_path
+            and ctx.ace_config.src_audio_path.startswith(shared_tmp_prefix)
+        ):
+            tmp_copies.append(ctx.ace_config.src_audio_path)
         if ctx.raw_src_audio and ctx.raw_src_audio.startswith(shared_tmp_prefix):
             tmp_copies.append(ctx.raw_src_audio)
 

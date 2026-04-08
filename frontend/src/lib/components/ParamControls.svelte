@@ -60,11 +60,11 @@
 	}
 
 	const SELECT_FIELDS: SelectField[] = [
-		{ key: 'infer_method', label: 'Infer Method', options: ['ode', 'sde'] },
-		{ key: 'think_mode', label: 'Think Mode', options: ['deep', 'off'] }
+		{ key: 'infer_method', label: 'Infer Method', options: ['ode', 'sde'] }
 	];
 
 	const ALL_BOOL_FIELDS: BoolField[] = [
+		{ key: 'thinking', label: 'Thinking (LM)', defaultValue: true },
 		{ key: 'use_cot_caption', label: 'CoT Caption', defaultValue: true },
 		{ key: 'use_cot_language', label: 'CoT Language', defaultValue: true },
 		{ key: 'use_adg', label: 'Adaptive Dual Guidance', defaultValue: false }

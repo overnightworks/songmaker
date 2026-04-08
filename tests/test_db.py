@@ -101,7 +101,7 @@ def seeded_session(db_session: Session) -> Session:
     gen1 = Generation(
         id="g1", song_id="s1", version_id="v1", generation_number=1,
         mp3_path="test/01_song_one_v1.mp3", seed=42,
-        generation_params={"bpm": 120, "key": "Am"},
+        generation_params={"bpm": 120, "key_scale": "Am"},
     )
     gen2 = Generation(
         id="g2", song_id="s1", version_id="v1", generation_number=2,
@@ -1504,6 +1504,108 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
         "alembic_version",
     }
     assert tables == expected
+
+
+def test_acestep_canonical_names_migration_renames_json_keys(tmp_path: Path) -> None:
+    from songmaker_cli.db.engine import init_db
+    from songmaker_cli.db.migrations.versions import (
+        b8c9d1e2f3a4_acestep_canonical_names as mig,
+    )
+    from songmaker_cli.db.models import Album, Song, Version
+
+    factory = init_db(f"sqlite:///{tmp_path / 'migrate.db'}")
+    old_params = {
+        "duration": 180,
+        "key": "Am",
+        "src_audio": "/audio/x.wav",
+        "reference_audio": "/audio/r.wav",
+        "think_mode": "deep",
+        "bpm": 120,
+    }
+    with factory() as session:
+        session.add(Album(id="a1", title="A", artist="X"))
+        session.add(Song(
+            id="s1", title="S", album_id="a1",
+            vocal_language="en", track_number=1,
+        ))
+        session.add(Version(
+            id="v1", song_id="s1", version_number=1,
+            lyrics="l", prompt="p", bpm=120,
+            audio_duration=180, key_scale="Am",
+            generation_params=old_params,
+        ))
+        session.commit()
+
+    engine = factory.kw["bind"]
+    with engine.begin() as conn:
+        original_get_bind = mig.op.get_bind
+        mig.op.get_bind = lambda: conn
+        try:
+            mig._migrate_json_column("versions", "generation_params", forward=True)
+        finally:
+            mig.op.get_bind = original_get_bind
+
+    with factory() as session:
+        ver = session.query(Version).filter_by(id="v1").one()
+        params = ver.generation_params
+        assert params["audio_duration"] == 180
+        assert params["key_scale"] == "Am"
+        assert params["src_audio_path"] == "/audio/x.wav"
+        assert params["reference_audio_path"] == "/audio/r.wav"
+        assert params["thinking"] is True
+        assert params["bpm"] == 120
+        assert "duration" not in params
+        assert "key" not in params
+        assert "src_audio" not in params
+        assert "reference_audio" not in params
+        assert "think_mode" not in params
+
+    engine.dispose()
+
+
+def test_acestep_canonical_names_migration_downgrade_reverses_json_keys(tmp_path: Path) -> None:
+    from songmaker_cli.db.engine import init_db
+    from songmaker_cli.db.migrations.versions import (
+        b8c9d1e2f3a4_acestep_canonical_names as mig,
+    )
+    from songmaker_cli.db.models import Album, Song, Version
+
+    factory = init_db(f"sqlite:///{tmp_path / 'migrate_down.db'}")
+    new_params = {
+        "audio_duration": 180,
+        "key_scale": "Am",
+        "src_audio_path": "/audio/x.wav",
+        "thinking": False,
+    }
+    with factory() as session:
+        session.add(Album(id="a1", title="A", artist="X"))
+        session.add(Song(id="s1", title="S", album_id="a1", track_number=1))
+        session.add(Version(
+            id="v1", song_id="s1", version_number=1,
+            lyrics="l", prompt="p", bpm=120,
+            audio_duration=180, key_scale="Am",
+            generation_params=new_params,
+        ))
+        session.commit()
+
+    engine = factory.kw["bind"]
+    with engine.begin() as conn:
+        original_get_bind = mig.op.get_bind
+        mig.op.get_bind = lambda: conn
+        try:
+            mig._migrate_json_column("versions", "generation_params", forward=False)
+        finally:
+            mig.op.get_bind = original_get_bind
+
+    with factory() as session:
+        ver = session.query(Version).filter_by(id="v1").one()
+        params = ver.generation_params
+        assert params["duration"] == 180
+        assert params["key"] == "Am"
+        assert params["src_audio"] == "/audio/x.wav"
+        assert params["think_mode"] == "off"
+
+    engine.dispose()
 
 
 def test_init_db_stamps_existing_db(tmp_path: Path) -> None:

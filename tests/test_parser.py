@@ -24,7 +24,7 @@ def test_song_meta_track_none_coercion() -> None:
 
 
 def test_song_meta_with_generation_params() -> None:
-    params = {"bpm": 120, "key": "Am", "inference_steps": 50}
+    params = {"bpm": 120, "key_scale": "Am", "inference_steps": 50}
     meta = SongMeta(prompt="rock", lyrics="hello", generation_params=params)
     assert meta.generation_params["bpm"] == 120
     assert meta.generation_params["inference_steps"] == 50

@@ -102,7 +102,7 @@ class AceStepClient:
             prompt="female vocal, piano ballad",
             lyrics="[verse]\\nHello world",
             bpm=72,
-            duration=30,
+            audio_duration=30,
         ))
     """
 
@@ -170,22 +170,21 @@ class AceStepClient:
         Raises:
             TaskSubmissionError: On persistent network error or missing task_id.
         """
-        payload = {
+        payload: dict[str, object] = {
             "task_type": config.task_type,
-            "caption": config.prompt,
+            "prompt": config.prompt,
             "lyrics": config.lyrics,
             "bpm": config.bpm,
-            "audio_duration": config.duration,
-            "key_scale": config.key,
+            "audio_duration": config.audio_duration,
+            "key_scale": config.key_scale,
             "time_signature": config.time_signature,
             "vocal_language": config.vocal_language,
-            "instrumental": config.instrumental,
             "seed": config.seed,
             "use_random_seed": config.seed < 0,
             "inference_steps": config.inference_steps,
             "guidance_scale": config.guidance_scale,
             "shift": config.shift,
-            "thinking": config.think_mode not in ("off", "", "false"),
+            "thinking": config.thinking,
             "lm_temperature": config.lm_temperature,
             "lm_top_k": config.lm_top_k,
             "lm_top_p": config.lm_top_p,
@@ -196,8 +195,8 @@ class AceStepClient:
         }
         if config.lm_negative_prompt:
             payload["lm_negative_prompt"] = config.lm_negative_prompt
-        if config.src_audio:
-            payload["src_audio_path"] = config.src_audio
+        if config.src_audio_path:
+            payload["src_audio_path"] = config.src_audio_path
         if config.task_type == "repaint":
             payload["repainting_start"] = config.repainting_start
             payload["repainting_end"] = config.repainting_end
@@ -213,8 +212,8 @@ class AceStepClient:
             payload["audio_cover_strength"] = config.audio_cover_strength
             if config.cover_noise_strength > 0:
                 payload["cover_noise_strength"] = config.cover_noise_strength
-        if config.reference_audio:
-            payload["reference_audio_path"] = config.reference_audio
+        if config.reference_audio_path:
+            payload["reference_audio_path"] = config.reference_audio_path
         if config.timesteps:
             payload["timesteps"] = config.timesteps
         if not config.use_cot_caption:

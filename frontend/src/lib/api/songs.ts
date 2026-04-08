@@ -25,9 +25,9 @@ export async function createSong(params: {
 	lyrics?: string;
 	prompt?: string;
 	bpm?: number;
-	duration?: number;
-	key?: string;
-	language?: string;
+	audio_duration?: number;
+	key_scale?: string;
+	vocal_language?: string;
 }): Promise<SongItem> {
 	return apiFetch<SongItem>('/api/songs', {
 		method: 'POST',
@@ -42,8 +42,8 @@ export async function updateSong(
 		lyrics?: string;
 		prompt?: string;
 		bpm?: number;
-		duration?: number;
-		key?: string;
+		audio_duration?: number;
+		key_scale?: string;
 		generation_params?: import('./types').VersionGenerationParams | null;
 	}
 ): Promise<SongItem> {

@@ -10,13 +10,18 @@ from pydantic import BaseModel, Field
 
 @dataclass(frozen=True)
 class AceStepConfig:
-    """Configuration for an ACE-Step music generation request."""
+    """Configuration for an ACE-Step music generation request.
+
+    Field names match the canonical names on ACE-Step's
+    GenerateMusicRequest Pydantic model so the wire payload is the
+    dataclass dump with no translation step.
+    """
 
     prompt: str
     lyrics: str
     bpm: int | None = 120
-    duration: int = 60
-    key: str = ""
+    audio_duration: int = 60
+    key_scale: str = ""
     time_signature: str = ""
     vocal_language: str = "en"
     instrumental: bool = False
@@ -24,7 +29,7 @@ class AceStepConfig:
     inference_steps: int = 8
     guidance_scale: float = 0.0
     shift: float = 3.0
-    think_mode: str = "deep"
+    thinking: bool = True
     lm_temperature: float = 0.85
     lm_top_k: int = 0
     lm_top_p: float = 0.9
@@ -33,11 +38,11 @@ class AceStepConfig:
     infer_method: str = "ode"
     batch_size: int = 1
     task_type: str = "text2music"
-    src_audio: str = ""
+    src_audio_path: str = ""
     repainting_start: float = 0.0
     repainting_end: float = -1.0
     audio_cover_strength: float = 1.0
-    reference_audio: str = ""
+    reference_audio_path: str = ""
     repaint_mode: str = ""
     repaint_strength: float = 0.5
     repaint_latent_crossfade_frames: int = 0

@@ -34,7 +34,6 @@ def _safe_json_dict(
 
 
 _VALID_INFER_METHODS = frozenset({"ode", "sde"})
-_VALID_THINK_MODES = frozenset({"deep", "off", ""})
 _VALID_REPAINT_MODES = frozenset({"conservative", "balanced", "aggressive"})
 _VALID_MODEL_MODES = frozenset(get_builtin_defaults().keys())
 
@@ -45,7 +44,7 @@ class GenerationParams(BaseModel):
     inference_steps: int | None = Field(None, ge=1, le=200)
     guidance_scale: float | None = Field(None, ge=0, le=50)
     shift: float | None = Field(None, ge=0, le=100)
-    think_mode: str | None = Field(None, max_length=10)
+    thinking: bool | None = None
     lm_temperature: float | None = Field(None, ge=0, le=5)
     lm_top_k: int | None = Field(None, ge=0, le=1000)
     lm_top_p: float | None = Field(None, ge=0, le=1)
@@ -53,7 +52,7 @@ class GenerationParams(BaseModel):
     lm_negative_prompt: str | None = Field(None, max_length=_GEN_PARAM_MAX_STRING_LENGTH)
     infer_method: str | None = Field(None, max_length=10)
     batch_size: int | None = Field(None, ge=1, le=8)
-    reference_audio: str | None = Field(None, max_length=500)
+    reference_audio_path: str | None = Field(None, max_length=500)
     repaint_mode: str | None = Field(None, max_length=20)
     repaint_strength: float | None = Field(None, ge=0, le=1)
     lm_repetition_penalty: float | None = Field(None, ge=0.5, le=5)
@@ -63,11 +62,11 @@ class GenerationParams(BaseModel):
     cfg_interval_start: float | None = Field(None, ge=0, le=1)
     cfg_interval_end: float | None = Field(None, ge=0, le=1)
 
-    @field_validator("reference_audio")
+    @field_validator("reference_audio_path")
     @classmethod
-    def _validate_reference_audio(cls, v: str | None) -> str | None:
+    def _validate_reference_audio_path(cls, v: str | None) -> str | None:
         if v is not None and ".." in v:
-            raise ValueError("reference_audio must not contain '..'")
+            raise ValueError("reference_audio_path must not contain '..'")
         return v
 
     @field_validator("infer_method")
@@ -75,14 +74,6 @@ class GenerationParams(BaseModel):
     def _validate_infer_method(cls, v: str | None) -> str | None:
         if v is not None and v not in _VALID_INFER_METHODS:
             msg = f"infer_method must be one of {sorted(_VALID_INFER_METHODS)}"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("think_mode")
-    @classmethod
-    def _validate_think_mode(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VALID_THINK_MODES:
-            msg = f"think_mode must be one of {sorted(_VALID_THINK_MODES)}"
             raise ValueError(msg)
         return v
 
@@ -102,8 +93,8 @@ class StoredGenerationParams(GenerationParams):
     seed: int | None = None
     acestep_model: str | None = None
     bpm: int | None = None
-    duration: int | None = None
-    key: str | None = None
+    audio_duration: int | None = None
+    key_scale: str | None = None
     task_type: str | None = None
     repainting_start: float | None = None
     repainting_end: float | None = None
@@ -261,8 +252,8 @@ class VersionResponse(BaseModel):
     lyrics: str
     prompt: str
     bpm: int
-    duration: int
-    key: str
+    audio_duration: int
+    key_scale: str
     generation_params: dict | None
     created_at: str | None
 
@@ -275,8 +266,8 @@ class VersionResponse(BaseModel):
             lyrics=ver.lyrics,
             prompt=ver.prompt,
             bpm=ver.bpm,
-            duration=ver.duration,
-            key=ver.key,
+            audio_duration=ver.audio_duration,
+            key_scale=ver.key_scale,
             generation_params=generation_params,
             created_at=ver.created_at.isoformat() if ver.created_at else None,
         )
@@ -289,12 +280,12 @@ class SongSummaryResponse(BaseModel):
     album_title: str = ""
     artist: str = ""
     track_number: int
-    language: str = ""
+    vocal_language: str = ""
     lyrics: str = ""
     prompt: str = ""
     bpm: int | None = None
-    duration: int | None = None
-    key: str = ""
+    audio_duration: int | None = None
+    key_scale: str = ""
     generation_params: dict | None = None
     version_count: int = 0
     generation_count: int = 0
@@ -318,12 +309,12 @@ class SongSummaryResponse(BaseModel):
             album_title=song.album.title if song.album else "",
             artist=song.album.artist if song.album else "",
             track_number=song.track_number,
-            language=song.language,
+            vocal_language=song.vocal_language,
             lyrics=ver.lyrics if ver else "",
             prompt=ver.prompt if ver else "",
             bpm=ver.bpm if ver else None,
-            duration=ver.duration if ver else None,
-            key=ver.key if ver else "",
+            audio_duration=ver.audio_duration if ver else None,
+            key_scale=ver.key_scale if ver else "",
             generation_params=generation_params,
             version_count=len(song.versions),
             generation_count=len(song.generations),
@@ -376,9 +367,9 @@ class SongCreateRequest(BaseModel):
     lyrics: str = Field("", max_length=50_000)
     prompt: str = Field("", max_length=5_000)
     bpm: int = Field(0, ge=0, le=999)
-    duration: int = Field(180, ge=1, le=600)
-    key: str = Field("", max_length=10)
-    language: str = Field("", max_length=10)
+    audio_duration: int = Field(180, ge=1, le=600)
+    key_scale: str = Field("", max_length=10)
+    vocal_language: str = Field("", max_length=10)
     generation_params: GenerationParams | None = None
 
 
@@ -386,8 +377,8 @@ class SongUpdateRequest(BaseModel):
     lyrics: str | None = Field(None, max_length=50_000)
     prompt: str | None = Field(None, max_length=5_000)
     bpm: int | None = Field(None, ge=0, le=999)
-    duration: int | None = Field(None, ge=1, le=600)
-    key: str | None = Field(None, max_length=10)
+    audio_duration: int | None = Field(None, ge=1, le=600)
+    key_scale: str | None = Field(None, max_length=10)
     generation_params: GenerationParams | None = None
 
 

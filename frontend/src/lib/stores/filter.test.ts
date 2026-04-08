@@ -24,12 +24,12 @@ function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 		album_title: 'Album',
 		artist: 'Artist',
 		track_number: 1,
-		language: 'en',
+		vocal_language: 'en',
 		lyrics: '',
 		prompt: '',
 		bpm: 120,
-		duration: 180,
-		key: 'Am',
+		audio_duration: 180,
+		key_scale: 'Am',
 		generation_params: null,
 		version_count: 1,
 		generation_count: 5,
@@ -47,14 +47,14 @@ describe('filter store', () => {
 	it('METRICS includes expected keys', () => {
 		const keys = METRICS.map((m) => m.key);
 		expect(keys).toContain('dynamics');
-		expect(keys).toContain('key');
+		expect(keys).toContain('key_scale');
 		expect(keys).toContain('bpm');
-		expect(keys).toContain('duration');
+		expect(keys).toContain('audio_duration');
 	});
 
 	it('SORT_OPTIONS excludes select type', () => {
 		expect(SORT_OPTIONS.every((m) => m.type === 'number')).toBe(true);
-		expect(SORT_OPTIONS.find((m) => m.key === 'key')).toBeUndefined();
+		expect(SORT_OPTIONS.find((m) => m.key === 'key_scale')).toBeUndefined();
 	});
 
 	it('getMetric returns matching metric', () => {
@@ -117,8 +117,8 @@ describe('filter store', () => {
 
 	it('updateFilterSelect updates the select value', () => {
 		activeFilters.set([]);
-		addFilter('key');
-		updateFilterSelect('key', 'Am');
+		addFilter('key_scale');
+		updateFilterSelect('key_scale', 'Am');
 		expect(get(activeFilters)[0].selectValue).toBe('Am');
 		activeFilters.set([]);
 	});
@@ -142,16 +142,16 @@ describe('applyFilters', () => {
 	});
 
 	it('filters by select value', () => {
-		const songs = [makeSong({ id: 's1', key: 'Am' }), makeSong({ id: 's2', key: 'C' })];
-		const filters = [{ metric: getMetric('key'), min: 0, selectValue: 'Am' }];
+		const songs = [makeSong({ id: 's1', key_scale: 'Am' }), makeSong({ id: 's2', key_scale: 'C' })];
+		const filters = [{ metric: getMetric('key_scale'), min: 0, selectValue: 'Am' }];
 		const result = applyFilters(songs, filters);
 		expect(result).toHaveLength(1);
 		expect(result[0].id).toBe('s1');
 	});
 
 	it('select filter with empty value passes all', () => {
-		const songs = [makeSong({ key: 'Am' }), makeSong({ id: 's2', key: 'C' })];
-		const filters = [{ metric: getMetric('key'), min: 0, selectValue: '' }];
+		const songs = [makeSong({ key_scale: 'Am' }), makeSong({ id: 's2', key_scale: 'C' })];
+		const filters = [{ metric: getMetric('key_scale'), min: 0, selectValue: '' }];
 		expect(applyFilters(songs, filters)).toHaveLength(2);
 	});
 
@@ -163,12 +163,12 @@ describe('applyFilters', () => {
 
 	it('AND-combines multiple filters', () => {
 		const songs = [
-			makeSong({ id: 's1', key: 'Am', best_scores: { dynamics: 80 } }),
-			makeSong({ id: 's2', key: 'C', best_scores: { dynamics: 80 } }),
-			makeSong({ id: 's3', key: 'Am', best_scores: { dynamics: 20 } })
+			makeSong({ id: 's1', key_scale: 'Am', best_scores: { dynamics: 80 } }),
+			makeSong({ id: 's2', key_scale: 'C', best_scores: { dynamics: 80 } }),
+			makeSong({ id: 's3', key_scale: 'Am', best_scores: { dynamics: 20 } })
 		];
 		const filters = [
-			{ metric: getMetric('key'), min: 0, selectValue: 'Am' },
+			{ metric: getMetric('key_scale'), min: 0, selectValue: 'Am' },
 			{ metric: getMetric('dynamics'), min: 50, selectValue: '' }
 		];
 		const result = applyFilters(songs, filters);

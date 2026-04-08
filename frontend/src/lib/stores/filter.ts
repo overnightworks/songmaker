@@ -68,11 +68,11 @@ export const METRICS: MetricDef[] = [
 		type: 'number'
 	},
 	{
-		key: 'key',
+		key: 'key_scale',
 		label: 'Key',
 		max: 0,
 		step: 0,
-		getValue: (s) => s.key,
+		getValue: (s) => s.key_scale,
 		type: 'select'
 	},
 	{
@@ -84,11 +84,11 @@ export const METRICS: MetricDef[] = [
 		type: 'number'
 	},
 	{
-		key: 'duration',
+		key: 'audio_duration',
 		label: 'Duration',
 		max: 600,
 		step: 30,
-		getValue: (s) => s.duration || undefined,
+		getValue: (s) => s.audio_duration || undefined,
 		type: 'number'
 	}
 ];

@@ -1350,13 +1350,22 @@ def test_create_song_gen_param_invalid_infer_method(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
-def test_create_song_gen_param_invalid_think_mode(client: TestClient) -> None:
+def test_create_song_gen_param_invalid_thinking(client: TestClient) -> None:
     resp = client.post("/api/songs", json={
         "title": "Bad Think",
         "album_id": "rock",
-        "generation_params": {"think_mode": "invalid"},
+        "generation_params": {"thinking": "not-a-bool"},
     })
     assert resp.status_code == 422
+
+
+def test_create_song_gen_param_thinking_accepts_bool(client: TestClient) -> None:
+    resp = client.post("/api/songs", json={
+        "title": "Good Think",
+        "album_id": "rock",
+        "generation_params": {"thinking": True},
+    })
+    assert resp.status_code == 200
 
 
 def test_score_request_invalid_scorer_name(client: TestClient) -> None:
@@ -1377,13 +1386,13 @@ def test_generation_params_invalid_infer_method_direct() -> None:
         GenerationParams(infer_method="euler")
 
 
-def test_generation_params_invalid_think_mode_direct() -> None:
+def test_generation_params_invalid_thinking_direct() -> None:
     from pydantic import ValidationError
 
     from songmaker_cli.api_models import GenerationParams
 
-    with pytest.raises(ValidationError, match="think_mode"):
-        GenerationParams(think_mode="invalid")
+    with pytest.raises(ValidationError):
+        GenerationParams(thinking="not-a-bool")
 
 
 def test_score_request_invalid_scorer_direct() -> None:

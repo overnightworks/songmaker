@@ -47,7 +47,7 @@ def score_text_accuracy(
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
     whisper_size = effective_config.whisper_model
     device = effective_config.whisper_device or effective_config.device
-    language = meta.generation_params.get("language") or None
+    language = meta.generation_params.get("vocal_language") or None
     model = _get_whisper_model(whisper_size, device=device)
 
     intended_lines = tuple(

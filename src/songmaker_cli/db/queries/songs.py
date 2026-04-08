@@ -98,9 +98,9 @@ def create_song(
     lyrics: str = "",
     prompt: str = "",
     bpm: int = 0,
-    duration: int = 180,
-    key: str = "",
-    language: str = "",
+    audio_duration: int = 180,
+    key_scale: str = "",
+    vocal_language: str = "",
     generation_params: dict | None = None,
 ) -> Song:
     album = session.query(Album).filter_by(id=album_id).first()
@@ -118,14 +118,16 @@ def create_song(
     track_number = (max_track[0] + 1) if max_track else 1
 
     song = Song(
-        title=title, album_id=album_id, language=language, track_number=track_number,
+        title=title, album_id=album_id, vocal_language=vocal_language,
+        track_number=track_number,
     )
     session.add(song)
     session.flush()
 
     version = Version(
         song_id=song.id, version_number=1,
-        lyrics=lyrics, prompt=prompt, bpm=bpm, duration=duration, key=key,
+        lyrics=lyrics, prompt=prompt, bpm=bpm,
+        audio_duration=audio_duration, key_scale=key_scale,
         generation_params=generation_params,
     )
     session.add(version)
@@ -140,8 +142,8 @@ def update_song(
     lyrics: str | None = None,
     prompt: str | None = None,
     bpm: int | None = None,
-    duration: int | None = None,
-    key: str | None = None,
+    audio_duration: int | None = None,
+    key_scale: str | None = None,
     generation_params: dict | None | _Unset = UNSET,
 ) -> Version:
     song = get_song(session, song_id)
@@ -160,15 +162,20 @@ def update_song(
     new_lyrics = lyrics if lyrics is not None else (prev.lyrics if prev else "")
     new_prompt = prompt if prompt is not None else (prev.prompt if prev else "")
     new_bpm = bpm if bpm is not None else (prev.bpm if prev else 0)
-    new_duration = duration if duration is not None else (prev.duration if prev else 180)
-    new_key = key if key is not None else (prev.key if prev else "")
+    new_audio_duration = (
+        audio_duration if audio_duration is not None
+        else (prev.audio_duration if prev else 180)
+    )
+    new_key_scale = (
+        key_scale if key_scale is not None else (prev.key_scale if prev else "")
+    )
 
     if prev and not prev.generations:
         prev.lyrics = new_lyrics
         prev.prompt = new_prompt
         prev.bpm = new_bpm
-        prev.duration = new_duration
-        prev.key = new_key
+        prev.audio_duration = new_audio_duration
+        prev.key_scale = new_key_scale
         prev.generation_params = new_gen_params
         session.flush()
         log.info("Updated song %s v%d in-place", song_id, prev.version_number)
@@ -181,8 +188,8 @@ def update_song(
         lyrics=new_lyrics,
         prompt=new_prompt,
         bpm=new_bpm,
-        duration=new_duration,
-        key=new_key,
+        audio_duration=new_audio_duration,
+        key_scale=new_key_scale,
         generation_params=new_gen_params,
     )
     session.add(version)

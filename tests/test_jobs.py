@@ -57,10 +57,14 @@ def db_factory(tmp_path: Path):
 def seeded_db(db_factory, tmp_path: Path):
     with db_factory() as session:
         session.add(Album(id="rock", title="Rock", artist="Band"))
-        session.add(Song(id="s1", title="Song One", album_id="rock", track_number=1, language="en"))
+        session.add(Song(
+            id="s1", title="Song One", album_id="rock",
+            track_number=1, vocal_language="en",
+        ))
         session.add(Version(
             id="v1", song_id="s1", version_number=1,
-            lyrics="Hello world", prompt="rock style", bpm=120, duration=60, key="Am",
+            lyrics="Hello world", prompt="rock style", bpm=120,
+            audio_duration=60, key_scale="Am",
         ))
         session.add(Job(id="j1", type="generate", status="queued"))
         session.add(Job(id="j2", type="score", status="queued"))
@@ -534,7 +538,7 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
     src_wav = tmp_path / "src.wav"
     src_wav.write_bytes(b"RIFF" + b"\x00" * 40)
 
-    config = AceStepConfig(prompt="test", lyrics="la la", duration=180)
+    config = AceStepConfig(prompt="test", lyrics="la la", audio_duration=180)
     ctx = GenerationContext(
         song_id="s1", version_id="v1",
         meta=SongMeta(title="t", lyrics="la la", prompt="test"),
@@ -553,9 +557,9 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
     assert result.ace_config.repainting_start == pytest.approx(54.0)
     assert result.ace_config.repainting_end == pytest.approx(144.0)
     assert result.ace_config.task_type == "repaint"
-    assert result.ace_config.think_mode == "deep"
-    assert result.ace_config.src_audio.startswith(str(tmp_path / ".tmp"))
-    assert Path(result.ace_config.src_audio).exists()
+    assert result.ace_config.thinking is True
+    assert result.ace_config.src_audio_path.startswith(str(tmp_path / ".tmp"))
+    assert Path(result.ace_config.src_audio_path).exists()
 
 
 def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
@@ -565,8 +569,8 @@ def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
     src_wav.write_bytes(b"RIFF" + b"\x00" * 40)
 
     config = AceStepConfig(
-        prompt="test", lyrics="la la", duration=120,
-        guidance_scale=5.0, inference_steps=50, shift=2.0, think_mode="deep",
+        prompt="test", lyrics="la la", audio_duration=120,
+        guidance_scale=5.0, inference_steps=50, shift=2.0, thinking=True,
     )
     ctx = GenerationContext(
         song_id="s1", version_id="v1",
@@ -584,7 +588,7 @@ def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
     assert result.ace_config.guidance_scale == 5.0
     assert result.ace_config.inference_steps == 50
     assert result.ace_config.shift == 2.0
-    assert result.ace_config.think_mode == "deep"
+    assert result.ace_config.thinking is True
 
 
 def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
@@ -593,7 +597,7 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
     src_wav = tmp_path / "src.wav"
     src_wav.write_bytes(b"RIFF" + b"\x00" * 40)
 
-    config = AceStepConfig(prompt="test", lyrics="la la", duration=180)
+    config = AceStepConfig(prompt="test", lyrics="la la", audio_duration=180)
     ctx = GenerationContext(
         song_id="s1", version_id="v1",
         meta=SongMeta(title="t", lyrics="la la", prompt="test"),
@@ -610,7 +614,7 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
     result = _apply_task_overrides(ctx, "cover", params)
     assert result.ace_config.audio_cover_strength == 0.7
     assert result.ace_config.task_type == "cover"
-    assert result.ace_config.src_audio.startswith(str(tmp_path / ".tmp"))
+    assert result.ace_config.src_audio_path.startswith(str(tmp_path / ".tmp"))
 
 
 # ── load_model_on_worker ────────────────────────────────────────────

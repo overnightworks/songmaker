@@ -321,11 +321,11 @@ def test_submit_task_with_lm_negative_prompt() -> None:
 # ── repaint/cover payload keys ────────────────────────────────────
 
 
-def test_submit_task_repaint_uses_src_audio_path_key() -> None:
+def test_submit_task_repaint_sends_src_audio_path() -> None:
     client = AceStepClient()
     config = AceStepConfig(
         prompt="test", lyrics="la la",
-        task_type="repaint", src_audio="/audio/src.wav",
+        task_type="repaint", src_audio_path="/audio/src.wav",
         repainting_start=10.0, repainting_end=20.0,
     )
 
@@ -339,18 +339,17 @@ def test_submit_task_repaint_uses_src_audio_path_key() -> None:
         client._submit_task(config)
 
     payload = json.loads(mock_urlopen.call_args[0][0].data)
-    assert "src_audio_path" in payload
-    assert "src_audio" not in payload
     assert payload["src_audio_path"] == "/audio/src.wav"
+    assert "src_audio" not in payload
     assert payload["repainting_start"] == 10.0
     assert payload["repainting_end"] == 20.0
 
 
-def test_submit_task_reference_audio_uses_path_key() -> None:
+def test_submit_task_sends_reference_audio_path() -> None:
     client = AceStepClient()
     config = AceStepConfig(
         prompt="test", lyrics="la la",
-        reference_audio="/audio/ref.wav",
+        reference_audio_path="/audio/ref.wav",
     )
 
     response_data = json.dumps({
@@ -363,9 +362,8 @@ def test_submit_task_reference_audio_uses_path_key() -> None:
         client._submit_task(config)
 
     payload = json.loads(mock_urlopen.call_args[0][0].data)
-    assert "reference_audio_path" in payload
-    assert "reference_audio" not in payload
     assert payload["reference_audio_path"] == "/audio/ref.wav"
+    assert "reference_audio" not in payload
 
 
 # ── submit json/pydantic decode error (non-retryable) ─────────────

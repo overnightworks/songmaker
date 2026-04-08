@@ -16,7 +16,7 @@ export interface GenerationParams {
 	inference_steps?: number | null;
 	guidance_scale?: number | null;
 	shift?: number | null;
-	think_mode?: string | null;
+	thinking?: boolean | null;
 	lm_temperature?: number | null;
 	lm_top_k?: number | null;
 	lm_top_p?: number | null;
@@ -24,7 +24,7 @@ export interface GenerationParams {
 	lm_negative_prompt?: string | null;
 	infer_method?: string | null;
 	batch_size?: number | null;
-	reference_audio?: string | null;
+	reference_audio_path?: string | null;
 	repaint_mode?: string | null;
 	repaint_strength?: number | null;
 	lm_repetition_penalty?: number | null;
@@ -36,8 +36,8 @@ export interface GenerationParams {
 	seed?: number | null;
 	acestep_model?: string | null;
 	bpm?: number | null;
-	duration?: number | null;
-	key?: string | null;
+	audio_duration?: number | null;
+	key_scale?: string | null;
 	task_type?: string | null;
 	repainting_start?: number | null;
 	repainting_end?: number | null;
@@ -55,7 +55,7 @@ export interface VersionGenerationParams {
 	inference_steps?: number | null;
 	guidance_scale?: number | null;
 	shift?: number | null;
-	think_mode?: string | null;
+	thinking?: boolean | null;
 	lm_temperature?: number | null;
 	lm_top_k?: number | null;
 	lm_top_p?: number | null;
@@ -63,7 +63,7 @@ export interface VersionGenerationParams {
 	lm_negative_prompt?: string | null;
 	infer_method?: string | null;
 	batch_size?: number | null;
-	reference_audio?: string | null;
+	reference_audio_path?: string | null;
 	repaint_mode?: string | null;
 	repaint_strength?: number | null;
 	lm_repetition_penalty?: number | null;
@@ -126,8 +126,8 @@ export interface VersionItem {
 	lyrics: string;
 	prompt: string;
 	bpm: number;
-	duration: number;
-	key: string;
+	audio_duration: number;
+	key_scale: string;
 	generation_params: VersionGenerationParams | null;
 	created_at: string | null;
 }
@@ -139,12 +139,12 @@ export interface SongItem {
 	album_title: string;
 	artist: string;
 	track_number: number;
-	language: string;
+	vocal_language: string;
 	lyrics: string;
 	prompt: string;
 	bpm?: number | null;
-	duration?: number | null;
-	key: string;
+	audio_duration?: number | null;
+	key_scale: string;
 	generation_params?: VersionGenerationParams | null;
 	version_count: number;
 	generation_count: number;

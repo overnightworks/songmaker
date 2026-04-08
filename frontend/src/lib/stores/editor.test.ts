@@ -17,8 +17,8 @@ import {
 	editLyrics,
 	editPrompt,
 	editBpm,
-	editDuration,
-	editKey,
+	editAudioDuration,
+	editKeyScale,
 	setDraftGenParams,
 	setDraftLyrics,
 	isDirty,
@@ -45,12 +45,12 @@ function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 		album_title: 'Album',
 		artist: 'Artist',
 		track_number: 1,
-		language: 'en',
+		vocal_language: 'en',
 		lyrics: 'hello',
 		prompt: 'rock',
 		bpm: 120,
-		duration: 180,
-		key: 'Am',
+		audio_duration: 180,
+		key_scale: 'Am',
 		generation_params: null,
 		version_count: 1,
 		generation_count: 0,
@@ -71,8 +71,8 @@ function makeVersion(overrides: Partial<VersionItem> = {}): VersionItem {
 		lyrics: 'verse one',
 		prompt: 'rock style',
 		bpm: 120,
-		duration: 180,
-		key: 'Am',
+		audio_duration: 180,
+		key_scale: 'Am',
 		generation_params: null,
 		created_at: null,
 		...overrides
@@ -121,12 +121,14 @@ describe('editGenParams dirty tracking', () => {
 
 describe('loadSongData', () => {
 	it('sets all edit fields', () => {
-		loadSongData(makeSong({ lyrics: 'L', prompt: 'P', bpm: 99, duration: 200, key: 'C' }));
+		loadSongData(
+			makeSong({ lyrics: 'L', prompt: 'P', bpm: 99, audio_duration: 200, key_scale: 'C' })
+		);
 		expect(get(editLyrics)).toBe('L');
 		expect(get(editPrompt)).toBe('P');
 		expect(get(editBpm)).toBe(99);
-		expect(get(editDuration)).toBe(200);
-		expect(get(editKey)).toBe('C');
+		expect(get(editAudioDuration)).toBe(200);
+		expect(get(editKeyScale)).toBe('C');
 	});
 });
 

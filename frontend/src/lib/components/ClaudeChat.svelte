@@ -150,8 +150,8 @@
 				lyrics: data.lyrics,
 				prompt: data.prompt,
 				bpm: data.bpm,
-				duration: data.duration,
-				key: data.key
+				audio_duration: data.audio_duration,
+				key_scale: data.key_scale
 			});
 			replaceSongInList(updated);
 			addToast(`Applied to ${data.song}`, 'success');
@@ -174,8 +174,8 @@
 				lyrics: data.lyrics,
 				prompt: data.prompt,
 				bpm: data.bpm,
-				duration: data.duration,
-				key: data.key
+				audio_duration: data.audio_duration,
+				key_scale: data.key_scale
 			});
 			addSongToList(song);
 			addToast(`Created "${data.title}"`, 'success');

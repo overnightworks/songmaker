@@ -86,7 +86,8 @@ def api_create_song(
     song = create_song(
         session, title=req.title, album_id=req.album_id,
         lyrics=req.lyrics, prompt=req.prompt, bpm=req.bpm,
-        duration=req.duration, key=req.key, language=req.language,
+        audio_duration=req.audio_duration, key_scale=req.key_scale,
+        vocal_language=req.vocal_language,
         generation_params=gen_params_to_dict(req.generation_params),
     )
     record_audit(session, user.id, AuditAction.CREATE, ResourceType.SONG, song.id)
@@ -103,7 +104,7 @@ def api_update_song(
     check_song_access(session, song_id, user)
     kwargs: dict = dict(
         lyrics=req.lyrics, prompt=req.prompt,
-        bpm=req.bpm, duration=req.duration, key=req.key,
+        bpm=req.bpm, audio_duration=req.audio_duration, key_scale=req.key_scale,
     )
     if "generation_params" in req.model_fields_set:
         kwargs["generation_params"] = gen_params_to_dict(req.generation_params)

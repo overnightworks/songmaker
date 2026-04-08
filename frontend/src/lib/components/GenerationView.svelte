@@ -186,7 +186,7 @@
 		updateGenerationInList(generation.id, (g) => ({
 			...g,
 			is_shared: true,
-			share_slug: result.share_slug,
+			share_slug: result.share_slug
 		}));
 		return result;
 	}
@@ -341,8 +341,9 @@
 			{@const srcGen = song?.generations.find((g) => g.id === generation.src_generation_id)}
 			{@const repaintStartSec =
 				generation.generation_params?.repainting_start != null &&
-				generation.generation_params?.duration
-					? generation.generation_params.repainting_start * generation.generation_params.duration
+				generation.generation_params?.audio_duration
+					? generation.generation_params.repainting_start *
+						generation.generation_params.audio_duration
 					: null}
 			<div class="lineage">
 				<span class="lineage-label">Source</span>

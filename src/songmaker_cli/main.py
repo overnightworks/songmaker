@@ -309,9 +309,9 @@ def edit(
     if bpm is not None:
         params["bpm"] = bpm
     if duration is not None:
-        params["duration"] = duration
+        params["audio_duration"] = duration
     if key is not None:
-        params["key"] = key
+        params["key_scale"] = key
 
     if not params:
         raise ServerError("No changes specified")

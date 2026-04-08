@@ -41,7 +41,7 @@
 		$editGenParams !== null && Object.keys($editGenParams ?? {}).length > 0
 	);
 
-	const referenceAudioPath = $derived(($editGenParams ?? {}).reference_audio ?? null);
+	const referenceAudioPath = $derived(($editGenParams ?? {}).reference_audio_path ?? null);
 	let referenceFilename = $state<string | null>(null);
 	let uploading = $state(false);
 
@@ -52,7 +52,7 @@
 		uploading = true;
 		try {
 			const result = await uploadReferenceAudio(file);
-			setDraftGenParams({ ...($editGenParams ?? {}), reference_audio: result.path });
+			setDraftGenParams({ ...($editGenParams ?? {}), reference_audio_path: result.path });
 			referenceFilename = result.filename;
 		} catch (err) {
 			addToast(err instanceof Error ? err.message : 'Upload failed', 'error');
@@ -63,7 +63,7 @@
 	}
 
 	function clearReference(): void {
-		const { reference_audio: _, ...rest } = $editGenParams ?? {};
+		const { reference_audio_path: _, ...rest } = $editGenParams ?? {};
 		setDraftGenParams(Object.keys(rest).length > 0 ? rest : null);
 		referenceFilename = null;
 	}

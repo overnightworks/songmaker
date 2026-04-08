@@ -6,8 +6,8 @@ export interface ApplyData {
 	lyrics?: string;
 	prompt?: string;
 	bpm?: number;
-	duration?: number;
-	key?: string;
+	audio_duration?: number;
+	key_scale?: string;
 	create?: boolean;
 	title?: string;
 }
@@ -24,10 +24,15 @@ function parseSongmakerBlock(
 	const data: ApplyData = {};
 	if (typeof raw.lyrics === 'string' && raw.lyrics.length <= 50_000) data.lyrics = raw.lyrics;
 	if (typeof raw.prompt === 'string' && raw.prompt.length <= 5_000) data.prompt = raw.prompt;
-	if (typeof raw.key === 'string' && raw.key.length <= 10) data.key = raw.key;
+	if (typeof raw.key_scale === 'string' && raw.key_scale.length <= 10)
+		data.key_scale = raw.key_scale;
 	if (typeof raw.bpm === 'number' && raw.bpm >= 0 && raw.bpm <= 999) data.bpm = raw.bpm;
-	if (typeof raw.duration === 'number' && raw.duration >= 1 && raw.duration <= 600)
-		data.duration = raw.duration;
+	if (
+		typeof raw.audio_duration === 'number' &&
+		raw.audio_duration >= 1 &&
+		raw.audio_duration <= 600
+	)
+		data.audio_duration = raw.audio_duration;
 	if (typeof raw.song === 'string') {
 		data.song = raw.song;
 		const q = raw.song.toLowerCase();
