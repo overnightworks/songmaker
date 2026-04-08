@@ -100,19 +100,12 @@ def init_test_db(db_path: Path) -> sessionmaker[Session]:
 
 def _seed_available_models(engine) -> None:
     from sqlalchemy import text
+
+    from songmaker_cli.constants import AVAILABLE_MODEL_MODES, DEFAULT_MODEL_MODE
+
+    stmt = text(
+        "INSERT OR IGNORE INTO available_models (id, is_active) VALUES (:id, :active)",
+    )
     with engine.begin() as conn:
-        conn.execute(text(
-            "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('sft', 1)"
-        ))
-        conn.execute(text(
-            "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('turbo', 0)"
-        ))
-        conn.execute(text(
-            "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('xl-turbo', 0)"
-        ))
-        conn.execute(text(
-            "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('xl-sft', 0)"
-        ))
-        conn.execute(text(
-            "INSERT OR IGNORE INTO available_models (id, is_active) VALUES ('xl-base', 0)"
-        ))
+        for mode in AVAILABLE_MODEL_MODES:
+            conn.execute(stmt, {"id": mode, "active": int(mode == DEFAULT_MODEL_MODE)})
