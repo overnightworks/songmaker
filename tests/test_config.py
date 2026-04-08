@@ -11,6 +11,7 @@ from songmaker_cli.config import (
     build_ace_config,
     find_project_root,
     load_generation_defaults,
+    resolve_model_mode,
     save_generation_defaults,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -181,7 +182,7 @@ def test_db_defaults_take_priority_over_file(db_factory, tmp_path: Path) -> None
 
 def test_build_ace_config_global_defaults_applied() -> None:
     meta = SongMeta(prompt="test", lyrics="test", generation_params={"bpm": 120})
-    defaults = {"turbo": {"shift": 5.0, "lm_temperature": 0.5}}
+    defaults = {"sft": {"shift": 5.0, "lm_temperature": 0.5}}
     config = build_ace_config(meta, global_defaults=defaults)
     assert config.shift == 5.0
     assert config.lm_temperature == 0.5
@@ -192,7 +193,7 @@ def test_build_ace_config_song_overrides_global_defaults() -> None:
         prompt="test", lyrics="test",
         generation_params={"bpm": 120, "shift": 2.0},
     )
-    defaults = {"turbo": {"shift": 5.0}}
+    defaults = {"sft": {"shift": 5.0}}
     config = build_ace_config(meta, global_defaults=defaults)
     assert config.shift == 2.0
 
@@ -200,13 +201,13 @@ def test_build_ace_config_song_overrides_global_defaults() -> None:
 def test_build_ace_config_sft_global_defaults() -> None:
     meta = SongMeta(prompt="test", lyrics="test", generation_params={"bpm": 120})
     defaults = {"sft": {"inference_steps": 60}}
-    config = build_ace_config(meta, model_name="ace-sft-v1", global_defaults=defaults)
+    config = build_ace_config(meta, model_name="acestep-v15-sft", global_defaults=defaults)
     assert config.inference_steps == 60
 
 
 def test_build_ace_config_cli_overrides_global_defaults() -> None:
     meta = SongMeta(prompt="test", lyrics="test", generation_params={"bpm": 120})
-    defaults = {"turbo": {"shift": 5.0}}
+    defaults = {"sft": {"shift": 5.0}}
     config = build_ace_config(meta, cli_overrides={"shift": 1.0}, global_defaults=defaults)
     assert config.shift == 1.0
 
@@ -227,3 +228,35 @@ def test_build_ace_config_seed_negative_one_uses_default() -> None:
     meta = SongMeta(prompt="test", lyrics="test")
     config = build_ace_config(meta, seed=-1)
     assert config.seed == -1
+
+
+# ── resolve_model_mode ───────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("mode", ["sft", "turbo", "xl-sft", "xl-turbo", "xl-base"])
+def test_resolve_model_mode_known_modes(mode: str) -> None:
+    assert resolve_model_mode(mode) == mode
+
+
+@pytest.mark.parametrize(
+    ("full_name", "expected"),
+    [
+        ("acestep-v15-sft", "sft"),
+        ("acestep-v15-turbo", "turbo"),
+        ("acestep-v15-xl-sft", "xl-sft"),
+        ("acestep-v15-xl-turbo", "xl-turbo"),
+        ("acestep-v15-xl-base", "xl-base"),
+    ],
+)
+def test_resolve_model_mode_full_name(full_name: str, expected: str) -> None:
+    assert resolve_model_mode(full_name) == expected
+
+
+def test_resolve_model_mode_unknown_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown model"):
+        resolve_model_mode("acestep-v999-quantum")
+
+
+def test_resolve_model_mode_none_raises() -> None:
+    with pytest.raises((ValueError, TypeError)):
+        resolve_model_mode(None)  # type: ignore[arg-type]

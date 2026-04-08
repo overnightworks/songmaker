@@ -20,6 +20,7 @@ class PlaylistEntryResponse(BaseModel):
     generation_number: int
     mp3_path: str
     seed: int | None
+    model_mode: str
 
     @classmethod
     def from_orm(cls, entry: PlaylistEntry) -> PlaylistEntryResponse:
@@ -36,6 +37,7 @@ class PlaylistEntryResponse(BaseModel):
             generation_number=gen.generation_number,
             mp3_path=gen.mp3_path,
             seed=gen.seed,
+            model_mode=gen.model_mode,
         )
 
 

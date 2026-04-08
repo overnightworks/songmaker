@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator
 
-from songmaker_cli.config import get_builtin_defaults
+from songmaker_cli.constants import AVAILABLE_MODEL_MODES
 from songmaker_cli.scoring.registry import VALID_SCORER_NAMES
 
 log = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ def _safe_json_dict(
 
 _VALID_INFER_METHODS = frozenset({"ode", "sde"})
 _VALID_REPAINT_MODES = frozenset({"conservative", "balanced", "aggressive"})
-_VALID_MODEL_MODES = frozenset(get_builtin_defaults().keys())
+_VALID_MODEL_MODES = AVAILABLE_MODEL_MODES
 
 
 class GenerationParams(BaseModel):
@@ -185,7 +185,7 @@ class GenerationResponse(BaseModel):
     is_kept: bool
     is_shared: bool = False
     share_slug: str | None = None
-    model_mode: str | None = None
+    model_mode: str
     src_generation_id: str | None = None
     src_generation_number: int | None = None
     whisper_text: str | None
@@ -388,14 +388,14 @@ class SongMoveRequest(BaseModel):
 
 class GenerateRequest(BaseModel):
     count: int = Field(1, ge=1, le=10)
-    model: str | None = None
+    model: str
     version_id: str | None = None
     seed: int | None = Field(None, ge=-1)
 
     @field_validator("model")
     @classmethod
-    def _validate_model(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VALID_MODEL_MODES:
+    def _validate_model(cls, v: str) -> str:
+        if v not in _VALID_MODEL_MODES:
             msg = f"model must be one of {sorted(_VALID_MODEL_MODES)}"
             raise ValueError(msg)
         return v
@@ -409,7 +409,7 @@ class RepaintRequest(BaseModel):
     prompt: str | None = Field(None, max_length=5_000)
     version_id: str | None = Field(None, max_length=36)
     count: int = Field(1, ge=1, le=10)
-    model: str | None = None
+    model: str
     seed: int | None = Field(None, ge=-1)
     repaint_mode: str | None = Field(None, max_length=20)
     repaint_strength: float | None = Field(None, ge=0, le=1)
@@ -418,8 +418,8 @@ class RepaintRequest(BaseModel):
 
     @field_validator("model")
     @classmethod
-    def _validate_model(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VALID_MODEL_MODES:
+    def _validate_model(cls, v: str) -> str:
+        if v not in _VALID_MODEL_MODES:
             msg = f"model must be one of {sorted(_VALID_MODEL_MODES)}"
             raise ValueError(msg)
         return v
@@ -441,13 +441,13 @@ class CoverRequest(BaseModel):
     prompt: str | None = Field(None, max_length=5_000)
     version_id: str | None = Field(None, max_length=36)
     count: int = Field(1, ge=1, le=10)
-    model: str | None = None
+    model: str
     seed: int | None = Field(None, ge=-1)
 
     @field_validator("model")
     @classmethod
-    def _validate_model(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VALID_MODEL_MODES:
+    def _validate_model(cls, v: str) -> str:
+        if v not in _VALID_MODEL_MODES:
             msg = f"model must be one of {sorted(_VALID_MODEL_MODES)}"
             raise ValueError(msg)
         return v

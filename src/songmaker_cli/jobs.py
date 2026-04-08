@@ -136,7 +136,7 @@ def _load_song_meta(
 
 
 def _load_preset_params(
-    user_id: str | None, model_name: str | None, db_factory: sessionmaker[Session],
+    user_id: str | None, model_name: str, db_factory: sessionmaker[Session],
 ) -> dict | None:
     if not user_id:
         return None
@@ -162,13 +162,11 @@ def _load_preset_params(
 def _build_generation_context(
     song_id: str, version_id: str,
     db_factory: sessionmaker[Session], audio_dir: Path, data_dir: Path,
-    user_id: str, seed: int | None = None,
-    target_model: str | None = None,
+    user_id: str, target_model: str, seed: int | None = None,
 ) -> GenerationContext:
     """Load song/version from DB and build all config needed for generation.
 
-    ``target_model`` is the user-requested mode (e.g. "sft", "xl-sft"). If None,
-    falls back to the builtin default via resolve_model_mode.
+    ``target_model`` is the user-requested mode (e.g. "sft", "xl-sft").
     """
     meta, album_meta = _load_song_meta(song_id, version_id, db_factory)
 
@@ -361,7 +359,7 @@ def _persist_generation_row(
                 seed=seed,
                 generation_params=gen_params,
                 wav_path=wav_rel,
-                model_mode=resolve_model_mode(ctx.model_name),
+                model_mode=ctx.model_name,
                 src_generation_id=ctx.src_generation_id,
             )
             session.commit()
@@ -484,13 +482,14 @@ def _apply_task_overrides(
 async def run_generation_job(
     job_id: str, song_id: str, version_id: str, count: int,
     user_id: str,
+    *,
+    target_model: str,
     db_factory: sessionmaker[Session] | None = None,
     audio_dir: Path | None = None,
     data_dir: Path | None = None,
     seed: int | None = None,
     repaint_params: dict | None = None,
     cover_params: dict | None = None,
-    target_model: str | None = None,
     redis: Redis | None = None,
 ) -> None:
     assert db_factory is not None, "db_factory is required"

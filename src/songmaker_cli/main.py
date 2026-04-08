@@ -240,14 +240,20 @@ def song(
 @app.command
 def generate(
     query: Annotated[str, Parameter(help="Song title (fuzzy match)")],
+    model: Annotated[
+        str, Parameter(name=["-m", "--model"], help="Model mode (e.g. sft, turbo, xl-sft)"),
+    ],
     count: Annotated[int, Parameter(name=["-n", "--count"], help="Number of generations")] = 1,
 ) -> None:
     """Queue a generation job for a song."""
     s = _server()
     matched = resolve_song(s, query)
-    log.info("Generating %dx for '%s'...", count, matched["title"])
+    log.info("Generating %dx for '%s' (model=%s)...", count, matched["title"], model)
 
-    job = api_post(s, f"/api/songs/{matched['id']}/generate", {"count": count})
+    job = api_post(
+        s, f"/api/songs/{matched['id']}/generate",
+        {"count": count, "model": model},
+    )
     poll_job(s, job["id"])
     log.info("Done.")
 

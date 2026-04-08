@@ -39,10 +39,10 @@ def create_generation(
     song_id: str,
     version_id: str | None,
     mp3_path: str,
+    model_mode: str,
     seed: int | None = None,
     generation_params: dict | None = None,
     wav_path: str | None = None,
-    model_mode: str | None = None,
     src_generation_id: str | None = None,
 ) -> Generation:
     max_num = (

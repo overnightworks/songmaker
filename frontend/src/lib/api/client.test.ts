@@ -147,19 +147,12 @@ describe('API client', () => {
 		expect(init.method).toBe('DELETE');
 	});
 
-	it('generateSong sends POST with count', async () => {
+	it('generateSong sends POST with count and model', async () => {
 		mockOk({ id: 'j1', type: 'generate' });
-		const result = await generateSong('s1', 3);
+		const result = await generateSong('s1', 3, 'sft');
 		expect(result.type).toBe('generate');
 		const body = JSON.parse(mockFetch.mock.calls[0][1].body);
 		expect(body.count).toBe(3);
-		expect(body.model).toBeUndefined();
-	});
-
-	it('generateSong sends model when specified', async () => {
-		mockOk({ id: 'j1', type: 'generate' });
-		await generateSong('s1', 1, 'sft');
-		const body = JSON.parse(mockFetch.mock.calls[0][1].body);
 		expect(body.model).toBe('sft');
 	});
 

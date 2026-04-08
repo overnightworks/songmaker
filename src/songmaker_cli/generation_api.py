@@ -65,6 +65,7 @@ from songmaker_cli.db.queries import (
     get_job,
     get_queue_position,
     keep_generation,
+    list_active_models,
     pick_generation,
     record_audit,
     save_rating,
@@ -77,6 +78,12 @@ from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _check_model_active(session: Session, model: str) -> None:
+    active_ids = {m.id for m in list_active_models(session)}
+    if model not in active_ids:
+        raise HTTPException(400, f"Model '{model}' is not currently available")
 
 
 async def _has_online_acestep_worker(session: Session) -> bool:
@@ -239,6 +246,8 @@ async def api_generate_song(
     if not version or not version.lyrics or not version.prompt:
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
+    _check_model_active(session, req.model)
+
     job = create_job_with_rate_limit(session, user, JobType.GENERATE)
     record_audit(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
@@ -293,6 +302,8 @@ async def api_repaint_generation(
 
     if req.repainting_start >= req.repainting_end:
         raise HTTPException(400, "repainting_start must be less than repainting_end")
+
+    _check_model_active(session, req.model)
 
     wav_path = _resolve_source_wav(ctx.audio_dir, gen, session)
 
@@ -366,6 +377,8 @@ async def api_cover_generation(
 
     if not version:
         raise HTTPException(400, "Generation has no linked version")
+
+    _check_model_active(session, req.model)
 
     wav_path = _resolve_source_wav(ctx.audio_dir, gen, session)
 

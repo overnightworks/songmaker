@@ -111,7 +111,7 @@ export interface GenerationItem {
 	is_kept: boolean;
 	is_shared: boolean;
 	share_slug?: string | null;
-	model_mode?: string | null;
+	model_mode: string;
 	src_generation_id?: string | null;
 	src_generation_number?: number | null;
 	whisper_text: string | null;
@@ -317,6 +317,7 @@ export interface PlaylistEntryItem {
 	generation_number: number;
 	mp3_path: string;
 	seed: number | null;
+	model_mode: string;
 }
 
 export interface PlaylistItem {

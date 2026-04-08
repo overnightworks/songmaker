@@ -4,12 +4,11 @@ import { apiFetch, type JobStatus } from './fetch';
 export async function generateSong(
 	songId: string,
 	count: number = 1,
-	model?: string | null,
+	model: string,
 	versionId?: string | null,
 	seed?: number | null
 ): Promise<JobStatus> {
-	const payload: Record<string, unknown> = { count };
-	if (model) payload.model = model;
+	const payload: Record<string, unknown> = { count, model };
 	if (versionId) payload.version_id = versionId;
 	if (seed != null) payload.seed = seed;
 	return apiFetch<JobStatus>(`/api/songs/${songId}/generate`, {
@@ -22,7 +21,7 @@ export async function generateSong(
 export interface RepaintOptions {
 	lyrics?: string | null;
 	prompt?: string | null;
-	model?: string | null;
+	model: string;
 	seed?: number | null;
 	versionId?: string | null;
 	count?: number;
@@ -36,16 +35,16 @@ export async function repaintGeneration(
 	genId: string,
 	repaintingStart: number,
 	repaintingEnd: number,
-	opts: RepaintOptions = {}
+	opts: RepaintOptions
 ): Promise<JobStatus> {
 	const payload: Record<string, unknown> = {
 		src_generation_id: genId,
 		repainting_start: repaintingStart,
-		repainting_end: repaintingEnd
+		repainting_end: repaintingEnd,
+		model: opts.model
 	};
 	if (opts.lyrics != null) payload.lyrics = opts.lyrics;
 	if (opts.prompt != null) payload.prompt = opts.prompt;
-	if (opts.model) payload.model = opts.model;
 	if (opts.seed != null) payload.seed = opts.seed;
 	if (opts.versionId) payload.version_id = opts.versionId;
 	if (opts.count != null && opts.count > 1) payload.count = opts.count;
@@ -65,7 +64,7 @@ export async function repaintGeneration(
 export interface CoverOptions {
 	lyrics?: string | null;
 	prompt?: string | null;
-	model?: string | null;
+	model: string;
 	seed?: number | null;
 	versionId?: string | null;
 	count?: number;
@@ -75,15 +74,15 @@ export interface CoverOptions {
 export async function coverGeneration(
 	genId: string,
 	audioCoverStrength: number,
-	opts: CoverOptions = {}
+	opts: CoverOptions
 ): Promise<JobStatus> {
 	const payload: Record<string, unknown> = {
 		src_generation_id: genId,
-		audio_cover_strength: audioCoverStrength
+		audio_cover_strength: audioCoverStrength,
+		model: opts.model
 	};
 	if (opts.lyrics != null) payload.lyrics = opts.lyrics;
 	if (opts.prompt != null) payload.prompt = opts.prompt;
-	if (opts.model) payload.model = opts.model;
 	if (opts.seed != null) payload.seed = opts.seed;
 	if (opts.versionId) payload.version_id = opts.versionId;
 	if (opts.count != null && opts.count > 1) payload.count = opts.count;

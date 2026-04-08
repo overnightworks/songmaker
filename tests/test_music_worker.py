@@ -21,7 +21,9 @@ def test_generate_skips_completed_job() -> None:
         patch("songmaker_cli.music_worker.check_job_still_valid", return_value=False),
         patch("songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock) as mock_run,
     ):
-        _run(mw_mod.generate(_mock_ctx(), "j1", "s1", "v1", 2, "u1"))
+        _run(mw_mod.generate(
+            _mock_ctx(), "j1", "s1", "v1", 2, "u1", None, "sft",
+        ))
 
     mock_run.assert_not_called()
 
@@ -35,7 +37,7 @@ def test_generate_runs_queued_job() -> None:
         patch("songmaker_cli.music_worker._data_dir", return_value="data"),
         patch("songmaker_cli.music_worker._get_db_factory", return_value=MagicMock()),
     ):
-        _run(mw_mod.generate(ctx, "j1", "s1", "v1", 2, "u1"))
+        _run(mw_mod.generate(ctx, "j1", "s1", "v1", 2, "u1", None, "sft"))
 
     mock_run.assert_awaited_once()
     kwargs = mock_run.await_args.kwargs
@@ -52,7 +54,7 @@ def test_generate_passes_seed_and_target_model() -> None:
         patch("songmaker_cli.music_worker._get_db_factory", return_value=MagicMock()),
     ):
         _run(mw_mod.generate(
-            ctx, "j1", "s1", "v1", 2, "u1", seed=42, requested_model="xl-sft",
+            ctx, "j1", "s1", "v1", 2, "u1", 42, "xl-sft",
         ))
 
     kwargs = mock_run.await_args.kwargs
@@ -71,7 +73,7 @@ def test_generate_passes_repaint_params() -> None:
         patch("songmaker_cli.music_worker._get_db_factory", return_value=MagicMock()),
     ):
         _run(mw_mod.generate(
-            ctx, "j1", "s1", "v1", 1, "u1", repaint_params=repaint,
+            ctx, "j1", "s1", "v1", 1, "u1", None, "sft", repaint_params=repaint,
         ))
 
     kwargs = mock_run.await_args.kwargs

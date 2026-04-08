@@ -151,7 +151,8 @@
 	}
 
 	async function onGenerate(): Promise<void> {
-		if (!song) return;
+		if (!song || selectedModel === null) return;
+		const model: string = selectedModel;
 		try {
 			if (dirty) {
 				await handleSave(song.id);
@@ -162,7 +163,7 @@
 			if (sourceGeneration && sourceMode === 'repaint') {
 				const { repaintGeneration } = await import('$lib/api/client');
 				const job = await repaintGeneration(sourceGeneration.id, repaintStart, repaintEnd, {
-					model: selectedModel,
+					model,
 					seed: pinnedSeed,
 					versionId,
 					count: genCount,
@@ -174,7 +175,7 @@
 			} else if (sourceGeneration && sourceMode === 'cover') {
 				const { coverGeneration } = await import('$lib/api/client');
 				const job = await coverGeneration(sourceGeneration.id, coverStrength, {
-					model: selectedModel,
+					model,
 					seed: pinnedSeed,
 					versionId,
 					count: genCount,
@@ -183,7 +184,7 @@
 				pinnedSeed = null;
 				trackJob(job, { songId: song.id });
 			} else {
-				const job = await generateSong(song.id, genCount, selectedModel, versionId, pinnedSeed);
+				const job = await generateSong(song.id, genCount, model, versionId, pinnedSeed);
 				pinnedSeed = null;
 				trackJob(job, { songId: song.id });
 			}
@@ -338,8 +339,14 @@
 						class="generate-btn"
 						class:generating={isGenerating}
 						onclick={onGenerate}
-						disabled={isGenerating || !song?.lyrics || !song?.prompt}
-						title={!song?.lyrics || !song?.prompt ? 'Add lyrics and style prompt first' : ''}
+						disabled={isGenerating || !song?.lyrics || !song?.prompt || selectedModel === null}
+						title={!song?.lyrics || !song?.prompt
+							? 'Add lyrics and style prompt first'
+							: selectedModel === null
+								? $activeModels.length === 0
+									? 'No models enabled. Ask admin to enable one.'
+									: 'Select a model first'
+								: ''}
 					>
 						{#if sourceGeneration}
 							{isGenerating ? 'Generating...' : sourceMode === 'repaint' ? 'Repaint' : 'Cover'}
@@ -358,6 +365,11 @@
 								<option value={m.id}>{m.id.toUpperCase()}</option>
 							{/each}
 						</select>
+					{/if}
+					{#if $activeModels.length === 0}
+						<span class="no-models-warning" data-testid="no-models-warning">
+							No models enabled. Ask admin to enable one.
+						</span>
 					{/if}
 					{#if pinnedSeed != null}
 						<button

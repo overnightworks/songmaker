@@ -478,7 +478,9 @@ def _create_user_with_data(client: TestClient, username: str) -> str:
         song = create_song(session, "Test Song", album.id)
         mp3_rel = f"{user.id}/{song.id}.mp3"
         wav_rel = f"{user.id}/{song.id}.wav"
-        create_generation(session, song.id, None, mp3_rel, wav_path=wav_rel)
+        create_generation(
+            session, song.id, None, mp3_rel, model_mode="sft", wav_path=wav_rel,
+        )
         create_playlist(session, "User Playlist", user.id)
         session.commit()
 

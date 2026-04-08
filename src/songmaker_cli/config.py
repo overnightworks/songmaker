@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
+from songmaker_cli.constants import DEFAULT_MODEL_MODE
 from songmaker_cli.db.queries.settings import get_global_defaults, save_global_defaults
 from songmaker_cli.errors import ValidationError
 
@@ -151,21 +152,27 @@ _MODEL_NAME_TO_MODE: dict[str, str] = {
 }
 
 
-def resolve_model_mode(model_name: str | None) -> str:
-    """Map an ACE-Step model name (e.g. 'acestep-v15-sft') to a builtin mode key."""
-    if model_name:
-        if model_name in _MODEL_NAME_TO_MODE:
-            return _MODEL_NAME_TO_MODE[model_name]
-        for mode in sorted(_BUILTIN_DEFAULTS, key=len, reverse=True):
-            if mode in model_name:
-                return mode
-    return next(iter(_BUILTIN_DEFAULTS))
+def resolve_model_mode(model_name: str) -> str:
+    """Map an ACE-Step model name (e.g. 'acestep-v15-sft') to a builtin mode key.
+
+    Raises:
+        ValueError: if ``model_name`` is not a known builtin mode or full name.
+    """
+    if model_name in _MODEL_NAME_TO_MODE:
+        return _MODEL_NAME_TO_MODE[model_name]
+    if model_name in _BUILTIN_DEFAULTS:
+        return model_name
+    raise ValueError(
+        f"Unknown model: {model_name!r}. "
+        f"Must be one of {sorted(_BUILTIN_DEFAULTS)} "
+        f"or {sorted(_MODEL_NAME_TO_MODE)}",
+    )
 
 
 def build_ace_config(
     meta: "SongMeta",
     cli_overrides: dict | None = None,
-    model_name: str | None = None,
+    model_name: str = DEFAULT_MODEL_MODE,
     global_defaults: dict | None = None,
     preset_params: dict | None = None,
     seed: int | None = None,

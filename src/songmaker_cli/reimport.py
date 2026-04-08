@@ -11,6 +11,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from songmaker_cli.config import audio_file_path
+from songmaker_cli.constants import DEFAULT_MODEL_MODE
 from songmaker_cli.db.queries import create_generation
 
 log = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ def reimport_files(
         song_id=song_id,
         version_id=None,
         mp3_path=mp3_rel or "",
+        model_mode=DEFAULT_MODEL_MODE,
         seed=seed,
         wav_path=wav_rel,
     )

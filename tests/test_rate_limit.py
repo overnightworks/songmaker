@@ -11,7 +11,7 @@ from conftest import make_test_app
 from fastapi.testclient import TestClient
 
 from songmaker_cli.auth import hash_password
-from songmaker_cli.db.models import Album, Generation, Job, Song, Version
+from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
 from songmaker_cli.db.queries import create_user
 
 
@@ -25,6 +25,10 @@ def _seed_rate_limit_data(session) -> None:
         id="g1", song_id="s1", version_id="v1", generation_number=1,
         mp3_path="rock/song_v1.mp3",
     ))
+    session.flush()
+    session.query(AvailableModel).filter(
+        AvailableModel.id == "sft",
+    ).update({"is_active": True}, synchronize_session=False)
 
 
 @pytest.fixture()
@@ -79,7 +83,7 @@ def test_generate_rate_limit_for_user(client: TestClient) -> None:
             session.add(Job(type="generate", user_id=user_id, status="completed"))
         session.commit()
 
-    resp = client.post("/api/songs/s1/generate", json={"count": 1})
+    resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
     assert resp.status_code == 429
     assert "Rate limit" in resp.json()["detail"]
@@ -96,7 +100,7 @@ def test_generate_no_rate_limit_for_admin(client: TestClient) -> None:
         session.commit()
 
     with _mock_arq():
-        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+        resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
     assert resp.status_code == 200
 
@@ -132,7 +136,7 @@ def test_active_job_limit(client: TestClient) -> None:
             session.add(Job(type="generate", user_id=user_id, status="running"))
             session.commit()
 
-        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+        resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
         assert resp.status_code == 429
         assert "active job" in resp.json()["detail"]
@@ -148,7 +152,7 @@ def test_score_job_does_not_block_generate(client: TestClient) -> None:
         session.commit()
 
     with _mock_arq():
-        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+        resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
     assert resp.status_code == 200
 
@@ -181,7 +185,7 @@ def test_queue_depth_limit(client: TestClient) -> None:
                 session.add(Job(type="generate", status="queued"))
             session.commit()
 
-        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+        resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
         assert resp.status_code == 429
         assert "Queue is full" in resp.json()["detail"]
@@ -195,7 +199,7 @@ def test_generate_job_gets_user_id(client: TestClient) -> None:
     user_id = _get_user_id(client)
 
     with _mock_arq():
-        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+        resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
     assert resp.status_code == 200
     job_id = resp.json()["id"]

@@ -42,8 +42,8 @@ log = logging.getLogger(__name__)
 _IMPORT_TIME_REDIS_URL = os.environ.get("REDIS_URL")
 
 
-async def generate(ctx, job_id, song_id, version_id, count, user_id, seed=None,
-                   requested_model=None, repaint_params=None, cover_params=None):
+async def generate(ctx, job_id, song_id, version_id, count, user_id, seed,
+                   requested_model, repaint_params=None, cover_params=None):
     if not check_job_still_valid(job_id):
         return
 

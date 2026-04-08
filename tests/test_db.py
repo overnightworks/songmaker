@@ -519,8 +519,8 @@ def test_job_to_dict(seeded_session: Session) -> None:
 
 def test_create_generation(seeded_session: Session) -> None:
     gen = create_generation(
-        seeded_session, "s1", "v1", "test/new_gen.mp3", seed=123,
-        generation_params={"bpm": 140},
+        seeded_session, "s1", "v1", "test/new_gen.mp3", model_mode="sft",
+        seed=123, generation_params={"bpm": 140},
     )
     seeded_session.commit()
     assert gen.generation_number == 3
@@ -530,28 +530,51 @@ def test_create_generation(seeded_session: Session) -> None:
 
 def test_create_generation_with_model_mode(seeded_session: Session) -> None:
     gen = create_generation(
-        seeded_session, "s1", "v1", "test/gen.mp3", seed=1,
-        model_mode="turbo",
+        seeded_session, "s1", "v1", "test/gen.mp3", model_mode="turbo", seed=1,
     )
     seeded_session.commit()
     assert gen.model_mode == "turbo"
 
 
-def test_create_generation_without_model_mode(seeded_session: Session) -> None:
-    gen = create_generation(
-        seeded_session, "s1", "v1", "test/gen.mp3", seed=1,
-    )
-    seeded_session.commit()
-    assert gen.model_mode is None
-
-
 def test_create_generation_with_wav_path(seeded_session: Session) -> None:
     gen = create_generation(
-        seeded_session, "s1", "v1", "test/gen.mp3", seed=1,
+        seeded_session, "s1", "v1", "test/gen.mp3", model_mode="sft", seed=1,
         wav_path="test/gen.wav",
     )
     seeded_session.commit()
     assert gen.wav_path == "test/gen.wav"
+
+
+def test_generations_model_mode_not_null(tmp_path: Path) -> None:
+    from sqlalchemy import inspect
+
+    from songmaker_cli.db.engine import init_test_db
+
+    factory = init_test_db(tmp_path / "test.db")
+    with factory() as session:
+        insp = inspect(session.bind)
+        cols = {c["name"]: c for c in insp.get_columns("generations")}
+        assert cols["model_mode"]["nullable"] is False
+
+
+def test_available_models_seed_idempotent(tmp_path: Path) -> None:
+    from songmaker_cli.constants import AVAILABLE_MODEL_MODES
+    from songmaker_cli.db.engine import init_test_db
+    from songmaker_cli.db.models import AvailableModel
+
+    db_path = tmp_path / "test.db"
+    factory = init_test_db(db_path)
+    with factory() as session:
+        ids = {m.id for m in session.query(AvailableModel).all()}
+        assert ids == AVAILABLE_MODEL_MODES
+        count_before = session.query(AvailableModel).count()
+
+    factory = init_test_db(db_path)
+    with factory() as session:
+        ids_after = {m.id for m in session.query(AvailableModel).all()}
+        count_after = session.query(AvailableModel).count()
+    assert ids_after == AVAILABLE_MODEL_MODES
+    assert count_after == count_before
 
 
 def test_save_scores_create(seeded_session: Session) -> None:

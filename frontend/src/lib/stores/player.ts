@@ -249,6 +249,7 @@ function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 		is_picked: false,
 		is_kept: true,
 		is_shared: false,
+		model_mode: entry.model_mode,
 		whisper_text: null,
 		scores: null,
 		generation_params: null,

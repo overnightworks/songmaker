@@ -70,6 +70,7 @@ function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		is_archived: false,
 		is_picked: false,
 		is_kept: false,
+		model_mode: 'sft',
 		whisper_text: null,
 		scores: null,
 		generation_params: null,
@@ -91,6 +92,7 @@ function makePlaylistEntry(overrides: Partial<PlaylistEntryItem> = {}): Playlist
 		generation_number: 1,
 		mp3_path: 'a1/song_v1.mp3',
 		seed: 42,
+		model_mode: 'sft',
 		...overrides
 	};
 }

@@ -4,10 +4,20 @@ from __future__ import annotations
 
 import os
 from enum import StrEnum
+from typing import Final
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
 
 APP_NAME = "Hallucinai"
+
+AVAILABLE_MODEL_MODES: Final[frozenset[str]] = frozenset({
+    "turbo",
+    "sft",
+    "xl-turbo",
+    "xl-sft",
+    "xl-base",
+})
+DEFAULT_MODEL_MODE: Final[str] = "sft"
 
 DATA_ROOT = "data"
 AUDIO_ROOT = "data/audio"

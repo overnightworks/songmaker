@@ -134,7 +134,9 @@ def _seed_db(session, owner_id: str | None = None) -> None:
         mp3_path="u-test/g2.mp3", seed=77,
     )
     session.add_all([gen1, gen2])
-    session.query(AvailableModel).filter_by(id="turbo").update({"is_active": True})
+    session.query(AvailableModel).filter(
+        AvailableModel.id.in_(["turbo", "sft"]),
+    ).update({"is_active": True}, synchronize_session=False)
     score = Score(id="sc1", generation_id="g1", scorer="batch", value={"dynamics": 65.0})
     session.add(score)
     session.commit()
@@ -192,7 +194,7 @@ def test_get_generation(client: TestClient) -> None:
     resp = client.get("/api/generations/g1")
     assert resp.status_code == 200
     assert resp.json()["seed"] == 42
-    assert resp.json()["model_mode"] is None
+    assert resp.json()["model_mode"] == "sft"
 
 
 def test_rate_generation(client: TestClient) -> None:
@@ -502,7 +504,7 @@ def test_rate_generation_not_found(client: TestClient) -> None:
 def test_generate_song_not_found(client: TestClient) -> None:
     resp = client.post(
         "/api/songs/nonexistent/generate",
-        json={"count": 1},
+        json={"count": 1, "model": "sft"},
     )
     assert resp.status_code == 404
 
@@ -523,7 +525,7 @@ def test_generate_song_no_lyrics(client: TestClient) -> None:
 
     resp = client.post(
         "/api/songs/s_empty/generate",
-        json={"count": 1},
+        json={"count": 1, "model": "sft"},
     )
     assert resp.status_code == 400
 
@@ -562,7 +564,7 @@ def test_generate_song_submits_job(client: TestClient) -> None:
     with _mock_worker() as mock_pool:
         resp = client.post(
             "/api/songs/s1/generate",
-            json={"count": 2},
+            json={"count": 2, "model": "sft"},
         )
 
     assert resp.status_code == 200
@@ -595,17 +597,12 @@ def test_generate_song_passes_model_to_worker(client: TestClient) -> None:
     assert args[0][-1] == "turbo"
 
 
-def test_generate_song_no_model_skips_check(client: TestClient) -> None:
-    with _mock_worker() as mock_pool:
-        resp = client.post(
-            "/api/songs/s1/generate",
-            json={"count": 1},
-        )
-
-    assert resp.status_code == 200
-    mock_pool.enqueue_job.assert_called_once()
-    args = mock_pool.enqueue_job.call_args
-    assert args[0][-1] is None
+def test_generate_song_missing_model_rejected(client: TestClient) -> None:
+    resp = client.post(
+        "/api/songs/s1/generate",
+        json={"count": 1},
+    )
+    assert resp.status_code == 422
 
 
 def test_generate_song_invalid_model(client: TestClient) -> None:
@@ -618,16 +615,21 @@ def test_generate_song_invalid_model(client: TestClient) -> None:
 
 def test_generate_song_seed_accepted(client: TestClient) -> None:
     with _mock_worker() as mock_pool:
-        resp = client.post("/api/songs/s1/generate", json={"count": 1, "seed": 42})
+        resp = client.post(
+            "/api/songs/s1/generate",
+            json={"count": 1, "seed": 42, "model": "turbo"},
+        )
     assert resp.status_code == 200
     mock_pool.enqueue_job.assert_called_once()
     call_args = mock_pool.enqueue_job.call_args[0]
     assert call_args[-2] == 42
-    assert call_args[-1] is None
+    assert call_args[-1] == "turbo"
 
 
 def test_generate_song_seed_invalid(client: TestClient) -> None:
-    resp = client.post("/api/songs/s1/generate", json={"count": 1, "seed": -2})
+    resp = client.post(
+        "/api/songs/s1/generate", json={"count": 1, "seed": -2, "model": "sft"},
+    )
     assert resp.status_code == 422
 
 
@@ -640,6 +642,7 @@ def test_repaint_submits_job(client: TestClient) -> None:
             "src_generation_id": "g1",
             "repainting_start": 0.2,
             "repainting_end": 0.8,
+            "model": "sft",
         })
 
     assert resp.status_code == 200
@@ -656,6 +659,7 @@ def test_repaint_invalid_range(client: TestClient) -> None:
         "src_generation_id": "g1",
         "repainting_start": 0.8,
         "repainting_end": 0.2,
+        "model": "sft",
     })
     assert resp.status_code == 400
     assert "repainting_start" in resp.json()["detail"]
@@ -666,6 +670,7 @@ def test_repaint_no_audio(client: TestClient) -> None:
         "src_generation_id": "g2",
         "repainting_start": 0.0,
         "repainting_end": 0.5,
+        "model": "sft",
     })
     assert resp.status_code == 400
     assert "no audio file" in resp.json()["detail"]
@@ -692,6 +697,7 @@ def test_repaint_converts_mp3_to_wav(client: TestClient) -> None:
             "src_generation_id": "g2",
             "repainting_start": 0.0,
             "repainting_end": 0.5,
+            "model": "sft",
         })
 
     assert resp.status_code == 200
@@ -705,6 +711,7 @@ def test_repaint_not_found(client: TestClient) -> None:
         "src_generation_id": "nonexistent",
         "repainting_start": 0.0,
         "repainting_end": 0.5,
+        "model": "sft",
     })
     assert resp.status_code == 404
 
@@ -717,6 +724,7 @@ def test_repaint_with_lyrics_override(client: TestClient) -> None:
             "repainting_end": 0.7,
             "lyrics": "new lyrics here",
             "prompt": "jazz ballad",
+            "model": "sft",
         })
 
     assert resp.status_code == 200
@@ -735,6 +743,7 @@ def test_cover_submits_job(client: TestClient) -> None:
             "src_generation_id": "g1",
             "audio_cover_strength": 0.7,
             "prompt": "jazz version",
+            "model": "sft",
         })
 
     assert resp.status_code == 200
@@ -750,6 +759,7 @@ def test_cover_no_audio(client: TestClient) -> None:
     resp = client.post("/api/generations/g2/cover", json={
         "src_generation_id": "g2",
         "audio_cover_strength": 0.5,
+        "model": "sft",
     })
     assert resp.status_code == 400
     assert "no audio file" in resp.json()["detail"]
@@ -759,6 +769,7 @@ def test_cover_not_found(client: TestClient) -> None:
     resp = client.post("/api/generations/nonexistent/cover", json={
         "src_generation_id": "nonexistent",
         "audio_cover_strength": 0.5,
+        "model": "sft",
     })
     assert resp.status_code == 404
 
@@ -767,12 +778,70 @@ def test_cover_default_strength(client: TestClient) -> None:
     with _mock_worker() as mock_pool:
         resp = client.post("/api/generations/g1/cover", json={
             "src_generation_id": "g1",
+            "model": "sft",
         })
 
     assert resp.status_code == 200
     args = mock_pool.enqueue_job.call_args[0]
     cover = args[-1]
     assert cover["audio_cover_strength"] == 0.8
+
+
+# ── No silent fallbacks: model required across all three endpoints ──
+
+
+def _no_fallback_endpoint_payloads():
+    return [
+        ("/api/songs/s1/generate", {"count": 1}),
+        ("/api/generations/g1/repaint", {
+            "src_generation_id": "g1",
+            "repainting_start": 0.1,
+            "repainting_end": 0.5,
+        }),
+        ("/api/generations/g1/cover", {
+            "src_generation_id": "g1",
+            "audio_cover_strength": 0.5,
+        }),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("url", "base_payload"), _no_fallback_endpoint_payloads(),
+)
+def test_endpoint_requires_model(
+    client: TestClient, url: str, base_payload: dict,
+) -> None:
+    resp = client.post(url, json=base_payload)
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("url", "base_payload"), _no_fallback_endpoint_payloads(),
+)
+def test_endpoint_rejects_unknown_model(
+    client: TestClient, url: str, base_payload: dict,
+) -> None:
+    resp = client.post(url, json={**base_payload, "model": "totally-fake"})
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("url", "base_payload"), _no_fallback_endpoint_payloads(),
+)
+def test_endpoint_rejects_inactive_model(
+    client: TestClient, url: str, base_payload: dict,
+) -> None:
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        before = session.query(AvailableModel).filter_by(id="turbo").one()
+        assert before.is_active, "fixture invariant: turbo starts active"
+        session.query(AvailableModel).filter_by(id="turbo").update(
+            {"is_active": False},
+        )
+        session.commit()
+    resp = client.post(url, json={**base_payload, "model": "turbo"})
+    assert resp.status_code == 400
+    assert "not currently available" in resp.json()["detail"]
 
 
 # ── Reference audio upload ──────────────────────────────────────────
@@ -834,7 +903,7 @@ def test_generate_song_redis_down(client: TestClient) -> None:
     ):
         resp = client.post(
             "/api/songs/s1/generate",
-            json={"count": 1},
+            json={"count": 1, "model": "sft"},
         )
 
     assert resp.status_code == 503
@@ -1010,7 +1079,9 @@ def test_get_album(client: TestClient) -> None:
 
 def test_get_job_found(client: TestClient) -> None:
     with _mock_worker():
-        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+        resp = client.post(
+            "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
+        )
     job_id = resp.json()["id"]
 
     resp = client.get(f"/api/jobs/{job_id}")
@@ -1181,7 +1252,9 @@ def test_job_ownership_blocks_other_user(tmp_path: Path) -> None:
 
 def test_cancel_queued_job(client: TestClient) -> None:
     with _mock_worker():
-        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+        resp = client.post(
+            "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
+        )
     job_id = resp.json()["id"]
 
     resp = client.post(f"/api/jobs/{job_id}/cancel")
@@ -1193,7 +1266,9 @@ def test_cancel_already_completed_job(client: TestClient) -> None:
     from songmaker_cli.db.queries import update_job_status
 
     with _mock_worker():
-        resp = client.post("/api/songs/s1/generate", json={"count": 1})
+        resp = client.post(
+            "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
+        )
     job_id = resp.json()["id"]
 
     ctx: AppContext = client.app.state.ctx
@@ -1566,10 +1641,14 @@ def test_admin_has_rate_limit(tmp_path: Path) -> None:
 
     try:
         with _mock_worker():
-            r = c.post("/api/songs/s1/generate", json={"count": 1})
+            r = c.post(
+                "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
+            )
             assert r.status_code == 200
 
-            r = c.post("/api/songs/s1/generate", json={"count": 1})
+            r = c.post(
+                "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
+            )
             assert r.status_code == 429
     finally:
         api_mod._ENV_RATE_LIMITS["generate"] = original_limits
