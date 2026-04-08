@@ -41,6 +41,7 @@
 		currentVersionIndex,
 		saving,
 		status,
+		pinnedSeed,
 		loadSongData,
 		loadVersion,
 		handleSave,
@@ -66,7 +67,6 @@
 	let genCount = $state(1);
 	let selectedModel = $state<string | null>(null);
 	let showDeleteConfirm = $state(false);
-	let pinnedSeed = $state<number | null>(null);
 	let sourceGeneration = $state<GenerationItem | null>(null);
 	let sourceMode = $state<'repaint' | 'cover'>('repaint');
 	let repaintStart = $state(0);
@@ -131,7 +131,7 @@
 			addToast('Added to playlist', 'success');
 		},
 		pinSeed: (seed) => {
-			pinnedSeed = seed;
+			pinnedSeed.set(seed);
 			addToast(`Seed ${seed} pinned for next generation`, 'success');
 		},
 		clickVersion: onVersionClick,
@@ -162,32 +162,33 @@
 			const ver = $versions[$currentVersionIndex];
 			const versionId = ver?.id;
 
+			const seedToUse = $pinnedSeed;
 			if (sourceGeneration && sourceMode === 'repaint') {
 				const { repaintGeneration } = await import('$lib/api/client');
 				const job = await repaintGeneration(sourceGeneration.id, repaintStart, repaintEnd, {
 					model,
-					seed: pinnedSeed,
+					seed: seedToUse,
 					versionId,
 					count: genCount,
 					repaintMode: repaintMode || undefined,
 					repaintStrength: repaintMode === 'balanced' ? repaintStrength : undefined
 				});
-				pinnedSeed = null;
+				pinnedSeed.set(null);
 				trackJob(job, { songId: song.id });
 			} else if (sourceGeneration && sourceMode === 'cover') {
 				const { coverGeneration } = await import('$lib/api/client');
 				const job = await coverGeneration(sourceGeneration.id, coverStrength, {
 					model,
-					seed: pinnedSeed,
+					seed: seedToUse,
 					versionId,
 					count: genCount,
 					coverNoiseStrength: coverNoiseStrength > 0 ? coverNoiseStrength : undefined
 				});
-				pinnedSeed = null;
+				pinnedSeed.set(null);
 				trackJob(job, { songId: song.id });
 			} else {
-				const job = await generateSong(song.id, genCount, model, versionId, pinnedSeed);
-				pinnedSeed = null;
+				const job = await generateSong(song.id, genCount, model, versionId, seedToUse);
+				pinnedSeed.set(null);
 				trackJob(job, { songId: song.id });
 			}
 		} catch (e) {
@@ -384,13 +385,13 @@
 							No models enabled. Ask admin to enable one.
 						</span>
 					{/if}
-					{#if pinnedSeed != null}
+					{#if $pinnedSeed != null}
 						<button
 							class="pinned-seed"
-							onclick={() => (pinnedSeed = null)}
+							onclick={() => pinnedSeed.set(null)}
 							title="Click to clear pinned seed"
 						>
-							seed:{pinnedSeed} ✕
+							seed:{$pinnedSeed} ✕
 						</button>
 					{/if}
 				{/if}

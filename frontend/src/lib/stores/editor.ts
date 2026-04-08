@@ -99,6 +99,9 @@ export function setDraftGenParams(genParams: VersionGenerationParams | null): vo
 export const versions = writable<VersionItem[]>([]);
 export const currentVersionIndex = writable(0);
 
+// --- Pinned seed (forwarded to the next generation request) ---
+export const pinnedSeed = writable<number | null>(null);
+
 // --- Status ---
 export const saving = writable(false);
 export const status = writable('');

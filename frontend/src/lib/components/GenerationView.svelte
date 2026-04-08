@@ -27,6 +27,7 @@
 	import { addGenerationToPlaylist } from '$lib/stores/playlists';
 	import { pendingSource } from '$lib/stores/source';
 	import { setGenerationActions } from '$lib/contexts/generation-actions';
+	import { pinnedSeed } from '$lib/stores/editor';
 	import { scoreColor } from '$lib/utils/scores';
 	import ActionButton from './ActionButton.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
@@ -221,6 +222,11 @@
 		backToSong();
 	}
 
+	function onPinSeed(seed: number): void {
+		pinnedSeed.set(seed);
+		addToast(`Seed ${seed} pinned for next generation`, 'success');
+	}
+
 	setGenerationActions({
 		score: () => onScore(),
 		pick: (_id, picked) => onPick(picked),
@@ -237,9 +243,7 @@
 			await addGenerationToPlaylist(playlistId, genId);
 			addToast('Added to playlist', 'success');
 		},
-		pinSeed: (seed) => {
-			addToast(`Seed ${seed} pinned for next generation`, 'success');
-		},
+		pinSeed: onPinSeed,
 		clickVersion: () => {
 			backToSong();
 		},
@@ -265,7 +269,15 @@
 						<span class="model-tag">{generation.model_mode}</span>
 					{/if}
 					{#if generation.seed}
-						<span class="seed-tag">seed:{generation.seed}</span>
+						<button
+							type="button"
+							class="seed-tag seed-tag-button"
+							class:pinned={$pinnedSeed === generation.seed}
+							onclick={() => onPinSeed(generation.seed ?? 0)}
+							title="Click to pin this seed for the next generation"
+						>
+							seed:{generation.seed}
+						</button>
 					{/if}
 				</div>
 			</div>
@@ -563,6 +575,26 @@
 		font-size: 0.7rem;
 		color: var(--text-dim);
 		font-family: var(--font-body);
+	}
+
+	.seed-tag-button {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		padding: 0.15rem 0.5rem;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.seed-tag-button:hover {
+		color: var(--accent);
+		border-color: var(--accent);
+	}
+
+	.seed-tag-button.pinned {
+		color: var(--accent);
+		border-color: var(--accent);
+		background: rgba(160, 32, 240, 0.1);
 	}
 
 	.detail-actions {
