@@ -24,7 +24,6 @@ class AceStepConfig:
     key_scale: str = ""
     time_signature: str = ""
     vocal_language: str = "en"
-    instrumental: bool = False
     seed: int = -1
     inference_steps: int = 8
     guidance_scale: float = 0.0
