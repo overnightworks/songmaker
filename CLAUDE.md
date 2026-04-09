@@ -79,7 +79,23 @@ alembic upgrade head
 | Scorer | `scoring/{name}.py` → `scoring/models.py` → `pipeline.py` count → `api_models.py` names | `scoring/silence_detection.py` |
 | DB model | `db/models.py` → `db/queries/{domain}.py` → Alembic migration | `db/models.py:Song` |
 | Frontend component | `lib/components/` → `lib/stores/` if stateful → `lib/api/client.ts` if new API | `SongList.svelte` |
-| Plan / design doc | `plans/{name}.md` with `**Status:** Proposed\|In progress\|Done\|Abandoned` and `**Date:** YYYY-MM-DD` headers. Move `Done`/`Abandoned` to `plans/archive/`. | `plans/no-silent-fallbacks-v2.md` |
+| Plan / design doc | `plans/{name}.md` — **concept only** (goal, locked-in decisions, hard constraints, "first step: read the live code"). See "Plan-writing convention" below. Add `**Status:** Proposed\|In progress\|Done\|Abandoned` and `**Date:** YYYY-MM-DD` headers. Move `Done`/`Abandoned` to `plans/archive/`. | `plans/jobs-module-split.md` |
+
+## Plan-writing convention
+
+Detailed implementation plans rot. Symbol lists, line counts, and step-by-step move orders become wrong as soon as the underlying code changes. **Plan files in `plans/` must capture the concept, not the implementation.** Three tiers:
+
+| Task size | Artifact |
+|---|---|
+| **Small** (< 30 min — rename a function, add an index, fix a typo) | No plan. Execute directly. |
+| **Medium / future work** (hours, has decisions worth capturing) | Concept note in `plans/{name}.md`, ~10–30 lines: **goal** (1–2 sentences), **locked-in decisions** (bullets — things the user already answered), **hard constraints** (bullets — things the executor cannot violate), **first step** (always "read the live code, design + execute"). The executing agent generates their own implementation plan in-session if they want one — don't pre-write it. |
+| **Live multi-session execution** (multi-agent or multi-day work in flight) | A detailed plan IS appropriate as a live coordination doc, but treat it as **temporary**. Move to `plans/archive/` once execution finishes. Don't keep refreshing it after the work is done. |
+
+**Why:** detailed plans for future work pretend to know things only the executor can know. The agent is closer to the truth at execution time than the plan ever can be. Pre-written symbol lists, file structures, and step orders bias the executor toward the planner's pre-conception and need maintenance every time the code changes underneath. Concept notes survive code changes because they don't depend on details.
+
+**Don't** include in a concept note: symbol inventories, line counts, file-by-file diff sketches, step-by-step ordering, "risks" that are generic engineering concerns, verification commands beyond the standard `ruff check && pytest && docker compose up -d --build --wait`. The agent runs `grep` and `wc -l` themselves in 1 second when needed.
+
+**Do** include: the goal, the decisions that came from prior conversations (so the agent doesn't re-prompt), and the constraints that aren't obvious from the code. Anything else is rot waiting to happen.
 
 ## Code Patterns (codebase-specific)
 

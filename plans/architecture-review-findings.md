@@ -3,6 +3,8 @@
 **Status:** In progress — quick-wins and W1 of no-silent-fallbacks landed; W2 in flight; B1/B8/B9 still deferred
 **Date:** 2026-04-09 (refreshed late afternoon)
 **Context:** Brutal architecture review of the codebase identified 12 findings. This document records each one, its current status, and the decisions needed to act on it.
+
+> **Note on plan-writing convention:** the per-finding sections below intentionally include the "What/Why/Decision" but NOT a step-by-step implementation plan. Per CLAUDE.md "Plan-writing convention", future work captures concepts and locked-in decisions only — the executing agent reads the live code, designs the implementation in-session, and executes. If you're picking up B1, B8, or B9: the section below has everything you need to start. Run the greps, read the code, design and execute. Do not re-prompt the user for already-locked decisions.
 **Related plans:**
 - [no-silent-fallbacks-v2.md](no-silent-fallbacks-v2.md) — covers B2, B7, B12. **W1 done, env merge done, W2 in progress.**
 - [no-silent-fallbacks-w1-cleanup.md](no-silent-fallbacks-w1-cleanup.md) — W1 cleanup checklist, **executed** (commits f1ad2d4 + 5571009).
