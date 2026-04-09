@@ -27,12 +27,14 @@ from songmaker_cli.api_models import (
     BulkDeleteRequest,
     BulkDeleteResponse,
     CoverRequest,
+    CoverTaskParams,
     GenerateRequest,
     GenerationResponse,
     JobResponse,
     RateRequest,
     RateResponse,
     RepaintRequest,
+    RepaintTaskParams,
     ScoreRequest,
     ScoringSchemaResponse,
     ShareResponse,
@@ -327,25 +329,21 @@ async def api_repaint_generation(
         if not await _has_online_acestep_worker(session):
             _fail_job(ctx, job.id)
             raise HTTPException(503, "No online ACE-Step workers")
-        repaint_params: dict = {
-            "src_wav_path": str(wav_path),
-            "repainting_start": req.repainting_start,
-            "repainting_end": req.repainting_end,
-            "lyrics": lyrics,
-            "prompt": prompt,
-            "src_generation_id": gen_id,
-        }
-        if req.repaint_mode is not None:
-            repaint_params["repaint_mode"] = req.repaint_mode
-        if req.repaint_strength is not None:
-            repaint_params["repaint_strength"] = req.repaint_strength
-        if req.repaint_latent_crossfade_frames is not None:
-            repaint_params["repaint_latent_crossfade_frames"] = req.repaint_latent_crossfade_frames
-        if req.repaint_wav_crossfade_sec is not None:
-            repaint_params["repaint_wav_crossfade_sec"] = req.repaint_wav_crossfade_sec
+        repaint_task = RepaintTaskParams(
+            src_wav_path=str(wav_path),
+            src_generation_id=gen_id,
+            repainting_start=req.repainting_start,
+            repainting_end=req.repainting_end,
+            lyrics=lyrics,
+            prompt=prompt,
+            repaint_mode=req.repaint_mode,
+            repaint_strength=req.repaint_strength,
+            repaint_latent_crossfade_frames=req.repaint_latent_crossfade_frames,
+            repaint_wav_crossfade_sec=req.repaint_wav_crossfade_sec,
+        )
         await pool.enqueue_job(
             "generate", job.id, song.id, version.id, req.count, user.id,
-            req.seed, req.model, repaint_params,
+            req.seed, req.model, repaint_task.model_dump(),
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
@@ -402,18 +400,17 @@ async def api_cover_generation(
         if not await _has_online_acestep_worker(session):
             _fail_job(ctx, job.id)
             raise HTTPException(503, "No online ACE-Step workers")
-        cover_params: dict = {
-            "src_wav_path": str(wav_path),
-            "audio_cover_strength": req.audio_cover_strength,
-            "lyrics": lyrics,
-            "prompt": prompt,
-            "src_generation_id": gen_id,
-        }
-        if req.cover_noise_strength is not None:
-            cover_params["cover_noise_strength"] = req.cover_noise_strength
+        cover_task = CoverTaskParams(
+            src_wav_path=str(wav_path),
+            src_generation_id=gen_id,
+            audio_cover_strength=req.audio_cover_strength,
+            lyrics=lyrics,
+            prompt=prompt,
+            cover_noise_strength=req.cover_noise_strength,
+        )
         await pool.enqueue_job(
             "generate", job.id, song.id, version.id, req.count, user.id,
-            req.seed, req.model, None, cover_params,
+            req.seed, req.model, None, cover_task.model_dump(),
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:

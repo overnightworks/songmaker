@@ -67,8 +67,17 @@ def test_generate_passes_seed_and_target_model() -> None:
 
 
 def test_generate_passes_repaint_params() -> None:
+    from songmaker_cli.api_models import RepaintTaskParams
+
     worker = _make_worker()
-    repaint = {"src_wav_path": "/x.wav", "repainting_start": 0.0, "repainting_end": 1.0}
+    repaint = {
+        "src_wav_path": "/x.wav",
+        "src_generation_id": "g0",
+        "repainting_start": 0.0,
+        "repainting_end": 1.0,
+        "lyrics": "la",
+        "prompt": "rock",
+    }
     with patch(
         "songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock,
     ) as mock_run:
@@ -77,7 +86,9 @@ def test_generate_passes_repaint_params() -> None:
         ))
 
     kwargs = mock_run.await_args.kwargs
-    assert kwargs["repaint_params"] == repaint
+    assert isinstance(kwargs["repaint_params"], RepaintTaskParams)
+    assert kwargs["repaint_params"].src_wav_path == "/x.wav"
+    assert kwargs["repaint_params"].repainting_end == 1.0
 
 
 def test_cleanup_stale_calls_base_cleanup_and_orphan_audit() -> None:

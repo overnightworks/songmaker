@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.parser import AlbumMeta, SongMeta
 
 
@@ -10,7 +11,11 @@ def test_song_meta_defaults() -> None:
     assert meta.title == "Untitled"
     assert meta.album == "unknown"
     assert meta.track == ""
-    assert meta.generation_params == {}
+    assert meta.bpm == 0
+    assert meta.audio_duration == 0
+    assert meta.key_scale == ""
+    assert meta.vocal_language == ""
+    assert meta.generation_params == BaseGenerationParams()
 
 
 def test_song_meta_track_coercion() -> None:
@@ -24,10 +29,16 @@ def test_song_meta_track_none_coercion() -> None:
 
 
 def test_song_meta_with_generation_params() -> None:
-    params = {"bpm": 120, "key_scale": "Am", "inference_steps": 50}
-    meta = SongMeta(prompt="rock", lyrics="hello", generation_params=params)
-    assert meta.generation_params["bpm"] == 120
-    assert meta.generation_params["inference_steps"] == 50
+    params = {"inference_steps": 50, "shift": 2.0}
+    meta = SongMeta(
+        prompt="rock", lyrics="hello",
+        bpm=120, key_scale="Am",
+        generation_params=params,
+    )
+    assert meta.bpm == 120
+    assert meta.key_scale == "Am"
+    assert meta.generation_params.inference_steps == 50
+    assert meta.generation_params.shift == 2.0
 
 
 def test_album_meta_defaults() -> None:

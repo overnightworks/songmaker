@@ -46,7 +46,7 @@ def score_text_accuracy(
     effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
     whisper_size = effective_config.whisper_model
     device = effective_config.whisper_device or effective_config.device
-    language = (meta.generation_params.get("vocal_language") or None) if meta else None
+    language = (meta.vocal_language or None) if meta else None
     model = _get_whisper_model(whisper_size, device=device)
 
     lyrics_text = meta.lyrics if meta else ""

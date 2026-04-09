@@ -7,10 +7,12 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.acestep_capabilities import ACESTEP_PROFILES
+from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.constants import MODEL_DEFAULT_MODE
 from songmaker_cli.db.queries.settings import get_global_defaults, save_global_defaults
 from songmaker_cli.errors import ValidationError
@@ -152,81 +154,106 @@ def resolve_model_mode(model_name: str) -> str:
     )
 
 
+def _coerce_to_params(
+    value: BaseGenerationParams | dict | None,
+) -> BaseGenerationParams | None:
+    """Accept either a typed model or a raw dict, return the typed model.
+
+    Raises :class:`ValidationError` if the dict cannot be validated. Used so
+    that legacy callers (CLI, tests) passing dicts still work without losing
+    the boundary check that catches typos.
+    """
+    if value is None:
+        return None
+    if isinstance(value, BaseGenerationParams):
+        return value
+    if isinstance(value, dict):
+        try:
+            return BaseGenerationParams.model_validate(value)
+        except PydanticValidationError as exc:
+            raise ValidationError(str(exc)) from exc
+    msg = (
+        f"generation params must be BaseGenerationParams or dict, "
+        f"got {type(value).__name__}"
+    )
+    raise ValidationError(msg)
+
+
+def _merge_layers(
+    *layers: BaseGenerationParams | None,
+) -> dict[str, object]:
+    """Merge typed param layers into a flat dict.
+
+    Each layer's non-None fields override earlier layers. Used as the
+    interior of :func:`build_ace_config` so that the merge happens between
+    validated typed objects, not raw dicts.
+    """
+    result: dict[str, object] = {}
+    for layer in layers:
+        if layer is None:
+            continue
+        for key, value in layer.model_dump().items():
+            if value is not None:
+                result[key] = value
+    return result
+
+
 def build_ace_config(
     meta: "SongMeta",
-    cli_overrides: dict | None = None,
+    cli_overrides: BaseGenerationParams | dict | None = None,
     model_name: str = MODEL_DEFAULT_MODE,
-    global_defaults: dict | None = None,
-    preset_params: dict | None = None,
+    global_defaults: dict[str, dict] | None = None,
+    preset_params: BaseGenerationParams | dict | None = None,
     seed: int | None = None,
 ) -> AceStepConfig:
-    """Build an AceStepConfig from SongMeta + optional CLI overrides.
+    """Build an AceStepConfig from a typed SongMeta + typed override layers.
 
-    Priority: CLI overrides > frontmatter > preset params > global defaults > model defaults.
+    Layering (later wins): model defaults < user global defaults < preset
+    params < song meta < CLI overrides. Each layer is a
+    :class:`BaseGenerationParams`; merging happens field-by-field, never via
+    raw ``dict.update``. Top-of-meta scalars (``bpm``, ``audio_duration``,
+    ``key_scale``, ``vocal_language``) and the seed are applied last.
+
+    ``global_defaults`` is the per-model dict-of-dicts loaded from the DB
+    (``{"sft": {...}, "turbo": {...}}``); the entry for the resolved model
+    is validated as :class:`BaseGenerationParams` here.
     """
     model_key = resolve_model_mode(model_name)
-    model_defaults = _BUILTIN_DEFAULTS[model_key]
-    user_defaults = (global_defaults or {}).get(model_key, {})
-    active_preset = preset_params or {}
+    builtin_layer = BaseGenerationParams.model_validate(_BUILTIN_DEFAULTS[model_key])
+    user_defaults_dict = (global_defaults or {}).get(model_key)
+    user_defaults_layer = _coerce_to_params(user_defaults_dict)
+    preset_layer = _coerce_to_params(preset_params)
+    song_layer = meta.generation_params
+    cli_layer = _coerce_to_params(cli_overrides)
+
     log.debug(
         "build_ace_config: model=%s (%s), preset=%s, user_defaults=%s, song_params=%s",
         model_name, model_key,
-        active_preset or "none", user_defaults or "none",
-        meta.generation_params or "none",
+        preset_layer or "none", user_defaults_layer or "none",
+        song_layer or "none",
     )
 
-    fields: dict = {"prompt": meta.prompt, "lyrics": meta.lyrics}
+    fields: dict[str, object] = {
+        "prompt": meta.prompt,
+        "lyrics": meta.lyrics,
+    }
+    fields.update(_merge_layers(
+        builtin_layer, user_defaults_layer, preset_layer, song_layer, cli_layer,
+    ))
 
-    layers = [model_defaults, user_defaults, active_preset, meta.generation_params]
-    if cli_overrides:
-        layers.append({k: v for k, v in cli_overrides.items() if v is not None})
-    for layer in layers:
-        fields.update(layer)
+    if meta.bpm:
+        fields["bpm"] = meta.bpm
+    if meta.audio_duration:
+        fields["audio_duration"] = meta.audio_duration
+    if meta.key_scale:
+        fields["key_scale"] = meta.key_scale
+    if meta.vocal_language:
+        fields["vocal_language"] = meta.vocal_language
 
-    fields = _sanitize_params(fields)
     if seed is not None and seed >= 0:
         fields["seed"] = seed
-    return AceStepConfig(**fields)
 
-
-def _sanitize_params(fields: dict) -> dict:
-    """Validate ACE-Step params and reject invalid values."""
-    shift = fields.get("shift")
-    if shift is not None and shift < 0.0:
-        raise ValidationError(f"shift={shift} is negative, must be >= 0.0")
-
-    guidance = fields.get("guidance_scale")
-    if guidance is not None and guidance < 0.0:
-        raise ValidationError(f"guidance_scale={guidance} is negative, must be >= 0.0")
-
-    steps = fields.get("inference_steps")
-    if steps is not None and steps < 1:
-        raise ValidationError(f"inference_steps={steps} is < 1, must be >= 1")
-
-    audio_duration = fields.get("audio_duration")
-    if audio_duration is not None and audio_duration < 1:
-        raise ValidationError(f"audio_duration={audio_duration} is < 1, must be >= 1")
-
-    infer = fields.get("infer_method")
-    if infer and infer not in ("ode", "sde"):
-        raise ValidationError(
-            f"infer_method='{infer}' is invalid, must be 'ode' or 'sde'"
-        )
-
-    repaint_mode = fields.get("repaint_mode")
-    if repaint_mode and repaint_mode not in ("conservative", "balanced", "aggressive"):
-        raise ValidationError(
-            f"repaint_mode='{repaint_mode}' is invalid, "
-            "must be 'conservative', 'balanced', or 'aggressive'"
-        )
-
-    timesteps = fields.get("timesteps")
-    if timesteps:
-        try:
-            [float(t) for t in timesteps.split(",")]
-        except ValueError:
-            raise ValidationError(
-                f"timesteps='{timesteps}' is invalid, must be comma-separated numbers"
-            )
-
-    return fields
+    try:
+        return AceStepConfig(**fields)
+    except TypeError as exc:
+        raise ValidationError(str(exc)) from exc

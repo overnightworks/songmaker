@@ -12,6 +12,7 @@ from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.auth import (
     RATE_LIMIT_WINDOW_SECONDS,
     ROLE_ADMIN,
@@ -155,11 +156,12 @@ def create_job_with_rate_limit(
     return create_job(session, job_type, user_id=user.id)
 
 
-def gen_params_to_dict(params: object | None) -> dict | None:
-    """Convert GenerationParams to a plain dict for DB storage, dropping None values."""
+def gen_params_to_dict(params: BaseGenerationParams | None) -> dict | None:
+    """Convert BaseGenerationParams to a plain dict for DB storage, dropping None values."""
     if params is None:
         return None
-    return params.to_dict() or None
+    dumped = {k: v for k, v in params.model_dump().items() if v is not None}
+    return dumped or None
 
 
 def slugify(value: str) -> str:

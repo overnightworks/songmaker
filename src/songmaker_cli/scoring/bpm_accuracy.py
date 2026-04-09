@@ -49,10 +49,9 @@ def score_bpm(
 
 
 def _extract_requested_bpm(meta: SongMeta | None) -> int | None:
-    if meta is None:
+    if meta is None or not meta.bpm:
         return None
-    bpm = meta.generation_params.get("bpm")
-    return int(bpm) if bpm is not None else None
+    return meta.bpm
 
 
 def _detect_bpm(audio: np.ndarray, sr: int) -> float:

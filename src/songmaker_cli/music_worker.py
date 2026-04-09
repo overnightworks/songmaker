@@ -11,6 +11,7 @@ import logging
 
 from arq import cron
 
+from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     RECOVERY_LOCK_MUSIC_KEY,
@@ -44,14 +45,23 @@ class MusicWorker(WorkerBase):
         import structlog
         structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.GENERATE)
 
+        typed_repaint = (
+            RepaintTaskParams.model_validate(repaint_params)
+            if repaint_params is not None else None
+        )
+        typed_cover = (
+            CoverTaskParams.model_validate(cover_params)
+            if cover_params is not None else None
+        )
+
         await run_generation_job(
             job_id, song_id, version_id, count, user_id,
             db_factory=self.get_db_factory(),
             audio_dir=self.audio_dir(),
             data_dir=self.data_dir(),
             seed=seed,
-            repaint_params=repaint_params,
-            cover_params=cover_params,
+            repaint_params=typed_repaint,
+            cover_params=typed_cover,
             target_model=requested_model,
             redis=ctx["redis"],
         )

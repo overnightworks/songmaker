@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.constants import DEFAULT_ARTIST
 
 
@@ -19,12 +19,25 @@ class SongMeta(BaseModel):
     lyrics: str = ""
     status: str = ""
     source_path: Path = Path()
-    generation_params: dict[str, Any] = Field(default_factory=dict)
+    bpm: int = 0
+    audio_duration: int = 0
+    key_scale: str = ""
+    vocal_language: str = ""
+    generation_params: BaseGenerationParams = Field(default_factory=BaseGenerationParams)
 
     @field_validator("track", mode="before")
     @classmethod
     def _coerce_track(cls, v: object) -> str:
         return str(v) if v is not None else ""
+
+    @field_validator("generation_params", mode="before")
+    @classmethod
+    def _coerce_generation_params(cls, v: object) -> object:
+        if v is None:
+            return BaseGenerationParams()
+        if isinstance(v, dict):
+            return BaseGenerationParams.model_validate(v)
+        return v
 
 
 class AlbumMeta(BaseModel):

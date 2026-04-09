@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator
 
+from songmaker_cli.api_models.generation_params import (
+    BaseGenerationParams,
+)
 from songmaker_cli.constants import MODEL_AVAILABLE_MODES
 from songmaker_cli.scoring.registry import VALID_SCORER_NAMES
 
@@ -14,9 +17,6 @@ log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Generation, Song, Version
-
-
-_GEN_PARAM_MAX_STRING_LENGTH = 2000
 
 
 def _safe_json_dict(
@@ -33,79 +33,11 @@ def _safe_json_dict(
     return None
 
 
-_VALID_INFER_METHODS = frozenset({"ode", "sde"})
 _VALID_REPAINT_MODES = frozenset({"conservative", "balanced", "aggressive"})
 _VALID_MODEL_MODES = MODEL_AVAILABLE_MODES
 
 
-class GenerationParams(BaseModel):
-    model_config = {"extra": "forbid"}
-
-    inference_steps: int | None = Field(None, ge=1, le=200)
-    guidance_scale: float | None = Field(None, ge=0, le=50)
-    shift: float | None = Field(None, ge=0, le=100)
-    thinking: bool | None = None
-    lm_temperature: float | None = Field(None, ge=0, le=5)
-    lm_top_k: int | None = Field(None, ge=0, le=1000)
-    lm_top_p: float | None = Field(None, ge=0, le=1)
-    lm_cfg_scale: float | None = Field(None, ge=0, le=50)
-    lm_negative_prompt: str | None = Field(None, max_length=_GEN_PARAM_MAX_STRING_LENGTH)
-    infer_method: str | None = Field(None, max_length=10)
-    batch_size: int | None = Field(None, ge=1, le=8)
-    reference_audio_path: str | None = Field(None, max_length=500)
-    repaint_mode: str | None = Field(None, max_length=20)
-    repaint_strength: float | None = Field(None, ge=0, le=1)
-    lm_repetition_penalty: float | None = Field(None, ge=0.5, le=5)
-    use_cot_caption: bool | None = None
-    use_cot_language: bool | None = None
-    use_adg: bool | None = None
-    cfg_interval_start: float | None = Field(None, ge=0, le=1)
-    cfg_interval_end: float | None = Field(None, ge=0, le=1)
-
-    @field_validator("reference_audio_path")
-    @classmethod
-    def _validate_reference_audio_path(cls, v: str | None) -> str | None:
-        if v is not None and ".." in v:
-            raise ValueError("reference_audio_path must not contain '..'")
-        return v
-
-    @field_validator("infer_method")
-    @classmethod
-    def _validate_infer_method(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VALID_INFER_METHODS:
-            msg = f"infer_method must be one of {sorted(_VALID_INFER_METHODS)}"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("repaint_mode")
-    @classmethod
-    def _validate_repaint_mode(cls, v: str | None) -> str | None:
-        if v is not None and v not in _VALID_REPAINT_MODES:
-            msg = f"repaint_mode must be one of {sorted(_VALID_REPAINT_MODES)}"
-            raise ValueError(msg)
-        return v
-
-    def to_dict(self) -> dict:
-        return {k: v for k, v in self.model_dump().items() if v is not None}
-
-
-class StoredGenerationParams(GenerationParams):
-    seed: int | None = None
-    acestep_model: str | None = None
-    bpm: int | None = None
-    audio_duration: int | None = None
-    key_scale: str | None = None
-    task_type: str | None = None
-    repainting_start: float | None = None
-    repainting_end: float | None = None
-    audio_cover_strength: float | None = None
-    repaint_latent_crossfade_frames: int | None = None
-    repaint_wav_crossfade_sec: float | None = None
-    cover_noise_strength: float | None = None
-    timesteps: str | None = None
-    constrained_decoding: bool | None = None
-    cot_caption: str | None = None
-    cot_lyrics: str | None = None
+GenerationParams = BaseGenerationParams
 
 
 class AlbumResponse(BaseModel):

@@ -9,12 +9,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from acestep_engine.models import AceStepConfig
+from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, Version
 from songmaker_cli.db.queries import get_generation, get_job
 from songmaker_cli.jobs import (
     GenerationContext,
-    _apply_task_overrides,
+    _apply_cover_overrides,
+    _apply_repaint_overrides,
     _persist_generation_row,
     _update_job,
     run_generation_job,
@@ -456,7 +458,7 @@ def test_scoring_job_uses_generation_version_not_latest(
     assert meta is not None
     assert meta.lyrics == "Hello world"
     assert meta.prompt == "rock style"
-    assert meta.generation_params.get("vocal_language") == "en"
+    assert meta.vocal_language == "en"
 
 
 def test_scoring_job_no_version_still_scores(seeded_db, tmp_path: Path) -> None:
@@ -496,7 +498,7 @@ def test_scoring_job_no_version_still_scores(seeded_db, tmp_path: Path) -> None:
     meta = captured["meta"]
     assert meta is not None
     assert meta.lyrics == ""
-    assert meta.generation_params.get("vocal_language") == "en"
+    assert meta.vocal_language == "en"
 
 
 def test_scoring_job_generation_not_found(seeded_db) -> None:
@@ -639,20 +641,22 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
         ace_config=config, audio_dir=tmp_path, user_id="u1",
         model_name="turbo",
     )
-    params = {
-        "src_wav_path": str(src_wav),
-        "repainting_start": 0.3,
-        "repainting_end": 0.8,
-        "lyrics": "la la",
-        "prompt": "test",
-    }
-    result = _apply_task_overrides(ctx, "repaint", params)
+    params = RepaintTaskParams(
+        src_wav_path=str(src_wav),
+        src_generation_id="g0",
+        repainting_start=0.3,
+        repainting_end=0.8,
+        lyrics="la la",
+        prompt="test",
+    )
+    result = _apply_repaint_overrides(ctx, params)
     assert result.ace_config.repainting_start == pytest.approx(54.0)
     assert result.ace_config.repainting_end == pytest.approx(144.0)
     assert result.ace_config.task_type == "repaint"
     assert result.ace_config.thinking is True
     assert result.ace_config.src_audio_path.startswith(str(tmp_path / ".tmp"))
     assert Path(result.ace_config.src_audio_path).exists()
+    assert result.src_generation_id == "g0"
 
 
 def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
@@ -672,12 +676,15 @@ def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
         ace_config=config, audio_dir=tmp_path, user_id="u1",
         model_name="sft",
     )
-    params = {
-        "src_wav_path": str(src_wav),
-        "repainting_start": 0.1,
-        "repainting_end": 0.3,
-    }
-    result = _apply_task_overrides(ctx, "repaint", params)
+    params = RepaintTaskParams(
+        src_wav_path=str(src_wav),
+        src_generation_id="g0",
+        repainting_start=0.1,
+        repainting_end=0.3,
+        lyrics="la la",
+        prompt="test",
+    )
+    result = _apply_repaint_overrides(ctx, params)
     assert result.ace_config.guidance_scale == 5.0
     assert result.ace_config.inference_steps == 50
     assert result.ace_config.shift == 2.0
@@ -698,13 +705,14 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
         ace_config=config, audio_dir=tmp_path, user_id="u1",
         model_name="turbo",
     )
-    params = {
-        "src_wav_path": str(src_wav),
-        "audio_cover_strength": 0.7,
-        "lyrics": "la la",
-        "prompt": "test",
-    }
-    result = _apply_task_overrides(ctx, "cover", params)
+    params = CoverTaskParams(
+        src_wav_path=str(src_wav),
+        src_generation_id="g0",
+        audio_cover_strength=0.7,
+        lyrics="la la",
+        prompt="test",
+    )
+    result = _apply_cover_overrides(ctx, params)
     assert result.ace_config.audio_cover_strength == 0.7
     assert result.ace_config.task_type == "cover"
     assert result.ace_config.src_audio_path.startswith(str(tmp_path / ".tmp"))

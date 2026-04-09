@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 
 from songmaker_cli.config import (
     audio_file_path,
@@ -15,7 +16,6 @@ from songmaker_cli.config import (
     save_generation_defaults,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.errors import ValidationError
 from songmaker_cli.parser import SongMeta
 
 
@@ -28,7 +28,7 @@ def test_build_ace_config_basic() -> None:
     meta = SongMeta(
         prompt="rock anthem",
         lyrics="[verse]\nHello",
-        generation_params={"bpm": 140, "audio_duration": 60, "key_scale": "Am"},
+        bpm=140, audio_duration=60, key_scale="Am",
     )
     config = build_ace_config(meta)
     assert config.prompt == "rock anthem"
@@ -42,32 +42,25 @@ def test_build_ace_config_vocal_language() -> None:
     meta = SongMeta(
         prompt="test",
         lyrics="test",
-        generation_params={"vocal_language": "de"},
+        vocal_language="de",
     )
     config = build_ace_config(meta)
     assert config.vocal_language == "de"
 
 
-def test_build_ace_config_cli_overrides() -> None:
-    meta = SongMeta(
-        prompt="test",
-        lyrics="test",
-        generation_params={"bpm": 120, "audio_duration": 60},
-    )
-    config = build_ace_config(meta, {"bpm": 180, "seed": 42})
-    assert config.bpm == 180
+def test_build_ace_config_seed_kwarg() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", bpm=120, audio_duration=60)
+    config = build_ace_config(meta, seed=42)
+    assert config.bpm == 120
     assert config.seed == 42
     assert config.audio_duration == 60
 
 
-def test_build_ace_config_cli_overrides_none_ignored() -> None:
-    meta = SongMeta(
-        prompt="test",
-        lyrics="test",
-        generation_params={"bpm": 120},
-    )
-    config = build_ace_config(meta, {"bpm": None, "seed": 99})
+def test_build_ace_config_cli_overrides_typed() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", bpm=120)
+    config = build_ace_config(meta, {"shift": 4.0}, seed=99)
     assert config.bpm == 120
+    assert config.shift == 4.0
     assert config.seed == 99
 
 
@@ -85,33 +78,35 @@ def test_audio_file_path_creates_dir(tmp_path: Path) -> None:
 
 
 def test_build_ace_config_negative_shift_raises() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", generation_params={"shift": -1.0})
-    with pytest.raises(ValidationError, match="shift="):
-        build_ace_config(meta)
+    with pytest.raises(PydanticValidationError, match="shift"):
+        SongMeta(prompt="test", lyrics="test", generation_params={"shift": -1.0})
 
 
 def test_build_ace_config_negative_guidance_raises() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", generation_params={"guidance_scale": -0.5})
-    with pytest.raises(ValidationError, match="guidance_scale="):
-        build_ace_config(meta)
+    with pytest.raises(PydanticValidationError, match="guidance_scale"):
+        SongMeta(
+            prompt="test", lyrics="test",
+            generation_params={"guidance_scale": -0.5},
+        )
 
 
 def test_build_ace_config_zero_steps_raises() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", generation_params={"inference_steps": 0})
-    with pytest.raises(ValidationError, match="inference_steps="):
-        build_ace_config(meta)
-
-
-def test_build_ace_config_zero_audio_duration_raises() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", generation_params={"audio_duration": 0})
-    with pytest.raises(ValidationError, match="audio_duration="):
-        build_ace_config(meta)
+    with pytest.raises(PydanticValidationError, match="inference_steps"):
+        SongMeta(prompt="test", lyrics="test", generation_params={"inference_steps": 0})
 
 
 def test_build_ace_config_invalid_infer_method_raises() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", generation_params={"infer_method": "bad"})
-    with pytest.raises(ValidationError, match="infer_method="):
-        build_ace_config(meta)
+    with pytest.raises(PydanticValidationError, match="infer_method"):
+        SongMeta(prompt="test", lyrics="test", generation_params={"infer_method": "bad"})
+
+
+def test_build_ace_config_unknown_param_raises() -> None:
+    """The 2026-04-08 surface: extra='forbid' rejects typos at the boundary."""
+    with pytest.raises(PydanticValidationError, match="not permitted|extra"):
+        SongMeta(
+            prompt="test", lyrics="test",
+            generation_params={"infrence_steps": 50},  # typo
+        )
 
 
 def test_find_project_root_found(tmp_path: Path) -> None:
@@ -181,7 +176,7 @@ def test_db_defaults_take_priority_over_file(db_factory, tmp_path: Path) -> None
 
 
 def test_build_ace_config_global_defaults_applied() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", generation_params={"bpm": 120})
+    meta = SongMeta(prompt="test", lyrics="test", bpm=120)
     defaults = {"sft": {"shift": 5.0, "lm_temperature": 0.5}}
     config = build_ace_config(meta, global_defaults=defaults)
     assert config.shift == 5.0
@@ -190,8 +185,8 @@ def test_build_ace_config_global_defaults_applied() -> None:
 
 def test_build_ace_config_song_overrides_global_defaults() -> None:
     meta = SongMeta(
-        prompt="test", lyrics="test",
-        generation_params={"bpm": 120, "shift": 2.0},
+        prompt="test", lyrics="test", bpm=120,
+        generation_params={"shift": 2.0},
     )
     defaults = {"sft": {"shift": 5.0}}
     config = build_ace_config(meta, global_defaults=defaults)
@@ -199,14 +194,14 @@ def test_build_ace_config_song_overrides_global_defaults() -> None:
 
 
 def test_build_ace_config_sft_global_defaults() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", generation_params={"bpm": 120})
+    meta = SongMeta(prompt="test", lyrics="test", bpm=120)
     defaults = {"sft": {"inference_steps": 60}}
     config = build_ace_config(meta, model_name="acestep-v15-sft", global_defaults=defaults)
     assert config.inference_steps == 60
 
 
 def test_build_ace_config_cli_overrides_global_defaults() -> None:
-    meta = SongMeta(prompt="test", lyrics="test", generation_params={"bpm": 120})
+    meta = SongMeta(prompt="test", lyrics="test", bpm=120)
     defaults = {"sft": {"shift": 5.0}}
     config = build_ace_config(meta, cli_overrides={"shift": 1.0}, global_defaults=defaults)
     assert config.shift == 1.0

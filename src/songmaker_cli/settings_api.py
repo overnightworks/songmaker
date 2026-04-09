@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from songmaker_cli.api_helpers import gen_params_to_dict
 from songmaker_cli.api_models import (
     GenerationDefaultsRequest,
     PresetCreateRequest,
@@ -82,7 +83,7 @@ def api_set_generation_defaults(
     _admin: AuthenticatedUser = Depends(require_admin),
     ctx: AppContext = Depends(get_app_context),
 ) -> dict[str, dict[str, object]]:
-    data = {mode: params.to_dict() for mode, params in req.root.items()}
+    data = {mode: gen_params_to_dict(params) or {} for mode, params in req.root.items()}
     save_generation_defaults(ctx.db, data)
     return data
 
@@ -112,7 +113,7 @@ def api_create_preset(
         session,
         name=req.name,
         model_mode=req.model_mode,
-        params=req.params.to_dict(),
+        params=gen_params_to_dict(req.params) or {},
         user_id=user.id,
         is_default=req.is_default,
     )
@@ -137,7 +138,7 @@ def api_update_preset(
     if req.name is not None and req.name != preset.name:
         if name_exists(session, user.id, preset.model_mode, req.name):
             raise HTTPException(409, "A preset with that name already exists")
-    params_dict = req.params.to_dict() if req.params is not None else None
+    params_dict = gen_params_to_dict(req.params) if req.params is not None else None
     update_preset(session, preset, name=req.name, params=params_dict, is_default=req.is_default)
     try:
         session.commit()

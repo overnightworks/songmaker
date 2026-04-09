@@ -21,9 +21,35 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 
+from songmaker_cli.api_models.generation_params import (
+    BaseGenerationParams,
+    StoredGenerationParams,
+)
 from songmaker_cli.constants import MODEL_DEFAULT_MODE, JobStatus
+
+
+def _validate_base_generation_params(value: object) -> dict | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        msg = (
+            f"generation_params must be a dict or None, got {type(value).__name__}"
+        )
+        raise TypeError(msg)
+    return BaseGenerationParams.model_validate(value).model_dump(exclude_none=True)
+
+
+def _validate_stored_generation_params(value: object) -> dict | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        msg = (
+            f"generation_params must be a dict or None, got {type(value).__name__}"
+        )
+        raise TypeError(msg)
+    return StoredGenerationParams.model_validate(value).model_dump(exclude_none=True)
 
 
 def _uuid() -> str:
@@ -119,6 +145,10 @@ class Version(Base):
     song: Mapped[Song] = relationship(back_populates="versions")
     generations: Mapped[list[Generation]] = relationship(back_populates="version")
 
+    @validates("generation_params")
+    def _validate_generation_params(self, _key: str, value: object) -> dict | None:
+        return _validate_base_generation_params(value)
+
 
 class Generation(ShareMixin, Base):
     """A generated audio output from a specific version."""
@@ -162,6 +192,10 @@ class Generation(ShareMixin, Base):
     rating: Mapped[Rating | None] = relationship(
         back_populates="generation", uselist=False, cascade="all, delete-orphan",
     )
+
+    @validates("generation_params")
+    def _validate_generation_params(self, _key: str, value: object) -> dict | None:
+        return _validate_stored_generation_params(value)
 
 
 class Playlist(ShareMixin, Base):
@@ -235,6 +269,15 @@ class GenerationPreset(Base):
     model_mode: Mapped[str] = mapped_column(String(10))
     params: Mapped[dict] = mapped_column(JSON, default=dict)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    @validates("params")
+    def _validate_params(self, _key: str, value: object) -> dict:
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            msg = f"params must be a dict, got {type(value).__name__}"
+            raise TypeError(msg)
+        return BaseGenerationParams.model_validate(value).model_dump(exclude_none=True)
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
     )

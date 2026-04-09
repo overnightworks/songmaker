@@ -17,7 +17,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.errors import AudioDownloadError
 from acestep_engine.models import AceStepConfig
-from songmaker_cli.api_models import StoredGenerationParams
+from songmaker_cli.api_models import (
+    CoverTaskParams,
+    RepaintTaskParams,
+    StoredGenerationParams,
+)
+from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.config import (
     audio_file_path,
     build_ace_config,
@@ -108,36 +113,35 @@ def _load_song_meta(
         album = song.album
         album_name = album.title.lower().replace(" ", "_") if album else "unknown"
 
-        base_params: dict = {
-            k: v for k, v in {
-                "bpm": version.bpm,
-                "audio_duration": version.audio_duration,
-                "key_scale": version.key_scale,
-                "vocal_language": song.vocal_language,
-            }.items() if v
-        }
-        base_params.update(version.generation_params or {})
-
         meta = SongMeta(
             title=song.title,
             album=album_name,
             track=str(song.track_number),
             prompt=version.prompt,
             lyrics=version.lyrics,
-            generation_params=base_params,
+            bpm=version.bpm,
+            audio_duration=version.audio_duration,
+            key_scale=version.key_scale,
+            vocal_language=song.vocal_language,
+            generation_params=BaseGenerationParams.model_validate(
+                version.generation_params or {},
+            ),
         )
         album_meta = AlbumMeta(
             title=album_name,
             artist=album.artist if album else "",
         )
 
-    log.debug("Loaded: '%s' (album=%s, params=%s)", meta.title, album_name, base_params or "none")
+    log.debug(
+        "Loaded: '%s' (album=%s, params=%s)",
+        meta.title, album_name, meta.generation_params or "none",
+    )
     return meta, album_meta
 
 
 def _load_preset_params(
     user_id: str | None, model_name: str, db_factory: sessionmaker[Session],
-) -> dict | None:
+) -> BaseGenerationParams | None:
     if not user_id:
         return None
     from songmaker_cli.config import get_builtin_defaults, resolve_model_mode
@@ -148,15 +152,19 @@ def _load_preset_params(
         if not user or not user.default_generation_config:
             model_mode = resolve_model_mode(model_name)
             preset = get_default_preset(session, user_id, model_mode)
-            return dict(preset.params) if preset else None
+            if preset is None:
+                return None
+            return BaseGenerationParams.model_validate(preset.params or {})
 
         config = user.default_generation_config
         builtins = get_builtin_defaults()
         if config in builtins:
-            return dict(builtins[config])
+            return BaseGenerationParams.model_validate(builtins[config])
 
         preset = session.query(GenerationPreset).filter_by(id=config).first()
-        return dict(preset.params) if preset else None
+        if preset is None:
+            return None
+        return BaseGenerationParams.model_validate(preset.params or {})
 
 
 def _build_generation_context(
@@ -297,7 +305,7 @@ def _persist_generation_row(
         acestep_model=ctx.model_name,
         bpm=ctx.ace_config.bpm,
         audio_duration=ctx.ace_config.audio_duration,
-        key_scale=ctx.meta.generation_params.get("key_scale", ""),
+        key_scale=ctx.meta.key_scale,
         guidance_scale=ctx.ace_config.guidance_scale,
         inference_steps=ctx.ace_config.inference_steps,
         shift=ctx.ace_config.shift,
@@ -443,40 +451,59 @@ def _resolve_raw_wav(mastered_wav_path: str) -> str | None:
     return str(raw_path) if raw_path.exists() else None
 
 
-def _apply_task_overrides(
-    ctx: GenerationContext, task_type: str, params: dict,
+def _apply_repaint_overrides(
+    ctx: GenerationContext, params: RepaintTaskParams,
 ) -> GenerationContext:
-    src_wav = params["src_wav_path"]
-    raw_wav = _resolve_raw_wav(src_wav)
+    raw_wav = _resolve_raw_wav(params.src_wav_path)
+    audio_duration = ctx.ace_config.audio_duration
 
     overrides: dict = {
-        "task_type": task_type,
-        "src_audio_path": _copy_to_shared_tmp(src_wav, ctx.audio_dir),
-        "prompt": params.get("prompt", ctx.ace_config.prompt),
-        "lyrics": params.get("lyrics", ctx.ace_config.lyrics),
+        "task_type": "repaint",
+        "src_audio_path": _copy_to_shared_tmp(params.src_wav_path, ctx.audio_dir),
+        "prompt": params.prompt or ctx.ace_config.prompt,
+        "lyrics": params.lyrics or ctx.ace_config.lyrics,
+        "repainting_start": params.repainting_start * audio_duration,
+        "repainting_end": params.repainting_end * audio_duration,
     }
-    if task_type == "repaint":
-        audio_duration = ctx.ace_config.audio_duration
-        overrides["repainting_start"] = params["repainting_start"] * audio_duration
-        overrides["repainting_end"] = params["repainting_end"] * audio_duration
-        if params.get("repaint_mode"):
-            overrides["repaint_mode"] = params["repaint_mode"]
-        if params.get("repaint_strength") is not None:
-            overrides["repaint_strength"] = params["repaint_strength"]
-        if params.get("repaint_latent_crossfade_frames") is not None:
-            overrides["repaint_latent_crossfade_frames"] = params["repaint_latent_crossfade_frames"]
-        if params.get("repaint_wav_crossfade_sec") is not None:
-            overrides["repaint_wav_crossfade_sec"] = params["repaint_wav_crossfade_sec"]
-    elif task_type == "cover":
-        overrides["audio_cover_strength"] = params["audio_cover_strength"]
-        if params.get("cover_noise_strength") is not None:
-            overrides["cover_noise_strength"] = params["cover_noise_strength"]
+    if params.repaint_mode is not None:
+        overrides["repaint_mode"] = params.repaint_mode
+    if params.repaint_strength is not None:
+        overrides["repaint_strength"] = params.repaint_strength
+    if params.repaint_latent_crossfade_frames is not None:
+        overrides["repaint_latent_crossfade_frames"] = params.repaint_latent_crossfade_frames
+    if params.repaint_wav_crossfade_sec is not None:
+        overrides["repaint_wav_crossfade_sec"] = params.repaint_wav_crossfade_sec
 
-    updated_config = replace(ctx.ace_config, **overrides)
-    new_ctx = replace(ctx, ace_config=updated_config)
-    if task_type == "repaint" and raw_wav:
-        new_ctx = replace(new_ctx, raw_src_audio=_copy_to_shared_tmp(raw_wav, ctx.audio_dir))
+    new_ctx = replace(
+        ctx,
+        ace_config=replace(ctx.ace_config, **overrides),
+        src_generation_id=params.src_generation_id,
+    )
+    if raw_wav:
+        new_ctx = replace(
+            new_ctx, raw_src_audio=_copy_to_shared_tmp(raw_wav, ctx.audio_dir),
+        )
     return new_ctx
+
+
+def _apply_cover_overrides(
+    ctx: GenerationContext, params: CoverTaskParams,
+) -> GenerationContext:
+    overrides: dict = {
+        "task_type": "cover",
+        "src_audio_path": _copy_to_shared_tmp(params.src_wav_path, ctx.audio_dir),
+        "prompt": params.prompt or ctx.ace_config.prompt,
+        "lyrics": params.lyrics or ctx.ace_config.lyrics,
+        "audio_cover_strength": params.audio_cover_strength,
+    }
+    if params.cover_noise_strength is not None:
+        overrides["cover_noise_strength"] = params.cover_noise_strength
+
+    return replace(
+        ctx,
+        ace_config=replace(ctx.ace_config, **overrides),
+        src_generation_id=params.src_generation_id,
+    )
 
 
 async def run_generation_job(
@@ -488,8 +515,8 @@ async def run_generation_job(
     audio_dir: Path | None = None,
     data_dir: Path | None = None,
     seed: int | None = None,
-    repaint_params: dict | None = None,
-    cover_params: dict | None = None,
+    repaint_params: RepaintTaskParams | None = None,
+    cover_params: CoverTaskParams | None = None,
     redis: Redis | None = None,
 ) -> None:
     assert db_factory is not None, "db_factory is required"
@@ -520,12 +547,10 @@ async def run_generation_job(
                 song_id, version_id, db_factory, audio_dir, data_dir,
                 user_id=user_id, seed=seed, target_model=target_model,
             )
-            if repaint_params:
-                ctx = _apply_task_overrides(ctx, "repaint", repaint_params)
-                ctx = replace(ctx, src_generation_id=repaint_params.get("src_generation_id"))
-            elif cover_params:
-                ctx = _apply_task_overrides(ctx, "cover", cover_params)
-                ctx = replace(ctx, src_generation_id=cover_params.get("src_generation_id"))
+            if repaint_params is not None:
+                ctx = _apply_repaint_overrides(ctx, repaint_params)
+            elif cover_params is not None:
+                ctx = _apply_cover_overrides(ctx, cover_params)
         except GenerationSetupError as exc:
             _update_job(
                 db_factory, job_id, JobStatus.FAILED,
@@ -634,10 +659,9 @@ def run_scoring_job(
                 if ver:
                     meta_kwargs["prompt"] = ver.prompt
                     meta_kwargs["lyrics"] = ver.lyrics
+                    meta_kwargs["bpm"] = ver.bpm
                 if song and song.vocal_language:
-                    meta_kwargs["generation_params"] = {
-                        "vocal_language": song.vocal_language,
-                    }
+                    meta_kwargs["vocal_language"] = song.vocal_language
             resolved_model = get_claude_scoring_model(session)
 
         mp3_full = audio_dir / mp3_path_rel

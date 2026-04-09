@@ -22,6 +22,12 @@ from songmaker_cli.api_models.auth import (
     UpdateUserRequest,
     UserResponse,
 )
+from songmaker_cli.api_models.generation_params import (
+    BaseGenerationParams,
+    CoverTaskParams,
+    RepaintTaskParams,
+    StoredGenerationParams,
+)
 from songmaker_cli.api_models.playlists import (
     AddAlbumToPlaylistRequest,
     AddGenerationToPlaylistRequest,
@@ -80,7 +86,6 @@ from songmaker_cli.api_models.songs import (
     SongResponse,
     SongSummaryResponse,
     SongUpdateRequest,
-    StoredGenerationParams,
     VersionResponse,
 )
 from songmaker_cli.api_models.workers import (
@@ -158,6 +163,7 @@ __all__ = [
     "AlbumCreateRequest",
     "AlbumResponse",
     "AuditLogResponse",
+    "BaseGenerationParams",
     "BulkDeleteRequest",
     "BulkDeleteResponse",
     "AuthMeResponse",
@@ -170,6 +176,7 @@ __all__ = [
     "ChatTurnResponse",
     "CleanupResponse",
     "CoverRequest",
+    "CoverTaskParams",
     "CreateUserRequest",
     "DefaultConfigRequest",
     "DefaultConfigResponse",
@@ -200,6 +207,7 @@ __all__ = [
     "RegistryModelResponse",
     "RegistryResponse",
     "RepaintRequest",
+    "RepaintTaskParams",
     "ReorderPlaylistEntryRequest",
     "RateResponse",
     "RecentChatItem",

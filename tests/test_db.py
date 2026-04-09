@@ -1532,6 +1532,10 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
 
 
 def test_acestep_canonical_names_migration_renames_json_keys(tmp_path: Path) -> None:
+    import json as _json
+
+    from sqlalchemy import text as _sql_text
+
     from songmaker_cli.db.engine import init_db
     from songmaker_cli.db.migrations.versions import (
         b8c9d1e2f3a4_acestep_canonical_names as mig,
@@ -1553,12 +1557,13 @@ def test_acestep_canonical_names_migration_renames_json_keys(tmp_path: Path) -> 
             id="s1", title="S", album_id="a1",
             vocal_language="en", track_number=1,
         ))
-        session.add(Version(
-            id="v1", song_id="s1", version_number=1,
-            lyrics="l", prompt="p", bpm=120,
-            audio_duration=180, key_scale="Am",
-            generation_params=old_params,
-        ))
+        session.commit()
+        session.execute(_sql_text(
+            "INSERT INTO versions (id, song_id, version_number, lyrics, prompt, "
+            "bpm, audio_duration, key_scale, generation_params, created_at) "
+            "VALUES ('v1', 's1', 1, 'l', 'p', 120, 180, 'Am', :params, "
+            "CURRENT_TIMESTAMP)",
+        ), {"params": _json.dumps(old_params)})
         session.commit()
 
     engine = factory.kw["bind"]
@@ -1589,6 +1594,10 @@ def test_acestep_canonical_names_migration_renames_json_keys(tmp_path: Path) -> 
 
 
 def test_acestep_canonical_names_migration_downgrade_reverses_json_keys(tmp_path: Path) -> None:
+    import json as _json
+
+    from sqlalchemy import text as _sql_text
+
     from songmaker_cli.db.engine import init_db
     from songmaker_cli.db.migrations.versions import (
         b8c9d1e2f3a4_acestep_canonical_names as mig,
@@ -1605,12 +1614,13 @@ def test_acestep_canonical_names_migration_downgrade_reverses_json_keys(tmp_path
     with factory() as session:
         session.add(Album(id="a1", title="A", artist="X"))
         session.add(Song(id="s1", title="S", album_id="a1", track_number=1))
-        session.add(Version(
-            id="v1", song_id="s1", version_number=1,
-            lyrics="l", prompt="p", bpm=120,
-            audio_duration=180, key_scale="Am",
-            generation_params=new_params,
-        ))
+        session.commit()
+        session.execute(_sql_text(
+            "INSERT INTO versions (id, song_id, version_number, lyrics, prompt, "
+            "bpm, audio_duration, key_scale, generation_params, created_at) "
+            "VALUES ('v1', 's1', 1, 'l', 'p', 120, 180, 'Am', :params, "
+            "CURRENT_TIMESTAMP)",
+        ), {"params": _json.dumps(new_params)})
         session.commit()
 
     engine = factory.kw["bind"]
