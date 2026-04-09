@@ -647,6 +647,45 @@ def test_create_song_without_generation_params(db_session: Session) -> None:
     assert song.latest_version.generation_params is None
 
 
+def test_version_validator_rejects_unknown_key(db_session: Session) -> None:
+    """The SQLAlchemy @validates on Version.generation_params is the
+    defense-in-depth layer that catches the 2026-04-08 surface — typos
+    in stored params should fail loudly, not silently round-trip."""
+    from pydantic import ValidationError as PydanticValidationError
+
+    db_session.add(Album(id="a1", title="A", artist="X"))
+    db_session.flush()
+    with pytest.raises(PydanticValidationError, match="not permitted|extra"):
+        create_song(
+            db_session, "S", "a1",
+            generation_params={"infrence_steps": 50},
+        )
+
+
+def test_generation_validator_rejects_unknown_key(seeded_session: Session) -> None:
+    from pydantic import ValidationError as PydanticValidationError
+
+    from songmaker_cli.db.models import Generation
+
+    with pytest.raises(PydanticValidationError, match="not permitted|extra"):
+        seeded_session.add(Generation(
+            id="gx", song_id="s1", version_id="v1", generation_number=99,
+            mp3_path="user1/gx.mp3", model_mode="sft",
+            generation_params={"acestep_model": "sft", "bogus": True},
+        ))
+
+
+def test_preset_validator_rejects_unknown_key(db_session: Session) -> None:
+    from pydantic import ValidationError as PydanticValidationError
+
+    from songmaker_cli.db.models import GenerationPreset
+
+    with pytest.raises(PydanticValidationError, match="not permitted|extra"):
+        db_session.add(GenerationPreset(
+            name="p", model_mode="sft", params={"shift": 2.0, "junk": 1},
+        ))
+
+
 def test_update_song_sets_generation_params(seeded_session: Session) -> None:
     params = {"inference_steps": 25, "shift": 2.0}
     update_song(seeded_session, "s1", generation_params=params)

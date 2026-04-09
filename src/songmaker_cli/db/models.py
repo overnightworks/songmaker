@@ -269,6 +269,11 @@ class GenerationPreset(Base):
     model_mode: Mapped[str] = mapped_column(String(10))
     params: Mapped[dict] = mapped_column(JSON, default=dict)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_by: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
 
     @validates("params")
     def _validate_params(self, _key: str, value: object) -> dict:
@@ -278,11 +283,6 @@ class GenerationPreset(Base):
             msg = f"params must be a dict, got {type(value).__name__}"
             raise TypeError(msg)
         return BaseGenerationParams.model_validate(value).model_dump(exclude_none=True)
-    created_by: Mapped[str | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
-    )
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class Job(Base):
