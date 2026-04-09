@@ -418,11 +418,7 @@
 					onclick={() => (showDeleteConfirm = true)}
 				/>
 				{#each songJobs as j (j.job.id)}
-					{#if j.job.status === 'failed'}
-						<span class="job-indicator failed">
-							{j.job.error || 'Failed'}
-						</span>
-					{:else if j.job.status === 'queued' || j.job.status === 'running'}
+					{#if j.job.status === 'queued' || j.job.status === 'running'}
 						<span class="job-indicator">
 							<span class="job-progress-bar">
 								<span class="job-progress-fill" style="width: {Math.round(j.job.progress * 100)}%"
@@ -693,10 +689,6 @@
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
-	}
-
-	.job-indicator.failed {
-		color: var(--score-bad);
 	}
 
 	.job-progress-bar {

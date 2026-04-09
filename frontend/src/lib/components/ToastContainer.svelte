@@ -101,6 +101,17 @@
 		opacity: 1;
 	}
 
+	.toast-error .toast-dismiss {
+		opacity: 1;
+		border: 1px solid currentColor;
+		border-radius: 4px;
+		width: 1.5rem;
+		height: 1.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
 	@keyframes slide-in {
 		from {
 			transform: translateX(100%);

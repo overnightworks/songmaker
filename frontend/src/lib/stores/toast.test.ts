@@ -29,6 +29,15 @@ describe('toast store', () => {
 		expect(get(toasts)).toHaveLength(0);
 	});
 
+	it('error toasts persist until manually dismissed', () => {
+		addToast('boom', 'error');
+		expect(get(toasts)).toHaveLength(1);
+		vi.advanceTimersByTime(60000);
+		expect(get(toasts)).toHaveLength(1);
+		dismissToast(get(toasts)[0].id);
+		expect(get(toasts)).toHaveLength(0);
+	});
+
 	it('dismissToast removes a specific toast', () => {
 		addToast('first', 'info');
 		addToast('second', 'error');

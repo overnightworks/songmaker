@@ -13,6 +13,7 @@ vi.mock('$lib/stores/player', async () => {
 });
 
 import { activeJobs, trackJob, removeJob, stopTracking } from './jobs';
+import { toasts } from './toast';
 import type { JobStatus } from '$lib/api/client';
 
 type EventSourceHandler = ((event: MessageEvent) => void) | null;
@@ -119,12 +120,10 @@ describe('jobs store', () => {
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
-	it('removes failed job after delay', async () => {
+	it('removes failed job immediately', async () => {
 		trackJob(makeJob(), {});
 		latestSource().simulateMessage(makeJob({ status: 'failed', error: 'boom' }));
 		await vi.advanceTimersByTimeAsync(0);
-		expect(get(activeJobs)[0].job.status).toBe('failed');
-		await vi.advanceTimersByTimeAsync(5100);
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
@@ -147,17 +146,13 @@ describe('jobs store', () => {
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
-	it('marks job failed after max errors', async () => {
+	it('removes job after max connection errors', async () => {
 		trackJob(makeJob(), {});
 		const source = latestSource();
 		for (let i = 0; i < 10; i++) {
 			source.simulateError();
 		}
-		const jobs = get(activeJobs);
-		expect(jobs[0].job.status).toBe('failed');
-		expect(jobs[0].job.error).toBe('Lost connection');
 		expect(source.closed).toBe(true);
-		await vi.advanceTimersByTimeAsync(5100);
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
@@ -215,11 +210,15 @@ describe('jobs store', () => {
 	});
 
 	it('shows server restart message for restart errors', async () => {
+		toasts.set([]);
 		trackJob(makeJob(), {});
 		latestSource().simulateMessage(
 			makeJob({ status: 'failed', error: 'Server restarted', error_type: 'server_restart' })
 		);
 		await vi.advanceTimersByTimeAsync(0);
-		expect(get(activeJobs)[0].job.error_type).toBe('server_restart');
+		const all = get(toasts);
+		expect(all).toHaveLength(1);
+		expect(all[0].type).toBe('error');
+		expect(all[0].message).toBe('Server restarted — please retry');
 	});
 });

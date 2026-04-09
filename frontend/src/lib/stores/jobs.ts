@@ -4,7 +4,6 @@ import { replaceSongInList } from '$lib/stores/player';
 import { addToast } from '$lib/stores/toast';
 
 const MAX_POLL_ERRORS = 10;
-const FAILED_JOB_REMOVE_DELAY_MS = 5000;
 
 export interface ActiveJob {
 	job: JobStatus;
@@ -72,14 +71,11 @@ function streamJob(jobId: string): void {
 				const isRestart = updated.error_type === 'server_restart';
 				addToast(
 					isRestart ? 'Server restarted — please retry' : updated.error || `${updated.type} failed`,
-					isRestart ? 'info' : 'error'
+					'error'
 				);
 			}
 
-			const removeDelay = updated.status === 'failed' ? FAILED_JOB_REMOVE_DELAY_MS : 0;
-			setTimeout(() => {
-				activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
-			}, removeDelay);
+			activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
 		}
 	};
 
@@ -88,17 +84,8 @@ function streamJob(jobId: string): void {
 		if (errorCount >= MAX_POLL_ERRORS) {
 			source.close();
 			eventSources.delete(jobId);
-			activeJobs.update((jobs) =>
-				jobs.map((j) =>
-					j.job.id === jobId
-						? { ...j, job: { ...j.job, status: 'failed', error: 'Lost connection' } }
-						: j
-				)
-			);
+			activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
 			addToast('Lost connection to server', 'error');
-			setTimeout(() => {
-				activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
-			}, FAILED_JOB_REMOVE_DELAY_MS);
 		}
 	};
 }
