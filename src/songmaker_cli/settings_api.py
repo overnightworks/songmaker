@@ -43,7 +43,8 @@ from songmaker_cli.db.queries import (
 from songmaker_cli.db.queries.settings import (
     create_preset,
     delete_preset,
-    get_claude_model,
+    get_claude_chat_model,
+    get_claude_scoring_model,
     get_preset,
     list_active_models,
     list_all_models,
@@ -279,18 +280,12 @@ def api_get_claude_models(
     _admin: AuthenticatedUser = Depends(require_admin),
     session: Session = Depends(get_db_session),
 ) -> ClaudeModelsResponse:
-    from songmaker_cli.constants import (
-        ALLOWED_CLAUDE_MODELS,
-        CLAUDE_CHAT_MODEL,
-        CLAUDE_SCORING_MODEL,
-        SETTING_CLAUDE_CHAT_MODEL,
-        SETTING_CLAUDE_SCORING_MODEL,
-    )
+    from songmaker_cli.constants import MODEL_ALLOWED_CLAUDE
 
     return ClaudeModelsResponse(
-        chat_model=get_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, CLAUDE_CHAT_MODEL),
-        scoring_model=get_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, CLAUDE_SCORING_MODEL),
-        allowed_models=sorted(ALLOWED_CLAUDE_MODELS),
+        chat_model=get_claude_chat_model(session),
+        scoring_model=get_claude_scoring_model(session),
+        allowed_models=sorted(MODEL_ALLOWED_CLAUDE),
     )
 
 
@@ -301,17 +296,15 @@ def api_set_claude_models(
     session: Session = Depends(get_db_session),
 ) -> ClaudeModelsResponse:
     from songmaker_cli.constants import (
-        ALLOWED_CLAUDE_MODELS,
-        CLAUDE_CHAT_MODEL,
-        CLAUDE_SCORING_MODEL,
+        MODEL_ALLOWED_CLAUDE,
         SETTING_CLAUDE_CHAT_MODEL,
         SETTING_CLAUDE_SCORING_MODEL,
     )
 
-    if req.chat_model not in ALLOWED_CLAUDE_MODELS:
-        raise HTTPException(400, f"Invalid chat model. Allowed: {sorted(ALLOWED_CLAUDE_MODELS)}")
-    if req.scoring_model not in ALLOWED_CLAUDE_MODELS:
-        raise HTTPException(400, f"Invalid scoring model. Allowed: {sorted(ALLOWED_CLAUDE_MODELS)}")
+    if req.chat_model not in MODEL_ALLOWED_CLAUDE:
+        raise HTTPException(400, f"Invalid chat model. Allowed: {sorted(MODEL_ALLOWED_CLAUDE)}")
+    if req.scoring_model not in MODEL_ALLOWED_CLAUDE:
+        raise HTTPException(400, f"Invalid scoring model. Allowed: {sorted(MODEL_ALLOWED_CLAUDE)}")
 
     set_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, req.chat_model)
     set_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, req.scoring_model)
@@ -320,43 +313,33 @@ def api_set_claude_models(
     session.commit()
 
     return ClaudeModelsResponse(
-        chat_model=get_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, CLAUDE_CHAT_MODEL),
-        scoring_model=get_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, CLAUDE_SCORING_MODEL),
-        allowed_models=sorted(ALLOWED_CLAUDE_MODELS),
+        chat_model=get_claude_chat_model(session),
+        scoring_model=get_claude_scoring_model(session),
+        allowed_models=sorted(MODEL_ALLOWED_CLAUDE),
     )
 
 
 # ── Rate limits ────────────────────────────────────────────────────
 
-_ENV_DEFAULTS = None
-
-
 def _get_env_defaults() -> dict[str, int]:
-    global _ENV_DEFAULTS
-    if _ENV_DEFAULTS is None:
-        from songmaker_cli.auth import (
-            CHAT_RATE_LIMIT_USER,
-            GENERATION_RATE_LIMIT_USER,
-            MAX_QUEUE_DEPTH,
-            MAX_USER_ACTIVE_JOBS,
-            SCORING_RATE_LIMIT_USER,
-        )
-        from songmaker_cli.constants import (
-            SETTING_CHAT_RATE_LIMIT,
-            SETTING_GENERATION_RATE_LIMIT,
-            SETTING_MAX_QUEUE_DEPTH,
-            SETTING_MAX_USER_ACTIVE_JOBS,
-            SETTING_SCORING_RATE_LIMIT,
-        )
+    """Snapshot of the per-user rate-limit defaults from Settings."""
+    from songmaker_cli.constants import (
+        SETTING_CHAT_RATE_LIMIT,
+        SETTING_GENERATION_RATE_LIMIT,
+        SETTING_MAX_QUEUE_DEPTH,
+        SETTING_MAX_USER_ACTIVE_JOBS,
+        SETTING_SCORING_RATE_LIMIT,
+    )
+    from songmaker_cli.settings import get_settings
 
-        _ENV_DEFAULTS = {
-            SETTING_GENERATION_RATE_LIMIT: GENERATION_RATE_LIMIT_USER,
-            SETTING_SCORING_RATE_LIMIT: SCORING_RATE_LIMIT_USER,
-            SETTING_CHAT_RATE_LIMIT: CHAT_RATE_LIMIT_USER,
-            SETTING_MAX_QUEUE_DEPTH: MAX_QUEUE_DEPTH,
-            SETTING_MAX_USER_ACTIVE_JOBS: MAX_USER_ACTIVE_JOBS,
-        }
-    return _ENV_DEFAULTS
+    settings = get_settings()
+    return {
+        SETTING_GENERATION_RATE_LIMIT: settings.generation_rate_limit_user,
+        SETTING_SCORING_RATE_LIMIT: settings.scoring_rate_limit_user,
+        SETTING_CHAT_RATE_LIMIT: settings.chat_rate_limit_user,
+        SETTING_MAX_QUEUE_DEPTH: settings.max_queue_depth,
+        SETTING_MAX_USER_ACTIVE_JOBS: settings.max_user_active_jobs,
+    }
 
 
 @router.get("/settings/rate-limits")

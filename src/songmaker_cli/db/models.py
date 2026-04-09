@@ -23,7 +23,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from songmaker_cli.constants import DEFAULT_MODEL_MODE, JobStatus
+from songmaker_cli.constants import MODEL_DEFAULT_MODE, JobStatus
 
 
 def _uuid() -> str:
@@ -144,7 +144,7 @@ class Generation(ShareMixin, Base):
     is_picked: Mapped[bool] = mapped_column(Boolean, default=False)
     is_kept: Mapped[bool] = mapped_column(Boolean, default=False)
     model_mode: Mapped[str] = mapped_column(
-        String(10), nullable=False, default=DEFAULT_MODEL_MODE,
+        String(10), nullable=False, default=MODEL_DEFAULT_MODE,
     )
     src_generation_id: Mapped[str | None] = mapped_column(
         ForeignKey("generations.id", ondelete="SET NULL"), nullable=True,

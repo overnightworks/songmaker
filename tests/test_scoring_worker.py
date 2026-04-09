@@ -43,12 +43,10 @@ def test_score_runs_queued_job() -> None:
     mock_run.assert_called_once()
 
 
-def test_score_passes_device_from_env() -> None:
+def test_score_passes_device_from_settings(monkeypatch) -> None:
+    monkeypatch.setenv("SCORING_DEVICE", "cuda")
     worker = _make_worker()
-    with (
-        patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run,
-        patch.dict("os.environ", {"SCORING_DEVICE": "cuda"}),
-    ):
+    with patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run:
         _run(worker.score(_mock_ctx(), "j1", "g1", None))
 
     assert mock_run.call_args.kwargs["device"] == "cuda"
@@ -56,10 +54,7 @@ def test_score_passes_device_from_env() -> None:
 
 def test_score_defaults_to_cpu() -> None:
     worker = _make_worker()
-    with (
-        patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run,
-        patch.dict("os.environ", {}, clear=True),
-    ):
+    with patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run:
         _run(worker.score(_mock_ctx(), "j1", "g1", None))
 
     assert mock_run.call_args.kwargs["device"] == "cpu"

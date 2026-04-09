@@ -24,11 +24,11 @@ from songmaker_cli.config import (
     load_generation_defaults,
     resolve_model_mode,
 )
-from songmaker_cli.constants import SHARED_TMP_DIRNAME, JobStatus, JobType
+from songmaker_cli.constants import WORKER_SHARED_TMP_DIRNAME, JobStatus, JobType
 from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries import (
     create_generation,
-    get_claude_model,
+    get_claude_scoring_model,
     get_default_preset,
     get_generation,
     get_song,
@@ -423,7 +423,7 @@ def _make_heartbeat_callback(
 
 
 def _shared_tmp_dir(audio_dir: Path) -> Path:
-    d = audio_dir / SHARED_TMP_DIRNAME
+    d = audio_dir / WORKER_SHARED_TMP_DIRNAME
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -509,7 +509,7 @@ async def run_generation_job(
     task_type = "cover" if cover_params else ("repaint" if repaint_params else "generate")
     log.info("Generation job %s: song=%s, count=%d, task=%s", job_id, song_id, count, task_type)
 
-    shared_tmp_prefix = str(audio_dir / SHARED_TMP_DIRNAME)
+    shared_tmp_prefix = str(audio_dir / WORKER_SHARED_TMP_DIRNAME)
 
     try:
         _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
@@ -615,7 +615,6 @@ def run_scoring_job(
     try:
         _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
 
-        from songmaker_cli.constants import CLAUDE_SCORING_MODEL, SETTING_CLAUDE_SCORING_MODEL
 
         with db_factory() as session:
             gen = get_generation(session, gen_id)
@@ -639,9 +638,7 @@ def run_scoring_job(
                     meta_kwargs["generation_params"] = {
                         "vocal_language": song.vocal_language,
                     }
-            resolved_model = get_claude_model(
-                session, SETTING_CLAUDE_SCORING_MODEL, CLAUDE_SCORING_MODEL,
-            )
+            resolved_model = get_claude_scoring_model(session)
 
         mp3_full = audio_dir / mp3_path_rel
 
@@ -736,7 +733,8 @@ async def load_model_on_worker(
     import httpx
 
     from songmaker_cli.db.queries import get_worker_identity
-    from songmaker_cli.internal_api import INTERNAL_TOKEN_ENV, INTERNAL_TOKEN_HEADER
+    from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+    from songmaker_cli.settings import get_settings
 
     factory = db_factory
     _update_job(factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
@@ -751,7 +749,7 @@ async def load_model_on_worker(
         )
         return
 
-    token = os.environ.get(INTERNAL_TOKEN_ENV, "")
+    token = get_settings().songmaker_internal_token.get_secret_value()
     headers = {INTERNAL_TOKEN_HEADER: token}
     url = f"http://{worker.host}:{worker.port}/load_model"
 
@@ -792,7 +790,7 @@ async def download_model_on_worker(
         set_download_in_progress,
     )
     from songmaker_cli.constants import MODEL_CONFIG_PATHS
-    from songmaker_cli.internal_api import INTERNAL_TOKEN_ENV, INTERNAL_TOKEN_HEADER
+    from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
     from songmaker_cli.scheduler import (
         DispatchOptions,
         NoCapacityError,
@@ -800,6 +798,7 @@ async def download_model_on_worker(
         consume_download_task_stream,
         pick_any_online_worker,
     )
+    from songmaker_cli.settings import get_settings
 
     factory = db_factory
     _update_job(factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
@@ -844,7 +843,7 @@ async def download_model_on_worker(
                 )
                 return
 
-            token = os.environ.get(INTERNAL_TOKEN_ENV, "")
+            token = get_settings().songmaker_internal_token.get_secret_value()
             headers = {INTERNAL_TOKEN_HEADER: token}
             submit_url = f"{worker.base_url}/download_model"
 

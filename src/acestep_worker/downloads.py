@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.task_store import TaskStore
+from songmaker_cli.settings import get_worker_settings
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +59,8 @@ def directory_size_bytes(path: Path) -> int:
 async def hf_snapshot_download(repo_id: str, local_dir: Path) -> None:
     from huggingface_hub import snapshot_download
 
-    token = os.environ.get("HF_TOKEN")
+    hf = get_worker_settings().hf_token
+    token = hf.get_secret_value() if hf else None
     await asyncio.to_thread(
         snapshot_download,
         repo_id=repo_id,

@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import logging
-import os
 
 import structlog
+
+from songmaker_cli.settings import get_settings
 
 
 def configure_logging() -> None:
     """Configure structlog as a processor pipeline over stdlib logging.
 
-    LOG_FORMAT=json  -> JSON lines (production).
-    LOG_FORMAT=text  -> colored human-readable (default, dev).
+    Settings.log_format=json  -> JSON lines (production).
+    Settings.log_format=text  -> colored human-readable (default, dev).
     """
-    json_mode = os.environ.get("LOG_FORMAT", "text") == "json"
+    json_mode = get_settings().log_format == "json"
 
     shared_processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,

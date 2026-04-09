@@ -14,8 +14,8 @@ from songmaker_cli.api_models import GenerationResponse
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.db.queries import get_generation
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
-from songmaker_cli.middleware.body_size import MAX_UPLOAD_BODY_BYTES
 from songmaker_cli.reimport import reimport_files
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +55,7 @@ async def api_reimport(
     if wav:
         _validate_upload(wav, "wav")
 
+    max_upload_bytes = get_settings().max_upload_body_bytes
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         mp3_path: Path | None = None
@@ -62,15 +63,15 @@ async def api_reimport(
 
         if mp3:
             mp3_path = tmp_path / "upload.mp3"
-            content = await mp3.read(MAX_UPLOAD_BODY_BYTES + 1)
-            if len(content) > MAX_UPLOAD_BODY_BYTES:
+            content = await mp3.read(max_upload_bytes + 1)
+            if len(content) > max_upload_bytes:
                 raise HTTPException(413, "MP3 file too large")
             mp3_path.write_bytes(content)
 
         if wav:
             wav_path = tmp_path / "upload.wav"
-            content = await wav.read(MAX_UPLOAD_BODY_BYTES + 1)
-            if len(content) > MAX_UPLOAD_BODY_BYTES:
+            content = await wav.read(max_upload_bytes + 1)
+            if len(content) > max_upload_bytes:
                 raise HTTPException(413, "WAV file too large")
             wav_path.write_bytes(content)
 

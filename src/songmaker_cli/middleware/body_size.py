@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import os
-
 from fastapi.responses import JSONResponse
 
-MAX_REQUEST_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", 1_048_576))
-MAX_UPLOAD_BODY_BYTES = int(os.environ.get("MAX_UPLOAD_BODY_BYTES", 52_428_800))
+from songmaker_cli.settings import get_settings
 
 
 class _BodyTooLarge(Exception):
@@ -25,7 +22,11 @@ class BodySizeLimitMiddleware:
 
         path = scope.get("path", "")
         is_upload = path.endswith("/reimport")
-        limit = MAX_UPLOAD_BODY_BYTES if is_upload else MAX_REQUEST_BODY_BYTES
+        settings = get_settings()
+        limit = (
+            settings.max_upload_body_bytes if is_upload
+            else settings.max_request_body_bytes
+        )
 
         headers = {k.lower(): v for k, v in (
             (k.decode("latin-1"), v.decode("latin-1"))

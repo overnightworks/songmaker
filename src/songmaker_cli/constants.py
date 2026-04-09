@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-from datetime import timedelta
 from enum import StrEnum
 from typing import Final
 
@@ -11,25 +9,16 @@ from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
 
 APP_NAME = "Hallucinai"
 
-AVAILABLE_MODEL_MODES: Final[frozenset[str]] = frozenset({
+MODEL_AVAILABLE_MODES: Final[frozenset[str]] = frozenset({
     "turbo",
     "sft",
     "xl-turbo",
     "xl-sft",
     "xl-base",
 })
-DEFAULT_MODEL_MODE: Final[str] = "sft"
+MODEL_DEFAULT_MODE: Final[str] = "sft"
 
-DATA_ROOT = "data"
-AUDIO_ROOT = "data/audio"
 DEFAULT_ARTIST = "Flex0r"
-
-DEFAULT_SOFT_DELETE_RETENTION_DAYS: Final[int] = 30
-RESTORE_WINDOW: Final[timedelta] = timedelta(
-    days=int(os.environ.get(
-        "SOFT_DELETE_RETENTION_DAYS", str(DEFAULT_SOFT_DELETE_RETENTION_DAYS),
-    )),
-)
 
 # Pagination defaults and limits
 PAGE_DEFAULT_LIMIT = 50
@@ -61,15 +50,11 @@ SPECTRAL_ABSOLUTE_THRESHOLD = 0.1
 WHISPER_COMPUTE_TYPE = "int8_float16"
 WHISPER_BEAM_SIZE = 5
 WHISPER_TEMPERATURE = 0.0
-ACESTEP_DEFAULT_VRAM_GB = "24"
-
-CLAUDE_CHAT_MODEL = os.environ.get("CLAUDE_CHAT_MODEL", "claude-opus-4-6")
-CLAUDE_SCORING_MODEL = os.environ.get("CLAUDE_SCORING_MODEL", "claude-opus-4-6")
 
 SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
 SETTING_CLAUDE_SCORING_MODEL = "claude_scoring_model"
 
-ALLOWED_CLAUDE_MODELS = frozenset({
+MODEL_ALLOWED_CLAUDE = frozenset({
     "claude-opus-4-6",
     "claude-sonnet-4-6",
     "claude-haiku-4-5-20251001",
@@ -81,8 +66,8 @@ HALLUCINATION_MAX_UNIQUE = 2
 HALLUCINATION_PHRASE_RATIO = 0.5
 
 # Sharing
-SHARED_RATE_LIMIT = 60
-SHARED_RATE_WINDOW_SECONDS = 60
+SHARING_RATE_LIMIT = 60
+SHARING_RATE_WINDOW_SECONDS = 60
 
 # Redis key prefixes
 REDIS_KEY_PREFIX = "songmaker"
@@ -97,18 +82,18 @@ REDIS_SESSION_SYNC_INTERVAL_SECONDS = 300
 REDIS_DEGRADED_THRESHOLD = 3
 
 # Session
-MAX_USER_AGENT_LENGTH = 500
+HTTP_MAX_USER_AGENT_LENGTH = 500
 
 # Global generation defaults
-GLOBAL_DEFAULTS_PRESET_NAME = "__global_defaults__"
+PRESET_GLOBAL_DEFAULTS_NAME = "__global_defaults__"
 
 # Shared tmp dir for repaint/cover source audio — must be on the audio
 # volume so the acestep-worker container can read what the music-worker
 # wrote (each container has its own /tmp).
-SHARED_TMP_DIRNAME = ".tmp"
+WORKER_SHARED_TMP_DIRNAME = ".tmp"
 
 # Scoring subprocess
-SCORER_PIPELINE_TIMEOUT_SECONDS = 240
+SCORING_PIPELINE_TIMEOUT_SECONDS = 240
 
 # arq worker
 ARQ_QUEUE_KEY = "arq:queue"
@@ -129,13 +114,6 @@ REDIS_STARTUP_ERROR = (
     "Cannot connect to Redis at {url}. "
     "Redis is required — set REDIS_URL in .server.env or start Redis."
 )
-REDIS_URL_MISMATCH_WARNING = (
-    "REDIS_URL in .server.env ({env_value}) differs from the import-time value "
-    "({import_value}). The worker is using the import-time value because "
-    "WorkerSettings.redis_settings is resolved at import time. "
-    "Set REDIS_URL in the process environment before starting the worker."
-)
-
 # Prometheus metric names
 PROM_HTTP_REQUESTS_TOTAL = "songmaker_http_requests_total"
 PROM_HTTP_REQUEST_DURATION_MS = "songmaker_http_request_duration_milliseconds_total"

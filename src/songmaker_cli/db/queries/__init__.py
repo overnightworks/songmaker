@@ -74,9 +74,6 @@ from songmaker_cli.db.queries.generations import save_rating as save_rating
 from songmaker_cli.db.queries.generations import save_scores as save_scores
 from songmaker_cli.db.queries.generations import unkeep_generation as unkeep_generation
 from songmaker_cli.db.queries.generations import unpick_generation as unpick_generation
-from songmaker_cli.db.queries.jobs import (
-    STALE_JOB_THRESHOLD_SECONDS as STALE_JOB_THRESHOLD_SECONDS,
-)
 from songmaker_cli.db.queries.jobs import JobDurationStats as JobDurationStats
 from songmaker_cli.db.queries.jobs import clear_stale_user_jobs as clear_stale_user_jobs
 from songmaker_cli.db.queries.jobs import count_total_queued_jobs as count_total_queued_jobs
@@ -144,7 +141,12 @@ from songmaker_cli.db.queries.rate_limits import (
 )
 from songmaker_cli.db.queries.settings import create_preset as create_preset
 from songmaker_cli.db.queries.settings import delete_preset as delete_preset
-from songmaker_cli.db.queries.settings import get_claude_model as get_claude_model
+from songmaker_cli.db.queries.settings import (
+    get_claude_chat_model as get_claude_chat_model,
+)
+from songmaker_cli.db.queries.settings import (
+    get_claude_scoring_model as get_claude_scoring_model,
+)
 from songmaker_cli.db.queries.settings import get_default_preset as get_default_preset
 from songmaker_cli.db.queries.settings import get_global_defaults as get_global_defaults
 from songmaker_cli.db.queries.settings import get_preset as get_preset

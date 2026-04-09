@@ -4,19 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
 
 def auto_setup_admin(ctx: AppContext) -> None:
-    admin_user = os.environ.get("ADMIN_USERNAME")
-    admin_pass = os.environ.get("ADMIN_PASSWORD")
+    settings = get_settings()
+    admin_user = settings.admin_username
+    admin_pass = (
+        settings.admin_password.get_secret_value() if settings.admin_password else None
+    )
     if not admin_user or not admin_pass:
         return
 

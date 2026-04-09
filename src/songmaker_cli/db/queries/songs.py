@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session, joinedload
 
-from songmaker_cli.constants import RESTORE_WINDOW
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -17,6 +16,7 @@ from songmaker_cli.db.models import (
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 from songmaker_cli.db.soft_delete import include_deleted
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -237,7 +237,7 @@ def soft_delete_song(session: Session, song_id: str) -> datetime:
 
 
 def restore_song(session: Session, song_id: str) -> Song:
-    """Clear deleted_at on a song. Raises if past RESTORE_WINDOW or album is deleted."""
+    """Clear deleted_at on a song. Raises if past the restore window or album is deleted."""
     song = (
         session.query(Song)
         .execution_options(include_deleted=True)
@@ -252,10 +252,11 @@ def restore_song(session: Session, song_id: str) -> Song:
     if deleted_at.tzinfo is None:
         deleted_at = deleted_at.replace(tzinfo=timezone.utc)
     age = datetime.now(timezone.utc) - deleted_at
-    if age > RESTORE_WINDOW:
+    window = timedelta(days=get_settings().soft_delete_retention_days)
+    if age > window:
         raise RestoreWindowExpiredError(
             f"Song {song_id} was deleted {age.days} days ago, "
-            f"past the {RESTORE_WINDOW.days}-day restore window",
+            f"past the {window.days}-day restore window",
         )
     album = (
         session.query(Album)

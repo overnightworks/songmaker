@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from sqlalchemy import create_engine, event, inspect
@@ -11,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.db.models import Base
 from songmaker_cli.db.soft_delete import install_soft_delete_filter
+from songmaker_cli.settings import get_settings
 
 install_soft_delete_filter()
 
@@ -18,21 +18,12 @@ log = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = str(Path(__file__).parent / "migrations")
 
-DEFAULT_PG_POOL_SIZE = 5
-DEFAULT_PG_MAX_OVERFLOW = 10
-
 _DEFAULT_SQLITE_TIMEOUT = 30
 
 
 def resolve_database_url() -> str:
-    """Return DATABASE_URL from env. Raises RuntimeError if not set."""
-    env_url = os.environ.get("DATABASE_URL")
-    if env_url:
-        return env_url
-    raise RuntimeError(
-        "DATABASE_URL environment variable is required. "
-        "Set it to a PostgreSQL connection string (e.g. postgresql://user:pass@host/db)."
-    )
+    """Return the configured DATABASE_URL from Settings."""
+    return get_settings().database_url
 
 
 def _run_migrations(url: str) -> None:
@@ -64,12 +55,11 @@ def init_db(url: str) -> sessionmaker[Session]:
     """Create the PostgreSQL engine, run migrations, and return a session factory."""
     _run_migrations(url)
 
-    pool_size = int(os.environ.get("DATABASE_POOL_SIZE", DEFAULT_PG_POOL_SIZE))
-    max_overflow = int(os.environ.get("DATABASE_MAX_OVERFLOW", DEFAULT_PG_MAX_OVERFLOW))
+    settings = get_settings()
     engine = create_engine(
         url, echo=False,
-        pool_size=pool_size,
-        max_overflow=max_overflow,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
         pool_pre_ping=True,
     )
 
@@ -104,11 +94,11 @@ def init_test_db(db_path: Path) -> sessionmaker[Session]:
 def _seed_available_models(engine) -> None:
     from sqlalchemy import text
 
-    from songmaker_cli.constants import AVAILABLE_MODEL_MODES, DEFAULT_MODEL_MODE
+    from songmaker_cli.constants import MODEL_AVAILABLE_MODES, MODEL_DEFAULT_MODE
 
     stmt = text(
         "INSERT OR IGNORE INTO available_models (id, is_active) VALUES (:id, :active)",
     )
     with engine.begin() as conn:
-        for mode in AVAILABLE_MODEL_MODES:
-            conn.execute(stmt, {"id": mode, "active": int(mode == DEFAULT_MODEL_MODE)})
+        for mode in MODEL_AVAILABLE_MODES:
+            conn.execute(stmt, {"id": mode, "active": int(mode == MODEL_DEFAULT_MODE)})

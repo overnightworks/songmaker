@@ -6,8 +6,13 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from songmaker_cli.constants import GLOBAL_DEFAULTS_PRESET_NAME
+from songmaker_cli.constants import (
+    PRESET_GLOBAL_DEFAULTS_NAME,
+    SETTING_CLAUDE_CHAT_MODEL,
+    SETTING_CLAUDE_SCORING_MODEL,
+)
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
+from songmaker_cli.settings import get_settings
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:
@@ -46,7 +51,7 @@ def list_shared_presets(session: Session) -> list[GenerationPreset]:
         session.query(GenerationPreset)
         .filter(
             GenerationPreset.created_by.is_(None),
-            GenerationPreset.name != GLOBAL_DEFAULTS_PRESET_NAME,
+            GenerationPreset.name != PRESET_GLOBAL_DEFAULTS_NAME,
         )
         .order_by(GenerationPreset.model_mode, GenerationPreset.name)
         .all()
@@ -150,7 +155,7 @@ def get_global_defaults(session: Session, model_mode: str) -> dict | None:
     preset = (
         session.query(GenerationPreset)
         .filter(
-            GenerationPreset.name == GLOBAL_DEFAULTS_PRESET_NAME,
+            GenerationPreset.name == PRESET_GLOBAL_DEFAULTS_NAME,
             GenerationPreset.model_mode == model_mode,
             GenerationPreset.created_by.is_(None),
         )
@@ -163,7 +168,7 @@ def save_global_defaults(session: Session, model_mode: str, params: dict) -> Non
     preset = (
         session.query(GenerationPreset)
         .filter(
-            GenerationPreset.name == GLOBAL_DEFAULTS_PRESET_NAME,
+            GenerationPreset.name == PRESET_GLOBAL_DEFAULTS_NAME,
             GenerationPreset.model_mode == model_mode,
             GenerationPreset.created_by.is_(None),
         )
@@ -174,7 +179,7 @@ def save_global_defaults(session: Session, model_mode: str, params: dict) -> Non
         preset.updated_at = datetime.now(timezone.utc)
     else:
         preset = GenerationPreset(
-            name=GLOBAL_DEFAULTS_PRESET_NAME,
+            name=PRESET_GLOBAL_DEFAULTS_NAME,
             model_mode=model_mode,
             params=params,
             created_by=None,
@@ -183,7 +188,7 @@ def save_global_defaults(session: Session, model_mode: str, params: dict) -> Non
     session.flush()
 
 
-def get_claude_model(session: Session, setting_key: str, env_fallback: str) -> str:
+def _get_claude_model_row(session: Session, setting_key: str) -> str | None:
     row = (
         session.query(RateLimitSetting)
         .filter(
@@ -192,9 +197,25 @@ def get_claude_model(session: Session, setting_key: str, env_fallback: str) -> s
         )
         .first()
     )
-    if row is not None:
-        return str(row.value_text) if row.value_text else env_fallback
-    return env_fallback
+    if row is not None and row.value_text:
+        return str(row.value_text)
+    return None
+
+
+def get_claude_chat_model(session: Session) -> str:
+    """Return the configured chat model: DB row override or Settings default."""
+    return (
+        _get_claude_model_row(session, SETTING_CLAUDE_CHAT_MODEL)
+        or get_settings().claude_chat_model
+    )
+
+
+def get_claude_scoring_model(session: Session) -> str:
+    """Return the configured scoring model: DB row override or Settings default."""
+    return (
+        _get_claude_model_row(session, SETTING_CLAUDE_SCORING_MODEL)
+        or get_settings().claude_scoring_model
+    )
 
 
 def set_claude_model(session: Session, setting_key: str, value: str) -> None:

@@ -22,19 +22,15 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import (
     CSRF_COOKIE,
-    LOGIN_LOCKOUT_THRESHOLD,
-    LOGIN_LOCKOUT_WINDOW_SECONDS,
-    LOGIN_RATE_LIMIT,
     LOGIN_RATE_WINDOW_SECONDS,
     ROLE_ADMIN,
-    SESSION_MAX_AGE_SECONDS,
     generate_csrf_token,
     get_client_ip,
     hash_password,
     sign_session_id,
     verify_password_constant_time,
 )
-from songmaker_cli.constants import MAX_USER_AGENT_LENGTH
+from songmaker_cli.constants import HTTP_MAX_USER_AGENT_LENGTH
 from songmaker_cli.db.queries import (
     count_recent_failed_attempts,
     create_session,
@@ -52,6 +48,7 @@ from songmaker_cli.middleware import (
     get_current_user,
 )
 from songmaker_cli.redis_client import SessionCache
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +66,7 @@ def _cache_session(
     try:
         session_cache.store(
             session_id, user.id, user.username, user.role, user.is_active,
-            ip, ua, expires, created_at, SESSION_MAX_AGE_SECONDS,
+            ip, ua, expires, created_at, get_settings().session_max_age_seconds,
         )
     except Exception:
         log.warning("Redis session cache write failed on login")
@@ -91,7 +88,7 @@ def _client_ip(request: Request, ctx: AppContext) -> str:
 
 
 def _client_user_agent(request: Request) -> str:
-    return request.headers.get("user-agent", "")[:MAX_USER_AGENT_LENGTH]
+    return request.headers.get("user-agent", "")[:HTTP_MAX_USER_AGENT_LENGTH]
 
 
 def _detect_secure(request: Request | None, ctx: AppContext) -> bool:
@@ -109,10 +106,11 @@ def _set_session_cookie(
 ) -> None:
     secure = _detect_secure(request, ctx)
     signed = sign_session_id(session_id, ctx.session_secret)
+    max_age = get_settings().session_max_age_seconds
     response.set_cookie(
         SESSION_COOKIE,
         signed,
-        max_age=SESSION_MAX_AGE_SECONDS,
+        max_age=max_age,
         httponly=True,
         samesite="strict",
         secure=secure,
@@ -122,7 +120,7 @@ def _set_session_cookie(
     response.set_cookie(
         CSRF_COOKIE,
         csrf_token,
-        max_age=SESSION_MAX_AGE_SECONDS,
+        max_age=max_age,
         httponly=False,
         samesite="strict",
         secure=secure,
@@ -155,7 +153,9 @@ def setup(
         if user_count(db) > 1:
             db.rollback()
             raise HTTPException(403, "Setup already completed")
-        expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
+        expires = datetime.now(timezone.utc) + timedelta(
+            seconds=get_settings().session_max_age_seconds,
+        )
         user_session = create_session(
             db, user.id, expires,
             ip_address=ip, user_agent=ua,
@@ -180,22 +180,23 @@ def login(
     ctx: AppContext = Depends(get_app_context),
 ) -> UserResponse:
     ip = _client_ip(request, ctx)
+    settings = get_settings()
 
     lockout_failures = count_recent_failed_attempts(
-        db, ip, LOGIN_LOCKOUT_WINDOW_SECONDS, username=req.username,
+        db, ip, settings.login_lockout_window_seconds, username=req.username,
     )
-    if lockout_failures >= LOGIN_LOCKOUT_THRESHOLD:
+    if lockout_failures >= settings.login_lockout_threshold:
         raise HTTPException(
             429,
             "Account temporarily locked due to repeated failed attempts. Try again later.",
-            headers={"Retry-After": str(LOGIN_LOCKOUT_WINDOW_SECONDS)},
+            headers={"Retry-After": str(settings.login_lockout_window_seconds)},
         )
 
     ip_failures = count_recent_failed_attempts(db, ip, LOGIN_RATE_WINDOW_SECONDS)
     user_failures = count_recent_failed_attempts(
         db, ip, LOGIN_RATE_WINDOW_SECONDS, username=req.username,
     )
-    if ip_failures >= LOGIN_RATE_LIMIT or user_failures >= LOGIN_RATE_LIMIT:
+    if ip_failures >= settings.login_rate_limit or user_failures >= settings.login_rate_limit:
         raise HTTPException(
             429,
             "Too many login attempts. Try again later.",
@@ -220,7 +221,7 @@ def login(
     delete_user_sessions(db, user.id)
 
     ua = _client_user_agent(request)
-    expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
+    expires = datetime.now(timezone.utc) + timedelta(seconds=settings.session_max_age_seconds)
     user_session = create_session(
         db, user.id, expires,
         ip_address=ip, user_agent=ua,
@@ -279,11 +280,12 @@ def change_password(
 ) -> StatusResponse:
     user = get_user(db, current_user.id)
     ip = _client_ip(request, ctx)
+    settings = get_settings()
 
     ip_failures = count_recent_failed_attempts(
         db, ip, LOGIN_RATE_WINDOW_SECONDS, username=f"__pwchange__{current_user.username}",
     )
-    if ip_failures >= LOGIN_RATE_LIMIT:
+    if ip_failures >= settings.login_rate_limit:
         raise HTTPException(
             429, "Too many password change attempts. Try again later.",
             headers={"Retry-After": str(LOGIN_RATE_WINDOW_SECONDS)},
@@ -299,7 +301,9 @@ def change_password(
 
     ip = _client_ip(request, ctx)
     ua = _client_user_agent(request)
-    expires = datetime.now(timezone.utc) + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
+    expires = datetime.now(timezone.utc) + timedelta(
+        seconds=settings.session_max_age_seconds,
+    )
     new_session = create_session(
         db, current_user.id, expires,
         ip_address=ip, user_agent=ua,

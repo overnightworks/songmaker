@@ -18,13 +18,12 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.db.engine import (
-    DEFAULT_PG_MAX_OVERFLOW,
-    DEFAULT_PG_POOL_SIZE,
     init_test_db,
     resolve_database_url,
 )
 from songmaker_cli.db.models import Base, Job, User
 from songmaker_cli.db.queries import create_job, job_duration_stats
+from songmaker_cli.settings import get_settings
 
 TEST_PG_URL = os.environ.get("TEST_DATABASE_URL", "")
 SKIP_NO_PG = pytest.mark.skipif(
@@ -34,10 +33,11 @@ SKIP_NO_PG = pytest.mark.skipif(
 
 
 def _pg_session_factory() -> sessionmaker[Session]:
+    settings = get_settings()
     engine = create_engine(
         TEST_PG_URL,
-        pool_size=DEFAULT_PG_POOL_SIZE,
-        max_overflow=DEFAULT_PG_MAX_OVERFLOW,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
         pool_pre_ping=True,
     )
     Base.metadata.drop_all(engine)
@@ -62,12 +62,6 @@ def pg_factory():
 
 
 # ── resolve_database_url ──────────────────────────────────────────
-
-
-def test_resolve_database_url_raises_without_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("DATABASE_URL", raising=False)
-    with pytest.raises(RuntimeError, match="DATABASE_URL environment variable is required"):
-        resolve_database_url()
 
 
 def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
-import os
 
 import httpx
 from arq.connections import ArqRedis
@@ -74,9 +73,10 @@ from songmaker_cli.db.queries import (
     record_audit,
     update_user,
 )
-from songmaker_cli.internal_api import INTERNAL_TOKEN_ENV, INTERNAL_TOKEN_HEADER
+from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.middleware import AuthenticatedUser, require_admin
 from songmaker_cli.redis_client import SessionCache
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -337,7 +337,7 @@ def _state_from_dict(state: dict | None, queue_depth: int) -> WorkerEphemeralSta
 async def _post_to_worker(
     host: str, port: int, path: str, json_body: dict | None = None,
 ) -> httpx.Response:
-    token = os.environ.get(INTERNAL_TOKEN_ENV, "")
+    token = get_settings().songmaker_internal_token.get_secret_value()
     headers = {INTERNAL_TOKEN_HEADER: token}
     async with httpx.AsyncClient(timeout=30) as client:
         return await client.post(

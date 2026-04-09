@@ -19,7 +19,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict, dataclass, is_dataclass
 from typing import Any
@@ -37,7 +36,8 @@ from songmaker_cli.acestep_state import (
     read_worker_state,
 )
 from songmaker_cli.db.queries import list_worker_identities
-from songmaker_cli.internal_api import INTERNAL_TOKEN_ENV, INTERNAL_TOKEN_HEADER
+from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -148,7 +148,9 @@ async def pick_any_online_worker(
 
 
 def _internal_headers() -> dict[str, str]:
-    return {INTERNAL_TOKEN_HEADER: os.environ.get(INTERNAL_TOKEN_ENV, "")}
+    return {
+        INTERNAL_TOKEN_HEADER: get_settings().songmaker_internal_token.get_secret_value(),
+    }
 
 
 async def _maybe_invoke(callback: Callable | None, *args) -> None:

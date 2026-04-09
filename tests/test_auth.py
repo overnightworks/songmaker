@@ -8,18 +8,9 @@ import pytest
 
 from songmaker_cli.auth import (
     BCRYPT_ROUNDS,
-    GENERATION_RATE_LIMIT_USER,
-    LOGIN_LOCKOUT_THRESHOLD,
-    LOGIN_LOCKOUT_WINDOW_SECONDS,
-    LOGIN_RATE_LIMIT,
-    MAX_QUEUE_DEPTH,
-    MAX_USER_ACTIVE_JOBS,
     MIN_PASSWORD_LENGTH,
     RATE_LIMIT_WINDOW_SECONDS,
     ROLE_ADMIN,
-    SCORING_RATE_LIMIT_USER,
-    SESSION_ABSOLUTE_MAX_AGE_SECONDS,
-    SESSION_MAX_AGE_SECONDS,
     check_password_strength,
     ensure_session_secret,
     generate_csrf_token,
@@ -31,6 +22,7 @@ from songmaker_cli.auth import (
     verify_password,
     verify_session_cookie,
 )
+from songmaker_cli.settings import get_settings
 
 _TEST_SECRET = b"a" * 64
 
@@ -56,16 +48,20 @@ def test_constants() -> None:
     assert BCRYPT_ROUNDS == 12
     assert ROLE_ADMIN == "admin"
     assert MIN_PASSWORD_LENGTH == 8
-    assert LOGIN_RATE_LIMIT == 5
-    assert SESSION_MAX_AGE_SECONDS == 60 * 60 * 24 * 30
-    assert SESSION_ABSOLUTE_MAX_AGE_SECONDS == 60 * 60 * 24 * 90
-    assert GENERATION_RATE_LIMIT_USER == 3
-    assert SCORING_RATE_LIMIT_USER == 10
     assert RATE_LIMIT_WINDOW_SECONDS == 3600
-    assert MAX_QUEUE_DEPTH == 100
-    assert MAX_USER_ACTIVE_JOBS == 10
-    assert LOGIN_LOCKOUT_THRESHOLD == 15
-    assert LOGIN_LOCKOUT_WINDOW_SECONDS == 3600
+
+
+def test_default_settings_values() -> None:
+    settings = get_settings()
+    assert settings.login_rate_limit == 5
+    assert settings.session_max_age_seconds == 60 * 60 * 24 * 30
+    assert settings.session_absolute_max_age_seconds == 60 * 60 * 24 * 90
+    assert settings.generation_rate_limit_user == 3
+    assert settings.scoring_rate_limit_user == 10
+    assert settings.max_queue_depth == 100
+    assert settings.max_user_active_jobs == 10
+    assert settings.login_lockout_threshold == 15
+    assert settings.login_lockout_window_seconds == 3600
 
 
 # -- HMAC session signing ---------------------------------------------------
@@ -92,33 +88,20 @@ def test_verify_rejects_empty_parts() -> None:
     assert verify_session_cookie("abc.", _TEST_SECRET) is None
 
 
-def test_ensure_session_secret_generates_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("SESSION_SECRET", raising=False)
-    result = ensure_session_secret(tmp_path)
-    assert len(result) >= 32
-    secret_file = tmp_path / ".session_secret"
-    assert secret_file.exists()
-    assert secret_file.read_text().strip() == result
-
-
-def test_ensure_session_secret_reads_existing_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("SESSION_SECRET", raising=False)
-    secret_file = tmp_path / ".session_secret"
-    secret_file.write_text("b" * 64)
-    result = ensure_session_secret(tmp_path)
-    assert result == "b" * 64
-
-
-def test_ensure_session_secret_prefers_env_var(
+def test_ensure_session_secret_returns_settings_value(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SESSION_SECRET", "c" * 64)
     result = ensure_session_secret(tmp_path)
     assert result == "c" * 64
+
+
+def test_ensure_session_secret_rejects_short(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SESSION_SECRET", "short")
+    with pytest.raises(RuntimeError, match="too short"):
+        ensure_session_secret(tmp_path)
 
 
 # -- Password strength -------------------------------------------------------

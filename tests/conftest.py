@@ -2,20 +2,45 @@
 
 from __future__ import annotations
 
-import struct
-import wave
-from collections.abc import Callable
-from http.client import HTTPResponse
-from io import BytesIO
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+import os
 
-import fakeredis
-import numpy as np
-import pytest
-from fastapi.testclient import TestClient
+# Required env vars for Settings construction at module-import time.
+# Real values from the environment win — these are only safe defaults
+# so importing songmaker_cli.music_worker (which constructs Settings at
+# class-definition time) does not fail in unit tests.
+os.environ["SONGMAKER_SKIP_ENV_FILE"] = "1"
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("SESSION_SECRET", "x" * 64)
+os.environ.setdefault("SONGMAKER_INTERNAL_TOKEN", "test-internal-token")
+os.environ.setdefault("WORKER_ID", "test-worker")
+
+import struct  # noqa: E402
+import wave  # noqa: E402
+from collections.abc import Callable  # noqa: E402
+from http.client import HTTPResponse  # noqa: E402
+from io import BytesIO  # noqa: E402
+from pathlib import Path  # noqa: E402
+from unittest.mock import MagicMock, patch  # noqa: E402
+
+import fakeredis  # noqa: E402
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
 TEST_SECRET = b"a" * 64
+
+
+@pytest.fixture(autouse=True)
+def _reset_settings_cache():
+    """Clear the Settings lru_cache between tests so monkeypatched env wins."""
+    from songmaker_cli.settings import get_settings, get_worker_settings
+
+    get_settings.cache_clear()
+    get_worker_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+    get_worker_settings.cache_clear()
 
 
 @pytest.fixture(autouse=True)

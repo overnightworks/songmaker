@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -29,10 +28,6 @@ from songmaker_cli.claude.provider import (
     is_available,
 )
 from songmaker_cli.constants import (
-    CLAUDE_CHAT_MODEL,
-    CLAUDE_SCORING_MODEL,
-    SETTING_CLAUDE_CHAT_MODEL,
-    SETTING_CLAUDE_SCORING_MODEL,
     JobStatus,
     JobType,
 )
@@ -40,7 +35,8 @@ from songmaker_cli.db.queries import (
     count_chat_messages,
     create_chat_message,
     delete_chat_messages,
-    get_claude_model,
+    get_claude_chat_model,
+    get_claude_scoring_model,
     get_song,
     get_version,
     list_chat_messages,
@@ -63,16 +59,16 @@ def api_capabilities(
     _user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> CapabilitiesResponse:
-    env_key = os.environ.get("ANTHROPIC_API_KEY")
-    chat_model = get_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, CLAUDE_CHAT_MODEL)
-    scoring_model = get_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, CLAUDE_SCORING_MODEL)
+    from songmaker_cli.settings import get_settings
+    settings = get_settings()
+    api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
     return CapabilitiesResponse(
-        claude_api=bool(env_key),
+        claude_api=bool(api_key),
         claude_cli=is_available(api_key=None),
         generation=True,
         scoring=True,
-        chat_model=chat_model,
-        scoring_model=scoring_model,
+        chat_model=get_claude_chat_model(session),
+        scoring_model=get_claude_scoring_model(session),
     )
 
 
@@ -225,8 +221,10 @@ async def api_song_chat(
     api_messages.append({"role": "user", "content": user_content})
 
     system = SYSTEM_PROMPT
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    chat_model = get_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, CLAUDE_CHAT_MODEL)
+    from songmaker_cli.settings import get_settings
+    settings = get_settings()
+    api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
+    chat_model = get_claude_chat_model(session)
 
     try:
         response = await acall_claude(

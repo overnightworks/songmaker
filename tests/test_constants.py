@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 
 from songmaker_cli.constants import (
-    AVAILABLE_MODEL_MODES,
-    DEFAULT_MODEL_MODE,
     JOB_ACTIVE_STATUSES,
     JOB_TERMINAL_STATUSES,
+    MODEL_AVAILABLE_MODES,
+    MODEL_DEFAULT_MODE,
     AuditAction,
     JobStatus,
     JobType,
@@ -17,7 +17,7 @@ from songmaker_cli.constants import (
 
 
 def test_default_model_mode_is_in_available() -> None:
-    assert DEFAULT_MODEL_MODE in AVAILABLE_MODEL_MODES
+    assert MODEL_DEFAULT_MODE in MODEL_AVAILABLE_MODES
 
 
 def test_builtin_defaults_keys_match_available_modes() -> None:
@@ -27,17 +27,17 @@ def test_builtin_defaults_keys_match_available_modes() -> None:
         _MODEL_NAME_TO_MODE,
     )
 
-    assert set(_BUILTIN_DEFAULTS.keys()) == AVAILABLE_MODEL_MODES
-    assert set(ACESTEP_PROFILES.keys()) == AVAILABLE_MODEL_MODES
-    assert set(_MODEL_NAME_TO_MODE.values()) <= AVAILABLE_MODEL_MODES
+    assert set(_BUILTIN_DEFAULTS.keys()) == MODEL_AVAILABLE_MODES
+    assert set(ACESTEP_PROFILES.keys()) == MODEL_AVAILABLE_MODES
+    assert set(_MODEL_NAME_TO_MODE.values()) <= MODEL_AVAILABLE_MODES
 
 
 def test_acestep_worker_size_dicts_cover_available_modes() -> None:
     from acestep_worker.__main__ import DEFAULT_MODEL_SIZES_GB
     from acestep_worker.downloads import ESTIMATED_MODEL_SIZE_BYTES
 
-    assert set(ESTIMATED_MODEL_SIZE_BYTES.keys()) == AVAILABLE_MODEL_MODES
-    assert set(DEFAULT_MODEL_SIZES_GB.keys()) == AVAILABLE_MODEL_MODES
+    assert set(ESTIMATED_MODEL_SIZE_BYTES.keys()) == MODEL_AVAILABLE_MODES
+    assert set(DEFAULT_MODEL_SIZES_GB.keys()) == MODEL_AVAILABLE_MODES
 
 
 def test_job_status_values_match_db_strings():

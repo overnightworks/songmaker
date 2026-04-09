@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator
 
-from songmaker_cli.constants import AVAILABLE_MODEL_MODES
+from songmaker_cli.constants import MODEL_AVAILABLE_MODES
 from songmaker_cli.scoring.registry import VALID_SCORER_NAMES
 
 log = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ def _safe_json_dict(
 
 _VALID_INFER_METHODS = frozenset({"ode", "sde"})
 _VALID_REPAINT_MODES = frozenset({"conservative", "balanced", "aggressive"})
-_VALID_MODEL_MODES = AVAILABLE_MODEL_MODES
+_VALID_MODEL_MODES = MODEL_AVAILABLE_MODES
 
 
 class GenerationParams(BaseModel):

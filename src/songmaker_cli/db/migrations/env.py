@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool, text
 
 from songmaker_cli.db.models import Base
+from songmaker_cli.settings import get_settings
 
 config = context.config
 
@@ -22,13 +22,7 @@ def _resolve_db_url() -> str:
     url = config.get_main_option("sqlalchemy.url")
     if url:
         return url
-    env_url = os.environ.get("DATABASE_URL")
-    if env_url:
-        return env_url
-    raise RuntimeError(
-        "DATABASE_URL environment variable is required for migrations. "
-        "Set it to a PostgreSQL connection string."
-    )
+    return get_settings().database_url
 
 
 def run_migrations_offline() -> None:

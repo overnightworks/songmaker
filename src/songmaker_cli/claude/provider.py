@@ -20,7 +20,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from songmaker_cli.constants import CLAUDE_CHAT_MODEL
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -62,10 +62,12 @@ def call_claude(
     prompt: str,
     api_key: str | None = None,
     system: str | None = None,
-    model: str = CLAUDE_CHAT_MODEL,
+    model: str | None = None,
     max_tokens: int = 1024,
     messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
+    if model is None:
+        model = get_settings().claude_chat_model
     if api_key:
         log.info("Claude: using API backend (model=%s)", model)
         return _call_api(prompt, api_key, system, model, max_tokens, messages)
@@ -77,10 +79,12 @@ async def acall_claude(
     prompt: str,
     api_key: str | None = None,
     system: str | None = None,
-    model: str = CLAUDE_CHAT_MODEL,
+    model: str | None = None,
     max_tokens: int = 1024,
     messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
+    if model is None:
+        model = get_settings().claude_chat_model
     if api_key:
         log.info("Claude: using async API backend (model=%s)", model)
         return await _acall_api(prompt, api_key, system, model, max_tokens, messages)
@@ -228,9 +232,11 @@ async def _acall_api(
 
 
 def _call_cli(
-    prompt: str, system: str | None = None, model: str = CLAUDE_CHAT_MODEL,
+    prompt: str, system: str | None = None, model: str | None = None,
     messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
+    if model is None:
+        model = get_settings().claude_chat_model
     binary = _require_claude_binary()
     flat_prompt = _flatten_messages(prompt, messages)
     cmd = _build_cli_cmd(binary, flat_prompt, system, model)
@@ -253,9 +259,11 @@ def _call_cli(
 
 
 async def _acall_cli(
-    prompt: str, system: str | None = None, model: str = CLAUDE_CHAT_MODEL,
+    prompt: str, system: str | None = None, model: str | None = None,
     messages: list[dict[str, str]] | None = None,
 ) -> ClaudeResponse:
+    if model is None:
+        model = get_settings().claude_chat_model
     binary = _require_claude_binary()
     flat_prompt = _flatten_messages(prompt, messages)
     cmd = _build_cli_cmd(binary, flat_prompt, system, model)

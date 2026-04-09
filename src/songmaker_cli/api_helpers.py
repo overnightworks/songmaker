@@ -13,16 +13,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from songmaker_cli.auth import (
-    CHAT_RATE_LIMIT_ADMIN,
-    CHAT_RATE_LIMIT_USER,
-    GENERATION_RATE_LIMIT_ADMIN,
-    GENERATION_RATE_LIMIT_USER,
-    MAX_QUEUE_DEPTH,
-    MAX_USER_ACTIVE_JOBS,
     RATE_LIMIT_WINDOW_SECONDS,
     ROLE_ADMIN,
-    SCORING_RATE_LIMIT_ADMIN,
-    SCORING_RATE_LIMIT_USER,
 )
 from songmaker_cli.constants import (
     PAGE_ADMIN_DEFAULT_LIMIT,
@@ -49,6 +41,7 @@ from songmaker_cli.db.queries import (
     resolve_rate_limit,
 )
 from songmaker_cli.middleware import AuthenticatedUser
+from songmaker_cli.settings import get_settings
 
 _RATE_LIMIT_LOCK_ID = 1
 _ALBUM_ID_LOCK_ID = 2
@@ -78,20 +71,36 @@ def check_redis_health(request) -> None:
         raise HTTPException(503, "Service temporarily degraded — try again shortly")
 
 
-_ENV_RATE_LIMITS: dict[JobType, tuple[int, int, str]] = {
-    JobType.GENERATE: (
-        GENERATION_RATE_LIMIT_USER, GENERATION_RATE_LIMIT_ADMIN,
-        SETTING_GENERATION_RATE_LIMIT,
-    ),
-    JobType.SCORE: (
-        SCORING_RATE_LIMIT_USER, SCORING_RATE_LIMIT_ADMIN,
-        SETTING_SCORING_RATE_LIMIT,
-    ),
-    JobType.CHAT: (
-        CHAT_RATE_LIMIT_USER, CHAT_RATE_LIMIT_ADMIN,
-        SETTING_CHAT_RATE_LIMIT,
-    ),
+_RATE_LIMIT_SETTING_KEYS: dict[JobType, str] = {
+    JobType.GENERATE: SETTING_GENERATION_RATE_LIMIT,
+    JobType.SCORE: SETTING_SCORING_RATE_LIMIT,
+    JobType.CHAT: SETTING_CHAT_RATE_LIMIT,
 }
+
+
+def _job_type_rate_limits(job_type: JobType) -> tuple[int, int, str]:
+    """Return (user_limit, admin_limit, db_setting_key) for a job type."""
+    settings = get_settings()
+    if job_type == JobType.GENERATE:
+        return (
+            settings.generation_rate_limit_user,
+            settings.generation_rate_limit_admin,
+            SETTING_GENERATION_RATE_LIMIT,
+        )
+    if job_type == JobType.SCORE:
+        return (
+            settings.scoring_rate_limit_user,
+            settings.scoring_rate_limit_admin,
+            SETTING_SCORING_RATE_LIMIT,
+        )
+    if job_type == JobType.CHAT:
+        return (
+            settings.chat_rate_limit_user,
+            settings.chat_rate_limit_admin,
+            SETTING_CHAT_RATE_LIMIT,
+        )
+    raise ValueError(f"Unknown job type for rate limiting: {job_type}")
+
 
 _QUEUEABLE_JOB_TYPES = frozenset({JobType.GENERATE, JobType.SCORE})
 
@@ -124,29 +133,27 @@ def create_job_with_rate_limit(
     is_admin = user.role == ROLE_ADMIN
     clear_stale_user_jobs(session, user.id)
 
+    settings = get_settings()
     if job_type in _QUEUEABLE_JOB_TYPES:
         max_queue = resolve_rate_limit(
-            session, user.id, SETTING_MAX_QUEUE_DEPTH, MAX_QUEUE_DEPTH,
+            session, user.id, SETTING_MAX_QUEUE_DEPTH, settings.max_queue_depth,
         )
         if count_total_queued_jobs(session) >= max_queue:
             session.rollback()
             raise HTTPException(429, "Queue is full. Try again later.")
         if not is_admin:
             max_active = resolve_rate_limit(
-                session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, MAX_USER_ACTIVE_JOBS,
+                session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, settings.max_user_active_jobs,
             )
             if count_user_active_jobs(session, user.id, job_type) >= max_active:
                 session.rollback()
                 raise HTTPException(429, "You already have an active job. Wait for it to finish.")
 
-    env_user, env_admin, setting_key = _ENV_RATE_LIMITS.get(job_type, (10, 100, ""))
+    env_user, env_admin, setting_key = _job_type_rate_limits(job_type)
     if is_admin:
         limit = env_admin
     else:
-        limit = (
-            resolve_rate_limit(session, user.id, setting_key, env_user)
-            if setting_key else env_user
-        )
+        limit = resolve_rate_limit(session, user.id, setting_key, env_user)
     count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
     if count >= limit:
         session.rollback()

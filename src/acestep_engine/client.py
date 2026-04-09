@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import time
 from collections.abc import Callable
@@ -36,6 +35,7 @@ from acestep_engine.models import (
     TaskQueryResponse,
     TaskSubmitResponse,
 )
+from acestep_engine.settings import get_engine_settings
 
 log = logging.getLogger(__name__)
 
@@ -47,13 +47,7 @@ class _PollResult:
     cot_lyrics: str = ""
 
 
-_FALLBACK_HOST: Final[str] = "http://localhost"
-_FALLBACK_PORT: Final[int] = 8001
 POLL_INTERVAL: Final[float] = 3.0
-_DEFAULT_POLL_TIMEOUT: Final[float] = 600.0
-POLL_TIMEOUT: Final[float] = float(
-    os.environ.get("ACESTEP_POLL_TIMEOUT", str(_DEFAULT_POLL_TIMEOUT)),
-)
 SUBMIT_RETRIES: Final[int] = 3
 SUBMIT_RETRY_DELAYS: Final[tuple[float, ...]] = (1.0, 3.0, 10.0)
 _TASK_STATUS_COMPLETE: Final[int] = 1
@@ -63,11 +57,11 @@ _DOWNLOAD_CHUNK_SIZE: Final[int] = 65536
 
 
 def _default_host() -> str:
-    return os.environ.get("ACESTEP_HOST", _FALLBACK_HOST)
+    return get_engine_settings().acestep_host
 
 
 def _default_port() -> int:
-    return int(os.environ.get("ACESTEP_PORT", _FALLBACK_PORT))
+    return get_engine_settings().acestep_port
 
 
 def is_acestep_available(host: str | None = None, port: int | None = None) -> bool:
@@ -297,13 +291,14 @@ class AceStepClient:
 
         Raises:
             GenerationFailedError: Server reported failure.
-            GenerationTimeoutError: Polling exceeded POLL_TIMEOUT.
+            GenerationTimeoutError: Polling exceeded ``acestep_poll_timeout``.
             KeyboardInterrupt: User cancelled during generation.
         """
+        poll_timeout = get_engine_settings().acestep_poll_timeout
         payload = json.dumps({"task_id_list": [task_id]}).encode()
         start = time.monotonic()
 
-        while time.monotonic() - start < POLL_TIMEOUT:
+        while time.monotonic() - start < poll_timeout:
             try:
                 req = Request(
                     f"{self.base_url}/query_result",
@@ -358,7 +353,7 @@ class AceStepClient:
             time.sleep(POLL_INTERVAL)
 
         raise GenerationTimeoutError(
-            f"ACE-Step generation timed out after {POLL_TIMEOUT:.0f}s"
+            f"ACE-Step generation timed out after {poll_timeout:.0f}s"
         )
 
     def _download_audio(

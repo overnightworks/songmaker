@@ -8,11 +8,9 @@ intended lyrics are fine as long as the output is coherent.
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from songmaker_cli.claude.provider import call_claude, parse_json_response
-from songmaker_cli.constants import CLAUDE_SCORING_MODEL as _ENV_SCORING_MODEL
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import LyricalCoherenceScore, SharedScorerData
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
@@ -92,9 +90,11 @@ def score_lyrical_coherence(
     n_intended = len(intended.splitlines())
     n_transcribed = len(transcribed.splitlines())
     log.debug("Sending %d intended + %d transcribed lines to Claude", n_intended, n_transcribed)
+    from songmaker_cli.settings import get_settings
+    settings = get_settings()
     scoring_model = (config.claude_scoring_model if config and config.claude_scoring_model
-                     else _ENV_SCORING_MODEL)
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+                     else settings.claude_scoring_model)
+    api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
     response = call_claude(prompt, api_key=api_key, model=scoring_model)
     log.debug("Claude response: %d chars", len(response.text))
     data = parse_json_response(response.text)

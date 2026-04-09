@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
-IP_RATE_LIMIT = int(os.environ.get("IP_RATE_LIMIT", 120))
 IP_RATE_WINDOW = 60
 STATIC_ASSET_PREFIX = "/_app/"
 
@@ -28,7 +27,8 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
             from songmaker_cli.constants import REDIS_RL_IP_PREFIX
             from songmaker_cli.redis_client import RedisRateLimiter
             self._limiter = RedisRateLimiter(
-                ctx.redis, REDIS_RL_IP_PREFIX, IP_RATE_LIMIT, IP_RATE_WINDOW,
+                ctx.redis, REDIS_RL_IP_PREFIX,
+                get_settings().ip_rate_limit, IP_RATE_WINDOW,
             )
         return self._limiter
 

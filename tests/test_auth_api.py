@@ -129,12 +129,13 @@ def test_login_brute_force_lockout(client: TestClient) -> None:
 
 
 def test_login_lockout_after_sustained_failures(client: TestClient) -> None:
-    from songmaker_cli.auth import LOGIN_LOCKOUT_THRESHOLD
     from songmaker_cli.db.queries import record_login_attempt
+    from songmaker_cli.settings import get_settings
     _seed_admin(client)
+    threshold = get_settings().login_lockout_threshold
     factory = client.app.state.ctx.db
     with factory() as session:
-        for _ in range(LOGIN_LOCKOUT_THRESHOLD):
+        for _ in range(threshold):
             record_login_attempt(session, "testclient", "admin", success=False)
         session.commit()
 

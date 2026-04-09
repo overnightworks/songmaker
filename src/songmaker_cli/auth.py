@@ -5,18 +5,18 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
-import secrets
 
 import bcrypt
+
+from songmaker_cli.settings import get_settings
 
 BCRYPT_ROUNDS = 12
 
 
 def parse_trusted_proxies() -> frozenset[str]:
-    """Parse TRUSTED_PROXIES from env. Returns a frozenset of proxy IPs."""
-    return frozenset(
-        p.strip() for p in os.environ.get("TRUSTED_PROXIES", "").split(",") if p.strip()
-    )
+    """Parse trusted-proxies CSV from Settings. Returns a frozenset of proxy IPs."""
+    raw = get_settings().trusted_proxies
+    return frozenset(p.strip() for p in raw.split(",") if p.strip())
 
 
 def get_client_ip(
@@ -30,31 +30,15 @@ def get_client_ip(
                 return ip
     return client_host
 
-SESSION_MAX_AGE_SECONDS = int(os.environ.get("SESSION_MAX_AGE", 60 * 60 * 24 * 30))
-SESSION_ABSOLUTE_MAX_AGE_SECONDS = int(
-    os.environ.get("SESSION_ABSOLUTE_MAX_AGE", 60 * 60 * 24 * 90),
-)
-LOGIN_RATE_LIMIT = int(os.environ.get("LOGIN_RATE_LIMIT", 5))
+
 LOGIN_RATE_WINDOW_SECONDS = 300
+RATE_LIMIT_WINDOW_SECONDS = 3600
 
 ROLE_ADMIN = "admin"
 CSRF_COOKIE = "csrf_token"
 CSRF_HEADER = "x-csrf-token"
 
 MIN_PASSWORD_LENGTH = 8
-
-GENERATION_RATE_LIMIT_USER = int(os.environ.get("GENERATION_RATE_LIMIT_USER", 3))
-GENERATION_RATE_LIMIT_ADMIN = int(os.environ.get("GENERATION_RATE_LIMIT_ADMIN", 30))
-SCORING_RATE_LIMIT_USER = int(os.environ.get("SCORING_RATE_LIMIT_USER", 10))
-SCORING_RATE_LIMIT_ADMIN = int(os.environ.get("SCORING_RATE_LIMIT_ADMIN", 100))
-CHAT_RATE_LIMIT_USER = int(os.environ.get("CHAT_RATE_LIMIT_USER", 30))
-CHAT_RATE_LIMIT_ADMIN = int(os.environ.get("CHAT_RATE_LIMIT_ADMIN", 300))
-RATE_LIMIT_WINDOW_SECONDS = 3600
-MAX_QUEUE_DEPTH = int(os.environ.get("MAX_QUEUE_DEPTH", 100))
-MAX_USER_ACTIVE_JOBS = int(os.environ.get("MAX_USER_ACTIVE_JOBS", 10))
-
-LOGIN_LOCKOUT_THRESHOLD = int(os.environ.get("LOGIN_LOCKOUT_THRESHOLD", 15))
-LOGIN_LOCKOUT_WINDOW_SECONDS = int(os.environ.get("LOGIN_LOCKOUT_WINDOW", 3600))
 
 
 _DUMMY_HASH = bcrypt.hashpw(b"dummy", bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode()
@@ -145,29 +129,18 @@ def check_password_strength(cls_or_value: str, *_args: object) -> str:
 # ── HMAC session signing ───────────────────────────────────────────
 
 
-def ensure_session_secret(output_dir_path: str | os.PathLike) -> str:
-    """Generate or load a persistent session signing secret.
+def ensure_session_secret(_output_dir_path: str | os.PathLike) -> str:
+    """Return the validated session signing secret from Settings.
 
-    Called once at server startup. Stores the secret in
-    ``<output_dir>/.session_secret`` with 0600 permissions.
-    Returns the secret string for storage in AppContext.
+    Settings.session_secret is required (W1 contract). ``_output_dir_path``
+    is kept for call-site compatibility — the previous file-based fallback
+    is gone now that secrets must come from .server.env.
     """
-    from pathlib import Path
-
-    secret = os.environ.get("SESSION_SECRET")
-    if secret and len(secret) >= 32:
-        return secret
-
-    secret_file = Path(output_dir_path) / ".session_secret"
-    if secret_file.exists():
-        secret = secret_file.read_text().strip()
-        if len(secret) >= 32:
-            return secret
-
-    secret = secrets.token_hex(32)
-    secret_file.parent.mkdir(parents=True, exist_ok=True)
-    secret_file.write_text(secret)
-    os.chmod(secret_file, 0o600)
+    secret = get_settings().session_secret.get_secret_value()
+    if len(secret) < 32:
+        raise RuntimeError(
+            "SESSION_SECRET is too short — must be at least 32 characters",
+        )
     return secret
 
 

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 
 from arq import cron
 
@@ -26,6 +25,7 @@ from songmaker_cli.jobs import (
 from songmaker_cli.jobs import (
     run_generation_job,
 )
+from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_base import WorkerBase, build_redis_settings
 
 log = logging.getLogger(__name__)
@@ -35,7 +35,6 @@ class MusicWorker(WorkerBase):
     job_type = JobType.GENERATE
     recovery_lock_key = RECOVERY_LOCK_MUSIC_KEY
     queue_name = ARQ_MUSIC_QUEUE_NAME
-    max_jobs = int(os.environ.get("MUSIC_MAX_JOBS", "2"))
 
     async def generate(self, ctx, job_id, song_id, version_id, count, user_id, seed,
                        requested_model, repaint_params=None, cover_params=None):
@@ -80,7 +79,8 @@ class MusicWorker(WorkerBase):
         return count
 
 
-_music_worker = MusicWorker()
+_settings = get_settings()
+_music_worker = MusicWorker(_settings)
 
 
 class MusicWorkerSettings:
@@ -91,11 +91,11 @@ class MusicWorkerSettings:
     ]
     on_startup = _music_worker.on_startup
     on_shutdown = _music_worker.on_shutdown
-    redis_settings = build_redis_settings()
+    redis_settings = build_redis_settings(_settings)
     queue_name = MusicWorker.queue_name
-    max_jobs = MusicWorker.max_jobs
-    job_timeout = MusicWorker.job_timeout
-    job_completion_wait = MusicWorker.drain_timeout
+    max_jobs = _settings.music_max_jobs
+    job_timeout = _settings.arq_job_timeout
+    job_completion_wait = _settings.arq_drain_timeout
     health_check_interval = MusicWorker.health_check_interval
     cron_jobs = [
         cron(

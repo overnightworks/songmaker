@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import hmac
 import logging
-import os
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
@@ -17,17 +16,17 @@ from sqlalchemy.orm import Session
 from songmaker_cli.api_models import WorkerRegisterRequest, WorkerRegisterResponse
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.db.queries import register_worker
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
-INTERNAL_TOKEN_ENV = "SONGMAKER_INTERNAL_TOKEN"
 INTERNAL_TOKEN_HEADER = "X-Internal-Token"
 
 
 def verify_internal_token(
     x_internal_token: str = Header(..., alias=INTERNAL_TOKEN_HEADER),
 ) -> None:
-    expected = os.environ.get(INTERNAL_TOKEN_ENV)
+    expected = get_settings().songmaker_internal_token.get_secret_value()
     if not expected:
         raise HTTPException(503, "Internal API not configured")
     if not hmac.compare_digest(x_internal_token, expected):

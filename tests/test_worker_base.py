@@ -71,10 +71,9 @@ def test_get_db_factory_caches() -> None:
     mock_factory = MagicMock()
     mock_factory.kw = {"bind": mock_engine}
 
-    with (
-        patch("songmaker_cli.worker_base.init_db", return_value=mock_factory) as mock_init,
-        patch("songmaker_cli.worker_base.resolve_database_url", return_value="sqlite:///:memory:"),
-    ):
+    with patch(
+        "songmaker_cli.worker_base.init_db", return_value=mock_factory,
+    ) as mock_init:
         result1 = worker.get_db_factory()
         result2 = worker.get_db_factory()
 
@@ -88,10 +87,9 @@ def test_get_db_factory_independent_per_instance() -> None:
     mock_factory = MagicMock()
     mock_factory.kw = {"bind": MagicMock()}
 
-    with (
-        patch("songmaker_cli.worker_base.init_db", return_value=mock_factory) as mock_init,
-        patch("songmaker_cli.worker_base.resolve_database_url", return_value="sqlite:///:memory:"),
-    ):
+    with patch(
+        "songmaker_cli.worker_base.init_db", return_value=mock_factory,
+    ) as mock_init:
         a.get_db_factory()
         b.get_db_factory()
 
@@ -99,42 +97,6 @@ def test_get_db_factory_independent_per_instance() -> None:
 
 
 # ── on_startup ────────────────────────────────────────────────────
-
-
-def test_on_startup_warns_on_redis_url_mismatch() -> None:
-    worker = _DummyWorker()
-    worker._import_time_redis_url = "redis://localhost:6379/0"
-    worker._recover_on_startup = AsyncMock(return_value=0)
-
-    mock_log = MagicMock()
-    with (
-        patch.dict("os.environ", {"REDIS_URL": "redis://prod:6379/0"}),
-        patch.object(wb_mod, "log", mock_log),
-    ):
-        _run(worker.on_startup({"redis": AsyncMock()}))
-
-    warning_calls = [
-        c for c in mock_log.warning.call_args_list if "redis://prod:6379/0" in str(c)
-    ]
-    assert len(warning_calls) == 1
-
-
-def test_on_startup_no_warning_when_urls_match() -> None:
-    worker = _DummyWorker()
-    worker._import_time_redis_url = "redis://localhost:6379/0"
-    worker._recover_on_startup = AsyncMock(return_value=0)
-
-    mock_log = MagicMock()
-    with (
-        patch.dict("os.environ", {"REDIS_URL": "redis://localhost:6379/0"}),
-        patch.object(wb_mod, "log", mock_log),
-    ):
-        _run(worker.on_startup({"redis": AsyncMock()}))
-
-    warning_calls = [
-        c for c in mock_log.warning.call_args_list if "REDIS_URL" in str(c)
-    ]
-    assert len(warning_calls) == 0
 
 
 # ── on_shutdown ───────────────────────────────────────────────────

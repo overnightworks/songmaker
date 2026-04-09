@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -132,15 +131,13 @@ def recover_stale_jobs(session: Session) -> int:
     return len(stale)
 
 
-STALE_JOB_THRESHOLD_SECONDS = int(
-    os.environ.get("STALE_JOB_THRESHOLD_SECONDS", 360),
-)
-
-
 def clear_stale_user_jobs(
     session: Session, user_id: str,
-    threshold_seconds: int = STALE_JOB_THRESHOLD_SECONDS,
+    threshold_seconds: int | None = None,
 ) -> int:
+    if threshold_seconds is None:
+        from songmaker_cli.settings import get_settings
+        threshold_seconds = get_settings().stale_job_threshold_seconds
     """Mark stale running/queued jobs for a user as failed. Returns count cleared.
 
     Called at job submission time so users auto-unblock without waiting
@@ -183,12 +180,15 @@ def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
 
 
 def recover_stale_jobs_by_age(
-    session: Session, threshold_seconds: int = STALE_JOB_THRESHOLD_SECONDS,
+    session: Session, threshold_seconds: int | None = None,
 ) -> int:
     """Mark running/queued jobs older than threshold as failed. Returns count recovered.
 
     Uses heartbeat_at to detect hung workers (alive but not progressing).
     """
+    if threshold_seconds is None:
+        from songmaker_cli.settings import get_settings
+        threshold_seconds = get_settings().stale_job_threshold_seconds
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=threshold_seconds)
     candidates = (
@@ -239,12 +239,15 @@ def recover_stale_jobs_by_type(session: Session, job_type: str) -> int:
 
 def recover_stale_jobs_by_age_and_type(
     session: Session, job_type: str,
-    threshold_seconds: int = STALE_JOB_THRESHOLD_SECONDS,
+    threshold_seconds: int | None = None,
 ) -> int:
     """Mark running/queued jobs of a given type older than threshold as failed.
 
     Uses heartbeat_at to detect hung workers.
     """
+    if threshold_seconds is None:
+        from songmaker_cli.settings import get_settings
+        threshold_seconds = get_settings().stale_job_threshold_seconds
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=threshold_seconds)
     candidates = (

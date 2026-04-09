@@ -15,13 +15,10 @@ from urllib.request import Request, urlopen
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.model_cache import LoadedModel, Loader, Unloader
+from songmaker_cli.settings import get_worker_settings
 
 log = logging.getLogger(__name__)
 
-STARTUP_TIMEOUT_SECONDS = int(os.environ.get("ACESTEP_STARTUP_TIMEOUT_SECONDS", "300"))
-SHUTDOWN_GRACE_SECONDS = int(os.environ.get("ACESTEP_SHUTDOWN_GRACE_SECONDS", "15"))
-SHUTDOWN_KILL_SECONDS = int(os.environ.get("ACESTEP_SHUTDOWN_KILL_SECONDS", "5"))
-HEALTH_POLL_SECONDS = float(os.environ.get("ACESTEP_HEALTH_POLL_SECONDS", "2.0"))
 SECRET_ENV_KEYS = ("ANTHROPIC_API_KEY", "SESSION_SECRET", "SONGMAKER_INTERNAL_TOKEN")
 
 
@@ -84,11 +81,16 @@ def is_acestep_healthy(port: int, timeout: float = 5.0) -> bool:
 def wait_for_health(
     handle: SubprocessHandle,
     *,
-    timeout: float = STARTUP_TIMEOUT_SECONDS,
-    poll: float = HEALTH_POLL_SECONDS,
+    timeout: float | None = None,
+    poll: float | None = None,
     sleeper: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> None:
+    settings = get_worker_settings()
+    if timeout is None:
+        timeout = settings.acestep_startup_timeout_seconds
+    if poll is None:
+        poll = settings.acestep_health_poll_seconds
     deadline = clock() + timeout
     while clock() < deadline:
         if is_acestep_healthy(handle.port):
@@ -149,6 +151,7 @@ def start_acestep_subprocess(
 
 
 def stop_acestep_subprocess(handle: SubprocessHandle) -> None:
+    settings = get_worker_settings()
     process = handle.process
     try:
         if process.poll() is not None:
@@ -157,10 +160,10 @@ def stop_acestep_subprocess(handle: SubprocessHandle) -> None:
         try:
             process.send_signal(signal.SIGTERM)
             try:
-                process.wait(timeout=SHUTDOWN_GRACE_SECONDS)
+                process.wait(timeout=settings.acestep_shutdown_grace_seconds)
             except subprocess.TimeoutExpired:
                 process.kill()
-                process.wait(timeout=SHUTDOWN_KILL_SECONDS)
+                process.wait(timeout=settings.acestep_shutdown_kill_seconds)
         except ProcessLookupError:
             pass
     finally:

@@ -8,7 +8,6 @@ common arq startup/shutdown hooks.
 from __future__ import annotations
 
 import logging
-import os
 import threading
 from pathlib import Path
 from typing import ClassVar
@@ -16,26 +15,21 @@ from typing import ClassVar
 from arq.connections import RedisSettings
 
 from songmaker_cli.constants import (
-    AUDIO_ROOT,
-    DATA_ROOT,
     JOB_TERMINAL_STATUSES,
     RECOVERY_LOCK_TTL_SECONDS,
-    REDIS_URL_MISMATCH_WARNING,
 )
-from songmaker_cli.db.engine import init_db, resolve_database_url
+from songmaker_cli.db.engine import init_db
 from songmaker_cli.db.queries import get_job
+from songmaker_cli.settings import Settings, get_settings
 
 log = logging.getLogger(__name__)
 
-JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "900"))
-DRAIN_TIMEOUT_SECONDS = int(os.environ.get("ARQ_DRAIN_TIMEOUT", "300"))
 HEALTH_CHECK_INTERVAL_SECONDS = 30
 
 
-def build_redis_settings() -> RedisSettings:
-    return RedisSettings.from_dsn(
-        os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
-    )
+def build_redis_settings(settings: Settings | None = None) -> RedisSettings:
+    """Build arq RedisSettings from validated Settings."""
+    return RedisSettings.from_dsn((settings or get_settings()).redis_url)
 
 
 class WorkerBase:
@@ -55,28 +49,34 @@ class WorkerBase:
     recovery_lock_key: ClassVar[str]
     queue_name: ClassVar[str]
     max_jobs: ClassVar[int]
-    job_timeout: ClassVar[int] = JOB_TIMEOUT_SECONDS
-    drain_timeout: ClassVar[int] = DRAIN_TIMEOUT_SECONDS
     health_check_interval: ClassVar[int] = HEALTH_CHECK_INTERVAL_SECONDS
 
-    def __init__(self) -> None:
+    def __init__(self, settings: Settings | None = None) -> None:
+        self._settings = settings or get_settings()
         self._db_engine = None
         self._db_factory = None
         self._db_lock = threading.Lock()
-        self._import_time_redis_url = os.environ.get("REDIS_URL")
+
+    @property
+    def job_timeout(self) -> int:
+        return self._settings.arq_job_timeout
+
+    @property
+    def drain_timeout(self) -> int:
+        return self._settings.arq_drain_timeout
 
     def get_db_factory(self):
         with self._db_lock:
             if self._db_factory is None:
-                self._db_factory = init_db(resolve_database_url())
+                self._db_factory = init_db(self._settings.database_url)
                 self._db_engine = self._db_factory.kw["bind"]
         return self._db_factory
 
     def audio_dir(self) -> Path:
-        return Path(os.environ.get("AUDIO_DIR", AUDIO_ROOT))
+        return Path(self._settings.audio_dir)
 
     def data_dir(self) -> Path:
-        return Path(os.environ.get("DATA_DIR", DATA_ROOT))
+        return Path(self._settings.data_dir)
 
     def check_job_still_valid(self, job_id: str) -> bool:
         with self.get_db_factory()() as session:
@@ -86,22 +86,9 @@ class WorkerBase:
         return True
 
     async def on_startup(self, ctx) -> None:
-        from songmaker_cli.config import find_project_root, load_env_file
         from songmaker_cli.logging_config import configure_logging
 
-        project_root = find_project_root(Path.cwd()) or Path.cwd()
-        load_env_file(project_root)
         configure_logging()
-
-        current_redis_url = os.environ.get("REDIS_URL")
-        if current_redis_url and current_redis_url != self._import_time_redis_url:
-            log.warning(
-                REDIS_URL_MISMATCH_WARNING.format(
-                    env_value=current_redis_url,
-                    import_value=self._import_time_redis_url
-                    or "redis://localhost:6379/0",
-                ),
-            )
 
         log.info("%s worker starting up...", self.job_type)
         await self._recover_on_startup(ctx)

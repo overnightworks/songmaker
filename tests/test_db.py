@@ -558,7 +558,7 @@ def test_generations_model_mode_not_null(tmp_path: Path) -> None:
 
 
 def test_available_models_seed_idempotent(tmp_path: Path) -> None:
-    from songmaker_cli.constants import AVAILABLE_MODEL_MODES
+    from songmaker_cli.constants import MODEL_AVAILABLE_MODES
     from songmaker_cli.db.engine import init_test_db
     from songmaker_cli.db.models import AvailableModel
 
@@ -566,14 +566,14 @@ def test_available_models_seed_idempotent(tmp_path: Path) -> None:
     factory = init_test_db(db_path)
     with factory() as session:
         ids = {m.id for m in session.query(AvailableModel).all()}
-        assert ids == AVAILABLE_MODEL_MODES
+        assert ids == MODEL_AVAILABLE_MODES
         count_before = session.query(AvailableModel).count()
 
     factory = init_test_db(db_path)
     with factory() as session:
         ids_after = {m.id for m in session.query(AvailableModel).all()}
         count_after = session.query(AvailableModel).count()
-    assert ids_after == AVAILABLE_MODEL_MODES
+    assert ids_after == MODEL_AVAILABLE_MODES
     assert count_after == count_before
 
 
@@ -1658,22 +1658,26 @@ def test_init_db_stamps_existing_db(tmp_path: Path) -> None:
 # ── Claude model settings ───────────────────────────────────────────
 
 
-def test_get_claude_model_fallback(db_session: Session) -> None:
-    from songmaker_cli.db.queries.settings import get_claude_model
-    result = get_claude_model(db_session, "claude_chat_model", "claude-opus-4-6")
-    assert result == "claude-opus-4-6"
+def test_get_claude_chat_model_fallback(db_session: Session) -> None:
+    from songmaker_cli.db.queries.settings import get_claude_chat_model
+    # No DB row → falls back to Settings default ("claude-opus-4-6")
+    assert get_claude_chat_model(db_session) == "claude-opus-4-6"
 
 
-def test_set_and_get_claude_model(db_session: Session) -> None:
-    from songmaker_cli.db.queries.settings import get_claude_model, set_claude_model
+def test_set_and_get_claude_chat_model(db_session: Session) -> None:
+    from songmaker_cli.db.queries.settings import (
+        get_claude_chat_model,
+        set_claude_model,
+    )
     set_claude_model(db_session, "claude_chat_model", "claude-sonnet-4-6")
-    result = get_claude_model(db_session, "claude_chat_model", "claude-opus-4-6")
-    assert result == "claude-sonnet-4-6"
+    assert get_claude_chat_model(db_session) == "claude-sonnet-4-6"
 
 
-def test_set_claude_model_updates_existing(db_session: Session) -> None:
-    from songmaker_cli.db.queries.settings import get_claude_model, set_claude_model
+def test_set_claude_chat_model_updates_existing(db_session: Session) -> None:
+    from songmaker_cli.db.queries.settings import (
+        get_claude_chat_model,
+        set_claude_model,
+    )
     set_claude_model(db_session, "claude_chat_model", "claude-sonnet-4-6")
     set_claude_model(db_session, "claude_chat_model", "claude-haiku-4-5-20251001")
-    result = get_claude_model(db_session, "claude_chat_model", "claude-opus-4-6")
-    assert result == "claude-haiku-4-5-20251001"
+    assert get_claude_chat_model(db_session) == "claude-haiku-4-5-20251001"

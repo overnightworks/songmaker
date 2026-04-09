@@ -13,12 +13,11 @@ from sqlalchemy.orm import Session
 from songmaker_cli.app_context import AppContext, get_db_session
 from songmaker_cli.auth import (
     ROLE_ADMIN,
-    SESSION_ABSOLUTE_MAX_AGE_SECONDS,
-    SESSION_MAX_AGE_SECONDS,
     verify_session_cookie,
 )
-from songmaker_cli.constants import MAX_USER_AGENT_LENGTH, AuditAction, ResourceType
+from songmaker_cli.constants import HTTP_MAX_USER_AGENT_LENGTH, AuditAction, ResourceType
 from songmaker_cli.db.queries import get_session_with_user, record_audit
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -82,14 +81,15 @@ def _try_redis_auth(
     if created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=timezone.utc)
 
-    if (now - created_at).total_seconds() > SESSION_ABSOLUTE_MAX_AGE_SECONDS:
+    settings = get_settings()
+    if (now - created_at).total_seconds() > settings.session_absolute_max_age_seconds:
         raise HTTPException(401, "Session expired")
 
     if not cached.is_active:
         raise HTTPException(403, "Account disabled")
 
     current_ip = request.client.host if request.client else "unknown"
-    current_ua = (request.headers.get("user-agent") or "")[:MAX_USER_AGENT_LENGTH]
+    current_ua = (request.headers.get("user-agent") or "")[:HTTP_MAX_USER_AGENT_LENGTH]
 
     ip_changed, ua_changed = _check_ip_ua_changes(
         db, session_id, cached.user_id,
@@ -98,7 +98,7 @@ def _try_redis_auth(
     )
 
     try:
-        session_cache.refresh_ttl(session_id, SESSION_MAX_AGE_SECONDS)
+        session_cache.refresh_ttl(session_id, settings.session_max_age_seconds)
         if ip_changed or ua_changed:
             session_cache.update_ip_ua(session_id, current_ip, current_ua)
     except Exception:
@@ -140,15 +140,16 @@ def get_current_user(
     if not user_session or expires_at < now:
         raise HTTPException(401, "Session expired")
 
+    settings = get_settings()
     created_at = user_session.created_at.replace(tzinfo=timezone.utc)
-    if (now - created_at).total_seconds() > SESSION_ABSOLUTE_MAX_AGE_SECONDS:
+    if (now - created_at).total_seconds() > settings.session_absolute_max_age_seconds:
         raise HTTPException(401, "Session expired")
 
     if not user_session.user.is_active:
         raise HTTPException(403, "Account disabled")
 
     current_ip = request.client.host if request.client else "unknown"
-    current_ua = (request.headers.get("user-agent") or "")[:MAX_USER_AGENT_LENGTH]
+    current_ua = (request.headers.get("user-agent") or "")[:HTTP_MAX_USER_AGENT_LENGTH]
 
     _check_ip_ua_changes(
         db, session_id, user_session.user.id,
@@ -158,7 +159,7 @@ def get_current_user(
     user_session.ip_address = current_ip
     user_session.user_agent = current_ua
 
-    user_session.expires_at = now + timedelta(seconds=SESSION_MAX_AGE_SECONDS)
+    user_session.expires_at = now + timedelta(seconds=settings.session_max_age_seconds)
 
     try:
         from songmaker_cli.redis_client import SessionCache
@@ -169,7 +170,7 @@ def get_current_user(
                 user_session.user.role, user_session.user.is_active,
                 current_ip, current_ua,
                 user_session.expires_at, user_session.created_at,
-                SESSION_MAX_AGE_SECONDS,
+                settings.session_max_age_seconds,
             )
     except Exception:
         log.warning("Redis session cache populate failed")

@@ -68,8 +68,8 @@ class PipelineConfig:
 
     def __post_init__(self) -> None:
         if self.pipeline_timeout <= 0:
-            from songmaker_cli.constants import SCORER_PIPELINE_TIMEOUT_SECONDS
-            object.__setattr__(self, "pipeline_timeout", SCORER_PIPELINE_TIMEOUT_SECONDS)
+            from songmaker_cli.constants import SCORING_PIPELINE_TIMEOUT_SECONDS
+            object.__setattr__(self, "pipeline_timeout", SCORING_PIPELINE_TIMEOUT_SECONDS)
 
 
 ScorerFunc = Callable[

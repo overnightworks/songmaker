@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 
 from arq import cron
 
@@ -18,18 +17,16 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.jobs import run_scoring_job
+from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_base import WorkerBase, build_redis_settings
 
 log = logging.getLogger(__name__)
-
-_SCORING_DEVICE_DEFAULT = "cpu"
 
 
 class ScoringWorker(WorkerBase):
     job_type = JobType.SCORE
     recovery_lock_key = RECOVERY_LOCK_SCORING_KEY
     queue_name = ARQ_SCORING_QUEUE_NAME
-    max_jobs = int(os.environ.get("SCORING_MAX_JOBS", "1"))
 
     async def score(self, ctx, job_id, gen_id, scorers):
         if not self.check_job_still_valid(job_id):
@@ -38,12 +35,11 @@ class ScoringWorker(WorkerBase):
         import structlog
         structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.SCORE)
 
-        device = os.environ.get("SCORING_DEVICE", _SCORING_DEVICE_DEFAULT)
         await asyncio.to_thread(
             run_scoring_job,
             job_id, gen_id, scorers,
             db_factory=self.get_db_factory(), audio_dir=self.audio_dir(),
-            device=device,
+            device=self._settings.scoring_device,
         )
 
     async def on_startup(self, ctx) -> None:
@@ -70,18 +66,19 @@ class ScoringWorker(WorkerBase):
         await super().on_shutdown(ctx)
 
 
-_scoring_worker = ScoringWorker()
+_settings = get_settings()
+_scoring_worker = ScoringWorker(_settings)
 
 
 class ScoringWorkerSettings:
     functions = [_scoring_worker.score]
     on_startup = _scoring_worker.on_startup
     on_shutdown = _scoring_worker.on_shutdown
-    redis_settings = build_redis_settings()
+    redis_settings = build_redis_settings(_settings)
     queue_name = ScoringWorker.queue_name
-    max_jobs = ScoringWorker.max_jobs
-    job_timeout = ScoringWorker.job_timeout
-    job_completion_wait = ScoringWorker.drain_timeout
+    max_jobs = _settings.scoring_max_jobs
+    job_timeout = _settings.arq_job_timeout
+    job_completion_wait = _settings.arq_drain_timeout
     health_check_interval = ScoringWorker.health_check_interval
     cron_jobs = [
         cron(

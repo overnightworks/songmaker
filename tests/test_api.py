@@ -1603,55 +1603,43 @@ def test_audit_log_admin_endpoint(tmp_path: Path) -> None:
 # ── Chat rate limiting ───────────────────────────────────────────────
 
 
-def test_chat_rate_limit(client: TestClient) -> None:
-    import songmaker_cli.api_helpers as api_mod
-    import songmaker_cli.auth as auth_mod
+def test_chat_rate_limit(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("CHAT_RATE_LIMIT_USER", "2")
+    monkeypatch.setenv("CHAT_RATE_LIMIT_ADMIN", "300")
+    from songmaker_cli.settings import get_settings
+    get_settings.cache_clear()
 
-    original = auth_mod.CHAT_RATE_LIMIT_USER
-    auth_mod.CHAT_RATE_LIMIT_USER = 2
-    api_mod._ENV_RATE_LIMITS["chat"] = (2, 300, "chat_rate_limit")
-
-    try:
-        patcher, _ = _mock_acall()
-        with patcher:
-            for _ in range(2):
-                r = client.post("/api/songs/s1/chat", json={"message": "hi"})
-                assert r.status_code == 200
-
+    patcher, _ = _mock_acall()
+    with patcher:
+        for _ in range(2):
             r = client.post("/api/songs/s1/chat", json={"message": "hi"})
-            assert r.status_code == 429
-    finally:
-        auth_mod.CHAT_RATE_LIMIT_USER = original
-        api_mod._ENV_RATE_LIMITS["chat"] = (
-            auth_mod.CHAT_RATE_LIMIT_USER, auth_mod.CHAT_RATE_LIMIT_ADMIN,
-            "chat_rate_limit",
-        )
+            assert r.status_code == 200
+
+        r = client.post("/api/songs/s1/chat", json={"message": "hi"})
+        assert r.status_code == 429
 
 
 # ── Admin rate limits ────────────────────────────────────────────────
 
 
-def test_admin_has_rate_limit(tmp_path: Path) -> None:
-    import songmaker_cli.api_helpers as api_mod
-
-    original_limits = api_mod._ENV_RATE_LIMITS["generate"]
-    api_mod._ENV_RATE_LIMITS["generate"] = (3, 1, "generation_rate_limit")
+def test_admin_has_rate_limit(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("GENERATION_RATE_LIMIT_USER", "3")
+    monkeypatch.setenv("GENERATION_RATE_LIMIT_ADMIN", "1")
+    from songmaker_cli.settings import get_settings
+    get_settings.cache_clear()
 
     c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
 
-    try:
-        with _mock_worker():
-            r = c.post(
-                "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
-            )
-            assert r.status_code == 200
+    with _mock_worker():
+        r = c.post(
+            "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
+        )
+        assert r.status_code == 200
 
-            r = c.post(
-                "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
-            )
-            assert r.status_code == 429
-    finally:
-        api_mod._ENV_RATE_LIMITS["generate"] = original_limits
+        r = c.post(
+            "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
+        )
+        assert r.status_code == 429
 
 
 # ── Body size limit middleware ───────────────────────────────────────

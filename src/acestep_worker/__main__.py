@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 import uvicorn
@@ -19,12 +18,7 @@ from acestep_worker.wrapper import (
     create_app,
     default_generate_runner,
 )
-
-DEFAULT_VRAM_BUDGET_GB = 22.0
-DEFAULT_CHECKPOINT_DIR = Path("/opt/acestep")
-DEFAULT_AUDIO_DIR = Path("/app/data/audio/worker_output")
-DEFAULT_LOG_DIR = Path("/opt/acestep/logs")
-DEFAULT_ACESTEP_INNER_PORT = 8101
+from songmaker_cli.settings import WorkerSettings, get_worker_settings
 
 DEFAULT_MODEL_SIZES_GB: dict[str, float] = {
     "turbo": 6.0,
@@ -35,43 +29,24 @@ DEFAULT_MODEL_SIZES_GB: dict[str, float] = {
 }
 
 
-def _require_env(name: str) -> str:
-    value = os.environ.get(name)
-    if not value:
-        raise RuntimeError(f"Required environment variable not set: {name}")
-    return value
+def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
+    settings = settings or get_worker_settings()
+    worker_id = settings.worker_id
+    worker_host = settings.worker_host or worker_id
+    checkpoint_dir = Path(settings.acestep_checkpoint_dir)
+    audio_dir = Path(settings.audio_output_dir)
+    log_dir = Path(settings.acestep_log_dir)
 
-
-def _optional_int_env(name: str) -> int | None:
-    value = os.environ.get(name)
-    return int(value) if value is not None and value != "" else None
-
-
-def build_deps() -> WorkerDeps:
-    worker_id = _require_env("WORKER_ID")
-    worker_host = os.environ.get("WORKER_HOST", worker_id)
-    worker_port = int(os.environ.get("WORKER_PORT", "8001"))
-    vram_budget_gb = float(os.environ.get("VRAM_BUDGET_GB", str(DEFAULT_VRAM_BUDGET_GB)))
-    checkpoint_dir = Path(os.environ.get("ACESTEP_CHECKPOINT_DIR", str(DEFAULT_CHECKPOINT_DIR)))
-    audio_dir = Path(os.environ.get("AUDIO_OUTPUT_DIR", str(DEFAULT_AUDIO_DIR)))
-    log_dir = Path(os.environ.get("ACESTEP_LOG_DIR", str(DEFAULT_LOG_DIR)))
-    acestep_inner_port = int(
-        os.environ.get("ACESTEP_INNER_PORT", str(DEFAULT_ACESTEP_INNER_PORT))
-    )
-    redis_url = _require_env("REDIS_URL")
-    control_plane_url = os.environ.get("CONTROL_PLANE_URL")
-    internal_token = os.environ.get("SONGMAKER_INTERNAL_TOKEN", "")
-
-    redis_client: Redis = Redis.from_url(redis_url, decode_responses=False)
+    redis_client: Redis = Redis.from_url(settings.redis_url, decode_responses=False)
 
     loader, unloader = make_acestep_runner(
         checkpoint_dir=checkpoint_dir,
-        base_port=acestep_inner_port,
-        vram_budget_gb=vram_budget_gb,
+        base_port=settings.acestep_inner_port,
+        vram_budget_gb=settings.vram_budget_gb,
         log_dir=log_dir,
     )
     cache = ModelCache(
-        vram_budget_gb=vram_budget_gb,
+        vram_budget_gb=settings.vram_budget_gb,
         model_sizes={mode: DEFAULT_MODEL_SIZES_GB.get(mode, 6.0) for mode in MODEL_CONFIG_PATHS},
         loader=loader,
         unloader=unloader,
@@ -97,28 +72,29 @@ def build_deps() -> WorkerDeps:
         state_provider=lambda: build_state_payload(deps),
     )
 
-    if control_plane_url and internal_token:
+    internal_token = settings.songmaker_internal_token.get_secret_value()
+    if settings.control_plane_url and internal_token:
         deps.registry_client = RegistryClient(
-            control_plane_url=control_plane_url,
+            control_plane_url=settings.control_plane_url,
             internal_token=internal_token,
         )
         deps.registration = WorkerRegistration(
             worker_id=worker_id,
             host=worker_host,
-            port=worker_port,
-            gpu_id=_optional_int_env("GPU_ID"),
-            vram_total_gb=vram_budget_gb,
+            port=settings.worker_port,
+            gpu_id=settings.gpu_id,
+            vram_total_gb=settings.vram_budget_gb,
         )
 
     return deps
 
 
 def main() -> None:
-    logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
-    deps = build_deps()
+    settings = get_worker_settings()
+    logging.basicConfig(level=settings.log_level)
+    deps = build_deps(settings)
     app = create_app(deps)
-    port = int(os.environ.get("WORKER_PORT", "8001"))
-    uvicorn.run(app, host="0.0.0.0", port=port)  # noqa: S104
+    uvicorn.run(app, host="0.0.0.0", port=settings.worker_port)  # noqa: S104
 
 
 if __name__ == "__main__":  # pragma: no cover

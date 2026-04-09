@@ -206,8 +206,8 @@ def test_shared_rate_limit(tmp_path: Path) -> None:
     resp = client.post("/api/albums/test_album/share")
     slug = resp.json()["share_slug"]
 
-    old_limit = consts.SHARED_RATE_LIMIT
-    consts.SHARED_RATE_LIMIT = 2
+    old_limit = consts.SHARING_RATE_LIMIT
+    consts.SHARING_RATE_LIMIT = 2
     try:
         from songmaker_cli.server import create_app
         audio_dir = client.app.state.ctx.audio_dir
@@ -227,7 +227,7 @@ def test_shared_rate_limit(tmp_path: Path) -> None:
             resp = unauthed.get(f"/shared/{slug}")
         assert resp.status_code == 429
     finally:
-        consts.SHARED_RATE_LIMIT = old_limit
+        consts.SHARING_RATE_LIMIT = old_limit
 
 
 # ── Ownership checks ──────────────────────────────────────────────

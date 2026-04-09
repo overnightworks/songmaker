@@ -11,11 +11,11 @@ from songmaker_cli.acestep_capabilities import (
     ParamSupport,
 )
 from songmaker_cli.config import get_model_capabilities
-from songmaker_cli.constants import AVAILABLE_MODEL_MODES
+from songmaker_cli.constants import MODEL_AVAILABLE_MODES
 
 
 def test_profiles_cover_every_available_mode() -> None:
-    assert set(ACESTEP_PROFILES.keys()) == AVAILABLE_MODEL_MODES
+    assert set(ACESTEP_PROFILES.keys()) == MODEL_AVAILABLE_MODES
 
 
 def test_profile_objects_are_frozen() -> None:
@@ -77,7 +77,7 @@ def test_lm_params_supported_on_all_variants() -> None:
 
 def test_get_model_capabilities_adapter_shape() -> None:
     caps = get_model_capabilities()
-    assert set(caps.keys()) == AVAILABLE_MODEL_MODES
+    assert set(caps.keys()) == MODEL_AVAILABLE_MODES
     for mode_caps in caps.values():
         assert set(mode_caps.keys()) == {"max_inference_steps", "hidden_params"}
         assert isinstance(mode_caps["max_inference_steps"], int)

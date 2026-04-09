@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -25,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import find_project_root
-from songmaker_cli.constants import APP_NAME, AUDIO_ROOT, DATA_ROOT
+from songmaker_cli.constants import APP_NAME
 from songmaker_cli.health_api import _compute_script_hashes
 from songmaker_cli.lifecycle import auto_setup_admin, session_sync_loop
 from songmaker_cli.middleware import (
@@ -36,14 +35,13 @@ from songmaker_cli.middleware import (
     IpRateLimitMiddleware,
     SecurityHeadersMiddleware,
 )
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
-REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT", 30))
-
 
 def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
-    raw = os.environ.get("ALLOWED_HOSTS", "")
+    raw = get_settings().allowed_hosts
     exact: set[str] = set()
     patterns: list[re.Pattern[str]] = []
     for h in raw.split(","):
@@ -101,14 +99,14 @@ def create_app(
 
     if ctx is None:
         from songmaker_cli.auth import ensure_session_secret, parse_trusted_proxies
-        from songmaker_cli.db.engine import init_db, resolve_database_url
+        from songmaker_cli.db.engine import init_db
 
-        db_url = resolve_database_url()
-        db_factory = init_db(db_url)
+        settings = get_settings()
+        db_factory = init_db(settings.database_url)
         secret = ensure_session_secret(data_dir)
         hosts_exact, hosts_patterns = parse_allowed_hosts()
 
-        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        redis_url = settings.redis_url
         from songmaker_cli.redis_client import create_redis
         redis_instance = create_redis(redis_url)
 
@@ -151,7 +149,7 @@ def create_app(
     app.add_middleware(IpRateLimitMiddleware)
     app.add_middleware(BodySizeLimitMiddleware)
 
-    cors_origin = os.environ.get("CORS_ORIGIN")
+    cors_origin = get_settings().cors_origin
     cors_kwargs: dict = {
         "allow_methods": ["GET", "POST", "PUT", "DELETE"],
         "allow_headers": ["Content-Type", "Cookie", "X-CSRF-Token"],
@@ -242,12 +240,13 @@ def run_server(
 
     if project_root is None:
         project_root = find_project_root(Path.cwd()) or Path.cwd()
-    if audio_dir is None:
-        audio_dir = project_root / AUDIO_ROOT
-    if data_dir is None:
-        data_dir = project_root / DATA_ROOT
 
     _load_env_file(project_root)
+    settings = get_settings()
+    if audio_dir is None:
+        audio_dir = project_root / settings.audio_dir
+    if data_dir is None:
+        data_dir = project_root / settings.data_dir
 
     from songmaker_cli.logging_config import configure_logging
     configure_logging()
@@ -264,8 +263,7 @@ def run_server(
         import webbrowser
         webbrowser.open(f"http://localhost:{port}")
 
-    host = os.environ.get("HOST", "127.0.0.1")
     uvicorn.run(
-        app, host=host, port=port, log_level="info",
-        timeout_keep_alive=REQUEST_TIMEOUT_SECONDS,
+        app, host=settings.host, port=port, log_level="info",
+        timeout_keep_alive=settings.request_timeout_seconds,
     )

@@ -44,7 +44,7 @@ def _get_shared_limiter(request: Request) -> RedisRateLimiter:
         ctx: AppContext = request.app.state.ctx
         limiter = RedisRateLimiter(
             ctx.redis, REDIS_RL_SHARED_PREFIX,
-            _consts.SHARED_RATE_LIMIT, _consts.SHARED_RATE_WINDOW_SECONDS,
+            _consts.SHARING_RATE_LIMIT, _consts.SHARING_RATE_WINDOW_SECONDS,
         )
         request.app.state._shared_limiter = limiter
     return limiter
@@ -66,7 +66,7 @@ def _check_shared_rate_limit(request: Request) -> None:
     if not allowed:
         raise HTTPException(
             429, "Too many requests",
-            headers={"Retry-After": str(_consts.SHARED_RATE_WINDOW_SECONDS)},
+            headers={"Retry-After": str(_consts.SHARING_RATE_WINDOW_SECONDS)},
         )
 
 

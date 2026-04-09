@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.acestep_capabilities import ACESTEP_PROFILES
-from songmaker_cli.constants import DEFAULT_MODEL_MODE
+from songmaker_cli.constants import MODEL_DEFAULT_MODE
 from songmaker_cli.db.queries.settings import get_global_defaults, save_global_defaults
 from songmaker_cli.errors import ValidationError
 
@@ -166,7 +166,7 @@ def resolve_model_mode(model_name: str) -> str:
 def build_ace_config(
     meta: "SongMeta",
     cli_overrides: dict | None = None,
-    model_name: str = DEFAULT_MODEL_MODE,
+    model_name: str = MODEL_DEFAULT_MODE,
     global_defaults: dict | None = None,
     preset_params: dict | None = None,
     seed: int | None = None,

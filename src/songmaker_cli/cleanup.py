@@ -1,4 +1,4 @@
-"""Hard-delete soft-deleted Albums/Songs older than RESTORE_WINDOW.
+"""Hard-delete soft-deleted Albums/Songs older than the soft-delete retention window.
 
 Scheduled as an arq cron job. Reuses the existing delete_album/delete_song
 query functions (which already collect mp3/wav paths before ORM cascade
@@ -9,16 +9,16 @@ DELETE endpoints used to.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from songmaker_cli.api_helpers import cleanup_generation_files
-from songmaker_cli.constants import RESTORE_WINDOW
 from songmaker_cli.db.queries import (
     delete_album,
     delete_song,
     list_expired_albums,
     list_expired_songs,
 )
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +30,9 @@ def run_cleanup_expired(db_factory, audio_dir) -> tuple[int, int]:
     orphan songs whose parent album was *not* in the expired set —
     songs deleted earlier than their (still-live) album.
     """
-    cutoff = datetime.now(timezone.utc) - RESTORE_WINDOW
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        days=get_settings().soft_delete_retention_days,
+    )
     paths: list[str] = []
     album_count = 0
     song_count = 0

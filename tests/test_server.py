@@ -315,8 +315,9 @@ def test_run_server_opens_browser(tmp_path: Path) -> None:
 
 
 def test_run_server_creates_dirs(tmp_path: Path) -> None:
-    from songmaker_cli.constants import AUDIO_ROOT, DATA_ROOT
+    from songmaker_cli.settings import get_settings
 
+    settings = get_settings()
     mock_app = MagicMock()
 
     with (
@@ -325,13 +326,14 @@ def test_run_server_creates_dirs(tmp_path: Path) -> None:
     ):
         run_server(project_root=tmp_path)
 
-    assert (tmp_path / AUDIO_ROOT).exists()
-    assert (tmp_path / DATA_ROOT).exists()
+    assert (tmp_path / settings.audio_dir).exists()
+    assert (tmp_path / settings.data_dir).exists()
 
 
 def test_run_server_infers_dirs_from_project_root(tmp_path: Path) -> None:
-    from songmaker_cli.constants import AUDIO_ROOT, DATA_ROOT
+    from songmaker_cli.settings import get_settings
 
+    settings = get_settings()
     mock_app = MagicMock()
 
     with (
@@ -342,8 +344,8 @@ def test_run_server_infers_dirs_from_project_root(tmp_path: Path) -> None:
         run_server(project_root=None)
 
     call_args = mock_create.call_args
-    assert call_args[0][0] == tmp_path / AUDIO_ROOT
-    assert call_args[0][1] == tmp_path / DATA_ROOT
+    assert call_args[0][0] == tmp_path / settings.audio_dir
+    assert call_args[0][1] == tmp_path / settings.data_dir
 
 
 def test_csrf_origin_check_rejects_cross_origin(server_app: TestClient) -> None:
@@ -560,9 +562,9 @@ def test_body_size_limit_invalid_content_length(server_app: TestClient) -> None:
     assert resp.status_code != 413
 
 
-def test_body_size_streaming_too_large(tmp_path: Path) -> None:
+def test_body_size_streaming_too_large(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("MAX_REQUEST_BODY_BYTES", "10")
 
-    import songmaker_cli.middleware.body_size as srv
     from songmaker_cli.middleware.body_size import BodySizeLimitMiddleware
 
     async def dummy_app(scope, receive, send):
@@ -574,9 +576,7 @@ def test_body_size_streaming_too_large(tmp_path: Path) -> None:
         })
         await send({"type": "http.response.body", "body": b"ok"})
 
-    old_limit = srv.MAX_REQUEST_BODY_BYTES
-    srv.MAX_REQUEST_BODY_BYTES = 10
-    try:
+    if True:
         middleware = BodySizeLimitMiddleware(dummy_app)
 
         async def run():
@@ -605,8 +605,6 @@ def test_body_size_streaming_too_large(tmp_path: Path) -> None:
 
         result = asyncio.run(run())
         assert result == 413
-    finally:
-        srv.MAX_REQUEST_BODY_BYTES = old_limit
 
 
 # ── CORS wildcard validation ───────────────────────────────────────
@@ -734,8 +732,8 @@ def test_parse_allowed_hosts() -> None:
 # ── IpRateLimitMiddleware ──────────────────────────────────────────
 
 
-def test_ip_rate_limit_429(tmp_path: Path) -> None:
-    import songmaker_cli.middleware.rate_limit as srv
+def test_ip_rate_limit_429(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("IP_RATE_LIMIT", "2")
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -757,21 +755,16 @@ def test_ip_rate_limit_429(tmp_path: Path) -> None:
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    old_limit = srv.IP_RATE_LIMIT
-    srv.IP_RATE_LIMIT = 2
-    try:
-        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-        client = TestClient(app)
-        for _ in range(3):
-            resp = client.get("/api/auth/check")
-        assert resp.status_code == 429
-        assert "Too many requests" in resp.json()["detail"]
-    finally:
-        srv.IP_RATE_LIMIT = old_limit
+    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
+    client = TestClient(app)
+    for _ in range(3):
+        resp = client.get("/api/auth/check")
+    assert resp.status_code == 429
+    assert "Too many requests" in resp.json()["detail"]
 
 
-def test_static_assets_bypass_rate_limit(tmp_path: Path) -> None:
-    import songmaker_cli.middleware.rate_limit as srv
+def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("IP_RATE_LIMIT", "2")
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -795,16 +788,11 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path) -> None:
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    old_limit = srv.IP_RATE_LIMIT
-    srv.IP_RATE_LIMIT = 2
-    try:
-        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-        client = TestClient(app)
-        for _ in range(5):
-            resp = client.get("/_app/immutable/test.js")
-        assert resp.status_code == 200
-    finally:
-        srv.IP_RATE_LIMIT = old_limit
+    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
+    client = TestClient(app)
+    for _ in range(5):
+        resp = client.get("/_app/immutable/test.js")
+    assert resp.status_code == 200
 
 
 # ── Audio endpoint edge cases ──────────────────────────────────────
@@ -1488,7 +1476,9 @@ def test_auto_setup_admin_skips_when_users_exist(tmp_path: Path) -> None:
         assert get_user_by_username(session, "boss") is None
 
 
-def test_auto_setup_admin_skips_without_env_vars(tmp_path: Path) -> None:
+def test_auto_setup_admin_skips_without_env_vars(
+    tmp_path: Path, monkeypatch,
+) -> None:
     from songmaker_cli.lifecycle import auto_setup_admin as _auto_setup_admin
 
     factory = init_db(tmp_path / "test.db")
@@ -1496,8 +1486,9 @@ def test_auto_setup_admin_skips_without_env_vars(tmp_path: Path) -> None:
         db=factory, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
         session_secret=TEST_SECRET, redis=make_fake_redis(),
     )
-    with patch.dict("os.environ", {}, clear=True):
-        _auto_setup_admin(ctx)
+    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    _auto_setup_admin(ctx)
 
 
 def test_auto_setup_admin_rejects_weak_password(tmp_path: Path) -> None:

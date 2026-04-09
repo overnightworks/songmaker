@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session, joinedload
 
-from songmaker_cli.constants import RESTORE_WINDOW
 from songmaker_cli.db.models import Album, Generation, Song
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 from songmaker_cli.db.soft_delete import include_deleted
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
 
 class RestoreWindowExpiredError(Exception):
-    """Raised when restore is attempted past RESTORE_WINDOW."""
+    """Raised when restore is attempted past the soft-delete restore window."""
 
 
 def list_albums(
@@ -135,7 +135,7 @@ def restore_album(session: Session, album_id: str) -> Album:
     Songs deleted *before* the album was deleted (different timestamp)
     stay deleted, preserving the user's earlier intent.
 
-    Raises RestoreWindowExpiredError if past RESTORE_WINDOW.
+    Raises RestoreWindowExpiredError if past the soft-delete restore window.
     Raises ValueError if the album doesn't exist.
     """
     album = get_album(session, album_id, include_deleted_rows=True)
@@ -147,10 +147,11 @@ def restore_album(session: Session, album_id: str) -> Album:
     if deleted_at.tzinfo is None:
         deleted_at = deleted_at.replace(tzinfo=timezone.utc)
     age = datetime.now(timezone.utc) - deleted_at
-    if age > RESTORE_WINDOW:
+    window = timedelta(days=get_settings().soft_delete_retention_days)
+    if age > window:
         raise RestoreWindowExpiredError(
             f"Album {album_id} was deleted {age.days} days ago, "
-            f"past the {RESTORE_WINDOW.days}-day restore window",
+            f"past the {window.days}-day restore window",
         )
     cascade_ts = album.deleted_at
     album.deleted_at = None
