@@ -1,5 +1,17 @@
 # Coverage config for CI — excludes modules that require scoring/whisper extras.
-# Full coverage (including scorers) is measured locally with all extras installed.
+#
+# Why scorers are excluded:
+# All seven scorers technically run on CPU (faster-whisper makes text_accuracy
+# viable, just slower), so the *code* could be tested in CI. The blocker is the
+# CI image — it doesn't ship the heavy scoring deps (faster-whisper, audiobox-
+# aesthetics, librosa model weights), and adding them blows up image size and
+# runtime for marginal benefit on a single-developer project.
+#
+# Full coverage (including scorers) is measured locally with all extras
+# installed. Revisit this when the project moves to multi-user deployment, gets
+# a beefier CI runner, or a scorer regression actually slips through.
+#
+# Tracked as B4 in plans/architecture-review-findings.md.
 [run]
 omit =
     src/songmaker_cli/scoring/audiobox_aesthetics.py
