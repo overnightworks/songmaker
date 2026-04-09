@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { VersionGenerationParams } from '$lib/api/types';
+	import { ACESTEP_PARAM_DESCRIPTIONS } from '$lib/constants/acestep-params';
 
 	interface Props {
 		values: VersionGenerationParams;
@@ -7,6 +8,10 @@
 		onchange: (params: VersionGenerationParams) => void;
 		hiddenParams?: string[];
 		maxInferenceSteps?: number;
+	}
+
+	function tooltip(key: string): string {
+		return ACESTEP_PARAM_DESCRIPTIONS[key]?.short ?? '';
 	}
 
 	let {
@@ -93,7 +98,7 @@
 
 <div class="settings-grid">
 	{#each NUMBER_FIELDS.slice(0, 4) as f (f.key)}
-		<label class="setting">
+		<label class="setting" title={tooltip(f.key)}>
 			<span>{f.label}</span>
 			<input
 				type="number"
@@ -102,16 +107,18 @@
 				step={f.step}
 				value={values[f.key] ?? ''}
 				placeholder={String(placeholders[f.key])}
+				title={tooltip(f.key)}
 				oninput={(e) => handleNumber(f.key, e.currentTarget.value)}
 			/>
 		</label>
 	{/each}
 
 	{#each SELECT_FIELDS as f (f.key)}
-		<label class="setting">
+		<label class="setting" title={tooltip(f.key)}>
 			<span>{f.label}</span>
 			<select
 				value={values[f.key] ?? ''}
+				title={tooltip(f.key)}
 				onchange={(e) => setParam(f.key, e.currentTarget.value || undefined)}
 			>
 				<option value="">default ({placeholders[f.key]})</option>
@@ -123,7 +130,7 @@
 	{/each}
 
 	{#each NUMBER_FIELDS.slice(4) as f (f.key)}
-		<label class="setting">
+		<label class="setting" title={tooltip(f.key)}>
 			<span>{f.label}</span>
 			<input
 				type="number"
@@ -132,28 +139,31 @@
 				step={f.step}
 				value={values[f.key] ?? ''}
 				placeholder={String(placeholders[f.key])}
+				title={tooltip(f.key)}
 				oninput={(e) => handleNumber(f.key, e.currentTarget.value)}
 			/>
 		</label>
 	{/each}
 
-	<label class="setting full-width">
+	<label class="setting full-width" title={tooltip('lm_negative_prompt')}>
 		<span>LM Negative Prompt</span>
 		<input
 			type="text"
 			value={values.lm_negative_prompt ?? ''}
 			placeholder="e.g. bad quality, noise"
+			title={tooltip('lm_negative_prompt')}
 			oninput={(e) => setParam('lm_negative_prompt', e.currentTarget.value || undefined)}
 		/>
 	</label>
 
 	{#if BOOL_FIELDS.length > 0}
 		{#each BOOL_FIELDS as f (f.key)}
-			<label class="setting toggle">
+			<label class="setting toggle" title={tooltip(f.key)}>
 				<span>{f.label}</span>
 				<input
 					type="checkbox"
 					checked={(values[f.key] as boolean | null | undefined) ?? f.defaultValue}
+					title={tooltip(f.key)}
 					onchange={(e) => {
 						const checked = e.currentTarget.checked;
 						setParam(f.key, checked === f.defaultValue ? undefined : checked);
