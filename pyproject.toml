@@ -55,6 +55,7 @@ acestep-worker = [
     "uvicorn>=0.20,<1",
     "redis[hiredis]>=5.0,<6",
     "huggingface_hub>=0.20,<1",
+    "nvidia-ml-py3>=7.352,<8",
 ]
 dev = [
     "pytest>=7.0,<10",

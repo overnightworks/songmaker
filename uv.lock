@@ -1354,6 +1354,7 @@ dependencies = [
 acestep-worker = [
     { name = "fastapi" },
     { name = "huggingface-hub" },
+    { name = "nvidia-ml-py3" },
     { name = "redis", extra = ["hiredis"] },
     { name = "uvicorn" },
 ]
@@ -1415,6 +1416,7 @@ requires-dist = [
     { name = "mutagen", marker = "extra == 'server'", specifier = ">=1.47,<2" },
     { name = "numba", marker = "extra == 'whisper'" },
     { name = "numpy", specifier = ">=1.26,<3" },
+    { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
     { name = "nvidia-ml-py3", marker = "extra == 'scoring'", specifier = ">=7.352,<8" },
     { name = "psycopg2-binary", marker = "extra == 'server'", specifier = ">=2.9,<3" },
     { name = "pydantic", specifier = ">=2.0,<3" },
