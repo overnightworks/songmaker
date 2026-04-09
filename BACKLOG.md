@@ -99,23 +99,6 @@ After the architecture cleanup, these are the bigger features in the queue. They
 
 **First step:** read existing test infrastructure, install Playwright, write the auth phase first. Don't try to do all 4 phases in one PR.
 
-### Rename songs and albums (inline edit)
-
-**Goal:** Let the user rename a song or album from the UI. Currently the title is set at creation and never changes — typos and "untitled" placeholders linger forever.
-
-**Decisions:**
-- One shared `EditableTitle.svelte` component used by both the song detail view and album header. Click-to-edit, blur-to-save, Esc-to-cancel.
-- Two endpoints: `PATCH /api/songs/{id}` and `PATCH /api/albums/{id}`, both accepting `{title: string}`. Same Pydantic shape, different ownership check.
-- Audit-logged with the existing `UPDATE` action.
-- Slug regeneration: rerun `slugify()` on the new title and update `share_slug` only if the share is currently disabled. If sharing is on, keep the old slug to avoid breaking shared links.
-
-**Constraints:**
-- Ownership check on both endpoints.
-- Validation: non-empty after trim, ≤ existing column width.
-- Bundle both endpoints + the shared component in one PR — splitting them duplicates `EditableTitle.svelte` for no gain.
-
-**First step:** read `Song` and `Album` models + `db/queries/songs.py` and `db/queries/albums.py` + the song/album header components, design + execute.
-
 ### Move resources (generation→song, song→album)
 
 **Goal:** Let the user move a generation to a different (song, version), and move a song to a different album. Primary use case: post-recovery cleanup where anonymous WAVs land in a "Recovered" album and need reassignment to their real songs and albums.
