@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
+from songmaker_cli.acestep_capabilities import ACESTEP_PROFILES
 from songmaker_cli.constants import DEFAULT_MODEL_MODE
 from songmaker_cli.db.queries.settings import get_global_defaults, save_global_defaults
 from songmaker_cli.errors import ValidationError
@@ -127,8 +128,6 @@ def get_model_capabilities() -> dict[str, dict[str, object]]:
     consume today (max_inference_steps + hidden_params). If we want richer
     UI later, expose AceStepProfile directly via a new endpoint.
     """
-    from songmaker_cli.acestep_capabilities import ACESTEP_PROFILES
-
     return {
         mode: {
             "max_inference_steps": profile.max_inference_steps(),

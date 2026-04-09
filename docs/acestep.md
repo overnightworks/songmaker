@@ -260,7 +260,7 @@ Priority: song params > admin defaults > model defaults.
 | `use_cot_language` | bool | true | true | LM chain-of-thought language detection |
 | `constrained_decoding` | bool | false | false | FSM-based structured LM output |
 | `timesteps` | string | — | — | Custom diffusion schedule (comma-separated floats) |
-| `use_adg` | bool | false | false | Adaptive Dual Guidance (base model only) |
+| `use_adg` | bool | false | false | Adaptive Projected Guidance (no-op on turbo; honored on sft/base when `guidance_scale > 1.0`) |
 | `cfg_interval_start` | 0-1 | 0.0 | 0.0 | CFG application start fraction |
 | `cfg_interval_end` | 0-1 | 1.0 | 1.0 | CFG application end fraction |
 
@@ -334,3 +334,24 @@ torch.cuda.empty_cache()
 **No upstream option exists** — no env var, config flag, or API parameter disables the pre-flight. Only `offload_to_cpu=True` bypasses it (too slow).
 
 **When you can remove this patch:** When the GPU has enough spare VRAM that the check passes reliably (e.g., after adding a second GPU for desktop+scoring, freeing the 3090). Or when ACE-Step adds an official skip flag upstream.
+
+## Deferred features (blocked upstream)
+
+Things we'd like to expose but can't until ACE-Step changes — written down so we don't repeatedly investigate the same dead ends.
+
+### `use_cot_metas` toggle
+
+**What it would do:** Let the user disable the LM's automatic inference of BPM, key signature, and time signature from caption + lyrics, forcing the engine to respect explicit values instead.
+
+**Why it's blocked:** The flag exists internally in the ACE-Step engine ([`acestep/api/job_generation_setup.py`](../_models/acestep/acestep/api/job_generation_setup.py) sets it from `sample_mode`) and in the unrelated [`openrouter_models.py`](../_models/acestep/acestep/openrouter_models.py) compatibility schema, but **the canonical `/release_task` HTTP request schema does not accept it as user input**:
+
+- [`release_task_models.py`](../_models/acestep/acestep/api/http/release_task_models.py) declares only `use_cot_caption` and `use_cot_language` as boolean inputs
+- [`release_task_param_parser.py`](../_models/acestep/acestep/api/http/release_task_param_parser.py) parameter alias allowlist does not include `use_cot_metas` under any name
+
+Sending the field in the wire payload would be silently dropped. A UI toggle would appear to work but have **zero effect** on generation.
+
+**What needs to change upstream:** ACE-Step needs to add `use_cot_metas` to the `/release_task` request model and the param parser allowlist.
+
+**Investigation date:** 2026-04-09. Re-check after a vendored submodule bump.
+
+**When unblocked:** ~10 lines of plumbing — add field to [`AceStepConfig`](../src/acestep_engine/models.py), [`GenerationParams`](../src/songmaker_cli/api_models/songs.py), [`AceStepProfile`](../src/songmaker_cli/acestep_capabilities.py), and the wire payload in [`acestep_engine/client.py`](../src/acestep_engine/client.py); add a tooltip in [`acestep-params.ts`](../frontend/src/lib/constants/acestep-params.ts) and a toggle in [`ParamControls.svelte`](../frontend/src/lib/components/ParamControls.svelte).

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from songmaker_cli.acestep_capabilities import (
     ACESTEP_PROFILES,
@@ -19,7 +20,7 @@ def test_profiles_cover_every_available_mode() -> None:
 
 def test_profile_objects_are_frozen() -> None:
     profile = ACESTEP_PROFILES["sft"]
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         profile.shift = ParamSupport(supported=False)
 
 
