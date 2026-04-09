@@ -8,7 +8,7 @@ When you finish an item, delete its section. Git history preserves it. Decisions
 
 ## Architecture cleanup (deferred from the 2026-04-09 review)
 
-These three items remain from the brutal architecture review. The other 9 findings (B2–B7, B10–B12) shipped — see commit messages from 2026-04-09 for the audit trail. Sequence them after `plans/no-silent-fallbacks-v2.md` lands fully.
+These three items remain from the brutal architecture review. The other 9 findings (B2–B7, B10–B12) shipped — see commit messages from 2026-04-09 for the audit trail. Sequence them after the no-silent-fallbacks branch merges to main.
 
 ### Split `jobs.py` (B1)
 
