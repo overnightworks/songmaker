@@ -35,12 +35,16 @@ After the architecture cleanup, these are the bigger features in the queue. They
 
 ### Frontend component split (Phase 2)
 
-**Goal:** Two god components in the frontend — `GenerationView.svelte` (~845 lines) and `SongDetailView.svelte` (~802 lines) — mix unrelated concerns (score display, action bar, playlist picker, delete confirmation, job tracking, tab routing, editor, version timeline, sharing, repaint/cover dialogs). Split them into focused components and add component test scaffolding (currently zero component tests, only stores + utils are tested).
+**Goal:** `GenerationView.svelte` and `SongDetailView.svelte` are god components that mix unrelated concerns (score display, action bar, playlist picker, delete confirmation, job tracking, tab routing, editor, version timeline, sharing, repaint/cover dialogs). Split them into focused components and add component test scaffolding (currently zero component tests, only stores + utils are tested).
 
 **Decisions:**
 - Functional split only — no visual redesign, no new features.
 - Add component test scaffolding using `@testing-library/svelte` + `vitest`.
-- Highest-leverage frontend work — every other frontend D-item depends on this.
+
+**Triggers to start:**
+- Next non-trivial feature lands in either god component and the diff is hard to reason about.
+- A bug in one of the embedded concerns is hard to isolate because of the size.
+- Until then, pure-refactor risk (breaking 1700+ lines of working UI) outweighs the benefit.
 
 **Constraints:**
 - Backend stays unchanged. Pure frontend refactor + new tests.
@@ -95,19 +99,44 @@ After the architecture cleanup, these are the bigger features in the queue. They
 
 **First step:** read existing test infrastructure, install Playwright, write the auth phase first. Don't try to do all 4 phases in one PR.
 
-### Move generation between songs
+### Rename songs and albums (inline edit)
 
-**Goal:** Lets the user move a `Generation` row from one (song, version) to another via the UI. Designed primarily for the post-recovery cleanup workflow where N anonymous WAVs land in a "Recovered" album and need reassignment to their real songs.
+**Goal:** Let the user rename a song or album from the UI. Currently the title is set at creation and never changes — typos and "untitled" placeholders linger forever.
 
 **Decisions:**
-- New endpoint `POST /api/generations/{id}/move` taking `target_song_id` + `target_version_id` (optional, defaults to latest).
-- Audit-logged with `MOVE` action (already in `AuditAction` enum).
-- Frontend exposes it via a "Move to..." action in the generation context menu.
-- Updates `is_picked` / `is_kept` flags on the destination correctly (transfer them iff the source was picked/kept and the destination has none).
+- One shared `EditableTitle.svelte` component used by both the song detail view and album header. Click-to-edit, blur-to-save, Esc-to-cancel.
+- Two endpoints: `PATCH /api/songs/{id}` and `PATCH /api/albums/{id}`, both accepting `{title: string}`. Same Pydantic shape, different ownership check.
+- Audit-logged with the existing `UPDATE` action.
+- Slug regeneration: rerun `slugify()` on the new title and update `share_slug` only if the share is currently disabled. If sharing is on, keep the old slug to avoid breaking shared links.
 
 **Constraints:**
-- Ownership check — can only move generations owned by the current user (or admin).
-- The audio file path doesn't move on disk — only the DB row changes. The path remains stable.
-- Don't break version_number / generation_number sequences on the destination.
+- Ownership check on both endpoints.
+- Validation: non-empty after trim, ≤ existing column width.
+- Bundle both endpoints + the shared component in one PR — splitting them duplicates `EditableTitle.svelte` for no gain.
 
-**First step:** read `Generation` model + `db/queries/generations.py` + the existing context menu component, design + execute.
+**First step:** read `Song` and `Album` models + `db/queries/songs.py` and `db/queries/albums.py` + the song/album header components, design + execute.
+
+### Move resources (generation→song, song→album)
+
+**Goal:** Let the user move a generation to a different (song, version), and move a song to a different album. Primary use case: post-recovery cleanup where anonymous WAVs land in a "Recovered" album and need reassignment to their real songs and albums.
+
+**Decisions:**
+- One shared `MoveResourceDialog.svelte` for both move operations. It takes the resource type, source ID, and a tree picker (album → song → version) scoped to resources the user owns.
+- Two endpoints, bundled in one PR because they share the dialog and the safety patterns:
+  - `POST /api/generations/{id}/move` with `target_song_id` + optional `target_version_id` (defaults to latest version on the destination song).
+  - `POST /api/songs/{id}/move` with `target_album_id`.
+- Both audit-logged with the existing `MOVE` action.
+- Both expose the action via a "Move to..." entry in the existing context menu.
+- Double ownership check: user must own both source and destination.
+- The audio file path doesn't move on disk for either operation — only DB rows change. Paths stay stable.
+
+**Destination-side bookkeeping (the actual edge cases):**
+- **Move generation**: transfer `is_picked` only if the source was picked AND the destination song has no current pick. Always preserve `is_kept`. Don't break the destination version's `generation_number` sequence — assign the next available number on the destination version.
+- **Move song**: assign the next available `track_number` on the destination album. Playlist references survive as-is (they reference `song_id`, not `album_id`). If the source song was the album cover for its old album, the old album loses its cover.
+
+**Constraints:**
+- Ownership check on both source and destination.
+- Single transaction per move — partial state on failure is unacceptable.
+- The existing `MOVE` action in `AuditAction` covers both — no enum change needed.
+
+**First step:** read `Generation` and `Song` models + `db/queries/generations.py` + `db/queries/songs.py` + the existing context menu component, design + execute.
