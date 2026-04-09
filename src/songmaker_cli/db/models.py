@@ -131,7 +131,7 @@ class Generation(ShareMixin, Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     song_id: Mapped[str] = mapped_column(ForeignKey("songs.id"), index=True)
     version_id: Mapped[str | None] = mapped_column(
-        ForeignKey("versions.id"), nullable=True,
+        ForeignKey("versions.id"), nullable=True, index=True,
     )
     generation_number: Mapped[int] = mapped_column(Integer, default=1)
     seed: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
