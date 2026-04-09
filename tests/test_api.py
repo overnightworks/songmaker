@@ -1870,6 +1870,19 @@ def test_list_active_models(client: TestClient) -> None:
     assert "use_adg" not in sft_caps["hidden_params"]
 
 
+def test_build_model_response_raises_on_unregistered_model() -> None:
+    """If a row in available_models has an id that's not in
+    _BUILTIN_DEFAULTS / ACESTEP_PROFILES, that's a registration bug —
+    fail loudly instead of silently returning empty defaults."""
+    from types import SimpleNamespace
+
+    from songmaker_cli.settings_api import _build_model_response
+
+    fake_model = SimpleNamespace(id="acestep-quantum-v999", is_active=True)
+    with pytest.raises(RuntimeError, match="missing from get_builtin_defaults"):
+        _build_model_response(fake_model)
+
+
 def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:

@@ -64,11 +64,11 @@ def _format_prometheus(
     queue_depth: int,
     gpu_vram_mb: float | None,
     active_sessions: int,
-    acestep_workers_online: int = 0,
-    acestep_workers_loading: int = 0,
-    acestep_workers_offline: int = 0,
-    acestep_worker_loaded_counts: dict[str, int] | None = None,
-    acestep_worker_queue_depths: dict[str, int] | None = None,
+    acestep_workers_online: int,
+    acestep_workers_loading: int,
+    acestep_workers_offline: int,
+    acestep_worker_loaded_counts: dict[str, int],
+    acestep_worker_queue_depths: dict[str, int],
 ) -> str:
     lines: list[str] = []
 
@@ -132,22 +132,20 @@ def _format_prometheus(
         f'{PROM_ACESTEP_WORKERS_TOTAL}{{status="offline"}} {acestep_workers_offline}',
     )
 
-    loaded_counts = acestep_worker_loaded_counts or {}
     lines.append(
         f"# HELP {PROM_ACESTEP_WORKER_LOADED_MODELS} Number of loaded models per worker.",
     )
     lines.append(f"# TYPE {PROM_ACESTEP_WORKER_LOADED_MODELS} gauge")
-    for worker_id, count in sorted(loaded_counts.items()):
+    for worker_id, count in sorted(acestep_worker_loaded_counts.items()):
         lines.append(
             f'{PROM_ACESTEP_WORKER_LOADED_MODELS}{{worker_id="{worker_id}"}} {count}',
         )
 
-    queue_depths = acestep_worker_queue_depths or {}
     lines.append(
         f"# HELP {PROM_ACESTEP_WORKER_QUEUE_DEPTH} Per-worker generation queue depth.",
     )
     lines.append(f"# TYPE {PROM_ACESTEP_WORKER_QUEUE_DEPTH} gauge")
-    for worker_id, depth in sorted(queue_depths.items()):
+    for worker_id, depth in sorted(acestep_worker_queue_depths.items()):
         lines.append(
             f'{PROM_ACESTEP_WORKER_QUEUE_DEPTH}{{worker_id="{worker_id}"}} {depth}',
         )

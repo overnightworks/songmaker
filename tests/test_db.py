@@ -214,6 +214,35 @@ def test_create_song(seeded_session: Session) -> None:
     assert song.latest_version.lyrics == "hello"
 
 
+def test_create_song_first_in_album_uses_initial_track_number(
+    db_session: Session,
+) -> None:
+    from songmaker_cli.db.queries.songs import INITIAL_TRACK_NUMBER
+
+    db_session.add(Album(id="empty", title="E", artist="X"))
+    db_session.flush()
+    song = create_song(db_session, "First Song", "empty")
+    db_session.commit()
+    assert song.track_number == INITIAL_TRACK_NUMBER
+
+
+def test_create_generation_first_for_song_uses_initial_number(
+    seeded_session: Session,
+) -> None:
+    from songmaker_cli.db.queries import create_generation
+    from songmaker_cli.db.queries.generations import INITIAL_GENERATION_NUMBER
+
+    seeded_session.add(Album(id="a2", title="A2", artist="X"))
+    seeded_session.add(Song(id="s2", title="S2", album_id="a2", track_number=1))
+    seeded_session.flush()
+    gen = create_generation(
+        seeded_session, song_id="s2", version_id=None,
+        mp3_path="x.mp3", model_mode="sft",
+    )
+    seeded_session.commit()
+    assert gen.generation_number == INITIAL_GENERATION_NUMBER
+
+
 def test_update_song(seeded_session: Session) -> None:
     ver = update_song(seeded_session, "s1", lyrics="new lyrics")
     seeded_session.commit()

@@ -583,3 +583,23 @@ def test_unshare_playlist(tmp_path: Path) -> None:
     client.post("/api/playlists/pl1/share")
     resp = client.delete("/api/playlists/pl1/share")
     assert resp.status_code == 200
+
+
+def test_playlist_response_logs_warning_when_entries_is_none(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """`Playlist.entries` should never be None — SQLAlchemy returns []
+    for an empty one-to-many. If it ever IS None, that's an ORM bug; W3
+    requires it surface as a warning, not a silent fallback."""
+    from types import SimpleNamespace
+
+    from songmaker_cli.api_models.playlists import PlaylistResponse
+
+    fake_playlist = SimpleNamespace(
+        id="pl-broken", title="T", entries=None,
+        is_shared=False, share_slug=None, created_at=None,
+    )
+    with caplog.at_level("WARNING", logger="songmaker_cli.api_models.playlists"):
+        resp = PlaylistResponse.from_orm(fake_playlist)
+    assert resp.entry_count == 0
+    assert any("entries=None" in r.message for r in caplog.records)

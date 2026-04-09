@@ -19,6 +19,7 @@ from songmaker_cli.scheduler import (
     DownloadTaskResultDTO,
     GenerationTaskResultDTO,
     NoCapacityError,
+    WorkerProtocolError,
     WorkerTaskFailed,
     _iterate_task_events,
     _pick_from,
@@ -238,6 +239,35 @@ def test_consume_task_stream_invalid_result_raises() -> None:
     with _patch_async_client(client):
         with pytest.raises(WorkerTaskFailed, match="invalid result"):
             _run(consume_task_stream(worker, "gen-1"))
+
+
+def test_consume_task_stream_done_missing_result_raises_protocol_error() -> None:
+    worker = _make_picked()
+    client = _make_stream_client([("done", {"task_id": "g"})])
+    with _patch_async_client(client):
+        with pytest.raises(WorkerProtocolError, match="missing 'result'"):
+            _run(consume_task_stream(worker, "gen-1"))
+
+
+def test_consume_task_stream_error_missing_field_raises_protocol_error() -> None:
+    worker = _make_picked()
+    client = _make_stream_client([("error", {"task_id": "g"})])
+    with _patch_async_client(client):
+        with pytest.raises(WorkerProtocolError, match="missing 'error'"):
+            _run(consume_task_stream(worker, "gen-1"))
+
+
+def test_consume_task_stream_error_empty_string_logs_and_raises(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    worker = _make_picked()
+    client = _make_stream_client([("error", {"error": ""})])
+    with _patch_async_client(client):
+        with caplog.at_level("WARNING", logger="songmaker_cli.scheduler"):
+            with pytest.raises(WorkerTaskFailed) as exc_info:
+                _run(consume_task_stream(worker, "gen-1"))
+    assert str(exc_info.value) == ""
+    assert any("empty 'error'" in r.message for r in caplog.records)
 
 
 def test_consume_task_stream_reconnects_on_transport_drop() -> None:
@@ -728,6 +758,22 @@ def test_consume_download_task_stream_invalid_payload_raises() -> None:
     client = _make_stream_client([("done", {"task_id": "d", "result": {"mode": "sft"}})])
     with _patch_async_client(client):
         with pytest.raises(WorkerTaskFailed, match="invalid download result"):
+            _run(consume_download_task_stream(worker, "d"))
+
+
+def test_consume_download_task_stream_done_missing_result_raises_protocol_error() -> None:
+    worker = _make_picked()
+    client = _make_stream_client([("done", {"task_id": "d"})])
+    with _patch_async_client(client):
+        with pytest.raises(WorkerProtocolError, match="missing 'result'"):
+            _run(consume_download_task_stream(worker, "d"))
+
+
+def test_consume_download_task_stream_error_missing_field_raises_protocol_error() -> None:
+    worker = _make_picked()
+    client = _make_stream_client([("error", {"task_id": "d"})])
+    with _patch_async_client(client):
+        with pytest.raises(WorkerProtocolError, match="missing 'error'"):
             _run(consume_download_task_stream(worker, "d"))
 
 

@@ -53,6 +53,17 @@ class WorkerTaskFailed(RuntimeError):
     """Raised when the worker emits an `error` SSE event."""
 
 
+class WorkerProtocolError(WorkerTaskFailed):
+    """Raised when a worker SSE event violates the wire contract.
+
+    Subclasses :class:`WorkerTaskFailed` so existing ``except`` blocks
+    continue to work, but the specific class lets diagnostics distinguish
+    "the worker reported a real task failure" from "the worker sent a
+    malformed event that should never happen". A protocol error always
+    indicates a bug in the worker — not a transient failure.
+    """
+
+
 class DownloadTaskResultDTO(BaseModel):
     mode: str
     size_bytes: int
@@ -295,15 +306,24 @@ async def consume_task_stream(
             fraction = float(data.get("progress", 0.0))
             await _maybe_invoke(on_progress, fraction)
         elif event_type == "done":
-            result_payload = data.get("result") or {}
+            if "result" not in data:
+                raise WorkerProtocolError(
+                    "Worker done event missing 'result' field",
+                )
             try:
-                return GenerationTaskResultDTO.model_validate(result_payload)
+                return GenerationTaskResultDTO.model_validate(data["result"])
             except ValidationError as exc:
                 raise WorkerTaskFailed(
                     f"Worker returned invalid result: {exc}",
                 ) from exc
         elif event_type == "error":
-            message = data.get("error") or "worker error"
+            if "error" not in data:
+                raise WorkerProtocolError(
+                    "Worker error event missing 'error' field",
+                )
+            message = data["error"]
+            if not message:
+                log.warning("Worker error event has empty 'error' field")
             raise WorkerTaskFailed(message)
     raise WorkerTaskFailed("SSE stream ended without done/error event")
 
@@ -326,15 +346,24 @@ async def consume_download_task_stream(
             fraction = float(data.get("progress", 0.0))
             await _maybe_invoke(on_progress, fraction)
         elif event_type == "done":
-            result_payload = data.get("result") or {}
+            if "result" not in data:
+                raise WorkerProtocolError(
+                    "Worker done event missing 'result' field",
+                )
             try:
-                return DownloadTaskResultDTO.model_validate(result_payload)
+                return DownloadTaskResultDTO.model_validate(data["result"])
             except ValidationError as exc:
                 raise WorkerTaskFailed(
                     f"Worker returned invalid download result: {exc}",
                 ) from exc
         elif event_type == "error":
-            message = data.get("error") or "worker error"
+            if "error" not in data:
+                raise WorkerProtocolError(
+                    "Worker error event missing 'error' field",
+                )
+            message = data["error"]
+            if not message:
+                log.warning("Worker error event has empty 'error' field")
             raise WorkerTaskFailed(message)
     raise WorkerTaskFailed("SSE stream ended without done/error event")
 

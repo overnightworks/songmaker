@@ -1170,6 +1170,11 @@ def test_metrics_format_prometheus_all_sections() -> None:
         queue_depth=7,
         gpu_vram_mb=1024.5,
         active_sessions=3,
+        acestep_workers_online=0,
+        acestep_workers_loading=0,
+        acestep_workers_offline=0,
+        acestep_worker_loaded_counts={},
+        acestep_worker_queue_depths={},
     )
     assert '# TYPE songmaker_http_requests_total counter' in body
     assert 'songmaker_http_requests_total{method="GET",status="200"} 10' in body
@@ -1202,6 +1207,11 @@ def test_metrics_format_prometheus_no_gpu_no_duration() -> None:
         queue_depth=0,
         gpu_vram_mb=None,
         active_sessions=0,
+        acestep_workers_online=0,
+        acestep_workers_loading=0,
+        acestep_workers_offline=0,
+        acestep_worker_loaded_counts={},
+        acestep_worker_queue_depths={},
     )
     assert "songmaker_gpu_vram_megabytes" not in body
     assert "songmaker_job_duration_seconds{" not in body
@@ -1267,6 +1277,11 @@ def test_metrics_format_prometheus_acestep_no_workers() -> None:
         queue_depth=0,
         gpu_vram_mb=None,
         active_sessions=0,
+        acestep_workers_online=0,
+        acestep_workers_loading=0,
+        acestep_workers_offline=0,
+        acestep_worker_loaded_counts={},
+        acestep_worker_queue_depths={},
     )
     assert 'songmaker_acestep_workers_total{status="online"} 0' in body
     assert 'songmaker_acestep_workers_total{status="loading"} 0' in body

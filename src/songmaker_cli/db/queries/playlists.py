@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Final
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -16,6 +17,8 @@ from songmaker_cli.db.models import (
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 
 log = logging.getLogger(__name__)
+
+INITIAL_PLAYLIST_POSITION: Final[int] = 0
 
 
 def list_playlists(session: Session, user_id: str) -> list[Playlist]:
@@ -75,7 +78,7 @@ def _next_position(session: Session, playlist_id: str) -> int:
         .order_by(PlaylistEntry.position.desc())
         .first()
     )
-    return (max_pos[0] + 1) if max_pos else 0
+    return (max_pos[0] + 1) if max_pos else INITIAL_PLAYLIST_POSITION
 
 
 def add_generation_to_playlist(

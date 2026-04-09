@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Final
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -19,6 +20,8 @@ from songmaker_cli.db.soft_delete import include_deleted
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
+
+INITIAL_TRACK_NUMBER: Final[int] = 1
 
 
 class _Unset:
@@ -120,7 +123,7 @@ def create_song(
     if session.bind.dialect.name != "sqlite":
         track_query = track_query.with_for_update()
     max_track = track_query.first()
-    track_number = (max_track[0] + 1) if max_track else 1
+    track_number = (max_track[0] + 1) if max_track else INITIAL_TRACK_NUMBER
 
     song = Song(
         title=title, album_id=album_id, vocal_language=vocal_language,

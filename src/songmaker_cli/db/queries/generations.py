@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Final
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -12,6 +13,8 @@ from songmaker_cli.db.models import Generation, Rating, Score, Song
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 
 log = logging.getLogger(__name__)
+
+INITIAL_GENERATION_NUMBER: Final[int] = 1
 
 
 def get_generation(session: Session, gen_id: str) -> Generation | None:
@@ -51,7 +54,7 @@ def create_generation(
         .order_by(Generation.generation_number.desc())
         .first()
     )
-    gen_number = (max_num[0] + 1) if max_num else 1
+    gen_number = (max_num[0] + 1) if max_num else INITIAL_GENERATION_NUMBER
 
     gen = Generation(
         song_id=song_id,

@@ -2,12 +2,29 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Playlist, PlaylistEntry
+
+log = logging.getLogger(__name__)
+
+
+def _playlist_entries(playlist: Playlist) -> list[PlaylistEntry]:
+    """Return playlist.entries, logging an ORM warning if the relationship
+    is None (which should never happen — SQLAlchemy returns an empty list
+    for an unfilled one-to-many, never ``None``)."""
+    entries = playlist.entries
+    if entries is None:
+        log.warning(
+            "Playlist %s has entries=None — ORM mapping bug, treating as empty",
+            playlist.id,
+        )
+        return []
+    return entries
 
 
 class PlaylistEntryResponse(BaseModel):
@@ -52,7 +69,7 @@ class PlaylistResponse(BaseModel):
     @classmethod
     def from_orm(cls, playlist: Playlist) -> PlaylistResponse:
         live_entries = [
-            e for e in (playlist.entries or [])
+            e for e in _playlist_entries(playlist)
             if e.generation is not None and e.generation.song is not None
         ]
         return cls(
@@ -73,7 +90,7 @@ class PlaylistDetailResponse(PlaylistResponse):
         base = PlaylistResponse.from_orm(playlist)
         entries = [
             PlaylistEntryResponse.from_orm(e)
-            for e in sorted(playlist.entries, key=lambda e: e.position)
+            for e in sorted(_playlist_entries(playlist), key=lambda e: e.position)
             if e.generation is not None and e.generation.song is not None
         ]
         return cls(

@@ -181,13 +181,22 @@ def _build_model_response(model) -> AvailableModelResponse:
     from songmaker_cli.api_models.settings import ModelCapabilities
     from songmaker_cli.config import get_builtin_defaults, get_model_capabilities
 
-    defaults = get_builtin_defaults().get(model.id, {})
-    caps = get_model_capabilities().get(model.id)
+    builtin_defaults = get_builtin_defaults()
+    capabilities_table = get_model_capabilities()
+    if model.id not in builtin_defaults or model.id not in capabilities_table:
+        msg = (
+            f"Model '{model.id}' is registered in the database but missing "
+            f"from get_builtin_defaults()/get_model_capabilities(). "
+            f"Add it to _BUILTIN_DEFAULTS and ACESTEP_PROFILES, or remove the "
+            f"row from available_models."
+        )
+        raise RuntimeError(msg)
+    caps = capabilities_table[model.id]
     capabilities = ModelCapabilities(
-        defaults=defaults,
-        max_inference_steps=caps["max_inference_steps"] if caps else 200,
-        hidden_params=caps["hidden_params"] if caps else [],
-    ) if caps or defaults else None
+        defaults=builtin_defaults[model.id],
+        max_inference_steps=caps["max_inference_steps"],
+        hidden_params=caps["hidden_params"],
+    )
     return AvailableModelResponse(
         id=model.id, is_active=model.is_active, capabilities=capabilities,
     )
