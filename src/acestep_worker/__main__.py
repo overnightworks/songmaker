@@ -72,11 +72,10 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         state_provider=lambda: build_state_payload(deps),
     )
 
-    internal_token = settings.songmaker_internal_token.get_secret_value()
-    if settings.control_plane_url and internal_token:
+    if settings.control_plane_url and settings.songmaker_internal_token:
         deps.registry_client = RegistryClient(
             control_plane_url=settings.control_plane_url,
-            internal_token=internal_token,
+            internal_token=settings.songmaker_internal_token.get_secret_value(),
         )
         deps.registration = WorkerRegistration(
             worker_id=worker_id,

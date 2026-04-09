@@ -24,12 +24,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 def _find_env_file() -> Path | None:
     """Walk up from CWD to find .server.env at the project root.
 
-    Honors ``SONGMAKER_SKIP_ENV_FILE=1`` to bypass loading entirely
-    (used by the test suite so .server.env values do not leak into
-    monkeypatched env tests).
+    Honors ``SONGMAKER_SKIP_ENV_FILE`` (any value) to bypass loading
+    entirely — used by the test suite so .server.env values do not
+    leak into monkeypatched env tests.
     """
     import os as _os
-    if _os.environ.get("SONGMAKER_SKIP_ENV_FILE") == "1":
+    if "SONGMAKER_SKIP_ENV_FILE" in _os.environ:
         return None
     cwd = Path.cwd().resolve()
     for parent in (cwd, *cwd.parents):
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=_find_env_file(),
         env_file_encoding="utf-8",
-        extra="ignore",
+        extra="forbid",
         case_sensitive=False,
     )
 
@@ -136,15 +136,13 @@ class WorkerSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=_find_env_file(),
-        env_file_encoding="utf-8",
-        extra="ignore",
+        extra="forbid",
         case_sensitive=False,
     )
 
     worker_id: str
     redis_url: str
-    songmaker_internal_token: SecretStr = SecretStr("")
+    songmaker_internal_token: SecretStr | None = None
     worker_host: str | None = None
     worker_port: int = 8001
     vram_budget_gb: float = 22.0

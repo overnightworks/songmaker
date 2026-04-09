@@ -15,9 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class EngineSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".server.env",
-        env_file_encoding="utf-8",
-        extra="ignore",
+        extra="forbid",
         case_sensitive=False,
     )
 
