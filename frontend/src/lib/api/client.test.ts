@@ -21,6 +21,7 @@ import {
 	generateSong,
 	scoreGeneration,
 	fetchJob,
+	fetchHealth,
 	pickGeneration,
 	unpickGeneration,
 	cleanupAlbum,
@@ -166,6 +167,22 @@ describe('API client', () => {
 		mockOk({ id: 'j1', status: 'completed' });
 		const result = await fetchJob('j1');
 		expect(result.status).toBe('completed');
+	});
+
+	it('fetchHealth returns the queue cap flag', async () => {
+		mockOk({
+			status: 'ok',
+			queue_depth_cap_reached: true,
+			queue_depth: 5,
+			music_queue_depth: 3,
+			scoring_queue_depth: 2,
+			acestep_workers_online: 1,
+			acestep_workers_total: 1
+		});
+		const result = await fetchHealth();
+		expect(mockFetch.mock.calls[0][0]).toBe('/health');
+		expect(result.queue_depth_cap_reached).toBe(true);
+		expect(result.queue_depth).toBe(5);
 	});
 
 	it('pickGeneration sends POST', async () => {

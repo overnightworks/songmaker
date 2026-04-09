@@ -970,6 +970,7 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
     assert data["acestep"] == "unknown"
     assert data["acestep_workers_total"] == 0
     assert data["acestep_workers_online"] == 0
+    assert data["queue_depth_cap_reached"] is False
     assert isinstance(data["uptime_seconds"], int)
 
 
@@ -1057,6 +1058,53 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path, mock_arq_pool) -> N
     assert resp.status_code == 200
     assert resp.json()["status"] == "degraded"
 
+
+def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool) -> None:
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.db.models import Job
+
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir(parents=True)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+    sk_dir = tmp_path / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Test</html>")
+
+    factory = init_db(data_dir / "songmaker.db")
+    with factory() as session:
+        admin = User(
+            username="admincap", password_hash=hash_password("admin12345"), role="admin",
+        )
+        session.add(admin)
+        for _ in range(3):
+            session.add(Job(type="generate", status="queued"))
+        session.commit()
+
+    redis = make_fake_redis()
+    ctx = AppContext(
+        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        session_secret=TEST_SECRET, redis=redis,
+    )
+    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
+    client = TestClient(app)
+
+    with (
+        client,
+        patch("songmaker_cli.arq_pool.is_worker_healthy", AsyncMock(return_value=True)),
+        patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
+        patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", AsyncMock(return_value=True)),
+        patch("songmaker_cli.arq_pool.get_queue_depth", AsyncMock(return_value=3)),
+        patch("songmaker_cli.arq_pool.get_music_queue_depth", AsyncMock(return_value=3)),
+        patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
+        patch("songmaker_cli.settings.get_settings") as mock_settings,
+    ):
+        mock_settings.return_value.max_queue_depth = 2
+        resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json()["queue_depth_cap_reached"] is True
 
 
 # ── /metrics endpoint ────────────────────────────────────────────

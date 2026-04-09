@@ -41,6 +41,7 @@ export {
 	unshareGeneration
 } from './generations';
 export { fetchJob, cancelJob } from './jobs';
+export { fetchHealth, type HealthSummary } from './health';
 export {
 	fetchPlaylists,
 	createPlaylist,

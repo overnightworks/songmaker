@@ -18,6 +18,7 @@
 		unkeepGeneration
 	} from '$lib/api/client';
 	import { activeJobs, trackJob, removeJob } from '$lib/stores/jobs';
+	import { health, startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 	import {
 		selectedSong,
 		ensureGenerationsLoaded,
@@ -111,6 +112,13 @@
 			(j) => j.job.type === 'generate' && (j.job.status === 'running' || j.job.status === 'queued')
 		)
 	);
+	const activeGenerateJob = $derived(songJobs.find((j) => j.job.type === 'generate')?.job ?? null);
+	const queueDepthCapReached = $derived($health?.queue_depth_cap_reached ?? false);
+
+	$effect(() => {
+		startHealthPolling();
+		return () => stopHealthPolling();
+	});
 
 	$effect(() => {
 		if (selectedModel === null && $activeModels.length > 0) {
@@ -360,9 +368,15 @@
 								? $activeModels.length === 0
 									? 'No models enabled. Ask admin to enable one.'
 									: 'Select a model first'
-								: ''}
+								: queueDepthCapReached
+									? 'System busy — submit may be rejected'
+									: ''}
 					>
-						{#if sourceGeneration}
+						{#if isGenerating && activeGenerateJob?.status === 'queued'}
+							{activeGenerateJob.queue_position
+								? `Queued (#${activeGenerateJob.queue_position})`
+								: 'Queued...'}
+						{:else if sourceGeneration}
 							{isGenerating ? 'Generating...' : sourceMode === 'repaint' ? 'Repaint' : 'Cover'}
 						{:else}
 							{isGenerating ? 'Generating...' : 'Generate'}

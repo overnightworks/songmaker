@@ -2,43 +2,9 @@
 
 All future work as concept notes. Per [CLAUDE.md "Plan-writing convention"](CLAUDE.md#plan-writing-convention), each entry captures **goal + locked-in decisions + hard constraints**. The executing agent reads the live code, designs the implementation in-session, and executes. Do not re-prompt the user for already-locked decisions.
 
+**Before executing, always analyze.** Backlog entries rot. The premise may be wrong, the work may be partly done, the threshold may collide with an existing one, the file the entry references may have been renamed. **First step on every item: read the live code and verify the entry's premise still holds.** If it doesn't — stop, surface the discrepancy to the user, and discuss what's actually worth doing. Don't execute a stale spec just because it's written down. The 30 seconds of "wait, this doesn't match what I'm seeing" is worth more than an hour of building the wrong thing.
+
 When you finish an item, delete its section. Git history preserves it. Decisions and reasoning are also captured in the commit messages.
-
----
-
-## Architecture cleanup (deferred from the 2026-04-09 review)
-
-These two items remain from the brutal architecture review. The other 10 findings (B1–B7, B10–B12) shipped — see commit messages from 2026-04-09 for the audit trail. Sequence them after the no-silent-fallbacks branch merges to main.
-
-### Stuck-`QUEUED` job recovery (B8)
-
-**Goal:** Jobs that sit in `QUEUED` because no worker is online never get marked stale. The recovery cron only checks heartbeat staleness on `RUNNING` jobs. User sees "queued" forever.
-
-**Decisions:**
-- `QUEUE_MAX_AGE_SECONDS = 600` (10 min). Add as a `Settings` field.
-- Failure message: `"No worker available for {job_type} after {QUEUE_MAX_AGE_SECONDS}s — please retry."`
-- Extend the existing `recover_stale_jobs_by_age` cron rather than adding a new task.
-
-**Constraints:**
-- The cleanup cron already runs every 2 min — no scheduling change needed.
-- Use the existing `_list_online_workers()` from the scheduler to detect "no worker available."
-
-**First step:** read `db/queries/jobs.py:recover_stale_jobs_by_age` + the scheduler's worker discovery, design + execute.
-
-### Backpressure UI (B9)
-
-**Goal:** Queue depth is exposed in `/health` and `/metrics` but the frontend doesn't show it. Users submit blindly and may queue dozens of jobs without realizing the wait. Surface queue pressure in the UI as a 3-layer design.
-
-**Decisions:** three layers, all locked in:
-- **Layer 1:** always-visible queue depth hint under the submit button. New `lib/stores/queue.ts` polling `/health`.
-- **Layer 2:** position-in-queue while waiting. New `queue_position: int | None` field on the job-status response (count of older queued jobs of same `job_type`).
-- **Layer 3:** disable submit button when global queue depth ≥ `max_queue_depth`. New `queue_depth_cap_reached: bool` on `/health`.
-
-**Constraints:**
-- Coordinate with B8 if shipped in the same PR — both add fields to the `JobResponse` Pydantic model.
-- May need a new index on `(job_type, status, created_at)` for the `queue_position` query if not already present.
-
-**First step:** read `health_api.py`, the existing `JobResponse` Pydantic model, and the frontend `GenerateButton.svelte` + jobs store, design + execute.
 
 ---
 

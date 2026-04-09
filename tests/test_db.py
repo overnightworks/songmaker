@@ -1300,7 +1300,70 @@ def test_recover_stale_jobs_by_age_catches_queued(db_session: Session) -> None:
     assert count == 1
     after = get_job(db_session, j_queued.id)
     assert after.status == "failed"
-    assert after.error_type == "stale_timeout"
+    assert after.error_type == "no_worker_available"
+    assert "No worker available" in after.error
+
+
+def test_recover_stale_jobs_by_age_and_type_distinguishes_queued_vs_running(
+    db_session: Session,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
+
+    j_queued = create_job(db_session, "generate")
+    j_running = create_job(db_session, "generate")
+    j_other = create_job(db_session, "score")
+    db_session.commit()
+
+    update_job_status(db_session, j_running.id, "running", progress=0.5)
+    db_session.commit()
+
+    old = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    for job in (j_queued, j_running, j_other):
+        job.started_at = old
+        job.heartbeat_at = old
+    db_session.commit()
+
+    count = recover_stale_jobs_by_age_and_type(
+        db_session, "generate", threshold_seconds=1800,
+    )
+    db_session.commit()
+
+    assert count == 2
+    assert get_job(db_session, j_queued.id).error_type == "no_worker_available"
+    assert get_job(db_session, j_running.id).error_type == "stale_timeout"
+    assert get_job(db_session, j_other.id).status == "queued"
+
+
+def test_recover_stale_jobs_by_age_distinguishes_queued_vs_running(
+    db_session: Session,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    j_queued = create_job(db_session, "generate")
+    j_running = create_job(db_session, "generate")
+    db_session.commit()
+
+    update_job_status(db_session, j_running.id, "running", progress=0.5)
+    db_session.commit()
+
+    old = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    for job in (j_queued, j_running):
+        job.started_at = old
+        job.heartbeat_at = old
+    db_session.commit()
+
+    count = recover_stale_jobs_by_age(db_session, threshold_seconds=1800)
+    db_session.commit()
+
+    assert count == 2
+    queued_after = get_job(db_session, j_queued.id)
+    running_after = get_job(db_session, j_running.id)
+    assert queued_after.error_type == "no_worker_available"
+    assert running_after.error_type == "stale_timeout"
+    assert "No worker available" in queued_after.error
+    assert "timed out" in running_after.error
 
 
 # ── clear_stale_user_jobs ─────────────────────────────────────────
@@ -1424,6 +1487,21 @@ def test_queue_position_mixed_statuses(db_session: Session) -> None:
     assert get_queue_position(db_session, j1) is None
     assert get_queue_position(db_session, j2) == 1
     assert get_queue_position(db_session, j3) == 2
+
+
+def test_queue_position_isolated_by_type(db_session: Session) -> None:
+    from songmaker_cli.db.queries import get_queue_position
+
+    score_first = create_job(db_session, "score")
+    gen_first = create_job(db_session, "generate")
+    score_second = create_job(db_session, "score")
+    gen_second = create_job(db_session, "generate")
+    db_session.commit()
+
+    assert get_queue_position(db_session, gen_first) == 1
+    assert get_queue_position(db_session, gen_second) == 2
+    assert get_queue_position(db_session, score_first) == 1
+    assert get_queue_position(db_session, score_second) == 2
 
 
 # ── rate_limit_settings ───────────────────────────────────────────

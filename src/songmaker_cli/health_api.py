@@ -234,7 +234,8 @@ async def health_check(request: Request) -> JSONResponse:
         is_scoring_worker_healthy,
         is_worker_healthy,
     )
-    from songmaker_cli.db.queries import list_worker_identities
+    from songmaker_cli.db.queries import count_total_queued_jobs, list_worker_identities
+    from songmaker_cli.settings import get_settings
 
     worker_running = await is_worker_healthy()
     music_running = await is_music_worker_healthy()
@@ -244,8 +245,11 @@ async def health_check(request: Request) -> JSONResponse:
     scoring_queue_depth = await get_scoring_queue_depth()
 
     pool = get_arq_pool()
+    settings = get_settings()
     with ctx.db() as session:
         acestep_workers = list_worker_identities(session)
+        active_jobs_count = count_total_queued_jobs(session)
+    queue_depth_cap_reached = active_jobs_count >= settings.max_queue_depth
     workers_total = len(acestep_workers)
     workers_online = 0
     for w in acestep_workers:
@@ -286,5 +290,6 @@ async def health_check(request: Request) -> JSONResponse:
         "acestep": acestep,
         "acestep_workers_total": workers_total,
         "acestep_workers_online": workers_online,
+        "queue_depth_cap_reached": queue_depth_cap_reached,
         "uptime_seconds": uptime,
     })

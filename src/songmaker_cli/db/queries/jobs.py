@@ -98,13 +98,18 @@ def get_job(session: Session, job_id: str) -> Job | None:
 
 
 def get_queue_position(session: Session, job: Job) -> int | None:
-    """Return 1-based queue position for a queued job, or None if not queued."""
+    """Return 1-based queue position for a queued job, or None if not queued.
+
+    Filtered by ``job.type`` — music and scoring queues are independent
+    worker pools, so ordering across them is meaningless.
+    """
     if job.status != JobStatus.QUEUED:
         return None
     ahead = (
         session.query(Job)
         .filter(
             Job.status == JobStatus.QUEUED,
+            Job.type == job.type,
             Job.started_at < job.started_at,
         )
         .count()
@@ -204,9 +209,14 @@ def recover_stale_jobs_by_age(
         if not _is_heartbeat_stale(job, cutoff):
             log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
             continue
+        was_queued = job.status == JobStatus.QUEUED
         job.status = JobStatus.FAILED
-        job.error = "Job timed out (exceeded maximum run time)"
-        job.error_type = "stale_timeout"
+        if was_queued:
+            job.error = "No worker available — please retry."
+            job.error_type = "no_worker_available"
+        else:
+            job.error = "Job timed out (exceeded maximum run time)"
+            job.error_type = "stale_timeout"
         job.completed_at = now
         recovered += 1
     session.flush()
@@ -264,9 +274,14 @@ def recover_stale_jobs_by_age_and_type(
         if not _is_heartbeat_stale(job, cutoff):
             log.info("Skipping stale job %s — recent heartbeat or worker alive", job.id)
             continue
+        was_queued = job.status == JobStatus.QUEUED
         job.status = JobStatus.FAILED
-        job.error = "Job timed out (exceeded maximum run time)"
-        job.error_type = "stale_timeout"
+        if was_queued:
+            job.error = "No worker available — please retry."
+            job.error_type = "no_worker_available"
+        else:
+            job.error = "Job timed out (exceeded maximum run time)"
+            job.error_type = "stale_timeout"
         job.completed_at = now
         recovered += 1
     session.flush()
