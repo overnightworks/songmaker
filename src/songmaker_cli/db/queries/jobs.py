@@ -168,31 +168,18 @@ def clear_stale_user_jobs(
     return len(stale)
 
 
-def _is_worker_alive(pid: int | None) -> bool:
-    if pid is None:
-        return False
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-
-
 def _is_heartbeat_stale(job: Job, cutoff: datetime) -> bool:
     """Check if the job's heartbeat indicates a hung worker.
 
-    If heartbeat_at exists, use it (more reliable than PID — catches hung
-    workers that are alive but not making progress). If heartbeat_at is null
-    (pre-migration jobs), fall back to PID liveness check.
+    heartbeat_at is now NOT NULL (backfilled from started_at on migration,
+    populated on every insert via SQLAlchemy default). Old PID-based
+    fallback removed — PID reuse on long-running containers made it
+    unreliable.
     """
-    if job.heartbeat_at is not None:
-        hb = job.heartbeat_at
-        if hb.tzinfo is None:
-            hb = hb.replace(tzinfo=timezone.utc)
-        return hb < cutoff
-    return not _is_worker_alive(job.worker_pid)
+    hb = job.heartbeat_at
+    if hb.tzinfo is None:
+        hb = hb.replace(tzinfo=timezone.utc)
+    return hb < cutoff
 
 
 def recover_stale_jobs_by_age(
@@ -201,7 +188,6 @@ def recover_stale_jobs_by_age(
     """Mark running/queued jobs older than threshold as failed. Returns count recovered.
 
     Uses heartbeat_at to detect hung workers (alive but not progressing).
-    Falls back to PID check for pre-migration jobs without heartbeat_at.
     """
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=threshold_seconds)
@@ -257,8 +243,7 @@ def recover_stale_jobs_by_age_and_type(
 ) -> int:
     """Mark running/queued jobs of a given type older than threshold as failed.
 
-    Uses heartbeat_at to detect hung workers. Falls back to PID check
-    for pre-migration jobs without heartbeat_at.
+    Uses heartbeat_at to detect hung workers.
     """
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=threshold_seconds)

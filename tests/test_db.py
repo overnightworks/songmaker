@@ -1221,7 +1221,9 @@ def test_recover_stale_jobs_by_age_catches_queued(db_session: Session) -> None:
     j_queued = create_job(db_session, "generate")
     db_session.commit()
 
-    j_queued.started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    old = datetime.now(timezone.utc) - timedelta(seconds=3600)
+    j_queued.started_at = old
+    j_queued.heartbeat_at = old
     db_session.commit()
 
     count = recover_stale_jobs_by_age(db_session, threshold_seconds=1800)
