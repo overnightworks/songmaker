@@ -355,7 +355,7 @@ No more `dict.update()`. No more `cli_overrides`. The CLI builds a `BaseGenerati
 ```python
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".server.env",
+        env_file=".env",
         env_file_encoding="utf-8",
         extra="forbid",
     )
@@ -455,7 +455,7 @@ A separate `WorkerSettings(Settings)` adds the acestep-worker-only fields (`work
 | [acestep_engine/client.py](../src/acestep_engine/client.py#L55-L70) | `ACESTEP_POLL_TIMEOUT`, `_default_host`, `_default_port` |
 | [scoring/lyrical_coherence.py](../src/songmaker_cli/scoring/lyrical_coherence.py#L97) | `api_key` |
 | [scoring/audiobox_aesthetics.py](../src/songmaker_cli/scoring/audiobox_aesthetics.py#L59-L60) | `CUDA_VISIBLE_DEVICES` (this one stays — it's a deliberate temporary mutation, but moves behind a `settings.scoring_force_cpu` flag) |
-| [config.py](../src/songmaker_cli/config.py#L25-L33) | `load_env_file` is gone; `Settings` loads `.server.env` automatically |
+| [config.py](../src/songmaker_cli/config.py#L25-L33) | `load_env_file` is gone; `Settings` loads `.env` automatically |
 
 **Acceptance:**
 - `grep -rn "os.environ" src/` returns only `settings.py`, the audiobox CUDA mutation, and any `os.environ.copy()` for subprocess env-scrubbing.
@@ -480,7 +480,7 @@ After W1, the load-bearing pattern is to resolve `Settings()` ONCE at module imp
 # music_worker.py
 from songmaker_cli.settings import get_settings
 
-_settings = get_settings()  # one-shot, lru_cached. .server.env loaded by BaseSettings.
+_settings = get_settings()  # one-shot, lru_cached. .env loaded by BaseSettings.
 _music_worker = MusicWorker(_settings)
 
 class MusicWorkerSettings:
@@ -491,9 +491,9 @@ class MusicWorkerSettings:
     ...
 ```
 
-This works because `BaseSettings` reads `.server.env` during `Settings()` construction, which happens at the first call to `get_settings()` — and that first call is now at import time of `music_worker.py`, before arq inspects the class. The `lru_cache` on `get_settings()` ensures the same instance is used everywhere afterwards.
+This works because `BaseSettings` reads `.env` during `Settings()` construction, which happens at the first call to `get_settings()` — and that first call is now at import time of `music_worker.py`, before arq inspects the class. The `lru_cache` on `get_settings()` ensures the same instance is used everywhere afterwards.
 
-The CLAUDE.md "Known Technical Debt" entry about `WorkerSettings.redis_settings` resolving at import time is then resolvable via documentation: yes, it still resolves at import time, but now from a validated `Settings` object whose `.server.env` is loaded automatically by Pydantic. The old footgun (`os.environ.get("REDIS_URL", "redis://localhost:6379/0")` returning the fallback if `.server.env` hadn't been processed yet) is gone because `Settings()` reads `.server.env` itself.
+The CLAUDE.md "Known Technical Debt" entry about `WorkerSettings.redis_settings` resolving at import time was resolvable via documentation: yes, it still resolved at import time, but now from a validated `Settings` object whose `.env` is loaded automatically by Pydantic. The old footgun (`os.environ.get("REDIS_URL", "redis://localhost:6379/0")` returning the fallback if `.server.env` hadn't been processed yet) is gone because `Settings()` reads `.env` itself. The CLAUDE.md entry has been deleted as part of W1.
 
 **Engine package isolation (Risk 4):** `acestep_engine/client.py` cannot import from `songmaker_cli.settings` without breaking the one-way dependency rule. Create `src/acestep_engine/settings.py` with a minimal `EngineSettings(BaseSettings)` containing only `acestep_poll_timeout`, `default_host`, `default_port`. The engine package owns its own settings.
 

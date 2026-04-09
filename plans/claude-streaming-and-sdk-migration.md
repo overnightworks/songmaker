@@ -153,7 +153,7 @@ Once Phase 1 is shipped and validated:
 This is the only sensitive operation:
 
 1. Deploy with both backends present (Phase 1+2 shipped, CLI still works).
-2. Set `ANTHROPIC_API_KEY` in `.server.env`. Verify chat works. Verify scorer works.
+2. Set `ANTHROPIC_API_KEY` in `.env`. Verify chat works. Verify scorer works.
 3. Once validated, deploy the deletion PR (Phase 3).
 4. Remove the bind mounts and delete the host CLI install if you want to.
 
