@@ -295,15 +295,49 @@ The server returns `cot_caption` and `cot_lyrics` in generation results — the 
 
 ## Environment Variables
 
+There are two layers of env vars: ones the **acestep-worker container** reads at startup (managed by `WorkerSettings` in `src/acestep_worker/settings.py`) and ones the worker passes to the **ACE-Step subprocess** when it spawns it (set in `src/acestep_worker/subprocess_runner.py:build_env()`).
+
+### Worker container env vars (`WorkerSettings`)
+
+These are set on the `songmaker-acestep-worker-0` container in `docker-compose.yml` and read by the worker's Pydantic `Settings` at startup. `extra="forbid"` — typo'd names raise `ValidationError`.
+
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `ACESTEP_API_PORT` | 8001 | ACE-Step server port |
-| `ACESTEP_CONFIG_PATH` | acestep-v15-sft | DiT model to load |
-| `ACESTEP_INIT_LLM` | 1 | Load LM on startup |
-| `ACESTEP_LM_MODEL_PATH` | acestep-5Hz-lm-4B | LM model |
-| `ACESTEP_LM_BACKEND` | vllm | LM inference backend |
-| `MAX_CUDA_VRAM` | 24 | VRAM budget in GB |
-| `ACESTEP_COMPILE_MODEL` | 0 | torch.compile (slower startup, faster inference) |
+| `WORKER_ID` | (required, no default) | Unique ID for this worker instance |
+| `WORKER_HOST` | None | Hostname this worker advertises to the control plane |
+| `WORKER_PORT` | 8001 | Port the worker's FastAPI app listens on |
+| `REDIS_URL` | (required) | Redis URL for heartbeat publishing |
+| `CONTROL_PLANE_URL` | None | Songmaker web URL for worker registration. If unset, registration is skipped. |
+| `SONGMAKER_INTERNAL_TOKEN` | None | Shared secret for control-plane auth. Empty/None disables registration. |
+| `VRAM_BUDGET_GB` | 22.0 | VRAM budget in GB. Passed to the ACE-Step subprocess as `MAX_CUDA_VRAM`. |
+| `GPU_ID` | None | CUDA device index (for `CUDA_VISIBLE_DEVICES`) |
+| `ACESTEP_CHECKPOINT_DIR` | `/opt/acestep` | Where ACE-Step model weights live |
+| `AUDIO_OUTPUT_DIR` | `/app/data/audio/worker_output` | Where the subprocess writes generated WAVs |
+| `ACESTEP_LOG_DIR` | `/opt/acestep/logs` | Where the subprocess's stderr is captured |
+| `ACESTEP_INNER_PORT` | 8101 | Port the ACE-Step subprocess listens on (inside the container) |
+| `ACESTEP_STARTUP_TIMEOUT_SECONDS` | 300 | Max seconds to wait for the subprocess to become healthy |
+| `ACESTEP_SHUTDOWN_GRACE_SECONDS` | 15 | SIGTERM grace period before SIGKILL |
+| `ACESTEP_SHUTDOWN_KILL_SECONDS` | 5 | SIGKILL grace period |
+| `ACESTEP_HEALTH_POLL_SECONDS` | 2.0 | Health-check interval during startup probe |
+| `HF_TOKEN` | None | Hugging Face token for downloading model weights |
+| `LOG_LEVEL` | `INFO` | Standard Python logging level |
+
+### ACE-Step subprocess env vars (passed by the worker)
+
+These are set on the subprocess by `subprocess_runner.py:build_env()` when it spawns ACE-Step. Most are computed from the worker settings above; you don't set them directly.
+
+| Var | Default / Source | Purpose |
+|-----|---|---|
+| `ACESTEP_API_HOST` | `127.0.0.1` (hardcoded) | Bind address (subprocess only listens on loopback inside the container) |
+| `ACESTEP_API_PORT` | from `ACESTEP_INNER_PORT` (default 8101) | Port the subprocess listens on |
+| `ACESTEP_DEVICE` | `cuda` | GPU/CPU device (override to `cpu` for non-GPU testing) |
+| `ACESTEP_CONFIG_PATH` | per-mode (e.g. `acestep-v15-sft`) | DiT model variant — set dynamically per `load_model` call from `MODEL_CONFIG_PATHS` |
+| `ACESTEP_INIT_LLM` | `1` | Load the LM on startup |
+| `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-4B` | LM model name |
+| `ACESTEP_LM_BACKEND` | `vllm` | LM inference backend |
+| `ACESTEP_COMPILE_MODEL` | `0` | `torch.compile` the DiT model — slower startup, faster inference per generation |
+| `MAX_CUDA_VRAM` | from `VRAM_BUDGET_GB` (default `22`) | Total VRAM budget in GB |
+| `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (hardcoded) | PyTorch CUDA allocator config |
 
 ## Local Submodule Patch — VRAM Pre-flight
 

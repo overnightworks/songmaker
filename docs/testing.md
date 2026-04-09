@@ -19,8 +19,9 @@ pnpm test:coverage                  # with v8 coverage report
 Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tests are isolated:
 - Each test gets its own `tmp_path` and SQLite database
 - `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
+- `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state
 - No module-level mutable state shared between tests
-- Scorer tests (GPU-only) are skipped in CI and excluded from parallel runs
+- Scorer tests run on CPU but are excluded from CI coverage because the CI image doesn't ship faster-whisper / audiobox-aesthetics / librosa model weights (see `.coveragerc-ci`)
 
 ## Coverage Targets
 
@@ -44,7 +45,9 @@ tests/
 ├── test_config.py           ACE-Step config building, path resolution
 ├── test_db.py               DB models, queries, engine, migrations
 ├── test_arq_pool.py           arq connection pool, Redis health queries
-├── test_worker.py             arq worker tasks, idempotency, startup/shutdown
+├── test_worker_base.py        WorkerBase class lifecycle (DB factory, recovery, audit)
+├── test_music_worker.py       MusicWorker arq tasks (generate, model load/download)
+├── test_scoring_worker.py     ScoringWorker arq tasks (score, scorer subprocess lifecycle)
 ├── test_jobs.py               Background generation + scoring job runners
 ├── test_gpu_util.py           GPU memory queries via NVML
 ├── test_mastering.py          Mastering chain (compression, LUFS, clipping)
@@ -78,11 +81,12 @@ frontend/src/
 
 ### Python
 
-- **Real SQLite** for DB tests (`tmp_path` per test, `reset_engine()` in fixtures)
+- **Real SQLite** for DB tests (`tmp_path` per test, `seeded_db` fixture in `conftest.py`)
 - **Synthesized audio** for mastering/scoring tests (sine waves via numpy)
 - **Mock external services**: scheduler dispatch, Whisper model, Claude API, ffmpeg
 - **Patch at the import location**, not the source: `patch("songmaker_cli.jobs.dispatch_generation")`
 - **Factory fixtures** in conftest.py for WAV bytes, stereo audio, song files
+- **`Settings` constructed with explicit kwargs** in tests; no monkeypatching of `os.environ` for the fields. Use `monkeypatch.setenv` only for the import-time env vars set in `conftest.py` (`DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `WORKER_ID`)
 
 ### Frontend
 
