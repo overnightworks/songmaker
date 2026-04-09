@@ -192,7 +192,10 @@ After Phase 3:
 
 ```bash
 pytest tests/ -n auto -q --cov=songmaker_cli --cov-report=term-missing
-docker compose build && timeout 120 docker compose up -d --build --wait
+# Run docker compose up in the background — never wrap in `timeout`.
+# Cold-cache rebuilds are 8-15 min; any timeout < ~20 min will SIGTERM
+# mid-build and leave a partial deploy. See CLAUDE.md "Docker" section.
+docker compose up -d --build --wait
 ```
 
 Smoke-test chat in the browser against the new container.

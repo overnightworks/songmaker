@@ -202,8 +202,10 @@ s = get_settings()
 print('OK:', s.database_url[:30], s.redis_url[:20])
 "
 
-# 6. Docker stack starts healthy
-timeout 300 docker compose up -d --build --wait
+# 6. Docker stack starts healthy. Run in background — cold-cache rebuild
+#    is 8-15 min and any wrapping `timeout` will SIGTERM mid-build. See
+#    CLAUDE.md "Docker" section.
+docker compose up -d --build --wait
 docker compose ps  # all services healthy
 
 # 7. Smoke test: hit /health

@@ -134,7 +134,11 @@ git push -u origin refactor/no-silent-fallbacks
 
 # Redeploy (W2 adds a migration for the generation_params backfill):
 BACKUP_DIR=/home/felix-hummert/backups/songmaker ./scripts/backup.sh   # backup before migration
-timeout 300 docker compose up -d --build --wait
+# IMPORTANT: never wrap docker compose up in `timeout` (cold-cache rebuilds
+# take 8-15 min and any timeout < ~20 min will SIGTERM mid-build). Run in
+# the background via the Bash tool's run_in_background=true. See CLAUDE.md
+# "Docker" section.
+docker compose up -d --build --wait
 docker compose logs migrate | tail -20  # confirm migration ran clean
 .venv/bin/python scripts/migrate_generation_params.py --dry-run        # report any corrupt rows
 ```
@@ -869,8 +873,11 @@ BACKUP_DIR=/home/felix-hummert/backups/songmaker ./scripts/backup.sh
 # Merge to main (user prefers fast-forward):
 git checkout main && git merge --ff-only refactor/no-silent-fallbacks && git push origin main
 
-# Redeploy (auto-runs alembic via the migrate service):
-timeout 300 docker compose up -d --build --wait
+# Redeploy (auto-runs alembic via the migrate service).
+# Never wrap in `timeout` — cold-cache rebuild takes 8-15 min. Always run
+# in background via the Bash tool's run_in_background=true. See CLAUDE.md
+# "Docker" section.
+docker compose up -d --build --wait
 
 # Verify migrations applied (if any new ones):
 docker compose logs migrate | tail -20

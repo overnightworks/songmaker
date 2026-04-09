@@ -33,8 +33,10 @@ at the project root (gitignored).
 # Local toolchain (tests, lint, IDE)
 uv sync --extra server --extra scoring --extra whisper --extra dev
 
-# Run the live stack
-timeout 300 docker compose up -d --build --wait
+# Run the live stack — agents: ALWAYS run this in the background
+# (Bash tool: run_in_background=true). Cold-cache rebuilds take 8-15 minutes
+# and any wrapping `timeout` will SIGTERM mid-build. See "Docker" section.
+docker compose up -d --build --wait
 
 # Frontend (dev mode)
 cd frontend && pnpm install && pnpm dev
@@ -123,7 +125,17 @@ These are conventions that aren't obvious from reading a single file:
 
 ## Docker
 
-Always use `--wait` with `docker compose up -d` but wrap it in `timeout` to prevent hanging after healthchecks pass (known Docker Compose bug): `timeout 120 docker compose up -d --build --wait`. If timeout fires, check `docker compose ps` — containers are likely already healthy.
+**Never wrap `docker compose up --build --wait` in `timeout`.** Use `--wait` (it exits cleanly when all containers are healthy) but no surrounding timeout. A cold-cache rebuild of all 5 service images takes 8-15 minutes — the acestep-worker alone is 8.84 GB of PyTorch + CUDA. Any timeout shorter than ~20 minutes will SIGTERM the build mid-way through, leaving you with a partial deploy (some images rebuilt, others stale, containers still running the old code). Discovered the hard way 2026-04-09 after a `docker builder prune` cleared the cache and the next deploy with `timeout 600` killed itself just after the acestep-worker finished, before the other 4 service images rebuilt. The bug looked like "stuck" because the SIGTERM is silent.
+
+```bash
+# Correct
+docker compose up -d --build --wait
+
+# Wrong — silently kills the build at 600s
+timeout 600 docker compose up -d --build --wait
+```
+
+**Agents: always run `docker compose up --build` in the background** (Bash tool `run_in_background=true`). The command takes 8-15 minutes on cold cache and there's no reason to block the agent loop while it runs. Poll the background output instead, or check `docker compose ps` later. The `--wait` flag means the command will exit on its own when containers are healthy — you're not babysitting an indefinite hang.
 
 If you've changed any Dockerfile under `docker/base/`, run `scripts/build_images.sh` first to rebuild the base images. Otherwise compose will fail with `manifest unknown` for `FROM songmaker/acestep-base:latest`.
 
