@@ -6,7 +6,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 
 - **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in both DB and Redis
 - **Redis session cache**: Session validation reads from Redis first (no DB hit on cache hit). DB is the durable store, synced every 5 minutes via a background task. Redis failure degrades gracefully to DB-only mode. Session TTL in Redis replaces per-request DB writes for sliding window renewal.
-- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB or Redis leak does not yield usable cookies. The secret is auto-generated and stored in `<data_dir>/.session_secret` (mode 0600), or provided via `SESSION_SECRET` env var (min 32 chars).
+- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB or Redis leak does not yield usable cookies. The secret comes from the `SESSION_SECRET` env var (min 32 chars) and is required at startup — Settings raises `ValidationError` if missing. There is no auto-generation fallback (was removed in the W1 no-silent-fallbacks cleanup; the old fallback masked deployment misconfigurations).
 - **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected; `X-Forwarded-Proto` only honored when the direct peer is in `TRUSTED_PROXIES`)
 - **Session lifetime**: 30-day sliding window (via Redis TTL), 90-day absolute max (checked from cached `created_at`)
 - **Session fixation**: All old sessions deleted from both DB and Redis on login, password change, and admin password reset
@@ -47,7 +47,7 @@ Four-layer defense:
 | Generation   | 3 / hour          | 30 / hour         | Per user |
 | Scoring      | 10 / hour         | 100 / hour        | Per user |
 | Chat (Claude)| 30 / hour         | 300 / hour        | Per user |
-| Queue depth  | 10 total          | 10 total          | Global   |
+| Queue depth  | 100 total         | 100 total         | Global   |
 | Active jobs  | 1 concurrent      | 1 concurrent      | Per user (non-admin) |
 
 Rate limit checks and job creation are atomic (`BEGIN IMMEDIATE`) to prevent TOCTOU races where concurrent requests bypass limits.
@@ -187,16 +187,15 @@ All mutating operations are logged to the `audit_log` table:
 | Setting | How |
 |---------|-----|
 | HTTPS termination | Reverse proxy (nginx/caddy) with TLS. Set `X-Forwarded-Proto: https` so `Secure` cookie flag and HSTS header activate. |
-| Session secret | Set `SESSION_SECRET` env var (min 32 chars) for stable HMAC signing across restarts. If not set, auto-generated and stored in `<data_dir>/.session_secret`. |
+| Session secret | Set `SESSION_SECRET` env var (min 32 chars). Required — startup fails with `ValidationError` if missing. Stable across restarts. Generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`. |
 | CORS origin | Set `CORS_ORIGIN=https://yourdomain.com` or `CORS_ORIGIN=*.yourdomain.com`. Wildcard must include a registrable domain (e.g., `*.trycloudflare.com`). Bare TLDs rejected. |
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1` (comma-separated). Only these IPs are trusted for `X-Forwarded-For`. Uses the rightmost untrusted entry to prevent spoofing. Without this, the client's direct IP is always used for rate limiting. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` to listen on all interfaces (only behind a reverse proxy). |
-| Workers | `UVICORN_WORKERS` > 1 requires PostgreSQL (`DATABASE_URL`). SQLite is single-process only. |
+| Workers | Production runs in Docker only. The web container uses a single uvicorn process; concurrency comes from arq worker containers (`MUSIC_MAX_JOBS`, `SCORING_MAX_JOBS`). PostgreSQL is the only supported production DB — SQLite is test-only. |
 | Request body limit | App-level: `MAX_REQUEST_BODY_BYTES` (default 1 MB). Also set in reverse proxy for defense-in-depth. |
 | IP rate limit | `IP_RATE_LIMIT` (default 120/min). Adjust based on expected traffic. |
 | Request timeout | `REQUEST_TIMEOUT` (default 30s). Increase if generation/scoring endpoints are called synchronously. |
-| DB file permissions | Automatically set to `600` (owner read/write only). |
 
 ### Secrets
 

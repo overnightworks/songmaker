@@ -282,7 +282,7 @@ POST /api/generations/{id}/score
 - DB singleton with thread-safe initialization
 - Path helpers (`_audio_dir`, `_data_dir`)
 - Timeout constants, terminal status set
-- Common startup (env loading, logging, Redis URL validation)
+- Common startup (logging configuration, stale-job recovery)
 - Common shutdown (per-type stale recovery with Redis advisory lock, DB disposal)
 - Orphaned file audit (`audit_orphaned_files()`) — logs disk files with no DB record
 
