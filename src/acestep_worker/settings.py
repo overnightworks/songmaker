@@ -33,7 +33,7 @@ class WorkerSettings(BaseSettings):
     songmaker_internal_token: SecretStr | None = None
     worker_host: str | None = None
     worker_port: int = 8001
-    vram_budget_gb: float = 22.0
+    vram_budget_gb: float = 24.0
     acestep_checkpoint_dir: str = "/opt/acestep"
     audio_output_dir: str = "/app/data/audio/worker_output"
     acestep_log_dir: str = "/opt/acestep/logs"

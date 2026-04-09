@@ -54,6 +54,7 @@ from songmaker_cli.constants import (
     JOB_TERMINAL_STATUSES,
     SSE_POLL_INTERVAL_SECONDS,
     AuditAction,
+    JobFunction,
     JobStatus,
     JobType,
     ResourceType,
@@ -268,7 +269,7 @@ async def api_generate_song(
             _fail_job(ctx, job.id)
             raise HTTPException(503, "No online ACE-Step workers")
         await pool.enqueue_job(
-            "generate", job.id, song_id, version.id, req.count, user.id, req.seed,
+            JobFunction.GENERATE, job.id, song_id, version.id, req.count, user.id, req.seed,
             req.model,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
@@ -342,7 +343,7 @@ async def api_repaint_generation(
             repaint_wav_crossfade_sec=req.repaint_wav_crossfade_sec,
         )
         await pool.enqueue_job(
-            "generate", job.id, song.id, version.id, req.count, user.id,
+            JobFunction.GENERATE, job.id, song.id, version.id, req.count, user.id,
             req.seed, req.model, repaint_task.model_dump(),
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
@@ -409,7 +410,7 @@ async def api_cover_generation(
             cover_noise_strength=req.cover_noise_strength,
         )
         await pool.enqueue_job(
-            "generate", job.id, song.id, version.id, req.count, user.id,
+            JobFunction.GENERATE, job.id, song.id, version.id, req.count, user.id,
             req.seed, req.model, None, cover_task.model_dump(),
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
@@ -446,7 +447,7 @@ async def api_score_generation(
             _fail_job(ctx, job.id)
             raise HTTPException(503, "Worker not running")
         await get_arq_pool().enqueue_job(
-            "score", job.id, gen_id, req.scorers,
+            JobFunction.SCORE, job.id, gen_id, req.scorers,
             _queue_name=ARQ_SCORING_QUEUE_NAME,
         )
     except ConnectionError:

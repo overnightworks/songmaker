@@ -9,12 +9,13 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from arq import cron
+from arq import cron, func
 
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     RECOVERY_LOCK_MUSIC_KEY,
+    JobFunction,
     JobType,
 )
 from songmaker_cli.jobs import (
@@ -95,9 +96,9 @@ _music_worker = MusicWorker(_settings)
 
 class MusicWorkerSettings:
     functions = [
-        _music_worker.generate,
-        _music_worker.load_model_on_worker,
-        _music_worker.download_model_on_worker,
+        func(_music_worker.generate, name=JobFunction.GENERATE),
+        func(_music_worker.load_model_on_worker, name=JobFunction.LOAD_MODEL_ON_WORKER),
+        func(_music_worker.download_model_on_worker, name=JobFunction.DOWNLOAD_MODEL_ON_WORKER),
     ]
     on_startup = _music_worker.on_startup
     on_shutdown = _music_worker.on_shutdown

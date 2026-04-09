@@ -7,6 +7,7 @@ import uvicorn
 from redis.asyncio import Redis
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
+from acestep_worker.gpu_util import read_gpu_vram_stats
 from acestep_worker.heartbeat import HeartbeatLoop
 from acestep_worker.model_cache import ModelCache
 from acestep_worker.registry_client import RegistryClient, WorkerRegistration
@@ -50,6 +51,7 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         model_sizes={mode: DEFAULT_MODEL_SIZES_GB.get(mode, 6.0) for mode in MODEL_CONFIG_PATHS},
         loader=loader,
         unloader=unloader,
+        vram_reader=lambda: read_gpu_vram_stats(settings.gpu_id or 0),
     )
     task_store = TaskStore()
 

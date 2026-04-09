@@ -33,6 +33,15 @@ class LoadedModelInfo:
 
 
 @dataclass(frozen=True)
+class VramStats:
+    used_gb: float
+    total_gb: float
+
+
+VramReader = Callable[[], "VramStats | None"]
+
+
+@dataclass(frozen=True)
 class CacheStateSnapshot:
     loaded: tuple[LoadedModelInfo, ...]
     target_loading: str | None
@@ -66,6 +75,7 @@ class ModelCache:
         model_sizes: dict[str, float],
         loader: Loader,
         unloader: Unloader,
+        vram_reader: VramReader | None = None,
     ) -> None:
         self._loaded: OrderedDict[str, LoadedModel] = OrderedDict()
         self._lock = asyncio.Lock()
@@ -75,6 +85,7 @@ class ModelCache:
         self._sizes = dict(model_sizes)
         self._loader = loader
         self._unloader = unloader
+        self._vram_reader = vram_reader
         self._in_use: dict[str, int] = {}
         self._pinned: set[str] = set()
 
@@ -92,9 +103,6 @@ class ModelCache:
     def get_loaded(self, mode: str) -> LoadedModel | None:
         return self._loaded.get(mode)
 
-    def vram_used_gb(self) -> float:
-        return sum(self._sizes.get(mode, 0.0) for mode in self._loaded)
-
     def is_pinned(self, mode: str) -> bool:
         return mode in self._pinned
 
@@ -106,11 +114,18 @@ class ModelCache:
             LoadedModelInfo(mode=m, size_gb=self._sizes.get(m, 0.0))
             for m in self._loaded
         )
+        measured = self._vram_reader() if self._vram_reader is not None else None
+        if measured is not None:
+            used_gb = measured.used_gb
+            total_gb = measured.total_gb
+        else:
+            used_gb = sum(info.size_gb for info in loaded_tuple)
+            total_gb = self._budget_gb
         return CacheStateSnapshot(
             loaded=loaded_tuple,
             target_loading=self._target_loading,
-            vram_used_gb=sum(info.size_gb for info in loaded_tuple),
-            vram_total_gb=self._budget_gb,
+            vram_used_gb=used_gb,
+            vram_total_gb=total_gb,
             pinned=tuple(sorted(self._pinned)),
             loading_started_at=self._loading_started_at,
         )

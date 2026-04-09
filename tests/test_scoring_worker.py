@@ -140,14 +140,39 @@ def test_scoring_worker_settings_has_cron() -> None:
 
 
 def test_scoring_worker_settings_functions() -> None:
+    from songmaker_cli.constants import JobFunction
     from songmaker_cli.scoring_worker import ScoringWorkerSettings
-    func_names = [f.__name__ for f in ScoringWorkerSettings.functions]
-    assert "score" in func_names
-    assert "generate" not in func_names
+    func_names = {f.name for f in ScoringWorkerSettings.functions}
+    assert JobFunction.SCORE in func_names
+    assert JobFunction.GENERATE not in func_names
 
 
 def test_scoring_worker_settings_uses_singleton_methods() -> None:
     """The arq Settings shim must expose bound methods of _scoring_worker."""
     from songmaker_cli.scoring_worker import ScoringWorkerSettings
     for func in ScoringWorkerSettings.functions:
-        assert func.__self__ is sw_mod._scoring_worker
+        assert func.coroutine.__self__ is sw_mod._scoring_worker
+
+
+def test_scoring_worker_functions_registered_under_job_function_names() -> None:
+    """Regression: arq must register ``score`` under the plain JobFunction
+    name, not ``ScoringWorker.score``.
+    """
+    import asyncio as _asyncio
+
+    from arq.worker import Worker
+
+    from songmaker_cli.constants import JobFunction
+    from songmaker_cli.scoring_worker import ScoringWorkerSettings
+
+    async def _build_and_inspect() -> set[str]:
+        worker = Worker(
+            functions=ScoringWorkerSettings.functions,
+            queue_name=ScoringWorkerSettings.queue_name,
+            redis_settings=ScoringWorkerSettings.redis_settings,
+            handle_signals=False,
+        )
+        return set(worker.functions.keys())
+
+    registered = _asyncio.run(_build_and_inspect())
+    assert JobFunction.SCORE in registered

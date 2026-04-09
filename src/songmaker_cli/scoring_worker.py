@@ -9,11 +9,12 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from arq import cron
+from arq import cron, func
 
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
     RECOVERY_LOCK_SCORING_KEY,
+    JobFunction,
     JobType,
 )
 from songmaker_cli.jobs import run_scoring_job
@@ -71,7 +72,7 @@ _scoring_worker = ScoringWorker(_settings)
 
 
 class ScoringWorkerSettings:
-    functions = [_scoring_worker.score]
+    functions = [func(_scoring_worker.score, name=JobFunction.SCORE)]
     on_startup = _scoring_worker.on_startup
     on_shutdown = _scoring_worker.on_shutdown
     redis_settings = build_redis_settings(_settings)

@@ -129,7 +129,7 @@ services:
       WORKER_HOST: "songmaker-acestep-worker-0"
       WORKER_PORT: "8001"
       GPU_ID: "0"
-      VRAM_BUDGET_GB: "${ACESTEP_WORKER_VRAM_GB:-22}"
+      VRAM_BUDGET_GB: "${ACESTEP_WORKER_VRAM_GB:-24}"
       ACESTEP_STARTUP_TIMEOUT_SECONDS: "${ACESTEP_STARTUP_TIMEOUT_SECONDS:-300}"
       ACESTEP_CHECKPOINT_DIR: "/opt/acestep"
       AUDIO_OUTPUT_DIR: "/app/data/audio/worker_output"

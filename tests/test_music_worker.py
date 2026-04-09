@@ -152,11 +152,12 @@ def test_music_worker_settings_has_cron() -> None:
 
 
 def test_music_worker_settings_functions() -> None:
+    from songmaker_cli.constants import JobFunction
     from songmaker_cli.music_worker import MusicWorkerSettings
-    func_names = [f.__name__ for f in MusicWorkerSettings.functions]
-    assert "generate" in func_names
-    assert "load_model_on_worker" in func_names
-    assert "download_model_on_worker" in func_names
+    func_names = {f.name for f in MusicWorkerSettings.functions}
+    assert JobFunction.GENERATE in func_names
+    assert JobFunction.LOAD_MODEL_ON_WORKER in func_names
+    assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in func_names
     assert len(MusicWorkerSettings.functions) == 3
 
 
@@ -164,4 +165,29 @@ def test_music_worker_settings_uses_singleton_methods() -> None:
     """The arq Settings shim must expose bound methods of _music_worker."""
     from songmaker_cli.music_worker import MusicWorkerSettings
     for func in MusicWorkerSettings.functions:
-        assert func.__self__ is mw_mod._music_worker
+        assert func.coroutine.__self__ is mw_mod._music_worker
+
+
+def test_music_worker_functions_registered_under_job_function_names() -> None:
+    """Regression: arq must register class methods under the plain JobFunction
+    names, not ``ClassName.method``. Enqueuers send the JobFunction name, and
+    arq looks up functions by name — any mismatch silently drops every job.
+    """
+    from arq.worker import Worker
+
+    from songmaker_cli.constants import JobFunction
+    from songmaker_cli.music_worker import MusicWorkerSettings
+
+    async def _build_and_inspect() -> set[str]:
+        worker = Worker(
+            functions=MusicWorkerSettings.functions,
+            queue_name=MusicWorkerSettings.queue_name,
+            redis_settings=MusicWorkerSettings.redis_settings,
+            handle_signals=False,
+        )
+        return set(worker.functions.keys())
+
+    registered = asyncio.run(_build_and_inspect())
+    assert JobFunction.GENERATE in registered
+    assert JobFunction.LOAD_MODEL_ON_WORKER in registered
+    assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in registered

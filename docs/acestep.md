@@ -309,7 +309,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `REDIS_URL` | (required) | Redis URL for heartbeat publishing |
 | `CONTROL_PLANE_URL` | None | Songmaker web URL for worker registration. If unset, registration is skipped. |
 | `SONGMAKER_INTERNAL_TOKEN` | None | Shared secret for control-plane auth. Empty/None disables registration. |
-| `VRAM_BUDGET_GB` | 22.0 | VRAM budget in GB. Passed to the ACE-Step subprocess as `MAX_CUDA_VRAM`. |
+| `VRAM_BUDGET_GB` | 24.0 | VRAM budget in GB. Passed to the ACE-Step subprocess as `MAX_CUDA_VRAM`. Lower values (e.g. 22 on a 24 GB card) cause ACE-Step to auto-fall-back to CPU VAE decode during xl-turbo generation, which is ~100x slower than GPU — raise the budget if the admin panel shows very slow xl-turbo generations at ~0% GPU util. |
 | `GPU_ID` | None | CUDA device index (for `CUDA_VISIBLE_DEVICES`) |
 | `ACESTEP_CHECKPOINT_DIR` | `/opt/acestep` | Where ACE-Step model weights live |
 | `AUDIO_OUTPUT_DIR` | `/app/data/audio/worker_output` | Where the subprocess writes generated WAVs |
@@ -336,7 +336,7 @@ These are set on the subprocess by `subprocess_runner.py:build_env()` when it sp
 | `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-4B` | LM model name |
 | `ACESTEP_LM_BACKEND` | `vllm` | LM inference backend |
 | `ACESTEP_COMPILE_MODEL` | `0` | `torch.compile` the DiT model — slower startup, faster inference per generation |
-| `MAX_CUDA_VRAM` | from `VRAM_BUDGET_GB` (default `22`) | Total VRAM budget in GB |
+| `MAX_CUDA_VRAM` | from `VRAM_BUDGET_GB` (default `24`) | Total VRAM budget in GB |
 | `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (hardcoded) | PyTorch CUDA allocator config |
 
 ## Local Submodule Patch — VRAM Pre-flight

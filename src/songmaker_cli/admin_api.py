@@ -50,6 +50,7 @@ from songmaker_cli.auth import hash_password
 from songmaker_cli.constants import (
     MODEL_CONFIG_PATHS,
     AuditAction,
+    JobFunction,
     JobStatus,
     ResourceType,
 )
@@ -425,13 +426,13 @@ async def load_model_on_worker_endpoint(
     if req.mode not in MODEL_CONFIG_PATHS:
         raise HTTPException(400, f"Unknown model mode '{req.mode}'")
 
-    job = create_job(db, "load_model_on_worker", user_id=admin.id)
+    job = create_job(db, JobFunction.LOAD_MODEL_ON_WORKER, user_id=admin.id)
     db.commit()
 
     try:
         pool = get_arq_pool()
         await pool.enqueue_job(
-            "load_model_on_worker", job.id, worker_id, req.mode,
+            JobFunction.LOAD_MODEL_ON_WORKER, job.id, worker_id, req.mode,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
@@ -581,13 +582,13 @@ async def download_model_endpoint(
             f"Model '{mode}' is already being downloaded (job {in_progress})",
         )
 
-    job = create_job(db, "download_model_on_worker", user_id=admin.id)
+    job = create_job(db, JobFunction.DOWNLOAD_MODEL_ON_WORKER, user_id=admin.id)
     db.commit()
 
     try:
         arq_pool = get_arq_pool()
         await arq_pool.enqueue_job(
-            "download_model_on_worker", job.id, mode,
+            JobFunction.DOWNLOAD_MODEL_ON_WORKER, job.id, mode,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:

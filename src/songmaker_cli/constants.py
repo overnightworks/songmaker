@@ -181,6 +181,13 @@ class JobType(StrEnum):
     CHAT = "chat"
 
 
+class JobFunction(StrEnum):
+    GENERATE = "generate"
+    SCORE = "score"
+    LOAD_MODEL_ON_WORKER = "load_model_on_worker"
+    DOWNLOAD_MODEL_ON_WORKER = "download_model_on_worker"
+
+
 class ResourceType(StrEnum):
     SONG = "song"
     ALBUM = "album"

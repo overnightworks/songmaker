@@ -12,6 +12,7 @@ from acestep_worker.model_cache import (
     ModelCache,
     ModelNotLoadedError,
     UnknownModeError,
+    VramStats,
 )
 
 
@@ -19,7 +20,12 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _make_cache(*, budget: float = 24.0, sizes: dict[str, float] | None = None):
+def _make_cache(
+    *,
+    budget: float = 24.0,
+    sizes: dict[str, float] | None = None,
+    vram_reader=None,
+):
     sizes = sizes or {"sft": 6.0, "xl-sft": 12.0, "huge": 30.0}
     loaded_log: list[str] = []
     unloaded_log: list[LoadedModel] = []
@@ -36,6 +42,7 @@ def _make_cache(*, budget: float = 24.0, sizes: dict[str, float] | None = None):
         model_sizes=sizes,
         loader=loader,
         unloader=unloader,
+        vram_reader=vram_reader,
     )
     return cache, loaded_log, unloaded_log
 
@@ -44,7 +51,7 @@ def test_initial_state() -> None:
     cache, _, _ = _make_cache()
     assert cache.loaded_modes() == []
     assert cache.target_loading is None
-    assert cache.vram_used_gb() == 0.0
+    assert cache.snapshot().vram_used_gb == 0.0
     assert cache.vram_budget_gb == 24.0
 
 
@@ -66,7 +73,7 @@ def test_load_single_model() -> None:
     assert result.loaded == ["sft"]
     assert result.evicted == []
     assert cache.loaded_modes() == ["sft"]
-    assert cache.vram_used_gb() == 6.0
+    assert cache.snapshot().vram_used_gb == 6.0
     assert loaded_log == ["sft"]
 
 
@@ -96,7 +103,7 @@ def test_load_multi_model_no_eviction_when_fits() -> None:
     result = _run(cache.load("xl-sft"))
     assert sorted(result.loaded) == ["sft", "xl-sft"]
     assert result.evicted == []
-    assert cache.vram_used_gb() == 18.0
+    assert cache.snapshot().vram_used_gb == 18.0
 
 
 def test_load_multi_then_evict_oldest() -> None:
@@ -445,3 +452,29 @@ def test_loading_started_at_set_during_load_then_cleared() -> None:
     assert captured[0].loading_started_at is not None
     final = cache.snapshot()
     assert final.loading_started_at is None
+
+
+def test_snapshot_uses_vram_reader_when_available() -> None:
+    cache, _, _ = _make_cache(
+        vram_reader=lambda: VramStats(used_gb=15.3, total_gb=24.0),
+    )
+    _run(cache.load("sft"))
+    snapshot = cache.snapshot()
+    assert snapshot.vram_used_gb == 15.3
+    assert snapshot.vram_total_gb == 24.0
+
+
+def test_snapshot_falls_back_to_declared_sizes_when_reader_returns_none() -> None:
+    cache, _, _ = _make_cache(budget=22.0, vram_reader=lambda: None)
+    _run(cache.load("sft"))
+    snapshot = cache.snapshot()
+    assert snapshot.vram_used_gb == 6.0
+    assert snapshot.vram_total_gb == 22.0
+
+
+def test_snapshot_without_reader_uses_declared_sizes() -> None:
+    cache, _, _ = _make_cache(budget=22.0)
+    _run(cache.load("sft"))
+    snapshot = cache.snapshot()
+    assert snapshot.vram_used_gb == 6.0
+    assert snapshot.vram_total_gb == 22.0
