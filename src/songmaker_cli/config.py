@@ -116,31 +116,26 @@ _BUILTIN_DEFAULTS: dict[str, dict[str, object]] = {
 }
 
 
-_MODEL_CAPABILITIES: dict[str, dict[str, object]] = {
-    "turbo": {
-        "max_inference_steps": 20,
-        "hidden_params": [
-            "guidance_scale", "use_adg", "cfg_interval_start", "cfg_interval_end",
-        ],
-    },
-    "sft": {"max_inference_steps": 200, "hidden_params": ["use_adg"]},
-    "xl-turbo": {
-        "max_inference_steps": 20,
-        "hidden_params": [
-            "guidance_scale", "use_adg", "cfg_interval_start", "cfg_interval_end",
-        ],
-    },
-    "xl-sft": {"max_inference_steps": 200, "hidden_params": ["use_adg"]},
-    "xl-base": {"max_inference_steps": 200, "hidden_params": []},
-}
-
-
 def get_builtin_defaults() -> dict[str, dict[str, object]]:
     return _BUILTIN_DEFAULTS
 
 
 def get_model_capabilities() -> dict[str, dict[str, object]]:
-    return _MODEL_CAPABILITIES
+    """Derive the legacy capability shape from ACESTEP_PROFILES.
+
+    The wire format kept here matches what settings_api.py and the frontend
+    consume today (max_inference_steps + hidden_params). If we want richer
+    UI later, expose AceStepProfile directly via a new endpoint.
+    """
+    from songmaker_cli.acestep_capabilities import ACESTEP_PROFILES
+
+    return {
+        mode: {
+            "max_inference_steps": profile.max_inference_steps(),
+            "hidden_params": profile.hidden_param_names(),
+        }
+        for mode, profile in ACESTEP_PROFILES.items()
+    }
 
 
 _MODEL_NAME_TO_MODE: dict[str, str] = {

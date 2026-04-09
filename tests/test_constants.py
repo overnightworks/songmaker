@@ -21,14 +21,14 @@ def test_default_model_mode_is_in_available() -> None:
 
 
 def test_builtin_defaults_keys_match_available_modes() -> None:
+    from songmaker_cli.acestep_capabilities import ACESTEP_PROFILES
     from songmaker_cli.config import (
         _BUILTIN_DEFAULTS,
-        _MODEL_CAPABILITIES,
         _MODEL_NAME_TO_MODE,
     )
 
     assert set(_BUILTIN_DEFAULTS.keys()) == AVAILABLE_MODEL_MODES
-    assert set(_MODEL_CAPABILITIES.keys()) == AVAILABLE_MODEL_MODES
+    assert set(ACESTEP_PROFILES.keys()) == AVAILABLE_MODEL_MODES
     assert set(_MODEL_NAME_TO_MODE.values()) <= AVAILABLE_MODEL_MODES
 
 
