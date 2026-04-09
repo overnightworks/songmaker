@@ -1,6 +1,9 @@
 # E2E Testing
 
-> **Status: NOT STARTED** — Mobile layout is done. E2E test infrastructure not set up yet.
+**Status:** Proposed
+**Date:** 2026-04-09
+
+> Older plan but still valid. Mobile layout is done. E2E test infrastructure not set up yet.
 
 ## Goal
 

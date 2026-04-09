@@ -1,6 +1,9 @@
 # Frontend Component Split (Phase 2) + Component Test Scaffolding
 
-> **Status: READY** — Highest-leverage frontend work. Every other frontend D-item depends on this.
+**Status:** Proposed
+**Date:** 2026-04-09
+
+> Highest-leverage frontend work. Every other frontend D-item depends on this.
 
 ## Problem
 

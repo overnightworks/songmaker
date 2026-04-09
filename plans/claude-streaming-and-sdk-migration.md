@@ -1,6 +1,9 @@
 # Claude Streaming + Drop the CLI Backend (Migrate to SDK Only)
 
-> **Status: PLAN** — Multi-day initiative. Two changes are coupled because both rewrite the same surface (`claude/provider.py` + `chat_api.py` + `ClaudeChat.svelte`) and shipping them together avoids touching it twice.
+**Status:** Proposed
+**Date:** 2026-04-09
+
+> Multi-day initiative. Two changes are coupled because both rewrite the same surface (`claude/provider.py` + `chat_api.py` + `ClaudeChat.svelte`) and shipping them together avoids touching it twice.
 >
 > **Triggers to start:**
 > - Co-writer becomes a daily-driver feature (you actually use it for real lyric work, not just experiments).

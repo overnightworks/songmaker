@@ -1,5 +1,8 @@
 # ACE-Step model parameters — implementation plan
 
+**Status:** Done
+**Date:** 2026-04-09 (status assigned; plan completed earlier — see commits 478bcda, 7758483, ec3be78, 99c4896, 98fa3ae)
+
 ## Decisions needed before starting
 
 1. **Change 1** (ship `use_adg` for sft variants) — approve as a separate small PR? **Recommended yes.**

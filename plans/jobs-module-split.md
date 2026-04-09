@@ -1,6 +1,10 @@
 # Split `jobs.py` (god module)
 
-> **Status: READY** — Highest-blast-radius file in the project. Every job runs through it; every failure mode passes through it. A second contributor will be afraid to touch it.
+**Status:** Proposed
+**Date:** 2026-04-09
+**Sequencing:** Execute **after** [no-silent-fallbacks-v2.md](no-silent-fallbacks-v2.md). The fallbacks branch heavily rewrites `jobs.py`; splitting after means typed `BaseGenerationParams` already exists and the cuts are cleaner.
+
+> Highest-blast-radius file in the project. Every job runs through it; every failure mode passes through it. A second contributor will be afraid to touch it.
 >
 > **Triggers to revisit / deprioritize:**
 > - If `multi-model-routing.md` is about to ship, do *that* first — it changes job dispatch and you don't want to refactor `jobs.py` twice.

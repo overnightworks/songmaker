@@ -70,6 +70,7 @@ alembic upgrade head
 | Scorer | `scoring/{name}.py` → `scoring/models.py` → `pipeline.py` count → `api_models.py` names | `scoring/silence_detection.py` |
 | DB model | `db/models.py` → `db/queries/{domain}.py` → Alembic migration | `db/models.py:Song` |
 | Frontend component | `lib/components/` → `lib/stores/` if stateful → `lib/api/client.ts` if new API | `SongList.svelte` |
+| Plan / design doc | `plans/{name}.md` with `**Status:** Proposed\|In progress\|Done\|Abandoned` and `**Date:** YYYY-MM-DD` headers. Move `Done`/`Abandoned` to `plans/archive/`. | `plans/no-silent-fallbacks-v2.md` |
 
 ## Code Patterns (codebase-specific)
 

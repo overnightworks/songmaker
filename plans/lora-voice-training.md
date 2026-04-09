@@ -1,6 +1,9 @@
 # LoRA Voice Training
 
-> **Status: NOT STARTED** — requires ACE-Step LoRA support verification and training pipeline.
+**Status:** Proposed
+**Date:** 2026-04-09
+
+> Requires ACE-Step LoRA support verification and training pipeline.
 
 ## Goal
 

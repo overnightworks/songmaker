@@ -1,6 +1,7 @@
 # ACE-Step Base Model Tasks — Lego, Extract, Complete
 
-> **Status: DEFERRED** — Parked for future consideration.
+**Status:** Proposed
+**Date:** 2026-04-09
 
 ## Goal
 

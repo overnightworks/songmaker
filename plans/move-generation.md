@@ -1,10 +1,9 @@
 # Move Generation Between Songs — Feature Plan
 
+**Status:** Proposed
+**Date:** 2026-04-09
+
 > Lets the user move an existing `Generation` row from one (song, version) to another (song, version). Designed primarily for the post-recovery cleanup workflow where 99 anonymous WAVs landed in a "Recovered (April 2026)" album and need to be reassigned to their real songs/versions.
-
-## Status
-
-**Plan only — not yet implemented.** Outside Phase 8 scope. Awaiting user review.
 
 ## Why this exists
 
