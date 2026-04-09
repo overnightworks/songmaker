@@ -1,4 +1,4 @@
-"""Background job runners for generation and scoring."""
+"""Generation job orchestration — context build, dispatch, post-process, persist."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ from pathlib import Path
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
-from acestep_engine.errors import AudioDownloadError
 from acestep_engine.models import AceStepConfig
+from songmaker_cli import jobs
 from songmaker_cli.api_models import (
     CoverTaskParams,
     RepaintTaskParams,
@@ -26,21 +26,15 @@ from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.config import (
     audio_file_path,
     build_ace_config,
-    load_generation_defaults,
     resolve_model_mode,
 )
 from songmaker_cli.constants import WORKER_SHARED_TMP_DIRNAME, JobStatus, JobType
 from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries import (
     create_generation,
-    get_claude_scoring_model,
     get_default_preset,
-    get_generation,
     get_song,
     get_version,
-    save_scores,
-    update_job_heartbeat,
-    update_job_status,
 )
 from songmaker_cli.generate import (
     _decode_audio,
@@ -48,34 +42,18 @@ from songmaker_cli.generate import (
     _write_output,
 )
 from songmaker_cli.parser import AlbumMeta, SongMeta
-from songmaker_cli.scheduler import (
-    NoCapacityError,
-    WorkerTaskFailed,
-    dispatch_generation,
+from songmaker_cli.scheduler import NoCapacityError, WorkerTaskFailed
+
+from ._runtime import (
+    GenerationSetupError,
+    _sanitize_error,
+    _touch_heartbeat,
+    _update_job,
 )
-from songmaker_cli.scoring.pipeline import PipelineConfig
-from songmaker_cli.scoring.subprocess_runner import get_scorer_process
 
 log = logging.getLogger(__name__)
 
-_USER_FACING_ERRORS: tuple[tuple[type[Exception], str], ...] = (
-    (AudioDownloadError, "Failed to download generated audio"),
-    (ConnectionError, "ACE-Step server not reachable"),
-    (TimeoutError, "Generation timed out"),
-    (NoCapacityError, "No ACE-Step workers available"),
-    (WorkerTaskFailed, "Worker generation failed"),
-    (RuntimeError, "Internal error during processing"),
-)
-
-
-def _sanitize_error(exc: Exception) -> str:
-    """Return a user-safe error message, logging the full exception."""
-    if isinstance(exc, GenerationSetupError):
-        return str(exc)
-    for exc_type, message in _USER_FACING_ERRORS:
-        if isinstance(exc, exc_type):
-            return message
-    return "An unexpected error occurred"
+_PROGRESS_THROTTLE_SECONDS = 2.0
 
 
 @dataclass
@@ -93,8 +71,9 @@ class GenerationContext:
     raw_src_audio: str | None = None
 
 
-class GenerationSetupError(Exception):
-    pass
+@dataclass(frozen=True)
+class _DecodedAudioInput:
+    wav_bytes: bytes
 
 
 def _load_song_meta(
@@ -185,7 +164,7 @@ def _build_generation_context(
     ace_config = build_ace_config(
         meta,
         model_name=model_name,
-        global_defaults=load_generation_defaults(db_factory, data_dir),
+        global_defaults=jobs.load_generation_defaults(db_factory, data_dir),
         preset_params=preset_params,
         seed=seed,
     )
@@ -217,11 +196,6 @@ def _build_generation_context(
         model_name=model_name,
         base_params=meta.generation_params,
     )
-
-
-@dataclass(frozen=True)
-class _DecodedAudioInput:
-    wav_bytes: bytes
 
 
 def post_process_generation(
@@ -400,9 +374,6 @@ def _finalize_generation_job(
         )
 
 
-_PROGRESS_THROTTLE_SECONDS = 2.0
-
-
 def _make_generation_progress_callback(
     db_factory: sessionmaker[Session], job_id: str,
     variant_index: int, count: int,
@@ -573,7 +544,7 @@ async def run_generation_job(
                 on_heartbeat = _make_heartbeat_callback(db_factory, job_id)
                 try:
                     gen_id = str(uuid.uuid4())
-                    worker_result = await dispatch_generation(
+                    worker_result = await jobs.dispatch_generation(
                         ace_config=ctx.ace_config,
                         target_mode=ctx.model_name,
                         on_progress=on_progress,
@@ -582,7 +553,7 @@ async def run_generation_job(
                         db_factory=db_factory,
                     )
                     await asyncio.to_thread(
-                        post_process_generation,
+                        jobs.post_process_generation,
                         worker_audio_path=worker_result.audio_path,
                         worker_seed=worker_result.seed,
                         worker_cot_caption=worker_result.cot_caption,
@@ -613,327 +584,6 @@ async def run_generation_job(
             db_factory, job_id, JobStatus.FAILED,
             error=_sanitize_error(exc), error_type="generation_error",
         )
-
-
-def run_scoring_job(
-    job_id: str, gen_id: str, scorers: list[str] | None,
-    db_factory: sessionmaker[Session] | None = None,
-    audio_dir: Path | None = None,
-    device: str = "cpu",
-) -> None:
-    """Run scoring in a background thread, updating DB status."""
-    assert db_factory is not None, "db_factory is required"
-    assert audio_dir is not None, "audio_dir is required"
-
-    import structlog
-    structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(
-        job_id=job_id, job_type=JobType.SCORE, generation_id=gen_id,
-    )
-
-    log.info("Scoring job %s: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
-
-    try:
-        _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
-
-
-        with db_factory() as session:
-            gen = get_generation(session, gen_id)
-            if not gen:
-                _update_job(
-                    db_factory, job_id, JobStatus.FAILED,
-                    error="Generation not found", error_type="setup_error",
-                )
-                return
-            mp3_path_rel = gen.mp3_path
-            song = gen.song
-            ver = gen.version
-
-            meta_kwargs: dict = {}
-            if song or ver:
-                meta_kwargs["title"] = song.title if song else ""
-                if ver:
-                    meta_kwargs["prompt"] = ver.prompt
-                    meta_kwargs["lyrics"] = ver.lyrics
-                    meta_kwargs["bpm"] = ver.bpm
-                if song and song.vocal_language:
-                    meta_kwargs["vocal_language"] = song.vocal_language
-            resolved_model = get_claude_scoring_model(session)
-
-        mp3_full = audio_dir / mp3_path_rel
-
-        if not mp3_full.exists():
-            _update_job(
-                db_factory, job_id, JobStatus.FAILED,
-                error="Audio file not found for scoring", error_type="setup_error",
-            )
-            log.error("Scoring job %s: MP3 not found at %s", job_id, mp3_path_rel)
-            return
-
-        scorer = get_scorer_process()
-        if not scorer.alive:
-            log.info("Scorer subprocess not running — spawning before scoring")
-
-        config = PipelineConfig(device=device, claude_scoring_model=resolved_model)
-        meta = SongMeta(**meta_kwargs) if meta_kwargs else None
-
-        def _score_progress(completed: int, total: int, scorer_name: str) -> None:
-            _update_job(db_factory, job_id, JobStatus.RUNNING, progress=completed / total)
-
-        song_scores = scorer.score(
-            mp3_full, meta=meta, scorers=scorers, config=config, job_id=job_id,
-            on_progress=_score_progress,
-        )
-        scores_dict = song_scores.to_dict()
-
-        whisper_text = None
-        if song_scores.text_accuracy:
-            whisper_text = "\n".join(song_scores.text_accuracy.transcribed_line_texts)
-
-        with db_factory() as session:
-            from songmaker_cli.db.models import Generation as GenModel
-            save_scores(session, gen_id, scores_dict)
-            if whisper_text is not None:
-                gen_record = session.query(GenModel).filter_by(id=gen_id).first()
-                if gen_record:
-                    gen_record.whisper_text = whisper_text
-            session.commit()
-
-        log.info("Scored: %s (%d metrics)", mp3_path_rel, len(scores_dict))
-        _update_job(db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
-
-    except TimeoutError as exc:
-        log.error("Scoring job timed out: %s", exc)
-        _update_job(
-            db_factory, job_id, JobStatus.FAILED,
-            error=_sanitize_error(exc), error_type="timeout",
-        )
-    except Exception as exc:
-        log.exception("Scoring job failed: %s", exc)
-        _update_job(
-            db_factory, job_id, JobStatus.FAILED,
-            error=_sanitize_error(exc), error_type="scoring_error",
-        )
-
-
-def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
-    last_exc: Exception | None = None
-    for attempt in range(2):
-        try:
-            with factory() as session:
-                update_job_status(session, job_id, status, **kwargs)
-                session.commit()
-            return
-        except Exception as exc:
-            last_exc = exc
-            if attempt == 0:
-                log.warning("Retrying job %s status update to %s", job_id, status)
-    log.exception("Failed to update job %s to %s after retry", job_id, status)
-    raise RuntimeError(
-        f"Job {job_id} status update to {status!r} failed after 2 attempts"
-    ) from last_exc
-
-
-def _touch_heartbeat(factory, job_id: str) -> None:
-    try:
-        with factory() as session:
-            update_job_heartbeat(session, job_id)
-            session.commit()
-    except Exception:
-        log.error(
-            "Heartbeat update failed for job %s — "
-            "worker may be falsely declared stale if DB stays unreachable",
-            job_id, exc_info=True,
-        )
-
-
-async def load_model_on_worker(
-    ctx, job_id: str, worker_id: str, mode: str, *, db_factory,
-) -> None:
-    import httpx
-
-    from songmaker_cli.db.queries import get_worker_identity
-    from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
-    from songmaker_cli.settings import get_settings
-
-    factory = db_factory
-    _update_job(factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
-
-    with factory() as session:
-        worker = get_worker_identity(session, worker_id)
-    if worker is None:
-        _update_job(
-            factory, job_id, JobStatus.FAILED,
-            error=f"Worker '{worker_id}' not registered",
-            error_type="worker_missing",
-        )
-        return
-
-    token = get_settings().songmaker_internal_token.get_secret_value()
-    headers = {INTERNAL_TOKEN_HEADER: token}
-    url = f"http://{worker.host}:{worker.port}/load_model"
-
-    try:
-        async with httpx.AsyncClient(timeout=300) as client:
-            response = await client.post(url, json={"mode": mode}, headers=headers)
-    except httpx.HTTPError as exc:
-        _update_job(
-            factory, job_id, JobStatus.FAILED,
-            error=f"Worker unreachable: {exc}",
-            error_type="worker_unreachable",
-        )
-        return
-
-    if response.status_code >= 400:
-        _update_job(
-            factory, job_id, JobStatus.FAILED,
-            error=f"Worker returned {response.status_code}: {response.text[:200]}",
-            error_type="worker_error",
-        )
-        return
-
-    _update_job(factory, job_id, JobStatus.COMPLETED, progress=1.0)
-
-
-DOWNLOAD_MAX_ATTEMPTS = 3
-DOWNLOAD_RETRY_BASE_DELAY_SECONDS = 5.0
-
-
-async def download_model_on_worker(
-    ctx, job_id: str, mode: str, *, db_factory,
-) -> None:
-    import httpx
-
-    from songmaker_cli.acestep_state import (
-        clear_download_in_progress,
-        read_download_in_progress,
-        set_download_in_progress,
-    )
-    from songmaker_cli.constants import MODEL_CONFIG_PATHS
-    from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
-    from songmaker_cli.scheduler import (
-        DispatchOptions,
-        NoCapacityError,
-        WorkerTaskFailed,
-        consume_download_task_stream,
-        pick_any_online_worker,
-    )
-    from songmaker_cli.settings import get_settings
-
-    factory = db_factory
-    _update_job(factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
-
-    if mode not in MODEL_CONFIG_PATHS:
-        _update_job(
-            factory, job_id, JobStatus.FAILED,
-            error=f"Unknown model mode '{mode}'",
-            error_type="invalid_mode",
-        )
-        return
-
-    redis = ctx["redis"]
-    acquired = await set_download_in_progress(redis, mode, job_id)
-    if not acquired:
-        existing = await read_download_in_progress(redis, mode)
-        _update_job(
-            factory, job_id, JobStatus.FAILED,
-            error=f"Another download for '{mode}' is already in progress (job {existing})",
-            error_type="duplicate_download",
-        )
-        return
-
-    def _on_progress(fraction: float) -> None:
-        _update_job(factory, job_id, JobStatus.RUNNING, progress=fraction)
-        _touch_heartbeat(factory, job_id)
-
-    def _on_heartbeat() -> None:
-        _touch_heartbeat(factory, job_id)
-
-    last_error: str | None = None
-    try:
-        for attempt in range(1, DOWNLOAD_MAX_ATTEMPTS + 1):
-            try:
-                with factory() as session:
-                    worker = await pick_any_online_worker(session, redis)
-            except NoCapacityError as exc:
-                _update_job(
-                    factory, job_id, JobStatus.FAILED,
-                    error=str(exc),
-                    error_type="no_workers",
-                )
-                return
-
-            token = get_settings().songmaker_internal_token.get_secret_value()
-            headers = {INTERNAL_TOKEN_HEADER: token}
-            submit_url = f"{worker.base_url}/download_model"
-
-            try:
-                async with httpx.AsyncClient(timeout=30) as client:
-                    submit = await client.post(
-                        submit_url, json={"mode": mode}, headers=headers,
-                    )
-            except httpx.HTTPError as exc:
-                _update_job(
-                    factory, job_id, JobStatus.FAILED,
-                    error=f"Worker unreachable: {exc}",
-                    error_type="worker_unreachable",
-                )
-                return
-
-            if submit.status_code >= 400:
-                _update_job(
-                    factory, job_id, JobStatus.FAILED,
-                    error=f"Worker returned {submit.status_code}: {submit.text[:200]}",
-                    error_type="worker_error",
-                )
-                return
-
-            task_id = submit.json()["task_id"]
-
-            try:
-                await consume_download_task_stream(
-                    worker,
-                    task_id,
-                    on_progress=_on_progress,
-                    on_heartbeat=_on_heartbeat,
-                    options=DispatchOptions(),
-                )
-                _update_job(factory, job_id, JobStatus.COMPLETED, progress=1.0)
-                return
-            except WorkerTaskFailed as exc:
-                last_error = (
-                    f"Download attempt {attempt}/{DOWNLOAD_MAX_ATTEMPTS} failed: {exc}"
-                )
-                log.warning(
-                    "download attempt %d/%d for %s failed: %s",
-                    attempt, DOWNLOAD_MAX_ATTEMPTS, mode, exc,
-                )
-            except (httpx.RemoteProtocolError, httpx.ReadError) as exc:
-                last_error = (
-                    f"SSE drop on attempt {attempt}/{DOWNLOAD_MAX_ATTEMPTS}: {exc}"
-                )
-                log.warning(
-                    "SSE drop on download attempt %d/%d for %s: %s",
-                    attempt, DOWNLOAD_MAX_ATTEMPTS, mode, exc,
-                )
-            except httpx.HTTPError as exc:
-                _update_job(
-                    factory, job_id, JobStatus.FAILED,
-                    error=f"SSE transport failed: {exc}",
-                    error_type="sse_transport",
-                )
-                return
-
-            if attempt < DOWNLOAD_MAX_ATTEMPTS:
-                await asyncio.sleep(DOWNLOAD_RETRY_BASE_DELAY_SECONDS * attempt)
-
-        _update_job(
-            factory, job_id, JobStatus.FAILED,
-            error=last_error or "All download attempts exhausted",
-            error_type="download_error",
-        )
-    finally:
-        await clear_download_in_progress(redis, mode)
 
 
 def _cleanup_orphaned_files(audio_dir: Path, *rel_paths: str) -> None:

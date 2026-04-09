@@ -8,24 +8,7 @@ When you finish an item, delete its section. Git history preserves it. Decisions
 
 ## Architecture cleanup (deferred from the 2026-04-09 review)
 
-These three items remain from the brutal architecture review. The other 9 findings (B2–B7, B10–B12) shipped — see commit messages from 2026-04-09 for the audit trail. Sequence them after the no-silent-fallbacks branch merges to main.
-
-### Split `jobs.py` (B1)
-
-**Goal:** `src/songmaker_cli/jobs.py` is the highest-blast-radius file in the project (~950 lines mixing generation orchestration, scoring orchestration, worker model management, and runtime helpers). Split into a `jobs/` package with one file per concern. Pure structural refactor — no behavior changes.
-
-**Decisions:**
-- Sequence after `no-silent-fallbacks-v2` lands. The W2 typed `BaseGenerationParams` makes the cuts cleaner.
-- 4 files (not 3 — the original plan missed `load_model_on_worker` / `download_model_on_worker`): `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`.
-- Keep `jobs.py` as a deprecation shim re-exporting from the package. Verified safe: workers + tests import via `songmaker_cli.jobs.X`.
-- No new abstractions, no behavior changes, no new comments.
-
-**Constraints:**
-- Engine isolation (CLAUDE.md) — `acestep_engine`, `audio_engine`, `acestep_worker` must not import from `jobs/`.
-- `db_factory` injection pattern stays — `load_model_on_worker` / `download_model_on_worker` keep their `*, db_factory` keyword-only kwarg. Don't regress to module-level lookup.
-- `tests/test_jobs.py` patches paths under `songmaker_cli.jobs.X` extensively. The shim covers them.
-
-**First step:** read live `jobs.py` and `tests/test_jobs.py`, design + execute.
+These two items remain from the brutal architecture review. The other 10 findings (B1–B7, B10–B12) shipped — see commit messages from 2026-04-09 for the audit trail. Sequence them after the no-silent-fallbacks branch merges to main.
 
 ### Stuck-`QUEUED` job recovery (B8)
 

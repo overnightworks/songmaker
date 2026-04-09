@@ -144,10 +144,10 @@ The API client and `types.ts` are the frontend's contract with the backend. When
 | API | REST endpoints split by domain: albums, songs, generations, chat | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `chat_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models.py` |
-| Jobs | Background generation + scoring runners | `jobs.py` |
+| Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
 | Worker | arq-based job queues (music + scoring), scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
 | ACE-Step worker pool | Peer containers serving ACE-Step over HTTP/SSE | `src/acestep_worker/` (top-level package, separate from `songmaker_cli`) |
-| Generation post-process | Decode worker WAV → splice → master → MP3 | `generate.py`, `jobs.py:post_process_generation` |
+| Generation post-process | Decode worker WAV → splice → master → MP3 | `generate.py`, `jobs/generation.py:post_process_generation` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics, coherence | `scoring/` |
