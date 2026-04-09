@@ -11,6 +11,7 @@ from songmaker_cli.db.queries.albums import get_album as get_album
 from songmaker_cli.db.queries.albums import get_album_by_slug as get_album_by_slug
 from songmaker_cli.db.queries.albums import list_albums as list_albums
 from songmaker_cli.db.queries.albums import list_expired_albums as list_expired_albums
+from songmaker_cli.db.queries.albums import rename_album as rename_album
 from songmaker_cli.db.queries.albums import restore_album as restore_album
 from songmaker_cli.db.queries.albums import soft_delete_album as soft_delete_album
 from songmaker_cli.db.queries.auth import (
@@ -172,6 +173,7 @@ from songmaker_cli.db.queries.songs import get_song_by_slug as get_song_by_slug
 from songmaker_cli.db.queries.songs import list_expired_songs as list_expired_songs
 from songmaker_cli.db.queries.songs import list_songs as list_songs
 from songmaker_cli.db.queries.songs import move_song as move_song
+from songmaker_cli.db.queries.songs import rename_song as rename_song
 from songmaker_cli.db.queries.songs import restore_song as restore_song
 from songmaker_cli.db.queries.songs import soft_delete_song as soft_delete_song
 from songmaker_cli.db.queries.songs import update_song as update_song

@@ -182,6 +182,74 @@ def test_update_song(client: TestClient) -> None:
     assert resp.json()["version_count"] == 2
 
 
+def test_rename_song(client: TestClient) -> None:
+    resp = client.put("/api/songs/s1/title", json={"title": "Storm"})
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "Storm"
+    after = client.get("/api/songs/s1")
+    assert after.json()["title"] == "Storm"
+
+
+def test_rename_song_strips_whitespace(client: TestClient) -> None:
+    resp = client.put("/api/songs/s1/title", json={"title": "  Storm  "})
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "Storm"
+
+
+def test_rename_song_rejects_empty(client: TestClient) -> None:
+    resp = client.put("/api/songs/s1/title", json={"title": ""})
+    assert resp.status_code == 422
+
+
+def test_rename_song_rejects_whitespace_only(client: TestClient) -> None:
+    resp = client.put("/api/songs/s1/title", json={"title": "   "})
+    assert resp.status_code == 422
+
+
+def test_rename_song_rejects_too_long(client: TestClient) -> None:
+    resp = client.put("/api/songs/s1/title", json={"title": "x" * 201})
+    assert resp.status_code == 422
+
+
+def test_rename_song_not_found(client: TestClient) -> None:
+    resp = client.put("/api/songs/nonexistent/title", json={"title": "Storm"})
+    assert resp.status_code == 404
+
+
+def test_rename_album(client: TestClient) -> None:
+    resp = client.put("/api/albums/rock/title", json={"title": "Metal Album"})
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "Metal Album"
+    after = client.get("/api/albums/rock")
+    assert after.json()["title"] == "Metal Album"
+
+
+def test_rename_album_strips_whitespace(client: TestClient) -> None:
+    resp = client.put("/api/albums/rock/title", json={"title": "  Metal  "})
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "Metal"
+
+
+def test_rename_album_rejects_empty(client: TestClient) -> None:
+    resp = client.put("/api/albums/rock/title", json={"title": ""})
+    assert resp.status_code == 422
+
+
+def test_rename_album_rejects_whitespace_only(client: TestClient) -> None:
+    resp = client.put("/api/albums/rock/title", json={"title": "   "})
+    assert resp.status_code == 422
+
+
+def test_rename_album_rejects_too_long(client: TestClient) -> None:
+    resp = client.put("/api/albums/rock/title", json={"title": "x" * 201})
+    assert resp.status_code == 422
+
+
+def test_rename_album_not_found(client: TestClient) -> None:
+    resp = client.put("/api/albums/nonexistent/title", json={"title": "Metal"})
+    assert resp.status_code == 404
+
+
 def test_song_versions(client: TestClient) -> None:
     resp = client.get("/api/songs/s1/versions")
     assert resp.status_code == 200

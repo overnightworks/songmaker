@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { deleteAlbum, restoreAlbum, shareAlbum, unshareAlbum } from '$lib/api/client';
+	import {
+		deleteAlbum,
+		renameAlbum,
+		restoreAlbum,
+		shareAlbum,
+		unshareAlbum
+	} from '$lib/api/client';
 	import { fetchSongs } from '$lib/api/songs';
 	import {
 		albumList,
@@ -16,6 +22,7 @@
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import ActionButton from './ActionButton.svelte';
+	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
@@ -39,6 +46,19 @@
 	);
 	const albumSongCount = $derived(albumSongs.length);
 	const albumGenCount = $derived(albumSongs.reduce((sum, s) => sum + s.generation_count, 0));
+
+	async function onRenameAlbum(newTitle: string): Promise<void> {
+		if (!selectedAlbum) return;
+		const albumId = selectedAlbum.id;
+		try {
+			const updated = await renameAlbum(albumId, newTitle);
+			updateAlbumInList(albumId, () => updated);
+			addToast('Album renamed', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Rename failed', 'error');
+			throw e;
+		}
+	}
 
 	async function onAlbumShareEnable() {
 		if (!selectedAlbum) throw new Error('No album');
@@ -103,7 +123,13 @@
 		</button>
 		<div class="detail-header">
 			<div>
-				<h2 class="detail-title">{selectedAlbum.title}</h2>
+				<h2 class="detail-title">
+					<EditableTitle
+						value={selectedAlbum.title}
+						onsave={onRenameAlbum}
+						ariaLabel="Album title"
+					/>
+				</h2>
 				<span class="detail-subtitle">
 					{albumSongCount} song{albumSongCount !== 1 ? 's' : ''} · {albumGenCount} generation{albumGenCount !==
 					1

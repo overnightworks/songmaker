@@ -3,6 +3,7 @@
 		cancelJob,
 		fetchSong,
 		generateSong,
+		renameSong,
 		scoreGeneration,
 		pickGeneration,
 		unpickGeneration,
@@ -60,6 +61,7 @@
 	import SongEditor from './SongEditor.svelte';
 	import ClaudeChat from './ClaudeChat.svelte';
 	import ActionButton from './ActionButton.svelte';
+	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
@@ -256,6 +258,19 @@
 		navigateToSongTab('edit');
 	}
 
+	async function onRenameSong(newTitle: string): Promise<void> {
+		if (!song) return;
+		const songId = song.id;
+		try {
+			const updated = await renameSong(songId, newTitle);
+			updateSongInList(songId, () => updated);
+			addToast('Song renamed', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Rename failed', 'error');
+			throw e;
+		}
+	}
+
 	async function onSongShareEnable() {
 		if (!song) throw new Error('No song');
 		const songId = song.id;
@@ -347,7 +362,9 @@
 		</button>
 		<div class="detail-header">
 			<div>
-				<h2 class="song-title">{song.title}</h2>
+				<h2 class="song-title">
+					<EditableTitle value={song.title} onsave={onRenameSong} ariaLabel="Song title" />
+				</h2>
 				<span class="song-album">{song.artist}</span>
 			</div>
 			<div class="detail-actions">

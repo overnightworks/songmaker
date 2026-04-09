@@ -24,6 +24,7 @@ from songmaker_cli.api_models import (
     SongSummaryResponse,
     SongUpdateRequest,
     StatusResponse,
+    TitleUpdateRequest,
     VersionResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
@@ -40,6 +41,7 @@ from songmaker_cli.db.queries import (
     list_songs,
     move_song,
     record_audit,
+    rename_song,
     restore_song,
     soft_delete_song,
     update_song,
@@ -118,6 +120,25 @@ def api_update_song(
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(version.song)
+
+
+@router.put("/songs/{song_id}/title")
+def api_rename_song(
+    song_id: str, req: TitleUpdateRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> SongResponse:
+    check_song_access(session, song_id, user)
+    title = req.title.strip()
+    if not title:
+        raise HTTPException(422, "Title is required")
+    try:
+        song = rename_song(session, song_id, title)
+    except ValueError:
+        raise HTTPException(404, "Song not found")
+    record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
+    session.commit()
+    return SongResponse.from_orm(song)
 
 
 @router.put("/songs/{song_id}/album")

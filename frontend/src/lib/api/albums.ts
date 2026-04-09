@@ -16,6 +16,14 @@ export async function createAlbum(title: string, artist: string = ''): Promise<A
 	});
 }
 
+export async function renameAlbum(albumId: string, title: string): Promise<AlbumItem> {
+	return apiFetch<AlbumItem>(`/api/albums/${albumId}/title`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ title })
+	});
+}
+
 export async function shareAlbum(albumId: string): Promise<ShareResult> {
 	return apiFetch<ShareResult>(`/api/albums/${albumId}/share`, { method: 'POST' });
 }

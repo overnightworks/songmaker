@@ -318,6 +318,10 @@ class SongMoveRequest(BaseModel):
     album_id: str = Field(max_length=64)
 
 
+class TitleUpdateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
 class GenerateRequest(BaseModel):
     count: int = Field(1, ge=1, le=10)
     model: str

@@ -86,6 +86,7 @@ from songmaker_cli.api_models.songs import (
     SongResponse,
     SongSummaryResponse,
     SongUpdateRequest,
+    TitleUpdateRequest,
     VersionResponse,
 )
 from songmaker_cli.api_models.workers import (
@@ -232,6 +233,7 @@ __all__ = [
     "SongUpdateRequest",
     "StatusResponse",
     "StoredGenerationParams",
+    "TitleUpdateRequest",
     "UnpinModelOnWorkerRequest",
     "UpdateUserRequest",
     "UserRateLimitsResponse",

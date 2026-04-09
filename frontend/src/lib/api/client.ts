@@ -2,6 +2,7 @@ export { ApiError, type JobStatus } from './fetch';
 export {
 	fetchAlbums,
 	createAlbum,
+	renameAlbum,
 	shareAlbum,
 	unshareAlbum,
 	deleteAlbum,
@@ -18,6 +19,7 @@ export {
 	deleteSong,
 	restoreSong,
 	moveSong,
+	renameSong,
 	shareSong,
 	unshareSong,
 	cleanupSong

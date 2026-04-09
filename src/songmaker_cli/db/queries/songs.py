@@ -275,6 +275,16 @@ def restore_song(session: Session, song_id: str) -> Song:
     return song
 
 
+def rename_song(session: Session, song_id: str, title: str) -> Song:
+    song = session.query(Song).filter_by(id=song_id).first()
+    if not song:
+        raise ValueError(f"Song not found: {song_id}")
+    song.title = title
+    session.flush()
+    log.info("Renamed song %s to %r", song_id, title)
+    return song
+
+
 def move_song(session: Session, song_id: str, new_album_id: str) -> Song:
     song = session.query(Song).filter_by(id=song_id).first()
     if not song:

@@ -80,6 +80,14 @@ export async function moveSong(songId: string, albumId: string): Promise<SongIte
 	});
 }
 
+export async function renameSong(songId: string, title: string): Promise<SongItem> {
+	return apiFetch<SongItem>(`/api/songs/${songId}/title`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ title })
+	});
+}
+
 export async function shareSong(songId: string): Promise<ShareResult> {
 	return apiFetch<ShareResult>(`/api/songs/${songId}/share`, { method: 'POST' });
 }

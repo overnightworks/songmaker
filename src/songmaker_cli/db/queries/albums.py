@@ -64,6 +64,16 @@ def create_album(
     return album
 
 
+def rename_album(session: Session, album_id: str, title: str) -> Album:
+    album = session.query(Album).filter_by(id=album_id).first()
+    if not album:
+        raise ValueError(f"Album not found: {album_id}")
+    album.title = title
+    session.flush()
+    log.info("Renamed album %s to %r", album_id, title)
+    return album
+
+
 def get_album_by_slug(session: Session, slug: str) -> Album | None:
     return (
         session.query(Album)

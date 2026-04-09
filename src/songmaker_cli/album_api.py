@@ -23,6 +23,7 @@ from songmaker_cli.api_models import (
     PaginatedResponse,
     ShareResponse,
     StatusResponse,
+    TitleUpdateRequest,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.constants import AuditAction, ResourceType
@@ -36,6 +37,7 @@ from songmaker_cli.db.queries import (
     get_album,
     list_albums,
     record_audit,
+    rename_album,
     restore_album,
     soft_delete_album,
 )
@@ -93,6 +95,26 @@ def api_create_album(
     except IntegrityError:
         session.rollback()
         raise HTTPException(409, f"Album ID conflict for '{title}'. Try a different title.")
+    return AlbumResponse.from_orm(album)
+
+
+@router.put("/albums/{album_id}/title")
+def api_rename_album(
+    album_id: str, req: TitleUpdateRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> AlbumResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    title = req.title.strip()
+    if not title:
+        raise HTTPException(422, "Title is required")
+    try:
+        album = rename_album(session, album_id, title)
+    except ValueError:
+        raise HTTPException(404, "Album not found")
+    record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album_id)
+    session.commit()
     return AlbumResponse.from_orm(album)
 
 
