@@ -1,10 +1,24 @@
 # No Silent Fallbacks — v2
 
-**Status:** In progress (branch `refactor/no-silent-fallbacks` open, no W1 commits yet)
+**Status:** In progress on `refactor/no-silent-fallbacks`. **W1 is committed and re-reviewed clean. Env merge (Docker-only deployment) is in flight or just landed. W2 is the next workstream.**
 **Date:** 2026-04-09
 **Supersedes:** `plans/no-silent-fallbacks.md` (deleted; was a one-shot audit, this is the full cleanup)
 **Driver:** 2026-04-08 incident — `resolve_model_mode(None)` silently returned `'turbo'` for every generation after `available_models` was truncated. Audit revealed the root pattern is endemic, not a one-off.
-**Companion plan:** [architecture-review-findings.md](architecture-review-findings.md) — full context on the 12 review findings that motivated this work, including the 6 that already shipped via `chore/architecture-quick-wins`.
+**Companion plans:**
+- [architecture-review-findings.md](architecture-review-findings.md) — full context on the 12 review findings that motivated this work, including the 6 that already shipped via `chore/architecture-quick-wins`.
+- [no-silent-fallbacks-w1-cleanup.md](no-silent-fallbacks-w1-cleanup.md) — the W1 cleanup checklist that landed in commits `f1ad2d4` + `5571009` (already done — do not re-execute).
+- [single-env-file-docker-only.md](single-env-file-docker-only.md) — the env merge that consolidates `.env` and `.server.env` and removes the `uv run songmaker server` local-dev path. May be in flight or done — verify with the greps below before starting W2.
+
+## Workstream status
+
+| # | Workstream | Status | Where |
+|---|---|---|---|
+| W1 | Settings consolidation (`os.environ` → `Settings(BaseSettings)`) | ✅ **Done** | Commits `9abbf89` + `f1ad2d4` + `5571009`. All four cleanup-plan greps pass. `extra="forbid"` set in all three Settings classes. |
+| Env merge | `.env` + `.server.env` → single `.env`, Docker-only deployment | 🔄 In flight or done — verify | Commits to look for: anything touching `.gitignore` + `settings.py` + `CLAUDE.md` "Setup & Run" section. |
+| W2 | Pydantic discriminated union for `generation_params` | ⏳ **Next** — start here | Not yet begun. This is the highest-payoff workstream — it's the exact 2026-04-08 surface. |
+| W3 | Kill the 20 silent-fallback smell sites | ⏳ Pending | Most are auto-deleted by W2's typed objects. The standalone fixes (database "next number" patterns, scheduling.py error masking, api_helpers.py rate-limit fallback, settings_api.py model defaults) need explicit changes. |
+| W4 | Tighten `Optional` types in interior signatures | ⏳ Pending | Smaller. Removes `Optional` lies from timestamp fields, `_best_generation` return type, `run_generation_job` parameters, etc. |
+| W5 | Tests + CI smell-checker | ⏳ Pending | Final cleanup. Un-`xfail` everything, add `scripts/check_no_silent_fallbacks.py`, wire to CI. |
 
 ## How to pick this up in a fresh session
 
@@ -14,58 +28,105 @@ If you (a Claude agent or a human) are reading this for the first time and conti
 
 ```bash
 git checkout refactor/no-silent-fallbacks
-git log --oneline -10
-# Should show "be046a9 refactor(workers): introduce WorkerBase class" near the top
-# along with the other 5 quick-wins commits and the docs commit.
+git pull
+git log --oneline -15
+# You should see W1 commits at the top:
+#   5571009 fix(settings): apply re-review feedback (extra=forbid + cosmetics)
+#   f1ad2d4 fix(settings): post-review fixes for W1
+#   9abbf89 feat(settings): introduce Settings(BaseSettings) and migrate env reads (W1)
+# And — if the env merge has landed — commits like:
+#   feat(env): consolidate to single .env (Docker-only)  (or similar)
+# If W2 has already started, you'll see it as a separate commit beyond those.
 
 # Confirm migrations are up to date:
 docker compose exec -T postgres psql -U songmaker -d songmaker -c "SELECT version_num FROM alembic_version;"
-# Should report b2c3d4e5f6a7
+# Should report b2c3d4e5f6a7 (no new migrations from W1 — W2 may add one for the
+# generation_params migration script)
 
 # Confirm the test suite is green before you start:
 .venv/bin/python -m pytest tests/ -q --no-cov
-# Should report 1252 passed, 5 skipped (as of 2026-04-09)
+# Should report ≥1325 passed, ≤5 skipped
 
 # Confirm linter is clean:
 .venv/bin/ruff check src/ tests/
 ```
 
-### 2. Read these files in order
+### 2. Confirm where the work picks up
 
-1. **`CLAUDE.md`** (auto-loaded) — project conventions, especially "Code Patterns" and "Known Technical Debt".
-2. **This plan** — the workstreams, decisions, and Pydantic model design.
-3. **[plans/architecture-review-findings.md](architecture-review-findings.md)** — context on what already shipped (B3, B5, B6, B10, B11) and what's deferred (B1, B8, B9). Sections marked "✓ COVERED" reference this plan.
-4. **[src/acestep_engine/models.py](../src/acestep_engine/models.py)** — the `AceStepConfig` dataclass is the source of truth for which generation params are required (only `prompt` and `lyrics` have no default).
-5. **[src/songmaker_cli/worker_base.py](../src/songmaker_cli/worker_base.py)** — the `WorkerBase` class introduced in B5 is where `Settings` will be injected in W1. Read it to understand the new class shape.
-
-### 3. Decisions are locked in — do NOT re-prompt the user
-
-The user already answered every open question. Do not ask them again. The locked decisions are in the next section. If you discover a NEW question that genuinely wasn't covered (e.g. "this Pydantic field needs a min/max constraint, what value?"), then ask. Otherwise execute.
-
-### 4. Re-run the audit before W1 (sanity check)
-
-The audit findings in this plan were generated 2026-04-09 against the pre-quick-wins codebase. Line numbers may have shifted by a few lines after B5/B10. Before starting W1, verify the current state with quick greps:
+Run these greps to figure out exactly what state the branch is in:
 
 ```bash
-# Count remaining env reads (should be ~73; W1 reduces this to ~3)
-grep -rn "os\.environ\|os\.getenv" src/ | grep -v __pycache__ | wc -l
+# Has W1 (Settings consolidation) landed?
+grep -l "class Settings(BaseSettings)" src/songmaker_cli/settings.py && echo "✅ W1 done"
 
-# Confirm the 4 import-time footguns from CLAUDE.md still exist (they should until W1 lands):
-grep -n "CLAUDE_CHAT_MODEL\|CLAUDE_SCORING_MODEL" src/songmaker_cli/constants.py
-grep -n "_IMPORT_TIME_REDIS_URL\|self._import_time_redis_url" src/songmaker_cli/worker_base.py
+# Has the env merge landed?
+test ! -f .server.env && echo "✅ env merge done — only .env exists"
+test -f .server.env && echo "🔄 env merge NOT done yet — .server.env still exists"
 
-# Sanity-check the dict-as-domain hot spots:
-grep -n "generation_params\.get\|generation_params\[" src/ -r | grep -v __pycache__
-grep -n "next(iter(" src/ -r | grep -v __pycache__
+# Has W2 (Pydantic discriminated union for generation_params) started?
+test -f src/songmaker_cli/api_models/generation_params.py && echo "🔄 W2 has started"
+test ! -f src/songmaker_cli/api_models/generation_params.py && echo "⏳ W2 has not started"
+
+# The 4 W1 verification greps must all return empty:
+grep -rn "os\.environ\|os\.getenv" src/ | grep -v __pycache__ | grep -v "settings\.py" | grep -v "audiobox_aesthetics.py"
+grep -E "os\.(environ|getenv)|^def " src/songmaker_cli/constants.py
+grep -rn "DATA_ROOT\|AUDIO_ROOT\|DEFAULT_SOFT_DELETE_RETENTION_DAYS\|REDIS_URL_MISMATCH_WARNING" src/ tests/ | grep -v __pycache__
+grep -rn "\bSHARED_RATE_LIMIT\b\|\bSCORER_PIPELINE_TIMEOUT_SECONDS\b\|\bDEFAULT_MODEL_MODE\b" src/ tests/ | grep -v __pycache__
+# All four should be empty. If any returns content, W1 is not actually clean.
 ```
 
-If any grep returns surprisingly few hits, something has already been fixed — update this plan before duplicating work.
+**If the env merge isn't done yet:** wait for it to land before starting W2. The env merge touches `settings.py`, `conftest.py`, and `CLAUDE.md` — all files W2 also touches. Doing them concurrently creates merge conflicts.
 
-### 5. Execute workstreams in order
+**If W2 has already started:** read its commit(s) and the current `api_models/generation_params.py` to understand where it left off. Continue from there.
 
-W1 → W2 → W3 → W4 → W5. Each is a single commit on this branch. Do **not** reorder; later workstreams depend on earlier types existing.
+### 3. Read these files in order
 
-### 6. After all 5 commits land
+1. **`CLAUDE.md`** (auto-loaded) — project conventions, especially "Code Patterns" and "Known Technical Debt".
+2. **This plan** — the workstreams, decisions, and Pydantic model design (the W2 section is below).
+3. **[plans/architecture-review-findings.md](architecture-review-findings.md)** — context on what already shipped and what's deferred. Sections marked "✓ COVERED" reference this plan.
+4. **[plans/no-silent-fallbacks-w1-cleanup.md](no-silent-fallbacks-w1-cleanup.md)** — already executed, do not re-run. Read it only to understand what W1 cleaned up.
+5. **[plans/single-env-file-docker-only.md](single-env-file-docker-only.md)** — the env merge plan. Already executed or in flight.
+6. **[src/acestep_engine/models.py](../src/acestep_engine/models.py)** — the `AceStepConfig` dataclass is the source of truth for which generation params are required (only `prompt` and `lyrics` have no default).
+7. **[src/songmaker_cli/settings.py](../src/songmaker_cli/settings.py)** — the post-W1 Settings class. W2 will need to import `get_settings` for the migration script and DB validators.
+8. **[src/songmaker_cli/api_models/songs.py](../src/songmaker_cli/api_models/songs.py)** — contains the existing loose `StoredGenerationParams` (17 Optional fields, lines ~92-108). W2 deletes this and replaces it with the discriminated union from this plan.
+9. **[src/songmaker_cli/config.py](../src/songmaker_cli/config.py)** — contains the existing `build_ace_config()` that takes `meta: SongMeta + cli_overrides: dict`. W2 rewrites it to take a typed `BaseGenerationParams` directly.
+10. **[src/songmaker_cli/jobs.py](../src/songmaker_cli/jobs.py)** — contains `_apply_task_overrides`, `_load_preset_params`, `run_generation_job`. W2 deletes the first two and rewrites the third to take typed objects.
+
+### 4. Decisions are locked in — do NOT re-prompt the user
+
+The user already answered every open question (env merge, strictness, AceStep truth, PR shape, test strategy, migration script). Do not ask them again. The locked decisions are in the next section. If you discover a NEW question that genuinely wasn't covered (e.g. "this specific Pydantic field needs a regex validator, what pattern?"), then ask. Otherwise execute.
+
+### 5. Re-run the audit hot spots before W2 (sanity check)
+
+The audit was generated pre-W1. W1 + env merge moved file boundaries around. Before starting W2, verify the W2 hot spots are still where the plan claims:
+
+```bash
+# Dict-as-domain hot spots that W2 must collapse:
+grep -n "generation_params\.get\|generation_params\[" src/ -r | grep -v __pycache__
+# Expected: matches in jobs.py, scoring/bpm_accuracy.py, scoring/text_accuracy.py,
+# api_models/songs.py — these are the call sites W2 will rewrite to use the typed model.
+
+# The dict-typed arq kwargs:
+grep -n "repaint_params\|cover_params" src/songmaker_cli/generation_api.py src/songmaker_cli/music_worker.py src/songmaker_cli/jobs.py
+# Expected: matches showing dicts being passed through arq. W2 replaces with Pydantic.
+
+# build_ace_config call sites:
+grep -rn "build_ace_config" src/ | grep -v __pycache__
+# Expected: a few callers in jobs.py and possibly the CLI. W2 changes the signature.
+
+# StoredGenerationParams (the loose Optional model W2 replaces):
+grep -rn "StoredGenerationParams" src/ tests/ | grep -v __pycache__
+```
+
+If any grep returns surprisingly few hits, something has already been refactored — read the diff and update this plan before duplicating work.
+
+### 6. Execute the next workstream
+
+W1 → env merge → **W2** → W3 → W4 → W5. Do **not** reorder. Later workstreams depend on earlier types existing.
+
+If you're starting fresh, your next commit is **W2**. The detailed steps are in the "Workstream 2 — Pydantic for `generation_params`" section below.
+
+### 7. After all workstreams land
 
 ```bash
 # Run the full check suite (per the completion criteria at the bottom of this plan)
@@ -76,28 +137,52 @@ W1 → W2 → W3 → W4 → W5. Each is a single commit on this branch. Do **not
 git push -u origin refactor/no-silent-fallbacks
 # Open a PR or fast-forward merge — match the user's preference (last time it was ff merge).
 
-# Redeploy (no migrations expected unless W2 added one for the migration script):
+# Redeploy (W2 adds a migration for the generation_params backfill):
+BACKUP_DIR=/home/felix-hummert/backups/songmaker ./scripts/backup.sh   # backup before migration
 timeout 300 docker compose up -d --build --wait
-docker compose logs migrate | tail -20  # confirm clean
+docker compose logs migrate | tail -20  # confirm migration ran clean
+.venv/bin/python scripts/migrate_generation_params.py --dry-run        # report any corrupt rows
 ```
 
-### Important context on what changed in the quick-wins PR (commits 5655163..be046a9)
+### What changed since the original audit (full timeline)
 
-The 6 commits ahead of the original audit's reference point made these changes that affect this plan:
+The original audit was generated pre-quick-wins. Here's what's landed since, in order:
 
-- **B5 (`refactor(workers): introduce WorkerBase class`)** — `worker_base.py` is now a real class. Module-level globals `_db_factory`, `_db_engine`, `_db_lock`, `JOB_TIMEOUT_SECONDS`, `DRAIN_TIMEOUT_SECONDS`, `_audio_dir()`, `_data_dir()`, `_get_db_factory()`, `common_startup`, `common_shutdown`, `recover_on_startup`, `make_cleanup_cron`, and `audit_orphaned_files` are now methods on `WorkerBase`. `_IMPORT_TIME_REDIS_URL` in `music_worker.py` and `scoring_worker.py` is gone — the snapshot moved to `WorkerBase.__init__` as `self._import_time_redis_url`. **W1's injection point becomes `WorkerBase.__init__(settings: Settings)` instead of patching module globals.**
+**Quick-wins PR (commits `5655163..be046a9`, merged to main):**
+- **B5** — `worker_base.py` is now a `WorkerBase` class. Module-level globals are gone. Subclassed by `MusicWorker` and `ScoringWorker`. Each has a singleton instance built at module import (`_music_worker = MusicWorker(_settings)`).
+- **B10** — `Job.heartbeat_at` is `NOT NULL`, PID-based stale detection deleted, backfill migration applied.
+- **B6** — `Generation.version_id` now has an index.
+- **B3** — `ScorerProcess._pipe_lock` serializes concurrent score calls.
+- **B11** — `plans/` standardized with `Status:`/`Date:` headers, `acestep-model-parameters.md` archived, `infinite-duration.md` deleted.
+- **B4** — CI scoring exclusion documented in `.coveragerc-ci` and CLAUDE.md.
 
-- **B10 (`fix(jobs): drop PID liveness fallback, make heartbeat_at NOT NULL`)** — `STALE_JOB_THRESHOLD_SECONDS` in `db/queries/jobs.py:135` still reads `os.environ.get(...)` at module load. Still in scope for W1.
+**W1 (commits `9abbf89..5571009`):**
+- New `src/songmaker_cli/settings.py` with `Settings` + `WorkerSettings(BaseSettings)` (split, not inheriting). All env reads consolidated. `extra="forbid"` everywhere.
+- New `src/acestep_engine/settings.py` for engine isolation.
+- `WorkerBase.__init__(settings: Settings)` — instance owns the validated config.
+- `_music_worker = MusicWorker(_settings)` at module import time so arq's class-attribute inspection sees a validated value.
+- `get_claude_chat_model(session)` and `get_claude_scoring_model(session)` are query helpers in `db/queries/settings.py` — endpoints just call them, no `SETTING_*` keys at the API layer.
+- `clear_stale_user_jobs` docstring fix, `WorkerSettings(Settings)` → `WorkerSettings(BaseSettings)` split, `extra="forbid"` flip.
+- `tests/conftest.py` sets required env vars via `os.environ.setdefault` BEFORE any `songmaker_cli` import (because workers instantiate Settings at module load) and has an autouse `_reset_settings_cache` fixture.
+- 5 duplicate constants deleted (`DATA_ROOT`, `AUDIO_ROOT`, `DEFAULT_SOFT_DELETE_RETENTION_DAYS`, `ACESTEP_DEFAULT_VRAM_GB`, `REDIS_URL_MISMATCH_WARNING`).
+- 9 prefix renames done (`SHARED_RATE_LIMIT` → `SHARING_RATE_LIMIT`, `SCORER_PIPELINE_TIMEOUT_SECONDS` → `SCORING_PIPELINE_TIMEOUT_SECONDS`, `DEFAULT_MODEL_MODE` → `MODEL_DEFAULT_MODE`, etc. — see `plans/no-silent-fallbacks-w1-cleanup.md` Pass 3 for the full table).
+- CLAUDE.md "Known Technical Debt" entries about `WorkerSettings.redis_settings` and `CLAUDE_CHAT_MODEL/CLAUDE_SCORING_MODEL` import-time resolution are deleted.
 
-- **B6** — `Generation.version_id` now has an index. Doesn't affect this plan.
+**Env merge (commits TBD or already landed — verify):**
+- `.server.env` deleted.
+- `Settings._find_env_file()` looks for `.env`.
+- 6 ignored Docker-substitution fields added to `Settings` (`postgres_user`, `postgres_password`, `postgres_db`, `grafana_user`, `grafana_password`, `hf_token`) so `extra="forbid"` still works.
+- `CLAUDE.md` "Setup & Run" reflects Docker-only deployment.
+- Host PostgreSQL service is stopped/uninstalled (manual user step, already done).
+- The local-dev `uv run songmaker server` workflow no longer works (intentional).
 
-- **B3** — `ScorerProcess._pipe_lock` now serializes scoring calls. Doesn't affect this plan; the `SCORING_MAX_JOBS` env var is still in scope for W1.
+**Implications for W2:**
+- All env access is `get_settings().foo`. The migration script can `from songmaker_cli.settings import get_settings` and read DB credentials from there.
+- `worker_base.WorkerBase` is a class — no module globals to patch. Tests instantiate fresh `WorkerBase` subclasses.
+- `db_factory` is passed explicitly to `load_model_on_worker` and `download_model_on_worker` (kwarg). When W2's typed `repaint_params`/`cover_params` flow through arq, the same pattern applies — pass typed objects through, validate at the worker entrypoint.
+- `_apply_task_overrides` in `jobs.py` is the function W2 deletes. The replacement logic lives inside the new `build_ace_config(params: GenerationParamsRequest, ...)` from the design section below.
 
-- **B11** — `plans/` was reorganized. References in this plan to other plans use the new paths.
-
-- **`load_model_on_worker` and `download_model_on_worker` in `jobs.py`** now take `db_factory` as a keyword-only argument (the B5 refactor passed this through). When W1 adds `Settings`, both functions should also take `settings` as a kwarg, OR be wrapped on `MusicWorker` to access `self._settings`.
-
-The audit file/line references in workstreams below may be off by a few lines after these commits. If a grep doesn't find what the plan claims is there, just re-grep for the symbol — the conceptual reference is what matters.
+The audit file/line references in the W2 section below may be off by a few lines after all of this. If a grep doesn't find what the plan claims is there, just re-grep for the symbol — the conceptual reference is what matters.
 
 ## Goal
 
