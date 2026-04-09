@@ -1,9 +1,103 @@
 # No Silent Fallbacks — v2
 
-**Status:** Proposed
+**Status:** In progress (branch `refactor/no-silent-fallbacks` open, no W1 commits yet)
 **Date:** 2026-04-09
 **Supersedes:** `plans/no-silent-fallbacks.md` (deleted; was a one-shot audit, this is the full cleanup)
 **Driver:** 2026-04-08 incident — `resolve_model_mode(None)` silently returned `'turbo'` for every generation after `available_models` was truncated. Audit revealed the root pattern is endemic, not a one-off.
+**Companion plan:** [architecture-review-findings.md](architecture-review-findings.md) — full context on the 12 review findings that motivated this work, including the 6 that already shipped via `chore/architecture-quick-wins`.
+
+## How to pick this up in a fresh session
+
+If you (a Claude agent or a human) are reading this for the first time and continuing the work:
+
+### 1. Verify the starting state
+
+```bash
+git checkout refactor/no-silent-fallbacks
+git log --oneline -10
+# Should show "be046a9 refactor(workers): introduce WorkerBase class" near the top
+# along with the other 5 quick-wins commits and the docs commit.
+
+# Confirm migrations are up to date:
+docker compose exec -T postgres psql -U songmaker -d songmaker -c "SELECT version_num FROM alembic_version;"
+# Should report b2c3d4e5f6a7
+
+# Confirm the test suite is green before you start:
+.venv/bin/python -m pytest tests/ -q --no-cov
+# Should report 1252 passed, 5 skipped (as of 2026-04-09)
+
+# Confirm linter is clean:
+.venv/bin/ruff check src/ tests/
+```
+
+### 2. Read these files in order
+
+1. **`CLAUDE.md`** (auto-loaded) — project conventions, especially "Code Patterns" and "Known Technical Debt".
+2. **This plan** — the workstreams, decisions, and Pydantic model design.
+3. **[plans/architecture-review-findings.md](architecture-review-findings.md)** — context on what already shipped (B3, B5, B6, B10, B11) and what's deferred (B1, B8, B9). Sections marked "✓ COVERED" reference this plan.
+4. **[src/acestep_engine/models.py](../src/acestep_engine/models.py)** — the `AceStepConfig` dataclass is the source of truth for which generation params are required (only `prompt` and `lyrics` have no default).
+5. **[src/songmaker_cli/worker_base.py](../src/songmaker_cli/worker_base.py)** — the `WorkerBase` class introduced in B5 is where `Settings` will be injected in W1. Read it to understand the new class shape.
+
+### 3. Decisions are locked in — do NOT re-prompt the user
+
+The user already answered every open question. Do not ask them again. The locked decisions are in the next section. If you discover a NEW question that genuinely wasn't covered (e.g. "this Pydantic field needs a min/max constraint, what value?"), then ask. Otherwise execute.
+
+### 4. Re-run the audit before W1 (sanity check)
+
+The audit findings in this plan were generated 2026-04-09 against the pre-quick-wins codebase. Line numbers may have shifted by a few lines after B5/B10. Before starting W1, verify the current state with quick greps:
+
+```bash
+# Count remaining env reads (should be ~73; W1 reduces this to ~3)
+grep -rn "os\.environ\|os\.getenv" src/ | grep -v __pycache__ | wc -l
+
+# Confirm the 4 import-time footguns from CLAUDE.md still exist (they should until W1 lands):
+grep -n "CLAUDE_CHAT_MODEL\|CLAUDE_SCORING_MODEL" src/songmaker_cli/constants.py
+grep -n "_IMPORT_TIME_REDIS_URL\|self._import_time_redis_url" src/songmaker_cli/worker_base.py
+
+# Sanity-check the dict-as-domain hot spots:
+grep -n "generation_params\.get\|generation_params\[" src/ -r | grep -v __pycache__
+grep -n "next(iter(" src/ -r | grep -v __pycache__
+```
+
+If any grep returns surprisingly few hits, something has already been fixed — update this plan before duplicating work.
+
+### 5. Execute workstreams in order
+
+W1 → W2 → W3 → W4 → W5. Each is a single commit on this branch. Do **not** reorder; later workstreams depend on earlier types existing.
+
+### 6. After all 5 commits land
+
+```bash
+# Run the full check suite (per the completion criteria at the bottom of this plan)
+.venv/bin/ruff check src/ tests/
+.venv/bin/python -m pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine
+
+# Push and merge:
+git push -u origin refactor/no-silent-fallbacks
+# Open a PR or fast-forward merge — match the user's preference (last time it was ff merge).
+
+# Redeploy (no migrations expected unless W2 added one for the migration script):
+timeout 300 docker compose up -d --build --wait
+docker compose logs migrate | tail -20  # confirm clean
+```
+
+### Important context on what changed in the quick-wins PR (commits 5655163..be046a9)
+
+The 6 commits ahead of the original audit's reference point made these changes that affect this plan:
+
+- **B5 (`refactor(workers): introduce WorkerBase class`)** — `worker_base.py` is now a real class. Module-level globals `_db_factory`, `_db_engine`, `_db_lock`, `JOB_TIMEOUT_SECONDS`, `DRAIN_TIMEOUT_SECONDS`, `_audio_dir()`, `_data_dir()`, `_get_db_factory()`, `common_startup`, `common_shutdown`, `recover_on_startup`, `make_cleanup_cron`, and `audit_orphaned_files` are now methods on `WorkerBase`. `_IMPORT_TIME_REDIS_URL` in `music_worker.py` and `scoring_worker.py` is gone — the snapshot moved to `WorkerBase.__init__` as `self._import_time_redis_url`. **W1's injection point becomes `WorkerBase.__init__(settings: Settings)` instead of patching module globals.**
+
+- **B10 (`fix(jobs): drop PID liveness fallback, make heartbeat_at NOT NULL`)** — `STALE_JOB_THRESHOLD_SECONDS` in `db/queries/jobs.py:135` still reads `os.environ.get(...)` at module load. Still in scope for W1.
+
+- **B6** — `Generation.version_id` now has an index. Doesn't affect this plan.
+
+- **B3** — `ScorerProcess._pipe_lock` now serializes scoring calls. Doesn't affect this plan; the `SCORING_MAX_JOBS` env var is still in scope for W1.
+
+- **B11** — `plans/` was reorganized. References in this plan to other plans use the new paths.
+
+- **`load_model_on_worker` and `download_model_on_worker` in `jobs.py`** now take `db_factory` as a keyword-only argument (the B5 refactor passed this through). When W1 adds `Settings`, both functions should also take `settings` as a kwarg, OR be wrapped on `MusicWorker` to access `self._settings`.
+
+The audit file/line references in workstreams below may be off by a few lines after these commits. If a grep doesn't find what the plan claims is there, just re-grep for the symbol — the conceptual reference is what matters.
 
 ## Goal
 
@@ -247,9 +341,9 @@ A separate `WorkerSettings(Settings)` adds the acestep-worker-only fields (`work
 |---|---|
 | [constants.py](../src/songmaker_cli/constants.py#L29-L67) | `RESTORE_WINDOW`, `CLAUDE_CHAT_MODEL`, `CLAUDE_SCORING_MODEL` (the documented footguns) |
 | [auth.py](../src/songmaker_cli/auth.py#L18-L57) | All 16 rate-limit / session / lockout constants + `TRUSTED_PROXIES` parser |
-| [worker_base.py](../src/songmaker_cli/worker_base.py#L32-L179) | `JOB_TIMEOUT_SECONDS`, `DRAIN_TIMEOUT_SECONDS`, `_audio_dir`, `_data_dir`, `build_redis_settings` |
-| [music_worker.py](../src/songmaker_cli/music_worker.py#L42-L96) | `_IMPORT_TIME_REDIS_URL`, `max_jobs` |
-| [scoring_worker.py](../src/songmaker_cli/scoring_worker.py#L37-L94) | `_IMPORT_TIME_REDIS_URL`, `device`, `max_jobs` |
+| [worker_base.py](../src/songmaker_cli/worker_base.py) | Module-level: `JOB_TIMEOUT_SECONDS`, `DRAIN_TIMEOUT_SECONDS`, `build_redis_settings`. Inside `WorkerBase`: `self._import_time_redis_url` (snapshot in `__init__`), `audio_dir()` reading `AUDIO_DIR`, `data_dir()` reading `DATA_DIR`, `on_startup()` reading `REDIS_URL` for the mismatch warning. **Inject `Settings` into `WorkerBase.__init__` and access via `self._settings`.** |
+| [music_worker.py](../src/songmaker_cli/music_worker.py) | `MusicWorker.max_jobs = int(os.environ.get("MUSIC_MAX_JOBS", "2"))` at class definition. Move this to read from `settings.music_max_jobs` after instantiation, OR (cleaner) make `max_jobs` a `ClassVar[int]` set lazily in `MusicWorkerSettings` after `get_settings()` resolves. |
+| [scoring_worker.py](../src/songmaker_cli/scoring_worker.py) | `ScoringWorker.max_jobs` (same pattern as music). Plus `device = os.environ.get("SCORING_DEVICE", _SCORING_DEVICE_DEFAULT)` inside `ScoringWorker.score()` — move to `settings.scoring_device`. |
 | [server.py](../src/songmaker_cli/server.py#L42-L267) | `REQUEST_TIMEOUT_SECONDS`, `ALLOWED_HOSTS`, `redis_url`, `CORS_ORIGIN`, `HOST` |
 | [logging_config.py](../src/songmaker_cli/logging_config.py#L17) | `LOG_FORMAT` |
 | [middleware/rate_limit.py](../src/songmaker_cli/middleware/rate_limit.py#L16) | `IP_RATE_LIMIT` |
@@ -276,7 +370,39 @@ A separate `WorkerSettings(Settings)` adds the acestep-worker-only fields (`work
 - Startup with a missing required env var raises a clear `ValidationError` listing which fields are missing.
 - `Settings` is constructible in tests via `Settings(database_url=..., redis_url=..., ...)` without monkey-patching `os.environ`.
 
-**Special handling for import-time consumers:** `WorkerSettings.redis_settings` (the arq class attribute that was the original footgun) is set inside `MusicWorkerSettings.__init__` via `cls.redis_settings = build_redis_settings(get_settings().redis_url)` rather than at module-import time. Same for `max_jobs`. This is the load-bearing fix.
+**Special handling for arq's class-level attributes (the load-bearing fix):**
+
+arq inspects `MusicWorkerSettings.redis_settings`, `MusicWorkerSettings.max_jobs`, `MusicWorkerSettings.queue_name` at class definition time. These cannot be `None`-then-set-later — arq needs them resolved before its event loop starts.
+
+Today (after B5):
+```python
+class MusicWorkerSettings:
+    redis_settings = build_redis_settings()  # reads REDIS_URL at module import
+    max_jobs = MusicWorker.max_jobs           # reads MUSIC_MAX_JOBS at class def of MusicWorker
+```
+
+After W1, the load-bearing pattern is to resolve `Settings()` ONCE at module import time, before defining the class:
+
+```python
+# music_worker.py
+from songmaker_cli.settings import get_settings
+
+_settings = get_settings()  # one-shot, lru_cached. .server.env loaded by BaseSettings.
+_music_worker = MusicWorker(_settings)
+
+class MusicWorkerSettings:
+    functions = [_music_worker.generate, ...]
+    redis_settings = RedisSettings.from_dsn(_settings.redis_url)
+    max_jobs = _settings.music_max_jobs
+    queue_name = MusicWorker.queue_name
+    ...
+```
+
+This works because `BaseSettings` reads `.server.env` during `Settings()` construction, which happens at the first call to `get_settings()` — and that first call is now at import time of `music_worker.py`, before arq inspects the class. The `lru_cache` on `get_settings()` ensures the same instance is used everywhere afterwards.
+
+The CLAUDE.md "Known Technical Debt" entry about `WorkerSettings.redis_settings` resolving at import time is then resolvable via documentation: yes, it still resolves at import time, but now from a validated `Settings` object whose `.server.env` is loaded automatically by Pydantic. The old footgun (`os.environ.get("REDIS_URL", "redis://localhost:6379/0")` returning the fallback if `.server.env` hadn't been processed yet) is gone because `Settings()` reads `.server.env` itself.
+
+**Engine package isolation (Risk 4):** `acestep_engine/client.py` cannot import from `songmaker_cli.settings` without breaking the one-way dependency rule. Create `src/acestep_engine/settings.py` with a minimal `EngineSettings(BaseSettings)` containing only `acestep_poll_timeout`, `default_host`, `default_port`. The engine package owns its own settings.
 
 ## Workstream 2 — Pydantic for `generation_params` (the 2026-04-08 surface)
 
@@ -435,8 +561,10 @@ RULES = [
     ),
     Rule(
         name="dict-get-domain-fallback",
-        # .get(key, <literal>) on variables named like config/params/state/defaults
-        pattern=r"(config|params|state|defaults|settings)\.get\([^,)]+,\s*[\"'\[{0-9]",
+        # .get(key, <literal>) on variables named like config/params/state/defaults.
+        # Matches when the second arg starts with a string quote, list/dict literal,
+        # or a digit — i.e. a literal default, not a sentinel like None.
+        pattern=r"(config|params|state|defaults|settings)\.get\([^,)]+,\s*([\"'\[{]|\d)",
         allowlist=set(),
     ),
     Rule(
@@ -503,4 +631,162 @@ This plan is done when:
 5. `python scripts/check_no_silent_fallbacks.py src/` exits 0.
 6. `pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine` passes with target coverage.
 7. `python scripts/migrate_generation_params.py --dry-run` reports zero issues against a freshly-migrated dev DB.
-8. The CLAUDE.md "Known Technical Debt" entries for `WorkerSettings.redis_settings`, `CLAUDE_CHAT_MODEL`, and `CLAUDE_SCORING_MODEL` are deleted.
+8. The CLAUDE.md "Known Technical Debt" entries for `WorkerSettings.redis_settings`, `CLAUDE_CHAT_MODEL`, and `CLAUDE_SCORING_MODEL` are deleted (or rewritten to say "now resolved via `Settings(BaseSettings)`, see settings.py").
+
+## Verification appendix — concrete commands
+
+Copy-paste these to verify each workstream as you go.
+
+### After W1 (Settings consolidation)
+
+```bash
+# 1. Settings file exists and is the only place env is read
+test -f src/songmaker_cli/settings.py && echo OK
+test -f src/acestep_engine/settings.py && echo OK  # engine isolation
+
+# 2. No env reads outside settings files (should print only settings.py + audiobox CUDA mutation)
+grep -rn "os\.environ\|os\.getenv" src/ | grep -v __pycache__ | grep -v "settings\.py" | grep -v "audiobox_aesthetics.py:60"
+# Expected: empty output (or very small allowlist)
+
+# 3. Settings is constructible in tests with explicit kwargs
+.venv/bin/python -c "
+from songmaker_cli.settings import Settings
+s = Settings(database_url='sqlite:///:memory:', redis_url='redis://localhost:6379/0', session_secret='x'*64, songmaker_internal_token='t')
+print(s.music_max_jobs, s.scoring_max_jobs)
+"
+
+# 4. Required fields raise on missing
+.venv/bin/python -c "
+from songmaker_cli.settings import Settings
+import os
+for k in ('DATABASE_URL', 'REDIS_URL', 'SESSION_SECRET', 'SONGMAKER_INTERNAL_TOKEN'):
+    os.environ.pop(k, None)
+try:
+    Settings()
+    print('FAIL: should have raised')
+except Exception as e:
+    print('OK:', type(e).__name__)
+"
+
+# 5. arq workers still start
+docker compose up -d --build --wait
+docker compose logs songmaker-music-worker | tail -5  # should show "generate worker ready"
+docker compose logs songmaker-scoring-worker | tail -5 # should show "score worker ready"
+
+# 6. CLAUDE.md technical-debt entries are gone (or rewritten)
+grep -n "resolved at import time\|REDIS_URL" CLAUDE.md
+```
+
+### After W2 (Pydantic for generation_params)
+
+```bash
+# 1. New file exists
+test -f src/songmaker_cli/api_models/generation_params.py && echo OK
+
+# 2. No more dict-style access on generation_params
+grep -rn "generation_params\.get\|generation_params\[" src/ | grep -v __pycache__
+# Expected: empty
+
+# 3. Round-trip test passes
+.venv/bin/python -c "
+from songmaker_cli.api_models.generation_params import Text2MusicParams
+p = Text2MusicParams(prompt='test', lyrics='test', model_mode='turbo')
+data = p.model_dump(mode='json')
+p2 = Text2MusicParams.model_validate(data)
+assert p == p2
+print('OK')
+"
+
+# 4. Unknown key rejected (extra='forbid')
+.venv/bin/python -c "
+from songmaker_cli.api_models.generation_params import Text2MusicParams
+try:
+    Text2MusicParams(prompt='x', lyrics='y', model_mode='turbo', typo_field=42)
+    print('FAIL: should have rejected typo_field')
+except Exception as e:
+    print('OK:', type(e).__name__)
+"
+
+# 5. Migration script exists and dry-runs clean against dev DB
+test -f scripts/migrate_generation_params.py && echo OK
+.venv/bin/python scripts/migrate_generation_params.py --dry-run
+# Review output for any rows flagged as invalid before running --fix
+```
+
+### After W3 (smell sites)
+
+```bash
+# 1. No next(iter(...)) anywhere
+grep -rn "next(iter(" src/ | grep -v __pycache__
+# Expected: empty
+
+# 2. The 10 HIGH findings are gone (re-grep each one)
+grep -n "preset_params or {}\|global_defaults or {}" src/songmaker_cli/config.py
+grep -n 'data\.get("result") or' src/songmaker_cli/scheduling.py
+grep -n 'data\.get("error") or' src/songmaker_cli/scheduling.py
+grep -n '_ENV_RATE_LIMITS\.get' src/songmaker_cli/api_helpers.py
+grep -n 'get_builtin_defaults\(\)\.get' src/songmaker_cli/settings_api.py
+# Expected: all empty (or matched by the W3 fix patterns)
+
+# 3. Named constants exist for the legitimate fallbacks
+grep -n "INITIAL_PLAYLIST_POSITION\|INITIAL_TRACK_NUMBER\|INITIAL_GENERATION_NUMBER" src/songmaker_cli/db/queries/
+```
+
+### After W4 (Optional tightening)
+
+```bash
+# 1. Type checker passes
+.venv/bin/mypy src/  # or pyright if you prefer
+
+# 2. Timestamp Optionals on default=_utcnow columns are gone
+grep -n "created_at.*Optional\|created_at.*| None\|updated_at.*Optional\|updated_at.*| None" src/songmaker_cli/api_models/
+# Expected: empty for the columns we tightened
+
+# 3. _best_generation has the right type
+grep -A 1 "_best_generation" src/songmaker_cli/api_models/songs.py
+# Expected: returns Generation | None, not object | None
+
+# 4. run_generation_job parameters are required
+grep -A 5 "def run_generation_job" src/songmaker_cli/jobs.py
+# Expected: no `= None` on db_factory, audio_dir, data_dir, redis
+```
+
+### After W5 (tests + CI)
+
+```bash
+# 1. Smell checker exists and passes against current src/
+test -f scripts/check_no_silent_fallbacks.py && echo OK
+.venv/bin/python scripts/check_no_silent_fallbacks.py src/
+# Expected: exit 0
+
+# 2. Smell checker actually catches a smell when injected
+echo 'foo = os.environ.get("HACK", "default")' >> src/songmaker_cli/api_helpers.py
+.venv/bin/python scripts/check_no_silent_fallbacks.py src/ && echo "FAIL: should have caught the new env read"
+git checkout src/songmaker_cli/api_helpers.py
+
+# 3. Full test suite green
+.venv/bin/python -m pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine
+
+# 4. CI config calls the smell checker
+grep -n "check_no_silent_fallbacks" .github/workflows/ci.yml
+```
+
+### Deploy after merge
+
+```bash
+# Backup first if W2 added a migration:
+BACKUP_DIR=/home/felix-hummert/backups/songmaker ./scripts/backup.sh
+
+# Merge to main (user prefers fast-forward):
+git checkout main && git merge --ff-only refactor/no-silent-fallbacks && git push origin main
+
+# Redeploy (auto-runs alembic via the migrate service):
+timeout 300 docker compose up -d --build --wait
+
+# Verify migrations applied (if any new ones):
+docker compose logs migrate | tail -20
+docker compose exec -T postgres psql -U songmaker -d songmaker -c "SELECT version_num FROM alembic_version;"
+
+# Smoke test: generate a song end-to-end
+# (manual via the web UI or CLI)
+```
