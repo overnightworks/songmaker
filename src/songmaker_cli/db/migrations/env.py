@@ -1,14 +1,21 @@
-"""Alembic environment — auto-detects schema changes from SQLAlchemy models."""
+"""Alembic environment — auto-detects schema changes from SQLAlchemy models.
+
+Boundary script: alembic loads and executes this file directly. It reads
+DATABASE_URL from os.environ rather than going through Settings so the
+migrate container does not need to plumb unrelated Settings env vars
+(REDIS_URL, SESSION_SECRET, SONGMAKER_INTERNAL_TOKEN) just to run
+``alembic upgrade``.
+"""
 
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool, text
 
 from songmaker_cli.db.models import Base
-from songmaker_cli.settings import get_settings
 
 config = context.config
 
@@ -22,7 +29,13 @@ def _resolve_db_url() -> str:
     url = config.get_main_option("sqlalchemy.url")
     if url:
         return url
-    return get_settings().database_url
+    env_url = os.environ.get("DATABASE_URL")
+    if not env_url:
+        raise RuntimeError(
+            "DATABASE_URL is required for alembic migrations — "
+            "set it in the environment before running `alembic upgrade`.",
+        )
+    return env_url
 
 
 def run_migrations_offline() -> None:

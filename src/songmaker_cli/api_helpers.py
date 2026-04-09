@@ -71,13 +71,6 @@ def check_redis_health(request) -> None:
         raise HTTPException(503, "Service temporarily degraded — try again shortly")
 
 
-_RATE_LIMIT_SETTING_KEYS: dict[JobType, str] = {
-    JobType.GENERATE: SETTING_GENERATION_RATE_LIMIT,
-    JobType.SCORE: SETTING_SCORING_RATE_LIMIT,
-    JobType.CHAT: SETTING_CHAT_RATE_LIMIT,
-}
-
-
 def _job_type_rate_limits(job_type: JobType) -> tuple[int, int, str]:
     """Return (user_limit, admin_limit, db_setting_key) for a job type."""
     settings = get_settings()

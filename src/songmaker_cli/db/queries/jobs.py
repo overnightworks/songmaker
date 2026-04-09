@@ -135,14 +135,14 @@ def clear_stale_user_jobs(
     session: Session, user_id: str,
     threshold_seconds: int | None = None,
 ) -> int:
-    if threshold_seconds is None:
-        from songmaker_cli.settings import get_settings
-        threshold_seconds = get_settings().stale_job_threshold_seconds
     """Mark stale running/queued jobs for a user as failed. Returns count cleared.
 
     Called at job submission time so users auto-unblock without waiting
     for the periodic cron cleanup.
     """
+    if threshold_seconds is None:
+        from songmaker_cli.settings import get_settings
+        threshold_seconds = get_settings().stale_job_threshold_seconds
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=threshold_seconds)
     stale = (

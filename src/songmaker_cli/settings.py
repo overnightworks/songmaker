@@ -125,15 +125,26 @@ class Settings(BaseSettings):
     data_dir: str = "data"
 
 
-class WorkerSettings(Settings):
+class WorkerSettings(BaseSettings):
     """Settings for the acestep-worker container.
 
-    Adds the worker-specific fields. Required fields raise at startup
-    if missing — there is no fallback for ``worker_id`` because every
-    worker pod must declare its identity.
+    Independent from ``Settings`` because the GPU worker pod has no
+    database, no sessions, and no internal API of its own — it only
+    needs Redis, its own identity, and subprocess knobs. Inheriting
+    from ``Settings`` would force the worker container to set
+    ``DATABASE_URL`` and ``SESSION_SECRET`` for no reason.
     """
 
+    model_config = SettingsConfigDict(
+        env_file=_find_env_file(),
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
     worker_id: str
+    redis_url: str
+    songmaker_internal_token: SecretStr = SecretStr("")
     worker_host: str | None = None
     worker_port: int = 8001
     vram_budget_gb: float = 22.0
@@ -144,6 +155,7 @@ class WorkerSettings(Settings):
     control_plane_url: str | None = None
     gpu_id: int | None = None
     hf_token: SecretStr | None = None
+    log_level: str = "INFO"
 
     # Subprocess timeouts
     acestep_startup_timeout_seconds: int = 300

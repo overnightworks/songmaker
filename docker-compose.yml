@@ -109,6 +109,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
+      SESSION_SECRET: ${SESSION_SECRET}
       MUSIC_MAX_JOBS: "${MUSIC_MAX_JOBS:-2}"
       ARQ_JOB_TIMEOUT: "${ARQ_JOB_TIMEOUT:-300}"
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
@@ -179,6 +180,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
+      SESSION_SECRET: ${SESSION_SECRET}
+      SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
       SCORING_DEVICE: "${SCORING_DEVICE:-cpu}"
       SCORING_MAX_JOBS: "${SCORING_MAX_JOBS:-1}"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
