@@ -747,10 +747,9 @@ def test_load_model_on_worker_success(seeded_db) -> None:
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        _run(load_model_on_worker({}, "w1-job", "w1", "sft"))
+        _run(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "w1-job")
@@ -769,8 +768,7 @@ def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
         session.add(Job(id="job1", type="load_model_on_worker", status="queued"))
         session.commit()
 
-    with patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db):
-        _run(load_model_on_worker({}, "job1", "missing", "sft"))
+    _run(load_model_on_worker({}, "job1", "missing", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "job1")
@@ -793,10 +791,9 @@ def test_load_model_on_worker_unreachable(seeded_db) -> None:
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        _run(load_model_on_worker({}, "w1-job", "w1", "sft"))
+        _run(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "w1-job")
@@ -817,10 +814,9 @@ def test_load_model_on_worker_returns_5xx(seeded_db) -> None:
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        _run(load_model_on_worker({}, "w1-job", "w1", "sft"))
+        _run(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "w1-job")
@@ -879,8 +875,7 @@ def test_download_model_on_worker_unknown_mode(seeded_db) -> None:
 
     _seed_download_job(seeded_db, "dl1")
     redis = _FakeRedis()
-    with patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db):
-        _run(download_model_on_worker({"redis": redis}, "dl1", "ghost"))
+    _run(download_model_on_worker({"redis": redis}, "dl1", "ghost", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl1")
@@ -893,8 +888,7 @@ def test_download_model_on_worker_no_online_workers(seeded_db) -> None:
 
     _seed_download_job(seeded_db, "dl2")
     redis = _FakeRedis()
-    with patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db):
-        _run(download_model_on_worker({"redis": redis}, "dl2", "sft"))
+    _run(download_model_on_worker({"redis": redis}, "dl2", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl2")
@@ -919,10 +913,9 @@ def test_download_model_on_worker_unreachable(seeded_db) -> None:
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl3", "sft"))
+        _run(download_model_on_worker({"redis": redis}, "dl3", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl3")
@@ -946,10 +939,9 @@ def test_download_model_on_worker_returns_5xx(seeded_db) -> None:
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl4", "sft"))
+        _run(download_model_on_worker({"redis": redis}, "dl4", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl4")
@@ -983,11 +975,10 @@ def test_download_model_on_worker_happy_path(seeded_db) -> None:
         return DownloadTaskResultDTO(mode="sft", size_bytes=12345)
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
         patch("songmaker_cli.scheduler.consume_download_task_stream", new=fake_consume),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl5", "sft"))
+        _run(download_model_on_worker({"redis": redis}, "dl5", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl5")
@@ -1028,7 +1019,6 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
         raise WorkerTaskFailed("HF 401 unauthorized")
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
         patch(
             "songmaker_cli.scheduler.consume_download_task_stream",
@@ -1036,7 +1026,7 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
         ),
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl6", "sft"))
+        _run(download_model_on_worker({"redis": redis}, "dl6", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl6")
@@ -1068,14 +1058,13 @@ def test_download_model_on_worker_sse_transport_error(seeded_db) -> None:
         raise httpx.ConnectError("dropped")
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
         patch(
             "songmaker_cli.scheduler.consume_download_task_stream",
             new=transport_drop,
         ),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl7", "sft"))
+        _run(download_model_on_worker({"redis": redis}, "dl7", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl7")
@@ -1105,11 +1094,10 @@ def test_download_model_on_worker_clears_redis_flag_on_success(seeded_db) -> Non
         return DownloadTaskResultDTO(mode="sft", size_bytes=1)
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
         patch("songmaker_cli.scheduler.consume_download_task_stream", new=fake_consume),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl8", "sft"))
+        _run(download_model_on_worker({"redis": redis}, "dl8", "sft", db_factory=seeded_db))
 
     assert download_key("sft") not in redis.store
 
@@ -1121,8 +1109,7 @@ def test_download_model_on_worker_clears_redis_flag_on_failure(seeded_db) -> Non
     _seed_download_job(seeded_db, "dl9")
     redis = _FakeRedis()
 
-    with patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db):
-        _run(download_model_on_worker({"redis": redis}, "dl9", "sft"))
+    _run(download_model_on_worker({"redis": redis}, "dl9", "sft", db_factory=seeded_db))
 
     assert download_key("sft") not in redis.store
 
@@ -1135,8 +1122,7 @@ def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> Non
     redis = _FakeRedis()
     redis.store[download_key("sft")] = "previous-job"
 
-    with patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db):
-        _run(download_model_on_worker({"redis": redis}, "dl10", "sft"))
+    _run(download_model_on_worker({"redis": redis}, "dl10", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl10")
@@ -1175,7 +1161,6 @@ def test_download_retries_on_worker_task_failed_then_succeeds(seeded_db) -> None
         return DownloadTaskResultDTO(mode="sft", size_bytes=1)
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
         patch(
             "songmaker_cli.scheduler.consume_download_task_stream",
@@ -1183,7 +1168,7 @@ def test_download_retries_on_worker_task_failed_then_succeeds(seeded_db) -> None
         ),
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl-retry-1", "sft"))
+        _run(download_model_on_worker({"redis": redis}, "dl-retry-1", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl-retry-1")
@@ -1220,7 +1205,6 @@ def test_download_retries_on_sse_drop_then_succeeds(seeded_db) -> None:
         return DownloadTaskResultDTO(mode="sft", size_bytes=1)
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
         patch(
             "songmaker_cli.scheduler.consume_download_task_stream",
@@ -1228,7 +1212,7 @@ def test_download_retries_on_sse_drop_then_succeeds(seeded_db) -> None:
         ),
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl-retry-2", "sft"))
+        _run(download_model_on_worker({"redis": redis}, "dl-retry-2", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl-retry-2")
@@ -1261,7 +1245,6 @@ def test_download_does_not_retry_on_connect_error(seeded_db) -> None:
         raise httpx.ConnectError("refused")
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
         patch(
             "songmaker_cli.scheduler.consume_download_task_stream",
@@ -1269,7 +1252,7 @@ def test_download_does_not_retry_on_connect_error(seeded_db) -> None:
         ),
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl-noretry", "sft"))
+        _run(download_model_on_worker({"redis": redis}, "dl-noretry", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl-noretry")
@@ -1304,7 +1287,6 @@ def test_download_redis_flag_held_across_retries(seeded_db) -> None:
         raise WorkerTaskFailed("transient")
 
     with (
-        patch("songmaker_cli.worker_base._get_db_factory", return_value=seeded_db),
         patch("httpx.AsyncClient", return_value=fake_client),
         patch(
             "songmaker_cli.scheduler.consume_download_task_stream",
@@ -1312,7 +1294,7 @@ def test_download_redis_flag_held_across_retries(seeded_db) -> None:
         ),
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl-flag", "sft"))
+        _run(download_model_on_worker({"redis": redis}, "dl-flag", "sft", db_factory=seeded_db))
 
     assert seen_during_retries == [True, True, True]
     assert flag_key not in redis.store

@@ -6,6 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import songmaker_cli.music_worker as mw_mod
+from songmaker_cli.music_worker import MusicWorker
 
 
 def _run(coro):
@@ -16,28 +17,35 @@ def _mock_ctx():
     return {"redis": AsyncMock()}
 
 
+def _make_worker() -> MusicWorker:
+    """Fresh worker with DB / dirs / job-validity stubbed."""
+    worker = MusicWorker()
+    worker.check_job_still_valid = MagicMock(return_value=True)
+    worker.audio_dir = MagicMock(return_value="audio")
+    worker.data_dir = MagicMock(return_value="data")
+    worker.get_db_factory = MagicMock(return_value=MagicMock())
+    return worker
+
+
 def test_generate_skips_completed_job() -> None:
-    with (
-        patch("songmaker_cli.music_worker.check_job_still_valid", return_value=False),
-        patch("songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock) as mock_run,
-    ):
-        _run(mw_mod.generate(
-            _mock_ctx(), "j1", "s1", "v1", 2, "u1", None, "sft",
-        ))
+    worker = _make_worker()
+    worker.check_job_still_valid = MagicMock(return_value=False)
+
+    with patch(
+        "songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock,
+    ) as mock_run:
+        _run(worker.generate(_mock_ctx(), "j1", "s1", "v1", 2, "u1", None, "sft"))
 
     mock_run.assert_not_called()
 
 
 def test_generate_runs_queued_job() -> None:
+    worker = _make_worker()
     ctx = _mock_ctx()
-    with (
-        patch("songmaker_cli.music_worker.check_job_still_valid", return_value=True),
-        patch("songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock) as mock_run,
-        patch("songmaker_cli.music_worker._audio_dir", return_value="audio"),
-        patch("songmaker_cli.music_worker._data_dir", return_value="data"),
-        patch("songmaker_cli.music_worker._get_db_factory", return_value=MagicMock()),
-    ):
-        _run(mw_mod.generate(ctx, "j1", "s1", "v1", 2, "u1", None, "sft"))
+    with patch(
+        "songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock,
+    ) as mock_run:
+        _run(worker.generate(ctx, "j1", "s1", "v1", 2, "u1", None, "sft"))
 
     mock_run.assert_awaited_once()
     kwargs = mock_run.await_args.kwargs
@@ -45,16 +53,12 @@ def test_generate_runs_queued_job() -> None:
 
 
 def test_generate_passes_seed_and_target_model() -> None:
-    ctx = _mock_ctx()
-    with (
-        patch("songmaker_cli.music_worker.check_job_still_valid", return_value=True),
-        patch("songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock) as mock_run,
-        patch("songmaker_cli.music_worker._audio_dir", return_value="audio"),
-        patch("songmaker_cli.music_worker._data_dir", return_value="data"),
-        patch("songmaker_cli.music_worker._get_db_factory", return_value=MagicMock()),
-    ):
-        _run(mw_mod.generate(
-            ctx, "j1", "s1", "v1", 2, "u1", 42, "xl-sft",
+    worker = _make_worker()
+    with patch(
+        "songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock,
+    ) as mock_run:
+        _run(worker.generate(
+            _mock_ctx(), "j1", "s1", "v1", 2, "u1", 42, "xl-sft",
         ))
 
     kwargs = mock_run.await_args.kwargs
@@ -63,17 +67,13 @@ def test_generate_passes_seed_and_target_model() -> None:
 
 
 def test_generate_passes_repaint_params() -> None:
-    ctx = _mock_ctx()
+    worker = _make_worker()
     repaint = {"src_wav_path": "/x.wav", "repainting_start": 0.0, "repainting_end": 1.0}
-    with (
-        patch("songmaker_cli.music_worker.check_job_still_valid", return_value=True),
-        patch("songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock) as mock_run,
-        patch("songmaker_cli.music_worker._audio_dir", return_value="audio"),
-        patch("songmaker_cli.music_worker._data_dir", return_value="data"),
-        patch("songmaker_cli.music_worker._get_db_factory", return_value=MagicMock()),
-    ):
-        _run(mw_mod.generate(
-            ctx, "j1", "s1", "v1", 1, "u1", None, "sft", repaint_params=repaint,
+    with patch(
+        "songmaker_cli.music_worker.run_generation_job", new_callable=AsyncMock,
+    ) as mock_run:
+        _run(worker.generate(
+            _mock_ctx(), "j1", "s1", "v1", 1, "u1", None, "sft", repaint_params=repaint,
         ))
 
     kwargs = mock_run.await_args.kwargs
@@ -81,44 +81,56 @@ def test_generate_passes_repaint_params() -> None:
 
 
 def test_cleanup_stale_calls_base_cleanup_and_orphan_audit() -> None:
+    worker = _make_worker()
+    worker.audit_orphaned_files = MagicMock()
+
     with (
-        patch.object(mw_mod, "_base_cleanup", new_callable=AsyncMock) as mock_base,
-        patch.object(mw_mod, "audit_orphaned_files") as mock_audit,
+        patch.object(
+            MusicWorker.__mro__[1],  # WorkerBase
+            "cleanup_stale_cron",
+            new_callable=AsyncMock,
+            return_value=0,
+        ) as mock_base,
         patch("songmaker_cli.cleanup.run_cleanup_expired") as mock_expired,
-        patch.object(mw_mod, "_get_db_factory", return_value=MagicMock()),
-        patch.object(mw_mod, "_audio_dir", return_value="audio"),
     ):
         ctx = _mock_ctx()
-        _run(mw_mod.cleanup_stale(ctx))
+        _run(worker.cleanup_stale_cron(ctx))
 
     mock_base.assert_called_once_with(ctx)
-    mock_audit.assert_called_once()
+    worker.audit_orphaned_files.assert_called_once()
     mock_expired.assert_called_once()
 
 
 def test_on_startup_calls_recover_on_startup() -> None:
+    worker = MusicWorker()
+    worker._recover_on_startup = AsyncMock(return_value=0)
+
     ctx = _mock_ctx()
     with (
-        patch(
-            "songmaker_cli.music_worker.recover_on_startup", new_callable=AsyncMock,
-        ) as mock_recover,
-        patch("songmaker_cli.music_worker.common_startup", new_callable=AsyncMock),
+        patch("songmaker_cli.config.find_project_root"),
+        patch("songmaker_cli.config.load_env_file"),
+        patch("songmaker_cli.logging_config.configure_logging"),
     ):
-        _run(mw_mod.on_startup(ctx))
+        _run(worker.on_startup(ctx))
 
-    from songmaker_cli.constants import RECOVERY_LOCK_MUSIC_KEY
-    mock_recover.assert_called_once_with(ctx, RECOVERY_LOCK_MUSIC_KEY, "generate")
+    worker._recover_on_startup.assert_called_once_with(ctx)
 
 
-def test_on_shutdown_calls_common_shutdown() -> None:
-    ctx = _mock_ctx()
+def test_on_shutdown_disposes_db() -> None:
+    worker = MusicWorker()
+    mock_session = MagicMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+    worker.get_db_factory = MagicMock(return_value=mock_factory)
+    worker._db_engine = MagicMock()
+
     with patch(
-        "songmaker_cli.music_worker.common_shutdown", new_callable=AsyncMock,
-    ) as mock_shutdown:
-        _run(mw_mod.on_shutdown(ctx))
+        "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value=0,
+    ):
+        _run(worker.on_shutdown(_mock_ctx()))
 
-    from songmaker_cli.constants import RECOVERY_LOCK_MUSIC_KEY
-    mock_shutdown.assert_called_once_with(RECOVERY_LOCK_MUSIC_KEY, "generate", ctx["redis"])
+    worker._db_engine.dispose.assert_called_once()
 
 
 def test_music_worker_settings_queue_name() -> None:
@@ -139,3 +151,10 @@ def test_music_worker_settings_functions() -> None:
     assert "load_model_on_worker" in func_names
     assert "download_model_on_worker" in func_names
     assert len(MusicWorkerSettings.functions) == 3
+
+
+def test_music_worker_settings_uses_singleton_methods() -> None:
+    """The arq Settings shim must expose bound methods of _music_worker."""
+    from songmaker_cli.music_worker import MusicWorkerSettings
+    for func in MusicWorkerSettings.functions:
+        assert func.__self__ is mw_mod._music_worker

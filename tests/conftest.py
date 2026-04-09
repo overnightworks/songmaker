@@ -21,10 +21,12 @@ TEST_SECRET = b"a" * 64
 @pytest.fixture(autouse=True)
 def _reset_worker_singletons():
     yield
-    import songmaker_cli.worker_base as wb
+    from songmaker_cli import music_worker as mw_mod
+    from songmaker_cli import scoring_worker as sw_mod
 
-    wb._db_factory = None
-    wb._db_engine = None
+    for worker in (mw_mod._music_worker, sw_mod._scoring_worker):
+        worker._db_factory = None
+        worker._db_engine = None
 
 
 @pytest.fixture

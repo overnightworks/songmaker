@@ -730,14 +730,15 @@ def _touch_heartbeat(factory, job_id: str) -> None:
         )
 
 
-async def load_model_on_worker(ctx, job_id: str, worker_id: str, mode: str) -> None:
+async def load_model_on_worker(
+    ctx, job_id: str, worker_id: str, mode: str, *, db_factory,
+) -> None:
     import httpx
 
     from songmaker_cli.db.queries import get_worker_identity
     from songmaker_cli.internal_api import INTERNAL_TOKEN_ENV, INTERNAL_TOKEN_HEADER
-    from songmaker_cli.worker_base import _get_db_factory
 
-    factory = _get_db_factory()
+    factory = db_factory
     _update_job(factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
 
     with factory() as session:
@@ -780,7 +781,9 @@ DOWNLOAD_MAX_ATTEMPTS = 3
 DOWNLOAD_RETRY_BASE_DELAY_SECONDS = 5.0
 
 
-async def download_model_on_worker(ctx, job_id: str, mode: str) -> None:
+async def download_model_on_worker(
+    ctx, job_id: str, mode: str, *, db_factory,
+) -> None:
     import httpx
 
     from songmaker_cli.acestep_state import (
@@ -797,9 +800,8 @@ async def download_model_on_worker(ctx, job_id: str, mode: str) -> None:
         consume_download_task_stream,
         pick_any_online_worker,
     )
-    from songmaker_cli.worker_base import _get_db_factory
 
-    factory = _get_db_factory()
+    factory = db_factory
     _update_job(factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
 
     if mode not in MODEL_CONFIG_PATHS:

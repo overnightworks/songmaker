@@ -6,6 +6,7 @@ Started as a separate process:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
@@ -17,86 +18,89 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.jobs import (
-    download_model_on_worker,
-    load_model_on_worker,
+    download_model_on_worker as _download_model_on_worker_impl,
+)
+from songmaker_cli.jobs import (
+    load_model_on_worker as _load_model_on_worker_impl,
+)
+from songmaker_cli.jobs import (
     run_generation_job,
 )
-from songmaker_cli.worker_base import (
-    DRAIN_TIMEOUT_SECONDS,
-    HEALTH_CHECK_INTERVAL_SECONDS,
-    JOB_TIMEOUT_SECONDS,
-    _audio_dir,
-    _data_dir,
-    _get_db_factory,
-    audit_orphaned_files,
-    build_redis_settings,
-    check_job_still_valid,
-    common_shutdown,
-    common_startup,
-    make_cleanup_cron,
-    recover_on_startup,
-)
+from songmaker_cli.worker_base import WorkerBase, build_redis_settings
 
 log = logging.getLogger(__name__)
 
-_IMPORT_TIME_REDIS_URL = os.environ.get("REDIS_URL")
+
+class MusicWorker(WorkerBase):
+    job_type = JobType.GENERATE
+    recovery_lock_key = RECOVERY_LOCK_MUSIC_KEY
+    queue_name = ARQ_MUSIC_QUEUE_NAME
+    max_jobs = int(os.environ.get("MUSIC_MAX_JOBS", "2"))
+
+    async def generate(self, ctx, job_id, song_id, version_id, count, user_id, seed,
+                       requested_model, repaint_params=None, cover_params=None):
+        if not self.check_job_still_valid(job_id):
+            return
+
+        import structlog
+        structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.GENERATE)
+
+        await run_generation_job(
+            job_id, song_id, version_id, count, user_id,
+            db_factory=self.get_db_factory(),
+            audio_dir=self.audio_dir(),
+            data_dir=self.data_dir(),
+            seed=seed,
+            repaint_params=repaint_params,
+            cover_params=cover_params,
+            target_model=requested_model,
+            redis=ctx["redis"],
+        )
+
+    async def load_model_on_worker(
+        self, ctx, job_id: str, worker_id: str, mode: str,
+    ) -> None:
+        await _load_model_on_worker_impl(
+            ctx, job_id, worker_id, mode, db_factory=self.get_db_factory(),
+        )
+
+    async def download_model_on_worker(self, ctx, job_id: str, mode: str) -> None:
+        await _download_model_on_worker_impl(
+            ctx, job_id, mode, db_factory=self.get_db_factory(),
+        )
+
+    async def cleanup_stale_cron(self, ctx) -> int:
+        from songmaker_cli.cleanup import run_cleanup_expired
+
+        count = await super().cleanup_stale_cron(ctx)
+        await asyncio.to_thread(self.audit_orphaned_files)
+        await asyncio.to_thread(
+            run_cleanup_expired, self.get_db_factory(), self.audio_dir(),
+        )
+        return count
 
 
-async def generate(ctx, job_id, song_id, version_id, count, user_id, seed,
-                   requested_model, repaint_params=None, cover_params=None):
-    if not check_job_still_valid(job_id):
-        return
-
-    import structlog
-    structlog.contextvars.bind_contextvars(job_id=job_id, task=JobType.GENERATE)
-
-    await run_generation_job(
-        job_id, song_id, version_id, count, user_id,
-        db_factory=_get_db_factory(),
-        audio_dir=_audio_dir(),
-        data_dir=_data_dir(),
-        seed=seed,
-        repaint_params=repaint_params,
-        cover_params=cover_params,
-        target_model=requested_model,
-        redis=ctx["redis"],
-    )
-
-
-_base_cleanup = make_cleanup_cron(JobType.GENERATE)
-
-
-async def cleanup_stale(ctx):
-    import asyncio
-
-    from songmaker_cli.cleanup import run_cleanup_expired
-
-    await _base_cleanup(ctx)
-    await asyncio.to_thread(audit_orphaned_files)
-    await asyncio.to_thread(run_cleanup_expired, _get_db_factory(), _audio_dir())
-
-
-async def on_startup(ctx):
-    await common_startup(ctx, _IMPORT_TIME_REDIS_URL)
-    log.info("Music worker starting up...")
-    await recover_on_startup(ctx, RECOVERY_LOCK_MUSIC_KEY, JobType.GENERATE)
-    log.info("Music worker ready")
-
-
-async def on_shutdown(ctx):
-    await common_shutdown(RECOVERY_LOCK_MUSIC_KEY, JobType.GENERATE, ctx["redis"])
+_music_worker = MusicWorker()
 
 
 class MusicWorkerSettings:
-    functions = [generate, load_model_on_worker, download_model_on_worker]
-    on_startup = on_startup
-    on_shutdown = on_shutdown
+    functions = [
+        _music_worker.generate,
+        _music_worker.load_model_on_worker,
+        _music_worker.download_model_on_worker,
+    ]
+    on_startup = _music_worker.on_startup
+    on_shutdown = _music_worker.on_shutdown
     redis_settings = build_redis_settings()
-    queue_name = ARQ_MUSIC_QUEUE_NAME
-    max_jobs = int(os.environ.get("MUSIC_MAX_JOBS", "2"))
-    job_timeout = JOB_TIMEOUT_SECONDS
-    job_completion_wait = DRAIN_TIMEOUT_SECONDS
-    health_check_interval = HEALTH_CHECK_INTERVAL_SECONDS
+    queue_name = MusicWorker.queue_name
+    max_jobs = MusicWorker.max_jobs
+    job_timeout = MusicWorker.job_timeout
+    job_completion_wait = MusicWorker.drain_timeout
+    health_check_interval = MusicWorker.health_check_interval
     cron_jobs = [
-        cron(cleanup_stale, minute={i for i in range(0, 60, 2)}, second={0}),
+        cron(
+            _music_worker.cleanup_stale_cron,
+            minute={i for i in range(0, 60, 2)},
+            second={0},
+        ),
     ]

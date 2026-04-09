@@ -6,6 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import songmaker_cli.scoring_worker as sw_mod
+from songmaker_cli.scoring_worker import ScoringWorker
 
 
 def _run(coro):
@@ -16,106 +17,85 @@ def _mock_ctx():
     return {"redis": AsyncMock()}
 
 
-def _mock_db_factory():
-    mock_session = MagicMock()
-    mock_factory = MagicMock()
-    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
-    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
-    return mock_factory, mock_session
+def _make_worker() -> ScoringWorker:
+    worker = ScoringWorker()
+    worker.check_job_still_valid = MagicMock(return_value=True)
+    worker.audio_dir = MagicMock(return_value="audio")
+    worker.get_db_factory = MagicMock(return_value=MagicMock())
+    return worker
 
 
 def test_score_skips_completed_job() -> None:
-    with (
-        patch("songmaker_cli.scoring_worker.check_job_still_valid", return_value=False),
-        patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run,
-    ):
-        _run(sw_mod.score(_mock_ctx(), "j1", "g1", None))
+    worker = _make_worker()
+    worker.check_job_still_valid = MagicMock(return_value=False)
+
+    with patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run:
+        _run(worker.score(_mock_ctx(), "j1", "g1", None))
 
     mock_run.assert_not_called()
 
 
 def test_score_runs_queued_job() -> None:
-    with (
-        patch("songmaker_cli.scoring_worker.check_job_still_valid", return_value=True),
-        patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run,
-        patch("songmaker_cli.scoring_worker._get_db_factory", return_value=MagicMock()),
-        patch("songmaker_cli.scoring_worker._audio_dir", return_value="audio"),
-    ):
-        _run(sw_mod.score(_mock_ctx(), "j1", "g1", ["silence"]))
+    worker = _make_worker()
+    with patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run:
+        _run(worker.score(_mock_ctx(), "j1", "g1", ["silence"]))
 
     mock_run.assert_called_once()
 
 
 def test_score_passes_device_from_env() -> None:
+    worker = _make_worker()
     with (
-        patch("songmaker_cli.scoring_worker.check_job_still_valid", return_value=True),
         patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run,
-        patch("songmaker_cli.scoring_worker._get_db_factory", return_value=MagicMock()),
-        patch("songmaker_cli.scoring_worker._audio_dir", return_value="audio"),
         patch.dict("os.environ", {"SCORING_DEVICE": "cuda"}),
     ):
-        _run(sw_mod.score(_mock_ctx(), "j1", "g1", None))
+        _run(worker.score(_mock_ctx(), "j1", "g1", None))
 
     assert mock_run.call_args.kwargs["device"] == "cuda"
 
 
 def test_score_defaults_to_cpu() -> None:
+    worker = _make_worker()
     with (
-        patch("songmaker_cli.scoring_worker.check_job_still_valid", return_value=True),
         patch("songmaker_cli.scoring_worker.run_scoring_job") as mock_run,
-        patch("songmaker_cli.scoring_worker._get_db_factory", return_value=MagicMock()),
-        patch("songmaker_cli.scoring_worker._audio_dir", return_value="audio"),
         patch.dict("os.environ", {}, clear=True),
     ):
-        _run(sw_mod.score(_mock_ctx(), "j1", "g1", None))
+        _run(worker.score(_mock_ctx(), "j1", "g1", None))
 
     assert mock_run.call_args.kwargs["device"] == "cpu"
 
 
-def test_cleanup_stale_is_from_make_cleanup_cron() -> None:
-    assert sw_mod.cleanup_stale is not None
-    assert callable(sw_mod.cleanup_stale)
-
-
 def test_on_startup_initializes_scorer() -> None:
+    worker = ScoringWorker()
+    worker._recover_on_startup = AsyncMock(return_value=0)
+
     mock_scorer = MagicMock()
     ctx = _mock_ctx()
 
     with (
-        patch("songmaker_cli.scoring_worker.recover_on_startup", new_callable=AsyncMock),
-        patch("songmaker_cli.scoring_worker.common_startup", new_callable=AsyncMock),
+        patch("songmaker_cli.config.find_project_root"),
+        patch("songmaker_cli.config.load_env_file"),
+        patch("songmaker_cli.logging_config.configure_logging"),
         patch(
             "songmaker_cli.scoring.subprocess_runner.ScorerProcess",
             return_value=mock_scorer,
         ),
         patch("songmaker_cli.scoring.subprocess_runner.set_scorer_process") as mock_set,
     ):
-        _run(sw_mod.on_startup(ctx))
+        _run(worker.on_startup(ctx))
 
     mock_set.assert_called_once_with(mock_scorer)
-
-
-def test_on_startup_calls_recover_on_startup() -> None:
-    ctx = _mock_ctx()
-
-    with (
-        patch(
-            "songmaker_cli.scoring_worker.recover_on_startup", new_callable=AsyncMock,
-        ) as mock_recover,
-        patch("songmaker_cli.scoring_worker.common_startup", new_callable=AsyncMock),
-        patch(
-            "songmaker_cli.scoring.subprocess_runner.ScorerProcess",
-            return_value=MagicMock(),
-        ),
-        patch("songmaker_cli.scoring.subprocess_runner.set_scorer_process"),
-    ):
-        _run(sw_mod.on_startup(ctx))
-
-    from songmaker_cli.constants import RECOVERY_LOCK_SCORING_KEY
-    mock_recover.assert_called_once_with(ctx, RECOVERY_LOCK_SCORING_KEY, "score")
+    worker._recover_on_startup.assert_called_once_with(ctx)
 
 
 def test_on_shutdown_stops_scorer() -> None:
+    worker = ScoringWorker()
+    mock_session = MagicMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+    worker.get_db_factory = MagicMock(return_value=mock_factory)
+
     mock_scorer = MagicMock()
     ctx = _mock_ctx()
 
@@ -124,14 +104,23 @@ def test_on_shutdown_stops_scorer() -> None:
             "songmaker_cli.scoring.subprocess_runner.get_scorer_process",
             return_value=mock_scorer,
         ),
-        patch("songmaker_cli.scoring_worker.common_shutdown", new_callable=AsyncMock),
+        patch(
+            "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value=0,
+        ),
     ):
-        _run(sw_mod.on_shutdown(ctx))
+        _run(worker.on_shutdown(ctx))
 
     mock_scorer.shutdown.assert_called_once()
 
 
 def test_on_shutdown_handles_missing_scorer() -> None:
+    worker = ScoringWorker()
+    mock_session = MagicMock()
+    mock_factory = MagicMock()
+    mock_factory.return_value.__enter__ = MagicMock(return_value=mock_session)
+    mock_factory.return_value.__exit__ = MagicMock(return_value=False)
+    worker.get_db_factory = MagicMock(return_value=mock_factory)
+
     ctx = _mock_ctx()
 
     with (
@@ -139,9 +128,11 @@ def test_on_shutdown_handles_missing_scorer() -> None:
             "songmaker_cli.scoring.subprocess_runner.get_scorer_process",
             side_effect=RuntimeError("not initialized"),
         ),
-        patch("songmaker_cli.scoring_worker.common_shutdown", new_callable=AsyncMock),
+        patch(
+            "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value=0,
+        ),
     ):
-        _run(sw_mod.on_shutdown(ctx))
+        _run(worker.on_shutdown(ctx))
 
 
 def test_scoring_worker_settings_queue_name() -> None:
@@ -160,3 +151,10 @@ def test_scoring_worker_settings_functions() -> None:
     func_names = [f.__name__ for f in ScoringWorkerSettings.functions]
     assert "score" in func_names
     assert "generate" not in func_names
+
+
+def test_scoring_worker_settings_uses_singleton_methods() -> None:
+    """The arq Settings shim must expose bound methods of _scoring_worker."""
+    from songmaker_cli.scoring_worker import ScoringWorkerSettings
+    for func in ScoringWorkerSettings.functions:
+        assert func.__self__ is sw_mod._scoring_worker
