@@ -29,7 +29,7 @@ _db_factory = None
 _db_engine = None
 _db_lock = threading.Lock()
 
-JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "300"))
+JOB_TIMEOUT_SECONDS = int(os.environ.get("ARQ_JOB_TIMEOUT", "900"))
 DRAIN_TIMEOUT_SECONDS = int(os.environ.get("ARQ_DRAIN_TIMEOUT", "300"))
 HEALTH_CHECK_INTERVAL_SECONDS = 30
 

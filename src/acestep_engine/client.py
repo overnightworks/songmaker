@@ -50,7 +50,10 @@ class _PollResult:
 _FALLBACK_HOST: Final[str] = "http://localhost"
 _FALLBACK_PORT: Final[int] = 8001
 POLL_INTERVAL: Final[float] = 3.0
-POLL_TIMEOUT: Final[float] = 240.0
+_DEFAULT_POLL_TIMEOUT: Final[float] = 600.0
+POLL_TIMEOUT: Final[float] = float(
+    os.environ.get("ACESTEP_POLL_TIMEOUT", str(_DEFAULT_POLL_TIMEOUT)),
+)
 SUBMIT_RETRIES: Final[int] = 3
 SUBMIT_RETRY_DELAYS: Final[tuple[float, ...]] = (1.0, 3.0, 10.0)
 _TASK_STATUS_COMPLETE: Final[int] = 1
