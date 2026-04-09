@@ -12,8 +12,6 @@ the same task_id (the worker's task store survives across reconnects)
 with exponential backoff up to ``MAX_SSE_RECONNECTS``. The worker keeps
 generating regardless of whether the scheduler is currently subscribed,
 so a transient network blip never wastes a 10-minute generation.
-
-For the tradeoffs and failure modes, see plans/acestep-worker-pool.md.
 """
 
 from __future__ import annotations

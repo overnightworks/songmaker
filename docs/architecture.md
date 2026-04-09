@@ -73,8 +73,7 @@ online worker, INCRs queue depth atomically, dispatches via HTTP, and
 consumes the worker's task SSE stream until `done`. The music-worker then
 post-processes the worker's WAV (decode → splice → master → MP3 → DB
 insert) and the job completes. See [acestep.md](acestep.md) for the
-worker API surface and [acestep-worker-pool.md](../plans/acestep-worker-pool.md)
-for the rationale.
+worker API surface.
 
 ## Job Routing
 
