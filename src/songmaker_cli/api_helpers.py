@@ -156,8 +156,11 @@ def create_job_with_rate_limit(
     return create_job(session, job_type, user_id=user.id)
 
 
-def gen_params_to_dict(params: BaseGenerationParams | None) -> dict | None:
-    """Convert BaseGenerationParams to a plain dict for DB storage, dropping None values."""
+def gen_params_to_json(params: BaseGenerationParams | None) -> dict | None:
+    """Serialize a BaseGenerationParams to a JSON-storable dict, dropping
+    None values. Returns ``None`` for an entirely-empty model so callers
+    that gate on ``is None`` can distinguish "user didn't set anything"
+    from "user explicitly cleared every field"."""
     if params is None:
         return None
     dumped = {k: v for k, v in params.model_dump().items() if v is not None}

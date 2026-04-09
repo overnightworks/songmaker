@@ -53,7 +53,7 @@ class UserResponse(BaseModel):
     username: str
     role: str
     is_active: bool
-    created_at: str | None = None
+    created_at: str
 
     @classmethod
     def from_orm(cls, user: User) -> UserResponse:
@@ -62,7 +62,7 @@ class UserResponse(BaseModel):
             username=user.username,
             role=user.role,
             is_active=user.is_active,
-            created_at=user.created_at.isoformat() if user.created_at else None,
+            created_at=user.created_at.isoformat(),
         )
 
 
@@ -80,8 +80,8 @@ class SessionResponse(BaseModel):
     id: str
     user_id: str
     username: str
-    created_at: str | None = None
-    expires_at: str | None = None
+    created_at: str
+    expires_at: str
     ip_address: str = ""
     user_agent: str = ""
 
@@ -91,8 +91,8 @@ class SessionResponse(BaseModel):
             id=hashlib.sha256(sess.id.encode()).hexdigest(),
             user_id=sess.user_id,
             username=sess.user.username,
-            created_at=sess.created_at.isoformat() if sess.created_at else None,
-            expires_at=sess.expires_at.isoformat() if sess.expires_at else None,
+            created_at=sess.created_at.isoformat(),
+            expires_at=sess.expires_at.isoformat(),
             ip_address=sess.ip_address,
             user_agent=sess.user_agent,
         )
@@ -103,7 +103,7 @@ class LoginAttemptResponse(BaseModel):
     ip_address: str
     username: str
     success: bool
-    attempted_at: str | None = None
+    attempted_at: str
 
     @classmethod
     def from_orm(cls, attempt: LoginAttempt) -> LoginAttemptResponse:
@@ -112,7 +112,7 @@ class LoginAttemptResponse(BaseModel):
             ip_address=attempt.ip_address,
             username=attempt.username,
             success=attempt.success,
-            attempted_at=attempt.attempted_at.isoformat() if attempt.attempted_at else None,
+            attempted_at=attempt.attempted_at.isoformat(),
         )
 
 
@@ -123,7 +123,7 @@ class AuditLogResponse(BaseModel):
     resource_type: str
     resource_id: str
     detail: str
-    created_at: str | None = None
+    created_at: str
 
     @classmethod
     def from_orm(cls, entry: AuditLog) -> AuditLogResponse:
@@ -134,5 +134,5 @@ class AuditLogResponse(BaseModel):
             resource_type=entry.resource_type,
             resource_id=entry.resource_id,
             detail=entry.detail,
-            created_at=entry.created_at.isoformat() if entry.created_at else None,
+            created_at=entry.created_at.isoformat(),
         )

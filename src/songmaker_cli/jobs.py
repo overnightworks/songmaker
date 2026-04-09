@@ -511,18 +511,14 @@ async def run_generation_job(
     user_id: str,
     *,
     target_model: str,
-    db_factory: sessionmaker[Session] | None = None,
-    audio_dir: Path | None = None,
-    data_dir: Path | None = None,
+    db_factory: sessionmaker[Session],
+    audio_dir: Path,
+    data_dir: Path,
+    redis: Redis,
     seed: int | None = None,
     repaint_params: RepaintTaskParams | None = None,
     cover_params: CoverTaskParams | None = None,
-    redis: Redis | None = None,
 ) -> None:
-    assert db_factory is not None, "db_factory is required"
-    assert audio_dir is not None, "audio_dir is required"
-    assert data_dir is not None, "data_dir is required"
-    assert redis is not None, "redis is required"
 
     import uuid
 

@@ -65,8 +65,8 @@ class PresetResponse(BaseModel):
             params=preset.params or {},
             is_default=preset.is_default,
             is_shared=preset.created_by is None,
-            created_at=preset.created_at.isoformat() if preset.created_at else "",
-            updated_at=preset.updated_at.isoformat() if preset.updated_at else "",
+            created_at=preset.created_at.isoformat(),
+            updated_at=preset.updated_at.isoformat(),
         )
 
 
@@ -128,7 +128,7 @@ class ChatMessageResponse(BaseModel):
             id=msg.id,
             role=msg.role,
             content=msg.content,
-            created_at=msg.created_at.isoformat() if msg.created_at else "",
+            created_at=msg.created_at.isoformat(),
         )
 
 

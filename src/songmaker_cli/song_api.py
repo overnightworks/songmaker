@@ -11,7 +11,7 @@ from songmaker_cli.api_helpers import (
     check_song_access,
     check_song_access_including_deleted,
     cleanup_generation_files,
-    gen_params_to_dict,
+    gen_params_to_json,
     owner_filter,
 )
 from songmaker_cli.api_models import (
@@ -91,7 +91,7 @@ def api_create_song(
         lyrics=req.lyrics, prompt=req.prompt, bpm=req.bpm,
         audio_duration=req.audio_duration, key_scale=req.key_scale,
         vocal_language=req.vocal_language,
-        generation_params=gen_params_to_dict(req.generation_params),
+        generation_params=gen_params_to_json(req.generation_params),
     )
     record_audit(session, user.id, AuditAction.CREATE, ResourceType.SONG, song.id)
     session.commit()
@@ -110,7 +110,7 @@ def api_update_song(
         bpm=req.bpm, audio_duration=req.audio_duration, key_scale=req.key_scale,
     )
     if "generation_params" in req.model_fields_set:
-        kwargs["generation_params"] = gen_params_to_dict(req.generation_params)
+        kwargs["generation_params"] = gen_params_to_json(req.generation_params)
     try:
         version = update_song(session, song_id, **kwargs)
     except ValueError:

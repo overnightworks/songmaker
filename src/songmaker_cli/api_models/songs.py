@@ -123,7 +123,7 @@ class GenerationResponse(BaseModel):
     whisper_text: str | None
     scores: dict | None
     generation_params: dict | None
-    created_at: str | None
+    created_at: str
 
     @classmethod
     def from_orm(cls, gen: Generation) -> GenerationResponse:
@@ -174,7 +174,7 @@ class GenerationResponse(BaseModel):
             whisper_text=gen.whisper_text,
             scores=scores if scores else None,
             generation_params=generation_params,
-            created_at=gen.created_at.isoformat() if gen.created_at else None,
+            created_at=gen.created_at.isoformat(),
         )
 
 
@@ -187,7 +187,7 @@ class VersionResponse(BaseModel):
     audio_duration: int
     key_scale: str
     generation_params: dict | None
-    created_at: str | None
+    created_at: str
 
     @classmethod
     def from_orm(cls, ver: Version) -> VersionResponse:
@@ -201,7 +201,7 @@ class VersionResponse(BaseModel):
             audio_duration=ver.audio_duration,
             key_scale=ver.key_scale,
             generation_params=generation_params,
-            created_at=ver.created_at.isoformat() if ver.created_at else None,
+            created_at=ver.created_at.isoformat(),
         )
 
 
@@ -217,7 +217,7 @@ class SongSummaryResponse(BaseModel):
     prompt: str = ""
     bpm: int | None = None
     audio_duration: int | None = None
-    key_scale: str = ""
+    key_scale: str | None = None
     generation_params: dict | None = None
     version_count: int = 0
     generation_count: int = 0
@@ -225,7 +225,7 @@ class SongSummaryResponse(BaseModel):
     share_slug: str | None = None
     best_scores: dict | None = None
     best_rating: float | None = None
-    created_at: str | None = None
+    created_at: str
 
     @classmethod
     def from_orm(cls, song: Song) -> SongSummaryResponse:
@@ -246,13 +246,13 @@ class SongSummaryResponse(BaseModel):
             prompt=ver.prompt if ver else "",
             bpm=ver.bpm if ver else None,
             audio_duration=ver.audio_duration if ver else None,
-            key_scale=ver.key_scale if ver else "",
+            key_scale=ver.key_scale if ver else None,
             generation_params=generation_params,
             version_count=len(song.versions),
             generation_count=len(song.generations),
             is_shared=song.is_shared,
             share_slug=song.share_slug,
-            created_at=song.created_at.isoformat() if song.created_at else None,
+            created_at=song.created_at.isoformat(),
         )
 
 
@@ -280,7 +280,7 @@ class SongResponse(SongSummaryResponse):
         )
 
 
-def _best_generation(generations: list) -> object | None:
+def _best_generation(generations: list[Generation]) -> Generation | None:
     rated = [g for g in generations if g.rating and not g.is_archived]
     if rated:
         return max(rated, key=lambda g: g.rating.rating)
