@@ -41,6 +41,9 @@ jobs:
       - name: Ruff lint
         run: ruff check src/ tests/
 
+      - name: No silent-fallback smell check
+        run: python scripts/check_no_silent_fallbacks.py src/
+
       - name: Check TypeScript types in sync
         run: python scripts/generate_types.py --check
 

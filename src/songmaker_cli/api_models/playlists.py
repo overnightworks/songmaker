@@ -64,7 +64,7 @@ class PlaylistResponse(BaseModel):
     entry_count: int
     is_shared: bool = False
     share_slug: str | None = None
-    created_at: str | None = None
+    created_at: str
 
     @classmethod
     def from_orm(cls, playlist: Playlist) -> PlaylistResponse:
@@ -78,7 +78,7 @@ class PlaylistResponse(BaseModel):
             entry_count=len(live_entries),
             is_shared=playlist.is_shared,
             share_slug=playlist.share_slug,
-            created_at=playlist.created_at.isoformat() if playlist.created_at else None,
+            created_at=playlist.created_at.isoformat(),
         )
 
 

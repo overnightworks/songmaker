@@ -591,13 +591,15 @@ def test_playlist_response_logs_warning_when_entries_is_none(
     """`Playlist.entries` should never be None — SQLAlchemy returns []
     for an empty one-to-many. If it ever IS None, that's an ORM bug; W3
     requires it surface as a warning, not a silent fallback."""
+    from datetime import datetime, timezone
     from types import SimpleNamespace
 
     from songmaker_cli.api_models.playlists import PlaylistResponse
 
     fake_playlist = SimpleNamespace(
         id="pl-broken", title="T", entries=None,
-        is_shared=False, share_slug=None, created_at=None,
+        is_shared=False, share_slug=None,
+        created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
     with caplog.at_level("WARNING", logger="songmaker_cli.api_models.playlists"):
         resp = PlaylistResponse.from_orm(fake_playlist)
