@@ -1,20 +1,20 @@
 # No Silent Fallbacks — v2
 
-**Status:** In progress on `refactor/no-silent-fallbacks`. **W1 is committed and re-reviewed clean. Env merge (Docker-only deployment) is in flight or just landed. W2 is the next workstream.**
+**Status:** In progress on `refactor/no-silent-fallbacks`. **W1 + env merge are committed and re-reviewed clean. W2 is the next workstream — start a fresh agent here.**
 **Date:** 2026-04-09
 **Supersedes:** `plans/no-silent-fallbacks.md` (deleted; was a one-shot audit, this is the full cleanup)
 **Driver:** 2026-04-08 incident — `resolve_model_mode(None)` silently returned `'turbo'` for every generation after `available_models` was truncated. Audit revealed the root pattern is endemic, not a one-off.
 **Companion plans:**
 - [architecture-review-findings.md](architecture-review-findings.md) — full context on the 12 review findings that motivated this work, including the 6 that already shipped via `chore/architecture-quick-wins`.
 - [no-silent-fallbacks-w1-cleanup.md](no-silent-fallbacks-w1-cleanup.md) — the W1 cleanup checklist that landed in commits `f1ad2d4` + `5571009` (already done — do not re-execute).
-- [single-env-file-docker-only.md](single-env-file-docker-only.md) — the env merge that consolidates `.env` and `.server.env` and removes the `uv run songmaker server` local-dev path. May be in flight or done — verify with the greps below before starting W2.
+- [single-env-file-docker-only.md](single-env-file-docker-only.md) — the env merge that consolidated `.env` and `.server.env` and removed the `uv run songmaker server` local-dev path. **Done** in commit `ffd80d2` — do not re-execute.
 
 ## Workstream status
 
 | # | Workstream | Status | Where |
 |---|---|---|---|
 | W1 | Settings consolidation (`os.environ` → `Settings(BaseSettings)`) | ✅ **Done** | Commits `9abbf89` + `f1ad2d4` + `5571009`. All four cleanup-plan greps pass. `extra="forbid"` set in all three Settings classes. |
-| Env merge | `.env` + `.server.env` → single `.env`, Docker-only deployment | 🔄 In flight or done — verify | Commits to look for: anything touching `.gitignore` + `settings.py` + `CLAUDE.md` "Setup & Run" section. |
+| Env merge | `.env` + `.server.env` → single `.env`, Docker-only deployment | ✅ **Done** | Commit `ffd80d2`. `.server.env` deleted. `Settings._find_env_file()` walks for `.env`. 6 Docker-substitution fields (`postgres_user/password/db`, `grafana_user/password`, `hf_token`) added as Optional ignored defaults so `extra="forbid"` accepts the real `.env`. The `uv run songmaker server` workflow is gone — Docker is the only deployment path. |
 | W2 | Pydantic discriminated union for `generation_params` | ⏳ **Next** — start here | Not yet begun. This is the highest-payoff workstream — it's the exact 2026-04-08 surface. |
 | W3 | Kill the 20 silent-fallback smell sites | ⏳ Pending | Most are auto-deleted by W2's typed objects. The standalone fixes (database "next number" patterns, scheduling.py error masking, api_helpers.py rate-limit fallback, settings_api.py model defaults) need explicit changes. |
 | W4 | Tighten `Optional` types in interior signatures | ⏳ Pending | Smaller. Removes `Optional` lies from timestamp fields, `_best_generation` return type, `run_generation_job` parameters, etc. |
@@ -30,13 +30,12 @@ If you (a Claude agent or a human) are reading this for the first time and conti
 git checkout refactor/no-silent-fallbacks
 git pull
 git log --oneline -15
-# You should see W1 commits at the top:
+# You should see (most recent first):
+#   ffd80d2 refactor(settings): single .env file, Docker-only deployment
 #   5571009 fix(settings): apply re-review feedback (extra=forbid + cosmetics)
 #   f1ad2d4 fix(settings): post-review fixes for W1
 #   9abbf89 feat(settings): introduce Settings(BaseSettings) and migrate env reads (W1)
-# And — if the env merge has landed — commits like:
-#   feat(env): consolidate to single .env (Docker-only)  (or similar)
-# If W2 has already started, you'll see it as a separate commit beyond those.
+# If W2 has already started, you'll see it as additional commits beyond ffd80d2.
 
 # Confirm migrations are up to date:
 docker compose exec -T postgres psql -U songmaker -d songmaker -c "SELECT version_num FROM alembic_version;"
@@ -56,26 +55,22 @@ docker compose exec -T postgres psql -U songmaker -d songmaker -c "SELECT versio
 Run these greps to figure out exactly what state the branch is in:
 
 ```bash
-# Has W1 (Settings consolidation) landed?
-grep -l "class Settings(BaseSettings)" src/songmaker_cli/settings.py && echo "✅ W1 done"
-
-# Has the env merge landed?
-test ! -f .server.env && echo "✅ env merge done — only .env exists"
-test -f .server.env && echo "🔄 env merge NOT done yet — .server.env still exists"
-
 # Has W2 (Pydantic discriminated union for generation_params) started?
 test -f src/songmaker_cli/api_models/generation_params.py && echo "🔄 W2 has started"
 test ! -f src/songmaker_cli/api_models/generation_params.py && echo "⏳ W2 has not started"
 
-# The 4 W1 verification greps must all return empty:
-grep -rn "os\.environ\|os\.getenv" src/ | grep -v __pycache__ | grep -v "settings\.py" | grep -v "audiobox_aesthetics.py"
+# Sanity-check that W1 + env merge are clean (all four should return empty):
+grep -rn "os\.environ\|os\.getenv" src/ | grep -v __pycache__ \
+    | grep -v "settings\.py" | grep -v "audiobox_aesthetics.py" \
+    | grep -v "migrations/env.py" | grep -v "\.copy()"
 grep -E "os\.(environ|getenv)|^def " src/songmaker_cli/constants.py
 grep -rn "DATA_ROOT\|AUDIO_ROOT\|DEFAULT_SOFT_DELETE_RETENTION_DAYS\|REDIS_URL_MISMATCH_WARNING" src/ tests/ | grep -v __pycache__
 grep -rn "\bSHARED_RATE_LIMIT\b\|\bSCORER_PIPELINE_TIMEOUT_SECONDS\b\|\bDEFAULT_MODEL_MODE\b" src/ tests/ | grep -v __pycache__
-# All four should be empty. If any returns content, W1 is not actually clean.
-```
 
-**If the env merge isn't done yet:** wait for it to land before starting W2. The env merge touches `settings.py`, `conftest.py`, and `CLAUDE.md` — all files W2 also touches. Doing them concurrently creates merge conflicts.
+# Sanity-check that the env merge is clean (all should return empty):
+test ! -f .server.env && echo "✅ .server.env is gone"
+grep -rn "\.server\.env\|load_env_file" src/ tests/ docs/ scripts/ CLAUDE.md docker-compose.yml 2>/dev/null | grep -v __pycache__ | grep -v PKG-INFO
+```
 
 **If W2 has already started:** read its commit(s) and the current `api_models/generation_params.py` to understand where it left off. Continue from there.
 
@@ -85,7 +80,7 @@ grep -rn "\bSHARED_RATE_LIMIT\b\|\bSCORER_PIPELINE_TIMEOUT_SECONDS\b\|\bDEFAULT_
 2. **This plan** — the workstreams, decisions, and Pydantic model design (the W2 section is below).
 3. **[plans/architecture-review-findings.md](architecture-review-findings.md)** — context on what already shipped and what's deferred. Sections marked "✓ COVERED" reference this plan.
 4. **[plans/no-silent-fallbacks-w1-cleanup.md](no-silent-fallbacks-w1-cleanup.md)** — already executed, do not re-run. Read it only to understand what W1 cleaned up.
-5. **[plans/single-env-file-docker-only.md](single-env-file-docker-only.md)** — the env merge plan. Already executed or in flight.
+5. **[plans/single-env-file-docker-only.md](single-env-file-docker-only.md)** — the env merge plan. Already executed in commit `ffd80d2` — read only for context on why there is no `.server.env` and no `uv run songmaker server` workflow anymore.
 6. **[src/acestep_engine/models.py](../src/acestep_engine/models.py)** — the `AceStepConfig` dataclass is the source of truth for which generation params are required (only `prompt` and `lyrics` have no default).
 7. **[src/songmaker_cli/settings.py](../src/songmaker_cli/settings.py)** — the post-W1 Settings class. W2 will need to import `get_settings` for the migration script and DB validators.
 8. **[src/songmaker_cli/api_models/songs.py](../src/songmaker_cli/api_models/songs.py)** — contains the existing loose `StoredGenerationParams` (17 Optional fields, lines ~92-108). W2 deletes this and replaces it with the discriminated union from this plan.
@@ -155,6 +150,15 @@ The original audit was generated pre-quick-wins. Here's what's landed since, in 
 - **B3** — `ScorerProcess._pipe_lock` serializes concurrent score calls.
 - **B11** — `plans/` standardized with `Status:`/`Date:` headers, `acestep-model-parameters.md` archived, `infinite-duration.md` deleted.
 - **B4** — CI scoring exclusion documented in `.coveragerc-ci` and CLAUDE.md.
+
+**Env merge (commit `ffd80d2`, see `plans/single-env-file-docker-only.md`):**
+- `.server.env` deleted. Single source of truth is now `.env` at the project root.
+- `Settings._find_env_file()` walks for `.env` (was `.server.env`). Honors `SONGMAKER_SKIP_ENV_FILE` (any value) to bypass — used by conftest.
+- 6 Docker Compose substitution fields added to `Settings` as Optional ignored defaults: `postgres_user`, `postgres_password`, `postgres_db`, `grafana_user`, `grafana_password`, `hf_token`. They exist so `extra="forbid"` recognizes the real `.env` and a typo on a real app field still raises.
+- `load_env_file()` / `_load_env_file()` deleted from `config.py` and `server.py`. pydantic-settings handles env-file loading directly now.
+- The `uv run songmaker server` local-dev path is gone. Docker is the only deployment. CLAUDE.md "Setup & Run" rewritten accordingly. Host Postgres uninstalled.
+- `tests/test_server.py::test_run_server_loads_env_file` deleted (asserted load_dotenv was called by the now-removed code path).
+- `acestep_worker` container is unchanged — it already reads its env from the compose `environment:` block, not from any env_file.
 
 **W1 (commits `9abbf89..5571009`):**
 - New `src/songmaker_cli/settings.py` with `Settings` + `WorkerSettings(BaseSettings)` (split, not inheriting). All env reads consolidated. `extra="forbid"` everywhere.
