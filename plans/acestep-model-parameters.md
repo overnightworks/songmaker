@@ -4,7 +4,7 @@
 
 1. **Change 1** (ship `use_adg` for sft variants) — approve as a separate small PR? **Recommended yes.**
 2. **Change 2** (Pydantic profile refactor) — approve as a follow-up PR? **Recommended yes.**
-3. **Change 3** (expose `use_cot_metas`) — do you actually want this control? **Default no unless you say.**
+3. **Change 3** (expose `use_cot_metas`) — investigated and **declined**: not user-controllable in the ACE-Step HTTP request schema. See section below.
 4. **UI tooltips** — implement as Option C (native `title` now, popover later)? **Recommended yes.**
 
 Everything else is research and rationale that lives elsewhere (memory + this matrix).
@@ -145,17 +145,17 @@ Frontend, types.ts, and `ModelCapabilities` API model all stay as-is until we wa
 
 **Risk**: medium. Pure refactor with adapter shim, but it touches a config consumed by `settings_api.py`. Suite must stay green.
 
-## Change 3 — Expose `use_cot_metas` (optional)
+## Change 3 — Expose `use_cot_metas` — DECLINED (not user-controllable upstream)
 
-Upstream exposes a `use_cot_metas` flag (default true) that controls whether the LM auto-infers BPM/key/time-signature. Our [GenerationParams](src/songmaker_cli/api_models/songs.py) doesn't have it.
+**Investigated 2026-04-09 and abandoned.** `use_cot_metas` exists internally in the ACE-Step engine (set by [job_generation_setup.py:197](_models/acestep/acestep/api/job_generation_setup.py#L197) based on `sample_mode`) and in the unrelated `openrouter_models.py` schema, but **the canonical HTTP `/release_task` request schema does not accept it as an input**.
 
-If we add it:
-- One field in `GenerationParams` (`use_cot_metas: bool | None = None`)
-- One field in `AceStepConfig` (already exists in upstream's request schema — verify before adding)
-- One row in the `ParamSupport` profile
-- One row in `ParamControls.svelte` toggles
+Verified at:
+- [release_task_models.py:113-114](_models/acestep/acestep/api/http/release_task_models.py#L113-L114) — only `use_cot_caption` and `use_cot_language` are exposed; no `use_cot_metas` field.
+- [release_task_param_parser.py:39-40](_models/acestep/acestep/api/http/release_task_param_parser.py#L39-L40) — the alias allowlist for the HTTP request parser does not include `use_cot_metas` under any name.
 
-**Decision needed**: do you want this exposed? Skip if no.
+Sending `use_cot_metas` in the wire payload would be silently dropped before reaching the engine. Exposing the toggle in our UI would be a lie — it would appear to work but have no effect.
+
+**Conclusion**: cannot implement honestly without an upstream change to ACE-Step. Defer until upstream adds `use_cot_metas` to the HTTP request schema, then re-evaluate.
 
 ## UI tooltips — descriptions where users see them
 
