@@ -12,7 +12,7 @@ def test_build_deps_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("REDIS_URL", "redis://fake")
     monkeypatch.delenv("CONTROL_PLANE_URL", raising=False)
     monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "")
-    from songmaker_cli.settings import get_worker_settings
+    from acestep_worker.settings import get_worker_settings
     get_worker_settings.cache_clear()
 
     fake_redis = MagicMock()
@@ -38,7 +38,7 @@ def test_build_deps_with_registration(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
     monkeypatch.setenv("GPU_ID", "1")
     monkeypatch.setenv("VRAM_BUDGET_GB", "16")
-    from songmaker_cli.settings import get_worker_settings
+    from acestep_worker.settings import get_worker_settings
     get_worker_settings.cache_clear()
 
     with (

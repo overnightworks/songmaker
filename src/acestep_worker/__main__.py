@@ -10,6 +10,7 @@ from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.heartbeat import HeartbeatLoop
 from acestep_worker.model_cache import ModelCache
 from acestep_worker.registry_client import RegistryClient, WorkerRegistration
+from acestep_worker.settings import WorkerSettings, get_worker_settings
 from acestep_worker.subprocess_runner import make_acestep_runner
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import (
@@ -18,7 +19,6 @@ from acestep_worker.wrapper import (
     create_app,
     default_generate_runner,
 )
-from songmaker_cli.settings import WorkerSettings, get_worker_settings
 
 DEFAULT_MODEL_SIZES_GB: dict[str, float] = {
     "turbo": 6.0,

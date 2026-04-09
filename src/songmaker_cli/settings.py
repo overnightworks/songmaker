@@ -139,43 +139,6 @@ class Settings(BaseSettings):
     hf_token: SecretStr | None = None
 
 
-class WorkerSettings(BaseSettings):
-    """Settings for the acestep-worker container.
-
-    Independent from ``Settings`` because the GPU worker pod has no
-    database, no sessions, and no internal API of its own — it only
-    needs Redis, its own identity, and subprocess knobs. Inheriting
-    from ``Settings`` would force the worker container to set
-    ``DATABASE_URL`` and ``SESSION_SECRET`` for no reason.
-    """
-
-    model_config = SettingsConfigDict(
-        extra="forbid",
-        case_sensitive=False,
-    )
-
-    worker_id: str
-    redis_url: str
-    songmaker_internal_token: SecretStr | None = None
-    worker_host: str | None = None
-    worker_port: int = 8001
-    vram_budget_gb: float = 22.0
-    acestep_checkpoint_dir: str = "/opt/acestep"
-    audio_output_dir: str = "/app/data/audio/worker_output"
-    acestep_log_dir: str = "/opt/acestep/logs"
-    acestep_inner_port: int = 8101
-    control_plane_url: str | None = None
-    gpu_id: int | None = None
-    hf_token: SecretStr | None = None
-    log_level: str = "INFO"
-
-    # Subprocess timeouts
-    acestep_startup_timeout_seconds: int = 300
-    acestep_shutdown_grace_seconds: int = 15
-    acestep_shutdown_kill_seconds: int = 5
-    acestep_health_poll_seconds: float = 2.0
-
-
 @lru_cache
 def get_settings() -> Settings:
     """Return the process-wide ``Settings`` singleton.
@@ -187,7 +150,9 @@ def get_settings() -> Settings:
     return Settings()
 
 
-@lru_cache
-def get_worker_settings() -> WorkerSettings:
-    """Return the process-wide ``WorkerSettings`` singleton (acestep-worker only)."""
-    return WorkerSettings()
+# WorkerSettings was moved to src/acestep_worker/settings.py on 2026-04-09
+# because the acestep-worker container does not install songmaker_cli.
+# Importing it here crashed the worker at startup with
+# ``ModuleNotFoundError: No module named 'songmaker_cli'``. The class is
+# now owned by acestep_worker. Any test or helper that needs it should
+# ``from acestep_worker.settings import WorkerSettings, get_worker_settings``.

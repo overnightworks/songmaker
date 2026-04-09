@@ -6,8 +6,8 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
+from acestep_worker.settings import get_worker_settings
 from acestep_worker.task_store import TaskStore
-from songmaker_cli.settings import get_worker_settings
 
 log = logging.getLogger(__name__)
 

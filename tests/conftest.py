@@ -34,7 +34,8 @@ TEST_SECRET = b"a" * 64
 @pytest.fixture(autouse=True)
 def _reset_settings_cache():
     """Clear the Settings lru_cache between tests so monkeypatched env wins."""
-    from songmaker_cli.settings import get_settings, get_worker_settings
+    from acestep_worker.settings import get_worker_settings
+    from songmaker_cli.settings import get_settings
 
     get_settings.cache_clear()
     get_worker_settings.cache_clear()

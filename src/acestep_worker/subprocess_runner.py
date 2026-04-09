@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.model_cache import LoadedModel, Loader, Unloader
-from songmaker_cli.settings import get_worker_settings
+from acestep_worker.settings import get_worker_settings
 
 log = logging.getLogger(__name__)
 
