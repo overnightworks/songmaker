@@ -87,7 +87,7 @@ These are conventions that aren't obvious from reading a single file:
 
 - **Query functions `flush()`, endpoints `commit()`.** `get_db_session` does NOT auto-commit. Forgetting `session.commit()` in an endpoint = silent data loss. Exception: "commit then raise" in `auth_api.py` login (must persist failed attempt before returning 401).
 - **`from_orm()` classmethods on response models.** Never hand-build response dicts. Add a `from_orm()` to the Pydantic model.
-- **Engine packages are independent.** `acestep_engine` and `audio_engine` must never import from `songmaker_cli`. Dependency flows one way.
+- **Engine packages are independent.** `acestep_engine`, `audio_engine`, AND `acestep_worker` must never import from `songmaker_cli`. Dependency flows one way. The acestep-worker container is a slim image that does NOT install `songmaker_cli` — any import from `songmaker_cli` in `acestep_worker/` will crash the container at startup with `ModuleNotFoundError: No module named 'songmaker_cli'`. Each engine package owns its own `settings.py` (`acestep_engine/settings.py`, `acestep_worker/settings.py`). Verify with `grep -rn "from songmaker_cli\|import songmaker_cli" src/acestep_engine/ src/audio_engine/ src/acestep_worker/` — must return empty.
 - **Ownership checks on every resource endpoint.** Use `check_song_access()`, `check_album_access()`, `check_generation_access()` from `api_helpers.py`. Never skip, even for GET.
 - **Middleware order is security-critical.** See comment block in `server.py`. Do not reorder.
 - **DB queries split by domain.** `db/queries/songs.py`, `db/queries/auth.py`, `db/queries/jobs.py`. New queries go in the matching file, re-exported from `db/queries/__init__.py`.
