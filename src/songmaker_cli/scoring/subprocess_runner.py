@@ -148,6 +148,7 @@ class ScorerProcess:
     def __init__(self) -> None:
         self._process: multiprocessing.Process | None = None
         self._conn: Connection | None = None
+        self._pipe_lock = threading.Lock()
 
     @property
     def alive(self) -> bool:
@@ -187,26 +188,26 @@ class ScorerProcess:
         config: PipelineConfig,
         job_id: str | None,
         on_progress: Callable[[int, int, str], None] | None,
-        _retried: bool = False,
     ) -> SongScores:
-        conn = self._ensure_started()
-        request = ScoreRequest(
-            mp3_path=mp3_path, meta=meta, scorers=scorers,
-            config=config, job_id=job_id,
-        )
-
-        try:
-            conn.send(request)
-            return self._poll_response(conn, scorers, config, on_progress)
-        except (BrokenPipeError, EOFError, ConnectionResetError):
-            if _retried:
-                raise RuntimeError("Scorer subprocess crashed twice — aborting")
-            log.warning("Scorer subprocess died mid-scoring — respawning and retrying")
-            self._cleanup_dead()
-            return self._score_with_retry(
-                mp3_path, meta, scorers, config, job_id, on_progress,
-                _retried=True,
-            )
+        # Lock held across send + poll so concurrent score() calls (when
+        # SCORING_MAX_JOBS > 1) cannot interleave Pipe writes/reads on the
+        # single shared subprocess. multiprocessing.Pipe is not thread-safe.
+        with self._pipe_lock:
+            for attempt in (1, 2):
+                conn = self._ensure_started()
+                request = ScoreRequest(
+                    mp3_path=mp3_path, meta=meta, scorers=scorers,
+                    config=config, job_id=job_id,
+                )
+                try:
+                    conn.send(request)
+                    return self._poll_response(conn, scorers, config, on_progress)
+                except (BrokenPipeError, EOFError, ConnectionResetError):
+                    if attempt == 2:
+                        raise RuntimeError("Scorer subprocess crashed twice — aborting")
+                    log.warning("Scorer subprocess died mid-scoring — respawning and retrying")
+                    self._cleanup_dead()
+            raise RuntimeError("unreachable")
 
     def _poll_response(
         self,

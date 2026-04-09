@@ -277,6 +277,46 @@ def test_scorer_process_handles_child_crash(tmp_path: Path) -> None:
 # ── Module-level accessor ────────────────────────────────────────
 
 
+def test_concurrent_score_calls_are_serialized(tmp_path: Path) -> None:
+    """Two threads calling .score() concurrently must both succeed.
+
+    The Pipe is not thread-safe; without the per-instance lock the two
+    sends/receives would interleave and corrupt at least one response.
+    """
+    import threading
+
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    mp3 = tmp_path / "test.mp3"
+    mp3.write_bytes(b"fake")
+
+    sp = ScorerProcess()
+    results: list[SongScores | Exception] = []
+    results_lock = threading.Lock()
+
+    def worker() -> None:
+        try:
+            r = sp.score(mp3, scorers=[], config=PipelineConfig(device="cpu"))
+            with results_lock:
+                results.append(r)
+        except Exception as exc:  # noqa: BLE001
+            with results_lock:
+                results.append(exc)
+
+    try:
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+            assert not t.is_alive(), "scorer thread hung"
+        assert len(results) == 2
+        for r in results:
+            assert isinstance(r, SongScores), f"got {type(r).__name__}: {r}"
+    finally:
+        sp.shutdown()
+
+
 def test_get_scorer_process_raises_when_unset() -> None:
     original = None
     import songmaker_cli.scoring.subprocess_runner as mod
