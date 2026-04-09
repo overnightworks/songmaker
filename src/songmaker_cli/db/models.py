@@ -289,7 +289,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    type: Mapped[str] = mapped_column(String(20))
+    type: Mapped[str] = mapped_column(String(40))
     status: Mapped[str] = mapped_column(String(20), default=JobStatus.QUEUED, index=True)
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
