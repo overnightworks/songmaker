@@ -223,12 +223,6 @@ def create_app(
     return app
 
 
-def _load_env_file(project_root: Path) -> None:
-    from songmaker_cli.config import load_env_file
-
-    load_env_file(project_root)
-
-
 def run_server(
     audio_dir: Path | None = None,
     data_dir: Path | None = None,
@@ -241,7 +235,6 @@ def run_server(
     if project_root is None:
         project_root = find_project_root(Path.cwd()) or Path.cwd()
 
-    _load_env_file(project_root)
     settings = get_settings()
     if audio_dir is None:
         audio_dir = project_root / settings.audio_dir

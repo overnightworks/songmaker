@@ -68,8 +68,6 @@ def test_on_startup_initializes_scorer() -> None:
     ctx = _mock_ctx()
 
     with (
-        patch("songmaker_cli.config.find_project_root"),
-        patch("songmaker_cli.config.load_env_file"),
         patch("songmaker_cli.logging_config.configure_logging"),
         patch(
             "songmaker_cli.scoring.subprocess_runner.ScorerProcess",

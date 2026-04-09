@@ -200,9 +200,9 @@ All mutating operations are logged to the `audit_log` table:
 
 ### Secrets
 
-- `SESSION_SECRET`: HMAC signing key for session cookies. Auto-generated if not set.
+- `SESSION_SECRET`: HMAC signing key for session cookies. Required at startup (Settings raises ValidationError if missing).
 - `ANTHROPIC_API_KEY`: Optional (for server-side Claude chat). Never logged or returned in responses.
-- `.server.env`: Gitignored. Never committed.
+- `.env`: Gitignored. Never committed. Single source for all Docker Compose substitutions and pydantic Settings.
 
 ## Input Validation
 

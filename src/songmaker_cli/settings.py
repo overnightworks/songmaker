@@ -1,6 +1,6 @@
 """Typed application settings — single source of truth for env config.
 
-Reads ``.server.env`` (project root) automatically via pydantic-settings.
+Reads ``.env`` (project root) automatically via pydantic-settings.
 Constructed lazily via ``get_settings()`` on first call (lru_cached).
 
 Workers that need import-time access (arq's ``WorkerSettings`` class
@@ -22,18 +22,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _find_env_file() -> Path | None:
-    """Walk up from CWD to find .server.env at the project root.
+    """Walk up from CWD to find .env at the project root.
 
     Honors ``SONGMAKER_SKIP_ENV_FILE`` (any value) to bypass loading
-    entirely — used by the test suite so .server.env values do not
-    leak into monkeypatched env tests.
+    entirely — used by the test suite so .env values do not leak into
+    monkeypatched env tests.
     """
     import os as _os
     if "SONGMAKER_SKIP_ENV_FILE" in _os.environ:
         return None
     cwd = Path.cwd().resolve()
     for parent in (cwd, *cwd.parents):
-        candidate = parent / ".server.env"
+        candidate = parent / ".env"
         if candidate.exists():
             return candidate
         if (parent / "pyproject.toml").exists():
@@ -42,7 +42,7 @@ def _find_env_file() -> Path | None:
 
 
 class Settings(BaseSettings):
-    """Validated application settings, loaded from env + .server.env.
+    """Validated application settings, loaded from env + .env.
 
     All env reads in ``src/songmaker_cli`` and ``src/acestep_worker`` go
     through this class. Required fields raise at startup if missing.
@@ -124,6 +124,20 @@ class Settings(BaseSettings):
     audio_dir: str = "data/audio"
     data_dir: str = "data"
 
+    # ── Docker Compose substitution fields ────────────────────────────
+    # These live in .env so docker-compose can substitute them into
+    # container environment blocks (POSTGRES_USER → the postgres
+    # container, HF_TOKEN → scripts/download_models.sh, etc.). The app
+    # code does not read them. Declared here so extra="forbid" still
+    # recognizes them and a typo on a real app field still raises
+    # ValidationError.
+    postgres_user: str | None = None
+    postgres_password: SecretStr | None = None
+    postgres_db: str | None = None
+    grafana_user: str | None = None
+    grafana_password: SecretStr | None = None
+    hf_token: SecretStr | None = None
+
 
 class WorkerSettings(BaseSettings):
     """Settings for the acestep-worker container.
@@ -166,10 +180,9 @@ class WorkerSettings(BaseSettings):
 def get_settings() -> Settings:
     """Return the process-wide ``Settings`` singleton.
 
-    First call constructs from env + .server.env. Subsequent calls
-    return the cached instance. Tests should call
-    ``get_settings.cache_clear()`` between cases when they manipulate
-    the environment.
+    First call constructs from env + .env. Subsequent calls return the
+    cached instance. Tests should call ``get_settings.cache_clear()``
+    between cases when they manipulate the environment.
     """
     return Settings()
 

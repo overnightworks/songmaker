@@ -106,11 +106,7 @@ def test_on_startup_calls_recover_on_startup() -> None:
     worker._recover_on_startup = AsyncMock(return_value=0)
 
     ctx = _mock_ctx()
-    with (
-        patch("songmaker_cli.config.find_project_root"),
-        patch("songmaker_cli.config.load_env_file"),
-        patch("songmaker_cli.logging_config.configure_logging"),
-    ):
+    with patch("songmaker_cli.logging_config.configure_logging"):
         _run(worker.on_startup(ctx))
 
     worker._recover_on_startup.assert_called_once_with(ctx)

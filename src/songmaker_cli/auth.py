@@ -134,7 +134,7 @@ def ensure_session_secret(_output_dir_path: str | os.PathLike) -> str:
 
     Settings.session_secret is required (W1 contract). ``_output_dir_path``
     is kept for call-site compatibility — the previous file-based fallback
-    is gone now that secrets must come from .server.env.
+    is gone now that secrets must come from .env.
     """
     secret = get_settings().session_secret.get_secret_value()
     if len(secret) < 32:

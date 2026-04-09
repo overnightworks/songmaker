@@ -24,10 +24,17 @@ Two special flags on generations: **pick** marks "this is THE one for this song 
 
 ## Setup & Run
 
+The live app is **Docker-only** — there is no `uv run songmaker server`
+local-dev path. The local `.venv` is for tests, type checking, and IDE
+autocomplete only. All secrets and config live in a single `.env` file
+at the project root (gitignored).
+
 ```bash
-# Backend (requires Redis + PostgreSQL)
+# Local toolchain (tests, lint, IDE)
 uv sync --extra server --extra scoring --extra whisper --extra dev
-uv run songmaker server --port 8080   # Reads DATABASE_URL + REDIS_URL from .server.env
+
+# Run the live stack
+timeout 300 docker compose up -d --build --wait
 
 # Frontend (dev mode)
 cd frontend && pnpm install && pnpm dev
@@ -93,7 +100,7 @@ These are conventions that aren't obvious from reading a single file:
 1. **Database is source of truth** — all data in PostgreSQL, not files
 2. **One code path** — CLI and web UI use the same REST API (exception: `reset-password` and `list-users` are local DB escape hatches)
 3. **Pydantic models define the API contract** — `api_models.py` → `types.ts` (generated via `python scripts/generate_types.py`)
-4. **Never commit secrets** — `.server.env` is gitignored
+4. **Never commit secrets** — `.env` is gitignored
 5. **Commit messages**: conventional commits (`feat:`, `fix:`, `refactor:`, `test:`)
 
 ## Known Technical Debt

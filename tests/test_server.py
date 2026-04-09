@@ -891,24 +891,6 @@ def test_startup_prunes_login_attempts(tmp_path: Path, mock_arq_pool) -> None:
         assert session.query(LoginAttempt).count() == 0
 
 
-# ── run_server loads env file ───────────────────────────────────────
-
-
-def test_run_server_loads_env_file(tmp_path: Path) -> None:
-    env_file = tmp_path / ".server.env"
-    env_file.write_text("SOME_VAR=test\n")
-    mock_app = MagicMock()
-
-    with (
-        patch("uvicorn.run"),
-        patch("songmaker_cli.server.create_app", return_value=mock_app),
-        patch("dotenv.load_dotenv") as mock_load,
-    ):
-        run_server(project_root=tmp_path)
-
-    mock_load.assert_called_once()
-
-
 # ── structured logging configuration ──────────────────────────────
 
 

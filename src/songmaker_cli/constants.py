@@ -112,7 +112,7 @@ SESSION_SYNC_LOCK_TTL_SECONDS = 60
 # Startup error messages
 REDIS_STARTUP_ERROR = (
     "Cannot connect to Redis at {url}. "
-    "Redis is required — set REDIS_URL in .server.env or start Redis."
+    "Redis is required — set REDIS_URL in .env or start Redis."
 )
 # Prometheus metric names
 PROM_HTTP_REQUESTS_TOTAL = "songmaker_http_requests_total"
