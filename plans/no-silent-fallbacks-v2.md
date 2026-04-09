@@ -5,7 +5,7 @@
 **Supersedes:** `plans/no-silent-fallbacks.md` (deleted; was a one-shot audit, this is the full cleanup)
 **Driver:** 2026-04-08 incident — `resolve_model_mode(None)` silently returned `'turbo'` for every generation after `available_models` was truncated. Audit revealed the root pattern is endemic, not a one-off.
 **Companion plans:**
-- [architecture-review-findings.md](architecture-review-findings.md) — full context on the 12 review findings that motivated this work, including the 6 that already shipped via `chore/architecture-quick-wins`.
+- The 2026-04-09 architecture review identified 12 findings; this plan covers B2 (hardcoded task_type strings), B7 (import-time singletons), and B12 (config scattered). The other 6 shipped as the `chore/architecture-quick-wins` PR (see commit messages from 2026-04-09). The 3 deferred findings (B1, B8, B9) live in [BACKLOG.md](../BACKLOG.md).
 - [no-silent-fallbacks-w1-cleanup.md](no-silent-fallbacks-w1-cleanup.md) — the W1 cleanup checklist that landed in commits `f1ad2d4` + `5571009` (already done — do not re-execute).
 - [single-env-file-docker-only.md](single-env-file-docker-only.md) — the env merge that consolidated `.env` and `.server.env` and removed the `uv run songmaker server` local-dev path. **Done** in commit `ffd80d2` — do not re-execute.
 
@@ -78,7 +78,7 @@ grep -rn "\.server\.env\|load_env_file" src/ tests/ docs/ scripts/ CLAUDE.md doc
 
 1. **`CLAUDE.md`** (auto-loaded) — project conventions, especially "Code Patterns" and "Known Technical Debt".
 2. **This plan** — the workstreams, decisions, and Pydantic model design (the W2 section is below).
-3. **[plans/architecture-review-findings.md](architecture-review-findings.md)** — context on what already shipped and what's deferred. Sections marked "✓ COVERED" reference this plan.
+3. **[BACKLOG.md](../BACKLOG.md)** — the project backlog. The "Architecture cleanup" section lists the 3 deferred findings (B1, B8, B9). Anything already shipped is in commit messages, not in this doc.
 4. **[plans/no-silent-fallbacks-w1-cleanup.md](no-silent-fallbacks-w1-cleanup.md)** — already executed, do not re-run. Read it only to understand what W1 cleaned up.
 5. **[plans/single-env-file-docker-only.md](single-env-file-docker-only.md)** — the env merge plan. Already executed in commit `ffd80d2` — read only for context on why there is no `.server.env` and no `uv run songmaker server` workflow anymore.
 6. **[src/acestep_engine/models.py](../src/acestep_engine/models.py)** — the `AceStepConfig` dataclass is the source of truth for which generation params are required (only `prompt` and `lyrics` have no default).
