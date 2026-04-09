@@ -250,6 +250,83 @@ def test_rename_album_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
+def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        session.add(User(
+            id="u-test", username="test_user",
+            password_hash="unused", role="user",
+        ))
+        session.add(User(
+            id="u-other", username="other_user",
+            password_hash="unused", role="user",
+        ))
+        session.flush()
+        session.add(Album(
+            id="other", title="Other Album", artist="Them", created_by="u-other",
+        ))
+        session.add(Song(id="s-other", title="Their Song", album_id="other", track_number=1))
+        session.commit()
+
+    ctx = AppContext(
+        db=factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+    from songmaker_cli.api import router
+
+    app = FastAPI()
+    app.state.ctx = ctx
+    app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
+    app.include_router(router)
+    tc = TestClient(app)
+
+    resp = tc.put("/api/songs/s-other/title", json={"title": "Hijacked"})
+    assert resp.status_code == 404
+    with factory() as session:
+        assert session.query(Song).filter_by(id="s-other").first().title == "Their Song"
+
+
+def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        session.add(User(
+            id="u-test", username="test_user",
+            password_hash="unused", role="user",
+        ))
+        session.add(User(
+            id="u-other", username="other_user",
+            password_hash="unused", role="user",
+        ))
+        session.flush()
+        session.add(Album(
+            id="other", title="Other Album", artist="Them", created_by="u-other",
+        ))
+        session.commit()
+
+    ctx = AppContext(
+        db=factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+    from songmaker_cli.api import router
+
+    app = FastAPI()
+    app.state.ctx = ctx
+    app.dependency_overrides[get_current_user] = _fake_user("u-test", "test_user", "user")
+    app.include_router(router)
+    tc = TestClient(app)
+
+    resp = tc.put("/api/albums/other/title", json={"title": "Hijacked"})
+    assert resp.status_code == 404
+    with factory() as session:
+        assert session.query(Album).filter_by(id="other").first().title == "Other Album"
+
+
 def test_song_versions(client: TestClient) -> None:
     resp = client.get("/api/songs/s1/versions")
     assert resp.status_code == 200
