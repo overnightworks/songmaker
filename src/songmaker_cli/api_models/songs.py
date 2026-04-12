@@ -73,6 +73,7 @@ class ShareResponse(BaseModel):
 
 
 class SharedSongItem(BaseModel):
+    id: str
     title: str
     track_number: int
     audio_url: str | None

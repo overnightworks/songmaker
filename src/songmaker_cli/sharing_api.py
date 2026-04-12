@@ -126,6 +126,7 @@ def get_shared_album(
         year=album.year,
         songs=[
             SharedSongItem(
+                id=s.id,
                 title=s.title,
                 track_number=s.track_number,
                 audio_url=(

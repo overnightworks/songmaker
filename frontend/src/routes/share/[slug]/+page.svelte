@@ -6,6 +6,7 @@
 	import SharedPlayer from '$lib/components/SharedPlayer.svelte';
 
 	interface SharedSong {
+		id: string;
 		title: string;
 		track_number: number;
 		audio_url: string | null;
@@ -107,7 +108,7 @@
 		</div>
 
 		<div class="tracklist">
-			{#each album.songs as song (song.track_number)}
+			{#each album.songs as song (song.id)}
 				<button
 					class="track"
 					class:active={currentTrack === song}
