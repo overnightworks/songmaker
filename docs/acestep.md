@@ -70,7 +70,7 @@ The Admin → ACE-Step → Model Registry panel has a **Download** button on eac
 
 Concurrency guard: a Redis flag (`songmaker:acestep:download:{mode}`, 30-minute TTL) prevents two concurrent downloads of the same mode. The flag is set in the arq job's `try` block and cleared in `finally`; the TTL is the safety net for crashed workers.
 
-For bootstrap (no worker yet running, fresh install, CI), use the CLI escape hatch instead: `bash scripts/download_models.sh` calls `huggingface_hub.snapshot_download` directly into `_models/acestep/checkpoints/`. Requires `HF_TOKEN` exported in the host shell.
+For bootstrap (no worker yet running, fresh install, CI), use the CLI escape hatch instead: `bash scripts/download_models.sh` calls `huggingface_hub.snapshot_download` directly into `vendor/acestep/checkpoints/`. Requires `HF_TOKEN` exported in the host shell.
 
 ## Operating the worker pool
 
@@ -100,9 +100,9 @@ python:3.12-slim
 
 **The rule:** if you edit any `docker/base/*.Dockerfile`, run `scripts/build_images.sh` first before `docker compose up --build`. Otherwise compose fails with `manifest unknown` for `FROM songmaker/acestep-base:latest`.
 
-**The inner ACE-Step venv is baked into `acestep-base` at `/opt/acestep/.venv`.** Pre-Phase-8, it lived in a host bind mount that uv re-resynced from scratch on every fresh container (5–15 minute model-load gate). Now it's in the image. The bind mount on `acestep-worker` only carries `./_models/acestep/checkpoints` → `/opt/acestep/checkpoints` (the multi-GB model weights). The upstream source tree, the `.venv`, and everything else under `_models/acestep/` is COPYed into the image at build time.
+**The inner ACE-Step venv is baked into `acestep-base` at `/opt/acestep/.venv`.** Pre-Phase-8, it lived in a host bind mount that uv re-resynced from scratch on every fresh container (5–15 minute model-load gate). Now it's in the image. The bind mount on `acestep-worker` only carries `./vendor/acestep/checkpoints` → `/opt/acestep/checkpoints` (the multi-GB model weights). The upstream source tree, the `.venv`, and everything else under `vendor/acestep/` is COPYed into the image at build time.
 
-The `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. Workers default to the documented 300 s timeout. If you have it set in your local `.env`, drop it.
+The `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. Workers default to `ARQ_JOB_TIMEOUT=1000` and `ACESTEP_STARTUP_TIMEOUT_SECONDS=900` — long enough for a cold xl-turbo + vLLM init, which can take 5–8 min on a fresh container with empty page/JIT caches. If you have an older shorter override in your local `.env`, drop it.
 
 **Music-worker image bloat fix:** prior to Phase 8, music-worker shared `Dockerfile.worker` with scoring-worker and carried ~5 GB of unused torch + scoring + whisper wheels. Phase 8 split that file into `docker/music-worker.Dockerfile` (server extras only) and `docker/scoring-worker.Dockerfile` (server + scoring + whisper). Music-worker is now ~860 MB. This is safe because music-worker's import chain (`music_worker.py` → `jobs.py` → `scoring.{pipeline,models}`) is torch-free at module load — torch imports inside the scoring stack are lazy (inside function bodies) and music-worker never registers `run_scoring_job`.
 
@@ -313,9 +313,9 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `GPU_ID` | None | CUDA device index (for `CUDA_VISIBLE_DEVICES`) |
 | `ACESTEP_CHECKPOINT_DIR` | `/opt/acestep` | Where ACE-Step model weights live |
 | `AUDIO_OUTPUT_DIR` | `/app/data/audio/worker_output` | Where the subprocess writes generated WAVs |
-| `ACESTEP_LOG_DIR` | `/opt/acestep/logs` | Where the subprocess's stderr is captured |
+| `ACESTEP_LOG_DIR` | `/opt/acestep/logs` | Where the subprocess's merged stdout+stderr is captured. Each load attempt appends a `=== {mode} attempt at {iso} ===` header so retry history isn't clobbered. Also forwarded line-by-line to the worker's own logger as `[ace-step {mode}] ...` (visible in `docker compose logs songmaker-acestep-worker-0`). |
 | `ACESTEP_INNER_PORT` | 8101 | Port the ACE-Step subprocess listens on (inside the container) |
-| `ACESTEP_STARTUP_TIMEOUT_SECONDS` | 300 | Max seconds to wait for the subprocess to become healthy |
+| `ACESTEP_STARTUP_TIMEOUT_SECONDS` | 900 | Max seconds to wait for the subprocess to become healthy. Cold xl-turbo + vLLM cold-init can take 5–8 min on the very first load after a container start (page cache and torch JIT cache are empty). Once warm, subsequent loads are <30 s. On timeout, the last 2 KB of the merged log is included in the `SubprocessStartError` and surfaces in the admin job error. |
 | `ACESTEP_SHUTDOWN_GRACE_SECONDS` | 15 | SIGTERM grace period before SIGKILL |
 | `ACESTEP_SHUTDOWN_KILL_SECONDS` | 5 | SIGKILL grace period |
 | `ACESTEP_HEALTH_POLL_SECONDS` | 2.0 | Health-check interval during startup probe |
@@ -341,9 +341,9 @@ These are set on the subprocess by `subprocess_runner.py:build_env()` when it sp
 
 ## Local Submodule Patch — VRAM Pre-flight
 
-The `_models/acestep` submodule (pinned at v0.1.6) has a **local patch** that must be reapplied after any `git submodule update`.
+The `vendor/acestep` submodule has a **local patch** that must be reapplied after any `git submodule update`.
 
-**File:** `_models/acestep/acestep/core/generation/handler/generate_music.py` (around line 325)
+**File:** `vendor/acestep/acestep/core/generation/handler/generate_music.py` (around line 325)
 
 **Change:** Replace the `_vram_preflight_check()` call with `gc.collect()` + `torch.cuda.empty_cache()`.
 
@@ -377,10 +377,10 @@ Things we'd like to expose but can't until ACE-Step changes — written down so 
 
 **What it would do:** Let the user disable the LM's automatic inference of BPM, key signature, and time signature from caption + lyrics, forcing the engine to respect explicit values instead.
 
-**Why it's blocked:** The flag exists internally in the ACE-Step engine ([`acestep/api/job_generation_setup.py`](../_models/acestep/acestep/api/job_generation_setup.py) sets it from `sample_mode`) and in the unrelated [`openrouter_models.py`](../_models/acestep/acestep/openrouter_models.py) compatibility schema, but **the canonical `/release_task` HTTP request schema does not accept it as user input**:
+**Why it's blocked:** The flag exists internally in the ACE-Step engine ([`acestep/api/job_generation_setup.py`](../vendor/acestep/acestep/api/job_generation_setup.py) sets it from `sample_mode`) and in the unrelated [`openrouter_models.py`](../vendor/acestep/acestep/openrouter_models.py) compatibility schema, but **the canonical `/release_task` HTTP request schema does not accept it as user input**:
 
-- [`release_task_models.py`](../_models/acestep/acestep/api/http/release_task_models.py) declares only `use_cot_caption` and `use_cot_language` as boolean inputs
-- [`release_task_param_parser.py`](../_models/acestep/acestep/api/http/release_task_param_parser.py) parameter alias allowlist does not include `use_cot_metas` under any name
+- [`release_task_models.py`](../vendor/acestep/acestep/api/http/release_task_models.py) declares only `use_cot_caption` and `use_cot_language` as boolean inputs
+- [`release_task_param_parser.py`](../vendor/acestep/acestep/api/http/release_task_param_parser.py) parameter alias allowlist does not include `use_cot_metas` under any name
 
 Sending the field in the wire payload would be silently dropped. A UI toggle would appear to work but have **zero effect** on generation.
 

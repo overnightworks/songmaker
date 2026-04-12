@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-CHECKPOINTS_DIR="$PROJECT_ROOT/_models/acestep/checkpoints"
+CHECKPOINTS_DIR="$PROJECT_ROOT/vendor/acestep/checkpoints"
 VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python3"
 ENV_FILE="$PROJECT_ROOT/.env"
 

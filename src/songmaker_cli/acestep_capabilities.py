@@ -4,7 +4,7 @@ Single source of truth derived from reading the vendored ACE-Step source.
 Adding a new ACE-Step model variant: add one ACESTEP_PROFILES entry.
 
 The matrix this encodes is documented in plans/acestep-model-parameters.md
-and verified against the vendored code in _models/acestep/acestep/.
+and verified against the vendored code in vendor/acestep/acestep/.
 """
 
 from __future__ import annotations

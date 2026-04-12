@@ -4,7 +4,7 @@ This is the lock that enforces Phase 3 of plans/acestep-naming-and-magic-strings
 If a future ACE-Step upgrade renames a field, this test fails on rebase rather
 than at generation time.
 
-The vendored model lives in _models/acestep/ and is normally only importable
+The vendored model lives in vendor/acestep/ and is normally only importable
 inside the ACE-Step venv. We inject the source dir into sys.path; the warning
 about pydantic v1 config keys is benign — the vendored model uses
 allow_population_by_field_name which pydantic v2 has renamed but still honours.
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 _VENDORED_ACESTEP_PATH = (
-    Path(__file__).resolve().parent.parent / "_models" / "acestep"
+    Path(__file__).resolve().parent.parent / "vendor" / "acestep"
 )
 if str(_VENDORED_ACESTEP_PATH) not in sys.path:
     sys.path.insert(0, str(_VENDORED_ACESTEP_PATH))

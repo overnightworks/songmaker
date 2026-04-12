@@ -120,6 +120,7 @@ services:
     build:
       context: .
       dockerfile: docker/acestep-worker.Dockerfile
+    runtime: nvidia
     restart: unless-stopped
     depends_on:
       redis:
@@ -140,7 +141,7 @@ services:
       HF_TOKEN: "${HF_TOKEN:-}"
       HF_HUB_DISABLE_XET: "1"
     volumes:
-      - ./_models/acestep/checkpoints:/opt/acestep/checkpoints
+      - ./vendor/acestep/checkpoints:/opt/acestep/checkpoints
       - audiofiles:/app/data/audio
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]

@@ -13,16 +13,16 @@ USER songmaker
 WORKDIR /opt/acestep
 
 # Layer 1: lockfile + manifest only — caches independently of source churn.
-COPY --chown=songmaker _models/acestep/pyproject.toml _models/acestep/uv.lock _models/acestep/README.md ./
+COPY --chown=songmaker vendor/acestep/pyproject.toml vendor/acestep/uv.lock vendor/acestep/README.md ./
 
 # Layer 2: nano-vllm path-source dep — required for `uv sync` to resolve.
-COPY --chown=songmaker _models/acestep/acestep/third_parts/ ./acestep/third_parts/
+COPY --chown=songmaker vendor/acestep/acestep/third_parts/ ./acestep/third_parts/
 
 # Layer 3: heavy delta install. torch already present from gpu-torch-base.
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Layer 4: full upstream source. Invalidates only on upstream source edits.
-COPY --chown=songmaker _models/acestep/ ./
+COPY --chown=songmaker vendor/acestep/ ./
 
 # Layer 5: editable install of the upstream project so the `acestep-api`
 # entry point exists and `_get_project_root()` resolves to /opt/acestep at

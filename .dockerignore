@@ -8,14 +8,14 @@ __pycache__/
 # the inner subprocess venv can be baked at build time. Only host-runtime
 # artifacts and the heavy weights are excluded; weights are bind-mounted at
 # runtime by the acestep-worker leaf service.
-_models/acestep/.venv/
-_models/acestep/.git/
-_models/acestep/.cache/
-_models/acestep/checkpoints/
-_models/acestep/gradio_outputs/
-_models/acestep/manual_uv_sync.log
-_models/acestep/acestep-*.stderr.log
-_models/acestep/acestep_stderr.log
+vendor/acestep/.venv/
+vendor/acestep/.git/
+vendor/acestep/.cache/
+vendor/acestep/checkpoints/
+vendor/acestep/gradio_outputs/
+vendor/acestep/manual_uv_sync.log
+vendor/acestep/acestep-*.stderr.log
+vendor/acestep/acestep_stderr.log
 
 # Frontend dev artifacts
 frontend/node_modules/

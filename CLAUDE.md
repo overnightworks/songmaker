@@ -42,7 +42,7 @@ docker compose up -d --build --wait
 cd frontend && pnpm install && pnpm dev
 
 # Download ACE-Step model weights (requires HF_TOKEN in .env)
-bash scripts/download_models.sh       # Downloads all model variants to _models/acestep/checkpoints/
+bash scripts/download_models.sh       # Downloads all model variants to vendor/acestep/checkpoints/
 ```
 
 ## Checks
