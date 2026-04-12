@@ -123,3 +123,19 @@ After the architecture cleanup, these are the bigger features in the queue. They
 - The existing `MOVE` action in `AuditAction` covers both — no enum change needed.
 
 **First step:** read `Generation` and `Song` models + `db/queries/generations.py` + `db/queries/songs.py` + the existing context menu component, design + execute.
+
+### Generation settings refactor + ACE-Step parameter parity
+
+**Goal:** Decouple generation params from song versions, add missing ACE-Step params (sampler_mode, custom_timesteps, etc.), restructure the frontend settings panel. Full concept plan in `plans/settings-profiles.md`.
+
+### Use `ACESTEP_CHECKPOINTS_DIR` env var
+
+**Goal:** Upstream #1056 added `ACESTEP_CHECKPOINTS_DIR` for shared model storage. Use this instead of hardcoding the checkpoint mount path in docker-compose and worker settings. Small cleanup.
+
+### Upstream PRs for ACE-Step-1.5
+
+**Goal:** Submit patches from our fork (`FlexOr2/ACE-Step-1.5`) back to upstream:
+1. VRAM preflight skip option — add an env var to disable `_vram_preflight_check()` instead of patching it out. Currently we carry a local patch in `vendor/acestep`.
+2. Expose HTTP API params — `sampler_mode`, `velocity_norm_threshold`, `velocity_ema_factor`, `latent_shift`, `latent_rescale` exist in `GenerationParams` but aren't on the `/release_task` HTTP surface. Needed for non-Gradio clients (like us).
+
+**Constraints:** Follow upstream CONTRIBUTING.md — one problem per PR, minimal blast radius, PR template with scope/risk/regression.

@@ -1,6 +1,6 @@
 # Review an Implementation
 
-Read `CLAUDE.md` for the project's conventions. Read the plan that was implemented. Then read every changed file via `git diff HEAD~1` — don't skip anything.
+Read `CLAUDE.md` for the project's conventions. Then read every changed file via `git diff HEAD~1` — don't skip anything.
 
 Run all checks yourself. If they fail, that's a finding.
 
