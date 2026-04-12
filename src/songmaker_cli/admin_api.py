@@ -326,6 +326,7 @@ def _state_from_dict(state: dict | None, queue_depth: int) -> WorkerEphemeralSta
         loaded=_parse_loaded(state.get("loaded", [])),
         target_loading=state.get("target_loading"),
         loading_started_at=state.get("loading_started_at"),
+        loading_last_log_line=state.get("loading_last_log_line"),
         queue_depth=queue_depth,
         vram_used_gb=state.get("vram_used_gb"),
         vram_total_gb=state.get("vram_total_gb"),

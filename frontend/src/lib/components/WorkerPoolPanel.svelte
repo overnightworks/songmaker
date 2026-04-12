@@ -276,6 +276,12 @@
 								{/if}
 							</span>
 						</div>
+						{#if worker.state.target_loading && worker.state.loading_last_log_line}
+							<div class="card-row">
+								<span class="row-label">Log:</span>
+								<span class="row-value log-line">{worker.state.loading_last_log_line}</span>
+							</div>
+						{/if}
 						<div class="card-row">
 							<span class="row-label">Queue:</span>
 							<span class="row-value">{worker.state.queue_depth} jobs</span>
@@ -458,6 +464,14 @@
 	.spinner {
 		display: inline-block;
 		margin-left: 0.5rem;
+	}
+
+	.log-line {
+		font-family: var(--font-mono, monospace);
+		font-size: 0.7rem;
+		color: var(--text-muted);
+		white-space: pre-wrap;
+		word-break: break-all;
 	}
 
 	.card-actions {

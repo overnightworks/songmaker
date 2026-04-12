@@ -682,6 +682,29 @@ def test_list_workers_online(client: TestClient) -> None:
     assert w["state"]["loaded"] == [{"mode": "sft", "size_gb": 6.0}]
     assert w["state"]["available_modes"] == ["sft", "turbo"]
     assert w["state"]["pinned"] == []
+    assert w["state"]["loading_last_log_line"] is None
+
+
+def test_list_workers_propagates_loading_last_log_line(client: TestClient) -> None:
+    import json
+
+    from songmaker_cli.acestep_state import worker_state_key
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    pool = _make_fake_pool()
+    pool._store[worker_state_key("w1")] = json.dumps(
+        {
+            "loaded": [],
+            "target_loading": "xl-turbo",
+            "loading_last_log_line": "vllm: loading shard 3/4",
+        },
+    )
+    _override_pool(client, pool)
+
+    resp = client.get("/api/admin/workers")
+    state = resp.json()["workers"][0]["state"]
+    assert state["loading_last_log_line"] == "vllm: loading shard 3/4"
 
 
 def test_list_workers_loading(client: TestClient) -> None:

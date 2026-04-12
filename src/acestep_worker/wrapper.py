@@ -47,6 +47,7 @@ from acestep_worker.models import (
     WorkerTaskEvent,
 )
 from acestep_worker.registry_client import RegistryClient, WorkerRegistration
+from acestep_worker.subprocess_runner import SubprocessStartError
 from acestep_worker.task_store import TaskStore
 
 log = logging.getLogger(__name__)
@@ -93,6 +94,7 @@ async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
             if snapshot.loading_started_at is not None
             else None
         ),
+        "loading_last_log_line": snapshot.loading_last_log_line,
         "vram_used_gb": snapshot.vram_used_gb,
         "vram_total_gb": snapshot.vram_total_gb,
         "available_modes": list_available_modes(deps.checkpoint_dir),
@@ -127,6 +129,7 @@ def build_router(deps: WorkerDeps) -> APIRouter:
                 if snapshot.loading_started_at is not None
                 else None
             ),
+            loading_last_log_line=snapshot.loading_last_log_line,
             queue_depth=await read_queue_depth(deps.redis, deps.worker_id),
             vram_used_gb=snapshot.vram_used_gb,
             vram_total_gb=snapshot.vram_total_gb,
@@ -142,6 +145,9 @@ def build_router(deps: WorkerDeps) -> APIRouter:
             raise HTTPException(status_code=400, detail=f"Unknown mode: {exc}") from exc
         except CapacityError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except SubprocessStartError as exc:
+            log.exception("ACE-Step subprocess failed to start for %s", req.mode)
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
         return LoadModelResponse(
             loaded=result.loaded,
             evicted=result.evicted,

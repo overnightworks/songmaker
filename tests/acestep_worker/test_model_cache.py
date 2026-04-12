@@ -478,3 +478,54 @@ def test_snapshot_without_reader_uses_declared_sizes() -> None:
     snapshot = cache.snapshot()
     assert snapshot.vram_used_gb == 6.0
     assert snapshot.vram_total_gb == 22.0
+
+
+def test_loading_last_log_line_only_set_during_load() -> None:
+    cache, _, _ = _make_cache()
+    cache.set_loading_log_line("ignored — no load in progress")
+    assert cache.loading_last_log_line is None
+
+
+def test_loading_last_log_line_visible_during_load_then_cleared() -> None:
+    captured: list[str | None] = []
+
+    async def slow_loader(mode: str) -> LoadedModel:
+        cache.set_loading_log_line("loading shard 1/4")
+        captured.append(cache.snapshot().loading_last_log_line)
+        cache.set_loading_log_line("loading shard 4/4")
+        captured.append(cache.snapshot().loading_last_log_line)
+        return LoadedModel(mode=mode, handle=None, port=8101)
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=slow_loader,
+        unloader=unloader,
+    )
+    _run(cache.load("sft"))
+    assert captured == ["loading shard 1/4", "loading shard 4/4"]
+    final = cache.snapshot()
+    assert final.loading_last_log_line is None
+    assert final.target_loading is None
+
+
+def test_loading_last_log_line_cleared_on_loader_failure() -> None:
+    async def failing_loader(mode: str) -> LoadedModel:
+        cache.set_loading_log_line("about to crash")
+        raise RuntimeError("boom")
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=failing_loader,
+        unloader=unloader,
+    )
+    with pytest.raises(RuntimeError, match="boom"):
+        _run(cache.load("sft"))
+    assert cache.loading_last_log_line is None

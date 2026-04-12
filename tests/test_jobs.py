@@ -833,6 +833,35 @@ def test_load_model_on_worker_returns_5xx(seeded_db) -> None:
         assert "500" in job.error
 
 
+def test_load_model_on_worker_5xx_includes_long_tail(seeded_db) -> None:
+    """502 from the worker carries the ACE-Step subprocess tail; we want
+    enough of it to be useful (4000 chars), not 200."""
+    from unittest.mock import AsyncMock
+
+    from songmaker_cli.jobs import load_model_on_worker
+
+    _seed_worker_row(seeded_db)
+    long_tail = (
+        "ACE-Step did not become healthy within 900s\n"
+        "--- last log lines ---\n"
+        + ("vllm: loading shard 2/4\n" * 50)
+    )
+    fake_response = MagicMock(status_code=502, text=long_tail)
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value=fake_response)
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("httpx.AsyncClient", return_value=fake_client):
+        _run(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
+
+    with seeded_db() as session:
+        job = get_job(session, "w1-job")
+        assert job.status == "failed"
+        assert "did not become healthy" in job.error
+        assert job.error.count("loading shard 2/4") >= 30
+
+
 # ── download_model_on_worker ────────────────────────────────────────
 
 

@@ -44,7 +44,7 @@ class WorkerSettings(BaseSettings):
     log_level: str = "INFO"
 
     # Subprocess timeouts
-    acestep_startup_timeout_seconds: int = 300
+    acestep_startup_timeout_seconds: int = 900
     acestep_shutdown_grace_seconds: int = 15
     acestep_shutdown_kill_seconds: int = 5
     acestep_health_poll_seconds: float = 2.0

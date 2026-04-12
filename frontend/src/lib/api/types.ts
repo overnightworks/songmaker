@@ -22,10 +22,10 @@ export interface GenerationParams {
 	lm_top_p?: number | null;
 	lm_cfg_scale?: number | null;
 	lm_negative_prompt?: string | null;
-	infer_method?: string | null;
+	infer_method?: 'ode' | 'sde' | null;
 	batch_size?: number | null;
 	reference_audio_path?: string | null;
-	repaint_mode?: string | null;
+	repaint_mode?: 'conservative' | 'balanced' | 'aggressive' | null;
 	repaint_strength?: number | null;
 	lm_repetition_penalty?: number | null;
 	use_cot_caption?: boolean | null;
@@ -38,7 +38,7 @@ export interface GenerationParams {
 	bpm?: number | null;
 	audio_duration?: number | null;
 	key_scale?: string | null;
-	task_type?: string | null;
+	task_type?: 'text2music' | 'repaint' | 'cover' | null;
 	repainting_start?: number | null;
 	repainting_end?: number | null;
 	audio_cover_strength?: number | null;
@@ -61,10 +61,10 @@ export interface VersionGenerationParams {
 	lm_top_p?: number | null;
 	lm_cfg_scale?: number | null;
 	lm_negative_prompt?: string | null;
-	infer_method?: string | null;
+	infer_method?: 'ode' | 'sde' | null;
 	batch_size?: number | null;
 	reference_audio_path?: string | null;
-	repaint_mode?: string | null;
+	repaint_mode?: 'conservative' | 'balanced' | 'aggressive' | null;
 	repaint_strength?: number | null;
 	lm_repetition_penalty?: number | null;
 	use_cot_caption?: boolean | null;
@@ -117,7 +117,7 @@ export interface GenerationItem {
 	whisper_text: string | null;
 	scores: TrackScores | null;
 	generation_params: GenerationParams | null;
-	created_at: string | null;
+	created_at: string;
 }
 
 export interface VersionItem {
@@ -129,7 +129,7 @@ export interface VersionItem {
 	audio_duration: number;
 	key_scale: string;
 	generation_params: VersionGenerationParams | null;
-	created_at: string | null;
+	created_at: string;
 }
 
 export interface SongItem {
@@ -144,7 +144,7 @@ export interface SongItem {
 	prompt: string;
 	bpm?: number | null;
 	audio_duration?: number | null;
-	key_scale: string;
+	key_scale?: string | null;
 	generation_params?: VersionGenerationParams | null;
 	version_count: number;
 	generation_count: number;
@@ -152,7 +152,7 @@ export interface SongItem {
 	share_slug?: string | null;
 	best_scores?: TrackScores | null;
 	best_rating?: number | null;
-	created_at?: string | null;
+	created_at: string;
 	generations: GenerationItem[];
 }
 
@@ -204,15 +204,15 @@ export interface UserItem {
 	username: string;
 	role: string;
 	is_active: boolean;
-	created_at?: string | null;
+	created_at: string;
 }
 
 export interface SessionItem {
 	id: string;
 	user_id: string;
 	username: string;
-	created_at?: string | null;
-	expires_at?: string | null;
+	created_at: string;
+	expires_at: string;
 	ip_address: string;
 	user_agent: string;
 }
@@ -233,7 +233,7 @@ export interface LoginAttemptItem {
 	ip_address: string;
 	username: string;
 	success: boolean;
-	attempted_at?: string | null;
+	attempted_at: string;
 }
 
 export interface AuditLogItem {
@@ -243,7 +243,7 @@ export interface AuditLogItem {
 	resource_type: string;
 	resource_id: string;
 	detail: string;
-	created_at?: string | null;
+	created_at: string;
 }
 
 export interface RateLimitItem {
@@ -326,7 +326,7 @@ export interface PlaylistItem {
 	entry_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
-	created_at?: string | null;
+	created_at: string;
 }
 
 export interface PlaylistDetailItem {
@@ -335,7 +335,7 @@ export interface PlaylistDetailItem {
 	entry_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
-	created_at?: string | null;
+	created_at: string;
 	entries: PlaylistEntryItem[];
 }
 
@@ -358,6 +358,7 @@ export interface WorkerEphemeralStateItem {
 	loaded: LoadedModelDetailItem[];
 	target_loading?: string | null;
 	loading_started_at?: string | null;
+	loading_last_log_line?: string | null;
 	queue_depth: number;
 	vram_used_gb?: number | null;
 	vram_total_gb?: number | null;

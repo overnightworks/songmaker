@@ -43,7 +43,7 @@ async def load_model_on_worker(
     url = f"http://{worker.host}:{worker.port}/load_model"
 
     try:
-        async with httpx.AsyncClient(timeout=300) as client:
+        async with httpx.AsyncClient(timeout=960) as client:
             response = await client.post(url, json={"mode": mode}, headers=headers)
     except httpx.HTTPError as exc:
         _update_job(
@@ -56,7 +56,7 @@ async def load_model_on_worker(
     if response.status_code >= 400:
         _update_job(
             factory, job_id, JobStatus.FAILED,
-            error=f"Worker returned {response.status_code}: {response.text[:200]}",
+            error=f"Worker returned {response.status_code}: {response.text[:4000]}",
             error_type="worker_error",
         )
         return

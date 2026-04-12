@@ -133,6 +133,7 @@ def test_loaded_models_initial(tmp_path: Path) -> None:
     assert body["queue_depth"] == 0
     assert body["vram_total_gb"] == 24.0
     assert body["available_modes"] == []
+    assert body["loading_last_log_line"] is None
 
 
 def test_loaded_models_with_downloaded_mode(tmp_path: Path) -> None:
@@ -173,6 +174,36 @@ def test_load_model_capacity_error(tmp_path: Path) -> None:
     with TestClient(app) as client:
         resp = client.post("/load_model", json={"mode": "huge"})
     assert resp.status_code == 409
+
+
+def test_load_model_subprocess_start_error_returns_502(tmp_path: Path) -> None:
+    from acestep_worker.model_cache import ModelCache
+    from acestep_worker.subprocess_runner import SubprocessStartError
+
+    async def failing_loader(mode: str) -> LoadedModel:
+        raise SubprocessStartError(
+            "ACE-Step did not become healthy within 900s\n"
+            "--- last log lines ---\n"
+            "vllm: loading shard 2/4",
+        )
+
+    async def unloader(_: LoadedModel) -> None:
+        pass
+
+    deps, _ = _make_deps(tmp_path)
+    deps.cache = ModelCache(
+        vram_budget_gb=24.0,
+        model_sizes={"sft": 6.0},
+        loader=failing_loader,
+        unloader=unloader,
+    )
+    app = create_app(deps)
+    with TestClient(app) as client:
+        resp = client.post("/load_model", json={"mode": "sft"})
+    assert resp.status_code == 502
+    detail = resp.json()["detail"]
+    assert "did not become healthy" in detail
+    assert "loading shard 2/4" in detail
 
 
 def test_evict_model(tmp_path: Path) -> None:
@@ -429,6 +460,7 @@ def test_build_state_payload(tmp_path: Path) -> None:
     assert payload["available_modes"] == []
     assert payload["pinned"] == []
     assert payload["loading_started_at"] is None
+    assert payload["loading_last_log_line"] is None
 
 
 def test_build_state_payload_after_load_uses_detail_shape(tmp_path: Path) -> None:

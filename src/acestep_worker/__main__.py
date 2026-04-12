@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 import uvicorn
@@ -40,11 +41,21 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
 
     redis_client: Redis = Redis.from_url(settings.redis_url, decode_responses=False)
 
+    cache_box: dict[str, ModelCache] = {}
+
+    def on_log_line(line: str) -> None:
+        cache = cache_box.get("cache")
+        if cache is not None:
+            cache.set_loading_log_line(line)
+
+    log_sink: Callable[[str], None] = on_log_line
+
     loader, unloader = make_acestep_runner(
         checkpoint_dir=checkpoint_dir,
         base_port=settings.acestep_inner_port,
         vram_budget_gb=settings.vram_budget_gb,
         log_dir=log_dir,
+        on_log_line=log_sink,
     )
     cache = ModelCache(
         vram_budget_gb=settings.vram_budget_gb,
@@ -53,6 +64,7 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         unloader=unloader,
         vram_reader=lambda: read_gpu_vram_stats(settings.gpu_id or 0),
     )
+    cache_box["cache"] = cache
     task_store = TaskStore()
 
     deps = WorkerDeps(

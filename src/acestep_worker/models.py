@@ -85,6 +85,7 @@ class LoadedModelsResponse(BaseModel):
     loaded: list[LoadedModelDetailItem]
     target_loading: str | None
     loading_started_at: str | None = None
+    loading_last_log_line: str | None = None
     queue_depth: int
     vram_used_gb: float
     vram_total_gb: float

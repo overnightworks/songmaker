@@ -49,6 +49,7 @@ class CacheStateSnapshot:
     vram_total_gb: float
     pinned: tuple[str, ...]
     loading_started_at: datetime | None
+    loading_last_log_line: str | None = None
 
 
 class CapacityError(Exception):
@@ -81,6 +82,7 @@ class ModelCache:
         self._lock = asyncio.Lock()
         self._target_loading: str | None = None
         self._loading_started_at: datetime | None = None
+        self._loading_last_log_line: str | None = None
         self._budget_gb = vram_budget_gb
         self._sizes = dict(model_sizes)
         self._loader = loader
@@ -92,6 +94,15 @@ class ModelCache:
     @property
     def target_loading(self) -> str | None:
         return self._target_loading
+
+    @property
+    def loading_last_log_line(self) -> str | None:
+        return self._loading_last_log_line
+
+    def set_loading_log_line(self, line: str) -> None:
+        if self._target_loading is None:
+            return
+        self._loading_last_log_line = line
 
     @property
     def vram_budget_gb(self) -> float:
@@ -128,6 +139,7 @@ class ModelCache:
             vram_total_gb=total_gb,
             pinned=tuple(sorted(self._pinned)),
             loading_started_at=self._loading_started_at,
+            loading_last_log_line=self._loading_last_log_line,
         )
 
     async def load(self, mode: str) -> LoadResult:
@@ -145,6 +157,7 @@ class ModelCache:
                 )
             self._target_loading = mode
             self._loading_started_at = _now()
+            self._loading_last_log_line = None
             try:
                 evicted = await self._evict_to_fit(target_size)
                 model = await self._loader(mode)
@@ -153,6 +166,7 @@ class ModelCache:
             finally:
                 self._target_loading = None
                 self._loading_started_at = None
+                self._loading_last_log_line = None
 
     async def evict(self, mode: str) -> list[str]:
         async with self._lock:

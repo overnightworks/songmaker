@@ -101,12 +101,12 @@ class Settings(BaseSettings):
     ip_rate_limit: int = 120
 
     # ── arq workers ───────────────────────────────────────────────────
-    arq_job_timeout: int = 900
+    arq_job_timeout: int = 1000
     arq_drain_timeout: int = 300
     music_max_jobs: int = 2
     scoring_max_jobs: int = 1
     scoring_device: str = "cpu"
-    stale_job_threshold_seconds: int = 360
+    stale_job_threshold_seconds: int = 1100
 
     # ── Soft delete ───────────────────────────────────────────────────
     soft_delete_retention_days: int = 30

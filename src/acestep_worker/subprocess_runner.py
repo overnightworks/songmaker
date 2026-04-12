@@ -5,11 +5,13 @@ import logging
 import os
 import signal
 import subprocess
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import IO
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -21,6 +23,8 @@ log = logging.getLogger(__name__)
 
 SECRET_ENV_KEYS = ("ANTHROPIC_API_KEY", "SESSION_SECRET", "SONGMAKER_INTERNAL_TOKEN")
 
+LogLineSink = Callable[[str], None]
+
 
 class SubprocessStartError(RuntimeError):
     pass
@@ -31,7 +35,8 @@ class SubprocessHandle:
     process: subprocess.Popen[bytes]
     stderr_path: Path | None
     port: int
-    stderr_file: Any = None
+    stderr_file: IO[str] | None = None
+    log_thread: threading.Thread | None = None
 
 
 def find_uv() -> list[str] | None:
@@ -64,6 +69,7 @@ def build_env(mode: str, port: int, vram_budget_gb: float) -> dict[str, str]:
     env.setdefault("MAX_CUDA_VRAM", str(vram_budget_gb))
     env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     env.setdefault("ACESTEP_COMPILE_MODEL", "0")
+    env.setdefault("PYTHONUNBUFFERED", "1")
     for secret in SECRET_ENV_KEYS:
         env.pop(secret, None)
     return env
@@ -99,7 +105,11 @@ def wait_for_health(
             tail = _read_stderr_tail(handle.stderr_path)
             raise SubprocessStartError(f"ACE-Step subprocess exited: {tail}")
         sleeper(poll)
-    raise SubprocessStartError(f"ACE-Step did not become healthy within {timeout}s")
+    tail = _read_stderr_tail(handle.stderr_path, max_chars=2000)
+    suffix = f"\n--- last log lines ---\n{tail}" if tail else ""
+    raise SubprocessStartError(
+        f"ACE-Step did not become healthy within {timeout}s{suffix}",
+    )
 
 
 def _read_stderr_tail(path: Path | None, max_chars: int = 500) -> str:
@@ -109,6 +119,49 @@ def _read_stderr_tail(path: Path | None, max_chars: int = 500) -> str:
     return text[-max_chars:] if len(text) > max_chars else text
 
 
+def _stream_subprocess_logs(
+    *,
+    mode: str,
+    process: subprocess.Popen[bytes],
+    log_file: IO[str] | None,
+    on_log_line: LogLineSink | None,
+) -> None:
+    stdout = process.stdout
+    if stdout is None:
+        return
+    try:
+        for raw in iter(stdout.readline, b""):
+            line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+            if not line:
+                continue
+            if log_file is not None:
+                try:
+                    log_file.write(line + "\n")
+                    log_file.flush()
+                except (OSError, ValueError):
+                    pass
+            log.info("[ace-step %s] %s", mode, line)
+            if on_log_line is not None:
+                try:
+                    on_log_line(line)
+                except Exception:
+                    log.warning("on_log_line callback raised", exc_info=True)
+    except Exception:
+        log.warning("Subprocess log streamer crashed", exc_info=True)
+
+
+def _open_log_file(log_dir: Path | None, mode: str) -> tuple[Path | None, IO[str] | None]:
+    if log_dir is None:
+        return None, None
+    log_dir.mkdir(parents=True, exist_ok=True)
+    path = log_dir / f"acestep-{mode}.stderr.log"
+    handle = path.open("a", encoding="utf-8")
+    header = f"\n=== {mode} attempt at {datetime.now(timezone.utc).isoformat()} ===\n"
+    handle.write(header)
+    handle.flush()
+    return path, handle
+
+
 def start_acestep_subprocess(
     mode: str,
     *,
@@ -116,24 +169,20 @@ def start_acestep_subprocess(
     checkpoint_dir: Path,
     vram_budget_gb: float,
     log_dir: Path | None = None,
+    on_log_line: LogLineSink | None = None,
 ) -> SubprocessHandle:
     uv = find_uv()
     if uv is None:
         raise SubprocessStartError("uv not found — cannot start ACE-Step subprocess")
     env = build_env(mode, port, vram_budget_gb)
-    stderr_path: Path | None = None
-    stderr_file = None
-    if log_dir is not None:
-        log_dir.mkdir(parents=True, exist_ok=True)
-        stderr_path = log_dir / f"acestep-{mode}.stderr.log"
-        stderr_file = stderr_path.open("w")
+    stderr_path, stderr_file = _open_log_file(log_dir, mode)
     cmd = [*uv, "run", "acestep-api", "--port", str(port)]
     process = subprocess.Popen(  # noqa: S603
         cmd,
         env=env,
         cwd=checkpoint_dir,
-        stdout=subprocess.DEVNULL,
-        stderr=stderr_file or subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
     )
     handle = SubprocessHandle(
         process=process,
@@ -141,6 +190,19 @@ def start_acestep_subprocess(
         port=port,
         stderr_file=stderr_file,
     )
+    log_thread = threading.Thread(
+        target=_stream_subprocess_logs,
+        kwargs={
+            "mode": mode,
+            "process": process,
+            "log_file": stderr_file,
+            "on_log_line": on_log_line,
+        },
+        name=f"ace-step-log-{mode}",
+        daemon=True,
+    )
+    log_thread.start()
+    handle.log_thread = log_thread
     try:
         wait_for_health(handle)
     except Exception:
@@ -167,6 +229,14 @@ def stop_acestep_subprocess(handle: SubprocessHandle) -> None:
         except ProcessLookupError:
             pass
     finally:
+        if process.stdout is not None:
+            try:
+                process.stdout.close()
+            except OSError:
+                pass
+        if handle.log_thread is not None and handle.log_thread.is_alive():
+            handle.log_thread.join(timeout=2.0)
+            handle.log_thread = None
         if handle.stderr_file is not None:
             try:
                 handle.stderr_file.close()
@@ -181,6 +251,7 @@ def make_acestep_runner(
     base_port: int,
     vram_budget_gb: float,
     log_dir: Path | None = None,
+    on_log_line: LogLineSink | None = None,
 ) -> tuple[Loader, Unloader]:
     async def loader(mode: str) -> LoadedModel:
         handle = await asyncio.to_thread(
@@ -190,6 +261,7 @@ def make_acestep_runner(
             checkpoint_dir=checkpoint_dir,
             vram_budget_gb=vram_budget_gb,
             log_dir=log_dir,
+            on_log_line=on_log_line,
         )
         return LoadedModel(mode=mode, handle=handle, port=handle.port)
 
@@ -199,3 +271,18 @@ def make_acestep_runner(
             await asyncio.to_thread(stop_acestep_subprocess, handle)
 
     return loader, unloader
+
+
+__all__ = [
+    "LogLineSink",
+    "SubprocessHandle",
+    "SubprocessStartError",
+    "_read_stderr_tail",
+    "build_env",
+    "find_uv",
+    "is_acestep_healthy",
+    "make_acestep_runner",
+    "start_acestep_subprocess",
+    "stop_acestep_subprocess",
+    "wait_for_health",
+]
