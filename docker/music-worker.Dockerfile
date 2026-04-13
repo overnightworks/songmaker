@@ -20,6 +20,7 @@ RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
 
 COPY --chown=songmaker src/ src/
 COPY --chown=songmaker alembic.ini ./
+COPY --chown=songmaker scripts/arq_healthcheck.py scripts/
 RUN uv sync --frozen --no-dev --extra server
 
-ENTRYPOINT ["uv", "run", "arq"]
+ENTRYPOINT ["/app/.venv/bin/arq"]

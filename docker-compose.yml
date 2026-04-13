@@ -94,9 +94,9 @@ services:
     command: ["songmaker_cli.music_worker.MusicWorkerSettings"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "uv", "run", "arq", "songmaker_cli.music_worker.MusicWorkerSettings", "--check"]
+      test: ["CMD", "/app/.venv/bin/python", "scripts/arq_healthcheck.py", "music"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       start_period: 120s
       retries: 3
     depends_on:
@@ -166,9 +166,9 @@ services:
     command: ["songmaker_cli.scoring_worker.ScoringWorkerSettings"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "uv", "run", "arq", "songmaker_cli.scoring_worker.ScoringWorkerSettings", "--check"]
+      test: ["CMD", "/app/.venv/bin/python", "scripts/arq_healthcheck.py", "scoring"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       start_period: 120s
       retries: 3
     depends_on:

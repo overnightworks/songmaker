@@ -31,6 +31,7 @@ AesPredictor(checkpoint_pth='default')"
 
 COPY --chown=songmaker src/ src/
 COPY --chown=songmaker alembic.ini ./
+COPY --chown=songmaker scripts/arq_healthcheck.py scripts/
 RUN uv sync --frozen --no-dev --extra server --extra scoring --extra whisper
 
-ENTRYPOINT ["uv", "run", "arq"]
+ENTRYPOINT ["/app/.venv/bin/arq"]
