@@ -28,7 +28,8 @@
 	import { addGenerationToPlaylist } from '$lib/stores/playlists';
 	import { pendingSource } from '$lib/stores/source';
 	import { setGenerationActions } from '$lib/contexts/generation-actions';
-	import { pinnedSeed } from '$lib/stores/editor';
+	import { pinnedSeed, applyGenerationSettings } from '$lib/stores/editor';
+	import type { VersionGenerationParams } from '$lib/api/types';
 	import { scoreColor } from '$lib/utils/scores';
 	import ActionButton from './ActionButton.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
@@ -245,6 +246,46 @@
 		addToast(`Seed ${seed} pinned for next generation`, 'success');
 	}
 
+	const VERSION_PARAM_KEYS: (keyof VersionGenerationParams)[] = [
+		'inference_steps',
+		'guidance_scale',
+		'shift',
+		'thinking',
+		'lm_temperature',
+		'lm_top_k',
+		'lm_top_p',
+		'lm_cfg_scale',
+		'lm_negative_prompt',
+		'infer_method',
+		'batch_size',
+		'repaint_mode',
+		'repaint_strength',
+		'lm_repetition_penalty',
+		'use_cot_caption',
+		'use_cot_language',
+		'use_adg',
+		'cfg_interval_start',
+		'cfg_interval_end',
+		'sampler_mode',
+		'velocity_norm_threshold',
+		'velocity_ema_factor',
+		'latent_shift',
+		'latent_rescale',
+		'audio_cover_strength'
+	];
+
+	function onUseSettings(): void {
+		if (!params) return;
+		const filtered: VersionGenerationParams = {};
+		for (const key of VERSION_PARAM_KEYS) {
+			if (params[key] != null) {
+				(filtered as Record<string, unknown>)[key] = params[key];
+			}
+		}
+		applyGenerationSettings(filtered);
+		addToast('Settings loaded into editor', 'success');
+	}
+
 	setGenerationActions({
 		score: () => onScore(),
 		pick: (_id, picked) => onPick(picked),
@@ -356,6 +397,9 @@
 					onclick={() => (showDeleteConfirm = true)}
 				/>
 				<button class="use-as-source-btn" onclick={onUseAsSource}>Use as Source</button>
+				{#if params}
+					<button class="use-as-source-btn" onclick={onUseSettings}>Use Settings</button>
+				{/if}
 			</div>
 		</div>
 

@@ -486,13 +486,13 @@ def test_get_job_not_found(client: TestClient) -> None:
 # ── Generation params ───────────────────────────────────────────────
 
 
-def test_create_song_with_generation_params(client: TestClient) -> None:
+def test_create_song_ignores_generation_params(client: TestClient) -> None:
     resp = client.post("/api/songs", json={
         "title": "Bolt", "album_id": "rock",
         "generation_params": {"inference_steps": 50, "shift": 2.0},
     })
     assert resp.status_code == 200
-    assert resp.json()["generation_params"] == {"inference_steps": 50, "shift": 2.0}
+    assert resp.json()["generation_params"] is None
 
 
 def test_create_song_invalid_generation_params(client: TestClient) -> None:
@@ -503,49 +503,20 @@ def test_create_song_invalid_generation_params(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
-def test_update_song_sets_generation_params(client: TestClient) -> None:
+def test_update_song_ignores_generation_params(client: TestClient) -> None:
     resp = client.put("/api/songs/s1", json={
         "generation_params": {"guidance_scale": 5.5},
-    })
-    assert resp.status_code == 200
-    assert resp.json()["generation_params"] == {"guidance_scale": 5.5}
-
-
-def test_update_song_clears_generation_params(client: TestClient) -> None:
-    client.put("/api/songs/s1", json={
-        "generation_params": {"inference_steps": 25},
-    })
-    resp = client.put("/api/songs/s1", json={
-        "generation_params": None,
     })
     assert resp.status_code == 200
     assert resp.json()["generation_params"] is None
 
 
-def test_update_song_omit_keeps_generation_params(client: TestClient) -> None:
-    client.put("/api/songs/s1", json={
-        "generation_params": {"shift": 4.0},
-    })
-    resp = client.put("/api/songs/s1", json={"lyrics": "new lyrics"})
-    assert resp.status_code == 200
-    assert resp.json()["generation_params"] == {"shift": 4.0}
-
-
-def test_update_song_invalid_generation_params(client: TestClient) -> None:
-    resp = client.put("/api/songs/s1", json={
-        "generation_params": {"typo_key": 1},
-    })
-    assert resp.status_code == 422
-
-
-def test_version_includes_generation_params(client: TestClient) -> None:
-    client.put("/api/songs/s1", json={
-        "generation_params": {"lm_temperature": 0.5},
-    })
+def test_version_generation_params_always_null(client: TestClient) -> None:
+    client.put("/api/songs/s1", json={"lyrics": "new lyrics"})
     resp = client.get("/api/songs/s1/versions")
     assert resp.status_code == 200
     latest = resp.json()[0]
-    assert latest["generation_params"] == {"lm_temperature": 0.5}
+    assert latest["generation_params"] is None
 
 
 # ── Generation defaults ─────────────────────────────────────────────

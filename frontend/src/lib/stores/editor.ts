@@ -37,21 +37,6 @@ export const editorState = writable<EditorState>({
 	draft: { ...EMPTY_SONG_DATA }
 });
 
-function genParamsEqual(
-	a: VersionGenerationParams | null,
-	b: VersionGenerationParams | null
-): boolean {
-	const objA = a ?? {};
-	const objB = b ?? {};
-	const keys = new Set([...Object.keys(objA), ...Object.keys(objB)]);
-	for (const k of keys) {
-		if ((objA as Record<string, unknown>)[k] !== (objB as Record<string, unknown>)[k]) {
-			return false;
-		}
-	}
-	return true;
-}
-
 export const isDirty = derived(editorState, (s) => {
 	const { saved, draft } = s;
 	return (
@@ -59,8 +44,7 @@ export const isDirty = derived(editorState, (s) => {
 		draft.prompt !== saved.prompt ||
 		draft.bpm !== saved.bpm ||
 		draft.audio_duration !== saved.audio_duration ||
-		draft.key_scale !== saved.key_scale ||
-		!genParamsEqual(draft.genParams, saved.genParams)
+		draft.key_scale !== saved.key_scale
 	);
 });
 
@@ -101,6 +85,11 @@ export const currentVersionIndex = writable(0);
 
 // --- Pinned seed (forwarded to the next generation request) ---
 export const pinnedSeed = writable<number | null>(null);
+
+// --- Pinned generation settings (loaded via "Use these settings" button) ---
+export function applyGenerationSettings(params: VersionGenerationParams): void {
+	setDraftGenParams(params);
+}
 
 // --- Status ---
 export const saving = writable(false);
@@ -187,8 +176,7 @@ export async function handleSave(songId: string): Promise<void> {
 			prompt: draft.prompt,
 			bpm: draft.bpm,
 			audio_duration: draft.audio_duration,
-			key_scale: draft.key_scale,
-			generation_params: draft.genParams
+			key_scale: draft.key_scale
 		});
 		editorState.update((s) => ({ ...s, saved: { ...s.draft } }));
 		replaceSongInList(updated);
