@@ -97,7 +97,14 @@ _SHARED_DEFAULTS: dict[str, object] = {
     "lm_repetition_penalty": 1.0,
     "use_cot_caption": True,
     "use_cot_language": True,
+    "use_adg": False,
+    "cfg_interval_start": 0.0,
+    "cfg_interval_end": 1.0,
     "sampler_mode": "euler",
+    "velocity_norm_threshold": 0.0,
+    "velocity_ema_factor": 0.0,
+    "latent_shift": 0.0,
+    "latent_rescale": 1.0,
     "audio_cover_strength": 1.0,
 }
 
