@@ -33,7 +33,7 @@ export interface GenerationParams {
 	use_adg?: boolean | null;
 	cfg_interval_start?: number | null;
 	cfg_interval_end?: number | null;
-	sampler_mode?: string | null;
+	sampler_mode?: 'euler' | 'heun' | null;
 	velocity_norm_threshold?: number | null;
 	velocity_ema_factor?: number | null;
 	latent_shift?: number | null;
@@ -77,7 +77,7 @@ export interface VersionGenerationParams {
 	use_adg?: boolean | null;
 	cfg_interval_start?: number | null;
 	cfg_interval_end?: number | null;
-	sampler_mode?: string | null;
+	sampler_mode?: 'euler' | 'heun' | null;
 	velocity_norm_threshold?: number | null;
 	velocity_ema_factor?: number | null;
 	latent_shift?: number | null;

@@ -88,8 +88,8 @@ export const ACESTEP_PARAM_DESCRIPTIONS: Record<string, ParamDescription> = {
 		long: 'Each candidate uses a different seed, giving you N variations of the same prompt. Larger batches use linearly more VRAM but are more efficient than running N separate generations. Hard maximum is 8.'
 	},
 	sampler_mode: {
-		short: 'Diffusion sampler algorithm. euler_ancestral is the xl-sft quality workaround.',
-		long: 'Controls which ODE/SDE solver the DiT uses. "euler" is the default. "euler_ancestral" adds stochastic noise at each step — currently the only workaround for xl-sft noisy output (ACE-Step #1063). No effect on turbo models.'
+		short: 'Diffusion sampler algorithm. heun is a second-order predictor-corrector.',
+		long: 'Controls which ODE/SDE solver the DiT uses. "euler" (first-order, fast) is the default. "heun" (second-order predictor-corrector) uses ~2x compute but produces higher-quality output. heun+SDE falls back to euler+SDE automatically.'
 	},
 	velocity_norm_threshold: {
 		short: 'DiT velocity normalization threshold. 0 = disabled.',

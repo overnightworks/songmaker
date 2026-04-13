@@ -57,7 +57,7 @@ class BaseGenerationParams(BaseModel):
     use_adg: bool | None = None
     cfg_interval_start: float | None = Field(None, ge=0, le=1)
     cfg_interval_end: float | None = Field(None, ge=0, le=1)
-    sampler_mode: str | None = None
+    sampler_mode: Literal["euler", "heun"] | None = None
     velocity_norm_threshold: float | None = Field(None, ge=0)
     velocity_ema_factor: float | None = Field(None, ge=0)
     latent_shift: float | None = None

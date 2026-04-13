@@ -60,7 +60,7 @@
 		{
 			key: 'sampler_mode',
 			label: 'Sampler',
-			options: ['euler', 'euler_ancestral']
+			options: ['euler', 'heun']
 		}
 	];
 
