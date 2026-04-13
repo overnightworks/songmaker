@@ -38,6 +38,13 @@ class AceStepProfile(BaseModel):
     cfg_interval_start: ParamSupport
     cfg_interval_end: ParamSupport
 
+    sampler_mode: ParamSupport
+    velocity_norm_threshold: ParamSupport
+    velocity_ema_factor: ParamSupport
+    latent_shift: ParamSupport
+    latent_rescale: ParamSupport
+    audio_cover_strength: ParamSupport
+
     thinking: ParamSupport
     lm_temperature: ParamSupport
     lm_top_k: ParamSupport
@@ -80,6 +87,18 @@ _TURBO_CFG_INTERVAL_END_OFF = ParamSupport(
     supported=False,
     note="No-op on turbo: CFG is disabled, so the interval end has no effect.",
 )
+_TURBO_SAMPLER_MODE_OFF = ParamSupport(
+    supported=False,
+    note="Turbo distillation uses a fixed sampler; this parameter has no effect.",
+)
+_TURBO_VELOCITY_OFF = ParamSupport(
+    supported=False,
+    note="Velocity parameters only affect non-distilled (SFT/base) samplers.",
+)
+_TURBO_LATENT_OFF = ParamSupport(
+    supported=False,
+    note="Latent shift/rescale only affect non-distilled (SFT/base) samplers.",
+)
 
 
 def _make_turbo(*, mode: str, is_xl: bool) -> AceStepProfile:
@@ -94,6 +113,12 @@ def _make_turbo(*, mode: str, is_xl: bool) -> AceStepProfile:
         use_adg=_TURBO_USE_ADG_OFF,
         cfg_interval_start=_TURBO_CFG_INTERVAL_START_OFF,
         cfg_interval_end=_TURBO_CFG_INTERVAL_END_OFF,
+        sampler_mode=_TURBO_SAMPLER_MODE_OFF,
+        velocity_norm_threshold=_TURBO_VELOCITY_OFF,
+        velocity_ema_factor=_TURBO_VELOCITY_OFF,
+        latent_shift=_TURBO_LATENT_OFF,
+        latent_rescale=_TURBO_LATENT_OFF,
+        audio_cover_strength=ParamSupport(supported=True, min=0.0, max=1.0),
         thinking=ParamSupport(supported=True),
         lm_temperature=ParamSupport(supported=True, min=0.0, max=2.0),
         lm_top_k=ParamSupport(supported=True, min=0, max=200),
@@ -127,6 +152,12 @@ def _make_sft_or_base(
             supported=True, min=0.0, max=1.0,
             note="Honored when guidance_scale > 1.0.",
         ),
+        sampler_mode=ParamSupport(supported=True),
+        velocity_norm_threshold=ParamSupport(supported=True, min=0.0),
+        velocity_ema_factor=ParamSupport(supported=True, min=0.0, max=1.0),
+        latent_shift=ParamSupport(supported=True),
+        latent_rescale=ParamSupport(supported=True, min=0.1),
+        audio_cover_strength=ParamSupport(supported=True, min=0.0, max=1.0),
         thinking=ParamSupport(supported=True),
         lm_temperature=ParamSupport(supported=True, min=0.0, max=2.0),
         lm_top_k=ParamSupport(supported=True, min=0, max=200),

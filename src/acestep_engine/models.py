@@ -56,6 +56,11 @@ class AceStepConfig:
     use_adg: bool = False
     cfg_interval_start: float = 0.0
     cfg_interval_end: float = 1.0
+    sampler_mode: str = "euler"
+    velocity_norm_threshold: float = 0.0
+    velocity_ema_factor: float = 0.0
+    latent_shift: float = 0.0
+    latent_rescale: float = 1.0
     model: str = ""
 
 

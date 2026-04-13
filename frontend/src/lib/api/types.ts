@@ -33,6 +33,12 @@ export interface GenerationParams {
 	use_adg?: boolean | null;
 	cfg_interval_start?: number | null;
 	cfg_interval_end?: number | null;
+	sampler_mode?: string | null;
+	velocity_norm_threshold?: number | null;
+	velocity_ema_factor?: number | null;
+	latent_shift?: number | null;
+	latent_rescale?: number | null;
+	audio_cover_strength?: number | null;
 	seed?: number | null;
 	acestep_model?: string | null;
 	bpm?: number | null;
@@ -41,7 +47,6 @@ export interface GenerationParams {
 	task_type?: 'text2music' | 'repaint' | 'cover' | null;
 	repainting_start?: number | null;
 	repainting_end?: number | null;
-	audio_cover_strength?: number | null;
 	repaint_latent_crossfade_frames?: number | null;
 	repaint_wav_crossfade_sec?: number | null;
 	cover_noise_strength?: number | null;
@@ -72,6 +77,12 @@ export interface VersionGenerationParams {
 	use_adg?: boolean | null;
 	cfg_interval_start?: number | null;
 	cfg_interval_end?: number | null;
+	sampler_mode?: string | null;
+	velocity_norm_threshold?: number | null;
+	velocity_ema_factor?: number | null;
+	latent_shift?: number | null;
+	latent_rescale?: number | null;
+	audio_cover_strength?: number | null;
 }
 
 export interface TrackScores {

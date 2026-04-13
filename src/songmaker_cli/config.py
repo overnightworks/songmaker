@@ -84,7 +84,7 @@ def save_generation_defaults(db_factory: sessionmaker[Session], data: dict) -> N
     log.info("Saved generation defaults to database")
 
 
-_SHARED_LM_DEFAULTS: dict[str, object] = {
+_SHARED_DEFAULTS: dict[str, object] = {
     "shift": 3.0,
     "thinking": True,
     "lm_temperature": 0.85,
@@ -97,14 +97,16 @@ _SHARED_LM_DEFAULTS: dict[str, object] = {
     "lm_repetition_penalty": 1.0,
     "use_cot_caption": True,
     "use_cot_language": True,
+    "sampler_mode": "euler",
+    "audio_cover_strength": 1.0,
 }
 
 _BUILTIN_DEFAULTS: dict[str, dict[str, object]] = {
-    "turbo": {"inference_steps": 8, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
-    "sft": {"inference_steps": 50, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
-    "xl-turbo": {"inference_steps": 8, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
-    "xl-sft": {"inference_steps": 50, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
-    "xl-base": {"inference_steps": 50, "guidance_scale": 0.0, **_SHARED_LM_DEFAULTS},
+    "turbo": {"inference_steps": 8, "guidance_scale": 0.0, **_SHARED_DEFAULTS},
+    "sft": {"inference_steps": 50, "guidance_scale": 0.0, **_SHARED_DEFAULTS},
+    "xl-turbo": {"inference_steps": 8, "guidance_scale": 0.0, **_SHARED_DEFAULTS},
+    "xl-sft": {"inference_steps": 50, "guidance_scale": 0.0, **_SHARED_DEFAULTS},
+    "xl-base": {"inference_steps": 50, "guidance_scale": 0.0, **_SHARED_DEFAULTS},
 }
 
 

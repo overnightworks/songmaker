@@ -86,5 +86,29 @@ export const ACESTEP_PARAM_DESCRIPTIONS: Record<string, ParamDescription> = {
 	batch_size: {
 		short: 'Number of audio variations to generate from one request (1–8).',
 		long: 'Each candidate uses a different seed, giving you N variations of the same prompt. Larger batches use linearly more VRAM but are more efficient than running N separate generations. Hard maximum is 8.'
+	},
+	sampler_mode: {
+		short: 'Diffusion sampler algorithm. euler_ancestral is the xl-sft quality workaround.',
+		long: 'Controls which ODE/SDE solver the DiT uses. "euler" is the default. "euler_ancestral" adds stochastic noise at each step — currently the only workaround for xl-sft noisy output (ACE-Step #1063). No effect on turbo models.'
+	},
+	velocity_norm_threshold: {
+		short: 'DiT velocity normalization threshold. 0 = disabled.',
+		long: 'When > 0, normalizes the predicted velocity at each diffusion step if its norm exceeds this threshold. Stabilizes generation at the cost of some dynamic range. Default 0.0 disables normalization.'
+	},
+	velocity_ema_factor: {
+		short: 'Exponential moving average smoothing for DiT velocity. 0 = disabled.',
+		long: 'Smooths the predicted velocity across diffusion steps using EMA. Higher values (0.5–0.95) give smoother, more stable output; 0 disables. Works with velocity_norm_threshold for combined stabilization.'
+	},
+	latent_shift: {
+		short: 'Shifts the latent space center. 0 = no shift.',
+		long: 'Adds a constant offset to the latent representation during generation. Can nudge the output toward different tonal or timbral qualities. Default 0.0 uses the natural latent center.'
+	},
+	latent_rescale: {
+		short: 'Rescales latent magnitude. 1.0 = no change.',
+		long: 'Multiplies the latent representation by this factor. Values > 1 amplify, < 1 attenuate. Default 1.0 preserves the natural scale. Useful for fine-tuning output energy.'
+	},
+	audio_cover_strength: {
+		short: 'How much the LM codes guide the DiT. 1.0 = full guidance, 0 = codes ignored.',
+		long: 'Controls what fraction of DiT denoising steps use LM-generated semantic codes as guidance. Higher (0.7–1.0) = output closely follows the LM musical plan. Lower (0.1–0.4) = DiT has more creative freedom. Default 1.0.'
 	}
 };

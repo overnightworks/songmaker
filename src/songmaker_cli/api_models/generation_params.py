@@ -57,6 +57,12 @@ class BaseGenerationParams(BaseModel):
     use_adg: bool | None = None
     cfg_interval_start: float | None = Field(None, ge=0, le=1)
     cfg_interval_end: float | None = Field(None, ge=0, le=1)
+    sampler_mode: str | None = None
+    velocity_norm_threshold: float | None = Field(None, ge=0)
+    velocity_ema_factor: float | None = Field(None, ge=0)
+    latent_shift: float | None = None
+    latent_rescale: float | None = Field(None, ge=0.1)
+    audio_cover_strength: float | None = Field(None, ge=0, le=1)
 
     @field_validator("reference_audio_path")
     @classmethod
@@ -82,7 +88,6 @@ class StoredGenerationParams(BaseGenerationParams):
     task_type: Literal["text2music", "repaint", "cover"] | None = None
     repainting_start: float | None = None
     repainting_end: float | None = None
-    audio_cover_strength: float | None = None
     repaint_latent_crossfade_frames: int | None = None
     repaint_wav_crossfade_sec: float | None = None
     cover_noise_strength: float | None = None

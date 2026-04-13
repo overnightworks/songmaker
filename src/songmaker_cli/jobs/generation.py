@@ -302,6 +302,26 @@ def _persist_generation_row(
             if ctx.ace_config.cfg_interval_end < 1.0 else None
         ),
         constrained_decoding=True if ctx.ace_config.constrained_decoding else None,
+        sampler_mode=(
+            ctx.ace_config.sampler_mode
+            if ctx.ace_config.sampler_mode != "euler" else None
+        ),
+        velocity_norm_threshold=(
+            ctx.ace_config.velocity_norm_threshold
+            if ctx.ace_config.velocity_norm_threshold > 0 else None
+        ),
+        velocity_ema_factor=(
+            ctx.ace_config.velocity_ema_factor
+            if ctx.ace_config.velocity_ema_factor > 0 else None
+        ),
+        latent_shift=(
+            ctx.ace_config.latent_shift
+            if ctx.ace_config.latent_shift != 0 else None
+        ),
+        latent_rescale=(
+            ctx.ace_config.latent_rescale
+            if ctx.ace_config.latent_rescale != 1.0 else None
+        ),
         timesteps=ctx.ace_config.timesteps or None,
         task_type=(
             ctx.ace_config.task_type if ctx.ace_config.task_type != "text2music" else None
@@ -321,7 +341,10 @@ def _persist_generation_row(
             ctx.ace_config.repaint_wav_crossfade_sec
             if is_repaint and ctx.ace_config.repaint_wav_crossfade_sec > 0 else None
         ),
-        audio_cover_strength=ctx.ace_config.audio_cover_strength if is_cover else None,
+        audio_cover_strength=(
+            ctx.ace_config.audio_cover_strength
+            if ctx.ace_config.audio_cover_strength != 1.0 else None
+        ),
         cover_noise_strength=(
             ctx.ace_config.cover_noise_strength
             if is_cover and ctx.ace_config.cover_noise_strength > 0 else None
