@@ -92,7 +92,9 @@ def parse_timecode(tc: str) -> float:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     p.add_argument(
         "--segment", action="append", nargs=3, metavar=("WAV", "START", "END"),
         required=True, help="repeatable; START and END are M:SS or seconds",
@@ -255,7 +257,10 @@ def main() -> None:
     ]
     log.info("segments: %d", len(segments))
     for i, seg in enumerate(segments):
-        log.info("  [%d] %s %.2f-%.2f (%.2fs)", i, seg.source.name, seg.start_sec, seg.end_sec, seg.duration)
+        log.info(
+            "  [%d] %s %.2f-%.2f (%.2fs)",
+            i, seg.source.name, seg.start_sec, seg.end_sec, seg.duration,
+        )
 
     unique_sources = {seg.source for seg in segments}
     log.info("unique sources: %d", len(unique_sources))
@@ -272,7 +277,10 @@ def main() -> None:
         log.info("BPM detected: %s -> %.2f", src.name, bpm)
         stem_paths[src] = run_demucs(src, stem_cache_dir)
 
-    target_bpm = float(args.target_bpm) if args.target_bpm > 0 else float(np.median(list(detected_bpms.values())))
+    target_bpm = (
+        float(args.target_bpm) if args.target_bpm > 0
+        else float(np.median(list(detected_bpms.values())))
+    )
     log.info("target BPM: %.2f", target_bpm)
 
     stem_audio: dict[Path, dict[str, tuple[np.ndarray, int]]] = {}
@@ -300,7 +308,10 @@ def main() -> None:
             ratio = detected_bpms[seg.source] / target_bpm
             stretched = time_stretch(sliced, sr, ratio)
             slices.append(stretched.astype(np.float32))
-        log.info("stitching %s stem (%d slices, xfade %dms)", stem_name, len(slices), xfade_ms[stem_name])
+        log.info(
+            "stitching %s stem (%d slices, xfade %dms)",
+            stem_name, len(slices), xfade_ms[stem_name],
+        )
         final_stems[stem_name] = stitch_stem(
             slices, sr_out, xfade_ms[stem_name], stem_name, snap_drums=not args.no_snap,
         )

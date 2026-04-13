@@ -58,7 +58,9 @@ class ExtractResult:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     p.add_argument("--source", required=True, type=Path, help="source WAV (one of the generations)")
     p.add_argument("--output", required=True, type=Path, help="output dir for blind A/B")
     p.add_argument("--acestep-base-url", default="http://localhost:8001")
@@ -119,7 +121,8 @@ def acestep_poll_task(base_url: str, task_id: str) -> dict:
     deadline = time.monotonic() + ACESTEP_TIMEOUT
     while time.monotonic() < deadline:
         try:
-            with urllib.request.urlopen(f"{base_url}/get_task_result/{task_id}", timeout=15) as resp:
+            url = f"{base_url}/get_task_result/{task_id}"
+            with urllib.request.urlopen(url, timeout=15) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
@@ -200,7 +203,10 @@ def main() -> None:
             ace_stems = acestep_extract(args.acestep_base_url, args.source, ace_dir)
         except Exception as exc:
             log.error("acestep extract failed: %s", exc)
-            log.error("if this is a 'wrong model loaded' error, set ACESTEP_CONFIG_PATH=acestep-v15-xl-base and restart the worker")
+            log.error(
+                "if this is a 'wrong model loaded' error,"
+                " set ACESTEP_CONFIG_PATH=acestep-v15-xl-base and restart the worker",
+            )
             sys.exit(2)
         candidates.append(("acestep", "vocals", ace_stems["vocal"]))
         candidates.append(("acestep", "drums", ace_stems["drum"]))
