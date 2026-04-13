@@ -9,7 +9,8 @@
 		shareGeneration,
 		unshareGeneration,
 		deleteGeneration,
-		rateGeneration
+		rateGeneration,
+		remasterGeneration
 	} from '$lib/api/client';
 	import {
 		selectedSong,
@@ -216,6 +217,23 @@
 		}
 	}
 
+	let remastering = $state(false);
+
+	async function onRemaster(): Promise<void> {
+		if (!generation || !song || remastering) return;
+		remastering = true;
+		try {
+			await remasterGeneration(generation.id);
+			const updated = await fetchSong(song.id);
+			replaceSongInList(updated);
+			addToast('Remastered', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Remaster failed', 'error');
+		} finally {
+			remastering = false;
+		}
+	}
+
 	function onUseAsSource(): void {
 		if (!generation) return;
 		pendingSource.set(generation);
@@ -324,6 +342,12 @@
 					shareSlug={generation.share_slug}
 					onshare={onShareEnable}
 					onunshare={onShareDisable}
+				/>
+				<ActionButton
+					icon="wand"
+					label={remastering ? 'Remastering...' : 'Remaster'}
+					disabled={remastering}
+					onclick={onRemaster}
 				/>
 				<ActionButton
 					icon="trash"

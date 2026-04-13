@@ -643,6 +643,56 @@ def api_unshare_generation(
     return StatusResponse()
 
 
+@router.post("/generations/{gen_id}/remaster")
+def api_remaster_generation(
+    gen_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> GenerationResponse:
+    gen = check_generation_access(session, gen_id, user)
+
+    raw_wav_path = Path(ctx.audio_dir) / gen.mp3_path.replace(".mp3", ".raw.wav")
+    if not raw_wav_path.exists():
+        raise HTTPException(404, "Raw WAV not found for this generation")
+
+    import shutil
+
+    from audio_engine import master_audio, read_wav_bytes, write_stereo_wav
+    from audio_engine.audio_io import encode_mp3
+
+    wav_path = Path(ctx.audio_dir) / gen.mp3_path.replace(".mp3", ".wav")
+    mp3_path = Path(ctx.audio_dir) / gen.mp3_path
+    pre_remaster_wav = Path(ctx.audio_dir) / gen.mp3_path.replace(".mp3", ".pre-remaster.wav")
+    pre_remaster_mp3 = Path(ctx.audio_dir) / gen.mp3_path.replace(".mp3", ".pre-remaster.mp3")
+
+    if wav_path.exists() and not pre_remaster_wav.exists():
+        shutil.copy2(str(wav_path), str(pre_remaster_wav))
+    if mp3_path.exists() and not pre_remaster_mp3.exists():
+        shutil.copy2(str(mp3_path), str(pre_remaster_mp3))
+
+    left, right, sample_rate = read_wav_bytes(raw_wav_path.read_bytes())
+    mastered_left, mastered_right = master_audio(left, right, sample_rate=sample_rate)
+
+    write_stereo_wav(str(wav_path), mastered_left, mastered_right, sample_rate)
+
+    id3_metadata = {}
+    if gen.song:
+        id3_metadata["title"] = gen.song.title
+        if gen.song.album:
+            id3_metadata["artist"] = gen.song.album.artist
+            id3_metadata["album"] = gen.song.album.title
+    encode_mp3(
+        mastered_left, mastered_right, str(mp3_path),
+        sample_rate=sample_rate, metadata=id3_metadata,
+    )
+
+    record_audit(session, user.id, AuditAction.REMASTER, ResourceType.GENERATION, gen_id)
+    session.commit()
+
+    return GenerationResponse.from_orm(gen)
+
+
 def _fail_job(ctx: AppContext, job_id: str) -> None:
     try:
         with ctx.db() as session:

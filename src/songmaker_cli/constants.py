@@ -218,6 +218,7 @@ class AuditAction(StrEnum):
     CANCEL = "cancel"
     SHARE = "share"
     UNSHARE = "unshare"
+    REMASTER = "remaster"
     MOVE = "move"
     CLEANUP = "cleanup"
     SESSION_IP_CHANGE = "session_ip_change"

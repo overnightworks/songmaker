@@ -16,6 +16,7 @@ from audio_engine.mastering import (
     measure_lufs,
     multiband_compress,
     normalize_to_lufs,
+    parametric_eq,
     soft_clip,
     widen_stereo,
 )
@@ -367,6 +368,60 @@ def test_extract_band_degenerate_range() -> None:
     left, right = _extract_band(signal, signal.copy(), 20000.0, 100.0, SAMPLE_RATE / 2.0)
     assert np.all(left == 0.0)
     assert np.all(right == 0.0)
+
+
+def test_parametric_eq_no_nan_inf() -> None:
+    """Verify parametric EQ produces no NaN or Inf values."""
+    signal = _generate_multiband_signal()
+    left, right = parametric_eq(signal, signal.copy(), sample_rate=SAMPLE_RATE)
+    assert not np.any(np.isnan(left))
+    assert not np.any(np.isnan(right))
+    assert not np.any(np.isinf(left))
+    assert not np.any(np.isinf(right))
+
+
+def test_parametric_eq_preserves_energy() -> None:
+    """Verify EQ doesn't zero out the signal."""
+    signal = _generate_multiband_signal()
+    input_rms = float(np.sqrt(np.mean(signal**2)))
+    left, right = parametric_eq(signal, signal.copy(), sample_rate=SAMPLE_RATE)
+    output_rms = float(np.sqrt(np.mean(left**2)))
+    assert output_rms > input_rms * 0.5, (
+        f"EQ removed too much energy: input_rms={input_rms:.4f}, output_rms={output_rms:.4f}"
+    )
+
+
+def test_parametric_eq_cuts_mud() -> None:
+    """Verify EQ attenuates the mud frequency range (around 350 Hz)."""
+    mud_signal = _generate_sine(350.0, 0.5, 3.0)
+    left, _ = parametric_eq(mud_signal, mud_signal.copy(), sample_rate=SAMPLE_RATE)
+    input_rms = float(np.sqrt(np.mean(mud_signal**2)))
+    output_rms = float(np.sqrt(np.mean(left**2)))
+    assert output_rms < input_rms, (
+        f"EQ should cut mud: input_rms={input_rms:.4f}, output_rms={output_rms:.4f}"
+    )
+
+
+def test_parametric_eq_boosts_air() -> None:
+    """Verify EQ boosts high frequencies (air shelf)."""
+    air_signal = _generate_sine(12000.0, 0.3, 3.0)
+    left, _ = parametric_eq(air_signal, air_signal.copy(), sample_rate=SAMPLE_RATE)
+    input_rms = float(np.sqrt(np.mean(air_signal**2)))
+    output_rms = float(np.sqrt(np.mean(left**2)))
+    assert output_rms > input_rms, (
+        f"EQ should boost air: input_rms={input_rms:.4f}, output_rms={output_rms:.4f}"
+    )
+
+
+def test_parametric_eq_zero_gain_identity() -> None:
+    """Verify EQ with zero gains is identity (no change)."""
+    signal = _generate_sine(1000.0, 0.5, 1.0)
+    left, _ = parametric_eq(
+        signal, signal.copy(), sample_rate=SAMPLE_RATE,
+        mud_gain_db=0.0, air_gain_db=0.0,
+    )
+    max_diff = float(np.max(np.abs(signal - left)))
+    assert max_diff < 1e-10, f"Zero-gain EQ should be identity: max_diff={max_diff}"
 
 
 def test_extract_band_highpass() -> None:

@@ -144,10 +144,8 @@ def create_job_with_rate_limit(
                 raise HTTPException(429, "You already have an active job. Wait for it to finish.")
 
     env_user, env_admin, setting_key = _job_type_rate_limits(job_type)
-    if is_admin:
-        limit = env_admin
-    else:
-        limit = resolve_rate_limit(session, user.id, setting_key, env_user)
+    env_default = env_admin if is_admin else env_user
+    limit = resolve_rate_limit(session, user.id, setting_key, env_default)
     count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
     if count >= limit:
         session.rollback()

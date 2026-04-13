@@ -1,6 +1,6 @@
 """Professional mastering chain for streaming-ready audio.
 
-Pipeline: Multiband Compression -> Stereo Widening -> LUFS Normalization -> Soft Clipping
+Pipeline: Pre-EQ -> Multiband Compression -> Stereo Widening -> LUFS Normalization -> Soft Clipping
 
 All processing is pure NumPy/scipy with no external mastering libraries.
 Deterministic: identical input always produces identical output.
@@ -17,7 +17,7 @@ import math
 import numpy as np
 import pyloudnorm as pyln
 from numpy.typing import NDArray
-from scipy.signal import butter, lfilter, sosfilt
+from scipy.signal import butter, sosfilt
 
 from audio_engine.constants import (
     BUTTER_ORDER,
@@ -30,6 +30,11 @@ from audio_engine.constants import (
     DEFAULT_SOFT_CLIP_CEILING,
     DEFAULT_STEREO_WIDTH,
     DEFAULT_TARGET_LUFS,
+    EQ_AIR_GAIN_DB,
+    EQ_AIR_SHELF_HZ,
+    EQ_MUD_CENTER_HZ,
+    EQ_MUD_GAIN_DB,
+    EQ_MUD_Q,
     FALLBACK_SAMPLE_RATE,
     MAX_GAIN_DB,
     MIN_RMS_FLOOR,
@@ -78,6 +83,7 @@ def _master_chain(
     sample_rate: int,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Internal mastering chain operating on numpy arrays."""
+    left, right = parametric_eq(left, right, sample_rate=sample_rate)
     left, right = multiband_compress(left, right, sample_rate=sample_rate)
     left, right = widen_stereo(left, right, width=stereo_width)
 
@@ -205,6 +211,87 @@ def soft_clip(
     return result
 
 
+def parametric_eq(
+    left: NDArray[np.float64],
+    right: NDArray[np.float64],
+    sample_rate: int = FALLBACK_SAMPLE_RATE,
+    mud_center_hz: float = EQ_MUD_CENTER_HZ,
+    mud_q: float = EQ_MUD_Q,
+    mud_gain_db: float = EQ_MUD_GAIN_DB,
+    air_shelf_hz: float = EQ_AIR_SHELF_HZ,
+    air_gain_db: float = EQ_AIR_GAIN_DB,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Apply parametric EQ: peaking cut at mud frequencies + high shelf for air."""
+    mud_sos = _peaking_eq_sos(mud_center_hz, mud_q, mud_gain_db, sample_rate)
+    left = sosfilt(mud_sos, left).astype(np.float64)
+    right = sosfilt(mud_sos, right).astype(np.float64)
+
+    air_sos = _high_shelf_sos(air_shelf_hz, air_gain_db, sample_rate)
+    left = sosfilt(air_sos, left).astype(np.float64)
+    right = sosfilt(air_sos, right).astype(np.float64)
+
+    return left, right
+
+
+def _peaking_eq_sos(
+    center_hz: float, q: float, gain_db: float, sample_rate: int,
+) -> NDArray[np.float64]:
+    a_lin = 10.0 ** (gain_db / 40.0)
+    w0 = 2.0 * math.pi * center_hz / sample_rate
+    alpha = math.sin(w0) / (2.0 * q)
+
+    b0 = 1.0 + alpha * a_lin
+    b1 = -2.0 * math.cos(w0)
+    b2 = 1.0 - alpha * a_lin
+    a0 = 1.0 + alpha / a_lin
+    a1 = -2.0 * math.cos(w0)
+    a2 = 1.0 - alpha / a_lin
+
+    return np.array([[b0 / a0, b1 / a0, b2 / a0, 1.0, a1 / a0, a2 / a0]])
+
+
+def _high_shelf_sos(
+    freq_hz: float, gain_db: float, sample_rate: int,
+) -> NDArray[np.float64]:
+    a_lin = 10.0 ** (gain_db / 40.0)
+    w0 = 2.0 * math.pi * freq_hz / sample_rate
+    cos_w0 = math.cos(w0)
+    alpha = math.sin(w0) / 2.0 * math.sqrt(2.0)
+    sqrt_a = math.sqrt(a_lin)
+
+    b0 = a_lin * ((a_lin + 1.0) + (a_lin - 1.0) * cos_w0 + 2.0 * sqrt_a * alpha)
+    b1 = -2.0 * a_lin * ((a_lin - 1.0) + (a_lin + 1.0) * cos_w0)
+    b2 = a_lin * ((a_lin + 1.0) + (a_lin - 1.0) * cos_w0 - 2.0 * sqrt_a * alpha)
+    a0 = (a_lin + 1.0) - (a_lin - 1.0) * cos_w0 + 2.0 * sqrt_a * alpha
+    a1 = 2.0 * ((a_lin - 1.0) - (a_lin + 1.0) * cos_w0)
+    a2 = (a_lin + 1.0) - (a_lin - 1.0) * cos_w0 - 2.0 * sqrt_a * alpha
+
+    return np.array([[b0 / a0, b1 / a0, b2 / a0, 1.0, a1 / a0, a2 / a0]])
+
+
+def _envelope_follower_python(
+    abs_signal: NDArray[np.float64],
+    attack_coeff: float,
+    release_coeff: float,
+) -> NDArray[np.float64]:
+    n = len(abs_signal)
+    envelope = np.empty(n, dtype=np.float64)
+    envelope[0] = abs_signal[0]
+    for i in range(1, n):
+        if abs_signal[i] > envelope[i - 1]:
+            envelope[i] = attack_coeff * envelope[i - 1] + (1.0 - attack_coeff) * abs_signal[i]
+        else:
+            envelope[i] = release_coeff * envelope[i - 1] + (1.0 - release_coeff) * abs_signal[i]
+    return envelope
+
+
+try:
+    import numba
+    _envelope_follower = numba.jit(nopython=True, cache=True)(_envelope_follower_python)
+except ImportError:
+    _envelope_follower = _envelope_follower_python
+
+
 def _extract_band(
     left: NDArray[np.float64],
     right: NDArray[np.float64],
@@ -242,28 +329,12 @@ def _compress_signal(
     ratio: float,
     sample_rate: int,
 ) -> NDArray[np.float64]:
-    """Apply single-band compression with approximate envelope following.
-
-    Uses vectorized lfilter for attack/release envelopes instead of a
-    per-sample Python loop.  The envelope is max(attack_env, release_env)
-    which approximates fast-attack / slow-release behaviour. A true
-    conditional envelope follower (if x > env: attack else release) would
-    require a per-sample loop that is prohibitively slow in pure Python
-    for multi-minute audio at 48 kHz.  The approximation is sufficient
-    for mastering-level dynamics control and produces musically acceptable
-    results validated by the LUFS and clipping tests.
-    """
+    """Apply single-band compression with true per-sample envelope following."""
     attack_coeff = math.exp(-1.0 / (COMPRESSOR_ATTACK_SECONDS * sample_rate))
     release_coeff = math.exp(-1.0 / (COMPRESSOR_RELEASE_SECONDS * sample_rate))
     abs_signal = np.abs(signal)
 
-    # One-pole IIR smoothers: y[n] = coeff * y[n-1] + (1 - coeff) * x[n]
-    # Attack (fast tracking) and release (slow decay)
-    attack_env = lfilter([1.0 - attack_coeff], [1.0, -attack_coeff], abs_signal)
-    release_env = lfilter([1.0 - release_coeff], [1.0, -release_coeff], abs_signal)
-
-    # Fast attack (tracks rises quickly), slow release (holds during drops)
-    envelope = np.maximum(attack_env, release_env)
+    envelope = _envelope_follower(abs_signal, attack_coeff, release_coeff)
 
     gain = np.ones_like(envelope)
     above_threshold = envelope > threshold

@@ -26,3 +26,10 @@ MIN_RMS_FLOOR: Final[float] = 1e-10
 MAX_GAIN_DB: Final[float] = 24.0
 SOFT_CLIP_KNEE: Final[float] = 0.85
 CHANNEL_LENGTH_TOLERANCE: Final[int] = 16
+
+# ── Pre-EQ tuning parameters ───────────────────────────────────────
+EQ_MUD_CENTER_HZ: Final[float] = 350.0
+EQ_MUD_Q: Final[float] = 1.0
+EQ_MUD_GAIN_DB: Final[float] = -3.0
+EQ_AIR_SHELF_HZ: Final[float] = 10000.0
+EQ_AIR_GAIN_DB: Final[float] = 2.0

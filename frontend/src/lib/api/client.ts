@@ -40,7 +40,8 @@ export {
 	keepGeneration,
 	unkeepGeneration,
 	shareGeneration,
-	unshareGeneration
+	unshareGeneration,
+	remasterGeneration
 } from './generations';
 export { fetchJob, cancelJob } from './jobs';
 export { fetchHealth, type HealthSummary } from './health';
