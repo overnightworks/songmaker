@@ -8,6 +8,8 @@ AI-powered song generation platform. SvelteKit web UI + FastAPI backend + Postgr
 
 Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [security](docs/security.md) | [ACE-Step](docs/acestep.md)
 
+**ACE-Step submodule:** `vendor/acestep` → [FlexOr2/ACE-Step-1.5](https://github.com/FlexOr2/ACE-Step-1.5) (our fork). The fork carries patches not yet upstream (HTTP API param exposure, VRAM preflight skip). Upstream remote is `upstream` inside the submodule. Sync periodically with `cd vendor/acestep && git fetch upstream && git merge upstream/main`. When adding or modifying ACE-Step params, read the fork's HTTP API code directly (`vendor/acestep/acestep/api/http/`) — it's the source of truth for available params and their names.
+
 ## Product Context
 
 A musician creates an **album** (a coherent collection of songs — an EP, LP, or concept album). Each **song** belongs to one album. **Playlists** let the user collect favorite songs across albums for listening.
