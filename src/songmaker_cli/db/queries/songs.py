@@ -178,7 +178,15 @@ def update_song(
         key_scale if key_scale is not None else (prev.key_scale if prev else "")
     )
 
-    if prev and not prev.generations:
+    creative_changed = prev is None or (
+        new_lyrics != prev.lyrics
+        or new_prompt != prev.prompt
+        or new_bpm != prev.bpm
+        or new_audio_duration != prev.audio_duration
+        or new_key_scale != prev.key_scale
+    )
+
+    if prev and (not prev.generations or not creative_changed):
         prev.lyrics = new_lyrics
         prev.prompt = new_prompt
         prev.bpm = new_bpm

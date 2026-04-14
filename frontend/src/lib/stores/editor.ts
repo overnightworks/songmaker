@@ -37,6 +37,21 @@ export const editorState = writable<EditorState>({
 	draft: { ...EMPTY_SONG_DATA }
 });
 
+function genParamsEqual(
+	a: VersionGenerationParams | null,
+	b: VersionGenerationParams | null
+): boolean {
+	const objA = a ?? {};
+	const objB = b ?? {};
+	const keys = new Set([...Object.keys(objA), ...Object.keys(objB)]);
+	for (const k of keys) {
+		if ((objA as Record<string, unknown>)[k] !== (objB as Record<string, unknown>)[k]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 export const isDirty = derived(editorState, (s) => {
 	const { saved, draft } = s;
 	return (
@@ -44,7 +59,8 @@ export const isDirty = derived(editorState, (s) => {
 		draft.prompt !== saved.prompt ||
 		draft.bpm !== saved.bpm ||
 		draft.audio_duration !== saved.audio_duration ||
-		draft.key_scale !== saved.key_scale
+		draft.key_scale !== saved.key_scale ||
+		!genParamsEqual(draft.genParams, saved.genParams)
 	);
 });
 
@@ -176,7 +192,8 @@ export async function handleSave(songId: string): Promise<void> {
 			prompt: draft.prompt,
 			bpm: draft.bpm,
 			audio_duration: draft.audio_duration,
-			key_scale: draft.key_scale
+			key_scale: draft.key_scale,
+			generation_params: draft.genParams
 		});
 		editorState.update((s) => ({ ...s, saved: { ...s.draft } }));
 		replaceSongInList(updated);
