@@ -103,13 +103,15 @@
 		try {
 			await deleteConversation(conv.id);
 			conversations = conversations.filter((c) => c.id !== conv.id);
+			if (activeConversationId === conv.id) {
+				activeConversationId = null;
+			}
 			if (viewingConversationId === conv.id) {
 				viewingConversationId = activeConversationId;
-				if (activeConversationId && activeConversationId !== conv.id) {
+				if (activeConversationId) {
 					await loadMessages(activeConversationId);
 				} else {
 					messages = [];
-					activeConversationId = null;
 				}
 			}
 		} catch {
