@@ -117,7 +117,6 @@ def test_mcp_cli_cmd_includes_required_flags():
     )
     assert "--mcp-config" in cmd
     assert "--strict-mcp-config" in cmd
-    assert "--bare" in cmd
     assert "--allowedTools" in cmd
     assert MCP_ALLOWED_TOOLS in cmd
     assert "--permission-mode" in cmd

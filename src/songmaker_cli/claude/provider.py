@@ -260,7 +260,6 @@ def _build_mcp_cli_cmd(
         "--allowedTools", MCP_ALLOWED_TOOLS,
         "--mcp-config", _build_mcp_config(user_id),
         "--strict-mcp-config",
-        "--bare",
         "--permission-mode", "bypassPermissions",
     ]
     if system:
