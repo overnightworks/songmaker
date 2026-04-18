@@ -300,6 +300,33 @@ export interface RecentChatItem {
 	last_message_at: string | null;
 }
 
+export interface ConversationItem {
+	id: string;
+	title: string | null;
+	created_at: string;
+	updated_at: string;
+	archived_at: string | null;
+	message_count: number;
+	last_message_at: string | null;
+}
+
+export interface ConversationListResponse {
+	conversations: ConversationItem[];
+}
+
+export interface ConversationMessagesResponse {
+	conversation_id: string;
+	title: string | null;
+	archived_at: string | null;
+	messages: ChatMessageItem[];
+}
+
+export interface ChatTurnV2Result {
+	conversation_id: string;
+	user_message: ChatMessageItem;
+	assistant_message: ChatMessageItem;
+}
+
 export interface RateResult {
 	status: string;
 	generation_id?: string | null;

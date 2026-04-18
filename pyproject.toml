@@ -50,6 +50,9 @@ server = [
 claude = [
     "anthropic>=0.20,<1",
 ]
+mcp = [
+    "mcp>=1.2,<2",
+]
 acestep-worker = [
     "fastapi>=0.100,<1",
     "uvicorn>=0.20,<1",

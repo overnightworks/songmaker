@@ -364,16 +364,83 @@ class RateLimitSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
 
 
+class Conversation(Base):
+    """A user-scoped chat session. Each user has at most one active (non-archived)
+    conversation at a time; "new conversation" archives the current one and starts
+    a fresh row. Messages attach via ``ChatMessage.conversation_id``.
+    """
+
+    __tablename__ = "conversations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True,
+    )
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TZDateTime, default=_utcnow, onupdate=_utcnow,
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+
+    messages: Mapped[list[ChatMessage]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ChatMessage.created_at",
+    )
+    summary: Mapped[ConversationSummary | None] = relationship(
+        back_populates="conversation",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class ConversationSummary(Base):
+    """Rolling summary of older messages in a conversation.
+
+    One row per conversation (unique FK). Updated in place when the
+    conversation grows past the summarization threshold. The last-
+    summarized message id is an exclusive upper bound — messages
+    created *after* that row are kept verbatim in the prompt; everything
+    up to and including it is represented by ``summary_text``.
+    """
+
+    __tablename__ = "conversation_summaries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        unique=True, index=True,
+    )
+    summary_text: Mapped[str] = mapped_column(Text)
+    last_summarized_message_id: Mapped[str | None] = mapped_column(
+        ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True,
+    )
+    message_count: Mapped[int] = mapped_column(Integer, default=0)
+    token_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        TZDateTime, default=_utcnow, onupdate=_utcnow,
+    )
+
+    conversation: Mapped[Conversation] = relationship(back_populates="summary")
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    song_id: Mapped[str] = mapped_column(
-        ForeignKey("songs.id", ondelete="CASCADE"), index=True,
+    song_id: Mapped[str | None] = mapped_column(
+        ForeignKey("songs.id", ondelete="CASCADE"), index=True, nullable=True,
+    )
+    conversation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        index=True, nullable=True,
     )
     role: Mapped[str] = mapped_column(String(10))
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+
+    conversation: Mapped[Conversation | None] = relationship(back_populates="messages")
 
 
 class AceStepWorker(Base):

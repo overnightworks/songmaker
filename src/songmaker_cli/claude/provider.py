@@ -16,6 +16,7 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -92,6 +93,67 @@ async def acall_claude(
     return await _acall_cli(prompt, system, model, messages)
 
 
+async def acall_claude_with_mcp(
+    prompt: str,
+    *,
+    user_id: str,
+    system: str | None = None,
+    model: str | None = None,
+    messages: list[dict[str, str]] | None = None,
+    timeout_seconds: int = 300,
+) -> ClaudeResponse:
+    """Call the Claude CLI with the songmaker MCP server attached.
+
+    Spawns the CLI which in turn spawns the MCP server subprocess with
+    ``SONGMAKER_MCP_USER_ID`` set. All of Claude's built-in tools remain
+    denied; only ``mcp__songmaker__*`` is allowed. This path exists
+    exclusively for the co-writer chat flow and requires the CLI backend
+    (the Anthropic SDK does not expose MCP servers).
+    """
+    if model is None:
+        model = get_settings().claude_chat_model
+    binary = _require_claude_binary()
+    flat_prompt = _flatten_messages(prompt, messages)
+    cmd = _build_mcp_cli_cmd(binary, flat_prompt, system, model, user_id)
+    env = _scrub_env()
+    log.info("Claude: MCP+CLI backend (model=%s, user=%s)", model, user_id)
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise UnavailableError(
+                f"Claude CLI timed out after {timeout_seconds}s",
+            )
+    except FileNotFoundError:
+        raise UnavailableError("Claude CLI binary not found")
+
+    stdout = stdout_bytes.decode()
+    stderr = stderr_bytes.decode()
+
+    if proc.returncode != 0:
+        log.warning(
+            "Claude MCP CLI failed (rc=%d): %s", proc.returncode, stderr[:500],
+        )
+        raise UnavailableError(
+            "Claude CLI is unavailable. Check server logs for details.",
+        )
+
+    text = _parse_cli_output(stdout)
+    log.debug("Claude MCP CLI response: %d chars", len(text))
+    return ClaudeResponse(text=text.strip())
+
+
 def is_available(api_key: str | None = None) -> bool:
     if api_key:
         return True
@@ -144,6 +206,62 @@ def _build_cli_cmd(
         "--model", model,
         "--output-format", "json",
         "--disallowedTools", _DISALLOWED_TOOLS,
+    ]
+    if system:
+        cmd.extend(["--system-prompt", system])
+    return cmd
+
+
+MCP_SERVER_NAME = "songmaker"
+MCP_ALLOWED_TOOLS = f"mcp__{MCP_SERVER_NAME}__*"
+
+
+_MCP_SUBPROCESS_PLACEHOLDER = "unused-in-mcp-subprocess"
+
+
+def _build_mcp_config(user_id: str) -> str:
+    """Serialize the inline --mcp-config payload for our stdio server.
+
+    The inline JSON is passed as a CLI argument, so anything in it is
+    readable via ``/proc/<pid>/cmdline`` and ``ps auxww``. Only
+    DATABASE_URL and SONGMAKER_MCP_USER_ID are actually consumed by the
+    MCP subprocess — but ``Settings()`` validation requires every
+    "required" field to be present. We supply placeholder values for
+    REDIS_URL / SESSION_SECRET / SONGMAKER_INTERNAL_TOKEN so the real
+    secrets never appear in argv of the MCP subprocess line.
+    """
+    settings = get_settings()
+    config = {
+        "mcpServers": {
+            MCP_SERVER_NAME: {
+                "command": sys.executable,
+                "args": ["-m", "songmaker_cli.mcp_server"],
+                "env": {
+                    "DATABASE_URL": settings.database_url,
+                    "REDIS_URL": _MCP_SUBPROCESS_PLACEHOLDER,
+                    "SESSION_SECRET": _MCP_SUBPROCESS_PLACEHOLDER,
+                    "SONGMAKER_INTERNAL_TOKEN": _MCP_SUBPROCESS_PLACEHOLDER,
+                    "SONGMAKER_MCP_USER_ID": user_id,
+                },
+            },
+        },
+    }
+    return json.dumps(config)
+
+
+def _build_mcp_cli_cmd(
+    binary: str, prompt: str, system: str | None, model: str, user_id: str,
+) -> list[str]:
+    cmd = [
+        binary, "-p", prompt,
+        "--model", model,
+        "--output-format", "json",
+        "--disallowedTools", _DISALLOWED_TOOLS,
+        "--allowedTools", MCP_ALLOWED_TOOLS,
+        "--mcp-config", _build_mcp_config(user_id),
+        "--strict-mcp-config",
+        "--bare",
+        "--permission-mode", "bypassPermissions",
     ]
     if system:
         cmd.extend(["--system-prompt", system])

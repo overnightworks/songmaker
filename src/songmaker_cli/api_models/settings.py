@@ -148,6 +148,67 @@ class RecentChatItem(BaseModel):
     last_message_at: str | None
 
 
+class ConversationResponse(BaseModel):
+    id: str
+    title: str | None
+    created_at: str
+    updated_at: str
+    archived_at: str | None
+    message_count: int
+    last_message_at: str | None
+
+    @classmethod
+    def from_row(cls, row: dict) -> ConversationResponse:
+        return cls(
+            id=row["id"],
+            title=row["title"],
+            created_at=row["created_at"].isoformat(),
+            updated_at=row["updated_at"].isoformat(),
+            archived_at=(
+                row["archived_at"].isoformat() if row["archived_at"] else None
+            ),
+            message_count=row["message_count"],
+            last_message_at=(
+                row["last_message_at"].isoformat()
+                if row["last_message_at"] else None
+            ),
+        )
+
+    @classmethod
+    def from_orm(cls, conv, message_count: int = 0) -> ConversationResponse:
+        return cls(
+            id=conv.id,
+            title=conv.title,
+            created_at=conv.created_at.isoformat(),
+            updated_at=conv.updated_at.isoformat(),
+            archived_at=conv.archived_at.isoformat() if conv.archived_at else None,
+            message_count=message_count,
+            last_message_at=None,
+        )
+
+
+class ConversationListResponse(BaseModel):
+    conversations: list[ConversationResponse]
+
+
+class ConversationMessagesResponse(BaseModel):
+    conversation_id: str
+    title: str | None
+    archived_at: str | None
+    messages: list[ChatMessageResponse]
+
+
+class ChatTurnV2Request(BaseModel):
+    message: str = Field(max_length=50_000)
+    current_song_id: str | None = None
+
+
+class ChatTurnV2Response(BaseModel):
+    conversation_id: str
+    user_message: ChatMessageResponse
+    assistant_message: ChatMessageResponse
+
+
 class CapabilitiesResponse(BaseModel):
     claude_api: bool
     claude_cli: bool

@@ -1200,6 +1200,54 @@ def test_song_chat_clear(client: TestClient) -> None:
     assert len(history["messages"]) == 0
 
 
+def test_song_chat_attaches_messages_to_active_conversation(
+    client: TestClient,
+) -> None:
+    from songmaker_cli.db.models import ChatMessage, Conversation
+
+    patcher, _ = _mock_acall()
+    with patcher:
+        r1 = client.post("/api/songs/s1/chat", json={"message": "first"})
+        r2 = client.post("/api/songs/s1/chat", json={"message": "second"})
+    assert r1.status_code == 200 and r2.status_code == 200
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        convs = session.query(Conversation).filter_by(archived_at=None).all()
+        assert len(convs) == 1, "expected one active conversation after 2 turns"
+        conv_id = convs[0].id
+        msgs = (
+            session.query(ChatMessage)
+            .order_by(ChatMessage.created_at).all()
+        )
+        # 4 messages (2 user, 2 assistant), every one linked to the same conversation.
+        assert len(msgs) == 4
+        assert all(m.conversation_id == conv_id for m in msgs)
+        assert [m.role for m in msgs] == ["user", "assistant", "user", "assistant"]
+
+
+def test_song_chat_failure_leaves_no_empty_conversation(
+    client: TestClient,
+) -> None:
+    """Regression guard: Claude failure must not persist an empty
+    Conversation row. ``get_or_create_active_conversation`` runs on the
+    success path only.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    from songmaker_cli.claude.provider import UnavailableError
+    from songmaker_cli.db.models import Conversation
+
+    mock_acall = AsyncMock(side_effect=UnavailableError("no backend"))
+    with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
+        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
+    assert resp.status_code == 503
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        assert session.query(Conversation).count() == 0
+
+
 def test_song_chat_unavailable(client: TestClient) -> None:
     from unittest.mock import AsyncMock, patch
 
@@ -2132,22 +2180,6 @@ def test_capabilities_reflects_db_model(tmp_path: Path) -> None:
     data = resp.json()
     assert data["chat_model"] == "claude-sonnet-4-6"
     assert data["scoring_model"] == "claude-haiku-4-5-20251001"
-
-
-def test_song_chat_message_limit(client: TestClient) -> None:
-    from songmaker_cli.db.queries.chat import MAX_CHAT_MESSAGES
-
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        from songmaker_cli.db.queries import create_chat_message
-        for i in range(MAX_CHAT_MESSAGES):
-            role = "user" if i % 2 == 0 else "assistant"
-            create_chat_message(session, "s1", role, f"msg {i}")
-        session.commit()
-
-    resp = client.post("/api/songs/s1/chat", json={"message": "overflow"})
-    assert resp.status_code == 409
-    assert "full" in resp.json()["detail"].lower()
 
 
 # ── Bulk delete generations ─────────────────────────────────────────

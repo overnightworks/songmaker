@@ -32,18 +32,17 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.db.queries import (
-    count_chat_messages,
     create_chat_message,
     delete_chat_messages,
     get_claude_chat_model,
     get_claude_scoring_model,
+    get_or_create_active_conversation,
     get_song,
     get_version,
     list_chat_messages,
     songs_with_chat,
     update_job_status,
 )
-from songmaker_cli.db.queries.chat import MAX_CHAT_MESSAGES
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
@@ -198,12 +197,6 @@ async def api_song_chat(
     job_id = job.id
     session.commit()
 
-    msg_count = count_chat_messages(session, song_id)
-    if msg_count >= MAX_CHAT_MESSAGES:
-        update_job_status(session, job_id, JobStatus.FAILED, error="Chat history full")
-        session.commit()
-        raise HTTPException(409, "Chat history full — clear to continue")
-
     context = _build_song_context(
         session, song_id, req.mentioned_song_ids, req.mentioned_version_ids, user,
     )
@@ -244,8 +237,15 @@ async def api_song_chat(
         session.commit()
         raise
 
-    user_msg = create_chat_message(session, song_id, "user", req.message)
-    assistant_msg = create_chat_message(session, song_id, "assistant", response.text)
+    conversation = get_or_create_active_conversation(session, user.id)
+    user_msg = create_chat_message(
+        session, song_id, "user", req.message,
+        conversation_id=conversation.id,
+    )
+    assistant_msg = create_chat_message(
+        session, song_id, "assistant", response.text,
+        conversation_id=conversation.id,
+    )
     update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0)
     session.commit()
 

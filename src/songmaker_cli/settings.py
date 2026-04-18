@@ -116,6 +116,12 @@ class Settings(BaseSettings):
     claude_scoring_model: str = "claude-opus-4-6"
     anthropic_api_key: SecretStr | None = None
 
+    # ── MCP server (songmaker tools exposed to Claude) ────────────────
+    # Only set in the subprocess spawned by chat_api when the CLI
+    # launches the MCP server via --mcp-config. Identifies the acting
+    # user so tool calls can run the same ownership checks as HTTP.
+    songmaker_mcp_user_id: str | None = None
+
     # ── Admin auto-setup ──────────────────────────────────────────────
     admin_username: str | None = None
     admin_password: SecretStr | None = None

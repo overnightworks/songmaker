@@ -1,4 +1,10 @@
-"""Query functions for chat messages."""
+"""Song-scoped chat message query helpers.
+
+New code should prefer the conversation-scoped queries in
+``db/queries/conversations.py``. These song-scoped helpers are kept
+for the legacy per-song chat UI which will be replaced in the
+co-writer redesign.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +12,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import ChatMessage, Song
-
-MAX_CHAT_MESSAGES = 50
 
 
 def list_chat_messages(session: Session, song_id: str) -> list[ChatMessage]:
@@ -20,9 +24,16 @@ def list_chat_messages(session: Session, song_id: str) -> list[ChatMessage]:
 
 
 def create_chat_message(
-    session: Session, song_id: str, role: str, content: str,
+    session: Session,
+    song_id: str,
+    role: str,
+    content: str,
+    conversation_id: str | None = None,
 ) -> ChatMessage:
-    msg = ChatMessage(song_id=song_id, role=role, content=content)
+    msg = ChatMessage(
+        song_id=song_id, role=role, content=content,
+        conversation_id=conversation_id,
+    )
     session.add(msg)
     session.flush()
     return msg

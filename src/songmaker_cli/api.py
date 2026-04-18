@@ -18,6 +18,7 @@ from songmaker_cli.admin_api import router as admin_router
 from songmaker_cli.album_api import router as album_router
 from songmaker_cli.auth_api import router as auth_router
 from songmaker_cli.chat_api import router as chat_router
+from songmaker_cli.conversation_api import router as conversation_router
 from songmaker_cli.generation_api import router as generation_router
 from songmaker_cli.internal_api import router as internal_router
 from songmaker_cli.playlist_api import router as playlist_router
@@ -35,4 +36,5 @@ router.include_router(internal_router)
 router.include_router(playlist_router)
 router.include_router(reimport_router)
 router.include_router(chat_router)
+router.include_router(conversation_router)
 router.include_router(settings_router)

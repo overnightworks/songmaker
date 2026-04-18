@@ -48,8 +48,50 @@ from songmaker_cli.db.queries.chat import create_chat_message as create_chat_mes
 from songmaker_cli.db.queries.chat import delete_chat_messages as delete_chat_messages
 from songmaker_cli.db.queries.chat import list_chat_messages as list_chat_messages
 from songmaker_cli.db.queries.chat import songs_with_chat as songs_with_chat
+from songmaker_cli.db.queries.conversations import (
+    append_message as append_message,
+)
+from songmaker_cli.db.queries.conversations import (
+    archive_conversation as archive_conversation,
+)
+from songmaker_cli.db.queries.conversations import (
+    count_messages as count_messages,
+)
+from songmaker_cli.db.queries.conversations import (
+    create_conversation as create_conversation,
+)
+from songmaker_cli.db.queries.conversations import (
+    delete_conversation as delete_conversation,
+)
+from songmaker_cli.db.queries.conversations import (
+    get_active_conversation as get_active_conversation,
+)
+from songmaker_cli.db.queries.conversations import (
+    get_conversation as get_conversation,
+)
+from songmaker_cli.db.queries.conversations import (
+    get_or_create_active_conversation as get_or_create_active_conversation,
+)
+from songmaker_cli.db.queries.conversations import (
+    list_conversations as list_conversations,
+)
+from songmaker_cli.db.queries.conversations import (
+    list_messages as list_messages,
+)
+from songmaker_cli.db.queries.conversations import (
+    messages_since as messages_since,
+)
+from songmaker_cli.db.queries.conversations import (
+    recent_conversations as recent_conversations,
+)
+from songmaker_cli.db.queries.conversations import (
+    upsert_summary as upsert_summary,
+)
 from songmaker_cli.db.queries.generations import (
     all_generation_paths as all_generation_paths,
+)
+from songmaker_cli.db.queries.generations import (
+    archive_generation as archive_generation,
 )
 from songmaker_cli.db.queries.generations import (
     bulk_delete_generations as bulk_delete_generations,

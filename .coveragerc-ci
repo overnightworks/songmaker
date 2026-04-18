@@ -22,3 +22,4 @@ omit =
     src/songmaker_cli/scoring/spectral_quality.py
     src/songmaker_cli/scoring/text_accuracy.py
     src/songmaker_cli/main.py
+    src/songmaker_cli/mcp_server/__main__.py
