@@ -47,11 +47,9 @@
 		loadSongData,
 		loadVersion,
 		handleSave,
-		handleDeleteVersion,
-		handleApply
+		handleDeleteVersion
 	} from '$lib/stores/editor';
 	import { activeModels } from '$lib/stores/presets';
-	import { songList } from '$lib/stores/player';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addGenerationToPlaylist, addSongToPlaylist } from '$lib/stores/playlists';
 	import { pendingSource } from '$lib/stores/source';
@@ -60,13 +58,12 @@
 	import { EXPIRY_WARN_DAYS } from '$lib/constants';
 	import GenerationsList from './GenerationsList.svelte';
 	import SongEditor from './SongEditor.svelte';
-	import ClaudeChat from './ClaudeChat.svelte';
+	import CoWriterPanel from './CoWriterPanel.svelte';
 	import ActionButton from './ActionButton.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
-	import { selectSong } from '$lib/stores/navigation';
 
 	let genCount = $state(1);
 	let selectedModel = $state<string | null>(null);
@@ -529,9 +526,14 @@
 				<div class="expiry-digest">
 					<span class="expiry-digest-icon">⏳</span>
 					<span>
-						{expiringSoon.count} generation{expiringSoon.count === 1 ? '' : 's'} expire{expiringSoon.count === 1 ? 's' : ''}
-						{expiringSoon.minDays === 0 ? 'soon' : `in ${expiringSoon.minDays} day${expiringSoon.minDays === 1 ? '' : 's'}`} —
-						pick or keep to preserve.
+						{expiringSoon.count} generation{expiringSoon.count === 1 ? '' : 's'} expire{expiringSoon.count ===
+						1
+							? 's'
+							: ''}
+						{expiringSoon.minDays === 0
+							? 'soon'
+							: `in ${expiringSoon.minDays} day${expiringSoon.minDays === 1 ? '' : 's'}`} — pick or keep
+						to preserve.
 					</span>
 				</div>
 			{/if}
@@ -568,17 +570,16 @@
 			/>
 		{/if}
 		<div class="chat-tab" class:hidden={tab !== 'chat'}>
-			<ClaudeChat
-				songId={song?.id ?? ''}
-				allSongs={$songList}
-				currentAlbumId={song?.album_id ?? ''}
-				versions={$versions}
+			<CoWriterPanel
+				currentSongId={song?.id ?? ''}
 				visible={tab === 'chat'}
-				onapply={handleApply}
-				oncreate={(s) => selectSong(s.id)}
-				onnavigate={(id) => {
-					selectSong(id);
-					switchTab('chat');
+				onturncompleted={() => {
+					if (song) {
+						void fetchSong(song.id).then((fresh) => {
+							replaceSongInList(fresh);
+							loadSongData(fresh);
+						});
+					}
 				}}
 			/>
 		</div>
