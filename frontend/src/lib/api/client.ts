@@ -39,6 +39,7 @@ export {
 	unpickGeneration,
 	keepGeneration,
 	unkeepGeneration,
+	unarchiveGeneration,
 	shareGeneration,
 	unshareGeneration,
 	remasterGeneration
@@ -103,5 +104,8 @@ export {
 	downloadModel,
 	restartWorker,
 	pinModelOnWorker,
-	unpinModelOnWorker
+	unpinModelOnWorker,
+	previewGenerationRetention,
+	runGenerationRetention,
+	type GenerationRetentionReport
 } from './admin';

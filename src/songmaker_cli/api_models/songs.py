@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator
@@ -12,6 +13,7 @@ from songmaker_cli.api_models.generation_params import (
 )
 from songmaker_cli.constants import MODEL_AVAILABLE_MODES
 from songmaker_cli.scoring.registry import VALID_SCORER_NAMES
+from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -114,6 +116,8 @@ class GenerationResponse(BaseModel):
     seed: int | None
     status: str
     is_archived: bool
+    archived_at: str | None = None
+    expires_at: str | None = None
     is_picked: bool
     is_kept: bool
     is_shared: bool = False
@@ -151,6 +155,20 @@ class GenerationResponse(BaseModel):
             gen.generation_params, "generation", gen.id,
         )
 
+        settings = get_settings()
+        archived_iso = gen.archived_at.isoformat() if gen.archived_at else None
+        expires_at: datetime | None = None
+        if gen.is_picked or gen.is_kept:
+            expires_at = None
+        elif gen.is_archived and gen.archived_at:
+            expires_at = gen.archived_at + timedelta(
+                days=settings.generation_hard_delete_days,
+            )
+        else:
+            expires_at = gen.created_at + timedelta(
+                days=settings.generation_retention_days,
+            )
+
         return cls(
             id=gen.id,
             song_id=gen.song_id,
@@ -162,6 +180,8 @@ class GenerationResponse(BaseModel):
             seed=gen.seed,
             status=gen.status,
             is_archived=gen.is_archived,
+            archived_at=archived_iso,
+            expires_at=expires_at.isoformat() if expires_at else None,
             is_picked=gen.is_picked,
             is_kept=gen.is_kept,
             is_shared=gen.is_shared,

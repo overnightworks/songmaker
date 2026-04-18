@@ -116,6 +116,13 @@ RULES: list[Rule] = [
             "is NOT NULL with default=_utcnow. Drop the | None and the "
             "matching `if x else None` in from_orm."
         ),
+        allowlist={
+            # GenerationResponse.expires_at is a computed field, not a DB
+            # column — returns None for picked/kept generations since they
+            # never expire. Legitimate nullable.
+            "src/songmaker_cli/api_models/songs.py:120",
+            "src/songmaker_cli/api_models/songs.py:160",
+        },
     ),
     Rule(
         name="engine-isolation-violation",

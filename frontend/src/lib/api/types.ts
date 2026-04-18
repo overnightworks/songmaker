@@ -118,6 +118,8 @@ export interface GenerationItem {
 	seed: number | null;
 	status: string;
 	is_archived: boolean;
+	archived_at?: string | null;
+	expires_at?: string | null;
 	is_picked: boolean;
 	is_kept: boolean;
 	is_shared: boolean;

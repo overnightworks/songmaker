@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from songmaker_cli.constants import JobStatus
 from songmaker_cli.db.models import Generation, Rating, Score, Song
@@ -137,6 +138,62 @@ def unkeep_generation(session: Session, generation_id: str) -> None:
         raise ValueError(f"Generation not found: {generation_id}")
     gen.is_kept = False
     session.flush()
+
+
+def archive_generation(session: Session, generation_id: str) -> Generation:
+    gen = session.query(Generation).filter_by(id=generation_id).first()
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    gen.is_archived = True
+    gen.archived_at = datetime.now(timezone.utc)
+    session.flush()
+    return gen
+
+
+def unarchive_generation(session: Session, generation_id: str) -> Generation:
+    gen = session.query(Generation).filter_by(id=generation_id).first()
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    gen.is_archived = False
+    gen.archived_at = None
+    session.flush()
+    return gen
+
+
+def list_generations_expired_for_archive(
+    session: Session, cutoff: datetime,
+) -> list[Generation]:
+    return (
+        session.query(Generation)
+        .filter(
+            Generation.is_picked.is_(False),
+            Generation.is_kept.is_(False),
+            Generation.is_archived.is_(False),
+            Generation.created_at < cutoff,
+        )
+        .all()
+    )
+
+
+def list_generations_expired_for_delete(
+    session: Session, cutoff: datetime,
+) -> list[Generation]:
+    child = aliased(Generation)
+    anchor_subq = (
+        session.query(child.id)
+        .filter(child.src_generation_id == Generation.id)
+        .exists()
+    )
+    return (
+        session.query(Generation)
+        .filter(
+            Generation.is_archived.is_(True),
+            Generation.archived_at.isnot(None),
+            Generation.archived_at < cutoff,
+            ~anchor_subq,
+        )
+        .all()
+    )
 
 
 def bulk_delete_generations(

@@ -162,6 +162,16 @@ class CleanupResponse(BaseModel):
     deleted: int
 
 
+class GenerationRetentionReportResponse(BaseModel):
+    archived_ids: list[str]
+    deleted_ids: list[str]
+    archived_count: int
+    deleted_count: int
+    retention_days: int
+    hard_delete_days: int
+    dry_run: bool
+
+
 __all__ = [
     "AddAlbumToPlaylistRequest",
     "AddGenerationToPlaylistRequest",
@@ -196,6 +206,7 @@ __all__ = [
     "GenerationDefaultsRequest",
     "GenerationParams",
     "GenerationResponse",
+    "GenerationRetentionReportResponse",
     "JobResponse",
     "LoadedModelDetail",
     "LoadModelOnWorkerRequest",

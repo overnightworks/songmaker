@@ -18,6 +18,7 @@
 		{ href: '/settings/generation', label: 'Generation', adminOnly: false },
 		{ href: '/settings/account', label: 'Account', adminOnly: false },
 		{ href: '/settings/users', label: 'Admin', adminOnly: true },
+		{ href: '/settings/cleanup', label: 'Cleanup', adminOnly: true },
 		{ href: '/settings/legal', label: 'Legal', adminOnly: false }
 	];
 

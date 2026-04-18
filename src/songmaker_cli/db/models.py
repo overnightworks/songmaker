@@ -171,6 +171,9 @@ class Generation(ShareMixin, Base):
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=JobStatus.COMPLETED)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived_at: Mapped[datetime | None] = mapped_column(
+        TZDateTime, nullable=True, index=True,
+    )
     is_picked: Mapped[bool] = mapped_column(Boolean, default=False)
     is_kept: Mapped[bool] = mapped_column(Boolean, default=False)
     model_mode: Mapped[str] = mapped_column(

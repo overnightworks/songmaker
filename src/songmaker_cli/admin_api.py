@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -26,6 +27,7 @@ from songmaker_cli.api_models import (
     AuditLogResponse,
     CreateUserRequest,
     EvictModelOnWorkerRequest,
+    GenerationRetentionReportResponse,
     JobResponse,
     LoadedModelDetail,
     LoadModelOnWorkerRequest,
@@ -598,3 +600,50 @@ async def download_model_endpoint(
         raise HTTPException(503, "Job queue unavailable")
 
     return JobResponse.from_orm(job, queue_position=get_queue_position(db, job))
+
+
+def _retention_report_response(
+    report, *, dry_run: bool,
+) -> GenerationRetentionReportResponse:
+    settings = get_settings()
+    return GenerationRetentionReportResponse(
+        archived_ids=report.archived_ids,
+        deleted_ids=report.deleted_ids,
+        archived_count=report.archived_count,
+        deleted_count=report.deleted_count,
+        retention_days=settings.generation_retention_days,
+        hard_delete_days=settings.generation_hard_delete_days,
+        dry_run=dry_run,
+    )
+
+
+@router.get("/generation-retention/preview")
+async def generation_retention_preview(
+    ctx: AppContext = Depends(get_app_context),
+    _admin: AuthenticatedUser = Depends(require_admin),
+) -> GenerationRetentionReportResponse:
+    from songmaker_cli.cleanup import run_generation_retention
+
+    report = await asyncio.to_thread(
+        run_generation_retention, ctx.db, ctx.audio_dir, dry_run=True,
+    )
+    return _retention_report_response(report, dry_run=True)
+
+
+@router.post("/generation-retention/run")
+async def generation_retention_run(
+    ctx: AppContext = Depends(get_app_context),
+    admin: AuthenticatedUser = Depends(require_admin),
+    db: Session = Depends(get_db_session),
+) -> GenerationRetentionReportResponse:
+    from songmaker_cli.cleanup import run_generation_retention
+
+    report = await asyncio.to_thread(
+        run_generation_retention, ctx.db, ctx.audio_dir, dry_run=False,
+    )
+    record_audit(
+        db, admin.id, AuditAction.HARD_DELETE, ResourceType.GENERATION, None,
+        f"retention: archived={report.archived_count}, deleted={report.deleted_count}",
+    )
+    db.commit()
+    return _retention_report_response(report, dry_run=False)

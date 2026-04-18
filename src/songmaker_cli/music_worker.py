@@ -89,6 +89,14 @@ class MusicWorker(WorkerBase):
         )
         return count
 
+    async def generation_retention_cron(self, ctx) -> int:
+        from songmaker_cli.cleanup import run_generation_retention
+
+        report = await asyncio.to_thread(
+            run_generation_retention, self.get_db_factory(), self.audio_dir(),
+        )
+        return report.archived_count + report.deleted_count
+
 
 _settings = get_settings()
 _music_worker = MusicWorker(_settings)
@@ -112,6 +120,12 @@ class MusicWorkerSettings:
         cron(
             _music_worker.cleanup_stale_cron,
             minute={i for i in range(0, 60, 2)},
+            second={0},
+        ),
+        cron(
+            _music_worker.generation_retention_cron,
+            hour={3},
+            minute={0},
             second={0},
         ),
     ]

@@ -30,6 +30,7 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries import (
     UNSET,
+    archive_generation,
     cleanup_album,
     cleanup_song,
     clear_stale_user_jobs,
@@ -60,6 +61,8 @@ from songmaker_cli.db.queries import (
     keep_generation,
     list_active_sessions,
     list_albums,
+    list_generations_expired_for_archive,
+    list_generations_expired_for_delete,
     list_login_attempts,
     list_songs,
     list_users,
@@ -70,6 +73,7 @@ from songmaker_cli.db.queries import (
     recover_stale_jobs_by_age,
     save_rating,
     save_scores,
+    unarchive_generation,
     unkeep_generation,
     unpick_generation,
     update_job_status,
@@ -1838,3 +1842,134 @@ def test_set_claude_chat_model_updates_existing(db_session: Session) -> None:
     set_claude_model(db_session, "claude_chat_model", "claude-sonnet-4-6")
     set_claude_model(db_session, "claude_chat_model", "claude-haiku-4-5-20251001")
     assert get_claude_chat_model(db_session) == "claude-haiku-4-5-20251001"
+
+
+# ── Generation retention tests ──────────────────────────────────────
+
+
+def test_archive_generation_sets_timestamp(seeded_session: Session) -> None:
+    from datetime import datetime, timezone
+
+    gen = archive_generation(seeded_session, "g1")
+    seeded_session.commit()
+    assert gen.is_archived is True
+    assert gen.archived_at is not None
+    archived = gen.archived_at
+    if archived.tzinfo is None:
+        archived = archived.replace(tzinfo=timezone.utc)
+    delta = datetime.now(timezone.utc) - archived
+    assert delta.total_seconds() < 5
+
+
+def test_unarchive_generation_clears_timestamp(seeded_session: Session) -> None:
+    archive_generation(seeded_session, "g1")
+    seeded_session.commit()
+    gen = unarchive_generation(seeded_session, "g1")
+    seeded_session.commit()
+    assert gen.is_archived is False
+    assert gen.archived_at is None
+
+
+def test_archive_generation_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Generation not found"):
+        archive_generation(seeded_session, "missing")
+
+
+def test_unarchive_generation_not_found(seeded_session: Session) -> None:
+    with pytest.raises(ValueError, match="Generation not found"):
+        unarchive_generation(seeded_session, "missing")
+
+
+def _shift_created_at(session: Session, gen_id: str, days_ago: int) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    gen = get_generation(session, gen_id)
+    gen.created_at = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    session.flush()
+
+
+def _shift_archived_at(session: Session, gen_id: str, days_ago: int) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    gen = get_generation(session, gen_id)
+    gen.archived_at = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    session.flush()
+
+
+def test_list_expired_for_archive_skips_picked_and_kept(seeded_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    pick_generation(seeded_session, "g1")
+    keep_generation(seeded_session, "g2")
+    _shift_created_at(seeded_session, "g1", 30)
+    _shift_created_at(seeded_session, "g2", 30)
+    seeded_session.commit()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    expired = list_generations_expired_for_archive(seeded_session, cutoff)
+    assert expired == []
+
+
+def test_list_expired_for_archive_picks_old_unmarked(seeded_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    _shift_created_at(seeded_session, "g1", 30)
+    seeded_session.commit()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    expired = list_generations_expired_for_archive(seeded_session, cutoff)
+    ids = {g.id for g in expired}
+    assert ids == {"g1"}
+
+
+def test_list_expired_for_archive_skips_already_archived(seeded_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    archive_generation(seeded_session, "g1")
+    _shift_created_at(seeded_session, "g1", 30)
+    seeded_session.commit()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    expired = list_generations_expired_for_archive(seeded_session, cutoff)
+    assert expired == []
+
+
+def test_list_expired_for_delete_picks_old_archived(seeded_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    archive_generation(seeded_session, "g1")
+    _shift_archived_at(seeded_session, "g1", 60)
+    seeded_session.commit()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    expired = list_generations_expired_for_delete(seeded_session, cutoff)
+    assert {g.id for g in expired} == {"g1"}
+
+
+def test_list_expired_for_delete_skips_anchors(seeded_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    # Make g2 a child of g1
+    g2 = get_generation(seeded_session, "g2")
+    g2.src_generation_id = "g1"
+    seeded_session.flush()
+
+    archive_generation(seeded_session, "g1")
+    _shift_archived_at(seeded_session, "g1", 60)
+    seeded_session.commit()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    expired = list_generations_expired_for_delete(seeded_session, cutoff)
+    assert expired == []
+
+
+def test_list_expired_for_delete_skips_recent_archives(seeded_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    archive_generation(seeded_session, "g1")
+    _shift_archived_at(seeded_session, "g1", 5)
+    seeded_session.commit()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    expired = list_generations_expired_for_delete(seeded_session, cutoff)
+    assert expired == []

@@ -1206,3 +1206,68 @@ def test_download_endpoint_queue_unavailable(client: TestClient) -> None:
 def test_download_endpoint_requires_admin(client: TestClient) -> None:
     resp = client.post("/api/admin/registry/sft/download")
     assert resp.status_code in (401, 403)
+
+
+# -- Generation retention -----------------------------------------------------
+
+
+def _seed_album_with_gens(client: TestClient) -> None:
+    from songmaker_cli.db.models import Album, Generation, Song, Version
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session.add(Album(id="a1", title="A", artist="X"))
+        session.add(Song(id="s1", title="S", album_id="a1", track_number=1))
+        session.add(
+            Version(id="v1", song_id="s1", version_number=1, lyrics="", prompt=""),
+        )
+        session.add(
+            Generation(
+                id="g1", song_id="s1", version_id="v1",
+                generation_number=1, mp3_path="a1/1.mp3",
+            ),
+        )
+        session.commit()
+
+
+def test_retention_preview_requires_admin(client: TestClient) -> None:
+    resp = client.get("/api/admin/generation-retention/preview")
+    assert resp.status_code in (401, 403)
+
+
+def test_retention_run_requires_admin(client: TestClient) -> None:
+    resp = client.post("/api/admin/generation-retention/run")
+    assert resp.status_code in (401, 403)
+
+
+def test_retention_preview_returns_counts(client: TestClient) -> None:
+    _login_as_admin(client)
+    _seed_album_with_gens(client)
+
+    resp = client.get("/api/admin/generation-retention/preview")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["dry_run"] is True
+    assert "archived_ids" in body
+    assert "deleted_ids" in body
+    assert body["retention_days"] >= 1
+    assert body["hard_delete_days"] >= 1
+
+
+def test_retention_run_executes(client: TestClient) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from songmaker_cli.db.models import Generation
+
+    _login_as_admin(client)
+    _seed_album_with_gens(client)
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        gen = session.get(Generation, "g1")
+        gen.created_at = datetime.now(timezone.utc) - timedelta(days=365)
+        session.commit()
+
+    resp = client.post("/api/admin/generation-retention/run")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["dry_run"] is False
+    assert "g1" in body["archived_ids"]

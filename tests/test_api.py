@@ -438,6 +438,29 @@ def test_unkeep_generation_api(client: TestClient) -> None:
     assert resp.json()["is_kept"] is False
 
 
+def test_unarchive_generation_api(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    from songmaker_cli.db.queries import archive_generation
+    with factory() as session:
+        archive_generation(session, "g1")
+        session.commit()
+
+    resp = client.get("/api/generations/g1")
+    assert resp.json()["is_archived"] is True
+
+    resp = client.post("/api/generations/g1/unarchive")
+    assert resp.status_code == 200
+    resp = client.get("/api/generations/g1")
+    body = resp.json()
+    assert body["is_archived"] is False
+    assert body["archived_at"] is None
+
+
+def test_unarchive_generation_not_found(client: TestClient) -> None:
+    resp = client.post("/api/generations/nonexistent/unarchive")
+    assert resp.status_code == 404
+
+
 def test_cleanup_album_skips_kept_api(client: TestClient) -> None:
     client.post("/api/generations/g1/keep")
     resp = client.post("/api/albums/rock/cleanup")

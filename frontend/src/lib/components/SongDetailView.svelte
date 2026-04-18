@@ -57,6 +57,7 @@
 	import { pendingSource } from '$lib/stores/source';
 	import { setGenerationActions } from '$lib/contexts/generation-actions';
 	import type { GenerationItem } from '$lib/api/types';
+	import { EXPIRY_WARN_DAYS } from '$lib/constants';
 	import GenerationsList from './GenerationsList.svelte';
 	import SongEditor from './SongEditor.svelte';
 	import ClaudeChat from './ClaudeChat.svelte';
@@ -116,6 +117,23 @@
 	);
 	const activeGenerateJob = $derived(songJobs.find((j) => j.job.type === 'generate')?.job ?? null);
 	const queueDepthCapReached = $derived($health?.queue_depth_cap_reached ?? false);
+
+	const expiringSoon = $derived.by(() => {
+		if (!song) return { count: 0, minDays: 0 };
+		const now = Date.now();
+		const dayMs = 1000 * 60 * 60 * 24;
+		let count = 0;
+		let minDays = Infinity;
+		for (const gen of song.generations) {
+			if (gen.is_picked || gen.is_kept || gen.is_archived || !gen.expires_at) continue;
+			const days = Math.ceil((new Date(gen.expires_at).getTime() - now) / dayMs);
+			if (days <= EXPIRY_WARN_DAYS) {
+				count += 1;
+				if (days < minDays) minDays = days;
+			}
+		}
+		return { count, minDays: count > 0 ? Math.max(0, minDays) : 0 };
+	});
 
 	$effect(() => {
 		startHealthPolling();
@@ -507,6 +525,16 @@
 		</div>
 
 		{#if tab === 'generations'}
+			{#if expiringSoon.count > 0}
+				<div class="expiry-digest">
+					<span class="expiry-digest-icon">⏳</span>
+					<span>
+						{expiringSoon.count} generation{expiringSoon.count === 1 ? '' : 's'} expire{expiringSoon.count === 1 ? 's' : ''}
+						{expiringSoon.minDays === 0 ? 'soon' : `in ${expiringSoon.minDays} day${expiringSoon.minDays === 1 ? '' : 's'}`} —
+						pick or keep to preserve.
+					</span>
+				</div>
+			{/if}
 			<GenerationsList {song} onselect={(gen) => selectGeneration(gen, song)} />
 		{:else if tab === 'edit'}
 			<SongEditor
@@ -575,6 +603,23 @@
 {/if}
 
 <style>
+	.expiry-digest {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.8rem;
+		background: rgba(220, 140, 20, 0.1);
+		border: 1px solid rgba(220, 140, 20, 0.4);
+		border-radius: 4px;
+		font-size: 0.8rem;
+		color: #d89040;
+		margin-bottom: 0.5rem;
+	}
+
+	.expiry-digest-icon {
+		font-size: 1rem;
+	}
+
 	.detail-panel {
 		padding: 1.2rem 1.5rem calc(var(--player-height) + 1.2rem);
 		display: flex;

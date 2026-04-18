@@ -72,6 +72,7 @@ from songmaker_cli.db.queries import (
     pick_generation,
     record_audit,
     save_rating,
+    unarchive_generation,
     unkeep_generation,
     unpick_generation,
     update_job_status,
@@ -604,6 +605,15 @@ def api_unkeep_generation(
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     return _toggle_generation(gen_id, user, session, unkeep_generation)
+
+
+@router.post("/generations/{gen_id}/unarchive")
+def api_unarchive_generation(
+    gen_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> StatusResponse:
+    return _toggle_generation(gen_id, user, session, unarchive_generation)
 
 
 @router.post("/generations/{gen_id}/share")

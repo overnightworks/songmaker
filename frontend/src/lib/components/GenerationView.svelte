@@ -6,6 +6,7 @@
 		unpickGeneration,
 		keepGeneration,
 		unkeepGeneration,
+		unarchiveGeneration,
 		shareGeneration,
 		unshareGeneration,
 		deleteGeneration,
@@ -169,6 +170,34 @@
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Keep failed', 'error');
 		}
+	}
+
+	async function onUnarchive(): Promise<void> {
+		if (!generation || !song) return;
+		try {
+			await unarchiveGeneration(generation.id);
+			const updated = await fetchSong(song.id);
+			replaceSongInList(updated);
+			addToast('Generation restored', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Unarchive failed', 'error');
+		}
+	}
+
+	function formatExpiryLine(): string | null {
+		if (!generation) return null;
+		if (generation.is_picked) return 'Kept forever — picked for album';
+		if (generation.is_kept) return 'Kept forever — marked as keep';
+		if (!generation.expires_at) return null;
+		const expiry = new Date(generation.expires_at);
+		const ms = expiry.getTime() - Date.now();
+		const days = Math.ceil(ms / (1000 * 60 * 60 * 24));
+		if (generation.is_archived) {
+			if (days <= 0) return 'Archived — eligible for permanent deletion';
+			return `Archived — permanent deletion in ${days} day${days === 1 ? '' : 's'} (${expiry.toLocaleDateString()})`;
+		}
+		if (days <= 0) return 'Auto-archive due any time now';
+		return `Auto-archives in ${days} day${days === 1 ? '' : 's'} (${expiry.toLocaleDateString()}) unless picked or kept`;
 	}
 
 	async function onDelete(): Promise<void> {
@@ -339,6 +368,20 @@
 						</button>
 					{/if}
 				</div>
+				{#if formatExpiryLine()}
+					<div
+						class="expiry-line"
+						class:archived={generation.is_archived}
+						class:safe={generation.is_picked || generation.is_kept}
+					>
+						{formatExpiryLine()}
+						{#if generation.is_archived}
+							<button type="button" class="unarchive-btn" onclick={onUnarchive}>
+								Restore
+							</button>
+						{/if}
+					</div>
+				{/if}
 			</div>
 			<div class="detail-actions">
 				<ActionButton
@@ -616,6 +659,38 @@
 		align-items: center;
 		gap: 0.55rem;
 		margin-top: 0.3rem;
+	}
+
+	.expiry-line {
+		margin-top: 0.5rem;
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.expiry-line.archived {
+		color: #e07070;
+	}
+
+	.expiry-line.safe {
+		color: #60a070;
+	}
+
+	.unarchive-btn {
+		font-size: 0.7rem;
+		padding: 0.15rem 0.5rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		color: var(--text);
+		border-radius: 3px;
+		cursor: pointer;
+	}
+
+	.unarchive-btn:hover {
+		background: var(--surface-hover, var(--surface));
+		border-color: var(--accent);
 	}
 
 	.version-tag {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { SongItem, GenerationItem } from '$lib/api/types';
+	import { EXPIRY_WARN_DAYS } from '$lib/constants';
 	import {
 		playGeneration,
 		togglePlayPause,
@@ -60,6 +61,12 @@
 		result.sort((a, b) => (b.versionNumber ?? -1) - (a.versionNumber ?? -1));
 		return result;
 	});
+
+	function daysUntilExpiry(gen: GenerationItem): number | null {
+		if (gen.is_picked || gen.is_kept || !gen.expires_at) return null;
+		const ms = new Date(gen.expires_at).getTime() - Date.now();
+		return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+	}
 
 	function isGenPlaying(gen: GenerationItem): boolean {
 		return pb?.generation.id === gen.id;
@@ -160,6 +167,21 @@
 							{/if}
 							{#if gen.model_mode}
 								<span class="model-badge">{gen.model_mode}</span>
+							{/if}
+							{#if gen.is_archived}
+								<span class="expiry-badge archived" title="Archived — will be hard-deleted">
+									archived
+								</span>
+							{:else}
+								{@const daysLeft = daysUntilExpiry(gen)}
+								{#if daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS}
+									<span
+										class="expiry-badge warn"
+										title="Expires in {daysLeft} day{daysLeft === 1 ? '' : 's'} — pick or keep to preserve"
+									>
+										⏳ {daysLeft}d
+									</span>
+								{/if}
 							{/if}
 						</div>
 
@@ -378,6 +400,26 @@
 		color: var(--text-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
+	}
+
+	.expiry-badge {
+		font-size: 0.6rem;
+		padding: 0.1rem 0.35rem;
+		border-radius: 3px;
+		letter-spacing: 0.3px;
+	}
+
+	.expiry-badge.warn {
+		background: rgba(220, 140, 20, 0.15);
+		border: 1px solid rgba(220, 140, 20, 0.5);
+		color: #f0a030;
+	}
+
+	.expiry-badge.archived {
+		background: rgba(200, 60, 60, 0.15);
+		border: 1px solid rgba(200, 60, 60, 0.5);
+		color: #e07070;
+		text-transform: uppercase;
 	}
 
 	.gen-actions {

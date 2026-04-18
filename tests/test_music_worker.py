@@ -148,7 +148,9 @@ def test_music_worker_settings_queue_name() -> None:
 
 def test_music_worker_settings_has_cron() -> None:
     from songmaker_cli.music_worker import MusicWorkerSettings
-    assert len(MusicWorkerSettings.cron_jobs) == 1
+    names = {job.name for job in MusicWorkerSettings.cron_jobs}
+    assert "cron:MusicWorker.cleanup_stale_cron" in names
+    assert "cron:MusicWorker.generation_retention_cron" in names
 
 
 def test_music_worker_settings_functions() -> None:

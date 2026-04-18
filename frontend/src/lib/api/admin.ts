@@ -115,3 +115,23 @@ export async function unpinModelOnWorker(workerId: string, mode: string): Promis
 		body: JSON.stringify({ mode })
 	});
 }
+
+export interface GenerationRetentionReport {
+	archived_ids: string[];
+	deleted_ids: string[];
+	archived_count: number;
+	deleted_count: number;
+	retention_days: number;
+	hard_delete_days: number;
+	dry_run: boolean;
+}
+
+export async function previewGenerationRetention(): Promise<GenerationRetentionReport> {
+	return apiFetch<GenerationRetentionReport>('/api/admin/generation-retention/preview');
+}
+
+export async function runGenerationRetention(): Promise<GenerationRetentionReport> {
+	return apiFetch<GenerationRetentionReport>('/api/admin/generation-retention/run', {
+		method: 'POST'
+	});
+}

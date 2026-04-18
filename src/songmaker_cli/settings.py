@@ -111,6 +111,17 @@ class Settings(BaseSettings):
     # ── Soft delete ───────────────────────────────────────────────────
     soft_delete_retention_days: int = 30
 
+    # ── Generation retention ──────────────────────────────────────────
+    # Generations that are neither picked nor kept are auto-archived
+    # after `generation_retention_days` and hard-deleted (files + row)
+    # after `generation_hard_delete_days` additional days archived.
+    generation_retention_days: int = Field(
+        default=7, alias="GENERATION_RETENTION_DAYS",
+    )
+    generation_hard_delete_days: int = Field(
+        default=30, alias="GENERATION_HARD_DELETE_DAYS",
+    )
+
     # ── Claude ────────────────────────────────────────────────────────
     claude_chat_model: str = "claude-opus-4-6"
     claude_scoring_model: str = "claude-opus-4-6"

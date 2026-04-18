@@ -112,9 +112,18 @@ from songmaker_cli.db.queries.generations import (
     get_generation_by_slug as get_generation_by_slug,
 )
 from songmaker_cli.db.queries.generations import keep_generation as keep_generation
+from songmaker_cli.db.queries.generations import (
+    list_generations_expired_for_archive as list_generations_expired_for_archive,
+)
+from songmaker_cli.db.queries.generations import (
+    list_generations_expired_for_delete as list_generations_expired_for_delete,
+)
 from songmaker_cli.db.queries.generations import pick_generation as pick_generation
 from songmaker_cli.db.queries.generations import save_rating as save_rating
 from songmaker_cli.db.queries.generations import save_scores as save_scores
+from songmaker_cli.db.queries.generations import (
+    unarchive_generation as unarchive_generation,
+)
 from songmaker_cli.db.queries.generations import unkeep_generation as unkeep_generation
 from songmaker_cli.db.queries.generations import unpick_generation as unpick_generation
 from songmaker_cli.db.queries.jobs import JobDurationStats as JobDurationStats
