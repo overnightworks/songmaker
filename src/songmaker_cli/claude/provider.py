@@ -100,7 +100,7 @@ async def acall_claude_with_mcp(
     system: str | None = None,
     model: str | None = None,
     messages: list[dict[str, str]] | None = None,
-    timeout_seconds: int = 300,
+    timeout_seconds: int = 600,
 ) -> ClaudeResponse:
     """Call the Claude CLI with the songmaker MCP server attached.
 

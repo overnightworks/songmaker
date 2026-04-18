@@ -1,7 +1,7 @@
 import type { JobItem } from './types';
 
 export const API_TIMEOUT_MS = 30_000;
-export const CHAT_TIMEOUT_MS = 120_000;
+export const CHAT_TIMEOUT_MS = 600_000;
 
 export class ApiError extends Error {
 	constructor(
