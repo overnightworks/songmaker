@@ -8,140 +8,142 @@ When you finish an item, delete its section. Git history preserves it. Decisions
 
 ---
 
-## Feature work (product-driven, no sequencing)
+## Feature work (priority order — top = most valuable)
 
-After the architecture cleanup, these are the bigger features in the queue. They're all independent — pick by product value, not by file order.
+### 1. LoRA voice training
 
-### Claude SDK migration + streaming
+**Goal:** Let Felix train custom voice/style LoRAs from his own vocal recordings and use them in generation. Upload vocal samples → background training job → trained LoRA appears in the model picker → generation can apply it.
 
-**Goal:** Two coupled changes: (a) drop the Claude CLI subprocess backend in favor of the official `anthropic` SDK only, (b) add streaming responses to the co-writer. Both rewrite `claude/provider.py` + `chat_api.py` + `ClaudeChat.svelte` — bundle them so the surface is touched once.
-
-**Decisions:**
-- SDK-only — delete the CLI subprocess backend, the `_DISALLOWED_TOOLS` denylist, and the docker-compose bind mounts (`~/.local/bin/claude`, `~/.claude`, `~/.claude.json`).
-- Streaming via SSE on the chat endpoint, frontend reads the stream incrementally.
-- Add a circuit breaker around Anthropic calls (open after 3 consecutive failures, short-circuit subsequent requests).
-
-**Triggers to start** (only the explicit decision triggers — the soft signals alone aren't enough to justify the migration cost):
-- Switch from Max subscription / CLI to a paid `ANTHROPIC_API_KEY`. (Felix 2026-04-21: currently NO — Max sub is already expensive, per-token on top doubles the AI bill.)
-- Public-facing launch (CLI denylist is fail-open and unsuitable for untrusted users).
-
-**Non-triggers** (do NOT start the migration just because these happen):
-- Co-writer becomes a daily-driver feature — just polish the CLI wrapper.
-- Frontend reports chat timeout in the wild — fix by raising `ARQ_JOB_TIMEOUT` / adding CLI-side streaming, not by swapping the provider. (Already done once: commit `1dc4038` bumped to 600s.)
+**Decisions** (locked in from upstream research 2026-04-21):
+- Use ACE-Step's native trainer — `vendor/acestep` ships `trainer.py` + a documented LoRA training tutorial + a Gradio "LoRA Training" tab. We do NOT build our own trainer.
+- Use **LoKR** adapters (not plain LoRA). Upstream reports ~10× faster training than LoRA (~1 hour → ~5 minutes) on consumer hardware with no quality loss.
+- Training data floor: "a handful of tracks" per upstream docs. Minimum we document to users: 3–5 clean vocal takes, 30–90 seconds each.
+- Three-stage pipeline mirrors upstream: `DatasetBuilder` (scan + metadata + optional auto-label) → preprocess → train via `trainer.py --lora_config_path …`.
+- Storage: trained LoRAs go in a new `user_loras/{user_id}/` directory under the existing audio volume. DB row in a new `UserLora` table (user_id, name, path, created_at, status). Appear in the generation model picker as "Your voice: {name}".
+- Training is a background ARQ job (new `lora_training` job type), runs on the acestep-worker's GPU. Blocks generation on that worker while running — acceptable for a single-user deployment.
+- Ownership: `created_by` FK, normal ownership checks.
 
 **Constraints:**
-- `ANTHROPIC_API_KEY` becomes required (not optional). Settings raises at startup if missing.
-- Frontend must handle partial-response state (cursor, cancel button).
+- Must not break existing generation pipeline. Training + generation share one GPU — serialize via the existing job queue.
+- Upload size cap (e.g. 100 MB per batch) to prevent runaway disk usage.
+- Training failures must clean up partial LoRA files + mark the DB row `FAILED` — don't orphan half-trained artifacts.
+- Audit-log training start + completion.
 
-**First step:** read `claude/provider.py`, `chat_api.py`, `ClaudeChat.svelte`, design + execute as a single coordinated PR.
+**References:**
+- [upstream LoRA tutorial](https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/en/LoRA_Training_Tutorial.md)
+- [DeepWiki LoRA training system](https://deepwiki.com/ace-step/ACE-Step-1.5/6-lora-training-system)
+- [community LoRA builder scripts](https://github.com/leewinder/ace-step-lora-builder)
+- [example community LoRAs](https://huggingface.co/m125148/ACE-Step-v1.5-raspy-vocal-and-instrumental-5-LoRAs)
 
-### Frontend component split (Phase 2)
+**First step:** read `vendor/acestep/docs/en/LoRA_Training_Tutorial.md`, `vendor/acestep/trainer.py`, our `src/acestep_worker/`, and `src/songmaker_cli/db/models.py`. Design the `UserLora` model + new `lora_training` job + upload endpoint + model-picker wiring. Execute.
 
-**Goal:** `GenerationView.svelte` and `SongDetailView.svelte` are god components that mix unrelated concerns (score display, action bar, playlist picker, delete confirmation, job tracking, tab routing, editor, version timeline, sharing, repaint/cover dialogs). Split them into focused components and add component test scaffolding (currently zero component tests, only stores + utils are tested).
+---
 
-**Decisions:**
-- Functional split only — no visual redesign, no new features.
-- Add component test scaffolding using `@testing-library/svelte` + `vitest`.
+### 2. Co-writer reliability (timeout / latency investigation)
 
-**Triggers to start:**
-- Next non-trivial feature lands in either god component and the diff is hard to reason about.
-- A bug in one of the embedded concerns is hard to isolate because of the size.
-- Until then, pure-refactor risk (breaking 1700+ lines of working UI) outweighs the benefit.
-
-**Constraints:**
-- Backend stays unchanged. Pure frontend refactor + new tests.
-- Stores stay unchanged (separate concern).
-
-**First step:** read both components + the existing store layer, design the split (probably 5-10 new focused components per god component), execute.
-
-### ACE-Step Base model tasks (Lego, Extract, Complete)
-
-**Goal:** Expose ACE-Step's Base-DiT-only audio manipulation modes that aren't currently deployed: Lego (layer instruments on existing audio), Extract (stem separation), Complete (add accompaniment to a solo track). Requires the `acestep-v15-base` model variant.
+**Goal:** Co-writer hit the 600s chat-timeout wall once already — bumped to 600s in commit `1dc4038` as a plaster. Investigate the actual latency contributors and fix the root cause, without swapping the provider.
 
 **Decisions:**
-- Each mode is its own `task_type` value in the discriminated union (`lego`, `extract`, `complete`).
-- Validate that the Base model is loaded before accepting any of these jobs — reject otherwise.
-- Frontend gets a dedicated "Audio Tools" panel separate from generation settings.
+- Stay on Claude CLI subprocess + Max subscription. SDK migration is rejected on cost grounds (see `feedback_claude_cli_vs_sdk.md`).
+- Fix locally: don't introduce SSE streaming as a rewrite — if CLI-side streaming (`--output-format stream-json`) can be read incrementally without rewriting `claude/provider.py`, ship that; otherwise fix the dominant latency.
+
+**Open questions** (investigation first — these aren't decisions yet):
+- Where is the time going on a slow turn? CLI subprocess cold start? MCP server tool-loop latency? Tool result size? Claude model thinking tokens?
+- Is the 600s sometimes still not enough for multi-tool-call turns?
 
 **Constraints:**
-- Requires the W2 discriminated-union shape from `no-silent-fallbacks-v2`. The new task types extend `RepaintParams` / `CoverParams`-style classes.
-- The `acestep-v15-base` model is not currently in production. Decide whether to download + pin it, or leave it as opt-in.
+- No provider swap. No SDK. No `ANTHROPIC_API_KEY` requirement.
+- Don't regress the current successful paths while fixing the slow ones.
 
-**First step:** read the post-W2 `api_models/generation_params.py` discriminated union and the ACE-Step submodule's task-type handling, design + execute.
+**First step:** instrument a slow co-writer turn end-to-end (client send → server receive → CLI spawn → tool calls → final token → client render). Find the dominant contributor. Decide the fix. Implement.
 
-### LoRA voice training
+---
 
-**Goal:** Let users train custom voice models (LoRA) from their own vocal recordings and use them in generation. The user uploads vocal samples → background training job → trained LoRA appears in the model picker.
+### 3. Move resources (generation→song, song→album)
 
-**Open questions** (must answer before starting — these are NOT locked-in decisions):
-- Does ACE-Step 1.5 support LoRA inference natively, or is a custom adapter needed?
-- What training framework? ACE-Step's own, RVC, or Applio?
-- What's the minimum audio quality/length for usable results?
+> ⚠️ **Premises below must be verified before execution** — background agent spawned 2026-04-21 to check. Do NOT start implementation until verification lands.
 
-**Constraints:**
-- Training is GPU-bound and slow — must be a background job, not a synchronous API call.
-- Stored LoRAs are user-owned (`created_by` ownership check).
+**Goal:** Let the user move a generation to a different (song, version), and move a song to a different album. Primary claimed use case: post-recovery cleanup where anonymous WAVs land in a "Recovered" album and need reassignment to their real songs and albums.
 
-**First step:** answer the open questions via prototyping. Don't start the full feature until you know the answer to "does ACE-Step support LoRA at all."
+**Premises to verify first:**
+- Does the "Recovered" album / post-recovery WAV-ingestion flow actually exist? If no, the primary use case evaporates and the feature's value shrinks to "nice to have."
+- Does `AuditAction.MOVE` exist in the enum?
+- Do `Playlist` rows reference `song_id` (so moving a song between albums doesn't break them)?
+- Is there a `track_number` on `Song` and is it `UNIQUE(album_id, track_number)` or similar?
 
-### E2E testing infrastructure (Playwright)
-
-**Goal:** Set up Playwright + write E2E tests covering auth, ownership, CRUD, player, and mobile viewports. Currently zero E2E tests — only Python integration tests + frontend unit tests exist.
-
-**Decisions:**
-- Playwright (not Cypress).
-- Phase 1: Playwright setup + auth tests (catch security regressions).
-- Phase 2: ownership + CRUD tests (catch permission bugs).
-- Phase 3: player + mobile viewport tests (catch UI regressions).
-- Phase 4: CI integration.
-
-**Constraints:**
-- Tests run against a real Docker stack (not mocked), so they need a `docker compose up` lifecycle in CI.
-- Slow-by-design — don't gate every PR on the full E2E suite, run on `main` merges only.
-
-**First step:** read existing test infrastructure, install Playwright, write the auth phase first. Don't try to do all 4 phases in one PR.
-
-### Move resources (generation→song, song→album)
-
-**Goal:** Let the user move a generation to a different (song, version), and move a song to a different album. Primary use case: post-recovery cleanup where anonymous WAVs land in a "Recovered" album and need reassignment to their real songs and albums.
-
-**Decisions:**
-- One shared `MoveResourceDialog.svelte` for both move operations. It takes the resource type, source ID, and a tree picker (album → song → version) scoped to resources the user owns.
-- Two endpoints, bundled in one PR because they share the dialog and the safety patterns:
-  - `POST /api/generations/{id}/move` with `target_song_id` + optional `target_version_id` (defaults to latest version on the destination song).
+**Decisions** (conditional on premises holding):
+- One shared `MoveResourceDialog.svelte` for both moves. Tree picker (album → song → version) scoped to resources the user owns.
+- Two endpoints, bundled in one PR because they share the dialog and safety patterns:
+  - `POST /api/generations/{id}/move` with `target_song_id` + optional `target_version_id` (default: latest version on destination song).
   - `POST /api/songs/{id}/move` with `target_album_id`.
-- Both audit-logged with the existing `MOVE` action.
-- Both expose the action via a "Move to..." entry in the existing context menu.
+- Both audit-logged with the existing `MOVE` action (if it exists — see premises).
+- "Move to..." entry in the existing context menu.
 - Double ownership check: user must own both source and destination.
-- The audio file path doesn't move on disk for either operation — only DB rows change. Paths stay stable.
+- The audio file path does NOT move on disk — only DB rows change. Paths stay stable.
 
-**Destination-side bookkeeping (the actual edge cases):**
-- **Move generation**: transfer `is_picked` only if the source was picked AND the destination song has no current pick. Always preserve `is_kept`. Don't break the destination version's `generation_number` sequence — assign the next available number on the destination version.
-- **Move song**: assign the next available `track_number` on the destination album. Playlist references survive as-is (they reference `song_id`, not `album_id`). If the source song was the album cover for its old album, the old album loses its cover.
+**Destination-side bookkeeping:**
+- **Move generation**: transfer `is_picked` only if source was picked AND destination song has no current pick. Always preserve `is_kept`. Assign next available `generation_number` on the destination version.
+- **Move song**: assign next `track_number` on destination album. Playlist references survive as-is (if premise holds). If source song was the album cover, the old album loses its cover.
 
 **Constraints:**
 - Ownership check on both source and destination.
-- Single transaction per move — partial state on failure is unacceptable.
-- The existing `MOVE` action in `AuditAction` covers both — no enum change needed.
+- Single transaction per move. No partial state on failure.
 
-**First step:** read `Generation` and `Song` models + `db/queries/generations.py` + `db/queries/songs.py` + the existing context menu component, design + execute.
+**First step:** wait for the verification agent's report. Then, if premises hold, read `Generation` + `Song` models + `db/queries/generations.py` + `db/queries/songs.py` + the context menu component, design + execute.
 
-### Use `ACESTEP_CHECKPOINTS_DIR` env var
+---
 
-**Goal:** Upstream #1056 added `ACESTEP_CHECKPOINTS_DIR` for shared model storage. Use this instead of hardcoding the checkpoint mount path in docker-compose and worker settings. Small cleanup.
+### 4. Use `ACESTEP_CHECKPOINTS_DIR` env var
 
-### Tune xl-turbo / xl-sft APG defaults
-
-**Goal:** The APG (Adaptive Projected Guidance) params we exposed via upstream PR #1092 — `sampler_mode`, `velocity_norm_threshold`, `velocity_ema_factor`, `latent_shift`, `latent_rescale` — are wired into songmaker's generation path but the per-model-mode defaults haven't been reviewed against community-recommended XL values. Quality on the 4B XL variants depends on these more than on 2B.
+**Goal:** Upstream #1056 added `ACESTEP_CHECKPOINTS_DIR` for shared model-weights storage. Consume it instead of hardcoding the checkpoint mount path in `docker-compose.yml` and worker settings. Small config cleanup, not a feature.
 
 **Decisions:**
-- Felix's production model is xl-turbo (8 steps, no CFG, best balance) — that's the primary target.
-- xl-sft is secondary (46 steps, CFG 7.3, peak audio quality) — tune its defaults separately since CFG is on.
-- Community-recommended xl-sft config (per websearch 2026-04-21): euler sampler, normal scheduler, 46 steps, CFG 7.3, APG `eta=1.05`, `norm_thresh=1.3`, `momentum=0.0`. xl-turbo config is less documented; start from xl-sft values minus the CFG-dependent ones.
+- Set `ACESTEP_CHECKPOINTS_DIR=/models` (or whatever the current mount is) in `docker-compose.yml` for acestep-worker.
+- Remove any hardcoded checkpoint path constant in `src/acestep_worker/settings.py` / `src/acestep_engine/settings.py` that duplicates this.
+- No DB/API changes, no user-facing change.
 
 **Constraints:**
-- Exact eta/norm_thresh/momentum → our-5-param mapping must be verified against `vendor/acestep/acestep/api/http/release_task_param_parser.py` before changing defaults. The names don't line up 1:1.
-- Defaults live per-model-mode in `acestep_capabilities.py` / `acestep_engine`. Don't change shared fallbacks that other modes depend on.
-- A/B test at least one xl-turbo generation with tuned vs current defaults before committing — this is audible quality, not just a setting.
+- Don't break existing volume mounts — the env var must point at the same directory that's already populated.
+- Verify upstream PR #1056 actually shipped and the env var is honored in the `vendor/acestep` submodule we currently pin. If not, this item is a no-op.
 
-**First step:** read the param parser + current per-mode defaults, verify the APG name mapping, prototype new defaults on xl-turbo, listen, decide.
+**First step:** grep the repo for checkpoint path hardcoding (`grep -rn "/models\|checkpoints" docker-compose.yml src/acestep_worker src/acestep_engine`), read the ACE-Step code that consumes `ACESTEP_CHECKPOINTS_DIR`, wire it up.
+
+---
+
+### 5. Claude SDK migration + streaming — DORMANT
+
+**Goal:** Two coupled changes: (a) drop the Claude CLI subprocess backend in favor of the official `anthropic` SDK only, (b) add SSE streaming responses to the co-writer. Both rewrite `claude/provider.py` + `chat_api.py` + `ClaudeChat.svelte` — bundle them so the surface is touched once.
+
+**Status:** Dormant. Do not start until one of the triggers below fires.
+
+**Decisions** (locked in for when it eventually runs):
+- SDK-only — delete the CLI subprocess backend, `_DISALLOWED_TOOLS` denylist, and the docker-compose bind mounts (`~/.local/bin/claude`, `~/.claude`, `~/.claude.json`).
+- Streaming via SSE, frontend reads the stream incrementally.
+- Circuit breaker around Anthropic calls (open after 3 consecutive failures).
+
+**Triggers to start:**
+- Explicit user decision to leave the Max subscription for `ANTHROPIC_API_KEY`. (2026-04-21: NO — Max sub is already expensive, per-token on top roughly doubles the AI bill.)
+- Public-facing launch (CLI denylist is fail-open, unsuitable for untrusted users).
+
+**Non-triggers** (do NOT start just because these happen):
+- Co-writer chat timeouts in the wild — fix with item #2 instead.
+- Co-writer becomes a daily-driver feature — CLI wrapper is fine.
+
+---
+
+### 6. Tune xl-turbo / xl-sft APG defaults — USER-ONLY, NOT AGENT WORK
+
+**Goal:** Audit the per-mode defaults for the 5 APG params we exposed via upstream PR #1092 (`sampler_mode`, `velocity_norm_threshold`, `velocity_ema_factor`, `latent_shift`, `latent_rescale`) against community-recommended XL values. Bad defaults are the prime suspect for xl-turbo/xl-sft quality issues — defaults were picked without reference to anything.
+
+**Why this isn't in the agent queue:** the hard constraint is "A/B listen and pick." Audible audio quality is Felix's ears, not a headless agent's. Keep the entry as a shared reference note for when Felix + Claude sit down together.
+
+**Reference values** (from websearch 2026-04-21):
+- xl-sft community recipe: `euler` sampler, normal scheduler, 46 steps, CFG 7.3, APG `eta=1.05`, `norm_thresh=1.3`, `momentum=0.0`.
+- xl-turbo: less documented. Turbo distillation means CFG is off, so APG params matter less — but still should match the xl-sft values where they apply.
+- Exact `eta / norm_thresh / momentum` → our-5-param mapping needs verification against `vendor/acestep/acestep/api/http/release_task_param_parser.py` — the names don't line up 1:1.
+
+**Process when we do it:**
+1. Read the param parser + current defaults in `acestep_capabilities.py`.
+2. Verify the name mapping.
+3. Generate A/B pairs with current vs proposed defaults on the same seed.
+4. Felix picks. Commit the winner.
