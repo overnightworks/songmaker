@@ -28,6 +28,14 @@ from songmaker_cli.api_models.generation_params import (
     RepaintTaskParams,
     StoredGenerationParams,
 )
+from songmaker_cli.api_models.loras import (
+    UserLoraCreateRequest,
+    UserLoraListResponse,
+    UserLoraResponse,
+    UserLoraSampleCreateRequest,
+    UserLoraSamplePatchRequest,
+    UserLoraSampleResponse,
+)
 from songmaker_cli.api_models.playlists import (
     AddAlbumToPlaylistRequest,
     AddGenerationToPlaylistRequest,
@@ -257,6 +265,12 @@ __all__ = [
     "TitleUpdateRequest",
     "UnpinModelOnWorkerRequest",
     "UpdateUserRequest",
+    "UserLoraCreateRequest",
+    "UserLoraListResponse",
+    "UserLoraResponse",
+    "UserLoraSampleCreateRequest",
+    "UserLoraSamplePatchRequest",
+    "UserLoraSampleResponse",
     "UserRateLimitsResponse",
     "UserResponse",
     "VALID_SCORER_NAMES",

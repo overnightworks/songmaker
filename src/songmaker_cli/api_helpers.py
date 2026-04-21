@@ -29,7 +29,15 @@ from songmaker_cli.constants import (
     SETTING_SCORING_RATE_LIMIT,
     JobType,
 )
-from songmaker_cli.db.models import Album, Generation, Job, Song, User
+from songmaker_cli.db.models import (
+    Album,
+    Generation,
+    Job,
+    Song,
+    User,
+    UserLora,
+    UserLoraSample,
+)
 from songmaker_cli.db.queries import (
     clear_stale_user_jobs,
     count_total_queued_jobs,
@@ -46,6 +54,7 @@ from songmaker_cli.settings import get_settings
 
 _RATE_LIMIT_LOCK_ID = 1
 _ALBUM_ID_LOCK_ID = 2
+_LORA_SLUG_LOCK_ID = 3
 
 
 def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> None:
@@ -190,6 +199,33 @@ def unique_album_id(session: Session, base_slug: str) -> str:
     return candidate
 
 
+def unique_lora_slug(
+    session: Session, user_id: str, base_slug: str,
+) -> str:
+    """Atomically find a slug unique per user, appending -2, -3, etc. if needed.
+
+    Commits the current transaction before acquiring an exclusive lock.
+    Same caveats as create_job_with_rate_limit — no prior uncommitted
+    mutations besides auth-layer session renewal.
+    """
+    assert not session.new and not session.dirty and not session.deleted, (
+        "unique_lora_slug: session has uncommitted mutations — "
+        "the commit() below would persist them unconditionally"
+    )
+    session.commit()
+    _begin_exclusive(session, _LORA_SLUG_LOCK_ID)
+    candidate = base_slug
+    counter = 1
+    while (
+        session.query(UserLora)
+        .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
+        .first()
+    ):
+        counter += 1
+        candidate = f"{base_slug}-{counter}"
+    return candidate
+
+
 def owner_filter(user: AuthenticatedUser) -> str | None:
     if user.role == ROLE_ADMIN:
         return None
@@ -235,6 +271,27 @@ def check_song_access_including_deleted(
         if not album or album.created_by != user.id:
             raise HTTPException(404, "Song not found")
     return song
+
+
+def check_lora_access(lora: UserLora | None, user: AuthenticatedUser) -> UserLora:
+    if not lora:
+        raise HTTPException(404, "LoRA not found")
+    if user.role != ROLE_ADMIN and lora.user_id != user.id:
+        raise HTTPException(404, "LoRA not found")
+    return lora
+
+
+def check_lora_sample_access(
+    sample: UserLoraSample | None, user: AuthenticatedUser,
+) -> UserLoraSample:
+    if not sample:
+        raise HTTPException(404, "LoRA sample not found")
+    parent = sample.user_lora
+    if not parent:
+        raise HTTPException(404, "LoRA sample not found")
+    if user.role != ROLE_ADMIN and parent.user_id != user.id:
+        raise HTTPException(404, "LoRA sample not found")
+    return sample
 
 
 def check_generation_access(
