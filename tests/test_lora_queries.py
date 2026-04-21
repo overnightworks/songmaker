@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import LoraStatus
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import User
+from songmaker_cli.db.models import Job, User
 from songmaker_cli.db.queries import (
     add_user_lora_sample,
     count_user_lora_samples,
@@ -86,19 +86,30 @@ def test_list_user_loras_excludes_deleted_by_default(session: Session) -> None:
 
 
 def test_update_user_lora_sets_fields(session: Session) -> None:
+    from datetime import datetime, timezone
+
     lora = create_user_lora(session, _USER_A, "L", "l")
+    session.add(Job(id="job-xyz", type="lora_training", user_id=_USER_A))
     session.commit()
+    completed = datetime(2026, 4, 20, 12, 0, tzinfo=timezone.utc)
     update_user_lora(
         session, lora.id,
         status=LoraStatus.TRAINING,
         storage_path="/data/audio/user_loras/u-a/x/lora",
+        tensor_path="/data/audio/user_loras/u-a/x/lora/adapter.safetensors",
+        training_job_id="job-xyz",
         error="transient",
+        completed_at=completed,
     )
     session.commit()
     fresh = get_user_lora(session, lora.id)
     assert fresh.status == LoraStatus.TRAINING
     assert fresh.storage_path.endswith("/lora")
+    assert fresh.tensor_path.endswith("/adapter.safetensors")
+    assert fresh.training_job_id == "job-xyz"
     assert fresh.error == "transient"
+    assert fresh.completed_at is not None
+    assert fresh.completed_at.replace(tzinfo=timezone.utc) == completed
 
     update_user_lora(session, lora.id, status=LoraStatus.READY, clear_error=True)
     session.commit()
