@@ -20,6 +20,7 @@ from acestep_worker.wrapper import (
     build_state_payload,
     create_app,
     default_generate_runner,
+    default_train_lora_runner,
 )
 
 DEFAULT_MODEL_SIZES_GB: dict[str, float] = {
@@ -78,6 +79,7 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         checkpoint_dir=checkpoint_dir,
         audio_output_dir=audio_dir,
         generate_runner=default_generate_runner,
+        train_lora_runner=default_train_lora_runner,
     )
 
     deps.heartbeat = HeartbeatLoop(

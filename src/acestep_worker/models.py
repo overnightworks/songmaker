@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-TaskKind = Literal["generate", "download"]
+TaskKind = Literal["generate", "download", "train_lora"]
 TaskState = Literal["pending", "running", "done", "error"]
 EventType = Literal["progress", "done", "error"]
 
@@ -103,3 +103,36 @@ class GenerationTaskResult(BaseModel):
     seed: int
     cot_caption: str = ""
     cot_lyrics: str = ""
+
+
+class TrainLoraRequest(BaseModel):
+    mode: str
+    dataset_dir: str
+    output_dir: str
+    lokr_linear_dim: int = 64
+    lokr_linear_alpha: int = 128
+    lokr_factor: int = -1
+    lokr_decompose_both: bool = False
+    lokr_use_tucker: bool = False
+    lokr_use_scalar: bool = False
+    lokr_weight_decompose: bool = True
+    learning_rate: float = 0.03
+    train_epochs: int = 500
+    train_batch_size: int = 1
+    gradient_accumulation: int = 4
+    save_every_n_epochs: int = 5
+    training_shift: float = 3.0
+    training_seed: int = 42
+    gradient_checkpointing: bool = False
+    poll_interval_seconds: float = 5.0
+
+
+class TrainLoraTaskResult(BaseModel):
+    mode: str
+    adapter_dir: str
+    num_samples: int = 0
+    final_loss: float | None = None
+
+
+class TrainLoraResponse(BaseModel):
+    task_id: str

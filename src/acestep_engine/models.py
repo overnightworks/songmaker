@@ -62,6 +62,46 @@ class AceStepConfig:
     latent_shift: float = 0.0
     latent_rescale: float = 1.0
     model: str = ""
+    lora_path: str = ""
+
+
+@dataclass(frozen=True)
+class LoraTrainingConfig:
+    """Parameters for a single LoKR training run.
+
+    Mirrors the subset of ``StartLoKRTrainingRequest`` fields exposed by
+    the ACE-Step training HTTP API that songmaker cares about. Defaults
+    match the upstream Gradio UI so the server behaviour is unchanged.
+    """
+
+    tensor_dir: str
+    output_dir: str
+    lokr_linear_dim: int = 64
+    lokr_linear_alpha: int = 128
+    lokr_factor: int = -1
+    lokr_decompose_both: bool = False
+    lokr_use_tucker: bool = False
+    lokr_use_scalar: bool = False
+    lokr_weight_decompose: bool = True
+    learning_rate: float = 0.03
+    train_epochs: int = 500
+    train_batch_size: int = 1
+    gradient_accumulation: int = 4
+    save_every_n_epochs: int = 5
+    training_shift: float = 3.0
+    training_seed: int = 42
+    gradient_checkpointing: bool = False
+
+
+@dataclass(frozen=True)
+class LoraTrainingResult:
+    """Outcome of a LoKR training run + export.
+
+    ``adapter_dir`` is the exported adapter directory the client can pass
+    straight to ``/v1/lora/load``.
+    """
+
+    adapter_dir: str
 
 
 @dataclass(frozen=True)

@@ -43,6 +43,7 @@ from acestep_worker.models import (
     RestartResponse,
     TaskCreatedResponse,
     TaskSnapshot,
+    TrainLoraRequest,
     UnpinModelRequest,
     WorkerTaskEvent,
 )
@@ -53,6 +54,7 @@ from acestep_worker.task_store import TaskStore
 log = logging.getLogger(__name__)
 
 GenerateRunner = Any
+TrainLoraRunner = Any
 
 
 @dataclass
@@ -67,6 +69,7 @@ class WorkerDeps:
     checkpoint_dir: Path
     audio_output_dir: Path
     generate_runner: GenerateRunner
+    train_lora_runner: TrainLoraRunner | None = None
     registered: bool = False
     registration_task: asyncio.Task[None] | None = None
 
@@ -218,6 +221,39 @@ def build_router(deps: WorkerDeps) -> APIRouter:
         spawn_background(_runner_with_release())
         return TaskCreatedResponse(task_id=task_id)
 
+    @router.post("/tasks/train_lora", response_model=TaskCreatedResponse)
+    async def train_lora(req: TrainLoraRequest) -> TaskCreatedResponse:
+        if deps.train_lora_runner is None:
+            raise HTTPException(
+                status_code=501,
+                detail="Worker not configured with a train_lora runner",
+            )
+        loaded = await deps.cache.acquire_for_use(req.mode)
+        if loaded is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Mode {req.mode} not loaded; call /load_model first",
+            )
+        try:
+            task_id = await deps.task_store.create("train_lora")
+        except Exception:
+            await deps.cache.release(req.mode)
+            raise
+
+        async def _runner_with_release() -> None:
+            try:
+                await deps.train_lora_runner(
+                    deps.task_store,
+                    task_id,
+                    request=req,
+                    port=loaded.port,
+                )
+            finally:
+                await deps.cache.release(req.mode)
+
+        spawn_background(_runner_with_release())
+        return TaskCreatedResponse(task_id=task_id)
+
     @router.post("/download_model", response_model=TaskCreatedResponse)
     async def download_model(req: DownloadModelRequest) -> TaskCreatedResponse:
         task_id = await start_download(
@@ -288,6 +324,117 @@ def create_app(deps: WorkerDeps) -> FastAPI:
     app.state.deps = deps
     app.include_router(build_router(deps))
     return app
+
+
+async def default_train_lora_runner(
+    task_store: TaskStore,
+    task_id: str,
+    *,
+    request: TrainLoraRequest,
+    port: int,
+) -> None:
+    from acestep_engine.models import LoraTrainingConfig
+    from acestep_engine.training_client import (
+        AceStepTrainingClient,
+        TrainingRequestError,
+        TrainingResponseError,
+    )
+    from acestep_worker.models import TrainLoraTaskResult
+
+    await task_store.mark_running(task_id)
+    client = AceStepTrainingClient(host="http://127.0.0.1", port=port)
+    tensor_dir = str(Path(request.output_dir) / "tensors")
+    loop = asyncio.get_running_loop()
+
+    try:
+        scan_result = await asyncio.to_thread(client.scan_dataset, request.dataset_dir)
+        await task_store.update_progress(task_id, 0.02)
+        if scan_result.num_samples == 0:
+            raise RuntimeError(f"Dataset scan found 0 samples in {request.dataset_dir}")
+
+        preprocess_handle = await asyncio.to_thread(
+            client.start_preprocess, tensor_dir,
+        )
+        await task_store.update_progress(task_id, 0.05)
+
+        while True:
+            await asyncio.sleep(request.poll_interval_seconds)
+            status = await asyncio.to_thread(
+                client.poll_preprocess, preprocess_handle.task_id,
+            )
+            if status.total > 0:
+                fraction = 0.05 + 0.15 * min(status.current / status.total, 1.0)
+                await task_store.update_progress(task_id, fraction)
+            if status.status == "completed":
+                break
+            if status.status == "failed":
+                raise RuntimeError(f"Preprocess failed: {status.error or status.progress}")
+
+        lokr_config = LoraTrainingConfig(
+            tensor_dir=tensor_dir,
+            output_dir=request.output_dir,
+            lokr_linear_dim=request.lokr_linear_dim,
+            lokr_linear_alpha=request.lokr_linear_alpha,
+            lokr_factor=request.lokr_factor,
+            lokr_decompose_both=request.lokr_decompose_both,
+            lokr_use_tucker=request.lokr_use_tucker,
+            lokr_use_scalar=request.lokr_use_scalar,
+            lokr_weight_decompose=request.lokr_weight_decompose,
+            learning_rate=request.learning_rate,
+            train_epochs=request.train_epochs,
+            train_batch_size=request.train_batch_size,
+            gradient_accumulation=request.gradient_accumulation,
+            save_every_n_epochs=request.save_every_n_epochs,
+            training_shift=request.training_shift,
+            training_seed=request.training_seed,
+            gradient_checkpointing=request.gradient_checkpointing,
+        )
+        await asyncio.to_thread(client.start_lokr, lokr_config)
+        await task_store.update_progress(task_id, 0.20)
+
+        total_epochs = max(request.train_epochs, 1)
+        final_loss: float | None = None
+        while True:
+            await asyncio.sleep(request.poll_interval_seconds)
+            training_status = await asyncio.to_thread(client.poll_training)
+            if training_status.current_loss is not None:
+                final_loss = training_status.current_loss
+            epoch_progress = min(training_status.current_epoch / total_epochs, 1.0)
+            fraction = 0.20 + 0.70 * epoch_progress
+            await task_store.update_progress(task_id, fraction)
+            if training_status.error:
+                raise RuntimeError(f"Training failed: {training_status.error}")
+            if not training_status.is_training:
+                break
+
+        adapter_dir = str(Path(request.output_dir) / "final")
+        export_result = await asyncio.to_thread(
+            client.export_training, request.output_dir, adapter_dir,
+        )
+        await task_store.update_progress(task_id, 0.99)
+
+        payload = TrainLoraTaskResult(
+            mode=request.mode,
+            adapter_dir=export_result.export_path,
+            num_samples=scan_result.num_samples,
+            final_loss=final_loss,
+        )
+        await task_store.complete(task_id, payload.model_dump())
+        del loop
+    except asyncio.CancelledError:
+        try:
+            await asyncio.to_thread(client.stop_training)
+        except (TrainingRequestError, TrainingResponseError, Exception):
+            log.warning("Failed to stop training during cancel", exc_info=True)
+        await task_store.fail(task_id, "cancelled")
+        raise
+    except Exception as exc:
+        log.exception("Training failed for task %s", task_id)
+        try:
+            await asyncio.to_thread(client.stop_training)
+        except Exception:
+            log.debug("Best-effort stop_training failed", exc_info=True)
+        await task_store.fail(task_id, f"{type(exc).__name__}: {exc}")
 
 
 async def default_generate_runner(
