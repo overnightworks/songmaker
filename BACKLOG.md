@@ -59,41 +59,7 @@ When you finish an item, delete its section. Git history preserves it. Decisions
 
 ---
 
-### 3. Move resources (generation→song, song→album)
-
-> ⚠️ **Premises below must be verified before execution** — background agent spawned 2026-04-21 to check. Do NOT start implementation until verification lands.
-
-**Goal:** Let the user move a generation to a different (song, version), and move a song to a different album. Primary claimed use case: post-recovery cleanup where anonymous WAVs land in a "Recovered" album and need reassignment to their real songs and albums.
-
-**Premises to verify first:**
-- Does the "Recovered" album / post-recovery WAV-ingestion flow actually exist? If no, the primary use case evaporates and the feature's value shrinks to "nice to have."
-- Does `AuditAction.MOVE` exist in the enum?
-- Do `Playlist` rows reference `song_id` (so moving a song between albums doesn't break them)?
-- Is there a `track_number` on `Song` and is it `UNIQUE(album_id, track_number)` or similar?
-
-**Decisions** (conditional on premises holding):
-- One shared `MoveResourceDialog.svelte` for both moves. Tree picker (album → song → version) scoped to resources the user owns.
-- Two endpoints, bundled in one PR because they share the dialog and safety patterns:
-  - `POST /api/generations/{id}/move` with `target_song_id` + optional `target_version_id` (default: latest version on destination song).
-  - `POST /api/songs/{id}/move` with `target_album_id`.
-- Both audit-logged with the existing `MOVE` action (if it exists — see premises).
-- "Move to..." entry in the existing context menu.
-- Double ownership check: user must own both source and destination.
-- The audio file path does NOT move on disk — only DB rows change. Paths stay stable.
-
-**Destination-side bookkeeping:**
-- **Move generation**: transfer `is_picked` only if source was picked AND destination song has no current pick. Always preserve `is_kept`. Assign next available `generation_number` on the destination version.
-- **Move song**: assign next `track_number` on destination album. Playlist references survive as-is (if premise holds). If source song was the album cover, the old album loses its cover.
-
-**Constraints:**
-- Ownership check on both source and destination.
-- Single transaction per move. No partial state on failure.
-
-**First step:** wait for the verification agent's report. Then, if premises hold, read `Generation` + `Song` models + `db/queries/generations.py` + `db/queries/songs.py` + the context menu component, design + execute.
-
----
-
-### 4. Use `ACESTEP_CHECKPOINTS_DIR` env var
+### 3. Use `ACESTEP_CHECKPOINTS_DIR` env var
 
 **Goal:** Upstream #1056 added `ACESTEP_CHECKPOINTS_DIR` for shared model-weights storage. Consume it instead of hardcoding the checkpoint mount path in `docker-compose.yml` and worker settings. Small config cleanup, not a feature.
 
@@ -110,7 +76,7 @@ When you finish an item, delete its section. Git history preserves it. Decisions
 
 ---
 
-### 5. Claude SDK migration + streaming — DORMANT
+### 4. Claude SDK migration + streaming — DORMANT
 
 **Goal:** Two coupled changes: (a) drop the Claude CLI subprocess backend in favor of the official `anthropic` SDK only, (b) add SSE streaming responses to the co-writer. Both rewrite `claude/provider.py` + `chat_api.py` + `ClaudeChat.svelte` — bundle them so the surface is touched once.
 
@@ -131,7 +97,7 @@ When you finish an item, delete its section. Git history preserves it. Decisions
 
 ---
 
-### 6. Tune xl-turbo / xl-sft APG defaults — USER-ONLY, NOT AGENT WORK
+### 5. Tune xl-turbo / xl-sft APG defaults — USER-ONLY, NOT AGENT WORK
 
 **Goal:** Audit the per-mode defaults for the 5 APG params we exposed via upstream PR #1092 (`sampler_mode`, `velocity_norm_threshold`, `velocity_ema_factor`, `latent_shift`, `latent_rescale`) against community-recommended XL values. Bad defaults are the prime suspect for xl-turbo/xl-sft quality issues — defaults were picked without reference to anything.
 
