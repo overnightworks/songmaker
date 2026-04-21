@@ -281,6 +281,34 @@ def check_lora_access(lora: UserLora | None, user: AuthenticatedUser) -> UserLor
     return lora
 
 
+def check_lora_ready_for_generation(
+    session: Session, user_lora_id: str | None, user: AuthenticatedUser,
+) -> UserLora | None:
+    """Validate a user_lora_id referenced by a generation request.
+
+    Returns the LoRA row if ``user_lora_id`` is set and OK.
+    Raises 404 if not owned / not found, 422 if deleted or not READY.
+    Returns None when ``user_lora_id`` is None (no LoRA requested).
+    """
+    from songmaker_cli.constants import LoraStatus
+    from songmaker_cli.db.queries import get_user_lora
+
+    if not user_lora_id:
+        return None
+    lora = get_user_lora(session, user_lora_id, include_deleted_rows=True)
+    if not lora:
+        raise HTTPException(404, "LoRA not found")
+    if user.role != ROLE_ADMIN and lora.user_id != user.id:
+        raise HTTPException(404, "LoRA not found")
+    if lora.deleted_at is not None:
+        raise HTTPException(422, "LoRA is deleted")
+    if lora.status != LoraStatus.READY:
+        raise HTTPException(
+            422, f"LoRA is not ready (status={lora.status})",
+        )
+    return lora
+
+
 def check_lora_sample_access(
     sample: UserLoraSample | None, user: AuthenticatedUser,
 ) -> UserLoraSample:

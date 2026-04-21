@@ -39,6 +39,7 @@ export interface GenerationParams {
 	latent_shift?: number | null;
 	latent_rescale?: number | null;
 	audio_cover_strength?: number | null;
+	user_lora_id?: string | null;
 	seed?: number | null;
 	acestep_model?: string | null;
 	bpm?: number | null;
@@ -83,6 +84,7 @@ export interface VersionGenerationParams {
 	latent_shift?: number | null;
 	latent_rescale?: number | null;
 	audio_cover_strength?: number | null;
+	user_lora_id?: string | null;
 }
 
 export interface TrackScores {

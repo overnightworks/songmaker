@@ -26,6 +26,7 @@ from songmaker_cli.jobs import (
 )
 from songmaker_cli.jobs import (
     run_generation_job,
+    run_lora_training_job,
 )
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_base import WorkerBase, build_redis_settings
@@ -64,6 +65,24 @@ class MusicWorker(WorkerBase):
             repaint_params=typed_repaint,
             cover_params=typed_cover,
             target_model=requested_model,
+            redis=ctx["redis"],
+        )
+
+    async def train_lora(
+        self, ctx, job_id: str, lora_id: str, user_id: str,
+    ) -> None:
+        if not self.check_job_still_valid(job_id):
+            return
+
+        import structlog
+        structlog.contextvars.bind_contextvars(
+            job_id=job_id, task=JobType.LORA_TRAINING,
+        )
+
+        await run_lora_training_job(
+            ctx, job_id, lora_id, user_id,
+            db_factory=self.get_db_factory(),
+            audio_dir=self.audio_dir(),
             redis=ctx["redis"],
         )
 
@@ -107,6 +126,7 @@ class MusicWorkerSettings:
         func(_music_worker.generate, name=JobFunction.GENERATE),
         func(_music_worker.load_model_on_worker, name=JobFunction.LOAD_MODEL_ON_WORKER),
         func(_music_worker.download_model_on_worker, name=JobFunction.DOWNLOAD_MODEL_ON_WORKER),
+        func(_music_worker.train_lora, name=JobFunction.LORA_TRAINING),
     ]
     on_startup = _music_worker.on_startup
     on_shutdown = _music_worker.on_shutdown

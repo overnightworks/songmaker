@@ -48,6 +48,7 @@ from .generation import (
     post_process_generation,
     run_generation_job,
 )
+from .lora_training import cleanup_failed_lora, run_lora_training_job
 from .model_lifecycle import (
     DOWNLOAD_MAX_ATTEMPTS,
     DOWNLOAD_RETRY_BASE_DELAY_SECONDS,
@@ -78,6 +79,7 @@ __all__ = [
     "_update_job",
     "audio_file_path",
     "build_ace_config",
+    "cleanup_failed_lora",
     "dispatch_generation",
     "download_model_on_worker",
     "get_scorer_process",
@@ -86,5 +88,6 @@ __all__ = [
     "post_process_generation",
     "resolve_model_mode",
     "run_generation_job",
+    "run_lora_training_job",
     "run_scoring_job",
 ]
