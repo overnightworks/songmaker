@@ -460,6 +460,69 @@ class AceStepWorker(Base):
     )
 
 
+class UserLora(Base):
+    """User-trained LoRA adapter. One row per training run container.
+
+    ``status`` moves through ``LoraStatus.DRAFT`` → ``QUEUED`` → ``PREPROCESSING``
+    → ``TRAINING`` → ``EXPORTING`` → ``READY`` (or ``FAILED`` at any step).
+    ``storage_path`` points at the exported adapter dir once status is READY;
+    it is None while draft/training.
+    """
+
+    __tablename__ = "user_loras"
+    __table_args__ = (
+        UniqueConstraint("user_id", "slug", name="uq_user_lora_user_slug"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True,
+    )
+    name: Mapped[str] = mapped_column(String(100))
+    slug: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
+    storage_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    tensor_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    training_job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        TZDateTime, nullable=True, index=True,
+    )
+
+    samples: Mapped[list[UserLoraSample]] = relationship(
+        back_populates="user_lora",
+        cascade="all, delete-orphan",
+        order_by="UserLoraSample.position",
+    )
+
+
+class UserLoraSample(Base):
+    """An audio take inside a UserLora. Caption + lyrics live in DB; the
+    on-disk sidecar ``.caption.txt`` / ``.lyrics.txt`` files are written
+    only at training time and deleted afterward."""
+
+    __tablename__ = "user_lora_samples"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_lora_id: Mapped[str] = mapped_column(
+        ForeignKey("user_loras.id", ondelete="CASCADE"), index=True,
+    )
+    audio_path: Mapped[str] = mapped_column(String(500))
+    caption: Mapped[str] = mapped_column(Text, default="")
+    lyrics: Mapped[str] = mapped_column(Text, default="")
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TZDateTime, default=_utcnow, onupdate=_utcnow,
+    )
+
+    user_lora: Mapped[UserLora] = relationship(back_populates="samples")
+
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
 

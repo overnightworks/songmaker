@@ -156,6 +156,16 @@ REFERENCE_AUDIO_DIR = "refs"
 REFERENCE_AUDIO_EXTENSIONS = frozenset({".mp3", ".wav", ".flac", ".ogg"})
 REFERENCE_AUDIO_MAX_BYTES = 50 * 1024 * 1024
 
+# User LoRA training
+USER_LORAS_DIRNAME: Final[str] = "user_loras"
+USER_LORA_SAMPLES_DIRNAME: Final[str] = "samples"
+USER_LORA_DATASET_DIRNAME: Final[str] = "dataset"
+USER_LORA_OUTPUT_DIRNAME: Final[str] = "lora"
+USER_LORA_SAMPLE_MAX_BYTES: Final[int] = 50 * 1024 * 1024
+USER_LORA_MAX_SAMPLES: Final[int] = 20
+USER_LORA_MIN_SAMPLES_FOR_TRAINING: Final[int] = 3
+USER_LORA_AUDIO_EXTENSIONS: Final[frozenset[str]] = frozenset({".wav", ".mp3", ".flac"})
+
 
 class JobStatus(StrEnum):
     QUEUED = "queued"
@@ -179,6 +189,7 @@ class JobType(StrEnum):
     GENERATE = "generate"
     SCORE = "score"
     CHAT = "chat"
+    LORA_TRAINING = "lora_training"
 
 
 class JobFunction(StrEnum):
@@ -186,6 +197,7 @@ class JobFunction(StrEnum):
     SCORE = "score"
     LOAD_MODEL_ON_WORKER = "load_model_on_worker"
     DOWNLOAD_MODEL_ON_WORKER = "download_model_on_worker"
+    LORA_TRAINING = "lora_training"
 
 
 class ResourceType(StrEnum):
@@ -202,6 +214,7 @@ class ResourceType(StrEnum):
     RATE_LIMITS = "rate_limits"
     JOB = "job"
     SESSION = "session"
+    LORA = "lora"
 
 
 class AuditAction(StrEnum):
@@ -223,3 +236,22 @@ class AuditAction(StrEnum):
     CLEANUP = "cleanup"
     SESSION_IP_CHANGE = "session_ip_change"
     SESSION_UA_CHANGE = "session_ua_change"
+    TRAIN_LORA = "train_lora"
+
+
+class LoraStatus(StrEnum):
+    DRAFT = "draft"
+    QUEUED = "queued"
+    PREPROCESSING = "preprocessing"
+    TRAINING = "training"
+    EXPORTING = "exporting"
+    READY = "ready"
+    FAILED = "failed"
+
+
+LORA_ACTIVE_STATUSES: Final[frozenset[LoraStatus]] = frozenset({
+    LoraStatus.QUEUED,
+    LoraStatus.PREPROCESSING,
+    LoraStatus.TRAINING,
+    LoraStatus.EXPORTING,
+})

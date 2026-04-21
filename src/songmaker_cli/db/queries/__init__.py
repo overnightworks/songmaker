@@ -151,6 +151,42 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.jobs import update_job_heartbeat as update_job_heartbeat
 from songmaker_cli.db.queries.jobs import update_job_status as update_job_status
+from songmaker_cli.db.queries.loras import (
+    add_user_lora_sample as add_user_lora_sample,
+)
+from songmaker_cli.db.queries.loras import (
+    count_user_lora_samples as count_user_lora_samples,
+)
+from songmaker_cli.db.queries.loras import (
+    create_user_lora as create_user_lora,
+)
+from songmaker_cli.db.queries.loras import (
+    delete_user_lora_sample as delete_user_lora_sample,
+)
+from songmaker_cli.db.queries.loras import (
+    get_user_lora as get_user_lora,
+)
+from songmaker_cli.db.queries.loras import (
+    get_user_lora_sample as get_user_lora_sample,
+)
+from songmaker_cli.db.queries.loras import (
+    list_active_user_loras as list_active_user_loras,
+)
+from songmaker_cli.db.queries.loras import (
+    list_user_loras_for_user as list_user_loras_for_user,
+)
+from songmaker_cli.db.queries.loras import (
+    restore_user_lora as restore_user_lora,
+)
+from songmaker_cli.db.queries.loras import (
+    soft_delete_user_lora as soft_delete_user_lora,
+)
+from songmaker_cli.db.queries.loras import (
+    update_user_lora as update_user_lora,
+)
+from songmaker_cli.db.queries.loras import (
+    update_user_lora_sample as update_user_lora_sample,
+)
 from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist as add_album_to_playlist,
 )

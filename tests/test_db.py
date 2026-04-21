@@ -1677,6 +1677,7 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
         "playlists", "playlist_entries", "chat_messages",
         "conversations", "conversation_summaries",
         "acestep_workers",
+        "user_loras", "user_lora_samples",
         "alembic_version",
     }
     assert tables == expected
