@@ -146,6 +146,38 @@ def _load_preset_params(
         return BaseGenerationParams.model_validate(preset.params or {})
 
 
+def _extract_user_lora_id(base_params: object) -> str | None:
+    if isinstance(base_params, BaseGenerationParams):
+        return base_params.user_lora_id
+    if isinstance(base_params, dict):
+        try:
+            return BaseGenerationParams.model_validate(base_params).user_lora_id
+        except Exception:
+            return None
+    return None
+
+
+def _apply_user_lora_path(
+    ace_config: AceStepConfig, base_params: BaseGenerationParams,
+    db_factory: sessionmaker[Session], audio_dir: Path,
+) -> AceStepConfig:
+    user_lora_id = base_params.user_lora_id
+    if not user_lora_id:
+        return ace_config
+    from songmaker_cli.constants import LoraStatus
+    from songmaker_cli.db.queries import get_user_lora
+
+    with db_factory() as session:
+        lora = get_user_lora(session, user_lora_id)
+        if lora is None or lora.status != LoraStatus.READY or not lora.storage_path:
+            log.warning(
+                "UserLora %s not READY — falling back to base model", user_lora_id,
+            )
+            return ace_config
+        lora_path = str((audio_dir / lora.storage_path).resolve())
+    return replace(ace_config, lora_path=lora_path)
+
+
 def _build_generation_context(
     song_id: str, version_id: str,
     db_factory: sessionmaker[Session], audio_dir: Path, data_dir: Path,
@@ -184,6 +216,10 @@ def _build_generation_context(
         else:
             log.warning("Reference audio not found: %s", abs_ref)
             ace_config = replace(ace_config, reference_audio_path="")
+
+    ace_config = _apply_user_lora_path(
+        ace_config, meta.generation_params, db_factory, audio_dir,
+    )
 
     return GenerationContext(
         song_id=song_id,
@@ -351,6 +387,7 @@ def _persist_generation_row(
         ),
         cot_caption=cot_caption or None,
         cot_lyrics=cot_lyrics or None,
+        user_lora_id=_extract_user_lora_id(ctx.base_params),
     )
     gen_params = stored.model_dump(exclude_none=True)
 

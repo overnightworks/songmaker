@@ -14,6 +14,45 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 
+def reconcile_crashed_loras(ctx: AppContext) -> int:
+    """Mark LoRAs stuck in active statuses as FAILED when their job is terminal.
+
+    Runs at web-process startup. If the ARQ worker crashed mid-training the
+    LoRA row stays in PREPROCESSING / TRAINING / EXPORTING even though no
+    job is running. We detect that the associated ``training_job_id`` is
+    either missing or in a terminal state, and reuse the job runner's
+    ``cleanup_failed_lora`` helper to release disk space and mark the row
+    FAILED.
+
+    Returns the number of rows reconciled.
+    """
+    from songmaker_cli.constants import JOB_TERMINAL_STATUSES
+    from songmaker_cli.db.queries import get_job, list_active_user_loras
+    from songmaker_cli.jobs.lora_training import cleanup_failed_lora
+
+    reconciled = 0
+    with ctx.db() as session:
+        active = list_active_user_loras(session)
+        victims: list[tuple[str, str]] = []
+        for lora in active:
+            if lora.training_job_id is None:
+                victims.append((lora.id, lora.user_id))
+                continue
+            job = get_job(session, lora.training_job_id)
+            if job is None or job.status in JOB_TERMINAL_STATUSES:
+                victims.append((lora.id, lora.user_id))
+
+    for lora_id, user_id in victims:
+        cleanup_failed_lora(
+            lora_id=lora_id, user_id=user_id, audio_dir=ctx.audio_dir,
+            db_factory=ctx.db, error_message="Training crashed or was interrupted",
+        )
+        reconciled += 1
+    if reconciled:
+        log.info("Startup: reconciled %d crashed LoRA(s)", reconciled)
+    return reconciled
+
+
 def auto_setup_admin(ctx: AppContext) -> None:
     settings = get_settings()
     admin_user = settings.admin_username

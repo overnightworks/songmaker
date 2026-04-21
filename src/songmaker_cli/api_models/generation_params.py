@@ -63,6 +63,7 @@ class BaseGenerationParams(BaseModel):
     latent_shift: float | None = None
     latent_rescale: float | None = Field(None, ge=0.1)
     audio_cover_strength: float | None = Field(None, ge=0, le=1)
+    user_lora_id: str | None = Field(None, max_length=36)
 
     @field_validator("reference_audio_path")
     @classmethod

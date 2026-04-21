@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli.acestep_state import read_worker_state
 from songmaker_cli.api_helpers import (
     check_generation_access,
+    check_lora_ready_for_generation,
     check_redis_health,
     check_song_access,
     cleanup_generation_files,
@@ -40,6 +41,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
+from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import (
     get_arq_pool,
@@ -88,6 +90,17 @@ def _check_model_active(session: Session, model: str) -> None:
     active_ids = {m.id for m in list_active_models(session)}
     if model not in active_ids:
         raise HTTPException(400, f"Model '{model}' is not currently available")
+
+
+def _check_version_lora_ready(
+    session: Session, version, user: AuthenticatedUser,
+) -> None:
+    params_dict = version.generation_params or {}
+    try:
+        params = BaseGenerationParams.model_validate(params_dict)
+    except Exception:
+        return
+    check_lora_ready_for_generation(session, params.user_lora_id, user)
 
 
 async def _has_online_acestep_worker(session: Session) -> bool:
@@ -251,6 +264,7 @@ async def api_generate_song(
         raise HTTPException(400, "Song needs lyrics and a style prompt before generating")
 
     _check_model_active(session, req.model)
+    _check_version_lora_ready(session, version, user)
 
     job = create_job_with_rate_limit(session, user, JobType.GENERATE)
     record_audit(
@@ -308,6 +322,7 @@ async def api_repaint_generation(
         raise HTTPException(400, "repainting_start must be less than repainting_end")
 
     _check_model_active(session, req.model)
+    _check_version_lora_ready(session, version, user)
 
     wav_path = _resolve_source_wav(ctx.audio_dir, gen, session)
 
@@ -379,6 +394,7 @@ async def api_cover_generation(
         raise HTTPException(400, "Generation has no linked version")
 
     _check_model_active(session, req.model)
+    _check_version_lora_ready(session, version, user)
 
     wav_path = _resolve_source_wav(ctx.audio_dir, gen, session)
 

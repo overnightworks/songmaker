@@ -26,7 +26,11 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import APP_NAME
 from songmaker_cli.health_api import _compute_script_hashes
-from songmaker_cli.lifecycle import auto_setup_admin, session_sync_loop
+from songmaker_cli.lifecycle import (
+    auto_setup_admin,
+    reconcile_crashed_loras,
+    session_sync_loop,
+)
 from songmaker_cli.middleware import (
     AccessLogMiddleware,
     BodySizeLimitMiddleware,
@@ -72,6 +76,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         session.commit()
 
     auto_setup_admin(ctx)
+    reconcile_crashed_loras(ctx)
 
     await init_arq_pool()
     log.info("arq pool connected")

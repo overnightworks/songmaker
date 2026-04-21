@@ -160,7 +160,8 @@ def test_music_worker_settings_functions() -> None:
     assert JobFunction.GENERATE in func_names
     assert JobFunction.LOAD_MODEL_ON_WORKER in func_names
     assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in func_names
-    assert len(MusicWorkerSettings.functions) == 3
+    assert JobFunction.LORA_TRAINING in func_names
+    assert len(MusicWorkerSettings.functions) == 4
 
 
 def test_music_worker_settings_uses_singleton_methods() -> None:

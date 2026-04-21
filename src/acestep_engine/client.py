@@ -9,6 +9,7 @@ Server launch:  python scripts/start_acestep.py
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -148,16 +149,63 @@ class AceStepClient:
             GenerationTimeoutError: Polling timed out.
             AudioDownloadError: Failed to download or parse audio.
         """
-        task_id = self._submit_task(config)
-        poll_result = self._poll_result(task_id, on_progress=on_progress)
-        result = self._download_audio(poll_result.audio_path, poll_result.seed)
-        if poll_result.cot_caption or poll_result.cot_lyrics:
-            result = replace(
-                result,
-                cot_caption=poll_result.cot_caption,
-                cot_lyrics=poll_result.cot_lyrics,
+        lora_loaded_by_us = False
+        if config.lora_path:
+            lora_loaded_by_us = self._ensure_lora_loaded(config.lora_path)
+        try:
+            task_id = self._submit_task(config)
+            poll_result = self._poll_result(task_id, on_progress=on_progress)
+            result = self._download_audio(poll_result.audio_path, poll_result.seed)
+            if poll_result.cot_caption or poll_result.cot_lyrics:
+                result = replace(
+                    result,
+                    cot_caption=poll_result.cot_caption,
+                    cot_lyrics=poll_result.cot_lyrics,
+                )
+            return result
+        finally:
+            if lora_loaded_by_us:
+                self._unload_lora_best_effort()
+
+    def _ensure_lora_loaded(self, lora_path: str) -> bool:
+        """Load adapter if not already loaded. Returns True if we triggered the load.
+
+        Adapter name is the sha256 of the path so repeated loads of the
+        same path with the same adapter name are a no-op on the server
+        side.
+        """
+        adapter_name = hashlib.sha256(lora_path.encode("utf-8")).hexdigest()[:16]
+        try:
+            payload = json.dumps(
+                {"lora_path": lora_path, "adapter_name": adapter_name},
+            ).encode()
+            req = Request(
+                f"{self.base_url}/v1/lora/load",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
             )
-        return result
+            with urlopen(req, timeout=30) as resp:
+                resp.read()
+            log.info("LoRA loaded: path=%s adapter=%s", lora_path, adapter_name)
+            return True
+        except (URLError, OSError) as exc:
+            log.warning("Failed to load LoRA %s: %s", lora_path, exc)
+            return False
+
+    def _unload_lora_best_effort(self) -> None:
+        try:
+            req = Request(
+                f"{self.base_url}/v1/lora/unload",
+                data=b"",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(req, timeout=30) as resp:
+                resp.read()
+            log.info("LoRA unloaded")
+        except (URLError, OSError) as exc:
+            log.warning("Failed to unload LoRA: %s", exc)
 
     def _submit_task(self, config: AceStepConfig) -> str:
         """Submit a generation task to the server with retry.

@@ -39,6 +39,7 @@ export interface GenerationParams {
 	latent_shift?: number | null;
 	latent_rescale?: number | null;
 	audio_cover_strength?: number | null;
+	user_lora_id?: string | null;
 	seed?: number | null;
 	acestep_model?: string | null;
 	bpm?: number | null;
@@ -83,6 +84,7 @@ export interface VersionGenerationParams {
 	latent_shift?: number | null;
 	latent_rescale?: number | null;
 	audio_cover_strength?: number | null;
+	user_lora_id?: string | null;
 }
 
 export interface TrackScores {
@@ -426,4 +428,35 @@ export interface RegistryModelItem {
 
 export interface RegistryResponse {
 	models: RegistryModelItem[];
+}
+
+export interface UserLoraSampleItem {
+	id: string;
+	user_lora_id: string;
+	audio_path: string;
+	caption: string;
+	lyrics: string;
+	position: number;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface UserLoraItem {
+	id: string;
+	user_id: string;
+	name: string;
+	slug: string;
+	status: string;
+	storage_path?: string | null;
+	tensor_path?: string | null;
+	training_job_id?: string | null;
+	error?: string | null;
+	created_at: string;
+	completed_at?: string | null;
+	deleted_at?: string | null;
+	samples: UserLoraSampleItem[];
+}
+
+export interface UserLoraListResponse {
+	loras: UserLoraItem[];
 }

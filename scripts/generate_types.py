@@ -77,6 +77,9 @@ _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "WorkerPoolResponse": "WorkerPoolResponse",
     "RegistryModelResponse": "RegistryModelItem",
     "RegistryResponse": "RegistryResponse",
+    "UserLoraResponse": "UserLoraItem",
+    "UserLoraSampleResponse": "UserLoraSampleItem",
+    "UserLoraListResponse": "UserLoraListResponse",
 }
 
 _FIELD_TYPE_OVERRIDES: dict[tuple[str, str], str] = {
@@ -130,6 +133,9 @@ _EMIT_ORDER: list[str] = [
     "WorkerPoolResponse",
     "RegistryModelItem",
     "RegistryResponse",
+    "UserLoraSampleItem",
+    "UserLoraItem",
+    "UserLoraListResponse",
 ]
 
 
@@ -284,6 +290,9 @@ def generate() -> str:
         SetupRequiredResponse,
         ShareResponse,
         SongResponse,
+        UserLoraListResponse,
+        UserLoraResponse,
+        UserLoraSampleResponse,
         UserRateLimitsResponse,
         UserResponse,
         VersionResponse,
@@ -333,6 +342,9 @@ def generate() -> str:
         "WorkerPoolResponse": WorkerPoolResponse,
         "RegistryModelItem": RegistryModelResponse,
         "RegistryResponse": RegistryResponse,
+        "UserLoraSampleItem": UserLoraSampleResponse,
+        "UserLoraItem": UserLoraResponse,
+        "UserLoraListResponse": UserLoraListResponse,
     }
 
     blocks: list[str] = [HEADER]

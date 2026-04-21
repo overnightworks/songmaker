@@ -1,0 +1,113 @@
+"""Tests for lifecycle.reconcile_crashed_loras — detect + cleanup on startup."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import (
+    USER_LORA_DATASET_DIRNAME,
+    USER_LORAS_DIRNAME,
+    JobStatus,
+    JobType,
+    LoraStatus,
+)
+from songmaker_cli.db.engine import init_test_db
+from songmaker_cli.db.models import Job, User, UserLora
+from songmaker_cli.db.queries import get_user_lora
+from songmaker_cli.lifecycle import reconcile_crashed_loras
+from conftest import TEST_SECRET, make_fake_redis
+
+
+@pytest.fixture()
+def ctx(tmp_path: Path) -> AppContext:
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    factory = init_test_db(tmp_path / "songmaker.db")
+    return AppContext(
+        db=factory, audio_dir=audio_dir, data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET, redis=make_fake_redis(),
+    )
+
+
+def _create_stuck_lora(
+    ctx: AppContext, *,
+    lora_id: str, status: LoraStatus,
+    job_status: str | None,
+) -> None:
+    with ctx.db() as session:
+        session.add(User(id="u1", username="u1", password_hash="x"))
+        job_id = None
+        if job_status is not None:
+            session.add(
+                Job(id=f"job-{lora_id}", type=JobType.LORA_TRAINING, status=job_status),
+            )
+            job_id = f"job-{lora_id}"
+        session.add(
+            UserLora(
+                id=lora_id, user_id="u1", name=lora_id, slug=lora_id,
+                status=status, training_job_id=job_id,
+            ),
+        )
+        session.commit()
+    root = ctx.audio_dir / USER_LORAS_DIRNAME / "u1" / lora_id
+    (root / USER_LORA_DATASET_DIRNAME).mkdir(parents=True, exist_ok=True)
+    (root / USER_LORA_DATASET_DIRNAME / "x.wav").write_text("x")
+
+
+def test_reconciles_when_job_terminal(ctx) -> None:
+    _create_stuck_lora(
+        ctx, lora_id="L1", status=LoraStatus.TRAINING,
+        job_status=JobStatus.FAILED,
+    )
+    n = reconcile_crashed_loras(ctx)
+    assert n == 1
+    with ctx.db() as s:
+        lora = get_user_lora(s, "L1", include_deleted_rows=True)
+        assert lora.status == LoraStatus.FAILED
+
+
+def test_reconciles_when_job_missing(ctx) -> None:
+    _create_stuck_lora(
+        ctx, lora_id="L2", status=LoraStatus.PREPROCESSING, job_status=None,
+    )
+    n = reconcile_crashed_loras(ctx)
+    assert n == 1
+    with ctx.db() as s:
+        assert get_user_lora(s, "L2", include_deleted_rows=True).status == LoraStatus.FAILED
+
+
+def test_leaves_active_job_alone(ctx) -> None:
+    _create_stuck_lora(
+        ctx, lora_id="L3", status=LoraStatus.TRAINING,
+        job_status=JobStatus.RUNNING,
+    )
+    n = reconcile_crashed_loras(ctx)
+    assert n == 0
+    with ctx.db() as s:
+        assert get_user_lora(s, "L3").status == LoraStatus.TRAINING
+
+
+def test_reconciles_exporting_state(ctx) -> None:
+    _create_stuck_lora(
+        ctx, lora_id="L4", status=LoraStatus.EXPORTING,
+        job_status=JobStatus.COMPLETED,
+    )
+    n = reconcile_crashed_loras(ctx)
+    assert n == 1
+
+
+def test_reconciliation_removes_dataset_dir(ctx) -> None:
+    _create_stuck_lora(
+        ctx, lora_id="L5", status=LoraStatus.PREPROCESSING, job_status=None,
+    )
+    root = ctx.audio_dir / USER_LORAS_DIRNAME / "u1" / "L5"
+    assert (root / USER_LORA_DATASET_DIRNAME).exists()
+    reconcile_crashed_loras(ctx)
+    assert not (root / USER_LORA_DATASET_DIRNAME).exists()
+
+
+def test_no_stuck_loras_returns_zero(ctx) -> None:
+    assert reconcile_crashed_loras(ctx) == 0

@@ -104,7 +104,7 @@ def test_acestep_config_validates_against_vendored_model(
 def test_acestep_config_has_no_unknown_fields() -> None:
     cfg_fields = {f.name for f in AceStepConfig.__dataclass_fields__.values()}
     model_fields = set(GenerateMusicRequest.model_fields.keys())
-    songmaker_only = {"seed"}
+    songmaker_only = {"seed", "lora_path"}
     extra = cfg_fields - model_fields - songmaker_only
     assert not extra, (
         f"AceStepConfig fields missing from vendored GenerateMusicRequest: {extra}"
