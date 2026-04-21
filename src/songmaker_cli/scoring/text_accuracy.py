@@ -187,13 +187,14 @@ def _get_whisper_model(
 
     from songmaker_cli.constants import WHISPER_COMPUTE_TYPE
 
+    compute_type = "int8" if device == "cpu" else WHISPER_COMPUTE_TYPE
     global _whisper_model, _whisper_model_key
     cache_key = f"{model_size}:{device}"
     with _whisper_cache_lock:
         if _whisper_model_key != cache_key:
-            log.info("Loading Whisper model (%s) on %s...", model_size, device)
+            log.info("Loading Whisper model (%s) on %s (%s)...", model_size, device, compute_type)
             _whisper_model = WhisperModel(
-                model_size, device=device, compute_type=WHISPER_COMPUTE_TYPE,
+                model_size, device=device, compute_type=compute_type,
             )
             _whisper_model_key = cache_key
     return _whisper_model
