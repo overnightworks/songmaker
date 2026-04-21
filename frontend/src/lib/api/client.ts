@@ -63,12 +63,13 @@ export {
 export { checkSetupRequired, setupAdmin, login, logout, fetchMe, changePassword } from './auth';
 export { sendChatMessage, fetchChatHistory, clearChatHistory, fetchRecentChats } from './chat';
 export {
-	sendCoWriterTurn,
+	streamCoWriterTurn,
 	fetchConversations,
 	fetchConversationMessages,
 	startNewConversation,
 	deleteConversation
 } from './conversations';
+export type { CoWriterStreamEvent } from './conversations';
 export {
 	fetchCapabilities,
 	fetchGenerationDefaults,

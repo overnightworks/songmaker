@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import {
-		sendCoWriterTurn,
+		streamCoWriterTurn,
 		fetchConversations,
 		fetchConversationMessages,
 		startNewConversation,
 		deleteConversation,
 		ApiError
 	} from '$lib/api/client';
+	import type { CoWriterStreamEvent } from '$lib/api/client';
 	import type { ChatMessageItem, ConversationItem } from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
 	import ChatInput from './ChatInput.svelte';
@@ -20,9 +21,15 @@
 
 	let { currentSongId = '', visible = true, onturncompleted }: Props = $props();
 
+	interface ToolCall {
+		name: string;
+		input: Record<string, unknown>;
+	}
+
 	interface Message {
 		role: 'user' | 'assistant';
 		text: string;
+		toolCalls?: ToolCall[];
 	}
 
 	let messages: Message[] = $state([]);
@@ -129,28 +136,68 @@
 
 		input = '';
 		error = '';
-		messages = [...messages, { role: 'user', text: msg }];
+		const assistantIndex = messages.length + 1;
+		messages = [
+			...messages,
+			{ role: 'user', text: msg },
+			{ role: 'assistant', text: '', toolCalls: [] }
+		];
 		loading = true;
 
+		let streamError: string | null = null;
 		try {
-			const result = await sendCoWriterTurn(msg, currentSongId || null);
-			messages = [...messages, { role: 'assistant', text: result.assistant_message.content }];
-			if (activeConversationId !== result.conversation_id) {
-				activeConversationId = result.conversation_id;
-				viewingConversationId = result.conversation_id;
-				void loadConversations();
+			for await (const event of streamCoWriterTurn(msg, currentSongId || null)) {
+				applyStreamEvent(assistantIndex, event);
+				if (event.type === 'error') {
+					streamError = event.message;
+					break;
+				}
+				if (event.type === 'final') {
+					if (activeConversationId !== event.conversation_id) {
+						activeConversationId = event.conversation_id;
+						viewingConversationId = event.conversation_id;
+						void loadConversations();
+					}
+					if (onturncompleted) onturncompleted();
+				}
+				void scrollToBottom();
 			}
-			if (onturncompleted) onturncompleted();
 		} catch (e) {
 			if (e instanceof ApiError && e.status === 503) {
-				error = 'Claude is currently unavailable';
+				streamError = 'Claude is currently unavailable';
 			} else {
-				error = e instanceof Error ? e.message : 'Chat failed';
+				streamError = e instanceof Error ? e.message : 'Chat failed';
 			}
-			messages = messages.slice(0, -1);
 		} finally {
 			loading = false;
+			if (streamError) {
+				error = streamError;
+				const current = messages[assistantIndex];
+				if (current && !current.text) {
+					messages = [...messages.slice(0, assistantIndex), ...messages.slice(assistantIndex + 1)];
+				}
+			}
 			void scrollToBottom();
+		}
+	}
+
+	function applyStreamEvent(assistantIndex: number, event: CoWriterStreamEvent): void {
+		const current = messages[assistantIndex];
+		if (!current) return;
+		if (event.type === 'assistant_text') {
+			messages[assistantIndex] = { ...current, text: current.text + event.text };
+			return;
+		}
+		if (event.type === 'tool_call') {
+			const calls = [...(current.toolCalls ?? []), { name: event.name, input: event.input }];
+			messages[assistantIndex] = { ...current, toolCalls: calls };
+			return;
+		}
+		if (event.type === 'final') {
+			messages[assistantIndex] = {
+				...current,
+				text: event.assistant_message.content
+			};
 		}
 	}
 
@@ -247,14 +294,23 @@
 					class:user={msg.role === 'user'}
 					class:assistant={msg.role === 'assistant'}
 				>
-					<pre class="message-text">{msg.text}</pre>
+					{#if msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0}
+						<div class="tool-calls">
+							{#each msg.toolCalls as call, ci (ci)}
+								<div class="tool-call" title={JSON.stringify(call.input)}>
+									<span class="tool-dot" aria-hidden="true">▸</span>
+									<span class="tool-name">ran tool: {call.name}</span>
+								</div>
+							{/each}
+						</div>
+					{/if}
+					{#if msg.text}
+						<pre class="message-text">{msg.text}</pre>
+					{:else if msg.role === 'assistant' && loading && i === messages.length - 1}
+						<span class="typing">Claude is thinking...</span>
+					{/if}
 				</div>
 			{/each}
-			{#if loading}
-				<div class="message assistant">
-					<span class="typing">Thinking...</span>
-				</div>
-			{/if}
 			{#if error}
 				<div class="chat-error">{error}</div>
 			{/if}
@@ -512,6 +568,36 @@
 	.typing {
 		color: var(--text-muted);
 		font-style: italic;
+	}
+
+	.tool-calls {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		margin-bottom: 6px;
+	}
+
+	.tool-call {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 3px 8px;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		font-family: var(--font-mono, monospace);
+		font-size: 0.75rem;
+		color: var(--text-dim);
+	}
+
+	.tool-dot {
+		color: var(--accent);
+	}
+
+	.tool-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.chat-error {
