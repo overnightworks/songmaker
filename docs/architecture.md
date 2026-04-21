@@ -200,6 +200,7 @@ PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is
 | GET | `/api/songs/{id}/chat` | user | Load chat history |
 | DELETE | `/api/songs/{id}/chat` | user | Clear chat history |
 | GET | `/api/chat/recent` | user | Songs with active chats |
+| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages |
 | GET | `/api/capabilities` | user | Feature flags |
 | * | `/api/admin/*` | admin | User CRUD, sessions, audit log, ACE-Step control |
 | * | `/api/auth/*` | public | Login, logout, setup, password change |
