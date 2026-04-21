@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import TEST_SECRET, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -18,7 +19,6 @@ from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job, User, UserLora
 from songmaker_cli.db.queries import get_user_lora
 from songmaker_cli.lifecycle import reconcile_crashed_loras
-from conftest import TEST_SECRET, make_fake_redis
 
 
 @pytest.fixture()

@@ -6,6 +6,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from conftest import mock_http_response
 
 from acestep_engine.models import LoraTrainingConfig
 from acestep_engine.training_client import (
@@ -19,7 +20,6 @@ from acestep_engine.training_client import (
     TrainingStartedHandle,
     TrainingStatus,
 )
-from conftest import mock_http_response
 
 
 def _resp(payload: dict) -> MagicMock:

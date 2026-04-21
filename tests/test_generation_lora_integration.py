@@ -190,13 +190,13 @@ def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:
 
 
 def test_generate_endpoint_rejects_non_ready_lora(tmp_path) -> None:
+    from conftest import TEST_SECRET, make_fake_redis
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
     from songmaker_cli.api import router
     from songmaker_cli.app_context import AppContext
     from songmaker_cli.middleware import get_current_user
-    from conftest import TEST_SECRET, make_fake_redis
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()

@@ -6,10 +6,10 @@ import json
 from unittest.mock import patch
 
 import pytest
+from conftest import mock_http_response
 
 from acestep_engine.client import AceStepClient
 from acestep_engine.models import AceStepConfig, AceStepResult
-from conftest import mock_http_response
 
 
 def _config(lora_path: str = "") -> AceStepConfig:
