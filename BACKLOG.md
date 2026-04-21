@@ -103,13 +103,32 @@ When you finish an item, delete its section. Git history preserves it. Decisions
 
 **Why this isn't in the agent queue:** the hard constraint is "A/B listen and pick." Audible audio quality is Felix's ears, not a headless agent's. Keep the entry as a shared reference note for when Felix + Claude sit down together.
 
-**Reference values** (from websearch 2026-04-21):
-- xl-sft community recipe: `euler` sampler, normal scheduler, 46 steps, CFG 7.3, APG `eta=1.05`, `norm_thresh=1.3`, `momentum=0.0`.
-- xl-turbo: less documented. Turbo distillation means CFG is off, so APG params matter less — but still should match the xl-sft values where they apply.
-- Exact `eta / norm_thresh / momentum` → our-5-param mapping needs verification against `vendor/acestep/acestep/api/http/release_task_param_parser.py` — the names don't line up 1:1.
+**Verified mapping** (2026-04-21 research agent):
 
-**Process when we do it:**
-1. Read the param parser + current defaults in `acestep_capabilities.py`.
-2. Verify the name mapping.
-3. Generate A/B pairs with current vs proposed defaults on the same seed.
-4. Felix picks. Commit the winner.
+| Community term | Our param | Currently exposed? |
+|---|---|---|
+| `norm_thresh` | `velocity_norm_threshold` | ✅ yes |
+| `eta` | — | ❌ not wired to HTTP surface |
+| `momentum` | — | ❌ not wired (MLX hardcoded; PyTorch internal only) |
+| sampler | `sampler_mode` (`"euler"` \| `"heun"`) | ✅ yes |
+| — | `latent_shift` / `latent_rescale` | ✅ yes, but post-diffusion scale, not APG |
+
+Only `velocity_norm_threshold` + `sampler_mode` match the community APG recipe. `eta` and `momentum` would need a follow-up upstream PR on top of #1092.
+
+**Current defaults** (all modes share `_SHARED_DEFAULTS` in `src/songmaker_cli/config.py:103-107`):
+- `velocity_norm_threshold = 0.0` (off)
+- `velocity_ema_factor = 0.0` (off)
+- `latent_shift = 0.0`, `latent_rescale = 1.0`
+- `sampler_mode = "euler"`
+
+**Recommended A/B candidates:**
+
+| Mode | `sampler_mode` | `velocity_norm_threshold` | Rationale |
+|---|---|---|---|
+| `xl-turbo` (Felix's prod) | `"heun"` | `1.5` | 8-step distilled benefits from second-order predictor; clamping is the only stabilization with CFG off |
+| `xl-sft` | `"euler"` | `1.3` | Direct match to community xl-sft recipe |
+
+**Process:**
+1. Generate A/B pairs on the same seed: current defaults vs proposed.
+2. Felix listens. Commits whichever.
+3. Optional follow-up PR on top of #1092: expose `eta` + `momentum` so the full recipe is reachable.
