@@ -9,7 +9,7 @@ import pytest
 
 from acestep_engine.client import AceStepClient
 from acestep_engine.models import AceStepConfig, AceStepResult
-from tests.conftest import mock_http_response
+from conftest import mock_http_response
 
 
 def _config(lora_path: str = "") -> AceStepConfig:

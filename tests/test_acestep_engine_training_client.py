@@ -19,7 +19,7 @@ from acestep_engine.training_client import (
     TrainingStartedHandle,
     TrainingStatus,
 )
-from tests.conftest import mock_http_response
+from conftest import mock_http_response
 
 
 def _resp(payload: dict) -> MagicMock:
