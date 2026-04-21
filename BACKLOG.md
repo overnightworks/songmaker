@@ -21,11 +21,13 @@ After the architecture cleanup, these are the bigger features in the queue. They
 - Streaming via SSE on the chat endpoint, frontend reads the stream incrementally.
 - Add a circuit breaker around Anthropic calls (open after 3 consecutive failures, short-circuit subsequent requests).
 
-**Triggers to start:**
-- Co-writer becomes a daily-driver feature.
-- Frontend reports a chat timeout in the wild (the 120s wall is hit).
-- Switch from Max subscription / CLI to a paid `ANTHROPIC_API_KEY`.
+**Triggers to start** (only the explicit decision triggers — the soft signals alone aren't enough to justify the migration cost):
+- Switch from Max subscription / CLI to a paid `ANTHROPIC_API_KEY`. (Felix 2026-04-21: currently NO — Max sub is already expensive, per-token on top doubles the AI bill.)
 - Public-facing launch (CLI denylist is fail-open and unsuitable for untrusted users).
+
+**Non-triggers** (do NOT start the migration just because these happen):
+- Co-writer becomes a daily-driver feature — just polish the CLI wrapper.
+- Frontend reports chat timeout in the wild — fix by raising `ARQ_JOB_TIMEOUT` / adding CLI-side streaming, not by swapping the provider. (Already done once: commit `1dc4038` bumped to 600s.)
 
 **Constraints:**
 - `ANTHROPIC_API_KEY` becomes required (not optional). Settings raises at startup if missing.
@@ -124,18 +126,22 @@ After the architecture cleanup, these are the bigger features in the queue. They
 
 **First step:** read `Generation` and `Song` models + `db/queries/generations.py` + `db/queries/songs.py` + the existing context menu component, design + execute.
 
-### Generation settings refactor + ACE-Step parameter parity
-
-**Goal:** Decouple generation params from song versions, add missing ACE-Step params (sampler_mode, custom_timesteps, etc.), restructure the frontend settings panel. Full concept plan in `plans/settings-profiles.md`.
-
 ### Use `ACESTEP_CHECKPOINTS_DIR` env var
 
 **Goal:** Upstream #1056 added `ACESTEP_CHECKPOINTS_DIR` for shared model storage. Use this instead of hardcoding the checkpoint mount path in docker-compose and worker settings. Small cleanup.
 
-### Upstream PRs for ACE-Step-1.5
+### Tune xl-turbo / xl-sft APG defaults
 
-**Goal:** Submit patches from our fork (`FlexOr2/ACE-Step-1.5`) back to upstream:
-1. VRAM preflight skip option — add an env var to disable `_vram_preflight_check()` instead of patching it out. Currently we carry a local patch in `vendor/acestep`.
-2. Expose HTTP API params — `sampler_mode`, `velocity_norm_threshold`, `velocity_ema_factor`, `latent_shift`, `latent_rescale` exist in `GenerationParams` but aren't on the `/release_task` HTTP surface. Needed for non-Gradio clients (like us).
+**Goal:** The APG (Adaptive Projected Guidance) params we exposed via upstream PR #1092 — `sampler_mode`, `velocity_norm_threshold`, `velocity_ema_factor`, `latent_shift`, `latent_rescale` — are wired into songmaker's generation path but the per-model-mode defaults haven't been reviewed against community-recommended XL values. Quality on the 4B XL variants depends on these more than on 2B.
 
-**Constraints:** Follow upstream CONTRIBUTING.md — one problem per PR, minimal blast radius, PR template with scope/risk/regression.
+**Decisions:**
+- Felix's production model is xl-turbo (8 steps, no CFG, best balance) — that's the primary target.
+- xl-sft is secondary (46 steps, CFG 7.3, peak audio quality) — tune its defaults separately since CFG is on.
+- Community-recommended xl-sft config (per websearch 2026-04-21): euler sampler, normal scheduler, 46 steps, CFG 7.3, APG `eta=1.05`, `norm_thresh=1.3`, `momentum=0.0`. xl-turbo config is less documented; start from xl-sft values minus the CFG-dependent ones.
+
+**Constraints:**
+- Exact eta/norm_thresh/momentum → our-5-param mapping must be verified against `vendor/acestep/acestep/api/http/release_task_param_parser.py` before changing defaults. The names don't line up 1:1.
+- Defaults live per-model-mode in `acestep_capabilities.py` / `acestep_engine`. Don't change shared fallbacks that other modes depend on.
+- A/B test at least one xl-turbo generation with tuned vs current defaults before committing — this is audible quality, not just a setting.
+
+**First step:** read the param parser + current per-mode defaults, verify the APG name mapping, prototype new defaults on xl-turbo, listen, decide.
