@@ -1,16 +1,33 @@
 import type {
-	ChatTurnV2Result,
+	ChatMessageItem,
 	ConversationItem,
 	ConversationListResponse,
 	ConversationMessagesResponse
 } from './types';
-import { apiFetch, CHAT_TIMEOUT_MS } from './fetch';
+import { apiFetch, sseFetch, CHAT_TIMEOUT_MS } from './fetch';
 
-export async function sendCoWriterTurn(
+export type CoWriterStreamEvent =
+	| { type: 'assistant_text'; text: string }
+	| { type: 'tool_call'; tool_use_id: string; name: string; input: Record<string, unknown> }
+	| {
+			type: 'tool_result';
+			tool_use_id: string;
+			content: string;
+			is_error: boolean;
+	  }
+	| {
+			type: 'final';
+			conversation_id: string;
+			user_message: ChatMessageItem;
+			assistant_message: ChatMessageItem;
+	  }
+	| { type: 'error'; status: number; message: string };
+
+export function streamCoWriterTurn(
 	message: string,
 	currentSongId: string | null = null
-): Promise<ChatTurnV2Result> {
-	return apiFetch<ChatTurnV2Result>(
+): AsyncGenerator<CoWriterStreamEvent> {
+	return sseFetch<CoWriterStreamEvent>(
 		'/api/chat/turn',
 		{
 			method: 'POST',

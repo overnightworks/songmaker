@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,6 +13,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.claude.provider import (
+    AssistantTextEvent,
+    FinalEvent,
+    StreamEvent,
+    ToolCallEvent,
+    UnavailableError,
+)
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -98,9 +106,32 @@ def stranger_client(tmp_path: Path) -> TestClient:
 
 
 def _mock_claude(text: str = "hello from claude"):
-    response = MagicMock()
-    response.text = text
-    return AsyncMock(return_value=response)
+    """Return a patch value that mimics acall_claude_with_mcp_stream.
+
+    Yields a single assistant_text event then the terminal FinalEvent.
+    """
+    async def _gen(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
+        yield AssistantTextEvent(text=text)
+        yield FinalEvent(text=text)
+
+    return _gen
+
+
+def _stream_events(response) -> list[dict]:
+    events: list[dict] = []
+    for line in response.iter_lines():
+        if not line:
+            continue
+        if line.startswith("data: "):
+            events.append(json.loads(line[len("data: "):]))
+    return events
+
+
+def _final_event(events: list[dict]) -> dict:
+    for event in events:
+        if event.get("type") == "final":
+            return event
+    raise AssertionError(f"no final event in {events!r}")
 
 
 # ── provider: _build_mcp_cli_cmd ──────────────────────────────────────
@@ -238,17 +269,24 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
 # ── /api/chat/turn ────────────────────────────────────────────────────
 
 
-def test_chat_turn_creates_active_conversation_and_stores_messages(client):
+def test_chat_turn_streams_sse_and_stores_messages(client):
     c, factory = client
-    mock_acall = _mock_claude("ok")
-    with patch("songmaker_cli.conversation_api.acall_claude_with_mcp", mock_acall):
+    mock_stream = _mock_claude("ok")
+    with patch(
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        mock_stream,
+    ):
         resp = c.post("/api/chat/turn", json={"message": "hey"})
 
     assert resp.status_code == 200
-    body = resp.json()
-    assert body["user_message"]["content"] == "hey"
-    assert body["assistant_message"]["content"] == "ok"
-    conv_id = body["conversation_id"]
+    assert resp.headers["content-type"].startswith("text/event-stream")
+    events = _stream_events(resp)
+    # At least one streaming (assistant_text) event + a final frame.
+    assert any(e["type"] == "assistant_text" for e in events)
+    final = _final_event(events)
+    assert final["user_message"]["content"] == "hey"
+    assert final["assistant_message"]["content"] == "ok"
+    conv_id = final["conversation_id"]
 
     with factory() as session:
         convs = session.query(Conversation).all()
@@ -263,11 +301,17 @@ def test_chat_turn_creates_active_conversation_and_stores_messages(client):
 
 def test_chat_turn_reuses_active_conversation_across_turns(client):
     c, factory = client
-    mock_acall = _mock_claude()
-    with patch("songmaker_cli.conversation_api.acall_claude_with_mcp", mock_acall):
+    mock_stream = _mock_claude()
+    with patch(
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        mock_stream,
+    ):
         r1 = c.post("/api/chat/turn", json={"message": "one"})
         r2 = c.post("/api/chat/turn", json={"message": "two"})
-    assert r1.json()["conversation_id"] == r2.json()["conversation_id"]
+
+    f1 = _final_event(_stream_events(r1))
+    f2 = _final_event(_stream_events(r2))
+    assert f1["conversation_id"] == f2["conversation_id"]
     with factory() as session:
         assert session.query(Conversation).count() == 1
         assert session.query(ChatMessage).count() == 4
@@ -275,48 +319,94 @@ def test_chat_turn_reuses_active_conversation_across_turns(client):
 
 def test_chat_turn_injects_current_song_block(client):
     c, _ = client
-    mock_acall = _mock_claude()
+    captured_kwargs: dict = {}
+
+    async def _capture(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        yield AssistantTextEvent(text="ok")
+        yield FinalEvent(text="ok")
+
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp", mock_acall,
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        _capture,
     ):
         resp = c.post(
             "/api/chat/turn",
             json={"message": "rewrite the chorus", "current_song_id": "s1"},
         )
     assert resp.status_code == 200
-    last_call = mock_acall.await_args
-    messages = last_call.kwargs["messages"]
+    _ = _stream_events(resp)
+    messages = captured_kwargs["messages"]
     last_user = messages[-1]["content"]
     assert "<current_song>" in last_user
     assert "title: Thunder" in last_user
     assert "lyrics:\nverse" in last_user
-    # Claude sees the current song even though we only pass user_id to the MCP.
-    assert last_call.kwargs["user_id"] == "u-test"
+    assert captured_kwargs["user_id"] == "u-test"
+
+
+def test_chat_turn_forwards_tool_call_events(client):
+    c, _ = client
+
+    async def _gen(*_args, **_kwargs):
+        yield ToolCallEvent(
+            tool_use_id="tu-1",
+            name="mcp__songmaker__get_song",
+            input={"song_id": "s1"},
+        )
+        yield AssistantTextEvent(text="here")
+        yield FinalEvent(text="here")
+
+    with patch(
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream", _gen,
+    ):
+        resp = c.post("/api/chat/turn", json={"message": "call a tool"})
+
+    events = _stream_events(resp)
+    types = [e["type"] for e in events]
+    assert "tool_call" in types
+    tool_event = next(e for e in events if e["type"] == "tool_call")
+    assert tool_event["name"] == "mcp__songmaker__get_song"
 
 
 def test_chat_turn_rejects_other_users_song(stranger_client):
     c, _ = stranger_client
-    mock_acall = _mock_claude()
+    called = {"value": False}
+
+    async def _gen(*_args, **_kwargs):
+        called["value"] = True
+        yield FinalEvent(text="")
+
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp", mock_acall,
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream", _gen,
     ):
         resp = c.post(
             "/api/chat/turn",
             json={"message": "spy", "current_song_id": "s1"},
         )
     assert resp.status_code == 404
-    # Claude must not have been called for an unauthorized song.
-    mock_acall.assert_not_awaited()
+    assert called["value"] is False
 
 
-def test_chat_turn_unexpected_error_marks_job_failed(client):
+def test_chat_turn_unexpected_error_emits_error_frame_and_marks_job_failed(
+    client,
+):
     c, factory = client
-    mock_acall = AsyncMock(side_effect=RuntimeError("kaboom"))
-    with (
-        patch("songmaker_cli.conversation_api.acall_claude_with_mcp", mock_acall),
-        pytest.raises(Exception),
+
+    async def _boom(*_args, **_kwargs):
+        raise RuntimeError("kaboom")
+        yield  # pragma: no cover
+
+    with patch(
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        _boom,
     ):
-        c.post("/api/chat/turn", json={"message": "oops"})
+        resp = c.post("/api/chat/turn", json={"message": "oops"})
+
+    assert resp.status_code == 200
+    events = _stream_events(resp)
+    assert any(
+        e.get("type") == "error" and e.get("status") == 500 for e in events
+    )
 
     with factory() as session:
         from songmaker_cli.db.models import Job
@@ -326,16 +416,22 @@ def test_chat_turn_unexpected_error_marks_job_failed(client):
         assert jobs[0].status == "failed"
 
 
-def test_chat_turn_failure_leaves_no_empty_conversation(client):
+def test_chat_turn_unavailable_emits_503_error_frame(client):
     c, factory = client
-    from songmaker_cli.claude.provider import UnavailableError
 
-    mock_acall = AsyncMock(side_effect=UnavailableError("down"))
+    async def _down(*_args, **_kwargs):
+        raise UnavailableError("down")
+        yield  # pragma: no cover
+
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp", mock_acall,
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        _down,
     ):
         resp = c.post("/api/chat/turn", json={"message": "hi"})
-    assert resp.status_code == 503
+    assert resp.status_code == 200
+    events = _stream_events(resp)
+    err = next(e for e in events if e.get("type") == "error")
+    assert err["status"] == 503
 
     with factory() as session:
         assert session.query(Conversation).count() == 0
@@ -364,9 +460,10 @@ def test_list_conversations_scoped_to_user(client):
 
 def test_list_conversations_includes_counts(client):
     c, factory = client
-    mock_acall = _mock_claude()
+    mock_stream = _mock_claude()
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp", mock_acall,
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        mock_stream,
     ):
         c.post("/api/chat/turn", json={"message": "a"})
 
@@ -378,12 +475,13 @@ def test_list_conversations_includes_counts(client):
 
 def test_get_conversation_returns_messages(client):
     c, _ = client
-    mock_acall = _mock_claude("reply!")
+    mock_stream = _mock_claude("reply!")
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp", mock_acall,
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        mock_stream,
     ):
         turn = c.post("/api/chat/turn", json={"message": "question?"})
-    conv_id = turn.json()["conversation_id"]
+    conv_id = _final_event(_stream_events(turn))["conversation_id"]
 
     resp = c.get(f"/api/conversations/{conv_id}")
     assert resp.status_code == 200
@@ -414,12 +512,13 @@ def test_get_conversation_404_when_unknown(client):
 
 def test_new_conversation_archives_active(client):
     c, factory = client
-    mock_acall = _mock_claude()
+    mock_stream = _mock_claude()
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp", mock_acall,
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        mock_stream,
     ):
         turn = c.post("/api/chat/turn", json={"message": "hi"})
-    old_id = turn.json()["conversation_id"]
+    old_id = _final_event(_stream_events(turn))["conversation_id"]
 
     resp = c.post("/api/conversations/new")
     assert resp.status_code == 200
@@ -444,12 +543,13 @@ def test_new_conversation_without_active(client):
 
 def test_delete_conversation_removes_messages(client):
     c, factory = client
-    mock_acall = _mock_claude()
+    mock_stream = _mock_claude()
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp", mock_acall,
+        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        mock_stream,
     ):
         turn = c.post("/api/chat/turn", json={"message": "bye"})
-    conv_id = turn.json()["conversation_id"]
+    conv_id = _final_event(_stream_events(turn))["conversation_id"]
 
     resp = c.delete(f"/api/conversations/{conv_id}")
     assert resp.status_code == 200

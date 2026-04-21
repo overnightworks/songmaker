@@ -14,9 +14,12 @@ compatibility during rollout.
 """
 from __future__ import annotations
 
+import json
 import logging
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
@@ -27,7 +30,6 @@ from songmaker_cli.api_helpers import (
 from songmaker_cli.api_models import (
     ChatMessageResponse,
     ChatTurnV2Request,
-    ChatTurnV2Response,
     ConversationListResponse,
     ConversationMessagesResponse,
     ConversationResponse,
@@ -35,8 +37,10 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.claude.provider import (
+    FinalEvent,
+    StreamEvent,
     UnavailableError,
-    acall_claude_with_mcp,
+    acall_claude_with_mcp_stream,
 )
 from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.queries import (
@@ -109,13 +113,24 @@ def _wrap_user_message(message: str, song) -> str:
 # ── Chat turn ─────────────────────────────────────────────────────────
 
 
+SSE_MEDIA_TYPE = "text/event-stream"
+
+
+def _sse_format(event: StreamEvent | dict) -> str:
+    if isinstance(event, StreamEvent):
+        payload = event.model_dump()
+    else:
+        payload = event
+    return f"data: {json.dumps(payload)}\n\n"
+
+
 @router.post("/chat/turn")
 async def api_chat_turn(
     req: ChatTurnV2Request,
     request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-) -> ChatTurnV2Response:
+) -> StreamingResponse:
     check_redis_health(request)
 
     current_song = None
@@ -138,40 +153,70 @@ async def api_chat_turn(
 
     chat_model = get_claude_chat_model(session)
 
-    try:
-        response = await acall_claude_with_mcp(
-            prompt="",
-            user_id=user.id,
-            system=COWRITER_SYSTEM_PROMPT,
-            model=chat_model,
-            messages=api_messages,
+    async def event_generator() -> AsyncIterator[str]:
+        assistant_text = ""
+        try:
+            async for event in acall_claude_with_mcp_stream(
+                prompt="",
+                user_id=user.id,
+                system=COWRITER_SYSTEM_PROMPT,
+                model=chat_model,
+                messages=api_messages,
+            ):
+                if isinstance(event, FinalEvent):
+                    assistant_text = event.text
+                    break
+                yield _sse_format(event)
+        except UnavailableError as e:
+            log.warning("Co-writer chat unavailable: %s", e)
+            update_job_status(
+                session, job_id, JobStatus.FAILED, error="Claude unavailable",
+            )
+            session.commit()
+            yield _sse_format({
+                "type": "error",
+                "status": 503,
+                "message": "Claude is currently unavailable",
+            })
+            return
+        except Exception as exc:
+            log.exception("Co-writer chat failed: %s", exc)
+            update_job_status(
+                session, job_id, JobStatus.FAILED, error="Chat request failed",
+            )
+            session.commit()
+            yield _sse_format({
+                "type": "error",
+                "status": 500,
+                "message": "Chat request failed",
+            })
+            return
+
+        conversation = get_or_create_active_conversation(session, user.id)
+        user_msg = append_message(
+            session, conversation.id, "user", req.message,
+            song_id=req.current_song_id,
         )
-    except UnavailableError as e:
-        log.warning("Co-writer chat unavailable: %s", e)
-        update_job_status(session, job_id, JobStatus.FAILED, error="Claude unavailable")
+        assistant_msg = append_message(
+            session, conversation.id, "assistant", assistant_text,
+            song_id=req.current_song_id,
+        )
+        update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0)
         session.commit()
-        raise HTTPException(503, "Claude is currently unavailable")
-    except Exception:
-        update_job_status(session, job_id, JobStatus.FAILED, error="Chat request failed")
-        session.commit()
-        raise
 
-    conversation = get_or_create_active_conversation(session, user.id)
-    user_msg = append_message(
-        session, conversation.id, "user", req.message,
-        song_id=req.current_song_id,
-    )
-    assistant_msg = append_message(
-        session, conversation.id, "assistant", response.text,
-        song_id=req.current_song_id,
-    )
-    update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0)
-    session.commit()
+        yield _sse_format({
+            "type": "final",
+            "conversation_id": conversation.id,
+            "user_message": ChatMessageResponse.from_orm(user_msg).model_dump(),
+            "assistant_message": ChatMessageResponse.from_orm(
+                assistant_msg,
+            ).model_dump(),
+        })
 
-    return ChatTurnV2Response(
-        conversation_id=conversation.id,
-        user_message=ChatMessageResponse.from_orm(user_msg),
-        assistant_message=ChatMessageResponse.from_orm(assistant_msg),
+    return StreamingResponse(
+        event_generator(),
+        media_type=SSE_MEDIA_TYPE,
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

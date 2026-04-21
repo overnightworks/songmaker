@@ -64,3 +64,78 @@ export async function apiFetch<T>(
 }
 
 export type JobStatus = JobItem;
+
+export async function* sseFetch<T = unknown>(
+	path: string,
+	init: RequestInit,
+	timeoutMs?: number
+): AsyncGenerator<T> {
+	const method = init.method?.toUpperCase() ?? 'GET';
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), timeoutMs ?? API_TIMEOUT_MS);
+	let opts: RequestInit = {
+		credentials: 'include',
+		signal: controller.signal,
+		...init,
+		headers: {
+			Accept: 'text/event-stream',
+			...((init.headers as Record<string, string>) ?? {})
+		}
+	};
+	if (method !== 'GET' && method !== 'HEAD') {
+		const token = getCsrfToken();
+		if (token) {
+			opts = {
+				...opts,
+				headers: { 'X-CSRF-Token': token, ...(opts.headers as Record<string, string>) }
+			};
+		}
+	}
+	try {
+		const resp = await fetch(path, opts);
+		if (!resp.ok) {
+			let detail = '';
+			try {
+				const body = await resp.json();
+				detail = body.detail ?? '';
+			} catch {
+				// non-JSON body on error
+			}
+			if (resp.status === 401 && !AUTH_ENDPOINTS.includes(path)) {
+				const { clearAuth } = await import('$lib/stores/auth');
+				const { goto } = await import('$app/navigation');
+				clearAuth();
+				await goto('/login');
+			}
+			throw new ApiError(resp.status, detail, path);
+		}
+		if (!resp.body) {
+			return;
+		}
+		const reader = resp.body.getReader();
+		const decoder = new TextDecoder('utf-8');
+		let buffer = '';
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+			let boundary = buffer.indexOf('\n\n');
+			while (boundary !== -1) {
+				const frame = buffer.slice(0, boundary);
+				buffer = buffer.slice(boundary + 2);
+				const line = frame.split('\n').find((l) => l.startsWith('data: '));
+				if (line) {
+					const json = line.slice('data: '.length);
+					try {
+						yield JSON.parse(json) as T;
+					} catch {
+						// drop malformed frame
+					}
+				}
+				boundary = buffer.indexOf('\n\n');
+			}
+		}
+	} finally {
+		clearTimeout(timeout);
+	}
+}

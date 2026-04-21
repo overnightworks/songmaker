@@ -18,8 +18,12 @@ import shutil
 import subprocess
 import sys
 import threading
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 from songmaker_cli.settings import get_settings
 
@@ -54,6 +58,43 @@ class UnavailableError(Exception):
 @dataclass
 class ClaudeResponse:
     text: str
+
+
+# ── Stream event models ────────────────────────────────────────────
+
+
+class StreamEvent(BaseModel):
+    """Base class for all streamed Claude events."""
+    type: str
+
+
+class AssistantTextEvent(StreamEvent):
+    type: Literal["assistant_text"] = "assistant_text"
+    text: str
+
+
+class ToolCallEvent(StreamEvent):
+    type: Literal["tool_call"] = "tool_call"
+    tool_use_id: str
+    name: str
+    input: dict = Field(default_factory=dict)
+
+
+class ToolResultEvent(StreamEvent):
+    type: Literal["tool_result"] = "tool_result"
+    tool_use_id: str
+    content: str
+    is_error: bool = False
+
+
+class FinalEvent(StreamEvent):
+    type: Literal["final"] = "final"
+    text: str
+
+
+class ErrorEvent(StreamEvent):
+    type: Literal["error"] = "error"
+    message: str
 
 
 # ── Public interface ───────────────────────────────────────────────
@@ -154,6 +195,177 @@ async def acall_claude_with_mcp(
     return ClaudeResponse(text=text.strip())
 
 
+async def acall_claude_with_mcp_stream(
+    prompt: str,
+    *,
+    user_id: str,
+    system: str | None = None,
+    model: str | None = None,
+    messages: list[dict[str, str]] | None = None,
+    timeout_seconds: int = 600,
+) -> AsyncIterator[StreamEvent]:
+    """Stream Claude CLI output as parsed events.
+
+    Spawns the Claude CLI with ``--output-format stream-json`` and yields
+    typed ``StreamEvent`` instances as the subprocess emits newline-delimited
+    JSON lines. The final yielded event is always a ``FinalEvent`` (on
+    success) or an ``ErrorEvent`` (on CLI failure). Malformed JSON lines
+    are logged and skipped rather than raising.
+    """
+    if model is None:
+        model = get_settings().claude_chat_model
+    binary = _require_claude_binary()
+    flat_prompt = _flatten_messages(prompt, messages)
+    cmd = _build_mcp_cli_cmd(binary, flat_prompt, system, model, user_id, stream=True)
+    env = _scrub_env()
+    log.info("Claude: streaming MCP+CLI (model=%s, user=%s)", model, user_id)
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+    except FileNotFoundError:
+        raise UnavailableError("Claude CLI binary not found")
+
+    async for event in _consume_stream(proc, timeout_seconds):
+        yield event
+
+
+async def _consume_stream(
+    proc: asyncio.subprocess.Process, timeout_seconds: int,
+) -> AsyncIterator[StreamEvent]:
+    text_chunks: list[str] = []
+    final_text: str | None = None
+    try:
+        async for raw_line in _iter_lines(proc.stdout, timeout_seconds):
+            parsed = _safe_json_loads(raw_line)
+            if parsed is None:
+                continue
+            event = _parse_stream_event(parsed, text_chunks)
+            if event is None:
+                continue
+            if isinstance(event, FinalEvent):
+                final_text = event.text
+                continue
+            yield event
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        raise UnavailableError(
+            f"Claude CLI timed out after {timeout_seconds}s",
+        )
+
+    await proc.wait()
+    if proc.returncode != 0:
+        stderr_bytes = await proc.stderr.read() if proc.stderr else b""
+        stderr = stderr_bytes.decode(errors="replace")
+        log.warning(
+            "Claude MCP stream failed (rc=%d): %s", proc.returncode, stderr[:500],
+        )
+        raise UnavailableError(
+            "Claude CLI is unavailable. Check server logs for details.",
+        )
+
+    assembled = final_text if final_text is not None else "".join(text_chunks)
+    yield FinalEvent(text=assembled.strip())
+
+
+async def _iter_lines(
+    stdout: asyncio.StreamReader | None, timeout_seconds: int,
+) -> AsyncIterator[bytes]:
+    if stdout is None:
+        return
+    deadline = asyncio.get_event_loop().time() + timeout_seconds
+    while True:
+        remaining = deadline - asyncio.get_event_loop().time()
+        if remaining <= 0:
+            raise asyncio.TimeoutError()
+        try:
+            line = await asyncio.wait_for(stdout.readline(), timeout=remaining)
+        except asyncio.TimeoutError:
+            raise
+        if not line:
+            return
+        yield line
+
+
+def _safe_json_loads(raw_line: bytes) -> dict | None:
+    line = raw_line.strip()
+    if not line:
+        return None
+    try:
+        parsed = json.loads(line)
+    except json.JSONDecodeError:
+        log.warning("Claude stream: skipping malformed JSON line: %r", line[:200])
+        return None
+    if not isinstance(parsed, dict):
+        log.warning("Claude stream: skipping non-object event: %r", parsed)
+        return None
+    return parsed
+
+
+def _parse_stream_event(
+    payload: dict, text_chunks: list[str],
+) -> StreamEvent | None:
+    kind = payload.get("type")
+    if kind == "assistant":
+        return _parse_assistant_event(payload, text_chunks)
+    if kind == "user":
+        return _parse_user_event(payload)
+    if kind == "result":
+        text = payload.get("result")
+        if isinstance(text, str):
+            return FinalEvent(text=text)
+        return None
+    return None
+
+
+def _parse_assistant_event(
+    payload: dict, text_chunks: list[str],
+) -> StreamEvent | None:
+    message = payload.get("message") or {}
+    blocks = message.get("content") or []
+    for block in blocks:
+        btype = block.get("type")
+        if btype == "text":
+            text = block.get("text") or ""
+            text_chunks.append(text)
+            return AssistantTextEvent(text=text)
+        if btype == "tool_use":
+            return ToolCallEvent(
+                tool_use_id=block.get("id") or "",
+                name=block.get("name") or "",
+                input=block.get("input") or {},
+            )
+    return None
+
+
+def _parse_user_event(payload: dict) -> StreamEvent | None:
+    message = payload.get("message") or {}
+    blocks = message.get("content") or []
+    for block in blocks:
+        if block.get("type") == "tool_result":
+            content = block.get("content")
+            if isinstance(content, list):
+                texts = [
+                    c.get("text", "") for c in content if isinstance(c, dict)
+                ]
+                content_str = "".join(texts)
+            elif isinstance(content, str):
+                content_str = content
+            else:
+                content_str = ""
+            return ToolResultEvent(
+                tool_use_id=block.get("tool_use_id") or "",
+                content=content_str,
+                is_error=bool(block.get("is_error", False)),
+            )
+    return None
+
+
 def is_available(api_key: str | None = None) -> bool:
     if api_key:
         return True
@@ -251,17 +463,22 @@ def _build_mcp_config(user_id: str) -> str:
 
 def _build_mcp_cli_cmd(
     binary: str, prompt: str, system: str | None, model: str, user_id: str,
+    *,
+    stream: bool = False,
 ) -> list[str]:
+    output_format = "stream-json" if stream else "json"
     cmd = [
         binary, "-p", prompt,
         "--model", model,
-        "--output-format", "json",
+        "--output-format", output_format,
         "--disallowedTools", _DISALLOWED_TOOLS,
         "--allowedTools", MCP_ALLOWED_TOOLS,
         "--mcp-config", _build_mcp_config(user_id),
         "--strict-mcp-config",
         "--permission-mode", "bypassPermissions",
     ]
+    if stream:
+        cmd.append("--verbose")
     if system:
         cmd.extend(["--system-prompt", system])
     return cmd
