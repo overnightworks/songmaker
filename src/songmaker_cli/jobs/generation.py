@@ -601,6 +601,14 @@ async def run_generation_job(
                 except OSError:
                     pass
 
+    except asyncio.CancelledError:
+        log.warning("Generation job %s cancelled (arq timeout or worker shutdown)", job_id)
+        _update_job(
+            db_factory, job_id, JobStatus.FAILED,
+            error="Job cancelled: exceeded ARQ_JOB_TIMEOUT or worker shutdown",
+            error_type="timeout",
+        )
+        raise
     except Exception as exc:
         log.exception("Generation job failed: %s", exc)
         _update_job(
