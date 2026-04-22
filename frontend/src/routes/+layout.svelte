@@ -88,6 +88,7 @@
 			<button class="theme-toggle" onclick={toggleTheme} aria-label="Toggle theme">
 				{$theme === 'dark' ? '☀' : '☾'}
 			</button>
+			<a href="/loras">Voices</a>
 			<a href="/settings">Settings</a>
 			<button class="top-logout" onclick={handleLogout}>Logout</button>
 		</nav>
