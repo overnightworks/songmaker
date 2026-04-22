@@ -1,5 +1,5 @@
 import type { UserLoraItem, UserLoraListResponse, UserLoraSampleItem } from './types';
-import { apiFetch, ApiError } from './fetch';
+import { apiFetch } from './fetch';
 
 const SAMPLE_UPLOAD_TIMEOUT_MS = 120_000;
 
@@ -25,11 +25,6 @@ export async function softDeleteLora(loraId: string): Promise<void> {
 	await apiFetch(`/api/loras/${loraId}`, { method: 'DELETE' });
 }
 
-function getCsrfToken(): string {
-	const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
-	return match ? decodeURIComponent(match[1]) : '';
-}
-
 export async function addLoraSample(
 	loraId: string,
 	audioFile: File,
@@ -42,35 +37,11 @@ export async function addLoraSample(
 	form.append('caption', caption);
 	form.append('lyrics', lyrics);
 	if (position !== undefined) form.append('position', String(position));
-
-	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), SAMPLE_UPLOAD_TIMEOUT_MS);
-	const token = getCsrfToken();
-	const headers: Record<string, string> = {};
-	if (token) headers['X-CSRF-Token'] = token;
-
-	try {
-		const resp = await fetch(`/api/loras/${loraId}/samples`, {
-			method: 'POST',
-			credentials: 'include',
-			signal: controller.signal,
-			headers,
-			body: form
-		});
-		if (!resp.ok) {
-			let detail = '';
-			try {
-				const body = await resp.json();
-				detail = body.detail ?? '';
-			} catch {
-				// response body not JSON — use empty detail
-			}
-			throw new ApiError(resp.status, detail, `/api/loras/${loraId}/samples`);
-		}
-		return (await resp.json()) as UserLoraSampleItem;
-	} finally {
-		clearTimeout(timeout);
-	}
+	return apiFetch<UserLoraSampleItem>(
+		`/api/loras/${loraId}/samples`,
+		{ method: 'POST', body: form },
+		SAMPLE_UPLOAD_TIMEOUT_MS
+	);
 }
 
 export interface LoraSamplePatch {
