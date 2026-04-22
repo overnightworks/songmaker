@@ -13,6 +13,7 @@
 	import { addToast } from '$lib/stores/toast';
 	import ParamControls from './ParamControls.svelte';
 	import PresetChips from './PresetChips.svelte';
+	import VoicePicker from './VoicePicker.svelte';
 
 	interface Props {
 		selectedModel?: string | null;
@@ -89,6 +90,8 @@
 	</summary>
 
 	<div class="settings-body">
+		<VoicePicker />
+
 		<PresetChips
 			{hasOverrides}
 			{selectedModel}

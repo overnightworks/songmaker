@@ -117,3 +117,14 @@ export {
 	runGenerationRetention,
 	type GenerationRetentionReport
 } from './admin';
+export {
+	listLoras,
+	getLora,
+	createLora,
+	softDeleteLora,
+	addLoraSample,
+	patchLoraSample,
+	deleteLoraSample,
+	trainLora,
+	type LoraSamplePatch
+} from './loras';
