@@ -431,3 +431,52 @@ def test_iter_lines_returns_immediately_when_stdout_missing() -> None:
         return out
 
     assert asyncio.run(_run()) == []
+
+
+def test_stream_passes_buffer_limit_above_asyncio_default(monkeypatch) -> None:
+    monkeypatch.setattr(
+        provider, "_require_claude_binary", lambda: "/bin/claude",
+    )
+
+    captured: dict[str, Any] = {}
+
+    async def fake_exec(*cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        return _make_fake_proc([_result_line("ok")])
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+    asyncio.run(_collect(
+        acall_claude_with_mcp_stream(prompt="hi", user_id="u"),
+    ))
+
+    assert "limit" in captured["kwargs"]
+    assert captured["kwargs"]["limit"] == provider._STREAM_BUFFER_LIMIT
+    assert captured["kwargs"]["limit"] > 64 * 1024
+
+
+def test_stream_consumes_oversized_tool_result_line(monkeypatch) -> None:
+    monkeypatch.setattr(
+        provider, "_require_claude_binary", lambda: "/bin/claude",
+    )
+
+    huge_payload = "x" * (256 * 1024)
+    lines = [
+        _tool_use_line("mcp__songmaker__get_song", "tu-1", {"song_id": "s1"}),
+        _tool_result_line("tu-1", huge_payload),
+        _result_line("done"),
+    ]
+
+    async def fake_exec(*_cmd, **_kw):
+        return _make_fake_proc(lines)
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+    events = asyncio.run(_collect(
+        acall_claude_with_mcp_stream(prompt="hi", user_id="u"),
+    ))
+    tool_results = [e for e in events if isinstance(e, ToolResultEvent)]
+    assert len(tool_results) == 1
+    assert tool_results[0].content == huge_payload
+    assert isinstance(events[-1], FinalEvent)

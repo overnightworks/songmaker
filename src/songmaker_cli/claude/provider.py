@@ -44,6 +44,8 @@ _DISALLOWED_TOOLS = (
     "ToolSearch"
 )
 
+_STREAM_BUFFER_LIMIT = 4 * 1024 * 1024
+
 
 def clear_client_cache() -> None:
     with _client_lock:
@@ -226,6 +228,7 @@ async def acall_claude_with_mcp_stream(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
+            limit=_STREAM_BUFFER_LIMIT,
         )
     except FileNotFoundError:
         raise UnavailableError("Claude CLI binary not found")
