@@ -64,6 +64,40 @@ def test_build_ace_config_cli_overrides_typed() -> None:
     assert config.seed == 99
 
 
+def test_build_ace_config_zero_duration_propagates_for_auto() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", bpm=120, audio_duration=0)
+    config = build_ace_config(meta)
+    assert config.audio_duration == 0
+
+
+def test_song_create_request_accepts_zero_duration() -> None:
+    from songmaker_cli.api_models.songs import SongCreateRequest
+
+    req = SongCreateRequest(title="t", album_id="a", audio_duration=0)
+    assert req.audio_duration == 0
+
+
+def test_song_update_request_accepts_zero_duration() -> None:
+    from songmaker_cli.api_models.songs import SongUpdateRequest
+
+    req = SongUpdateRequest(audio_duration=0)
+    assert req.audio_duration == 0
+
+
+def test_song_create_request_rejects_negative_duration() -> None:
+    from songmaker_cli.api_models.songs import SongCreateRequest
+
+    with pytest.raises(PydanticValidationError):
+        SongCreateRequest(title="t", album_id="a", audio_duration=-1)
+
+
+def test_song_create_request_rejects_duration_above_cap() -> None:
+    from songmaker_cli.api_models.songs import SongCreateRequest
+
+    with pytest.raises(PydanticValidationError):
+        SongCreateRequest(title="t", album_id="a", audio_duration=601)
+
+
 def test_audio_file_path_basic(tmp_path: Path) -> None:
     result = audio_file_path(tmp_path, "user1", "gen1", ".mp3")
     assert result == tmp_path / "user1" / "gen1.mp3"

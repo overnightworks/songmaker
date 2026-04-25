@@ -252,7 +252,7 @@ def build_ace_config(
 
     if meta.bpm:
         fields["bpm"] = meta.bpm
-    if meta.audio_duration:
+    if meta.audio_duration is not None:
         fields["audio_duration"] = meta.audio_duration
     if meta.key_scale:
         fields["key_scale"] = meta.key_scale
