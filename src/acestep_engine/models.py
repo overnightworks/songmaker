@@ -19,7 +19,7 @@ class AceStepConfig:
 
     prompt: str
     lyrics: str
-    bpm: int | None = 120
+    bpm: int | None = None
     audio_duration: int = 60
     key_scale: str = ""
     time_signature: str = ""

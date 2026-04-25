@@ -70,6 +70,18 @@ def test_build_ace_config_zero_duration_propagates_for_auto() -> None:
     assert config.audio_duration == 0
 
 
+def test_build_ace_config_zero_bpm_routes_to_none_for_auto() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", bpm=0, audio_duration=60)
+    config = build_ace_config(meta)
+    assert config.bpm is None
+
+
+def test_build_ace_config_explicit_bpm_preserved() -> None:
+    meta = SongMeta(prompt="test", lyrics="test", bpm=140, audio_duration=60)
+    config = build_ace_config(meta)
+    assert config.bpm == 140
+
+
 def test_song_create_request_accepts_zero_duration() -> None:
     from songmaker_cli.api_models.songs import SongCreateRequest
 

@@ -330,17 +330,21 @@
 
 		<div class="params-row">
 			<label class="edit-field small">
-				<span>BPM</span>
+				<span>BPM <small class="hint">(0 = auto)</small></span>
 				<input
 					type="number"
+					min="0"
+					max="999"
 					value={$editBpm}
 					oninput={(e) => setDraftBpm(Number(e.currentTarget.value))}
 				/>
 			</label>
 			<label class="edit-field small">
-				<span>Duration</span>
+				<span>Duration <small class="hint">(0 = auto)</small></span>
 				<input
 					type="number"
+					min="0"
+					max="600"
 					value={$editAudioDuration}
 					oninput={(e) => setDraftAudioDuration(Number(e.currentTarget.value))}
 				/>
@@ -445,6 +449,14 @@
 		text-transform: uppercase;
 		font-family: var(--font-display);
 		letter-spacing: 1px;
+	}
+
+	.edit-field .hint {
+		font-size: 0.75em;
+		opacity: 0.6;
+		text-transform: none;
+		letter-spacing: 0;
+		margin-left: 0.3em;
 	}
 
 	.edit-field input,
