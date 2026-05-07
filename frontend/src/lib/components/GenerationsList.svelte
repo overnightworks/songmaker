@@ -3,14 +3,11 @@
 	import { EXPIRY_WARN_DAYS } from '$lib/constants';
 	import {
 		playGeneration,
-		togglePlayPause,
-		isAudioPlaying,
-		isAudioBuffering,
-		playback,
 		queueContext,
 		selectedAlbumId,
 		removeGenerationFromSong
 	} from '$lib/stores/player';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { scoreColor } from '$lib/utils/scores';
 	import { getGenerationActions } from '$lib/contexts/generation-actions';
 	import {
@@ -34,9 +31,11 @@
 
 	const actions = getGenerationActions();
 
-	const pb = $derived($playback);
-	const audioPlaying = $derived($isAudioPlaying);
-	const buffering = $derived($isAudioBuffering);
+	const playingGenId = $derived(audioPlayer.current?.generation.id ?? null);
+	const audioPlaying = $derived(audioPlayer.status === 'playing');
+	const buffering = $derived(
+		audioPlayer.status === 'loading' || audioPlayer.status === 'buffering'
+	);
 
 	interface VersionGroup {
 		label: string;
@@ -69,7 +68,7 @@
 	}
 
 	function isGenPlaying(gen: GenerationItem): boolean {
-		return pb?.generation.id === gen.id;
+		return playingGenId === gen.id;
 	}
 
 	function isGenLoading(gen: GenerationItem): boolean {
@@ -78,7 +77,7 @@
 
 	function handlePlay(e: Event, gen: GenerationItem): void {
 		e.stopPropagation();
-		if (isGenPlaying(gen)) togglePlayPause();
+		if (isGenPlaying(gen)) audioPlayer.toggle();
 		else {
 			const albumId = $selectedAlbumId;
 			queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
@@ -177,7 +176,9 @@
 								{#if daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS}
 									<span
 										class="expiry-badge warn"
-										title="Expires in {daysLeft} day{daysLeft === 1 ? '' : 's'} — pick or keep to preserve"
+										title="Expires in {daysLeft} day{daysLeft === 1
+											? ''
+											: 's'} — pick or keep to preserve"
 									>
 										⏳ {daysLeft}d
 									</span>

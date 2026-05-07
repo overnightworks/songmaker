@@ -1,14 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import {
-		playingGeneration,
-		playback,
-		playbackTime,
-		playbackDuration,
 		navigateToPlaying,
-		isAudioPlaying,
-		isAudioBuffering,
-		requestTogglePlay,
 		playNextGeneration,
 		playPrevGeneration,
 		playNextSong,
@@ -18,8 +11,9 @@
 		canPlayPrevSong,
 		canPlayNextSong,
 		queueContext,
-		requestSeekTo
+		songList
 	} from '$lib/stores/player';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { formatTime } from '$lib/utils/format';
 	import {
 		AudioVisualizer,
@@ -31,23 +25,6 @@
 	} from '$lib/utils/visualizer';
 
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
-	let isPlaying = $state(false);
-	let isLoading = $state(false);
-	const toggleRequest = $derived($requestTogglePlay);
-	const seekRequest = $derived($requestSeekTo);
-	let currentTime = $state(0);
-	let duration = $state(0);
-
-	const gen = $derived($playingGeneration);
-	const pb = $derived($playback);
-	const prevGen = $derived($canPlayPrevGen);
-	const nextGen = $derived($canPlayNextGen);
-	const prevSong = $derived($canPlayPrevSong);
-	const nextSong = $derived($canPlayNextSong);
-
-	let prevFile = $state('');
-
-	let audio: HTMLAudioElement | undefined;
 	let audioCtx: AudioContext | undefined;
 	let analyser: AnalyserNode | undefined;
 	let frequencyData: Uint8Array<ArrayBuffer> | undefined;
@@ -58,49 +35,31 @@
 
 	const viz = new AudioVisualizer();
 
-	function ensureAudio(): HTMLAudioElement {
-		if (audio) return audio;
-		audio = new Audio();
-		audio.crossOrigin = 'anonymous';
-		audio.preload = 'auto';
+	const current = $derived(audioPlayer.current);
+	const status = $derived(audioPlayer.status);
+	const errorMsg = $derived(audioPlayer.error);
+	const currentTime = $derived(audioPlayer.currentTime);
+	const duration = $derived(audioPlayer.duration);
 
-		audio.addEventListener('loadstart', () => {
-			isLoading = true;
-			isAudioBuffering.set(true);
-		});
-		audio.addEventListener('canplay', () => {
-			isLoading = false;
-			isAudioBuffering.set(false);
-			duration = audio?.duration ?? 0;
-			playbackDuration.set(duration);
-			connectAnalyser();
-		});
-		audio.addEventListener('timeupdate', () => {
-			currentTime = audio?.currentTime ?? 0;
-			playbackTime.set(currentTime);
-		});
-		audio.addEventListener('ended', () => {
-			const ctx = $queueContext;
-			if (ctx.type === 'playlist') playNextSong();
-			else playNextGeneration();
-		});
-		audio.addEventListener('play', () => {
-			isPlaying = true;
-			isAudioPlaying.set(true);
-			startVisualizerLoop();
-		});
-		audio.addEventListener('pause', () => {
-			isPlaying = false;
-			isAudioPlaying.set(false);
-			stopVisualizerLoop();
-		});
+	const isPlaying = $derived(status === 'playing');
+	const isLoading = $derived(status === 'loading' || status === 'buffering');
+	const isError = $derived(status === 'error');
 
-		return audio;
-	}
+	const songs = $derived($songList);
+	const ctx = $derived($queueContext);
+	const prevGen = $derived(canPlayPrevGen(current, songs));
+	const nextGen = $derived(canPlayNextGen(current, songs));
+	const prevSong = $derived(canPlayPrevSong(current, songs, ctx));
+	const nextSong = $derived(canPlayNextSong(current, songs, ctx));
+
+	$effect(() => {
+		if (isPlaying) startVisualizerLoop();
+		else stopVisualizerLoop();
+	});
 
 	function connectAnalyser(): void {
-		if (!audio) return;
-		if (audioCtx) return;
+		const audio = audioPlayer.getElement();
+		if (!audio || audioCtx) return;
 		try {
 			audioCtx = new AudioContext();
 			analyser = audioCtx.createAnalyser();
@@ -134,60 +93,20 @@
 	}
 
 	function seekFromClick(e: MouseEvent, el?: HTMLElement): void {
-		if (!audio || duration <= 0) return;
+		if (duration <= 0) return;
 		const target = el ?? (e.currentTarget as HTMLElement);
 		const rect = target.getBoundingClientRect();
 		const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-		audio.currentTime = ratio * duration;
+		audioPlayer.seek(ratio * duration);
 	}
-
-	$effect(() => {
-		if (!gen) return;
-		if (gen.mp3_path !== prevFile) {
-			prevFile = gen.mp3_path;
-			const el = ensureAudio();
-			el.pause();
-			isLoading = true;
-			isAudioBuffering.set(true);
-			el.src = `/audio/${gen.mp3_path}`;
-			el.load();
-			if (pb?.autoplay) {
-				el.play().catch(() => {});
-			}
-		}
-	});
-
-	let prevToggle = 0;
-	$effect(() => {
-		if (toggleRequest !== prevToggle) {
-			prevToggle = toggleRequest;
-			if (audio && !isLoading) {
-				if (audio.paused) audio.play().catch(() => {});
-				else audio.pause();
-			}
-		}
-	});
-
-	$effect(() => {
-		if (seekRequest !== null && audio) {
-			audio.currentTime = seekRequest;
-			requestSeekTo.set(null);
-		}
-	});
 
 	onDestroy(() => {
 		viz.destroy();
-		if (audio) {
-			audio.pause();
-			audio.src = '';
-		}
 		if (audioCtx) audioCtx.close();
 	});
 
 	function togglePlay(): void {
-		if (!gen || !audio || isLoading) return;
-		if (audio.paused) audio.play().catch(() => {});
-		else audio.pause();
+		audioPlayer.toggle();
 	}
 </script>
 
@@ -217,12 +136,16 @@
 			class="play-btn"
 			class:loading={isLoading}
 			class:playing={isPlaying}
+			class:errored={isError}
 			onclick={togglePlay}
 			disabled={isLoading}
-			aria-label={isPlaying ? 'Pause' : 'Play'}
+			aria-label={isError ? 'Retry' : isPlaying ? 'Pause' : 'Play'}
+			title={isError && errorMsg ? errorMsg : ''}
 			style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
 		>
-			{#if isLoading}<span class="spinner"></span>{:else}{isPlaying ? '⏸' : '▶'}{/if}
+			{#if isLoading}<span class="spinner"></span>{:else if isError}↻{:else}{isPlaying
+					? '⏸'
+					: '▶'}{/if}
 		</button>
 		<button
 			class="nav-btn"
@@ -246,16 +169,16 @@
 		>
 	</div>
 	<button class="track-info" onclick={navigateToPlaying} aria-label="Go to playing song">
-		{#if pb}
+		{#if current}
 			<span
 				class="track-title"
 				class:glowing={isPlaying}
-				style={isPlaying ? titleGlowStyle(bassLevel, vizColors) : ''}>{pb.songTitle}</span
+				style={isPlaying ? titleGlowStyle(bassLevel, vizColors) : ''}>{current.songTitle}</span
 			>
 			<span class="track-detail"
-				>{pb.artist} · gen{gen?.generation_number}{#if isLoading}<span class="loading-text"
-						>Loading...</span
-					>{/if}</span
+				>{current.artist} · gen{current.generation.generation_number}{#if isLoading}<span
+						class="loading-text">Loading...</span
+					>{:else if isError}<span class="error-text">{errorMsg ?? 'Error'}</span>{/if}</span
 			>
 		{/if}
 	</button>
@@ -329,6 +252,14 @@
 	}
 	.play-btn.playing {
 		border-color: var(--accent);
+	}
+	.play-btn.errored {
+		border-color: #d34;
+		color: #d34;
+	}
+	.error-text {
+		color: #d34;
+		margin-left: 4px;
 	}
 	@supports (animation-timeline: auto) or (background-clip: border-box) {
 		@media (prefers-reduced-motion: no-preference) {

@@ -19,10 +19,9 @@
 		replaceSongInList,
 		removeGenerationFromSong,
 		updateGenerationInList,
-		playGeneration,
-		playingGeneration,
-		seekTo
+		playGeneration
 	} from '$lib/stores/player';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { backToSong } from '$lib/stores/navigation';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { addToast } from '$lib/stores/toast';
@@ -376,9 +375,7 @@
 					>
 						{formatExpiryLine()}
 						{#if generation.is_archived}
-							<button type="button" class="unarchive-btn" onclick={onUnarchive}>
-								Restore
-							</button>
+							<button type="button" class="unarchive-btn" onclick={onUnarchive}> Restore </button>
 						{/if}
 					</div>
 				{/if}
@@ -491,18 +488,18 @@
 					<div class="compare-buttons">
 						<button
 							class="compare-btn"
-							class:active={$playingGeneration?.id === srcGen.id}
+							class:active={audioPlayer.current?.generation.id === srcGen.id}
 							onclick={() => {
 								playGeneration(srcGen, song);
-								seekTo(repaintStartSec);
+								audioPlayer.seek(repaintStartSec);
 							}}>Source</button
 						>
 						<button
 							class="compare-btn"
-							class:active={$playingGeneration?.id === generation.id}
+							class:active={audioPlayer.current?.generation.id === generation.id}
 							onclick={() => {
 								playGeneration(generation, song);
-								seekTo(repaintStartSec);
+								audioPlayer.seek(repaintStartSec);
 							}}>Result</button
 						>
 					</div>

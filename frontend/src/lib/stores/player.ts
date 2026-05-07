@@ -1,6 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
 import { fetchSong } from '$lib/api/client';
 import type { AlbumItem, GenerationItem, PlaylistEntryItem, SongItem } from '$lib/api/types';
+import { audioPlayer, type PlaybackInfo } from '$lib/services/audioPlayer.svelte';
 
 // --- Data ---
 export const albumList = writable<AlbumItem[]>([]);
@@ -72,26 +73,14 @@ type QueueContext =
 
 export const queueContext = writable<QueueContext>({ type: 'library' });
 
-// --- Playback state ---
-interface PlaybackState {
-	generation: GenerationItem;
-	songId: string;
-	songTitle: string;
-	artist: string;
-	autoplay: boolean;
+// --- Playback dispatch ---
+
+function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
+	return { generation: gen, songId: song.id, songTitle: song.title, artist: song.artist };
 }
 
-export const playback = writable<PlaybackState | null>(null);
-export const playingGeneration = derived(playback, ($pb) => $pb?.generation ?? null);
-
 export function playGeneration(gen: GenerationItem, song: SongItem): void {
-	playback.set({
-		generation: gen,
-		songId: song.id,
-		songTitle: song.title,
-		artist: song.artist,
-		autoplay: true
-	});
+	audioPlayer.load(toPlaybackInfo(gen, song));
 }
 
 function queueSongs(): SongItem[] {
@@ -101,71 +90,73 @@ function queueSongs(): SongItem[] {
 	return songs;
 }
 
-export const canPlayPrevGen = derived([playback, songList], ([$pb, $songs]) => {
-	if (!$pb) return false;
-	const song = $songs.find((s) => s.id === $pb.songId);
+export function canPlayPrevGen(current: PlaybackInfo | null, songs: SongItem[]): boolean {
+	if (!current) return false;
+	const song = songs.find((s) => s.id === current.songId);
 	if (!song) return false;
-	const idx = song.generations.findIndex((g) => g.id === $pb.generation.id);
+	const idx = song.generations.findIndex((g) => g.id === current.generation.id);
 	return idx > 0;
-});
+}
 
-export const canPlayNextGen = derived([playback, songList], ([$pb, $songs]) => {
-	if (!$pb) return false;
-	const song = $songs.find((s) => s.id === $pb.songId);
+export function canPlayNextGen(current: PlaybackInfo | null, songs: SongItem[]): boolean {
+	if (!current) return false;
+	const song = songs.find((s) => s.id === current.songId);
 	if (!song) return false;
-	const idx = song.generations.findIndex((g) => g.id === $pb.generation.id);
-	return idx < song.generations.length - 1;
-});
+	const idx = song.generations.findIndex((g) => g.id === current.generation.id);
+	return idx >= 0 && idx < song.generations.length - 1;
+}
 
-export const canPlayPrevSong = derived(
-	[playback, songList, queueContext],
-	([$pb, $songs, $ctx]) => {
-		if (!$pb) return false;
-		if ($ctx.type === 'playlist') return $ctx.index > 0;
-		const pool = $ctx.type === 'album' ? $songs.filter((s) => s.album_id === $ctx.albumId) : $songs;
-		const idx = pool.findIndex((s) => s.id === $pb.songId);
-		for (let i = idx - 1; i >= 0; i--) {
-			if (pool[i].generation_count > 0) return true;
-		}
-		return false;
+export function canPlayPrevSong(
+	current: PlaybackInfo | null,
+	songs: SongItem[],
+	ctx: QueueContext
+): boolean {
+	if (!current) return false;
+	if (ctx.type === 'playlist') return ctx.index > 0;
+	const pool = ctx.type === 'album' ? songs.filter((s) => s.album_id === ctx.albumId) : songs;
+	const idx = pool.findIndex((s) => s.id === current.songId);
+	for (let i = idx - 1; i >= 0; i--) {
+		if (pool[i].generation_count > 0) return true;
 	}
-);
+	return false;
+}
 
-export const canPlayNextSong = derived(
-	[playback, songList, queueContext],
-	([$pb, $songs, $ctx]) => {
-		if (!$pb) return false;
-		if ($ctx.type === 'playlist') return $ctx.index < $ctx.entries.length - 1;
-		const pool = $ctx.type === 'album' ? $songs.filter((s) => s.album_id === $ctx.albumId) : $songs;
-		const idx = pool.findIndex((s) => s.id === $pb.songId);
-		for (let i = idx + 1; i < pool.length; i++) {
-			if (pool[i].generation_count > 0) return true;
-		}
-		return false;
+export function canPlayNextSong(
+	current: PlaybackInfo | null,
+	songs: SongItem[],
+	ctx: QueueContext
+): boolean {
+	if (!current) return false;
+	if (ctx.type === 'playlist') return ctx.index < ctx.entries.length - 1;
+	const pool = ctx.type === 'album' ? songs.filter((s) => s.album_id === ctx.albumId) : songs;
+	const idx = pool.findIndex((s) => s.id === current.songId);
+	for (let i = idx + 1; i < pool.length; i++) {
+		if (pool[i].generation_count > 0) return true;
 	}
-);
+	return false;
+}
 
 export function playNextGeneration(): void {
-	const pb = get(playback);
-	if (!pb) return;
+	const cur = audioPlayer.current;
+	if (!cur) return;
 	const songs = get(songList);
-	const song = songs.find((s) => s.id === pb.songId);
+	const song = songs.find((s) => s.id === cur.songId);
 	if (!song) return;
 	const gens = song.generations;
-	const idx = gens.findIndex((g) => g.id === pb.generation.id);
+	const idx = gens.findIndex((g) => g.id === cur.generation.id);
 	if (idx < gens.length - 1) {
 		playGeneration(gens[idx + 1], song);
 	}
 }
 
 export function playPrevGeneration(): void {
-	const pb = get(playback);
-	if (!pb) return;
+	const cur = audioPlayer.current;
+	if (!cur) return;
 	const songs = get(songList);
-	const song = songs.find((s) => s.id === pb.songId);
+	const song = songs.find((s) => s.id === cur.songId);
 	if (!song) return;
 	const gens = song.generations;
-	const idx = gens.findIndex((g) => g.id === pb.generation.id);
+	const idx = gens.findIndex((g) => g.id === cur.generation.id);
 	if (idx > 0) {
 		playGeneration(gens[idx - 1], song);
 	}
@@ -181,10 +172,10 @@ export async function playNextSong(): Promise<void> {
 		playPlaylistIndex(ctx, ctx.index + 1);
 		return;
 	}
-	const pb = get(playback);
-	if (!pb) return;
+	const cur = audioPlayer.current;
+	if (!cur) return;
 	const songs = queueSongs();
-	const idx = songs.findIndex((s) => s.id === pb.songId);
+	const idx = songs.findIndex((s) => s.id === cur.songId);
 	for (let i = idx + 1; i < songs.length; i++) {
 		if (songs[i].generation_count === 0) continue;
 		await ensureGenerationsLoaded(songs[i].id);
@@ -203,10 +194,10 @@ export async function playPrevSong(): Promise<void> {
 		playPlaylistIndex(ctx, ctx.index - 1);
 		return;
 	}
-	const pb = get(playback);
-	if (!pb) return;
+	const cur = audioPlayer.current;
+	if (!cur) return;
 	const songs = queueSongs();
-	const idx = songs.findIndex((s) => s.id === pb.songId);
+	const idx = songs.findIndex((s) => s.id === cur.songId);
 	for (let i = idx - 1; i >= 0; i--) {
 		if (songs[i].generation_count === 0) continue;
 		await ensureGenerationsLoaded(songs[i].id);
@@ -253,7 +244,7 @@ function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 		whisper_text: null,
 		scores: null,
 		generation_params: null,
-		created_at: null
+		created_at: ''
 	};
 }
 
@@ -264,12 +255,11 @@ function playPlaylistIndex(
 	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
 	const entry = ctx.entries[newIndex];
 	queueContext.set({ type: 'playlist', entries: ctx.entries, index: newIndex });
-	playback.set({
+	audioPlayer.load({
 		generation: playlistEntryToGeneration(entry),
 		songId: '',
 		songTitle: entry.song_title,
-		artist: entry.artist,
-		autoplay: true
+		artist: entry.artist
 	});
 }
 
@@ -277,42 +267,23 @@ export function playPlaylistEntries(entries: PlaylistEntryItem[]): void {
 	if (entries.length === 0) return;
 	queueContext.set({ type: 'playlist', entries, index: 0 });
 	const first = entries[0];
-	playback.set({
+	audioPlayer.load({
 		generation: playlistEntryToGeneration(first),
 		songId: '',
 		songTitle: first.song_title,
-		artist: first.artist,
-		autoplay: true
+		artist: first.artist
 	});
 }
 
 export function navigateToPlaying(): void {
-	const pb = get(playback);
-	if (!pb) return;
+	const cur = audioPlayer.current;
+	if (!cur) return;
 	const songs = get(songList);
-	const song = songs.find((s) => s.id === pb.songId);
+	const song = songs.find((s) => s.id === cur.songId);
 	if (song) {
 		selectedAlbumId.set(song.album_id);
 		selectedSongId.set(song.id);
 	}
-}
-
-// --- Playback control ---
-export const isAudioPlaying = writable(false);
-export const isAudioBuffering = writable(false);
-export const requestTogglePlay = writable(0);
-
-export function togglePlayPause(): void {
-	requestTogglePlay.update((n) => n + 1);
-}
-
-// --- Playback time ---
-export const playbackTime = writable(0);
-export const playbackDuration = writable(0);
-export const requestSeekTo = writable<number | null>(null);
-
-export function seekTo(seconds: number): void {
-	requestSeekTo.set(seconds);
 }
 
 // --- Song/album list mutations ---
@@ -389,3 +360,16 @@ export function updateGenerationScores(
 		scores: { ...gen.scores, ...update }
 	}));
 }
+
+audioPlayer.onEnded = () => {
+	const ctx = get(queueContext);
+	if (ctx.type === 'playlist') void playNextSong();
+	else void playNextGeneration();
+};
+
+audioPlayer.onAuthLost = async () => {
+	const { clearAuth } = await import('$lib/stores/auth');
+	const { goto } = await import('$app/navigation');
+	clearAuth();
+	await goto('/login');
+};

@@ -7,7 +7,7 @@
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { APP_NAME } from '$lib/constants';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
-	import { playback } from '$lib/stores/player';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { canGoBack, deselectSong, backToSong } from '$lib/stores/navigation';
 	import { selectedGeneration } from '$lib/stores/player';
 	import { theme, toggleTheme, initTheme } from '$lib/stores/ui';
@@ -23,7 +23,7 @@
 	const isSettings = $derived(page.url.pathname.startsWith('/settings'));
 	const hasBack = $derived(isSettings || $canGoBack);
 	const me = $derived($currentUser);
-	const hasPlayback = $derived($playback !== null);
+	const hasPlayback = $derived(audioPlayer.current !== null);
 
 	$effect(() => {
 		initTheme();

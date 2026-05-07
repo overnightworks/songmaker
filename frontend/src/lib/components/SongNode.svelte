@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { playback, isAudioPlaying } from '$lib/stores/player';
 	import { selectedSongId } from '$lib/stores/player';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { selectSong } from '$lib/stores/navigation';
 	import type { SongItem } from '$lib/api/types';
 
@@ -11,18 +11,16 @@
 	let { song }: Props = $props();
 
 	const activeSongId = $derived($selectedSongId);
-	const pb = $derived($playback);
-	const audioPlaying = $derived($isAudioPlaying);
 
-	function isPlaying(): boolean {
-		return pb?.songId === song.id && audioPlaying;
-	}
+	const isPlaying = $derived(
+		audioPlayer.current?.songId === song.id && audioPlayer.status === 'playing'
+	);
 </script>
 
 <div
 	class="song-row"
 	class:active={song.id === activeSongId}
-	class:playing={isPlaying()}
+	class:playing={isPlaying}
 	onclick={() => selectSong(song.id)}
 	onkeydown={(e) => e.key === 'Enter' && selectSong(song.id)}
 	role="button"
