@@ -24,6 +24,9 @@ venv/
 .venv-*/
 env/
 
+# ── Local export folder (manual WAV/MP3 copies for distribution etc.) ──
+.output/
+
 # ── Claude Code ──
 .claude/
 
@@ -49,6 +52,7 @@ Thumbs.db
 frontend/node_modules/
 frontend/.svelte-kit/
 frontend/build/
+frontend/coverage/
 
 # ── Misc ──
 .coverage
