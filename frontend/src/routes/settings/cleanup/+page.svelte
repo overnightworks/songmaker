@@ -1,4 +1,5 @@
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { isAdmin } from '$lib/stores/auth';
@@ -37,10 +38,7 @@
 		running = true;
 		try {
 			report = await runGenerationRetention();
-			addToast(
-				`Archived ${report.archived_count}, deleted ${report.deleted_count}`,
-				'success'
-			);
+			addToast(`Archived ${report.archived_count}, deleted ${report.deleted_count}`, 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Cleanup failed', 'error');
 		} finally {
@@ -53,9 +51,9 @@
 <div class="page">
 	<h1>Generation Retention</h1>
 	<p class="hint">
-		Generations that are neither <strong>picked</strong> nor <strong>kept</strong> are
-		auto-archived after the retention window, then permanently deleted after the hard-delete
-		window. This cleanup also runs automatically every day at 03:00 UTC.
+		Generations that are neither <strong>picked</strong> nor <strong>kept</strong> are auto-archived after
+		the retention window, then permanently deleted after the hard-delete window. This cleanup also runs
+		automatically every day at 03:00 UTC.
 	</p>
 
 	{#if loading && !report}
@@ -88,16 +86,18 @@
 		{:else if !confirming}
 			<div class="actions">
 				<button class="btn" onclick={refreshPreview} disabled={loading}>Refresh preview</button>
-				<button class="btn danger" onclick={() => (confirming = true)}>
-					Run cleanup now
-				</button>
+				<button class="btn danger" onclick={() => (confirming = true)}> Run cleanup now </button>
 			</div>
 		{:else}
 			<div class="confirm">
 				<p>
-					Archive <strong>{report.archived_count}</strong> generation{report.archived_count === 1 ? '' : 's'}
-					and permanently delete <strong>{report.deleted_count}</strong> archived one{report.deleted_count === 1 ? '' : 's'}?
-					Hard-deletion is not reversible.
+					Archive <strong>{report.archived_count}</strong> generation{report.archived_count === 1
+						? ''
+						: 's'}
+					and permanently delete <strong>{report.deleted_count}</strong> archived one{report.deleted_count ===
+					1
+						? ''
+						: 's'}? Hard-deletion is not reversible.
 				</p>
 				<div class="actions">
 					<button class="btn" onclick={() => (confirming = false)} disabled={running}>
