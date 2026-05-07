@@ -20,6 +20,7 @@ function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 		generation_count: 0,
 		is_shared: false,
 		generations: [],
+		created_at: '',
 		...overrides
 	};
 }

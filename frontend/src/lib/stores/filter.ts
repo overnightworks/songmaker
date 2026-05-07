@@ -72,7 +72,7 @@ export const METRICS: MetricDef[] = [
 		label: 'Key',
 		max: 0,
 		step: 0,
-		getValue: (s) => s.key_scale,
+		getValue: (s) => s.key_scale ?? undefined,
 		type: 'select'
 	},
 	{

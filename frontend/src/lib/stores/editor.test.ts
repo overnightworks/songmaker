@@ -57,7 +57,7 @@ function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 		best_scores: null,
 		best_rating: null,
 		generations: [],
-		created_at: null,
+		created_at: '',
 		is_shared: false,
 		share_slug: null,
 		...overrides
@@ -74,7 +74,7 @@ function makeVersion(overrides: Partial<VersionItem> = {}): VersionItem {
 		audio_duration: 180,
 		key_scale: 'Am',
 		generation_params: null,
-		created_at: null,
+		created_at: '',
 		...overrides
 	};
 }

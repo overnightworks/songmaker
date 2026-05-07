@@ -146,7 +146,7 @@ function songDataFromSong(s: SongItem): SongData {
 		prompt: s.prompt,
 		bpm: s.bpm ?? 0,
 		audio_duration: s.audio_duration ?? 180,
-		key_scale: s.key_scale,
+		key_scale: s.key_scale ?? '',
 		genParams: s.generation_params ?? null
 	};
 }
@@ -243,7 +243,7 @@ export function handleApply(data: ApplyData): void {
 		audio_duration: draft.audio_duration,
 		key_scale: draft.key_scale,
 		generation_params: draft.genParams,
-		created_at: null
+		created_at: ''
 	};
 	editorState.update((s) => ({
 		...s,
@@ -266,7 +266,7 @@ export function handleApply(data: ApplyData): void {
 		audio_duration: afterDraft.audio_duration,
 		key_scale: afterDraft.key_scale,
 		generation_params: afterDraft.genParams,
-		created_at: null
+		created_at: ''
 	};
 	appliedDiffBase.set(before);
 	appliedDiffTarget.set(after);
