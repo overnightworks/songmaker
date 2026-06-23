@@ -301,11 +301,21 @@ class SongResponse(SongSummaryResponse):
         )
 
 
+def _audiobox_quality(generation: Generation) -> float | None:
+    for score in generation.scores:
+        if isinstance(score.value, dict) and "audiobox_quality" in score.value:
+            return score.value["audiobox_quality"]
+    return None
+
+
 def _best_generation(generations: list[Generation]) -> Generation | None:
-    rated = [g for g in generations if g.rating and not g.is_archived]
+    active = [g for g in generations if not g.is_archived]
+    rated = [g for g in active if g.rating]
     if rated:
         return max(rated, key=lambda g: g.rating.rating)
-    active = [g for g in generations if not g.is_archived]
+    scored = [g for g in active if _audiobox_quality(g) is not None]
+    if scored:
+        return max(scored, key=_audiobox_quality)
     return active[0] if active else None
 
 

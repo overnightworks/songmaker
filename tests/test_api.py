@@ -1393,6 +1393,40 @@ def test_get_song_best_scores_from_rated_gen(client: TestClient) -> None:
     assert data["best_rating"] == 80
 
 
+def test_get_song_best_scores_follow_audiobox_quality_when_unrated(
+    client: TestClient,
+) -> None:
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        session.add(Score(id="aq1", generation_id="g1", scorer="batch",
+                          value={"audiobox_quality": 7.0}))
+        session.add(Score(id="aq2", generation_id="g2", scorer="batch",
+                          value={"audiobox_quality": 8.5}))
+        session.commit()
+
+    resp = client.get("/api/songs/s1")
+    data = resp.json()
+    assert data["best_scores"]["audiobox_quality"] == 8.5
+
+
+def test_get_song_user_rating_outranks_higher_quality_take(
+    client: TestClient,
+) -> None:
+    from songmaker_cli.db.models import Rating
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        session.add(Score(id="aq2", generation_id="g2", scorer="batch",
+                          value={"audiobox_quality": 9.0}))
+        session.add(Rating(generation_id="g1", rating=80))
+        session.commit()
+
+    resp = client.get("/api/songs/s1")
+    data = resp.json()
+    assert data["best_rating"] == 80
+    assert "audiobox_quality" not in (data["best_scores"] or {})
+
+
 # ── Ownership / access control ──────────────────────────────────────
 
 
