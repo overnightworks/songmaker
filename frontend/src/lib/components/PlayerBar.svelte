@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import {
 		navigateToPlaying,
 		playNextSong,
@@ -54,8 +54,11 @@
 	);
 
 	$effect(() => {
-		if (isPlaying) startVisualizerLoop();
-		else stopVisualizerLoop();
+		const playing = isPlaying;
+		untrack(() => {
+			if (playing) startVisualizerLoop();
+			else stopVisualizerLoop();
+		});
 	});
 
 	function connectAnalyser(): void {
