@@ -81,6 +81,7 @@ services:
       - "8080:8080"
     volumes:
       - audiofiles:/app/data/audio
+      - queuestreams:/app/data/queue-streams
       - ~/.local/bin/claude:/usr/local/bin/claude:ro
       - ~/.claude:/home/songmaker/.claude
       - ~/.claude.json:/home/songmaker/.claude.json
@@ -228,6 +229,7 @@ volumes:
   pgdata:
   redisdata:
   audiofiles:
+  queuestreams:
   hfcache:
   promdata:
   grafdata:
