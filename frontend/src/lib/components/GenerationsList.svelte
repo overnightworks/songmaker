@@ -75,14 +75,19 @@
 		return isGenPlaying(gen) && buffering;
 	}
 
+	function playOrToggle(gen: GenerationItem): void {
+		if (isGenPlaying(gen) && audioPlaying) {
+			audioPlayer.toggle();
+			return;
+		}
+		const albumId = $selectedAlbumId;
+		queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
+		playGeneration(gen, song, { restart: true });
+	}
+
 	function handlePlay(e: Event, gen: GenerationItem): void {
 		e.stopPropagation();
-		if (isGenPlaying(gen)) audioPlayer.toggle();
-		else {
-			const albumId = $selectedAlbumId;
-			queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
-			playGeneration(gen, song);
-		}
+		playOrToggle(gen);
 	}
 
 	function handleCardClick(gen: GenerationItem, e: MouseEvent): void {
@@ -95,6 +100,19 @@
 			return;
 		}
 		onselect(gen);
+		playOrToggle(gen);
+	}
+
+	function handleCardKeydown(gen: GenerationItem, e: KeyboardEvent): void {
+		if (e.target !== e.currentTarget) return;
+		if (e.key !== 'Enter' && e.key !== ' ') return;
+		e.preventDefault();
+		if ($selectionMode) {
+			toggleSelection(gen.id);
+			return;
+		}
+		onselect(gen);
+		playOrToggle(gen);
 	}
 
 	async function handleBulkDelete(): Promise<void> {
@@ -127,12 +145,7 @@
 						class:buffering={isGenLoading(gen)}
 						class:selected={$selectedIds.has(gen.id)}
 						onclick={(e) => handleCardClick(gen, e)}
-						onkeydown={(e) => {
-							if (e.key === 'Enter') {
-								if ($selectionMode) toggleSelection(gen.id);
-								else onselect(gen);
-							}
-						}}
+						onkeydown={(e) => handleCardKeydown(gen, e)}
 						role="button"
 						tabindex="0"
 					>

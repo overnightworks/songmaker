@@ -11,7 +11,6 @@
 # installed. Revisit this when the project moves to multi-user deployment, gets
 # a beefier CI runner, or a scorer regression actually slips through.
 #
-# Tracked as B4 in plans/architecture-review-findings.md.
 [run]
 omit =
     src/songmaker_cli/scoring/audiobox_aesthetics.py

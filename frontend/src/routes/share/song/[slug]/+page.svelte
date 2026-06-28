@@ -102,7 +102,7 @@
 	.shared-page {
 		max-width: 600px;
 		margin: 0 auto;
-		padding: 2rem 1rem 6rem;
+		padding: 2rem 1rem calc(var(--player-height, 88px) + 1rem);
 		min-height: 100dvh;
 		font-family: var(--font-body, 'Open Sans', sans-serif);
 		color: var(--text, #e0e0e0);

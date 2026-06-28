@@ -103,6 +103,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	vi.useRealTimers();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 });
@@ -148,6 +149,20 @@ describe('load()', () => {
 		const initialSrc = fakeAudio.src;
 		audioPlayer.load(makeInfo({ generation: makeGen() }));
 		expect(fakeAudio.src).toBe(initialSrc);
+	});
+
+	it('reloads the same generation when restart is requested', () => {
+		const info = makeInfo();
+		audioPlayer.load(info);
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 42;
+
+		audioPlayer.load(info, { restart: true });
+
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3');
+		expect(audioPlayer.currentTime).toBe(0);
+		expect(audioPlayer.status).toBe('loading');
 	});
 
 	it('reloads when generation id differs', () => {
@@ -227,6 +242,44 @@ describe('event handling', () => {
 		expect(audioPlayer.status).toBe('playing');
 	});
 
+	it('reloads and seeks back when playback remains stalled', () => {
+		vi.useFakeTimers();
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 40;
+		fakeAudio.fire('timeupdate');
+
+		fakeAudio.fire('stalled');
+		expect(audioPlayer.status).toBe('buffering');
+
+		vi.advanceTimersByTime(5000);
+
+		expect(audioPlayer.status).toBe('loading');
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3?recover=1');
+
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(39.25);
+
+		fakeAudio.fire('canplay');
+		expect(fakeAudio.playMock).toHaveBeenCalled();
+	});
+
+	it('cancels stalled recovery when playback progresses again', () => {
+		vi.useFakeTimers();
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 40;
+		fakeAudio.fire('timeupdate');
+		fakeAudio.fire('waiting');
+
+		fakeAudio.currentTime = 41;
+		fakeAudio.fire('timeupdate');
+		vi.advanceTimersByTime(5000);
+
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3');
+		expect(audioPlayer.status).toBe('playing');
+	});
+
 	it('ended fires onEnded callback', () => {
 		const onEnded = vi.fn();
 		audioPlayer.onEnded = onEnded;
@@ -252,6 +305,49 @@ describe('error handling', () => {
 		fakeAudio.fire('error');
 		await Promise.resolve();
 		await Promise.resolve();
+		expect(audioPlayer.status).toBe('error');
+		expect(fetchMock).toHaveBeenCalledWith('/audio/a1/song_v1.mp3', {
+			method: 'HEAD',
+			credentials: 'include'
+		});
+	});
+
+	it('recovers from a mid-track media error before probing URL', () => {
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 40;
+		fakeAudio.fire('timeupdate');
+		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+
+		fakeAudio.fire('error');
+
+		expect(audioPlayer.status).toBe('loading');
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3?recover=1');
+		expect(fetchMock).not.toHaveBeenCalled();
+
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(39.25);
+	});
+
+	it('falls back to normal error handling after recovery attempts are exhausted', async () => {
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+
+		for (const attempt of [1, 2]) {
+			fakeAudio.fire('play');
+			fakeAudio.currentTime = 40 + attempt;
+			fakeAudio.fire('timeupdate');
+			fakeAudio.fire('error');
+			expect(fakeAudio.src).toBe(`/audio/a1/song_v1.mp3?recover=${attempt}`);
+			fakeAudio.fire('loadedmetadata');
+		}
+
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 43;
+		fakeAudio.fire('timeupdate');
+		fakeAudio.fire('error');
+		await new Promise((r) => setTimeout(r, 0));
+
 		expect(audioPlayer.status).toBe('error');
 		expect(fetchMock).toHaveBeenCalledWith('/audio/a1/song_v1.mp3', {
 			method: 'HEAD',

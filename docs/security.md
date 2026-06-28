@@ -23,8 +23,8 @@ Session-based auth with bcrypt password hashing (12 rounds).
 
 Two-layer defense:
 
-1. **Dependency-based auth** (`middleware.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session. On Redis cache hit, validation uses cached data and TTL refresh replaces the DB write. On Redis miss or failure, falls back to the DB path and populates the Redis cache for subsequent requests.
-2. **Endpoint** (`api.py`): Every endpoint uses `Depends(get_current_user)` — returns 401 if unauthenticated. Ownership checks enforce default-deny: access is blocked unless `album.created_by == user.id` (or user is admin). Missing album → denied.
+1. **Dependency-based auth** (`middleware/auth.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session. On Redis cache hit, validation uses cached data and TTL refresh replaces the DB write. On Redis miss or failure, falls back to the DB path and populates the Redis cache for subsequent requests.
+2. **Endpoint** (`api.py`): Authenticated resource endpoints use `Depends(get_current_user)` and return 401 if unauthenticated. Public auth/setup endpoints are deliberately unauthenticated; worker control-plane routes under `/api/internal/*` use the internal token instead of sessions. Ownership checks enforce default-deny: access is blocked unless the resource belongs to the user (or the user is admin). Missing resources are denied.
 
 Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. Demotion or deactivation of the last active admin is blocked to prevent lockout. When a user is deactivated or their role is changed, all their sessions are immediately invalidated.
 
@@ -54,7 +54,16 @@ Rate limit checks and job creation are atomic (`BEGIN IMMEDIATE`) to prevent TOC
 
 ### Shared endpoints (public, no auth)
 
-`/shared/{slug}` and `/shared/{slug}/audio/{file}` are public read-only endpoints with a dedicated per-IP rate limiter (default: 60 requests/minute, configurable via `SHARED_RATE_LIMIT`). Only picked generations are served. No user data (IDs, scores, edit history) is exposed. The slug is a UUID v4 (122 bits of entropy, unguessable). Sharing is revocable by the album owner.
+Album, song, generation, and playlist shares expose public read-only endpoints with a dedicated per-IP rate limiter (default: 60 requests/minute, configurable via `SHARED_RATE_LIMIT`):
+
+| Resource | JSON endpoint | Audio endpoint |
+|----------|---------------|----------------|
+| Album | `/shared/{slug}` | `/shared/{slug}/audio/{file}` |
+| Song | `/shared/song/{slug}` | `/shared/song/{slug}/audio/{file}` |
+| Generation | `/shared/gen/{slug}` | `/shared/gen/{slug}/audio/{file}` |
+| Playlist | `/shared/playlist/{slug}` | `/shared/playlist/{slug}/audio/{file}` |
+
+Album and song shares serve the picked unarchived generation when one exists, otherwise the latest unarchived generation. Generation shares serve the shared generation. Playlist shares serve playlist entry generations. Public JSON responses omit scores and edit history; audio URLs include the exact stored relative audio path needed by the filename allowlist. Share slugs are UUID v4 values (122 bits of entropy, unguessable). Sharing is revocable by the resource owner.
 
 ### Per-IP (global middleware)
 
@@ -96,7 +105,7 @@ All responses include:
 
 ### Reference audio upload
 
-`POST /api/audio/upload` accepts audio files (.mp3, .wav, .flac, .ogg) up to 50 MB. Files are stored in `{audio_dir}/{user_id}/refs/{uuid}.{ext}` — the UUID filename prevents name collisions and path injection. The `reference_audio` field on `GenerationParams` is validated at two levels:
+`POST /api/audio/upload` accepts audio files (.mp3, .wav, .flac, .ogg) up to 50 MB. Files are stored in `{audio_dir}/{user_id}/refs/{uuid}.{ext}` — the UUID filename prevents name collisions and path injection. The `reference_audio_path` field on `GenerationParams` is validated at two levels:
 
 1. **API validation**: Pydantic validator rejects any value containing `..`
 2. **Job execution**: The path is resolved to absolute and verified to stay inside `audio_dir` before being passed to ACE-Step
@@ -217,7 +226,7 @@ All request models use Pydantic with strict constraints:
 
 ## Path Traversal Protection
 
-Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. The authenticated audio endpoint (`/audio/{owner_id}/{filename}`) checks that the requesting user owns the files (or is admin) — no DB lookup needed since the path is keyed by user ID. Shared audio endpoints validate the requested filename against the set of picked generation paths for the shared album. Slug generation strips all non-alphanumeric characters.
+Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. The authenticated audio endpoint (`/audio/{owner_id}/{filename}`) checks that the requesting user owns the files (or is admin) — no DB lookup needed since the path is keyed by user ID. Shared audio endpoints first resolve the slug to a shared album, song, generation, or playlist, then validate the requested filename against that resource's allowed generation paths before reading from disk.
 
 ## GPU Resource Safety
 

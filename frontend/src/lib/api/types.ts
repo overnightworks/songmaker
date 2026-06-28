@@ -1,5 +1,5 @@
 /**
- * Auto-generated from api_models.py and scoring/models.py.
+ * Auto-generated from songmaker_cli.api_models and scoring/models.py.
  * Do NOT edit manually — run: python scripts/generate_types.py
  *
  * Hierarchy: Song → Version (content) → Generation (MP3 output)

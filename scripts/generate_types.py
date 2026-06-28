@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate TypeScript interfaces from Pydantic response models.
 
-Reads api_models.py and scoring/models.py, produces frontend/src/lib/api/types.ts.
+Reads songmaker_cli.api_models and scoring/models.py, produces frontend/src/lib/api/types.ts.
 Run after changing any API response model to keep the contract in sync.
 
 Usage:
@@ -23,7 +23,7 @@ OUTPUT_PATH = PROJECT_ROOT / "frontend" / "src" / "lib" / "api" / "types.ts"
 
 HEADER = """\
 /**
- * Auto-generated from api_models.py and scoring/models.py.
+ * Auto-generated from songmaker_cli.api_models and scoring/models.py.
  * Do NOT edit manually — run: python scripts/generate_types.py
  *
  * Hierarchy: Song → Version (content) → Generation (MP3 output)
@@ -375,7 +375,7 @@ def main() -> None:
             sys.exit(1)
         existing = OUTPUT_PATH.read_text()
         if existing != content:
-            print(f"FAIL: {OUTPUT_PATH} is out of sync with api_models.py")
+            print(f"FAIL: {OUTPUT_PATH} is out of sync with songmaker_cli.api_models")
             print("Run: python scripts/generate_types.py")
             sys.exit(1)
         print("OK: types.ts is in sync")

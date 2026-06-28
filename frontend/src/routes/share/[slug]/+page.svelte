@@ -59,6 +59,7 @@
 			return;
 		}
 		currentTrack = song;
+		playerRef?.loadAndPlay(song.audio_url);
 	}
 
 	function onEnded() {
@@ -401,7 +402,7 @@
 	.powered {
 		text-align: center;
 		margin-top: 3rem;
-		padding-bottom: 4rem;
+		padding-bottom: calc(var(--player-height, 88px) + 1rem);
 		font-size: 0.75rem;
 		color: var(--text-dim, #444);
 	}

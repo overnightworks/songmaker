@@ -20,7 +20,7 @@ Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tes
 - Each test gets its own `tmp_path` and SQLite database
 - `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
 - `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state
-- No module-level mutable state shared between tests
+- Settings/worker singletons are reset by fixtures; scorer model caches live in subprocesses
 - Scorer tests run on CPU but are excluded from CI coverage because the CI image doesn't ship faster-whisper / audiobox-aesthetics / librosa model weights (see `.coveragerc-ci`)
 
 ## Coverage Targets
@@ -33,48 +33,38 @@ Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tes
 
 ```
 tests/
-├── conftest.py              Shared fixtures (WAV generators, song file factory)
-├── test_admin_api.py        Admin endpoints (user CRUD, sessions, login attempts)
-├── test_api.py              API endpoint tests (FastAPI TestClient)
-├── test_auth_api.py         Auth endpoints (login, setup, password)
-├── test_auth.py             Auth utilities (bcrypt, session config)
-├── test_cli.py              CLI helper function tests (generate, decode, write)
-├── test_cli_client.py       HTTP client tests (resolve_song, api_get/post/put)
-├── test_client.py           ACE-Step HTTP client tests
-├── test_claude_provider.py  Claude API/CLI backend tests
-├── test_config.py           ACE-Step config building, path resolution
-├── test_db.py               DB models, queries, engine, migrations
-├── test_arq_pool.py           arq connection pool, Redis health queries
-├── test_worker_base.py        WorkerBase class lifecycle (DB factory, recovery, audit)
-├── test_music_worker.py       MusicWorker arq tasks (generate, model load/download)
-├── test_scoring_worker.py     ScoringWorker arq tasks (score, scorer subprocess lifecycle)
-├── test_jobs.py               Background generation + scoring job runners
-├── test_gpu_util.py           GPU memory queries via NVML
-├── test_mastering.py          Mastering chain (compression, LUFS, clipping)
-├── test_middleware.py         Auth middleware and FastAPI dependencies
-├── test_parser.py             SongMeta/AlbumMeta data model tests
-├── test_audio_io.py           WAV read/write, MP3 encoding
-├── test_postgresql.py         PostgreSQL-specific tests, migrations, concurrency
-├── test_rate_limit.py         Rate limiting (generation, scoring, queue depth)
-├── test_redis.py              Redis client, rate limiter, metrics, session cache
-├── test_reimport.py           Reimport core logic and API endpoint
-├── test_scorers.py            Silence, BPM, dynamics scorers
-├── test_scorers_extended.py   Spectral, audiobox, text accuracy, coherence
-├── test_scorer_subprocess.py  Scorer subprocess lifecycle, timeout, kill, recovery
-├── test_scoring_pipeline.py   Pipeline registry, runner, type validation
-├── test_sharing.py            Album sharing (share/unshare, shared view, rate limit)
-└── test_server.py             Server app creation, static files, audio routes
+├── conftest.py                    Shared fixtures (DB, WAV/audio factories, arq mocks)
+├── test_*_api.py                  Domain API coverage: admin, auth, conversation, generation,
+│                                  internal, LoRA, playlist, reimport, sharing, server
+├── test_*_queries.py              DB query coverage for workers and LoRAs
+├── test_jobs*.py                  Generation, scoring, model lifecycle, LoRA training jobs
+├── test_*worker*.py               Music/scoring worker classes and ACE-Step worker package tests
+├── test_scoring*.py               Scorer registry, pipeline, subprocess, and scorer modules
+├── test_*client*.py               CLI client, ACE-Step client, and training client tests
+├── test_auth*.py                  Auth utilities and auth endpoints
+├── test_config.py                 ACE-Step config building, defaults, path resolution
+├── test_db.py / test_postgresql.py Database models, migrations, concurrency
+├── test_generation*.py            Generation params, retention, LoRA integration
+└── test_*                         Audio I/O, lifecycle, middleware, parser, Redis, scheduler,
+                                   soft delete, constants, MCP server, mastering
+
+tests/acestep_worker/
+├── test_downloads.py
+├── test_heartbeat.py
+├── test_main.py
+├── test_model_cache.py
+├── test_progress.py
+├── test_registry_client.py
+├── test_subprocess_runner.py
+├── test_task_store.py
+└── test_wrapper.py
 
 frontend/src/
-├── lib/api/client.test.ts          API client (all endpoints, error handling)
-├── lib/stores/auth.test.ts         Auth store (login, logout, role checks)
-├── lib/stores/editor.test.ts       Editor store (dirty tracking, save, diff)
-├── lib/stores/filter.test.ts       Filter store (metrics, add/remove, apply)
-├── lib/stores/jobs.test.ts         Job polling, completion, error retry
-├── lib/stores/player.test.ts       Browsing, playback, score updates
-├── lib/stores/settings.test.ts     Claude key persistence
-├── lib/utils/diff.test.ts          LCS diff algorithm
-└── lib/utils/format.test.ts        Number/time formatting
+├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA
+├── lib/stores/*.test.ts           Store coverage: admin polling, auth, editor, filter,
+│                                  health, jobs, LoRA, player, toast
+├── lib/services/*.test.ts         Audio player service tests
+└── lib/utils/*.test.ts            Chat context, diff, and format helpers
 ```
 
 ## Testing Patterns

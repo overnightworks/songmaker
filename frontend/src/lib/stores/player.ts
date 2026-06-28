@@ -72,6 +72,15 @@ type QueueContext =
 	| { type: 'playlist'; entries: PlaylistEntryItem[]; index: number };
 
 export const queueContext = writable<QueueContext>({ type: 'library' });
+export const shuffleEnabled = writable(false);
+
+export function toggleShuffle(): void {
+	shuffleEnabled.update((enabled) => !enabled);
+}
+
+export function setShuffle(enabled: boolean): void {
+	shuffleEnabled.set(enabled);
+}
 
 // --- Playback dispatch ---
 
@@ -79,8 +88,14 @@ function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
 	return { generation: gen, songId: song.id, songTitle: song.title, artist: song.artist };
 }
 
-export function playGeneration(gen: GenerationItem, song: SongItem): void {
-	audioPlayer.load(toPlaybackInfo(gen, song));
+export function playGeneration(
+	gen: GenerationItem,
+	song: SongItem,
+	opts: { restart?: boolean } = {}
+): void {
+	const info = toPlaybackInfo(gen, song);
+	if (opts.restart) audioPlayer.load(info, { restart: true });
+	else audioPlayer.load(info);
 }
 
 function queueSongs(): SongItem[] {
@@ -112,28 +127,23 @@ export function canPlayPrevSong(
 	ctx: QueueContext
 ): boolean {
 	if (!current) return false;
-	if (ctx.type === 'playlist') return ctx.index > 0;
+	if (ctx.type === 'playlist') return ctx.entries.length > 1;
 	const pool = ctx.type === 'album' ? songs.filter((s) => s.album_id === ctx.albumId) : songs;
-	const idx = pool.findIndex((s) => s.id === current.songId);
-	for (let i = idx - 1; i >= 0; i--) {
-		if (pool[i].generation_count > 0) return true;
-	}
-	return false;
+	return pool.filter((s) => s.generation_count > 0).length > 1;
 }
 
 export function canPlayNextSong(
 	current: PlaybackInfo | null,
 	songs: SongItem[],
-	ctx: QueueContext
+	ctx: QueueContext,
+	shuffle = false
 ): boolean {
 	if (!current) return false;
-	if (ctx.type === 'playlist') return ctx.index < ctx.entries.length - 1;
-	const pool = ctx.type === 'album' ? songs.filter((s) => s.album_id === ctx.albumId) : songs;
-	const idx = pool.findIndex((s) => s.id === current.songId);
-	for (let i = idx + 1; i < pool.length; i++) {
-		if (pool[i].generation_count > 0) return true;
+	if (ctx.type === 'playlist') {
+		return ctx.entries.length > 1;
 	}
-	return false;
+	const pool = ctx.type === 'album' ? songs.filter((s) => s.album_id === ctx.albumId) : songs;
+	return pool.filter((s) => s.id !== current.songId && s.generation_count > 0).length > 0;
 }
 
 export function playNextGeneration(): void {
@@ -166,20 +176,69 @@ function bestGen(song: SongItem): GenerationItem | undefined {
 	return song.generations.find((g) => g.is_picked) ?? song.generations[0];
 }
 
+function currentPlaylistIndex(
+	ctx: { entries: PlaylistEntryItem[]; index: number },
+	current: PlaybackInfo | null = audioPlayer.current
+): number {
+	if (!current) return ctx.index;
+	const indexedEntry = ctx.entries[ctx.index];
+	if (
+		indexedEntry?.generation_id === current.generation.id &&
+		indexedEntry.mp3_path === current.generation.mp3_path
+	) {
+		return ctx.index;
+	}
+	const idx = ctx.entries.findIndex(
+		(entry) =>
+			entry.generation_id === current.generation.id &&
+			entry.mp3_path === current.generation.mp3_path
+	);
+	return idx >= 0 ? idx : ctx.index;
+}
+
+function randomIndexExcluding(length: number, excludedIndex: number): number | null {
+	if (length <= 1) return null;
+	const candidates = Array.from({ length }, (_, index) => index).filter(
+		(index) => index !== excludedIndex
+	);
+	return candidates[Math.floor(Math.random() * candidates.length)] ?? null;
+}
+
 export async function playNextSong(): Promise<void> {
 	const ctx = get(queueContext);
 	if (ctx.type === 'playlist') {
-		playPlaylistIndex(ctx, ctx.index + 1);
+		const currentIndex = currentPlaylistIndex(ctx);
+		const nextIndex = get(shuffleEnabled)
+			? randomIndexExcluding(ctx.entries.length, currentIndex)
+			: ctx.entries.length > 1
+				? (currentIndex + 1) % ctx.entries.length
+				: null;
+		if (nextIndex !== null) playPlaylistIndex(ctx, nextIndex);
 		return;
 	}
 	const cur = audioPlayer.current;
 	if (!cur) return;
 	const songs = queueSongs();
 	const idx = songs.findIndex((s) => s.id === cur.songId);
-	for (let i = idx + 1; i < songs.length; i++) {
-		if (songs[i].generation_count === 0) continue;
-		await ensureGenerationsLoaded(songs[i].id);
-		const fresh = get(songList).find((s) => s.id === songs[i].id);
+	if (get(shuffleEnabled)) {
+		const candidates = songs.filter((s) => s.id !== cur.songId && s.generation_count > 0);
+		while (candidates.length > 0) {
+			const next = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
+			await ensureGenerationsLoaded(next.id);
+			const fresh = get(songList).find((s) => s.id === next.id);
+			const gen = fresh ? bestGen(fresh) : undefined;
+			if (gen && fresh) {
+				playGeneration(gen, fresh);
+				return;
+			}
+		}
+		return;
+	}
+	for (let offset = 1; offset <= songs.length; offset++) {
+		const song = songs[(idx + offset + songs.length) % songs.length];
+		if (!song || song.id === cur.songId || song.generation_count === 0) continue;
+		await ensureGenerationsLoaded(song.id);
+		const fresh = get(songList).find((s) => s.id === song.id);
 		const gen = fresh ? bestGen(fresh) : undefined;
 		if (gen && fresh) {
 			playGeneration(gen, fresh);
@@ -191,17 +250,21 @@ export async function playNextSong(): Promise<void> {
 export async function playPrevSong(): Promise<void> {
 	const ctx = get(queueContext);
 	if (ctx.type === 'playlist') {
-		playPlaylistIndex(ctx, ctx.index - 1);
+		const currentIndex = currentPlaylistIndex(ctx);
+		if (ctx.entries.length > 1) {
+			playPlaylistIndex(ctx, (currentIndex - 1 + ctx.entries.length) % ctx.entries.length);
+		}
 		return;
 	}
 	const cur = audioPlayer.current;
 	if (!cur) return;
 	const songs = queueSongs();
 	const idx = songs.findIndex((s) => s.id === cur.songId);
-	for (let i = idx - 1; i >= 0; i--) {
-		if (songs[i].generation_count === 0) continue;
-		await ensureGenerationsLoaded(songs[i].id);
-		const fresh = get(songList).find((s) => s.id === songs[i].id);
+	for (let offset = 1; offset <= songs.length; offset++) {
+		const song = songs[(idx - offset + songs.length) % songs.length];
+		if (!song || song.id === cur.songId || song.generation_count === 0) continue;
+		await ensureGenerationsLoaded(song.id);
+		const fresh = get(songList).find((s) => s.id === song.id);
 		const gen = fresh ? bestGen(fresh) : undefined;
 		if (gen && fresh) {
 			playGeneration(gen, fresh);
@@ -250,29 +313,29 @@ function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 
 function playPlaylistIndex(
 	ctx: { entries: PlaylistEntryItem[]; index: number },
-	newIndex: number
+	newIndex: number,
+	opts: { restart?: boolean } = {}
 ): void {
 	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
 	const entry = ctx.entries[newIndex];
 	queueContext.set({ type: 'playlist', entries: ctx.entries, index: newIndex });
-	audioPlayer.load({
+	const info = {
 		generation: playlistEntryToGeneration(entry),
 		songId: '',
 		songTitle: entry.song_title,
 		artist: entry.artist
-	});
+	};
+	if (opts.restart) audioPlayer.load(info, { restart: true });
+	else audioPlayer.load(info);
 }
 
-export function playPlaylistEntries(entries: PlaylistEntryItem[]): void {
+export function playPlaylistEntries(
+	entries: PlaylistEntryItem[],
+	startIndex = 0,
+	opts: { restart?: boolean } = {}
+): void {
 	if (entries.length === 0) return;
-	queueContext.set({ type: 'playlist', entries, index: 0 });
-	const first = entries[0];
-	audioPlayer.load({
-		generation: playlistEntryToGeneration(first),
-		songId: '',
-		songTitle: first.song_title,
-		artist: first.artist
-	});
+	playPlaylistIndex({ entries, index: startIndex }, startIndex, opts);
 }
 
 export function navigateToPlaying(): void {
@@ -361,11 +424,11 @@ export function updateGenerationScores(
 	}));
 }
 
-audioPlayer.onEnded = () => {
-	const ctx = get(queueContext);
-	if (ctx.type === 'playlist') void playNextSong();
-	else void playNextGeneration();
-};
+export function handlePlaybackEnded(): void {
+	void playNextSong();
+}
+
+audioPlayer.onEnded = handlePlaybackEnded;
 
 audioPlayer.onAuthLost = async () => {
 	const { clearAuth } = await import('$lib/stores/auth');

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { formatTime } from '$lib/utils/format';
+	import Icon from './Icon.svelte';
 	import {
 		AudioVisualizer,
 		FFT_SIZE,
@@ -38,6 +39,10 @@
 	let analyser: AnalyserNode | undefined;
 	let frequencyData: Uint8Array<ArrayBuffer> | undefined;
 	let waveformData: Uint8Array<ArrayBuffer> | undefined;
+	let prevUrl: string | undefined = $state(undefined);
+	const progressPercent = $derived(
+		duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0
+	);
 
 	const viz = new AudioVisualizer();
 
@@ -74,6 +79,26 @@
 		return audio;
 	}
 
+	function requestPlay(el: HTMLAudioElement): void {
+		el.play().catch(() => {
+			isPlaying = false;
+			isLoading = false;
+		});
+	}
+
+	export function loadAndPlay(nextUrl: string = audioUrl): void {
+		const el = ensureAudio();
+		if (el.src !== new URL(nextUrl, window.location.href).href) {
+			el.src = nextUrl;
+			el.load();
+		}
+		prevUrl = nextUrl;
+		currentTime = 0;
+		duration = 0;
+		isLoading = true;
+		requestPlay(el);
+	}
+
 	function connectAnalyser(): void {
 		if (!audio || audioCtx) return;
 		try {
@@ -105,18 +130,12 @@
 		if (vizCanvas) viz.stopLoop(vizCanvas);
 	}
 
-	let prevUrl: string | undefined = $state(undefined);
 	$effect(() => {
 		if (audioUrl === prevUrl) return;
 		const isInitial = prevUrl === undefined;
 		prevUrl = audioUrl;
 		if (isInitial && !autoplay) return;
-		const el = ensureAudio();
-		if (!isInitial) el.src = audioUrl;
-		currentTime = 0;
-		duration = 0;
-		isLoading = true;
-		el.play().catch(() => {});
+		loadAndPlay(audioUrl);
 	});
 
 	$effect(() => {
@@ -126,7 +145,7 @@
 	export function togglePlay(): void {
 		const el = ensureAudio();
 		if (isLoading) return;
-		if (el.paused) el.play().catch(() => {});
+		if (el.paused) requestPlay(el);
 		else el.pause();
 	}
 
@@ -136,6 +155,11 @@
 		const rect = el.getBoundingClientRect();
 		const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
 		audio.currentTime = ratio * duration;
+	}
+
+	function seekFromRange(e: Event): void {
+		if (!audio || duration <= 0) return;
+		audio.currentTime = Number((e.currentTarget as HTMLInputElement).value);
 	}
 
 	onDestroy(() => {
@@ -149,47 +173,61 @@
 </script>
 
 <div class="shared-player" style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}>
-	{#if onprev}
-		<button class="nav-btn" onclick={onprev} aria-label="Previous">⏮</button>
-	{/if}
-	<button
-		class="play-btn"
-		class:loading={isLoading}
-		class:playing={isPlaying}
-		onclick={togglePlay}
-		disabled={isLoading}
-		aria-label={isPlaying ? 'Pause' : 'Play'}
-		style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
-	>
-		{#if isLoading}<span class="spinner"></span>{:else}{isPlaying ? '⏸' : '▶'}{/if}
-	</button>
-	{#if onnext}
-		<button class="nav-btn" onclick={onnext} aria-label="Next">⏭</button>
-	{/if}
-	<div class="track-info">
-		<span
-			class="track-title"
-			class:glowing={isPlaying}
-			style={isPlaying ? titleGlowStyle(bassLevel, vizColors) : ''}>{title}</span
-		>
-		{#if subtitle}
-			<span class="track-detail">{subtitle}</span>
-		{/if}
-	</div>
-	<span class="time">{formatTime(currentTime)}</span>
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="viz-area" onclick={seek}>
-		<canvas class="viz-canvas" bind:this={vizCanvas}></canvas>
-	</div>
-	<span class="time">{formatTime(duration)}</span>
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="progress-bar" onclick={seek}>
-		<div
-			class="progress-fill"
-			style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"
-		></div>
+	<canvas class="viz-canvas" bind:this={vizCanvas}></canvas>
+	<div class="player-content">
+		<div class="player-controls">
+			{#if onprev}
+				<button class="nav-btn" onclick={onprev} aria-label="Previous" title="Previous">
+					<Icon name="skip-back" size={21} />
+				</button>
+			{/if}
+			<button
+				class="play-btn"
+				class:loading={isLoading}
+				class:playing={isPlaying}
+				onclick={togglePlay}
+				disabled={isLoading}
+				aria-label={isPlaying ? 'Pause' : 'Play'}
+				style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
+			>
+				{#if isLoading}<span class="spinner"></span>{:else}<Icon
+						name={isPlaying ? 'pause' : 'play'}
+						size={26}
+					/>{/if}
+			</button>
+			{#if onnext}
+				<button class="nav-btn" onclick={onnext} aria-label="Next" title="Next">
+					<Icon name="skip-forward" size={21} />
+				</button>
+			{/if}
+		</div>
+		<div class="track-info">
+			<span
+				class="track-title"
+				class:glowing={isPlaying}
+				style={isPlaying ? titleGlowStyle(bassLevel, vizColors) : ''}>{title}</span
+			>
+			{#if subtitle}
+				<span class="track-detail">{subtitle}</span>
+			{/if}
+		</div>
+		<div class="timeline">
+			<span class="time">{formatTime(currentTime)}</span>
+			<input
+				class="timeline-range"
+				style={`--progress: ${progressPercent}%`}
+				type="range"
+				min="0"
+				max={duration || 0}
+				step="0.1"
+				value={duration > 0 ? currentTime : 0}
+				oninput={seekFromRange}
+				onclick={(e) => seek(e)}
+				disabled={duration <= 0}
+				aria-label="Seek playback"
+			/>
+			<span class="time">{formatTime(duration)}</span>
+		</div>
 	</div>
 </div>
 
@@ -199,50 +237,77 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		height: 64px;
+		height: var(--player-height, 88px);
 		background: var(--card-bg, #111);
 		border-top: 2px solid transparent;
 		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
 		display: flex;
 		align-items: center;
-		gap: 12px;
-		padding: 0 16px;
+		padding: 10px 18px;
 		z-index: 100;
-		overflow: visible;
+		overflow: hidden;
 		transition: box-shadow 0.3s;
 	}
 
-	.nav-btn {
-		background: none;
-		border: none;
-		color: var(--text-muted, #888);
-		font-size: 1rem;
-		cursor: pointer;
-		padding: 4px;
+	.player-content {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		grid-template-columns: auto minmax(120px, 240px) minmax(180px, 1fr);
+		align-items: center;
+		gap: 14px;
+		width: 100%;
+		min-width: 0;
+	}
+
+	.player-controls {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 		flex-shrink: 0;
-		transition: color 0.15s;
+	}
+
+	.nav-btn {
+		width: 44px;
+		height: 44px;
+		background: color-mix(in srgb, var(--surface, #111) 70%, transparent);
+		border: 1px solid color-mix(in srgb, var(--border, #333) 80%, transparent);
+		border-radius: 50%;
+		color: var(--text-muted, #888);
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
+		flex-shrink: 0;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s;
 	}
 
 	.nav-btn:hover {
 		color: var(--text, #e0e0e0);
+		border-color: color-mix(in srgb, var(--primary, #ff3220) 65%, var(--border, #333));
+		background: color-mix(in srgb, var(--primary, #ff3220) 12%, var(--surface, #111));
 	}
 
 	.play-btn {
-		width: 44px;
-		height: 44px;
+		width: 62px;
+		height: 62px;
 		border-radius: 50%;
 		border: 2px solid var(--primary, #ff3220);
-		background: transparent;
+		background: color-mix(in srgb, var(--surface, #111) 72%, transparent);
 		color: var(--primary, #ff3220);
-		font-size: 1rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		flex-shrink: 0;
 		cursor: pointer;
 		transition:
+			background 0.2s,
 			border-color 0.3s,
-			transform 0.1s;
+			color 0.2s;
 	}
 
 	.play-btn:hover:not(:disabled) {
@@ -296,8 +361,8 @@
 	}
 
 	.spinner {
-		width: 20px;
-		height: 20px;
+		width: 24px;
+		height: 24px;
 		border: 2px solid transparent;
 		border-radius: 50%;
 		background-origin: border-box;
@@ -317,10 +382,8 @@
 	.track-info {
 		display: flex;
 		flex-direction: column;
-		min-width: 80px;
-		max-width: 200px;
+		min-width: 0;
 		overflow: hidden;
-		flex-shrink: 0;
 	}
 
 	.track-title {
@@ -344,11 +407,19 @@
 	}
 
 	.track-detail {
-		font-size: 0.7rem;
+		font-size: 0.73rem;
 		color: var(--text-muted, #888);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.timeline {
+		display: grid;
+		grid-template-columns: auto minmax(80px, 1fr) auto;
+		align-items: center;
+		gap: 10px;
+		min-width: 0;
 	}
 
 	.time {
@@ -358,15 +429,72 @@
 		min-width: 36px;
 		text-align: center;
 		flex-shrink: 0;
-		z-index: 1;
 	}
 
-	.viz-area {
-		flex: 1;
-		min-width: 80px;
-		height: 52px;
-		position: relative;
+	.timeline-range {
+		--track-bg: color-mix(in srgb, var(--border, #333) 45%, transparent);
+		appearance: none;
+		-webkit-appearance: none;
+		width: 100%;
+		height: 34px;
+		background: transparent;
 		cursor: pointer;
+		accent-color: var(--accent, #a020f0);
+	}
+
+	.timeline-range:disabled {
+		cursor: default;
+		opacity: 0.45;
+	}
+
+	.timeline-range::-webkit-slider-runnable-track {
+		height: 8px;
+		border-radius: 999px;
+		background: linear-gradient(
+			90deg,
+			var(--primary, #ff3220) 0%,
+			var(--accent, #a020f0) var(--progress),
+			var(--track-bg) var(--progress),
+			var(--track-bg) 100%
+		);
+		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border, #333) 55%, transparent);
+	}
+
+	.timeline-range::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		border: 2px solid var(--card-bg, #111);
+		background: var(--text, #e0e0e0);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #a020f0) 28%, transparent);
+		margin-top: -5px;
+	}
+
+	.timeline-range:hover:not(:disabled)::-webkit-slider-thumb {
+		background: #fff;
+		box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent, #a020f0) 30%, transparent);
+	}
+
+	.timeline-range::-moz-range-track {
+		height: 8px;
+		border-radius: 999px;
+		background: var(--track-bg);
+	}
+
+	.timeline-range::-moz-range-progress {
+		height: 8px;
+		border-radius: 999px;
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+	}
+
+	.timeline-range::-moz-range-thumb {
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		border: 2px solid var(--card-bg, #111);
+		background: var(--text, #e0e0e0);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #a020f0) 28%, transparent);
 	}
 
 	.viz-canvas {
@@ -375,46 +503,60 @@
 		width: 100%;
 		height: 100%;
 		pointer-events: none;
+		z-index: 0;
 	}
 
-	.progress-bar {
-		position: absolute;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		height: 12px;
-		padding-top: 10px;
-		background: transparent;
-		z-index: 2;
-		cursor: pointer;
-	}
-
-	.progress-bar::after {
-		content: '';
-		display: block;
-		height: 2px;
-		background: color-mix(in srgb, var(--border, #333) 30%, transparent);
-		border-radius: 1px;
-	}
-
-	.progress-fill {
-		height: 2px;
-		margin-top: -2px;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
-		transition: width 0.1s linear;
-		border-radius: 1px;
-		position: relative;
-		z-index: 1;
-	}
-
-	@media (max-width: 768px) {
+	@media (max-width: 900px) {
 		.shared-player {
-			gap: 6px;
-			padding: 0 8px;
+			padding: 8px 10px;
+		}
+
+		.player-content {
+			grid-template-columns: auto minmax(120px, 1fr);
+			gap: 10px;
 		}
 
 		.track-info {
 			display: none;
+		}
+
+		.nav-btn {
+			width: 40px;
+			height: 40px;
+		}
+
+		.play-btn {
+			width: 56px;
+			height: 56px;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.player-content {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+
+		.player-controls {
+			justify-content: center;
+			gap: 6px;
+			width: 100%;
+		}
+
+		.timeline {
+			width: 100%;
+			gap: 6px;
+		}
+
+		.nav-btn {
+			width: 38px;
+			height: 38px;
+		}
+
+		.play-btn {
+			width: 48px;
+			height: 48px;
 		}
 
 		.time {

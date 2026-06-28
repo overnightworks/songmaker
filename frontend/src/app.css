@@ -40,7 +40,7 @@
 	--viz-accent-b: 240;
 	--font-display: 'Oswald', Impact, sans-serif;
 	--font-body: 'Open Sans', Arial, sans-serif;
-	--player-height: 72px;
+	--player-height: 88px;
 	--header-height: 44px;
 
 	/* Button tokens */
@@ -74,6 +74,12 @@
 		--input-font-size: 1.07rem;
 		--row-padding: 0.8rem 0.8rem;
 		--row-gap: 0.7rem;
+	}
+}
+
+@media (max-width: 640px) {
+	:root {
+		--player-height: 104px;
 	}
 }
 

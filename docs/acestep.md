@@ -1,6 +1,6 @@
 # ACE-Step Integration
 
-Upstream: [ACE-Step 1.5 v0.1.6](https://github.com/ace-step/ACE-Step-1.5)
+Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). The vendored submodule is currently `v0.1.6-100-g931be76`.
 
 ## How Songmaker Uses ACE-Step
 
@@ -12,7 +12,13 @@ an LRU cache of loaded models and exposes:
 |---|---|---|
 | POST | `/load_model` | Load a model variant into VRAM (idempotent) |
 | POST | `/evict_model` | Evict from VRAM |
+| POST | `/pin_model` | Mark a loaded model as exempt from LRU eviction |
+| POST | `/unpin_model` | Remove a model from the pinned set |
+| POST | `/restart` | Ask the worker process to terminate so Docker restarts it |
 | POST | `/generate` | Submit generation, returns `{task_id}` |
+| POST | `/tasks/train_lora` | Submit a LoRA training task, returns `{task_id}` |
+| POST | `/download_model` | Download a model variant, returns `{task_id}` |
+| GET | `/tasks/{id}` | Current task snapshot |
 | GET | `/tasks/{id}/stream` | SSE: `progress`/`done`/`error` events |
 | GET | `/loaded_models` | Current state for heartbeat |
 | GET | `/health` | Liveness |
@@ -102,7 +108,7 @@ python:3.12-slim
 
 **The inner ACE-Step venv is baked into `acestep-base` at `/opt/acestep/.venv`.** Pre-Phase-8, it lived in a host bind mount that uv re-resynced from scratch on every fresh container (5–15 minute model-load gate). Now it's in the image. The bind mount on `acestep-worker` only carries `./vendor/acestep/checkpoints` → `/opt/acestep/checkpoints` (the multi-GB model weights). The upstream source tree, the `.venv`, and everything else under `vendor/acestep/` is COPYed into the image at build time.
 
-The `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. Workers default to `ARQ_JOB_TIMEOUT=1000` and `ACESTEP_STARTUP_TIMEOUT_SECONDS=900` — long enough for a cold xl-turbo + vLLM init, which can take 5–8 min on a fresh container with empty page/JIT caches. If you have an older shorter override in your local `.env`, drop it.
+The old `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. The Python settings defaults are `ARQ_JOB_TIMEOUT=1000` and `ACESTEP_STARTUP_TIMEOUT_SECONDS=900`, matching `.env.docker.example`. `docker-compose.yml` currently supplies shorter 300-second fallbacks when those env vars are unset, so set the longer values in `.env` for Docker deployments that cold-load xl-turbo or vLLM on fresh containers.
 
 **Music-worker image bloat fix:** prior to Phase 8, music-worker shared `Dockerfile.worker` with scoring-worker and carried ~5 GB of unused torch + scoring + whisper wheels. Phase 8 split that file into `docker/music-worker.Dockerfile` (server extras only) and `docker/scoring-worker.Dockerfile` (server + scoring + whisper). Music-worker is now ~860 MB. This is safe because music-worker's import chain (`music_worker.py` → `jobs.py` → `scoring.{pipeline,models}`) is torch-free at module load — torch imports inside the scoring stack are lazy (inside function bodies) and music-worker never registers `run_scoring_job`.
 
@@ -236,33 +242,48 @@ For the cross-cutting flow (web → music-worker → acestep-worker), see [archi
 
 ## Generation Parameters
 
-Parameters can be set per-song (`generation_params` in version), per-model-type (admin defaults), or globally.
+The user-facing ACE-Step knobs are stored in `Version.generation_params`, can be set per-model in admin defaults, and are merged into `AceStepConfig`.
 
-Priority: song params > admin defaults > model defaults.
+Priority: CLI overrides, when supplied > song params > preset params > admin defaults > model defaults. Top-level song/version fields (`bpm`, `audio_duration`, `key_scale`, `vocal_language`) are applied after that merge.
 
 | Parameter | Range | Default (turbo) | Default (SFT) | Effect |
 |-----------|-------|-----------------|---------------|--------|
 | `inference_steps` | 1-200 | 8 | 50 | More = slower, potentially higher quality |
 | `guidance_scale` | 0-50 | 0.0 | 0.0 | CFG strength (turbo ignores this) |
 | `shift` | 0-100 | 3.0 | 3.0 | 1.0 = natural/emotional, 3.0 = accurate lyrics |
+| `thinking` | bool | true | true | Let the LM plan musical structure |
 | `lm_temperature` | 0-5 | 0.85 | 0.85 | Higher = more creative (try 1.1-1.2) |
-| `lm_top_k` | 0-1000 | — | — | LM sampling top-k |
-| `lm_top_p` | 0-1 | — | — | LM sampling nucleus |
-| `lm_cfg_scale` | 0-50 | — | — | LM classifier-free guidance |
-| `lm_negative_prompt` | string | — | — | What to avoid |
+| `lm_top_k` | 0-1000 | 0 | 0 | LM sampling top-k; 0 disables top-k filtering |
+| `lm_top_p` | 0-1 | 0.9 | 0.9 | LM sampling nucleus |
+| `lm_cfg_scale` | 0-50 | 2.0 | 2.0 | LM classifier-free guidance |
+| `lm_negative_prompt` | string | empty | empty | What to avoid |
 | `infer_method` | ode/sde | ode | ode | sde = more textured/alive |
-| `think_mode` | string | true | true | false = more creative, true = more structured |
-| `lm_repetition_penalty` | 0.5-5 | 1.0 | 1.0 | Penalize LM token repetition |
 | `batch_size` | 1-8 | 1 | 1 | Parallel generations per request |
-| `duration` | 1-600 | 180 | 180 | Output length in seconds |
-| `bpm` | 0-999 | 120 | 120 | 0 = let model decide |
+| `reference_audio_path` | string | empty | empty | Uploaded reference-audio path |
+| `repaint_mode` | conservative/balanced/aggressive | none | none | Server-side repaint preservation mode |
+| `repaint_strength` | 0-1 | none | none | Intensity for balanced repaint mode |
+| `lm_repetition_penalty` | 0.5-5 | 1.0 | 1.0 | Penalize LM token repetition |
 | `use_cot_caption` | bool | true | true | LM chain-of-thought caption rewriting |
 | `use_cot_language` | bool | true | true | LM chain-of-thought language detection |
-| `constrained_decoding` | bool | false | false | FSM-based structured LM output |
-| `timesteps` | string | — | — | Custom diffusion schedule (comma-separated floats) |
 | `use_adg` | bool | false | false | Adaptive Projected Guidance (no-op on turbo; honored on sft/base when `guidance_scale > 1.0`) |
 | `cfg_interval_start` | 0-1 | 0.0 | 0.0 | CFG application start fraction |
 | `cfg_interval_end` | 0-1 | 1.0 | 1.0 | CFG application end fraction |
+| `sampler_mode` | euler/heun | euler | euler | Diffusion sampler |
+| `velocity_norm_threshold` | >= 0 | 0.0 | 0.0 | DiT velocity normalization threshold; 0 disables |
+| `velocity_ema_factor` | >= 0 | 0.0 | 0.0 | Exponential smoothing for DiT velocity; 0 disables |
+| `latent_shift` | float | 0.0 | 0.0 | Shift latent-space center |
+| `latent_rescale` | >= 0.1 | 1.0 | 1.0 | Rescale latent magnitude |
+| `audio_cover_strength` | 0-1 | 1.0 | 1.0 | Strength for cover/reference guidance |
+| `user_lora_id` | string | none | none | User-trained LoRA adapter ID |
+
+Top-level song/version fields:
+
+| Field | Range | Default | Effect |
+|-------|-------|---------|--------|
+| `audio_duration` | 0-600 | 180 | Output length in seconds; 0 lets ACE-Step decide |
+| `bpm` | 0-999 | 0 | Target BPM; 0 lets ACE-Step decide |
+| `key_scale` | string | empty | Target key |
+| `vocal_language` | string | empty | Vocal language hint |
 
 ## Modes
 
@@ -273,9 +294,9 @@ All modes use the same upstream ACE-Step task endpoint with different `task_type
 | Text2Music | `text2music` | Generate button | Generate from scratch (default) |
 | Repaint | `repaint` | Repaint button on generation | Edit a time section — fix wrong lyrics, redo a chorus |
 | Cover | `cover` | Cover button on generation | Re-interpret with different style/lyrics, keep melody |
-| Reference | `text2music` + `reference_audio` | Upload in generation settings | Guide timbre/style from an external audio track |
+| Reference | `text2music` + `reference_audio_path` | Upload in generation settings | Guide timbre/style from an external audio track |
 
-**Repaint** sends `src_audio` (the original WAV), `repainting_start` and `repainting_end` (0.0-1.0 fractions). `think_mode` is auto-disabled. The result is a new generation — non-destructive. v0.1.6 adds server-side crossfade controls:
+**Repaint** sends `src_audio` (the original WAV), `repainting_start` and `repainting_end` (0.0-1.0 fractions). `thinking` is auto-disabled. The result is a new generation — non-destructive. ACE-Step 1.5 adds server-side crossfade controls:
 - `repaint_mode`: `conservative` / `balanced` / `aggressive` — how much source audio is preserved
 - `repaint_strength`: 0-1, intensity for balanced mode
 - `repaint_latent_crossfade_frames`: latent-level boundary blend width
@@ -283,15 +304,15 @@ All modes use the same upstream ACE-Step task endpoint with different `task_type
 
 When `repaint_mode` or `repaint_wav_crossfade_sec` is set, the server handles crossfading and the client-side splice (`_splice_repaint_raw`) is skipped.
 
-**Cover** sends `src_audio` and `audio_cover_strength` (0.0 = free reinterpretation, 1.0 = strict structure). `think_mode` is auto-disabled. v0.1.6 adds `cover_noise_strength` (0-1) for noise blending control.
+**Cover** sends `src_audio` and `audio_cover_strength` (0.0 = free reinterpretation, 1.0 = strict structure). `thinking` is auto-disabled. ACE-Step 1.5 adds `cover_noise_strength` (0-1) for noise blending control.
 
-**Reference audio** uploads via `POST /api/audio/upload` (max 50MB, .mp3/.wav/.flac/.ogg). The path is stored in version `generation_params.reference_audio` and resolved to an absolute path before sending to ACE-Step. Path traversal is blocked at both API validation and job execution levels.
+**Reference audio** uploads via `POST /api/audio/upload` (max 50MB, .mp3/.wav/.flac/.ogg). The path is stored in version `generation_params.reference_audio_path` and resolved to an absolute path before sending to ACE-Step. Path traversal is blocked at both API validation and job execution levels.
 
 ## CoT Response Data
 
 The server returns `cot_caption` and `cot_lyrics` in generation results — the LM's chain-of-thought rewritten caption and lyrics. These are stored in `generation_params` and displayed in the frontend generation detail. Useful for understanding how the LM interpreted your prompt. Disable with `use_cot_caption: false` / `use_cot_language: false`.
 
-**Not yet integrated**: Lego, Extract, Complete (require Base model — see `plans/base-model-tasks.md`). Infinite duration (exploratory — see `plans/acestep-modes.md` Phase 5).
+**Not yet integrated**: Lego, Extract, Complete (require Base model support in Songmaker). Infinite duration remains exploratory.
 
 ## Environment Variables
 
@@ -339,13 +360,13 @@ These are set on the subprocess by `subprocess_runner.py:build_env()` when it sp
 | `MAX_CUDA_VRAM` | from `VRAM_BUDGET_GB` (default `24`) | Total VRAM budget in GB. ACE-Step **trusts this value as ground truth** — it does not cross-check against the physical GPU. On startup the subprocess logs `⚠️ DEBUG MODE: Simulating GPU memory as N GB (set via MAX_CUDA_VRAM)`. Setting this higher than the physical GPU lets ACE-Step's VAE stay on GPU when it should fall back, which will OOM during decode. Always set `VRAM_BUDGET_GB` ≤ physical VRAM. |
 | `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (hardcoded) | PyTorch CUDA allocator config |
 
-## Local Submodule Patch — VRAM Pre-flight
+## VRAM Pre-flight Note
 
-The `vendor/acestep` submodule has a **local patch** that must be reapplied after any `git submodule update`.
+The `vendor/acestep` submodule currently still calls `_vram_preflight_check()` before generation. A previously used local workaround replaced that check with cache cleanup when the pre-flight was too conservative on 24 GB cards.
 
-**File:** `vendor/acestep/acestep/core/generation/handler/generate_music.py` (around line 325)
+**Current file:** `vendor/acestep/acestep/core/generation/handler/generate_music.py` (around the `_vram_preflight_check()` call in `GenerateMusicMixin.generate_music()`)
 
-**Change:** Replace the `_vram_preflight_check()` call with `gc.collect()` + `torch.cuda.empty_cache()`.
+**Workaround:** Replace the `_vram_preflight_check()` call with `gc.collect()` + `torch.cuda.empty_cache()`.
 
 **Why:** v0.1.6 added a VRAM pre-flight check that's overly conservative on 24 GB cards when the desktop shares the GPU. It reports e.g. "1.3 GB free, needs 1.4 GB" and blocks generation, even though PyTorch's caching allocator can handle it. The check did not exist in v0.1.5 and songs generated fine. See ACE-Step issue #822 for similar reports.
 
@@ -367,7 +388,7 @@ torch.cuda.empty_cache()
 
 **No upstream option exists** — no env var, config flag, or API parameter disables the pre-flight. Only `offload_to_cpu=True` bypasses it (too slow).
 
-**When you can remove this patch:** When the GPU has enough spare VRAM that the check passes reliably (e.g., after adding a second GPU for desktop+scoring, freeing the 3090). Or when ACE-Step adds an official skip flag upstream.
+**When to retire this note:** When the GPU has enough spare VRAM that the check passes reliably (e.g., after adding a second GPU for desktop+scoring, freeing the 3090), or when ACE-Step adds an official skip flag upstream.
 
 ## Deferred features (blocked upstream)
 

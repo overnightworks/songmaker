@@ -67,6 +67,17 @@ def test_get_audio(server_app: TestClient) -> None:
     assert resp.status_code == 200
 
 
+def test_get_audio_supports_range_requests(server_app: TestClient) -> None:
+    resp = server_app.get(
+        "/audio/admin-user-id/g1.mp3",
+        headers={"Range": "bytes=0-3"},
+    )
+    assert resp.status_code == 206
+    assert resp.headers["Accept-Ranges"] == "bytes"
+    assert resp.headers["Content-Range"] == "bytes 0-3/400"
+    assert resp.content == b"\xff\xfb\x90\x00"
+
+
 def test_get_audio_not_found(server_app: TestClient) -> None:
     resp = server_app.get("/audio/admin-user-id/nonexistent.mp3")
     assert resp.status_code == 404

@@ -10,7 +10,7 @@ Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [secur
 
 **Backlog:** [BACKLOG.md](BACKLOG.md) at the repo root. Always consult it when the user asks "what should we do next?", "what's on the roadmap?", or "anything in the queue?" — don't assume the `plans/` directory is the full picture. BACKLOG.md holds feature-level concept notes; `plans/` holds per-task concept notes only while work is in flight.
 
-**ACE-Step submodule:** `vendor/acestep` → [FlexOr2/ACE-Step-1.5](https://github.com/FlexOr2/ACE-Step-1.5) (our fork). The fork carries patches not yet upstream (HTTP API param exposure, VRAM preflight skip). Upstream remote is `upstream` inside the submodule. Sync periodically with `cd vendor/acestep && git fetch upstream && git merge upstream/main`. When adding or modifying ACE-Step params, read the fork's HTTP API code directly (`vendor/acestep/acestep/api/http/`) — it's the source of truth for available params and their names. **For PR status questions** ("what's open upstream?", "are my PRs merged?", "anything blocked?") always query GitHub live with `gh pr list --repo ACE-Step/ACE-Step-1.5 --author FlexOr2 --state open --json number,title,isDraft,mergeStateStatus,reviewDecision,updatedAt` — don't trust memory snapshots, they go stale within days.
+**ACE-Step submodule:** `vendor/acestep` → [FlexOr2/ACE-Step-1.5](https://github.com/FlexOr2/ACE-Step-1.5) (our fork). The fork carries patches not yet upstream, especially HTTP API param exposure; the old VRAM preflight skip is not currently applied in the vendored file (see `docs/acestep.md`). Upstream remote is `upstream` inside the submodule. Sync periodically with `cd vendor/acestep && git fetch upstream && git merge upstream/main`. When adding or modifying ACE-Step params, read the fork's HTTP API code directly (`vendor/acestep/acestep/api/http/`) — it's the source of truth for available params and their names. **For PR status questions** ("what's open upstream?", "are my PRs merged?", "anything blocked?") always query GitHub live with `gh pr list --repo ACE-Step/ACE-Step-1.5 --author FlexOr2 --state open --json number,title,isDraft,mergeStateStatus,reviewDecision,updatedAt` — don't trust memory snapshots, they go stale within days.
 
 ## Product Context
 
@@ -79,8 +79,8 @@ alembic upgrade head
 
 | Adding a... | Files to touch | Exemplar |
 |---|---|---|
-| API endpoint | `api_models.py` → `db/queries/{domain}.py` → `{domain}_api.py` → run `python scripts/generate_types.py` | `album_api.py` |
-| Scorer | `scoring/{name}.py` → `scoring/models.py` → `pipeline.py` count → `api_models.py` names | `scoring/silence_detection.py` |
+| API endpoint | `api_models/{domain}.py` → `db/queries/{domain}.py` → `{domain}_api.py` → run `python scripts/generate_types.py` | `album_api.py` |
+| Scorer | `scoring/{name}.py` → `scoring/models.py` → `pipeline.py` count → `api_models/` names | `scoring/silence_detection.py` |
 | DB model | `db/models.py` → `db/queries/{domain}.py` → Alembic migration | `db/models.py:Song` |
 | Frontend component | `lib/components/` → `lib/stores/` if stateful → `lib/api/client.ts` if new API | `SongList.svelte` |
 | Plan / design doc | `plans/{name}.md` — **concept only** (goal, locked-in decisions, hard constraints, "first step: read the live code"). See "Plan-writing convention" below. Add `**Status:** Proposed\|In progress\|Done\|Abandoned` and `**Date:** YYYY-MM-DD` headers. Delete `Done`/`Abandoned` plans — git history keeps them recoverable. | `plans/jobs-module-split.md` |
@@ -121,7 +121,7 @@ These are conventions that aren't obvious from reading a single file:
 
 1. **Database is source of truth** — all data in PostgreSQL, not files
 2. **One code path** — CLI and web UI use the same REST API (exception: `reset-password` and `list-users` are local DB escape hatches)
-3. **Pydantic models define the API contract** — `api_models.py` → `types.ts` (generated via `python scripts/generate_types.py`)
+3. **Pydantic models define the API contract** — `src/songmaker_cli/api_models/` → `types.ts` (generated via `python scripts/generate_types.py`)
 4. **Never commit secrets** — `.env` is gitignored
 5. **Commit messages**: conventional commits (`feat:`, `fix:`, `refactor:`, `test:`)
 

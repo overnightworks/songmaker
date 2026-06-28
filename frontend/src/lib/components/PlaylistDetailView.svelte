@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { sharePlaylist, unsharePlaylist } from '$lib/api/client';
-	import { playPlaylistEntries } from '$lib/stores/player';
+	import { playPlaylistEntries, setShuffle } from '$lib/stores/player';
 	import {
 		selectedPlaylistDetail,
 		deletePlaylist,
@@ -9,6 +9,7 @@
 		movePlaylistEntry
 	} from '$lib/stores/playlists';
 	import { deselectPlaylistView } from '$lib/stores/navigation';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { addToast } from '$lib/stores/toast';
 	import ActionButton from './ActionButton.svelte';
 	import Icon from './Icon.svelte';
@@ -70,6 +71,51 @@
 			addToast('Reorder failed', 'error');
 		}
 	}
+
+	function playEntry(index: number): void {
+		if (!playlistDetail) return;
+		const entry = playlistDetail.entries[index];
+		if (entry && isEntryCurrent(entry)) {
+			audioPlayer.toggle();
+			return;
+		}
+		playPlaylistEntries(playlistDetail.entries, index, { restart: true });
+	}
+
+	function playShuffled(): void {
+		if (!playlistDetail || playlistDetail.entries.length === 0) return;
+		setShuffle(true);
+		playPlaylistEntries(
+			playlistDetail.entries,
+			Math.floor(Math.random() * playlistDetail.entries.length),
+			{ restart: true }
+		);
+	}
+
+	function isEntryCurrent(entry: { generation_id: string; mp3_path: string }): boolean {
+		return (
+			audioPlayer.current?.generation.id === entry.generation_id &&
+			audioPlayer.current?.generation.mp3_path === entry.mp3_path
+		);
+	}
+
+	function isEntryPlaying(entry: { generation_id: string; mp3_path: string }): boolean {
+		return isEntryCurrent(entry) && audioPlayer.status === 'playing';
+	}
+
+	function isEntryLoading(entry: { generation_id: string; mp3_path: string }): boolean {
+		return (
+			isEntryCurrent(entry) &&
+			(audioPlayer.status === 'loading' || audioPlayer.status === 'buffering')
+		);
+	}
+
+	function onEntryKeydown(e: KeyboardEvent, index: number): void {
+		if (e.target !== e.currentTarget) return;
+		if (e.key !== 'Enter' && e.key !== ' ') return;
+		e.preventDefault();
+		playEntry(index);
+	}
 </script>
 
 {#if playlistDetail}
@@ -91,7 +137,12 @@
 						class="action-btn-primary"
 						onclick={() => playPlaylistEntries(playlistDetail.entries)}
 					>
+						<Icon name="play" size={15} />
 						Play
+					</button>
+					<button class="action-btn-secondary" onclick={playShuffled}>
+						<Icon name="shuffle" size={15} />
+						Shuffle
 					</button>
 				{/if}
 				<ShareButton
@@ -127,32 +178,71 @@
 
 		<div class="entry-list">
 			{#each playlistDetail.entries as entry, i (entry.id)}
-				<div class="entry-row">
-					<div class="entry-controls">
-						{#if i > 0}
-							<button class="move-btn" onclick={() => onMoveEntry(entry.id, i - 1)} title="Move up"
-								><Icon name="chevron-up" size={14} /></button
-							>
+				<div
+					class="entry-row"
+					class:playing={isEntryCurrent(entry)}
+					onclick={() => playEntry(i)}
+					onkeydown={(e) => onEntryKeydown(e, i)}
+					role="button"
+					tabindex="0"
+					aria-label={`${isEntryPlaying(entry) ? 'Pause' : 'Play'} ${entry.song_title}`}
+				>
+					<span
+						class="entry-play"
+						class:playing={isEntryPlaying(entry)}
+						class:loading={isEntryLoading(entry)}
+						aria-hidden="true"
+					>
+						{#if isEntryLoading(entry)}
+							<span class="spinner"></span>
+						{:else}
+							<Icon name={isEntryPlaying(entry) ? 'pause' : 'play'} size={16} />
 						{/if}
-						{#if i < playlistDetail.entries.length - 1}
-							<button
-								class="move-btn"
-								onclick={() => onMoveEntry(entry.id, i + 1)}
-								title="Move down"><Icon name="chevron-down" size={14} /></button
-							>
-						{/if}
-					</div>
+					</span>
 					<div class="entry-info">
 						<span class="entry-title">{entry.song_title}</span>
 						<span class="entry-meta">
 							{entry.artist} · Gen #{entry.generation_number}
 						</span>
 					</div>
-					<button
-						class="remove-btn"
-						onclick={() => onRemoveEntry(entry.id)}
-						title="Remove from playlist"><Icon name="x" size={14} /></button
-					>
+					<div class="entry-actions">
+						<div class="entry-controls">
+							{#if i > 0}
+								<button
+									class="move-btn"
+									onclick={(e) => {
+										e.stopPropagation();
+										void onMoveEntry(entry.id, i - 1);
+									}}
+									title="Move up"
+									aria-label={`Move ${entry.song_title} up`}
+									><Icon name="chevron-up" size={14} /></button
+								>
+							{/if}
+							{#if i < playlistDetail.entries.length - 1}
+								<button
+									class="move-btn"
+									onclick={(e) => {
+										e.stopPropagation();
+										void onMoveEntry(entry.id, i + 1);
+									}}
+									title="Move down"
+									aria-label={`Move ${entry.song_title} down`}
+									><Icon name="chevron-down" size={14} /></button
+								>
+							{/if}
+						</div>
+						<button
+							class="remove-btn"
+							onclick={(e) => {
+								e.stopPropagation();
+								void onRemoveEntry(entry.id);
+							}}
+							title="Remove from playlist"
+							aria-label={`Remove ${entry.song_title} from playlist`}
+							><Icon name="x" size={14} /></button
+						>
+					</div>
 				</div>
 			{/each}
 			{#if playlistDetail.entries.length === 0}
@@ -200,23 +290,46 @@
 		align-items: center;
 	}
 
-	.action-btn-primary {
+	.action-btn-primary,
+	.action-btn-secondary {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
 		padding: var(--btn-padding-pill);
-		border: none;
 		border-radius: var(--btn-radius-pill);
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
 		font-family: var(--font-display);
 		font-size: var(--btn-font-size);
 		letter-spacing: var(--btn-letter-spacing);
 		text-transform: uppercase;
 		cursor: pointer;
 		white-space: nowrap;
-		transition: box-shadow 0.2s;
+		transition:
+			box-shadow 0.2s,
+			border-color 0.15s,
+			color 0.15s,
+			background 0.15s;
+	}
+
+	.action-btn-primary {
+		border: none;
+		background: linear-gradient(135deg, var(--primary), var(--accent));
+		color: #fff;
+	}
+
+	.action-btn-secondary {
+		border: 1px solid var(--border);
+		background: color-mix(in srgb, var(--surface) 75%, transparent);
+		color: var(--text-muted);
 	}
 
 	.action-btn-primary:hover {
 		box-shadow: 0 0 20px rgba(160, 32, 240, 0.3);
+	}
+
+	.action-btn-secondary:hover {
+		border-color: var(--accent);
+		color: var(--text);
+		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 	}
 
 	.back-btn {
@@ -252,11 +365,74 @@
 	.entry-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem 0.8rem;
+		gap: 0.75rem;
+		min-height: 64px;
+		padding: 0.65rem 0.8rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
+		color: var(--text);
+		cursor: pointer;
+		text-align: left;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			box-shadow 0.15s;
+	}
+
+	.entry-row:hover {
+		border-color: rgba(160, 32, 240, 0.3);
+		background: var(--surface-hover);
+		box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 7%, transparent);
+	}
+
+	.entry-row.playing {
+		border-color: var(--accent);
+		background: rgba(160, 32, 240, 0.1);
+	}
+
+	.entry-play {
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		border: 2px solid var(--border);
+		background: color-mix(in srgb, var(--bg) 30%, transparent);
+		color: var(--text-muted);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		transition:
+			border-color 0.15s,
+			color 0.15s,
+			background 0.15s;
+	}
+
+	.entry-row:hover .entry-play {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.entry-play.playing,
+	.entry-play.loading {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.spinner {
+		display: inline-block;
+		width: 0.95rem;
+		height: 0.95rem;
+		border: 2px solid var(--accent);
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.entry-controls {
@@ -264,21 +440,31 @@
 		flex-direction: column;
 		gap: 2px;
 		flex-shrink: 0;
+		min-width: 28px;
 	}
 
 	.move-btn {
-		background: none;
+		background: color-mix(in srgb, var(--surface) 80%, transparent);
 		border: 1px solid var(--border);
 		border-radius: 3px;
 		color: var(--text-muted);
-		width: 18px;
-		height: 16px;
+		width: 28px;
+		height: 24px;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		padding: 0;
 		line-height: 1;
+		opacity: 0.7;
+		transition:
+			opacity 0.15s,
+			border-color 0.15s,
+			color 0.15s;
+	}
+
+	.entry-row:hover .move-btn {
+		opacity: 1;
 	}
 
 	.move-btn:hover {
@@ -299,6 +485,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		font-size: 1rem;
 	}
 
 	.entry-meta {
@@ -306,13 +493,20 @@
 		color: var(--text-dim);
 	}
 
+	.entry-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-shrink: 0;
+	}
+
 	.remove-btn {
-		background: none;
+		background: color-mix(in srgb, var(--surface) 80%, transparent);
 		border: 1px solid var(--border);
 		border-radius: 3px;
 		color: var(--text-muted);
-		width: 22px;
-		height: 22px;
+		width: 30px;
+		height: 30px;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -320,6 +514,10 @@
 		flex-shrink: 0;
 		padding: 0;
 		line-height: 1;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s;
 	}
 
 	.remove-btn:hover {
@@ -350,6 +548,16 @@
 
 		.detail-title {
 			font-size: 1.2rem;
+		}
+
+		.entry-row {
+			align-items: flex-start;
+			gap: 0.6rem;
+			padding: 0.7rem;
+		}
+
+		.entry-actions {
+			gap: 0.35rem;
 		}
 	}
 </style>

@@ -129,21 +129,21 @@ SvelteKit single-page app. All state in Svelte stores.
 | Layer | What | Key files |
 |-------|------|-----------|
 | Routes | Pages: main view, login, setup, settings | `src/routes/` |
-| Components | SongEditor, PlayerBar, SongList, GenerationDetail, ClaudeChat, etc. | `src/lib/components/` |
+| Components | SongEditor, PlayerBar, SongList, GenerationView, ClaudeChat, etc. | `src/lib/components/` |
 | Stores | Reactive state: player, editor, filter, jobs, auth, settings, ui | `src/lib/stores/` |
-| API client | Typed HTTP client, mirrors `api_models.py` | `src/lib/api/client.ts`, `types.ts` |
+| API client | Typed HTTP client, mirrors `songmaker_cli.api_models` | `src/lib/api/client.ts`, `types.ts` |
 
-The API client and `types.ts` are the frontend's contract with the backend. When `api_models.py` changes, `types.ts` must match.
+The API client and `types.ts` are the frontend's contract with the backend. When `src/songmaker_cli/api_models/` changes, `types.ts` must match.
 
 ### Backend (`src/songmaker_cli/`)
 
 | Layer | Responsibility | Key files |
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, SPA fallback | `server.py` |
-| Auth | Session middleware, login/setup/logout, password change, brute-force protection | `middleware.py`, `auth_api.py`, `auth.py` |
-| API | REST endpoints split by domain: albums, songs, generations, chat | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `chat_api.py`, `admin_api.py` |
+| Auth | Session dependencies, login/setup/logout, password change, brute-force protection | `middleware/auth.py`, `auth_api.py`, `auth.py` |
+| API | REST endpoints split by domain: albums, songs, generations, playlists, LoRAs, chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `lora_api.py`, `chat_api.py`, `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
-| Models | Pydantic request/response with `from_orm()` | `api_models.py` |
+| Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |
 | Worker | arq-based job queues (music + scoring), scheduler dispatch | `music_worker.py`, `scoring_worker.py`, `worker_base.py`, `scheduler.py`, `arq_pool.py` |
 | ACE-Step worker pool | Peer containers serving ACE-Step over HTTP/SSE | `src/acestep_worker/` (top-level package, separate from `songmaker_cli`) |
@@ -166,16 +166,16 @@ The API client and `types.ts` are the frontend's contract with the backend. When
 ```
 User (username, role: admin|user, bcrypt hash)
   ├── Album (title, artist, share_slug?, is_shared — owned via created_by)
-  │     └── Song (title, track_number)
+  │     └── Song (title, track_number, share_slug?, is_shared)
   │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params)
-  │           ├── Generation (MP3, seed, status, whisper_text, model_mode)
+  │           ├── Generation (MP3, seed, status, whisper_text, model_mode, share_slug?, is_shared)
   │           │     ├── Score (scorer, value JSON)
   │           │     └── Rating (0-100, notes)
   │           └── ChatMessage (role, content — per-song conversation history)
   ├── Job (type, status, progress, error, queue_position)
   └── AuditLog (action, resource_type, resource_id, detail)
 
-Also: UserSession, LoginAttempt, Playlist, PlaylistEntry,
+Also: UserSession, LoginAttempt, Playlist (share_slug?, is_shared), PlaylistEntry,
       GenerationPreset, AvailableModel, RateLimitSetting
 ```
 
@@ -206,10 +206,18 @@ PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is
 | * | `/api/auth/*` | public | Login, logout, setup, password change |
 | GET | `/health` | public | Per-worker status, DB, Redis, ACE-Step, queue depths |
 | GET | `/metrics` | public | Job stats, HTTP counters, VRAM usage (Prometheus) |
-| POST | `/api/albums/{id}/share` | user | Enable sharing, return secret link |
-| DELETE | `/api/albums/{id}/share` | user | Revoke sharing |
-| GET | `/shared/{slug}` | public | Read-only album view (no auth, rate-limited) |
-| GET | `/shared/{slug}/audio/{file}` | public | Stream MP3 for shared album (no auth, rate-limited) |
+| POST/DELETE | `/api/albums/{id}/share` | user | Enable/revoke album sharing |
+| POST/DELETE | `/api/songs/{id}/share` | user | Enable/revoke song sharing |
+| POST/DELETE | `/api/generations/{id}/share` | user | Enable/revoke generation sharing |
+| POST/DELETE | `/api/playlists/{id}/share` | user | Enable/revoke playlist sharing |
+| GET | `/shared/{slug}` | public | Read-only album JSON (no auth, rate-limited) |
+| GET | `/shared/song/{slug}` | public | Read-only song JSON (no auth, rate-limited) |
+| GET | `/shared/gen/{slug}` | public | Read-only generation JSON (no auth, rate-limited) |
+| GET | `/shared/playlist/{slug}` | public | Read-only playlist JSON (no auth, rate-limited) |
+| GET | `/shared/{slug}/audio/{file}` | public | Stream shared album audio after filename allowlist validation |
+| GET | `/shared/song/{slug}/audio/{file}` | public | Stream shared song audio after filename allowlist validation |
+| GET | `/shared/gen/{slug}/audio/{file}` | public | Stream shared generation audio after filename allowlist validation |
+| GET | `/shared/playlist/{slug}/audio/{file}` | public | Stream shared playlist audio after filename allowlist validation |
 | POST | `/api/songs/{id}/reimport` | user | Upload MP3/WAV to reimport into a song |
 | GET | `/audio/{owner_id}/{file}` | user | Serve audio files (MP3/WAV, ownership-checked by user ID) |
 
@@ -222,12 +230,14 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
   → model validation (if specified — reject 409 if active model doesn't match)
   → create Job record + audit log entry
   → enqueue to arq (Redis-backed, music queue)
-  → music worker: prepare_generate_mode()
-    → ensure ACE-Step server is running (start if needed)
-  → run_generation_job()
-    → build config (song params + admin defaults + model defaults)
-    → ACE-Step HTTP API → WAV bytes
-    → decode → master (multiband compress, LUFS normalize) → MP3
+  → music worker: run_generation_job()
+    → build config (model defaults + admin defaults + preset + song params)
+    → scheduler.dispatch_generation()
+      → pick an online acestep-worker
+      → POST /load_model if the target mode is not loaded
+      → POST /generate and consume /tasks/{id}/stream SSE until done
+    → read worker WAV from the shared audio volume
+    → decode → splice if repaint → master (multiband compress, LUFS normalize) → MP3
     → create Generation record in DB
   → Job status: completed
 ```
@@ -335,7 +345,7 @@ its current usage via heartbeat. The music-worker has no GPU access at all.
 | Album ownership | `created_by` on Album | Songs inherit access; sharing via secret UUID slug |
 | PostgreSQL | Connection pooling, concurrent writes | Required alongside Redis |
 | ACE-Step as subprocess | Separate server, managed lifecycle | Clean VRAM release, independent restarts |
-| Typed API contract | `api_models.py` ↔ `types.ts` | Backend and frontend stay in sync |
+| Typed API contract | `api_models/` ↔ `types.ts` | Backend and frontend stay in sync |
 
 ## Monitoring
 
