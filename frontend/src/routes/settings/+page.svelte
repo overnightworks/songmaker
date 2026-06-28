@@ -6,7 +6,7 @@
 	const admin = $derived($isAdmin);
 
 	$effect(() => {
-		const target = admin ? '/settings/generation' : '/settings/account';
+		const target = admin ? '/settings/generation' : '/settings/playback';
 		goto(target, { replaceState: true });
 	});
 </script>

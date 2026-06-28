@@ -12,6 +12,10 @@
 		toggleShuffle
 	} from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import {
+		updateMediaSessionPlaybackState,
+		updateMediaSessionPositionState
+	} from '$lib/services/mediaSession';
 	import { formatTime } from '$lib/utils/format';
 	import Icon from './Icon.svelte';
 	import {
@@ -59,6 +63,11 @@
 			if (playing) startVisualizerLoop();
 			else stopVisualizerLoop();
 		});
+	});
+
+	$effect(() => {
+		updateMediaSessionPlaybackState(isPlaying ? 'playing' : current ? 'paused' : 'none');
+		updateMediaSessionPositionState(currentTime, duration);
 	});
 
 	function connectAnalyser(): void {

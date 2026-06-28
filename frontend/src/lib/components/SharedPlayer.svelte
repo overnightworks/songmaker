@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
+	import type { QueueStreamTrackItem } from '$lib/api/types';
+	import {
+		pushMediaSessionHandlers,
+		updateMediaSessionPlaybackState,
+		updateMediaSessionPositionState,
+		updateMediaSessionTitle
+	} from '$lib/services/mediaSession';
 	import { formatTime } from '$lib/utils/format';
 	import Icon from './Icon.svelte';
 	import {
@@ -16,14 +23,37 @@
 		title: string;
 		subtitle?: string;
 		autoplay?: boolean;
+		streamTracks?: QueueStreamTrackItem[];
+		startIndex?: number;
 		onended?: () => void;
 		onnext?: () => void;
 		onprev?: () => void;
+		onerror?: () => void;
+		ontrackchange?: (track: QueueStreamTrackItem, index: number) => void;
 		onstatechange?: (playing: boolean, loading: boolean) => void;
 	}
 
-	let { audioUrl, title, subtitle, autoplay, onended, onnext, onprev, onstatechange }: Props =
-		$props();
+	type LoadAndPlayOptions =
+		| number
+		| {
+				startIndex?: number;
+				streamTracks?: QueueStreamTrackItem[] | null;
+		  };
+
+	let {
+		audioUrl,
+		title,
+		subtitle,
+		autoplay,
+		streamTracks,
+		startIndex = 0,
+		onended,
+		onnext,
+		onprev,
+		onerror,
+		ontrackchange,
+		onstatechange
+	}: Props = $props();
 
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
 	let isPlaying = $state(false);
@@ -39,10 +69,18 @@
 	let analyser: AnalyserNode | undefined;
 	let frequencyData: Uint8Array<ArrayBuffer> | undefined;
 	let waveformData: Uint8Array<ArrayBuffer> | undefined;
+	let playbackStreamTracks: QueueStreamTrackItem[] | null | undefined = $state(undefined);
 	let prevUrl: string | undefined = $state(undefined);
+	let activeStreamIndex = $state(0);
+	const effectiveStreamTracks = $derived(
+		playbackStreamTracks === undefined ? streamTracks : playbackStreamTracks
+	);
 	const progressPercent = $derived(
 		duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0
 	);
+	const activeStreamTrack = $derived(effectiveStreamTracks?.[activeStreamIndex] ?? null);
+	const displayTitle = $derived(activeStreamTrack?.song_title ?? title);
+	const displaySubtitle = $derived(activeStreamTrack?.artist ?? subtitle);
 
 	const viz = new AudioVisualizer();
 
@@ -56,11 +94,13 @@
 		audio.addEventListener('loadstart', () => (isLoading = true));
 		audio.addEventListener('canplay', () => {
 			isLoading = false;
-			duration = audio?.duration ?? 0;
+			duration = activeStreamTrack?.duration ?? audio?.duration ?? 0;
+			applyPendingStreamStart();
 			connectAnalyser();
 		});
 		audio.addEventListener('timeupdate', () => {
-			currentTime = audio?.currentTime ?? 0;
+			if (effectiveStreamTracks) updateStreamPosition(audio?.currentTime ?? 0);
+			else currentTime = audio?.currentTime ?? 0;
 		});
 		audio.addEventListener('ended', () => {
 			setPaused();
@@ -72,6 +112,11 @@
 		});
 		audio.addEventListener('pause', () => {
 			setPaused();
+		});
+		audio.addEventListener('error', () => {
+			setPaused();
+			isLoading = false;
+			onerror?.();
 		});
 
 		return audio;
@@ -89,7 +134,10 @@
 		stopVisualizerLoop();
 	}
 
-	export function loadAndPlay(nextUrl: string = audioUrl): void {
+	export function loadAndPlay(nextUrl: string = audioUrl, options: LoadAndPlayOptions = {}): void {
+		const normalized = typeof options === 'number' ? { startIndex: options } : options;
+		playbackStreamTracks = normalized.streamTracks;
+		const tracks = effectiveStreamTracks;
 		const el = ensureAudio();
 		if (el.src !== new URL(nextUrl, window.location.href).href) {
 			setPaused();
@@ -97,9 +145,12 @@
 			el.load();
 		}
 		prevUrl = nextUrl;
+		const nextStartIndex = normalized.startIndex ?? startIndex;
+		activeStreamIndex = Math.max(0, Math.min(nextStartIndex, (tracks?.length ?? 1) - 1));
 		currentTime = 0;
-		duration = 0;
+		duration = activeStreamTrack?.duration ?? 0;
 		isLoading = true;
+		applyPendingStreamStart();
 		requestPlay(el);
 	}
 
@@ -139,11 +190,36 @@
 		const isInitial = prevUrl === undefined;
 		prevUrl = audioUrl;
 		if (isInitial && !autoplay) return;
-		loadAndPlay(audioUrl);
+		loadAndPlay(audioUrl, { startIndex, streamTracks: streamTracks ?? null });
 	});
 
 	$effect(() => {
 		onstatechange?.(isPlaying, isLoading);
+	});
+
+	$effect(() => {
+		updateMediaSessionTitle(displayTitle, displaySubtitle);
+		updateMediaSessionPlaybackState(isPlaying ? 'playing' : 'paused');
+		updateMediaSessionPositionState(currentTime, duration);
+	});
+
+	onMount(() => {
+		return pushMediaSessionHandlers({
+			play: () => {
+				const el = ensureAudio();
+				requestPlay(el);
+			},
+			pause: () => audio?.pause(),
+			stop: () => audio?.pause(),
+			next: () => onnext?.(),
+			prev: () => onprev?.(),
+			seekTo: (seconds) => {
+				if (!audio || duration <= 0) return;
+				audio.currentTime = activeStreamTrack
+					? activeStreamTrack.start_offset + seconds
+					: Math.max(0, Math.min(seconds, duration));
+			}
+		});
 	});
 
 	export function togglePlay(): void {
@@ -156,17 +232,63 @@
 		}
 	}
 
+	export function seekToTrack(index: number): void {
+		const tracks = effectiveStreamTracks;
+		if (!audio || !tracks || tracks.length === 0) return;
+		const nextIndex = (index + tracks.length) % tracks.length;
+		activeStreamIndex = nextIndex;
+		const track = tracks[nextIndex];
+		currentTime = 0;
+		duration = track.duration;
+		audio.currentTime = track.start_offset;
+		ontrackchange?.(track, nextIndex);
+		if (audio.paused) requestPlay(audio);
+	}
+
 	function seek(e: MouseEvent): void {
 		if (!audio || duration <= 0) return;
 		const el = e.currentTarget as HTMLElement;
 		const rect = el.getBoundingClientRect();
 		const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-		audio.currentTime = ratio * duration;
+		const targetTime = ratio * duration;
+		audio.currentTime = activeStreamTrack
+			? activeStreamTrack.start_offset + targetTime
+			: targetTime;
 	}
 
 	function seekFromRange(e: Event): void {
 		if (!audio || duration <= 0) return;
-		audio.currentTime = Number((e.currentTarget as HTMLInputElement).value);
+		const targetTime = Number((e.currentTarget as HTMLInputElement).value);
+		audio.currentTime = activeStreamTrack
+			? activeStreamTrack.start_offset + targetTime
+			: targetTime;
+	}
+
+	function applyPendingStreamStart(): void {
+		if (!audio || !activeStreamTrack) return;
+		if (Math.abs(audio.currentTime - activeStreamTrack.start_offset) > 0.25 && currentTime === 0) {
+			try {
+				audio.currentTime = activeStreamTrack.start_offset;
+			} catch {
+				/* wait for more metadata */
+			}
+		}
+	}
+
+	function updateStreamPosition(absoluteTime: number): void {
+		const tracks = effectiveStreamTracks;
+		if (!tracks || tracks.length === 0) return;
+		let index = tracks.findIndex(
+			(track) => absoluteTime >= track.start_offset && absoluteTime < track.end_offset
+		);
+		if (index < 0) index = absoluteTime >= tracks[tracks.length - 1].end_offset ? tracks.length - 1 : 0;
+		if (index !== activeStreamIndex) {
+			activeStreamIndex = index;
+			ontrackchange?.(tracks[index], index);
+		}
+		const track = tracks[index];
+		duration = track.duration;
+		currentTime = Math.max(0, Math.min(track.duration, absoluteTime - track.start_offset));
 	}
 
 	onDestroy(() => {
@@ -212,10 +334,10 @@
 			<span
 				class="track-title"
 				class:glowing={isPlaying}
-				style={isPlaying ? titleGlowStyle(bassLevel, vizColors) : ''}>{title}</span
+				style={isPlaying ? titleGlowStyle(bassLevel, vizColors) : ''}>{displayTitle}</span
 			>
-			{#if subtitle}
-				<span class="track-detail">{subtitle}</span>
+			{#if displaySubtitle}
+				<span class="track-detail">{displaySubtitle}</span>
 			{/if}
 		</div>
 		<div class="timeline">

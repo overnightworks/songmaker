@@ -381,6 +381,41 @@ export interface PlaylistDetailItem {
 	entries: PlaylistEntryItem[];
 }
 
+export interface QueueStreamTrackRequest {
+	generation_id: string;
+	entry_id?: string | null;
+}
+
+export interface QueueStreamSnapshotRequest {
+	tracks: QueueStreamTrackRequest[];
+}
+
+export interface QueueStreamTrackItem {
+	key: string;
+	index: number;
+	entry_id: string | null;
+	generation_id: string;
+	song_id: string;
+	song_title: string;
+	artist: string;
+	generation_number: number;
+	mp3_path: string;
+	audio_url: string;
+	seed: number | null;
+	model_mode: string;
+	duration: number;
+	start_offset: number;
+	end_offset: number;
+}
+
+export interface QueueStreamManifest {
+	snapshot_id: string;
+	stream_url: string;
+	expires_at: string;
+	total_duration: number;
+	tracks: QueueStreamTrackItem[];
+}
+
 export interface WorkerIdentityItem {
 	id: string;
 	host: string;

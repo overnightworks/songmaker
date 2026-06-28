@@ -1,7 +1,20 @@
 import { writable, derived, get } from 'svelte/store';
-import { fetchSong } from '$lib/api/client';
-import type { AlbumItem, GenerationItem, PlaylistEntryItem, SongItem } from '$lib/api/types';
-import { audioPlayer, type PlaybackInfo } from '$lib/services/audioPlayer.svelte';
+import { createQueueStreamSnapshot, fetchSong } from '$lib/api/client';
+import type {
+	AlbumItem,
+	GenerationItem,
+	PlaylistEntryItem,
+	SongItem
+} from '$lib/api/types';
+import {
+	audioPlayer,
+	type PlaybackInfo,
+	type StreamFallbackState
+} from '$lib/services/audioPlayer.svelte';
+import { setupMediaSessionHandlers, updateMediaSessionMetadata } from '$lib/services/mediaSession';
+import { streamTrackToPlaybackInfo } from '$lib/services/queueStreamEngine';
+import { addToast } from '$lib/stores/toast';
+import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
 
 // --- Data ---
 export const albumList = writable<AlbumItem[]>([]);
@@ -96,6 +109,41 @@ export function playGeneration(
 	const info = toPlaybackInfo(gen, song);
 	if (opts.restart) audioPlayer.load(info, { restart: true });
 	else audioPlayer.load(info);
+}
+
+function useStreamForQueue(): boolean {
+	return shouldUseQueueStream(get(queuePlaybackMode));
+}
+
+function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; startIndex: number } {
+	if (!get(shuffleEnabled) || items.length <= 1) return { items, startIndex };
+	const start = items[startIndex] ?? items[0];
+	const rest = items.filter((_, index) => index !== startIndex);
+	for (let i = rest.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[rest[i], rest[j]] = [rest[j], rest[i]];
+	}
+	return { items: [start, ...rest], startIndex: 0 };
+}
+
+async function playStreamEntries(
+	entries: PlaylistEntryItem[],
+	startIndex: number,
+	opts: { restart?: boolean },
+	fallback: () => void
+): Promise<void> {
+	try {
+		const manifest = await createQueueStreamSnapshot(
+			entries.map((entry) => ({
+				generation_id: entry.generation_id,
+				entry_id: entry.id
+			}))
+		);
+		audioPlayer.loadStream(manifest, startIndex, { restart: opts.restart ?? true });
+	} catch {
+		addToast('Stream unavailable, using classic playback', 'error');
+		fallback();
+	}
 }
 
 function queueSongs(): SongItem[] {
@@ -205,6 +253,10 @@ function randomIndexExcluding(length: number, excludedIndex: number): number | n
 }
 
 export async function playNextSong(): Promise<void> {
+	if (audioPlayer.mode === 'stream') {
+		audioPlayer.nextStreamTrack();
+		return;
+	}
 	const ctx = get(queueContext);
 	if (ctx.type === 'playlist') {
 		const currentIndex = currentPlaylistIndex(ctx);
@@ -248,6 +300,10 @@ export async function playNextSong(): Promise<void> {
 }
 
 export async function playPrevSong(): Promise<void> {
+	if (audioPlayer.mode === 'stream') {
+		audioPlayer.prevStreamTrack();
+		return;
+	}
 	const ctx = get(queueContext);
 	if (ctx.type === 'playlist') {
 		const currentIndex = currentPlaylistIndex(ctx);
@@ -276,17 +332,110 @@ export async function playPrevSong(): Promise<void> {
 export async function playAlbum(albumId: string): Promise<void> {
 	queueContext.set({ type: 'album', albumId });
 	const songs = get(songList).filter((s) => s.album_id === albumId);
+	const playableEntries: PlaylistEntryItem[] = [];
 	for (const song of songs) {
 		if (song.generation_count === 0) continue;
 		await ensureGenerationsLoaded(song.id);
 		const fresh = get(songList).find((s) => s.id === song.id);
 		const gen = fresh ? bestGen(fresh) : undefined;
 		if (gen && fresh) {
-			playGeneration(gen, fresh);
-			return;
+			playableEntries.push({
+				id: `album:${fresh.id}:${gen.id}`,
+				position: playableEntries.length,
+				generation_id: gen.id,
+				song_title: fresh.title,
+				album_title: fresh.album_title,
+				artist: fresh.artist,
+				generation_number: gen.generation_number,
+				mp3_path: gen.mp3_path,
+				seed: gen.seed,
+				model_mode: gen.model_mode
+			});
 		}
 	}
+	if (playableEntries.length === 0) return;
+	const ordered = shuffledWithStart(playableEntries, 0);
+	if (useStreamForQueue()) {
+		void playStreamEntries(ordered.items, ordered.startIndex, { restart: true }, () => {
+			queueContext.set({ type: 'album', albumId });
+			const entry = ordered.items[ordered.startIndex];
+			const song = get(songList).find((s) => s.id === entry.id.split(':')[1]);
+			const gen = song?.generations.find((g) => g.id === entry.generation_id);
+			if (song && gen) playGeneration(gen, song, { restart: true });
+		});
+		return;
+	}
+	const first = ordered.items[ordered.startIndex];
+	const firstSong = get(songList).find((s) => s.id === first.id.split(':')[1]);
+	const firstGen = firstSong?.generations.find((g) => g.id === first.generation_id);
+	if (firstGen && firstSong) {
+		playGeneration(firstGen, firstSong);
+	}
 }
+
+function playPlaylistIndex(
+	ctx: { entries: PlaylistEntryItem[]; index: number },
+	newIndex: number,
+	opts: { restart?: boolean; startAt?: number } = {}
+): void {
+	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
+	const entry = ctx.entries[newIndex];
+	queueContext.set({ type: 'playlist', entries: ctx.entries, index: newIndex });
+	const info = {
+		generation: playlistEntryToGeneration(entry),
+		songId: '',
+		songTitle: entry.song_title,
+		artist: entry.artist
+	};
+	if (opts.restart || opts.startAt !== undefined) {
+		audioPlayer.load(info, { restart: opts.restart, startAt: opts.startAt });
+	} else {
+		audioPlayer.load(info);
+	}
+}
+
+export function playPlaylistEntries(
+	entries: PlaylistEntryItem[],
+	startIndex = 0,
+	opts: { restart?: boolean } = {}
+): void {
+	if (entries.length === 0) return;
+	const ordered = shuffledWithStart(entries, startIndex);
+	const ctx = { entries: ordered.items, index: ordered.startIndex };
+	queueContext.set({ type: 'playlist', entries: ordered.items, index: ordered.startIndex });
+	if (useStreamForQueue()) {
+		void playStreamEntries(ordered.items, ordered.startIndex, opts, () =>
+			playPlaylistIndex(ctx, ordered.startIndex, opts)
+		);
+		return;
+	}
+	playPlaylistIndex(ctx, ordered.startIndex, opts);
+}
+
+function fallbackStreamToClassic(state: StreamFallbackState): void {
+	const track = state.manifest.tracks[state.trackIndex];
+	addToast('Stream stopped, using classic playback', 'error');
+	audioPlayer.load(streamTrackToPlaybackInfo(track), {
+		restart: true,
+		startAt: Math.max(0, Math.min(state.trackTime, track.duration))
+	});
+}
+
+audioPlayer.onStreamFallback = fallbackStreamToClassic;
+audioPlayer.onCurrentChange = updateMediaSessionMetadata;
+
+setupMediaSessionHandlers({
+	play: () => audioPlayer.play(),
+	pause: () => audioPlayer.pause(),
+	stop: () => audioPlayer.pause(),
+	next: () => {
+		void playNextSong();
+	},
+	prev: () => {
+		void playPrevSong();
+	},
+	seekTo: (seconds) => audioPlayer.seek(seconds)
+});
 
 function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 	return {
@@ -311,32 +460,6 @@ function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 	};
 }
 
-function playPlaylistIndex(
-	ctx: { entries: PlaylistEntryItem[]; index: number },
-	newIndex: number,
-	opts: { restart?: boolean } = {}
-): void {
-	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
-	const entry = ctx.entries[newIndex];
-	queueContext.set({ type: 'playlist', entries: ctx.entries, index: newIndex });
-	const info = {
-		generation: playlistEntryToGeneration(entry),
-		songId: '',
-		songTitle: entry.song_title,
-		artist: entry.artist
-	};
-	if (opts.restart) audioPlayer.load(info, { restart: true });
-	else audioPlayer.load(info);
-}
-
-export function playPlaylistEntries(
-	entries: PlaylistEntryItem[],
-	startIndex = 0,
-	opts: { restart?: boolean } = {}
-): void {
-	if (entries.length === 0) return;
-	playPlaylistIndex({ entries, index: startIndex }, startIndex, opts);
-}
 
 export function navigateToPlaying(): void {
 	const cur = audioPlayer.current;

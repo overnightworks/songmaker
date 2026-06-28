@@ -49,6 +49,12 @@ from songmaker_cli.api_models.playlists import (
     SharedPlaylistEntryResponse,
     SharedPlaylistResponse,
 )
+from songmaker_cli.api_models.queue_streams import (
+    QueueStreamManifestResponse,
+    QueueStreamSnapshotRequest,
+    QueueStreamTrackRequest,
+    QueueStreamTrackResponse,
+)
 from songmaker_cli.api_models.settings import (
     CapabilitiesResponse,
     ChatHistoryResponse,
@@ -230,6 +236,10 @@ __all__ = [
     "PresetCreateRequest",
     "PresetResponse",
     "PresetUpdateRequest",
+    "QueueStreamManifestResponse",
+    "QueueStreamSnapshotRequest",
+    "QueueStreamTrackRequest",
+    "QueueStreamTrackResponse",
     "RateLimitItem",
     "RateLimitUpdateRequest",
     "RateLimitsResponse",

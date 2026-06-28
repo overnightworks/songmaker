@@ -64,8 +64,10 @@ def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
     from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
+    from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
     ctx: AppContext = app.state.ctx
+    cleanup_expired_queue_streams(ctx)
     with ctx.db() as session:
         deleted = delete_expired_sessions(session)
         if deleted:

@@ -23,6 +23,7 @@ from songmaker_cli.generation_api import router as generation_router
 from songmaker_cli.internal_api import router as internal_router
 from songmaker_cli.lora_api import router as lora_router
 from songmaker_cli.playlist_api import router as playlist_router
+from songmaker_cli.queue_stream_api import router as queue_stream_router
 from songmaker_cli.reimport_api import router as reimport_router
 from songmaker_cli.settings_api import router as settings_router
 from songmaker_cli.song_api import router as song_router
@@ -36,6 +37,7 @@ router.include_router(generation_router)
 router.include_router(internal_router)
 router.include_router(lora_router)
 router.include_router(playlist_router)
+router.include_router(queue_stream_router)
 router.include_router(reimport_router)
 router.include_router(chat_router)
 router.include_router(conversation_router)

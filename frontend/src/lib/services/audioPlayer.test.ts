@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GenerationItem } from '$lib/api/types';
+import type { GenerationItem, QueueStreamManifest } from '$lib/api/types';
 import { audioPlayer, type PlaybackInfo } from './audioPlayer.svelte';
 
 function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
@@ -34,6 +34,51 @@ function makeInfo(overrides: Partial<PlaybackInfo> = {}): PlaybackInfo {
 		songTitle: 'Song',
 		artist: 'Artist',
 		...overrides
+	};
+}
+
+function makeStreamManifest(): QueueStreamManifest {
+	return {
+		snapshot_id: 'snap',
+		stream_url: '/api/queue-streams/snap/audio',
+		expires_at: '2026-01-01T00:00:00Z',
+		total_duration: 30,
+		tracks: [
+			{
+				key: 'one',
+				index: 0,
+				entry_id: 'one',
+				generation_id: 'g1',
+				song_id: 's1',
+				song_title: 'First',
+				artist: 'Artist',
+				generation_number: 1,
+				mp3_path: 'a1/first.mp3',
+				audio_url: '/audio/a1/first.mp3',
+				seed: 1,
+				model_mode: 'sft',
+				duration: 10,
+				start_offset: 0,
+				end_offset: 10
+			},
+			{
+				key: 'two',
+				index: 1,
+				entry_id: 'two',
+				generation_id: 'g2',
+				song_id: 's2',
+				song_title: 'Second',
+				artist: 'Artist',
+				generation_number: 1,
+				mp3_path: 'a1/second.mp3',
+				audio_url: '/audio/a1/second.mp3',
+				seed: 2,
+				model_mode: 'sft',
+				duration: 20,
+				start_offset: 10,
+				end_offset: 30
+			}
+		]
 	};
 }
 
@@ -100,6 +145,8 @@ beforeEach(() => {
 	audioPlayer.destroy();
 	audioPlayer.onEnded = null;
 	audioPlayer.onAuthLost = null;
+	audioPlayer.onStreamFallback = null;
+	audioPlayer.onCurrentChange = null;
 });
 
 afterEach(() => {
@@ -292,6 +339,76 @@ describe('event handling', () => {
 	it('ended without onEnded does not throw', () => {
 		audioPlayer.onEnded = null;
 		expect(() => fakeAudio.fire('ended')).not.toThrow();
+	});
+});
+
+describe('stream playback', () => {
+	it('loads a queue stream at the requested track boundary', () => {
+		const manifest = makeStreamManifest();
+		audioPlayer.loadStream(manifest, 1, { autoplay: false });
+		fakeAudio.fire('loadedmetadata');
+		fakeAudio.fire('canplay');
+
+		expect(audioPlayer.mode).toBe('stream');
+		expect(fakeAudio.src).toBe('/api/queue-streams/snap/audio');
+		expect(fakeAudio.currentTime).toBe(10);
+		expect(audioPlayer.current?.songTitle).toBe('Second');
+		expect(audioPlayer.duration).toBe(20);
+	});
+
+	it('maps absolute stream time to the active track time', () => {
+		const manifest = makeStreamManifest();
+		audioPlayer.loadStream(manifest, 0, { autoplay: false });
+
+		fakeAudio.currentTime = 12.5;
+		fakeAudio.fire('timeupdate');
+
+		expect(audioPlayer.current?.songTitle).toBe('Second');
+		expect(audioPlayer.currentTime).toBe(2.5);
+		expect(audioPlayer.duration).toBe(20);
+	});
+
+	it('seeks next and previous tracks inside the stream', () => {
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+
+		expect(audioPlayer.nextStreamTrack()).toBe(true);
+		expect(fakeAudio.currentTime).toBe(10);
+		expect(audioPlayer.current?.songTitle).toBe('Second');
+
+		expect(audioPlayer.prevStreamTrack()).toBe(true);
+		expect(fakeAudio.currentTime).toBe(0);
+		expect(audioPlayer.current?.songTitle).toBe('First');
+	});
+
+	it('advances and resumes when the stream audio element ends', () => {
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('loadedmetadata');
+
+		fakeAudio.fire('ended');
+
+		expect(audioPlayer.current?.songTitle).toBe('Second');
+		expect(fakeAudio.currentTime).toBe(10);
+		expect(fakeAudio.playMock).toHaveBeenCalled();
+	});
+
+	it('falls back to classic when stream playback remains stalled', async () => {
+		vi.useFakeTimers();
+		const onStreamFallback = vi.fn();
+		audioPlayer.onStreamFallback = onStreamFallback;
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 12;
+		fakeAudio.fire('timeupdate');
+
+		fakeAudio.fire('stalled');
+		vi.advanceTimersByTime(5000);
+		await Promise.resolve();
+
+		expect(onStreamFallback).toHaveBeenCalledWith(
+			expect.objectContaining({ trackIndex: 1, trackTime: 2 })
+		);
+		expect(audioPlayer.mode).toBe('classic');
+		expect(audioPlayer.status).toBe('error');
 	});
 });
 

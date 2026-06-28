@@ -1,4 +1,12 @@
-import type { GenerationItem } from '$lib/api/types';
+import type { QueueStreamManifest } from '$lib/api/types';
+import type { PlaybackInfo } from './playbackTypes';
+import {
+	QueueStreamEngine,
+	type StreamFallbackState
+} from './queueStreamEngine';
+
+export type { PlaybackInfo } from './playbackTypes';
+export type { StreamFallbackState } from './queueStreamEngine';
 
 export type PlayerStatus =
 	| 'idle'
@@ -8,13 +16,6 @@ export type PlayerStatus =
 	| 'paused'
 	| 'buffering'
 	| 'error';
-
-export interface PlaybackInfo {
-	generation: GenerationItem;
-	songId: string;
-	songTitle: string;
-	artist: string;
-}
 
 const AUDIO_URL_PREFIX = '/audio/';
 const ERROR_MSG_GENERIC = 'Playback failed. Click play to retry.';
@@ -31,13 +32,17 @@ class AudioPlayer {
 	duration = $state(0);
 	error = $state<string | null>(null);
 	current = $state<PlaybackInfo | null>(null);
+	mode = $state<'classic' | 'stream'>('classic');
 
 	onEnded: (() => void) | null = null;
 	onAuthLost: (() => void | Promise<void>) | null = null;
+	onStreamFallback: ((state: StreamFallbackState) => void | Promise<void>) | null = null;
+	onCurrentChange: ((current: PlaybackInfo | null) => void) | null = null;
 
 	private audio: HTMLAudioElement | null = null;
 	private autoplayPending = false;
 	private listenersAttached = false;
+	private streamEngine = new QueueStreamEngine();
 	private stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 	private recoveryAttempts = 0;
 	private pendingRecoverySeek: number | null = null;
@@ -47,14 +52,20 @@ class AudioPlayer {
 		return this.audio;
 	}
 
-	load(info: PlaybackInfo, opts: { autoplay?: boolean; restart?: boolean } = {}): void {
+	load(
+		info: PlaybackInfo,
+		opts: { autoplay?: boolean; restart?: boolean; startAt?: number } = {}
+	): void {
 		const autoplay = opts.autoplay ?? true;
 		const restart = opts.restart ?? false;
 		const sameGen =
+			!this.streamEngine.active &&
 			this.current?.generation.id === info.generation.id &&
 			this.current?.generation.mp3_path === info.generation.mp3_path;
 
-		this.current = info;
+		this.streamEngine.clear();
+		this.mode = 'classic';
+		this.setCurrent(info);
 		this.error = null;
 
 		if (sameGen && this.audio && this.status !== 'error' && !restart) {
@@ -64,7 +75,7 @@ class AudioPlayer {
 
 		this.clearStallRecoveryTimer();
 		this.recoveryAttempts = 0;
-		this.pendingRecoverySeek = null;
+		this.pendingRecoverySeek = opts.startAt ?? null;
 		this.lastObservedTime = 0;
 		this.autoplayPending = autoplay;
 		const el = this.ensureAudio();
@@ -74,6 +85,32 @@ class AudioPlayer {
 		this.duration = 0;
 		el.src = this.audioUrl(info.generation.mp3_path);
 		el.load();
+	}
+
+	loadStream(
+		manifest: QueueStreamManifest,
+		startIndex = 0,
+		opts: { autoplay?: boolean; restart?: boolean } = {}
+	): void {
+		const autoplay = opts.autoplay ?? true;
+		const streamState = this.streamEngine.start(manifest, startIndex);
+		if (!streamState) return;
+		const el = this.ensureAudio();
+		this.clearStallRecoveryTimer();
+		this.recoveryAttempts = 0;
+		this.pendingRecoverySeek = null;
+		this.lastObservedTime = 0;
+		this.mode = 'stream';
+		this.setCurrent(streamState.info);
+		this.currentTime = streamState.currentTime;
+		this.duration = streamState.duration;
+		this.error = null;
+		this.autoplayPending = autoplay;
+		el.pause();
+		this.status = 'loading';
+		el.src = manifest.stream_url;
+		el.load();
+		if (opts.restart) this.applyPendingStreamSeek(el);
 	}
 
 	play(): void {
@@ -106,7 +143,48 @@ class AudioPlayer {
 
 	seek(seconds: number): void {
 		if (!this.audio || this.duration <= 0) return;
+		if (this.streamEngine.active) {
+			this.streamEngine.seekLocal(this.audio, seconds);
+			return;
+		}
 		this.audio.currentTime = Math.max(0, Math.min(seconds, this.duration));
+	}
+
+	seekToStreamTrack(index: number, opts: { autoplay?: boolean } = {}): boolean {
+		if (!this.audio || !this.streamEngine.active) return false;
+		const autoplay = opts.autoplay ?? !this.audio.paused;
+		const streamState = this.streamEngine.seekToTrack(this.audio, index);
+		if (!streamState) return false;
+		this.setCurrent(streamState.info);
+		this.currentTime = streamState.currentTime;
+		this.duration = streamState.duration;
+		this.lastObservedTime = streamState.absoluteTime;
+		if (autoplay) this.play();
+		return true;
+	}
+
+	nextStreamTrack(opts: { autoplay?: boolean } = {}): boolean {
+		if (!this.audio || !this.streamEngine.active) return false;
+		const streamState = this.streamEngine.nextTrack(this.audio);
+		if (!streamState) return false;
+		this.setCurrent(streamState.info);
+		this.currentTime = streamState.currentTime;
+		this.duration = streamState.duration;
+		this.lastObservedTime = streamState.absoluteTime;
+		if (opts.autoplay ?? !this.audio.paused) this.play();
+		return true;
+	}
+
+	prevStreamTrack(opts: { autoplay?: boolean } = {}): boolean {
+		if (!this.audio || !this.streamEngine.active) return false;
+		const streamState = this.streamEngine.prevTrack(this.audio);
+		if (!streamState) return false;
+		this.setCurrent(streamState.info);
+		this.currentTime = streamState.currentTime;
+		this.duration = streamState.duration;
+		this.lastObservedTime = streamState.absoluteTime;
+		if (opts.autoplay ?? !this.audio.paused) this.play();
+		return true;
 	}
 
 	destroy(): void {
@@ -118,10 +196,12 @@ class AudioPlayer {
 		this.audio = null;
 		this.listenersAttached = false;
 		this.status = 'idle';
-		this.current = null;
+		this.setCurrent(null);
+		this.mode = 'classic';
 		this.currentTime = 0;
 		this.duration = 0;
 		this.error = null;
+		this.streamEngine.clear();
 		this.recoveryAttempts = 0;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
@@ -146,20 +226,32 @@ class AudioPlayer {
 			this.error = null;
 		});
 		el.addEventListener('loadedmetadata', () => {
-			this.duration = el.duration || 0;
-			this.applyPendingRecoverySeek(el);
+			if (this.streamEngine.active) {
+				this.duration = this.streamEngine.activeDuration;
+				this.applyPendingStreamSeek(el);
+			} else {
+				this.duration = el.duration || 0;
+				this.applyPendingRecoverySeek(el);
+			}
 		});
 		el.addEventListener('canplay', () => {
 			if (this.status === 'error') return;
-			this.applyPendingRecoverySeek(el);
+			if (this.streamEngine.active) this.applyPendingStreamSeek(el);
+			else this.applyPendingRecoverySeek(el);
 			this.status = el.paused ? 'ready' : 'playing';
-			this.duration = el.duration || this.duration;
+			this.duration = this.streamEngine.active
+				? this.streamEngine.activeDuration
+				: el.duration || this.duration;
 			if (this.autoplayPending) {
 				this.autoplayPending = false;
 				el.play().catch((err) => this.handlePlayRejection(err));
 			}
 		});
 		el.addEventListener('timeupdate', () => {
+			if (this.streamEngine.active) {
+				this.updateStreamPosition(el.currentTime);
+				return;
+			}
 			if (Math.abs(el.currentTime - this.lastObservedTime) > 0.05) {
 				this.lastObservedTime = el.currentTime;
 				this.clearStallRecoveryTimer();
@@ -195,11 +287,16 @@ class AudioPlayer {
 		});
 		el.addEventListener('ended', () => {
 			this.clearStallRecoveryTimer();
+			if (this.streamEngine.active && this.nextStreamTrack({ autoplay: true })) return;
 			this.status = 'idle';
 			this.currentTime = 0;
 			this.onEnded?.();
 		});
 		el.addEventListener('error', () => {
+			if (this.streamEngine.active) {
+				void this.fallbackFromStream();
+				return;
+			}
 			if (!this.recoverPlayback('media-error')) this.handleMediaError(el.error);
 		});
 	}
@@ -214,6 +311,10 @@ class AudioPlayer {
 		this.stallRecoveryTimer = setTimeout(() => {
 			this.stallRecoveryTimer = null;
 			if (this.status !== 'buffering') return;
+			if (this.streamEngine.active) {
+				void this.fallbackFromStream();
+				return;
+			}
 			if (!this.recoverPlayback('stall-timeout')) {
 				this.status = 'error';
 				this.error = ERROR_MSG_STALLED;
@@ -230,6 +331,7 @@ class AudioPlayer {
 	private recoverPlayback(reason: 'stall-timeout' | 'media-error'): boolean {
 		const target = this.current;
 		const el = this.audio;
+		if (this.streamEngine.active) return false;
 		if (!target || !el || el.ended || this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) return false;
 
 		const observedTime = el.currentTime || this.currentTime || this.lastObservedTime;
@@ -276,6 +378,42 @@ class AudioPlayer {
 		}
 	}
 
+	private applyPendingStreamSeek(el: HTMLAudioElement): void {
+		const seekTime = this.streamEngine.applyPendingSeek(el);
+		if (seekTime === null) {
+			// Some browsers reject early seeks until stream metadata is available.
+			return;
+		}
+		this.lastObservedTime = seekTime;
+		this.updateStreamPosition(seekTime);
+	}
+
+	private updateStreamPosition(absoluteTime: number): void {
+		const streamState = this.streamEngine.updatePosition(absoluteTime);
+		if (!streamState) return;
+		if (this.current?.generation.id !== streamState.info.generation.id) {
+			this.setCurrent(streamState.info);
+		}
+		this.duration = streamState.duration;
+		this.currentTime = streamState.currentTime;
+		this.lastObservedTime = absoluteTime;
+		this.clearStallRecoveryTimer();
+		if (this.status === 'buffering') this.status = 'playing';
+	}
+
+	private async fallbackFromStream(): Promise<void> {
+		const state = this.streamEngine.fallbackState(
+			this.currentTime,
+			this.audio?.currentTime ?? 0
+		);
+		if (!state) return;
+		this.streamEngine.clear();
+		this.mode = 'classic';
+		this.status = 'error';
+		this.error = ERROR_MSG_GENERIC;
+		await this.onStreamFallback?.(state);
+	}
+
 	private handlePlayRejection(err: unknown): void {
 		const name = err instanceof Error ? err.name : '';
 		if (name === 'AbortError') return;
@@ -305,6 +443,11 @@ class AudioPlayer {
 		if (probe.status === 404) this.error = ERROR_MSG_NOT_FOUND;
 		else if (probe.status === 0) this.error = ERROR_MSG_NETWORK;
 		else if (probe.ok && mediaError) this.error = decodeMediaError(mediaError);
+	}
+
+	private setCurrent(current: PlaybackInfo | null): void {
+		this.current = current;
+		this.onCurrentChange?.(current);
 	}
 
 	private async probeAudioUrl(mp3Path: string): Promise<{ ok: boolean; status: number }> {

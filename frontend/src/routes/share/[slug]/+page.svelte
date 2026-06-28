@@ -1,9 +1,12 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
+	import { fetchSharedAlbumStream } from '$lib/api/client';
+	import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 	import { APP_NAME } from '$lib/constants';
 	import LegalContent from '$lib/components/LegalContent.svelte';
 	import SharedPlayer from '$lib/components/SharedPlayer.svelte';
+	import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
 
 	interface SharedSong {
 		id: string;
@@ -24,12 +27,15 @@
 	let error: string | null = $state(null);
 	let loading = $state(true);
 	let currentTrack: SharedSong | null = $state(null);
+	let streamManifest: QueueStreamManifest | null = $state(null);
+	let streamStartIndex = $state(0);
 	let playerPlaying = $state(false);
 	let playerLoading = $state(false);
 	let legalSection: string | null = $state(null);
 	let playerRef: ReturnType<typeof SharedPlayer> | undefined = $state();
 
 	const slug = $derived(page.params.slug ?? '');
+	const STREAM_REFRESH_MARGIN_MS = 60_000;
 
 	$effect(() => {
 		if (slug) fetchAlbum(slug);
@@ -52,14 +58,41 @@
 		}
 	}
 
-	function play(song: SharedSong) {
+	async function play(song: SharedSong) {
 		if (!song.audio_url) return;
 		if (currentTrack === song) {
 			playerRef?.togglePlay();
 			return;
 		}
+		if (shouldUseQueueStream($queuePlaybackMode)) {
+			try {
+				const manifest = await getStreamManifest();
+				const streamIndex = manifest.tracks.findIndex((track) => track.song_id === song.id);
+				if (streamIndex >= 0) {
+					streamManifest = manifest;
+					streamStartIndex = streamIndex;
+					currentTrack = song;
+					playerRef?.loadAndPlay(manifest.stream_url, {
+						startIndex: streamIndex,
+						streamTracks: manifest.tracks
+					});
+					return;
+				}
+			} catch {
+				streamManifest = null;
+			}
+		}
+		streamManifest = null;
 		currentTrack = song;
-		playerRef?.loadAndPlay(song.audio_url);
+		playerRef?.loadAndPlay(song.audio_url, { streamTracks: null });
+	}
+
+	async function getStreamManifest(): Promise<QueueStreamManifest> {
+		if (streamManifest && Date.parse(streamManifest.expires_at) > Date.now() + STREAM_REFRESH_MARGIN_MS) {
+			return streamManifest;
+		}
+		streamManifest = await fetchSharedAlbumStream(slug);
+		return streamManifest;
 	}
 
 	function onEnded() {
@@ -69,16 +102,34 @@
 
 	function advanceTrack(direction: number) {
 		if (!album || !currentTrack) return;
+		if (streamManifest) {
+			playerRef?.seekToTrack(streamStartIndex + direction);
+			return;
+		}
 		const playable = album.songs.filter((song) => song.audio_url);
 		if (playable.length <= 1) return;
 		const idx = Math.max(0, playable.indexOf(currentTrack));
 		const nextIndex = (idx + direction + playable.length) % playable.length;
-		play(playable[nextIndex]);
+		void play(playable[nextIndex]);
+	}
+
+	function onStreamTrackChange(track: QueueStreamTrackItem, index: number) {
+		if (!album) return;
+		streamStartIndex = index;
+		const song = album.songs.find((candidate) => candidate.id === track.song_id);
+		if (song) currentTrack = song;
 	}
 
 	function onStateChange(playing: boolean, isLoading: boolean) {
 		playerPlaying = playing;
 		playerLoading = isLoading;
+	}
+
+	function onPlayerError() {
+		if (!streamManifest || !currentTrack?.audio_url) return;
+		streamManifest = null;
+		streamStartIndex = 0;
+		playerRef?.loadAndPlay(currentTrack.audio_url, { streamTracks: null });
 	}
 </script>
 
@@ -153,13 +204,17 @@
 {#if currentTrack?.audio_url}
 	<SharedPlayer
 		bind:this={playerRef}
-		audioUrl={currentTrack.audio_url}
+		audioUrl={streamManifest?.stream_url ?? currentTrack.audio_url}
 		title={currentTrack.title}
 		subtitle={album?.artist}
 		autoplay
+		streamTracks={streamManifest?.tracks}
+		startIndex={streamStartIndex}
 		onended={onEnded}
 		onnext={() => advanceTrack(1)}
 		onprev={() => advanceTrack(-1)}
+		onerror={onPlayerError}
+		ontrackchange={onStreamTrackChange}
 		onstatechange={onStateChange}
 	/>
 {/if}

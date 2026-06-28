@@ -1,11 +1,15 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
+	import { fetchSharedPlaylistStream } from '$lib/api/client';
+	import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 	import { APP_NAME } from '$lib/constants';
 	import LegalContent from '$lib/components/LegalContent.svelte';
 	import SharedPlayer from '$lib/components/SharedPlayer.svelte';
+	import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
 
 	interface SharedEntry {
+		entry_id: string;
 		song_title: string;
 		artist: string;
 		generation_number: number;
@@ -21,12 +25,15 @@
 	let error: string | null = $state(null);
 	let loading = $state(true);
 	let currentTrack: SharedEntry | null = $state(null);
+	let streamManifest: QueueStreamManifest | null = $state(null);
+	let streamStartIndex = $state(0);
 	let playerPlaying = $state(false);
 	let playerLoading = $state(false);
 	let legalSection: string | null = $state(null);
 	let playerRef: ReturnType<typeof SharedPlayer> | undefined = $state();
 
 	const slug = $derived(page.params.slug ?? '');
+	const STREAM_REFRESH_MARGIN_MS = 60_000;
 
 	$effect(() => {
 		if (slug) fetchData(slug);
@@ -49,14 +56,41 @@
 		}
 	}
 
-	function play(entry: SharedEntry) {
+	async function play(entry: SharedEntry) {
 		if (!entry.audio_url) return;
 		if (currentTrack === entry) {
 			playerRef?.togglePlay();
 			return;
 		}
+		if (shouldUseQueueStream($queuePlaybackMode)) {
+			try {
+				const manifest = await getStreamManifest();
+				const streamIndex = manifest.tracks.findIndex((track) => track.entry_id === entry.entry_id);
+				if (streamIndex >= 0) {
+					streamManifest = manifest;
+					streamStartIndex = streamIndex;
+					currentTrack = entry;
+					playerRef?.loadAndPlay(manifest.stream_url, {
+						startIndex: streamIndex,
+						streamTracks: manifest.tracks
+					});
+					return;
+				}
+			} catch {
+				streamManifest = null;
+			}
+		}
+		streamManifest = null;
 		currentTrack = entry;
-		playerRef?.loadAndPlay(entry.audio_url);
+		playerRef?.loadAndPlay(entry.audio_url, { streamTracks: null });
+	}
+
+	async function getStreamManifest(): Promise<QueueStreamManifest> {
+		if (streamManifest && Date.parse(streamManifest.expires_at) > Date.now() + STREAM_REFRESH_MARGIN_MS) {
+			return streamManifest;
+		}
+		streamManifest = await fetchSharedPlaylistStream(slug);
+		return streamManifest;
 	}
 
 	function onEnded() {
@@ -66,16 +100,34 @@
 
 	function advanceTrack(direction: number) {
 		if (!playlist || !currentTrack) return;
+		if (streamManifest) {
+			playerRef?.seekToTrack(streamStartIndex + direction);
+			return;
+		}
 		const playable = playlist.entries.filter((entry) => entry.audio_url);
 		if (playable.length <= 1) return;
 		const idx = Math.max(0, playable.indexOf(currentTrack));
 		const nextIndex = (idx + direction + playable.length) % playable.length;
-		play(playable[nextIndex]);
+		void play(playable[nextIndex]);
+	}
+
+	function onStreamTrackChange(track: QueueStreamTrackItem, index: number) {
+		if (!playlist) return;
+		streamStartIndex = index;
+		const entry = playlist.entries.find((candidate) => candidate.entry_id === track.entry_id);
+		if (entry) currentTrack = entry;
 	}
 
 	function onStateChange(playing: boolean, isLoading: boolean) {
 		playerPlaying = playing;
 		playerLoading = isLoading;
+	}
+
+	function onPlayerError() {
+		if (!streamManifest || !currentTrack?.audio_url) return;
+		streamManifest = null;
+		streamStartIndex = 0;
+		playerRef?.loadAndPlay(currentTrack.audio_url, { streamTracks: null });
 	}
 </script>
 
@@ -153,13 +205,17 @@
 {#if currentTrack?.audio_url}
 	<SharedPlayer
 		bind:this={playerRef}
-		audioUrl={currentTrack.audio_url}
+		audioUrl={streamManifest?.stream_url ?? currentTrack.audio_url}
 		title={currentTrack.song_title}
 		subtitle={currentTrack.artist}
 		autoplay
+		streamTracks={streamManifest?.tracks}
+		startIndex={streamStartIndex}
 		onended={onEnded}
 		onnext={() => advanceTrack(1)}
 		onprev={() => advanceTrack(-1)}
+		onerror={onPlayerError}
+		ontrackchange={onStreamTrackChange}
 		onstatechange={onStateChange}
 	/>
 {/if}

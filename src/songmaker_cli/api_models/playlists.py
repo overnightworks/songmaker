@@ -124,6 +124,7 @@ class ReorderPlaylistEntryRequest(BaseModel):
 
 
 class SharedPlaylistEntryResponse(BaseModel):
+    entry_id: str
     song_title: str
     artist: str
     generation_number: int

@@ -537,6 +537,7 @@ def test_shared_playlist_view(tmp_path: Path) -> None:
     data = resp.json()
     assert data["title"] == "Shared Mix"
     assert len(data["entries"]) == 1
+    assert data["entries"][0]["entry_id"] == "pe1"
     assert data["entries"][0]["song_title"] == "Song One"
     assert data["entries"][0]["audio_url"] is not None
 

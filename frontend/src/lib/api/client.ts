@@ -60,6 +60,11 @@ export {
 	sharePlaylist,
 	unsharePlaylist
 } from './playlists';
+export {
+	createQueueStreamSnapshot,
+	fetchSharedAlbumStream,
+	fetchSharedPlaylistStream
+} from './queue-streams';
 export { checkSetupRequired, setupAdmin, login, logout, fetchMe, changePassword } from './auth';
 export { sendChatMessage, fetchChatHistory, clearChatHistory, fetchRecentChats } from './chat';
 export {
