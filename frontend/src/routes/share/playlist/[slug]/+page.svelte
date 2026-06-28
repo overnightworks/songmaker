@@ -66,11 +66,11 @@
 
 	function advanceTrack(direction: number) {
 		if (!playlist || !currentTrack) return;
-		const idx = playlist.entries.indexOf(currentTrack);
-		const entries =
-			direction > 0 ? playlist.entries.slice(idx + 1) : playlist.entries.slice(0, idx).reverse();
-		const next = entries.find((e) => e.audio_url);
-		if (next) play(next);
+		const playable = playlist.entries.filter((entry) => entry.audio_url);
+		if (playable.length <= 1) return;
+		const idx = Math.max(0, playable.indexOf(currentTrack));
+		const nextIndex = (idx + direction + playable.length) % playable.length;
+		play(playable[nextIndex]);
 	}
 
 	function onStateChange(playing: boolean, isLoading: boolean) {

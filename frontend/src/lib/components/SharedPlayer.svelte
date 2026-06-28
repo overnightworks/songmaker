@@ -63,8 +63,7 @@
 			currentTime = audio?.currentTime ?? 0;
 		});
 		audio.addEventListener('ended', () => {
-			isPlaying = false;
-			stopVisualizerLoop();
+			setPaused();
 			onended?.();
 		});
 		audio.addEventListener('play', () => {
@@ -72,8 +71,7 @@
 			startVisualizerLoop();
 		});
 		audio.addEventListener('pause', () => {
-			isPlaying = false;
-			stopVisualizerLoop();
+			setPaused();
 		});
 
 		return audio;
@@ -81,14 +79,20 @@
 
 	function requestPlay(el: HTMLAudioElement): void {
 		el.play().catch(() => {
-			isPlaying = false;
+			setPaused();
 			isLoading = false;
 		});
+	}
+
+	function setPaused(): void {
+		isPlaying = false;
+		stopVisualizerLoop();
 	}
 
 	export function loadAndPlay(nextUrl: string = audioUrl): void {
 		const el = ensureAudio();
 		if (el.src !== new URL(nextUrl, window.location.href).href) {
+			setPaused();
 			el.src = nextUrl;
 			el.load();
 		}
@@ -146,7 +150,10 @@
 		const el = ensureAudio();
 		if (isLoading) return;
 		if (el.paused) requestPlay(el);
-		else el.pause();
+		else {
+			setPaused();
+			el.pause();
+		}
 	}
 
 	function seek(e: MouseEvent): void {

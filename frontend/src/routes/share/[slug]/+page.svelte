@@ -69,10 +69,11 @@
 
 	function advanceTrack(direction: number) {
 		if (!album || !currentTrack) return;
-		const idx = album.songs.indexOf(currentTrack);
-		const songs = direction > 0 ? album.songs.slice(idx + 1) : album.songs.slice(0, idx).reverse();
-		const next = songs.find((s) => s.audio_url);
-		if (next) play(next);
+		const playable = album.songs.filter((song) => song.audio_url);
+		if (playable.length <= 1) return;
+		const idx = Math.max(0, playable.indexOf(currentTrack));
+		const nextIndex = (idx + direction + playable.length) % playable.length;
+		play(playable[nextIndex]);
 	}
 
 	function onStateChange(playing: boolean, isLoading: boolean) {
