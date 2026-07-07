@@ -109,7 +109,10 @@ class AudioPlayer {
 		this.status = 'loading';
 		el.src = manifest.stream_url;
 		el.load();
-		if (opts.restart) this.applyPendingStreamSeek(el);
+		// The start-track seek is applied on loadedmetadata, never eagerly:
+		// browsers accept a currentTime assignment before metadata without
+		// error, then reset it to 0 when metadata arrives — which silently
+		// started every stream at track 1.
 	}
 
 	play(): void {

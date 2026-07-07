@@ -391,6 +391,15 @@ describe('stream playback', () => {
 		expect(fakeAudio.playMock).toHaveBeenCalled();
 	});
 
+	it('starts at the clicked track once metadata arrives, not track one', () => {
+		audioPlayer.loadStream(makeStreamManifest(), 1, { autoplay: false, restart: true });
+		// Before metadata the element must NOT have consumed the start seek.
+		fakeAudio.currentTime = 0;
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(10);
+		expect(audioPlayer.current?.songTitle).toBe('Second');
+	});
+
 	it('recovers a stalled stream in place, never falling back to classic', async () => {
 		vi.useFakeTimers();
 		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
