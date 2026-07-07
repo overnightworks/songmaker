@@ -11,6 +11,7 @@
 	import { canGoBack, deselectSong, backToSong } from '$lib/stores/navigation';
 	import { selectedGeneration } from '$lib/stores/player';
 	import { theme, toggleTheme, initTheme } from '$lib/stores/ui';
+	import { dev, browser } from '$app/environment';
 
 	let { children } = $props();
 
@@ -28,6 +29,11 @@
 	$effect(() => {
 		initTheme();
 		initAuth();
+		if (!dev && browser && 'serviceWorker' in navigator) {
+			navigator.serviceWorker.register('/service-worker.js').catch(() => {
+				// SW registration failure is non-fatal — the app still works online.
+			});
+		}
 	});
 
 	async function initAuth() {
@@ -63,6 +69,7 @@
 <svelte:head>
 	<title>{APP_NAME}</title>
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+	<link rel="manifest" href="/manifest.webmanifest" />
 </svelte:head>
 
 {#if isPublicRoute}

@@ -7,7 +7,11 @@ const config = {
 			pages: 'build',
 			assets: 'build',
 			fallback: 'index.html'
-		})
+		}),
+		serviceWorker: {
+			// Manual registration in +layout.svelte avoids CSP inline-script issues.
+			register: false
+		}
 	},
 	vitePlugin: {
 		dynamicCompileOptions: ({ filename }) =>

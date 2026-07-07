@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { sharePlaylist, unsharePlaylist } from '$lib/api/client';
+	import { sharePlaylist, unsharePlaylist, createQueueStreamSnapshot } from '$lib/api/client';
 	import { playPlaylistEntries, setShuffle } from '$lib/stores/player';
 	import {
 		selectedPlaylistDetail,
@@ -11,6 +11,13 @@
 	import { deselectPlaylistView } from '$lib/stores/navigation';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { addToast } from '$lib/stores/toast';
+	import {
+		saveStream,
+		removeStream,
+		isStreamSaved,
+		manifestCacheKey,
+		type StreamProgress
+	} from '$lib/services/offline';
 	import ActionButton from './ActionButton.svelte';
 	import Icon from './Icon.svelte';
 	import ShareButton from './ShareButton.svelte';
@@ -116,6 +123,95 @@
 		e.preventDefault();
 		playEntry(index);
 	}
+
+	// ── Offline / Save for offline ──────────────────────────────────────────
+
+	let offlineSaving = $state(false);
+	let offlineProgress = $state<StreamProgress | null>(null);
+	let offlineSavedStreamUrl = $state<string | null>(null);
+	let offlineSavedSnapshotId = $state<string | null>(null);
+
+	/** Re-checks the cache whenever the viewed playlist changes. */
+	$effect(() => {
+		let cancelled = false;
+		offlineSavedStreamUrl = null;
+		offlineSavedSnapshotId = null;
+		const detail = $selectedPlaylistDetail;
+		if (!detail) {
+			offlineProgress = null;
+			return () => {
+				cancelled = true;
+			};
+		}
+		// Persist saved-stream URLs in sessionStorage keyed by playlist id so the
+		// indicator survives component re-mounts within the same session.
+		const stored = sessionStorage.getItem(`offline-stream:${detail.id}`);
+		if (stored) {
+			try {
+				const { streamUrl, snapshotId } = JSON.parse(stored) as {
+					streamUrl: string;
+					snapshotId: string;
+				};
+				// Verify it is actually still in the cache.
+				isStreamSaved(streamUrl).then((saved) => {
+					if (cancelled) return;
+					if (saved) {
+						offlineSavedStreamUrl = streamUrl;
+						offlineSavedSnapshotId = snapshotId;
+					} else {
+						sessionStorage.removeItem(`offline-stream:${detail.id}`);
+					}
+				});
+			} catch {
+				sessionStorage.removeItem(`offline-stream:${detail.id}`);
+			}
+		}
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	async function onSaveForOffline(): Promise<void> {
+		if (!playlistDetail || offlineSaving) return;
+		offlineSaving = true;
+		offlineProgress = null;
+		try {
+			const tracks = playlistDetail.entries.map((e) => ({
+				generation_id: e.generation_id,
+				entry_id: e.id
+			}));
+			const manifest = await createQueueStreamSnapshot(tracks);
+			await saveStream(manifest, (progress) => {
+				offlineProgress = progress;
+			});
+			offlineSavedStreamUrl = manifest.stream_url;
+			offlineSavedSnapshotId = manifest.snapshot_id;
+			sessionStorage.setItem(
+				`offline-stream:${playlistDetail.id}`,
+				JSON.stringify({ streamUrl: manifest.stream_url, snapshotId: manifest.snapshot_id })
+			);
+			addToast('Saved for offline', 'success');
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : 'Save failed';
+			addToast(`Offline save failed: ${msg}`, 'error');
+		} finally {
+			offlineSaving = false;
+			offlineProgress = null;
+		}
+	}
+
+	async function onRemoveOffline(): Promise<void> {
+		if (!playlistDetail || !offlineSavedStreamUrl || !offlineSavedSnapshotId) return;
+		try {
+			await removeStream(offlineSavedStreamUrl, offlineSavedSnapshotId);
+			sessionStorage.removeItem(`offline-stream:${playlistDetail.id}`);
+			offlineSavedStreamUrl = null;
+			offlineSavedSnapshotId = null;
+			addToast('Offline copy removed', 'info');
+		} catch {
+			addToast('Remove failed', 'error');
+		}
+	}
 </script>
 
 {#if playlistDetail}
@@ -143,6 +239,25 @@
 					<button class="action-btn-secondary" onclick={playShuffled}>
 						<Icon name="shuffle" size={15} />
 						Shuffle
+					</button>
+				{/if}
+				{#if offlineSavedStreamUrl}
+					<button class="action-btn-offline saved" onclick={onRemoveOffline}>
+						Saved ✓ · Remove
+					</button>
+				{:else}
+					<button
+						class="action-btn-offline"
+						onclick={onSaveForOffline}
+						disabled={offlineSaving || playlistDetail.entries.length === 0}
+					>
+						{#if offlineSaving && offlineProgress && offlineProgress.total}
+							Saving… {Math.round((offlineProgress.downloaded / offlineProgress.total) * 100)}%
+						{:else if offlineSaving}
+							Saving…
+						{:else}
+							Save offline
+						{/if}
 					</button>
 				{/if}
 				<ShareButton
@@ -324,6 +439,50 @@
 
 	.action-btn-primary:hover {
 		box-shadow: 0 0 20px rgba(160, 32, 240, 0.3);
+	}
+
+	.action-btn-offline {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: var(--btn-padding-pill);
+		border-radius: var(--btn-radius-pill);
+		font-family: var(--font-display);
+		font-size: var(--btn-font-size-sm);
+		letter-spacing: var(--btn-letter-spacing);
+		text-transform: uppercase;
+		cursor: pointer;
+		white-space: nowrap;
+		border: 1px solid var(--border);
+		background: color-mix(in srgb, var(--surface) 75%, transparent);
+		color: var(--text-muted);
+		transition:
+			box-shadow 0.2s,
+			border-color 0.15s,
+			color 0.15s,
+			background 0.15s;
+	}
+
+	.action-btn-offline:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--text);
+		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+	}
+
+	.action-btn-offline:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.action-btn-offline.saved {
+		border-color: var(--success);
+		color: var(--success);
+	}
+
+	.action-btn-offline.saved:hover {
+		border-color: var(--score-bad);
+		color: var(--score-bad);
+		background: color-mix(in srgb, var(--score-bad) 8%, var(--surface));
 	}
 
 	.action-btn-secondary:hover {
