@@ -14,6 +14,7 @@ from songmaker_cli.api_helpers import check_generation_access
 from songmaker_cli.api_models.queue_streams import (
     QueueStreamLibraryRequest,
     QueueStreamManifestResponse,
+    QueueStreamPinResponse,
     QueueStreamSnapshotRequest,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
@@ -22,11 +23,14 @@ from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries import list_songs
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
+    PinnedBytesExceededError,
     QueueStreamSource,
     build_queue_stream_snapshot,
     load_queue_stream_manifest,
+    pin_snapshot,
     queue_stream_audio_path,
     track_source_from_generation,
+    unpin_snapshot,
 )
 from songmaker_cli.redis_client import RedisRateLimiter
 
@@ -172,3 +176,44 @@ def api_get_queue_stream_audio(
     audio_path = queue_stream_audio_path(ctx, snapshot_id)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
+
+
+@router.post("/queue-streams/{snapshot_id}/pin")
+def api_pin_queue_stream(
+    snapshot_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+    ctx: AppContext = Depends(get_app_context),
+) -> QueueStreamPinResponse:
+    _check_queue_stream_rate_limit(request, user)
+    manifest = load_queue_stream_manifest(ctx, snapshot_id)
+    if manifest.get("scope") != "auth" or manifest.get("scope_id") != user.id:
+        raise HTTPException(404, "Queue stream not found")
+    try:
+        updated = pin_snapshot(ctx, snapshot_id)
+    except PinnedBytesExceededError:
+        raise HTTPException(409, "Pinned storage cap reached")
+    return QueueStreamPinResponse(
+        snapshot_id=snapshot_id,
+        pinned=bool(updated.get("pinned", False)),
+        pinned_at=updated.get("pinned_at"),
+    )
+
+
+@router.delete("/queue-streams/{snapshot_id}/pin")
+def api_unpin_queue_stream(
+    snapshot_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+    ctx: AppContext = Depends(get_app_context),
+) -> QueueStreamPinResponse:
+    _check_queue_stream_rate_limit(request, user)
+    manifest = load_queue_stream_manifest(ctx, snapshot_id)
+    if manifest.get("scope") != "auth" or manifest.get("scope_id") != user.id:
+        raise HTTPException(404, "Queue stream not found")
+    updated = unpin_snapshot(ctx, snapshot_id)
+    return QueueStreamPinResponse(
+        snapshot_id=snapshot_id,
+        pinned=bool(updated.get("pinned", False)),
+        pinned_at=updated.get("pinned_at"),
+    )

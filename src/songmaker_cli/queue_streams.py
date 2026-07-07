@@ -31,11 +31,18 @@ QUEUE_STREAM_ORPHAN_MAX_AGE = timedelta(hours=24)
 QUEUE_STREAM_MAX_TRACKS = 200
 QUEUE_STREAM_MAX_DURATION_SECONDS = 60 * 60 * 6
 QUEUE_STREAM_MAX_CACHE_BYTES = 1024 * 1024 * 1024
+QUEUE_STREAM_PINNED_MAX_BYTES = 4 * 1024 * 1024 * 1024  # 4 GiB server-wide cap for pinned snapshots
+QUEUE_STREAM_PIN_MAX_AGE = timedelta(days=30)  # Abandoned pins expire after this age
 FFMPEG_TIMEOUT_SECONDS = 600
+
+
+class PinnedBytesExceededError(Exception):
+    """Pinning this snapshot would exceed the server-wide pinned bytes cap."""
 
 SnapshotScope = Literal["auth", "shared-playlist", "shared-album"]
 _build_locks: dict[str, threading.Lock] = {}
 _build_locks_guard = threading.Lock()
+_pin_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -185,6 +192,8 @@ def _build_queue_stream_snapshot(
         "expires_at": expires_at.isoformat(),
         "total_duration": round(offset, 3),
         "windowed": windowed,
+        "pinned": False,
+        "pinned_at": None,
         "tracks": [t.model_dump() for t in tracks],
     }
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -326,7 +335,8 @@ def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> dict[str, A
         raise HTTPException(404, "Queue stream not found")
 
     expires_at = datetime.fromisoformat(str(manifest["expires_at"]))
-    if expires_at < datetime.now(timezone.utc):
+    now = datetime.now(timezone.utc)
+    if expires_at < now and not _is_active_pin(manifest, now):
         delete_snapshot_files(ctx, snapshot_id)
         raise HTTPException(404, "Queue stream expired")
 
@@ -354,15 +364,20 @@ def cleanup_expired_queue_streams(ctx: AppContext) -> None:
     live_snapshot_ids: set[str] = set()
     for manifest_path in stream_dir.glob("*.json"):
         snapshot_id = manifest_path.stem
+        manifest: dict[str, Any] | None = None
+        expires_at = now - timedelta(seconds=1)  # default: treat as expired
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             expires_at = datetime.fromisoformat(str(manifest["expires_at"]))
         except Exception:
-            expires_at = now - timedelta(seconds=1)
-        if expires_at < now:
-            delete_snapshot_files(ctx, snapshot_id)
-        else:
+            pass
+        if expires_at >= now:
             live_snapshot_ids.add(snapshot_id)
+        elif manifest is not None and _is_active_pin(manifest, now):
+            # Pinned and not abandoned — exempt from TTL sweep
+            live_snapshot_ids.add(snapshot_id)
+        else:
+            delete_snapshot_files(ctx, snapshot_id)
 
     orphan_cutoff = now - QUEUE_STREAM_ORPHAN_MAX_AGE
     for cache_file in stream_dir.iterdir():
@@ -469,11 +484,19 @@ def _enforce_cache_quota(
     *,
     protected_snapshot_ids: set[str] | None = None,
 ) -> None:
-    protected = protected_snapshot_ids or set()
+    now = datetime.now(timezone.utc)
+    pinned_ids = _pinned_snapshot_ids(stream_dir, now)
+    # Pinned snapshots are excluded from quota accounting and eviction entirely.
+    # Just-built snapshots (protected_snapshot_ids) are counted but never evicted.
+    eviction_protected = (protected_snapshot_ids or set()) | pinned_ids
+
     mp3_files = [path for path in stream_dir.glob("*.mp3") if path.is_file()]
     total_bytes = 0
     sized_files: list[tuple[float, int, Path]] = []
     for path in mp3_files:
+        snapshot_id = _snapshot_id_from_cache_file(path)
+        if snapshot_id in pinned_ids:
+            continue  # Pinned bytes do not count toward the general quota
         try:
             stat = path.stat()
         except OSError:
@@ -488,7 +511,7 @@ def _enforce_cache_quota(
         if total_bytes <= QUEUE_STREAM_MAX_CACHE_BYTES:
             break
         snapshot_id = _snapshot_id_from_cache_file(path)
-        if snapshot_id in protected:
+        if snapshot_id in eviction_protected:
             continue
         if snapshot_id:
             delete_snapshot_files_from_dir(stream_dir, snapshot_id)
@@ -505,7 +528,7 @@ def delete_snapshot_files_from_dir(stream_dir: Path, snapshot_id: str) -> None:
 
 
 def _snapshot_id_from_cache_file(path: Path) -> str | None:
-    for suffix in (".tmp.mp3", ".concat.txt", ".json", ".mp3"):
+    for suffix in (".tmp.mp3", ".concat.txt", ".json.tmp", ".json", ".mp3"):
         if not path.name.endswith(suffix):
             continue
         snapshot_id = path.name[: -len(suffix)]
@@ -519,3 +542,129 @@ def _valid_snapshot_id(snapshot_id: str) -> bool:
 
 def _escape_concat_path(path: Path) -> str:
     return str(path).replace("'", r"'\''")
+
+
+def _is_active_pin(manifest: dict[str, Any], now: datetime) -> bool:
+    """Return True when the manifest is pinned and the pin has not been abandoned."""
+    if not manifest.get("pinned", False):
+        return False
+    pinned_at_str = manifest.get("pinned_at")
+    if not pinned_at_str:
+        return False
+    try:
+        pinned_at = datetime.fromisoformat(str(pinned_at_str))
+        return pinned_at >= now - QUEUE_STREAM_PIN_MAX_AGE
+    except (ValueError, TypeError):
+        return False
+
+
+def _pinned_snapshot_ids(stream_dir: Path, now: datetime) -> set[str]:
+    """Return the IDs of all snapshots that are currently pinned and not abandoned."""
+    pinned: set[str] = set()
+    for manifest_path in stream_dir.glob("*.json"):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if _is_active_pin(manifest, now):
+            pinned.add(manifest_path.stem)
+    return pinned
+
+
+def _sum_pinned_bytes(stream_dir: Path, now: datetime) -> int:
+    """Sum the audio bytes of all currently pinned, non-abandoned snapshots."""
+    total = 0
+    for manifest_path in stream_dir.glob("*.json"):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not _is_active_pin(manifest, now):
+            continue
+        audio_path = stream_dir / f"{manifest_path.stem}.mp3"
+        try:
+            total += audio_path.stat().st_size
+        except OSError:
+            pass
+    return total
+
+
+def _atomic_write_manifest(stream_dir: Path, snapshot_id: str, manifest: dict[str, Any]) -> None:
+    """Write manifest atomically via a temp file, then rename into place."""
+    manifest_path = stream_dir / f"{snapshot_id}.json"
+    tmp_path = stream_dir / f"{snapshot_id}.json.tmp"
+    try:
+        tmp_path.write_text(json.dumps(manifest), encoding="utf-8")
+        tmp_path.replace(manifest_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def pin_snapshot(ctx: AppContext, snapshot_id: str) -> dict[str, Any]:
+    """Pin a snapshot, exempting it from TTL expiry and quota eviction.
+
+    Raises PinnedBytesExceededError when the pinned-bytes cap would be exceeded.
+    Idempotent: returns the current manifest state when already pinned.
+    """
+    if not _valid_snapshot_id(snapshot_id):
+        raise HTTPException(404, "Queue stream not found")
+    stream_dir = _stream_dir(ctx)
+    manifest_path = stream_dir / f"{snapshot_id}.json"
+    if not manifest_path.exists():
+        raise HTTPException(404, "Queue stream not found")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        raise HTTPException(404, "Queue stream not found")
+
+    if manifest.get("pinned", False):
+        return manifest  # Already pinned — idempotent fast-path (no lock needed)
+
+    with _pin_lock:
+        # Re-read under the lock: another thread may have pinned between the check above and here
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            raise HTTPException(404, "Queue stream not found")
+
+        if manifest.get("pinned", False):
+            return manifest  # Already pinned — idempotent
+
+        audio_path = stream_dir / f"{snapshot_id}.mp3"
+        if not audio_path.exists():
+            raise HTTPException(404, "Queue stream audio not found")
+        try:
+            new_bytes = audio_path.stat().st_size
+        except OSError as exc:
+            raise HTTPException(404, "Queue stream audio not found") from exc
+
+        now = datetime.now(timezone.utc)
+        if _sum_pinned_bytes(stream_dir, now) + new_bytes > QUEUE_STREAM_PINNED_MAX_BYTES:
+            raise PinnedBytesExceededError()
+
+        manifest["pinned"] = True
+        manifest["pinned_at"] = now.isoformat()
+        _atomic_write_manifest(stream_dir, snapshot_id, manifest)
+    return manifest
+
+
+def unpin_snapshot(ctx: AppContext, snapshot_id: str) -> dict[str, Any]:
+    """Remove a pin from a snapshot.
+
+    Idempotent: has no effect when the snapshot is already unpinned.
+    """
+    if not _valid_snapshot_id(snapshot_id):
+        raise HTTPException(404, "Queue stream not found")
+    stream_dir = _stream_dir(ctx)
+    manifest_path = stream_dir / f"{snapshot_id}.json"
+    if not manifest_path.exists():
+        raise HTTPException(404, "Queue stream not found")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        raise HTTPException(404, "Queue stream not found")
+
+    manifest["pinned"] = False
+    manifest["pinned_at"] = None
+    _atomic_write_manifest(stream_dir, snapshot_id, manifest)
+    return manifest

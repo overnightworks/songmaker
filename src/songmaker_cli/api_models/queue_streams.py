@@ -43,3 +43,9 @@ class QueueStreamManifestResponse(BaseModel):
     total_duration: float
     tracks: list[QueueStreamTrackResponse]
     windowed: bool = False
+
+
+class QueueStreamPinResponse(BaseModel):
+    snapshot_id: str
+    pinned: bool
+    pinned_at: str | None
