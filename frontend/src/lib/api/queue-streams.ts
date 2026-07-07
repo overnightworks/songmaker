@@ -11,6 +11,16 @@ export async function createQueueStreamSnapshot(
 	});
 }
 
+export async function createLibraryQueueStreamSnapshot(
+	startGenerationId: string | null
+): Promise<QueueStreamManifest> {
+	return apiFetch<QueueStreamManifest>('/api/queue-streams/library', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ start_generation_id: startGenerationId })
+	});
+}
+
 export async function fetchSharedPlaylistStream(slug: string): Promise<QueueStreamManifest> {
 	const resp = await fetch(`/shared/playlist/${slug}/stream`, { method: 'POST' });
 	if (!resp.ok) throw new Error('Failed to create shared playlist stream');

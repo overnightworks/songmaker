@@ -62,6 +62,7 @@ export {
 } from './playlists';
 export {
 	createQueueStreamSnapshot,
+	createLibraryQueueStreamSnapshot,
 	fetchSharedAlbumStream,
 	fetchSharedPlaylistStream
 } from './queue-streams';

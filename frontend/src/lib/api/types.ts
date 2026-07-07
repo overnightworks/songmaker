@@ -390,6 +390,10 @@ export interface QueueStreamSnapshotRequest {
 	tracks: QueueStreamTrackRequest[];
 }
 
+export interface LibraryQueueStreamRequest {
+	start_generation_id: string | null;
+}
+
 export interface QueueStreamTrackItem {
 	key: string;
 	index: number;

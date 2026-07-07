@@ -1,5 +1,9 @@
 import { writable, derived, get } from 'svelte/store';
-import { createQueueStreamSnapshot, fetchSong } from '$lib/api/client';
+import {
+	createLibraryQueueStreamSnapshot,
+	createQueueStreamSnapshot,
+	fetchSong
+} from '$lib/api/client';
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -126,6 +130,13 @@ function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; sta
 	return { items: [start, ...rest], startIndex: 0 };
 }
 
+function showWindowedNotice(trackCount: number): void {
+	addToast(
+		`Streaming the first ${trackCount} tracks — the queue is longer than one stream allows.`,
+		'info'
+	);
+}
+
 async function playStreamEntries(
 	entries: PlaylistEntryItem[],
 	startIndex: number,
@@ -145,10 +156,23 @@ async function playStreamEntries(
 	}
 	audioPlayer.loadStream(manifest, startIndex, { restart: opts.restart ?? true });
 	if (manifest.windowed) {
-		addToast(
-			`Streaming the first ${manifest.tracks.length} tracks — the queue is longer than one stream allows.`,
-			'info'
-		);
+		showWindowedNotice(manifest.tracks.length);
+	}
+}
+
+export async function playLibraryFromGeneration(gen: GenerationItem): Promise<void> {
+	queueContext.set({ type: 'library' });
+	let manifest: QueueStreamManifest;
+	try {
+		manifest = await createLibraryQueueStreamSnapshot(gen.id);
+	} catch {
+		addToast('Stream unavailable. Tap play to retry.', 'error');
+		return;
+	}
+	const startIndex = manifest.tracks.findIndex((t) => t.generation_id === gen.id);
+	audioPlayer.loadStream(manifest, startIndex >= 0 ? startIndex : 0, { restart: true });
+	if (manifest.windowed) {
+		showWindowedNotice(manifest.tracks.length);
 	}
 }
 
@@ -411,7 +435,12 @@ export function playPlaylistEntries(
 }
 
 async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
+	const ctx = get(queueContext);
 	try {
+		if (ctx.type === 'library') {
+			const currentTrack = state.manifest.tracks[state.trackIndex];
+			return await createLibraryQueueStreamSnapshot(currentTrack?.generation_id ?? null);
+		}
 		return await createQueueStreamSnapshot(
 			state.manifest.tracks.map((track) => ({
 				generation_id: track.generation_id,

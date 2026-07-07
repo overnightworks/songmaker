@@ -5,13 +5,16 @@ import type {
 	GenerationItem,
 	PlaylistEntryItem,
 	QueueStreamManifest,
+	QueueStreamTrackItem,
 	SongItem
 } from '$lib/api/types';
 import { createQueueStreamSnapshot } from '$lib/api/client';
 import { toasts } from '$lib/stores/toast';
+import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 
 vi.mock('$lib/api/client', () => ({
 	createQueueStreamSnapshot: vi.fn(),
+	createLibraryQueueStreamSnapshot: vi.fn(),
 	fetchSong: vi.fn()
 }));
 import {
@@ -24,6 +27,7 @@ import {
 	handlePlaybackEnded,
 	navigateToPlaying,
 	playGeneration,
+	playLibraryFromGeneration,
 	playNextSong,
 	playPrevSong,
 	playPlaylistEntries,
@@ -42,6 +46,7 @@ import {
 	updateGenerationScores
 } from './player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
@@ -639,6 +644,27 @@ describe('updateGenerationScores', () => {
 	});
 });
 
+function makeTrack(overrides: Partial<QueueStreamTrackItem> = {}): QueueStreamTrackItem {
+	return {
+		key: 't1',
+		index: 0,
+		entry_id: null,
+		generation_id: 'g1',
+		song_id: 's1',
+		song_title: 'Song',
+		artist: 'Artist',
+		generation_number: 1,
+		mp3_path: 'a.mp3',
+		audio_url: '/audio/a.mp3',
+		seed: null,
+		model_mode: 'sft',
+		duration: 180,
+		start_offset: 0,
+		end_offset: 180,
+		...overrides
+	};
+}
+
 function makeManifest(overrides: Partial<QueueStreamManifest> = {}): QueueStreamManifest {
 	return {
 		snapshot_id: 'snap1',
@@ -717,5 +743,112 @@ describe('stream path', () => {
 
 		const infoToasts = get(toasts).filter((t) => t.type === 'info');
 		expect(infoToasts).toHaveLength(0);
+	});
+});
+
+describe('playLibraryFromGeneration', () => {
+	let loadStreamSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		setQueuePlaybackMode('stream');
+		loadStreamSpy = vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
+		toasts.set([]);
+	});
+
+	it('loads stream at the index matching the requested generation', async () => {
+		const gen = makeGen({ id: 'g2' });
+		const song = makeSong();
+		const manifest = makeManifest({
+			tracks: [
+				makeTrack({ generation_id: 'g1', index: 0 }),
+				makeTrack({ generation_id: 'g2', index: 1 })
+			]
+		});
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+
+		await playLibraryFromGeneration(gen);
+
+		expect(loadStreamSpy).toHaveBeenCalledWith(manifest, 1, { restart: true });
+	});
+
+	it('falls back to index 0 when requested generation is absent from manifest', async () => {
+		const gen = makeGen({ id: 'g-absent' });
+		const song = makeSong();
+		const manifest = makeManifest({ tracks: [makeTrack({ generation_id: 'g1' })] });
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+
+		await playLibraryFromGeneration(gen);
+
+		expect(loadStreamSpy).toHaveBeenCalledWith(manifest, 0, { restart: true });
+	});
+
+	it('shows error toast and does not call loadStream when library stream build fails', async () => {
+		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(new Error('server error'));
+
+		await playLibraryFromGeneration(makeGen());
+
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: 'Stream unavailable. Tap play to retry.', type: 'error' })
+		]);
+		expect(loadStreamSpy).not.toHaveBeenCalled();
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('shows windowed notice for a windowed library manifest', async () => {
+		const manifest = makeManifest({
+			windowed: true,
+			tracks: [makeTrack(), makeTrack({ generation_id: 'g2', index: 1 })]
+		});
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+
+		await playLibraryFromGeneration(makeGen());
+
+		const infoToasts = get(toasts).filter((t) => t.type === 'info');
+		expect(infoToasts).toHaveLength(1);
+		expect(infoToasts[0].message).toMatch(/Streaming the first 2 tracks/);
+	});
+});
+
+describe('rebuildQueueStream routing', () => {
+	beforeEach(() => {
+		setQueuePlaybackMode('stream');
+		vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
+		toasts.set([]);
+	});
+
+	it('routes library context rebuild to the library endpoint', async () => {
+		queueContext.set({ type: 'library' });
+		const freshManifest = makeManifest({ snapshot_id: 'fresh' });
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(freshManifest);
+
+		const state: StreamFallbackState = {
+			manifest: makeManifest({ tracks: [makeTrack({ generation_id: 'g-cur' })] }),
+			trackIndex: 0,
+			trackTime: 30
+		};
+		const result = await audioPlayer.onStreamRebuild!(state);
+
+		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g-cur');
+		expect(result).toBe(freshManifest);
+	});
+
+	it('routes playlist context rebuild to the generic endpoint', async () => {
+		const entries = [makePlaylistEntry()];
+		queueContext.set({ type: 'playlist', entries, index: 0 });
+		const freshManifest = makeManifest({ snapshot_id: 'fresh' });
+		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(freshManifest);
+
+		const track = makeTrack({ generation_id: 'g1', entry_id: 'pe1' });
+		const state: StreamFallbackState = {
+			manifest: makeManifest({ tracks: [track] }),
+			trackIndex: 0,
+			trackTime: 10
+		};
+		const result = await audioPlayer.onStreamRebuild!(state);
+
+		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
+			{ generation_id: 'g1', entry_id: 'pe1' }
+		]);
+		expect(result).toBe(freshManifest);
 	});
 });

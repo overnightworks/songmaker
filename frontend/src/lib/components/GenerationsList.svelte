@@ -3,10 +3,12 @@
 	import { EXPIRY_WARN_DAYS } from '$lib/constants';
 	import {
 		playGeneration,
+		playLibraryFromGeneration,
 		queueContext,
 		selectedAlbumId,
 		removeGenerationFromSong
 	} from '$lib/stores/player';
+	import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { scoreColor } from '$lib/utils/scores';
 	import { getGenerationActions } from '$lib/contexts/generation-actions';
@@ -81,6 +83,10 @@
 			return;
 		}
 		const albumId = $selectedAlbumId;
+		if (!albumId && shouldUseQueueStream($queuePlaybackMode)) {
+			void playLibraryFromGeneration(gen);
+			return;
+		}
 		queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
 		playGeneration(gen, song, { restart: true });
 	}
