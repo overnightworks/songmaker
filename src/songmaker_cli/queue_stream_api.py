@@ -148,6 +148,18 @@ def api_create_library_queue_stream(
             (i for i, s in enumerate(sources) if s.generation.id == req.start_generation_id),
             None,
         )
+        if rotation_pos is None:
+            # The clicked generation may not be the song's streamed take
+            # (library streams carry one take per song). Fall back to the
+            # clicked generation's SONG so playback still starts where the
+            # operator pointed. A foreign id matches no source and is
+            # ignored, never a probe.
+            start_gen = session.get(Generation, req.start_generation_id)
+            if start_gen is not None:
+                rotation_pos = next(
+                    (i for i, s in enumerate(sources) if s.generation.song_id == start_gen.song_id),
+                    None,
+                )
         if rotation_pos is not None:
             sources = sources[rotation_pos:] + sources[:rotation_pos]
 

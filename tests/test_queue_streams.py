@@ -483,6 +483,25 @@ def test_library_stream_rotation_via_start_generation_id(tmp_path: Path, monkeyp
     assert [t["index"] for t in data["tracks"]] == [0, 1]
 
 
+def test_library_stream_rotation_falls_back_to_the_clicked_generations_song(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Clicking a non-streamed take of a song still starts the stream at that song."""
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
+    _write_library_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    # g1 exists on s1 but the stream carries s1's picked take g1b; rotation
+    # must land on s1 anyway.
+    resp = client.post("/api/queue-streams/library", json={"start_generation_id": "g1"})
+
+    assert resp.status_code == 200
+    tracks = resp.json()["tracks"]
+    assert tracks[0]["song_id"] == "s1"
+    assert tracks[0]["generation_id"] == "g1b"
+
+
 def test_library_stream_start_generation_id_not_found_starts_from_beginning(
     tmp_path: Path, monkeypatch,
 ) -> None:
