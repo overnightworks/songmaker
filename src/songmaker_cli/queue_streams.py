@@ -83,14 +83,17 @@ def build_queue_stream_snapshot(
 ) -> QueueStreamManifestResponse:
     if not sources:
         raise HTTPException(422, "Queue has no playable tracks")
-    if len(sources) > QUEUE_STREAM_MAX_TRACKS:
-        raise HTTPException(422, "Queue has too many tracks for stream playback")
+    windowed_by_count = len(sources) > QUEUE_STREAM_MAX_TRACKS
+    if windowed_by_count:
+        sources = sources[:QUEUE_STREAM_MAX_TRACKS]
 
     stream_dir = _stream_dir(ctx)
     stream_dir.mkdir(parents=True, exist_ok=True)
     cleanup_expired_queue_streams(ctx)
 
-    prepared_sources = _prepare_sources(ctx, sources)
+    prepared_sources, windowed_by_duration = _prepare_sources(ctx, sources)
+    if not prepared_sources:
+        raise HTTPException(422, "Queue is too long for stream playback")
     content_hash = _content_hash(scope, scope_id, prepared_sources)
     with _build_lock(content_hash):
         reusable = _find_reusable_snapshot(ctx, content_hash, stream_url)
@@ -103,6 +106,8 @@ def build_queue_stream_snapshot(
             scope_id=scope_id,
             stream_url=stream_url,
             content_hash=content_hash,
+            windowed_by_count=windowed_by_count,
+            windowed_by_duration=windowed_by_duration,
         )
 
 
@@ -114,6 +119,8 @@ def _build_queue_stream_snapshot(
     scope_id: str,
     stream_url: str,
     content_hash: str,
+    windowed_by_count: bool = False,
+    windowed_by_duration: bool = False,
 ) -> QueueStreamManifestResponse:
     stream_dir = _stream_dir(ctx)
     snapshot_id = uuid.uuid4().hex
@@ -130,8 +137,6 @@ def _build_queue_stream_snapshot(
         source = prepared.source
         gen = source.generation
         duration = prepared.duration
-        if offset + duration > QUEUE_STREAM_MAX_DURATION_SECONDS:
-            raise HTTPException(422, "Queue is too long for stream playback")
         song = gen.song
         album = song.album if song else None
         start = offset
@@ -158,6 +163,11 @@ def _build_queue_stream_snapshot(
         audio_paths.append(prepared.audio_path)
         offset = end
 
+    if not tracks:
+        raise HTTPException(422, "Queue is too long for stream playback")
+
+    windowed = windowed_by_count or windowed_by_duration
+
     try:
         write_concat_file(concat_path, audio_paths)
         run_ffmpeg_concat(concat_path, output_tmp_path)
@@ -174,6 +184,7 @@ def _build_queue_stream_snapshot(
         "content_hash": content_hash,
         "expires_at": expires_at.isoformat(),
         "total_duration": round(offset, 3),
+        "windowed": windowed,
         "tracks": [t.model_dump() for t in tracks],
     }
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -184,6 +195,7 @@ def _build_queue_stream_snapshot(
         stream_url=stream_url,
         expires_at=manifest["expires_at"],
         total_duration=manifest["total_duration"],
+        windowed=windowed,
         tracks=tracks,
     )
 
@@ -191,8 +203,15 @@ def _build_queue_stream_snapshot(
 def _prepare_sources(
     ctx: AppContext,
     sources: list[QueueStreamSource],
-) -> list[QueueStreamPreparedSource]:
+) -> tuple[list[QueueStreamPreparedSource], bool]:
+    """Probe sources one at a time, stopping before the track that would
+    exceed the duration cap.
+
+    Returns (prepared, windowed_by_duration). Sources beyond the window are never probed,
+    so a corrupt track outside the window does not fail the build.
+    """
     prepared: list[QueueStreamPreparedSource] = []
+    offset = 0.0
     for source in sources:
         gen = source.generation
         if not gen.mp3_path:
@@ -203,6 +222,8 @@ def _prepare_sources(
         except OSError as exc:
             raise HTTPException(404, "Audio file not found") from exc
         duration = probe_audio_duration(audio_path)
+        if offset + duration > QUEUE_STREAM_MAX_DURATION_SECONDS:
+            return prepared, True
         prepared.append(
             QueueStreamPreparedSource(
                 source=source,
@@ -212,7 +233,8 @@ def _prepare_sources(
                 mtime_ns=stat.st_mtime_ns,
             )
         )
-    return prepared
+        offset += duration
+    return prepared, False
 
 
 def _content_hash(
@@ -283,6 +305,7 @@ def _find_reusable_snapshot(
             stream_url=stream_url,
             expires_at=str(manifest["expires_at"]),
             total_duration=float(manifest["total_duration"]),
+            windowed=bool(manifest.get("windowed", False)),
             tracks=[
                 QueueStreamTrackResponse.model_validate(track)
                 for track in manifest.get("tracks", [])

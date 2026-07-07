@@ -11,7 +11,7 @@ class QueueStreamTrackRequest(BaseModel):
 
 
 class QueueStreamSnapshotRequest(BaseModel):
-    tracks: list[QueueStreamTrackRequest] = Field(min_length=1, max_length=200)
+    tracks: list[QueueStreamTrackRequest] = Field(min_length=1, max_length=500)
 
 
 class QueueStreamTrackResponse(BaseModel):
@@ -38,3 +38,4 @@ class QueueStreamManifestResponse(BaseModel):
     expires_at: str
     total_duration: float
     tracks: list[QueueStreamTrackResponse]
+    windowed: bool = False

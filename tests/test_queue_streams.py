@@ -199,6 +199,128 @@ def test_queue_stream_cache_quota_keeps_new_snapshot(
     assert audio.status_code == 206
 
 
+def test_queue_stream_windowed_by_track_count(tmp_path: Path, monkeypatch) -> None:
+    _patch_audio_build(monkeypatch)
+    import songmaker_cli.queue_streams as qs
+
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 1)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams",
+        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["windowed"] is True
+    assert len(data["tracks"]) == 1
+    assert data["tracks"][0]["generation_id"] == "g1"
+
+
+def test_queue_stream_request_model_rejects_more_than_500_tracks(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    # 501 tracks must be rejected by model validation before any handler logic runs
+    resp_over = client.post(
+        "/api/queue-streams",
+        json={"tracks": [{"generation_id": "g1"}] * 501},
+    )
+    assert resp_over.status_code == 422
+
+    # 500 tracks passes model validation; windowed by count (MAX_TRACKS=200) and succeeds
+    import songmaker_cli.queue_streams as qs
+
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 1)
+    resp_at_limit = client.post(
+        "/api/queue-streams",
+        json={"tracks": [{"generation_id": "g1"}] * 500},
+    )
+    assert resp_at_limit.status_code == 200
+    assert resp_at_limit.json()["windowed"] is True
+
+
+def test_queue_stream_windowed_by_duration(tmp_path: Path, monkeypatch) -> None:
+    _patch_audio_build(monkeypatch)
+    import songmaker_cli.queue_streams as qs
+
+    # duration=10s per track; cap at 15s admits only the first track
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 15)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams",
+        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["windowed"] is True
+    assert len(data["tracks"]) == 1
+    assert data["tracks"][0]["generation_id"] == "g1"
+
+
+def test_queue_stream_not_windowed_when_within_limits(tmp_path: Path, monkeypatch) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams",
+        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["windowed"] is False
+
+
+def test_legacy_manifest_without_windowed_field_loads_as_unwindowed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    first = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    assert first.status_code == 200
+    snapshot_id = first.json()["snapshot_id"]
+
+    manifest_path = tmp_path / "data" / "queue-streams" / f"{snapshot_id}.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest.pop("windowed", None)
+    manifest_path.write_text(json.dumps(manifest))
+
+    second = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    assert second.status_code == 200
+    assert second.json()["windowed"] is False
+
+
+def test_queue_stream_first_track_too_long_raises_422(tmp_path: Path, monkeypatch) -> None:
+    import songmaker_cli.queue_streams as qs
+
+    _patch_audio_build(monkeypatch)
+    # first (and only) track duration exceeds the cap → empty window → 422
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 5)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+
+    assert resp.status_code == 422
+
+
 def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
