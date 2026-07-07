@@ -6,6 +6,24 @@ All future work as concept notes. Per [CLAUDE.md "Plan-writing convention"](CLAU
 
 When you finish an item, delete its section. Git history preserves it. Decisions and reasoning are also captured in the commit messages.
 
+## Dates visible + sort/filter by recency (Felix, 2026-07-07)
+
+**Goal:** Felix can see WHEN albums/songs/generations were created and find
+"the latest" without hunting. Verbatim: "i dont see dates so its hard to see
+what is a latest album song or whatever — i also cannot sort or filter by
+that."
+
+**Locked-in decisions:** relative dates on cards/rows ("2h ago" style, exact
+timestamp on hover/detail — matches the atelier convention: relative in
+lists, absolute in detail); a sort control (newest-first default is
+acceptable) on the album and song lists; created_at already exists on the
+models — this is read-side + UI only.
+
+**Hard constraints:** no schema change; keep list payloads light (created_at
+is already serialized or trivially added); the sort/filter belongs where the
+existing list controls live — no new panel.
+
+
 ---
 
 ## Feature work (priority order — top = most valuable)
