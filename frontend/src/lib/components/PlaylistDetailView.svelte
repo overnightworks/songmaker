@@ -11,6 +11,7 @@
 	import { deselectPlaylistView } from '$lib/stores/navigation';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { addToast } from '$lib/stores/toast';
+	import { pinQueueStream, unpinQueueStream } from '$lib/api/queue-streams';
 	import {
 		saveStream,
 		removeStream,
@@ -181,9 +182,13 @@
 				entry_id: e.id
 			}));
 			const manifest = await createQueueStreamSnapshot(tracks);
-			await saveStream(manifest, (progress) => {
-				offlineProgress = progress;
-			});
+			await saveStream(
+				manifest,
+				(progress) => {
+					offlineProgress = progress;
+				},
+				(snapshotId) => pinQueueStream(snapshotId).then(() => undefined)
+			);
 			offlineSavedStreamUrl = manifest.stream_url;
 			offlineSavedSnapshotId = manifest.snapshot_id;
 			sessionStorage.setItem(
@@ -203,6 +208,9 @@
 	async function onRemoveOffline(): Promise<void> {
 		if (!playlistDetail || !offlineSavedStreamUrl || !offlineSavedSnapshotId) return;
 		try {
+			await unpinQueueStream(offlineSavedSnapshotId).catch(() => {
+				addToast('Server unpin failed — the download is removed locally.', 'info');
+			});
 			await removeStream(offlineSavedStreamUrl, offlineSavedSnapshotId);
 			sessionStorage.removeItem(`offline-stream:${playlistDetail.id}`);
 			offlineSavedStreamUrl = null;

@@ -32,3 +32,21 @@ export async function fetchSharedAlbumStream(slug: string): Promise<QueueStreamM
 	if (!resp.ok) throw new Error('Failed to create shared album stream');
 	return resp.json() as Promise<QueueStreamManifest>;
 }
+
+export interface QueueStreamPinState {
+	snapshot_id: string;
+	pinned: boolean;
+	pinned_at: string | null;
+}
+
+export async function pinQueueStream(snapshotId: string): Promise<QueueStreamPinState> {
+	return apiFetch<QueueStreamPinState>(`/api/queue-streams/${snapshotId}/pin`, {
+		method: 'POST'
+	});
+}
+
+export async function unpinQueueStream(snapshotId: string): Promise<QueueStreamPinState> {
+	return apiFetch<QueueStreamPinState>(`/api/queue-streams/${snapshotId}/pin`, {
+		method: 'DELETE'
+	});
+}
