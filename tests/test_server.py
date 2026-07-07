@@ -1561,3 +1561,77 @@ def test_auto_setup_admin_rejects_weak_password(tmp_path: Path) -> None:
 
     with factory() as session:
         assert user_count(session) == 0
+
+
+# ── PWA static routes ────────────────────────────────────────────────
+
+
+def _pwa_test_app(tmp_path: Path, *, create_files: bool) -> TestClient:
+    """Build a test app with or without PWA static files present."""
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    sk_dir = tmp_path / "frontend" / "build"
+    sk_dir.mkdir(parents=True)
+    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
+
+    if create_files:
+        (sk_dir / "service-worker.js").write_text("self.addEventListener('install', () => {})")
+        (sk_dir / "manifest.webmanifest").write_text('{"name":"Songmaker"}')
+        (sk_dir / "icon-192.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+        (sk_dir / "icon-512.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    factory = init_db(data_dir / "songmaker.db")
+    ctx = AppContext(
+        db=factory,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
+    return TestClient(app)
+
+
+def test_service_worker_served_with_correct_mime_and_sw_allowed_header(
+    tmp_path: Path,
+) -> None:
+    client = _pwa_test_app(tmp_path, create_files=True)
+    resp = client.get("/service-worker.js")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/javascript")
+    assert resp.headers["Service-Worker-Allowed"] == "/"
+
+
+@pytest.mark.parametrize("path,expected_mime", [
+    ("/manifest.webmanifest", "application/manifest+json"),
+    ("/icon-192.png", "image/png"),
+    ("/icon-512.png", "image/png"),
+])
+def test_pwa_static_served_with_correct_mime(
+    tmp_path: Path, path: str, expected_mime: str,
+) -> None:
+    client = _pwa_test_app(tmp_path, create_files=True)
+    resp = client.get(path)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith(expected_mime)
+
+
+@pytest.mark.parametrize("path", [
+    "/service-worker.js",
+    "/manifest.webmanifest",
+    "/icon-192.png",
+    "/icon-512.png",
+])
+def test_pwa_route_honest_404_when_file_missing(tmp_path: Path, path: str) -> None:
+    client = _pwa_test_app(tmp_path, create_files=False)
+    resp = client.get(path)
+    assert resp.status_code == 404
+    assert resp.headers.get("content-type", "").startswith("application/json")
+    assert b"<html" not in resp.content
+
+
+def test_csp_includes_manifest_src_self(server_app: TestClient) -> None:
+    resp = server_app.get("/")
+    assert "manifest-src 'self'" in resp.headers["Content-Security-Policy"]

@@ -213,6 +213,45 @@ def create_app(
     async def serve_favicon() -> FileResponse:
         return FileResponse(favicon_path, media_type="image/svg+xml")
 
+    sw_path = sveltekit_dir / "service-worker.js"
+    manifest_path = sveltekit_dir / "manifest.webmanifest"
+    icon_192_path = sveltekit_dir / "icon-192.png"
+    icon_512_path = sveltekit_dir / "icon-512.png"
+    _pwa_exact_paths = frozenset({
+        "/service-worker.js",
+        "/manifest.webmanifest",
+        "/icon-192.png",
+        "/icon-512.png",
+    })
+
+    @app.get("/service-worker.js", include_in_schema=False)
+    async def serve_service_worker() -> FileResponse:
+        if not sw_path.exists():
+            raise HTTPException(status_code=404, detail="Not Found")
+        return FileResponse(
+            sw_path,
+            media_type="application/javascript",
+            headers={"Service-Worker-Allowed": "/"},
+        )
+
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    async def serve_webmanifest() -> FileResponse:
+        if not manifest_path.exists():
+            raise HTTPException(status_code=404, detail="Not Found")
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+
+    @app.get("/icon-192.png", include_in_schema=False)
+    async def serve_icon_192() -> FileResponse:
+        if not icon_192_path.exists():
+            raise HTTPException(status_code=404, detail="Not Found")
+        return FileResponse(icon_192_path, media_type="image/png")
+
+    @app.get("/icon-512.png", include_in_schema=False)
+    async def serve_icon_512() -> FileResponse:
+        if not icon_512_path.exists():
+            raise HTTPException(status_code=404, detail="Not Found")
+        return FileResponse(icon_512_path, media_type="image/png")
+
     sk_index = sveltekit_dir / "index.html"
 
     @app.exception_handler(404)
@@ -222,6 +261,7 @@ def create_app(
             and not request.url.path.startswith("/audio/")
             and not request.url.path.startswith("/_app/")
             and not request.url.path.startswith("/shared/")
+            and request.url.path not in _pwa_exact_paths
             and sk_index.exists()
         ):
             return FileResponse(sk_index, media_type="text/html")
