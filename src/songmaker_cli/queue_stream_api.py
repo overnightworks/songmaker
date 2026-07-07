@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -11,13 +12,17 @@ from sqlalchemy.orm import Session
 import songmaker_cli.constants as _consts
 from songmaker_cli.api_helpers import check_generation_access
 from songmaker_cli.api_models.queue_streams import (
+    QueueStreamLibraryRequest,
     QueueStreamManifestResponse,
     QueueStreamSnapshotRequest,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.constants import AUDIO_MEDIA_TYPES, REDIS_RL_QUEUE_STREAM_PREFIX
+from songmaker_cli.db.models import Generation, Song
+from songmaker_cli.db.queries import list_songs
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
+    QueueStreamSource,
     build_queue_stream_snapshot,
     load_queue_stream_manifest,
     queue_stream_audio_path,
@@ -79,6 +84,70 @@ def api_create_queue_stream(
                 audio_url=f"/audio/{gen.mp3_path}",
             )
         )
+
+    snapshot = build_queue_stream_snapshot(
+        ctx,
+        sources,
+        scope="auth",
+        scope_id=user.id,
+        stream_url="",
+    )
+    snapshot.stream_url = f"/api/queue-streams/{snapshot.snapshot_id}/audio"
+    return snapshot
+
+
+def _pick_library_generation(song: Song) -> Generation | None:
+    """Return the generation to stream for this song in a library snapshot.
+
+    Prefers the picked (non-archived) generation; falls back to the first
+    (newest) non-archived generation that has an mp3_path.  Returns None when
+    the song has no eligible generation — callers skip such songs.
+    """
+    picked = next(
+        (g for g in song.generations if g.is_picked and not g.is_archived and g.mp3_path),
+        None,
+    )
+    if picked is not None:
+        return picked
+    return next(
+        (g for g in song.generations if not g.is_archived and g.mp3_path),
+        None,
+    )
+
+
+@router.post("/queue-streams/library")
+def api_create_library_queue_stream(
+    req: QueueStreamLibraryRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> QueueStreamManifestResponse:
+    _check_queue_stream_rate_limit(request, user)
+
+    songs = list_songs(session, user_id=user.id, light=True)
+    sources: list[QueueStreamSource] = [
+        track_source_from_generation(
+            gen,
+            key=gen.id,
+            index=0,  # placeholder; reindexed below
+            entry_id=None,
+            audio_url=f"/audio/{gen.mp3_path}",
+        )
+        for song in songs
+        for gen in [_pick_library_generation(song)]
+        if gen is not None
+    ]
+
+    if req.start_generation_id is not None:
+        rotation_pos = next(
+            (i for i, s in enumerate(sources) if s.generation.id == req.start_generation_id),
+            None,
+        )
+        if rotation_pos is not None:
+            sources = sources[rotation_pos:] + sources[:rotation_pos]
+
+    sources = [replace(s, index=new_idx) for new_idx, s in enumerate(sources)]
 
     snapshot = build_queue_stream_snapshot(
         ctx,

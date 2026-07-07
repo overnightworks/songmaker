@@ -14,6 +14,10 @@ class QueueStreamSnapshotRequest(BaseModel):
     tracks: list[QueueStreamTrackRequest] = Field(min_length=1, max_length=500)
 
 
+class QueueStreamLibraryRequest(BaseModel):
+    start_generation_id: str | None = Field(default=None, max_length=36)
+
+
 class QueueStreamTrackResponse(BaseModel):
     key: str
     index: int
