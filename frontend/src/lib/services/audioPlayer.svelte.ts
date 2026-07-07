@@ -1,9 +1,6 @@
 import type { QueueStreamManifest } from '$lib/api/types';
 import type { PlaybackInfo } from './playbackTypes';
-import {
-	QueueStreamEngine,
-	type StreamFallbackState
-} from './queueStreamEngine';
+import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
 
 export type { PlaybackInfo } from './playbackTypes';
 export type { StreamFallbackState } from './queueStreamEngine';
@@ -36,7 +33,8 @@ class AudioPlayer {
 
 	onEnded: (() => void) | null = null;
 	onAuthLost: (() => void | Promise<void>) | null = null;
-	onStreamFallback: ((state: StreamFallbackState) => void | Promise<void>) | null = null;
+	onStreamRebuild: ((state: StreamFallbackState) => Promise<QueueStreamManifest | null>) | null =
+		null;
 	onCurrentChange: ((current: PlaybackInfo | null) => void) | null = null;
 
 	private audio: HTMLAudioElement | null = null;
@@ -90,11 +88,12 @@ class AudioPlayer {
 	loadStream(
 		manifest: QueueStreamManifest,
 		startIndex = 0,
-		opts: { autoplay?: boolean; restart?: boolean } = {}
+		opts: { autoplay?: boolean; restart?: boolean; resumeAt?: number } = {}
 	): void {
 		const autoplay = opts.autoplay ?? true;
 		const streamState = this.streamEngine.start(manifest, startIndex);
 		if (!streamState) return;
+		if (opts.resumeAt !== undefined) this.streamEngine.resumeAt(opts.resumeAt);
 		const el = this.ensureAudio();
 		this.clearStallRecoveryTimer();
 		this.recoveryAttempts = 0;
@@ -116,6 +115,11 @@ class AudioPlayer {
 	play(): void {
 		if (!this.audio || !this.current) return;
 		if (this.status === 'error') {
+			if (this.streamEngine.active) {
+				this.recoveryAttempts = 0;
+				void this.recoverStream('media-error');
+				return;
+			}
 			this.load(this.current, { autoplay: true });
 			return;
 		}
@@ -136,7 +140,13 @@ class AudioPlayer {
 			this.play();
 			return;
 		}
-		if (this.status === 'loading') return;
+		if (this.status === 'loading') {
+			// A press while loading must not be dropped: flip the queued intent
+			// (second press cancels), delivered by the existing autoplayPending
+			// machinery once the element is ready.
+			this.autoplayPending = !this.autoplayPending;
+			return;
+		}
 		if (this.audio.paused) this.play();
 		else this.pause();
 	}
@@ -264,6 +274,10 @@ class AudioPlayer {
 		});
 		el.addEventListener('playing', () => {
 			this.clearStallRecoveryTimer();
+			// Healthy playback resets the stream recovery budget: on a long ride
+			// each network blip may recover, as long as audio actually resumes
+			// between blips.
+			if (this.streamEngine.active) this.recoveryAttempts = 0;
 			if (this.status === 'buffering' || this.status === 'loading') this.status = 'playing';
 		});
 		el.addEventListener('pause', () => {
@@ -294,7 +308,7 @@ class AudioPlayer {
 		});
 		el.addEventListener('error', () => {
 			if (this.streamEngine.active) {
-				void this.fallbackFromStream();
+				void this.recoverStream('media-error');
 				return;
 			}
 			if (!this.recoverPlayback('media-error')) this.handleMediaError(el.error);
@@ -312,7 +326,7 @@ class AudioPlayer {
 			this.stallRecoveryTimer = null;
 			if (this.status !== 'buffering') return;
 			if (this.streamEngine.active) {
-				void this.fallbackFromStream();
+				void this.recoverStream('stall-timeout');
 				return;
 			}
 			if (!this.recoverPlayback('stall-timeout')) {
@@ -337,10 +351,7 @@ class AudioPlayer {
 		const observedTime = el.currentTime || this.currentTime || this.lastObservedTime;
 		if (observedTime < 1) return false;
 
-		const seekTime = Math.max(
-			0,
-			observedTime - RECOVERY_SEEK_BACK_SECONDS
-		);
+		const seekTime = Math.max(0, observedTime - RECOVERY_SEEK_BACK_SECONDS);
 		this.recoveryAttempts += 1;
 		this.pendingRecoverySeek = seekTime;
 		this.currentTime = seekTime;
@@ -365,9 +376,10 @@ class AudioPlayer {
 
 	private applyPendingRecoverySeek(el: HTMLAudioElement): void {
 		if (this.pendingRecoverySeek === null) return;
-		const seekTime = this.duration > 0
-			? Math.min(this.pendingRecoverySeek, this.duration)
-			: this.pendingRecoverySeek;
+		const seekTime =
+			this.duration > 0
+				? Math.min(this.pendingRecoverySeek, this.duration)
+				: this.pendingRecoverySeek;
 		try {
 			el.currentTime = seekTime;
 			this.currentTime = seekTime;
@@ -401,17 +413,75 @@ class AudioPlayer {
 		if (this.status === 'buffering') this.status = 'playing';
 	}
 
-	private async fallbackFromStream(): Promise<void> {
-		const state = this.streamEngine.fallbackState(
-			this.currentTime,
-			this.audio?.currentTime ?? 0
-		);
+	// Stream recovery never falls back to per-track playback: the per-track
+	// path is the mode locked phones kill, so reinstating it on a blip would
+	// resurrect the exact defect stream mode exists to fix. Recovery is
+	// status-aware and stays in-stream.
+	private async recoverStream(reason: 'stall-timeout' | 'media-error'): Promise<void> {
+		const el = this.audio;
+		if (!el || !this.streamEngine.active) return;
+		const state = this.streamEngine.fallbackState(this.currentTime, el.currentTime);
 		if (!state) return;
-		this.streamEngine.clear();
-		this.mode = 'classic';
-		this.status = 'error';
-		this.error = ERROR_MSG_GENERIC;
-		await this.onStreamFallback?.(state);
+		if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
+			this.status = 'error';
+			this.error = ERROR_MSG_STALLED;
+			return;
+		}
+		this.recoveryAttempts += 1;
+		this.clearStallRecoveryTimer();
+		this.status = 'loading';
+		this.error = null;
+		this.autoplayPending = true;
+
+		const track = state.manifest.tracks[state.trackIndex];
+		const absoluteTime = Math.max(
+			0,
+			(track?.start_offset ?? 0) + state.trackTime - RECOVERY_SEEK_BACK_SECONDS
+		);
+		const probe = await this.probeUrl(state.manifest.stream_url);
+		if (!this.streamEngine.active) return;
+
+		if (probe.status === 401) {
+			await this.onAuthLost?.();
+			return;
+		}
+		if (probe.status === 404) {
+			// Snapshot reaped server-side (TTL) — rebuild it from the manifest's
+			// own track list and resume at the same track position.
+			const fresh = await this.onStreamRebuild?.(state);
+			if (fresh && fresh.tracks.length > 0) {
+				const index = Math.min(state.trackIndex, fresh.tracks.length - 1);
+				const freshTrack = fresh.tracks[index];
+				this.loadStream(fresh, index, {
+					autoplay: true,
+					resumeAt: freshTrack.start_offset + Math.min(state.trackTime, freshTrack.duration)
+				});
+				return;
+			}
+			this.status = 'error';
+			this.error = ERROR_MSG_NOT_FOUND;
+			return;
+		}
+
+		console.debug('Recovering stream playback', {
+			reason,
+			attempt: this.recoveryAttempts,
+			absoluteTime
+		});
+		this.streamEngine.resumeAt(absoluteTime);
+		el.pause();
+		const url = state.manifest.stream_url;
+		el.src = `${url}${url.includes('?') ? '&' : '?'}recover=${this.recoveryAttempts}`;
+		el.load();
+	}
+
+	private async probeUrl(url: string): Promise<{ ok: boolean; status: number }> {
+		try {
+			const resp = await fetch(url, { method: 'HEAD', credentials: 'include' });
+			return { ok: resp.ok, status: resp.status };
+		} catch {
+			return { ok: false, status: 0 };
+		}
 	}
 
 	private handlePlayRejection(err: unknown): void {

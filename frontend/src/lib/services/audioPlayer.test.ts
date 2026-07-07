@@ -145,7 +145,7 @@ beforeEach(() => {
 	audioPlayer.destroy();
 	audioPlayer.onEnded = null;
 	audioPlayer.onAuthLost = null;
-	audioPlayer.onStreamFallback = null;
+	audioPlayer.onStreamRebuild = null;
 	audioPlayer.onCurrentChange = null;
 });
 
@@ -391,24 +391,48 @@ describe('stream playback', () => {
 		expect(fakeAudio.playMock).toHaveBeenCalled();
 	});
 
-	it('falls back to classic when stream playback remains stalled', async () => {
+	it('recovers a stalled stream in place, never falling back to classic', async () => {
 		vi.useFakeTimers();
-		const onStreamFallback = vi.fn();
-		audioPlayer.onStreamFallback = onStreamFallback;
 		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
 		fakeAudio.fire('play');
 		fakeAudio.currentTime = 12;
 		fakeAudio.fire('timeupdate');
 
 		fakeAudio.fire('stalled');
-		vi.advanceTimersByTime(5000);
+		await vi.advanceTimersByTimeAsync(5000);
+		await Promise.resolve();
 		await Promise.resolve();
 
-		expect(onStreamFallback).toHaveBeenCalledWith(
+		expect(audioPlayer.mode).toBe('stream');
+		expect(fakeAudio.src).toContain('recover=1');
+		fakeAudio.fire('loadedmetadata');
+		// Resumes just behind the stalled position (seek-back margin).
+		expect(fakeAudio.currentTime).toBeCloseTo(12 - 0.75, 2);
+	});
+
+	it('rebuilds an expired stream snapshot and resumes at position', async () => {
+		vi.useFakeTimers();
+		fetchMock.mockResolvedValue({ ok: false, status: 404 });
+		const fresh = makeStreamManifest();
+		const onStreamRebuild = vi.fn().mockResolvedValue(fresh);
+		audioPlayer.onStreamRebuild = onStreamRebuild;
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 12;
+		fakeAudio.fire('timeupdate');
+
+		fakeAudio.fire('stalled');
+		await vi.advanceTimersByTimeAsync(5000);
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(onStreamRebuild).toHaveBeenCalledWith(
 			expect.objectContaining({ trackIndex: 1, trackTime: 2 })
 		);
-		expect(audioPlayer.mode).toBe('classic');
-		expect(audioPlayer.status).toBe('error');
+		expect(audioPlayer.mode).toBe('stream');
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(12);
 	});
 });
 

@@ -4,6 +4,7 @@ import type {
 	AlbumItem,
 	GenerationItem,
 	PlaylistEntryItem,
+	QueueStreamManifest,
 	SongItem
 } from '$lib/api/types';
 import {
@@ -12,7 +13,6 @@ import {
 	type StreamFallbackState
 } from '$lib/services/audioPlayer.svelte';
 import { setupMediaSessionHandlers, updateMediaSessionMetadata } from '$lib/services/mediaSession';
-import { streamTrackToPlaybackInfo } from '$lib/services/queueStreamEngine';
 import { addToast } from '$lib/stores/toast';
 import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
 
@@ -184,7 +184,7 @@ export function canPlayNextSong(
 	current: PlaybackInfo | null,
 	songs: SongItem[],
 	ctx: QueueContext,
-	shuffle = false
+	_shuffle = false
 ): boolean {
 	if (!current) return false;
 	if (ctx.type === 'playlist') {
@@ -412,16 +412,21 @@ export function playPlaylistEntries(
 	playPlaylistIndex(ctx, ordered.startIndex, opts);
 }
 
-function fallbackStreamToClassic(state: StreamFallbackState): void {
-	const track = state.manifest.tracks[state.trackIndex];
-	addToast('Stream stopped, using classic playback', 'error');
-	audioPlayer.load(streamTrackToPlaybackInfo(track), {
-		restart: true,
-		startAt: Math.max(0, Math.min(state.trackTime, track.duration))
-	});
+async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
+	try {
+		return await createQueueStreamSnapshot(
+			state.manifest.tracks.map((track) => ({
+				generation_id: track.generation_id,
+				entry_id: track.entry_id
+			}))
+		);
+	} catch {
+		addToast('Stream expired and could not be rebuilt. Press play to retry.', 'error');
+		return null;
+	}
 }
 
-audioPlayer.onStreamFallback = fallbackStreamToClassic;
+audioPlayer.onStreamRebuild = rebuildQueueStream;
 audioPlayer.onCurrentChange = updateMediaSessionMetadata;
 
 setupMediaSessionHandlers({
@@ -459,7 +464,6 @@ function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 		created_at: ''
 	};
 }
-
 
 export function navigateToPlaying(): void {
 	const cur = audioPlayer.current;

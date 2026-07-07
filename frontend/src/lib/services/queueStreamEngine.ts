@@ -46,6 +46,11 @@ export class QueueStreamEngine {
 		this.pendingSeek = null;
 	}
 
+	resumeAt(absoluteSeconds: number): void {
+		if (!this.session) return;
+		this.pendingSeek = Math.max(0, absoluteSeconds);
+	}
+
 	seekLocal(el: HTMLAudioElement, seconds: number): void {
 		const track = this.activeTrack;
 		if (!track) return;
@@ -74,8 +79,7 @@ export class QueueStreamEngine {
 		const session = this.session;
 		if (!session || session.manifest.tracks.length <= 1) return null;
 		const prev =
-			(session.activeIndex - 1 + session.manifest.tracks.length) %
-			session.manifest.tracks.length;
+			(session.activeIndex - 1 + session.manifest.tracks.length) % session.manifest.tracks.length;
 		return this.seekToTrack(el, prev);
 	}
 
@@ -121,12 +125,9 @@ export class QueueStreamEngine {
 		return session?.manifest.tracks[session.activeIndex] ?? null;
 	}
 
-	private trackState(
-		index: number,
-		currentTime: number,
-		absoluteTime: number
-	): StreamTrackState {
-		const track = this.session!.manifest.tracks[index];
+	private trackState(index: number, currentTime: number, absoluteTime: number): StreamTrackState {
+		if (!this.session) throw new Error('trackState requires an active stream session');
+		const track = this.session.manifest.tracks[index];
 		return {
 			index,
 			track,

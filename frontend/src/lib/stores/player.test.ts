@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import type { GenerationItem, PlaylistEntryItem, SongItem } from '$lib/api/types';
 import {
 	canPlayNextGen,
@@ -9,11 +10,11 @@ import {
 	clearGenerationSelection,
 	filteredSongs,
 	handlePlaybackEnded,
-		navigateToPlaying,
-		playGeneration,
-		playNextSong,
-		playPrevSong,
-		playPlaylistEntries,
+	navigateToPlaying,
+	playGeneration,
+	playNextSong,
+	playPrevSong,
+	playPlaylistEntries,
 	queueContext,
 	selectAlbum,
 	selectGenerationInSidebar,
@@ -99,6 +100,9 @@ function makePlaylistEntry(overrides: Partial<PlaylistEntryItem> = {}): Playlist
 }
 
 beforeEach(() => {
+	// These tests pin the classic per-track queue path; stream is now the
+	// product default, so classic must be an explicit choice here.
+	setQueuePlaybackMode('classic');
 	vi.spyOn(audioPlayer, 'load').mockImplementation((info) => {
 		audioPlayer.current = info;
 	});
@@ -327,7 +331,9 @@ describe('playback dispatch', () => {
 		await playNextSong();
 
 		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 0 });
-		expect(audioPlayer.load).toHaveBeenLastCalledWith(expect.objectContaining({ songTitle: 'First' }));
+		expect(audioPlayer.load).toHaveBeenLastCalledWith(
+			expect.objectContaining({ songTitle: 'First' })
+		);
 	});
 
 	it('playPrevSong wraps playlist playback at the start', async () => {
@@ -406,7 +412,7 @@ describe('playback dispatch', () => {
 			artist: 'Artist'
 		});
 	});
-	});
+});
 
 describe('canPlay predicates', () => {
 	it('canPlayPrevGen false when no current', () => {
@@ -588,10 +594,9 @@ describe('playPlaylistEntries', () => {
 			})
 		];
 		playPlaylistEntries(entries, 0, { restart: true });
-		expect(audioPlayer.load).toHaveBeenCalledWith(
-			expect.objectContaining({ songTitle: 'First' }),
-			{ restart: true }
-		);
+		expect(audioPlayer.load).toHaveBeenCalledWith(expect.objectContaining({ songTitle: 'First' }), {
+			restart: true
+		});
 	});
 
 	it('does nothing for empty entries', () => {
