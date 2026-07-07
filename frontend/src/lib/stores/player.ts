@@ -129,20 +129,26 @@ function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; sta
 async function playStreamEntries(
 	entries: PlaylistEntryItem[],
 	startIndex: number,
-	opts: { restart?: boolean },
-	fallback: () => void
+	opts: { restart?: boolean }
 ): Promise<void> {
+	let manifest: QueueStreamManifest;
 	try {
-		const manifest = await createQueueStreamSnapshot(
+		manifest = await createQueueStreamSnapshot(
 			entries.map((entry) => ({
 				generation_id: entry.generation_id,
 				entry_id: entry.id
 			}))
 		);
-		audioPlayer.loadStream(manifest, startIndex, { restart: opts.restart ?? true });
 	} catch {
-		addToast('Stream unavailable, using classic playback', 'error');
-		fallback();
+		addToast('Stream unavailable. Tap play to retry.', 'error');
+		return;
+	}
+	audioPlayer.loadStream(manifest, startIndex, { restart: opts.restart ?? true });
+	if (manifest.windowed) {
+		addToast(
+			`Streaming the first ${manifest.tracks.length} tracks — the queue is longer than one stream allows.`,
+			'info'
+		);
 	}
 }
 
@@ -356,13 +362,7 @@ export async function playAlbum(albumId: string): Promise<void> {
 	if (playableEntries.length === 0) return;
 	const ordered = shuffledWithStart(playableEntries, 0);
 	if (useStreamForQueue()) {
-		void playStreamEntries(ordered.items, ordered.startIndex, { restart: true }, () => {
-			queueContext.set({ type: 'album', albumId });
-			const entry = ordered.items[ordered.startIndex];
-			const song = get(songList).find((s) => s.id === entry.id.split(':')[1]);
-			const gen = song?.generations.find((g) => g.id === entry.generation_id);
-			if (song && gen) playGeneration(gen, song, { restart: true });
-		});
+		void playStreamEntries(ordered.items, ordered.startIndex, { restart: true });
 		return;
 	}
 	const first = ordered.items[ordered.startIndex];
@@ -404,9 +404,7 @@ export function playPlaylistEntries(
 	const ctx = { entries: ordered.items, index: ordered.startIndex };
 	queueContext.set({ type: 'playlist', entries: ordered.items, index: ordered.startIndex });
 	if (useStreamForQueue()) {
-		void playStreamEntries(ordered.items, ordered.startIndex, opts, () =>
-			playPlaylistIndex(ctx, ordered.startIndex, opts)
-		);
+		void playStreamEntries(ordered.items, ordered.startIndex, opts);
 		return;
 	}
 	playPlaylistIndex(ctx, ordered.startIndex, opts);

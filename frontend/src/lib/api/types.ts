@@ -414,6 +414,7 @@ export interface QueueStreamManifest {
 	expires_at: string;
 	total_duration: number;
 	tracks: QueueStreamTrackItem[];
+	windowed?: boolean;
 }
 
 export interface WorkerIdentityItem {

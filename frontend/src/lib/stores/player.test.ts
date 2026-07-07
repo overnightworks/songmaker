@@ -1,7 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
-import type { GenerationItem, PlaylistEntryItem, SongItem } from '$lib/api/types';
+import type {
+	GenerationItem,
+	PlaylistEntryItem,
+	QueueStreamManifest,
+	SongItem
+} from '$lib/api/types';
+import { createQueueStreamSnapshot } from '$lib/api/client';
+import { toasts } from '$lib/stores/toast';
+
+vi.mock('$lib/api/client', () => ({
+	createQueueStreamSnapshot: vi.fn(),
+	fetchSong: vi.fn()
+}));
 import {
 	canPlayNextGen,
 	canPlayNextSong,
@@ -117,6 +129,7 @@ afterEach(() => {
 	selectedGenerationId.set(null);
 	queueContext.set({ type: 'library' });
 	shuffleEnabled.set(false);
+	toasts.set([]);
 });
 
 describe('browsing state', () => {
@@ -623,5 +636,86 @@ describe('updateGenerationScores', () => {
 		updateGenerationScores('g1', { dynamics: 80 });
 		const songs = get(songList);
 		expect(songs[0].generations[1].scores).toBeNull();
+	});
+});
+
+function makeManifest(overrides: Partial<QueueStreamManifest> = {}): QueueStreamManifest {
+	return {
+		snapshot_id: 'snap1',
+		stream_url: 'http://stream.example/queue.m3u8',
+		expires_at: '2099-01-01T00:00:00Z',
+		total_duration: 180,
+		tracks: [],
+		...overrides
+	};
+}
+
+describe('stream path', () => {
+	let loadStreamSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		setQueuePlaybackMode('stream');
+		loadStreamSpy = vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
+		toasts.set([]);
+	});
+
+	it('shows error toast and does not call loadStream when stream build fails', async () => {
+		vi.mocked(createQueueStreamSnapshot).mockRejectedValueOnce(new Error('network error'));
+		const entries = [makePlaylistEntry()];
+
+		playPlaylistEntries(entries);
+		await Promise.resolve();
+
+		const current = get(toasts);
+		expect(current).toEqual([
+			expect.objectContaining({ message: 'Stream unavailable. Tap play to retry.', type: 'error' })
+		]);
+		expect(loadStreamSpy).not.toHaveBeenCalled();
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('shows windowed notice toast when manifest is windowed', async () => {
+		const manifest = makeManifest({
+			windowed: true,
+			tracks: [
+				{
+					key: 't1',
+					index: 0,
+					entry_id: 'pe1',
+					generation_id: 'g1',
+					song_id: 's1',
+					song_title: 'Song',
+					artist: 'Artist',
+					generation_number: 1,
+					mp3_path: 'a.mp3',
+					audio_url: '/audio/a.mp3',
+					seed: null,
+					model_mode: 'sft',
+					duration: 180,
+					start_offset: 0,
+					end_offset: 180
+				}
+			]
+		});
+		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+		const entries = [makePlaylistEntry()];
+
+		playPlaylistEntries(entries);
+		await Promise.resolve();
+
+		const infoToasts = get(toasts).filter((t) => t.type === 'info');
+		expect(infoToasts).toHaveLength(1);
+		expect(infoToasts[0].message).toMatch(/Streaming the first 1 tracks/);
+	});
+
+	it('does not show windowed notice when manifest is not windowed', async () => {
+		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(makeManifest({ windowed: false }));
+		const entries = [makePlaylistEntry()];
+
+		playPlaylistEntries(entries);
+		await Promise.resolve();
+
+		const infoToasts = get(toasts).filter((t) => t.type === 'info');
+		expect(infoToasts).toHaveLength(0);
 	});
 });
