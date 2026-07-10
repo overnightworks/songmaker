@@ -28,6 +28,7 @@ import {
 	navigateToPlaying,
 	playGeneration,
 	playLibraryFromGeneration,
+	retryLastPlayIntent,
 	playNextSong,
 	playPrevSong,
 	playPlaylistEntries,
@@ -792,6 +793,36 @@ describe('playLibraryFromGeneration', () => {
 		]);
 		expect(loadStreamSpy).not.toHaveBeenCalled();
 		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('retries the same generation rotation after a failed build, not an unrotated default', async () => {
+		const gen = makeGen({ id: 'g2' });
+		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(new Error('cold build timeout'));
+		await playLibraryFromGeneration(gen);
+		expect(loadStreamSpy).not.toHaveBeenCalled();
+
+		const manifest = makeManifest({
+			tracks: [
+				makeTrack({ generation_id: 'g2', index: 0 }),
+				makeTrack({ generation_id: 'g1', index: 1 })
+			]
+		});
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+
+		await expect(retryLastPlayIntent()).resolves.toBe(true);
+
+		expect(vi.mocked(createLibraryQueueStreamSnapshot)).toHaveBeenLastCalledWith('g2');
+		expect(loadStreamSpy).toHaveBeenCalledWith(manifest, 0, { restart: true });
+	});
+
+	it('reports no retry intent once a stream start has succeeded', async () => {
+		const gen = makeGen({ id: 'g1' });
+		const manifest = makeManifest({ tracks: [makeTrack({ generation_id: 'g1' })] });
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+
+		await playLibraryFromGeneration(gen);
+
+		await expect(retryLastPlayIntent()).resolves.toBe(false);
 	});
 
 	it('shows windowed notice for a windowed library manifest', async () => {

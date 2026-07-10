@@ -1,24 +1,38 @@
 import type { QueueStreamManifest, QueueStreamTrackRequest } from './types';
 import { apiFetch } from './fetch';
 
+// A cold queue-stream build concatenates every track server-side and can take
+// well over the default API timeout while generation workers hold the box; a
+// patient budget here is the difference between one slow success and five
+// user-facing failures.
+const STREAM_BUILD_TIMEOUT_MS = 120_000;
+
 export async function createQueueStreamSnapshot(
 	tracks: QueueStreamTrackRequest[]
 ): Promise<QueueStreamManifest> {
-	return apiFetch<QueueStreamManifest>('/api/queue-streams', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ tracks })
-	});
+	return apiFetch<QueueStreamManifest>(
+		'/api/queue-streams',
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ tracks })
+		},
+		STREAM_BUILD_TIMEOUT_MS
+	);
 }
 
 export async function createLibraryQueueStreamSnapshot(
 	startGenerationId: string | null
 ): Promise<QueueStreamManifest> {
-	return apiFetch<QueueStreamManifest>('/api/queue-streams/library', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ start_generation_id: startGenerationId })
-	});
+	return apiFetch<QueueStreamManifest>(
+		'/api/queue-streams/library',
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ start_generation_id: startGenerationId })
+		},
+		STREAM_BUILD_TIMEOUT_MS
+	);
 }
 
 export async function fetchSharedPlaylistStream(slug: string): Promise<QueueStreamManifest> {

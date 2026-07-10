@@ -137,6 +137,18 @@ function showWindowedNotice(trackCount: number): void {
 	);
 }
 
+// A failed stream start remembers what the listener actually asked for, so the
+// "tap play to retry" affordance replays that exact intent instead of falling
+// back to an unrotated default queue (which starts at library track 1).
+let retryPlayIntent: (() => Promise<void>) | null = null;
+
+export async function retryLastPlayIntent(): Promise<boolean> {
+	const intent = retryPlayIntent;
+	if (!intent) return false;
+	await intent();
+	return true;
+}
+
 async function playStreamEntries(
 	entries: PlaylistEntryItem[],
 	startIndex: number,
@@ -151,9 +163,11 @@ async function playStreamEntries(
 			}))
 		);
 	} catch {
+		retryPlayIntent = () => playStreamEntries(entries, startIndex, opts);
 		addToast('Stream unavailable. Tap play to retry.', 'error');
 		return;
 	}
+	retryPlayIntent = null;
 	audioPlayer.loadStream(manifest, startIndex, { restart: opts.restart ?? true });
 	if (manifest.windowed) {
 		showWindowedNotice(manifest.tracks.length);
@@ -166,9 +180,11 @@ export async function playLibraryFromGeneration(gen: GenerationItem): Promise<vo
 	try {
 		manifest = await createLibraryQueueStreamSnapshot(gen.id);
 	} catch {
+		retryPlayIntent = () => playLibraryFromGeneration(gen);
 		addToast('Stream unavailable. Tap play to retry.', 'error');
 		return;
 	}
+	retryPlayIntent = null;
 	const startIndex = manifest.tracks.findIndex((t) => t.generation_id === gen.id);
 	audioPlayer.loadStream(manifest, startIndex >= 0 ? startIndex : 0, { restart: true });
 	if (manifest.windowed) {

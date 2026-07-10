@@ -7,6 +7,7 @@
 		canPlayPrevSong,
 		canPlayNextSong,
 		queueContext,
+		retryLastPlayIntent,
 		songList,
 		shuffleEnabled,
 		toggleShuffle
@@ -124,7 +125,9 @@
 	});
 
 	function togglePlay(): void {
-		audioPlayer.toggle();
+		void retryLastPlayIntent().then((retried) => {
+			if (!retried) audioPlayer.toggle();
+		});
 	}
 </script>
 
