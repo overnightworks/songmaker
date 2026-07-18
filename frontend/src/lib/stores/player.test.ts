@@ -8,7 +8,7 @@ import type {
 	QueueStreamTrackItem,
 	SongItem
 } from '$lib/api/types';
-import { createQueueStreamSnapshot } from '$lib/api/client';
+import { createQueueStreamSnapshot, fetchSong } from '$lib/api/client';
 import { toasts } from '$lib/stores/toast';
 import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 
@@ -23,6 +23,8 @@ import {
 	canPlayPrevGen,
 	canPlayPrevSong,
 	clearGenerationSelection,
+	ensureGenerationsLoaded,
+	upsertSongInList,
 	filteredSongs,
 	handlePlaybackEnded,
 	navigateToPlaying,
@@ -170,6 +172,28 @@ describe('browsing state', () => {
 		songList.set([makeSong()]);
 		selectedSongId.set('unknown');
 		expect(get(selectedSong)).toBeNull();
+	});
+
+	it('ensureGenerationsLoaded fetches and adds a song opened directly, not yet in the list', async () => {
+		// Felix, 2026-07-18: clicking a song directly (from a playlist) loaded nothing — only
+		// opening its album did. The song was absent from the list, so the old guard bailed.
+		songList.set([]);
+		const directlyOpened = makeSong({ id: 's-direct', title: 'Direct', generations: [makeGen()] });
+		vi.mocked(fetchSong).mockResolvedValueOnce(directlyOpened);
+
+		await ensureGenerationsLoaded('s-direct');
+
+		expect(get(songList).map((s) => s.id)).toContain('s-direct');
+		selectedSongId.set('s-direct');
+		expect(get(selectedSong)?.generations.length).toBe(1);
+	});
+
+	it('upsertSongInList appends an absent song and replaces a present one', () => {
+		songList.set([makeSong({ id: 'a' })]);
+		upsertSongInList(makeSong({ id: 'b', title: 'B' }));
+		upsertSongInList(makeSong({ id: 'a', title: 'A2' }));
+		const byId = new Map(get(songList).map((s) => [s.id, s.title]));
+		expect([byId.get('a'), byId.get('b')]).toEqual(['A2', 'B']);
 	});
 
 	it('selectedGeneration derives from selectedSong', () => {

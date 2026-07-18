@@ -62,12 +62,16 @@ const _loadingIds = new Set<string>();
 export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	const songs = get(songList);
 	const song = songs.find((s) => s.id === songId);
-	if (!song || song.generations.length > 0 || song.generation_count === 0) return;
+	// A song already in the list with its generations (or none) needs no fetch. A song
+	// NOT in the list — opened directly from a playlist, search, or URL rather than by
+	// opening its album — must be fetched and added, not bailed on: otherwise its detail
+	// view stays empty until the album is opened.
+	if (song && (song.generations.length > 0 || song.generation_count === 0)) return;
 	if (_loadingIds.has(songId)) return;
 	_loadingIds.add(songId);
 	try {
 		const full = await fetchSong(songId);
-		replaceSongInList(full);
+		upsertSongInList(full);
 	} finally {
 		_loadingIds.delete(songId);
 	}
@@ -522,6 +526,17 @@ export function navigateToPlaying(): void {
 // --- Song/album list mutations ---
 export function replaceSongInList(song: SongItem): void {
 	songList.update((list) => list.map((s) => (s.id === song.id ? song : s)));
+}
+
+// Replace the song if the list already holds it, otherwise append it. A song opened
+// directly (playlist, search, shared URL) is not in the list yet — only opening its
+// album fills the list — so replaceSongInList alone would silently drop it.
+export function upsertSongInList(song: SongItem): void {
+	songList.update((list) =>
+		list.some((s) => s.id === song.id)
+			? list.map((s) => (s.id === song.id ? song : s))
+			: [...list, song]
+	);
 }
 
 export function updateSongInList(songId: string, updater: (s: SongItem) => SongItem): void {
