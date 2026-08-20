@@ -275,6 +275,7 @@ def test_album_to_dict(seeded_session: Session) -> None:
     album = get_album(seeded_session, "test")
     d = AlbumResponse.from_orm(album).model_dump()
     assert d["song_count"] == 1
+    assert d["created_at"] == album.created_at.isoformat()
 
 
 # ── Delete tests ─────────────────────────────────────────────────────

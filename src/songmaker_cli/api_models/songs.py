@@ -52,6 +52,7 @@ class AlbumResponse(BaseModel):
     song_count: int = 0
     is_shared: bool = False
     share_slug: str | None = None
+    created_at: str
 
     @classmethod
     def from_orm(cls, album) -> AlbumResponse:
@@ -65,6 +66,7 @@ class AlbumResponse(BaseModel):
             song_count=len(album.songs) if album.songs else 0,
             is_shared=album.is_shared,
             share_slug=album.share_slug,
+            created_at=album.created_at.isoformat(),
         )
 
 

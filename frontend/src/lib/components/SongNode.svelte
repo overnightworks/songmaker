@@ -1,4 +1,5 @@
 <script lang="ts">
+	import AgeStamp from './AgeStamp.svelte';
 	import { selectedSongId } from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { selectSong } from '$lib/stores/navigation';
@@ -27,6 +28,7 @@
 	tabindex="0"
 >
 	<span class="song-name">{song.title}</span>
+	<AgeStamp createdAt={song.created_at} />
 	<span class="song-meta">
 		{song.generation_count} gen{song.generation_count !== 1 ? 's' : ''}
 	</span>

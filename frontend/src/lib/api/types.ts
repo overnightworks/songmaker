@@ -181,6 +181,7 @@ export interface AlbumItem {
 	song_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
+	created_at: string;
 }
 
 export interface JobItem {

@@ -12,6 +12,12 @@
 	import { addToast } from '$lib/stores/toast';
 	import AlbumNode from './AlbumNode.svelte';
 	import type { SongItem, AlbumItem } from '$lib/api/types';
+	import {
+		CREATED_SORT_LABELS,
+		CREATED_SORTS,
+		compareByCreatedAt,
+		type CreatedSort
+	} from '$lib/utils/recency';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	const albums = $derived($albumList);
@@ -55,6 +61,7 @@
 	let expandedAlbums = new SvelteSet<string>();
 	let playlistsExpanded = $state(true);
 	let sharedExpanded = $state(true);
+	let createdSort = $state<CreatedSort>('newest');
 
 	$effect(() => {
 		if (albums.length > 0 && expandedAlbums.size === 0) {
@@ -74,11 +81,12 @@
 			filtered = filtered.filter((s) => s.title.toLowerCase().includes(q));
 		}
 
+		const orderedAlbums = [...albums].sort((a, b) => compareByCreatedAt(a, b, createdSort));
 		const groups: AlbumGroup[] = [];
-		for (const album of albums) {
+		for (const album of orderedAlbums) {
 			const albumSongs = filtered
 				.filter((s) => s.album_id === album.id)
-				.sort((a, b) => a.track_number - b.track_number);
+				.sort((a, b) => compareByCreatedAt(a, b, createdSort));
 			if (albumSongs.length > 0) {
 				groups.push({ album, songs: albumSongs });
 			}
@@ -110,6 +118,20 @@
 		oninput={(e: Event) => searchQuery.set((e.target as HTMLInputElement).value)}
 		aria-label="Search songs"
 	/>
+	<div class="sort-strip" role="radiogroup" aria-label="List sort" tabindex="-1">
+		{#each CREATED_SORTS as option (option)}
+			<button
+				class="sort-btn"
+				class:active={createdSort === option}
+				role="radio"
+				aria-checked={createdSort === option}
+				aria-label={CREATED_SORT_LABELS[option]}
+				onclick={() => (createdSort = option)}
+			>
+				{CREATED_SORT_LABELS[option]}
+			</button>
+		{/each}
+	</div>
 	{#if onNewSong}
 		<button class="new-btn" onclick={onNewSong} title="New Song" aria-label="New Song">+</button>
 	{/if}
@@ -193,7 +215,31 @@
 		padding: 8px 12px;
 		flex-shrink: 0;
 		display: flex;
+		flex-wrap: wrap;
 		gap: 6px;
+	}
+
+	.sort-strip {
+		display: flex;
+		gap: 2px;
+		flex-shrink: 0;
+	}
+
+	.sort-btn {
+		border: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--text-muted);
+		border-radius: 999px;
+		padding: 0.15rem 0.5rem;
+		font-size: 0.68rem;
+		font-family: var(--font-body);
+		cursor: pointer;
+	}
+
+	.sort-btn.active {
+		color: var(--text);
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
 	}
 
 	.search {

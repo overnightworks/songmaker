@@ -1,4 +1,5 @@
 <script lang="ts">
+	import AgeStamp from './AgeStamp.svelte';
 	import SongNode from './SongNode.svelte';
 	import type { SongItem, AlbumItem } from '$lib/api/types';
 
@@ -40,6 +41,7 @@
 			{expanded ? '▾' : '▸'}
 		</button>
 		<span class="album-title">{album.title}</span>
+		<AgeStamp createdAt={album.created_at} />
 		<span class="album-count">{songs.length}</span>
 	</div>
 

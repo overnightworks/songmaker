@@ -23,6 +23,7 @@
 	} from '$lib/stores/selection';
 	import { addToast } from '$lib/stores/toast';
 	import { bulkDeleteGenerations } from '$lib/api/client';
+	import AgeStamp from './AgeStamp.svelte';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -185,6 +186,7 @@
 								{#if gen.is_picked}<span class="picked-star">★</span>{/if}
 								gen{gen.generation_number}
 							</span>
+							<AgeStamp createdAt={gen.created_at} />
 							{#if gen.seed}
 								<span class="gen-seed">seed:{gen.seed}</span>
 							{/if}
