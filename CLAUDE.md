@@ -51,19 +51,30 @@ bash scripts/download_models.sh       # Downloads all model variants to vendor/a
 
 ## Checks
 
-During iteration, run **targeted tests** for the files you changed + the linter. Full suite once before committing or when asked.
+**Agents and subagents never run the full suite on this machine.** The operator
+sits here; a `pytest tests/ -n auto` or `pnpm test` (all files) plus coverage
+blocks the desktop. Same rule as atelier-2: the land gate is GitHub CI.
+
+Local, always **targeted**:
 
 ```bash
-# During iteration — fast feedback
-ruff check src/ tests/
-python scripts/check_no_silent_fallbacks.py src/
-pytest tests/test_foo.py -q              # just the relevant test file(s)
+# Python — only the files that prove THIS change
+ruff check src/songmaker_cli/foo.py tests/test_foo.py
+pytest tests/test_foo.py tests/test_bar.py -q --tb=short
 
-# Before committing — full parallel suite + coverage (matches GitHub CI)
+# Frontend — only the matching test files
+cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts src/lib/services/offline.test.ts
+```
+
+`python scripts/check_no_silent_fallbacks.py src/` is cheap; run it when
+touching `src/`. `python scripts/generate_types.py --check` when touching
+API models.
+
+**Full suite is CI only** (or when the operator explicitly asks):
+
+```bash
 pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=90 --cov-config=.coveragerc-ci
 python scripts/generate_types.py --check
-
-# Frontend (matches GitHub CI)
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
@@ -164,11 +175,11 @@ If you've changed any Dockerfile under `docker/base/`, run `scripts/build_images
 
 ## Workflow — Speed
 
-- **Batch changes, test once.** All edits first, suite once at the end.
+- **Batch changes, targeted tests once.** All edits first, then only the tests that prove those files.
 - **Parallel edits.** Signature change across N files → edit all in parallel.
 - **Don't re-read files** you just read in the same conversation.
-- **Trust the linter.** Don't run the full suite for trivial changes.
-- **One coverage check per task.** `--cov` once at the end.
+- **Trust the linter.** Don't run the full suite locally.
+- **Coverage is CI.** Do not run `--cov` or `pnpm test:coverage` on this machine unless the operator asks.
 
 ## Self-Review (multi-file changes)
 

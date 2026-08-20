@@ -2,16 +2,22 @@
 
 ## Running Tests
 
-```bash
-# Backend (from project root)
-pytest tests/ -n auto -q            # all tests, parallel (pytest-xdist)
-pytest tests/ -q --tb=short         # sequential with short tracebacks
-pytest tests/test_api.py -v         # single file, verbose
-pytest tests/ -n auto --cov=songmaker_cli --cov-report=term-missing  # coverage
+Agents and subagents run **only the tests that prove the change**. The full
+suite belongs to GitHub CI so it does not saturate this machine (atelier-2
+rule: local = targeted, land gate = CI).
 
-# Frontend (from frontend/)
-pnpm test                           # all tests
-pnpm test:coverage                  # with v8 coverage report
+```bash
+# Backend — targeted (local / agents)
+pytest tests/test_api.py -q --tb=short
+pytest tests/test_queue_streams.py tests/test_playlists.py -q
+
+# Frontend — targeted (local / agents)
+cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
+cd frontend && pnpm exec vitest run src/lib/services/offline.test.ts
+
+# Full suite — CI only, or when the operator asks
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=90 --cov-config=.coveragerc-ci
+cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
 ### Parallel Execution
