@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from songmaker_cli.api_helpers import check_generation_access, check_song_access
 from songmaker_cli.api_models import (
     AddAlbumToPlaylistRequest,
+    AddAlbumToPlaylistResponse,
     AddGenerationToPlaylistRequest,
     AddSongToPlaylistRequest,
+    PlaylistAlbumSkipResponse,
     PlaylistCreateRequest,
     PlaylistDetailResponse,
     PlaylistEntryResponse,
@@ -21,14 +23,15 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
-from songmaker_cli.app_context import get_db_session
+from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import ROLE_ADMIN
 from songmaker_cli.constants import AuditAction, ResourceType
-from songmaker_cli.db.models import Playlist
+from songmaker_cli.db.models import Generation, Playlist
 from songmaker_cli.db.queries import (
     add_album_to_playlist,
     add_generation_to_playlist,
     add_song_to_playlist,
+    best_playable_generation,
     create_playlist,
     delete_playlist,
     disable_playlist_sharing,
@@ -42,6 +45,7 @@ from songmaker_cli.db.queries import (
     update_playlist,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from songmaker_cli.queue_streams import resolve_audio_path
 
 log = logging.getLogger(__name__)
 
@@ -151,15 +155,21 @@ def api_add_song_to_playlist(
     req: AddSongToPlaylistRequest,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
     _check_playlist_access(session, playlist_id, user)
-    check_song_access(session, req.song_id, user)
+    song = check_song_access(session, req.song_id, user)
+    playable = best_playable_generation(song)
+    if playable is None:
+        raise HTTPException(400, "Song has no playable take")
     try:
-        entry = add_song_to_playlist(session, playlist_id, req.song_id)
+        resolve_audio_path(ctx.audio_dir, playable.mp3_path)
+    except HTTPException:
+        raise HTTPException(400, "Song has no playable take")
+    try:
+        add_song_to_playlist(session, playlist_id, req.song_id)
     except ValueError:
         raise HTTPException(404, "Song not found")
-    if not entry:
-        raise HTTPException(400, "Song has no picked generation")
     session.commit()
     return StatusResponse()
 
@@ -170,19 +180,38 @@ def api_add_album_to_playlist(
     req: AddAlbumToPlaylistRequest,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-) -> StatusResponse:
+    ctx: AppContext = Depends(get_app_context),
+) -> AddAlbumToPlaylistResponse:
     _check_playlist_access(session, playlist_id, user)
     album = get_album(session, req.album_id)
     if not album:
         raise HTTPException(404, "Album not found")
     if user.role != ROLE_ADMIN and album.created_by != user.id:
         raise HTTPException(404, "Album not found")
+
+    def _readable(generation: Generation) -> bool:
+        try:
+            resolve_audio_path(ctx.audio_dir, generation.mp3_path)
+        except HTTPException:
+            return False
+        return True
+
     try:
-        add_album_to_playlist(session, playlist_id, req.album_id)
+        result = add_album_to_playlist(
+            session, playlist_id, req.album_id, is_readable=_readable
+        )
     except ValueError:
         raise HTTPException(404, "Album not found")
     session.commit()
-    return StatusResponse()
+    return AddAlbumToPlaylistResponse(
+        added_count=len(result.entries),
+        skipped=[
+            PlaylistAlbumSkipResponse(
+                song_id=item.song_id, title=item.title, reason=item.reason
+            )
+            for item in result.skipped
+        ],
+    )
 
 
 @router.delete("/playlists/{playlist_id}/entries/{entry_id}")

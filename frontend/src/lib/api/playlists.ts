@@ -1,4 +1,10 @@
-import type { PlaylistDetailItem, PlaylistEntryItem, PlaylistItem, ShareResult } from './types';
+import type {
+	AddAlbumToPlaylistResult,
+	PlaylistDetailItem,
+	PlaylistEntryItem,
+	PlaylistItem,
+	ShareResult
+} from './types';
 import { apiFetch } from './fetch';
 
 export async function fetchPlaylists(): Promise<PlaylistItem[]> {
@@ -48,8 +54,11 @@ export async function addSongToPlaylist(playlistId: string, songId: string): Pro
 	});
 }
 
-export async function addAlbumToPlaylist(playlistId: string, albumId: string): Promise<void> {
-	await apiFetch(`/api/playlists/${playlistId}/entries/album`, {
+export async function addAlbumToPlaylist(
+	playlistId: string,
+	albumId: string
+): Promise<AddAlbumToPlaylistResult> {
+	return apiFetch<AddAlbumToPlaylistResult>(`/api/playlists/${playlistId}/entries/album`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ album_id: albumId })

@@ -31,6 +31,7 @@ class PlaylistEntryResponse(BaseModel):
     id: str
     position: int
     generation_id: str
+    song_id: str
     song_title: str
     album_title: str
     artist: str
@@ -48,6 +49,7 @@ class PlaylistEntryResponse(BaseModel):
             id=entry.id,
             position=entry.position,
             generation_id=gen.id,
+            song_id=song.id if song else "",
             song_title=song.title if song else "",
             album_title=album.title if album else "",
             artist=album.artist if album else "",
@@ -117,6 +119,17 @@ class AddSongToPlaylistRequest(BaseModel):
 
 class AddAlbumToPlaylistRequest(BaseModel):
     album_id: str
+
+
+class PlaylistAlbumSkipResponse(BaseModel):
+    song_id: str
+    title: str
+    reason: str
+
+
+class AddAlbumToPlaylistResponse(BaseModel):
+    added_count: int
+    skipped: list[PlaylistAlbumSkipResponse]
 
 
 class ReorderPlaylistEntryRequest(BaseModel):

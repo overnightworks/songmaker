@@ -194,6 +194,9 @@ from songmaker_cli.db.queries.playlists import (
     add_generation_to_playlist as add_generation_to_playlist,
 )
 from songmaker_cli.db.queries.playlists import add_song_to_playlist as add_song_to_playlist
+from songmaker_cli.db.queries.playlists import (
+    best_playable_generation as best_playable_generation,
+)
 from songmaker_cli.db.queries.playlists import create_playlist as create_playlist
 from songmaker_cli.db.queries.playlists import delete_playlist as delete_playlist
 from songmaker_cli.db.queries.playlists import (

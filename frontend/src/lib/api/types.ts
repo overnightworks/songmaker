@@ -353,6 +353,7 @@ export interface PlaylistEntryItem {
 	id: string;
 	position: number;
 	generation_id: string;
+	song_id: string;
 	song_title: string;
 	album_title: string;
 	artist: string;
@@ -379,6 +380,17 @@ export interface PlaylistDetailItem {
 	share_slug?: string | null;
 	created_at: string;
 	entries: PlaylistEntryItem[];
+}
+
+export interface PlaylistAlbumSkipItem {
+	song_id: string;
+	title: string;
+	reason: string;
+}
+
+export interface AddAlbumToPlaylistResult {
+	added_count: number;
+	skipped: PlaylistAlbumSkipItem[];
 }
 
 export interface QueueStreamTrackRequest {

@@ -98,9 +98,14 @@ def client(tmp_path: Path) -> TestClient:
         _seed_test_data(session)
         session.commit()
 
+    audio_dir = tmp_path / "audio"
+    owner_dir = audio_dir / "u-test"
+    owner_dir.mkdir(parents=True)
+    for name in ("g1.mp3", "g2.mp3", "g3.mp3"):
+        (owner_dir / name).write_bytes(b"source")
     ctx = AppContext(
         db=factory,
-        audio_dir=tmp_path / "audio",
+        audio_dir=audio_dir,
         data_dir=tmp_path / "data",
         session_secret=TEST_SECRET,
         redis=make_fake_redis(),
@@ -184,12 +189,13 @@ def test_add_song_adds_picked_generation(seeded_session: Session) -> None:
     assert entry.generation_id == "g1"
 
 
-def test_add_song_no_pick_returns_none(seeded_session: Session) -> None:
+def test_add_song_no_pick_uses_newest_playable(seeded_session: Session) -> None:
     seeded_session.query(Generation).filter_by(id="g3").update({"is_picked": False})
     seeded_session.commit()
     playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
     result = add_song_to_playlist(seeded_session, playlist.id, "s2")
-    assert result is None
+    assert result is not None
+    assert result.generation_id == "g3"
 
 
 def test_add_song_not_found(seeded_session: Session) -> None:
@@ -201,11 +207,12 @@ def test_add_song_not_found(seeded_session: Session) -> None:
 
 def test_add_album_adds_all_picked(seeded_session: Session) -> None:
     playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
-    entries = add_album_to_playlist(seeded_session, playlist.id, "a1")
+    result = add_album_to_playlist(seeded_session, playlist.id, "a1")
     seeded_session.commit()
-    assert len(entries) == 2
-    gen_ids = {e.generation_id for e in entries}
+    assert len(result.entries) == 2
+    gen_ids = {e.generation_id for e in result.entries}
     assert gen_ids == {"g1", "g3"}
+    assert result.skipped == []
 
 
 def test_add_album_not_found(seeded_session: Session) -> None:
@@ -412,6 +419,7 @@ def test_api_add_song_to_playlist(client: TestClient) -> None:
     entries = resp.json()["entries"]
     assert len(entries) == 1
     assert entries[0]["generation_id"] == "g1"
+    assert entries[0]["song_id"] == "s1"
 
 
 def test_api_add_album_to_playlist(client: TestClient) -> None:
@@ -422,6 +430,9 @@ def test_api_add_album_to_playlist(client: TestClient) -> None:
         f"/api/playlists/{pid}/entries/album", json={"album_id": "a1"},
     )
     assert resp.status_code == 200
+    body = resp.json()
+    assert body["added_count"] == 2
+    assert body["skipped"] == []
 
     resp = client.get(f"/api/playlists/{pid}")
     assert len(resp.json()["entries"]) == 2
@@ -481,12 +492,24 @@ def test_api_entry_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_api_add_song_no_pick(client: TestClient) -> None:
+def test_api_add_song_no_pick_uses_newest_playable(client: TestClient) -> None:
     resp = client.post("/api/playlists", json={"title": "Test"})
     pid = resp.json()["id"]
     client.post("/api/generations/g3/unpick")
     resp = client.post(f"/api/playlists/{pid}/entries/song", json={"song_id": "s2"})
-    assert resp.status_code == 400
+    assert resp.status_code == 200
+    detail = client.get(f"/api/playlists/{pid}")
+    assert detail.json()["entries"][0]["generation_id"] == "g3"
+
+
+def test_add_song_archived_only_returns_none(seeded_session: Session) -> None:
+    seeded_session.query(Generation).filter_by(id="g3").update(
+        {"is_archived": True, "is_picked": False}
+    )
+    seeded_session.commit()
+    playlist = create_playlist(seeded_session, "Test", _DEFAULT_USER_ID)
+    result = add_song_to_playlist(seeded_session, playlist.id, "s2")
+    assert result is None
 
 
 def test_api_add_nonexistent_generation(client: TestClient) -> None:

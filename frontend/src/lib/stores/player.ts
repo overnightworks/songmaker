@@ -411,6 +411,7 @@ function toAlbumQueueEntry(song: SongItem, gen: GenerationItem): PlaylistEntryIt
 		id: `album:${song.id}:${gen.id}`,
 		position: 0,
 		generation_id: gen.id,
+		song_id: song.id,
 		song_title: song.title,
 		album_title: song.album_title,
 		artist: song.artist,
@@ -600,7 +601,7 @@ function playPlaylistIndex(
 	queueContext.set({ type: 'playlist', entries: ctx.entries, index: newIndex });
 	const info = {
 		generation: playlistEntryToGeneration(entry),
-		songId: '',
+		songId: entry.song_id,
 		songTitle: entry.song_title,
 		artist: entry.artist
 	};
@@ -670,7 +671,7 @@ setupMediaSessionHandlers({
 function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 	return {
 		id: entry.generation_id,
-		song_id: '',
+		song_id: entry.song_id,
 		version_id: null,
 		version_number: null,
 		generation_number: entry.generation_number,

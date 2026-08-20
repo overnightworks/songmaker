@@ -70,6 +70,8 @@ _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "PlaylistResponse": "PlaylistItem",
     "PlaylistEntryResponse": "PlaylistEntryItem",
     "PlaylistDetailResponse": "PlaylistDetailItem",
+    "PlaylistAlbumSkipResponse": "PlaylistAlbumSkipItem",
+    "AddAlbumToPlaylistResponse": "AddAlbumToPlaylistResult",
     "QueueStreamTrackRequest": "QueueStreamTrackRequest",
     "QueueStreamSnapshotRequest": "QueueStreamSnapshotRequest",
     "QueueStreamLibraryRequest": "LibraryQueueStreamRequest",
@@ -131,6 +133,8 @@ _EMIT_ORDER: list[str] = [
     "PlaylistEntryItem",
     "PlaylistItem",
     "PlaylistDetailItem",
+    "PlaylistAlbumSkipItem",
+    "AddAlbumToPlaylistResult",
     "QueueStreamTrackRequest",
     "QueueStreamSnapshotRequest",
     "LibraryQueueStreamRequest",
@@ -268,6 +272,7 @@ def _build_track_scores_interface() -> str:
 
 def generate() -> str:
     from songmaker_cli.api_models import (
+        AddAlbumToPlaylistResponse,
         AlbumResponse,
         AuditLogResponse,
         AuthMeResponse,
@@ -286,6 +291,7 @@ def generate() -> str:
         JobResponse,
         LoadedModelDetail,
         LoginAttemptResponse,
+        PlaylistAlbumSkipResponse,
         PlaylistDetailResponse,
         PlaylistEntryResponse,
         PlaylistResponse,
@@ -350,6 +356,8 @@ def generate() -> str:
         "PlaylistEntryItem": PlaylistEntryResponse,
         "PlaylistItem": PlaylistResponse,
         "PlaylistDetailItem": PlaylistDetailResponse,
+        "PlaylistAlbumSkipItem": PlaylistAlbumSkipResponse,
+        "AddAlbumToPlaylistResult": AddAlbumToPlaylistResponse,
         "QueueStreamTrackRequest": QueueStreamTrackRequest,
         "QueueStreamSnapshotRequest": QueueStreamSnapshotRequest,
         "LibraryQueueStreamRequest": QueueStreamLibraryRequest,

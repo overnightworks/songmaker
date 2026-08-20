@@ -38,8 +38,10 @@ from songmaker_cli.api_models.loras import (
 )
 from songmaker_cli.api_models.playlists import (
     AddAlbumToPlaylistRequest,
+    AddAlbumToPlaylistResponse,
     AddGenerationToPlaylistRequest,
     AddSongToPlaylistRequest,
+    PlaylistAlbumSkipResponse,
     PlaylistCreateRequest,
     PlaylistDetailResponse,
     PlaylistEntryResponse,
@@ -192,6 +194,7 @@ class GenerationRetentionReportResponse(BaseModel):
 
 __all__ = [
     "AddAlbumToPlaylistRequest",
+    "AddAlbumToPlaylistResponse",
     "AddGenerationToPlaylistRequest",
     "AddSongToPlaylistRequest",
     "AlbumCreateRequest",
@@ -234,6 +237,7 @@ __all__ = [
     "LoginRequest",
     "PaginatedResponse",
     "PinModelOnWorkerRequest",
+    "PlaylistAlbumSkipResponse",
     "PlaylistCreateRequest",
     "PlaylistDetailResponse",
     "PlaylistEntryResponse",

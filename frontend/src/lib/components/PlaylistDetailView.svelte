@@ -20,10 +20,12 @@
 		type StreamProgress
 	} from '$lib/services/offline';
 	import ActionButton from './ActionButton.svelte';
+	import EditableTitle from './EditableTitle.svelte';
 	import Icon from './Icon.svelte';
 	import ShareButton from './ShareButton.svelte';
 
 	const playlistDetail = $derived($selectedPlaylistDetail);
+	let reorderBusy = $state(false);
 
 	async function onPlaylistShareEnable() {
 		if (!playlistDetail) throw new Error('No playlist');
@@ -50,15 +52,13 @@
 		}
 	}
 
-	async function onPlaylistRename(): Promise<void> {
+	async function onPlaylistRename(newTitle: string): Promise<void> {
 		if (!playlistDetail) return;
-		const newTitle = prompt('Rename playlist:', playlistDetail.title);
-		if (newTitle && newTitle.trim()) {
-			try {
-				await renamePlaylist(playlistDetail.id, newTitle.trim());
-			} catch {
-				addToast('Rename failed', 'error');
-			}
+		try {
+			await renamePlaylist(playlistDetail.id, newTitle);
+		} catch {
+			addToast('Rename failed', 'error');
+			throw new Error('Rename failed');
 		}
 	}
 
@@ -72,11 +72,14 @@
 	}
 
 	async function onMoveEntry(entryId: string, newPos: number): Promise<void> {
-		if (!playlistDetail) return;
+		if (!playlistDetail || reorderBusy) return;
+		reorderBusy = true;
 		try {
 			await movePlaylistEntry(playlistDetail.id, entryId, newPos);
 		} catch {
 			addToast('Reorder failed', 'error');
+		} finally {
+			reorderBusy = false;
 		}
 	}
 
@@ -240,7 +243,13 @@
 		</button>
 		<div class="detail-header">
 			<div>
-				<h2 class="detail-title">{playlistDetail.title}</h2>
+				<h2 class="detail-title">
+					<EditableTitle
+						value={playlistDetail.title}
+						onsave={onPlaylistRename}
+						ariaLabel="Playlist title"
+					/>
+				</h2>
 				<span class="detail-subtitle">
 					{playlistDetail.entries.length} track{playlistDetail.entries.length !== 1 ? 's' : ''}
 				</span>
@@ -284,7 +293,7 @@
 					onshare={onPlaylistShareEnable}
 					onunshare={onPlaylistShareDisable}
 				/>
-				<ActionButton icon="pencil" label="Rename" onclick={onPlaylistRename} />
+
 				<ActionButton
 					icon="trash"
 					label="Delete Playlist"
@@ -347,6 +356,7 @@
 										e.stopPropagation();
 										void onMoveEntry(entry.id, i - 1);
 									}}
+									disabled={reorderBusy}
 									title="Move up"
 									aria-label={`Move ${entry.song_title} up`}
 									><Icon name="chevron-up" size={14} /></button
@@ -359,6 +369,7 @@
 										e.stopPropagation();
 										void onMoveEntry(entry.id, i + 1);
 									}}
+									disabled={reorderBusy}
 									title="Move down"
 									aria-label={`Move ${entry.song_title} down`}
 									><Icon name="chevron-down" size={14} /></button

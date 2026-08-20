@@ -105,8 +105,15 @@
 	async function onAddToPlaylist(playlistId: string): Promise<void> {
 		if (!playlistPickerFor) return;
 		try {
-			await addAlbumToPlaylist(playlistId, playlistPickerFor);
-			addToast('Added to playlist', 'success');
+			const result = await addAlbumToPlaylist(playlistId, playlistPickerFor);
+			if (result.skipped.length > 0) {
+				addToast(
+					`Added ${result.added_count}, skipped ${result.skipped.length}`,
+					'info'
+				);
+			} else {
+				addToast('Added to playlist', 'success');
+			}
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Failed to add', 'error');
 		} finally {

@@ -115,6 +115,7 @@ function makePlaylistEntry(overrides: Partial<PlaylistEntryItem> = {}): Playlist
 		id: 'pe1',
 		position: 0,
 		generation_id: 'g1',
+		song_id: 's1',
 		song_title: 'Playlist Song',
 		album_title: 'Album',
 		artist: 'Artist',

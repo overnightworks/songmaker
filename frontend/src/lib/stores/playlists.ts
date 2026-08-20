@@ -11,7 +11,7 @@ import {
 	removeFromPlaylist as apiRemoveEntry,
 	reorderPlaylistEntry as apiReorder
 } from '$lib/api/client';
-import type { PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
+import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 
 export const playlistList = writable<PlaylistItem[]>([]);
 export const selectedPlaylistId = writable<string | null>(null);
@@ -27,8 +27,13 @@ export async function loadPlaylists(): Promise<void> {
 	playlistList.set(items);
 }
 
+let playlistDetailRequest = 0;
+
 export async function loadPlaylistDetail(id: string): Promise<void> {
+	const request = ++playlistDetailRequest;
+	selectedPlaylistId.set(id);
 	const detail = await fetchPlaylist(id);
+	if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
 	selectedPlaylistDetail.set(detail);
 }
 
@@ -38,6 +43,7 @@ export function selectPlaylist(id: string): void {
 }
 
 export function deselectPlaylist(): void {
+	playlistDetailRequest += 1;
 	selectedPlaylistId.set(null);
 	selectedPlaylistDetail.set(null);
 }
@@ -75,9 +81,13 @@ export async function addSongToPlaylist(playlistId: string, songId: string): Pro
 	await refreshPlaylist(playlistId);
 }
 
-export async function addAlbumToPlaylist(playlistId: string, albumId: string): Promise<void> {
-	await apiAddAlbum(playlistId, albumId);
+export async function addAlbumToPlaylist(
+	playlistId: string,
+	albumId: string
+): Promise<AddAlbumToPlaylistResult> {
+	const result = await apiAddAlbum(playlistId, albumId);
 	await refreshPlaylist(playlistId);
+	return result;
 }
 
 export async function removePlaylistEntry(playlistId: string, entryId: string): Promise<void> {

@@ -8,7 +8,8 @@
 	import { albumList, songList, selectedAlbumId } from '$lib/stores/player';
 	import { selectAlbumOverview, selectPlaylistView, selectSong } from '$lib/stores/navigation';
 	import { searchQuery } from '$lib/stores/filter';
-	import { playlistList, selectedPlaylistId } from '$lib/stores/playlists';
+	import { createNewPlaylist, playlistList, selectedPlaylistId } from '$lib/stores/playlists';
+	import { addToast } from '$lib/stores/toast';
 	import AlbumNode from './AlbumNode.svelte';
 	import type { SongItem, AlbumItem } from '$lib/api/types';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -89,6 +90,15 @@
 		if (expandedAlbums.has(albumId)) expandedAlbums.delete(albumId);
 		else expandedAlbums.add(albumId);
 	}
+
+	async function onCreatePlaylist(): Promise<void> {
+		try {
+			const playlist = await createNewPlaylist('Playlist');
+			selectPlaylistView(playlist.id);
+		} catch {
+			addToast('Create failed', 'error');
+		}
+	}
 </script>
 
 <div class="search-bar">
@@ -133,14 +143,21 @@
 		</div>
 	{/if}
 
-	{#if playlists.length > 0}
-		<div class="section-group">
+	<div class="section-group">
+		<div class="section-header-row">
 			<button class="section-header" onclick={() => (playlistsExpanded = !playlistsExpanded)}>
 				<span class="section-arrow" class:collapsed={!playlistsExpanded}>▸</span>
 				<span class="section-label">Playlists</span>
 				<span class="section-count">{playlists.length}</span>
 			</button>
-			{#if playlistsExpanded}
+			<button class="new-btn" onclick={onCreatePlaylist} title="New playlist" aria-label="New playlist"
+				>+</button
+			>
+		</div>
+		{#if playlistsExpanded}
+			{#if playlists.length === 0}
+				<p class="empty">No playlists</p>
+			{:else}
 				{#each playlists as p (p.id)}
 					<button
 						class="playlist-row"
@@ -152,8 +169,8 @@
 					</button>
 				{/each}
 			{/if}
-		</div>
-	{/if}
+		{/if}
+	</div>
 
 	{#each albumGroups as group (group.album.id)}
 		<AlbumNode
@@ -233,11 +250,17 @@
 		margin-bottom: 4px;
 	}
 
+	.section-header-row {
+		display: flex;
+		align-items: center;
+		padding-right: 8px;
+	}
 	.section-header {
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		padding: 6px 12px;
 		background: none;
 		border: none;

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Final
+from dataclasses import dataclass
+from typing import Callable, Final
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -19,6 +20,37 @@ from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 log = logging.getLogger(__name__)
 
 INITIAL_PLAYLIST_POSITION: Final[int] = 0
+PLAYLIST_SKIP_NO_PLAYABLE: Final = "no_playable_take"
+PLAYLIST_SKIP_MISSING_AUDIO: Final = "missing_audio"
+
+
+@dataclass(frozen=True)
+class PlaylistAlbumSkip:
+    song_id: str
+    title: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class PlaylistAlbumAddResult:
+    entries: list[PlaylistEntry]
+    skipped: list[PlaylistAlbumSkip]
+
+
+def best_playable_generation(song: Song) -> Generation | None:
+    live = [gen for gen in song.generations if not gen.is_archived and gen.mp3_path]
+    if not live:
+        return None
+    for gen in live:
+        if gen.is_picked:
+            return gen
+    live.sort(
+        key=lambda gen: (
+            -(gen.created_at.timestamp()) if gen.created_at is not None else 0.0,
+            gen.id,
+        )
+    )
+    return live[0]
 
 
 def list_playlists(session: Session, user_id: str) -> list[Playlist]:
@@ -108,15 +140,18 @@ def add_song_to_playlist(
     )
     if not song:
         raise ValueError(f"Song not found: {song_id}")
-    picked = next((g for g in song.generations if g.is_picked), None)
-    if not picked:
+    playable = best_playable_generation(song)
+    if playable is None:
         return None
-    return add_generation_to_playlist(session, playlist_id, picked.id)
+    return add_generation_to_playlist(session, playlist_id, playable.id)
 
 
 def add_album_to_playlist(
-    session: Session, playlist_id: str, album_id: str,
-) -> list[PlaylistEntry]:
+    session: Session,
+    playlist_id: str,
+    album_id: str,
+    is_readable: Callable[[Generation], bool] | None = None,
+) -> PlaylistAlbumAddResult:
     album = (
         session.query(Album)
         .options(
@@ -129,12 +164,29 @@ def add_album_to_playlist(
     if not album:
         raise ValueError(f"Album not found: {album_id}")
     entries: list[PlaylistEntry] = []
-    for song in sorted(album.songs, key=lambda s: s.track_number):
-        picked = next((g for g in song.generations if g.is_picked), None)
-        if picked:
-            entry = add_generation_to_playlist(session, playlist_id, picked.id)
-            entries.append(entry)
-    return entries
+    skipped: list[PlaylistAlbumSkip] = []
+    for song in sorted(album.songs, key=lambda item: (item.track_number, item.id)):
+        playable = best_playable_generation(song)
+        if playable is None:
+            skipped.append(
+                PlaylistAlbumSkip(
+                    song_id=song.id,
+                    title=song.title,
+                    reason=PLAYLIST_SKIP_NO_PLAYABLE,
+                )
+            )
+            continue
+        if is_readable is not None and not is_readable(playable):
+            skipped.append(
+                PlaylistAlbumSkip(
+                    song_id=song.id,
+                    title=song.title,
+                    reason=PLAYLIST_SKIP_MISSING_AUDIO,
+                )
+            )
+            continue
+        entries.append(add_generation_to_playlist(session, playlist_id, playable.id))
+    return PlaylistAlbumAddResult(entries=entries, skipped=skipped)
 
 
 def remove_from_playlist(
