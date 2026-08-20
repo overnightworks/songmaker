@@ -23,9 +23,17 @@ export type CoWriterStreamEvent =
 	  }
 	| { type: 'error'; status: number; message: string };
 
+export interface CoWriterTurnRequest {
+	message: string;
+	current_song_id: string | null;
+	mentioned_song_ids?: string[];
+	mentioned_version_ids?: string[];
+	mentioned_album_id?: string | null;
+	current_generation_id?: string | null;
+}
+
 export function streamCoWriterTurn(
-	message: string,
-	currentSongId: string | null = null
+	req: CoWriterTurnRequest
 ): AsyncGenerator<CoWriterStreamEvent> {
 	return sseFetch<CoWriterStreamEvent>(
 		'/api/chat/turn',
@@ -33,8 +41,12 @@ export function streamCoWriterTurn(
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				message,
-				current_song_id: currentSongId
+				message: req.message,
+				current_song_id: req.current_song_id,
+				mentioned_song_ids: req.mentioned_song_ids ?? [],
+				mentioned_version_ids: req.mentioned_version_ids ?? [],
+				mentioned_album_id: req.mentioned_album_id ?? null,
+				current_generation_id: req.current_generation_id ?? null
 			})
 		},
 		CHAT_TIMEOUT_MS

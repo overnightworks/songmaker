@@ -202,6 +202,10 @@ class ConversationMessagesResponse(BaseModel):
 class ChatTurnV2Request(BaseModel):
     message: str = Field(max_length=50_000)
     current_song_id: str | None = None
+    mentioned_song_ids: list[str] = Field(default_factory=list)
+    mentioned_version_ids: list[str] = Field(default_factory=list)
+    mentioned_album_id: str | None = None
+    current_generation_id: str | None = None
 
 
 class ChatTurnV2Response(BaseModel):

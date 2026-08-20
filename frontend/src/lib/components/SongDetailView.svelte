@@ -23,6 +23,7 @@
 	import {
 		selectedSong,
 		ensureGenerationsLoaded,
+		songList,
 		replaceSongInList,
 		updateSongInList,
 		updateGenerationInList,
@@ -81,6 +82,7 @@
 	>(null);
 
 	const song = $derived($selectedSong);
+	const songs = $derived($songList);
 	const jobs = $derived($activeJobs);
 	const tab = $derived($detailTab);
 	const dirty = $derived($isDirty);
@@ -572,6 +574,10 @@
 		<div class="chat-tab" class:hidden={tab !== 'chat'}>
 			<CoWriterPanel
 				currentSongId={song?.id ?? ''}
+				currentAlbumId={song?.album_id ?? ''}
+				currentAlbumTitle={song?.album_title ?? ''}
+				allSongs={songs}
+				versions={$versions}
 				visible={tab === 'chat'}
 				onturncompleted={() => {
 					if (song) {

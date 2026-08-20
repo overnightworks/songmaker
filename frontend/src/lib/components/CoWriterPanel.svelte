@@ -13,7 +13,13 @@
 		ApiError
 	} from '$lib/api/client';
 	import type { CoWriterStreamEvent } from '$lib/api/client';
-	import type { ChatMessageItem, ConversationItem, MemoryBundle } from '$lib/api/types';
+	import type {
+		ChatMessageItem,
+		ConversationItem,
+		MemoryBundle,
+		SongItem,
+		VersionItem
+	} from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
 	import {
 		collectPendingProposals,
@@ -22,16 +28,37 @@
 		type MemoryProposal,
 		type MemoryScope
 	} from '$lib/utils/memory-proposals';
+	import {
+		filterMentionItems,
+		mentionQueryAtCursor,
+		replaceMentionToken,
+		type MentionItem
+	} from '$lib/utils/mentions';
 	import ChatInput from './ChatInput.svelte';
 	import MemoryEditor from './MemoryEditor.svelte';
+	import MentionDropdown from './MentionDropdown.svelte';
 
 	interface Props {
 		currentSongId?: string;
+		currentAlbumId?: string;
+		currentAlbumTitle?: string;
+		allSongs?: SongItem[];
+		versions?: VersionItem[];
+		catalogLoading?: boolean;
 		visible?: boolean;
 		onturncompleted?: () => void;
 	}
 
-	let { currentSongId = '', visible = true, onturncompleted }: Props = $props();
+	let {
+		currentSongId = '',
+		currentAlbumId = '',
+		currentAlbumTitle = '',
+		allSongs = [],
+		versions = [],
+		catalogLoading = false,
+		visible = true,
+		onturncompleted
+	}: Props = $props();
 
 	interface ToolCall {
 		name: string;
@@ -61,6 +88,22 @@
 	let memoryLoading = $state(false);
 	let savingScope: MemoryScope | null = $state(null);
 	let rejectedProposalKeys: string[] = $state([]);
+
+	let mentionedSongIds: string[] = $state([]);
+	let mentionedVersionIds: string[] = $state([]);
+	let mentionedAlbumId: string | null = $state(null);
+	let mentionQuery = $state('');
+	let showMentions = $state(false);
+	let mentionCursorPos = $state(0);
+	let selectedMentionIdx = $state(0);
+
+	$effect(() => {
+		void currentSongId;
+		mentionedSongIds = [];
+		mentionedVersionIds = [];
+		mentionedAlbumId = null;
+		showMentions = false;
+	});
 
 	$effect(() => {
 		if (visible) {
@@ -169,7 +212,14 @@
 
 		let streamError: string | null = null;
 		try {
-			for await (const event of streamCoWriterTurn(msg, currentSongId || null)) {
+			for await (const event of streamCoWriterTurn({
+				message: msg,
+				current_song_id: currentSongId || null,
+				mentioned_song_ids: mentionedSongIds,
+				mentioned_version_ids: mentionedVersionIds,
+				mentioned_album_id: mentionedAlbumId,
+				current_generation_id: null
+			})) {
 				applyStreamEvent(assistantIndex, event);
 				if (event.type === 'error') {
 					streamError = event.message;
@@ -291,11 +341,92 @@
 		rejectedProposalKeys = [...rejectedProposalKeys, proposalKey(proposal)];
 	}
 
+	const activeMentionResults: MentionItem[] = $derived(
+		filterMentionItems({
+			query: mentionQuery,
+			albumMentioned: mentionedAlbumId !== null,
+			currentAlbumId,
+			currentSongId,
+			versions,
+			allSongs,
+			mentionedSongIds,
+			mentionedVersionIds
+		})
+	);
+
+	const mentionedSongs = $derived(
+		mentionedSongIds
+			.map((id) => allSongs.find((song) => song.id === id))
+			.filter((song): song is SongItem => song !== undefined)
+	);
+
+	const mentionedVersions = $derived(
+		mentionedVersionIds
+			.map((id) => versions.find((version) => version.id === id))
+			.filter((version): version is VersionItem => version !== undefined)
+	);
+
 	function handleInput(): void {
-		/* no-op — kept for ChatInput contract; the @-mention picker is gone. */
+		if (!inputEl) return;
+		const pos = inputEl.selectionStart ?? 0;
+		const found = mentionQueryAtCursor(input, pos);
+		if (found) {
+			mentionQuery = found.query;
+			mentionCursorPos = pos;
+			showMentions = true;
+			selectedMentionIdx = 0;
+		} else {
+			showMentions = false;
+			mentionQuery = '';
+		}
+	}
+
+	function selectMentionItem(item: MentionItem): void {
+		if (!inputEl) return;
+		if (item.type === 'album') {
+			input = replaceMentionToken(input, mentionCursorPos, '@album ');
+			mentionedAlbumId = currentAlbumId || null;
+		} else if (item.type === 'version') {
+			input = replaceMentionToken(input, mentionCursorPos, `@v${item.item.version_number} `);
+			if (!mentionedVersionIds.includes(item.item.id)) {
+				mentionedVersionIds = [...mentionedVersionIds, item.item.id];
+			}
+		} else if (!mentionedSongIds.includes(item.item.id)) {
+			input = replaceMentionToken(input, mentionCursorPos, `@${item.item.title} `);
+			mentionedSongIds = [...mentionedSongIds, item.item.id];
+		}
+		showMentions = false;
+		mentionQuery = '';
+		inputEl.focus();
 	}
 
 	function handleKeydown(e: KeyboardEvent): void {
+		if (showMentions && (activeMentionResults.length > 0 || catalogLoading)) {
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				if (activeMentionResults.length === 0) return;
+				selectedMentionIdx = (selectedMentionIdx + 1) % activeMentionResults.length;
+				return;
+			}
+			if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				if (activeMentionResults.length === 0) return;
+				selectedMentionIdx =
+					(selectedMentionIdx - 1 + activeMentionResults.length) % activeMentionResults.length;
+				return;
+			}
+			if ((e.key === 'Enter' || e.key === 'Tab') && activeMentionResults.length > 0) {
+				e.preventDefault();
+				const item = activeMentionResults[selectedMentionIdx];
+				if (item) selectMentionItem(item);
+				return;
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				showMentions = false;
+				return;
+			}
+		}
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
 			void send();
@@ -418,7 +549,48 @@
 		</div>
 	{/if}
 
+	{#if mentionedSongs.length > 0 || mentionedVersions.length > 0 || mentionedAlbumId}
+		<div class="mentions-bar">
+			{#if mentionedAlbumId}
+				<span class="mention-tag album">
+					{currentAlbumTitle || 'Album'}
+					<button class="mention-remove" onclick={() => (mentionedAlbumId = null)}>&#x2715;</button>
+				</span>
+			{/if}
+			{#each mentionedSongs as song (song.id)}
+				<span class="mention-tag">
+					{song.title}
+					<button
+						class="mention-remove"
+						onclick={() => (mentionedSongIds = mentionedSongIds.filter((id) => id !== song.id))}
+						>&#x2715;</button
+					>
+				</span>
+			{/each}
+			{#each mentionedVersions as version (version.id)}
+				<span class="mention-tag version">
+					v{version.version_number}
+					<button
+						class="mention-remove"
+						onclick={() =>
+							(mentionedVersionIds = mentionedVersionIds.filter((id) => id !== version.id))}
+						>&#x2715;</button
+					>
+				</span>
+			{/each}
+		</div>
+	{/if}
+
 	<div class="input-area">
+		{#if showMentions}
+			<MentionDropdown
+				items={activeMentionResults}
+				selectedIndex={selectedMentionIdx}
+				albumTitle={currentAlbumTitle}
+				loading={catalogLoading}
+				onselect={selectMentionItem}
+			/>
+		{/if}
 		<ChatInput
 			bind:value={input}
 			disabled={loading || !input.trim() || readOnly}
@@ -717,6 +889,51 @@
 		text-decoration: underline;
 		padding: 0;
 		font-size: inherit;
+	}
+
+	.mentions-bar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		padding: 6px 12px;
+		border-top: 1px solid var(--border);
+		flex-shrink: 0;
+	}
+
+	.mention-tag {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		background: var(--surface);
+		border: 1px solid var(--primary);
+		color: var(--primary);
+		padding: 1px 8px;
+		border-radius: 10px;
+		font-size: 0.7rem;
+	}
+
+	.mention-tag.version {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.mention-tag.album {
+		border-color: var(--success, #4caf50);
+		color: var(--success, #4caf50);
+	}
+
+	.mention-remove {
+		background: none;
+		border: none;
+		color: var(--text-dim);
+		font-size: 0.7rem;
+		cursor: pointer;
+		padding: 0;
+		line-height: 1;
+	}
+
+	.mention-remove:hover {
+		color: var(--score-bad);
 	}
 
 	.input-area {

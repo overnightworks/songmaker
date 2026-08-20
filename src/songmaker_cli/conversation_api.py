@@ -29,6 +29,7 @@ from songmaker_cli.api_helpers import (
     check_redis_health,
     check_song_access,
     create_job_with_rate_limit,
+    owner_filter,
 )
 from songmaker_cli.api_models import (
     ChatMessageResponse,
@@ -54,6 +55,9 @@ from songmaker_cli.constants import (
     MEMORY_SCOPE_USER,
     TURN_BLOCK_ALBUM_NOTES,
     TURN_BLOCK_CURRENT_SONG,
+    TURN_BLOCK_MENTIONED_ALBUM,
+    TURN_BLOCK_MENTIONED_SONGS,
+    TURN_BLOCK_MENTIONED_VERSIONS,
     TURN_BLOCK_SONG_MEMORY,
     TURN_BLOCK_USER_MEMORY,
     JobStatus,
@@ -72,7 +76,9 @@ from songmaker_cli.db.queries import (
     get_or_create_active_conversation,
     get_song_memory,
     get_user_memory,
+    get_version,
     list_messages,
+    list_songs,
     recent_conversations,
     update_job_status,
     upsert_album_memory,
@@ -220,6 +226,95 @@ def load_memory_for_turn(
     return user_body, song_body, album_body
 
 
+def _unique_ids(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        ordered.append(value)
+    return ordered
+
+
+def _format_version(version, song: Song) -> str:
+    parts = [
+        f"id: {version.id}",
+        f"song_id: {song.id}",
+        f"song_title: {song.title}",
+        f"version_number: {version.version_number}",
+    ]
+    if version.prompt:
+        parts.append(f"style: {version.prompt}")
+    if version.key_scale:
+        parts.append(f"key: {version.key_scale}")
+    if version.bpm:
+        parts.append(f"bpm: {version.bpm}")
+    if version.audio_duration:
+        parts.append(f"duration: {version.audio_duration}s")
+    if version.lyrics:
+        parts.append(f"lyrics:\n{version.lyrics}")
+    return "\n".join(parts)
+
+
+def resolve_mention_blocks(
+    session: Session,
+    user: AuthenticatedUser,
+    current_song: Song | None,
+    mentioned_song_ids: list[str],
+    mentioned_version_ids: list[str],
+    mentioned_album_id: str | None,
+) -> list[TurnContextBlock]:
+    """Load picker-selected mention targets from the DB.
+
+    Unknown, foreign, or unrelated IDs 404 the whole turn. The client
+    never supplies lyrics or other raw context as the source of truth.
+    """
+    blocks: list[TurnContextBlock] = []
+    current_id = current_song.id if current_song is not None else None
+    extra_songs = []
+    for song_id in _unique_ids(mentioned_song_ids):
+        if song_id == current_id:
+            continue
+        extra_songs.append(check_song_access(session, song_id, user))
+    if extra_songs:
+        body = "\n\n".join(_format_current_song(song) for song in extra_songs)
+        blocks.append(TurnContextBlock(TURN_BLOCK_MENTIONED_SONGS, body))
+
+    if mentioned_album_id is not None:
+        if current_song is None or mentioned_album_id != current_song.album_id:
+            raise HTTPException(404, "Album not found")
+        album = get_album(session, mentioned_album_id)
+        check_album_access(album, user)
+        tracks = list_songs(
+            session, album_id=album.id, user_id=owner_filter(user), light=True,
+        )
+        track_blocks = [_format_current_song(song) for song in tracks]
+        album_body = (
+            f"id: {album.id}\n"
+            f"title: {album.title}\n"
+            "tracks:\n"
+            + "\n\n".join(track_blocks)
+        )
+        blocks.append(TurnContextBlock(TURN_BLOCK_MENTIONED_ALBUM, album_body))
+
+    version_ids = _unique_ids(mentioned_version_ids)
+    if version_ids:
+        if current_song is None:
+            raise HTTPException(404, "Version not found")
+        versions = []
+        for version_id in version_ids:
+            version = get_version(session, version_id, current_song.id)
+            if version is None:
+                raise HTTPException(404, "Version not found")
+            versions.append(version)
+        body = "\n\n".join(
+            _format_version(version, current_song) for version in versions
+        )
+        blocks.append(TurnContextBlock(TURN_BLOCK_MENTIONED_VERSIONS, body))
+    return blocks
+
+
 # ── Chat turn ─────────────────────────────────────────────────────────
 
 
@@ -247,6 +342,14 @@ async def api_chat_turn(
     if req.current_song_id is not None:
         current_song = check_song_access(session, req.current_song_id, user)
 
+    mention_blocks = resolve_mention_blocks(
+        session,
+        user,
+        current_song,
+        req.mentioned_song_ids,
+        req.mentioned_version_ids,
+        req.mentioned_album_id,
+    )
     user_memory_body, song_memory_body, album_notes_body = load_memory_for_turn(
         session, user.id, current_song,
     )
@@ -255,6 +358,7 @@ async def api_chat_turn(
         user_memory_body=user_memory_body,
         song_memory_body=song_memory_body,
         album_notes_body=album_notes_body,
+        extra_blocks=mention_blocks,
     )
 
     job = create_job_with_rate_limit(session, user, JobType.CHAT)
