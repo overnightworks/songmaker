@@ -278,7 +278,7 @@
 		justify-content: space-between;
 		align-items: center;
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
 	}
@@ -287,7 +287,7 @@
 		background: none;
 		border: 1px solid var(--border);
 		border-radius: 3px;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		cursor: pointer;
 		font-size: 0.65rem;
 		padding: 0 0.35rem;

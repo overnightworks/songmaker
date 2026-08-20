@@ -215,7 +215,7 @@
 	}
 
 	.seed {
-		color: var(--text-dim, #444);
+		color: var(--text-subtle, #888);
 		margin: 0.3rem 0 0;
 		font-size: 0.8rem;
 		font-family: monospace;
@@ -223,7 +223,7 @@
 
 	.no-audio {
 		text-align: center;
-		color: var(--text-dim, #444);
+		color: var(--text-subtle, #888);
 		font-size: 0.9rem;
 		margin-top: 2rem;
 	}
@@ -232,7 +232,7 @@
 		text-align: center;
 		margin-top: 3rem;
 		font-size: 0.75rem;
-		color: var(--text-dim, #444);
+		color: var(--text-subtle, #888);
 	}
 
 	.powered a {

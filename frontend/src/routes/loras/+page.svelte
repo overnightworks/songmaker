@@ -318,7 +318,7 @@
 
 	.loading,
 	.empty {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.9rem;
 	}
 
@@ -394,12 +394,12 @@
 	}
 
 	.sample-count {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.8rem;
 	}
 
 	.arrow {
-		color: var(--text-dim);
+		color: var(--text-decoration);
 		font-size: 0.7rem;
 		transition: transform 0.15s;
 	}

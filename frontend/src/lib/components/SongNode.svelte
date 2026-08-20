@@ -84,7 +84,7 @@
 
 	.song-meta {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		flex-shrink: 0;
 	}
 

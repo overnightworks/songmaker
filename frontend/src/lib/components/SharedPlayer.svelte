@@ -476,7 +476,7 @@
 	}
 
 	.play-btn.loading {
-		border-color: var(--text-dim, #444);
+		border-color: var(--text-decoration, #444);
 	}
 
 	.play-btn.playing {

@@ -551,7 +551,7 @@
 	.source-dismiss {
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 1.1rem;
 		cursor: pointer;
 		padding: 0 0.2rem;
@@ -612,7 +612,7 @@
 
 	.strength-label {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
 		flex-shrink: 0;
@@ -708,7 +708,7 @@
 
 	.source-picker-model {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.source-picker-badge {

@@ -337,12 +337,12 @@
 
 	.item-meta {
 		font-size: 0.75rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		flex-shrink: 0;
 	}
 
 	.empty-tab {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.87rem;
 		font-style: italic;
 		padding: 0.8rem 0;

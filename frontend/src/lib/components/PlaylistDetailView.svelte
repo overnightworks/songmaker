@@ -665,7 +665,7 @@
 
 	.entry-meta {
 		font-size: 0.75rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.entry-actions {
@@ -701,7 +701,7 @@
 	}
 
 	.empty-tab {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.87rem;
 		font-style: italic;
 		padding: 0.8rem 0;

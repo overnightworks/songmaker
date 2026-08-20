@@ -323,7 +323,7 @@
 		color: #fff;
 	}
 	.play-btn.loading {
-		border-color: var(--text-dim);
+		border-color: var(--text-decoration);
 	}
 	.play-btn.playing {
 		border-color: var(--accent);
@@ -411,7 +411,7 @@
 		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
 	}
 	.nav-btn:disabled {
-		color: var(--text-dim);
+		color: var(--text-disabled);
 		cursor: default;
 		opacity: 0.3;
 	}

@@ -326,6 +326,6 @@
 		padding-top: 1rem;
 		border-top: 1px solid var(--border, #333);
 		font-size: 0.75rem;
-		color: var(--text-dim, #444);
+		color: var(--text-subtle, #888);
 	}
 </style>

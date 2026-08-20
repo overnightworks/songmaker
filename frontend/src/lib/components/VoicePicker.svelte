@@ -84,7 +84,7 @@
 
 	.hint {
 		font-size: 0.75rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-decoration: none;
 	}
 

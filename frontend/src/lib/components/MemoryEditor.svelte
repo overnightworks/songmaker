@@ -172,7 +172,7 @@
 		width: 100%;
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.8rem;
 		padding: 6px 12px;
 		display: flex;
@@ -210,7 +210,7 @@
 	.scope-hint,
 	.hint {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.memory-error {
@@ -256,7 +256,7 @@
 
 	.reject {
 		border-color: var(--border);
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.proposals {

@@ -1194,7 +1194,7 @@
 	}
 
 	.hint {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.75rem;
 		margin-top: 0.5rem;
 	}
@@ -1219,7 +1219,7 @@
 	}
 
 	.effective-val {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.75rem;
 	}
 
@@ -1236,7 +1236,7 @@
 	}
 
 	.limit-input::placeholder {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.save-btn {

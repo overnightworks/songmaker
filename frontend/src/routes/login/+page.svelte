@@ -198,7 +198,7 @@
 	.tagline {
 		font-family: var(--font-body);
 		font-size: 0.75rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		letter-spacing: 0.3em;
 		margin-top: 0.3rem;
 		font-style: italic;
@@ -237,7 +237,7 @@
 
 	.label-text {
 		font-size: 0.75rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
 		font-family: var(--font-display);
@@ -258,7 +258,7 @@
 	}
 
 	input::placeholder {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-style: italic;
 	}
 
@@ -348,7 +348,7 @@
 	}
 
 	.legal-links a {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-decoration: none;
 		transition: color 0.2s;
 	}
