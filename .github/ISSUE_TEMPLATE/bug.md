@@ -1,16 +1,35 @@
 ---
 name: Bug
-about: Something that does not work the way it should
+about: Etwas tut nicht, was der Operator erwartet
 labels: bug
 ---
 
-**What happens**
+## Herkunft und Ziel
 
+<!-- Was passiert, was stattdessen wahr sein soll. -->
 
-**What should happen**
+## Verhalten
 
+-
 
-**Where** (route, device, album/playlist/generation)
+## Grenzen
 
+-
 
-**Milestone** — assign one: Mobile listening / Generation quality / Studio / Housekeeping
+## Acceptance
+
+-
+
+## Owner & Pfade
+
+- Schreiben:
+- Lesen:
+- Nicht anfassen:
+
+## Abhängigkeiten
+
+none
+
+## Stop
+
+none

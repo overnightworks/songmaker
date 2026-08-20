@@ -1,19 +1,35 @@
 ---
 name: Feature
-about: New behaviour or product work
+about: Neues Verhalten, das ein Agent bauen kann
 labels: enhancement
 ---
 
-**Goal** (1–2 sentences)
+## Herkunft und Ziel
 
+<!-- Ziel in 1–2 Sätzen. Locked-in Entscheidungen hier, nicht im Chat lassen. -->
 
-**Locked-in decisions** (do not re-prompt)
+## Verhalten
 
-- 
+-
 
-**Hard constraints**
+## Grenzen
 
+-
 
-**First step:** read the live code, verify this still holds, then design + execute.
+## Acceptance
 
-**Milestone** — assign one: Mobile listening / Generation quality / Studio / Housekeeping
+-
+
+## Owner & Pfade
+
+- Schreiben:
+- Lesen:
+- Nicht anfassen:
+
+## Abhängigkeiten
+
+none
+
+## Stop
+
+none
