@@ -221,7 +221,7 @@
 		width: 28px;
 		height: 28px;
 		border-radius: 50%;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 	.pool-info:hover,
 	.pool-btn:hover,

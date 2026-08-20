@@ -13,7 +13,7 @@
 	.age {
 		flex-shrink: 0;
 		font-size: 0.68rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		letter-spacing: 0.2px;
 		text-transform: none;
 		font-family: var(--font-body);

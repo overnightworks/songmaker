@@ -290,7 +290,7 @@
 	}
 
 	.hint {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.85rem;
 		margin-bottom: 1rem;
 	}
@@ -504,7 +504,7 @@
 
 	.preset-mode-tag {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 	}
@@ -540,7 +540,7 @@
 	}
 
 	.empty {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.85rem;
 	}
 </style>

@@ -18,6 +18,9 @@
 	--border: #333;
 	--text: #e0e0e0;
 	--text-muted: #888;
+	--text-subtle: #888;
+	--text-disabled: #555;
+	--text-decoration: #444;
 	--text-dim: #444;
 	--text-light: #ccc;
 	--card-bg: rgba(13, 13, 13, 0.85);
@@ -93,6 +96,9 @@
 	--border: #d0d0d4;
 	--text: #1a1a1e;
 	--text-muted: #555;
+	--text-subtle: #555;
+	--text-disabled: #9a9a9a;
+	--text-decoration: #999;
 	--text-dim: #999;
 	--text-light: #333;
 	--card-bg: rgba(255, 255, 255, 0.9);

@@ -284,7 +284,7 @@
 	}
 
 	.search::placeholder {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.tree {
@@ -342,7 +342,7 @@
 
 	.section-count {
 		font-size: 0.6rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.playlist-row {
@@ -382,14 +382,14 @@
 
 	.playlist-count {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		flex-shrink: 0;
 		margin-left: 8px;
 	}
 
 	.empty {
 		padding: 20px;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-align: center;
 		font-size: var(--label-font-size);
 	}

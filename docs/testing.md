@@ -78,7 +78,7 @@ frontend/src/
 ├── lib/stores/*.test.ts           Store coverage: admin polling, auth, editor, filter,
 │                                  health, jobs, LoRA, player, toast
 ├── lib/services/*.test.ts         Audio player service tests
-└── lib/utils/*.test.ts            Chat context, diff, and format helpers
+└── lib/utils/*.test.ts            Chat context, contrast, diff, and format helpers
 ```
 
 ## Testing Patterns

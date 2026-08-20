@@ -686,7 +686,7 @@
 	.provider-label {
 		font-size: 0.75rem;
 		font-weight: 400;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.conv-wrapper {
@@ -697,7 +697,7 @@
 	.conv-toggle {
 		background: none;
 		border: 1px solid var(--border);
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.8rem;
 		padding: 2px 8px;
 		border-radius: 4px;
@@ -794,13 +794,13 @@
 
 	.conv-meta {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.conv-del {
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		cursor: pointer;
 		padding: 4px 6px;
 		font-size: 0.8rem;
@@ -836,7 +836,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-style: italic;
 	}
 
@@ -861,7 +861,7 @@
 	}
 
 	.empty-hint {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.85rem;
 		text-align: center;
 		padding: 20px;
@@ -919,7 +919,7 @@
 		border-radius: 4px;
 		font-family: var(--font-mono, monospace);
 		font-size: 0.75rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.tool-dot {
@@ -941,7 +941,7 @@
 	.readonly-banner {
 		padding: 6px 12px;
 		background: var(--surface);
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.8rem;
 		border-top: 1px solid var(--border);
 	}
@@ -990,7 +990,7 @@
 	.mention-remove {
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.7rem;
 		cursor: pointer;
 		padding: 0;

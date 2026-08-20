@@ -63,7 +63,7 @@
 	}
 
 	.diff-arrow {
-		color: var(--text-dim);
+		color: var(--text-decoration);
 	}
 
 	.diff-content {
@@ -98,7 +98,7 @@
 
 	.no-changes {
 		font-size: var(--label-font-size);
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-style: italic;
 	}
 </style>

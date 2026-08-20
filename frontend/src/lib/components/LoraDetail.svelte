@@ -332,7 +332,7 @@
 
 	.count {
 		font-size: 0.75rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.sample-list {
@@ -364,7 +364,7 @@
 	.pos {
 		font-family: var(--font-display);
 		font-size: 0.75rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		letter-spacing: 1px;
 		min-width: 2rem;
 	}
@@ -403,7 +403,7 @@
 
 	.field-label {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 		font-family: var(--font-display);
@@ -431,7 +431,7 @@
 	}
 
 	.empty {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.85rem;
 	}
 
@@ -460,7 +460,7 @@
 	}
 
 	.drop-hint {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.8rem;
 	}
 
@@ -501,7 +501,7 @@
 
 	.hint {
 		font-size: 0.8rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.train-section {

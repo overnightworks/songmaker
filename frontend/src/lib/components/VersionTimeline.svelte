@@ -227,7 +227,7 @@
 
 	.label {
 		font-size: 0.55rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
 	}
@@ -283,7 +283,7 @@
 	.clear-diff {
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		cursor: pointer;
 		font-size: 0.75rem;
 		padding: 0 4px;
@@ -296,7 +296,7 @@
 	.delete-version-btn {
 		background: none;
 		border: none;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-size: 0.6rem;
 		cursor: pointer;
 		padding: 0 4px;
@@ -362,7 +362,7 @@
 	.choice.cancel {
 		background: none;
 		border: 1px solid var(--border);
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.choice.cancel:hover {

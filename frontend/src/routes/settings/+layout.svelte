@@ -66,7 +66,7 @@
 	}
 
 	.back-link {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-decoration: none;
 		font-size: 0.8rem;
 		margin-bottom: 1rem;

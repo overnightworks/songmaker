@@ -125,7 +125,7 @@
 
 	.picker-count {
 		font-size: 10px;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		flex-shrink: 0;
 		margin-left: 8px;
 	}

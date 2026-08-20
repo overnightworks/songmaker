@@ -276,7 +276,7 @@
 	}
 
 	.top-username {
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		max-width: 150px;
 		overflow: hidden;
 		text-overflow: ellipsis;

@@ -293,7 +293,7 @@
 
 	.version-header {
 		font-size: var(--label-font-size);
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
@@ -415,7 +415,7 @@
 
 	.gen-seed {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 
 	.model-badge {
@@ -497,7 +497,7 @@
 		border: none;
 		font-size: 1.07rem;
 		cursor: pointer;
-		color: var(--text-dim);
+		color: var(--text-decoration);
 		padding: 2px;
 	}
 
@@ -515,7 +515,7 @@
 		border: none;
 		font-size: 1.07rem;
 		cursor: pointer;
-		color: var(--text-dim);
+		color: var(--text-decoration);
 		padding: 2px;
 	}
 
@@ -531,7 +531,7 @@
 	.selection-checkbox {
 		display: flex;
 		align-items: center;
-		color: var(--text-dim);
+		color: var(--text-decoration);
 		flex-shrink: 0;
 	}
 
@@ -589,7 +589,7 @@
 	.empty {
 		padding: 2.7rem 1.3rem;
 		text-align: center;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-style: italic;
 		font-size: 0.87rem;
 	}

@@ -93,6 +93,6 @@
 	.mention-empty {
 		padding: 8px 12px;
 		font-size: 12px;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 	}
 </style>

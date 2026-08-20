@@ -713,7 +713,7 @@
 
 	.seed-tag {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-family: var(--font-body);
 	}
 
@@ -763,7 +763,7 @@
 
 	.share-link {
 		font-size: 0.75rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		background: none;
 		border: 1px solid var(--border);
 		border-radius: 4px;
@@ -791,7 +791,7 @@
 
 	.lineage-label {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-transform: uppercase;
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
@@ -815,7 +815,7 @@
 		border: 1px solid var(--border);
 		border-radius: 3px;
 		background: none;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		cursor: pointer;
 		font-family: var(--font-display);
 		letter-spacing: 0.3px;
@@ -851,7 +851,7 @@
 	.section-title {
 		font-family: var(--font-display);
 		font-size: var(--label-font-size);
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 	}
@@ -884,7 +884,7 @@
 
 	.score-label {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-transform: uppercase;
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
@@ -898,7 +898,7 @@
 
 	.no-scores {
 		font-size: 0.75rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		font-style: italic;
 	}
 
@@ -919,7 +919,7 @@
 
 	.rating-label {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-transform: uppercase;
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
@@ -987,7 +987,7 @@
 
 	.summary-label {
 		font-size: 0.7rem;
-		color: var(--text-dim);
+		color: var(--text-subtle);
 		text-transform: uppercase;
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
