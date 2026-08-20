@@ -78,9 +78,56 @@ job while the offline pull-request gate still runs.
 
 Approval remains a procedural human STOP ritual for this single-operator
 repository; neither gate can distinguish a human account action from automation
-using that account. The future binding command must revalidate GitHub immediately
-before writing and the pushed commit must pass the live check. This slice does
-not yet provide that writer and creates no approval, witness, or active revision.
+using that account. The local binder revalidates GitHub immediately before
+writing, but a pushed commit still must pass the live check. This repository
+still contains no approval, witness, or active revision.
+
+## Binding ritual
+
+Use an isolated worktree whose HEAD has a green offline contract. Create a
+Genesis candidate, or edit the existing fixed path for a successor, as the only
+worktree delta. The binder accepts the narrower safe filename subset
+`docs/requirements/NNNN-[a-z0-9][a-z0-9-]*.md`; the Git index must remain exactly
+HEAD. This candidate-only window is deliberately red locally and must never be
+committed by itself.
+
+Review the exact candidate bytes, calculate their SHA-256, and post one GitHub
+issue comment containing only:
+
+```text
+APPROVE REQUIREMENT REVISION NNNN sha256:<content-digest>
+```
+
+Then run:
+
+```bash
+GITHUB_TOKEN=... python scripts/bind_requirement_revision.py \
+  --path docs/requirements/NNNN-slug.md \
+  --issue-number <issue-number> \
+  --comment-id <approval-comment-id>
+```
+
+The command derives `GENESIS` or the sole predecessor itself. It validates the
+green HEAD baseline; exact candidate-only Git state; requirement grammar; fresh
+repository, issue, and unedited comment evidence; the complete planned contract;
+Acceptance edges; and derived PRODUCT bytes. It performs no GitHub write,
+comment, commit, push, or merge. Success means only `local binding prepared`:
+review the complete four-file-or-smaller diff, commit and push it, and wait for
+the point-in-time `Requirement witnesses` check before treating it as landed.
+
+The binder holds a worktree-local lock through its prepared-success output and
+has a 120-second parent/worker wall guard. A private inherited pipe terminates
+the worker group if its supervisor disappears. It installs a new witness without
+clobbering an existing path, preserves
+the concrete Registry/PRODUCT mode bits, and rolls ordinary failures back to the
+original candidate-only snapshot. Its cooperative concurrency boundary does not
+claim protection from a hostile process running as the same OS user. A forced
+kill can leave the original candidate-only state, a partial fail-closed red
+state, or the fully prevalidated green state. Exit code 2 or a recovery message
+means do not retry blindly: inspect `git status`, the candidate, Registry,
+PRODUCT, Witness directory, and offline gate result first. A wall timeout also
+returns exit code 2 because interruption can leave a partial state. The binder never
+overwrites bytes it no longer recognizes as its own.
 
 Pull-request and push runs compare against the exact event base commit with full
 Git history. Existing revision-record fields remain identical while history

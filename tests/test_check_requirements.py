@@ -19,7 +19,7 @@ DOCUMENT = Path("docs/requirements/0001-albums.md")
 WITNESSES = Path("docs/requirements/witnesses")
 WORKFLOW = Path(".github/workflows/requirements.yml")
 SPECIFICATION = importlib.util.spec_from_file_location(
-    "requirement_contract", PROJECT_ROOT / CONTRACT
+    "songmaker_test_check_requirements_contract", PROJECT_ROOT / CONTRACT
 )
 assert SPECIFICATION is not None
 assert SPECIFICATION.loader is not None

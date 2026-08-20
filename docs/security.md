@@ -217,8 +217,38 @@ only to the live-verifier step. The token-bearing job skips fork pull requests;
 the tokenless offline gate continues to validate those diffs. Live results are
 point-in-time observations,
 so pushes, manual runs, weekly checks, and approval-comment edit/delete events
-rerun verification. The future writer must re-fetch immediately before a local
-write, and the resulting pushed commit must pass the live workflow.
+rerun verification. The binder re-fetches immediately before a local write, and
+the resulting pushed commit must pass the live workflow.
+
+The local requirement binder now owns that write boundary. A parent process
+enforces a 120-second wall limit over one guarded private worker process group;
+an inherited pipe terminates that group if the parent disappears, and timeouts
+return the manual-recovery exit code. The worker holds a no-symlink lock in the
+worktree Git directory through its prepared-success output, requires an index
+exactly matching HEAD and exactly one candidate delta, and rechecks HEAD, Git status, candidate,
+and owned outputs before and after the network phase. Git is invoked only as the
+fixed local `/usr/bin/git`, without a shell or network command, under short
+timeouts and output caps. Every Git child receives an allowlisted environment
+that excludes `GITHUB_TOKEN`, user/system Git configuration, replacement
+objects, lazy object fetches, and interactive prompts. Repository-local config
+remains inside the cooperative trust boundary, while explicit overrides disable
+fsmonitor, ignorestat, untracked-cache, and file-mode shortcuts. Assume-unchanged,
+skip-worktree, sparse, or otherwise nonordinary index entries are refused.
+Contract-visible directory scans stream entries and stop at the same fixed
+file-count bound used for baseline materialization before sorting or building sets.
+
+Witness JSON has one canonical ASCII representation: sorted keys, compact
+separators, no NaN, and exactly one final LF. New witness installation uses a
+same-directory temporary file plus atomic hard-link no-clobber. Registry and
+PRODUCT replacements preserve their snapshotted permission bits and are
+protected against cooperating binders by the lock. A noncooperating process
+with the same OS identity is outside this boundary; snapshot comparisons detect
+it at defined gates, and rollback removes a witness only when the successful
+link's held descriptor, target identity, exact bytes, and mode still prove binder
+ownership.
+There is no false multi-file atomicity claim: interruption may leave the original
+candidate-only state, a partial state that the offline gate rejects, or the
+complete end state that was validated before the first install.
 
 ## Audit Trail
 

@@ -117,11 +117,17 @@ class FakeClient:
         self.calls.append(("comment", comment_id))
         body = contract.approval_bytes("0001", digest(document_bytes())).decode("ascii")
         result = {
-            "id": 1001,
+            "id": comment_id,
             "user": {"id": contract.EXPECTED_OPERATOR_ID},
             "issue_url": "https://api.github.com/repos/FlexOr2/songmaker/issues/41",
-            "url": "https://api.github.com/repos/FlexOr2/songmaker/issues/comments/1001",
-            "html_url": "https://github.com/FlexOr2/songmaker/issues/41#issuecomment-1001",
+            "url": (
+                "https://api.github.com/repos/FlexOr2/songmaker/issues/comments/"
+                f"{comment_id}"
+            ),
+            "html_url": (
+                "https://github.com/FlexOr2/songmaker/issues/41#issuecomment-"
+                f"{comment_id}"
+            ),
             "body": body,
             "created_at": "2026-08-21T12:00:00Z",
             "updated_at": "2026-08-21T12:00:00Z",
@@ -142,6 +148,25 @@ def test_live_verifier_checks_the_complete_identity_chain(tmp_path: Path) -> Non
     assert client.calls == [("repository", None), ("issue", 41), ("comment", 1001)]
 
 
+def test_shared_capture_fetches_repository_once_and_caches_each_issue() -> None:
+    client = FakeClient()
+    capture = live.LiveApprovalCapture(client, 10**12)
+    content_digest = digest(document_bytes())
+
+    first = capture.capture(live.ApprovalRequest("0001", content_digest, 41, 1001))
+    second = capture.capture(live.ApprovalRequest("0001", content_digest, 41, 1002))
+
+    assert first.issue_id == second.issue_id == 2001
+    assert first.comment_id == 1001
+    assert second.comment_id == 1002
+    assert client.calls == [
+        ("repository", None),
+        ("issue", 41),
+        ("comment", 1001),
+        ("comment", 1002),
+    ]
+
+
 def test_empty_shelf_never_constructs_a_network_dependency(tmp_path: Path) -> None:
     class RefusingClient:
         def __getattr__(self, _name: str) -> Any:
@@ -159,20 +184,37 @@ def test_empty_shelf_never_constructs_a_network_dependency(tmp_path: Path) -> No
             lambda raw: raw.update(url="https://example.test/repo"),
             "repository identity",
         ),
-        ("issue", lambda raw: raw.update(id=1), "does not match its witness"),
+        ("issue", lambda raw: raw.update(id=1), "stored witness"),
         (
             "issue",
             lambda raw: raw.update(repository_url="https://example.test/repo"),
-            "does not match its witness",
+            "approval request",
         ),
-        ("comment", lambda raw: raw["user"].update(id=1), "unedited witness"),
-        ("comment", lambda raw: raw.update(body="changed"), "unedited witness"),
+        ("comment", lambda raw: raw["user"].update(id=1), "approval request"),
+        ("comment", lambda raw: raw.update(body="changed"), "approval request"),
         ("comment", lambda raw: raw.update(body="\ud800"), "invalid text body"),
-        ("comment", lambda raw: raw.update(updated_at="2026-08-21T12:00:01Z"), "unedited witness"),
+        (
+            "comment",
+            lambda raw: raw.update(updated_at="2026-08-21T12:00:01Z"),
+            "approval request",
+        ),
+        (
+            "comment",
+            lambda raw: raw.update(
+                created_at="2026-08-21T12:00:01Z",
+                updated_at="2026-08-21T12:00:01Z",
+            ),
+            "stored witness",
+        ),
+        (
+            "comment",
+            lambda raw: raw.update(created_at="not-a-timestamp", updated_at="not-a-timestamp"),
+            "invalid created_at",
+        ),
         (
             "comment",
             lambda raw: raw.update(issue_url="https://example.test/issue"),
-            "unedited witness",
+            "approval request",
         ),
     ],
 )
@@ -322,6 +364,37 @@ def test_https_client_requires_a_token_without_disclosing_it() -> None:
         live.HttpsGitHubClient("")
 
     assert "secret" not in str(error.value)
+
+
+def test_canonical_witness_has_fixed_golden_bytes_and_digest() -> None:
+    body = contract.approval_bytes("0001", digest(document_bytes()))
+    captured = live.CapturedApproval(
+        contract.EXPECTED_REPOSITORY_ID,
+        contract.EXPECTED_REPOSITORY_FULL_NAME,
+        2001,
+        41,
+        1001,
+        contract.EXPECTED_OPERATOR_ID,
+        "2026-08-21T12:00:00Z",
+        "2026-08-21T12:00:00Z",
+        body,
+        digest(body),
+    )
+    expected = (
+        b'{"author_id":44832414,"body_base64":"QVBQUk9WRSBSRVFVSVJFTUVOVCBSRVZJU0lP'
+        b'TiAwMDAxIHNoYTI1NjphMjM3YWM5YzA0MTEzNDI0NjRiZjYwMDI3MmM2OWYyNjJkZDZjYzlj'
+        b'M2JlZDg1Y2ZhNjk4YTk0NDBhZjZiOTc3","body_sha256":"a4cf4e6ad66c970dbff8a0fbde0'
+        b'dc929aed790c54de4d8afecfd3c75cb73a354","comment_id":1001,"created_at":"2026-08-'
+        b'21T12:00:00Z","issue_id":2001,"issue_number":41,"repository_full_name":"FlexOr2/'
+        b'songmaker","repository_id":1163644113,"schema_version":1,"updated_at":"2026-08-'
+        b'21T12:00:00Z"}\n'
+    )
+
+    rendered = live.canonical_witness_bytes(captured)
+
+    assert rendered == expected
+    assert digest(rendered) == "76a2139685c08df08273d96cc6aed6d15e8c05a02a080856fb71482da4cfa2a3"
+    assert live.canonical_witness_bytes(captured) == rendered
 
 
 def test_https_client_sanitizes_transport_failures() -> None:

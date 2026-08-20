@@ -58,6 +58,16 @@ chain. A green live check proves only what GitHub returned during that run; the
 edited/deleted event hooks and weekly schedule reduce, but cannot eliminate, the
 time between a later invalidation and detection.
 
+The local binder is covered separately by
+`tests/test_requirement_binder.py` and `tests/test_bind_requirement_revision.py`.
+Those tests use temporary Git repositories and fake GitHub clients. They cover
+Genesis/successor lineage, canonical witness bytes, exact Git/index states,
+token isolation from Git, live-capture TOCTOU, process locking and wall timeout,
+no-clobber collisions, permission preservation, full planned-contract checks,
+same-byte foreign ownership, bounded ignored-directory scans, the final expected
+delta, and rollback/manual-recovery behavior at every write boundary. They never
+create a real approval or make a network request.
+
 ## Test Structure
 
 ```

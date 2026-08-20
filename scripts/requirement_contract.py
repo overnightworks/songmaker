@@ -135,6 +135,18 @@ def approval_bytes(document: str, content_digest: str) -> bytes:
     return f"APPROVE REQUIREMENT REVISION {document} sha256:{content_digest}".encode("ascii")
 
 
+def validate_requirement_candidate(content: bytes, location: Path) -> tuple[RequirementRule, ...]:
+    if len(content) > MAX_REQUIREMENT_BYTES:
+        raise RequirementContractError(
+            f"{location} exceeds the {MAX_REQUIREMENT_BYTES}-byte limit"
+        )
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise RequirementContractError(f"{location} is not UTF-8") from error
+    return _parse_strict_document(text, location)
+
+
 def read_requirement_registry(project_root: Path) -> tuple[Revision, ...]:
     return read_registry_snapshot(project_root).revisions
 
@@ -487,17 +499,13 @@ def _read_requirement_document(
     project_root: Path, active: Revision
 ) -> tuple[RequirementRule, ...]:
     content = _read_bytes(project_root, active.location, MAX_REQUIREMENT_BYTES)
-    try:
-        text = content.decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise RequirementContractError(f"{active.location} is not UTF-8") from error
     actual = hashlib.sha256(content).hexdigest()
     if actual != active.content_sha256:
         raise RequirementContractError(
             f"{active.location} has current digest {actual}, but its sole registry tip "
             f"is {active.content_sha256}"
         )
-    return _parse_strict_document(text, active.location)
+    return validate_requirement_candidate(content, active.location)
 
 
 def _parse_strict_document(text: str, location: Path) -> tuple[RequirementRule, ...]:

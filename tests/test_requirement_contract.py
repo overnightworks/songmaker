@@ -13,7 +13,9 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).parents[1]
 CONTRACT_PATH = PROJECT_ROOT / "scripts/requirement_contract.py"
-SPECIFICATION = importlib.util.spec_from_file_location("requirement_contract", CONTRACT_PATH)
+SPECIFICATION = importlib.util.spec_from_file_location(
+    "songmaker_test_requirement_contract", CONTRACT_PATH
+)
 assert SPECIFICATION is not None
 assert SPECIFICATION.loader is not None
 CONTRACT = importlib.util.module_from_spec(SPECIFICATION)
