@@ -109,6 +109,12 @@ export interface TrackScores {
 	user_notes?: string;
 }
 
+export interface WhisperCue {
+	start: number;
+	end: number;
+	text: string;
+}
+
 export interface GenerationItem {
 	id: string;
 	song_id: string;
@@ -130,6 +136,7 @@ export interface GenerationItem {
 	src_generation_id?: string | null;
 	src_generation_number?: number | null;
 	whisper_text: string | null;
+	whisper_cues: WhisperCue[] | null;
 	scores: TrackScores | null;
 	generation_params: GenerationParams | null;
 	created_at: string;

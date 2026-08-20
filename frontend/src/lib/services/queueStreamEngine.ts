@@ -165,6 +165,7 @@ function streamTrackToGeneration(track: QueueStreamTrackItem): GenerationItem {
 		is_shared: false,
 		model_mode: track.model_mode,
 		whisper_text: null,
+		whisper_cues: null,
 		scores: null,
 		generation_params: null,
 		created_at: ''

@@ -18,6 +18,7 @@ function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		is_kept: false,
 		model_mode: 'sft',
 		whisper_text: null,
+		whisper_cues: null,
 		scores: null,
 		generation_params: null,
 		created_at: '2026-01-01T00:00:00Z',
