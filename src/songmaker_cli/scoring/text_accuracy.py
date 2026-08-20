@@ -8,6 +8,7 @@ import threading
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SharedScorerData, TextAccuracyScore
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
@@ -56,13 +57,11 @@ def score_text_accuracy(
     )
 
     initial_prompt = " ".join(intended_lines) if intended_lines else None
-    transcribed, segments, detected_language = _transcribe(
+    _, cues, detected_language = _transcribe(
         mp3_path, language, model, initial_prompt,
     )
 
-    trans_lines = tuple(
-        s.get("text", "").strip() for s in segments if s.get("text", "").strip()
-    )
+    trans_lines = tuple(cue.text for cue in cues)
     ratio = _word_level_accuracy(intended_lines, trans_lines) if intended_lines else 0.0
 
     log.info("Text accuracy: %.0f%% (%d intended, %d transcribed)",
@@ -71,6 +70,7 @@ def score_text_accuracy(
     if _is_hallucination(trans_lines):
         log.warning("Whisper hallucination detected — no real vocals in %s", mp3_path.name)
         trans_lines = ()
+        cues = []
 
     if shared_data is not None:
         shared_data.whisper_text = "\n".join(trans_lines)
@@ -79,6 +79,7 @@ def score_text_accuracy(
         similarity_ratio=round(ratio, 3),
         intended_line_texts=intended_lines,
         transcribed_line_texts=trans_lines,
+        whisper_cues=tuple(cues),
         detected_language=detected_language,
     )
 
@@ -200,10 +201,30 @@ def _get_whisper_model(
     return _whisper_model
 
 
+def _as_seconds(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _cue_from_whisper_segment(segment: object) -> WhisperCue | None:
+    raw_text = getattr(segment, "text", None)
+    if not isinstance(raw_text, str):
+        return None
+    text = raw_text.strip()
+    if not text:
+        return None
+    start = _as_seconds(getattr(segment, "start", None))
+    end = _as_seconds(getattr(segment, "end", None))
+    if start is None or end is None:
+        raise ValueError("Whisper segment is missing start or end")
+    return WhisperCue(start=start, end=end, text=text)
+
+
 def _transcribe(
     mp3_path: Path, language: str | None, model: object,
     initial_prompt: str | None = None,
-) -> tuple[str, list[dict], str | None]:
+) -> tuple[str, list[WhisperCue], str | None]:
     from songmaker_cli.constants import WHISPER_BEAM_SIZE, WHISPER_TEMPERATURE
 
     log.info("Transcribing %s...", mp3_path.name)
@@ -216,9 +237,12 @@ def _transcribe(
     if initial_prompt:
         kwargs["initial_prompt"] = initial_prompt
     segments_gen, info = model.transcribe(str(mp3_path), **kwargs)  # type: ignore[union-attr]
-    segments = [{"text": seg.text} for seg in segments_gen]
-    full_text = " ".join(seg["text"].strip() for seg in segments if seg["text"].strip())
+    cues = [
+        cue for cue in (_cue_from_whisper_segment(seg) for seg in segments_gen)
+        if cue is not None
+    ]
+    full_text = " ".join(cue.text for cue in cues)
     detected_language = getattr(info, "language", None)
     if detected_language:
         log.info("Detected language: %s", detected_language)
-    return full_text, segments, detected_language
+    return full_text, cues, detected_language

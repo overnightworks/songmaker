@@ -338,8 +338,80 @@ def test_song_versions(client: TestClient) -> None:
 def test_get_generation(client: TestClient) -> None:
     resp = client.get("/api/generations/g1")
     assert resp.status_code == 200
-    assert resp.json()["seed"] == 42
-    assert resp.json()["model_mode"] == "sft"
+    body = resp.json()
+    assert body["seed"] == 42
+    assert body["model_mode"] == "sft"
+    assert body["whisper_cues"] is None
+
+
+def test_get_generation_returns_typed_whisper_cues(client: TestClient) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        gen = session.query(Generation).filter_by(id="g1").one()
+        gen.whisper_cues = [
+            {"start": 0.0, "end": 1.25, "text": "hello world"},
+        ]
+        gen.whisper_text = "hello world"
+        session.commit()
+
+    resp = client.get("/api/generations/g1")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["whisper_text"] == "hello world"
+    assert body["whisper_cues"] == [
+        {"start": 0.0, "end": 1.25, "text": "hello world"},
+    ]
+
+
+def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path) -> None:
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        session.add(User(
+            id="u-test", username="test_user",
+            password_hash="unused", role="user",
+        ))
+        session.add(User(
+            id="u-other", username="other_user",
+            password_hash="unused", role="user",
+        ))
+        session.flush()
+        session.add(Album(
+            id="other", title="Other Album", artist="Them", created_by="u-other",
+        ))
+        session.add(Song(
+            id="s-other", title="Their Song", album_id="other", track_number=1,
+        ))
+        session.add(Version(
+            id="v-other", song_id="s-other", version_number=1,
+            lyrics="secret", prompt="x",
+        ))
+        session.add(Generation(
+            id="g-other", song_id="s-other", version_id="v-other",
+            generation_number=1, mp3_path="u-other/g.mp3", seed=1,
+            whisper_cues=[{"start": 0.0, "end": 1.0, "text": "secret"}],
+        ))
+        session.commit()
+
+    ctx = AppContext(
+        db=factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+    from songmaker_cli.api import router
+
+    app = FastAPI()
+    app.state.ctx = ctx
+    app.dependency_overrides[get_current_user] = _fake_user(
+        "u-test", "test_user", "user",
+    )
+    app.include_router(router)
+    tc = TestClient(app)
+
+    resp = tc.get("/api/generations/g-other")
+    assert resp.status_code == 404
+    assert "whisper_cues" not in resp.json()
 
 
 def test_rate_generation(client: TestClient) -> None:

@@ -12,6 +12,7 @@ import pytest
 librosa = pytest.importorskip("librosa")
 
 from conftest import read_wav, write_wav
+from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import AudioBoxScore, SpectralQualityScore, TextAccuracyScore
 from songmaker_cli.scoring.pipeline import AudioData
@@ -272,11 +273,18 @@ def test_get_whisper_model_default_cache() -> None:
     ta.clear_cache()
 
 
+def _whisper_segment(text: str, start: float, end: float) -> MagicMock:
+    seg = MagicMock()
+    seg.text = text
+    seg.start = start
+    seg.end = end
+    return seg
+
+
 def test_transcribe() -> None:
     from songmaker_cli.scoring.text_accuracy import _transcribe
 
-    mock_segment = MagicMock()
-    mock_segment.text = "hello world"
+    mock_segment = _whisper_segment("hello world", 0.0, 1.25)
     mock_info = MagicMock()
     mock_info.language = "en"
     mock_model = MagicMock()
@@ -284,16 +292,76 @@ def test_transcribe() -> None:
     text, segments, detected_lang = _transcribe(Path("test.mp3"), "en", mock_model, "hint")
     assert text == "hello world"
     assert len(segments) == 1
-    assert segments[0]["text"] == "hello world"
+    assert segments[0] == WhisperCue(start=0.0, end=1.25, text="hello world")
     assert detected_lang == "en"
     mock_model.transcribe.assert_called_once()
+
+
+def test_transcribe_keeps_segment_start_end() -> None:
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (
+        iter([
+            _whisper_segment("hello", 0.12, 0.80),
+            _whisper_segment("world", 0.80, 1.64),
+        ]),
+        MagicMock(language="en"),
+    )
+    _text, cues, _lang = _transcribe(Path("test.mp3"), "en", mock_model)
+    assert cues == [
+        WhisperCue(start=0.12, end=0.80, text="hello"),
+        WhisperCue(start=0.80, end=1.64, text="world"),
+    ]
+
+
+def test_transcribe_skips_empty_text_segments() -> None:
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (
+        iter([
+            _whisper_segment("   ", 0.0, 0.4),
+            _whisper_segment("hello", 0.4, 1.1),
+        ]),
+        MagicMock(language="en"),
+    )
+    text, cues, _lang = _transcribe(Path("test.mp3"), "en", mock_model)
+    assert text == "hello"
+    assert cues == [WhisperCue(start=0.4, end=1.1, text="hello")]
+
+
+def test_transcribe_missing_timing_is_rejected() -> None:
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    seg = MagicMock()
+    seg.text = "hello"
+    seg.start = None
+    seg.end = 1.0
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (iter([seg]), MagicMock(language="en"))
+    with pytest.raises(ValueError, match="missing start or end"):
+        _transcribe(Path("test.mp3"), "en", mock_model)
+
+
+def test_transcribe_rejects_backward_range() -> None:
+    from pydantic import ValidationError
+
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (
+        iter([_whisper_segment("hello", 2.0, 1.0)]),
+        MagicMock(language="en"),
+    )
+    with pytest.raises(ValidationError, match="end must not be before start"):
+        _transcribe(Path("test.mp3"), "en", mock_model)
 
 
 def test_transcribe_auto_detect_language() -> None:
     from songmaker_cli.scoring.text_accuracy import _transcribe
 
-    mock_segment = MagicMock()
-    mock_segment.text = "hallo welt"
+    mock_segment = _whisper_segment("hallo welt", 0.0, 0.9)
     mock_info = MagicMock()
     mock_info.language = "de"
     mock_model = MagicMock()
@@ -311,13 +379,16 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
 
     meta = SongMeta(prompt="test", lyrics="[verse]\nhello world\ngoodbye moon")
 
-    seg1, seg2 = MagicMock(), MagicMock()
-    seg1.text = "hello world"
-    seg2.text = "goodbye moon"
     mock_info = MagicMock()
     mock_info.language = "en"
     mock_model = MagicMock()
-    mock_model.transcribe.return_value = (iter([seg1, seg2]), mock_info)
+    mock_model.transcribe.return_value = (
+        iter([
+            _whisper_segment("hello world", 0.0, 1.1),
+            _whisper_segment("goodbye moon", 1.1, 2.4),
+        ]),
+        mock_info,
+    )
     config = PipelineConfig(device="cpu", whisper_model="base")
 
     from songmaker_cli.scoring.models import SharedScorerData
@@ -332,6 +403,10 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
     assert result.detected_language == "en"
     assert shared_data.whisper_text is not None
     assert "hello world" in shared_data.whisper_text
+    assert result.whisper_cues == (
+        WhisperCue(start=0.0, end=1.1, text="hello world"),
+        WhisperCue(start=1.1, end=2.4, text="goodbye moon"),
+    )
 
 
 def test_score_text_accuracy_no_meta(tmp_path: Path) -> None:
@@ -339,12 +414,12 @@ def test_score_text_accuracy_no_meta(tmp_path: Path) -> None:
     from songmaker_cli.scoring.pipeline import PipelineConfig
     from songmaker_cli.scoring.text_accuracy import score_text_accuracy
 
-    seg = MagicMock()
-    seg.text = "la la la"
     info = MagicMock()
     info.language = "en"
     mock_model = MagicMock()
-    mock_model.transcribe.return_value = (iter([seg]), info)
+    mock_model.transcribe.return_value = (
+        iter([_whisper_segment("la la la", 0.2, 1.8)]), info,
+    )
     config = PipelineConfig(device="cpu", whisper_model="base")
     shared = SharedScorerData()
 
@@ -360,6 +435,9 @@ def test_score_text_accuracy_no_meta(tmp_path: Path) -> None:
     assert result.similarity_ratio == 0.0
     assert result.intended_line_texts == ()
     assert "la la la" in result.transcribed_line_texts
+    assert result.whisper_cues == (
+        WhisperCue(start=0.2, end=1.8, text="la la la"),
+    )
     assert shared.whisper_text == "la la la"
     call_kwargs = mock_model.transcribe.call_args[1]
     assert call_kwargs["language"] is None
@@ -470,11 +548,10 @@ def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:
 
     meta = SongMeta(prompt="test", lyrics="[verse]\nhello world")
 
-    mock_segments = []
-    for _ in range(6):
-        seg = MagicMock()
-        seg.text = "thank you"
-        mock_segments.append(seg)
+    mock_segments = [
+        _whisper_segment("thank you", float(i), float(i) + 0.5)
+        for i in range(6)
+    ]
     mock_info = MagicMock()
     mock_info.language = "en"
     mock_model = MagicMock()
@@ -485,6 +562,7 @@ def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:
         result = score_text_accuracy(tmp_path / "test.mp3", meta=meta, config=config)
 
     assert result.transcribed_line_texts == ()
+    assert result.whisper_cues == ()
 
 
 def test_word_level_accuracy_all_vocalizations() -> None:

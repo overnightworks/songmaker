@@ -168,7 +168,7 @@ User (username, role: admin|user, bcrypt hash)
   ├── Album (title, artist, share_slug?, is_shared — owned via created_by)
   │     └── Song (title, track_number, share_slug?, is_shared)
   │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params)
-  │           ├── Generation (MP3, seed, status, whisper_text, model_mode, share_slug?, is_shared)
+  │           ├── Generation (MP3, seed, status, whisper_text, whisper_cues?, model_mode, share_slug?, is_shared)
   │           │     ├── Score (scorer, value JSON)
   │           │     └── Rating (0-100, notes)
   │           └── ChatMessage (role, content — per-song conversation history)
@@ -268,9 +268,11 @@ POST /api/generations/{id}/score
         Deferred CPU scorers (lyrical_coherence) wait for shared_data from GPU
         Each scorer fault-isolated: one failure does not block others
       Parent kills subprocess on timeout (SIGKILL), freeing GPU memory
-    → save scores + whisper text to DB
+    → save scores + whisper_text + whisper_cues to DB
   → Job status: completed
 ```
+
+`whisper_cues` is a JSON list of `{start, end, text}` from faster-whisper segments (start/end in seconds). `null` means never scored or a legacy row; a list (including `[]`) means text_accuracy ran and stored whatever usable cues it produced. `whisper_text` is the same cue texts joined with newlines. Missing timings are not invented.
 
 ## Worker Architecture
 
