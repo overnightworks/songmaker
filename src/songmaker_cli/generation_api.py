@@ -155,10 +155,10 @@ async def api_upload_reference_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> ReferenceAudioResponse:
     from songmaker_cli.constants import (
-        REFERENCE_AUDIO_DIR,
         REFERENCE_AUDIO_EXTENSIONS,
         REFERENCE_AUDIO_MAX_BYTES,
     )
+    from songmaker_cli.reference_audio import owner_reference_audio_root
 
     if not file.filename:
         raise HTTPException(400, "No filename provided")
@@ -175,11 +175,11 @@ async def api_upload_reference_audio(
     if len(content) < 100:
         raise HTTPException(400, "File is empty or too small")
 
-    ref_dir = ctx.audio_dir / user.id / REFERENCE_AUDIO_DIR
+    ref_dir = owner_reference_audio_root(ctx.audio_dir, user.id)
     ref_dir.mkdir(parents=True, exist_ok=True)
     file_id = str(uuid.uuid4())
-    rel_path = f"{user.id}/{REFERENCE_AUDIO_DIR}/{file_id}{ext}"
-    dest = ctx.audio_dir / rel_path
+    dest = ref_dir / f"{file_id}{ext}"
+    rel_path = str(dest.relative_to(ctx.audio_dir))
     dest.write_bytes(content)
 
     log.info("Reference audio uploaded: %s (%d bytes)", rel_path, len(content))

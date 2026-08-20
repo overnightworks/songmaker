@@ -213,7 +213,7 @@ def _build_generation_context(
                 audio_dir, user_id, ace_config.reference_audio_path,
             )
         except ReferenceAudioRejected as exc:
-            raise RuntimeError("reference audio path is not owned") from exc
+            raise GenerationSetupError("Reference audio not found") from exc
         ace_config = replace(ace_config, reference_audio_path=str(abs_ref))
 
     ace_config = _apply_user_lora_path(

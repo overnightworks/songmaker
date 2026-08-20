@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
@@ -27,6 +29,7 @@ from songmaker_cli.api_models import (
     TitleUpdateRequest,
     VersionResponse,
 )
+from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.queries import (
@@ -54,11 +57,11 @@ from songmaker_cli.reference_audio import (
 
 
 def _require_owned_reference_audio(
-    audio_dir, user_id: str, generation_params,
+    audio_dir: Path, user_id: str, generation_params: BaseGenerationParams | None,
 ) -> None:
     if generation_params is None:
         return
-    path = getattr(generation_params, "reference_audio_path", None)
+    path = generation_params.reference_audio_path
     if not path:
         return
     try:
