@@ -17,11 +17,7 @@ export function mentionQueryAtCursor(
 	return { query: match[1], atIndex: before.lastIndexOf('@') };
 }
 
-export function replaceMentionToken(
-	text: string,
-	cursor: number,
-	insertion: string
-): string {
+export function replaceMentionToken(text: string, cursor: number, insertion: string): string {
 	const found = mentionQueryAtCursor(text, cursor);
 	if (!found) return text;
 	return text.slice(0, found.atIndex) + insertion + text.slice(cursor);

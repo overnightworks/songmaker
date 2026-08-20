@@ -897,6 +897,45 @@ def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path: Path, monkeypatch)
     assert not stale_tmp.exists(), ".json.tmp orphan must be removed by the sweep"
 
 
+def test_unreadable_manifest_json_is_ignored(tmp_path: Path) -> None:
+    from songmaker_cli.queue_streams import _load_manifest_json, _manifest_expiry
+
+    missing = tmp_path / "missing.json"
+    assert _load_manifest_json(missing) is None
+
+    garbage = tmp_path / "garbage.json"
+    garbage.write_text("{not-json", encoding="utf-8")
+    assert _load_manifest_json(garbage) is None
+
+    not_object = tmp_path / "list.json"
+    not_object.write_text("[]", encoding="utf-8")
+    assert _load_manifest_json(not_object) is None
+
+    bad_expiry = tmp_path / "expiry.json"
+    bad_expiry.write_text('{"expires_at": "not-a-date"}', encoding="utf-8")
+    manifest = _load_manifest_json(bad_expiry)
+    assert manifest is not None
+    assert _manifest_expiry(manifest) is None
+    assert _manifest_expiry({}) is None
+
+
+def test_cleanup_deletes_corrupt_manifest(tmp_path: Path, monkeypatch) -> None:
+    import uuid
+
+    from songmaker_cli.queue_streams import cleanup_expired_queue_streams
+
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    stream_dir = tmp_path / "data" / "queue-streams"
+    stream_dir.mkdir(parents=True, exist_ok=True)
+    corrupt = stream_dir / f"{uuid.uuid4().hex}.json"
+    corrupt.write_text("{not-json", encoding="utf-8")
+
+    cleanup_expired_queue_streams(client.app.state.ctx)
+
+    assert not corrupt.exists()
+
+
 def test_legacy_manifest_without_pin_fields_is_accessible(tmp_path: Path, monkeypatch) -> None:
     """A pre-pin manifest (no pinned/pinned_at fields) is read as unpinned."""
     _patch_audio_build(monkeypatch)

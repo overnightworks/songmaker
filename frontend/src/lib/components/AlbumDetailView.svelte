@@ -107,10 +107,7 @@
 		try {
 			const result = await addAlbumToPlaylist(playlistId, playlistPickerFor);
 			if (result.skipped.length > 0) {
-				addToast(
-					`Added ${result.added_count}, skipped ${result.skipped.length}`,
-					'info'
-				);
+				addToast(`Added ${result.added_count}, skipped ${result.skipped.length}`, 'info');
 			} else {
 				addToast('Added to playlist', 'success');
 			}

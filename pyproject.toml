@@ -119,9 +119,11 @@ select = ["E", "F", "W", "I"]
 "tests/test_scorers_extended.py" = ["E402", "I001"]
 
 [tool.bandit]
-exclude_dirs = ["tests", ".venv"]
+exclude_dirs = ["tests", ".venv", "migrations"]
 skips = [
     "B101",  # assert in tests
+    "B104",  # acestep-worker binds 0.0.0.0 inside Docker (ruff S104 is noqa'd on the same line)
+    "B105",  # *token* setting keys / header names are not secrets; secrets are env SecretStr
     "B310",  # urlopen — URLs are from config, not user input
     "B404",  # subprocess import — required for ffmpeg and ACE-Step
     "B603",  # subprocess without shell — intentional, uses list args

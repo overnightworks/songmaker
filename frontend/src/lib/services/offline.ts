@@ -222,7 +222,8 @@ export async function saveStream(
 	onProgress?: ProgressCallback,
 	onPin?: PinCallback
 ): Promise<void> {
-	if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+	const controller = navigator.serviceWorker?.controller;
+	if (!('serviceWorker' in navigator) || !controller) {
 		throw new Error('Service worker not active — cannot save for offline');
 	}
 
@@ -266,9 +267,7 @@ export async function saveStream(
 			}
 		};
 
-		navigator.serviceWorker.controller!.postMessage(buildCacheStreamMessage(manifest), [
-			channel.port2
-		]);
+		controller.postMessage(buildCacheStreamMessage(manifest), [channel.port2]);
 	});
 }
 

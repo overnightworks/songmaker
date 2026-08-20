@@ -1677,6 +1677,8 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
         "generation_presets", "rate_limit_settings", "available_models",
         "playlists", "playlist_entries", "chat_messages",
         "conversations", "conversation_summaries",
+        "cowriter_user_memories", "cowriter_song_memories",
+        "cowriter_album_memories",
         "acestep_workers",
         "user_loras", "user_lora_samples",
         "alembic_version",

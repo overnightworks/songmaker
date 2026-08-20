@@ -876,6 +876,7 @@ def test_repaint_converts_mp3_to_wav(client: TestClient) -> None:
 
     with (
         _mock_worker() as mock_pool,
+        patch("songmaker_cli.generation_api.shutil.which", return_value="/usr/bin/ffmpeg"),
         patch("songmaker_cli.generation_api.subprocess.run", side_effect=fake_ffmpeg),
     ):
         resp = client.post("/api/generations/g2/repaint", json={
@@ -889,6 +890,29 @@ def test_repaint_converts_mp3_to_wav(client: TestClient) -> None:
     mock_pool.enqueue_job.assert_called_once()
     repaint = mock_pool.enqueue_job.call_args[0][-1]
     assert repaint["src_wav_path"].endswith(".wav")
+
+
+def test_repaint_without_ffmpeg_is_unavailable(client: TestClient) -> None:
+    from unittest.mock import patch
+
+    audio_dir = Path(client.app.state.ctx.audio_dir)
+    mp3_file = audio_dir / "u-test" / "g2.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3-data")
+
+    with (
+        _mock_worker(),
+        patch("songmaker_cli.generation_api.shutil.which", return_value=None),
+    ):
+        resp = client.post("/api/generations/g2/repaint", json={
+            "src_generation_id": "g2",
+            "repainting_start": 0.0,
+            "repainting_end": 0.5,
+            "model": "sft",
+        })
+
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == "ffmpeg is not available"
 
 
 def test_repaint_not_found(client: TestClient) -> None:

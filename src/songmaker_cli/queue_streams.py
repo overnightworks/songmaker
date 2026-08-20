@@ -45,6 +45,26 @@ _build_locks_guard = threading.Lock()
 _pin_lock = threading.Lock()
 
 
+def _load_manifest_json(manifest_path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _manifest_expiry(manifest: dict[str, Any]) -> datetime | None:
+    raw = manifest.get("expires_at")
+    if raw is None:
+        return None
+    try:
+        return datetime.fromisoformat(str(raw))
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass(frozen=True)
 class QueueStreamSource:
     key: str
@@ -298,10 +318,11 @@ def _find_reusable_snapshot(
         reverse=True,
     )
     for manifest_path in manifests:
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            expires_at = datetime.fromisoformat(str(manifest["expires_at"]))
-        except Exception:
+        manifest = _load_manifest_json(manifest_path)
+        if manifest is None:
+            continue
+        expires_at = _manifest_expiry(manifest)
+        if expires_at is None:
             continue
         if manifest.get("content_hash") != content_hash or expires_at < now:
             continue
@@ -364,14 +385,9 @@ def cleanup_expired_queue_streams(ctx: AppContext) -> None:
     live_snapshot_ids: set[str] = set()
     for manifest_path in stream_dir.glob("*.json"):
         snapshot_id = manifest_path.stem
-        manifest: dict[str, Any] | None = None
-        expires_at = now - timedelta(seconds=1)  # default: treat as expired
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            expires_at = datetime.fromisoformat(str(manifest["expires_at"]))
-        except Exception:
-            pass
-        if expires_at >= now:
+        manifest = _load_manifest_json(manifest_path)
+        expires_at = _manifest_expiry(manifest) if manifest is not None else None
+        if expires_at is not None and expires_at >= now:
             live_snapshot_ids.add(snapshot_id)
         elif manifest is not None and _is_active_pin(manifest, now):
             # Pinned and not abandoned — exempt from TTL sweep
@@ -389,8 +405,8 @@ def cleanup_expired_queue_streams(ctx: AppContext) -> None:
         try:
             modified_at = datetime.fromtimestamp(cache_file.stat().st_mtime, tz=timezone.utc)
         except OSError:
-            continue
-        if modified_at < orphan_cutoff:
+            modified_at = None
+        if modified_at is not None and modified_at < orphan_cutoff:
             cache_file.unlink(missing_ok=True)
 
     _enforce_cache_quota(stream_dir)
@@ -562,9 +578,8 @@ def _pinned_snapshot_ids(stream_dir: Path, now: datetime) -> set[str]:
     """Return the IDs of all snapshots that are currently pinned and not abandoned."""
     pinned: set[str] = set()
     for manifest_path in stream_dir.glob("*.json"):
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except Exception:
+        manifest = _load_manifest_json(manifest_path)
+        if manifest is None:
             continue
         if _is_active_pin(manifest, now):
             pinned.add(manifest_path.stem)
@@ -575,9 +590,8 @@ def _sum_pinned_bytes(stream_dir: Path, now: datetime) -> int:
     """Sum the audio bytes of all currently pinned, non-abandoned snapshots."""
     total = 0
     for manifest_path in stream_dir.glob("*.json"):
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except Exception:
+        manifest = _load_manifest_json(manifest_path)
+        if manifest is None:
             continue
         if not _is_active_pin(manifest, now):
             continue

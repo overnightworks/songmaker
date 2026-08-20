@@ -56,9 +56,7 @@ export function updateMediaSessionTitle(title: string, artist?: string): void {
 	});
 }
 
-export function updateMediaSessionPlaybackState(
-	status: 'none' | 'paused' | 'playing'
-): void {
+export function updateMediaSessionPlaybackState(status: 'none' | 'paused' | 'playing'): void {
 	if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
 	navigator.mediaSession.playbackState = status;
 }

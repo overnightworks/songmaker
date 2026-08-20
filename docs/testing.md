@@ -41,7 +41,7 @@ GitHub workflows (`.github/workflows/ci.yml`, `security.yml`) run on push/PR to 
 |---|---|
 | Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · pytest + 90% coverage |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
-| Security | bandit · pip-audit · `pnpm audit --prod` |
+| Security | bandit (`pyproject.toml`: skip B101/B104/B105/B110/B310/B404/B603, exclude tests/migrations) · pip-audit · `pnpm audit --prod` |
 
 ## Test Structure
 

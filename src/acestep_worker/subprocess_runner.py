@@ -48,9 +48,12 @@ def find_uv() -> list[str] | None:
     for candidate in candidates:
         try:
             subprocess.run([candidate, "--version"], capture_output=True, timeout=5, check=False)
-            return [candidate]
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
+            result = None
+        else:
+            result = candidate
+        if result is not None:
+            return [result]
     return None
 
 

@@ -10,10 +10,7 @@ import type {
 } from '$lib/api/types';
 import { createQueueStreamSnapshot, fetchSong } from '$lib/api/client';
 import { toasts } from '$lib/stores/toast';
-import {
-	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
-	QUEUE_TAKE_MISSING_TOAST
-} from '$lib/constants';
+import { QUEUE_STREAM_UNPLAYABLE_START_DETAIL, QUEUE_TAKE_MISSING_TOAST } from '$lib/constants';
 import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 
 vi.mock('$lib/api/client', () => ({
@@ -61,6 +58,14 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { ApiError } from '$lib/api/fetch';
 import { libraryTakePool, setLibraryTakePool } from '$lib/stores/playbackSettings';
+
+async function rebuildStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
+	const rebuild = audioPlayer.onStreamRebuild;
+	if (!rebuild) {
+		throw new Error('onStreamRebuild is not assigned');
+	}
+	return rebuild(state);
+}
 
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
@@ -808,7 +813,6 @@ describe('playLibraryFromGeneration', () => {
 
 	it('loads stream at the index matching the requested generation', async () => {
 		const gen = makeGen({ id: 'g2' });
-		const song = makeSong();
 		const manifest = makeManifest({
 			tracks: [
 				makeTrack({ generation_id: 'g1', index: 0 }),
@@ -872,7 +876,9 @@ describe('playLibraryFromGeneration', () => {
 
 	it('retries the same generation rotation after a failed build, not an unrotated default', async () => {
 		const gen = makeGen({ id: 'g2' });
-		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(new Error('cold build timeout'));
+		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(
+			new Error('cold build timeout')
+		);
 		await playLibraryFromGeneration(gen);
 		expect(loadStreamSpy).not.toHaveBeenCalled();
 
@@ -948,7 +954,7 @@ describe('rebuildQueueStream routing', () => {
 			trackIndex: 0,
 			trackTime: 30
 		};
-		const result = await audioPlayer.onStreamRebuild!(state);
+		const result = await rebuildStream(state);
 
 		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g-cur', {
 			shuffle: false,
@@ -969,7 +975,7 @@ describe('rebuildQueueStream routing', () => {
 			trackIndex: 0,
 			trackTime: 10
 		};
-		const result = await audioPlayer.onStreamRebuild!(state);
+		const result = await rebuildStream(state);
 
 		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
 			{ generation_id: 'g1', entry_id: 'pe1' }
@@ -1360,11 +1366,10 @@ describe('shuffle rebuilds the playing queue', () => {
 			{ generation_id: 'g3', entry_id: 'pe3' },
 			{ generation_id: 'g2', entry_id: 'pe2' }
 		]);
-		expect(loadStreamSpy).toHaveBeenCalledWith(
-			expect.anything(),
-			0,
-			{ restart: true, resumeAt: 11 }
-		);
+		expect(loadStreamSpy).toHaveBeenCalledWith(expect.anything(), 0, {
+			restart: true,
+			resumeAt: 11
+		});
 	});
 
 	it('expired library rebuild keeps the shuffle flag', async () => {
@@ -1373,7 +1378,7 @@ describe('shuffle rebuilds the playing queue', () => {
 		const freshManifest = makeManifest({ snapshot_id: 'fresh' });
 		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(freshManifest);
 
-		const result = await audioPlayer.onStreamRebuild!({
+		const result = await rebuildStream({
 			manifest: makeManifest({ tracks: [makeTrack({ generation_id: 'g-cur' })] }),
 			trackIndex: 0,
 			trackTime: 30

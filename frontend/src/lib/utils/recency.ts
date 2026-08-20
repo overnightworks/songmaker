@@ -37,11 +37,9 @@ export function formatExactLocalTime(iso: string | null | undefined): string {
 	return date.toLocaleString();
 }
 
-export function compareByCreatedAt<T extends { id: string; created_at?: string | null; title?: string }>(
-	a: T,
-	b: T,
-	mode: CreatedSort
-): number {
+export function compareByCreatedAt<
+	T extends { id: string; created_at?: string | null; title?: string }
+>(a: T, b: T, mode: CreatedSort): number {
 	if (mode === 'title') {
 		const titles = (a.title ?? '').localeCompare(b.title ?? '');
 		if (titles !== 0) return titles;

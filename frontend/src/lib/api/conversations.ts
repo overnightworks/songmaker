@@ -32,9 +32,7 @@ export interface CoWriterTurnRequest {
 	current_generation_id?: string | null;
 }
 
-export function streamCoWriterTurn(
-	req: CoWriterTurnRequest
-): AsyncGenerator<CoWriterStreamEvent> {
+export function streamCoWriterTurn(req: CoWriterTurnRequest): AsyncGenerator<CoWriterStreamEvent> {
 	return sseFetch<CoWriterStreamEvent>(
 		'/api/chat/turn',
 		{

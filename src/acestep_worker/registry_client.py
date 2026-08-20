@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import random
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from random import SystemRandom
 from typing import Any
 
 import httpx
@@ -19,12 +19,13 @@ INDEFINITE_BACKOFF_SECONDS = 60.0
 JITTER_FRACTION = 0.2
 
 DelaysFactory = Callable[[], Iterator[float]]
+_retry_jitter = SystemRandom()
 
 
 def default_retry_delays() -> Iterator[float]:
     yield from INITIAL_BACKOFF_SCHEDULE
     while True:
-        jitter = INDEFINITE_BACKOFF_SECONDS * JITTER_FRACTION * (2 * random.random() - 1)
+        jitter = INDEFINITE_BACKOFF_SECONDS * JITTER_FRACTION * (2 * _retry_jitter.random() - 1)
         yield INDEFINITE_BACKOFF_SECONDS + jitter
 
 

@@ -132,11 +132,7 @@
 	{#if sheetOpen}
 		<div class="pool-sheet" role="dialog" aria-label="Take pool" tabindex="-1">
 			{#each LIBRARY_TAKE_POOLS as option (option)}
-				<button
-					class="sheet-btn"
-					class:active={pool === option}
-					onclick={() => selectPool(option)}
-				>
+				<button class="sheet-btn" class:active={pool === option} onclick={() => selectPool(option)}>
 					{#if option === 'mix'}
 						<span class="mix-icons" aria-hidden="true">
 							<Icon name="star-filled" size={16} />

@@ -172,8 +172,11 @@
 				<span class="section-label">Playlists</span>
 				<span class="section-count">{playlists.length}</span>
 			</button>
-			<button class="new-btn" onclick={onCreatePlaylist} title="New playlist" aria-label="New playlist"
-				>+</button
+			<button
+				class="new-btn"
+				onclick={onCreatePlaylist}
+				title="New playlist"
+				aria-label="New playlist">+</button
 			>
 		</div>
 		{#if playlistsExpanded}

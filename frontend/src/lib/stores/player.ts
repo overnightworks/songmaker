@@ -288,9 +288,7 @@ export async function playLibraryFromGeneration(
 	}
 }
 
-export async function playLibrary(
-	opts: { resumeAtTrackTime?: number } = {}
-): Promise<void> {
+export async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<void> {
 	queueContext.set({ type: 'library' });
 	libraryQueueNotice.set('building');
 	let manifest: QueueStreamManifest;

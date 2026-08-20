@@ -1,4 +1,8 @@
-import type { LibraryQueueStreamRequest, QueueStreamManifest, QueueStreamTrackRequest } from './types';
+import type {
+	LibraryQueueStreamRequest,
+	QueueStreamManifest,
+	QueueStreamTrackRequest
+} from './types';
 import { apiFetch } from './fetch';
 
 // A cold queue-stream build concatenates every track server-side and can take

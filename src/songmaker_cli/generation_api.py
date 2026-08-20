@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import shutil
 import subprocess
 import uuid
 from collections.abc import AsyncGenerator, Callable
@@ -125,11 +126,16 @@ def _resolve_source_wav(audio_dir: Path, gen: Generation, session: Session) -> P
 
     wav = mp3.with_suffix(".wav")
     if not wav.exists():
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            raise HTTPException(503, "ffmpeg is not available")
         try:
             subprocess.run(
-                ["ffmpeg", "-y", "-i", str(mp3), str(wav)],
+                [ffmpeg, "-y", "-i", str(mp3), str(wav)],
                 check=True, capture_output=True,
             )
+        except FileNotFoundError as exc:
+            raise HTTPException(503, "ffmpeg is not available") from exc
         except subprocess.CalledProcessError as exc:
             raise HTTPException(500, "Failed to convert MP3 to WAV") from exc
 

@@ -304,8 +304,10 @@ describe('playlist offline metadata', () => {
 	it('writes and removes playlist metadata in the cache', async () => {
 		await rememberPlaylistOfflineStream('pl-1', 'snap-9');
 		const raw = store.get(offlinePlaylistMetaKey('pl-1'));
-		expect(raw).toBeDefined();
-		expect(await raw!.json()).toEqual(playlistOfflineMeta('pl-1', 'snap-9'));
+		if (!raw) {
+			throw new Error('expected cached playlist metadata');
+		}
+		expect(await raw.json()).toEqual(playlistOfflineMeta('pl-1', 'snap-9'));
 
 		await forgetPlaylistOfflineStream('pl-1');
 		expect(store.has(offlinePlaylistMetaKey('pl-1'))).toBe(false);

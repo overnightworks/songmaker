@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	filterMentionItems,
-	mentionQueryAtCursor,
-	replaceMentionToken
-} from './mentions';
+import { filterMentionItems, mentionQueryAtCursor, replaceMentionToken } from './mentions';
 import type { SongItem, VersionItem } from '$lib/api/types';
 
 const songs = [
@@ -55,9 +51,7 @@ describe('mention picker', () => {
 			mentionedSongIds: [],
 			mentionedVersionIds: ['v1']
 		});
-		const versionIds = items
-			.filter((item) => item.type === 'version')
-			.map((item) => item.item.id);
+		const versionIds = items.filter((item) => item.type === 'version').map((item) => item.item.id);
 		expect(versionIds).toEqual(['v2']);
 	});
 

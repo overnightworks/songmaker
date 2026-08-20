@@ -53,9 +53,11 @@ describe('compareByCreatedAt', () => {
 			newer,
 			older
 		]);
-		expect([sameTimeB, sameTimeA].sort((a, b) => compareByCreatedAt(a, b, 'newest')).map((item) => item.id)).toEqual(
-			['c', 'd']
-		);
+		expect(
+			[sameTimeB, sameTimeA]
+				.sort((a, b) => compareByCreatedAt(a, b, 'newest'))
+				.map((item) => item.id)
+		).toEqual(['c', 'd']);
 	});
 
 	it('sorts oldest first', () => {
