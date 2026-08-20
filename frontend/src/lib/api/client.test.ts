@@ -28,9 +28,6 @@ import {
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
-	sendChatMessage,
-	fetchChatHistory,
-	clearChatHistory,
 	checkSetupRequired,
 	setupAdmin,
 	login,
@@ -245,42 +242,6 @@ describe('API client', () => {
 		expect(err).toBeInstanceOf(ApiError);
 		expect(err.status).toBe(502);
 		expect(err.detail).toBe('');
-	});
-});
-
-describe('Chat API', () => {
-	it('sendChatMessage calls POST /api/songs/{id}/chat', async () => {
-		const turn = {
-			user_message: { id: 'm1', role: 'user', content: 'hi', created_at: '' },
-			assistant_message: { id: 'm2', role: 'assistant', content: 'hello', created_at: '' }
-		};
-		mockOk(turn);
-		const result = await sendChatMessage('s1', 'hi', ['s2'], ['v1']);
-		expect(result.assistant_message.content).toBe('hello');
-		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/api/songs/s1/chat');
-		expect(init.method).toBe('POST');
-		const body = JSON.parse(init.body);
-		expect(body.message).toBe('hi');
-		expect(body.mentioned_song_ids).toEqual(['s2']);
-	});
-
-	it('fetchChatHistory calls GET /api/songs/{id}/chat', async () => {
-		mockOk({ messages: [] });
-		const result = await fetchChatHistory('s1');
-		expect(result.messages).toEqual([]);
-		expect(mockFetch).toHaveBeenCalledWith(
-			'/api/songs/s1/chat',
-			expect.objectContaining({ credentials: 'include' })
-		);
-	});
-
-	it('clearChatHistory calls DELETE /api/songs/{id}/chat', async () => {
-		mockOk({ status: 'ok' });
-		await clearChatHistory('s1');
-		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/api/songs/s1/chat');
-		expect(init.method).toBe('DELETE');
 	});
 });
 

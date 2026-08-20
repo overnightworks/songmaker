@@ -129,7 +129,7 @@ SvelteKit single-page app. All state in Svelte stores.
 | Layer | What | Key files |
 |-------|------|-----------|
 | Routes | Pages: main view, login, setup, settings | `src/routes/` |
-| Components | SongEditor, PlayerBar, SongList, GenerationView, ClaudeChat, etc. | `src/lib/components/` |
+| Components | SongEditor, PlayerBar, SongList, GenerationView, CoWriterPanel, etc. | `src/lib/components/` |
 | Stores | Reactive state: player, editor, filter, jobs, auth, settings, ui | `src/lib/stores/` |
 | API client | Typed HTTP client, mirrors `songmaker_cli.api_models` | `src/lib/api/client.ts`, `types.ts` |
 
