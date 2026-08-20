@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import threading
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -45,7 +46,7 @@ _build_locks_guard = threading.Lock()
 _pin_lock = threading.Lock()
 
 
-def _load_manifest_json(manifest_path: Path) -> dict[str, Any] | None:
+def _load_manifest_json(manifest_path: Path) -> dict[str, object] | None:
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
@@ -55,7 +56,7 @@ def _load_manifest_json(manifest_path: Path) -> dict[str, Any] | None:
     return payload
 
 
-def _manifest_expiry(manifest: dict[str, Any]) -> datetime | None:
+def _manifest_expiry(manifest: Mapping[str, object]) -> datetime | None:
     raw = manifest.get("expires_at")
     if raw is None:
         return None
@@ -560,7 +561,7 @@ def _escape_concat_path(path: Path) -> str:
     return str(path).replace("'", r"'\''")
 
 
-def _is_active_pin(manifest: dict[str, Any], now: datetime) -> bool:
+def _is_active_pin(manifest: Mapping[str, object], now: datetime) -> bool:
     """Return True when the manifest is pinned and the pin has not been abandoned."""
     if not manifest.get("pinned", False):
         return False
@@ -603,7 +604,9 @@ def _sum_pinned_bytes(stream_dir: Path, now: datetime) -> int:
     return total
 
 
-def _atomic_write_manifest(stream_dir: Path, snapshot_id: str, manifest: dict[str, Any]) -> None:
+def _atomic_write_manifest(
+    stream_dir: Path, snapshot_id: str, manifest: Mapping[str, object],
+) -> None:
     """Write manifest atomically via a temp file, then rename into place."""
     manifest_path = stream_dir / f"{snapshot_id}.json"
     tmp_path = stream_dir / f"{snapshot_id}.json.tmp"

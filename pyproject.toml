@@ -119,7 +119,7 @@ select = ["E", "F", "W", "I"]
 "tests/test_scorers_extended.py" = ["E402", "I001"]
 
 [tool.bandit]
-exclude_dirs = ["tests", ".venv", "migrations"]
+exclude_dirs = ["tests", ".venv"]
 skips = [
     "B101",  # assert in tests
     "B310",  # urlopen — URLs are from config, not user input

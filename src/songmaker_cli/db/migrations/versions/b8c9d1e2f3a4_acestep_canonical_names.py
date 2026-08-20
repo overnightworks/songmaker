@@ -51,7 +51,7 @@ _JSON_TARGETS: tuple[tuple[str, str], ...] = (
 
 def _migrate_json_column(table: str, col: str, *, forward: bool) -> None:
     bind = op.get_bind()
-    rows = bind.execute(sa.text(f"SELECT id, {col} FROM {table}")).fetchall()
+    rows = bind.execute(sa.text(f"SELECT id, {col} FROM {table}")).fetchall()  # nosec B608
     for row in rows:
         raw = row[1]
         if raw is None:
@@ -84,7 +84,7 @@ def _migrate_json_column(table: str, col: str, *, forward: bool) -> None:
 
         if changed:
             bind.execute(
-                sa.text(f"UPDATE {table} SET {col} = :p WHERE id = :id"),
+                sa.text(f"UPDATE {table} SET {col} = :p WHERE id = :id"),  # nosec B608
                 {"p": json.dumps(data), "id": row[0]},
             )
 
