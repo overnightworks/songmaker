@@ -215,7 +215,11 @@
 				<Icon name="skip-forward" size={21} />
 			</button>
 		</div>
-		<button class="track-info" onclick={navigateToPlaying} aria-label="Go to playing song">
+		<button
+			class="track-info"
+			onclick={() => (current ? navigateToPlaying() : togglePlay())}
+			aria-label={current ? 'Go to playing song' : `Play ${poolName}`}
+		>
 			{#if current}
 				<span
 					class="track-title"

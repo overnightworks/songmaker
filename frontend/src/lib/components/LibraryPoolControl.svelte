@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { page } from '$app/state';
+	import { tick, untrack } from 'svelte';
 	import {
 		LIBRARY_TAKE_POOLS,
 		LIBRARY_TAKE_POOL_LABELS,
@@ -6,6 +8,7 @@
 		type LibraryTakePool
 	} from '$lib/stores/playbackSettings';
 	import { chooseLibraryTakePool, queueContext } from '$lib/stores/player';
+	import { detailTab } from '$lib/stores/navigation';
 	import Icon from './Icon.svelte';
 
 	const POOL_HELP =
@@ -24,6 +27,10 @@
 	let sheetOpen = $state(false);
 	let helpOpen = $state(false);
 	let narrow = $state(false);
+	let triggerButton: HTMLButtonElement | undefined = $state();
+	let sheet: HTMLDivElement | undefined = $state();
+	let lastSurfaceKey = '';
+	const surfaceKey = $derived(`${page.url.pathname}:${$detailTab}`);
 
 	$effect(() => {
 		if (typeof window === 'undefined') return;
@@ -31,15 +38,75 @@
 		narrow = media.matches;
 		const onChange = () => {
 			narrow = media.matches;
-			if (!media.matches) sheetOpen = false;
+			if (!media.matches) closeSheet();
 		};
 		media.addEventListener('change', onChange);
 		return () => media.removeEventListener('change', onChange);
 	});
 
-	function selectPool(next: LibraryTakePool): void {
+	$effect(() => {
+		const nextSurfaceKey = surfaceKey;
+		untrack(() => {
+			if (lastSurfaceKey && lastSurfaceKey !== nextSurfaceKey) {
+				closeSheet();
+				helpOpen = false;
+			}
+			lastSurfaceKey = nextSurfaceKey;
+		});
+	});
+
+	$effect(() => {
+		if (!onLibrary) untrack(() => closeSheet());
+	});
+
+	async function openSheet(): Promise<void> {
+		helpOpen = false;
+		sheetOpen = true;
+		await tick();
+		const active = sheet?.querySelector<HTMLElement>('[aria-checked="true"]');
+		(active ?? sheet)?.focus();
+	}
+
+	function closeSheet(restoreFocus = true): void {
+		if (!sheetOpen) return;
 		sheetOpen = false;
+		if (restoreFocus) queueMicrotask(() => triggerButton?.focus());
+	}
+
+	function toggleSheet(): void {
+		if (sheetOpen) closeSheet();
+		else void openSheet();
+	}
+
+	function selectPool(next: LibraryTakePool): void {
+		closeSheet();
 		void chooseLibraryTakePool(next);
+	}
+
+	function onWindowKeydown(event: KeyboardEvent): void {
+		if (!sheetOpen || !sheet) return;
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			closeSheet();
+			return;
+		}
+		if (event.key !== 'Tab') return;
+		const focusable = Array.from(sheet.querySelectorAll<HTMLElement>('button:not(:disabled)'));
+		if (focusable.length === 0) {
+			event.preventDefault();
+			sheet.focus();
+			return;
+		}
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		const active = document.activeElement;
+		if (event.shiftKey && (active === first || !sheet.contains(active))) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && (active === last || !sheet.contains(active))) {
+			event.preventDefault();
+			first.focus();
+		}
 	}
 
 	function onRadiogroupKeydown(event: KeyboardEvent): void {
@@ -56,16 +123,19 @@
 	}
 </script>
 
+<svelte:window onkeydown={onWindowKeydown} />
+
 {#if onLibrary}
 	<div class="pool-control">
 		{#if narrow}
 			<button
+				bind:this={triggerButton}
 				class="pool-current"
 				class:mix={pool === 'mix'}
 				class:picks={pool === 'picks'}
 				class:keeps={pool === 'keeps'}
 				class:all={pool === 'all'}
-				onclick={() => (sheetOpen = !sheetOpen)}
+				onclick={toggleSheet}
 				aria-haspopup="dialog"
 				aria-expanded={sheetOpen}
 				aria-label={`Take pool ${LIBRARY_TAKE_POOL_LABELS[pool]}`}
@@ -130,20 +200,43 @@
 		{/if}
 	</div>
 	{#if sheetOpen}
-		<div class="pool-sheet" role="dialog" aria-label="Take pool" tabindex="-1">
-			{#each LIBRARY_TAKE_POOLS as option (option)}
-				<button class="sheet-btn" class:active={pool === option} onclick={() => selectPool(option)}>
-					{#if option === 'mix'}
-						<span class="mix-icons" aria-hidden="true">
-							<Icon name="star-filled" size={16} />
-							<Icon name="heart-filled" size={16} />
-						</span>
-					{:else}
-						<Icon name={POOL_ICONS[option]} size={18} />
-					{/if}
-					{LIBRARY_TAKE_POOL_LABELS[option]}
-				</button>
-			{/each}
+		<div class="pool-modal">
+			<button
+				class="sheet-backdrop"
+				tabindex="-1"
+				onclick={() => closeSheet()}
+				aria-label="Close take pool"
+			></button>
+			<div
+				bind:this={sheet}
+				class="pool-sheet"
+				role="dialog"
+				aria-modal="true"
+				aria-label="Take pool"
+				tabindex="-1"
+			>
+				<div class="sheet-options" role="radiogroup" aria-label="Take pool choices">
+					{#each LIBRARY_TAKE_POOLS as option (option)}
+						<button
+							class="sheet-btn"
+							class:active={pool === option}
+							role="radio"
+							aria-checked={pool === option}
+							onclick={() => selectPool(option)}
+						>
+							{#if option === 'mix'}
+								<span class="mix-icons" aria-hidden="true">
+									<Icon name="star-filled" size={16} />
+									<Icon name="heart-filled" size={16} />
+								</span>
+							{:else}
+								<Icon name={POOL_ICONS[option]} size={18} />
+							{/if}
+							{LIBRARY_TAKE_POOL_LABELS[option]}
+						</button>
+					{/each}
+				</div>
+			</div>
 		</div>
 	{/if}
 {/if}
@@ -251,18 +344,34 @@
 		line-height: 1.35;
 		z-index: 20;
 	}
+	.pool-modal {
+		position: fixed;
+		inset: 0;
+		z-index: 109;
+	}
+	.sheet-backdrop {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		border: 0;
+		background: color-mix(in srgb, #000 42%, transparent);
+		cursor: default;
+	}
 	.pool-sheet {
 		position: fixed;
 		left: 0;
 		right: 0;
 		bottom: var(--player-height);
-		display: flex;
-		gap: 8px;
-		justify-content: center;
 		padding: 0.7rem 0.8rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
 		background: var(--header-bg);
 		border-top: 1px solid var(--border);
-		z-index: 110;
+		z-index: 1;
+	}
+	.sheet-options {
+		display: flex;
+		gap: 8px;
+		justify-content: center;
+		width: 100%;
 	}
 	.sheet-btn {
 		flex: 1;
@@ -277,5 +386,10 @@
 		border-color: var(--accent);
 		color: var(--text);
 		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+	}
+	@media (max-width: 640px) {
+		.pool-current {
+			padding: 0 8px;
+		}
 	}
 </style>
