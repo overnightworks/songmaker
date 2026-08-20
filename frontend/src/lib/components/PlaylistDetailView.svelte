@@ -16,7 +16,7 @@
 		saveStream,
 		removeStream,
 		isStreamSaved,
-		manifestCacheKey,
+		offlineStreamUrl,
 		type StreamProgress
 	} from '$lib/services/offline';
 	import ActionButton from './ActionButton.svelte';
@@ -154,10 +154,10 @@
 					snapshotId: string;
 				};
 				// Verify it is actually still in the cache.
-				isStreamSaved(streamUrl).then((saved) => {
+				isStreamSaved(offlineStreamUrl(snapshotId)).then((saved) => {
 					if (cancelled) return;
 					if (saved) {
-						offlineSavedStreamUrl = streamUrl;
+						offlineSavedStreamUrl = offlineStreamUrl(snapshotId);
 						offlineSavedSnapshotId = snapshotId;
 					} else {
 						sessionStorage.removeItem(`offline-stream:${detail.id}`);
@@ -189,11 +189,14 @@
 				},
 				(snapshotId) => pinQueueStream(snapshotId).then(() => undefined)
 			);
-			offlineSavedStreamUrl = manifest.stream_url;
+			offlineSavedStreamUrl = offlineStreamUrl(manifest.snapshot_id);
 			offlineSavedSnapshotId = manifest.snapshot_id;
 			sessionStorage.setItem(
 				`offline-stream:${playlistDetail.id}`,
-				JSON.stringify({ streamUrl: manifest.stream_url, snapshotId: manifest.snapshot_id })
+				JSON.stringify({
+					streamUrl: offlineStreamUrl(manifest.snapshot_id),
+					snapshotId: manifest.snapshot_id
+				})
 			);
 			addToast('Saved for offline', 'success');
 		} catch (err) {

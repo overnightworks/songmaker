@@ -1,7 +1,14 @@
 import type { QueueStreamManifest } from '$lib/api/types';
+import { parseRangeHeader } from './httpRange';
 
 /** Cache name shared with the service worker's fetch handler. */
 export const OFFLINE_STREAMS_CACHE = 'offline-streams';
+
+const LIVE_AUDIO_PATH_PREFIX = '/audio/';
+const QUEUE_STREAM_AUDIO_PATH = /^\/api\/queue-streams\/[^/]+\/audio\/?$/;
+export const OFFLINE_STREAM_PATH_PREFIX = '/offline/stream/';
+export const OFFLINE_MANIFEST_PATH_PREFIX = '/offline/manifest/';
+const OFFLINE_UNAVAILABLE_STATUS = 503;
 
 // ── Message types ──────────────────────────────────────────────────────────
 
@@ -9,6 +16,7 @@ export interface CacheStreamMessage {
 	type: 'CACHE_STREAM';
 	manifestUrl: string;
 	streamUrl: string;
+	sourceUrl: string;
 	meta: { title: string; trackCount: number };
 }
 
@@ -30,7 +38,79 @@ export interface CacheProgressMessage {
 
 /** Derives the cache key used to store a stream's manifest JSON. */
 export function manifestCacheKey(snapshotId: string): string {
-	return `/offline/manifest/${snapshotId}`;
+	return `${OFFLINE_MANIFEST_PATH_PREFIX}${snapshotId}`;
+}
+
+/** Synthetic URL the service worker intercepts for a saved stream. */
+export function offlineStreamUrl(snapshotId: string): string {
+	return `${OFFLINE_STREAM_PATH_PREFIX}${snapshotId}`;
+}
+
+export function requestPathname(url: string): string {
+	try {
+		return new URL(url, 'http://songmaker.local').pathname;
+	} catch {
+		const queryStart = url.indexOf('?');
+		const hashStart = url.indexOf('#');
+		let end = url.length;
+		if (queryStart !== -1) end = Math.min(end, queryStart);
+		if (hashStart !== -1) end = Math.min(end, hashStart);
+		return url.slice(0, end);
+	}
+}
+
+export function isLiveAudioPath(pathname: string): boolean {
+	return pathname.startsWith(LIVE_AUDIO_PATH_PREFIX) || QUEUE_STREAM_AUDIO_PATH.test(pathname);
+}
+
+export function isOfflineAudioPath(pathname: string): boolean {
+	return (
+		pathname.startsWith(OFFLINE_STREAM_PATH_PREFIX) &&
+		pathname.length > OFFLINE_STREAM_PATH_PREFIX.length
+	);
+}
+
+export function isOfflineManifestPath(pathname: string): boolean {
+	return (
+		pathname.startsWith(OFFLINE_MANIFEST_PATH_PREFIX) &&
+		pathname.length > OFFLINE_MANIFEST_PATH_PREFIX.length
+	);
+}
+
+/** Live audio must fall through; only the /offline/ namespace is intercepted. */
+export function shouldInterceptInServiceWorker(pathname: string): boolean {
+	return isOfflineAudioPath(pathname) || isOfflineManifestPath(pathname);
+}
+
+export async function responseForOfflineCacheHit(
+	cached: Response | undefined,
+	rangeHeader: string | null
+): Promise<Response> {
+	if (!cached) {
+		return new Response('Offline stream unavailable', { status: OFFLINE_UNAVAILABLE_STATUS });
+	}
+	if (!rangeHeader) return cached.clone();
+
+	const body = await cached.arrayBuffer();
+	const total = body.byteLength;
+	const range = parseRangeHeader(rangeHeader, total);
+	if (!range) {
+		return new Response('Range Not Satisfiable', {
+			status: 416,
+			headers: { 'Content-Range': `bytes */${total}` }
+		});
+	}
+	const { start, end } = range;
+	const contentType = cached.headers.get('Content-Type') ?? 'audio/mpeg';
+	return new Response(body.slice(start, end + 1), {
+		status: 206,
+		headers: {
+			'Content-Type': contentType,
+			'Content-Range': `bytes ${start}-${end}/${total}`,
+			'Accept-Ranges': 'bytes',
+			'Content-Length': String(end - start + 1)
+		}
+	});
 }
 
 /** Builds the CACHE_STREAM message posted to the service worker. */
@@ -38,7 +118,8 @@ export function buildCacheStreamMessage(manifest: QueueStreamManifest): CacheStr
 	return {
 		type: 'CACHE_STREAM',
 		manifestUrl: manifestCacheKey(manifest.snapshot_id),
-		streamUrl: manifest.stream_url,
+		streamUrl: offlineStreamUrl(manifest.snapshot_id),
+		sourceUrl: manifest.stream_url,
 		meta: { title: manifest.snapshot_id, trackCount: manifest.tracks.length }
 	};
 }
@@ -102,11 +183,14 @@ export async function saveStream(
 		throw new Error('Service worker not active — cannot save for offline');
 	}
 
-	// Store the manifest JSON directly so the cache is self-contained.
 	const cache = await caches.open(OFFLINE_STREAMS_CACHE);
+	const offlineManifest: QueueStreamManifest = {
+		...manifest,
+		stream_url: offlineStreamUrl(manifest.snapshot_id)
+	};
 	await cache.put(
 		manifestCacheKey(manifest.snapshot_id),
-		new Response(JSON.stringify(manifest), {
+		new Response(JSON.stringify(offlineManifest), {
 			headers: { 'Content-Type': 'application/json' }
 		})
 	);

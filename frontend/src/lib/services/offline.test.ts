@@ -2,10 +2,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import {
 	manifestCacheKey,
+	offlineStreamUrl,
 	buildCacheStreamMessage,
 	buildUncacheStreamMessage,
 	isStreamSaved,
-	removeStream
+	removeStream,
+	isLiveAudioPath,
+	isOfflineAudioPath,
+	shouldInterceptInServiceWorker,
+	responseForOfflineCacheHit,
+	requestPathname
 } from './offline';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
@@ -34,9 +40,14 @@ describe('buildCacheStreamMessage', () => {
 		expect(buildCacheStreamMessage(makeManifest()).type).toBe('CACHE_STREAM');
 	});
 
-	it('uses the manifest stream_url as streamUrl', () => {
-		const manifest = makeManifest({ stream_url: '/audio/queue-streams/x.mp3' });
-		expect(buildCacheStreamMessage(manifest).streamUrl).toBe('/audio/queue-streams/x.mp3');
+	it('fetches the live stream and caches the synthetic offline URL', () => {
+		const manifest = makeManifest({
+			snapshot_id: 'snap-9',
+			stream_url: '/api/queue-streams/snap-9/audio'
+		});
+		const msg = buildCacheStreamMessage(manifest);
+		expect(msg.sourceUrl).toBe('/api/queue-streams/snap-9/audio');
+		expect(msg.streamUrl).toBe(offlineStreamUrl('snap-9'));
 	});
 
 	it('derives manifestUrl from snapshot_id', () => {
@@ -47,6 +58,59 @@ describe('buildCacheStreamMessage', () => {
 	it('reports trackCount in meta', () => {
 		const manifest = makeManifest({ tracks: [] });
 		expect(buildCacheStreamMessage(manifest).meta.trackCount).toBe(0);
+	});
+});
+
+describe('service worker fetch routing', () => {
+	it('does not intercept live per-track audio', () => {
+		expect(isLiveAudioPath('/audio/user/file.mp3')).toBe(true);
+		expect(shouldInterceptInServiceWorker('/audio/user/file.mp3')).toBe(false);
+	});
+
+	it('does not intercept live queue-stream audio', () => {
+		expect(isLiveAudioPath('/api/queue-streams/abc/audio')).toBe(true);
+		expect(shouldInterceptInServiceWorker('/api/queue-streams/abc/audio')).toBe(false);
+	});
+
+	it('intercepts only the synthetic offline namespace', () => {
+		expect(isOfflineAudioPath(offlineStreamUrl('snap-1'))).toBe(true);
+		expect(shouldInterceptInServiceWorker(offlineStreamUrl('snap-1'))).toBe(true);
+		expect(shouldInterceptInServiceWorker(manifestCacheKey('snap-1'))).toBe(true);
+		expect(shouldInterceptInServiceWorker('/api/jobs/1')).toBe(false);
+	});
+
+	it('strips query and hash from pathnames', () => {
+		expect(requestPathname('https://x.example/offline/stream/s1?recover=2#t')).toBe(
+			'/offline/stream/s1'
+		);
+	});
+});
+
+describe('responseForOfflineCacheHit', () => {
+	it('fails closed on a cache miss instead of fetching the live URL', async () => {
+		const response = await responseForOfflineCacheHit(undefined, null);
+		expect(response.status).toBe(503);
+	});
+
+	it('returns the full body when no Range is sent', async () => {
+		const cached = new Response('abcdefghij', { headers: { 'Content-Type': 'audio/mpeg' } });
+		const response = await responseForOfflineCacheHit(cached, null);
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe('abcdefghij');
+	});
+
+	it('returns 206 with Content-Range for a valid Range', async () => {
+		const cached = new Response('abcdefghij', { headers: { 'Content-Type': 'audio/mpeg' } });
+		const response = await responseForOfflineCacheHit(cached, 'bytes=2-5');
+		expect(response.status).toBe(206);
+		expect(response.headers.get('Content-Range')).toBe('bytes 2-5/10');
+		expect(await response.text()).toBe('cdef');
+	});
+
+	it('returns 416 for an unsatisfiable Range', async () => {
+		const cached = new Response('abcdefghij');
+		const response = await responseForOfflineCacheHit(cached, 'bytes=99-');
+		expect(response.status).toBe(416);
 	});
 });
 
@@ -103,18 +167,17 @@ describe('isStreamSaved', () => {
 	});
 
 	it('returns false when the URL is not in the cache', async () => {
-		expect(await isStreamSaved('/audio/stream.mp3')).toBe(false);
+		expect(await isStreamSaved(offlineStreamUrl('snap-1'))).toBe(false);
 	});
 
 	it('returns true when the URL is present in the cache', async () => {
-		store.set('/audio/stream.mp3', new Response('data'));
-		expect(await isStreamSaved('/audio/stream.mp3')).toBe(true);
+		store.set(offlineStreamUrl('snap-1'), new Response('data'));
+		expect(await isStreamSaved(offlineStreamUrl('snap-1'))).toBe(true);
 	});
 
 	it('returns false when caches API is unavailable', async () => {
 		vi.unstubAllGlobals();
-		// caches is not stubbed — globalThis.caches is undefined in jsdom
-		expect(await isStreamSaved('/audio/stream.mp3')).toBe(false);
+		expect(await isStreamSaved(offlineStreamUrl('snap-1'))).toBe(false);
 	});
 });
 
@@ -139,22 +202,24 @@ describe('removeStream', () => {
 	});
 
 	it('posts an UNCACHE_STREAM message to the service worker', async () => {
-		await removeStream('/audio/s.mp3', 'snap-1');
+		const streamUrl = offlineStreamUrl('snap-1');
+		await removeStream(streamUrl, 'snap-1');
 		expect(mockController.postMessage).toHaveBeenCalledWith(
-			expect.objectContaining({ type: 'UNCACHE_STREAM', streamUrl: '/audio/s.mp3' })
+			expect.objectContaining({ type: 'UNCACHE_STREAM', streamUrl })
 		);
 	});
 
 	it('removes the stream URL from the cache', async () => {
-		store.set('/audio/s.mp3', new Response('data'));
-		await removeStream('/audio/s.mp3', 'snap-1');
-		expect(store.has('/audio/s.mp3')).toBe(false);
+		const streamUrl = offlineStreamUrl('snap-1');
+		store.set(streamUrl, new Response('data'));
+		await removeStream(streamUrl, 'snap-1');
+		expect(store.has(streamUrl)).toBe(false);
 	});
 
 	it('removes the manifest URL from the cache', async () => {
 		const mKey = manifestCacheKey('snap-1');
 		store.set(mKey, new Response('{}'));
-		await removeStream('/audio/s.mp3', 'snap-1');
+		await removeStream(offlineStreamUrl('snap-1'), 'snap-1');
 		expect(store.has(mKey)).toBe(false);
 	});
 });

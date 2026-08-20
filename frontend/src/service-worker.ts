@@ -2,15 +2,17 @@
 /// <reference lib="webworker" />
 
 import { build, files, version } from '$service-worker';
-import { parseRangeHeader } from '$lib/services/httpRange';
+import {
+	OFFLINE_STREAMS_CACHE,
+	requestPathname,
+	responseForOfflineCacheHit,
+	shouldInterceptInServiceWorker
+} from '$lib/services/offline';
 
 declare const self: ServiceWorkerGlobalScope;
 
 /** Versioned cache name for the SvelteKit app shell. */
 const APP_SHELL_CACHE = `app-shell-${version}`;
-
-/** Cache name for user-saved offline streams (never evicted by activate). */
-const OFFLINE_STREAMS_CACHE = 'offline-streams';
 
 /** Every precacheable URL: app bundle + static files. */
 const PRECACHE_URLS = new Set([...build, ...files]);
@@ -63,9 +65,9 @@ self.addEventListener('fetch', (event) => {
 		return;
 	}
 
-	// 3. Offline streams → cache-first with Range synthesis; all other
-	//    requests (API, live audio, etc.) fall through to the network.
-	event.respondWith(maybeServeOfflineStream(event.request));
+	if (!shouldInterceptInServiceWorker(url.pathname)) return;
+
+	event.respondWith(serveOfflineNamespace(event.request));
 });
 
 async function serveAppShell(request: Request, pathname: string): Promise<Response> {
@@ -78,42 +80,11 @@ async function serveNavigation(request: Request): Promise<Response> {
 	return (await cache.match('/index.html')) ?? fetch(request);
 }
 
-async function maybeServeOfflineStream(request: Request): Promise<Response> {
+async function serveOfflineNamespace(request: Request): Promise<Response> {
 	const cache = await caches.open(OFFLINE_STREAMS_CACHE);
-	// Match on URL only — ignore Range header so we always look up the full body.
-	const cached = await cache.match(new Request(request.url));
-	if (!cached) return fetch(request);
-
-	const rangeHeader = request.headers.get('Range');
-	if (!rangeHeader) return cached.clone();
-
-	return synthesizeRangeResponse(cached, rangeHeader);
-}
-
-async function synthesizeRangeResponse(cached: Response, rangeHeader: string): Promise<Response> {
-	const body = await cached.arrayBuffer();
-	const total = body.byteLength;
-	const range = parseRangeHeader(rangeHeader, total);
-
-	if (!range) {
-		return new Response('Range Not Satisfiable', {
-			status: 416,
-			headers: { 'Content-Range': `bytes */${total}` }
-		});
-	}
-
-	const { start, end } = range;
-	const contentType = cached.headers.get('Content-Type') ?? 'audio/mpeg';
-
-	return new Response(body.slice(start, end + 1), {
-		status: 206,
-		headers: {
-			'Content-Type': contentType,
-			'Content-Range': `bytes ${start}-${end}/${total}`,
-			'Accept-Ranges': 'bytes',
-			'Content-Length': String(end - start + 1)
-		}
-	});
+	const pathname = requestPathname(request.url);
+	const cached = (await cache.match(pathname)) ?? (await cache.match(request.url));
+	return responseForOfflineCacheHit(cached, request.headers.get('Range'));
 }
 
 // ── Message handlers ───────────────────────────────────────────────────────
@@ -122,6 +93,7 @@ interface CacheStreamMessage {
 	type: 'CACHE_STREAM';
 	manifestUrl: string;
 	streamUrl: string;
+	sourceUrl: string;
 	meta: Record<string, unknown>;
 }
 
@@ -147,7 +119,7 @@ async function handleCacheStream(
 	port: MessagePort | undefined
 ): Promise<void> {
 	try {
-		const response = await fetch(msg.streamUrl);
+		const response = await fetch(msg.sourceUrl);
 		if (!response.ok || !response.body) {
 			port?.postMessage({
 				type: 'CACHE_PROGRESS',
