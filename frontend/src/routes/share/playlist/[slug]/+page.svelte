@@ -6,6 +6,7 @@
 	import { APP_NAME } from '$lib/constants';
 	import LegalContent from '$lib/components/LegalContent.svelte';
 	import SharedPlayer from '$lib/components/SharedPlayer.svelte';
+	import ShareStatus from '$lib/components/ShareStatus.svelte';
 	import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
 
 	interface SharedEntry {
@@ -22,7 +23,7 @@
 	}
 
 	let playlist: SharedPlaylist | null = $state(null);
-	let error: string | null = $state(null);
+	let errorKind: 'missing' | 'error' | null = $state(null);
 	let loading = $state(true);
 	let currentTrack: SharedEntry | null = $state(null);
 	let streamManifest: QueueStreamManifest | null = $state(null);
@@ -41,16 +42,16 @@
 
 	async function fetchData(s: string) {
 		loading = true;
-		error = null;
+		errorKind = null;
 		try {
 			const resp = await fetch(`/shared/playlist/${s}`);
 			if (!resp.ok) {
-				error = resp.status === 404 ? 'Playlist not found' : 'Failed to load playlist';
+				errorKind = resp.status === 404 ? 'missing' : 'error';
 				return;
 			}
 			playlist = await resp.json();
 		} catch {
-			error = 'Failed to load playlist';
+			errorKind = 'error';
 		} finally {
 			loading = false;
 		}
@@ -147,9 +148,13 @@
 		<div class="glow glow-2"></div>
 	</div>
 	{#if loading}
-		<div class="center">Loading...</div>
-	{:else if error}
-		<div class="center error">{error}</div>
+		<ShareStatus kind="loading" resource="playlist" />
+	{:else if errorKind}
+		<ShareStatus
+			kind={errorKind}
+			resource="playlist"
+			onretry={errorKind === 'error' ? () => fetchData(slug) : undefined}
+		/>
 	{:else if playlist}
 		<div class="playlist-header">
 			<h1 data-text={playlist.title}>{playlist.title}</h1>

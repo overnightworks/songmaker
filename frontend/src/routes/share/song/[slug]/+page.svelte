@@ -4,6 +4,7 @@
 	import { APP_NAME } from '$lib/constants';
 	import LegalContent from '$lib/components/LegalContent.svelte';
 	import SharedPlayer from '$lib/components/SharedPlayer.svelte';
+	import ShareStatus from '$lib/components/ShareStatus.svelte';
 
 	interface SharedSong {
 		title: string;
@@ -13,7 +14,7 @@
 	}
 
 	let data: SharedSong | null = $state(null);
-	let error: string | null = $state(null);
+	let errorKind: 'missing' | 'error' | null = $state(null);
 	let loading = $state(true);
 	let legalSection: string | null = $state(null);
 
@@ -25,16 +26,16 @@
 
 	async function fetchData(s: string) {
 		loading = true;
-		error = null;
+		errorKind = null;
 		try {
 			const resp = await fetch(`/shared/song/${s}`);
 			if (!resp.ok) {
-				error = resp.status === 404 ? 'Song not found' : 'Failed to load';
+				errorKind = resp.status === 404 ? 'missing' : 'error';
 				return;
 			}
 			data = await resp.json();
 		} catch {
-			error = 'Failed to load';
+			errorKind = 'error';
 		} finally {
 			loading = false;
 		}
@@ -57,9 +58,13 @@
 		<div class="glow glow-2"></div>
 	</div>
 	{#if loading}
-		<div class="center">Loading...</div>
-	{:else if error}
-		<div class="center error">{error}</div>
+		<ShareStatus kind="loading" resource="song" />
+	{:else if errorKind}
+		<ShareStatus
+			kind={errorKind}
+			resource="song"
+			onretry={errorKind === 'error' ? () => fetchData(slug) : undefined}
+		/>
 	{:else if data}
 		<div class="song-header">
 			<h1>{data.title}</h1>
