@@ -47,6 +47,24 @@ from songmaker_cli.db.queries import (
     update_song,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from songmaker_cli.reference_audio import (
+    ReferenceAudioRejected,
+    resolve_owned_reference_audio,
+)
+
+
+def _require_owned_reference_audio(
+    audio_dir, user_id: str, generation_params,
+) -> None:
+    if generation_params is None:
+        return
+    path = getattr(generation_params, "reference_audio_path", None)
+    if not path:
+        return
+    try:
+        resolve_owned_reference_audio(audio_dir, user_id, path)
+    except ReferenceAudioRejected as exc:
+        raise HTTPException(404, "Reference audio not found") from exc
 
 router = APIRouter()
 
@@ -85,9 +103,11 @@ def api_create_song(
     req: SongCreateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> SongResponse:
     album = get_album(session, req.album_id)
     check_album_access(album, user)
+    _require_owned_reference_audio(ctx.audio_dir, user.id, req.generation_params)
     song = create_song(
         session, title=req.title, album_id=req.album_id,
         lyrics=req.lyrics, prompt=req.prompt, bpm=req.bpm,
@@ -105,8 +125,11 @@ def api_update_song(
     song_id: str, req: SongUpdateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> SongResponse:
     check_song_access(session, song_id, user)
+    if "generation_params" in req.model_fields_set:
+        _require_owned_reference_audio(ctx.audio_dir, user.id, req.generation_params)
     kwargs: dict = dict(
         lyrics=req.lyrics, prompt=req.prompt,
         bpm=req.bpm, audio_duration=req.audio_duration, key_scale=req.key_scale,

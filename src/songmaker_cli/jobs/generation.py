@@ -203,19 +203,18 @@ def _build_generation_context(
     ace_config = replace(ace_config, model=model_name)
 
     if ace_config.reference_audio_path:
-        abs_ref = (audio_dir / ace_config.reference_audio_path).resolve()
-        inside_audio_dir = str(abs_ref).startswith(str(audio_dir.resolve()))
-        if ".." in ace_config.reference_audio_path or not inside_audio_dir:
-            log.warning(
-                "Reference audio path traversal blocked: %s",
-                ace_config.reference_audio_path,
+        from songmaker_cli.reference_audio import (
+            ReferenceAudioRejected,
+            resolve_owned_reference_audio,
+        )
+
+        try:
+            abs_ref = resolve_owned_reference_audio(
+                audio_dir, user_id, ace_config.reference_audio_path,
             )
-            ace_config = replace(ace_config, reference_audio_path="")
-        elif abs_ref.exists():
-            ace_config = replace(ace_config, reference_audio_path=str(abs_ref))
-        else:
-            log.warning("Reference audio not found: %s", abs_ref)
-            ace_config = replace(ace_config, reference_audio_path="")
+        except ReferenceAudioRejected as exc:
+            raise RuntimeError("reference audio path is not owned") from exc
+        ace_config = replace(ace_config, reference_audio_path=str(abs_ref))
 
     ace_config = _apply_user_lora_path(
         ace_config, meta.generation_params, db_factory, audio_dir,
