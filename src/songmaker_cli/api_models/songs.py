@@ -11,6 +11,10 @@ from pydantic import BaseModel, Field, field_validator
 from songmaker_cli.api_models.generation_params import (
     BaseGenerationParams,
 )
+from songmaker_cli.api_models.whisper import (
+    WhisperCue,
+    generation_whisper_cues,
+)
 from songmaker_cli.constants import MODEL_AVAILABLE_MODES
 from songmaker_cli.scoring.registry import VALID_SCORER_NAMES
 from songmaker_cli.settings import get_settings
@@ -128,6 +132,7 @@ class GenerationResponse(BaseModel):
     src_generation_id: str | None = None
     src_generation_number: int | None = None
     whisper_text: str | None
+    whisper_cues: list[WhisperCue] | None
     scores: dict | None
     generation_params: dict | None
     created_at: str
@@ -195,6 +200,7 @@ class GenerationResponse(BaseModel):
                 if gen.src_generation else None
             ),
             whisper_text=gen.whisper_text,
+            whisper_cues=generation_whisper_cues(gen.whisper_cues),
             scores=scores if scores else None,
             generation_params=generation_params,
             created_at=gen.created_at.isoformat(),

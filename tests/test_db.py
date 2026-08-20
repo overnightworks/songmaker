@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_models import (
@@ -16,6 +17,7 @@ from songmaker_cli.api_models import (
     SongResponse,
     UserResponse,
     VersionResponse,
+    WhisperCue,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -261,6 +263,7 @@ def test_generation_to_dict(seeded_session: Session) -> None:
     assert d["seed"] == 42
     assert d["scores"]["dynamics"] == 55.0
     assert d["scores"]["user_rating"] == 82.5
+    assert d["whisper_cues"] is None
 
 
 def test_song_to_dict(seeded_session: Session) -> None:
@@ -734,6 +737,82 @@ def test_generation_to_dict_has_is_picked(seeded_session: Session) -> None:
     d = GenerationResponse.from_orm(gen).model_dump()
     assert d["is_picked"] is False
     assert "version_number" in d
+
+
+def test_generation_null_whisper_cues_serializes_as_null(
+    seeded_session: Session,
+) -> None:
+    gen = get_generation(seeded_session, "g2")
+    assert gen.whisper_cues is None
+    d = GenerationResponse.from_orm(gen).model_dump()
+    assert d["whisper_cues"] is None
+
+
+def test_generation_whisper_cues_roundtrip(seeded_session: Session) -> None:
+    gen = get_generation(seeded_session, "g1")
+    gen.whisper_cues = [
+        {"start": 0.0, "end": 1.25, "text": "hello world"},
+        {"start": 1.25, "end": 2.5, "text": "goodbye moon"},
+    ]
+    seeded_session.commit()
+    seeded_session.refresh(gen)
+    assert gen.whisper_cues == [
+        {"start": 0.0, "end": 1.25, "text": "hello world"},
+        {"start": 1.25, "end": 2.5, "text": "goodbye moon"},
+    ]
+    d = GenerationResponse.from_orm(gen).model_dump()
+    assert d["whisper_cues"] == [
+        {"start": 0.0, "end": 1.25, "text": "hello world"},
+        {"start": 1.25, "end": 2.5, "text": "goodbye moon"},
+    ]
+    assert all(isinstance(cue, dict) for cue in d["whisper_cues"])
+    typed = GenerationResponse.from_orm(gen).whisper_cues
+    assert typed == [
+        WhisperCue(start=0.0, end=1.25, text="hello world"),
+        WhisperCue(start=1.25, end=2.5, text="goodbye moon"),
+    ]
+
+
+def test_generation_empty_whisper_cues_serializes_as_empty_list(
+    seeded_session: Session,
+) -> None:
+    gen = get_generation(seeded_session, "g1")
+    gen.whisper_cues = []
+    seeded_session.commit()
+    seeded_session.refresh(gen)
+    d = GenerationResponse.from_orm(gen).model_dump()
+    assert d["whisper_cues"] == []
+
+
+def test_whisper_cue_rejects_negative_start() -> None:
+    with pytest.raises(PydanticValidationError, match="must not be negative"):
+        WhisperCue(start=-0.1, end=1.0, text="hello")
+
+
+def test_whisper_cue_rejects_non_finite_end() -> None:
+    with pytest.raises(PydanticValidationError, match="finite number of seconds"):
+        WhisperCue(start=0.0, end=float("inf"), text="hello")
+
+
+def test_whisper_cue_rejects_backward_range() -> None:
+    with pytest.raises(PydanticValidationError, match="end must not be before start"):
+        WhisperCue(start=2.0, end=1.0, text="hello")
+
+
+def test_generation_whisper_cues_validator_rejects_invalid(
+    seeded_session: Session,
+) -> None:
+    gen = get_generation(seeded_session, "g1")
+    with pytest.raises(PydanticValidationError, match="end must not be before start"):
+        gen.whisper_cues = [{"start": 2.0, "end": 1.0, "text": "hello"}]
+
+
+def test_generation_whisper_cues_validator_rejects_non_list(
+    seeded_session: Session,
+) -> None:
+    gen = get_generation(seeded_session, "g1")
+    with pytest.raises(TypeError, match="must be a list or None"):
+        gen.whisper_cues = {"start": 0.0, "end": 1.0, "text": "hello"}
 
 
 # ── Generation params on Version ────────────────────────────────────
@@ -1894,6 +1973,20 @@ def test_init_db_stamps_existing_db(tmp_path: Path) -> None:
         row = conn.execute(text("SELECT version_num FROM alembic_version")).fetchone()
         assert row is not None
     engine.dispose()
+
+
+def test_whisper_cues_migration_adds_nullable_column(tmp_path: Path) -> None:
+    from sqlalchemy import create_engine, inspect
+
+    from songmaker_cli.db.engine import init_db
+
+    db_path = tmp_path / "cues.db"
+    init_db(f"sqlite:///{db_path}")
+    engine = create_engine(f"sqlite:///{db_path}")
+    cols = {c["name"]: c for c in inspect(engine).get_columns("generations")}
+    engine.dispose()
+    assert "whisper_cues" in cols
+    assert cols["whisper_cues"]["nullable"] is True
 
 
 # ── Claude model settings ───────────────────────────────────────────

@@ -496,11 +496,17 @@ def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:
 
 
 def _mock_scores(with_whisper: bool = False):
+    from songmaker_cli.api_models.whisper import WhisperCue
+
     scores = MagicMock()
     scores.to_dict.return_value = {"dynamics": 55.0}
     if with_whisper:
         ta = MagicMock()
         ta.transcribed_line_texts = ["hello", "world"]
+        ta.whisper_cues = (
+            WhisperCue(start=0.0, end=0.8, text="hello"),
+            WhisperCue(start=0.8, end=1.6, text="world"),
+        )
         scores.text_accuracy = ta
     else:
         scores.text_accuracy = None
@@ -536,6 +542,9 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
         scores = session.query(Score).filter_by(generation_id="g1").all()
         assert len(scores) == 1
         assert scores[0].value["dynamics"] == 55.0
+        gen = get_generation(session, "g1")
+        assert gen.whisper_text is None
+        assert gen.whisper_cues is None
 
 
 def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
@@ -564,6 +573,10 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         gen = get_generation(session, "g1")
         assert gen.whisper_text == "hello\nworld"
+        assert gen.whisper_cues == [
+            {"start": 0.0, "end": 0.8, "text": "hello"},
+            {"start": 0.8, "end": 1.6, "text": "world"},
+        ]
 
 
 def test_scoring_job_uses_generation_version_not_latest(
@@ -642,6 +655,10 @@ def test_scoring_job_no_version_still_scores(seeded_db, tmp_path: Path) -> None:
         assert job.status == "completed"
         gen = get_generation(session, "g1")
         assert gen.whisper_text == "hello\nworld"
+        assert gen.whisper_cues == [
+            {"start": 0.0, "end": 0.8, "text": "hello"},
+            {"start": 0.8, "end": 1.6, "text": "world"},
+        ]
 
     meta = captured["meta"]
     assert meta is not None

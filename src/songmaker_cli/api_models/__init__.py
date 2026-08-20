@@ -119,6 +119,10 @@ from songmaker_cli.api_models.songs import (
     TitleUpdateRequest,
     VersionResponse,
 )
+from songmaker_cli.api_models.whisper import (
+    WhisperCue,
+    stored_whisper_cues,
+)
 from songmaker_cli.api_models.workers import (
     EvictModelOnWorkerRequest,
     LoadedModelDetail,
@@ -311,6 +315,8 @@ __all__ = [
     "WorkerIdentity",
     "WorkerInfo",
     "WorkerPoolResponse",
+    "WhisperCue",
     "WorkerRegisterRequest",
     "WorkerRegisterResponse",
+    "stored_whisper_cues",
 ]

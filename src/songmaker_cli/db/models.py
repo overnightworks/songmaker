@@ -27,6 +27,7 @@ from songmaker_cli.api_models.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
 )
+from songmaker_cli.api_models.whisper import stored_whisper_cues
 from songmaker_cli.constants import MODEL_DEFAULT_MODE, JobStatus
 
 
@@ -168,6 +169,7 @@ class Generation(ShareMixin, Base):
     mp3_path: Mapped[str] = mapped_column(String(500), index=True)
     wav_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     whisper_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    whisper_cues: Mapped[list | None] = mapped_column(JSON, nullable=True)
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=JobStatus.COMPLETED)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -199,6 +201,10 @@ class Generation(ShareMixin, Base):
     @validates("generation_params")
     def _validate_generation_params(self, _key: str, value: object) -> dict | None:
         return _validate_stored_generation_params(value)
+
+    @validates("whisper_cues")
+    def _validate_whisper_cues(self, _key: str, value: object) -> list[dict] | None:
+        return stored_whisper_cues(value)
 
 
 class Playlist(ShareMixin, Base):

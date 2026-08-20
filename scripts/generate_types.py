@@ -38,6 +38,7 @@ export interface PaginatedResponse<T> {
 
 _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "AlbumResponse": "AlbumItem",
+    "WhisperCue": "WhisperCue",
     "GenerationResponse": "GenerationItem",
     "VersionResponse": "VersionItem",
     "SongResponse": "SongItem",
@@ -105,6 +106,7 @@ _EMIT_ORDER: list[str] = [
     "GenerationParams",
     "VersionGenerationParams",
     "TrackScores",
+    "WhisperCue",
     "GenerationItem",
     "VersionItem",
     "SongItem",
@@ -326,6 +328,7 @@ def generate() -> str:
         UserRateLimitsResponse,
         UserResponse,
         VersionResponse,
+        WhisperCue,
         WorkerEphemeralState,
         WorkerIdentity,
         WorkerInfo,
@@ -334,6 +337,7 @@ def generate() -> str:
 
     models: dict[str, type[BaseModel]] = {
         "VersionGenerationParams": GenerationParams,
+        "WhisperCue": WhisperCue,
         "GenerationItem": GenerationResponse,
         "VersionItem": VersionResponse,
         "SongItem": SongResponse,

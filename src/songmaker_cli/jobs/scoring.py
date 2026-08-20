@@ -108,17 +108,20 @@ def run_scoring_job(
 
         scores_dict = song_scores.to_dict()
 
-        whisper_text = None
-        if song_scores.text_accuracy:
-            whisper_text = "\n".join(song_scores.text_accuracy.transcribed_line_texts)
+        text_accuracy = song_scores.text_accuracy
 
         with db_factory() as session:
             from songmaker_cli.db.models import Generation as GenModel
             save_scores(session, gen_id, scores_dict)
-            if whisper_text is not None:
+            if text_accuracy is not None:
                 gen_record = session.query(GenModel).filter_by(id=gen_id).first()
                 if gen_record:
-                    gen_record.whisper_text = whisper_text
+                    gen_record.whisper_text = "\n".join(
+                        text_accuracy.transcribed_line_texts,
+                    )
+                    gen_record.whisper_cues = [
+                        cue.model_dump() for cue in text_accuracy.whisper_cues
+                    ]
             session.commit()
 
         log.info("Scored: %s (%d metrics)", mp3_path_rel, len(scores_dict))

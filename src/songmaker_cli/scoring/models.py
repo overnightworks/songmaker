@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.scoring.registry import SCORERS
 
 
@@ -25,6 +26,7 @@ class TextAccuracyScore:
     similarity_ratio: float
     intended_line_texts: tuple[str, ...]
     transcribed_line_texts: tuple[str, ...]
+    whisper_cues: tuple[WhisperCue, ...] = ()
     detected_language: str | None = None
 
     @property
