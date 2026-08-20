@@ -131,6 +131,7 @@ services:
       WORKER_HOST: "songmaker-acestep-worker-0"
       WORKER_PORT: "8001"
       GPU_ID: "0"
+      NVIDIA_VISIBLE_DEVICES: "0"
       VRAM_BUDGET_GB: "${ACESTEP_WORKER_VRAM_GB:-24}"
       ACESTEP_STARTUP_TIMEOUT_SECONDS: "${ACESTEP_STARTUP_TIMEOUT_SECONDS:-300}"
       ACESTEP_CHECKPOINT_DIR: "/opt/acestep"
@@ -150,14 +151,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
   songmaker-scoring-worker:
     build:
       context: .

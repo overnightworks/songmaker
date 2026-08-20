@@ -230,6 +230,17 @@ The Redis flag (`songmaker:acestep:download:{mode}`) is held across all retry at
 
 ### Troubleshooting playbooks
 
+**"Docker cannot select the NVIDIA device driver"** — first confirm the host and explicit NVIDIA runtime independently:
+
+```bash
+nvidia-smi
+docker info | grep -E 'Runtimes|nvidia'
+docker run --rm --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all \
+  nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi
+```
+
+On this Docker 29 host, the legacy `--gpus all` / Compose `deploy.resources.reservations.devices` path fails even though the explicit NVIDIA runtime and CDI both work. The worker therefore uses `runtime: nvidia` plus `NVIDIA_VISIBLE_DEVICES`, and does not declare the failing deploy reservation. If the explicit-runtime test fails, stop: fix the NVIDIA Container Toolkit/daemon configuration before retrying Compose. If it succeeds, start exactly one worker and wait for registration before attempting generation.
+
 **"Worker won't register"** — `/health` returns 503. Check container logs for `"Registration attempt N failed: ..."`. Verify the control plane URL is reachable from inside the worker container with `docker compose exec songmaker-acestep-worker-0 curl -v http://songmaker-web:8080/health`. Verify `SONGMAKER_INTERNAL_TOKEN` matches between worker and web. The retry loop never gives up — fix the root cause and the next backoff tick will succeed.
 
 **"Download stalls"** — check the download flag: `docker compose exec redis redis-cli GET 'songmaker:acestep:download:{mode}'`. Cross-reference the value (a job_id) with the job's status in the admin UI. If the job is gone but the flag remains, it's stale — `redis-cli DEL` it and retry. The 30-minute TTL is the automatic safety net.
@@ -331,7 +342,8 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `CONTROL_PLANE_URL` | None | Songmaker web URL for worker registration. If unset, registration is skipped. |
 | `SONGMAKER_INTERNAL_TOKEN` | None | Shared secret for control-plane auth. Empty/None disables registration. |
 | `VRAM_BUDGET_GB` | 24.0 | VRAM budget in GB. Passed to the ACE-Step subprocess as `MAX_CUDA_VRAM`. Lower values (e.g. 22 on a 24 GB card) cause ACE-Step to auto-fall-back to CPU VAE decode during xl-turbo generation, which is ~100x slower than GPU — raise the budget if the admin panel shows very slow xl-turbo generations at ~0% GPU util. |
-| `GPU_ID` | None | CUDA device index (for `CUDA_VISIBLE_DEVICES`) |
+| `GPU_ID` | None | CUDA device index passed deterministically to the inner process as `CUDA_VISIBLE_DEVICES` |
+| `NVIDIA_VISIBLE_DEVICES` | Compose: `0` | Host GPU exposed to the worker by the explicit NVIDIA container runtime |
 | `ACESTEP_CHECKPOINT_DIR` | `/opt/acestep` | Where ACE-Step model weights live |
 | `AUDIO_OUTPUT_DIR` | `/app/data/audio/worker_output` | Where the subprocess writes generated WAVs |
 | `ACESTEP_LOG_DIR` | `/opt/acestep/logs` | Where the subprocess's merged stdout+stderr is captured. Each load attempt appends a `=== {mode} attempt at {iso} ===` header so retry history isn't clobbered. Also forwarded line-by-line to the worker's own logger as `[ace-step {mode}] ...` (visible in `docker compose logs songmaker-acestep-worker-0`). |
@@ -359,6 +371,7 @@ These are set on the subprocess by `subprocess_runner.py:build_env()` when it sp
 | `ACESTEP_COMPILE_MODEL` | `0` | `torch.compile` the DiT model — slower startup, faster inference per generation |
 | `MAX_CUDA_VRAM` | from `VRAM_BUDGET_GB` (default `24`) | Total VRAM budget in GB. ACE-Step **trusts this value as ground truth** — it does not cross-check against the physical GPU. On startup the subprocess logs `⚠️ DEBUG MODE: Simulating GPU memory as N GB (set via MAX_CUDA_VRAM)`. Setting this higher than the physical GPU lets ACE-Step's VAE stay on GPU when it should fall back, which will OOM during decode. Always set `VRAM_BUDGET_GB` ≤ physical VRAM. |
 | `PYTORCH_CUDA_ALLOC_CONF` | `expandable_segments:True` (hardcoded) | PyTorch CUDA allocator config |
+| `CUDA_VISIBLE_DEVICES` | from `GPU_ID` when set | Pins the inner ACE-Step process to the worker's configured device index |
 
 ## VRAM Pre-flight Note
 

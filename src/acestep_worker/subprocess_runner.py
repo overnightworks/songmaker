@@ -54,7 +54,12 @@ def find_uv() -> list[str] | None:
     return None
 
 
-def build_env(mode: str, port: int, vram_budget_gb: float) -> dict[str, str]:
+def build_env(
+    mode: str,
+    port: int,
+    vram_budget_gb: float,
+    gpu_id: int | None = None,
+) -> dict[str, str]:
     config_path = MODEL_CONFIG_PATHS.get(mode)
     if not config_path:
         raise SubprocessStartError(f"Unknown mode: {mode}")
@@ -70,6 +75,8 @@ def build_env(mode: str, port: int, vram_budget_gb: float) -> dict[str, str]:
     env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     env.setdefault("ACESTEP_COMPILE_MODEL", "0")
     env.setdefault("PYTHONUNBUFFERED", "1")
+    if gpu_id is not None:
+        env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     for secret in SECRET_ENV_KEYS:
         env.pop(secret, None)
     return env
@@ -168,13 +175,14 @@ def start_acestep_subprocess(
     port: int,
     checkpoint_dir: Path,
     vram_budget_gb: float,
+    gpu_id: int | None = None,
     log_dir: Path | None = None,
     on_log_line: LogLineSink | None = None,
 ) -> SubprocessHandle:
     uv = find_uv()
     if uv is None:
         raise SubprocessStartError("uv not found — cannot start ACE-Step subprocess")
-    env = build_env(mode, port, vram_budget_gb)
+    env = build_env(mode, port, vram_budget_gb, gpu_id)
     stderr_path, stderr_file = _open_log_file(log_dir, mode)
     cmd = [*uv, "run", "acestep-api", "--port", str(port)]
     process = subprocess.Popen(  # noqa: S603
@@ -250,6 +258,7 @@ def make_acestep_runner(
     checkpoint_dir: Path,
     base_port: int,
     vram_budget_gb: float,
+    gpu_id: int | None = None,
     log_dir: Path | None = None,
     on_log_line: LogLineSink | None = None,
 ) -> tuple[Loader, Unloader]:
@@ -260,6 +269,7 @@ def make_acestep_runner(
             port=base_port,
             checkpoint_dir=checkpoint_dir,
             vram_budget_gb=vram_budget_gb,
+            gpu_id=gpu_id,
             log_dir=log_dir,
             on_log_line=on_log_line,
         )

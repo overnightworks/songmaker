@@ -78,6 +78,11 @@ def test_build_env_strips_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "SONGMAKER_INTERNAL_TOKEN" not in env
 
 
+def test_build_env_binds_configured_gpu() -> None:
+    env = build_env("sft", port=8101, vram_budget_gb=24.0, gpu_id=1)
+    assert env["CUDA_VISIBLE_DEVICES"] == "1"
+
+
 def test_is_acestep_healthy_true() -> None:
     mock_response = MagicMock()
     mock_response.status = 200
@@ -414,6 +419,29 @@ def test_make_acestep_runner_passes_on_log_line(tmp_path: Path) -> None:
         )
         _run(loader("sft"))
     assert captured_kwargs["on_log_line"] is sink
+
+
+def test_make_acestep_runner_passes_gpu_id(tmp_path: Path) -> None:
+    captured_kwargs: dict = {}
+    fake_handle = SubprocessHandle(process=MagicMock(), stderr_path=None, port=8101)
+
+    def fake_start(mode: str, **kwargs):
+        captured_kwargs.update(kwargs)
+        return fake_handle
+
+    with patch(
+        "acestep_worker.subprocess_runner.start_acestep_subprocess",
+        side_effect=fake_start,
+    ):
+        loader, _ = make_acestep_runner(
+            checkpoint_dir=tmp_path,
+            base_port=8101,
+            vram_budget_gb=24.0,
+            gpu_id=1,
+        )
+        _run(loader("sft"))
+
+    assert captured_kwargs["gpu_id"] == 1
 
 
 def test_open_log_file_none_when_no_log_dir() -> None:

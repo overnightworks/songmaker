@@ -55,6 +55,7 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
         checkpoint_dir=checkpoint_dir,
         base_port=settings.acestep_inner_port,
         vram_budget_gb=settings.vram_budget_gb,
+        gpu_id=settings.gpu_id,
         log_dir=log_dir,
         on_log_line=log_sink,
     )
