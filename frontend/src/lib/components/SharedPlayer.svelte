@@ -283,6 +283,7 @@
 
 	function applyPendingStreamStart(): void {
 		if (!audio || !activeStreamTrack) return;
+		if (audio.readyState < 1) return;
 		if (Math.abs(audio.currentTime - activeStreamTrack.start_offset) > 0.25 && currentTime === 0) {
 			try {
 				audio.currentTime = activeStreamTrack.start_offset;

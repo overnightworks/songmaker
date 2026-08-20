@@ -443,6 +443,47 @@ describe('stream playback', () => {
 		fakeAudio.fire('loadedmetadata');
 		expect(fakeAudio.currentTime).toBe(12);
 	});
+
+	it('resumes the same generation after a rebuilt snapshot rotates order', async () => {
+		vi.useFakeTimers();
+		fetchMock.mockResolvedValue({ ok: false, status: 404 });
+		const original = makeStreamManifest();
+		const rotated: QueueStreamManifest = {
+			...makeStreamManifest(),
+			snapshot_id: 'snap-rotated',
+			stream_url: '/api/queue-streams/snap-rotated/audio',
+			tracks: [
+				{
+					...original.tracks[1],
+					index: 0,
+					start_offset: 0,
+					end_offset: 20
+				},
+				{
+					...original.tracks[0],
+					index: 1,
+					start_offset: 20,
+					end_offset: 30
+				}
+			]
+		};
+		audioPlayer.onStreamRebuild = vi.fn().mockResolvedValue(rotated);
+		audioPlayer.loadStream(original, 1, { autoplay: false });
+		fakeAudio.fire('loadedmetadata');
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 12;
+		fakeAudio.fire('timeupdate');
+
+		fakeAudio.fire('stalled');
+		await vi.advanceTimersByTimeAsync(5000);
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(audioPlayer.current?.generation.id).toBe('g2');
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(2);
+	});
 });
 
 describe('error handling', () => {

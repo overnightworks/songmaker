@@ -130,6 +130,34 @@ def api_create_library_queue_stream(
     _check_queue_stream_rate_limit(request, user)
 
     songs = list_songs(session, user_id=user.id, light=True)
+    songs = sorted(
+        songs,
+        key=lambda song: (
+            song.album.title if song.album is not None else "",
+            song.track_number,
+            song.id,
+        ),
+    )
+
+    start_gen: Generation | None = None
+    if req.start_generation_id is not None:
+        try:
+            start_gen = check_generation_access(session, req.start_generation_id, user)
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            start_gen = None
+
+    def _library_generation_for_song(song: Song) -> Generation | None:
+        if (
+            start_gen is not None
+            and start_gen.song_id == song.id
+            and not start_gen.is_archived
+            and start_gen.mp3_path
+        ):
+            return start_gen
+        return _pick_library_generation(song)
+
     sources: list[QueueStreamSource] = [
         track_source_from_generation(
             gen,
@@ -139,27 +167,15 @@ def api_create_library_queue_stream(
             audio_url=f"/audio/{gen.mp3_path}",
         )
         for song in songs
-        for gen in [_pick_library_generation(song)]
+        for gen in [_library_generation_for_song(song)]
         if gen is not None
     ]
 
-    if req.start_generation_id is not None:
+    if start_gen is not None:
         rotation_pos = next(
-            (i for i, s in enumerate(sources) if s.generation.id == req.start_generation_id),
+            (i for i, s in enumerate(sources) if s.generation.id == start_gen.id),
             None,
         )
-        if rotation_pos is None:
-            # The clicked generation may not be the song's streamed take
-            # (library streams carry one take per song). Fall back to the
-            # clicked generation's SONG so playback still starts where the
-            # operator pointed. A foreign id matches no source and is
-            # ignored, never a probe.
-            start_gen = session.get(Generation, req.start_generation_id)
-            if start_gen is not None:
-                rotation_pos = next(
-                    (i for i, s in enumerate(sources) if s.generation.song_id == start_gen.song_id),
-                    None,
-                )
         if rotation_pos is not None:
             sources = sources[rotation_pos:] + sources[:rotation_pos]
 

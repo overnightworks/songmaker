@@ -453,11 +453,14 @@ class AudioPlayer {
 			// own track list and resume at the same track position.
 			const fresh = await this.onStreamRebuild?.(state);
 			if (fresh && fresh.tracks.length > 0) {
-				const index = Math.min(state.trackIndex, fresh.tracks.length - 1);
+				const currentId = track?.generation_id;
+				const matched = fresh.tracks.findIndex((item) => item.generation_id === currentId);
+				const index = matched >= 0 ? matched : 0;
 				const freshTrack = fresh.tracks[index];
+				const trackTime = Math.min(state.trackTime, freshTrack.duration);
 				this.loadStream(fresh, index, {
 					autoplay: true,
-					resumeAt: freshTrack.start_offset + Math.min(state.trackTime, freshTrack.duration)
+					resumeAt: freshTrack.start_offset + trackTime
 				});
 				return;
 			}
