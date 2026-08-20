@@ -5,9 +5,9 @@
 		type QueuePlaybackMode
 	} from '$lib/stores/playbackSettings';
 
-	const playbackModes: { value: QueuePlaybackMode; label: string; experimental?: boolean }[] = [
-		{ value: 'classic', label: 'Standard' },
-		{ value: 'stream', label: 'Continuous stream', experimental: true }
+	const playbackModes: { value: QueuePlaybackMode; label: string; note?: string }[] = [
+		{ value: 'stream', label: 'Continuous stream', note: 'Recommended' },
+		{ value: 'classic', label: 'Per-track (legacy)' }
 	];
 </script>
 
@@ -26,8 +26,8 @@
 					onclick={() => setQueuePlaybackMode(mode.value)}
 				>
 					<span>{mode.label}</span>
-					{#if mode.experimental}
-						<small>Experimental</small>
+					{#if mode.note}
+						<small>{mode.note}</small>
 					{/if}
 				</button>
 			{/each}

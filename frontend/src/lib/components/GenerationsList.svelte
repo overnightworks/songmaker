@@ -3,6 +3,7 @@
 	import { EXPIRY_WARN_DAYS } from '$lib/constants';
 	import {
 		playGeneration,
+		playAlbumFromGeneration,
 		playLibraryFromGeneration,
 		queueContext,
 		selectedAlbumId,
@@ -83,7 +84,11 @@
 			return;
 		}
 		const albumId = $selectedAlbumId;
-		if (!albumId && shouldUseQueueStream($queuePlaybackMode)) {
+		if (shouldUseQueueStream($queuePlaybackMode)) {
+			if (albumId) {
+				void playAlbumFromGeneration(albumId, song, gen);
+				return;
+			}
 			void playLibraryFromGeneration(gen);
 			return;
 		}

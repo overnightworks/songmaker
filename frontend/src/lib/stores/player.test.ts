@@ -30,6 +30,7 @@ import {
 	navigateToPlaying,
 	playGeneration,
 	playLibraryFromGeneration,
+	playAlbumFromGeneration,
 	retryLastPlayIntent,
 	playNextSong,
 	playPrevSong,
@@ -905,5 +906,72 @@ describe('rebuildQueueStream routing', () => {
 			{ generation_id: 'g1', entry_id: 'pe1' }
 		]);
 		expect(result).toBe(freshManifest);
+	});
+});
+
+describe('playAlbumFromGeneration', () => {
+	let loadStreamSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		setQueuePlaybackMode('stream');
+		loadStreamSpy = vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
+		toasts.set([]);
+	});
+
+	it('streams the clicked take for that song and the pick for the rest', async () => {
+		const picked = makeGen({ id: 'g-pick', is_picked: true, song_id: 's1' });
+		const clicked = makeGen({
+			id: 'g-click',
+			is_picked: false,
+			song_id: 's1',
+			generation_number: 2,
+			mp3_path: 'a1/click.mp3'
+		});
+		const song1 = makeSong({
+			id: 's1',
+			track_number: 1,
+			generations: [picked, clicked],
+			generation_count: 2
+		});
+		const song2Pick = makeGen({ id: 'g2', is_picked: true, song_id: 's2', mp3_path: 'a1/s2.mp3' });
+		const song2 = makeSong({
+			id: 's2',
+			title: 'Two',
+			track_number: 2,
+			generations: [song2Pick],
+			generation_count: 1
+		});
+		songList.set([song1, song2]);
+		vi.mocked(createQueueStreamSnapshot).mockImplementation(async (tracks) =>
+			makeManifest({
+				tracks: tracks.map((track, index) =>
+					makeTrack({
+						generation_id: track.generation_id,
+						entry_id: track.entry_id ?? null,
+						index,
+						key: track.generation_id
+					})
+				)
+			})
+		);
+
+		await playAlbumFromGeneration('a1', song1, clicked);
+		await Promise.resolve();
+
+		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
+			{ generation_id: 'g-click', entry_id: 'album:s1:g-click' },
+			{ generation_id: 'g2', entry_id: 'album:s2:g2' }
+		]);
+		expect(loadStreamSpy).toHaveBeenCalledWith(
+			expect.objectContaining({
+				tracks: [
+					expect.objectContaining({ generation_id: 'g-click' }),
+					expect.objectContaining({ generation_id: 'g2' })
+				]
+			}),
+			0,
+			expect.objectContaining({ restart: true })
+		);
+		expect(get(queueContext)).toEqual({ type: 'album', albumId: 'a1' });
 	});
 });

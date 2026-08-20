@@ -274,6 +274,48 @@ function bestGen(song: SongItem): GenerationItem | undefined {
 	return song.generations.find((g) => g.is_picked) ?? song.generations[0];
 }
 
+function toAlbumQueueEntry(song: SongItem, gen: GenerationItem): PlaylistEntryItem {
+	return {
+		id: `album:${song.id}:${gen.id}`,
+		position: 0,
+		generation_id: gen.id,
+		song_title: song.title,
+		album_title: song.album_title,
+		artist: song.artist,
+		generation_number: gen.generation_number,
+		mp3_path: gen.mp3_path,
+		seed: gen.seed,
+		model_mode: gen.model_mode
+	};
+}
+
+async function collectAlbumQueue(
+	albumId: string,
+	start?: { song: SongItem; gen: GenerationItem }
+): Promise<{ entries: PlaylistEntryItem[]; startIndex: number }> {
+	const songs = get(songList).filter((s) => s.album_id === albumId);
+	const entries: PlaylistEntryItem[] = [];
+	for (const song of songs) {
+		if (song.generation_count === 0) continue;
+		await ensureGenerationsLoaded(song.id);
+		const fresh = get(songList).find((s) => s.id === song.id);
+		if (!fresh) continue;
+		const gen =
+			start && fresh.id === start.song.id
+				? (fresh.generations.find((g) => g.id === start.gen.id) ?? start.gen)
+				: bestGen(fresh);
+		if (!gen) continue;
+		entries.push({ ...toAlbumQueueEntry(fresh, gen), position: entries.length });
+	}
+	const startIndex = start
+		? Math.max(
+				0,
+				entries.findIndex((entry) => entry.generation_id === start.gen.id)
+			)
+		: 0;
+	return { entries, startIndex };
+}
+
 function currentPlaylistIndex(
 	ctx: { entries: PlaylistEntryItem[]; index: number },
 	current: PlaybackInfo | null = audioPlayer.current
@@ -381,30 +423,9 @@ export async function playPrevSong(): Promise<void> {
 
 export async function playAlbum(albumId: string): Promise<void> {
 	queueContext.set({ type: 'album', albumId });
-	const songs = get(songList).filter((s) => s.album_id === albumId);
-	const playableEntries: PlaylistEntryItem[] = [];
-	for (const song of songs) {
-		if (song.generation_count === 0) continue;
-		await ensureGenerationsLoaded(song.id);
-		const fresh = get(songList).find((s) => s.id === song.id);
-		const gen = fresh ? bestGen(fresh) : undefined;
-		if (gen && fresh) {
-			playableEntries.push({
-				id: `album:${fresh.id}:${gen.id}`,
-				position: playableEntries.length,
-				generation_id: gen.id,
-				song_title: fresh.title,
-				album_title: fresh.album_title,
-				artist: fresh.artist,
-				generation_number: gen.generation_number,
-				mp3_path: gen.mp3_path,
-				seed: gen.seed,
-				model_mode: gen.model_mode
-			});
-		}
-	}
-	if (playableEntries.length === 0) return;
-	const ordered = shuffledWithStart(playableEntries, 0);
+	const { entries, startIndex } = await collectAlbumQueue(albumId);
+	if (entries.length === 0) return;
+	const ordered = shuffledWithStart(entries, startIndex);
 	if (useStreamForQueue()) {
 		void playStreamEntries(ordered.items, ordered.startIndex, { restart: true });
 		return;
@@ -415,6 +436,22 @@ export async function playAlbum(albumId: string): Promise<void> {
 	if (firstGen && firstSong) {
 		playGeneration(firstGen, firstSong);
 	}
+}
+
+export async function playAlbumFromGeneration(
+	albumId: string,
+	song: SongItem,
+	gen: GenerationItem
+): Promise<void> {
+	queueContext.set({ type: 'album', albumId });
+	const { entries, startIndex } = await collectAlbumQueue(albumId, { song, gen });
+	if (entries.length === 0) return;
+	const ordered = shuffledWithStart(entries, startIndex);
+	if (useStreamForQueue()) {
+		void playStreamEntries(ordered.items, ordered.startIndex, { restart: true });
+		return;
+	}
+	playGeneration(gen, song, { restart: true });
 }
 
 function playPlaylistIndex(
