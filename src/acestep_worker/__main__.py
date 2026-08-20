@@ -110,7 +110,7 @@ def main() -> None:
     logging.basicConfig(level=settings.log_level)
     deps = build_deps(settings)
     app = create_app(deps)
-    uvicorn.run(app, host="0.0.0.0", port=settings.worker_port)  # noqa: S104
+    uvicorn.run(app, host="0.0.0.0", port=settings.worker_port)  # noqa: S104  # nosec B104
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -20,7 +20,7 @@ from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
-INTERNAL_TOKEN_HEADER = "X-Internal-Token"
+INTERNAL_TOKEN_HEADER = "X-Internal-Token"  # nosec B105
 
 
 def verify_internal_token(

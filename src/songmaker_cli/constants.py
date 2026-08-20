@@ -55,7 +55,7 @@ SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
 SETTING_CLAUDE_SCORING_MODEL = "claude_scoring_model"
 SETTING_COWRITER_PROVIDER = "cowriter_provider"
 SETTING_COWRITER_MODEL = "cowriter_model"
-SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"
+SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105
 
 MEMORY_SCOPE_USER = "user"
 MEMORY_SCOPE_SONG = "song"

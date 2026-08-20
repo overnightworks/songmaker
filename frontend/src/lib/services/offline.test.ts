@@ -6,6 +6,7 @@ import {
 	buildCacheStreamMessage,
 	buildUncacheStreamMessage,
 	isStreamSaved,
+	saveStream,
 	removeStream,
 	offlinePlaylistMetaKey,
 	playlistOfflineMeta,
@@ -228,6 +229,51 @@ describe('removeStream', () => {
 		store.set(mKey, new Response('{}'));
 		await removeStream(offlineStreamUrl('snap-1'), 'snap-1');
 		expect(store.has(mKey)).toBe(false);
+	});
+});
+
+describe('saveStream', () => {
+	const mockController = { postMessage: vi.fn() };
+	const serviceWorker: { controller: { postMessage: ReturnType<typeof vi.fn> } | null } = {
+		controller: mockController
+	};
+
+	beforeEach(() => {
+		store.clear();
+		vi.clearAllMocks();
+		serviceWorker.controller = mockController;
+		mockCaches.open.mockResolvedValue(mockCache);
+		mockCache.put.mockImplementation(async (url: string | Request, response: Response) => {
+			const key = typeof url === 'string' ? url : (url as Request).url;
+			store.set(key, response);
+		});
+		vi.stubGlobal('caches', mockCaches);
+		vi.stubGlobal('navigator', { serviceWorker });
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it('posts CACHE_STREAM to the controller that is active after caching', async () => {
+		mockController.postMessage.mockImplementation((_msg, ports: MessagePort[]) => {
+			ports[0].postMessage({ type: 'CACHE_PROGRESS', cached: 1, total: 1, done: true });
+		});
+		await saveStream(makeManifest());
+		expect(mockController.postMessage).toHaveBeenCalledWith(
+			expect.objectContaining({ type: 'CACHE_STREAM' }),
+			expect.any(Array)
+		);
+	});
+
+	it('fails if the controller is gone after the cache write', async () => {
+		mockCache.put.mockImplementation(async () => {
+			serviceWorker.controller = null;
+		});
+		await expect(saveStream(makeManifest())).rejects.toThrow(
+			'Service worker not active — cannot save for offline'
+		);
+		expect(mockController.postMessage).not.toHaveBeenCalled();
 	});
 });
 

@@ -6,6 +6,7 @@ export const OFFLINE_STREAMS_CACHE = 'offline-streams';
 
 const LIVE_AUDIO_PATH_PREFIX = '/audio/';
 const QUEUE_STREAM_AUDIO_PATH = /^\/api\/queue-streams\/[^/]+\/audio\/?$/;
+const SERVICE_WORKER_INACTIVE = 'Service worker not active — cannot save for offline';
 export const OFFLINE_STREAM_PATH_PREFIX = '/offline/stream/';
 export const OFFLINE_MANIFEST_PATH_PREFIX = '/offline/manifest/';
 export const OFFLINE_PLAYLIST_META_PATH_PREFIX = '/offline/meta/playlist/';
@@ -222,9 +223,8 @@ export async function saveStream(
 	onProgress?: ProgressCallback,
 	onPin?: PinCallback
 ): Promise<void> {
-	const controller = navigator.serviceWorker?.controller;
-	if (!('serviceWorker' in navigator) || !controller) {
-		throw new Error('Service worker not active — cannot save for offline');
+	if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+		throw new Error(SERVICE_WORKER_INACTIVE);
 	}
 
 	const cache = await caches.open(OFFLINE_STREAMS_CACHE);
@@ -240,6 +240,12 @@ export async function saveStream(
 	);
 
 	return new Promise<void>((resolve, reject) => {
+		const controller = navigator.serviceWorker.controller;
+		if (!controller) {
+			reject(new Error(SERVICE_WORKER_INACTIVE));
+			return;
+		}
+
 		const channel = new MessageChannel();
 
 		channel.port1.onmessage = (event: MessageEvent) => {
