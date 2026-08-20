@@ -1,6 +1,6 @@
 # ACE-Step Integration
 
-Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). The vendored submodule is currently `v0.1.6-100-g931be76`.
+Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). The vendored submodule is pinned to `99da233` on the fork branch `songmaker/vendor-2026-08-20`. That branch is based on upstream `main` at `14c0211` and contains the focused patches from upstream PRs [#1091](https://github.com/ace-step/ACE-Step-1.5/pull/1091) and [#1092](https://github.com/ace-step/ACE-Step-1.5/pull/1092).
 
 ## How Songmaker Uses ACE-Step
 
@@ -362,33 +362,15 @@ These are set on the subprocess by `subprocess_runner.py:build_env()` when it sp
 
 ## VRAM Pre-flight Note
 
-The `vendor/acestep` submodule currently still calls `_vram_preflight_check()` before generation. A previously used local workaround replaced that check with cache cleanup when the pre-flight was too conservative on 24 GB cards.
+The vendored fork keeps `_vram_preflight_check()` enabled by default. Before checking, CUDA generations run `gc.collect()` and `torch.cuda.empty_cache()` so cached allocations do not cause a false rejection. This behavior comes from upstream PR [#1091](https://github.com/ace-step/ACE-Step-1.5/pull/1091).
 
 **Current file:** `vendor/acestep/acestep/core/generation/handler/generate_music.py` (around the `_vram_preflight_check()` call in `GenerateMusicMixin.generate_music()`)
 
-**Workaround:** Replace the `_vram_preflight_check()` call with `gc.collect()` + `torch.cuda.empty_cache()`.
+**Emergency opt-out:** `ACESTEP_SKIP_VRAM_PREFLIGHT=1` skips only the safety check and logs a warning. The flag is CUDA-only, is disabled by default, and is not set in `docker-compose.yml`. Because the worker copies its environment when starting the ACE-Step subprocess, an operator can pass it through the worker container temporarily while diagnosing a false positive.
 
-**Why:** v0.1.6 added a VRAM pre-flight check that's overly conservative on 24 GB cards when the desktop shares the GPU. It reports e.g. "1.3 GB free, needs 1.4 GB" and blocks generation, even though PyTorch's caching allocator can handle it. The check did not exist in v0.1.5 and songs generated fine. See ACE-Step issue #822 for similar reports.
+**Policy:** Do not enable the opt-out as a normal deployment default. If generation only succeeds with the flag, capture the reported free/required VRAM and the actual peak usage, then adjust the estimator or deployment budget. An out-of-memory failure remains possible while the safety check is bypassed.
 
-**Patch:**
-```python
-# In GenerateMusicMixin.generate_music(), replace:
-vram_error = self._vram_preflight_check(
-    actual_batch_size=actual_batch_size,
-    audio_duration=audio_duration,
-    guidance_scale=guidance_scale,
-)
-if vram_error is not None:
-    return vram_error
-
-# With:
-gc.collect()
-torch.cuda.empty_cache()
-```
-
-**No upstream option exists** — no env var, config flag, or API parameter disables the pre-flight. Only `offload_to_cpu=True` bypasses it (too slow).
-
-**When to retire this note:** When the GPU has enough spare VRAM that the check passes reliably (e.g., after adding a second GPU for desktop+scoring, freeing the 3090), or when ACE-Step adds an official skip flag upstream.
+Targeted fork tests lock both branches of the policy: the pre-flight runs when the flag is unset and is bypassed only for an explicit truthy opt-out.
 
 ## Deferred features (blocked upstream)
 
