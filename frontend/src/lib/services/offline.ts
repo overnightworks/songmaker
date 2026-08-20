@@ -8,7 +8,17 @@ const LIVE_AUDIO_PATH_PREFIX = '/audio/';
 const QUEUE_STREAM_AUDIO_PATH = /^\/api\/queue-streams\/[^/]+\/audio\/?$/;
 export const OFFLINE_STREAM_PATH_PREFIX = '/offline/stream/';
 export const OFFLINE_MANIFEST_PATH_PREFIX = '/offline/manifest/';
+export const OFFLINE_PLAYLIST_META_PATH_PREFIX = '/offline/meta/playlist/';
+export const OFFLINE_STREAM_META_VERSION = 1;
 const OFFLINE_UNAVAILABLE_STATUS = 503;
+
+export interface OfflinePlaylistStreamMeta {
+	playlist_id: string;
+	snapshot_id: string;
+	stream_url: string;
+	manifest_url: string;
+	version: number;
+}
 
 // ── Message types ──────────────────────────────────────────────────────────
 
@@ -44,6 +54,39 @@ export function manifestCacheKey(snapshotId: string): string {
 /** Synthetic URL the service worker intercepts for a saved stream. */
 export function offlineStreamUrl(snapshotId: string): string {
 	return `${OFFLINE_STREAM_PATH_PREFIX}${snapshotId}`;
+}
+
+export function offlinePlaylistMetaKey(playlistId: string): string {
+	return `${OFFLINE_PLAYLIST_META_PATH_PREFIX}${playlistId}`;
+}
+
+export function isOfflinePlaylistStreamMeta(value: unknown): value is OfflinePlaylistStreamMeta {
+	if (value === null || typeof value !== 'object') return false;
+	const record = value as Record<string, unknown>;
+	return (
+		record.version === OFFLINE_STREAM_META_VERSION &&
+		typeof record.playlist_id === 'string' &&
+		record.playlist_id.length > 0 &&
+		typeof record.snapshot_id === 'string' &&
+		record.snapshot_id.length > 0 &&
+		typeof record.stream_url === 'string' &&
+		record.stream_url.length > 0 &&
+		typeof record.manifest_url === 'string' &&
+		record.manifest_url.length > 0
+	);
+}
+
+export function playlistOfflineMeta(
+	playlistId: string,
+	snapshotId: string
+): OfflinePlaylistStreamMeta {
+	return {
+		playlist_id: playlistId,
+		snapshot_id: snapshotId,
+		stream_url: offlineStreamUrl(snapshotId),
+		manifest_url: manifestCacheKey(snapshotId),
+		version: OFFLINE_STREAM_META_VERSION
+	};
 }
 
 export function requestPathname(url: string): string {
@@ -248,4 +291,51 @@ export async function removeStream(streamUrl: string, snapshotId: string): Promi
 		const cache = await caches.open(OFFLINE_STREAMS_CACHE);
 		await Promise.all([cache.delete(streamUrl), cache.delete(manifestCacheKey(snapshotId))]);
 	}
+}
+
+export async function rememberPlaylistOfflineStream(
+	playlistId: string,
+	snapshotId: string
+): Promise<void> {
+	if (!('caches' in globalThis)) return;
+	const cache = await caches.open(OFFLINE_STREAMS_CACHE);
+	const meta = playlistOfflineMeta(playlistId, snapshotId);
+	await cache.put(
+		offlinePlaylistMetaKey(playlistId),
+		new Response(JSON.stringify(meta), {
+			headers: { 'Content-Type': 'application/json' }
+		})
+	);
+}
+
+export async function forgetPlaylistOfflineStream(playlistId: string): Promise<void> {
+	if (!('caches' in globalThis)) return;
+	const cache = await caches.open(OFFLINE_STREAMS_CACHE);
+	await cache.delete(offlinePlaylistMetaKey(playlistId));
+}
+
+export async function loadSavedOfflinePlaylist(
+	playlistId: string
+): Promise<OfflinePlaylistStreamMeta | null> {
+	if (!('caches' in globalThis)) return null;
+	const cache = await caches.open(OFFLINE_STREAMS_CACHE);
+	const match = await cache.match(offlinePlaylistMetaKey(playlistId));
+	if (!match) return null;
+	let parsed: unknown;
+	try {
+		parsed = await match.json();
+	} catch {
+		await cache.delete(offlinePlaylistMetaKey(playlistId));
+		return null;
+	}
+	if (!isOfflinePlaylistStreamMeta(parsed)) {
+		await cache.delete(offlinePlaylistMetaKey(playlistId));
+		return null;
+	}
+	const saved = await isStreamSaved(parsed.stream_url);
+	if (!saved) {
+		await cache.delete(offlinePlaylistMetaKey(playlistId));
+		return null;
+	}
+	return parsed;
 }

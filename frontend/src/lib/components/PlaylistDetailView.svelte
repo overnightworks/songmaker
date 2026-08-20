@@ -15,8 +15,10 @@
 	import {
 		saveStream,
 		removeStream,
-		isStreamSaved,
 		offlineStreamUrl,
+		rememberPlaylistOfflineStream,
+		forgetPlaylistOfflineStream,
+		loadSavedOfflinePlaylist,
 		type StreamProgress
 	} from '$lib/services/offline';
 	import ActionButton from './ActionButton.svelte';
@@ -142,7 +144,6 @@
 	let offlineSavedStreamUrl = $state<string | null>(null);
 	let offlineSavedSnapshotId = $state<string | null>(null);
 
-	/** Re-checks the cache whenever the viewed playlist changes. */
 	$effect(() => {
 		let cancelled = false;
 		offlineSavedStreamUrl = null;
@@ -154,29 +155,11 @@
 				cancelled = true;
 			};
 		}
-		// Persist saved-stream URLs in sessionStorage keyed by playlist id so the
-		// indicator survives component re-mounts within the same session.
-		const stored = sessionStorage.getItem(`offline-stream:${detail.id}`);
-		if (stored) {
-			try {
-				const { streamUrl, snapshotId } = JSON.parse(stored) as {
-					streamUrl: string;
-					snapshotId: string;
-				};
-				// Verify it is actually still in the cache.
-				isStreamSaved(offlineStreamUrl(snapshotId)).then((saved) => {
-					if (cancelled) return;
-					if (saved) {
-						offlineSavedStreamUrl = offlineStreamUrl(snapshotId);
-						offlineSavedSnapshotId = snapshotId;
-					} else {
-						sessionStorage.removeItem(`offline-stream:${detail.id}`);
-					}
-				});
-			} catch {
-				sessionStorage.removeItem(`offline-stream:${detail.id}`);
-			}
-		}
+		void loadSavedOfflinePlaylist(detail.id).then((meta) => {
+			if (cancelled || !meta) return;
+			offlineSavedStreamUrl = meta.stream_url;
+			offlineSavedSnapshotId = meta.snapshot_id;
+		});
 		return () => {
 			cancelled = true;
 		};
@@ -201,13 +184,7 @@
 			);
 			offlineSavedStreamUrl = offlineStreamUrl(manifest.snapshot_id);
 			offlineSavedSnapshotId = manifest.snapshot_id;
-			sessionStorage.setItem(
-				`offline-stream:${playlistDetail.id}`,
-				JSON.stringify({
-					streamUrl: offlineStreamUrl(manifest.snapshot_id),
-					snapshotId: manifest.snapshot_id
-				})
-			);
+			await rememberPlaylistOfflineStream(playlistDetail.id, manifest.snapshot_id);
 			addToast('Saved for offline', 'success');
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : 'Save failed';
@@ -225,7 +202,7 @@
 				addToast('Server unpin failed — the download is removed locally.', 'info');
 			});
 			await removeStream(offlineSavedStreamUrl, offlineSavedSnapshotId);
-			sessionStorage.removeItem(`offline-stream:${playlistDetail.id}`);
+			await forgetPlaylistOfflineStream(playlistDetail.id);
 			offlineSavedStreamUrl = null;
 			offlineSavedSnapshotId = null;
 			addToast('Offline copy removed', 'info');

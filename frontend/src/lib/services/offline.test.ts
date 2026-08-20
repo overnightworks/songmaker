@@ -7,6 +7,12 @@ import {
 	buildUncacheStreamMessage,
 	isStreamSaved,
 	removeStream,
+	offlinePlaylistMetaKey,
+	playlistOfflineMeta,
+	rememberPlaylistOfflineStream,
+	forgetPlaylistOfflineStream,
+	loadSavedOfflinePlaylist,
+	OFFLINE_STREAM_META_VERSION,
 	isLiveAudioPath,
 	isOfflineAudioPath,
 	shouldInterceptInServiceWorker,
@@ -222,5 +228,77 @@ describe('removeStream', () => {
 		store.set(mKey, new Response('{}'));
 		await removeStream(offlineStreamUrl('snap-1'), 'snap-1');
 		expect(store.has(mKey)).toBe(false);
+	});
+});
+
+describe('playlist offline metadata', () => {
+	beforeEach(() => {
+		store.clear();
+		sessionStorage.clear();
+		vi.clearAllMocks();
+		mockCaches.open.mockResolvedValue(mockCache);
+		mockCache.match.mockImplementation(async (url: string | Request) => {
+			const key = typeof url === 'string' ? url : url.url;
+			return store.get(key);
+		});
+		mockCache.put.mockImplementation(async (url: string | Request, response: Response) => {
+			const key = typeof url === 'string' ? url : (url as Request).url;
+			store.set(key, response);
+		});
+		mockCache.delete.mockImplementation(async (url: string | Request) => {
+			const key = typeof url === 'string' ? url : (url as Request).url;
+			return store.delete(key);
+		});
+		vi.stubGlobal('caches', mockCaches);
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		sessionStorage.clear();
+	});
+
+	it('reconstructs saved status from cache metadata with empty sessionStorage', async () => {
+		const meta = playlistOfflineMeta('pl-1', 'snap-1');
+		store.set(offlinePlaylistMetaKey('pl-1'), new Response(JSON.stringify(meta)));
+		store.set(meta.stream_url, new Response('audio'));
+
+		const loaded = await loadSavedOfflinePlaylist('pl-1');
+
+		expect(sessionStorage.length).toBe(0);
+		expect(loaded).toEqual(meta);
+		expect(loaded?.version).toBe(OFFLINE_STREAM_META_VERSION);
+	});
+
+	it('forgets metadata when the stream body is gone', async () => {
+		const meta = playlistOfflineMeta('pl-1', 'snap-1');
+		store.set(offlinePlaylistMetaKey('pl-1'), new Response(JSON.stringify(meta)));
+
+		expect(await loadSavedOfflinePlaylist('pl-1')).toBeNull();
+		expect(store.has(offlinePlaylistMetaKey('pl-1'))).toBe(false);
+	});
+
+	it('ignores an unknown metadata version', async () => {
+		store.set(
+			offlinePlaylistMetaKey('pl-1'),
+			new Response(
+				JSON.stringify({
+					...playlistOfflineMeta('pl-1', 'snap-1'),
+					version: OFFLINE_STREAM_META_VERSION + 1
+				})
+			)
+		);
+		store.set(offlineStreamUrl('snap-1'), new Response('audio'));
+
+		expect(await loadSavedOfflinePlaylist('pl-1')).toBeNull();
+	});
+
+	it('writes and removes playlist metadata in the cache', async () => {
+		await rememberPlaylistOfflineStream('pl-1', 'snap-9');
+		const raw = store.get(offlinePlaylistMetaKey('pl-1'));
+		expect(raw).toBeDefined();
+		expect(await raw!.json()).toEqual(playlistOfflineMeta('pl-1', 'snap-9'));
+
+		await forgetPlaylistOfflineStream('pl-1');
+		expect(store.has(offlinePlaylistMetaKey('pl-1'))).toBe(false);
 	});
 });
