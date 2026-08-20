@@ -290,4 +290,12 @@
 		gap: 6px;
 		justify-content: flex-end;
 	}
+
+	@media (max-width: 768px) {
+		.memory-body {
+			max-height: min(300px, 38dvh);
+			overflow-y: auto;
+			overscroll-behavior-y: contain;
+		}
+	}
 </style>
