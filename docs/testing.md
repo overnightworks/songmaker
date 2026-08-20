@@ -25,9 +25,17 @@ Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tes
 
 ## Coverage Targets
 
-- **CI**: 90% overall (scoring modules excluded — require GPU extras not installed in CI, see `.coveragerc-ci`)
+- **CI backend**: 90% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (scoring modules excluded — require GPU extras not installed in CI, see `.coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
 - **Local**: aim for 100% on non-scoring core modules (exclude `main.py` CLI entrypoint)
-- **Frontend**: 100% statement coverage on `lib/` (`pnpm test` to see current count)
+- **CI frontend**: `pnpm test:coverage` (70% statement/line floor on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`. 100% on `lib/` remains a local aspiration, not a CI gate.
+
+GitHub workflows (`.github/workflows/ci.yml`, `security.yml`) run on push/PR to `main`. Security also runs weekly. The live checks are:
+
+| Job | What |
+|---|---|
+| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · pytest + 90% coverage |
+| Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
+| Security | bandit · pip-audit · `pnpm audit --prod` |
 
 ## Test Structure
 

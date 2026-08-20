@@ -11,7 +11,12 @@ export default defineConfig({
 			provider: 'v8',
 			include: ['src/lib/**/*.ts'],
 			exclude: ['src/lib/index.ts', 'src/lib/api/types.ts'],
-			reporter: ['text', 'text-summary']
+			reporter: ['text', 'text-summary'],
+			all: false,
+			thresholds: {
+				statements: 70,
+				lines: 70
+			}
 		}
 	}
 });

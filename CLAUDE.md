@@ -8,7 +8,7 @@ AI-powered song generation platform. SvelteKit web UI + FastAPI backend + Postgr
 
 Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [security](docs/security.md) | [ACE-Step](docs/acestep.md)
 
-**Backlog:** [BACKLOG.md](BACKLOG.md) at the repo root. Always consult it when the user asks "what should we do next?", "what's on the roadmap?", or "anything in the queue?" — don't assume the `plans/` directory is the full picture. BACKLOG.md holds feature-level concept notes; `plans/` holds per-task concept notes only while work is in flight.
+**Backlog:** GitHub Issues + Milestones at [FlexOr2/songmaker](https://github.com/FlexOr2/songmaker/issues). Always query live (`gh issue list --repo FlexOr2/songmaker --state open --json number,title,milestone,labels`) when the user asks "what should we do next?", "what's on the roadmap?", or "anything in the queue?" — don't assume `plans/` is the full picture. New work is filed as a GitHub issue **with a milestone** before it is built. `plans/` holds per-task concept notes only while work is in flight.
 
 **ACE-Step submodule:** `vendor/acestep` → [FlexOr2/ACE-Step-1.5](https://github.com/FlexOr2/ACE-Step-1.5) (our fork). The fork carries patches not yet upstream, especially HTTP API param exposure; the old VRAM preflight skip is not currently applied in the vendored file (see `docs/acestep.md`). Upstream remote is `upstream` inside the submodule. Sync periodically with `cd vendor/acestep && git fetch upstream && git merge upstream/main`. When adding or modifying ACE-Step params, read the fork's HTTP API code directly (`vendor/acestep/acestep/api/http/`) — it's the source of truth for available params and their names. **For PR status questions** ("what's open upstream?", "are my PRs merged?", "anything blocked?") always query GitHub live with `gh pr list --repo ACE-Step/ACE-Step-1.5 --author FlexOr2 --state open --json number,title,isDraft,mergeStateStatus,reviewDecision,updatedAt` — don't trust memory snapshots, they go stale within days.
 
@@ -35,7 +35,7 @@ at the project root (gitignored).
 
 ```bash
 # Local toolchain (tests, lint, IDE)
-uv sync --extra server --extra scoring --extra whisper --extra dev
+uv sync --extra server --extra scoring --extra whisper --extra mcp --extra dev
 
 # Run the live stack — agents: ALWAYS run this in the background
 # (Bash tool: run_in_background=true). Cold-cache rebuilds take 8-15 minutes
@@ -56,17 +56,20 @@ During iteration, run **targeted tests** for the files you changed + the linter.
 ```bash
 # During iteration — fast feedback
 ruff check src/ tests/
+python scripts/check_no_silent_fallbacks.py src/
 pytest tests/test_foo.py -q              # just the relevant test file(s)
 
-# Before committing — full parallel suite + coverage
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov-report=term-missing
+# Before committing — full parallel suite + coverage (matches GitHub CI)
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=90 --cov-config=.coveragerc-ci
+python scripts/generate_types.py --check
 
-# Frontend
-cd frontend && pnpm check && pnpm lint && pnpm test
+# Frontend (matches GitHub CI)
+cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
-- CI enforces 90% overall coverage; scoring modules excluded from CI (require GPU extras). Locally, aim for 100% on non-scoring modules (exclude `main.py` CLI entrypoint).
+- CI enforces 90% backend coverage (`songmaker_cli` + engines + `acestep_worker`; scoring modules excluded — require GPU extras) and a 70% frontend `lib/` floor plus `pnpm build`. Locally, aim for 100% on non-scoring Python modules (exclude `main.py` CLI entrypoint).
 - Docs (`docs/`) must stay accurate after changes
+- Open work lives in GitHub Issues with a milestone. Do not add items to a markdown backlog.
 
 ## Schema Changes
 
@@ -83,7 +86,7 @@ alembic upgrade head
 | Scorer | `scoring/{name}.py` → `scoring/models.py` → `pipeline.py` count → `api_models/` names | `scoring/silence_detection.py` |
 | DB model | `db/models.py` → `db/queries/{domain}.py` → Alembic migration | `db/models.py:Song` |
 | Frontend component | `lib/components/` → `lib/stores/` if stateful → `lib/api/client.ts` if new API | `SongList.svelte` |
-| Plan / design doc | `plans/{name}.md` — **concept only** (goal, locked-in decisions, hard constraints, "first step: read the live code"). See "Plan-writing convention" below. Add `**Status:** Proposed\|In progress\|Done\|Abandoned` and `**Date:** YYYY-MM-DD` headers. Delete `Done`/`Abandoned` plans — git history keeps them recoverable. | `plans/jobs-module-split.md` |
+| Work item | GitHub issue **with a milestone** (`gh issue create --milestone …`). Concept notes for in-flight work may live in `plans/{name}.md` until the issue closes, then delete the plan. | [issues](https://github.com/FlexOr2/songmaker/issues) |
 
 ## Plan-writing convention
 
@@ -91,9 +94,9 @@ Detailed implementation plans rot. Symbol lists, line counts, and step-by-step m
 
 | Task size | Artifact |
 |---|---|
-| **Small** (< 30 min — rename a function, add an index, fix a typo) | No plan. Execute directly. |
-| **Medium / future work** (hours, has decisions worth capturing) | Concept note in `plans/{name}.md`, ~10–30 lines: **goal** (1–2 sentences), **locked-in decisions** (bullets — things the user already answered), **hard constraints** (bullets — things the executor cannot violate), **first step** (always "read the live code, design + execute"). The executing agent generates their own implementation plan in-session if they want one — don't pre-write it. |
-| **Live multi-session execution** (multi-agent or multi-day work in flight) | A detailed plan IS appropriate as a live coordination doc, but treat it as **temporary**. Delete once execution finishes — git history keeps it if needed. Don't keep refreshing it after the work is done. |
+| **Small** (< 30 min — rename a function, add an index, fix a typo) | No issue, no plan. Execute directly. |
+| **Medium / future work** (hours, has decisions worth capturing) | GitHub issue **with a milestone**. Body is a concept note: **goal** (1–2 sentences), **locked-in decisions**, **hard constraints**, **first step** ("read the live code, design + execute"). No `plans/` file. |
+| **Live multi-session execution** (multi-agent or multi-day work in flight) | GitHub issue + a temporary `plans/{name}.md` as a live coordination doc. Delete the plan once the issue closes. |
 
 **Why:** detailed plans for future work pretend to know things only the executor can know. The agent is closer to the truth at execution time than the plan ever can be. Pre-written symbol lists, file structures, and step orders bias the executor toward the planner's pre-conception and need maintenance every time the code changes underneath. Concept notes survive code changes because they don't depend on details.
 

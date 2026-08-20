@@ -66,7 +66,7 @@ The local Python `.venv` exists for **tests, type checking, and IDE autocomplete
 
 ```bash
 # One-time setup
-uv sync --extra server --extra scoring --extra whisper --extra dev
+uv sync --extra server --extra scoring --extra whisper --extra mcp --extra dev
 
 # Run the test suite
 pytest tests/ -n auto -q
@@ -75,7 +75,7 @@ pytest tests/ -n auto -q
 ruff check src/ tests/
 
 # Frontend tests / lint / type-check
-cd frontend && pnpm install && pnpm test && pnpm lint && pnpm check
+cd frontend && pnpm install && pnpm test:coverage && pnpm lint && pnpm check && pnpm build
 ```
 
 Tests run against an in-memory SQLite database (no Postgres needed for unit tests) and `fakeredis`. The live Docker stack and the test suite are fully independent — you can run tests while the Docker stack is up.

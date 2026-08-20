@@ -106,6 +106,9 @@ RULES: list[Rule] = [
         ),
         allowlist={
             "src/acestep_worker/task_store.py",
+            # On-disk queue-stream JSON, not an API/domain object.
+            "src/songmaker_cli/queue_streams.py:547",
+            "src/songmaker_cli/queue_streams.py:592",
         },
     ),
     Rule(

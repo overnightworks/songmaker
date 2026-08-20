@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -36,7 +37,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
-        run: pip install -e ".[server,dev]" pytest-cov
+        run: pip install -e ".[server,dev,mcp]" pytest-cov
 
       - name: Ruff lint
         run: ruff check src/ tests/
@@ -51,7 +52,7 @@ jobs:
         run: |
           set -o pipefail
           pytest tests/ -n auto -q --tb=short \
-            --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine \
+            --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker \
             --cov-report=term-missing \
             --cov-fail-under=90 \
             --cov-config=.coveragerc-ci | tee pytest-output.txt
@@ -97,13 +98,18 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Tests
+      - name: Tests with coverage
         run: |
           set -o pipefail
-          pnpm test | tee vitest-output.txt
+          pnpm test:coverage | tee vitest-output.txt
+
+      - name: Production build
+        run: pnpm build
 
       - name: Test summary
         if: always()
         run: |
           line=$(grep -E '^\s*Tests\s' vitest-output.txt || echo 'Tests  ? passed')
+          cov=$(grep -E 'Statements\s*:' vitest-output.txt | tail -1 || true)
           echo "### Frontend: ${line}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$cov" ]; then echo "### Coverage: ${cov}" >> "$GITHUB_STEP_SUMMARY"; fi

@@ -3,8 +3,11 @@ name: Security
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   schedule:
     - cron: "0 6 * * 1" # Weekly Monday 06:00 UTC
+  workflow_dispatch:
 
 concurrency:
   group: security-${{ github.ref }}
@@ -38,7 +41,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install project + pip-audit
-        run: pip install -e ".[server,dev]" pip-audit
+        run: pip install -e ".[server,dev,mcp]" pip-audit
 
       - name: Audit Python dependencies
         run: pip-audit --skip-editable --ignore-vuln CVE-2026-4539
