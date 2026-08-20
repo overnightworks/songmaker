@@ -35,13 +35,17 @@ Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tes
 - **Local**: aim for 100% on non-scoring core modules (exclude `main.py` CLI entrypoint)
 - **CI frontend**: `pnpm test:coverage` (70% statement/line floor on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`. 100% on `lib/` remains a local aspiration, not a CI gate.
 
-GitHub workflows (`.github/workflows/ci.yml`, `security.yml`) run on push/PR to `main`. Security also runs weekly. The live checks are:
+GitHub workflows (`.github/workflows/ci.yml`, `security.yml`, and
+`requirements.yml`) run on push/PR to `main`. Security also runs weekly. The
+requirement workflow is a separate visible check, not an enforced merge gate
+while issue #31 remains open. The live checks are:
 
 | Job | What |
 |---|---|
 | Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · pytest + 90% coverage |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit · `pnpm audit --prod` |
+| Requirements | strict offline requirement/acceptance schema · exact bytes and linear history · exact PR/push base · derived PRODUCT view |
 
 ## Test Structure
 

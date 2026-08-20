@@ -91,6 +91,9 @@ BACKUP_DIR=/path/to/backup ./scripts/backup.sh
 ## Docs
 
 - [CLAUDE.md](CLAUDE.md) — project conventions, code patterns, and "Known Technical Debt." Read this first if you're contributing.
+- [docs/VISION.md](docs/VISION.md) — non-normative product overview and pointer to approved intent
+- [docs/requirements/](docs/requirements/) — normative requirement grammar and revision registry
+- [docs/PRODUCT.md](docs/PRODUCT.md) — generated requirement/acceptance count view; no implementation claim yet
 - [docs/architecture.md](docs/architecture.md) — system design, data model, API endpoints, worker pool, monitoring, backup
 - [docs/security.md](docs/security.md) — auth, sessions, CSRF, rate limiting, security headers, trust boundaries
 - [docs/testing.md](docs/testing.md) — test structure, fixtures, coverage targets
