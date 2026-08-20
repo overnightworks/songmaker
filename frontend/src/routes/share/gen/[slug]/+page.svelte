@@ -179,19 +179,6 @@
 		}
 	}
 
-	.center {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		height: 60dvh;
-		color: var(--text-muted, #888);
-		font-size: 1.1rem;
-	}
-
-	.error {
-		color: var(--primary, #ff3220);
-	}
-
 	.gen-header {
 		text-align: center;
 		margin-bottom: 2rem;

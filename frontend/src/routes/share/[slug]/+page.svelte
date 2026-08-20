@@ -89,7 +89,10 @@
 	}
 
 	async function getStreamManifest(): Promise<QueueStreamManifest> {
-		if (streamManifest && Date.parse(streamManifest.expires_at) > Date.now() + STREAM_REFRESH_MARGIN_MS) {
+		if (
+			streamManifest &&
+			Date.parse(streamManifest.expires_at) > Date.now() + STREAM_REFRESH_MARGIN_MS
+		) {
 			return streamManifest;
 		}
 		streamManifest = await fetchSharedAlbumStream(slug);
@@ -299,19 +302,6 @@
 		50% {
 			transform: translate(20px, -15px);
 		}
-	}
-
-	.center {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		height: 60dvh;
-		color: var(--text-muted, #888);
-		font-size: 1.1rem;
-	}
-
-	.error {
-		color: var(--primary, #ff3220);
 	}
 
 	.album-header {
