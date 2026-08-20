@@ -88,6 +88,80 @@ def validate_audio_path(audio_path: str) -> None:
         )
 
 
+def _build_submit_payload(config: AceStepConfig) -> dict[str, object]:
+    """Build the canonical ``/release_task`` payload for one generation."""
+    payload: dict[str, object] = {
+        "task_type": config.task_type,
+        "prompt": config.prompt,
+        "lyrics": config.lyrics,
+        "bpm": config.bpm,
+        "audio_duration": config.audio_duration,
+        "key_scale": config.key_scale,
+        "time_signature": config.time_signature,
+        "vocal_language": config.vocal_language,
+        "seed": config.seed,
+        "use_random_seed": config.seed < 0,
+        "inference_steps": config.inference_steps,
+        "guidance_scale": config.guidance_scale,
+        "shift": config.shift,
+        "thinking": config.thinking,
+        "lm_temperature": config.lm_temperature,
+        "lm_top_k": config.lm_top_k,
+        "lm_top_p": config.lm_top_p,
+        "lm_cfg_scale": config.lm_cfg_scale,
+        "infer_method": config.infer_method,
+        "sampler_mode": config.sampler_mode,
+        "velocity_norm_threshold": config.velocity_norm_threshold,
+        "velocity_ema_factor": config.velocity_ema_factor,
+        "latent_shift": config.latent_shift,
+        "latent_rescale": config.latent_rescale,
+        "audio_format": "wav",
+        "batch_size": config.batch_size,
+    }
+    if config.lm_negative_prompt:
+        payload["lm_negative_prompt"] = config.lm_negative_prompt
+    if config.src_audio_path:
+        payload["src_audio_path"] = config.src_audio_path
+    if config.task_type == "repaint":
+        payload["repainting_start"] = config.repainting_start
+        payload["repainting_end"] = config.repainting_end
+        if config.repaint_mode:
+            payload["repaint_mode"] = config.repaint_mode
+        if config.repaint_strength != 0.5:
+            payload["repaint_strength"] = config.repaint_strength
+        if config.repaint_latent_crossfade_frames > 0:
+            payload["repaint_latent_crossfade_frames"] = (
+                config.repaint_latent_crossfade_frames
+            )
+        if config.repaint_wav_crossfade_sec > 0:
+            payload["repaint_wav_crossfade_sec"] = config.repaint_wav_crossfade_sec
+    if config.task_type == "cover":
+        payload["audio_cover_strength"] = config.audio_cover_strength
+        if config.cover_noise_strength > 0:
+            payload["cover_noise_strength"] = config.cover_noise_strength
+    if config.reference_audio_path:
+        payload["reference_audio_path"] = config.reference_audio_path
+    if config.timesteps:
+        payload["timesteps"] = config.timesteps
+    if not config.use_cot_caption:
+        payload["use_cot_caption"] = False
+    if not config.use_cot_language:
+        payload["use_cot_language"] = False
+    if config.constrained_decoding:
+        payload["constrained_decoding"] = True
+    if config.lm_repetition_penalty != 1.0:
+        payload["lm_repetition_penalty"] = config.lm_repetition_penalty
+    if config.use_adg:
+        payload["use_adg"] = True
+    if config.cfg_interval_start > 0.0:
+        payload["cfg_interval_start"] = config.cfg_interval_start
+    if config.cfg_interval_end < 1.0:
+        payload["cfg_interval_end"] = config.cfg_interval_end
+    if config.model:
+        payload["model"] = config.model
+    return payload
+
+
 class AceStepClient:
     """HTTP client for the ACE-Step 1.5 REST API.
 
@@ -215,68 +289,7 @@ class AceStepClient:
         Raises:
             TaskSubmissionError: On persistent network error or missing task_id.
         """
-        payload: dict[str, object] = {
-            "task_type": config.task_type,
-            "prompt": config.prompt,
-            "lyrics": config.lyrics,
-            "bpm": config.bpm,
-            "audio_duration": config.audio_duration,
-            "key_scale": config.key_scale,
-            "time_signature": config.time_signature,
-            "vocal_language": config.vocal_language,
-            "seed": config.seed,
-            "use_random_seed": config.seed < 0,
-            "inference_steps": config.inference_steps,
-            "guidance_scale": config.guidance_scale,
-            "shift": config.shift,
-            "thinking": config.thinking,
-            "lm_temperature": config.lm_temperature,
-            "lm_top_k": config.lm_top_k,
-            "lm_top_p": config.lm_top_p,
-            "lm_cfg_scale": config.lm_cfg_scale,
-            "infer_method": config.infer_method,
-            "audio_format": "wav",
-            "batch_size": config.batch_size,
-        }
-        if config.lm_negative_prompt:
-            payload["lm_negative_prompt"] = config.lm_negative_prompt
-        if config.src_audio_path:
-            payload["src_audio_path"] = config.src_audio_path
-        if config.task_type == "repaint":
-            payload["repainting_start"] = config.repainting_start
-            payload["repainting_end"] = config.repainting_end
-            if config.repaint_mode:
-                payload["repaint_mode"] = config.repaint_mode
-            if config.repaint_strength != 0.5:
-                payload["repaint_strength"] = config.repaint_strength
-            if config.repaint_latent_crossfade_frames > 0:
-                payload["repaint_latent_crossfade_frames"] = config.repaint_latent_crossfade_frames
-            if config.repaint_wav_crossfade_sec > 0:
-                payload["repaint_wav_crossfade_sec"] = config.repaint_wav_crossfade_sec
-        if config.task_type == "cover":
-            payload["audio_cover_strength"] = config.audio_cover_strength
-            if config.cover_noise_strength > 0:
-                payload["cover_noise_strength"] = config.cover_noise_strength
-        if config.reference_audio_path:
-            payload["reference_audio_path"] = config.reference_audio_path
-        if config.timesteps:
-            payload["timesteps"] = config.timesteps
-        if not config.use_cot_caption:
-            payload["use_cot_caption"] = False
-        if not config.use_cot_language:
-            payload["use_cot_language"] = False
-        if config.constrained_decoding:
-            payload["constrained_decoding"] = True
-        if config.lm_repetition_penalty != 1.0:
-            payload["lm_repetition_penalty"] = config.lm_repetition_penalty
-        if config.use_adg:
-            payload["use_adg"] = True
-        if config.cfg_interval_start > 0.0:
-            payload["cfg_interval_start"] = config.cfg_interval_start
-        if config.cfg_interval_end < 1.0:
-            payload["cfg_interval_end"] = config.cfg_interval_end
-        if config.model:
-            payload["model"] = config.model
+        payload = _build_submit_payload(config)
 
         last_exc: Exception | None = None
         for attempt in range(SUBMIT_RETRIES):

@@ -53,6 +53,57 @@ def test_submit_task_success() -> None:
     assert task_id == "abc123"
 
 
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        (
+            AceStepConfig(prompt="test", lyrics="test"),
+            {
+                "sampler_mode": "euler",
+                "velocity_norm_threshold": 0.0,
+                "velocity_ema_factor": 0.0,
+                "latent_shift": 0.0,
+                "latent_rescale": 1.0,
+                "use_random_seed": True,
+            },
+        ),
+        (
+            AceStepConfig(
+                prompt="test",
+                lyrics="test",
+                seed=42,
+                sampler_mode="heun",
+                velocity_norm_threshold=2.0,
+                velocity_ema_factor=0.1,
+                latent_shift=0.05,
+                latent_rescale=1.2,
+            ),
+            {
+                "sampler_mode": "heun",
+                "velocity_norm_threshold": 2.0,
+                "velocity_ema_factor": 0.1,
+                "latent_shift": 0.05,
+                "latent_rescale": 1.2,
+                "use_random_seed": False,
+            },
+        ),
+    ],
+)
+def test_submit_task_forwards_dit_params_and_seed_policy(
+    config: AceStepConfig, expected: dict[str, object],
+) -> None:
+    """The payload handed to the HTTP sender contains every visible DiT knob."""
+    client = AceStepClient()
+
+    with patch.object(
+        client, "_send_submit_request", return_value="abc123",
+    ) as mock_send:
+        assert client._submit_task(config) == "abc123"
+
+    payload = mock_send.call_args.args[0]
+    assert {name: payload[name] for name in expected} == expected
+
+
 def test_submit_task_failure() -> None:
     client = AceStepClient()
     config = AceStepConfig(prompt="test", lyrics="test")

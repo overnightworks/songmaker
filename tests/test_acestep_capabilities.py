@@ -33,6 +33,19 @@ def test_turbo_hides_cfg_related_params() -> None:
         assert "cfg_interval_end" in hidden
 
 
+def test_turbo_exposes_sampler_velocity_and_latent_params() -> None:
+    visible_dit_params = {
+        "sampler_mode",
+        "velocity_norm_threshold",
+        "velocity_ema_factor",
+        "latent_shift",
+        "latent_rescale",
+    }
+    for mode in ("turbo", "xl-turbo"):
+        hidden = set(ACESTEP_PROFILES[mode].hidden_param_names())
+        assert visible_dit_params.isdisjoint(hidden)
+
+
 def test_turbo_max_inference_steps_is_20() -> None:
     for mode in ("turbo", "xl-turbo"):
         assert ACESTEP_PROFILES[mode].max_inference_steps() == 20
