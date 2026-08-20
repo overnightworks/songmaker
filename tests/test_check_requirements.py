@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
+import json
 import os
 import shutil
 import subprocess
@@ -14,6 +16,7 @@ PROJECT_ROOT = Path(__file__).parents[1]
 GATE = Path("scripts/check_requirements.py")
 CONTRACT = Path("scripts/requirement_contract.py")
 DOCUMENT = Path("docs/requirements/0001-albums.md")
+WITNESSES = Path("docs/requirements/witnesses")
 WORKFLOW = Path(".github/workflows/requirements.yml")
 SPECIFICATION = importlib.util.spec_from_file_location(
     "requirement_contract", PROJECT_ROOT / CONTRACT
@@ -28,6 +31,9 @@ ACCEPTANCE_LOCATION = CONTRACT_MODULE.ACCEPTANCE_LOCATION
 PRODUCT_LOCATION = CONTRACT_MODULE.PRODUCT_LOCATION
 REGISTRY_LOCATION = CONTRACT_MODULE.REGISTRY_LOCATION
 approval_bytes = CONTRACT_MODULE.approval_bytes
+EXPECTED_OPERATOR_ID = CONTRACT_MODULE.EXPECTED_OPERATOR_ID
+EXPECTED_REPOSITORY_FULL_NAME = CONTRACT_MODULE.EXPECTED_REPOSITORY_FULL_NAME
+EXPECTED_REPOSITORY_ID = CONTRACT_MODULE.EXPECTED_REPOSITORY_ID
 read_acceptance_manifest = CONTRACT_MODULE.read_acceptance_manifest
 read_requirement_shelf = CONTRACT_MODULE.read_requirement_shelf
 render_product_view = CONTRACT_MODULE.render_product_view
@@ -52,16 +58,40 @@ def revision_table(
     predecessor: str = "GENESIS",
     comment: int = 1001,
 ) -> str:
-    approval_digest = digest(approval_bytes("0001", content_digest))
+    witness = witness_bytes(content_digest, comment)
     return (
         "[[revision]]\n"
         'document = "0001"\n'
         f'path = "{DOCUMENT}"\n'
         f'content_sha256 = "{content_digest}"\n'
-        f"approval_comment_id = {comment}\n"
-        f'approval_sha256 = "{approval_digest}"\n'
+        f'witness_path = "{WITNESSES}/{comment}.json"\n'
+        f'witness_sha256 = "{digest(witness)}"\n'
         f'predecessor = "{predecessor}"\n'
     )
+
+
+def witness_bytes(content_digest: str, comment: int) -> bytes:
+    body = approval_bytes("0001", content_digest)
+    payload = {
+        "schema_version": 1,
+        "repository_id": EXPECTED_REPOSITORY_ID,
+        "repository_full_name": EXPECTED_REPOSITORY_FULL_NAME,
+        "issue_id": 2001,
+        "issue_number": 41,
+        "comment_id": comment,
+        "author_id": EXPECTED_OPERATOR_ID,
+        "created_at": "2026-08-21T12:00:00Z",
+        "updated_at": "2026-08-21T12:00:00Z",
+        "body_base64": base64.b64encode(body).decode("ascii"),
+        "body_sha256": digest(body),
+    }
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def write_witness(project: Path, content_digest: str, comment: int) -> None:
+    target = project / WITNESSES / f"{comment}.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(witness_bytes(content_digest, comment))
 
 
 def copied_contract(tmp_path: Path) -> Path:
@@ -94,9 +124,10 @@ def activate(project: Path, *, document_content: bytes | None = None) -> str:
     (project / DOCUMENT).write_bytes(current)
     current_digest = digest(current)
     (project / REGISTRY_LOCATION).write_text(
-        "schema_version = 1\n\n" + revision_table(current_digest),
+        "schema_version = 2\n\n" + revision_table(current_digest),
         encoding="utf-8",
     )
+    write_witness(project, current_digest, 1001)
     refresh_product(project)
     return current_digest
 
@@ -214,6 +245,33 @@ def test_greenfield_may_add_a_first_valid_genesis_against_the_exact_base(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_empty_schema_one_migrates_once_to_empty_schema_two(tmp_path: Path) -> None:
+    project = copied_contract(tmp_path)
+    registry = project / REGISTRY_LOCATION
+    registry.write_text("schema_version = 1\n", encoding="utf-8")
+    base = commit(project, "schema one empty contract")
+    registry.write_text("schema_version = 2\n", encoding="utf-8")
+
+    result = run_gate(project, "--base-revision", base)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_schema_one_migration_cannot_activate_a_revision_in_the_same_diff(
+    tmp_path: Path,
+) -> None:
+    project = copied_contract(tmp_path)
+    registry = project / REGISTRY_LOCATION
+    registry.write_text("schema_version = 1\n", encoding="utf-8")
+    base = commit(project, "schema one empty contract")
+    activate(project)
+
+    result = run_gate(project, "--base-revision", base)
+
+    assert result.returncode != 0
+    assert "must migrate to empty schema 2 before activation" in result.stderr
+
+
 def test_a_valid_successor_appends_to_immutable_history(tmp_path: Path) -> None:
     project = copied_contract(tmp_path)
     predecessor = activate(project)
@@ -225,6 +283,7 @@ def test_a_valid_successor_appends_to_immutable_history(tmp_path: Path) -> None:
         registry.write(
             "\n" + revision_table(successor_digest, predecessor=predecessor, comment=1002)
         )
+    write_witness(project, successor_digest, 1002)
 
     result = run_gate(project, "--base-revision", base)
 
@@ -236,27 +295,34 @@ def test_existing_revision_history_cannot_be_changed_deleted_or_restarted(
     tmp_path: Path, mutation: str
 ) -> None:
     project = copied_contract(tmp_path)
-    activate(project)
+    current_digest = activate(project)
     base = commit(project, "active genesis")
     registry = project / REGISTRY_LOCATION
     if mutation == "rewrite":
+        old_witness_digest = digest(witness_bytes(current_digest, 1001))
+        new_witness_digest = digest(witness_bytes(current_digest, 1002))
         registry.write_text(
             registry.read_text(encoding="utf-8").replace(
-                "approval_comment_id = 1001", "approval_comment_id = 1002"
-            ),
+                "witnesses/1001.json", "witnesses/1002.json"
+            ).replace(old_witness_digest, new_witness_digest),
             encoding="utf-8",
         )
+        (project / WITNESSES / "1001.json").unlink()
+        write_witness(project, current_digest, 1002)
     elif mutation == "delete":
         (project / DOCUMENT).unlink()
-        registry.write_text("schema_version = 1\n", encoding="utf-8")
+        (project / WITNESSES / "1001.json").unlink()
+        registry.write_text("schema_version = 2\n", encoding="utf-8")
         refresh_product(project)
     else:
         replacement = content("A replacement must not restart history.")
         (project / DOCUMENT).write_bytes(replacement)
         registry.write_text(
-            "schema_version = 1\n\n" + revision_table(digest(replacement), comment=1002),
+            "schema_version = 2\n\n" + revision_table(digest(replacement), comment=1002),
             encoding="utf-8",
         )
+        (project / WITNESSES / "1001.json").unlink()
+        write_witness(project, digest(replacement), 1002)
 
     result = run_gate(project, "--base-revision", base)
 
@@ -293,6 +359,25 @@ def test_base_registry_must_be_a_regular_git_blob(tmp_path: Path) -> None:
     assert "not a regular Git file" in result.stderr
 
 
+def test_base_witness_must_be_a_regular_git_blob(tmp_path: Path) -> None:
+    project = copied_contract(tmp_path)
+    activate(project)
+    witness = project / WITNESSES / "1001.json"
+    saved = witness.read_bytes()
+    outside = project / "base-witness.json"
+    outside.write_bytes(saved)
+    witness.unlink()
+    witness.symlink_to(outside)
+    base = commit(project, "symlink witness")
+    witness.unlink()
+    witness.write_bytes(saved)
+
+    result = run_gate(project, "--base-revision", base)
+
+    assert result.returncode != 0
+    assert "not a regular Git file" in result.stderr
+
+
 def test_pre_registry_base_cannot_hide_a_numbered_requirement(tmp_path: Path) -> None:
     project = copied_contract(tmp_path)
     registry = project / REGISTRY_LOCATION
@@ -300,7 +385,7 @@ def test_pre_registry_base_cannot_hide_a_numbered_requirement(tmp_path: Path) ->
     (project / DOCUMENT).write_bytes(content())
     base = commit(project, "unregistered requirement")
     (project / DOCUMENT).unlink()
-    registry.write_text("schema_version = 1\n", encoding="utf-8")
+    registry.write_text("schema_version = 2\n", encoding="utf-8")
 
     result = run_gate(project, "--base-revision", base)
 
@@ -383,6 +468,8 @@ def test_workflow_wires_each_event_to_the_only_allowed_history_mode() -> None:
     workflow = (PROJECT_ROOT / WORKFLOW).read_text(encoding="utf-8")
 
     assert "fetch-depth: 0" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "permissions:\n  contents: read" in workflow
     assert "if: github.event_name == 'pull_request'" in workflow
     assert "${{ github.event.pull_request.base.sha }}" in workflow
     assert "if: github.event_name == 'push'" in workflow

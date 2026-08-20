@@ -2,7 +2,8 @@
 
 Audience: the operator deciding intent, and the engineer or agent changing the
 product. This page owns the offline document contract;
-[`revisions.toml`](revisions.toml) owns active revision history.
+[`revisions.toml`](revisions.toml) owns active revision history, and the
+`witnesses/` directory owns the exact captured GitHub approval evidence.
 
 Songmaker is currently a greenfield requirement shelf: there are no numbered
 requirement documents and therefore no approved normative product claims. The
@@ -54,16 +55,32 @@ the offline gate judges only structure and byte bindings.
 ## Revision lifecycle
 
 Each future revision records one document path, the SHA-256 of its exact bytes,
-a positive globally unique approval-comment ID, the SHA-256 of the exact ASCII
-line `APPROVE REQUIREMENT REVISION NNNN sha256:<content-digest>`, and either
-`GENESIS` or its predecessor digest. A document has one fixed path, a complete
-unbranched lineage, and exactly one tip whose digest matches the current file.
+one `docs/requirements/witnesses/<comment-id>.json` path, the SHA-256 of that
+exact witness file, and either `GENESIS` or its predecessor digest. A document
+has one fixed path, a complete unbranched lineage, and exactly one tip whose
+digest matches the current file. One comment can bind only one revision.
 
-Approval is a procedural human STOP ritual for this single-operator repository.
-This offline foundation does not call GitHub and cannot prove that the recorded
-comment exists, is unedited, belongs to the configured account, or was authored
-by a human. Live binding and witness verification require a separate
-security-reviewed slice before the first active revision.
+A witness is a strict, size-bounded JSON object. It binds the numeric repository,
+issue, comment, and operator-account identities; repository full name; exact
+GitHub creation/update timestamps; and base64 plus SHA-256 of the exact ASCII
+line `APPROVE REQUIREMENT REVISION NNNN sha256:<content-digest>`. Creation and
+update timestamps must be identical. Unknown, missing, duplicate, malformed,
+oversized, noncanonical, symlinked, or unregistered data fail closed.
+
+The offline gate does not call GitHub. The separate live witness gate re-fetches
+the fixed repository, issue, and comment resources over verified TLS from fixed
+GitHub API routes and cross-checks their numeric identities, URLs, author,
+timestamps, and body against every witness. That result is point-in-time proof:
+an approval can be edited or deleted later. Edited/deleted comment events,
+pushes, same-repository pull requests, a weekly schedule, and manual dispatch
+rerun the live check. Fork pull requests deliberately skip the token-bearing
+job while the offline pull-request gate still runs.
+
+Approval remains a procedural human STOP ritual for this single-operator
+repository; neither gate can distinguish a human account action from automation
+using that account. The future binding command must revalidate GitHub immediately
+before writing and the pushed commit must pass the live check. This slice does
+not yet provide that writer and creates no approval, witness, or active revision.
 
 Pull-request and push runs compare against the exact event base commit with full
 Git history. Existing revision-record fields remain identical while history
@@ -86,9 +103,11 @@ reports, or claim proof; those capabilities belong to issue #42.
 proves: every numbered requirement is a regular UTF-8 file whose exact bytes match its sole active registry tip
 proves: every revision lineage is predecessor-complete, unbranched, and has exactly one tip on one fixed path
 proves: with an exact VCS base, existing revision fields cannot be changed, deleted, or restarted
+proves: every revision points to exact offline witness bytes for its approval line
 proves: every acceptance edge names an active requirement rule
 proves: PRODUCT is the exact derived count view of the current offline contract
-does not prove: that a configured approval comment exists, is unedited, or came from a human
+does not prove: that a configured approval comment still exists or remains unedited on GitHub
+does not prove: that the GitHub account action came from a human
 does not prove: that an acceptance sentence is meaningful or that any test ran
 does not fetch: GitHub or another live authority
 ```

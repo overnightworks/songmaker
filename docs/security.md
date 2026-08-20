@@ -193,6 +193,33 @@ The most a compromised worker can do is publish bogus state to Redis, register w
 
 If exposure to untrusted traffic becomes a concern, the next step is to bind `/api/internal/*` to a separate port (and bind it to the docker network, not `0.0.0.0`). The current single-port design is acceptable for self-hosted single-tenant deployments behind a reverse proxy that filters paths.
 
+## Requirement Approval Witnesses
+
+Requirement approval uses a procedural STOP comment from the repository
+operator account. The offline registry pins a strict witness file by SHA-256;
+the witness pins the numeric repository, issue, comment, and author identities,
+timestamps, and exact approval body. This proves durable byte relationships but
+does not prove that an account action was performed by a human.
+
+The live verifier uses Python's standard HTTPS stack with the default verified
+TLS context. It permits only `api.github.com` and three fixed read-only route
+shapes for `FlexOr2/songmaker`, does not follow redirects, checks API and HTML
+URLs across the repository→issue→comment chain, and fails closed on malformed or
+oversized responses. Responses are capped at 256 KiB, reads/connects at 15
+seconds, and the internal monotonic deadline is 120 seconds. The workflow also
+wraps the process in a 120-second OS watchdog, with a three-minute GitHub job
+timeout as provider-level defense. Registry, requirement, acceptance, witness,
+and decoded-body inputs also have explicit count/byte bounds.
+
+GitHub Actions grants only `contents: read` and `issues: read`. Checkout never
+persists credentials, and `GITHUB_TOKEN` is passed as an environment variable
+only to the live-verifier step. The token-bearing job skips fork pull requests;
+the tokenless offline gate continues to validate those diffs. Live results are
+point-in-time observations,
+so pushes, manual runs, weekly checks, and approval-comment edit/delete events
+rerun verification. The future writer must re-fetch immediately before a local
+write, and the resulting pushed commit must pass the live workflow.
+
 ## Audit Trail
 
 All mutating operations are logged to the `audit_log` table:

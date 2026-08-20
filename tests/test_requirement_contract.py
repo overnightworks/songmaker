@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
+import json
+import re
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -18,6 +22,10 @@ SPECIFICATION.loader.exec_module(CONTRACT)
 
 ACCEPTANCE_LOCATION = CONTRACT.ACCEPTANCE_LOCATION
 REGISTRY_LOCATION = CONTRACT.REGISTRY_LOCATION
+WITNESSES_DIRECTORY = CONTRACT.WITNESSES_DIRECTORY
+EXPECTED_OPERATOR_ID = CONTRACT.EXPECTED_OPERATOR_ID
+EXPECTED_REPOSITORY_FULL_NAME = CONTRACT.EXPECTED_REPOSITORY_FULL_NAME
+EXPECTED_REPOSITORY_ID = CONTRACT.EXPECTED_REPOSITORY_ID
 RequirementContractError = CONTRACT.RequirementContractError
 approval_bytes = CONTRACT.approval_bytes
 read_acceptance_manifest = CONTRACT.read_acceptance_manifest
@@ -54,16 +62,68 @@ def revision_table(
     comment: int = 1001,
     extra: str = "",
 ) -> str:
-    approval_digest = digest(approval_bytes(document, content_digest))
+    witness = witness_bytes(document, content_digest, comment)
     return (
         "[[revision]]\n"
         f'document = "{document}"\n'
         f'path = "{path}"\n'
         f'content_sha256 = "{content_digest}"\n'
-        f"approval_comment_id = {comment}\n"
-        f'approval_sha256 = "{approval_digest}"\n'
+        f'witness_path = "{WITNESSES_DIRECTORY}/{comment}.json"\n'
+        f'witness_sha256 = "{digest(witness)}"\n'
         f'predecessor = "{predecessor}"\n'
         f"{extra}"
+    )
+
+
+def witness_bytes(document: str, content_digest: str, comment: int) -> bytes:
+    body = approval_bytes(document, content_digest)
+    payload = {
+        "schema_version": 1,
+        "repository_id": EXPECTED_REPOSITORY_ID,
+        "repository_full_name": EXPECTED_REPOSITORY_FULL_NAME,
+        "issue_id": 2001,
+        "issue_number": 41,
+        "comment_id": comment,
+        "author_id": EXPECTED_OPERATOR_ID,
+        "created_at": "2026-08-21T12:00:00Z",
+        "updated_at": "2026-08-21T12:00:00Z",
+        "body_base64": base64.b64encode(body).decode("ascii"),
+        "body_sha256": digest(body),
+    }
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def write_registry_witnesses(project: Path, registry_text: str) -> None:
+    try:
+        revisions = tomllib.loads(registry_text).get("revision", [])
+    except tomllib.TOMLDecodeError:
+        return
+    for revision in revisions:
+        document = revision.get("document")
+        content_digest = revision.get("content_sha256")
+        witness_path = revision.get("witness_path")
+        if not all(isinstance(value, str) for value in (document, content_digest, witness_path)):
+            continue
+        try:
+            comment = int(Path(witness_path).stem)
+        except ValueError:
+            continue
+        target = project / witness_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(witness_bytes(document, content_digest, comment))
+
+
+def replace_only_witness(project: Path, content: bytes) -> None:
+    target = project / WITNESSES_DIRECTORY / "1001.json"
+    target.write_bytes(content)
+    registry = project / REGISTRY_LOCATION
+    registry.write_text(
+        re.sub(
+            r'witness_sha256 = "[0-9a-f]{64}"',
+            f'witness_sha256 = "{digest(content)}"',
+            registry.read_text(encoding="utf-8"),
+        ),
+        encoding="utf-8",
     )
 
 
@@ -71,7 +131,7 @@ def empty_project(tmp_path: Path) -> Path:
     project = tmp_path / "project"
     (project / REGISTRY_LOCATION).parent.mkdir(parents=True)
     (project / ACCEPTANCE_LOCATION).parent.mkdir(parents=True)
-    (project / REGISTRY_LOCATION).write_text("schema_version = 1\n", encoding="utf-8")
+    (project / REGISTRY_LOCATION).write_text("schema_version = 2\n", encoding="utf-8")
     (project / ACCEPTANCE_LOCATION).write_text("schema_version = 1\n", encoding="utf-8")
     return project
 
@@ -88,9 +148,10 @@ def active_project(
     location = "docs/requirements/0001-albums.md"
     (project / location).write_bytes(document)
     registry_text = registry or (
-        "schema_version = 1\n\n" + revision_table("0001", location, digest(document))
+        "schema_version = 2\n\n" + revision_table("0001", location, digest(document))
     )
     (project / REGISTRY_LOCATION).write_text(registry_text, encoding="utf-8")
+    write_registry_witnesses(project, registry_text)
     (project / ACCEPTANCE_LOCATION).write_text(acceptance, encoding="utf-8")
     return project
 
@@ -169,12 +230,12 @@ def test_contract_toml_must_be_regular_not_a_symlink(tmp_path: Path, relative: P
 @pytest.mark.parametrize(
     ("registry", "problem"),
     [
-        ("schema_version = 2\n", "unsupported schema"),
+        ("schema_version = 3\n", "unsupported schema"),
         ("schema_version = true\n", "unsupported schema"),
-        ("schema_version = 1.0\n", "unsupported schema"),
-        ("schema_version = 1\nsurprise = true\n", "unknown fields"),
+        ("schema_version = 2.0\n", "unsupported schema"),
+        ("schema_version = 2\nsurprise = true\n", "unknown fields"),
         (
-            'schema_version = 1\n\n[[revision]]\ndocument = "0001"\n',
+            'schema_version = 2\n\n[[revision]]\ndocument = "0001"\n',
             "lacks fields",
         ),
     ],
@@ -199,8 +260,12 @@ def test_registry_schema_refuses_unknown_or_incomplete_data(
             "invalid registry path",
         ),
         ('content_sha256 = "', 'content_sha256 = "bad#', "invalid content_sha256"),
-        ("approval_comment_id = 1001", "approval_comment_id = true", "approval_comment_id"),
-        ('approval_sha256 = "', 'approval_sha256 = "bad#', "invalid approval_sha256"),
+        (
+            'witness_path = "docs/requirements/witnesses/1001.json"',
+            "witness_path = true",
+            "invalid witness_path",
+        ),
+        ('witness_sha256 = "', 'witness_sha256 = "bad#', "invalid witness_sha256"),
         ('predecessor = "GENESIS"', "predecessor = true", "invalid predecessor"),
     ],
 )
@@ -251,7 +316,7 @@ def test_registry_path_must_exist(tmp_path: Path) -> None:
 )
 def test_registry_paths_cannot_escape_or_misname_the_document(tmp_path: Path, path: str) -> None:
     content = strict_document()
-    registry = "schema_version = 1\n\n" + revision_table("0001", path, digest(content))
+    registry = "schema_version = 2\n\n" + revision_table("0001", path, digest(content))
 
     with pytest.raises(RequirementContractError, match="invalid registry path"):
         active_project(tmp_path, content=content, registry=registry)
@@ -364,6 +429,8 @@ def test_requirement_ids_are_globally_unique(tmp_path: Path) -> None:
     (project / second_path).write_bytes(second)
     with (project / REGISTRY_LOCATION).open("a", encoding="utf-8") as registry:
         registry.write("\n" + revision_table("0002", second_path, digest(second), comment=1002))
+    target = project / WITNESSES_DIRECTORY / "1002.json"
+    target.write_bytes(witness_bytes("0002", digest(second), 1002))
 
     with pytest.raises(RequirementContractError, match="publishes REQ-ALBUM-01 again"):
         read_requirement_shelf(project)
@@ -433,7 +500,7 @@ def test_revision_history_must_be_one_complete_line(
     content = strict_document()
     current = digest(content)
     old = digest(b"old")
-    registry = "schema_version = 1\n\n" + registry_for(current, old)
+    registry = "schema_version = 2\n\n" + registry_for(current, old)
 
     with pytest.raises(RequirementContractError, match=problem):
         read_requirement_shelf(active_project(tmp_path, content=content, registry=registry))
@@ -443,7 +510,7 @@ def test_revision_history_refuses_a_repeated_digest(tmp_path: Path) -> None:
     document = strict_document()
     current = digest(document)
     registry = (
-        "schema_version = 1\n\n"
+        "schema_version = 2\n\n"
         + revision_table("0001", "docs/requirements/0001-albums.md", current, comment=1001)
         + "\n"
         + revision_table("0001", "docs/requirements/0001-albums.md", current, comment=1002)
@@ -458,7 +525,7 @@ def test_revision_history_refuses_a_cycle(tmp_path: Path) -> None:
     first = digest(b"first")
     second = digest(document)
     registry = (
-        "schema_version = 1\n\n"
+        "schema_version = 2\n\n"
         + revision_table(
             "0001",
             "docs/requirements/0001-albums.md",
@@ -485,7 +552,7 @@ def test_one_document_cannot_change_paths_inside_its_lineage(tmp_path: Path) -> 
     current = digest(content)
     old = digest(b"old")
     registry = (
-        "schema_version = 1\n\n"
+        "schema_version = 2\n\n"
         + revision_table("0001", "docs/requirements/0001-old.md", old, comment=1000)
         + "\n"
         + revision_table(
@@ -513,16 +580,191 @@ def test_one_approval_comment_cannot_bind_two_revisions(tmp_path: Path) -> None:
         read_requirement_shelf(project)
 
 
-def test_approval_digest_must_match_the_exact_ascii_line(tmp_path: Path) -> None:
+def test_witness_digest_must_match_the_exact_json_bytes(tmp_path: Path) -> None:
     content = strict_document()
-    correct = digest(approval_bytes("0001", digest(content)))
+    correct = digest(witness_bytes("0001", digest(content), 1001))
     table = revision_table("0001", "docs/requirements/0001-albums.md", digest(content)).replace(
         correct, "0" * 64
     )
-    registry = "schema_version = 1\n\n" + table
+    registry = "schema_version = 2\n\n" + table
 
-    with pytest.raises(RequirementContractError, match="approval digest"):
+    with pytest.raises(RequirementContractError, match="has digest"):
         read_requirement_shelf(active_project(tmp_path, content=content, registry=registry))
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "problem"),
+    [
+        ("repository_id", True, "invalid repository_id"),
+        ("repository_full_name", "someone/else", "repository_full_name"),
+        ("issue_id", 0, "invalid issue_id"),
+        ("issue_number", False, "invalid issue_number"),
+        ("comment_id", 1002, "does not match comment_id"),
+        ("author_id", 1, "author_id"),
+        ("created_at", "not-a-time", "invalid created_at"),
+        ("updated_at", "2026-08-21T12:00:01Z", "edited approval"),
+        ("body_base64", "!!!", "invalid body_base64"),
+        ("body_sha256", "0" * 64, "body digest"),
+    ],
+)
+def test_witness_identity_and_body_fields_fail_closed(
+    tmp_path: Path, field: str, value: object, problem: str
+) -> None:
+    project = active_project(tmp_path)
+    target = project / WITNESSES_DIRECTORY / "1001.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload[field] = value
+    replace_only_witness(
+        project,
+        (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(),
+    )
+
+    with pytest.raises(RequirementContractError, match=problem):
+        read_requirement_shelf(project)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "problem"),
+    [("unknown", "unknown fields"), ("missing", "lacks fields")],
+)
+def test_witness_has_an_exact_json_schema(
+    tmp_path: Path, mutation: str, problem: str
+) -> None:
+    project = active_project(tmp_path)
+    target = project / WITNESSES_DIRECTORY / "1001.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    if mutation == "unknown":
+        payload["surprise"] = True
+    else:
+        payload.pop("issue_id")
+    replace_only_witness(
+        project,
+        (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(),
+    )
+
+    with pytest.raises(RequirementContractError, match=problem):
+        read_requirement_shelf(project)
+
+
+def test_witness_refuses_duplicate_json_keys(tmp_path: Path) -> None:
+    project = active_project(tmp_path)
+    target = project / WITNESSES_DIRECTORY / "1001.json"
+    content = target.read_text(encoding="utf-8").replace(
+        '{"author_id":', '{"schema_version":1,"author_id":', 1
+    ).encode()
+    replace_only_witness(project, content)
+
+    with pytest.raises(RequirementContractError, match="repeats JSON key"):
+        read_requirement_shelf(project)
+
+
+@pytest.mark.parametrize(
+    ("content", "problem"),
+    [
+        (b"\xff", "not UTF-8"),
+        (b"{", "unreadable JSON"),
+        (b'{"schema_version":1,"repository_id":NaN}', "invalid JSON constant"),
+    ],
+)
+def test_witness_normalizes_pathological_json_errors(
+    tmp_path: Path, content: bytes, problem: str
+) -> None:
+    project = active_project(tmp_path)
+    replace_only_witness(project, content)
+
+    with pytest.raises(RequirementContractError, match=problem):
+        read_requirement_shelf(project)
+
+
+def test_json_reader_normalizes_excessive_nesting() -> None:
+    content = b'{"nested":' + b"[" * 10_000 + b"0" + b"]" * 10_000 + b"}"
+
+    with pytest.raises(RequirementContractError, match="unreadable JSON"):
+        CONTRACT._read_json_object(content, Path("witness.json"))
+
+
+def test_witness_body_must_be_the_exact_approval_line(tmp_path: Path) -> None:
+    project = active_project(tmp_path)
+    target = project / WITNESSES_DIRECTORY / "1001.json"
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    wrong_body = b"APPROVE SOMETHING ELSE"
+    payload["body_base64"] = base64.b64encode(wrong_body).decode("ascii")
+    payload["body_sha256"] = digest(wrong_body)
+    replace_only_witness(
+        project,
+        (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(),
+    )
+
+    with pytest.raises(RequirementContractError, match="exact approval line"):
+        read_requirement_shelf(project)
+
+
+def test_unregistered_or_unexpected_witness_entries_are_refused(tmp_path: Path) -> None:
+    project = active_project(tmp_path)
+    (project / WITNESSES_DIRECTORY / "1002.json").write_bytes(b"{}")
+
+    with pytest.raises(RequirementContractError, match="witness registry omits"):
+        read_requirement_shelf(project)
+
+    (project / WITNESSES_DIRECTORY / "1002.json").unlink()
+    (project / WITNESSES_DIRECTORY / "README.txt").write_text("not owned\n", encoding="utf-8")
+    with pytest.raises(RequirementContractError, match="unexpected entries"):
+        read_requirement_shelf(project)
+
+
+def test_witness_must_be_a_regular_bounded_file(tmp_path: Path) -> None:
+    project = active_project(tmp_path)
+    target = project / WITNESSES_DIRECTORY / "1001.json"
+    outside = tmp_path / "outside.json"
+    outside.write_bytes(target.read_bytes())
+    target.unlink()
+    target.symlink_to(outside)
+
+    with pytest.raises(RequirementContractError, match="regular non-symlink"):
+        read_requirement_shelf(project)
+
+    target.unlink()
+    oversized = b"{" + b" " * CONTRACT.MAX_WITNESS_BYTES + b"}"
+    target.write_bytes(oversized)
+    replace_only_witness(project, oversized)
+    with pytest.raises(RequirementContractError, match="exceeds the 4096-byte limit"):
+        read_requirement_shelf(project)
+
+
+def test_contract_resource_counts_and_bytes_are_bounded(tmp_path: Path) -> None:
+    project = empty_project(tmp_path)
+    registry = project / REGISTRY_LOCATION
+    registry.write_bytes(b"schema_version = 2\n" + b" " * CONTRACT.MAX_REGISTRY_BYTES)
+    with pytest.raises(RequirementContractError, match="1048576-byte limit"):
+        read_requirement_shelf(project)
+
+    registry.write_text(
+        "schema_version = 2\n" + "[[revision]]\n" * (CONTRACT.MAX_REVISIONS + 1),
+        encoding="utf-8",
+    )
+    with pytest.raises(RequirementContractError, match="maximum is 256"):
+        read_requirement_shelf(project)
+
+    registry.write_text("schema_version = 2\n", encoding="utf-8")
+    acceptance = project / ACCEPTANCE_LOCATION
+    acceptance.write_bytes(b"schema_version = 1\n" + b" " * CONTRACT.MAX_ACCEPTANCE_BYTES)
+    with pytest.raises(RequirementContractError, match="1048576-byte limit"):
+        read_acceptance_manifest(project, read_requirement_shelf(project))
+
+    acceptance.write_text(
+        "schema_version = 1\n" + "[[acceptance]]\n" * (CONTRACT.MAX_ACCEPTANCE_ENTRIES + 1),
+        encoding="utf-8",
+    )
+    with pytest.raises(RequirementContractError, match="maximum is 4096"):
+        read_acceptance_manifest(project, read_requirement_shelf(project))
+
+
+def test_requirement_document_bytes_are_bounded(tmp_path: Path) -> None:
+    oversized = b"# Oversized\n" + b"x" * CONTRACT.MAX_REQUIREMENT_BYTES
+    project = active_project(tmp_path, content=oversized)
+
+    with pytest.raises(RequirementContractError, match="262144-byte limit"):
+        read_requirement_shelf(project)
 
 
 @pytest.mark.parametrize(

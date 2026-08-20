@@ -13,10 +13,10 @@ from requirement_contract import (
     PRODUCT_LOCATION,
     REGISTRY_LOCATION,
     REQUIREMENTS_DIRECTORY,
+    RegistrySnapshot,
     RequirementContractError,
-    Revision,
     read_acceptance_manifest,
-    read_requirement_registry,
+    read_registry_snapshot,
     read_requirement_shelf,
     render_product_view,
 )
@@ -30,9 +30,11 @@ HONESTY_BOUND = (
     "exactly one tip on one fixed path",
     "proves: with an exact VCS base, existing revision fields cannot be changed, "
     "deleted, or restarted",
+    "proves: every revision points to exact offline witness bytes for its approval line",
     "proves: every acceptance edge names an active requirement rule",
     "proves: PRODUCT is the exact derived count view of the current offline contract",
-    "does not prove: that a configured approval comment exists, is unedited, or came from a human",
+    "does not prove: that a configured approval comment still exists or remains unedited on GitHub",
+    "does not prove: that the GitHub account action came from a human",
     "does not prove: that an acceptance sentence is meaningful or that any test ran",
     "does not fetch: GitHub or another live authority",
     "```",
@@ -89,7 +91,7 @@ def _git_regular_file(project_root: Path, base_revision: str, location: Path) ->
     return _git_bytes(project_root, "show", f"{base_revision}:{location.as_posix()}")
 
 
-def _base_revisions(project_root: Path, base_revision: str) -> tuple[Revision, ...]:
+def _base_snapshot(project_root: Path, base_revision: str) -> RegistrySnapshot:
     registry_object = f"{base_revision}:{REGISTRY_LOCATION.as_posix()}"
     if not _git_object_exists(project_root, registry_object):
         listing = _git_bytes(
@@ -115,16 +117,17 @@ def _base_revisions(project_root: Path, base_revision: str) -> tuple[Revision, .
             raise RequirementContractError(
                 f"exact base {base_revision} has numbered requirements without a registry"
             )
-        return ()
+        return RegistrySnapshot(0, ())
     with tempfile.TemporaryDirectory() as temporary:
         base_root = Path(temporary)
         registry = base_root / REGISTRY_LOCATION
         registry.parent.mkdir(parents=True)
         registry.write_bytes(_git_regular_file(project_root, base_revision, REGISTRY_LOCATION))
-        revisions = read_requirement_registry(base_root)
-    for revision in revisions:
+        snapshot = read_registry_snapshot(base_root, allow_empty_schema_one=True)
+    for revision in snapshot.revisions:
         _git_regular_file(project_root, base_revision, revision.location)
-    return revisions
+        _git_regular_file(project_root, base_revision, revision.witness_location)
+    return snapshot
 
 
 def verify_temporal_history(project_root: Path, base_revision: str) -> None:
@@ -137,10 +140,20 @@ def verify_temporal_history(project_root: Path, base_revision: str) -> None:
     shallow = _git_bytes(project_root, "rev-parse", "--is-shallow-repository")
     if shallow.strip() == b"true":
         raise RequirementContractError("exact base verification refuses a shallow repository")
-    base_revisions = _base_revisions(project_root, base_revision)
-    current = read_requirement_registry(project_root)
-    for revision in base_revisions:
-        if revision not in current:
+    base = _base_snapshot(project_root, base_revision)
+    current = read_registry_snapshot(project_root)
+    if base.schema_version == 1:
+        if current.revisions:
+            raise RequirementContractError(
+                "empty registry schema 1 must migrate to empty schema 2 before activation"
+            )
+        return
+    if base.schema_version not in {0, current.schema_version}:
+        raise RequirementContractError(
+            f"registry schema changed from {base.schema_version} to {current.schema_version}"
+        )
+    for revision in base.revisions:
+        if revision not in current.revisions:
             raise RequirementContractError(
                 f"revision {revision.document} {revision.content_sha256} changed or deleted"
             )

@@ -35,9 +35,10 @@ Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tes
 - **Local**: aim for 100% on non-scoring core modules (exclude `main.py` CLI entrypoint)
 - **CI frontend**: `pnpm test:coverage` (70% statement/line floor on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`. 100% on `lib/` remains a local aspiration, not a CI gate.
 
-GitHub workflows (`.github/workflows/ci.yml`, `security.yml`, and
-`requirements.yml`) run on push/PR to `main`. Security also runs weekly. The
-requirement workflow is a separate visible check, not an enforced merge gate
+GitHub workflows (`.github/workflows/ci.yml`, `security.yml`,
+`requirements.yml`, and `requirement-witnesses.yml`) run on push/PR to `main`.
+Security and live requirement-witness verification also run weekly. The
+requirement workflows are separate visible checks, not enforced merge gates
 while issue #31 remains open. The live checks are:
 
 | Job | What |
@@ -46,6 +47,16 @@ while issue #31 remains open. The live checks are:
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit · `pnpm audit --prod` |
 | Requirements | strict offline requirement/acceptance schema · exact bytes and linear history · exact PR/push base · derived PRODUCT view |
+| Requirement witnesses | fixed GitHub repo/issue/comment re-fetch · exact identity, URL, author, timestamp, and approval-body match |
+
+The witness test suite uses injected fake GitHub clients and transports; local
+tests never need a token or make network calls. It covers strict witness parsing,
+the empty no-network path, resource and time limits including the outer watchdog,
+fixed routes, fork-PR token isolation, pathological JSON, and mismatches at each
+link of the repository→issue→comment identity
+chain. A green live check proves only what GitHub returned during that run; the
+edited/deleted event hooks and weekly schedule reduce, but cannot eliminate, the
+time between a later invalidation and detection.
 
 ## Test Structure
 
