@@ -18,7 +18,7 @@ from songmaker_cli.db.queries import (
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.pipeline import PipelineConfig
 
-from ._runtime import _sanitize_error, _update_job
+from ._runtime import _job_is_terminal, _sanitize_error, _update_job
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +42,14 @@ def run_scoring_job(
     log.info("Scoring job %s: gen=%s, scorers=%s", job_id, gen_id, scorers or "all")
 
     try:
+        if _job_is_terminal(db_factory, job_id):
+            log.info("Scoring job %s stopping because job is terminal", job_id)
+            return
+
         _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
+        if _job_is_terminal(db_factory, job_id):
+            log.info("Scoring job %s stopping because job is terminal", job_id)
+            return
 
         with db_factory() as session:
             gen = get_generation(session, gen_id)
@@ -87,10 +94,18 @@ def run_scoring_job(
         def _score_progress(completed: int, total: int, scorer_name: str) -> None:
             _update_job(db_factory, job_id, JobStatus.RUNNING, progress=completed / total)
 
+        if _job_is_terminal(db_factory, job_id):
+            log.info("Scoring job %s stopping because job is terminal", job_id)
+            return
+
         song_scores = scorer.score(
             mp3_full, meta=meta, scorers=scorers, config=config, job_id=job_id,
             on_progress=_score_progress,
         )
+        if _job_is_terminal(db_factory, job_id):
+            log.info("Scoring job %s stopping because job is terminal", job_id)
+            return
+
         scores_dict = song_scores.to_dict()
 
         whisper_text = None

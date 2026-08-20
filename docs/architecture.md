@@ -199,6 +199,7 @@ PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is
 | POST | `/api/generations/{id}/rate` | user | Rate a generation |
 | POST | `/api/generations/{id}/pick` | user | Pick best generation |
 | GET | `/api/jobs/{id}` | user | Poll job status (includes queue_position) |
+| POST | `/api/jobs/{id}/cancel` | user | Cancel a queued or running job (409 if not active). Terminal; later progress/finalize cannot overwrite. Does not stop in-flight GPU inference. |
 | POST | `/api/songs/{id}/chat` | user | Send chat message (multi-turn, rate-limited) |
 | GET | `/api/songs/{id}/chat` | user | Load chat history |
 | DELETE | `/api/songs/{id}/chat` | user | Clear chat history |
@@ -249,6 +250,13 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
     → decode → splice if repaint → master (multiband compress, LUFS normalize) → MP3
     → create Generation record in DB
   → Job status: completed
+
+Cancel (POST /api/jobs/{id}/cancel) sets status=cancelled and completed_at.
+`update_job_status` is a no-op once the job is already terminal, so progress
+callbacks and finalize cannot revive a cancelled job. The generation runner
+stops before setup, before each variant, after the worker returns, and before
+persist. Queued cancelled jobs are skipped by `check_job_still_valid`.
+In-flight ACE-Step GPU work is not interrupted (issue #30 Phase 2).
 ```
 
 ## Scoring Flow

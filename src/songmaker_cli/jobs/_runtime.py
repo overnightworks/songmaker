@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 
 from acestep_engine.errors import AudioDownloadError
-from songmaker_cli.db.queries import update_job_heartbeat, update_job_status
+from songmaker_cli.constants import JOB_TERMINAL_STATUSES
+from songmaker_cli.db.queries import get_job, update_job_heartbeat, update_job_status
 from songmaker_cli.scheduler import NoCapacityError, WorkerTaskFailed
 
 log = logging.getLogger(__name__)
@@ -34,14 +35,20 @@ def _sanitize_error(exc: Exception) -> str:
     return "An unexpected error occurred"
 
 
-def _update_job(factory, job_id: str, status: str, **kwargs) -> None:
+def _job_is_terminal(factory, job_id: str) -> bool:
+    with factory() as session:
+        job = get_job(session, job_id)
+        return job is None or job.status in JOB_TERMINAL_STATUSES
+
+
+def _update_job(factory, job_id: str, status: str, **kwargs) -> bool:
     last_exc: Exception | None = None
     for attempt in range(2):
         try:
             with factory() as session:
-                update_job_status(session, job_id, status, **kwargs)
+                applied = update_job_status(session, job_id, status, **kwargs)
                 session.commit()
-            return
+            return applied
         except Exception as exc:
             last_exc = exc
             if attempt == 0:

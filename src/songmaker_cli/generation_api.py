@@ -545,7 +545,8 @@ def api_cancel_job(
     job = _check_job_access(session, job_id, user)
     if job.status not in JOB_ACTIVE_STATUSES:
         raise HTTPException(409, "Only queued or running jobs can be cancelled")
-    update_job_status(session, job_id, JobStatus.CANCELLED)
+    if not update_job_status(session, job_id, JobStatus.CANCELLED):
+        raise HTTPException(409, "Only queued or running jobs can be cancelled")
     record_audit(session, user.id, AuditAction.CANCEL, ResourceType.JOB, job_id)
     session.commit()
     job = get_job(session, job_id)

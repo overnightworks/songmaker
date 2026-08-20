@@ -76,6 +76,7 @@ from songmaker_cli.db.queries import (
     unarchive_generation,
     unkeep_generation,
     unpick_generation,
+    update_job_heartbeat,
     update_job_status,
     update_song,
     update_user,
@@ -537,6 +538,81 @@ def test_update_job_failed(seeded_session: Session) -> None:
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == "failed"
     assert fetched.error == "ACE-Step down"
+
+
+@pytest.mark.parametrize("terminal", ["cancelled", "completed", "failed", "partial"])
+def test_update_job_status_does_not_overwrite_terminal(
+    seeded_session: Session, terminal: str,
+) -> None:
+    job = create_job(seeded_session, "generate")
+    seeded_session.commit()
+    applied = update_job_status(seeded_session, job.id, terminal, progress=0.4)
+    seeded_session.commit()
+    assert applied is True
+
+    applied = update_job_status(seeded_session, job.id, "running", progress=0.9)
+    seeded_session.commit()
+    assert applied is False
+    fetched = get_job(seeded_session, job.id)
+    assert fetched.status == terminal
+    assert fetched.progress == 0.4
+
+
+def test_update_job_status_cancelled_sets_completed_at(seeded_session: Session) -> None:
+    job = create_job(seeded_session, "generate")
+    seeded_session.commit()
+    update_job_status(seeded_session, job.id, "cancelled")
+    seeded_session.commit()
+    fetched = get_job(seeded_session, job.id)
+    assert fetched.status == "cancelled"
+    assert fetched.completed_at is not None
+
+    completed_at = fetched.completed_at
+    update_job_status(seeded_session, job.id, "completed", progress=1.0)
+    update_job_status(seeded_session, job.id, "failed", error="late")
+    seeded_session.commit()
+    fetched = get_job(seeded_session, job.id)
+    assert fetched.status == "cancelled"
+    assert fetched.completed_at == completed_at
+    assert fetched.error is None
+
+
+def test_update_job_heartbeat_skips_terminal(seeded_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    job = create_job(seeded_session, "generate")
+    seeded_session.commit()
+    stale = datetime.now(timezone.utc) - timedelta(hours=1)
+    job.heartbeat_at = stale
+    seeded_session.flush()
+    update_job_status(seeded_session, job.id, "cancelled")
+    seeded_session.commit()
+
+    before = get_job(seeded_session, job.id).heartbeat_at
+    update_job_heartbeat(seeded_session, job.id)
+    seeded_session.commit()
+    fetched = get_job(seeded_session, job.id)
+    assert fetched.status == "cancelled"
+    assert fetched.heartbeat_at == before
+
+
+def test_update_job_heartbeat_updates_running(seeded_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    job = create_job(seeded_session, "generate")
+    seeded_session.commit()
+    update_job_status(seeded_session, job.id, "running")
+    stale = datetime.now(timezone.utc) - timedelta(hours=1)
+    job.heartbeat_at = stale
+    seeded_session.flush()
+
+    update_job_heartbeat(seeded_session, job.id)
+    seeded_session.commit()
+    fetched = get_job(seeded_session, job.id)
+    heartbeat = fetched.heartbeat_at
+    if heartbeat.tzinfo is None:
+        heartbeat = heartbeat.replace(tzinfo=timezone.utc)
+    assert heartbeat > stale
 
 
 def test_job_to_dict(seeded_session: Session) -> None:

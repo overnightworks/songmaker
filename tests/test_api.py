@@ -1551,6 +1551,12 @@ def test_cancel_queued_job(client: TestClient) -> None:
     resp = client.post(f"/api/jobs/{job_id}/cancel")
     assert resp.status_code == 200
     assert resp.json()["status"] == "cancelled"
+    assert resp.json()["completed_at"] is not None
+
+    got = client.get(f"/api/jobs/{job_id}")
+    assert got.status_code == 200
+    assert got.json()["status"] == "cancelled"
+    assert got.json()["completed_at"] is not None
 
 
 def test_cancel_already_completed_job(client: TestClient) -> None:
@@ -1569,6 +1575,41 @@ def test_cancel_already_completed_job(client: TestClient) -> None:
 
     resp = client.post(f"/api/jobs/{job_id}/cancel")
     assert resp.status_code == 409
+
+    got = client.get(f"/api/jobs/{job_id}")
+    assert got.status_code == 200
+    assert got.json()["status"] == "completed"
+
+
+def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
+    from songmaker_cli.db.queries import update_job_status
+
+    with _mock_worker():
+        resp = client.post(
+            "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
+        )
+    job_id = resp.json()["id"]
+
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        update_job_status(session, job_id, "running", progress=0.4)
+        session.commit()
+
+    resp = client.post(f"/api/jobs/{job_id}/cancel")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "cancelled"
+    assert resp.json()["completed_at"] is not None
+
+    with ctx.db() as session:
+        assert update_job_status(session, job_id, "running", progress=0.9) is False
+        assert update_job_status(session, job_id, "completed", progress=1.0) is False
+        assert update_job_status(session, job_id, "failed", error="late") is False
+        session.commit()
+
+    got = client.get(f"/api/jobs/{job_id}")
+    assert got.json()["status"] == "cancelled"
+    assert got.json()["completed_at"] is not None
+    assert got.json()["error"] is None
 
 
 def test_cancel_job_not_found(client: TestClient) -> None:

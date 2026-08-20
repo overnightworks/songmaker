@@ -28,11 +28,17 @@ from songmaker_cli.config import (
     build_ace_config,
     resolve_model_mode,
 )
-from songmaker_cli.constants import WORKER_SHARED_TMP_DIRNAME, JobStatus, JobType
+from songmaker_cli.constants import (
+    JOB_TERMINAL_STATUSES,
+    WORKER_SHARED_TMP_DIRNAME,
+    JobStatus,
+    JobType,
+)
 from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries import (
     create_generation,
     get_default_preset,
+    get_job,
     get_song,
     get_version,
 )
@@ -46,6 +52,7 @@ from songmaker_cli.scheduler import NoCapacityError, WorkerTaskFailed
 
 from ._runtime import (
     GenerationSetupError,
+    _job_is_terminal,
     _sanitize_error,
     _touch_heartbeat,
     _update_job,
@@ -242,6 +249,7 @@ def post_process_generation(
     ctx: GenerationContext,
     generation_id: str,
     db_factory: sessionmaker[Session],
+    job_id: str,
 ) -> None:
     """Read worker WAV, decode/splice/master/encode, persist DB row.
 
@@ -287,6 +295,7 @@ def post_process_generation(
             cot_lyrics=worker_cot_lyrics,
             mp3_path=mp3_path,
             wav_path=wav_path,
+            job_id=job_id,
         )
     finally:
         try:
@@ -305,6 +314,7 @@ def _persist_generation_row(
     cot_lyrics: str,
     mp3_path: Path,
     wav_path: Path,
+    job_id: str,
 ) -> None:
     mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
     wav_rel = f"{ctx.user_id}/{generation_id}.wav"
@@ -392,6 +402,10 @@ def _persist_generation_row(
 
     try:
         with db_factory() as session:
+            job = get_job(session, job_id)
+            if job is None or job.status in JOB_TERMINAL_STATUSES:
+                _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel)
+                return
             create_generation(
                 session,
                 song_id=ctx.song_id,
@@ -416,6 +430,8 @@ def _finalize_generation_job(
     count: int, completed: int, last_error: Exception | None,
 ) -> None:
     """Set final job status based on how many generations succeeded."""
+    if _job_is_terminal(db_factory, job_id):
+        return
     if completed == count:
         _update_job(db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
     elif completed > 0:
@@ -565,7 +581,14 @@ async def run_generation_job(
     shared_tmp_prefix = str(audio_dir / WORKER_SHARED_TMP_DIRNAME)
 
     try:
+        if _job_is_terminal(db_factory, job_id):
+            log.info("Generation job %s stopping because job is terminal", job_id)
+            return
+
         _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
+        if _job_is_terminal(db_factory, job_id):
+            log.info("Generation job %s stopping because job is terminal", job_id)
+            return
 
         try:
             ctx = await asyncio.to_thread(
@@ -598,6 +621,9 @@ async def run_generation_job(
             last_error: Exception | None = None
 
             for i in range(count):
+                if _job_is_terminal(db_factory, job_id):
+                    log.info("Generation job %s stopping because job is terminal", job_id)
+                    return
                 _update_job(db_factory, job_id, JobStatus.RUNNING, progress=i / count)
                 on_progress = _make_generation_progress_callback(db_factory, job_id, i, count)
                 on_heartbeat = _make_heartbeat_callback(db_factory, job_id)
@@ -611,6 +637,12 @@ async def run_generation_job(
                         redis=redis,
                         db_factory=db_factory,
                     )
+                    if _job_is_terminal(db_factory, job_id):
+                        _discard_worker_audio(worker_result.audio_path)
+                        log.info(
+                            "Generation job %s stopping because job is terminal", job_id,
+                        )
+                        return
                     await asyncio.to_thread(
                         jobs.post_process_generation,
                         worker_audio_path=worker_result.audio_path,
@@ -620,6 +652,7 @@ async def run_generation_job(
                         ctx=ctx,
                         generation_id=gen_id,
                         db_factory=db_factory,
+                        job_id=job_id,
                     )
                     completed += 1
                 except (NoCapacityError, WorkerTaskFailed) as exc:
@@ -651,6 +684,14 @@ async def run_generation_job(
             db_factory, job_id, JobStatus.FAILED,
             error=_sanitize_error(exc), error_type="generation_error",
         )
+
+
+def _discard_worker_audio(audio_path: str) -> None:
+    path = Path(audio_path)
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        log.warning("Failed to delete worker temp WAV: %s", path)
 
 
 def _cleanup_orphaned_files(audio_dir: Path, *rel_paths: str) -> None:

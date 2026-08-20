@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from songmaker_cli.constants import JOB_ACTIVE_STATUSES, JobStatus
+from songmaker_cli.constants import JOB_ACTIVE_STATUSES, JOB_TERMINAL_STATUSES, JobStatus
 from songmaker_cli.db.models import Job
 
 log = logging.getLogger(__name__)
@@ -68,10 +68,15 @@ def update_job_status(
     progress: float = 0.0, error: str | None = None,
     error_type: str | None = None,
     worker_pid: int | None = None,
-) -> None:
-    job = session.query(Job).filter_by(id=job_id).first()
-    if not job:
-        return
+) -> bool:
+    job = (
+        session.query(Job)
+        .filter_by(id=job_id)
+        .with_for_update()
+        .first()
+    )
+    if job is None or job.status in JOB_TERMINAL_STATUSES:
+        return False
     now = datetime.now(timezone.utc)
     job.status = status
     job.progress = progress
@@ -81,16 +86,23 @@ def update_job_status(
         job.worker_pid = worker_pid
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
         job.heartbeat_at = now
-    if status in (JobStatus.COMPLETED, JobStatus.FAILED):
+    if status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
         job.completed_at = now
     session.flush()
+    return True
 
 
 def update_job_heartbeat(session: Session, job_id: str) -> None:
-    job = session.query(Job).filter_by(id=job_id).first()
-    if job:
-        job.heartbeat_at = datetime.now(timezone.utc)
-        session.flush()
+    job = (
+        session.query(Job)
+        .filter_by(id=job_id)
+        .with_for_update()
+        .first()
+    )
+    if job is None or job.status in JOB_TERMINAL_STATUSES:
+        return
+    job.heartbeat_at = datetime.now(timezone.utc)
+    session.flush()
 
 
 def get_job(session: Session, job_id: str) -> Job | None:

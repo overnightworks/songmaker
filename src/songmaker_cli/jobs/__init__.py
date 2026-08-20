@@ -29,6 +29,7 @@ from songmaker_cli.scoring.subprocess_runner import get_scorer_process
 
 from ._runtime import (
     GenerationSetupError,
+    _job_is_terminal,
     _sanitize_error,
     _touch_heartbeat,
     _update_job,
@@ -69,6 +70,7 @@ __all__ = [
     "_build_generation_context",
     "_cleanup_orphaned_files",
     "_finalize_generation_job",
+    "_job_is_terminal",
     "_load_preset_params",
     "_load_song_meta",
     "_make_generation_progress_callback",
