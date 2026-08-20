@@ -36,10 +36,7 @@
 		</div>
 		<div class="waveform">
 			{#each Array(32) as _, i (i)}
-				<div
-					class="bar"
-					style="--i: {i}; --h: {20 + Math.sin(i * 0.4) * 15 + Math.random() * 10}"
-				></div>
+				<div class="bar" style="--h: {20 + Math.sin(i * 0.4) * 15 + Math.random() * 10}"></div>
 			{/each}
 		</div>
 		<form onsubmit={handleSubmit}>
@@ -102,7 +99,7 @@
 		overflow: hidden;
 	}
 
-	/* Animated background grid */
+	/* Background grid */
 	.bg-grid {
 		position: absolute;
 		inset: 0;
@@ -110,19 +107,9 @@
 			linear-gradient(var(--glow-primary) 1px, transparent 1px),
 			linear-gradient(90deg, var(--glow-primary) 1px, transparent 1px);
 		background-size: 40px 40px;
-		animation: grid-drift 20s linear infinite;
 	}
 
-	@keyframes grid-drift {
-		0% {
-			transform: translate(0, 0);
-		}
-		100% {
-			transform: translate(40px, 40px);
-		}
-	}
-
-	/* Floating glows */
+	/* Background glows */
 	.bg-glow {
 		position: absolute;
 		border-radius: 50%;
@@ -137,7 +124,6 @@
 		background: var(--primary);
 		top: -100px;
 		right: -100px;
-		animation: float-1 12s ease-in-out infinite;
 	}
 
 	.glow-2 {
@@ -146,7 +132,6 @@
 		background: var(--accent);
 		bottom: -50px;
 		left: -50px;
-		animation: float-2 15s ease-in-out infinite;
 	}
 
 	.glow-3 {
@@ -155,45 +140,6 @@
 		background: color-mix(in srgb, var(--primary) 70%, var(--accent));
 		top: 40%;
 		left: 60%;
-		animation: float-3 18s ease-in-out infinite;
-	}
-
-	@keyframes float-1 {
-		0%,
-		100% {
-			transform: translate(0, 0) scale(1);
-		}
-		33% {
-			transform: translate(-60px, 40px) scale(1.1);
-		}
-		66% {
-			transform: translate(30px, -20px) scale(0.9);
-		}
-	}
-
-	@keyframes float-2 {
-		0%,
-		100% {
-			transform: translate(0, 0) scale(1);
-		}
-		33% {
-			transform: translate(50px, -30px) scale(1.2);
-		}
-		66% {
-			transform: translate(-20px, 50px) scale(0.95);
-		}
-	}
-
-	@keyframes float-3 {
-		0%,
-		100% {
-			transform: translate(0, 0) scale(1);
-			opacity: 0.15;
-		}
-		50% {
-			transform: translate(-40px, 30px) scale(1.1);
-			opacity: 0.08;
-		}
 	}
 
 	/* Card */
@@ -209,7 +155,7 @@
 		box-shadow: 0 0 60px color-mix(in srgb, var(--primary) 5%, transparent);
 	}
 
-	/* Logo with glitch effect */
+	/* Logo with static split-color effect */
 	.logo-area {
 		text-align: center;
 		margin-bottom: 1.2rem;
@@ -223,7 +169,7 @@
 		color: var(--text);
 		position: relative;
 		display: inline-block;
-		animation: glow-pulse 4s ease-in-out infinite;
+		text-shadow: 0 0 20px color-mix(in srgb, var(--primary) 30%, transparent);
 	}
 
 	.logo::before,
@@ -239,62 +185,14 @@
 
 	.logo::before {
 		color: var(--primary);
-		animation: glitch-1 3s infinite;
 		clip-path: inset(0 0 65% 0);
 		opacity: 0.8;
 	}
 
 	.logo::after {
 		color: var(--accent);
-		animation: glitch-2 3s infinite;
 		clip-path: inset(65% 0 0 0);
 		opacity: 0.8;
-	}
-
-	@keyframes glitch-1 {
-		0%,
-		90%,
-		100% {
-			transform: translate(0);
-		}
-		92% {
-			transform: translate(2px, -1px);
-		}
-		94% {
-			transform: translate(-2px, 1px);
-		}
-		96% {
-			transform: translate(1px, 0);
-		}
-	}
-
-	@keyframes glitch-2 {
-		0%,
-		88%,
-		100% {
-			transform: translate(0);
-		}
-		90% {
-			transform: translate(-2px, 1px);
-		}
-		93% {
-			transform: translate(2px, -1px);
-		}
-		95% {
-			transform: translate(-1px, 0);
-		}
-	}
-
-	@keyframes glow-pulse {
-		0%,
-		100% {
-			text-shadow: 0 0 20px color-mix(in srgb, var(--primary) 30%, transparent);
-		}
-		50% {
-			text-shadow:
-				0 0 40px color-mix(in srgb, var(--primary) 50%, transparent),
-				0 0 80px color-mix(in srgb, var(--accent) 20%, transparent);
-		}
 	}
 
 	.tagline {
@@ -306,7 +204,7 @@
 		font-style: italic;
 	}
 
-	/* Waveform visualizer */
+	/* Static waveform motif */
 	.waveform {
 		display: flex;
 		align-items: center;
@@ -322,20 +220,6 @@
 		background: linear-gradient(to top, var(--primary), var(--accent));
 		border-radius: 2px;
 		height: calc(var(--h) * 1%);
-		animation: wave 1.5s ease-in-out infinite;
-		animation-delay: calc(var(--i) * 0.05s);
-	}
-
-	@keyframes wave {
-		0%,
-		100% {
-			transform: scaleY(1);
-			opacity: 0.4;
-		}
-		50% {
-			transform: scaleY(0.3);
-			opacity: 0.8;
-		}
 	}
 
 	/* Form */
@@ -429,33 +313,6 @@
 		transition:
 			transform 0.15s,
 			box-shadow 0.15s;
-		position: relative;
-		overflow: hidden;
-	}
-
-	.submit-btn::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		background: linear-gradient(
-			135deg,
-			transparent 40%,
-			rgba(255, 255, 255, 0.1) 50%,
-			transparent 60%
-		);
-		transform: translateX(-100%);
-		animation: shimmer 3s ease-in-out infinite;
-	}
-
-	@keyframes shimmer {
-		0%,
-		70%,
-		100% {
-			transform: translateX(-100%);
-		}
-		80% {
-			transform: translateX(100%);
-		}
 	}
 
 	.submit-btn:hover:not(:disabled) {
@@ -498,6 +355,23 @@
 
 	.legal-links a:hover {
 		color: var(--text-muted);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.login-page,
+		.login-page *,
+		.login-page *::before,
+		.login-page *::after {
+			animation: none !important;
+			transition: none !important;
+			scroll-behavior: auto !important;
+		}
+
+		.submit-btn:hover:not(:disabled),
+		.submit-btn:active:not(:disabled) {
+			transform: none;
+			box-shadow: none;
+		}
 	}
 
 	@media (max-width: 480px) {
