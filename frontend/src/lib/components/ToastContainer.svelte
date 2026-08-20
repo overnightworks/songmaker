@@ -23,7 +23,7 @@
 <style>
 	.toast-container {
 		position: fixed;
-		bottom: 1rem;
+		bottom: calc(var(--player-height) + 1rem);
 		right: 1rem;
 		z-index: 9999;
 		display: flex;

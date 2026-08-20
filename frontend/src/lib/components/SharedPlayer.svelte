@@ -154,8 +154,15 @@
 		requestPlay(el);
 	}
 
+	function visualizerAllowed(): boolean {
+		if (typeof window === 'undefined') return false;
+		if (document.hidden) return false;
+		return !window.matchMedia('(max-width: 640px)').matches;
+	}
+
 	function connectAnalyser(): void {
 		if (!audio || audioCtx) return;
+		if (!visualizerAllowed()) return;
 		try {
 			audioCtx = new AudioContext();
 			analyser = audioCtx.createAnalyser();
@@ -172,7 +179,10 @@
 	}
 
 	function startVisualizerLoop(): void {
-		if (!vizCanvas || !analyser || !frequencyData || !waveformData) return;
+		if (!vizCanvas) return;
+		if (!visualizerAllowed()) return;
+		if (!audioCtx) connectAnalyser();
+		if (!analyser || !frequencyData || !waveformData) return;
 		if (audioCtx?.state === 'suspended') audioCtx.resume();
 		vizColors = readVizColors();
 		viz.startLoop(vizCanvas, analyser, frequencyData, waveformData, vizColors, (bass, energy) => {
@@ -183,6 +193,14 @@
 
 	function stopVisualizerLoop(): void {
 		if (vizCanvas) viz.stopLoop(vizCanvas);
+	}
+
+	function handleVisibilityChange(): void {
+		if (document.hidden) {
+			stopVisualizerLoop();
+			return;
+		}
+		if (isPlaying) startVisualizerLoop();
 	}
 
 	$effect(() => {
@@ -224,7 +242,6 @@
 
 	export function togglePlay(): void {
 		const el = ensureAudio();
-		if (isLoading) return;
 		if (el.paused) requestPlay(el);
 		else {
 			setPaused();
@@ -281,7 +298,8 @@
 		let index = tracks.findIndex(
 			(track) => absoluteTime >= track.start_offset && absoluteTime < track.end_offset
 		);
-		if (index < 0) index = absoluteTime >= tracks[tracks.length - 1].end_offset ? tracks.length - 1 : 0;
+		if (index < 0)
+			index = absoluteTime >= tracks[tracks.length - 1].end_offset ? tracks.length - 1 : 0;
 		if (index !== activeStreamIndex) {
 			activeStreamIndex = index;
 			ontrackchange?.(tracks[index], index);
@@ -301,6 +319,8 @@
 	});
 </script>
 
+<svelte:document onvisibilitychange={handleVisibilityChange} />
+
 <div class="shared-player" style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}>
 	<canvas class="viz-canvas" bind:this={vizCanvas}></canvas>
 	<div class="player-content">
@@ -315,14 +335,17 @@
 				class:loading={isLoading}
 				class:playing={isPlaying}
 				onclick={togglePlay}
-				disabled={isLoading}
 				aria-label={isPlaying ? 'Pause' : 'Play'}
-				style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
 			>
-				{#if isLoading}<span class="spinner"></span>{:else}<Icon
-						name={isPlaying ? 'pause' : 'play'}
-						size={26}
-					/>{/if}
+				<span
+					class="play-btn-face"
+					style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
+				>
+					{#if isLoading}<span class="spinner"></span>{:else}<Icon
+							name={isPlaying ? 'pause' : 'play'}
+							size={26}
+						/>{/if}
+				</span>
 			</button>
 			{#if onnext}
 				<button class="nav-btn" onclick={onnext} aria-label="Next" title="Next">
@@ -372,7 +395,7 @@
 		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
 		display: flex;
 		align-items: center;
-		padding: 10px 18px;
+		padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
 		z-index: 100;
 		overflow: hidden;
 		transition: box-shadow 0.3s;
@@ -439,15 +462,16 @@
 			color 0.2s;
 	}
 
-	.play-btn:hover:not(:disabled) {
+	.play-btn-face {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.play-btn:hover {
 		background: linear-gradient(135deg, var(--primary, #ff3220), var(--accent, #a020f0));
 		border-color: transparent;
 		color: #fff;
-	}
-
-	.play-btn:disabled {
-		opacity: 0.5;
-		cursor: wait;
 	}
 
 	.play-btn.loading {
@@ -637,16 +661,12 @@
 
 	@media (max-width: 900px) {
 		.shared-player {
-			padding: 8px 10px;
+			padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
 		}
 
 		.player-content {
-			grid-template-columns: auto minmax(120px, 1fr);
+			grid-template-columns: auto minmax(80px, 1fr) minmax(120px, 1.2fr);
 			gap: 10px;
-		}
-
-		.track-info {
-			display: none;
 		}
 
 		.nav-btn {
@@ -664,13 +684,35 @@
 		.player-content {
 			display: flex;
 			flex-direction: column;
-			gap: 6px;
+			gap: 8px;
 		}
 
 		.player-controls {
 			justify-content: center;
-			gap: 6px;
+			gap: 8px;
 			width: 100%;
+		}
+
+		.track-info {
+			display: flex;
+			flex-direction: row;
+			align-items: center;
+			justify-content: center;
+			gap: 0.5rem;
+			width: 100%;
+			text-align: center;
+			white-space: nowrap;
+		}
+
+		.track-title {
+			font-size: 0.85rem;
+			max-width: 55%;
+			min-width: 0;
+		}
+
+		.track-detail {
+			max-width: 45%;
+			min-width: 0;
 		}
 
 		.timeline {
@@ -679,13 +721,21 @@
 		}
 
 		.nav-btn {
-			width: 38px;
-			height: 38px;
+			width: 44px;
+			height: 44px;
+			min-width: 44px;
+			min-height: 44px;
 		}
 
 		.play-btn {
-			width: 48px;
-			height: 48px;
+			width: 56px;
+			height: 56px;
+			min-width: 56px;
+			min-height: 56px;
+		}
+
+		.play-btn-face {
+			transform: none !important;
 		}
 
 		.time {

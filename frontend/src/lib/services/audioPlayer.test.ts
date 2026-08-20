@@ -614,8 +614,18 @@ describe('toggle / play / pause', () => {
 		expect(fakeAudio.paused).toBe(true);
 	});
 
-	it('toggle while loading does nothing', () => {
+	it('toggle while loading queues play until canplay', () => {
+		expect(audioPlayer.status).toBe('loading');
 		audioPlayer.toggle();
+		expect(fakeAudio.playMock).not.toHaveBeenCalled();
+		fakeAudio.fire('canplay');
+		expect(fakeAudio.playMock).toHaveBeenCalled();
+	});
+
+	it('second toggle while loading cancels queued play', () => {
+		audioPlayer.toggle();
+		audioPlayer.toggle();
+		fakeAudio.fire('canplay');
 		expect(fakeAudio.playMock).not.toHaveBeenCalled();
 	});
 

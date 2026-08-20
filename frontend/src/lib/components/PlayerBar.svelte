@@ -71,9 +71,16 @@
 		updateMediaSessionPositionState(currentTime, duration);
 	});
 
+	function visualizerAllowed(): boolean {
+		if (typeof window === 'undefined') return false;
+		if (document.hidden) return false;
+		return !window.matchMedia('(max-width: 640px)').matches;
+	}
+
 	function connectAnalyser(): void {
 		const audio = audioPlayer.getElement();
 		if (!audio || audioCtx) return;
+		if (!visualizerAllowed()) return;
 		try {
 			audioCtx = new AudioContext();
 			analyser = audioCtx.createAnalyser();
@@ -91,6 +98,7 @@
 
 	function startVisualizerLoop(): void {
 		if (!vizCanvas) return;
+		if (!visualizerAllowed()) return;
 		if (!audioCtx) connectAnalyser();
 		if (!analyser || !frequencyData || !waveformData) return;
 		if (audioCtx?.state === 'suspended') audioCtx.resume();
@@ -104,6 +112,14 @@
 	function stopVisualizerLoop(): void {
 		if (!vizCanvas) return;
 		viz.stopLoop(vizCanvas);
+	}
+
+	function handleVisibilityChange(): void {
+		if (document.hidden) {
+			stopVisualizerLoop();
+			return;
+		}
+		if (isPlaying) startVisualizerLoop();
 	}
 
 	function seekFromClick(e: MouseEvent, el?: HTMLElement): void {
@@ -130,6 +146,8 @@
 		});
 	}
 </script>
+
+<svelte:document onvisibilitychange={handleVisibilityChange} />
 
 <footer class="player-bar" style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}>
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
@@ -160,15 +178,18 @@
 				class:playing={isPlaying}
 				class:errored={isError}
 				onclick={togglePlay}
-				disabled={isLoading}
 				aria-label={isError ? 'Retry' : isPlaying ? 'Pause' : 'Play'}
 				title={isError && errorMsg ? errorMsg : ''}
-				style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
 			>
-				{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
-						name="refresh-cw"
-						size={24}
-					/>{:else}<Icon name={isPlaying ? 'pause' : 'play'} size={26} />{/if}
+				<span
+					class="play-btn-face"
+					style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
+				>
+					{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
+							name="refresh-cw"
+							size={24}
+						/>{:else}<Icon name={isPlaying ? 'pause' : 'play'} size={26} />{/if}
+				</span>
 			</button>
 			<button
 				class="nav-btn"
@@ -226,7 +247,7 @@
 		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
 		display: flex;
 		align-items: center;
-		padding: 10px 18px;
+		padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
 		z-index: 100;
 		overflow: hidden;
 		transition: box-shadow 0.3s;
@@ -265,14 +286,15 @@
 			border-color 0.3s,
 			color 0.2s;
 	}
-	.play-btn:hover:not(:disabled) {
+	.play-btn-face {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.play-btn:hover {
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		border-color: transparent;
 		color: #fff;
-	}
-	.play-btn:disabled {
-		opacity: 0.5;
-		cursor: wait;
 	}
 	.play-btn.loading {
 		border-color: var(--text-dim);
@@ -504,14 +526,11 @@
 
 	@media (max-width: 900px) {
 		.player-bar {
-			padding: 8px 10px;
+			padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
 		}
 		.player-content {
-			grid-template-columns: auto minmax(120px, 1fr);
+			grid-template-columns: auto minmax(80px, 1fr) minmax(120px, 1.2fr);
 			gap: 10px;
-		}
-		.track-info {
-			display: none;
 		}
 		.nav-btn {
 			width: 40px;
@@ -527,24 +546,51 @@
 		.player-content {
 			display: flex;
 			flex-direction: column;
-			gap: 6px;
+			gap: 8px;
 		}
 		.player-controls {
 			justify-content: center;
-			gap: 4px;
+			gap: 8px;
 			width: 100%;
+		}
+		.track-info {
+			display: flex;
+			flex-direction: row;
+			align-items: center;
+			justify-content: center;
+			gap: 0.5rem;
+			width: 100%;
+			text-align: center;
+			padding: 0 0.25rem;
+			white-space: nowrap;
+		}
+		.track-title {
+			font-size: 0.85rem;
+			max-width: 55%;
+			min-width: 0;
+		}
+		.track-detail {
+			max-width: 45%;
+			min-width: 0;
 		}
 		.timeline {
 			width: 100%;
 			gap: 6px;
 		}
 		.nav-btn {
-			width: 36px;
-			height: 36px;
+			width: 44px;
+			height: 44px;
+			min-width: 44px;
+			min-height: 44px;
 		}
 		.play-btn {
-			width: 48px;
-			height: 48px;
+			width: 56px;
+			height: 56px;
+			min-width: 56px;
+			min-height: 56px;
+		}
+		.play-btn-face {
+			transform: none !important;
 		}
 		.time {
 			font-size: 0.7rem;

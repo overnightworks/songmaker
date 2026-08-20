@@ -40,7 +40,7 @@
 	--viz-accent-b: 240;
 	--font-display: 'Oswald', Impact, sans-serif;
 	--font-body: 'Open Sans', Arial, sans-serif;
-	--player-height: 88px;
+	--player-height: calc(88px + env(safe-area-inset-bottom, 0px));
 	--header-height: 44px;
 
 	/* Button tokens */
@@ -79,7 +79,7 @@
 
 @media (max-width: 640px) {
 	:root {
-		--player-height: 104px;
+		--player-height: calc(144px + env(safe-area-inset-bottom, 0px));
 	}
 }
 
@@ -155,7 +155,7 @@ button {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-	button:active:not(:disabled) {
+	button:active:not(:disabled):not(.play-btn) {
 		transform: scale(0.97);
 	}
 }
