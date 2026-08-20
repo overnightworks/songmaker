@@ -20,6 +20,12 @@ from typing import Literal
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from songmaker_cli.constants import (
+    AUDIO_UPLOAD_BODY_MAX_BYTES,
+    JSON_REQUEST_BODY_MAX_BYTES,
+    REIMPORT_BODY_MAX_BYTES,
+)
+
 
 def _find_env_file() -> Path | None:
     """Walk up from CWD to find .env at the project root.
@@ -69,8 +75,9 @@ class Settings(BaseSettings):
     allowed_hosts: str = ""
     cors_origin: str | None = None
     trusted_proxies: str = ""
-    max_request_body_bytes: int = 1_048_576
-    max_upload_body_bytes: int = 52_428_800
+    max_request_body_bytes: int = Field(default=JSON_REQUEST_BODY_MAX_BYTES)
+    max_upload_body_bytes: int = Field(default=AUDIO_UPLOAD_BODY_MAX_BYTES)
+    max_reimport_body_bytes: int = Field(default=REIMPORT_BODY_MAX_BYTES)
 
     # ── Logging ───────────────────────────────────────────────────────
     log_format: Literal["text", "json"] = "text"

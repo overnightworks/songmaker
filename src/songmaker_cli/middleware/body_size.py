@@ -11,6 +11,31 @@ class _BodyTooLarge(Exception):
     pass
 
 
+def is_reimport_path(path: str) -> bool:
+    return path.endswith("/reimport")
+
+
+def is_large_upload_path(path: str) -> bool:
+    if path == "/api/audio/upload":
+        return True
+    parts = path.split("/")
+    return (
+        len(parts) == 5
+        and parts[1] == "api"
+        and parts[2] == "loras"
+        and parts[4] == "samples"
+    )
+
+
+def body_limit_for_path(path: str) -> int:
+    settings = get_settings()
+    if is_reimport_path(path):
+        return settings.max_reimport_body_bytes
+    if is_large_upload_path(path):
+        return settings.max_upload_body_bytes
+    return settings.max_request_body_bytes
+
+
 class BodySizeLimitMiddleware:
     def __init__(self, app):  # type: ignore[no-untyped-def]
         self.app = app
@@ -21,12 +46,7 @@ class BodySizeLimitMiddleware:
             return
 
         path = scope.get("path", "")
-        is_upload = path.endswith("/reimport")
-        settings = get_settings()
-        limit = (
-            settings.max_upload_body_bytes if is_upload
-            else settings.max_request_body_bytes
-        )
+        limit = body_limit_for_path(path)
 
         headers = {k.lower(): v for k, v in (
             (k.decode("latin-1"), v.decode("latin-1"))

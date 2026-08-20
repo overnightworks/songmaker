@@ -101,14 +101,26 @@ All responses include:
 
 ## Request Size Limits
 
-`BodySizeLimitMiddleware` (raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body. Requests > 1 MB are rejected (HTTP 413). Configurable via `MAX_REQUEST_BODY_BYTES` env var. The reimport endpoint (`/reimport`) and audio upload (`/audio/upload`) have a higher limit (50 MB, configurable via `MAX_UPLOAD_BODY_BYTES`) to allow audio file uploads.
+`BodySizeLimitMiddleware` (raw ASGI) first checks `Content-Length` for fast rejection, then wraps the receive channel to count bytes as they stream in — aborting with 413 once the limit is exceeded without buffering the entire body.
+
+JSON API requests are capped at 1 MiB (`MAX_REQUEST_BODY_BYTES`). Large multipart uploads use a path-exact allowlist, not a suffix match:
+
+| Path | File budget | Multipart body budget |
+|---|---|---|
+| Default JSON | — | 1 MiB |
+| `POST /api/audio/upload` | 50 MiB per file | 50 MiB + 1 MiB envelope |
+| `POST /api/loras/{lora_id}/samples` | 50 MiB per file | 50 MiB + 1 MiB envelope |
+| `POST /api/songs/{song_id}/reimport` | two audio files | 100 MiB + 1 MiB envelope |
+
+File limits and body limits are separate so a legal 50 MiB file is not rejected for multipart headers. `POST /api/loras/{id}/samples/{sample_id}` is not a large-upload path.
 
 ### Reference audio upload
 
-`POST /api/audio/upload` accepts audio files (.mp3, .wav, .flac, .ogg) up to 50 MB. Files are stored in `{audio_dir}/{user_id}/refs/{uuid}.{ext}` — the UUID filename prevents name collisions and path injection. The `reference_audio_path` field on `GenerationParams` is validated at two levels:
+`POST /api/audio/upload` accepts audio files (.mp3, .wav, .flac, .ogg) up to 50 MB. Files are stored in `{audio_dir}/{user_id}/refs/{uuid}.{ext}` — the UUID filename prevents name collisions and path injection. The `reference_audio_path` field on `GenerationParams` is validated at three levels:
 
 1. **API validation**: Pydantic validator rejects any value containing `..`
-2. **Job execution**: The path is resolved to absolute and verified to stay inside `audio_dir` before being passed to ACE-Step
+2. **Song write**: the path must resolve under `{audio_dir}/{authenticated_user_id}/refs`
+3. **Job execution**: the same owner-root resolver runs again; a foreign, symlink, or missing path fails the job instead of falling back to no reference
 
 **Note**: For production deployments exposed to the internet, use a reverse proxy (e.g., nginx `client_max_body_size 1m`) to reject oversized requests at the network edge before they reach the application.
 
