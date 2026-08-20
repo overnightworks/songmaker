@@ -203,7 +203,7 @@ PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is
 | GET | `/api/songs/{id}/chat` | user | Load chat history |
 | DELETE | `/api/songs/{id}/chat` | user | Clear chat history |
 | GET | `/api/chat/recent` | user | Songs with active chats |
-| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. Injects current song, durable memory, and server-resolved @-mentions (`mentioned_song_ids`, `mentioned_version_ids`, `mentioned_album_id`). Unknown mention IDs 404 the turn. |
+| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. Injects current song, durable memory, server-resolved @-mentions, and the relevant take's whisper/pick/keep/scores (`current_generation_id`). Unknown mention or generation IDs 404; a take for the wrong song or a non-playable take is 422. |
 | GET | `/api/memory` | user | Durable co-writer memory (`?song_id=` adds song + album scopes) |
 | PUT | `/api/memory/user` | user | Replace user-scope co-writer memory |
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |

@@ -34,6 +34,8 @@
 		replaceMentionToken,
 		type MentionItem
 	} from '$lib/utils/mentions';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { playerTakeIdForSong } from '$lib/utils/cowriter-take';
 	import ChatInput from './ChatInput.svelte';
 	import MemoryEditor from './MemoryEditor.svelte';
 	import MentionDropdown from './MentionDropdown.svelte';
@@ -212,13 +214,20 @@
 
 		let streamError: string | null = null;
 		try {
+			const playing = audioPlayer.current;
+			const currentGenerationId = playerTakeIdForSong(
+				currentSongId,
+				playing
+					? { songId: playing.songId, generationId: playing.generation.id }
+					: null
+			);
 			for await (const event of streamCoWriterTurn({
 				message: msg,
 				current_song_id: currentSongId || null,
 				mentioned_song_ids: mentionedSongIds,
 				mentioned_version_ids: mentionedVersionIds,
 				mentioned_album_id: mentionedAlbumId,
-				current_generation_id: null
+				current_generation_id: currentGenerationId
 			})) {
 				applyStreamEvent(assistantIndex, event);
 				if (event.type === 'error') {

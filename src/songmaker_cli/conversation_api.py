@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
     check_album_access,
+    check_generation_access,
     check_redis_health,
     check_song_access,
     create_job_with_rate_limit,
@@ -55,17 +56,20 @@ from songmaker_cli.constants import (
     MEMORY_SCOPE_USER,
     TURN_BLOCK_ALBUM_NOTES,
     TURN_BLOCK_CURRENT_SONG,
+    TURN_BLOCK_CURRENT_TAKE,
     TURN_BLOCK_MENTIONED_ALBUM,
     TURN_BLOCK_MENTIONED_SONGS,
     TURN_BLOCK_MENTIONED_VERSIONS,
+    TURN_BLOCK_NO_TAKE,
     TURN_BLOCK_SONG_MEMORY,
     TURN_BLOCK_USER_MEMORY,
     JobStatus,
     JobType,
 )
-from songmaker_cli.db.models import Song
+from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries import (
     archive_conversation,
+    best_playable_generation,
     create_conversation,
     delete_conversation,
     get_active_conversation,
@@ -315,6 +319,60 @@ def resolve_mention_blocks(
     return blocks
 
 
+def _generation_is_playable(generation: Generation) -> bool:
+    return (not generation.is_archived) and bool(generation.mp3_path)
+
+
+def _format_take(generation: Generation) -> str:
+    whisper = generation.whisper_text or ""
+    parts = [
+        f"generation_id: {generation.id}",
+        f"generation_number: {generation.generation_number}",
+        f"whisper_text:\n{whisper}",
+        f"is_picked: {str(generation.is_picked).lower()}",
+        f"is_kept: {str(generation.is_kept).lower()}",
+    ]
+    score_lines = []
+    for score in generation.scores:
+        value = score.value
+        if isinstance(value, dict) and "score" in value:
+            score_lines.append(f"{score.scorer}: {value['score']}")
+    if score_lines:
+        parts.append("scores:\n" + "\n".join(score_lines))
+    return "\n".join(parts)
+
+
+def resolve_take_block(
+    session: Session,
+    user: AuthenticatedUser,
+    current_song: Song | None,
+    current_generation_id: str | None,
+) -> TurnContextBlock | None:
+    """Pick the relevant playable take for the open song.
+
+    An explicit player id is used only when it is owned, belongs to the
+    current song, and is playable. Otherwise the server falls back to the
+    playable pick, then the newest playable take. Missing takes are a
+    named empty state, never a silent substitute.
+    """
+    if current_generation_id is not None:
+        generation = check_generation_access(session, current_generation_id, user)
+        if current_song is None or generation.song_id != current_song.id:
+            raise HTTPException(
+                422, "Generation does not belong to the current song",
+            )
+        if not _generation_is_playable(generation):
+            raise HTTPException(422, "Generation is not playable")
+        return TurnContextBlock(TURN_BLOCK_CURRENT_TAKE, _format_take(generation))
+
+    if current_song is None:
+        return None
+    playable = best_playable_generation(current_song)
+    if playable is None:
+        return TurnContextBlock(TURN_BLOCK_NO_TAKE, "no playable take")
+    return TurnContextBlock(TURN_BLOCK_CURRENT_TAKE, _format_take(playable))
+
+
 # ── Chat turn ─────────────────────────────────────────────────────────
 
 
@@ -350,6 +408,12 @@ async def api_chat_turn(
         req.mentioned_version_ids,
         req.mentioned_album_id,
     )
+    take_block = resolve_take_block(
+        session, user, current_song, req.current_generation_id,
+    )
+    extra_blocks = list(mention_blocks)
+    if take_block is not None:
+        extra_blocks.append(take_block)
     user_memory_body, song_memory_body, album_notes_body = load_memory_for_turn(
         session, user.id, current_song,
     )
@@ -358,7 +422,7 @@ async def api_chat_turn(
         user_memory_body=user_memory_body,
         song_memory_body=song_memory_body,
         album_notes_body=album_notes_body,
-        extra_blocks=mention_blocks,
+        extra_blocks=extra_blocks,
     )
 
     job = create_job_with_rate_limit(session, user, JobType.CHAT)

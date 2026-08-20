@@ -215,11 +215,11 @@ def test_unknown_or_foreign_mention_is_404_before_provider(client, stranger_clie
     assert _capture.called is False
 
 
-def test_schema_accepts_current_generation_id(client):
+def test_schema_accepts_current_generation_id_field(client):
     resp = _turn(client, {
         "message": "look at this take",
         "current_song_id": "s1",
-        "current_generation_id": "g-not-resolved-yet",
+        "current_generation_id": None,
     })
     assert resp.status_code == 200
     _stream_events(resp)
