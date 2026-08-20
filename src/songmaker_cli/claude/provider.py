@@ -15,8 +15,10 @@ import json
 import logging
 import os
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import threading
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -157,29 +159,35 @@ async def acall_claude_with_mcp(
         model = get_settings().claude_chat_model
     binary = _require_claude_binary()
     flat_prompt = _flatten_messages(prompt, messages)
-    cmd = _build_mcp_cli_cmd(binary, flat_prompt, system, model, user_id)
+    stdin_body = _stdin_prompt(system, flat_prompt)
+    config_path = _write_mcp_config(user_id)
+    cmd = _build_mcp_cli_cmd(binary, model, config_path, stream=False)
     env = _scrub_env()
     log.info("Claude: MCP+CLI backend (model=%s, user=%s)", model, user_id)
 
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+                start_new_session=True,
+            )
+        except FileNotFoundError:
+            raise UnavailableError("Claude CLI binary not found")
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout_seconds,
+                proc.communicate(stdin_body.encode()), timeout=timeout_seconds,
             )
         except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
+            await _reap_process_group(proc)
             raise UnavailableError(
                 f"Claude CLI timed out after {timeout_seconds}s",
             )
-    except FileNotFoundError:
-        raise UnavailableError("Claude CLI binary not found")
+    finally:
+        _unlink_quiet(config_path)
 
     stdout = stdout_bytes.decode()
     stderr = stderr_bytes.decode()
@@ -218,23 +226,36 @@ async def acall_claude_with_mcp_stream(
         model = get_settings().claude_chat_model
     binary = _require_claude_binary()
     flat_prompt = _flatten_messages(prompt, messages)
-    cmd = _build_mcp_cli_cmd(binary, flat_prompt, system, model, user_id, stream=True)
+    stdin_body = _stdin_prompt(system, flat_prompt)
+    config_path = _write_mcp_config(user_id)
+    cmd = _build_mcp_cli_cmd(binary, model, config_path, stream=True)
     env = _scrub_env()
     log.info("Claude: streaming MCP+CLI (model=%s, user=%s)", model, user_id)
 
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-            limit=_STREAM_BUFFER_LIMIT,
-        )
-    except FileNotFoundError:
-        raise UnavailableError("Claude CLI binary not found")
-
-    async for event in _consume_stream(proc, timeout_seconds):
-        yield event
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+                start_new_session=True,
+                limit=_STREAM_BUFFER_LIMIT,
+            )
+        except FileNotFoundError:
+            raise UnavailableError("Claude CLI binary not found")
+        if proc.stdin is not None:
+            proc.stdin.write(stdin_body.encode())
+            await proc.stdin.drain()
+            proc.stdin.close()
+        try:
+            async for event in _consume_stream(proc, timeout_seconds):
+                yield event
+        finally:
+            await _reap_process_group(proc)
+    finally:
+        _unlink_quiet(config_path)
 
 
 async def _consume_stream(
@@ -255,11 +276,13 @@ async def _consume_stream(
                 continue
             yield event
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
+        await _reap_process_group(proc)
         raise UnavailableError(
             f"Claude CLI timed out after {timeout_seconds}s",
         )
+    except BaseException:
+        await _reap_process_group(proc)
+        raise
 
     await proc.wait()
     if proc.returncode != 0:
@@ -464,26 +487,64 @@ def _build_mcp_config(user_id: str) -> str:
     return json.dumps(config)
 
 
+def _stdin_prompt(system: str | None, prompt: str) -> str:
+    if system:
+        return f"{system}\n\n{prompt}"
+    return prompt
+
+
+def _write_mcp_config(user_id: str) -> str:
+    handle, path = tempfile.mkstemp(prefix="songmaker-mcp-", suffix=".json")
+    with os.fdopen(handle, "w", encoding="utf-8") as fh:
+        fh.write(_build_mcp_config(user_id))
+    os.chmod(path, 0o600)
+    return path
+
+
+def _unlink_quiet(path: str) -> None:
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        return
+
+
+async def _reap_process_group(proc: asyncio.subprocess.Process) -> None:
+    if proc.pid is None:
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=1)
+        return
+    except asyncio.TimeoutError:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    await proc.wait()
+
+
 def _build_mcp_cli_cmd(
-    binary: str, prompt: str, system: str | None, model: str, user_id: str,
+    binary: str, model: str, config_path: str,
     *,
     stream: bool = False,
 ) -> list[str]:
     output_format = "stream-json" if stream else "json"
     cmd = [
-        binary, "-p", prompt,
+        binary, "-p",
         "--model", model,
         "--output-format", output_format,
         "--disallowedTools", _DISALLOWED_TOOLS,
         "--allowedTools", MCP_ALLOWED_TOOLS,
-        "--mcp-config", _build_mcp_config(user_id),
+        "--mcp-config", config_path,
         "--strict-mcp-config",
         "--permission-mode", "bypassPermissions",
     ]
     if stream:
         cmd.append("--verbose")
-    if system:
-        cmd.extend(["--system-prompt", system])
     return cmd
 
 

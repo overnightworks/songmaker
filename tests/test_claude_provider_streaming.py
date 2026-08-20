@@ -24,6 +24,11 @@ from songmaker_cli.claude.provider import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_real_killpg(monkeypatch):
+    monkeypatch.setattr(provider.os, "killpg", MagicMock())
+
+
 class FakeStreamReader:
     """Minimal stand-in for asyncio.StreamReader.readline()."""
 
@@ -57,6 +62,15 @@ def _make_fake_proc(
 
     proc.wait = _wait
     proc.kill = MagicMock()
+    proc.pid = 4242
+    proc.stdin = MagicMock()
+    proc.stdin.write = MagicMock()
+
+    async def _drain() -> None:
+        return None
+
+    proc.stdin.drain = _drain
+    proc.stdin.close = MagicMock()
     return proc
 
 
@@ -367,23 +381,15 @@ def test_stream_timeout_kills_subprocess(monkeypatch) -> None:
             return b""
 
     async def fake_exec(*_cmd, **_kw):
-        proc = MagicMock()
+        proc = _make_fake_proc([])
         proc.stdout = StallingReader([])
-        proc.stderr = FakeStreamReader([])
-        proc.returncode = 0
-
-        def _kill() -> None:
-            killed["value"] = True
-
-        proc.kill = _kill
-
-        async def _wait() -> None:
-            return None
-
-        proc.wait = _wait
         return proc
 
+    def _killpg(_pid, _sig):
+        killed["value"] = True
+
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(provider.os, "killpg", _killpg)
 
     with pytest.raises(UnavailableError):
         asyncio.run(_collect(
@@ -398,7 +404,7 @@ def test_stream_cmd_uses_stream_json_and_verbose() -> None:
     from songmaker_cli.claude.provider import _build_mcp_cli_cmd
 
     cmd = _build_mcp_cli_cmd(
-        "claude", "prompt", None, "opus", "u", stream=True,
+        "claude", "opus", "/tmp/mcp.json", stream=True,
     )
     assert "--output-format" in cmd
     idx = cmd.index("--output-format")
@@ -409,7 +415,7 @@ def test_stream_cmd_uses_stream_json_and_verbose() -> None:
 def test_stream_cmd_non_stream_keeps_json() -> None:
     from songmaker_cli.claude.provider import _build_mcp_cli_cmd
 
-    cmd = _build_mcp_cli_cmd("claude", "prompt", None, "opus", "u")
+    cmd = _build_mcp_cli_cmd("claude", "opus", "/tmp/mcp.json")
     idx = cmd.index("--output-format")
     assert cmd[idx + 1] == "json"
     assert "--verbose" not in cmd

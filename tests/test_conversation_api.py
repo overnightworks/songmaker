@@ -18,7 +18,6 @@ from songmaker_cli.claude.provider import (
     FinalEvent,
     StreamEvent,
     ToolCallEvent,
-    UnavailableError,
 )
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -145,16 +144,20 @@ def test_mcp_cli_cmd_includes_required_flags():
     )
 
     cmd = _build_mcp_cli_cmd(
-        "claude", "hi", "sysprompt", "claude-opus-4-6", "user-1",
+        "claude", "claude-opus-4-6", "/tmp/mcp.json",
     )
     assert "--mcp-config" in cmd
+    assert cmd[cmd.index("--mcp-config") + 1] == "/tmp/mcp.json"
     assert "--strict-mcp-config" in cmd
     assert "--allowedTools" in cmd
     assert MCP_ALLOWED_TOOLS in cmd
     assert "--permission-mode" in cmd
     assert "bypassPermissions" in cmd
-    assert "--system-prompt" in cmd
-    assert "sysprompt" in cmd
+    assert "hi" not in cmd
+    assert "sysprompt" not in cmd
+    joined = " ".join(cmd)
+    assert "postgresql://" not in joined
+    assert "DATABASE_URL" not in joined
 
 
 def test_mcp_config_passes_user_id_to_subprocess_env():
@@ -179,23 +182,28 @@ def test_acall_claude_with_mcp_dispatches_to_cli(monkeypatch):
     async def fake_exec(*cmd, **kw):
         captured["cmd"] = cmd
         captured["env"] = kw["env"]
+        captured["kwargs"] = kw
         proc = MagicMock()
+        proc.pid = 4242
         proc.returncode = 0
         proc.communicate = AsyncMock(
             return_value=(b'{"result":"ok"}', b""),
         )
         return proc
 
-    monkeypatch.setattr(
-        "asyncio.create_subprocess_exec", fake_exec,
-    )
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(provider.os, "killpg", MagicMock())
 
     result = asyncio.run(provider.acall_claude_with_mcp(
-        prompt="hi", user_id="u-1", model="claude-opus-4-6",
+        prompt="hi secret-prompt", user_id="u-1", model="claude-opus-4-6",
     ))
     assert result.text == "ok"
     assert "--mcp-config" in captured["cmd"]
-    # Sanity check that parent env is scrubbed before exec.
+    config_arg = captured["cmd"][captured["cmd"].index("--mcp-config") + 1]
+    assert not str(config_arg).startswith("{")
+    assert "secret-prompt" not in captured["cmd"]
+    assert all("DATABASE_URL" not in str(part) for part in captured["cmd"])
+    assert captured["kwargs"]["start_new_session"] is True
     assert "DATABASE_URL" not in captured["env"]
 
 
@@ -249,16 +257,17 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
 
     async def fake_exec(*cmd, **kw):
         proc = MagicMock()
+        proc.pid = 4242
         proc.returncode = 0
         proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
-
-        def _kill():
-            killed["value"] = True
-        proc.kill = _kill
         proc.wait = AsyncMock(return_value=None)
         return proc
 
+    def _killpg(pid, _sig):
+        killed["value"] = True
+
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(provider.os, "killpg", _killpg)
 
     with pytest.raises(provider.UnavailableError):
         asyncio.run(provider.acall_claude_with_mcp(

@@ -50,6 +50,7 @@ from songmaker_cli.db.queries.settings import (
     get_claude_scoring_model,
     get_cowriter_model,
     get_cowriter_provider,
+    get_cowriter_tail_token_budget,
     get_preset,
     list_active_models,
     list_all_models,
@@ -58,6 +59,7 @@ from songmaker_cli.db.queries.settings import (
     name_exists,
     set_claude_model,
     set_cowriter_settings,
+    set_cowriter_tail_token_budget,
     set_default_preset,
     toggle_model,
     update_preset,
@@ -362,6 +364,7 @@ def _cowriter_response(session) -> CowriterSettingsResponse:
         allowed_models=models_by_provider[provider],
         models_by_provider=models_by_provider,
         models_error=errors.get(provider),
+        tail_token_budget=get_cowriter_tail_token_budget(session),
     )
 
 
@@ -397,6 +400,11 @@ def api_set_cowriter_settings(
             f"Unknown {req.provider} model '{req.model}'",
         )
     set_cowriter_settings(session, req.provider, req.model)
+    if req.tail_token_budget is not None:
+        try:
+            set_cowriter_tail_token_budget(session, req.tail_token_budget)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
     record_audit(
         session, admin.id, AuditAction.UPDATE, ResourceType.COWRITER,
         detail=f"provider={req.provider} model={req.model}",

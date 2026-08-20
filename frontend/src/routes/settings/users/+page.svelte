@@ -78,6 +78,7 @@
 	let cowriterSettings = $state<CowriterSettings | null>(null);
 	let cowriterProvider = $state('claude');
 	let cowriterModel = $state('');
+	let cowriterBudget = $state(0);
 	let savingCowriter = $state(false);
 
 	let resetPasswordUserId = $state<string | null>(null);
@@ -218,6 +219,7 @@
 			cowriterSettings = await fetchCowriterSettings();
 			cowriterProvider = cowriterSettings.provider;
 			cowriterModel = cowriterSettings.model;
+			cowriterBudget = cowriterSettings.tail_token_budget;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load co-writer settings';
 		}
@@ -240,9 +242,14 @@
 		savingCowriter = true;
 		error = '';
 		try {
-			cowriterSettings = await updateCowriterSettings(cowriterProvider, cowriterModel);
+			cowriterSettings = await updateCowriterSettings(
+				cowriterProvider,
+				cowriterModel,
+				cowriterBudget
+			);
 			cowriterProvider = cowriterSettings.provider;
 			cowriterModel = cowriterSettings.model;
+			cowriterBudget = cowriterSettings.tail_token_budget;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to save co-writer settings';
 		} finally {
@@ -844,6 +851,16 @@
 									<option value={model}>{model}</option>
 								{/each}
 							</select>
+						</div>
+						<div class="claude-field">
+							<label for="cowriter-budget">History tail (tokens)</label>
+							<input
+								id="cowriter-budget"
+								type="number"
+								bind:value={cowriterBudget}
+								min="2000"
+								max="100000"
+							/>
 						</div>
 						{#if cowriterSettings.models_error && cowriterProvider === cowriterSettings.provider}
 							<p class="hint">{cowriterSettings.models_error}</p>

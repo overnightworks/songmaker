@@ -339,6 +339,7 @@ export interface CowriterSettings {
 	allowed_models: string[];
 	models_by_provider: Record<string, string[]>;
 	models_error?: string | null;
+	tail_token_budget: number;
 }
 
 export interface MemoryScopeItem {

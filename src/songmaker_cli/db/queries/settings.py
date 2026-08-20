@@ -8,12 +8,16 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import (
     COWRITER_DEFAULT_PROVIDER,
+    COWRITER_DEFAULT_TAIL_TOKEN_BUDGET,
+    COWRITER_MAX_TAIL_TOKEN_BUDGET,
+    COWRITER_MIN_TAIL_TOKEN_BUDGET,
     COWRITER_PROVIDERS,
     PRESET_GLOBAL_DEFAULTS_NAME,
     SETTING_CLAUDE_CHAT_MODEL,
     SETTING_CLAUDE_SCORING_MODEL,
     SETTING_COWRITER_MODEL,
     SETTING_COWRITER_PROVIDER,
+    SETTING_COWRITER_TAIL_TOKEN_BUDGET,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
 from songmaker_cli.settings import get_settings
@@ -244,6 +248,45 @@ def get_cowriter_model(session: Session, provider: str) -> str:
 def set_cowriter_settings(session: Session, provider: str, model: str) -> None:
     set_claude_model(session, SETTING_COWRITER_PROVIDER, provider)
     set_claude_model(session, SETTING_COWRITER_MODEL, model)
+
+
+def get_cowriter_tail_token_budget(session: Session) -> int:
+    row = (
+        session.query(RateLimitSetting)
+        .filter(
+            RateLimitSetting.setting_key == SETTING_COWRITER_TAIL_TOKEN_BUDGET,
+            RateLimitSetting.user_id.is_(None),
+        )
+        .first()
+    )
+    if row is None:
+        return COWRITER_DEFAULT_TAIL_TOKEN_BUDGET
+    return row.value
+
+
+def set_cowriter_tail_token_budget(session: Session, budget: int) -> None:
+    if budget < COWRITER_MIN_TAIL_TOKEN_BUDGET or budget > COWRITER_MAX_TAIL_TOKEN_BUDGET:
+        msg = (
+            f"tail_token_budget must be between "
+            f"{COWRITER_MIN_TAIL_TOKEN_BUDGET} and {COWRITER_MAX_TAIL_TOKEN_BUDGET}"
+        )
+        raise ValueError(msg)
+    row = (
+        session.query(RateLimitSetting)
+        .filter(
+            RateLimitSetting.setting_key == SETTING_COWRITER_TAIL_TOKEN_BUDGET,
+            RateLimitSetting.user_id.is_(None),
+        )
+        .first()
+    )
+    if row:
+        row.value = budget
+    else:
+        row = RateLimitSetting(
+            setting_key=SETTING_COWRITER_TAIL_TOKEN_BUDGET, value=budget,
+        )
+        session.add(row)
+    session.flush()
 
 
 def set_claude_model(session: Session, setting_key: str, value: str) -> None:

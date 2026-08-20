@@ -102,6 +102,8 @@ COWRITER_OPENAI_NON_CHAT_MARKERS: Final[tuple[str, ...]] = (
     "whisper", "tts", "embedding", "dall-e", "dalle", "transcribe", "realtime",
 )
 COWRITER_CLAUDE_MODEL_PREFIX = "claude-"
+COWRITER_SUMMARY_TAG = "conversation_summary"
+COWRITER_MAX_SUMMARY_CHARS = 12_000
 
 MODEL_ALLOWED_CLAUDE = frozenset({
     "claude-opus-4-6",

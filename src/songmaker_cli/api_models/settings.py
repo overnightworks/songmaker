@@ -105,6 +105,7 @@ class ClaudeModelsResponse(BaseModel):
 class CowriterSettingsRequest(BaseModel):
     provider: str
     model: str
+    tail_token_budget: int | None = None
 
 
 class CowriterSettingsResponse(BaseModel):
@@ -114,6 +115,7 @@ class CowriterSettingsResponse(BaseModel):
     allowed_models: list[str]
     models_by_provider: dict[str, list[str]]
     models_error: str | None = None
+    tail_token_budget: int
 
 
 class ChatRequest(BaseModel):

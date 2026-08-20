@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 
@@ -66,6 +67,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cowriter.dispatch import stream_cowriter_turn
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.history import compact_conversation, fold_summary
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries import (
     archive_conversation,
@@ -78,6 +80,7 @@ from songmaker_cli.db.queries import (
     get_conversation,
     get_cowriter_model,
     get_cowriter_provider,
+    get_cowriter_tail_token_budget,
     get_or_create_active_conversation,
     get_song_memory,
     get_user_memory,
@@ -88,6 +91,7 @@ from songmaker_cli.db.queries import (
     update_job_status,
     upsert_album_memory,
     upsert_song_memory,
+    upsert_summary,
     upsert_user_memory,
 )
 from songmaker_cli.db.queries.conversations import append_message
@@ -442,9 +446,28 @@ async def api_chat_turn(
 
     active = get_active_conversation(session, user.id)
     history = list_messages(session, active.id) if active else []
-    api_messages: list[dict[str, str]] = [
-        {"role": m.role, "content": m.content} for m in history
-    ]
+    tail_budget = get_cowriter_tail_token_budget(session)
+    compacted = compact_conversation(
+        history,
+        budget=tail_budget,
+        existing=active.summary if active is not None else None,
+        summarize=fold_summary,
+    )
+    if (
+        active is not None
+        and compacted.windowed
+        and compacted.summary_text is not None
+    ):
+        upsert_summary(
+            session,
+            active.id,
+            compacted.summary_text,
+            compacted.last_summarized_message_id,
+            message_count=len(history),
+            token_count=sum(len(msg.content) for msg in compacted.tail),
+        )
+        session.commit()
+    api_messages = compacted.to_api_messages()
     api_messages.append({
         "role": "user",
         "content": envelope.wrap_user_message(req.message),
@@ -452,6 +475,7 @@ async def api_chat_turn(
 
     async def event_generator() -> AsyncIterator[str]:
         assistant_text = ""
+        started = time.monotonic()
         try:
             async for event in stream_cowriter_turn(
                 provider=provider,
@@ -466,6 +490,13 @@ async def api_chat_turn(
                     assistant_text = event.text
                     break
                 yield _sse_format(event)
+            log.info(
+                "cowriter turn provider=%s windowed=%s duration_ms=%d tail_budget=%d",
+                provider,
+                compacted.windowed,
+                int((time.monotonic() - started) * 1000),
+                tail_budget,
+            )
         except ProviderUnavailableError as e:
             log.warning("Co-writer %s unavailable: %s", e.provider, e)
             update_job_status(

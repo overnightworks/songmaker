@@ -263,7 +263,13 @@ from songmaker_cli.db.queries.settings import (
     get_cowriter_provider as get_cowriter_provider,
 )
 from songmaker_cli.db.queries.settings import (
+    get_cowriter_tail_token_budget as get_cowriter_tail_token_budget,
+)
+from songmaker_cli.db.queries.settings import (
     set_cowriter_settings as set_cowriter_settings,
+)
+from songmaker_cli.db.queries.settings import (
+    set_cowriter_tail_token_budget as set_cowriter_tail_token_budget,
 )
 from songmaker_cli.db.queries.settings import get_default_preset as get_default_preset
 from songmaker_cli.db.queries.settings import get_global_defaults as get_global_defaults
