@@ -87,6 +87,7 @@
 			audioPlayer.toggle();
 			return;
 		}
+		setShuffle(false);
 		playPlaylistEntries(playlistDetail.entries, index, { restart: true });
 	}
 

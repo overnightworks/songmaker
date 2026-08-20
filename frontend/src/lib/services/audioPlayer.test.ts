@@ -78,7 +78,8 @@ function makeStreamManifest(): QueueStreamManifest {
 				start_offset: 10,
 				end_offset: 30
 			}
-		]
+		],
+		windowed: false
 	};
 }
 

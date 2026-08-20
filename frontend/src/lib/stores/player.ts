@@ -93,14 +93,26 @@ type QueueContext =
 	| { type: 'playlist'; entries: PlaylistEntryItem[]; index: number };
 
 export const queueContext = writable<QueueContext>({ type: 'library' });
-export const shuffleEnabled = writable(false);
 
-export function toggleShuffle(): void {
-	shuffleEnabled.update((enabled) => !enabled);
+const SHUFFLE_STORAGE_KEY = 'queueShuffleEnabled';
+
+function readStoredShuffle(): boolean {
+	if (typeof window === 'undefined') return false;
+	return localStorage.getItem(SHUFFLE_STORAGE_KEY) === 'true';
 }
+
+export const shuffleEnabled = writable(readStoredShuffle());
 
 export function setShuffle(enabled: boolean): void {
 	shuffleEnabled.set(enabled);
+	if (typeof window !== 'undefined') {
+		localStorage.setItem(SHUFFLE_STORAGE_KEY, String(enabled));
+	}
+}
+
+export async function toggleShuffle(): Promise<void> {
+	setShuffle(!get(shuffleEnabled));
+	await rebuildQueueAfterShuffleToggle();
 }
 
 // --- Playback dispatch ---
@@ -134,6 +146,15 @@ function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; sta
 	return { items: [start, ...rest], startIndex: 0 };
 }
 
+function streamLoadOpts(
+	restart: boolean,
+	track: QueueStreamManifest['tracks'][number] | undefined,
+	resumeAtTrackTime: number | undefined
+): { restart: boolean; resumeAt?: number } {
+	if (resumeAtTrackTime === undefined || !track) return { restart };
+	return { restart, resumeAt: track.start_offset + resumeAtTrackTime };
+}
+
 function showWindowedNotice(trackCount: number): void {
 	addToast(
 		`Streaming the first ${trackCount} tracks — the queue is longer than one stream allows.`,
@@ -156,7 +177,7 @@ export async function retryLastPlayIntent(): Promise<boolean> {
 async function playStreamEntries(
 	entries: PlaylistEntryItem[],
 	startIndex: number,
-	opts: { restart?: boolean }
+	opts: { restart?: boolean; resumeAtTrackTime?: number }
 ): Promise<void> {
 	let manifest: QueueStreamManifest;
 	try {
@@ -172,28 +193,66 @@ async function playStreamEntries(
 		return;
 	}
 	retryPlayIntent = null;
-	audioPlayer.loadStream(manifest, startIndex, { restart: opts.restart ?? true });
+	audioPlayer.loadStream(
+		manifest,
+		startIndex,
+		streamLoadOpts(opts.restart ?? true, manifest.tracks[startIndex], opts.resumeAtTrackTime)
+	);
 	if (manifest.windowed) {
 		showWindowedNotice(manifest.tracks.length);
 	}
 }
 
-export async function playLibraryFromGeneration(gen: GenerationItem): Promise<void> {
+export async function playLibraryFromGeneration(
+	gen: GenerationItem,
+	opts: { resumeAtTrackTime?: number } = {}
+): Promise<void> {
 	queueContext.set({ type: 'library' });
 	let manifest: QueueStreamManifest;
 	try {
-		manifest = await createLibraryQueueStreamSnapshot(gen.id);
+		manifest = await createLibraryQueueStreamSnapshot(gen.id, {
+			shuffle: get(shuffleEnabled)
+		});
 	} catch {
-		retryPlayIntent = () => playLibraryFromGeneration(gen);
+		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
 		addToast('Stream unavailable. Tap play to retry.', 'error');
 		return;
 	}
 	retryPlayIntent = null;
 	const startIndex = manifest.tracks.findIndex((t) => t.generation_id === gen.id);
-	audioPlayer.loadStream(manifest, startIndex >= 0 ? startIndex : 0, { restart: true });
+	const index = startIndex >= 0 ? startIndex : 0;
+	audioPlayer.loadStream(
+		manifest,
+		index,
+		streamLoadOpts(true, manifest.tracks[index], opts.resumeAtTrackTime)
+	);
 	if (manifest.windowed) {
 		showWindowedNotice(manifest.tracks.length);
 	}
+}
+
+async function rebuildQueueAfterShuffleToggle(): Promise<void> {
+	if (audioPlayer.mode !== 'stream' || !audioPlayer.current) return;
+	const current = audioPlayer.current;
+	const trackTime = audioPlayer.currentTime;
+	const ctx = get(queueContext);
+	if (ctx.type === 'library') {
+		await playLibraryFromGeneration(current.generation, { resumeAtTrackTime: trackTime });
+		return;
+	}
+	if (ctx.type === 'album') {
+		const song = get(songList).find((item) => item.id === current.songId);
+		if (!song) return;
+		await playAlbumFromGeneration(ctx.albumId, song, current.generation, {
+			resumeAtTrackTime: trackTime
+		});
+		return;
+	}
+	const currentIndex = currentPlaylistIndex(ctx, current);
+	await playPlaylistEntries(ctx.entries, currentIndex >= 0 ? currentIndex : ctx.index, {
+		restart: true,
+		resumeAtTrackTime: trackTime
+	});
 }
 
 function queueSongs(): SongItem[] {
@@ -427,7 +486,7 @@ export async function playAlbum(albumId: string): Promise<void> {
 	if (entries.length === 0) return;
 	const ordered = shuffledWithStart(entries, startIndex);
 	if (useStreamForQueue()) {
-		void playStreamEntries(ordered.items, ordered.startIndex, { restart: true });
+		await playStreamEntries(ordered.items, ordered.startIndex, { restart: true });
 		return;
 	}
 	const first = ordered.items[ordered.startIndex];
@@ -441,14 +500,18 @@ export async function playAlbum(albumId: string): Promise<void> {
 export async function playAlbumFromGeneration(
 	albumId: string,
 	song: SongItem,
-	gen: GenerationItem
+	gen: GenerationItem,
+	opts: { resumeAtTrackTime?: number } = {}
 ): Promise<void> {
 	queueContext.set({ type: 'album', albumId });
 	const { entries, startIndex } = await collectAlbumQueue(albumId, { song, gen });
 	if (entries.length === 0) return;
 	const ordered = shuffledWithStart(entries, startIndex);
 	if (useStreamForQueue()) {
-		void playStreamEntries(ordered.items, ordered.startIndex, { restart: true });
+		await playStreamEntries(ordered.items, ordered.startIndex, {
+			restart: true,
+			resumeAtTrackTime: opts.resumeAtTrackTime
+		});
 		return;
 	}
 	playGeneration(gen, song, { restart: true });
@@ -475,20 +538,22 @@ function playPlaylistIndex(
 	}
 }
 
-export function playPlaylistEntries(
+export async function playPlaylistEntries(
 	entries: PlaylistEntryItem[],
 	startIndex = 0,
-	opts: { restart?: boolean } = {}
-): void {
+	opts: { restart?: boolean; resumeAtTrackTime?: number } = {}
+): Promise<void> {
 	if (entries.length === 0) return;
+	queueContext.set({ type: 'playlist', entries, index: startIndex });
 	const ordered = shuffledWithStart(entries, startIndex);
-	const ctx = { entries: ordered.items, index: ordered.startIndex };
-	queueContext.set({ type: 'playlist', entries: ordered.items, index: ordered.startIndex });
 	if (useStreamForQueue()) {
-		void playStreamEntries(ordered.items, ordered.startIndex, opts);
+		await playStreamEntries(ordered.items, ordered.startIndex, {
+			restart: opts.restart ?? true,
+			resumeAtTrackTime: opts.resumeAtTrackTime
+		});
 		return;
 	}
-	playPlaylistIndex(ctx, ordered.startIndex, opts);
+	playPlaylistIndex({ entries, index: startIndex }, startIndex, { restart: opts.restart });
 }
 
 async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
@@ -496,7 +561,9 @@ async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStre
 	try {
 		if (ctx.type === 'library') {
 			const currentTrack = state.manifest.tracks[state.trackIndex];
-			return await createLibraryQueueStreamSnapshot(currentTrack?.generation_id ?? null);
+			return await createLibraryQueueStreamSnapshot(currentTrack?.generation_id ?? null, {
+				shuffle: get(shuffleEnabled)
+			});
 		}
 		return await createQueueStreamSnapshot(
 			state.manifest.tracks.map((track) => ({

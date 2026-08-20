@@ -52,6 +52,9 @@
 
 	const songs = $derived($songList);
 	const ctx = $derived($queueContext);
+	const shuffleScope = $derived(
+		ctx.type === 'playlist' ? 'this playlist' : ctx.type === 'album' ? 'this album' : 'all albums'
+	);
 	const prevSong = $derived(canPlayPrevSong(current, songs, ctx));
 	const nextSong = $derived(canPlayNextSong(current, songs, ctx, shuffle));
 	const progressPercent = $derived(
@@ -157,9 +160,9 @@
 				class="nav-btn mode-btn"
 				class:active={shuffle}
 				onclick={toggleShuffle}
-				aria-label={shuffle ? 'Disable shuffle' : 'Enable shuffle'}
+				aria-label={shuffle ? `Disable shuffle (${shuffleScope})` : `Shuffle ${shuffleScope}`}
 				aria-pressed={shuffle}
-				title="Shuffle"
+				title={shuffle ? `Disable shuffle (${shuffleScope})` : `Shuffle ${shuffleScope}`}
 			>
 				<Icon name="shuffle" size={20} />
 			</button>

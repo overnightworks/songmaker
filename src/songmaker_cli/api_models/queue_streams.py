@@ -16,6 +16,7 @@ class QueueStreamSnapshotRequest(BaseModel):
 
 class QueueStreamLibraryRequest(BaseModel):
     start_generation_id: str | None = Field(default=None, max_length=36)
+    shuffle: bool = False
 
 
 class QueueStreamTrackResponse(BaseModel):

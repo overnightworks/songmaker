@@ -391,7 +391,8 @@ export interface QueueStreamSnapshotRequest {
 }
 
 export interface LibraryQueueStreamRequest {
-	start_generation_id: string | null;
+	start_generation_id?: string | null;
+	shuffle: boolean;
 }
 
 export interface QueueStreamTrackItem {
@@ -418,7 +419,7 @@ export interface QueueStreamManifest {
 	expires_at: string;
 	total_duration: number;
 	tracks: QueueStreamTrackItem[];
-	windowed?: boolean;
+	windowed: boolean;
 }
 
 export interface WorkerIdentityItem {

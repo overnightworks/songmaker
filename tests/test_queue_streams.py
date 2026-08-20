@@ -12,6 +12,8 @@ from fastapi.testclient import TestClient
 
 from songmaker_cli.auth import hash_password
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
+from songmaker_cli.queue_stream_api import shuffle_library_sources
+from songmaker_cli.queue_streams import QueueStreamSource
 
 
 def _seed_queue_data(session) -> None:
@@ -863,3 +865,125 @@ def test_legacy_manifest_without_pin_fields_is_accessible(tmp_path: Path, monkey
     assert unpin_resp.status_code == 200
     assert unpin_resp.json()["pinned"] is False
     assert unpin_resp.json()["pinned_at"] is None
+
+
+def _reverse_in_place(items: list) -> None:
+    items.reverse()
+
+
+def _source_with_id(generation_id: str) -> QueueStreamSource:
+    generation = Generation(
+        id=generation_id,
+        song_id="s1",
+        generation_number=1,
+        mp3_path=f"{generation_id}.mp3",
+        seed=1,
+    )
+    return QueueStreamSource(
+        key=generation_id,
+        index=0,
+        entry_id=None,
+        generation=generation,
+        audio_url=f"/audio/{generation_id}.mp3",
+    )
+
+
+def test_shuffle_library_sources_pins_start_and_mixes_rest() -> None:
+    sources = [_source_with_id(gid) for gid in ("g-a", "g-b", "g-c", "g-d")]
+    mixed = shuffle_library_sources(sources, "g-b", shuffle_seq=_reverse_in_place)
+    assert [item.generation.id for item in mixed] == ["g-b", "g-d", "g-c", "g-a"]
+
+
+def test_shuffle_library_sources_deduplicates_generation_ids() -> None:
+    sources = [_source_with_id(gid) for gid in ("g-a", "g-b", "g-a", "g-c")]
+    mixed = shuffle_library_sources(sources, "g-b", shuffle_seq=_reverse_in_place)
+    assert [item.generation.id for item in mixed] == ["g-b", "g-c", "g-a"]
+
+
+def test_shuffle_library_sources_without_start_mixes_the_full_pool() -> None:
+    sources = [_source_with_id(gid) for gid in ("g-a", "g-b", "g-c")]
+    mixed = shuffle_library_sources(sources, None, shuffle_seq=_reverse_in_place)
+    assert [item.generation.id for item in mixed] == ["g-c", "g-b", "g-a"]
+
+
+def test_shuffle_library_sources_leaves_a_single_track_unchanged() -> None:
+    sources = [_source_with_id("g-a"), _source_with_id("g-a")]
+    mixed = shuffle_library_sources(sources, "g-a", shuffle_seq=_reverse_in_place)
+    assert [item.generation.id for item in mixed] == ["g-a"]
+
+
+def _seed_library_shuffle_data(session) -> None:
+    session.add(User(id="user-a", username="usera", password_hash=hash_password("pass1234")))
+    session.flush()
+    session.add(Album(id="a1", title="Album", artist="A", created_by="user-a"))
+    session.flush()
+    for index in range(1, 5):
+        session.add(Song(id=f"s{index}", title=f"Song {index}", album_id="a1", track_number=index))
+    session.flush()
+    for index in range(1, 5):
+        session.add(Version(id=f"v{index}", song_id=f"s{index}", version_number=1, lyrics=""))
+    session.flush()
+    for index in range(1, 5):
+        session.add(
+            Generation(
+                id=f"g{index}",
+                song_id=f"s{index}",
+                version_id=f"v{index}",
+                generation_number=1,
+                mp3_path=f"user-a/g{index}.mp3",
+                seed=index,
+                is_picked=True,
+            )
+        )
+
+
+def _write_shuffle_audio_files(root: Path) -> None:
+    path = root / "audio" / "user-a"
+    path.mkdir(parents=True, exist_ok=True)
+    for index in range(1, 5):
+        (path / f"g{index}.mp3").write_bytes(b"source")
+
+
+def test_library_stream_without_shuffle_keeps_album_track_order(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
+    _write_shuffle_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post("/api/queue-streams/library", json={"shuffle": False})
+
+    assert resp.status_code == 200
+    assert [track["generation_id"] for track in resp.json()["tracks"]] == [
+        "g1",
+        "g2",
+        "g3",
+        "g4",
+    ]
+
+
+def test_library_stream_shuffle_uses_injected_rng(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    monkeypatch.setattr(
+        "songmaker_cli.queue_stream_api.random.shuffle", _reverse_in_place
+    )
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
+    _write_shuffle_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams/library",
+        json={"shuffle": True, "start_generation_id": "g2"},
+    )
+
+    assert resp.status_code == 200
+    assert [track["generation_id"] for track in resp.json()["tracks"]] == [
+        "g2",
+        "g4",
+        "g3",
+        "g1",
+    ]
+    assert [track["index"] for track in resp.json()["tracks"]] == [0, 1, 2, 3]

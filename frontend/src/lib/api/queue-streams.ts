@@ -22,14 +22,18 @@ export async function createQueueStreamSnapshot(
 }
 
 export async function createLibraryQueueStreamSnapshot(
-	startGenerationId: string | null
+	startGenerationId: string | null,
+	opts: { shuffle?: boolean } = {}
 ): Promise<QueueStreamManifest> {
 	return apiFetch<QueueStreamManifest>(
 		'/api/queue-streams/library',
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ start_generation_id: startGenerationId })
+			body: JSON.stringify({
+				start_generation_id: startGenerationId,
+				shuffle: opts.shuffle ?? false
+			})
 		},
 		STREAM_BUILD_TIMEOUT_MS
 	);

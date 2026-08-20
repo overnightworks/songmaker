@@ -23,6 +23,7 @@ function makeManifest(overrides: Partial<QueueStreamManifest> = {}): QueueStream
 		expires_at: '2026-12-31T00:00:00Z',
 		total_duration: 120,
 		tracks: [],
+		windowed: false,
 		...overrides
 	};
 }

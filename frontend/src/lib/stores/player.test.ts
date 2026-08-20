@@ -44,6 +44,7 @@ import {
 	selectedGenerationId,
 	selectedSong,
 	selectedSongId,
+	setShuffle,
 	shuffleEnabled,
 	songList,
 	toggleShuffle,
@@ -137,8 +138,11 @@ afterEach(() => {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	queueContext.set({ type: 'library' });
-	shuffleEnabled.set(false);
+	setShuffle(false);
+	audioPlayer.mode = 'classic';
+	audioPlayer.currentTime = 0;
 	toasts.set([]);
+	localStorage.removeItem('queueShuffleEnabled');
 });
 
 describe('browsing state', () => {
@@ -341,12 +345,19 @@ describe('playback dispatch', () => {
 		);
 	});
 
-	it('toggleShuffle flips shuffle mode', () => {
+	it('toggleShuffle flips shuffle mode', async () => {
 		expect(get(shuffleEnabled)).toBe(false);
-		toggleShuffle();
+		await toggleShuffle();
 		expect(get(shuffleEnabled)).toBe(true);
-		toggleShuffle();
+		await toggleShuffle();
 		expect(get(shuffleEnabled)).toBe(false);
+	});
+
+	it('persists shuffle in localStorage', async () => {
+		await toggleShuffle();
+		expect(localStorage.getItem('queueShuffleEnabled')).toBe('true');
+		await toggleShuffle();
+		expect(localStorage.getItem('queueShuffleEnabled')).toBe('false');
 	});
 
 	it('shuffle mode advances playlist playback to another entry', async () => {
@@ -698,6 +709,7 @@ function makeManifest(overrides: Partial<QueueStreamManifest> = {}): QueueStream
 		expires_at: '2099-01-01T00:00:00Z',
 		total_duration: 180,
 		tracks: [],
+		windowed: false,
 		...overrides
 	};
 }
@@ -836,7 +848,9 @@ describe('playLibraryFromGeneration', () => {
 
 		await expect(retryLastPlayIntent()).resolves.toBe(true);
 
-		expect(vi.mocked(createLibraryQueueStreamSnapshot)).toHaveBeenLastCalledWith('g2');
+		expect(vi.mocked(createLibraryQueueStreamSnapshot)).toHaveBeenLastCalledWith('g2', {
+			shuffle: false
+		});
 		expect(loadStreamSpy).toHaveBeenCalledWith(manifest, 0, { restart: true });
 	});
 
@@ -863,6 +877,16 @@ describe('playLibraryFromGeneration', () => {
 		expect(infoToasts).toHaveLength(1);
 		expect(infoToasts[0].message).toMatch(/Streaming the first 2 tracks/);
 	});
+
+	it('sends the current shuffle flag with the library snapshot request', async () => {
+		setShuffle(true);
+		const manifest = makeManifest({ tracks: [makeTrack({ generation_id: 'g1' })] });
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+
+		await playLibraryFromGeneration(makeGen());
+
+		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g1', { shuffle: true });
+	});
 });
 
 describe('rebuildQueueStream routing', () => {
@@ -884,7 +908,7 @@ describe('rebuildQueueStream routing', () => {
 		};
 		const result = await audioPlayer.onStreamRebuild!(state);
 
-		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g-cur');
+		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g-cur', { shuffle: false });
 		expect(result).toBe(freshManifest);
 	});
 
@@ -973,5 +997,216 @@ describe('playAlbumFromGeneration', () => {
 			expect.objectContaining({ restart: true })
 		);
 		expect(get(queueContext)).toEqual({ type: 'album', albumId: 'a1' });
+	});
+});
+
+function makePlayback(gen: GenerationItem, song: SongItem) {
+	return { generation: gen, songId: song.id, songTitle: song.title, artist: song.artist };
+}
+
+describe('shuffle rebuilds the playing queue', () => {
+	let loadStreamSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		setQueuePlaybackMode('stream');
+		loadStreamSpy = vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
+		toasts.set([]);
+	});
+
+	it('toggling shuffle mid-library-play rebuilds at the current take and time', async () => {
+		const gen = makeGen({ id: 'g-cur' });
+		const song = makeSong({ generations: [gen] });
+		audioPlayer.mode = 'stream';
+		audioPlayer.current = makePlayback(gen, song);
+		audioPlayer.currentTime = 14;
+		queueContext.set({ type: 'library' });
+		const shuffled = makeManifest({
+			tracks: [
+				makeTrack({ generation_id: 'g-cur', start_offset: 0 }),
+				makeTrack({ generation_id: 'g-other', index: 1, start_offset: 180 })
+			]
+		});
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(shuffled);
+
+		await toggleShuffle();
+
+		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g-cur', { shuffle: true });
+		expect(loadStreamSpy).toHaveBeenCalledWith(shuffled, 0, { restart: true, resumeAt: 14 });
+	});
+
+	it('turning shuffle off rebuilds the library in deterministic order', async () => {
+		setShuffle(true);
+		const gen = makeGen({ id: 'g-cur' });
+		const song = makeSong({ generations: [gen] });
+		audioPlayer.mode = 'stream';
+		audioPlayer.current = makePlayback(gen, song);
+		audioPlayer.currentTime = 8;
+		queueContext.set({ type: 'library' });
+		const sequential = makeManifest({
+			tracks: [
+				makeTrack({ generation_id: 'g-cur', start_offset: 0 }),
+				makeTrack({ generation_id: 'g-other', index: 1, start_offset: 180 })
+			]
+		});
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(sequential);
+
+		await toggleShuffle();
+
+		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g-cur', { shuffle: false });
+		expect(loadStreamSpy).toHaveBeenCalledWith(sequential, 0, { restart: true, resumeAt: 8 });
+	});
+
+	it('album shuffle keeps the current take first and mixes the rest', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		setShuffle(true);
+		const song1 = makeSong({
+			id: 's1',
+			track_number: 1,
+			generations: [makeGen({ id: 'g1', is_picked: true, song_id: 's1' })]
+		});
+		const song2 = makeSong({
+			id: 's2',
+			title: 'Two',
+			track_number: 2,
+			generations: [makeGen({ id: 'g2', is_picked: true, song_id: 's2', mp3_path: 'a1/s2.mp3' })]
+		});
+		const song3 = makeSong({
+			id: 's3',
+			title: 'Three',
+			track_number: 3,
+			generations: [makeGen({ id: 'g3', is_picked: true, song_id: 's3', mp3_path: 'a1/s3.mp3' })]
+		});
+		songList.set([song1, song2, song3]);
+		vi.mocked(createQueueStreamSnapshot).mockImplementation(async (tracks) =>
+			makeManifest({
+				tracks: tracks.map((track, index) =>
+					makeTrack({
+						generation_id: track.generation_id,
+						entry_id: track.entry_id ?? null,
+						index,
+						key: track.generation_id,
+						start_offset: index * 180
+					})
+				)
+			})
+		);
+
+		await playAlbumFromGeneration('a1', song1, song1.generations[0]);
+		await Promise.resolve();
+
+		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
+			{ generation_id: 'g1', entry_id: 'album:s1:g1' },
+			{ generation_id: 'g3', entry_id: 'album:s3:g3' },
+			{ generation_id: 'g2', entry_id: 'album:s2:g2' }
+		]);
+	});
+
+	it('playlist play without shuffle keeps entry order', async () => {
+		const entries = [
+			makePlaylistEntry({ id: 'pe1', generation_id: 'g1' }),
+			makePlaylistEntry({ id: 'pe2', generation_id: 'g2' }),
+			makePlaylistEntry({ id: 'pe3', generation_id: 'g3' })
+		];
+		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(
+			makeManifest({
+				tracks: entries.map((entry, index) =>
+					makeTrack({ generation_id: entry.generation_id, entry_id: entry.id, index })
+				)
+			})
+		);
+
+		await playPlaylistEntries(entries, 0, { restart: true });
+
+		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
+			{ generation_id: 'g1', entry_id: 'pe1' },
+			{ generation_id: 'g2', entry_id: 'pe2' },
+			{ generation_id: 'g3', entry_id: 'pe3' }
+		]);
+		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 0 });
+	});
+
+	it('playlist shuffle keeps the current entry first and mixes the rest', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		setShuffle(true);
+		const entries = [
+			makePlaylistEntry({ id: 'pe1', generation_id: 'g1' }),
+			makePlaylistEntry({ id: 'pe2', generation_id: 'g2' }),
+			makePlaylistEntry({ id: 'pe3', generation_id: 'g3' })
+		];
+		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(
+			makeManifest({
+				tracks: [
+					makeTrack({ generation_id: 'g1', entry_id: 'pe1', index: 0 }),
+					makeTrack({ generation_id: 'g3', entry_id: 'pe3', index: 1 }),
+					makeTrack({ generation_id: 'g2', entry_id: 'pe2', index: 2 })
+				]
+			})
+		);
+
+		await playPlaylistEntries(entries, 0, { restart: true });
+
+		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
+			{ generation_id: 'g1', entry_id: 'pe1' },
+			{ generation_id: 'g3', entry_id: 'pe3' },
+			{ generation_id: 'g2', entry_id: 'pe2' }
+		]);
+		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 0 });
+	});
+
+	it('toggling shuffle mid-playlist-play resumes the current take', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		const entries = [
+			makePlaylistEntry({ id: 'pe1', generation_id: 'g1' }),
+			makePlaylistEntry({ id: 'pe2', generation_id: 'g2' }),
+			makePlaylistEntry({ id: 'pe3', generation_id: 'g3' })
+		];
+		const currentGen = makeGen({ id: 'g1', mp3_path: 'a1/song_v1.mp3' });
+		audioPlayer.mode = 'stream';
+		audioPlayer.current = {
+			generation: currentGen,
+			songId: '',
+			songTitle: 'Playlist Song',
+			artist: 'Artist'
+		};
+		audioPlayer.currentTime = 11;
+		queueContext.set({ type: 'playlist', entries, index: 0 });
+		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(
+			makeManifest({
+				tracks: [
+					makeTrack({ generation_id: 'g1', entry_id: 'pe1', index: 0, start_offset: 0 }),
+					makeTrack({ generation_id: 'g3', entry_id: 'pe3', index: 1, start_offset: 180 }),
+					makeTrack({ generation_id: 'g2', entry_id: 'pe2', index: 2, start_offset: 360 })
+				]
+			})
+		);
+
+		await toggleShuffle();
+
+		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
+			{ generation_id: 'g1', entry_id: 'pe1' },
+			{ generation_id: 'g3', entry_id: 'pe3' },
+			{ generation_id: 'g2', entry_id: 'pe2' }
+		]);
+		expect(loadStreamSpy).toHaveBeenCalledWith(
+			expect.anything(),
+			0,
+			{ restart: true, resumeAt: 11 }
+		);
+	});
+
+	it('expired library rebuild keeps the shuffle flag', async () => {
+		setShuffle(true);
+		queueContext.set({ type: 'library' });
+		const freshManifest = makeManifest({ snapshot_id: 'fresh' });
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(freshManifest);
+
+		const result = await audioPlayer.onStreamRebuild!({
+			manifest: makeManifest({ tracks: [makeTrack({ generation_id: 'g-cur' })] }),
+			trackIndex: 0,
+			trackTime: 30
+		});
+
+		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g-cur', { shuffle: true });
+		expect(result).toBe(freshManifest);
 	});
 });

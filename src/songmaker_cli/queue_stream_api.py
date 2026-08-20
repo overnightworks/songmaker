@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import random
+from collections.abc import Callable
 from dataclasses import replace
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -119,6 +121,38 @@ def _pick_library_generation(song: Song) -> Generation | None:
     )
 
 
+def shuffle_library_sources(
+    sources: list[QueueStreamSource],
+    start_generation_id: str | None,
+    shuffle_seq: Callable[[list[QueueStreamSource]], None] | None = None,
+) -> list[QueueStreamSource]:
+    if len(sources) <= 1:
+        return list(sources)
+    seen: set[str] = set()
+    unique: list[QueueStreamSource] = []
+    for source in sources:
+        generation_id = source.generation.id
+        if generation_id in seen:
+            continue
+        seen.add(generation_id)
+        unique.append(source)
+    mix = shuffle_seq if shuffle_seq is not None else random.shuffle
+    if start_generation_id is None:
+        mix(unique)
+        return unique
+    start: QueueStreamSource | None = None
+    rest: list[QueueStreamSource] = []
+    for item in unique:
+        if start is None and item.generation.id == start_generation_id:
+            start = item
+        else:
+            rest.append(item)
+    mix(rest)
+    if start is None:
+        return rest
+    return [start, *rest]
+
+
 @router.post("/queue-streams/library")
 def api_create_library_queue_stream(
     req: QueueStreamLibraryRequest,
@@ -171,7 +205,11 @@ def api_create_library_queue_stream(
         if gen is not None
     ]
 
-    if start_gen is not None:
+    if req.shuffle:
+        sources = shuffle_library_sources(
+            sources, start_gen.id if start_gen is not None else None
+        )
+    elif start_gen is not None:
         rotation_pos = next(
             (i for i, s in enumerate(sources) if s.generation.id == start_gen.id),
             None,
