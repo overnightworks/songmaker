@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from songmaker_cli.auth import hash_password
+from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.queue_stream_api import (
@@ -558,6 +559,22 @@ def test_library_stream_start_generation_id_owned_by_other_user_returns_404(
     )
 
     assert resp.status_code == 404
+
+
+def test_library_stream_archived_start_generation_returns_422(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
+    _write_library_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams/library", json={"start_generation_id": "g3"},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 
 
 def test_library_stream_windowed_for_oversize_library(tmp_path: Path, monkeypatch) -> None:

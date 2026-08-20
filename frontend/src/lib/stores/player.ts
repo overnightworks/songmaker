@@ -27,6 +27,11 @@ import {
 	shouldUseQueueStream,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
+import {
+	QUEUE_STREAM_EMPTY_POOL_PREFIX,
+	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
+	QUEUE_TAKE_MISSING_TOAST
+} from '$lib/constants';
 
 // --- Data ---
 export const albumList = writable<AlbumItem[]>([]);
@@ -140,7 +145,25 @@ function poolLabel(): string {
 }
 
 function isEmptyPoolError(err: unknown): boolean {
-	return err instanceof ApiError && err.status === 422;
+	return (
+		err instanceof ApiError &&
+		err.status === 422 &&
+		err.message.startsWith(QUEUE_STREAM_EMPTY_POOL_PREFIX)
+	);
+}
+
+function isUnplayableStartError(err: unknown): boolean {
+	return (
+		err instanceof ApiError &&
+		err.status === 422 &&
+		err.message === QUEUE_STREAM_UNPLAYABLE_START_DETAIL
+	);
+}
+
+function libraryStreamFailureToast(err: unknown): string {
+	if (isEmptyPoolError(err)) return `Keine Takes (${poolLabel()})`;
+	if (isUnplayableStartError(err)) return QUEUE_STREAM_UNPLAYABLE_START_DETAIL;
+	return `${poolLabel()} queue failed. Tap play to retry.`;
 }
 
 // --- Playback dispatch ---
@@ -243,22 +266,22 @@ export async function playLibraryFromGeneration(
 	} catch (err) {
 		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
 		libraryQueueNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
-		addToast(
-			isEmptyPoolError(err)
-				? `Keine Takes (${poolLabel()})`
-				: `${poolLabel()} queue failed. Tap play to retry.`,
-			'error'
-		);
+		addToast(libraryStreamFailureToast(err), 'error');
 		return;
 	}
 	retryPlayIntent = null;
-	libraryQueueNotice.set('idle');
 	const startIndex = manifest.tracks.findIndex((t) => t.generation_id === gen.id);
-	const index = startIndex >= 0 ? startIndex : 0;
+	if (startIndex < 0) {
+		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
+		libraryQueueNotice.set('error');
+		addToast(QUEUE_TAKE_MISSING_TOAST, 'error');
+		return;
+	}
+	libraryQueueNotice.set('idle');
 	audioPlayer.loadStream(
 		manifest,
-		index,
-		streamLoadOpts(true, manifest.tracks[index], opts.resumeAtTrackTime)
+		startIndex,
+		streamLoadOpts(true, manifest.tracks[startIndex], opts.resumeAtTrackTime)
 	);
 	if (manifest.windowed) {
 		showWindowedNotice(manifest.tracks.length);
@@ -276,12 +299,7 @@ export async function playLibrary(
 	} catch (err) {
 		retryPlayIntent = () => playLibrary(opts);
 		libraryQueueNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
-		addToast(
-			isEmptyPoolError(err)
-				? `Keine Takes (${poolLabel()})`
-				: `${poolLabel()} queue failed. Tap play to retry.`,
-			'error'
-		);
+		addToast(libraryStreamFailureToast(err), 'error');
 		return;
 	}
 	retryPlayIntent = null;

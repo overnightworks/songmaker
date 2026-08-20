@@ -161,6 +161,14 @@ def _library_audio_readable(ctx: AppContext, generation: Generation) -> bool:
     return True
 
 
+def _library_start_take_playable(ctx: AppContext, generation: Generation) -> bool:
+    return (
+        not generation.is_archived
+        and bool(generation.mp3_path)
+        and _library_audio_readable(ctx, generation)
+    )
+
+
 def shuffle_library_sources(
     sources: list[QueueStreamSource],
     start_generation_id: str | None,
@@ -216,6 +224,8 @@ def api_create_library_queue_stream(
     start_gen: Generation | None = None
     if req.start_generation_id is not None:
         start_gen = check_generation_access(session, req.start_generation_id, user)
+        if not _library_start_take_playable(ctx, start_gen):
+            raise HTTPException(422, _consts.QUEUE_STREAM_UNPLAYABLE_START_DETAIL)
 
     pool_generations = collect_library_pool_generations(
         songs,
@@ -224,7 +234,9 @@ def api_create_library_queue_stream(
         lambda gen: _library_audio_readable(ctx, gen),
     )
     if not pool_generations:
-        raise HTTPException(422, f"No playable takes in pool '{req.pool}'")
+        raise HTTPException(
+            422, f"{_consts.QUEUE_STREAM_EMPTY_POOL_DETAIL} '{req.pool}'",
+        )
 
     sources: list[QueueStreamSource] = [
         track_source_from_generation(

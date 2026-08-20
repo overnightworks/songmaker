@@ -10,6 +10,10 @@ import type {
 } from '$lib/api/types';
 import { createQueueStreamSnapshot, fetchSong } from '$lib/api/client';
 import { toasts } from '$lib/stores/toast';
+import {
+	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
+	QUEUE_TAKE_MISSING_TOAST
+} from '$lib/constants';
 import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 
 vi.mock('$lib/api/client', () => ({
@@ -818,15 +822,37 @@ describe('playLibraryFromGeneration', () => {
 		expect(loadStreamSpy).toHaveBeenCalledWith(manifest, 1, { restart: true });
 	});
 
-	it('falls back to index 0 when requested generation is absent from manifest', async () => {
+	it('does not load a substitute track when the requested generation is absent from the manifest', async () => {
 		const gen = makeGen({ id: 'g-absent' });
-		const song = makeSong();
 		const manifest = makeManifest({ tracks: [makeTrack({ generation_id: 'g1' })] });
 		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
 
 		await playLibraryFromGeneration(gen);
 
-		expect(loadStreamSpy).toHaveBeenCalledWith(manifest, 0, { restart: true });
+		expect(loadStreamSpy).not.toHaveBeenCalled();
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({
+				message: QUEUE_TAKE_MISSING_TOAST,
+				type: 'error'
+			})
+		]);
+	});
+
+	it('unplayable start take is not labeled as an empty pool', async () => {
+		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(
+			new ApiError(422, QUEUE_STREAM_UNPLAYABLE_START_DETAIL, '/api/queue-streams/library')
+		);
+
+		await playLibraryFromGeneration(makeGen({ id: 'g-dead' }));
+
+		expect(get(libraryQueueNotice)).toBe('error');
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({
+				message: QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
+				type: 'error'
+			})
+		]);
+		expect(loadStreamSpy).not.toHaveBeenCalled();
 	});
 
 	it('shows error toast and does not call loadStream when library stream build fails', async () => {
