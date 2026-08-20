@@ -292,6 +292,15 @@ describe('playlist offline metadata', () => {
 		expect(await loadSavedOfflinePlaylist('pl-1')).toBeNull();
 	});
 
+	it('rejects metadata stored under a different playlist key', async () => {
+		const meta = playlistOfflineMeta('pl-other', 'snap-1');
+		store.set(offlinePlaylistMetaKey('pl-1'), new Response(JSON.stringify(meta)));
+		store.set(meta.stream_url, new Response('audio'));
+
+		expect(await loadSavedOfflinePlaylist('pl-1')).toBeNull();
+		expect(store.has(offlinePlaylistMetaKey('pl-1'))).toBe(false);
+	});
+
 	it('writes and removes playlist metadata in the cache', async () => {
 		await rememberPlaylistOfflineStream('pl-1', 'snap-9');
 		const raw = store.get(offlinePlaylistMetaKey('pl-1'));

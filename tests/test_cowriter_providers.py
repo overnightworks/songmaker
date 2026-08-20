@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from conftest import TEST_SECRET, make_fake_redis
@@ -12,8 +13,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.claude.provider import FinalEvent
-from songmaker_cli.constants import SETTING_CLAUDE_SCORING_MODEL
+from songmaker_cli.claude.provider import FinalEvent, ToolCallEvent
+from songmaker_cli.constants import COWRITER_MAX_TOOL_ROUNDS, SETTING_CLAUDE_SCORING_MODEL
+from songmaker_cli.cowriter.errors import ProviderUnavailableError
+from songmaker_cli.cowriter.openai_adapter import (
+    _parse_tool_call,
+    stream_openai_compatible_turn,
+)
 from songmaker_cli.cowriter.tools import execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, AvailableModel, ChatMessage, Song, User
@@ -260,3 +266,81 @@ def test_openai_adapter_emits_same_event_types(admin_client):
     assert types.count("final") == 1
     assert "error" not in types
     assert "assistant_text" in types
+
+
+def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch):
+    responses = [
+        {
+            "choices": [{"message": {
+                "content": "",
+                "tool_calls": [{
+                    "id": f"call-{index}",
+                    "function": {"name": "list_albums", "arguments": "{}"},
+                }],
+            }}],
+        }
+        for index in range(COWRITER_MAX_TOOL_ROUNDS)
+    ]
+    responses.append({"choices": [{"message": {"content": "done"}}]})
+
+    class _Response:
+        status_code = 200
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def json(self):
+            return self.payload
+
+    class _Client:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, *_args, **_kwargs):
+            return _Response(responses.pop(0))
+
+    monkeypatch.setattr("songmaker_cli.cowriter.openai_adapter.httpx.AsyncClient", _Client)
+    execute = MagicMock(return_value=("[]", False))
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.openai_adapter.execute_cowriter_tool", execute,
+    )
+
+    async def _collect_events():
+        return [
+            event
+            async for event in stream_openai_compatible_turn(
+                provider="grok",
+                api_url="https://example.invalid/chat",
+                api_key="secret",
+                model="live-model",
+                system="system",
+                messages=[{"role": "user", "content": "hello"}],
+                session=MagicMock(),
+                user=AuthenticatedUser(
+                    id="u", username="u", role="user", is_active=True,
+                ),
+            )
+        ]
+
+    events = asyncio.run(_collect_events())
+    assert sum(isinstance(event, ToolCallEvent) for event in events) == 8
+    assert isinstance(events[-1], FinalEvent)
+    assert events[-1].text == "done"
+    assert execute.call_count == 8
+
+
+def test_openai_adapter_rejects_malformed_tool_arguments_without_calling_tool():
+    with pytest.raises(ProviderUnavailableError, match="invalid tool arguments"):
+        _parse_tool_call(
+            {
+                "id": "call-1",
+                "function": {"name": "list_albums", "arguments": "not-json"},
+            },
+            "grok",
+        )

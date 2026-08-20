@@ -25,6 +25,7 @@
 	import {
 		collectPendingProposals,
 		proposalKey,
+		proposalTargetForMemory,
 		stripMemoryProposals,
 		type MemoryProposal,
 		type MemoryScope
@@ -83,6 +84,7 @@
 	let input = $state('');
 	let loading = $state(false);
 	let historyLoading = $state(false);
+	let historyError = $state('');
 	let error = $state('');
 	let container: HTMLDivElement | undefined = $state();
 	let inputEl: HTMLTextAreaElement | undefined = $state();
@@ -94,6 +96,8 @@
 
 	let memoryBundle: MemoryBundle | null = $state(null);
 	let memoryLoading = $state(false);
+	let memoryError = $state('');
+	let memoryRequestId = 0;
 	let savingScope: MemoryScope | null = $state(null);
 	let rejectedProposalKeys: string[] = $state([]);
 
@@ -131,6 +135,7 @@
 	async function loadConversations(): Promise<void> {
 		try {
 			const list = await fetchConversations();
+			historyError = '';
 			conversations = list;
 			const active = list.find((c) => c.archived_at === null);
 			const newActiveId = active?.id ?? null;
@@ -144,12 +149,13 @@
 				}
 			}
 		} catch {
-			/* transient — leave state */
+			historyError = 'Conversation history unavailable';
 		}
 	}
 
 	async function loadMessages(conversationId: string): Promise<void> {
 		historyLoading = true;
+		historyError = '';
 		try {
 			const result = await fetchConversationMessages(conversationId);
 			messages = result.messages.map((m: ChatMessageItem) => ({
@@ -158,6 +164,7 @@
 			}));
 		} catch {
 			messages = [];
+			historyError = 'Conversation history unavailable';
 		} finally {
 			historyLoading = false;
 			void scrollToBottom();
@@ -226,9 +233,7 @@
 			const playing = audioPlayer.current;
 			const currentGenerationId = playerTakeIdForSong(
 				currentSongId,
-				playing
-					? { songId: playing.songId, generationId: playing.generation.id }
-					: null
+				playing ? { songId: playing.songId, generationId: playing.generation.id } : null
 			);
 			for await (const event of streamCoWriterTurn({
 				message: msg,
@@ -308,13 +313,19 @@
 	}
 
 	async function loadMemory(songId: string | null): Promise<void> {
+		const requestId = ++memoryRequestId;
 		memoryLoading = true;
+		memoryError = '';
 		try {
-			memoryBundle = await fetchMemory(songId);
+			const loaded = await fetchMemory(songId);
+			if (requestId === memoryRequestId) memoryBundle = loaded;
 		} catch {
-			/* transient — leave last known memory visible */
+			if (requestId === memoryRequestId) {
+				memoryBundle = null;
+				memoryError = 'Memory unavailable';
+			}
 		} finally {
-			memoryLoading = false;
+			if (requestId === memoryRequestId) memoryLoading = false;
 		}
 	}
 
@@ -322,14 +333,14 @@
 		collectPendingProposals(
 			messages.filter((msg) => msg.role === 'assistant').map((msg) => msg.text),
 			rejectedProposalKeys
-		)
+		).filter((proposal) => proposalTargetForMemory(proposal, memoryBundle) !== null)
 	);
 
 	async function saveMemoryScope(
 		scope: MemoryScope,
 		targetId: string,
 		body: string
-	): Promise<void> {
+	): Promise<boolean> {
 		savingScope = scope;
 		try {
 			if (scope === 'user') {
@@ -342,27 +353,25 @@
 				const saved = await saveAlbumMemory(targetId, body);
 				if (memoryBundle) memoryBundle = { ...memoryBundle, album: saved };
 			}
+			return true;
 		} catch {
 			addToast('Failed to save memory', 'error');
+			return false;
 		} finally {
 			savingScope = null;
 		}
 	}
 
 	async function acceptProposal(proposal: MemoryProposal): Promise<void> {
-		const targetId =
-			proposal.targetId ??
-			(proposal.scope === 'user'
-				? memoryBundle?.user.target_id
-				: proposal.scope === 'song'
-					? memoryBundle?.song?.target_id
-					: memoryBundle?.album?.target_id);
+		const targetId = proposalTargetForMemory(proposal, memoryBundle);
 		if (!targetId) {
-			addToast('Cannot apply this memory proposal here', 'error');
+			addToast('Memory proposal is stale or belongs elsewhere', 'error');
 			return;
 		}
-		await saveMemoryScope(proposal.scope, targetId, proposal.proposedBody);
-		rejectedProposalKeys = [...rejectedProposalKeys, proposalKey(proposal)];
+		const saved = await saveMemoryScope(proposal.scope, targetId, proposal.proposedBody);
+		if (saved) {
+			rejectedProposalKeys = [...rejectedProposalKeys, proposalKey(proposal)];
+		}
 	}
 
 	function rejectProposal(proposal: MemoryProposal): void {
@@ -530,6 +539,7 @@
 	<MemoryEditor
 		bundle={memoryBundle}
 		loading={memoryLoading}
+		error={memoryError}
 		{savingScope}
 		proposals={pendingProposals}
 		onSave={saveMemoryScope}
@@ -538,7 +548,9 @@
 	/>
 
 	{#if historyLoading}
-		<div class="history-loading">Loading chat...</div>
+		<div class="history-loading">Loading chat…</div>
+	{:else if historyError}
+		<div class="history-error" role="alert">{historyError}</div>
 	{:else}
 		<div class="messages" bind:this={container}>
 			{#if messages.length === 0}
@@ -826,6 +838,17 @@
 		justify-content: center;
 		color: var(--text-dim);
 		font-style: italic;
+	}
+
+	.history-error {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--score-bad);
+		font-size: 0.8rem;
+		padding: 20px;
+		text-align: center;
 	}
 
 	.messages {

@@ -332,6 +332,10 @@ export async function loadSavedOfflinePlaylist(
 		await cache.delete(offlinePlaylistMetaKey(playlistId));
 		return null;
 	}
+	if (parsed.playlist_id !== playlistId) {
+		await cache.delete(offlinePlaylistMetaKey(playlistId));
+		return null;
+	}
 	const saved = await isStreamSaved(parsed.stream_url);
 	if (!saved) {
 		await cache.delete(offlinePlaylistMetaKey(playlistId));

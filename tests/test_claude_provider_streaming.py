@@ -40,10 +40,18 @@ class FakeStreamReader:
             return b""
         return self._lines.pop(0)
 
-    async def read(self) -> bytes:
-        out = b"".join(self._lines)
-        self._lines = []
-        return out
+    async def read(self, size: int = -1) -> bytes:
+        if not self._lines:
+            return b""
+        if size < 0:
+            out = b"".join(self._lines)
+            self._lines = []
+            return out
+        out = self._lines.pop(0)
+        if len(out) <= size:
+            return out
+        self._lines.insert(0, out[size:])
+        return out[:size]
 
 
 def _make_fake_proc(
@@ -382,6 +390,7 @@ def test_stream_timeout_kills_subprocess(monkeypatch) -> None:
 
     async def fake_exec(*_cmd, **_kw):
         proc = _make_fake_proc([])
+        proc.returncode = None
         proc.stdout = StallingReader([])
         return proc
 
@@ -398,6 +407,32 @@ def test_stream_timeout_kills_subprocess(monkeypatch) -> None:
             ),
         ))
     assert killed["value"] is True
+
+
+def test_completed_stream_does_not_signal_process_group(monkeypatch) -> None:
+    monkeypatch.setattr(
+        provider, "_require_claude_binary", lambda: "/bin/claude",
+    )
+
+    async def fake_exec(*_cmd, **_kw):
+        return _make_fake_proc([_result_line("ok")])
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+    events = asyncio.run(_collect(
+        acall_claude_with_mcp_stream(prompt="hi", user_id="u"),
+    ))
+
+    assert isinstance(events[-1], FinalEvent)
+    provider.os.killpg.assert_not_called()
+
+
+def test_malformed_stream_log_does_not_include_line_content(caplog) -> None:
+    caplog.set_level("WARNING")
+
+    assert _safe_json_loads(b"secret-user-content") is None
+
+    assert "secret-user-content" not in caplog.text
 
 
 def test_stream_cmd_uses_stream_json_and_verbose() -> None:

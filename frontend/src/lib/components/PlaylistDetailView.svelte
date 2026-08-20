@@ -46,12 +46,25 @@
 
 	async function onPlaylistDelete(): Promise<void> {
 		if (!playlistDetail) return;
+		const playlistId = playlistDetail.id;
+		const saved = await loadSavedOfflinePlaylist(playlistId).catch(() => null);
 		try {
-			await deletePlaylist(playlistDetail.id);
-			addToast('Playlist deleted', 'success');
+			await deletePlaylist(playlistId);
 		} catch {
 			addToast('Delete failed', 'error');
+			return;
 		}
+		if (saved) {
+			try {
+				await unpinQueueStream(saved.snapshot_id).catch(() => undefined);
+				await removeStream(saved.stream_url, saved.snapshot_id);
+				await forgetPlaylistOfflineStream(playlistId);
+			} catch {
+				addToast('Playlist deleted; offline cleanup failed', 'error');
+				return;
+			}
+		}
+		addToast('Playlist deleted', 'success');
 	}
 
 	async function onPlaylistRename(newTitle: string): Promise<void> {
@@ -233,10 +246,7 @@
 			</div>
 			<div class="detail-actions">
 				{#if playlistDetail.entries.length > 0}
-					<button
-						class="action-btn-primary"
-						onclick={playSequential}
-					>
+					<button class="action-btn-primary" onclick={playSequential}>
 						<Icon name="play" size={15} />
 						Play
 					</button>

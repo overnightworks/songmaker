@@ -265,12 +265,6 @@ from songmaker_cli.db.queries.settings import (
 from songmaker_cli.db.queries.settings import (
     get_cowriter_tail_token_budget as get_cowriter_tail_token_budget,
 )
-from songmaker_cli.db.queries.settings import (
-    set_cowriter_settings as set_cowriter_settings,
-)
-from songmaker_cli.db.queries.settings import (
-    set_cowriter_tail_token_budget as set_cowriter_tail_token_budget,
-)
 from songmaker_cli.db.queries.settings import get_default_preset as get_default_preset
 from songmaker_cli.db.queries.settings import get_global_defaults as get_global_defaults
 from songmaker_cli.db.queries.settings import get_preset as get_preset
@@ -281,6 +275,12 @@ from songmaker_cli.db.queries.settings import list_shared_presets as list_shared
 from songmaker_cli.db.queries.settings import name_exists as name_exists
 from songmaker_cli.db.queries.settings import save_global_defaults as save_global_defaults
 from songmaker_cli.db.queries.settings import set_claude_model as set_claude_model
+from songmaker_cli.db.queries.settings import (
+    set_cowriter_settings as set_cowriter_settings,
+)
+from songmaker_cli.db.queries.settings import (
+    set_cowriter_tail_token_budget as set_cowriter_tail_token_budget,
+)
 from songmaker_cli.db.queries.settings import set_default_preset as set_default_preset
 from songmaker_cli.db.queries.settings import toggle_model as toggle_model
 from songmaker_cli.db.queries.settings import update_preset as update_preset

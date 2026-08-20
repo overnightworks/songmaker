@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
 	collectPendingProposals,
+	proposalTargetForMemory,
 	parseMemoryProposals,
 	proposalKey,
+	shouldReplaceMemoryDraft,
 	stripMemoryProposals
 } from './memory-proposals';
 
@@ -61,5 +63,26 @@ prefer German, no auto-rhyme
 		expect(pending).toHaveLength(1);
 		const rejected = collectPendingProposals([SAMPLE], [proposalKey(pending[0])]);
 		expect(rejected).toHaveLength(0);
+	});
+
+	it('only resolves a proposal against its current displayed target and body', () => {
+		const bundle = {
+			user: { scope: 'user' as const, target_id: 'u1', body: 'German', updated_at: null },
+			song: { scope: 'song' as const, target_id: 's1', body: 'old', updated_at: null },
+			album: null
+		};
+		const proposal = parseMemoryProposals(SAMPLE)[0];
+
+		expect(proposalTargetForMemory(proposal, bundle)).toBeNull();
+		expect(proposalTargetForMemory({ ...proposal, currentBody: 'old' }, bundle)).toBe('s1');
+		expect(
+			proposalTargetForMemory({ ...proposal, targetId: 'another-song', currentBody: 'old' }, bundle)
+		).toBeNull();
+	});
+
+	it('preserves a dirty draft for the same target but resets on target changes', () => {
+		expect(shouldReplaceMemoryDraft('s1', 'saved', 'draft', 's1')).toBe(false);
+		expect(shouldReplaceMemoryDraft('s1', 'saved', 'saved', 's1')).toBe(true);
+		expect(shouldReplaceMemoryDraft('s1', 'saved', 'draft', 's2')).toBe(true);
 	});
 });

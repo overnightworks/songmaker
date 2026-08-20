@@ -15,6 +15,7 @@ compatibility during rollout.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -67,7 +68,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cowriter.dispatch import stream_cowriter_turn
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
-from songmaker_cli.cowriter.history import compact_conversation, fold_summary
+from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries import (
     archive_conversation,
@@ -464,7 +465,10 @@ async def api_chat_turn(
             compacted.summary_text,
             compacted.last_summarized_message_id,
             message_count=len(history),
-            token_count=sum(len(msg.content) for msg in compacted.tail),
+            token_count=(
+                count_tokens(compacted.summary_text)
+                + sum(count_tokens(msg.content) for msg in compacted.tail)
+            ),
         )
         session.commit()
     api_messages = compacted.to_api_messages()
@@ -497,8 +501,16 @@ async def api_chat_turn(
                 int((time.monotonic() - started) * 1000),
                 tail_budget,
             )
+        except asyncio.CancelledError:
+            session.rollback()
+            update_job_status(
+                session, job_id, JobStatus.FAILED, error="Chat request cancelled",
+            )
+            session.commit()
+            raise
         except ProviderUnavailableError as e:
             log.warning("Co-writer %s unavailable: %s", e.provider, e)
+            session.rollback()
             update_job_status(
                 session, job_id, JobStatus.FAILED,
                 error=f"{e.provider} unavailable",
@@ -511,7 +523,8 @@ async def api_chat_turn(
             })
             return
         except Exception as exc:
-            log.exception("Co-writer chat failed: %s", exc)
+            log.error("Co-writer chat failed (%s)", type(exc).__name__)
+            session.rollback()
             update_job_status(
                 session, job_id, JobStatus.FAILED, error="Chat request failed",
             )

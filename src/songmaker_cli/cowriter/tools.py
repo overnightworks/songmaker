@@ -8,7 +8,7 @@ checks stay in ``mcp_server.tools``.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -44,10 +44,12 @@ class CowriterTool:
     handler: Callable[..., Any]
 
 
-def _object(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
+def _object(
+    properties: Mapping[str, object], required: list[str] | None = None,
+) -> dict[str, Any]:
     schema: dict[str, Any] = {
         "type": "object",
-        "properties": properties,
+        "properties": dict(properties),
         "additionalProperties": False,
     }
     if required:
@@ -201,3 +203,6 @@ def execute_cowriter_tool(
     except TypeError as exc:
         session.rollback()
         return str(exc), True
+    except Exception:
+        session.rollback()
+        raise

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from songmaker_cli.claude.provider import (
     ClaudeResponse,
     UnavailableError,
+    _acall_cli,
     _call_api,
     _call_cli,
     _find_claude_binary,
@@ -172,8 +174,31 @@ def test_call_cli_with_system_prompt() -> None:
         _call_cli("hello", system="be helpful")
 
     cmd = mock_run.call_args[0][0]
-    assert "--system-prompt" in cmd
-    assert "be helpful" in cmd
+    assert "--system-prompt" not in cmd
+    assert "be helpful" not in cmd
+    assert "hello" not in cmd
+    assert mock_run.call_args.kwargs["input"] == "be helpful\n\nhello"
+
+
+def test_acall_cli_keeps_prompt_and_system_out_of_argv() -> None:
+    proc = MagicMock(returncode=0)
+    proc.communicate = AsyncMock(return_value=(b'{"result":"ok"}', b""))
+    create = AsyncMock(return_value=proc)
+
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch("asyncio.create_subprocess_exec", create),
+    ):
+        result = asyncio.run(_acall_cli("secret prompt", system="secret system"))
+
+    assert result.text == "ok"
+    command = create.call_args.args
+    assert "secret prompt" not in command
+    assert "secret system" not in command
+    proc.communicate.assert_awaited_once_with(b"secret system\n\nsecret prompt")
 
 
 def test_call_cli_passes_model() -> None:

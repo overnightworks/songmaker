@@ -186,15 +186,18 @@ async def acall_claude_with_mcp(
             raise UnavailableError(
                 f"Claude CLI timed out after {timeout_seconds}s",
             )
+        except BaseException:
+            await _reap_process_group(proc)
+            raise
     finally:
         _unlink_quiet(config_path)
 
     stdout = stdout_bytes.decode()
-    stderr = stderr_bytes.decode()
-
     if proc.returncode != 0:
         log.warning(
-            "Claude MCP CLI failed (rc=%d): %s", proc.returncode, stderr[:500],
+            "Claude MCP CLI failed (rc=%d, stderr_bytes=%d)",
+            proc.returncode,
+            len(stderr_bytes),
         )
         raise UnavailableError(
             "Claude CLI is unavailable. Check server logs for details.",
@@ -263,40 +266,47 @@ async def _consume_stream(
 ) -> AsyncIterator[StreamEvent]:
     text_chunks: list[str] = []
     final_text: str | None = None
+    stderr_task = asyncio.create_task(_drain_stream(proc.stderr))
     try:
-        async for raw_line in _iter_lines(proc.stdout, timeout_seconds):
-            parsed = _safe_json_loads(raw_line)
-            if parsed is None:
-                continue
-            event = _parse_stream_event(parsed, text_chunks)
-            if event is None:
-                continue
-            if isinstance(event, FinalEvent):
-                final_text = event.text
-                continue
-            yield event
-    except asyncio.TimeoutError:
-        await _reap_process_group(proc)
-        raise UnavailableError(
-            f"Claude CLI timed out after {timeout_seconds}s",
-        )
-    except BaseException:
-        await _reap_process_group(proc)
-        raise
+        try:
+            async for raw_line in _iter_lines(proc.stdout, timeout_seconds):
+                parsed = _safe_json_loads(raw_line)
+                if parsed is None:
+                    continue
+                event = _parse_stream_event(parsed, text_chunks)
+                if event is None:
+                    continue
+                if isinstance(event, FinalEvent):
+                    final_text = event.text
+                    continue
+                yield event
+        except asyncio.TimeoutError:
+            await _reap_process_group(proc)
+            raise UnavailableError(
+                f"Claude CLI timed out after {timeout_seconds}s",
+            )
+        except BaseException:
+            await _reap_process_group(proc)
+            raise
 
-    await proc.wait()
-    if proc.returncode != 0:
-        stderr_bytes = await proc.stderr.read() if proc.stderr else b""
-        stderr = stderr_bytes.decode(errors="replace")
-        log.warning(
-            "Claude MCP stream failed (rc=%d): %s", proc.returncode, stderr[:500],
-        )
-        raise UnavailableError(
-            "Claude CLI is unavailable. Check server logs for details.",
-        )
+        await proc.wait()
+        stderr_size = await stderr_task
+        if proc.returncode != 0:
+            log.warning(
+                "Claude MCP stream failed (rc=%d, stderr_bytes=%d)",
+                proc.returncode,
+                stderr_size,
+            )
+            raise UnavailableError(
+                "Claude CLI is unavailable. Check server logs for details.",
+            )
 
-    assembled = final_text if final_text is not None else "".join(text_chunks)
-    yield FinalEvent(text=assembled.strip())
+        assembled = final_text if final_text is not None else "".join(text_chunks)
+        yield FinalEvent(text=assembled.strip())
+    finally:
+        if not stderr_task.done():
+            stderr_task.cancel()
+            await asyncio.gather(stderr_task, return_exceptions=True)
 
 
 async def _iter_lines(
@@ -318,6 +328,18 @@ async def _iter_lines(
         yield line
 
 
+async def _drain_stream(stream: asyncio.StreamReader | None) -> int:
+    """Drain a subprocess pipe without retaining its potentially sensitive body."""
+    if stream is None:
+        return 0
+    total = 0
+    while True:
+        chunk = await stream.read(64 * 1024)
+        if not chunk:
+            return total
+        total += len(chunk)
+
+
 def _safe_json_loads(raw_line: bytes) -> dict | None:
     line = raw_line.strip()
     if not line:
@@ -325,10 +347,10 @@ def _safe_json_loads(raw_line: bytes) -> dict | None:
     try:
         parsed = json.loads(line)
     except json.JSONDecodeError:
-        log.warning("Claude stream: skipping malformed JSON line: %r", line[:200])
+        log.warning("Claude stream: skipping malformed JSON line (%d bytes)", len(line))
         return None
     if not isinstance(parsed, dict):
-        log.warning("Claude stream: skipping non-object event: %r", parsed)
+        log.warning("Claude stream: skipping non-object event")
         return None
     return parsed
 
@@ -437,17 +459,14 @@ def _flatten_messages(prompt: str, messages: list[dict[str, str]] | None) -> str
 
 
 def _build_cli_cmd(
-    binary: str, prompt: str, system: str | None, model: str,
+    binary: str, model: str,
 ) -> list[str]:
-    cmd = [
-        binary, "-p", prompt,
+    return [
+        binary, "-p",
         "--model", model,
         "--output-format", "json",
         "--disallowedTools", _DISALLOWED_TOOLS,
     ]
-    if system:
-        cmd.extend(["--system-prompt", system])
-    return cmd
 
 
 MCP_SERVER_NAME = "songmaker"
@@ -458,15 +477,12 @@ _MCP_SUBPROCESS_PLACEHOLDER = "unused-in-mcp-subprocess"
 
 
 def _build_mcp_config(user_id: str) -> str:
-    """Serialize the inline --mcp-config payload for our stdio server.
+    """Serialize the temporary --mcp-config payload for our stdio server.
 
-    The inline JSON is passed as a CLI argument, so anything in it is
-    readable via ``/proc/<pid>/cmdline`` and ``ps auxww``. Only
-    DATABASE_URL and SONGMAKER_MCP_USER_ID are actually consumed by the
-    MCP subprocess — but ``Settings()`` validation requires every
-    "required" field to be present. We supply placeholder values for
-    REDIS_URL / SESSION_SECRET / SONGMAKER_INTERNAL_TOKEN so the real
-    secrets never appear in argv of the MCP subprocess line.
+    The JSON is written to a mode-0600 file so database credentials never appear
+    in ``/proc/<pid>/cmdline`` or process listings. Only DATABASE_URL and
+    SONGMAKER_MCP_USER_ID are consumed by the subprocess; placeholder values
+    satisfy settings validation for the other required fields.
     """
     settings = get_settings()
     config = {
@@ -509,11 +525,16 @@ def _unlink_quiet(path: str) -> None:
 
 
 async def _reap_process_group(proc: asyncio.subprocess.Process) -> None:
+    if proc.returncode is not None:
+        await proc.wait()
+        return
     if proc.pid is None:
+        await proc.wait()
         return
     try:
         os.killpg(proc.pid, signal.SIGTERM)
     except ProcessLookupError:
+        await proc.wait()
         return
     try:
         await asyncio.wait_for(proc.wait(), timeout=1)
@@ -523,7 +544,7 @@ async def _reap_process_group(proc: asyncio.subprocess.Process) -> None:
     try:
         os.killpg(proc.pid, signal.SIGKILL)
     except ProcessLookupError:
-        return
+        pass
     await proc.wait()
 
 
@@ -637,18 +658,23 @@ def _call_cli(
         model = get_settings().claude_chat_model
     binary = _require_claude_binary()
     flat_prompt = _flatten_messages(prompt, messages)
-    cmd = _build_cli_cmd(binary, flat_prompt, system, model)
+    stdin_body = _stdin_prompt(system, flat_prompt)
+    cmd = _build_cli_cmd(binary, model)
     env = _scrub_env()
 
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120, env=env,
+            cmd, input=stdin_body, capture_output=True, text=True, timeout=120, env=env,
         )
     except subprocess.TimeoutExpired:
         raise UnavailableError("Claude CLI timed out after 120s")
 
     if proc.returncode != 0:
-        log.warning("Claude CLI failed (rc=%d): %s", proc.returncode, proc.stderr[:500])
+        log.warning(
+            "Claude CLI failed (rc=%d, stderr_chars=%d)",
+            proc.returncode,
+            len(proc.stderr),
+        )
         raise UnavailableError("Claude CLI is unavailable. Check server logs for details.")
 
     text = _parse_cli_output(proc.stdout)
@@ -664,32 +690,39 @@ async def _acall_cli(
         model = get_settings().claude_chat_model
     binary = _require_claude_binary()
     flat_prompt = _flatten_messages(prompt, messages)
-    cmd = _build_cli_cmd(binary, flat_prompt, system, model)
+    stdin_body = _stdin_prompt(system, flat_prompt)
+    cmd = _build_cli_cmd(binary, model)
     env = _scrub_env()
 
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
+            start_new_session=True,
         )
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=120,
+                proc.communicate(stdin_body.encode()), timeout=120,
             )
         except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
+            await _reap_process_group(proc)
             raise UnavailableError("Claude CLI timed out after 120s")
+        except BaseException:
+            await _reap_process_group(proc)
+            raise
     except FileNotFoundError:
         raise UnavailableError("Claude CLI binary not found")
 
     stdout = stdout_bytes.decode()
-    stderr = stderr_bytes.decode()
-
     if proc.returncode != 0:
-        log.warning("Claude CLI failed (rc=%d): %s", proc.returncode, stderr[:500])
+        log.warning(
+            "Claude CLI failed (rc=%d, stderr_bytes=%d)",
+            proc.returncode,
+            len(stderr_bytes),
+        )
         raise UnavailableError("Claude CLI is unavailable. Check server logs for details.")
 
     text = _parse_cli_output(stdout)

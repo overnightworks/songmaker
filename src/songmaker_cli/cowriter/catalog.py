@@ -1,14 +1,10 @@
-"""Live co-writer model catalogs from each provider or CLI.
+"""Live co-writer model catalogs from each provider API.
 
 Model ids are never hardcoded. A failed catalog fetch is a named error,
 not a fallback list.
 """
 
 from __future__ import annotations
-
-import re
-import shutil
-import subprocess
 
 import httpx
 
@@ -27,8 +23,6 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cowriter.errors import ProviderUnavailableError
 from songmaker_cli.settings import get_settings
-
-_CLAUDE_ID_RE = re.compile(r"claude-[\w.-]+")
 
 
 def list_provider_models(provider: str) -> list[str]:
@@ -62,7 +56,12 @@ def _http_model_ids(url: str, headers: dict[str, str], provider: str) -> list[st
         raise ProviderUnavailableError(
             provider, f"could not list {provider} models",
         )
-    payload = response.json()
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise ProviderUnavailableError(
+            provider, f"could not list {provider} models",
+        ) from exc
     rows = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(rows, list):
         raise ProviderUnavailableError(
@@ -96,98 +95,42 @@ def _list_grok_models() -> list[str]:
 
 def _list_openai_models() -> list[str]:
     key = _secret(get_settings().openai_api_key)
-    if key:
-        ids = _http_model_ids(
-            COWRITER_OPENAI_MODELS_URL,
-            {"Authorization": f"Bearer {key}"},
-            "codex",
-        )
-        chat = [
-            model_id for model_id in ids
-            if model_id.startswith(COWRITER_OPENAI_CHAT_PREFIXES)
-            and not _contains_marker(model_id, COWRITER_OPENAI_NON_CHAT_MARKERS)
-        ]
-        if chat:
-            return sorted(chat)
-    return _list_codex_cli_models()
+    if not key:
+        raise ProviderUnavailableError("codex", "codex is not configured")
+    ids = _http_model_ids(
+        COWRITER_OPENAI_MODELS_URL,
+        {"Authorization": f"Bearer {key}"},
+        "codex",
+    )
+    chat = [
+        model_id for model_id in ids
+        if model_id.startswith(COWRITER_OPENAI_CHAT_PREFIXES)
+        and not _contains_marker(model_id, COWRITER_OPENAI_NON_CHAT_MARKERS)
+    ]
+    if not chat:
+        raise ProviderUnavailableError("codex", "no chat models returned by codex")
+    return sorted(chat)
 
 
 def _list_claude_models() -> list[str]:
     key = _secret(get_settings().anthropic_api_key)
-    if key:
-        ids = _http_model_ids(
-            COWRITER_ANTHROPIC_MODELS_URL,
-            {
-                "x-api-key": key,
-                "anthropic-version": ANTHROPIC_API_VERSION,
-            },
-            "claude",
-        )
-        chat = [
-            model_id for model_id in ids
-            if model_id.startswith(COWRITER_CLAUDE_MODEL_PREFIX)
-        ]
-        if chat:
-            return sorted(chat)
-    return _list_claude_cli_models()
-
-
-def _list_claude_cli_models() -> list[str]:
-    from songmaker_cli.claude.provider import _find_claude_binary
-
-    binary = _find_claude_binary()
-    if not binary:
+    if not key:
         raise ProviderUnavailableError("claude", "claude is not configured")
-    for args in (("models",), ("--list-models",)):
-        try:
-            proc = subprocess.run(
-                [binary, *args],
-                capture_output=True,
-                text=True,
-                timeout=COWRITER_MODELS_TIMEOUT_SECONDS,
-                check=False,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-        if proc.returncode != 0:
-            continue
-        found = sorted(set(_CLAUDE_ID_RE.findall(proc.stdout)))
-        if found:
-            return found
-    raise ProviderUnavailableError(
-        "claude", "could not list claude models from the API or CLI",
+    ids = _http_model_ids(
+        COWRITER_ANTHROPIC_MODELS_URL,
+        {
+            "x-api-key": key,
+            "anthropic-version": ANTHROPIC_API_VERSION,
+        },
+        "claude",
     )
-
-
-_CODEX_ID_RE = re.compile(r"(?:gpt-|o[0-9]|codex)[\w.-]*")
-
-
-def _list_codex_cli_models() -> list[str]:
-    binary = shutil.which("codex")
-    if not binary:
-        raise ProviderUnavailableError("codex", "codex is not configured")
-    for args in (("models",), ("--list-models",)):
-        try:
-            proc = subprocess.run(
-                [binary, *args],
-                capture_output=True,
-                text=True,
-                timeout=COWRITER_MODELS_TIMEOUT_SECONDS,
-                check=False,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-        if proc.returncode != 0:
-            continue
-        found = sorted({
-            match for match in _CODEX_ID_RE.findall(proc.stdout)
-            if not _contains_marker(match, COWRITER_OPENAI_NON_CHAT_MARKERS)
-        })
-        if found:
-            return found
-    raise ProviderUnavailableError(
-        "codex", "could not list codex models from the API or CLI",
-    )
+    chat = [
+        model_id for model_id in ids
+        if model_id.startswith(COWRITER_CLAUDE_MODEL_PREFIX)
+    ]
+    if not chat:
+        raise ProviderUnavailableError("claude", "no chat models returned by claude")
+    return sorted(chat)
 
 
 def _contains_marker(model_id: str, markers: tuple[str, ...]) -> bool:

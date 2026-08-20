@@ -217,11 +217,11 @@ class ConversationMessagesResponse(BaseModel):
 
 class ChatTurnV2Request(BaseModel):
     message: str = Field(max_length=50_000)
-    current_song_id: str | None = None
-    mentioned_song_ids: list[str] = Field(default_factory=list)
-    mentioned_version_ids: list[str] = Field(default_factory=list)
-    mentioned_album_id: str | None = None
-    current_generation_id: str | None = None
+    current_song_id: str | None = Field(default=None, max_length=36)
+    mentioned_song_ids: list[str] = Field(default_factory=list, max_length=50)
+    mentioned_version_ids: list[str] = Field(default_factory=list, max_length=50)
+    mentioned_album_id: str | None = Field(default=None, max_length=36)
+    current_generation_id: str | None = Field(default=None, max_length=36)
 
 
 class ChatTurnV2Response(BaseModel):
@@ -293,5 +293,4 @@ class UserRateLimitsResponse(BaseModel):
     user_id: str
     overrides: list[RateLimitItem]
     effective: list[RateLimitItem]
-
 

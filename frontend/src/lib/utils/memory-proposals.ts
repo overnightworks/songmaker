@@ -1,3 +1,5 @@
+import type { MemoryBundle, MemoryScopeItem } from '$lib/api/types';
+
 export type MemoryScope = 'user' | 'song' | 'album';
 
 export interface MemoryProposal {
@@ -47,4 +49,34 @@ export function collectPendingProposals(
 		}
 	}
 	return found;
+}
+
+export function memoryItemForScope(
+	bundle: MemoryBundle | null,
+	scope: MemoryScope
+): MemoryScopeItem | null {
+	if (!bundle) return null;
+	if (scope === 'user') return bundle.user;
+	if (scope === 'song') return bundle.song ?? null;
+	return bundle.album ?? null;
+}
+
+export function proposalTargetForMemory(
+	proposal: MemoryProposal,
+	bundle: MemoryBundle | null
+): string | null {
+	const item = memoryItemForScope(bundle, proposal.scope);
+	if (!item) return null;
+	if (proposal.targetId !== null && proposal.targetId !== item.target_id) return null;
+	if (proposal.currentBody !== item.body.trim()) return null;
+	return item.target_id;
+}
+
+export function shouldReplaceMemoryDraft(
+	previousTargetId: string | null,
+	previousBody: string,
+	draft: string,
+	nextTargetId: string | null
+): boolean {
+	return previousTargetId !== nextTargetId || draft === previousBody;
 }

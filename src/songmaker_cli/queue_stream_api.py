@@ -59,9 +59,9 @@ def _get_queue_stream_limiter(request: Request) -> RedisRateLimiter:
 def _check_queue_stream_rate_limit(request: Request, user: AuthenticatedUser) -> None:
     try:
         allowed = _get_queue_stream_limiter(request).is_allowed(user.id)
-    except Exception:
-        log.warning("Queue stream rate limiter unavailable -- allowing request")
-        return
+    except Exception as exc:
+        log.warning("Queue stream rate limiter unavailable -- rejecting request")
+        raise HTTPException(503, "Queue stream rate limiter unavailable") from exc
     if not allowed:
         raise HTTPException(
             429,
@@ -215,12 +215,7 @@ def api_create_library_queue_stream(
 
     start_gen: Generation | None = None
     if req.start_generation_id is not None:
-        try:
-            start_gen = check_generation_access(session, req.start_generation_id, user)
-        except HTTPException as exc:
-            if exc.status_code != 404:
-                raise
-            start_gen = None
+        start_gen = check_generation_access(session, req.start_generation_id, user)
 
     pool_generations = collect_library_pool_generations(
         songs,

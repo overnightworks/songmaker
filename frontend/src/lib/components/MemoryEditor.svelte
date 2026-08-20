@@ -1,36 +1,66 @@
 <script lang="ts">
 	import type { MemoryBundle, MemoryScopeItem } from '$lib/api/types';
-	import type { MemoryProposal, MemoryScope } from '$lib/utils/memory-proposals';
+	import {
+		shouldReplaceMemoryDraft,
+		type MemoryProposal,
+		type MemoryScope
+	} from '$lib/utils/memory-proposals';
 
 	interface Props {
 		bundle: MemoryBundle | null;
 		loading: boolean;
+		error: string;
 		savingScope: MemoryScope | null;
 		proposals: MemoryProposal[];
-		onSave: (scope: MemoryScope, targetId: string, body: string) => Promise<void>;
+		onSave: (scope: MemoryScope, targetId: string, body: string) => Promise<boolean>;
 		onAccept: (proposal: MemoryProposal) => Promise<void>;
 		onReject: (proposal: MemoryProposal) => void;
 	}
 
-	let {
-		bundle,
-		loading,
-		savingScope,
-		proposals,
-		onSave,
-		onAccept,
-		onReject
-	}: Props = $props();
+	let { bundle, loading, error, savingScope, proposals, onSave, onAccept, onReject }: Props =
+		$props();
 
 	let userDraft = $state('');
 	let songDraft = $state('');
 	let albumDraft = $state('');
 	let open = $state(false);
+	let userSourceTarget: string | null = null;
+	let songSourceTarget: string | null = null;
+	let albumSourceTarget: string | null = null;
+	let userSourceBody = '';
+	let songSourceBody = '';
+	let albumSourceBody = '';
 
 	$effect(() => {
-		userDraft = bundle?.user.body ?? '';
-		songDraft = bundle?.song?.body ?? '';
-		albumDraft = bundle?.album?.body ?? '';
+		const user = bundle?.user ?? null;
+		const song = bundle?.song ?? null;
+		const album = bundle?.album ?? null;
+		if (
+			shouldReplaceMemoryDraft(userSourceTarget, userSourceBody, userDraft, user?.target_id ?? null)
+		) {
+			userDraft = user?.body ?? '';
+		}
+		if (
+			shouldReplaceMemoryDraft(songSourceTarget, songSourceBody, songDraft, song?.target_id ?? null)
+		) {
+			songDraft = song?.body ?? '';
+		}
+		if (
+			shouldReplaceMemoryDraft(
+				albumSourceTarget,
+				albumSourceBody,
+				albumDraft,
+				album?.target_id ?? null
+			)
+		) {
+			albumDraft = album?.body ?? '';
+		}
+		userSourceTarget = user?.target_id ?? null;
+		userSourceBody = user?.body ?? '';
+		songSourceTarget = song?.target_id ?? null;
+		songSourceBody = song?.body ?? '';
+		albumSourceTarget = album?.target_id ?? null;
+		albumSourceBody = album?.body ?? '';
 	});
 
 	const userDirty = $derived(bundle !== null && userDraft !== bundle.user.body);
@@ -49,7 +79,11 @@
 		return 'Album-level notes — not lyrics';
 	}
 
-	async function saveScope(scope: MemoryScope, item: MemoryScopeItem, draft: string): Promise<void> {
+	async function saveScope(
+		scope: MemoryScope,
+		item: MemoryScopeItem,
+		draft: string
+	): Promise<void> {
 		await onSave(scope, item.target_id, draft);
 	}
 </script>
@@ -61,17 +95,15 @@
 	</button>
 	{#if open}
 		<div class="memory-body">
-			{#if loading && !bundle}
-				<p class="hint">Loading memory...</p>
+			{#if loading}
+				<p class="hint">Loading memory…</p>
+			{:else if error}
+				<p class="memory-error" role="alert">{error}</p>
 			{:else if bundle}
 				<label class="scope">
 					<span class="scope-title">{scopeLabel('user')}</span>
 					<span class="scope-hint">{hint('user')}</span>
-					<textarea
-						aria-label="User memory"
-						bind:value={userDraft}
-						rows="3"
-					></textarea>
+					<textarea aria-label="User memory" bind:value={userDraft} rows="3"></textarea>
 					<button
 						class="save"
 						disabled={!userDirty || savingScope === 'user'}
@@ -85,11 +117,7 @@
 					<label class="scope">
 						<span class="scope-title">{scopeLabel('song')}</span>
 						<span class="scope-hint">{hint('song')}</span>
-						<textarea
-							aria-label="Song memory"
-							bind:value={songDraft}
-							rows="3"
-						></textarea>
+						<textarea aria-label="Song memory" bind:value={songDraft} rows="3"></textarea>
 						<button
 							class="save"
 							disabled={!songDirty || savingScope === 'song'}
@@ -104,11 +132,7 @@
 					<label class="scope">
 						<span class="scope-title">{scopeLabel('album')}</span>
 						<span class="scope-hint">{hint('album')}</span>
-						<textarea
-							aria-label="Album notes"
-							bind:value={albumDraft}
-							rows="3"
-						></textarea>
+						<textarea aria-label="Album notes" bind:value={albumDraft} rows="3"></textarea>
 						<button
 							class="save"
 							disabled={!albumDirty || savingScope === 'album'}
@@ -128,10 +152,7 @@
 							</p>
 							<pre class="proposal-body">{proposal.proposedBody}</pre>
 							<div class="proposal-actions">
-								<button
-									class="accept"
-									onclick={() => onAccept(proposal)}>Accept</button
-								>
+								<button class="accept" onclick={() => onAccept(proposal)}>Accept</button>
 								<button class="reject" onclick={() => onReject(proposal)}>Reject</button>
 							</div>
 						</div>
@@ -190,6 +211,12 @@
 	.hint {
 		font-size: 0.7rem;
 		color: var(--text-dim);
+	}
+
+	.memory-error {
+		margin: 0;
+		color: var(--score-bad);
+		font-size: 0.8rem;
 	}
 
 	textarea {

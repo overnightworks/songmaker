@@ -832,7 +832,7 @@
 				<h2>Co-Writer</h2>
 				<p class="hint">
 					Provider and model for the studio co-writer. The model list is loaded live from that
-					provider or CLI.
+					provider API.
 				</p>
 				{#if cowriterSettings}
 					<div class="claude-form">
@@ -846,7 +846,11 @@
 						</div>
 						<div class="claude-field">
 							<label for="cowriter-model">Model</label>
-							<select id="cowriter-model" bind:value={cowriterModel} disabled={cowriterModels.length === 0}>
+							<select
+								id="cowriter-model"
+								bind:value={cowriterModel}
+								disabled={cowriterModels.length === 0}
+							>
 								{#each cowriterModels as model (model)}
 									<option value={model}>{model}</option>
 								{/each}

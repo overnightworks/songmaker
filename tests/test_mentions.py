@@ -10,7 +10,9 @@ import pytest
 from conftest import TEST_SECRET, make_fake_redis
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
+from songmaker_cli.api_models import ChatTurnV2Request
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.claude.provider import AssistantTextEvent, FinalEvent
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -224,3 +226,11 @@ def test_schema_accepts_current_generation_id_field(client):
     assert resp.status_code == 200
     _stream_events(resp)
     assert _capture.called is True
+
+
+def test_schema_caps_mention_lists_before_database_resolution():
+    with pytest.raises(ValidationError):
+        ChatTurnV2Request(
+            message="too many",
+            mentioned_song_ids=[f"song-{index}" for index in range(51)],
+        )

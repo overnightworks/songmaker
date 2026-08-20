@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from typing import Any
 
 import httpx
@@ -38,13 +38,25 @@ async def stream_openai_compatible_turn(
     text_chunks: list[str] = []
     try:
         async with httpx.AsyncClient(timeout=COWRITER_CLI_TIMEOUT_SECONDS) as client:
-            for _round in range(COWRITER_MAX_TOOL_ROUNDS):
+            for round_index in range(COWRITER_MAX_TOOL_ROUNDS + 1):
                 payload = await _post_chat(
                     client, provider, api_url, api_key, model, oai_messages,
                 )
                 message = _assistant_message(payload, provider)
                 tool_calls = message.get("tool_calls") or []
+                if not isinstance(tool_calls, list):
+                    raise ProviderUnavailableError(
+                        provider, f"{provider} returned an invalid response",
+                    )
+                if tool_calls and round_index == COWRITER_MAX_TOOL_ROUNDS:
+                    raise ProviderUnavailableError(
+                        provider, f"{provider} exceeded the tool-call limit",
+                    )
                 content = message.get("content") or ""
+                if not isinstance(content, str):
+                    raise ProviderUnavailableError(
+                        provider, f"{provider} returned an invalid response",
+                    )
                 if content:
                     text_chunks.append(content)
                     yield AssistantTextEvent(text=content)
@@ -76,9 +88,7 @@ async def stream_openai_compatible_turn(
         raise ProviderUnavailableError(
             provider, f"{provider} is currently unavailable",
         ) from exc
-    raise ProviderUnavailableError(
-        provider, f"{provider} exceeded the tool-call limit",
-    )
+    raise AssertionError("unreachable")
 
 
 async def _post_chat(
@@ -110,7 +120,12 @@ async def _post_chat(
         raise ProviderUnavailableError(
             provider, f"{provider} is currently unavailable",
         )
-    payload = response.json()
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise ProviderUnavailableError(
+            provider, f"{provider} is currently unavailable",
+        ) from exc
     if not isinstance(payload, dict):
         raise ProviderUnavailableError(
             provider, f"{provider} is currently unavailable",
@@ -118,7 +133,9 @@ async def _post_chat(
     return payload
 
 
-def _assistant_message(payload: dict[str, Any], provider: str) -> dict[str, Any]:
+def _assistant_message(
+    payload: Mapping[str, object], provider: str,
+) -> dict[str, object]:
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
         raise ProviderUnavailableError(
@@ -137,19 +154,33 @@ def _parse_tool_call(call: object, provider: str) -> tuple[str, str, dict[str, A
         raise ProviderUnavailableError(
             provider, f"{provider} is currently unavailable",
         )
-    function = call.get("function") if isinstance(call.get("function"), dict) else {}
+    function = call.get("function") if isinstance(call.get("function"), dict) else None
+    if function is None:
+        raise ProviderUnavailableError(
+            provider, f"{provider} returned an invalid tool call",
+        )
+    call_id = call.get("id")
+    name = function.get("name")
+    if not isinstance(call_id, str) or not call_id or not isinstance(name, str) or not name:
+        raise ProviderUnavailableError(
+            provider, f"{provider} returned an invalid tool call",
+        )
     raw_args = function.get("arguments") or "{}"
     if isinstance(raw_args, str):
         try:
             arguments = json.loads(raw_args)
-        except json.JSONDecodeError:
-            arguments = {}
+        except json.JSONDecodeError as exc:
+            raise ProviderUnavailableError(
+                provider, f"{provider} returned invalid tool arguments",
+            ) from exc
     elif isinstance(raw_args, dict):
         arguments = raw_args
     else:
-        arguments = {}
-    return (
-        str(call.get("id") or ""),
-        str(function.get("name") or ""),
-        arguments if isinstance(arguments, dict) else {},
-    )
+        raise ProviderUnavailableError(
+            provider, f"{provider} returned invalid tool arguments",
+        )
+    if not isinstance(arguments, dict):
+        raise ProviderUnavailableError(
+            provider, f"{provider} returned invalid tool arguments",
+        )
+    return call_id, name, arguments

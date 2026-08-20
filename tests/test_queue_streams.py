@@ -8,11 +8,14 @@ from pathlib import Path
 
 import pytest
 from conftest import login_and_csrf, make_test_app
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from songmaker_cli.auth import hash_password
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
+from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.queue_stream_api import (
+    _check_queue_stream_rate_limit,
     collect_library_pool_generations,
     generation_matches_pool,
     shuffle_library_sources,
@@ -70,6 +73,26 @@ def _patch_audio_build(monkeypatch) -> None:
         output_path.write_bytes(b"\xff\xfb\x90\x00" * 100)
 
     monkeypatch.setattr(qs, "run_ffmpeg_concat", _fake_concat)
+
+
+def test_queue_stream_rate_limiter_failure_is_503(monkeypatch) -> None:
+    class BrokenLimiter:
+        def is_allowed(self, _user_id):
+            raise RuntimeError("down")
+
+    limiter = BrokenLimiter()
+    monkeypatch.setattr(
+        "songmaker_cli.queue_stream_api._get_queue_stream_limiter",
+        lambda _request: limiter,
+    )
+    user = AuthenticatedUser(
+        id="owner-id", username="owner", role="user", is_active=True,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        _check_queue_stream_rate_limit(object(), user)
+
+    assert exc_info.value.status_code == 503
 
 
 def test_authenticated_queue_stream_snapshot_and_audio_range(
@@ -507,7 +530,7 @@ def test_library_stream_start_take_is_the_clicked_generation(
     assert [t["generation_id"] for t in tracks] == ["g1", "g1b", "g2"]
 
 
-def test_library_stream_start_generation_id_not_found_starts_from_beginning(
+def test_library_stream_start_generation_id_not_found_returns_404(
     tmp_path: Path, monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
@@ -519,9 +542,22 @@ def test_library_stream_start_generation_id_not_found_starts_from_beginning(
         "/api/queue-streams/library", json={"start_generation_id": "nonexistent-id"},
     )
 
-    assert resp.status_code == 200
-    # No rotation: library order unchanged
-    assert [t["generation_id"] for t in resp.json()["tracks"]] == ["g1b", "g2"]
+    assert resp.status_code == 404
+
+
+def test_library_stream_start_generation_id_owned_by_other_user_returns_404(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
+    _write_library_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams/library", json={"start_generation_id": "g5"},
+    )
+
+    assert resp.status_code == 404
 
 
 def test_library_stream_windowed_for_oversize_library(tmp_path: Path, monkeypatch) -> None:

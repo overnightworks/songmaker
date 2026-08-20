@@ -258,7 +258,7 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
     async def fake_exec(*cmd, **kw):
         proc = MagicMock()
         proc.pid = 4242
-        proc.returncode = 0
+        proc.returncode = None
         proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
         proc.wait = AsyncMock(return_value=None)
         return proc

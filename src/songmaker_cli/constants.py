@@ -100,6 +100,7 @@ COWRITER_OPENAI_CHAT_PREFIXES: Final[tuple[str, ...]] = (
 )
 COWRITER_OPENAI_NON_CHAT_MARKERS: Final[tuple[str, ...]] = (
     "whisper", "tts", "embedding", "dall-e", "dalle", "transcribe", "realtime",
+    "audio", "image", "search", "moderation",
 )
 COWRITER_CLAUDE_MODEL_PREFIX = "claude-"
 COWRITER_SUMMARY_TAG = "conversation_summary"
