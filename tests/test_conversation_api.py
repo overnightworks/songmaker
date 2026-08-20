@@ -20,6 +20,7 @@ from songmaker_cli.claude.provider import (
     ToolCallEvent,
     UnavailableError,
 )
+from songmaker_cli.cowriter.errors import ProviderUnavailableError
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -106,7 +107,7 @@ def stranger_client(tmp_path: Path) -> TestClient:
 
 
 def _mock_claude(text: str = "hello from claude"):
-    """Return a patch value that mimics acall_claude_with_mcp_stream.
+    """Return a patch value that mimics stream_cowriter_turn.
 
     Yields a single assistant_text event then the terminal FinalEvent.
     """
@@ -273,7 +274,7 @@ def test_chat_turn_streams_sse_and_stores_messages(client):
     c, factory = client
     mock_stream = _mock_claude("ok")
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         mock_stream,
     ):
         resp = c.post("/api/chat/turn", json={"message": "hey"})
@@ -303,7 +304,7 @@ def test_chat_turn_reuses_active_conversation_across_turns(client):
     c, factory = client
     mock_stream = _mock_claude()
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         mock_stream,
     ):
         r1 = c.post("/api/chat/turn", json={"message": "one"})
@@ -327,7 +328,7 @@ def test_chat_turn_injects_current_song_block(client):
         yield FinalEvent(text="ok")
 
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         _capture,
     ):
         resp = c.post(
@@ -357,7 +358,7 @@ def test_chat_turn_forwards_tool_call_events(client):
         yield FinalEvent(text="here")
 
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream", _gen,
+        "songmaker_cli.conversation_api.stream_cowriter_turn", _gen,
     ):
         resp = c.post("/api/chat/turn", json={"message": "call a tool"})
 
@@ -377,7 +378,7 @@ def test_chat_turn_rejects_other_users_song(stranger_client):
         yield FinalEvent(text="")
 
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream", _gen,
+        "songmaker_cli.conversation_api.stream_cowriter_turn", _gen,
     ):
         resp = c.post(
             "/api/chat/turn",
@@ -397,7 +398,7 @@ def test_chat_turn_unexpected_error_emits_error_frame_and_marks_job_failed(
         yield  # pragma: no cover
 
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         _boom,
     ):
         resp = c.post("/api/chat/turn", json={"message": "oops"})
@@ -420,11 +421,11 @@ def test_chat_turn_unavailable_emits_503_error_frame(client):
     c, factory = client
 
     async def _down(*_args, **_kwargs):
-        raise UnavailableError("down")
+        raise ProviderUnavailableError("claude", "down")
         yield  # pragma: no cover
 
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         _down,
     ):
         resp = c.post("/api/chat/turn", json={"message": "hi"})
@@ -432,6 +433,7 @@ def test_chat_turn_unavailable_emits_503_error_frame(client):
     events = _stream_events(resp)
     err = next(e for e in events if e.get("type") == "error")
     assert err["status"] == 503
+    assert "claude" in err["message"]
 
     with factory() as session:
         assert session.query(Conversation).count() == 0
@@ -462,7 +464,7 @@ def test_list_conversations_includes_counts(client):
     c, factory = client
     mock_stream = _mock_claude()
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         mock_stream,
     ):
         c.post("/api/chat/turn", json={"message": "a"})
@@ -477,7 +479,7 @@ def test_get_conversation_returns_messages(client):
     c, _ = client
     mock_stream = _mock_claude("reply!")
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         mock_stream,
     ):
         turn = c.post("/api/chat/turn", json={"message": "question?"})
@@ -514,7 +516,7 @@ def test_new_conversation_archives_active(client):
     c, factory = client
     mock_stream = _mock_claude()
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         mock_stream,
     ):
         turn = c.post("/api/chat/turn", json={"message": "hi"})
@@ -545,7 +547,7 @@ def test_delete_conversation_removes_messages(client):
     c, factory = client
     mock_stream = _mock_claude()
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         mock_stream,
     ):
         turn = c.post("/api/chat/turn", json={"message": "bye"})

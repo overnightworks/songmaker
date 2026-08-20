@@ -7,9 +7,13 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import (
+    COWRITER_DEFAULT_PROVIDER,
+    COWRITER_PROVIDERS,
     PRESET_GLOBAL_DEFAULTS_NAME,
     SETTING_CLAUDE_CHAT_MODEL,
     SETTING_CLAUDE_SCORING_MODEL,
+    SETTING_COWRITER_MODEL,
+    SETTING_COWRITER_PROVIDER,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
 from songmaker_cli.settings import get_settings
@@ -216,6 +220,30 @@ def get_claude_scoring_model(session: Session) -> str:
         _get_claude_model_row(session, SETTING_CLAUDE_SCORING_MODEL)
         or get_settings().claude_scoring_model
     )
+
+
+def get_cowriter_provider(session: Session) -> str:
+    stored = _get_claude_model_row(session, SETTING_COWRITER_PROVIDER)
+    if stored is None:
+        return COWRITER_DEFAULT_PROVIDER
+    if stored not in COWRITER_PROVIDERS:
+        msg = f"Unknown co-writer provider '{stored}'"
+        raise ValueError(msg)
+    return stored
+
+
+def get_cowriter_model(session: Session, provider: str) -> str:
+    stored = _get_claude_model_row(session, SETTING_COWRITER_MODEL)
+    if stored:
+        return stored
+    if provider == "claude":
+        return get_claude_chat_model(session)
+    return ""
+
+
+def set_cowriter_settings(session: Session, provider: str, model: str) -> None:
+    set_claude_model(session, SETTING_COWRITER_PROVIDER, provider)
+    set_claude_model(session, SETTING_COWRITER_MODEL, model)
 
 
 def set_claude_model(session: Session, setting_key: str, value: str) -> None:

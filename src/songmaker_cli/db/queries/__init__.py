@@ -256,6 +256,15 @@ from songmaker_cli.db.queries.settings import (
 from songmaker_cli.db.queries.settings import (
     get_claude_scoring_model as get_claude_scoring_model,
 )
+from songmaker_cli.db.queries.settings import (
+    get_cowriter_model as get_cowriter_model,
+)
+from songmaker_cli.db.queries.settings import (
+    get_cowriter_provider as get_cowriter_provider,
+)
+from songmaker_cli.db.queries.settings import (
+    set_cowriter_settings as set_cowriter_settings,
+)
 from songmaker_cli.db.queries.settings import get_default_preset as get_default_preset
 from songmaker_cli.db.queries.settings import get_global_defaults as get_global_defaults
 from songmaker_cli.db.queries.settings import get_preset as get_preset

@@ -102,6 +102,20 @@ class ClaudeModelsResponse(BaseModel):
     allowed_models: list[str]
 
 
+class CowriterSettingsRequest(BaseModel):
+    provider: str
+    model: str
+
+
+class CowriterSettingsResponse(BaseModel):
+    provider: str
+    model: str
+    allowed_providers: list[str]
+    allowed_models: list[str]
+    models_by_provider: dict[str, list[str]]
+    models_error: str | None = None
+
+
 class ChatRequest(BaseModel):
     message: str = Field(max_length=50_000)
     context: str = Field("", max_length=10_000)

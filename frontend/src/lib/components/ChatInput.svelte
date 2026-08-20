@@ -3,6 +3,7 @@
 		value: string;
 		disabled: boolean;
 		inputRef?: HTMLTextAreaElement;
+		placeholder?: string;
 		oninput: () => void;
 		onkeydown: (e: KeyboardEvent) => void;
 		onsend: () => void;
@@ -12,6 +13,7 @@
 		value = $bindable(),
 		disabled,
 		inputRef = $bindable(),
+		placeholder = 'Ask the co-writer... (@song, @album, or @v1)',
 		oninput,
 		onkeydown,
 		onsend
@@ -22,7 +24,7 @@
 	<textarea
 		class="chat-input"
 		rows="2"
-		placeholder="Ask Claude... (@song, @album, or @v1)"
+		{placeholder}
 		bind:value
 		bind:this={inputRef}
 		{onkeydown}

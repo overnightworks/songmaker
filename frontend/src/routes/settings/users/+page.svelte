@@ -29,9 +29,12 @@
 		fetchAllModels,
 		toggleModel as toggleModelApi,
 		fetchClaudeModels,
-		updateClaudeModels
+		updateClaudeModels,
+		fetchCowriterSettings,
+		updateCowriterSettings
 	} from '$lib/api/client';
 	import type { AvailableModel, ClaudeModelsResponse } from '$lib/api/client';
+	import type { CowriterSettings } from '$lib/api/types';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
 	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
@@ -71,6 +74,11 @@
 	let claudeChatModel = $state('');
 	let claudeScoringModel = $state('');
 	let savingClaude = $state(false);
+
+	let cowriterSettings = $state<CowriterSettings | null>(null);
+	let cowriterProvider = $state('claude');
+	let cowriterModel = $state('');
+	let savingCowriter = $state(false);
 
 	let resetPasswordUserId = $state<string | null>(null);
 	let resetPasswordValue = $state('');
@@ -205,6 +213,40 @@
 			claudeScoringModel = claudeModels.scoring_model;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load Claude models';
+		}
+		try {
+			cowriterSettings = await fetchCowriterSettings();
+			cowriterProvider = cowriterSettings.provider;
+			cowriterModel = cowriterSettings.model;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load co-writer settings';
+		}
+	}
+
+	const cowriterModels = $derived(
+		cowriterSettings?.models_by_provider?.[cowriterProvider] ??
+			cowriterSettings?.allowed_models ??
+			[]
+	);
+
+	$effect(() => {
+		void cowriterProvider;
+		if (cowriterModels.length > 0 && !cowriterModels.includes(cowriterModel)) {
+			cowriterModel = '';
+		}
+	});
+
+	async function handleSaveCowriter() {
+		savingCowriter = true;
+		error = '';
+		try {
+			cowriterSettings = await updateCowriterSettings(cowriterProvider, cowriterModel);
+			cowriterProvider = cowriterSettings.provider;
+			cowriterModel = cowriterSettings.model;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to save co-writer settings';
+		} finally {
+			savingCowriter = false;
 		}
 	}
 
@@ -780,8 +822,49 @@
 
 		{#if tab === 'claude'}
 			<section>
-				<h2>Claude Models</h2>
-				<p class="hint">Select which Claude model to use for chat and scoring.</p>
+				<h2>Co-Writer</h2>
+				<p class="hint">
+					Provider and model for the studio co-writer. The model list is loaded live from that
+					provider or CLI.
+				</p>
+				{#if cowriterSettings}
+					<div class="claude-form">
+						<div class="claude-field">
+							<label for="cowriter-provider">Provider</label>
+							<select id="cowriter-provider" bind:value={cowriterProvider}>
+								{#each cowriterSettings.allowed_providers as provider (provider)}
+									<option value={provider}>{provider}</option>
+								{/each}
+							</select>
+						</div>
+						<div class="claude-field">
+							<label for="cowriter-model">Model</label>
+							<select id="cowriter-model" bind:value={cowriterModel} disabled={cowriterModels.length === 0}>
+								{#each cowriterModels as model (model)}
+									<option value={model}>{model}</option>
+								{/each}
+							</select>
+						</div>
+						{#if cowriterSettings.models_error && cowriterProvider === cowriterSettings.provider}
+							<p class="hint">{cowriterSettings.models_error}</p>
+						{:else if cowriterModels.length === 0}
+							<p class="hint">No models listed for {cowriterProvider}.</p>
+						{/if}
+						<button
+							class="save-btn"
+							onclick={handleSaveCowriter}
+							disabled={savingCowriter || !cowriterModel}
+						>
+							{savingCowriter ? 'Saving...' : 'Save Co-Writer'}
+						</button>
+					</div>
+				{:else}
+					<p>Loading...</p>
+				{/if}
+			</section>
+			<section>
+				<h2>Scoring Models</h2>
+				<p class="hint">Select which Claude model to use for scoring. Scoring stays on Claude.</p>
 				{#if claudeModels}
 					<div class="claude-form">
 						<div class="claude-field">

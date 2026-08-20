@@ -116,7 +116,7 @@ async def _capture(*_args, **kwargs):
 def _turn(client: TestClient, payload: dict):
     _capture.called = False
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         _capture,
     ):
         return client.post("/api/chat/turn", json=payload)

@@ -79,12 +79,29 @@ TURN_BLOCK_NO_TAKE = "no_take"
 
 COWRITER_PROVIDERS: Final[frozenset[str]] = frozenset({"claude", "grok", "codex"})
 COWRITER_DEFAULT_PROVIDER = "claude"
-COWRITER_GROK_DEFAULT_MODEL = "grok-4"
-COWRITER_CODEX_DEFAULT_MODEL = "gpt-5.4"
 COWRITER_DEFAULT_TAIL_TOKEN_BUDGET = 24_000
 COWRITER_MIN_TAIL_TOKEN_BUDGET = 2_000
 COWRITER_MAX_TAIL_TOKEN_BUDGET = 100_000
 COWRITER_CLI_TIMEOUT_SECONDS = 600
+COWRITER_MAX_TOOL_ROUNDS = 8
+COWRITER_MODELS_TIMEOUT_SECONDS = 15
+COWRITER_GROK_CHAT_URL = "https://api.x.ai/v1/chat/completions"
+COWRITER_GROK_MODELS_URL = "https://api.x.ai/v1/models"
+COWRITER_OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
+COWRITER_OPENAI_MODELS_URL = "https://api.openai.com/v1/models"
+COWRITER_ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models"
+ANTHROPIC_API_VERSION = "2023-06-01"
+COWRITER_GROK_MODEL_PREFIX = "grok-"
+COWRITER_GROK_NON_CHAT_MARKERS: Final[tuple[str, ...]] = (
+    "imagine", "image", "video", "voice", "tts", "whisper",
+)
+COWRITER_OPENAI_CHAT_PREFIXES: Final[tuple[str, ...]] = (
+    "gpt-", "o1", "o3", "o4", "codex",
+)
+COWRITER_OPENAI_NON_CHAT_MARKERS: Final[tuple[str, ...]] = (
+    "whisper", "tts", "embedding", "dall-e", "dalle", "transcribe", "realtime",
+)
+COWRITER_CLAUDE_MODEL_PREFIX = "claude-"
 
 MODEL_ALLOWED_CLAUDE = frozenset({
     "claude-opus-4-6",
@@ -249,6 +266,7 @@ class ResourceType(StrEnum):
     MODEL = "model"
     DEFAULT_CONFIG = "default_config"
     CLAUDE_MODELS = "claude_models"
+    COWRITER = "cowriter"
     RATE_LIMITS = "rate_limits"
     JOB = "job"
     SESSION = "session"

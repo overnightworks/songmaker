@@ -192,7 +192,7 @@ def test_new_conversation_keeps_memory(client):
     c.put("/api/memory/songs/s1", json={"body": "open bridge"})
     c.post("/api/conversations/new")
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         _capture_stream,
     ):
         resp = c.post(
@@ -212,7 +212,7 @@ def test_song_switch_swaps_song_memory_keeps_user_memory(client):
     c.put("/api/memory/songs/s1", json={"body": "memory A"})
     c.put("/api/memory/songs/s2", json={"body": "memory B"})
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         _capture_stream,
     ):
         resp = c.post(
@@ -242,7 +242,7 @@ def test_proposal_in_assistant_text_does_not_write_memory(client):
         yield FinalEvent(text=proposal)
 
     with patch(
-        "songmaker_cli.conversation_api.acall_claude_with_mcp_stream",
+        "songmaker_cli.conversation_api.stream_cowriter_turn",
         _with_proposal,
     ):
         resp = c.post("/api/chat/turn", json={"message": "remember this"})

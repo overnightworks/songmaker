@@ -1,5 +1,6 @@
 import type {
 	Capabilities,
+	CowriterSettings,
 	PresetItem,
 	RateLimitsResponse,
 	UserRateLimitsResponse,
@@ -69,6 +70,21 @@ export async function updateClaudeModels(
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ chat_model, scoring_model })
+	});
+}
+
+export async function fetchCowriterSettings(): Promise<CowriterSettings> {
+	return apiFetch<CowriterSettings>('/api/settings/cowriter');
+}
+
+export async function updateCowriterSettings(
+	provider: string,
+	model: string
+): Promise<CowriterSettings> {
+	return apiFetch<CowriterSettings>('/api/settings/cowriter', {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ provider, model })
 	});
 }
 

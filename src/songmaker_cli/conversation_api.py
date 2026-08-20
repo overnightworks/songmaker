@@ -47,8 +47,6 @@ from songmaker_cli.app_context import get_db_session
 from songmaker_cli.claude.provider import (
     FinalEvent,
     StreamEvent,
-    UnavailableError,
-    acall_claude_with_mcp_stream,
 )
 from songmaker_cli.constants import (
     MEMORY_SCOPE_ALBUM,
@@ -66,6 +64,8 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
 )
+from songmaker_cli.cowriter.dispatch import stream_cowriter_turn
+from songmaker_cli.cowriter.errors import ProviderUnavailableError
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries import (
     archive_conversation,
@@ -75,8 +75,9 @@ from songmaker_cli.db.queries import (
     get_active_conversation,
     get_album,
     get_album_memory,
-    get_claude_chat_model,
     get_conversation,
+    get_cowriter_model,
+    get_cowriter_provider,
     get_or_create_active_conversation,
     get_song_memory,
     get_user_memory,
@@ -425,6 +426,16 @@ async def api_chat_turn(
         extra_blocks=extra_blocks,
     )
 
+    try:
+        provider = get_cowriter_provider(session)
+        cowriter_model = get_cowriter_model(session, provider)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if not cowriter_model:
+        raise HTTPException(
+            422, f"No co-writer model configured for {provider}",
+        )
+
     job = create_job_with_rate_limit(session, user, JobType.CHAT)
     job_id = job.id
     session.commit()
@@ -439,32 +450,33 @@ async def api_chat_turn(
         "content": envelope.wrap_user_message(req.message),
     })
 
-    chat_model = get_claude_chat_model(session)
-
     async def event_generator() -> AsyncIterator[str]:
         assistant_text = ""
         try:
-            async for event in acall_claude_with_mcp_stream(
-                prompt="",
+            async for event in stream_cowriter_turn(
+                provider=provider,
+                model=cowriter_model,
                 user_id=user.id,
                 system=COWRITER_SYSTEM_PROMPT,
-                model=chat_model,
                 messages=api_messages,
+                session=session,
+                user=user,
             ):
                 if isinstance(event, FinalEvent):
                     assistant_text = event.text
                     break
                 yield _sse_format(event)
-        except UnavailableError as e:
-            log.warning("Co-writer chat unavailable: %s", e)
+        except ProviderUnavailableError as e:
+            log.warning("Co-writer %s unavailable: %s", e.provider, e)
             update_job_status(
-                session, job_id, JobStatus.FAILED, error="Claude unavailable",
+                session, job_id, JobStatus.FAILED,
+                error=f"{e.provider} unavailable",
             )
             session.commit()
             yield _sse_format({
                 "type": "error",
                 "status": 503,
-                "message": "Claude is currently unavailable",
+                "message": f"{e.provider} is currently unavailable",
             })
             return
         except Exception as exc:

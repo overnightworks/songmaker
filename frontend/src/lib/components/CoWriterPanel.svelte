@@ -10,6 +10,7 @@
 		saveUserMemory,
 		saveSongMemory,
 		saveAlbumMemory,
+		fetchCowriterSettings,
 		ApiError
 	} from '$lib/api/client';
 	import type { CoWriterStreamEvent } from '$lib/api/client';
@@ -36,6 +37,11 @@
 	} from '$lib/utils/mentions';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { playerTakeIdForSong } from '$lib/utils/cowriter-take';
+	import {
+		cowriterHeaderLabel,
+		cowriterThinkingLabel,
+		cowriterUnavailableLabel
+	} from '$lib/utils/cowriter-ui';
 	import ChatInput from './ChatInput.svelte';
 	import MemoryEditor from './MemoryEditor.svelte';
 	import MentionDropdown from './MentionDropdown.svelte';
@@ -98,6 +104,8 @@
 	let showMentions = $state(false);
 	let mentionCursorPos = $state(0);
 	let selectedMentionIdx = $state(0);
+	let providerName = $state('claude');
+	let providerModel = $state('');
 
 	$effect(() => {
 		void currentSongId;
@@ -110,6 +118,7 @@
 	$effect(() => {
 		if (visible) {
 			void loadConversations();
+			void loadCowriterSettings();
 		}
 	});
 
@@ -246,7 +255,7 @@
 			}
 		} catch (e) {
 			if (e instanceof ApiError && e.status === 503) {
-				streamError = 'Claude is currently unavailable';
+				streamError = e.detail || cowriterUnavailableLabel(providerName);
 			} else {
 				streamError = e instanceof Error ? e.message : 'Chat failed';
 			}
@@ -286,6 +295,16 @@
 	async function scrollToBottom(): Promise<void> {
 		await tick();
 		if (container) container.scrollTop = container.scrollHeight;
+	}
+
+	async function loadCowriterSettings(): Promise<void> {
+		try {
+			const settings = await fetchCowriterSettings();
+			providerName = settings.provider;
+			providerModel = settings.model;
+		} catch {
+			/* leave last known labels */
+		}
 	}
 
 	async function loadMemory(songId: string | null): Promise<void> {
@@ -464,7 +483,12 @@
 <div class="cowriter">
 	<div class="cowriter-header">
 		<div class="header-left">
-			<h3>Claude Co-Writer</h3>
+			<h3>
+				Co-Writer
+				{#if providerModel}
+					<span class="provider-label">{cowriterHeaderLabel(providerName, providerModel)}</span>
+				{/if}
+			</h3>
 			<div class="conv-wrapper">
 				<button
 					class="conv-toggle"
@@ -519,8 +543,8 @@
 		<div class="messages" bind:this={container}>
 			{#if messages.length === 0}
 				<p class="empty-hint">
-					Hey! I can see the song you have open. Tell me what you want to work on, or ask me to
-					browse your other songs — I'll pull them up as needed.
+					I can see the song you have open. Tell me what you want to work on, or ask me to browse
+					your other songs — I'll pull them up as needed.
 				</p>
 			{/if}
 			{#each messages as msg, i (i)}
@@ -542,7 +566,7 @@
 					{#if msg.text}
 						<pre class="message-text">{stripMemoryProposals(msg.text)}</pre>
 					{:else if msg.role === 'assistant' && loading && i === messages.length - 1}
-						<span class="typing">Claude is thinking...</span>
+						<span class="typing">{cowriterThinkingLabel(providerName)}</span>
 					{/if}
 				</div>
 			{/each}
@@ -642,6 +666,15 @@
 		margin: 0;
 		font-size: 1rem;
 		white-space: nowrap;
+		display: inline-flex;
+		align-items: baseline;
+		gap: 8px;
+	}
+
+	.provider-label {
+		font-size: 0.75rem;
+		font-weight: 400;
+		color: var(--text-dim);
 	}
 
 	.conv-wrapper {

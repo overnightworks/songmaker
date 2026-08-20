@@ -126,6 +126,8 @@ class Settings(BaseSettings):
     claude_chat_model: str = "claude-opus-4-6"
     claude_scoring_model: str = "claude-opus-4-6"
     anthropic_api_key: SecretStr | None = None
+    xai_api_key: SecretStr | None = None
+    openai_api_key: SecretStr | None = None
 
     # ── MCP server (songmaker tools exposed to Claude) ────────────────
     # Only set in the subprocess spawned by chat_api when the CLI

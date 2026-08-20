@@ -89,6 +89,8 @@ export {
 	type ClaudeModelsResponse,
 	fetchClaudeModels,
 	updateClaudeModels,
+	fetchCowriterSettings,
+	updateCowriterSettings,
 	fetchBuiltinDefaults,
 	fetchDefaultConfig,
 	updateDefaultConfig,
