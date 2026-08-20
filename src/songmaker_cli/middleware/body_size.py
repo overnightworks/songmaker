@@ -11,10 +11,6 @@ class _BodyTooLarge(Exception):
     pass
 
 
-def is_reimport_path(path: str) -> bool:
-    return path.endswith("/reimport")
-
-
 def is_large_upload_path(path: str) -> bool:
     if path == "/api/audio/upload":
         return True
@@ -22,18 +18,21 @@ def is_large_upload_path(path: str) -> bool:
     return (
         len(parts) == 5
         and parts[1] == "api"
-        and parts[2] == "loras"
-        and parts[4] == "samples"
+        and bool(parts[3])
+        and (
+            (parts[2] == "loras" and parts[4] == "samples")
+            or (parts[2] == "songs" and parts[4] == "reimport")
+        )
     )
 
 
 def body_limit_for_path(path: str) -> int:
     settings = get_settings()
-    if is_reimport_path(path):
+    if not is_large_upload_path(path):
+        return settings.max_request_body_bytes
+    if path.split("/")[2] == "songs":
         return settings.max_reimport_body_bytes
-    if is_large_upload_path(path):
-        return settings.max_upload_body_bytes
-    return settings.max_request_body_bytes
+    return settings.max_upload_body_bytes
 
 
 class BodySizeLimitMiddleware:

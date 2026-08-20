@@ -122,7 +122,7 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 2. **Song write**: the path must resolve under `{audio_dir}/{authenticated_user_id}/refs`
 3. **Job execution**: the same owner-root resolver runs again; a foreign, symlink, or missing path fails the job instead of falling back to no reference
 
-**Note**: For production deployments exposed to the internet, use a reverse proxy (e.g., nginx `client_max_body_size 1m`) to reject oversized requests at the network edge before they reach the application.
+**Note**: For production deployments exposed to the internet, configure equivalent path-specific limits at the reverse proxy so oversized requests are rejected at the network edge. A blanket 1 MiB proxy limit would also block the three documented audio-upload routes.
 
 ## Request Timeout
 
