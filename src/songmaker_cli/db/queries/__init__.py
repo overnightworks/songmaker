@@ -187,6 +187,24 @@ from songmaker_cli.db.queries.loras import (
 from songmaker_cli.db.queries.loras import (
     update_user_lora_sample as update_user_lora_sample,
 )
+from songmaker_cli.db.queries.memory import (
+    get_album_memory as get_album_memory,
+)
+from songmaker_cli.db.queries.memory import (
+    get_song_memory as get_song_memory,
+)
+from songmaker_cli.db.queries.memory import (
+    get_user_memory as get_user_memory,
+)
+from songmaker_cli.db.queries.memory import (
+    upsert_album_memory as upsert_album_memory,
+)
+from songmaker_cli.db.queries.memory import (
+    upsert_song_memory as upsert_song_memory,
+)
+from songmaker_cli.db.queries.memory import (
+    upsert_user_memory as upsert_user_memory,
+)
 from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist as add_album_to_playlist,
 )

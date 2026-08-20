@@ -172,11 +172,14 @@ User (username, role: admin|user, bcrypt hash)
   │           │     ├── Score (scorer, value JSON)
   │           │     └── Rating (0-100, notes)
   │           └── ChatMessage (role, content — per-song conversation history)
+  ├── CowriterUserMemory (durable co-writer notes; survives new conversations)
   ├── Job (type, status, progress, error, queue_position)
   └── AuditLog (action, resource_type, resource_id, detail)
 
 Also: UserSession, LoginAttempt, Playlist (share_slug?, is_shared), PlaylistEntry,
-      GenerationPreset, AvailableModel, RateLimitSetting
+      GenerationPreset, AvailableModel, RateLimitSetting,
+      Conversation / ConversationSummary / ChatMessage (global co-writer thread),
+      CowriterSongMemory, CowriterAlbumMemory
 ```
 
 PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
@@ -200,7 +203,11 @@ PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is
 | GET | `/api/songs/{id}/chat` | user | Load chat history |
 | DELETE | `/api/songs/{id}/chat` | user | Clear chat history |
 | GET | `/api/chat/recent` | user | Songs with active chats |
-| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages |
+| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. Injects current song plus durable user/song/album memory. |
+| GET | `/api/memory` | user | Durable co-writer memory (`?song_id=` adds song + album scopes) |
+| PUT | `/api/memory/user` | user | Replace user-scope co-writer memory |
+| PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
+| PUT | `/api/memory/albums/{id}` | user | Replace album-scope co-writer notes |
 | GET | `/api/capabilities` | user | Feature flags |
 | * | `/api/admin/*` | admin | User CRUD, sessions, audit log, ACE-Step control |
 | * | `/api/auth/*` | public | Login, logout, setup, password change |

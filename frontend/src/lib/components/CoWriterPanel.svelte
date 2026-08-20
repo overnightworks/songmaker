@@ -6,12 +6,24 @@
 		fetchConversationMessages,
 		startNewConversation,
 		deleteConversation,
+		fetchMemory,
+		saveUserMemory,
+		saveSongMemory,
+		saveAlbumMemory,
 		ApiError
 	} from '$lib/api/client';
 	import type { CoWriterStreamEvent } from '$lib/api/client';
-	import type { ChatMessageItem, ConversationItem } from '$lib/api/types';
+	import type { ChatMessageItem, ConversationItem, MemoryBundle } from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
+	import {
+		collectPendingProposals,
+		proposalKey,
+		stripMemoryProposals,
+		type MemoryProposal,
+		type MemoryScope
+	} from '$lib/utils/memory-proposals';
 	import ChatInput from './ChatInput.svelte';
+	import MemoryEditor from './MemoryEditor.svelte';
 
 	interface Props {
 		currentSongId?: string;
@@ -45,9 +57,20 @@
 	let viewingConversationId: string | null = $state(null);
 	let showConversations = $state(false);
 
+	let memoryBundle: MemoryBundle | null = $state(null);
+	let memoryLoading = $state(false);
+	let savingScope: MemoryScope | null = $state(null);
+	let rejectedProposalKeys: string[] = $state([]);
+
 	$effect(() => {
 		if (visible) {
 			void loadConversations();
+		}
+	});
+
+	$effect(() => {
+		if (visible) {
+			void loadMemory(currentSongId || null);
 		}
 	});
 
@@ -206,6 +229,68 @@
 		if (container) container.scrollTop = container.scrollHeight;
 	}
 
+	async function loadMemory(songId: string | null): Promise<void> {
+		memoryLoading = true;
+		try {
+			memoryBundle = await fetchMemory(songId);
+		} catch {
+			/* transient — leave last known memory visible */
+		} finally {
+			memoryLoading = false;
+		}
+	}
+
+	const pendingProposals = $derived(
+		collectPendingProposals(
+			messages.filter((msg) => msg.role === 'assistant').map((msg) => msg.text),
+			rejectedProposalKeys
+		)
+	);
+
+	async function saveMemoryScope(
+		scope: MemoryScope,
+		targetId: string,
+		body: string
+	): Promise<void> {
+		savingScope = scope;
+		try {
+			if (scope === 'user') {
+				const saved = await saveUserMemory(body);
+				if (memoryBundle) memoryBundle = { ...memoryBundle, user: saved };
+			} else if (scope === 'song') {
+				const saved = await saveSongMemory(targetId, body);
+				if (memoryBundle) memoryBundle = { ...memoryBundle, song: saved };
+			} else {
+				const saved = await saveAlbumMemory(targetId, body);
+				if (memoryBundle) memoryBundle = { ...memoryBundle, album: saved };
+			}
+		} catch {
+			addToast('Failed to save memory', 'error');
+		} finally {
+			savingScope = null;
+		}
+	}
+
+	async function acceptProposal(proposal: MemoryProposal): Promise<void> {
+		const targetId =
+			proposal.targetId ??
+			(proposal.scope === 'user'
+				? memoryBundle?.user.target_id
+				: proposal.scope === 'song'
+					? memoryBundle?.song?.target_id
+					: memoryBundle?.album?.target_id);
+		if (!targetId) {
+			addToast('Cannot apply this memory proposal here', 'error');
+			return;
+		}
+		await saveMemoryScope(proposal.scope, targetId, proposal.proposedBody);
+		rejectedProposalKeys = [...rejectedProposalKeys, proposalKey(proposal)];
+	}
+
+	function rejectProposal(proposal: MemoryProposal): void {
+		rejectedProposalKeys = [...rejectedProposalKeys, proposalKey(proposal)];
+	}
+
 	function handleInput(): void {
 		/* no-op — kept for ChatInput contract; the @-mention picker is gone. */
 	}
@@ -278,6 +363,16 @@
 		</div>
 	</div>
 
+	<MemoryEditor
+		bundle={memoryBundle}
+		loading={memoryLoading}
+		{savingScope}
+		proposals={pendingProposals}
+		onSave={saveMemoryScope}
+		onAccept={acceptProposal}
+		onReject={rejectProposal}
+	/>
+
 	{#if historyLoading}
 		<div class="history-loading">Loading chat...</div>
 	{:else}
@@ -305,7 +400,7 @@
 						</div>
 					{/if}
 					{#if msg.text}
-						<pre class="message-text">{msg.text}</pre>
+						<pre class="message-text">{stripMemoryProposals(msg.text)}</pre>
 					{:else if msg.role === 'assistant' && loading && i === messages.length - 1}
 						<span class="typing">Claude is thinking...</span>
 					{/if}

@@ -332,6 +332,19 @@ export interface ChatTurnV2Result {
 	assistant_message: ChatMessageItem;
 }
 
+export interface MemoryScopeItem {
+	scope: 'user' | 'song' | 'album';
+	target_id: string;
+	body: string;
+	updated_at?: string | null;
+}
+
+export interface MemoryBundle {
+	user: MemoryScopeItem;
+	song?: MemoryScopeItem | null;
+	album?: MemoryScopeItem | null;
+}
+
 export interface RateResult {
 	status: string;
 	generation_id?: string | null;

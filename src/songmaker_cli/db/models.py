@@ -428,6 +428,48 @@ class ConversationSummary(Base):
     conversation: Mapped[Conversation] = relationship(back_populates="summary")
 
 
+class CowriterUserMemory(Base):
+    """Durable per-user co-writer notes. Survives conversation archive."""
+
+    __tablename__ = "cowriter_user_memories"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
+    )
+    body: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        TZDateTime, default=_utcnow, onupdate=_utcnow,
+    )
+
+
+class CowriterSongMemory(Base):
+    """Durable per-song co-writer notes. Not a second lyrics store."""
+
+    __tablename__ = "cowriter_song_memories"
+
+    song_id: Mapped[str] = mapped_column(
+        ForeignKey("songs.id", ondelete="CASCADE"), primary_key=True,
+    )
+    body: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        TZDateTime, default=_utcnow, onupdate=_utcnow,
+    )
+
+
+class CowriterAlbumMemory(Base):
+    """Optional album-scoped co-writer notes."""
+
+    __tablename__ = "cowriter_album_memories"
+
+    album_id: Mapped[str] = mapped_column(
+        ForeignKey("albums.id", ondelete="CASCADE"), primary_key=True,
+    )
+    body: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        TZDateTime, default=_utcnow, onupdate=_utcnow,
+    )
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 from songmaker_cli.api_models.songs import _VALID_MODEL_MODES, GenerationParams
+from songmaker_cli.constants import MEMORY_MAX_LENGTH
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import GenerationPreset
@@ -207,6 +208,34 @@ class ChatTurnV2Response(BaseModel):
     conversation_id: str
     user_message: ChatMessageResponse
     assistant_message: ChatMessageResponse
+
+
+class MemoryScopeResponse(BaseModel):
+    scope: Literal["user", "song", "album"]
+    target_id: str
+    body: str
+    updated_at: str | None = None
+
+    @classmethod
+    def from_orm(cls, scope: str, target_id: str, row) -> MemoryScopeResponse:
+        if row is None:
+            return cls(scope=scope, target_id=target_id, body="", updated_at=None)
+        return cls(
+            scope=scope,
+            target_id=target_id,
+            body=row.body,
+            updated_at=row.updated_at.isoformat() if row.updated_at else None,
+        )
+
+
+class MemoryBundleResponse(BaseModel):
+    user: MemoryScopeResponse
+    song: MemoryScopeResponse | None = None
+    album: MemoryScopeResponse | None = None
+
+
+class MemoryUpdateRequest(BaseModel):
+    body: str = Field(max_length=MEMORY_MAX_LENGTH)
 
 
 class CapabilitiesResponse(BaseModel):
