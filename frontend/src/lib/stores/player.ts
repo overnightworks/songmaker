@@ -1,4 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
+import { ApiError } from '$lib/api/fetch';
 import {
 	createLibraryQueueStreamSnapshot,
 	createQueueStreamSnapshot,
@@ -18,7 +19,14 @@ import {
 } from '$lib/services/audioPlayer.svelte';
 import { setupMediaSessionHandlers, updateMediaSessionMetadata } from '$lib/services/mediaSession';
 import { addToast } from '$lib/stores/toast';
-import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
+import {
+	LIBRARY_TAKE_POOL_LABELS,
+	libraryTakePool,
+	queuePlaybackMode,
+	setLibraryTakePool,
+	shouldUseQueueStream,
+	type LibraryTakePool
+} from '$lib/stores/playbackSettings';
 
 // --- Data ---
 export const albumList = writable<AlbumItem[]>([]);
@@ -115,6 +123,26 @@ export async function toggleShuffle(): Promise<void> {
 	await rebuildQueueAfterShuffleToggle();
 }
 
+export type LibraryQueueNotice = 'idle' | 'building' | 'empty' | 'error';
+export const libraryQueueNotice = writable<LibraryQueueNotice>('idle');
+
+export async function chooseLibraryTakePool(pool: LibraryTakePool): Promise<void> {
+	setLibraryTakePool(pool);
+	await rebuildLibraryQueueKeepingPlace();
+}
+
+function librarySnapshotOpts(): { shuffle: boolean; pool: LibraryTakePool } {
+	return { shuffle: get(shuffleEnabled), pool: get(libraryTakePool) };
+}
+
+function poolLabel(): string {
+	return LIBRARY_TAKE_POOL_LABELS[get(libraryTakePool)];
+}
+
+function isEmptyPoolError(err: unknown): boolean {
+	return err instanceof ApiError && err.status === 422;
+}
+
 // --- Playback dispatch ---
 
 function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
@@ -208,17 +236,23 @@ export async function playLibraryFromGeneration(
 	opts: { resumeAtTrackTime?: number } = {}
 ): Promise<void> {
 	queueContext.set({ type: 'library' });
+	libraryQueueNotice.set('building');
 	let manifest: QueueStreamManifest;
 	try {
-		manifest = await createLibraryQueueStreamSnapshot(gen.id, {
-			shuffle: get(shuffleEnabled)
-		});
-	} catch {
+		manifest = await createLibraryQueueStreamSnapshot(gen.id, librarySnapshotOpts());
+	} catch (err) {
 		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
-		addToast('Stream unavailable. Tap play to retry.', 'error');
+		libraryQueueNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
+		addToast(
+			isEmptyPoolError(err)
+				? `Keine Takes (${poolLabel()})`
+				: `${poolLabel()} queue failed. Tap play to retry.`,
+			'error'
+		);
 		return;
 	}
 	retryPlayIntent = null;
+	libraryQueueNotice.set('idle');
 	const startIndex = manifest.tracks.findIndex((t) => t.generation_id === gen.id);
 	const index = startIndex >= 0 ? startIndex : 0;
 	audioPlayer.loadStream(
@@ -229,6 +263,45 @@ export async function playLibraryFromGeneration(
 	if (manifest.windowed) {
 		showWindowedNotice(manifest.tracks.length);
 	}
+}
+
+export async function playLibrary(
+	opts: { resumeAtTrackTime?: number } = {}
+): Promise<void> {
+	queueContext.set({ type: 'library' });
+	libraryQueueNotice.set('building');
+	let manifest: QueueStreamManifest;
+	try {
+		manifest = await createLibraryQueueStreamSnapshot(null, librarySnapshotOpts());
+	} catch (err) {
+		retryPlayIntent = () => playLibrary(opts);
+		libraryQueueNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
+		addToast(
+			isEmptyPoolError(err)
+				? `Keine Takes (${poolLabel()})`
+				: `${poolLabel()} queue failed. Tap play to retry.`,
+			'error'
+		);
+		return;
+	}
+	retryPlayIntent = null;
+	libraryQueueNotice.set('idle');
+	audioPlayer.loadStream(
+		manifest,
+		0,
+		streamLoadOpts(true, manifest.tracks[0], opts.resumeAtTrackTime)
+	);
+	if (manifest.windowed) {
+		showWindowedNotice(manifest.tracks.length);
+	}
+}
+
+async function rebuildLibraryQueueKeepingPlace(): Promise<void> {
+	if (audioPlayer.mode !== 'stream' || !audioPlayer.current) return;
+	if (get(queueContext).type !== 'library') return;
+	await playLibraryFromGeneration(audioPlayer.current.generation, {
+		resumeAtTrackTime: audioPlayer.currentTime
+	});
 }
 
 async function rebuildQueueAfterShuffleToggle(): Promise<void> {
@@ -561,9 +634,10 @@ async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStre
 	try {
 		if (ctx.type === 'library') {
 			const currentTrack = state.manifest.tracks[state.trackIndex];
-			return await createLibraryQueueStreamSnapshot(currentTrack?.generation_id ?? null, {
-				shuffle: get(shuffleEnabled)
-			});
+			return await createLibraryQueueStreamSnapshot(
+				currentTrack?.generation_id ?? null,
+				librarySnapshotOpts()
+			);
 		}
 		return await createQueueStreamSnapshot(
 			state.manifest.tracks.map((track) => ({

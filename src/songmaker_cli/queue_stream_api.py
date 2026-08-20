@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 import songmaker_cli.constants as _consts
 from songmaker_cli.api_helpers import check_generation_access
 from songmaker_cli.api_models.queue_streams import (
+    LibraryTakePool,
     QueueStreamLibraryRequest,
     QueueStreamManifestResponse,
     QueueStreamPinResponse,
@@ -31,6 +32,7 @@ from songmaker_cli.queue_streams import (
     load_queue_stream_manifest,
     pin_snapshot,
     queue_stream_audio_path,
+    resolve_audio_path,
     track_source_from_generation,
     unpin_snapshot,
 )
@@ -102,23 +104,61 @@ def api_create_queue_stream(
     return snapshot
 
 
-def _pick_library_generation(song: Song) -> Generation | None:
-    """Return the generation to stream for this song in a library snapshot.
+def generation_matches_pool(generation: Generation, pool: LibraryTakePool) -> bool:
+    if generation.is_archived or not generation.mp3_path:
+        return False
+    if pool == "mix":
+        return bool(generation.is_picked or generation.is_kept)
+    if pool == "picks":
+        return bool(generation.is_picked)
+    if pool == "keeps":
+        return bool(generation.is_kept)
+    if pool == "all":
+        return True
+    raise ValueError(f"Unknown library take pool: {pool}")
 
-    Prefers the picked (non-archived) generation; falls back to the first
-    (newest) non-archived generation that has an mp3_path.  Returns None when
-    the song has no eligible generation — callers skip such songs.
-    """
-    picked = next(
-        (g for g in song.generations if g.is_picked and not g.is_archived and g.mp3_path),
-        None,
-    )
-    if picked is not None:
-        return picked
-    return next(
-        (g for g in song.generations if not g.is_archived and g.mp3_path),
-        None,
-    )
+
+def _take_sort_key(generation: Generation) -> tuple[float, str]:
+    created = generation.created_at
+    timestamp = -created.timestamp() if created is not None else 0.0
+    return (timestamp, generation.id)
+
+
+def collect_library_pool_generations(
+    songs: list[Song],
+    pool: LibraryTakePool,
+    start_gen: Generation | None,
+    is_readable: Callable[[Generation], bool],
+) -> list[Generation]:
+    selected: list[Generation] = []
+    seen: set[str] = set()
+    for song in songs:
+        takes = [gen for gen in song.generations if generation_matches_pool(gen, pool)]
+        takes.sort(key=_take_sort_key)
+        for gen in takes:
+            if gen.id in seen or not is_readable(gen):
+                continue
+            seen.add(gen.id)
+            selected.append(gen)
+    if (
+        start_gen is not None
+        and start_gen.id not in seen
+        and not start_gen.is_archived
+        and start_gen.mp3_path
+        and is_readable(start_gen)
+    ):
+        selected.insert(0, start_gen)
+    return selected
+
+
+def _library_audio_readable(ctx: AppContext, generation: Generation) -> bool:
+    if not generation.mp3_path:
+        return False
+    try:
+        resolve_audio_path(ctx.audio_dir, generation.mp3_path)
+    except HTTPException:
+        return False
+    return True
 
 
 def shuffle_library_sources(
@@ -182,27 +222,24 @@ def api_create_library_queue_stream(
                 raise
             start_gen = None
 
-    def _library_generation_for_song(song: Song) -> Generation | None:
-        if (
-            start_gen is not None
-            and start_gen.song_id == song.id
-            and not start_gen.is_archived
-            and start_gen.mp3_path
-        ):
-            return start_gen
-        return _pick_library_generation(song)
+    pool_generations = collect_library_pool_generations(
+        songs,
+        req.pool,
+        start_gen,
+        lambda gen: _library_audio_readable(ctx, gen),
+    )
+    if not pool_generations:
+        raise HTTPException(422, f"No playable takes in pool '{req.pool}'")
 
     sources: list[QueueStreamSource] = [
         track_source_from_generation(
             gen,
             key=gen.id,
-            index=0,  # placeholder; reindexed below
+            index=0,
             entry_id=None,
             audio_url=f"/audio/{gen.mp3_path}",
         )
-        for song in songs
-        for gen in [_library_generation_for_song(song)]
-        if gen is not None
+        for gen in pool_generations
     ]
 
     if req.shuffle:

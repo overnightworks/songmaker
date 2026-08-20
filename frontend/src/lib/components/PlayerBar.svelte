@@ -2,17 +2,21 @@
 	import { onDestroy, untrack } from 'svelte';
 	import {
 		navigateToPlaying,
+		playLibrary,
 		playNextSong,
 		playPrevSong,
 		canPlayPrevSong,
 		canPlayNextSong,
+		libraryQueueNotice,
 		queueContext,
 		retryLastPlayIntent,
 		songList,
 		shuffleEnabled,
 		toggleShuffle
 	} from '$lib/stores/player';
+	import { LIBRARY_TAKE_POOL_LABELS, libraryTakePool } from '$lib/stores/playbackSettings';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import LibraryPoolControl from './LibraryPoolControl.svelte';
 	import {
 		updateMediaSessionPlaybackState,
 		updateMediaSessionPositionState
@@ -45,6 +49,8 @@
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
 	const shuffle = $derived($shuffleEnabled);
+	const poolName = $derived(LIBRARY_TAKE_POOL_LABELS[$libraryTakePool]);
+	const queueNotice = $derived($libraryQueueNotice);
 
 	const isPlaying = $derived(status === 'playing');
 	const isLoading = $derived(status === 'loading' || status === 'buffering');
@@ -144,6 +150,10 @@
 	});
 
 	function togglePlay(): void {
+		if (!current) {
+			void playLibrary();
+			return;
+		}
 		void retryLastPlayIntent().then((retried) => {
 			if (!retried) audioPlayer.toggle();
 		});
@@ -156,6 +166,7 @@
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
 	<div class="player-content">
 		<div class="player-controls">
+			<LibraryPoolControl />
 			<button
 				class="nav-btn mode-btn"
 				class:active={shuffle}
@@ -216,6 +227,18 @@
 							class="loading-text">Loading...</span
 						>{:else if isError}<span class="error-text">{errorMsg ?? 'Error'}</span>{/if}</span
 				>
+			{:else if queueNotice === 'building'}
+				<span class="track-title">Queue wird gebaut</span>
+				<span class="track-detail">{poolName}</span>
+			{:else if queueNotice === 'empty'}
+				<span class="track-title">Keine Takes</span>
+				<span class="track-detail">{poolName}</span>
+			{:else if queueNotice === 'error'}
+				<span class="track-title">{poolName} failed</span>
+				<span class="track-detail">Tap play</span>
+			{:else}
+				<span class="track-title">{poolName}</span>
+				<span class="track-detail">Play</span>
 			{/if}
 		</button>
 		<div class="timeline">

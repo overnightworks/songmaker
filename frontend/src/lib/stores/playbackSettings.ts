@@ -31,3 +31,33 @@ export function setQueuePlaybackMode(mode: QueuePlaybackMode): void {
 export function shouldUseQueueStream(mode: QueuePlaybackMode): boolean {
 	return mode === 'stream';
 }
+
+export const LIBRARY_TAKE_POOLS = ['mix', 'picks', 'keeps', 'all'] as const;
+export type LibraryTakePool = (typeof LIBRARY_TAKE_POOLS)[number];
+export const DEFAULT_LIBRARY_TAKE_POOL: LibraryTakePool = 'mix';
+
+export const LIBRARY_TAKE_POOL_LABELS: Record<LibraryTakePool, string> = {
+	mix: 'Mix',
+	picks: 'Picks',
+	keeps: 'Keeps',
+	all: 'Alle'
+};
+
+const POOL_STORAGE_KEY = 'libraryTakePool';
+const VALID_POOLS: ReadonlySet<string> = new Set<string>(LIBRARY_TAKE_POOLS);
+
+function readStoredPool(): LibraryTakePool {
+	if (typeof window === 'undefined') return DEFAULT_LIBRARY_TAKE_POOL;
+	const stored = localStorage.getItem(POOL_STORAGE_KEY);
+	if (stored && VALID_POOLS.has(stored)) return stored as LibraryTakePool;
+	return DEFAULT_LIBRARY_TAKE_POOL;
+}
+
+export const libraryTakePool = writable<LibraryTakePool>(readStoredPool());
+
+export function setLibraryTakePool(pool: LibraryTakePool): void {
+	libraryTakePool.set(pool);
+	if (typeof window !== 'undefined') {
+		localStorage.setItem(POOL_STORAGE_KEY, pool);
+	}
+}

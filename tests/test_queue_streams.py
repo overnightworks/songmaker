@@ -12,7 +12,11 @@ from fastapi.testclient import TestClient
 
 from songmaker_cli.auth import hash_password
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
-from songmaker_cli.queue_stream_api import shuffle_library_sources
+from songmaker_cli.queue_stream_api import (
+    collect_library_pool_generations,
+    generation_matches_pool,
+    shuffle_library_sources,
+)
 from songmaker_cli.queue_streams import QueueStreamSource
 
 
@@ -334,8 +338,8 @@ def _seed_library_data(session) -> None:
       Album a1 (track order: s1, s2):
         s1: gen g1 (not picked, non-archived), gen g1b (picked, non-archived)
             → library picks g1b (picked preferred)
-        s2: gen g2 (not picked, non-archived)
-            → library picks g2 (only eligible)
+        s2: gen g2 (kept, not picked, non-archived)
+            → mix includes g2 as a keep
       Album a2 (track order: s3, s4):
         s3: gen g3 (not picked, IS archived)
             → no eligible generation → skipped
@@ -377,10 +381,10 @@ def _seed_library_data(session) -> None:
         id="g1b", song_id="s1", version_id="v1", generation_number=2,
         mp3_path="user-a/g1b.mp3", seed=2, is_picked=True,
     ))
-    # s2: single non-picked, non-archived gen
+    # s2: kept, not picked — mix includes it; picks does not
     session.add(Generation(
         id="g2", song_id="s2", version_id="v2", generation_number=1,
-        mp3_path="user-a/g2.mp3", seed=3, is_picked=False,
+        mp3_path="user-a/g2.mp3", seed=3, is_picked=False, is_kept=True,
     ))
     # s3: single archived gen → song has no eligible generation
     session.add(Generation(
@@ -500,7 +504,7 @@ def test_library_stream_start_take_is_the_clicked_generation(
     tracks = resp.json()["tracks"]
     assert tracks[0]["song_id"] == "s1"
     assert tracks[0]["generation_id"] == "g1"
-    assert [t["generation_id"] for t in tracks] == ["g1", "g2"]
+    assert [t["generation_id"] for t in tracks] == ["g1", "g1b", "g2"]
 
 
 def test_library_stream_start_generation_id_not_found_starts_from_beginning(
@@ -987,3 +991,254 @@ def test_library_stream_shuffle_uses_injected_rng(
         "g1",
     ]
     assert [track["index"] for track in resp.json()["tracks"]] == [0, 1, 2, 3]
+
+
+def test_library_stream_unknown_pool_is_422(tmp_path: Path, monkeypatch) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
+    _write_library_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post("/api/queue-streams/library", json={"pool": "favorites"})
+
+    assert resp.status_code == 422
+
+
+def test_generation_matches_pool_rules() -> None:
+    picked = Generation(id="p", song_id="s", mp3_path="p.mp3", is_picked=True, is_kept=False)
+    kept = Generation(id="k", song_id="s", mp3_path="k.mp3", is_picked=False, is_kept=True)
+    both = Generation(id="b", song_id="s", mp3_path="b.mp3", is_picked=True, is_kept=True)
+    plain = Generation(id="n", song_id="s", mp3_path="n.mp3", is_picked=False, is_kept=False)
+    archived = Generation(
+        id="a", song_id="s", mp3_path="a.mp3", is_picked=True, is_kept=True, is_archived=True
+    )
+
+    assert generation_matches_pool(picked, "mix") is True
+    assert generation_matches_pool(kept, "mix") is True
+    assert generation_matches_pool(both, "mix") is True
+    assert generation_matches_pool(plain, "mix") is False
+    assert generation_matches_pool(archived, "mix") is False
+    assert generation_matches_pool(picked, "picks") is True
+    assert generation_matches_pool(kept, "picks") is False
+    assert generation_matches_pool(picked, "keeps") is False
+    assert generation_matches_pool(kept, "keeps") is True
+    assert generation_matches_pool(plain, "all") is True
+    assert generation_matches_pool(archived, "all") is False
+
+
+def test_collect_library_pool_dedupes_pick_and_keep_and_pins_out_of_pool_start() -> None:
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    older = Generation(
+        id="g-old",
+        song_id="s1",
+        mp3_path="old.mp3",
+        is_picked=False,
+        is_kept=False,
+        created_at=t0,
+    )
+    both = Generation(
+        id="g-both",
+        song_id="s1",
+        mp3_path="both.mp3",
+        is_picked=True,
+        is_kept=True,
+        created_at=t0 + timedelta(days=2),
+    )
+    keep = Generation(
+        id="g-keep",
+        song_id="s1",
+        mp3_path="keep.mp3",
+        is_picked=False,
+        is_kept=True,
+        created_at=t0 + timedelta(days=1),
+    )
+    song = Song(id="s1", title="One", album_id="a1", track_number=1)
+    song.generations = [older, both, keep]
+
+    mixed = collect_library_pool_generations([song], "mix", older, lambda _gen: True)
+    assert [gen.id for gen in mixed] == ["g-old", "g-both", "g-keep"]
+
+    mix_only = collect_library_pool_generations([song], "mix", None, lambda _gen: True)
+    assert [gen.id for gen in mix_only] == ["g-both", "g-keep"]
+
+
+def _seed_library_pool_data(session) -> None:
+    t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    session.add(User(id="user-a", username="usera", password_hash=hash_password("pass1234")))
+    session.flush()
+    session.add(Album(id="a1", title="Alpha", artist="A", created_by="user-a"))
+    session.add(Album(id="a2", title="Beta", artist="A", created_by="user-a"))
+    session.flush()
+    session.add(Song(id="s1", title="One", album_id="a1", track_number=1))
+    session.add(Song(id="s2", title="Two", album_id="a1", track_number=2))
+    session.add(Song(id="s3", title="Three", album_id="a2", track_number=1))
+    session.flush()
+    for index, song_id in enumerate(("s1", "s2", "s3"), start=1):
+        session.add(Version(id=f"v{index}", song_id=song_id, version_number=1, lyrics=""))
+    session.flush()
+    session.add_all(
+        [
+            Generation(
+                id="g-old",
+                song_id="s1",
+                version_id="v1",
+                generation_number=1,
+                mp3_path="user-a/g-old.mp3",
+                seed=1,
+                created_at=t0,
+            ),
+            Generation(
+                id="g-pick",
+                song_id="s1",
+                version_id="v1",
+                generation_number=2,
+                mp3_path="user-a/g-pick.mp3",
+                seed=2,
+                is_picked=True,
+                created_at=t0 + timedelta(days=1),
+            ),
+            Generation(
+                id="g-keep-a",
+                song_id="s1",
+                version_id="v1",
+                generation_number=3,
+                mp3_path="user-a/g-keep-a.mp3",
+                seed=3,
+                is_kept=True,
+                created_at=t0 + timedelta(days=2),
+            ),
+            Generation(
+                id="g-both",
+                song_id="s1",
+                version_id="v1",
+                generation_number=4,
+                mp3_path="user-a/g-both.mp3",
+                seed=4,
+                is_picked=True,
+                is_kept=True,
+                created_at=t0 + timedelta(days=3),
+            ),
+            Generation(
+                id="g-arch",
+                song_id="s1",
+                version_id="v1",
+                generation_number=5,
+                mp3_path="user-a/g-arch.mp3",
+                seed=5,
+                is_picked=True,
+                is_kept=True,
+                is_archived=True,
+                created_at=t0 + timedelta(days=4),
+            ),
+            Generation(
+                id="g-keep-b",
+                song_id="s2",
+                version_id="v2",
+                generation_number=1,
+                mp3_path="user-a/g-keep-b.mp3",
+                seed=6,
+                is_kept=True,
+                created_at=t0 + timedelta(days=1),
+            ),
+            Generation(
+                id="g-missing",
+                song_id="s2",
+                version_id="v2",
+                generation_number=2,
+                mp3_path="user-a/g-missing.mp3",
+                seed=7,
+                is_kept=True,
+                created_at=t0 + timedelta(days=2),
+            ),
+            Generation(
+                id="g-pick-b",
+                song_id="s3",
+                version_id="v3",
+                generation_number=1,
+                mp3_path="user-a/g-pick-b.mp3",
+                seed=8,
+                is_picked=True,
+                created_at=t0,
+            ),
+        ]
+    )
+
+
+def _write_pool_audio_files(root: Path) -> None:
+    path = root / "audio" / "user-a"
+    path.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "g-old.mp3",
+        "g-pick.mp3",
+        "g-keep-a.mp3",
+        "g-both.mp3",
+        "g-arch.mp3",
+        "g-keep-b.mp3",
+        "g-pick-b.mp3",
+    ):
+        (path / name).write_bytes(b"source")
+
+
+@pytest.mark.parametrize(
+    ("pool", "expected"),
+    [
+        ("mix", ["g-both", "g-keep-a", "g-pick", "g-keep-b", "g-pick-b"]),
+        ("picks", ["g-both", "g-pick", "g-pick-b"]),
+        ("keeps", ["g-both", "g-keep-a", "g-keep-b"]),
+        ("all", ["g-both", "g-keep-a", "g-pick", "g-old", "g-keep-b", "g-pick-b"]),
+    ],
+)
+def test_library_stream_pool_sets(
+    tmp_path: Path, monkeypatch, pool: str, expected: list[str]
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
+    _write_pool_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post("/api/queue-streams/library", json={"pool": pool})
+
+    assert resp.status_code == 200
+    assert [track["generation_id"] for track in resp.json()["tracks"]] == expected
+
+
+def test_library_stream_default_pool_is_mix(tmp_path: Path, monkeypatch) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
+    _write_pool_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post("/api/queue-streams/library", json={})
+
+    assert resp.status_code == 200
+    assert [track["generation_id"] for track in resp.json()["tracks"]] == [
+        "g-both",
+        "g-keep-a",
+        "g-pick",
+        "g-keep-b",
+        "g-pick-b",
+    ]
+
+
+def test_library_stream_out_of_pool_start_is_temporary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
+    _write_pool_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams/library",
+        json={"pool": "mix", "start_generation_id": "g-old"},
+    )
+
+    assert resp.status_code == 200
+    assert [track["generation_id"] for track in resp.json()["tracks"]] == [
+        "g-old",
+        "g-both",
+        "g-keep-a",
+        "g-pick",
+        "g-keep-b",
+        "g-pick-b",
+    ]

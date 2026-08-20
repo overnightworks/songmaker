@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+LibraryTakePool = Literal["mix", "picks", "keeps", "all"]
+DEFAULT_LIBRARY_TAKE_POOL: LibraryTakePool = "mix"
 
 
 class QueueStreamTrackRequest(BaseModel):
@@ -17,6 +22,7 @@ class QueueStreamSnapshotRequest(BaseModel):
 class QueueStreamLibraryRequest(BaseModel):
     start_generation_id: str | None = Field(default=None, max_length=36)
     shuffle: bool = False
+    pool: LibraryTakePool = DEFAULT_LIBRARY_TAKE_POOL
 
 
 class QueueStreamTrackResponse(BaseModel):

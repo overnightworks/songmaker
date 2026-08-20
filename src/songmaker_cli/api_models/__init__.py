@@ -50,6 +50,8 @@ from songmaker_cli.api_models.playlists import (
     SharedPlaylistResponse,
 )
 from songmaker_cli.api_models.queue_streams import (
+    DEFAULT_LIBRARY_TAKE_POOL,
+    LibraryTakePool,
     QueueStreamLibraryRequest,
     QueueStreamManifestResponse,
     QueueStreamPinResponse,
@@ -215,6 +217,7 @@ __all__ = [
     "CoverRequest",
     "CoverTaskParams",
     "CreateUserRequest",
+    "DEFAULT_LIBRARY_TAKE_POOL",
     "DefaultConfigRequest",
     "DefaultConfigResponse",
     "EvictModelOnWorkerRequest",
@@ -224,6 +227,7 @@ __all__ = [
     "GenerationResponse",
     "GenerationRetentionReportResponse",
     "JobResponse",
+    "LibraryTakePool",
     "LoadedModelDetail",
     "LoadModelOnWorkerRequest",
     "LoginAttemptResponse",

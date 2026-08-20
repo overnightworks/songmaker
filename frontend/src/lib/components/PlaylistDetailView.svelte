@@ -91,6 +91,12 @@
 		playPlaylistEntries(playlistDetail.entries, index, { restart: true });
 	}
 
+	function playSequential(): void {
+		if (!playlistDetail || playlistDetail.entries.length === 0) return;
+		setShuffle(false);
+		playPlaylistEntries(playlistDetail.entries, 0, { restart: true });
+	}
+
 	function playShuffled(): void {
 		if (!playlistDetail || playlistDetail.entries.length === 0) return;
 		setShuffle(true);
@@ -243,7 +249,7 @@
 				{#if playlistDetail.entries.length > 0}
 					<button
 						class="action-btn-primary"
-						onclick={() => playPlaylistEntries(playlistDetail.entries)}
+						onclick={playSequential}
 					>
 						<Icon name="play" size={15} />
 						Play

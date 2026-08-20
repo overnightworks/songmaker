@@ -393,6 +393,7 @@ export interface QueueStreamSnapshotRequest {
 export interface LibraryQueueStreamRequest {
 	start_generation_id?: string | null;
 	shuffle: boolean;
+	pool: 'mix' | 'picks' | 'keeps' | 'all';
 }
 
 export interface QueueStreamTrackItem {
