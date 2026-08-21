@@ -32,6 +32,7 @@ import {
 	canPlayPrevSong,
 	clearGenerationSelection,
 	ensureGenerationsLoaded,
+	albumSongsLoad,
 	loadSongsForAlbum,
 	upsertSongInList,
 	filteredSongs,
@@ -230,6 +231,12 @@ describe('browsing state', () => {
 		expect(get(songList).map((s) => s.id)).toContain('s-direct');
 		selectedSongId.set('s-direct');
 		expect(get(selectedSong)?.generations.length).toBe(1);
+	});
+
+	it('records a retryable error when album songs fail to load', async () => {
+		vi.mocked(fetchSongs).mockRejectedValueOnce(new Error('offline'));
+		await loadSongsForAlbum('a1');
+		expect(get(albumSongsLoad).a1).toEqual({ status: 'error', error: 'offline' });
 	});
 
 	it('loadSongsForAlbum merges album tracks that were outside the browse slice', async () => {

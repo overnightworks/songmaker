@@ -781,9 +781,22 @@ export function upsertSongInList(song: SongItem): void {
 
 const albumSongLoads = new Map<string, Promise<void>>();
 
+export type AlbumSongsLoadStatus = 'idle' | 'loading' | 'error';
+
+export interface AlbumSongsLoadState {
+	status: AlbumSongsLoadStatus;
+	error: string | null;
+}
+
+export const albumSongsLoad = writable<Readonly<Record<string, AlbumSongsLoadState>>>({});
+
 export async function loadSongsForAlbum(albumId: string): Promise<void> {
 	const inflight = albumSongLoads.get(albumId);
 	if (inflight) return inflight;
+	albumSongsLoad.update((state) => ({
+		...state,
+		[albumId]: { status: 'loading', error: null }
+	}));
 	const load = (async () => {
 		let offset = 0;
 		const collected: SongItem[] = [];
@@ -798,9 +811,24 @@ export async function loadSongsForAlbum(albumId: string): Promise<void> {
 	albumSongLoads.set(albumId, load);
 	try {
 		await load;
+		albumSongsLoad.update((state) => ({
+			...state,
+			[albumId]: { status: 'idle', error: null }
+		}));
+	} catch (err) {
+		albumSongsLoad.update((state) => ({
+			...state,
+			[albumId]: { status: 'error', error: albumSongsErrorMessage(err) }
+		}));
 	} finally {
 		albumSongLoads.delete(albumId);
 	}
+}
+
+function albumSongsErrorMessage(err: unknown): string {
+	if (err instanceof ApiError) return err.detail || err.message;
+	if (err instanceof Error) return err.message;
+	return 'Failed to load songs';
 }
 
 function mergeAlbumSongs(list: SongItem[], incoming: SongItem[]): SongItem[] {

@@ -94,6 +94,21 @@ afterEach(() => {
 });
 
 describe('syncLibrarySearch', () => {
+	it('keeps the debounce when only trailing whitespace is added', async () => {
+		searchLibrary.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
+		syncLibrarySearch('Tide');
+		syncLibrarySearch('Tide ');
+		expect(searchLibrary).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+		expect(searchLibrary).toHaveBeenCalledTimes(1);
+		expect(searchLibrary).toHaveBeenCalledWith({
+			q: 'Tide',
+			sort: 'newest',
+			limit: LIBRARY_SEARCH_PAGE_SIZE,
+			cursor: null
+		});
+	});
+
 	it('does not call the server for an empty query', async () => {
 		syncLibrarySearch('   ');
 		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);

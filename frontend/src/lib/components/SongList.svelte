@@ -5,7 +5,7 @@
 
 	let { onNewSong }: Props = $props();
 
-	import { albumList, songList, selectedAlbumId } from '$lib/stores/player';
+	import { albumList, albumSongsLoad, loadSongsForAlbum, songList, selectedAlbumId } from '$lib/stores/player';
 	import {
 		persistLibraryHistory,
 		selectAlbumOverview,
@@ -81,6 +81,7 @@
 	const expanded = $derived($expandedAlbumIds);
 	const playlistStatus = $derived($playlistLoad);
 	const restoredScroll = $derived($libraryScrollAnchor);
+	const albumLoads = $derived($albumSongsLoad);
 
 	interface SharedItem {
 		id: string;
@@ -300,8 +301,10 @@
 					songHits: group.songs.length
 				})}
 				selected={group.album.id === currentAlbumId}
+				loadState={albumLoads[group.album.id]}
 				ontoggle={() => onToggleAlbum(group.album.id)}
 				onselect={() => hydrateAndOpenAlbum(group.album)}
+				onretry={() => loadSongsForAlbum(group.album.id)}
 			/>
 		{/each}
 
@@ -338,8 +341,10 @@
 						songHits: group.songs.length
 					})}
 					selected={group.album.id === currentAlbumId}
+					loadState={albumLoads[group.album.id]}
 					ontoggle={() => onToggleAlbum(group.album.id)}
 					onselect={() => hydrateAndOpenAlbum(group.album)}
+					onretry={() => loadSongsForAlbum(group.album.id)}
 				/>
 			{/each}
 		</div>

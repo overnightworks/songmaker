@@ -1,4 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
+import { fetchAlbum } from '$lib/api/albums';
 import {
 	selectedSongId,
 	selectedGenerationId,
@@ -8,6 +9,7 @@ import {
 	selectGenerationInSidebar as playerSelectGeneration,
 	clearGenerationSelection as playerClearGeneration,
 	ensureGenerationsLoaded,
+	loadSongsForAlbum,
 	albumList,
 	songList
 } from '$lib/stores/player';
@@ -17,7 +19,7 @@ import {
 	selectedPlaylistId
 } from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
-import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
+import type { GenerationItem, SongItem } from '$lib/api/types';
 import type { LibrarySection } from '$lib/constants';
 import {
 	applyLibraryHistory,
@@ -120,6 +122,7 @@ export function backToAlbum(): void {
 	if (albumId) {
 		playerSelectAlbum(albumId);
 		setLibrarySurface('detail');
+		void loadSongsForAlbum(albumId);
 	} else {
 		setLibrarySurface('browse');
 	}
@@ -139,6 +142,7 @@ export function selectSong(songId: string, knownSong?: SongItem): void {
 	const albumId = song?.album_id ?? null;
 	if (albumId) {
 		selectedAlbumId.set(albumId);
+		void loadSongsForAlbum(albumId);
 	}
 	playerSelectSong(songId);
 	ensureGenerationsLoaded(songId);
@@ -163,19 +167,13 @@ function hydrateSongIntoLibrary(song: SongItem): void {
 		songList.update((list) => [...list, song]);
 	}
 	if (get(albumList).some((item) => item.id === song.album_id)) return;
-	const album: AlbumItem = {
-		id: song.album_id,
-		title: song.album_title,
-		artist: song.artist,
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 0,
-		is_shared: false,
-		share_slug: null,
-		created_at: song.created_at
-	};
-	albumList.update((list) => [...list, album]);
+	void fetchAlbum(song.album_id)
+		.then((album) => {
+			albumList.update((list) =>
+				list.some((item) => item.id === album.id) ? list : [...list, album]
+			);
+		})
+		.catch(() => undefined);
 }
 
 export function selectPlaylistView(playlistId: string): void {

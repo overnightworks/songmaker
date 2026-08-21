@@ -102,12 +102,12 @@ export function groupSearchHits(hits: LibrarySearchHit[]): LibraryAlbumGroup[] {
 }
 
 export function syncLibrarySearch(rawQuery: string): void {
-	if (searchTimer !== null) {
-		clearTimeout(searchTimer);
-		searchTimer = null;
-	}
 	const q = rawQuery.trim();
 	if (!q) {
+		if (searchTimer !== null) {
+			clearTimeout(searchTimer);
+			searchTimer = null;
+		}
 		searchGeneration += 1;
 		librarySearch.set({ ...EMPTY_SEARCH });
 		return;
@@ -115,6 +115,10 @@ export function syncLibrarySearch(rawQuery: string): void {
 	const current = get(librarySearch);
 	if (current.q === q && (current.status === 'loading' || current.status === 'ready')) {
 		return;
+	}
+	if (searchTimer !== null) {
+		clearTimeout(searchTimer);
+		searchTimer = null;
 	}
 	librarySearch.set({
 		q,

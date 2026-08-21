@@ -2,17 +2,22 @@
 	import AgeStamp from './AgeStamp.svelte';
 	import SongNode from './SongNode.svelte';
 	import type { SongItem, AlbumItem } from '$lib/api/types';
+	import { LIBRARY_ALBUMS_LOADING, LIBRARY_RETRY_LABEL } from '$lib/constants';
+	import type { AlbumSongsLoadState } from '$lib/stores/player';
 
 	interface Props {
 		album: AlbumItem;
 		songs: SongItem[];
 		expanded: boolean;
 		selected: boolean;
+		loadState?: AlbumSongsLoadState;
 		ontoggle: () => void;
 		onselect: () => void;
+		onretry?: () => void;
 	}
 
-	let { album, songs, expanded, selected, ontoggle, onselect }: Props = $props();
+	let { album, songs, expanded, selected, loadState, ontoggle, onselect, onretry }: Props =
+		$props();
 
 	function handleClick(): void {
 		onselect();
@@ -50,6 +55,14 @@
 	</div>
 
 	{#if expanded}
+		{#if loadState?.status === 'loading' && songs.length === 0}
+			<p class="album-status" role="status">{LIBRARY_ALBUMS_LOADING}</p>
+		{:else if loadState?.status === 'error'}
+			<p class="album-status" role="alert">{loadState.error}</p>
+			{#if onretry}
+				<button class="album-retry" onclick={onretry}>{LIBRARY_RETRY_LABEL}</button>
+			{/if}
+		{/if}
 		{#each songs as song (song.id)}
 			<SongNode {song} />
 		{/each}
@@ -132,6 +145,23 @@
 		font-size: 0.6rem;
 		color: var(--text-subtle);
 		flex-shrink: 0;
+	}
+
+	.album-status {
+		margin: 0;
+		padding: 8px 12px 8px 28px;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+
+	.album-retry {
+		margin: 0 12px 8px 28px;
+		padding: 4px 8px;
+		background: none;
+		border: 1px solid var(--border);
+		color: var(--text);
+		font-size: 0.75rem;
+		cursor: pointer;
 	}
 
 	@media (max-width: 768px) {

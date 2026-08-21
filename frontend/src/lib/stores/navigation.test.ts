@@ -21,6 +21,7 @@ import { selectedPlaylistId } from '$lib/stores/playlists';
 import type { SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
+const fetchAlbum = vi.fn();
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
 
@@ -28,18 +29,7 @@ vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
 vi.mock('$lib/api/albums', () => ({
-	fetchAlbum: vi.fn().mockResolvedValue({
-		id: 'a1',
-		title: 'Nachtstrom',
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 1,
-		is_shared: false,
-		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00'
-	}),
+	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
 	fetchAlbums: vi.fn().mockResolvedValue({
 		items: [],
 		total: 0,
@@ -123,10 +113,23 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 
 beforeEach(() => {
 	fetchSong.mockReset();
+	fetchAlbum.mockReset();
 	fetchPlaylists.mockReset();
 	fetchPlaylist.mockReset();
 	fetchPlaylists.mockResolvedValue([]);
 	fetchSong.mockResolvedValue(song());
+	fetchAlbum.mockImplementation(async (albumId: unknown) => ({
+		id: String(albumId),
+		title: 'Nachtstrom',
+		artist: 'Artist',
+		subtitle: '',
+		year: '',
+		colors: {},
+		song_count: 1,
+		is_shared: false,
+		share_slug: null,
+		created_at: '2026-01-01T00:00:00+00:00'
+	}));
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetNavigationForTests();
@@ -274,7 +277,7 @@ describe('library history', () => {
 		expect(isLibraryWorkspacePath('/settings')).toBe(false);
 	});
 
-	it('hydrates a search-only song and its album into the library', () => {
+	it('hydrates a search-only song and its album into the library', async () => {
 		const cleanup = initNavigation();
 		selectSong('s-remote', {
 			...song(),
@@ -282,6 +285,8 @@ describe('library history', () => {
 			album_id: 'a-remote',
 			album_title: 'Remote Album'
 		});
+		await Promise.resolve();
+		await Promise.resolve();
 		expect(get(selectedSongId)).toBe('s-remote');
 		expect(get(selectedAlbumId)).toBe('a-remote');
 		expect(get(songList).some((item) => item.id === 's-remote')).toBe(true);
