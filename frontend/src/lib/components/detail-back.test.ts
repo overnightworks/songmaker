@@ -143,10 +143,12 @@ function playlistDetail(): PlaylistDetailItem {
 	};
 }
 
-async function render(component: Parameters<typeof mount>[0]): Promise<HTMLElement> {
+async function renderView(
+	factory: (target: HTMLElement) => ReturnType<typeof mount>
+): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted.push(mount(component, { target }));
+	mounted.push(factory(target));
 	await tick();
 	await Promise.resolve();
 	await tick();
@@ -175,21 +177,21 @@ afterEach(async () => {
 
 describe('detail views own no content back', () => {
 	it('does not render a second back button in album, song, playlist, or generation views', async () => {
-		const albumTarget = await render(AlbumDetailView);
+		const albumTarget = await renderView((target) => mount(AlbumDetailView, { target }));
 		expect(albumTarget.querySelector('.back-btn')).toBeNull();
 		expect(albumTarget.textContent).toContain('Local Album');
 
 		selectedGenerationId.set(null);
-		const songTarget = await render(SongDetailView);
+		const songTarget = await renderView((target) => mount(SongDetailView, { target }));
 		expect(songTarget.querySelector('.back-btn')).toBeNull();
 		expect(songTarget.textContent).toContain('Local Only');
 
-		const playlistTarget = await render(PlaylistDetailView);
+		const playlistTarget = await renderView((target) => mount(PlaylistDetailView, { target }));
 		expect(playlistTarget.querySelector('.back-btn')).toBeNull();
 		expect(playlistTarget.textContent).toContain('Night Drive');
 
 		selectedGenerationId.set('g1');
-		const generationTarget = await render(GenerationView);
+		const generationTarget = await renderView((target) => mount(GenerationView, { target }));
 		expect(generationTarget.querySelector('.back-btn')).toBeNull();
 		expect(generationTarget.textContent).toContain('Generation 1');
 	});
