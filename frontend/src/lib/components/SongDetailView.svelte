@@ -373,10 +373,6 @@
 
 {#if song}
 	<div class="detail-panel" class:chat-active={tab === 'chat'}>
-		<button class="back-btn" onclick={backToAlbum}>
-			<span class="back-arrow">←</span>
-			{song.album_title}
-		</button>
 		<div class="detail-header">
 			<div>
 				<h2 class="song-title">
@@ -811,30 +807,6 @@
 	.job-cancel:hover {
 		color: var(--score-bad);
 		border-color: var(--score-bad);
-	}
-
-	.back-btn {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 0.87rem;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		padding: 0.55rem 1.1rem;
-		cursor: pointer;
-		border-bottom: 1px solid var(--border);
-	}
-
-	.back-btn:hover {
-		color: var(--primary);
-	}
-
-	.back-arrow {
-		font-size: 0.93rem;
 	}
 
 	.tab-bar {

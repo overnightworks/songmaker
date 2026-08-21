@@ -4,8 +4,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
+	import HeaderMenu from '$lib/components/HeaderMenu.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
-	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { APP_NAME } from '$lib/constants';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
@@ -93,13 +93,7 @@
 			{/if}
 			<a href="/" class="brand" data-text={APP_NAME}>{APP_NAME}</a>
 		</div>
-		<nav class="top-right">
-			<span class="top-username">{me.username}</span>
-			<ThemeToggle />
-			<a href="/loras">Voices</a>
-			<a href="/settings">Settings</a>
-			<button class="top-logout" onclick={handleLogout}>Logout</button>
-		</nav>
+		<HeaderMenu username={me.username} onlogout={handleLogout} />
 	</header>
 
 	<div class="app-body" class:has-player={hasPlayback}>
@@ -134,6 +128,7 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 0 16px;
+		min-width: 0;
 		z-index: 200;
 	}
 
@@ -155,6 +150,7 @@
 		font-size: 20px;
 		cursor: pointer;
 		padding: 4px;
+		flex-shrink: 0;
 	}
 
 	.back-btn:hover {
@@ -275,46 +271,6 @@
 		}
 	}
 
-	.top-right {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		font-size: 0.8rem;
-	}
-
-	.top-username {
-		color: var(--text-subtle);
-		max-width: 150px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.top-right a {
-		color: var(--text-muted);
-		text-decoration: none;
-	}
-
-	.top-right a:hover {
-		color: var(--text);
-	}
-
-	.top-logout {
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 3px;
-		color: var(--text-muted);
-		padding: 3px 8px;
-		cursor: pointer;
-		font-size: 0.75rem;
-		font-family: var(--font-body);
-	}
-
-	.top-logout:hover {
-		color: var(--score-bad);
-		border-color: var(--score-bad);
-	}
-
 	.app-body {
 		margin-top: var(--header-height);
 		height: calc(100dvh - var(--header-height));
@@ -341,10 +297,6 @@
 	}
 
 	@media (max-width: 768px) {
-		.top-username {
-			display: none;
-		}
-
 		.top-bar {
 			padding: 0 8px;
 			gap: 8px;
@@ -354,19 +306,15 @@
 			font-size: 14px;
 			letter-spacing: 1px;
 		}
+	}
 
-		.top-right {
-			gap: 6px;
-			flex-shrink: 0;
-		}
+	:global(html[data-pointer='coarse']) .top-bar {
+		padding: 0 8px;
+		gap: 8px;
+	}
 
-		.top-right a {
-			font-size: 0.7rem;
-		}
-
-		.top-logout {
-			padding: 3px 6px;
-			font-size: 0.7rem;
-		}
+	:global(html[data-pointer='coarse']) .brand {
+		font-size: 14px;
+		letter-spacing: 1px;
 	}
 </style>

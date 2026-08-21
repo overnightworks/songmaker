@@ -20,7 +20,7 @@
 		removeSongsForAlbum,
 		updateAlbumInList
 	} from '$lib/stores/player';
-	import { deselectAlbum, selectSong } from '$lib/stores/navigation';
+	import { selectSong } from '$lib/stores/navigation';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import { LIBRARY_ALBUMS_LOADING, LIBRARY_RETRY_LABEL } from '$lib/constants';
@@ -125,10 +125,6 @@
 
 {#if selectedAlbum}
 	<div class="detail-panel">
-		<button class="back-btn" onclick={deselectAlbum}>
-			<span class="back-arrow">←</span>
-			Albums
-		</button>
 		<div class="detail-header">
 			<div>
 				<h2 class="detail-title">
@@ -287,30 +283,6 @@
 
 	.action-btn-primary:hover {
 		box-shadow: 0 0 20px rgba(160, 32, 240, 0.3);
-	}
-
-	.back-btn {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 0.87rem;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		padding: 0.5rem 1rem;
-		cursor: pointer;
-		border-bottom: 1px solid var(--border);
-	}
-
-	.back-btn:hover {
-		color: var(--primary);
-	}
-
-	.back-arrow {
-		font-size: 0.93rem;
 	}
 
 	.picker-anchor {

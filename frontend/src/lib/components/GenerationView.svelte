@@ -340,11 +340,6 @@
 
 {#if generation && song}
 	<div class="detail-panel">
-		<button class="back-btn" onclick={backToSong}>
-			<span class="back-arrow">←</span>
-			{song.title}
-		</button>
-
 		<div class="detail-header">
 			<div>
 				<h2 class="detail-title">Generation {generation.generation_number}</h2>
@@ -611,30 +606,6 @@
 		width: 100%;
 		min-width: 0;
 		min-height: 0;
-	}
-
-	.back-btn {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 0.87rem;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		padding: 0.55rem 1.1rem;
-		cursor: pointer;
-		border-bottom: 1px solid var(--border);
-	}
-
-	.back-btn:hover {
-		color: var(--primary);
-	}
-
-	.back-arrow {
-		font-size: 0.93rem;
 	}
 
 	.detail-header {

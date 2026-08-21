@@ -8,7 +8,6 @@
 		removePlaylistEntry,
 		movePlaylistEntry
 	} from '$lib/stores/playlists';
-	import { deselectPlaylistView } from '$lib/stores/navigation';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { addToast } from '$lib/stores/toast';
 	import { pinQueueStream, unpinQueueStream } from '$lib/api/queue-streams';
@@ -227,10 +226,6 @@
 
 {#if playlistDetail}
 	<div class="detail-panel">
-		<button class="back-btn" onclick={deselectPlaylistView}>
-			<span class="back-arrow">←</span>
-			Playlists
-		</button>
 		<div class="detail-header">
 			<div>
 				<h2 class="detail-title">
@@ -514,30 +509,6 @@
 		border-color: var(--accent);
 		color: var(--text);
 		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-	}
-
-	.back-btn {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 0.87rem;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		padding: 0.5rem 1rem;
-		cursor: pointer;
-		border-bottom: 1px solid var(--border);
-	}
-
-	.back-btn:hover {
-		color: var(--primary);
-	}
-
-	.back-arrow {
-		font-size: 0.93rem;
 	}
 
 	.entry-list {
