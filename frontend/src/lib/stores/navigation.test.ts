@@ -196,23 +196,23 @@ describe('library history', () => {
 		expect(get(librarySurface)).toBe('detail');
 		goBack();
 		expect(get(selectedSongId)).toBeNull();
-		expect(get(selectedAlbumId)).toBe('a1');
-		expect(get(librarySurface)).toBe('detail');
-		goBack();
 		expect(get(selectedAlbumId)).toBeNull();
+		expect(get(librarySurface)).toBe('browse');
 		expect(get(librarySection)).toBe('playlists');
 		expect(window.location.pathname).toBe('/');
 		cleanup();
 	});
 
-	it('goBack from a generation deep-link keeps the song when history has no predecessor', () => {
+	it('goBack from a generation deep-link restores the library root when history has no predecessor', () => {
 		history.replaceState(null, '', '/?song=s1&gen=g1');
 		selectedSongId.set('s1');
 		selectedGenerationId.set('g1');
 		const cleanup = initNavigation();
 		goBack();
-		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedSongId)).toBeNull();
 		expect(get(selectedGenerationId)).toBeNull();
+		expect(get(librarySurface)).toBe('browse');
+		expect(window.location.pathname).toBe('/');
 		cleanup();
 	});
 
