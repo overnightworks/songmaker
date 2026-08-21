@@ -196,6 +196,7 @@ def test_max_bigint_replay_preserves_cursor_and_sequence_exactly(tmp_path: Path)
         2,
     )
     assert frames[0] == {
+        "id": str(POSTGRES_BIGINT_MAX - 1),
         "event": "hello",
         "data": {"high_water_mark": str(POSTGRES_BIGINT_MAX)},
     }
@@ -252,6 +253,7 @@ def test_replay_is_ordered_bounded_to_handshake_then_goes_live(tmp_path: Path) -
         4,
     )
     assert frames[0] == {
+        "id": "0",
         "event": "hello",
         "data": {"high_water_mark": "2"},
     }
@@ -259,6 +261,34 @@ def test_replay_is_ordered_bounded_to_handshake_then_goes_live(tmp_path: Path) -
     assert [frame["data"]["sequence"] for frame in frames[1:]] == ["1", "2", "3"]
     assert "user_id" not in frames[1]["data"]
     assert "song_id" not in frames[1]["data"]
+
+
+def test_replay_hello_reasserts_cursor_before_any_replay_frame(tmp_path: Path) -> None:
+    clients, factory, users = _authenticated_clients(tmp_path)
+    _create_event(factory, users["alice"], 1)
+    _create_event(factory, users["alice"], 2)
+    ctx = clients["alice"].app.state.ctx
+
+    async def _reconnect_once() -> dict:
+        generator = resource_api._resource_event_generator(
+            ctx,
+            users["alice"],
+            1,
+            2,
+            1,
+        )
+        hello = _parse_sse(await anext(generator))
+        await generator.aclose()
+        return hello
+
+    first_hello = asyncio.run(_reconnect_once())
+    second_hello = asyncio.run(_reconnect_once())
+
+    assert first_hello == second_hello == {
+        "id": "1",
+        "event": "hello",
+        "data": {"high_water_mark": "2"},
+    }
 
 
 @pytest.mark.parametrize(
@@ -287,6 +317,7 @@ def test_handshake_gaps_emit_exactly_one_resync_with_data(
         2,
     )
     assert frames[0] == {
+        "id": str(last_event_id),
         "event": "hello",
         "data": {"high_water_mark": str(high_water_mark)},
     }
@@ -330,7 +361,7 @@ def test_gap_resync_advances_to_live_without_a_second_resync(tmp_path: Path) -> 
         "resync",
         "generation.created",
     ]
-    assert [frame.get("id") for frame in frames] == [None, "2", "3"]
+    assert [frame.get("id") for frame in frames] == ["0", "2", "3"]
 
 
 def test_internal_replay_hole_resyncs_before_delivering_later_rows(tmp_path: Path) -> None:
@@ -761,8 +792,15 @@ def test_outer_app_deadline_cancels_blocked_send_and_schedules_lease_release(
     ]
     assert len(deadline_middleware) == 1
     assert app.user_middleware[0] is deadline_middleware[0]
-    deadline_middleware[0].kwargs["deadline_seconds"] = 0.5
-    app.middleware_stack = None
+    app.middleware_stack = app.build_middleware_stack()
+    runtime_middleware = app.middleware_stack
+    while runtime_middleware is not None and not isinstance(
+        runtime_middleware,
+        ResourceStreamDeadlineMiddleware,
+    ):
+        runtime_middleware = getattr(runtime_middleware, "app", None)
+    assert isinstance(runtime_middleware, ResourceStreamDeadlineMiddleware)
+    runtime_middleware.deadline_seconds = 0.5
 
     async def _run() -> float:
         body_send_started = asyncio.Event()

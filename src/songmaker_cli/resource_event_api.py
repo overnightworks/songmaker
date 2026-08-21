@@ -169,7 +169,7 @@ async def _resource_event_generator(
     yield format_sse(
         "hello",
         ResourceHelloEvent.from_high_water_mark(high_water_mark),
-        event_id=high_water_mark if fresh else None,
+        event_id=high_water_mark if fresh else last_event_id,
     )
 
     cursor = high_water_mark if last_event_id is None else last_event_id

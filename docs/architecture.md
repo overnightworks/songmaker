@@ -214,7 +214,8 @@ ledger.
 `GET /api/resource-events/stream` is the authenticated read side. Its auth check and
 handshake use one function-local DB session that closes before the response begins;
 polls use separate short sessions. A fresh stream sends `hello` with `id: H`. A
-reconnect sends `hello` without an ID, replays only `L < sequence <= H`, then becomes
+reconnect reasserts its existing cursor with `hello` and `id: L`, replays only
+`L < sequence <= H`, then becomes
 live. Missing retained history, an internal sequence hole, or `L > H` produces one
 `resync` at `H`. Heartbeats are SSE comments. Every connection ends after at most 60
 seconds so native EventSource reconnect rechecks the session. Sequence and high-water
