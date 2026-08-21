@@ -321,6 +321,7 @@ def test_shared_playlist_queue_stream_snapshot_and_audio(
     data = resp.json()
     assert len(data["tracks"]) == 2
     assert [track["entry_id"] for track in data["tracks"]] == ["pe1", "pe2"]
+    assert all(track["lyrics"] is None for track in data["tracks"])
     assert data["tracks"][0]["audio_url"].startswith(f"/shared/playlist/{slug}/audio/")
     second = public.post(f"/shared/playlist/{slug}/stream")
     assert second.status_code == 200

@@ -1,4 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
+import { goto } from '$app/navigation';
 import { fetchAlbum } from '$lib/api/albums';
 import {
 	selectedSongId,
@@ -226,6 +227,14 @@ export function navigateToSongTab(tab: DetailTab): void {
 
 export function switchTab(tab: DetailTab): void {
 	detailTab.set(tab);
+}
+
+export async function revealPlayingSong(song: SongItem, generationId: string): Promise<void> {
+	if (!isLibraryWorkspacePath(window.location.pathname)) {
+		await goto('/');
+	}
+	selectSong(song.id, song);
+	selectedGenerationId.set(generationId);
 }
 
 export function goBack(): void {

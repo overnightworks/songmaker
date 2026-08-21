@@ -273,6 +273,7 @@ def _content_hash(
             source.key,
             source.entry_id or "",
             gen.id,
+            gen.version_id or "",
             gen.mp3_path or "",
             source.audio_url,
             str(prepared.size),
@@ -483,6 +484,18 @@ def run_ffmpeg_concat(concat_path: Path, output_path: Path) -> None:
         detail = (exc.stderr or exc.stdout or "").strip()
         log.warning("ffmpeg queue stream build failed: %s", detail)
         raise HTTPException(422, "Could not build queue stream") from exc
+
+
+def public_queue_stream_manifest(
+    snapshot: QueueStreamManifestResponse,
+) -> QueueStreamManifestResponse:
+    return snapshot.model_copy(
+        update={
+            "tracks": [
+                track.model_copy(update={"lyrics": None}) for track in snapshot.tracks
+            ]
+        }
+    )
 
 
 def _stream_dir(ctx: AppContext) -> Path:

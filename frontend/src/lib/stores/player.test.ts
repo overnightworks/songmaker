@@ -14,6 +14,9 @@ import { toasts } from '$lib/stores/toast';
 import { QUEUE_STREAM_UNPLAYABLE_START_DETAIL, QUEUE_TAKE_MISSING_TOAST } from '$lib/constants';
 import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn()
+}));
 vi.mock('$lib/api/client', () => ({
 	createQueueStreamSnapshot: vi.fn(),
 	createLibraryQueueStreamSnapshot: vi.fn(),
@@ -368,17 +371,18 @@ describe('playback dispatch', () => {
 		);
 	});
 
-	it('navigateToPlaying selects the playing song', () => {
+	it('navigateToPlaying selects the playing song', async () => {
 		const song = makeSong();
 		songList.set([song]);
 		playGeneration(makeGen(), song);
 		selectedAlbumId.set(null);
 		selectedSongId.set(null);
 
-		navigateToPlaying();
+		await navigateToPlaying();
 
 		expect(get(selectedAlbumId)).toBe('a1');
 		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedGenerationId)).toBe('g1');
 	});
 
 	it('navigateToPlaying does nothing with no playback', () => {

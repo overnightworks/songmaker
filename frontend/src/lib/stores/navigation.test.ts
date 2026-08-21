@@ -25,6 +25,9 @@ const fetchAlbum = vi.fn();
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
 
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn()
+}));
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
@@ -79,6 +82,7 @@ import {
 	isLibraryWorkspacePath,
 	openLibraryCreate,
 	resetNavigationForTests,
+	revealPlayingSong,
 	selectAlbumOverview,
 	selectLibrarySection,
 	selectSong
@@ -290,6 +294,15 @@ describe('library history', () => {
 		expect(isLibraryWorkspacePath('/')).toBe(true);
 		expect(isLibraryWorkspacePath('/loras')).toBe(false);
 		expect(isLibraryWorkspacePath('/settings')).toBe(false);
+	});
+
+	it('revealPlayingSong opens library detail for the playing take', async () => {
+		const cleanup = initNavigation();
+		await revealPlayingSong(song(), 'g1');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedGenerationId)).toBe('g1');
+		expect(get(librarySurface)).toBe('detail');
+		cleanup();
 	});
 
 	it('hydrates a search-only song and its album into the library', async () => {

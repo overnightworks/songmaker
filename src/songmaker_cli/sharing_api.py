@@ -36,6 +36,7 @@ from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
     build_queue_stream_snapshot,
     load_queue_stream_manifest,
+    public_queue_stream_manifest,
     queue_stream_audio_path,
     track_source_from_generation,
 )
@@ -262,7 +263,7 @@ def get_shared_album_stream(
         stream_url="",
     )
     snapshot.stream_url = f"/shared/queue-streams/{snapshot.snapshot_id}/audio"
-    return snapshot
+    return public_queue_stream_manifest(snapshot)
 
 
 @router.get("/shared/{slug}/audio/{filename:path}")
@@ -450,7 +451,7 @@ def get_shared_playlist_stream(
         stream_url="",
     )
     snapshot.stream_url = f"/shared/queue-streams/{snapshot.snapshot_id}/audio"
-    return snapshot
+    return public_queue_stream_manifest(snapshot)
 
 
 @router.get("/shared/playlist/{slug}/audio/{filename:path}")

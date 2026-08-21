@@ -782,10 +782,8 @@ export async function navigateToPlaying(): Promise<void> {
 		}
 		upsertSongInList(song);
 	}
-	selectedAlbumId.set(song.album_id);
-	selectedSongId.set(song.id);
-	selectedGenerationId.set(cur.generation.id);
-	await ensureGenerationsLoaded(song.id);
+	const { revealPlayingSong } = await import('./navigation');
+	await revealPlayingSong(song, cur.generation.id);
 }
 
 // --- Song/album list mutations ---
