@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import { ACESTEP_PARAM_DESCRIPTIONS } from '$lib/constants/acestep-params';
+	import { ensureCompactUiStyles } from '$lib/styles/compact-ui';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 
 	interface Props {
 		values: VersionGenerationParams;
@@ -21,6 +24,13 @@
 		hiddenParams = [],
 		maxInferenceSteps = 200
 	}: Props = $props();
+
+	let compact = $state(false);
+
+	onMount(() => {
+		ensureCompactUiStyles();
+		return subscribeCompactLayout((value) => (compact = value));
+	});
 
 	interface NumberField {
 		key: keyof VersionGenerationParams;
@@ -163,44 +173,46 @@
 	</label>
 {/snippet}
 
-<details class="param-section" open>
-	<summary class="section-label">DiT (Sound)</summary>
-	<div class="settings-grid">
-		{#each ditNumbers as f (f.key)}
-			{@render numberField(f)}
-		{/each}
-		{#each ditSelects as f (f.key)}
-			{@render selectField(f)}
-		{/each}
-		{#each ditBools as f (f.key)}
-			{@render boolField(f)}
-		{/each}
-	</div>
-</details>
+<div class="param-controls" class:compact>
+	<details class="param-section" open>
+		<summary class="section-label">DiT (Sound)</summary>
+		<div class="settings-grid">
+			{#each ditNumbers as f (f.key)}
+				{@render numberField(f)}
+			{/each}
+			{#each ditSelects as f (f.key)}
+				{@render selectField(f)}
+			{/each}
+			{#each ditBools as f (f.key)}
+				{@render boolField(f)}
+			{/each}
+		</div>
+	</details>
 
-<details class="param-section" open>
-	<summary class="section-label">LM (Lyrics)</summary>
-	<div class="settings-grid">
-		{#each lmNumbers as f (f.key)}
-			{@render numberField(f)}
-		{/each}
+	<details class="param-section" open>
+		<summary class="section-label">LM (Lyrics)</summary>
+		<div class="settings-grid">
+			{#each lmNumbers as f (f.key)}
+				{@render numberField(f)}
+			{/each}
 
-		<label class="setting full-width" title={tooltip('lm_negative_prompt')}>
-			<span>Negative Prompt</span>
-			<input
-				type="text"
-				value={values.lm_negative_prompt ?? ''}
-				placeholder="e.g. bad quality, noise"
-				title={tooltip('lm_negative_prompt')}
-				oninput={(e) => setParam('lm_negative_prompt', e.currentTarget.value || undefined)}
-			/>
-		</label>
+			<label class="setting full-width" title={tooltip('lm_negative_prompt')}>
+				<span>Negative Prompt</span>
+				<input
+					type="text"
+					value={values.lm_negative_prompt ?? ''}
+					placeholder="e.g. bad quality, noise"
+					title={tooltip('lm_negative_prompt')}
+					oninput={(e) => setParam('lm_negative_prompt', e.currentTarget.value || undefined)}
+				/>
+			</label>
 
-		{#each lmBools as f (f.key)}
-			{@render boolField(f)}
-		{/each}
-	</div>
-</details>
+			{#each lmBools as f (f.key)}
+				{@render boolField(f)}
+			{/each}
+		</div>
+	</details>
+</div>
 
 <style>
 	.param-section {
@@ -233,10 +245,15 @@
 		gap: 0.7rem;
 	}
 
+	.param-controls.compact .settings-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.setting {
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
+		min-width: 0;
 	}
 
 	.setting span {
@@ -271,6 +288,8 @@
 		color: var(--text);
 		font-size: 1rem;
 		width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
 	}
 
 	.setting input:focus,

@@ -1,5 +1,9 @@
 <!-- APP_NAME: if the app name changes, update the legal text below and the email addresses manually -->
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { ensureCompactUiStyles } from '$lib/styles/compact-ui';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+
 	interface Props {
 		onback?: () => void;
 		initialSection?: string;
@@ -8,13 +12,19 @@
 	let { onback, initialSection = 'impressum' }: Props = $props();
 	let userOverride: string | null = $state(null);
 	let section = $derived(userOverride ?? initialSection);
+	let compact = $state(false);
+
+	onMount(() => {
+		ensureCompactUiStyles();
+		return subscribeCompactLayout((value) => (compact = value));
+	});
 
 	function switchSection(s: string) {
 		userOverride = s;
 	}
 </script>
 
-<div class="legal-content">
+<div class="legal-content" class:compact>
 	<div class="legal-tabs">
 		{#if onback}
 			<button class="back-arrow" onclick={onback} aria-label="Back">←</button>
@@ -224,6 +234,9 @@
 <style>
 	.legal-content {
 		max-width: 640px;
+		width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
 		padding: 2rem;
 		color: var(--text, #e0e0e0);
 		font-family: var(--font-body, 'Open Sans', sans-serif);
@@ -231,9 +244,14 @@
 		overflow-y: auto;
 	}
 
+	.legal-content.compact {
+		padding: 1rem;
+	}
+
 	.legal-tabs {
 		display: flex;
-		gap: 1rem;
+		flex-wrap: wrap;
+		gap: 0.5rem 1rem;
 		margin-bottom: 2rem;
 		border-bottom: 1px solid var(--border, #333);
 		padding-bottom: 0.75rem;

@@ -83,6 +83,14 @@ export const COMPACT_UI_STYLE = `.${COMPACT_SELECT_CLASS} {
 	border-bottom-left-radius: 0;
 	border-bottom-right-radius: 0;
 }
+
+.param-controls.compact .settings-grid {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.legal-content.compact .legal-tabs {
+	flex-wrap: wrap;
+}
 `;
 
 export function ensureCompactUiStyles(): void {

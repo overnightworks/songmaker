@@ -136,6 +136,9 @@
 
 <style>
 	.page {
+		width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
 		padding: 1.5rem 2rem;
 		max-width: 800px;
 	}
@@ -289,5 +292,6 @@
 		padding: 0.2rem 0;
 		font-family: monospace;
 		color: var(--text-muted);
+		overflow-wrap: anywhere;
 	}
 </style>
