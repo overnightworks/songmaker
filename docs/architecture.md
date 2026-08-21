@@ -135,7 +135,7 @@ SvelteKit single-page app. All state in Svelte stores.
 
 The API client and `types.ts` are the frontend's contract with the backend. When `src/songmaker_cli/api_models/` changes, `types.ts` must match.
 
-Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new song/playlist, playlist-picker add) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.css`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px on a coarse pointer. PlayerBar and SharedPlayer are out of this primitive's scope.
+Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new song/playlist, playlist-picker add) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.css`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). PlayerBar and SharedPlayer are out of this primitive's scope. The 320px shell keeps Logout in view by tightening header tracking; generation cards wrap pick/keep onto their own row so seed text does not paint under the rating.
 
 ### Backend (`src/songmaker_cli/`)
 

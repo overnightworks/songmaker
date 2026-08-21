@@ -22,7 +22,7 @@ const hitboxCss = `:root {
 	min-width: var(--hitbox-compact);
 	min-height: var(--hitbox-compact);
 }
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
 	[data-hitbox='frequent'] {
 		min-width: var(--hitbox-frequent);
 		min-height: var(--hitbox-frequent);
@@ -363,6 +363,7 @@ describe('frequent action hitboxes', () => {
 		const style = getComputedStyle(document.documentElement);
 		expect(style.getPropertyValue('--hitbox-frequent').trim()).toBe(`${HITBOX_FREQUENT_PX}px`);
 		expect(style.getPropertyValue('--hitbox-compact').trim()).toBe(`${HITBOX_COMPACT_PX}px`);
+		expect(hitboxCss).toContain('@media (any-pointer: coarse)');
 	});
 
 	it('names every frequent-action target and measures coarse and fine pointers', async () => {

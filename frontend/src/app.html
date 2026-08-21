@@ -7,6 +7,10 @@
 			(function () {
 				var t = localStorage.getItem('theme') || 'dark';
 				document.documentElement.dataset.theme = t;
+				var coarse =
+					typeof window.matchMedia === 'function' &&
+					window.matchMedia('(any-pointer: coarse)').matches;
+				document.documentElement.dataset.pointer = coarse ? 'coarse' : 'fine';
 			})();
 		</script>
 		%sveltekit.head%

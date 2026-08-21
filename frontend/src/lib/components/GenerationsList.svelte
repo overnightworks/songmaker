@@ -304,6 +304,7 @@
 
 	.gen-card {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.7rem;
 		padding: 0.7rem 0.8rem;
@@ -418,6 +419,9 @@
 	.gen-seed {
 		font-size: 0.7rem;
 		color: var(--text-subtle);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.model-badge {
@@ -610,6 +614,11 @@
 
 		.gen-seed {
 			font-size: 0.75rem;
+		}
+
+		.gen-actions {
+			flex-basis: 100%;
+			justify-content: flex-end;
 		}
 
 		.play-btn {

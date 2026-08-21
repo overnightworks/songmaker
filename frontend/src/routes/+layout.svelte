@@ -337,4 +337,30 @@
 			display: none;
 		}
 	}
+
+	@media (max-width: 390px) {
+		.top-bar {
+			padding: 0 8px;
+			gap: 8px;
+		}
+
+		.brand {
+			font-size: 14px;
+			letter-spacing: 1px;
+		}
+
+		.top-right {
+			gap: 6px;
+			flex-shrink: 0;
+		}
+
+		.top-right a {
+			font-size: 0.7rem;
+		}
+
+		.top-logout {
+			padding: 3px 6px;
+			font-size: 0.7rem;
+		}
+	}
 </style>

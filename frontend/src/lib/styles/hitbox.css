@@ -22,7 +22,7 @@
 	cursor: default;
 }
 
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
 	[data-hitbox='frequent'] {
 		min-width: var(--hitbox-frequent);
 		min-height: var(--hitbox-frequent);
