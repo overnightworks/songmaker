@@ -517,6 +517,26 @@ describe('resource sync owner', () => {
 		expect(fetchCalls.length).toBe(before);
 	});
 
+	it('counts bootstrap failures across hello frames until retry is shown', async () => {
+		const gate = deferred<boolean>();
+		const { controller, sources, store } = setup({
+			loadSnapshot: () => gate.promise
+		});
+		controller.start();
+		const ready = controller.waitForReady();
+		for (let i = 0; i < RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT; i++) {
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			latestSource(sources).error();
+			await flush();
+		}
+		gate.resolve(true);
+		await flush();
+		expect(await ready).toBe(false);
+		expect(get(store).status).toBe('error');
+		expect(get(store).ready).toBe(false);
+	});
+
 	it('persistent stream errors during bootstrap become a retryable error', async () => {
 		const { controller, sources, store } = setup();
 		controller.start();

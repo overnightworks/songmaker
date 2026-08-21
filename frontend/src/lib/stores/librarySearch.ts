@@ -13,6 +13,7 @@ import {
 } from '$lib/constants';
 import {
 	albumList,
+	overlaySongList,
 	removeSongFromList,
 	selectedGenerationId,
 	selectedSongId,
@@ -249,10 +250,12 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 		if (generation !== browseGeneration) return false;
 		if (reset) {
 			albumList.set(albumPage.items);
-			songList.set(songPage.items);
+			songList.set(overlaySongList(get(songList), songPage.items));
 		} else {
 			albumList.set(dedupeById([...get(albumList), ...albumPage.items]));
-			songList.set(dedupeById([...get(songList), ...songPage.items]));
+			songList.set(
+				dedupeById([...get(songList), ...overlaySongList(get(songList), songPage.items)])
+			);
 		}
 		libraryBrowse.set({
 			status: 'ready',

@@ -227,7 +227,9 @@ history restore inside a new snapshot epoch. Events after the epoch watermark ar
 buffered until the snapshot merges, then the owner is `live`. Targeted
 `generation.created` invalidations update the selected song, loaded browse songs,
 and loaded search hits through explicit adapters; events for songs that are still
-in flight stay queued until those songs enter the loaded set. History restore
+in flight stay queued until those songs enter the loaded set. Browse and album
+list writes keep already-loaded takes when a later summary would otherwise wipe
+them. History restore
 awaits every expanded album before the snapshot is ready so those tracks are in
 the loaded set for the buffer flush. Window `focus` and document `visibilitychange`
 revalidate the selected song and any failed refresh, not the whole browse page —

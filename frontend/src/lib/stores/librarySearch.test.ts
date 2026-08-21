@@ -365,6 +365,57 @@ describe('loadLibraryBrowse', () => {
 		});
 		expect(get(libraryBrowse).songOffset).toBe(2);
 	});
+
+	it('keeps loaded generations when browse resets over a summary page', async () => {
+		songList.set([
+			song({
+				id: 's-page',
+				generation_count: 1,
+				generations: [
+					{
+						id: 'g1',
+						song_id: 's-page',
+						version_id: 'v1',
+						version_number: 1,
+						generation_number: 1,
+						mp3_path: 'g1.mp3',
+						wav_path: null,
+						seed: 1,
+						status: 'completed',
+						is_archived: false,
+						is_picked: false,
+						is_kept: false,
+						is_shared: false,
+						share_slug: null,
+						model_mode: 'sft',
+						whisper_text: null,
+						whisper_cues: null,
+						version_lyrics: null,
+						scores: null,
+						generation_params: null,
+						created_at: '2026-01-01T00:00:00+00:00'
+					}
+				]
+			})
+		]);
+		fetchAlbums.mockResolvedValue({
+			items: [album()],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		fetchSongs.mockResolvedValue({
+			items: [song({ id: 's-page', generation_count: 0, generations: [] })],
+			total: 1,
+			offset: 0,
+			limit: 200,
+			has_more: false
+		});
+		await loadLibraryBrowse({ reset: true });
+		expect(get(songList)[0].generations.map((item) => item.id)).toEqual(['g1']);
+		expect(get(songList)[0].generation_count).toBe(1);
+	});
 });
 
 describe('groupSearchHits', () => {

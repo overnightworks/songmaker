@@ -261,7 +261,6 @@ export class ResourceSyncController {
 			await this.recoverLiveConnection();
 			return;
 		}
-		this.bootstrapErrors = 0;
 		await this.beginEpoch(hello.high_water_mark);
 	}
 
@@ -277,7 +276,6 @@ export class ResourceSyncController {
 		this.store.update((state) => ({ ...state, highWaterMark: resync.high_water_mark }));
 		this.invalidateInflightProbes();
 		this.syncedOnce = false;
-		this.bootstrapErrors = 0;
 		await this.beginEpoch(resync.high_water_mark);
 	}
 
@@ -377,6 +375,7 @@ export class ResourceSyncController {
 				return;
 			}
 			this.syncedOnce = true;
+			this.bootstrapErrors = 0;
 			this.promoteDeferredSongs();
 			if (this.pendingSongIds.size > 0) {
 				await this.flushPending(epoch, true);

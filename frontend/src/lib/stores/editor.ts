@@ -5,7 +5,7 @@ import {
 	deleteVersion as apiDeleteVersion,
 	fetchSong
 } from '$lib/api/client';
-import { replaceSongInList } from '$lib/stores/player';
+import { replaceSongInList, selectedSongId } from '$lib/stores/player';
 import type { SongItem, VersionGenerationParams, VersionItem } from '$lib/api/types';
 import type { ApplyData } from '$lib/utils/chat-context';
 
@@ -216,7 +216,9 @@ export async function handleDeleteVersion(
 		await apiDeleteVersion(versionId, deleteGenerations);
 		const updated = await fetchSong(songId);
 		replaceSongInList(updated);
+		if (get(selectedSongId) !== songId) return;
 		await loadVersions(songId);
+		if (get(selectedSongId) !== songId) return;
 		if (get(versions)[0]) loadVersion(0);
 		else loadSongData(updated);
 	} catch {

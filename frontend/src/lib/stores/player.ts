@@ -787,8 +787,31 @@ export async function navigateToPlaying(): Promise<void> {
 }
 
 // --- Song/album list mutations ---
+export function retainRicherSong(current: SongItem | undefined, incoming: SongItem): SongItem {
+	if (!current) return incoming;
+	const incomingLoaded = incoming.generations.length > 0;
+	const currentLoaded = current.generations.length > 0;
+	if (currentLoaded && !incomingLoaded) {
+		return {
+			...incoming,
+			generations: current.generations,
+			generation_count: Math.max(
+				current.generation_count,
+				incoming.generation_count,
+				current.generations.length
+			)
+		};
+	}
+	return incoming;
+}
+
+export function overlaySongList(existing: SongItem[], incoming: SongItem[]): SongItem[] {
+	const current = new Map(existing.map((song) => [song.id, song]));
+	return incoming.map((song) => retainRicherSong(current.get(song.id), song));
+}
+
 export function replaceSongInList(song: SongItem): void {
-	songList.update((list) => list.map((s) => (s.id === song.id ? song : s)));
+	songList.update((list) => list.map((s) => (s.id === song.id ? retainRicherSong(s, song) : s)));
 }
 
 // Replace the song if the list already holds it, otherwise append it. A song opened
@@ -797,7 +820,7 @@ export function replaceSongInList(song: SongItem): void {
 export function upsertSongInList(song: SongItem): void {
 	songList.update((list) =>
 		list.some((s) => s.id === song.id)
-			? list.map((s) => (s.id === song.id ? song : s))
+			? list.map((s) => (s.id === song.id ? retainRicherSong(s, song) : s))
 			: [...list, song]
 	);
 }
@@ -857,11 +880,10 @@ function albumSongsErrorMessage(err: unknown): string {
 function mergeAlbumSongs(list: SongItem[], incoming: SongItem[]): SongItem[] {
 	let next = list;
 	for (const song of incoming) {
-		const current = next.find((item) => item.id === song.id);
-		const merged =
-			current && current.generations.length > 0 && song.generations.length === 0
-				? { ...song, generations: current.generations }
-				: song;
+		const merged = retainRicherSong(
+			next.find((item) => item.id === song.id),
+			song
+		);
 		next = next.some((item) => item.id === merged.id)
 			? next.map((item) => (item.id === merged.id ? merged : item))
 			: [...next, merged];

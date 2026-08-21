@@ -39,6 +39,8 @@ import {
 	albumSongsLoad,
 	loadSongsForAlbum,
 	upsertSongInList,
+	overlaySongList,
+	retainRicherSong,
 	filteredSongs,
 	handlePlaybackEnded,
 	navigateToPlaying,
@@ -266,6 +268,36 @@ describe('browsing state', () => {
 				.map((item) => item.id)
 				.sort()
 		).toEqual(['s-hidden', 's-page']);
+	});
+
+	it('retainRicherSong keeps loaded takes when a summary arrives later', () => {
+		const loaded = makeSong({
+			id: 's1',
+			generation_count: 1,
+			generations: [makeGen()]
+		});
+		const summary = makeSong({
+			id: 's1',
+			title: 'Updated title',
+			generation_count: 0,
+			generations: []
+		});
+		const merged = retainRicherSong(loaded, summary);
+		expect(merged.title).toBe('Updated title');
+		expect(merged.generation_count).toBe(1);
+		expect(merged.generations).toHaveLength(1);
+	});
+
+	it('overlaySongList preserves loaded takes across a browse reset', () => {
+		const existing = [
+			makeSong({
+				id: 's1',
+				generation_count: 1,
+				generations: [makeGen()]
+			})
+		];
+		const incoming = [makeSong({ id: 's1', generation_count: 0, generations: [] })];
+		expect(overlaySongList(existing, incoming)[0].generations).toHaveLength(1);
 	});
 
 	it('upsertSongInList appends an absent song and replaces a present one', () => {

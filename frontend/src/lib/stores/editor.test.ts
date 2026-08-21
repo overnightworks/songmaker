@@ -8,9 +8,13 @@ vi.mock('$lib/api/client', () => ({
 	fetchSong: vi.fn()
 }));
 
-vi.mock('$lib/stores/player', async () => ({
-	replaceSongInList: vi.fn()
-}));
+vi.mock('$lib/stores/player', async () => {
+	const { writable } = await import('svelte/store');
+	return {
+		replaceSongInList: vi.fn(),
+		selectedSongId: writable('s1')
+	};
+});
 
 import {
 	editGenParams,
@@ -35,6 +39,7 @@ import {
 	handleApply,
 	dismissAppliedDiff
 } from './editor';
+import { selectedSongId } from '$lib/stores/player';
 import type { SongItem, VersionItem } from '$lib/api/types';
 
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
@@ -195,6 +200,23 @@ describe('handleDeleteVersion', () => {
 
 		expect(deleteVersion).toHaveBeenCalledWith('v1', false);
 		expect(get(editLyrics)).toBe('remaining lyrics');
+	});
+
+	it('does not overwrite another song editor if the user navigates away', async () => {
+		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
+		loadSongData(makeSong({ lyrics: 'keep me' }));
+		setDraftLyrics('unsaved on s2');
+		selectedSongId.set('s2');
+		const delayed = new Promise<SongItem>((resolve) => {
+			setTimeout(() => resolve(makeSong({ lyrics: 'deleted leftover' })), 0);
+		});
+		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
+		vi.mocked(fetchSong).mockReturnValueOnce(delayed);
+		vi.mocked(fetchVersions).mockResolvedValueOnce([makeVersion({ lyrics: 'should not apply' })]);
+
+		await handleDeleteVersion('s1', 'v1', false);
+
+		expect(get(editLyrics)).toBe('unsaved on s2');
 	});
 
 	it('shows error on failure', async () => {
