@@ -2,8 +2,13 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { GenerationItem, SongItem, VersionGenerationParams } from '$lib/api/types';
+import type { AlbumItem, GenerationItem, SongItem, VersionGenerationParams } from '$lib/api/types';
 import {
+	COMPACT_LAYOUT_MEDIA,
+	HITBOX_FREQUENT_PX,
+	LIBRARY_NARROW_MEDIA,
+	SONG_NEXT_LABEL,
+	SONG_PREVIOUS_LABEL,
 	SONG_SPLIT_PANE_GAP_PX,
 	SONG_SPLIT_PANE_MIN_PX,
 	SONG_SURFACE_COWRITER,
@@ -14,9 +19,23 @@ import {
 	TAKE_REPAINT_LABEL,
 	canSplitSongPanes
 } from '$lib/constants';
+import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import { editGenParams, pinnedSeed } from '$lib/stores/editor';
-import { detailTab, persistLibraryHistory, resetNavigationForTests } from '$lib/stores/navigation';
-import { selectedGenerationId, selectedSongId, songList } from '$lib/stores/player';
+import {
+	detailTab,
+	initNavigation,
+	persistLibraryHistory,
+	resetNavigationForTests,
+	selectSong,
+	switchTab
+} from '$lib/stores/navigation';
+import {
+	albumList,
+	selectedAlbumId,
+	selectedGenerationId,
+	selectedSongId,
+	songList
+} from '$lib/stores/player';
 import { clearSelection, toggleSelection } from '$lib/stores/selection';
 import { pendingSource } from '$lib/stores/source';
 
@@ -24,7 +43,18 @@ vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
 }));
 vi.mock('$lib/api/albums', () => ({
-	fetchAlbum: vi.fn(),
+	fetchAlbum: vi.fn().mockResolvedValue({
+		id: 'a-local',
+		title: 'Local Album',
+		artist: 'Artist',
+		subtitle: '',
+		year: '',
+		colors: {},
+		song_count: 1,
+		is_shared: false,
+		share_slug: null,
+		created_at: '2026-01-01T00:00:00+00:00'
+	}),
 	fetchAlbums: vi.fn()
 }));
 vi.mock('$lib/api/songs', () => ({
@@ -37,8 +67,36 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		...actual,
 		fetchVersions: vi.fn().mockResolvedValue([]),
 		fetchHealth: vi.fn().mockResolvedValue(null),
-		fetchSong: vi.fn(),
-		fetchSongs: vi.fn(),
+		fetchSong: vi.fn(async (id: string) => ({
+			id,
+			title: 'Local Only',
+			album_id: 'a-local',
+			album_title: 'Local Album',
+			artist: 'Artist',
+			track_number: 1,
+			vocal_language: 'en',
+			lyrics: 'verse',
+			prompt: 'dark folk',
+			bpm: 120,
+			audio_duration: 180,
+			key_scale: 'Am',
+			generation_params: null,
+			version_count: 1,
+			generation_count: 0,
+			best_scores: null,
+			best_rating: null,
+			generations: [],
+			created_at: '2026-01-01T00:00:00+00:00',
+			is_shared: false,
+			share_slug: null
+		})),
+		fetchSongs: vi.fn().mockResolvedValue({
+			items: [],
+			total: 0,
+			offset: 0,
+			limit: 200,
+			has_more: false
+		}),
 		fetchConversations: vi.fn().mockResolvedValue([]),
 		fetchCowriterSettings: vi.fn().mockResolvedValue({ provider: 'claude', model: '' }),
 		fetchMemory: vi.fn().mockResolvedValue(null),
@@ -112,8 +170,12 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 	};
 }
 
-async function renderView(): Promise<HTMLElement> {
+async function renderView(options: { widthPx?: number } = {}): Promise<HTMLElement> {
 	const target = document.createElement('div');
+	if (options.widthPx !== undefined) {
+		target.style.width = `${options.widthPx}px`;
+		target.style.maxWidth = `${options.widthPx}px`;
+	}
 	document.body.append(target);
 	mounted.push(mount(SongDetailView, { target }));
 	await tick();
@@ -140,6 +202,60 @@ function clickNamed(target: HTMLElement, name: string): void {
 	button.click();
 }
 
+function stubLibraryMedia(options: { narrow: boolean; compact?: boolean }): void {
+	vi.stubGlobal(
+		'matchMedia',
+		vi.fn((query: string) => ({
+			matches:
+				query === LIBRARY_NARROW_MEDIA
+					? options.narrow
+					: query === COMPACT_LAYOUT_MEDIA
+						? (options.compact ?? options.narrow)
+						: false,
+			media: query,
+			onchange: null,
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+			dispatchEvent: vi.fn()
+		}))
+	);
+}
+
+function px(value: string): number {
+	const resolved = value.startsWith('var(')
+		? getComputedStyle(document.documentElement)
+				.getPropertyValue(value.slice('var('.length, -1).trim())
+				.trim()
+		: value;
+	const parsed = Number.parseFloat(resolved);
+	return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function album(): AlbumItem {
+	return {
+		id: 'a-local',
+		title: 'Local Album',
+		artist: 'Artist',
+		subtitle: '',
+		year: '',
+		colors: {},
+		song_count: 3,
+		is_shared: false,
+		share_slug: null,
+		created_at: '2026-01-01T00:00:00+00:00'
+	};
+}
+
+function albumSongs(): SongItem[] {
+	return [
+		song({ id: 's-first', title: 'First', track_number: 1 }),
+		song({ id: 's1', title: 'Local Only', track_number: 2 }),
+		song({ id: 's-last', title: 'Last', track_number: 3 })
+	];
+}
+
 beforeEach(() => {
 	resetNavigationForTests();
 	pendingSource.set(null);
@@ -159,7 +275,9 @@ afterEach(async () => {
 	clearSelection();
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
+	selectedAlbumId.set(null);
 	songList.set([]);
+	albumList.set([]);
 	delete document.documentElement.dataset.pointer;
 	vi.unstubAllGlobals();
 });
@@ -419,5 +537,130 @@ describe('recipe params from a take', () => {
 		expect(params.guidance_scale).toBe(1.5);
 		expect((params as Record<string, unknown>).task_type).toBeUndefined();
 		expect((params as Record<string, unknown>).seed).toBeUndefined();
+	});
+});
+
+describe('song header album rail', () => {
+	beforeEach(() => {
+		const sheet = document.createElement('style');
+		sheet.dataset.hitboxStyles = 'true';
+		sheet.textContent = hitboxCss;
+		document.head.append(sheet);
+	});
+
+	afterEach(() => {
+		document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
+	});
+
+	it('hides previous/next when browse is shown', async () => {
+		stubLibraryMedia({ narrow: false, compact: true });
+		document.documentElement.dataset.pointer = 'coarse';
+		songList.set(albumSongs());
+		const target = await renderView();
+		expect(target.querySelector('.song-rail')).toBeNull();
+		expect(target.querySelector(`[aria-label="${SONG_PREVIOUS_LABEL}"]`)).toBeNull();
+		expect(target.querySelector(`[aria-label="${SONG_NEXT_LABEL}"]`)).toBeNull();
+		expect(target.querySelector('span.song-album')?.textContent).toBe('Local Album');
+	});
+
+	it('shows album title and disabled ends without wrapping through neighbors', async () => {
+		stubLibraryMedia({ narrow: true });
+		albumList.set([album()]);
+		songList.set(albumSongs());
+		selectedSongId.set('s1');
+		const target = await renderView();
+		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
+		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		if (!prev || !next) throw new Error('Expected previous and next');
+		expect(prev.disabled).toBe(false);
+		expect(next.disabled).toBe(false);
+		expect(prev.getAttribute('data-hitbox')).toBe('frequent');
+		expect(next.getAttribute('data-hitbox')).toBe('frequent');
+		expect(target.querySelector('button.song-album')?.textContent).toBe('Local Album');
+
+		document.documentElement.dataset.pointer = 'coarse';
+		expect(px(getComputedStyle(prev).minWidth)).toBe(HITBOX_FREQUENT_PX);
+		expect(px(getComputedStyle(next).minWidth)).toBe(HITBOX_FREQUENT_PX);
+
+		selectedSongId.set('s-first');
+		await tick();
+		expect(prev.disabled).toBe(true);
+		expect(next.disabled).toBe(false);
+
+		selectedSongId.set('s-last');
+		await tick();
+		expect(prev.disabled).toBe(false);
+		expect(next.disabled).toBe(true);
+	});
+
+	it('keeps previous and next present and disabled on a one-song album', async () => {
+		stubLibraryMedia({ narrow: true });
+		const target = await renderView();
+		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
+		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		if (!prev || !next) throw new Error('Expected previous and next');
+		expect(prev.disabled).toBe(true);
+		expect(next.disabled).toBe(true);
+	});
+
+	it('replaces the song and keeps Recipe when next is clicked', async () => {
+		stubLibraryMedia({ narrow: true });
+		const songs = albumSongs();
+		albumList.set([album()]);
+		songList.set(songs);
+		selectedSongId.set('s1');
+		const cleanup = initNavigation();
+		selectSong('s1');
+		switchTab('edit');
+		const index = history.state.index;
+		const push = vi.spyOn(history, 'pushState');
+		const target = await renderView();
+		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		if (!next) throw new Error('Expected next');
+		next.click();
+		await tick();
+		expect(push).not.toHaveBeenCalled();
+		expect(history.state.index).toBe(index);
+		expect(get(selectedSongId)).toBe('s-last');
+		expect(get(detailTab)).toBe('edit');
+		push.mockRestore();
+		cleanup();
+	});
+
+	it('keeps the narrow coarse rail inside 320px with a long album title', async () => {
+		stubLibraryMedia({ narrow: true });
+		document.documentElement.dataset.pointer = 'coarse';
+		const longAlbumTitle =
+			'The Unreasonably Long Anniversary Collection From the Other Side of the Harbor';
+		songList.set(albumSongs().map((item) => ({ ...item, album_title: longAlbumTitle })));
+		selectedSongId.set('s1');
+		const target = await renderView({ widthPx: 320 });
+		const header = target.querySelector('.detail-header');
+		const rail = target.querySelector('.song-rail');
+		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
+		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
+		if (!(header instanceof HTMLElement) || !(rail instanceof HTMLElement) || !prev || !next) {
+			throw new Error('Expected header song rail');
+		}
+		expect(rail.querySelector('button.song-album')?.textContent).toBe(longAlbumTitle);
+		expect(px(getComputedStyle(prev).minWidth)).toBe(HITBOX_FREQUENT_PX);
+		expect(px(getComputedStyle(next).minWidth)).toBe(HITBOX_FREQUENT_PX);
+		expect(header.scrollWidth).toBeLessThanOrEqual(320);
+		expect(rail.scrollWidth).toBeLessThanOrEqual(320);
+	});
+
+	it('opens album overview from the album title', async () => {
+		stubLibraryMedia({ narrow: true });
+		selectedAlbumId.set('a-local');
+		const cleanup = initNavigation();
+		selectSong('s1');
+		const target = await renderView();
+		const album = target.querySelector<HTMLButtonElement>('button.song-album');
+		if (!album) throw new Error('Expected album control');
+		album.click();
+		await tick();
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(selectedAlbumId)).toBe('a-local');
+		cleanup();
 	});
 });

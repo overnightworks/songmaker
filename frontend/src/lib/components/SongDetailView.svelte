@@ -37,6 +37,7 @@
 		addSongsToList
 	} from '$lib/stores/player';
 	import {
+		albumTrackNeighbors,
 		selectGeneration,
 		navigateToSongTab,
 		backToAlbum,
@@ -44,7 +45,8 @@
 		persistLibraryHistory,
 		detailTab,
 		openRecipeSurface,
-		openTakesSurface
+		openTakesSurface,
+		selectNeighborSong
 	} from '$lib/stores/navigation';
 	import {
 		isDirty,
@@ -67,6 +69,9 @@
 	import type { GenerationItem } from '$lib/api/types';
 	import {
 		EXPIRY_WARN_DAYS,
+		LIBRARY_NARROW_MEDIA,
+		SONG_NEXT_LABEL,
+		SONG_PREVIOUS_LABEL,
 		SONG_SPLIT_PANE_GAP_PX,
 		SONG_SPLIT_PANE_MIN_PX,
 		SONG_SURFACE_COWRITER,
@@ -84,6 +89,7 @@
 	import SongEditor from './SongEditor.svelte';
 	import CoWriterPanel from './CoWriterPanel.svelte';
 	import ActionButton from './ActionButton.svelte';
+	import Icon from './Icon.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ShareButton from './ShareButton.svelte';
@@ -108,6 +114,7 @@
 	>(null);
 	let coWriterOpen = $state(false);
 	let compact = $state(false);
+	let songRail = $state(false);
 	let split = $state(false);
 	let panesEl: HTMLElement | undefined = $state();
 	let recipePaneEl: HTMLElement | undefined = $state();
@@ -120,6 +127,9 @@
 	const song = $derived($selectedSong);
 	const inspected = $derived($selectedGeneration);
 	const songs = $derived($songList);
+	const neighbors = $derived(
+		song ? albumTrackNeighbors(song.id, songs) : { previous: null, next: null }
+	);
 	const jobs = $derived($activeJobs);
 	const tab = $derived($detailTab);
 	const recipe = $derived(tab !== 'generations');
@@ -195,6 +205,20 @@
 		return subscribeCompactLayout((value) => {
 			compact = value;
 		});
+	});
+
+	$effect(() => {
+		if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+			songRail = false;
+			return;
+		}
+		const media = window.matchMedia(LIBRARY_NARROW_MEDIA);
+		const sync = () => {
+			songRail = media.matches;
+		};
+		sync();
+		media.addEventListener('change', sync);
+		return () => media.removeEventListener('change', sync);
 	});
 
 	$effect(() => {
@@ -561,11 +585,41 @@
 		style:--song-split-gap="{SONG_SPLIT_PANE_GAP_PX}px"
 	>
 		<div class="detail-header">
-			<div>
+			<div class="song-heading">
 				<h2 class="song-title">
 					<EditableTitle value={song.title} onsave={onRenameSong} ariaLabel="Song title" />
 				</h2>
-				<span class="song-album">{song.artist}</span>
+				{#if songRail}
+					<div class="song-rail">
+						<button
+							type="button"
+							class="song-neighbor"
+							data-hitbox="frequent"
+							data-hitbox-face
+							aria-label={SONG_PREVIOUS_LABEL}
+							disabled={!neighbors.previous}
+							onclick={() => neighbors.previous && selectNeighborSong(neighbors.previous)}
+						>
+							<Icon name="skip-back" size={14} />
+						</button>
+						<button type="button" class="song-album" onclick={() => backToAlbum()}>
+							{song.album_title}
+						</button>
+						<button
+							type="button"
+							class="song-neighbor"
+							data-hitbox="frequent"
+							data-hitbox-face
+							aria-label={SONG_NEXT_LABEL}
+							disabled={!neighbors.next}
+							onclick={() => neighbors.next && selectNeighborSong(neighbors.next)}
+						>
+							<Icon name="skip-forward" size={14} />
+						</button>
+					</div>
+				{:else}
+					<span class="song-album">{song.album_title}</span>
+				{/if}
 			</div>
 			<div class="detail-actions">
 				<ShareButton
@@ -894,8 +948,16 @@
 
 	.detail-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: flex-start;
+		gap: 0.55rem;
+		min-width: 0;
+	}
+
+	.song-heading {
+		min-width: 0;
+		flex: 1 1 12rem;
 	}
 
 	.song-title {
@@ -906,15 +968,54 @@
 		letter-spacing: 0.13rem;
 	}
 
+	.song-rail {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem;
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	.song-neighbor {
+		color: var(--text-muted);
+		background: none;
+		border: none;
+	}
+
+	.song-neighbor:disabled {
+		opacity: 0.4;
+	}
+
 	.song-album {
 		font-size: 0.87rem;
 		color: var(--text-muted);
+		min-width: 0;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+
+	button.song-album {
+		flex: 1 1 auto;
+		background: none;
+		border: none;
+		padding: 0;
+		text-align: left;
+		cursor: pointer;
+		font: inherit;
+		white-space: inherit;
+	}
+
+	button.song-album:hover {
+		color: var(--primary);
 	}
 
 	.detail-actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.55rem;
 		align-items: center;
+		min-width: 0;
 	}
 
 	.status-msg {
