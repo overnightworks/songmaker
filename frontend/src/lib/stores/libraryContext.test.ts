@@ -438,6 +438,42 @@ describe('library history snapshot', () => {
 		expect(get(librarySurface)).toBe('browse');
 	});
 
+	it('awaits expanded album tracks before history restore finishes', async () => {
+		let resolveExtra: ((value: unknown) => void) | undefined;
+		fetchAlbums.mockResolvedValue(emptyPage([album(), album({ id: 'a2', title: 'Second' })]));
+		fetchSongs.mockImplementation((albumId?: string) => {
+			if (albumId === 'a2') {
+				return new Promise((resolve) => {
+					resolveExtra = resolve;
+				});
+			}
+			return Promise.resolve({
+				...emptyPage([
+					song({ id: albumId === 'a1' ? 's1' : 's-browse', album_id: albumId ?? 'a1' })
+				]),
+				limit: 200
+			});
+		});
+		let finished = false;
+		const restore = applyLibraryHistory({
+			...libraryRootState(),
+			expandedAlbumIds: ['a1', 'a2']
+		}).then((ok) => {
+			finished = true;
+			return ok;
+		});
+		await vi.waitFor(() => expect(resolveExtra).toBeTypeOf('function'));
+		expect(finished).toBe(false);
+		expect(get(songList).some((item) => item.album_id === 'a2')).toBe(false);
+		resolveExtra?.({
+			...emptyPage([song({ id: 's2', album_id: 'a2' })]),
+			limit: 200
+		});
+		expect(await restore).toBe(true);
+		expect(finished).toBe(true);
+		expect(get(songList).some((item) => item.id === 's2')).toBe(true);
+	});
+
 	it('replaces history after hydrate so a deleted playlist is not replayed', async () => {
 		history.replaceState(
 			{

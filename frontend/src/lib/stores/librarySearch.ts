@@ -292,6 +292,17 @@ export function listLoadedSongIds(): string[] {
 	return [...ids];
 }
 
+export function watchLoadedSongIds(onChange: () => void): () => void {
+	const unsubscribers = [
+		songList.subscribe(() => onChange()),
+		librarySearch.subscribe(() => onChange()),
+		selectedSongId.subscribe(() => onChange())
+	];
+	return () => {
+		for (const unsubscribe of unsubscribers) unsubscribe();
+	};
+}
+
 export function cancelLibraryDataLoads(): void {
 	if (searchTimer !== null) {
 		clearTimeout(searchTimer);

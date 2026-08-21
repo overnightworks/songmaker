@@ -226,11 +226,19 @@ return from settings — opens a native `EventSource`, waits for `hello`, and ru
 history restore inside a new snapshot epoch. Events after the epoch watermark are
 buffered until the snapshot merges, then the owner is `live`. Targeted
 `generation.created` invalidations update the selected song, loaded browse songs,
-and loaded search hits through explicit adapters; focus/visibility revalidates the
-same loaded set. Generation jobs no longer fetch the song themselves. The job
-tab still shows its success toast; other tabs update silently. Bootstrap and
-refresh failures surface one accessible Retry status. Unmount, logout, and
-401/403 on `EventSource.onerror` close the stream.
+and loaded search hits through explicit adapters; events for songs that are still
+in flight stay queued until those songs enter the loaded set. History restore
+awaits every expanded album before the snapshot is ready so those tracks are in
+the loaded set for the buffer flush. Window `focus` and document `visibilitychange`
+revalidate the same loaded set without resetting the open song editor; the editor
+reloads only when the selected song id changes or the user explicitly applies a
+fresh song. A live refresh error stays visible across the 60-second reconnect
+and is retried on the next `hello`; a later successful fetch clears Retry.
+Generation jobs no longer fetch the song themselves. The job tab still shows its
+success toast; other tabs update silently. Bootstrap failures retry a bounded
+number of times, then surface one accessible Retry status rather than hanging on
+`Loading...`. Unmount, logout, and 401/403 on `EventSource.onerror` close the
+stream.
 
 ## API Endpoints
 

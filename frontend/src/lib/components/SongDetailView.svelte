@@ -89,11 +89,19 @@
 	const isSaving = $derived($saving);
 	const statusMsg = $derived($status);
 
+	let editorSongId: string | null = null;
+
 	$effect(() => {
-		if (song) {
-			loadSongData(song);
-			ensureGenerationsLoaded(song.id);
+		const current = song;
+		if (!current) {
+			editorSongId = null;
+			return;
 		}
+		if (current.id !== editorSongId) {
+			editorSongId = current.id;
+			loadSongData(current);
+		}
+		void ensureGenerationsLoaded(current.id);
 	});
 
 	$effect(() => {

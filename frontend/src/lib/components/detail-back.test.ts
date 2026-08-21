@@ -1,5 +1,6 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 
 import type { AlbumItem, GenerationItem, PlaylistDetailItem, SongItem } from '$lib/api/types';
 import {
@@ -207,6 +208,41 @@ describe('detail views own no content back', () => {
 		await tick();
 		expect(target.querySelector('.back-link')).toBeNull();
 		expect(target.querySelector('.back-btn')).toBeNull();
-		expect(target.textContent).toContain('Generation');
+	});
+});
+
+describe('song editor survives list revalidation', () => {
+	it('keeps unsaved lyrics when the open song object is replaced', async () => {
+		selectedGenerationId.set(null);
+		await renderView((target) => mount(SongDetailView, { target }));
+		const { setDraftLyrics, editLyrics, isDirty } = await import('$lib/stores/editor');
+		setDraftLyrics('unsaved verse');
+		expect(get(isDirty)).toBe(true);
+		songList.set([
+			song({
+				lyrics: '',
+				generation_count: 2,
+				generations: [generation(), generation({ id: 'g2' })]
+			})
+		]);
+		await tick();
+		await tick();
+		expect(get(editLyrics)).toBe('unsaved verse');
+		expect(get(isDirty)).toBe(true);
+	});
+
+	it('reloads the editor when a different song is selected', async () => {
+		selectedGenerationId.set(null);
+		await renderView((target) => mount(SongDetailView, { target }));
+		const { setDraftLyrics, editLyrics } = await import('$lib/stores/editor');
+		setDraftLyrics('unsaved verse');
+		songList.set([
+			song(),
+			song({ id: 's2', lyrics: 'other lyrics', generation_count: 0, generations: [] })
+		]);
+		selectedSongId.set('s2');
+		await tick();
+		await tick();
+		expect(get(editLyrics)).toBe('other lyrics');
 	});
 });

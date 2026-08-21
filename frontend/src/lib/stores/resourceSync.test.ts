@@ -2,13 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
 import type { GenerationCreatedResourceEvent, GenerationItem, SongItem } from '$lib/api/types';
-import { RESOURCE_EVENT_STREAM_PATH, RESOURCE_SYNC_ERROR } from '$lib/constants';
+import {
+	RESOURCE_EVENT_STREAM_PATH,
+	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
+	RESOURCE_SYNC_ERROR
+} from '$lib/constants';
 import {
 	EMPTY_RESOURCE_SYNC,
 	ResourceSyncController,
 	resetResourceSyncForTests,
 	startLibraryResourceSync,
 	stopLibraryResourceSync,
+	type ResourceAuthProbe,
 	type ResourceEventSource,
 	type ResourceSyncDeps,
 	type ResourceSyncState
@@ -144,6 +149,7 @@ function setup(options?: {
 	probeAuth?: ResourceSyncDeps['probeAuth'];
 	onUnauthorized?: ResourceSyncDeps['onUnauthorized'];
 	applySong?: ResourceSyncDeps['applySong'];
+	watchLoadedSongs?: ResourceSyncDeps['watchLoadedSongs'];
 }) {
 	const sources: MockEventSource[] = [];
 	const store = writable<ResourceSyncState>({ ...EMPTY_RESOURCE_SYNC });
@@ -151,6 +157,7 @@ function setup(options?: {
 	const fetchCalls: string[] = [];
 	const snapshotStarts: number[] = [];
 	const cancelled: number[] = [];
+	const loadedWatch: { notify: (() => void) | null } = { notify: null };
 	const innerFetch =
 		options?.fetchSong ??
 		(async (songId: string) =>
@@ -175,6 +182,14 @@ function setup(options?: {
 				options?.applySong?.(item);
 			},
 			listLoadedSongIds: options?.listLoadedSongIds ?? (() => ['s1']),
+			watchLoadedSongs:
+				options?.watchLoadedSongs ??
+				((onChange) => {
+					loadedWatch.notify = onChange;
+					return () => {
+						loadedWatch.notify = null;
+					};
+				}),
 			loadSnapshot:
 				options?.loadSnapshot ??
 				(async () => {
@@ -189,7 +204,16 @@ function setup(options?: {
 		},
 		store
 	);
-	return { controller, sources, store, upserted, fetchCalls, snapshotStarts, cancelled };
+	return {
+		controller,
+		sources,
+		store,
+		upserted,
+		fetchCalls,
+		snapshotStarts,
+		cancelled,
+		loadedWatch
+	};
 }
 
 function latestSource(sources: MockEventSource[]): MockEventSource {
@@ -475,8 +499,137 @@ describe('resource sync owner', () => {
 		controller.stop();
 		const before = fetchCalls.length;
 		window.dispatchEvent(new Event('focus'));
+		document.dispatchEvent(new Event('visibilitychange'));
 		await flush();
 		expect(fetchCalls.length).toBe(before);
+	});
+
+	it('persistent stream errors during bootstrap become a retryable error', async () => {
+		const { controller, sources, store } = setup();
+		controller.start();
+		const ready = controller.waitForReady();
+		for (let i = 0; i < RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT; i++) {
+			latestSource(sources).error();
+			await flush();
+		}
+		expect(await ready).toBe(false);
+		expect(get(store).status).toBe('error');
+		expect(get(store).error).toBe(RESOURCE_SYNC_ERROR);
+		expect(get(store).ready).toBe(false);
+		expect(sources[0].closed).toBe(true);
+	});
+
+	it('ignores a stale auth probe after a new hello starts a snapshot', async () => {
+		const probe = deferred<ResourceAuthProbe>();
+		const firstSnapshot = deferred<boolean>();
+		const loads: number[] = [];
+		const { controller, sources, store } = setup({
+			loadSnapshot: async () => {
+				loads.push(1);
+				if (loads.length === 1) return firstSnapshot.promise;
+				return true;
+			},
+			probeAuth: async () => probe.promise
+		});
+		controller.start();
+		const ready = controller.waitForReady();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).error();
+		await flush();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		probe.resolve('ok');
+		firstSnapshot.resolve(true);
+		await flush();
+		expect(await ready).toBe(true);
+		expect(get(store).status).toBe('live');
+		expect(loads.length).toBeGreaterThanOrEqual(2);
+	});
+
+	it('retries failed live refreshes on the next hello instead of hiding them', async () => {
+		let fail = true;
+		const { controller, sources, store, upserted } = setup({
+			fetchSong: async () => {
+				if (fail) throw new Error('boom');
+				return song({ generations: [gen('g1')] });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+		expect(get(store).status).toBe('error');
+		latestSource(sources).error();
+		await flush();
+		expect(get(store).status).toBe('error');
+		fail = false;
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		expect(get(store).status).toBe('live');
+		expect(get(store).error).toBeNull();
+		expect(upserted.at(-1)?.generations[0]?.id).toBe('g1');
+	});
+
+	it('retains invalidations until an in-flight song enters the loaded set', async () => {
+		let loaded: string[] = [];
+		const { controller, sources, fetchCalls, upserted, loadedWatch } = setup({
+			listLoadedSongIds: () => loaded
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g-late'));
+		await flush();
+		expect(fetchCalls).toEqual([]);
+		loaded = ['s1'];
+		loadedWatch.notify?.();
+		await flush();
+		expect(fetchCalls).toEqual(['s1']);
+		expect(upserted.at(-1)?.generations[0]?.id).toBe('g-from-server');
+	});
+
+	it('clears a live refresh error after a later fetch succeeds', async () => {
+		let fail = true;
+		const { controller, sources, store } = setup({
+			fetchSong: async () => {
+				if (fail) throw new Error('boom');
+				return song({ generations: [gen('g1')] });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+		expect(get(store).status).toBe('error');
+		fail = false;
+		latestSource(sources).emit('generation.created', created('2', 'g2'));
+		await flush();
+		expect(get(store).status).toBe('live');
+		expect(get(store).error).toBeNull();
+	});
+
+	it('revalidates on document visibilitychange', async () => {
+		const { controller, sources, fetchCalls } = setup({
+			listLoadedSongIds: () => ['s1', 's2']
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		const before = fetchCalls.length;
+		Object.defineProperty(document, 'visibilityState', {
+			configurable: true,
+			value: 'visible'
+		});
+		document.dispatchEvent(new Event('visibilitychange'));
+		await flush();
+		expect(fetchCalls.slice(before).sort()).toEqual(['s1', 's2']);
 	});
 });
 

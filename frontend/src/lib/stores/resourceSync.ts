@@ -14,13 +14,15 @@ import {
 	RESOURCE_EVENT_HELLO,
 	RESOURCE_EVENT_RESYNC,
 	RESOURCE_EVENT_STREAM_PATH,
+	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR
 } from '$lib/constants';
 import { cancelLibraryHistoryApply, hydrateLibraryFromHistory } from '$lib/stores/libraryContext';
 import {
 	applySyncedSong,
 	cancelLibraryDataLoads,
-	listLoadedSongIds
+	listLoadedSongIds,
+	watchLoadedSongIds
 } from '$lib/stores/librarySearch';
 import { clearAuth } from '$lib/stores/auth';
 
@@ -54,6 +56,7 @@ export interface ResourceSyncDeps {
 	fetchSong: (songId: string) => Promise<SongItem>;
 	applySong: (song: SongItem) => void;
 	listLoadedSongIds: () => string[];
+	watchLoadedSongs: (onChange: () => void) => () => void;
 	loadSnapshot: () => Promise<boolean>;
 	cancelSnapshot: () => void;
 	probeAuth: () => Promise<ResourceAuthProbe>;
@@ -76,6 +79,7 @@ export class ResourceSyncController {
 	private epoch = 0;
 	private watermark: string | null = null;
 	private buffer: GenerationCreatedResourceEvent[] = [];
+	private deferred: GenerationCreatedResourceEvent[] = [];
 	private pendingSongIds = new Set<string>();
 	private failedSongIds = new Set<string>();
 	private queuedGenerationIds = new Set<string>();
@@ -84,7 +88,11 @@ export class ResourceSyncController {
 	private flushing: Promise<void> | null = null;
 	private readyWaiters: Array<(ok: boolean) => void> = [];
 	private visibilityBound = false;
+	private loadedWatchUnsub: (() => void) | null = null;
+	private loadedNotifyQueued = false;
 	private syncedOnce = false;
+	private bootstrapErrors = 0;
+	private probeGeneration = 0;
 
 	constructor(
 		private readonly deps: ResourceSyncDeps,
@@ -98,7 +106,9 @@ export class ResourceSyncController {
 	start(): void {
 		if (this.started) return;
 		this.started = true;
+		this.bootstrapErrors = 0;
 		this.bindVisibility();
+		this.bindLoadedWatch();
 		this.setStatus('connecting');
 		this.openSource();
 	}
@@ -152,6 +162,8 @@ export class ResourceSyncController {
 		this.closeSource();
 		this.abandonEpoch();
 		this.syncedOnce = false;
+		this.bootstrapErrors = 0;
+		this.invalidateInflightProbes();
 		this.store.update((state) => ({
 			...state,
 			status: 'connecting',
@@ -185,8 +197,11 @@ export class ResourceSyncController {
 		this.started = false;
 		this.closeSource();
 		this.unbindVisibility();
+		this.unbindLoadedWatch();
 		this.abandonEpoch();
 		this.syncedOnce = false;
+		this.bootstrapErrors = 0;
+		this.invalidateInflightProbes();
 		this.seenGenerationIds.clear();
 		this.songRevisions.clear();
 		this.flushing = null;
@@ -198,6 +213,7 @@ export class ResourceSyncController {
 		this.epoch += 1;
 		this.deps.cancelSnapshot();
 		this.buffer = [];
+		this.deferred = [];
 		this.watermark = null;
 		this.pendingSongIds.clear();
 		this.failedSongIds.clear();
@@ -230,12 +246,12 @@ export class ResourceSyncController {
 			return;
 		}
 		this.store.update((state) => ({ ...state, highWaterMark: hello.high_water_mark }));
+		this.invalidateInflightProbes();
 		if (this.syncedOnce && this.state.status !== 'bootstrapping') {
-			if (this.state.status === 'reconnecting' || this.state.status === 'connecting') {
-				this.setStatus('live');
-			}
+			await this.recoverLiveConnection();
 			return;
 		}
+		this.bootstrapErrors = 0;
 		await this.beginEpoch(hello.high_water_mark);
 	}
 
@@ -249,7 +265,9 @@ export class ResourceSyncController {
 			return;
 		}
 		this.store.update((state) => ({ ...state, highWaterMark: resync.high_water_mark }));
+		this.invalidateInflightProbes();
 		this.syncedOnce = false;
+		this.bootstrapErrors = 0;
 		await this.beginEpoch(resync.high_water_mark);
 	}
 
@@ -274,8 +292,10 @@ export class ResourceSyncController {
 
 	private async handleStreamError(): Promise<void> {
 		if (!this.started) return;
+		const probeId = ++this.probeGeneration;
+		const source = this.source;
 		const result = await this.deps.probeAuth();
-		if (!this.started) return;
+		if (!this.started || probeId !== this.probeGeneration || this.source !== source) return;
 		if (result === 'unauthorized') {
 			this.teardown({ resetStore: false });
 			this.setVisibleError(RESOURCE_SYNC_ERROR);
@@ -284,11 +304,37 @@ export class ResourceSyncController {
 			return;
 		}
 		if (!this.syncedOnce) {
+			this.bootstrapErrors += 1;
+			if (this.bootstrapErrors >= RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT) {
+				this.failBootstrap(RESOURCE_SYNC_ERROR);
+				return;
+			}
 			this.abandonEpoch();
 			this.setStatus('reconnecting');
 			return;
 		}
+		if (this.failedSongIds.size > 0 || this.state.status === 'error') return;
 		this.setStatus('reconnecting');
+	}
+
+	private async recoverLiveConnection(): Promise<void> {
+		this.promoteDeferredSongs();
+		for (const songId of [...this.failedSongIds]) {
+			this.invalidateSong(songId);
+		}
+		if (this.pendingSongIds.size > 0) {
+			await this.flushPending(this.epoch);
+		}
+		if (!this.started) return;
+		if (this.failedSongIds.size > 0) {
+			this.setVisibleError(this.state.error || RESOURCE_SYNC_ERROR);
+			return;
+		}
+		this.store.update((state) => ({
+			...state,
+			status: 'live',
+			error: null
+		}));
 	}
 
 	private async beginEpoch(watermark: string): Promise<void> {
@@ -296,6 +342,7 @@ export class ResourceSyncController {
 		this.deps.cancelSnapshot();
 		this.watermark = watermark;
 		this.buffer = this.buffer.filter((event) => this.isAfterWatermark(event.sequence));
+		this.deferred = this.deferred.filter((event) => this.isAfterWatermark(event.sequence));
 		this.store.update((state) => ({
 			...state,
 			status: 'bootstrapping',
@@ -320,6 +367,15 @@ export class ResourceSyncController {
 				return;
 			}
 			this.syncedOnce = true;
+			this.promoteDeferredSongs();
+			if (this.pendingSongIds.size > 0) {
+				await this.flushPending(epoch, true);
+				if (!this.isCurrentEpoch(epoch)) return;
+				if (this.failedSongIds.size > 0) {
+					this.failBootstrap(this.state.error || RESOURCE_SYNC_ERROR);
+					return;
+				}
+			}
 			this.store.update((state) => ({
 				...state,
 				status: 'live',
@@ -346,9 +402,32 @@ export class ResourceSyncController {
 	private queueLoadedSong(event: GenerationCreatedResourceEvent): void {
 		if (this.seenGenerationIds.has(event.generation_id)) return;
 		if (this.queuedGenerationIds.has(event.generation_id)) return;
-		if (!this.deps.listLoadedSongIds().includes(event.resource_id)) return;
+		if (!this.deps.listLoadedSongIds().includes(event.resource_id)) {
+			this.deferEvent(event);
+			return;
+		}
 		this.queuedGenerationIds.add(event.generation_id);
 		this.invalidateSong(event.resource_id);
+	}
+
+	private deferEvent(event: GenerationCreatedResourceEvent): void {
+		if (this.deferred.some((queued) => queued.generation_id === event.generation_id)) return;
+		this.deferred.push(event);
+	}
+
+	private promoteDeferredSongs(): void {
+		if (this.deferred.length === 0) return;
+		const leftover: GenerationCreatedResourceEvent[] = [];
+		const loaded = new Set(this.deps.listLoadedSongIds());
+		for (const event of this.deferred) {
+			if (this.seenGenerationIds.has(event.generation_id)) continue;
+			if (!loaded.has(event.resource_id)) {
+				leftover.push(event);
+				continue;
+			}
+			this.queueLoadedSong(event);
+		}
+		this.deferred = leftover;
 	}
 
 	private invalidateSong(songId: string): void {
@@ -394,6 +473,7 @@ export class ResourceSyncController {
 			for (const generation of song.generations) {
 				this.seenGenerationIds.add(generation.id);
 			}
+			this.clearLiveErrorIfHealed();
 		} catch (err) {
 			if (!this.isCurrentEpoch(epoch)) return;
 			if (this.songRevisions.get(songId) !== revision) return;
@@ -422,8 +502,10 @@ export class ResourceSyncController {
 	}
 
 	private failBootstrap(message: string): void {
+		this.closeSource();
 		this.abandonEpoch();
 		this.syncedOnce = false;
+		this.invalidateInflightProbes();
 		this.store.update((state) => ({
 			...state,
 			status: 'error',
@@ -433,11 +515,25 @@ export class ResourceSyncController {
 		this.resolveReady(false);
 	}
 
+	private invalidateInflightProbes(): void {
+		this.probeGeneration += 1;
+	}
+
 	private setVisibleError(message: string): void {
 		this.store.update((state) => ({
 			...state,
 			status: 'error',
 			error: message
+		}));
+	}
+
+	private clearLiveErrorIfHealed(): void {
+		if (!this.syncedOnce || this.failedSongIds.size > 0) return;
+		if (this.state.status !== 'error') return;
+		this.store.update((state) => ({
+			...state,
+			status: 'live',
+			error: null
 		}));
 	}
 
@@ -454,18 +550,45 @@ export class ResourceSyncController {
 		if (this.visibilityBound || typeof window === 'undefined') return;
 		this.visibilityBound = true;
 		window.addEventListener('focus', this.onVisibility);
-		window.addEventListener('visibilitychange', this.onVisibility);
+		if (typeof document !== 'undefined') {
+			document.addEventListener('visibilitychange', this.onVisibility);
+		}
 	}
 
 	private unbindVisibility(): void {
 		if (!this.visibilityBound || typeof window === 'undefined') return;
 		this.visibilityBound = false;
 		window.removeEventListener('focus', this.onVisibility);
-		window.removeEventListener('visibilitychange', this.onVisibility);
+		if (typeof document !== 'undefined') {
+			document.removeEventListener('visibilitychange', this.onVisibility);
+		}
 	}
 
 	private onVisibility = (): void => {
 		void this.handleVisibility();
+	};
+
+	private bindLoadedWatch(): void {
+		if (this.loadedWatchUnsub) return;
+		this.loadedWatchUnsub = this.deps.watchLoadedSongs(this.onLoadedSongsChanged);
+	}
+
+	private unbindLoadedWatch(): void {
+		this.loadedWatchUnsub?.();
+		this.loadedWatchUnsub = null;
+		this.loadedNotifyQueued = false;
+	}
+
+	private onLoadedSongsChanged = (): void => {
+		if (this.loadedNotifyQueued) return;
+		this.loadedNotifyQueued = true;
+		void Promise.resolve().then(() => {
+			this.loadedNotifyQueued = false;
+			if (!this.started || !this.syncedOnce) return;
+			this.promoteDeferredSongs();
+			if (this.pendingSongIds.size === 0) return;
+			void this.flushPending(this.epoch);
+		});
 	};
 }
 
@@ -504,6 +627,7 @@ function librarySyncDeps(): ResourceSyncDeps {
 		fetchSong,
 		applySong: applySyncedSong,
 		listLoadedSongIds,
+		watchLoadedSongs: watchLoadedSongIds,
 		loadSnapshot: hydrateLibraryFromHistory,
 		cancelSnapshot: cancelLibrarySnapshot,
 		probeAuth: probeResourceAuth,

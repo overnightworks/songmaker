@@ -197,12 +197,13 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	if (generation !== historyApplyGeneration) return false;
 	await hydrateSelectedResources(state, generation);
 	if (generation !== historyApplyGeneration) return false;
-	if (state.albumId) await loadSongsForAlbum(state.albumId);
-	if (generation !== historyApplyGeneration) return false;
-	for (const albumId of state.expandedAlbumIds) {
-		if (albumId === state.albumId) continue;
-		void loadSongsForAlbum(albumId);
+	const albumIds = [
+		...new Set([...(state.albumId ? [state.albumId] : []), ...state.expandedAlbumIds])
+	];
+	if (albumIds.length > 0) {
+		await Promise.all(albumIds.map((albumId) => loadSongsForAlbum(albumId)));
 	}
+	if (generation !== historyApplyGeneration) return false;
 	fallbackBrowseIfDetailGone(state.surface);
 	return true;
 }

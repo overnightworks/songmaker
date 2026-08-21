@@ -27,6 +27,7 @@ import {
 	librarySearch,
 	libraryBrowse,
 	listLoadedSongIds,
+	watchLoadedSongIds,
 	loadLibraryBrowse,
 	loadMoreLibrarySearch,
 	resetLibrarySearchForTests,
@@ -421,5 +422,19 @@ describe('applySyncedSong', () => {
 		selectedSongId.set(null);
 		applySyncedSong(song({ id: 's-other', title: 'Other' }));
 		expect(get(songList).map((item) => item.id)).toEqual(['s1']);
+	});
+
+	it('watchLoadedSongIds notifies until unsubscribed', () => {
+		const seen: number[] = [];
+		const stop = watchLoadedSongIds(() => seen.push(1));
+		expect(seen.length).toBeGreaterThanOrEqual(1);
+		const afterSubscribe = seen.length;
+		songList.set([song({ id: 's-watch' })]);
+		expect(seen.length).toBeGreaterThan(afterSubscribe);
+		stop();
+		const afterStop = seen.length;
+		songList.set([]);
+		selectedSongId.set('s-watch');
+		expect(seen.length).toBe(afterStop);
 	});
 });
