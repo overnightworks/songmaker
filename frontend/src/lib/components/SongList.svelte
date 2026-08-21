@@ -33,12 +33,7 @@
 		watchShareView
 	} from '$lib/stores/shares';
 	import { fetchAlbum } from '$lib/api/albums';
-	import {
-		unshareAlbum,
-		unshareGeneration,
-		unsharePlaylist,
-		unshareSong
-	} from '$lib/api/client';
+	import { unshareAlbum, unshareGeneration, unsharePlaylist, unshareSong } from '$lib/api/client';
 	import type { AlbumItem, ShareInventoryItem, SongItem } from '$lib/api/types';
 	import { searchQuery } from '$lib/stores/filter';
 	import {
@@ -292,9 +287,7 @@
 	}
 
 	const panelSection = $derived(searching ? 'search' : sharesOpen ? 'shares' : section);
-	const sharesPageComplete = $derived(
-		sharesState.status === 'ready' && !sharesState.hasMore
-	);
+	const sharesPageComplete = $derived(sharesState.status === 'ready' && !sharesState.hasMore);
 </script>
 
 <div class="library-nav">

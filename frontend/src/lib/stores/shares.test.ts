@@ -23,13 +23,15 @@ import {
 	sharesViewOpen
 } from './shares';
 
-function page(overrides: Partial<{
-	items: ShareInventoryItem[];
-	total: number;
-	offset: number;
-	limit: number;
-	has_more: boolean;
-}> = {}) {
+function page(
+	overrides: Partial<{
+		items: ShareInventoryItem[];
+		total: number;
+		offset: number;
+		limit: number;
+		has_more: boolean;
+	}> = {}
+) {
 	return {
 		items: [],
 		total: 0,
@@ -122,9 +124,7 @@ describe('share inventory', () => {
 		expect(get(shareInventory).items).toEqual([]);
 		expect(get(shareInventory).hasMore).toBe(false);
 
-		fetchShares.mockResolvedValueOnce(
-			page({ items: [item()], total: 4, has_more: true })
-		);
+		fetchShares.mockResolvedValueOnce(page({ items: [item()], total: 4, has_more: true }));
 		await loadShareInventory({ reset: true });
 		expect(get(shareInventory).items).toHaveLength(1);
 		expect(get(shareInventory).hasMore).toBe(true);
@@ -158,9 +158,7 @@ describe('share inventory', () => {
 	});
 
 	it('keeps N from the server when a type filter is applied', async () => {
-		fetchShares.mockResolvedValueOnce(
-			page({ items: [item()], total: 4, has_more: false })
-		);
+		fetchShares.mockResolvedValueOnce(page({ items: [item()], total: 4, has_more: false }));
 		await setShareTypeFilter('album');
 		expect(fetchShares).toHaveBeenCalledWith({
 			offset: 0,

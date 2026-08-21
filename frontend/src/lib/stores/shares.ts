@@ -122,9 +122,7 @@ export async function loadShareInventory(options: { reset: boolean }): Promise<b
 		...state,
 		status: 'loading',
 		error: null,
-		...(options.reset && state.items.length === 0
-			? { items: [], offset: 0, hasMore: false }
-			: {})
+		...(options.reset && state.items.length === 0 ? { items: [], offset: 0, hasMore: false } : {})
 	}));
 	try {
 		const page = await requestShares({

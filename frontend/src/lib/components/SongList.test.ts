@@ -444,7 +444,9 @@ describe('SongList sections', () => {
 	});
 
 	it('does not build share inventory from loaded lists', async () => {
-		albumList.update((list) => list.map((item) => ({ ...item, is_shared: true, title: 'Loaded Shared' })));
+		albumList.update((list) =>
+			list.map((item) => ({ ...item, is_shared: true, title: 'Loaded Shared' }))
+		);
 		fetchShares.mockResolvedValue({
 			items: [shareItem()],
 			total: 1,
