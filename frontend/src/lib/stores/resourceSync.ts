@@ -27,7 +27,7 @@ import {
 	listLoadedSongIds,
 	watchLoadedSongIds
 } from '$lib/stores/librarySearch';
-import { selectedSongId } from '$lib/stores/player';
+import { cancelAlbumSongLoads, selectedSongId } from '$lib/stores/player';
 import { clearAuth } from '$lib/stores/auth';
 
 export type ResourceSyncStatus =
@@ -666,6 +666,7 @@ async function redirectToLogin(): Promise<void> {
 function cancelLibrarySnapshot(): void {
 	cancelLibraryHistoryApply();
 	cancelLibraryDataLoads();
+	cancelAlbumSongLoads();
 }
 
 function librarySyncDeps(): ResourceSyncDeps {

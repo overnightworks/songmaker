@@ -78,11 +78,11 @@ const _loadingIds = new Set<string>();
 export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	const songs = get(songList);
 	const song = songs.find((s) => s.id === songId);
-	// A song already in the list with its generations (or none) needs no fetch. A song
-	// NOT in the list — opened directly from a playlist, search, or URL rather than by
-	// opening its album — must be fetched and added, not bailed on: otherwise its detail
-	// view stays empty until the album is opened.
-	if (song && (song.generations.length > 0 || song.generation_count === 0)) return;
+	// A song whose loaded takes already match generation_count needs no fetch. A
+	// partial retain (fewer takes than the count) or a song not yet in the list
+	// must be fetched; otherwise a later snapshot can hide a take created while
+	// sync was stopped.
+	if (song && song.generations.length >= song.generation_count) return;
 	if (_loadingIds.has(songId)) return;
 	_loadingIds.add(songId);
 	try {
@@ -789,20 +789,19 @@ export async function navigateToPlaying(): Promise<void> {
 // --- Song/album list mutations ---
 export function retainRicherSong(current: SongItem | undefined, incoming: SongItem): SongItem {
 	if (!current) return incoming;
-	const incomingLoaded = incoming.generations.length > 0;
-	const currentLoaded = current.generations.length > 0;
-	if (currentLoaded && !incomingLoaded) {
-		return {
-			...incoming,
-			generations: current.generations,
-			generation_count: Math.max(
-				current.generation_count,
-				incoming.generation_count,
-				current.generations.length
-			)
-		};
-	}
-	return incoming;
+	const generations =
+		current.generations.length >= incoming.generations.length
+			? current.generations
+			: incoming.generations;
+	return {
+		...incoming,
+		generations,
+		generation_count: Math.max(
+			current.generation_count,
+			incoming.generation_count,
+			generations.length
+		)
+	};
 }
 
 export function overlaySongList(existing: SongItem[], incoming: SongItem[]): SongItem[] {
@@ -811,7 +810,7 @@ export function overlaySongList(existing: SongItem[], incoming: SongItem[]): Son
 }
 
 export function replaceSongInList(song: SongItem): void {
-	songList.update((list) => list.map((s) => (s.id === song.id ? retainRicherSong(s, song) : s)));
+	songList.update((list) => list.map((s) => (s.id === song.id ? song : s)));
 }
 
 // Replace the song if the list already holds it, otherwise append it. A song opened
@@ -820,12 +819,18 @@ export function replaceSongInList(song: SongItem): void {
 export function upsertSongInList(song: SongItem): void {
 	songList.update((list) =>
 		list.some((s) => s.id === song.id)
-			? list.map((s) => (s.id === song.id ? retainRicherSong(s, song) : s))
+			? list.map((s) => (s.id === song.id ? song : s))
 			: [...list, song]
 	);
 }
 
 const albumSongLoads = new Map<string, Promise<void>>();
+let albumSongsGeneration = 0;
+
+export function cancelAlbumSongLoads(): void {
+	albumSongsGeneration += 1;
+	albumSongLoads.clear();
+}
 
 export type AlbumSongsLoadStatus = 'idle' | 'loading' | 'error';
 
@@ -839,6 +844,7 @@ export const albumSongsLoad = writable<Readonly<Record<string, AlbumSongsLoadSta
 export async function loadSongsForAlbum(albumId: string): Promise<void> {
 	const inflight = albumSongLoads.get(albumId);
 	if (inflight) return inflight;
+	const generation = albumSongsGeneration;
 	albumSongsLoad.update((state) => ({
 		...state,
 		[albumId]: { status: 'loading', error: null }
@@ -848,20 +854,24 @@ export async function loadSongsForAlbum(albumId: string): Promise<void> {
 		const collected: SongItem[] = [];
 		for (;;) {
 			const page = await fetchSongs(albumId, offset, LIBRARY_SONG_PAGE_SIZE);
+			if (generation !== albumSongsGeneration) return;
 			collected.push(...page.items);
 			offset += page.items.length;
 			if (!page.has_more || page.items.length === 0) break;
 		}
+		if (generation !== albumSongsGeneration) return;
 		songList.update((list) => mergeAlbumSongs(list, collected));
 	})();
 	albumSongLoads.set(albumId, load);
 	try {
 		await load;
+		if (generation !== albumSongsGeneration) return;
 		albumSongsLoad.update((state) => ({
 			...state,
 			[albumId]: { status: 'idle', error: null }
 		}));
 	} catch (err) {
+		if (generation !== albumSongsGeneration) return;
 		albumSongsLoad.update((state) => ({
 			...state,
 			[albumId]: { status: 'error', error: albumSongsErrorMessage(err) }

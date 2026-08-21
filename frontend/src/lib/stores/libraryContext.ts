@@ -228,7 +228,7 @@ async function hydrateSelectedResources(
 	}
 	if (!state.songId) return;
 	const listed = get(songList).find((song) => song.id === state.songId);
-	if (listed && listed.generations.length > 0) {
+	if (listed && listed.generations.length >= listed.generation_count) {
 		await hydrateSongAlbum(listed.album_id, generation);
 		return;
 	}

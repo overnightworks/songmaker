@@ -38,6 +38,8 @@ import {
 	ensureGenerationsLoaded,
 	albumSongsLoad,
 	loadSongsForAlbum,
+	cancelAlbumSongLoads,
+	replaceSongInList,
 	upsertSongInList,
 	overlaySongList,
 	retainRicherSong,
@@ -229,6 +231,52 @@ describe('browsing state', () => {
 		expect(get(selectedSong)).toBeNull();
 	});
 
+	it('ensureGenerationsLoaded refetches when loaded takes are fewer than generation_count', async () => {
+		songList.set([
+			makeSong({
+				id: 's-partial',
+				generation_count: 2,
+				generations: [makeGen()]
+			})
+		]);
+		const full = makeSong({
+			id: 's-partial',
+			generation_count: 2,
+			generations: [makeGen(), makeGen({ id: 'g2' })]
+		});
+		vi.mocked(fetchSong).mockResolvedValueOnce(full);
+		await ensureGenerationsLoaded('s-partial');
+		expect(get(songList).find((item) => item.id === 's-partial')?.generations).toHaveLength(2);
+	});
+
+	it('replaceSongInList applies an authoritative empty generation list', () => {
+		songList.set([makeSong({ generation_count: 1, generations: [makeGen()] })]);
+		replaceSongInList(makeSong({ generation_count: 0, generations: [] }));
+		expect(get(songList)[0].generations).toEqual([]);
+		expect(get(songList)[0].generation_count).toBe(0);
+	});
+
+	it('cancelAlbumSongLoads drops an in-flight album merge', async () => {
+		let resolvePage: ((value: unknown) => void) | undefined;
+		vi.mocked(fetchSongs).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePage = resolve;
+				})
+		);
+		const pending = loadSongsForAlbum('a1');
+		cancelAlbumSongLoads();
+		resolvePage?.({
+			items: [makeSong({ id: 's-stale', album_id: 'a1' })],
+			total: 1,
+			offset: 0,
+			limit: 200,
+			has_more: false
+		});
+		await pending;
+		expect(get(songList).some((item) => item.id === 's-stale')).toBe(false);
+	});
+
 	it('ensureGenerationsLoaded fetches and adds a song opened directly, not yet in the list', async () => {
 		// Felix, 2026-07-18: clicking a song directly (from a playlist) loaded nothing — only
 		// opening its album did. The song was absent from the list, so the old guard bailed.
@@ -285,6 +333,22 @@ describe('browsing state', () => {
 		const merged = retainRicherSong(loaded, summary);
 		expect(merged.title).toBe('Updated title');
 		expect(merged.generation_count).toBe(1);
+		expect(merged.generations).toHaveLength(1);
+	});
+
+	it('retainRicherSong raises generation_count without dropping loaded takes', () => {
+		const loaded = makeSong({
+			id: 's1',
+			generation_count: 1,
+			generations: [makeGen()]
+		});
+		const summary = makeSong({
+			id: 's1',
+			generation_count: 2,
+			generations: []
+		});
+		const merged = retainRicherSong(loaded, summary);
+		expect(merged.generation_count).toBe(2);
 		expect(merged.generations).toHaveLength(1);
 	});
 

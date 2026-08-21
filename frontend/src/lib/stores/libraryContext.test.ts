@@ -364,6 +364,47 @@ describe('library history snapshot', () => {
 		).toEqual(['g1']);
 	});
 
+	it('fetches the selected song when retained takes are fewer than generation_count', async () => {
+		const summary = song({
+			id: 's9',
+			album_id: 'a9',
+			generation_count: 2,
+			generations: []
+		});
+		songList.set([
+			song({
+				id: 's9',
+				album_id: 'a9',
+				generation_count: 1,
+				generations: [generation({ id: 'g1', song_id: 's9' })]
+			})
+		]);
+		fetchSongs.mockResolvedValue({ ...emptyPage([summary]), limit: 200 });
+		fetchSong.mockResolvedValue(
+			song({
+				id: 's9',
+				album_id: 'a9',
+				generation_count: 2,
+				generations: [
+					generation({ id: 'g1', song_id: 's9' }),
+					generation({ id: 'g2', song_id: 's9' })
+				]
+			})
+		);
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			albumId: 'a9',
+			songId: 's9'
+		});
+		expect(fetchSong).toHaveBeenCalledWith('s9');
+		expect(
+			get(songList)
+				.find((item) => item.id === 's9')
+				?.generations.map((item) => item.id)
+		).toEqual(['g1', 'g2']);
+	});
+
 	it('lets a newer history restore win over an in-flight playlist fetch', async () => {
 		let resolveFirst: ((value: unknown) => void) | undefined;
 		fetchPlaylist.mockImplementationOnce(
