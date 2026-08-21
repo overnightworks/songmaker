@@ -179,13 +179,23 @@ def acceptance_table(
     )
 
 
-def test_repository_starts_as_an_honest_empty_contract() -> None:
+def test_repository_contains_the_active_genesis_contract() -> None:
     shelf = read_requirement_shelf(PROJECT_ROOT)
     acceptance = read_acceptance_manifest(PROJECT_ROOT, shelf)
 
-    assert shelf.document_count == 0
-    assert shelf.revision_count == 0
-    assert shelf.rules == ()
+    assert shelf.document_count == 1
+    assert shelf.revision_count == 1
+    assert tuple(rule.identifier for rule in shelf.rules) == (
+        "REQ-CATALOG-01",
+        "REQ-VERSION-01",
+        "REQ-GENERATION-01",
+        "REQ-CURATION-01",
+        "REQ-CURATION-02",
+        "REQ-CURATION-03",
+        "REQ-CURATION-04",
+        "REQ-CURATION-05",
+        "REQ-CURATION-06",
+    )
     assert acceptance == ()
 
 

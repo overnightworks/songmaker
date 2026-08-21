@@ -96,18 +96,20 @@ def write_witness(project: Path, content_digest: str, comment: int) -> None:
 
 def copied_contract(tmp_path: Path) -> Path:
     project = tmp_path / "project"
-    for relative in (GATE, CONTRACT, PRODUCT_LOCATION):
+    for relative in (GATE, CONTRACT, Path("docs/requirements/README.md")):
         destination = project / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(PROJECT_ROOT / relative, destination)
-    shutil.copytree(
-        PROJECT_ROOT / REGISTRY_LOCATION.parent,
-        project / REGISTRY_LOCATION.parent,
+    (project / REGISTRY_LOCATION).write_text(
+        "schema_version = 2\n",
+        encoding="utf-8",
     )
-    shutil.copytree(
-        PROJECT_ROOT / ACCEPTANCE_LOCATION.parent,
-        project / ACCEPTANCE_LOCATION.parent,
+    (project / ACCEPTANCE_LOCATION).parent.mkdir(parents=True)
+    (project / ACCEPTANCE_LOCATION).write_text(
+        "schema_version = 1\n",
+        encoding="utf-8",
     )
+    refresh_product(project)
     return project
 
 
@@ -186,7 +188,7 @@ def test_repository_contract_and_honesty_boundary_pass() -> None:
     result = run_gate(PROJECT_ROOT, "--current-only")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "0 document(s), 0 rule(s), 0 acceptance sentence(s)" in result.stdout
+    assert "1 document(s), 9 rule(s), 0 acceptance sentence(s)" in result.stdout
     assert "does not fetch: GitHub" in result.stdout
 
 

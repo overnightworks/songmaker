@@ -1,1 +1,9 @@
 schema_version = 2
+
+[[revision]]
+document = "0001"
+path = "docs/requirements/0001-creative-catalog-and-takes.md"
+content_sha256 = "eefcfc7034906e9123069351b7fd4938a00bbbf13d66051167ec39f1f397bfb3"
+witness_path = "docs/requirements/witnesses/5363884635.json"
+witness_sha256 = "e455aa95a03d3eb271fb5dd5d1eb158dea58e381a734c42c930c0d166e7d3350"
+predecessor = "GENESIS"

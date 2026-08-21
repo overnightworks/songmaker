@@ -69,9 +69,26 @@ def commit(project: Path, message: str) -> str:
 
 def project_with_empty_contract(tmp_path: Path) -> tuple[Path, str]:
     project = tmp_path / "project"
-    shutil.copytree(PROJECT_ROOT / "docs/requirements", project / "docs/requirements")
-    shutil.copytree(PROJECT_ROOT / "docs/acceptance", project / "docs/acceptance")
-    shutil.copy2(PROJECT_ROOT / "docs/PRODUCT.md", project / "docs/PRODUCT.md")
+    requirements = project / contract.REQUIREMENTS_DIRECTORY
+    requirements.mkdir(parents=True)
+    shutil.copy2(
+        PROJECT_ROOT / "docs/requirements/README.md",
+        requirements / "README.md",
+    )
+    (project / contract.REGISTRY_LOCATION).write_text(
+        "schema_version = 2\n",
+        encoding="utf-8",
+    )
+    acceptance = project / contract.ACCEPTANCE_LOCATION
+    acceptance.parent.mkdir(parents=True)
+    acceptance.write_text("schema_version = 1\n", encoding="utf-8")
+    shelf = contract.read_requirement_shelf(project)
+    acceptance_entries = contract.read_acceptance_manifest(project, shelf)
+    product = project / contract.PRODUCT_LOCATION
+    product.write_text(
+        contract.render_product_view(shelf, acceptance_entries),
+        encoding="utf-8",
+    )
     git(project, "init", "--quiet")
     base = commit(project, "empty contract")
     return project, base
