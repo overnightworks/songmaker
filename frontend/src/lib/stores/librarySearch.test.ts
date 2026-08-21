@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import type { AlbumItem, SongItem } from '$lib/api/types';
 import { LIBRARY_SEARCH_DEBOUNCE_MS, LIBRARY_SEARCH_PAGE_SIZE } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
-import { albumList, songList } from '$lib/stores/player';
+import { albumList, selectedSongId, songList } from '$lib/stores/player';
 
 const searchLibrary = vi.fn();
 const fetchAlbums = vi.fn();
@@ -21,10 +21,12 @@ vi.mock('$lib/api/songs', () => ({
 }));
 
 import {
+	applySyncedSong,
 	changeLibrarySort,
 	groupSearchHits,
 	librarySearch,
 	libraryBrowse,
+	listLoadedSongIds,
 	loadLibraryBrowse,
 	loadMoreLibrarySearch,
 	resetLibrarySearchForTests,
@@ -84,12 +86,14 @@ beforeEach(() => {
 	fetchSongs.mockReset();
 	resetLibrarySearchForTests();
 	searchQuery.set('');
+	selectedSongId.set(null);
 	albumList.set([album({ id: 'a-local', title: 'Local Album' })]);
 	songList.set([song()]);
 });
 
 afterEach(() => {
 	vi.useRealTimers();
+	selectedSongId.set(null);
 	resetLibrarySearchForTests();
 });
 
@@ -385,5 +389,37 @@ describe('groupSearchHits', () => {
 		expect(groups[1].album.title).toBe('Other');
 		expect(groups[1].songs).toHaveLength(1);
 		expect(groups[1].album.song_count).toBe(1);
+	});
+});
+
+describe('applySyncedSong', () => {
+	it('updates selected and listed browse songs and loaded search hits', () => {
+		const listed = song({ id: 's1', title: 'Listed' });
+		const searchHit = song({ id: 's-search', title: 'Search' });
+		songList.set([listed]);
+		selectedSongId.set('s1');
+		librarySearch.set({
+			q: 'Search',
+			status: 'ready',
+			error: null,
+			items: [{ type: 'song', song: searchHit, album_id: 'a-local', album_title: 'Local Album' }],
+			hasMore: false,
+			nextCursor: null
+		});
+		applySyncedSong(song({ id: 's1', title: 'Listed Updated', generation_count: 2 }));
+		applySyncedSong(song({ id: 's-search', title: 'Search Updated', generation_count: 1 }));
+		expect(get(songList)[0].title).toBe('Listed Updated');
+		expect(get(librarySearch).items[0]).toMatchObject({
+			type: 'song',
+			song: expect.objectContaining({ title: 'Search Updated' })
+		});
+		expect(listLoadedSongIds().sort()).toEqual(['s-search', 's1']);
+	});
+
+	it('does not insert an unlisted unselected song into browse', () => {
+		songList.set([song({ id: 's1' })]);
+		selectedSongId.set(null);
+		applySyncedSong(song({ id: 's-other', title: 'Other' }));
+		expect(get(songList).map((item) => item.id)).toEqual(['s1']);
 	});
 });

@@ -220,7 +220,17 @@ live. Missing retained history, an internal sequence hole, or `L > H` produces o
 `resync` at `H`. Heartbeats are SSE comments. Every connection ends after at most 60
 seconds so native EventSource reconnect rechecks the session. Sequence and high-water
 JSON fields are decimal strings, matching SSE IDs without JavaScript precision loss.
-The frontend synchronization owner remains the separate third phase of issue #40.
+
+The library page is the sole frontend owner of that stream. Each mount — including
+return from settings — opens a native `EventSource`, waits for `hello`, and runs
+history restore inside a new snapshot epoch. Events after the epoch watermark are
+buffered until the snapshot merges, then the owner is `live`. Targeted
+`generation.created` invalidations update the selected song, loaded browse songs,
+and loaded search hits through explicit adapters; focus/visibility revalidates the
+same loaded set. Generation jobs no longer fetch the song themselves. The job
+tab still shows its success toast; other tabs update silently. Bootstrap and
+refresh failures surface one accessible Retry status. Unmount, logout, and
+401/403 on `EventSource.onerror` close the stream.
 
 ## API Endpoints
 

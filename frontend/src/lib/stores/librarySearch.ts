@@ -11,7 +11,7 @@ import {
 	LIBRARY_SEARCH_PAGE_SIZE,
 	LIBRARY_SONG_PAGE_SIZE
 } from '$lib/constants';
-import { albumList, songList } from '$lib/stores/player';
+import { albumList, selectedSongId, songList, upsertSongInList } from '$lib/stores/player';
 
 export type LibrarySearchStatus = 'idle' | 'loading' | 'error' | 'ready';
 
@@ -267,13 +267,42 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 	}
 }
 
-export function resetLibrarySearchForTests(): void {
+export function applySyncedSong(song: SongItem): void {
+	const selectedId = get(selectedSongId);
+	const listed = get(songList).some((item) => item.id === song.id);
+	if (selectedId === song.id || listed) {
+		upsertSongInList(song);
+	}
+	librarySearch.update((state) => ({
+		...state,
+		items: state.items.map((hit) =>
+			hit.type === 'song' && hit.song.id === song.id ? { ...hit, song } : hit
+		)
+	}));
+}
+
+export function listLoadedSongIds(): string[] {
+	const ids = new Set<string>();
+	const selected = get(selectedSongId);
+	if (selected) ids.add(selected);
+	for (const song of get(songList)) ids.add(song.id);
+	for (const hit of get(librarySearch).items) {
+		if (hit.type === 'song') ids.add(hit.song.id);
+	}
+	return [...ids];
+}
+
+export function cancelLibraryDataLoads(): void {
 	if (searchTimer !== null) {
 		clearTimeout(searchTimer);
 		searchTimer = null;
 	}
 	searchGeneration += 1;
 	browseGeneration += 1;
+}
+
+export function resetLibrarySearchForTests(): void {
+	cancelLibraryDataLoads();
 	librarySort.set('newest');
 	librarySearch.set({ ...EMPTY_SEARCH });
 	libraryBrowse.set({

@@ -104,11 +104,14 @@ tests/acestep_worker/
 └── test_wrapper.py
 
 frontend/src/
-├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA
+├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA,
+│                                  resource-event decimal SSE payloads
 ├── lib/components/*.test.ts       Component tests: library, share status, frequent-action hitboxes
 ├── lib/stores/*.test.ts           Store coverage: admin polling, auth, editor, filter,
-│                                  health, jobs, library search/context, navigation,
-│                                  LoRA, player, playlists, toast
+│                                  health, jobs, library search/context, resource sync
+│                                  (hello/snapshot interleavings, replay, stale fetch,
+│                                  bootstrap disconnect, resync, focus, retry, cleanup),
+│                                  navigation, LoRA, player, playlists, toast
 ├── lib/services/*.test.ts         Audio player service tests
 └── lib/utils/*.test.ts            Chat context, contrast, diff, and format helpers
 ```

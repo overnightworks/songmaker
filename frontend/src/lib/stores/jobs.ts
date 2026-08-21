@@ -1,6 +1,7 @@
 import { writable, get } from 'svelte/store';
-import { fetchSong, type JobStatus } from '$lib/api/client';
-import { replaceSongInList } from '$lib/stores/player';
+import type { JobStatus } from '$lib/api/client';
+import { JOB_TYPE_GENERATE } from '$lib/constants';
+import { requestSongRefresh } from '$lib/stores/resourceSync';
 import { addToast } from '$lib/stores/toast';
 
 const MAX_POLL_ERRORS = 10;
@@ -44,7 +45,7 @@ function streamJob(jobId: string): void {
 	const source = new EventSource(`/api/jobs/${jobId}/stream`, { withCredentials: true });
 	eventSources.set(jobId, source);
 
-	source.onmessage = async (event: MessageEvent) => {
+	source.onmessage = (event: MessageEvent) => {
 		errorCount = 0;
 		const updated: JobStatus = JSON.parse(event.data);
 
@@ -58,12 +59,17 @@ function streamJob(jobId: string): void {
 		) {
 			source.close();
 			eventSources.delete(jobId);
+			const songId = get(activeJobs).find((j) => j.job.id === jobId)?.songId;
 
 			if (updated.status === 'completed') {
-				await refreshSongData(jobId);
+				if (updated.type !== JOB_TYPE_GENERATE && songId) {
+					void requestSongRefresh(songId);
+				}
 				addToast(`${updated.type} completed`, 'success');
 			} else if (updated.status === 'partial') {
-				await refreshSongData(jobId);
+				if (updated.type !== JOB_TYPE_GENERATE && songId) {
+					void requestSongRefresh(songId);
+				}
 				addToast(updated.error || `${updated.type} partially completed`, 'info');
 			} else if (updated.status === 'cancelled') {
 				addToast(`${updated.type} cancelled`, 'info');
@@ -88,17 +94,4 @@ function streamJob(jobId: string): void {
 			addToast('Lost connection to server', 'error');
 		}
 	};
-}
-
-async function refreshSongData(jobId: string): Promise<void> {
-	const jobs = get(activeJobs);
-	const activeJob = jobs.find((j) => j.job.id === jobId);
-	if (!activeJob?.songId) return;
-
-	try {
-		const updated = await fetchSong(activeJob.songId);
-		replaceSongInList(updated);
-	} catch {
-		// song refresh failed silently — user can manually reload
-	}
 }

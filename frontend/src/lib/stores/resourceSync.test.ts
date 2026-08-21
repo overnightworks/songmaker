@@ -1,0 +1,493 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get, writable } from 'svelte/store';
+
+import type { GenerationCreatedResourceEvent, GenerationItem, SongItem } from '$lib/api/types';
+import { RESOURCE_EVENT_STREAM_PATH, RESOURCE_SYNC_ERROR } from '$lib/constants';
+import {
+	EMPTY_RESOURCE_SYNC,
+	ResourceSyncController,
+	resetResourceSyncForTests,
+	startLibraryResourceSync,
+	stopLibraryResourceSync,
+	type ResourceEventSource,
+	type ResourceSyncDeps,
+	type ResourceSyncState
+} from './resourceSync';
+
+class MockEventSource implements ResourceEventSource {
+	static instances: MockEventSource[] = [];
+	url: string;
+	withCredentials: boolean;
+	closed = false;
+	onerror: ((event: Event) => void) | null = null;
+	private readonly listeners = new Map<string, Set<(event: Event) => void>>();
+
+	constructor(url: string, init?: { withCredentials?: boolean }) {
+		this.url = url;
+		this.withCredentials = init?.withCredentials ?? false;
+		MockEventSource.instances.push(this);
+	}
+
+	addEventListener(type: string, listener: (event: Event) => void): void {
+		const listeners = this.listeners.get(type) ?? new Set();
+		listeners.add(listener);
+		this.listeners.set(type, listeners);
+	}
+
+	removeEventListener(type: string, listener: (event: Event) => void): void {
+		this.listeners.get(type)?.delete(listener);
+	}
+
+	close(): void {
+		this.closed = true;
+	}
+
+	emit(type: string, data: unknown): void {
+		const event = new MessageEvent(type, { data: JSON.stringify(data) });
+		for (const listener of this.listeners.get(type) ?? []) listener(event);
+	}
+
+	error(): void {
+		this.onerror?.(new Event('error'));
+	}
+}
+
+function song(overrides: Partial<SongItem> = {}): SongItem {
+	return {
+		id: 's1',
+		title: 'Track',
+		album_id: 'a1',
+		album_title: 'Album',
+		artist: 'Artist',
+		track_number: 1,
+		vocal_language: 'en',
+		lyrics: '',
+		prompt: '',
+		bpm: 120,
+		audio_duration: 180,
+		key_scale: 'Am',
+		generation_params: null,
+		version_count: 1,
+		generation_count: 0,
+		best_scores: null,
+		best_rating: null,
+		generations: [],
+		created_at: '2026-01-01T00:00:00+00:00',
+		is_shared: false,
+		share_slug: null,
+		...overrides
+	};
+}
+
+function gen(id: string, overrides: Partial<GenerationItem> = {}): GenerationItem {
+	return {
+		id,
+		song_id: 's1',
+		version_id: 'v1',
+		version_number: 1,
+		generation_number: 1,
+		seed: 1,
+		mp3_path: `${id}.mp3`,
+		wav_path: null,
+		status: 'completed',
+		is_picked: false,
+		is_kept: false,
+		is_archived: false,
+		is_shared: false,
+		share_slug: null,
+		model_mode: 'sft',
+		whisper_text: null,
+		whisper_cues: null,
+		version_lyrics: null,
+		scores: null,
+		generation_params: null,
+		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
+	};
+}
+
+function created(
+	sequence: string,
+	generationId: string,
+	resourceId = 's1'
+): GenerationCreatedResourceEvent {
+	return {
+		kind: 'generation.created',
+		sequence,
+		resource_type: 'song',
+		resource_id: resourceId,
+		generation_id: generationId,
+		created_at: '2026-01-01T00:00:00+00:00'
+	};
+}
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res;
+		reject = rej;
+	});
+	return { promise, resolve, reject };
+}
+
+async function flush(): Promise<void> {
+	for (let i = 0; i < 20; i++) {
+		await Promise.resolve();
+	}
+}
+
+function setup(options?: {
+	loadSnapshot?: ResourceSyncDeps['loadSnapshot'];
+	fetchSong?: ResourceSyncDeps['fetchSong'];
+	listLoadedSongIds?: ResourceSyncDeps['listLoadedSongIds'];
+	probeAuth?: ResourceSyncDeps['probeAuth'];
+	onUnauthorized?: ResourceSyncDeps['onUnauthorized'];
+	applySong?: ResourceSyncDeps['applySong'];
+}) {
+	const sources: MockEventSource[] = [];
+	const store = writable<ResourceSyncState>({ ...EMPTY_RESOURCE_SYNC });
+	const upserted: SongItem[] = [];
+	const fetchCalls: string[] = [];
+	const snapshotStarts: number[] = [];
+	const cancelled: number[] = [];
+	const innerFetch =
+		options?.fetchSong ??
+		(async (songId: string) =>
+			song({
+				id: songId,
+				generation_count: 1,
+				generations: [gen('g-from-server')]
+			}));
+	const controller = new ResourceSyncController(
+		{
+			createEventSource: (url) => {
+				const source = new MockEventSource(url);
+				sources.push(source);
+				return source;
+			},
+			fetchSong: async (songId: string) => {
+				fetchCalls.push(songId);
+				return innerFetch(songId);
+			},
+			applySong: (item) => {
+				upserted.push(item);
+				options?.applySong?.(item);
+			},
+			listLoadedSongIds: options?.listLoadedSongIds ?? (() => ['s1']),
+			loadSnapshot:
+				options?.loadSnapshot ??
+				(async () => {
+					snapshotStarts.push(Date.now());
+					return true;
+				}),
+			cancelSnapshot: () => {
+				cancelled.push(1);
+			},
+			probeAuth: options?.probeAuth ?? (async () => 'ok'),
+			onUnauthorized: options?.onUnauthorized ?? (async () => undefined)
+		},
+		store
+	);
+	return { controller, sources, store, upserted, fetchCalls, snapshotStarts, cancelled };
+}
+
+function latestSource(sources: MockEventSource[]): MockEventSource {
+	return sources[sources.length - 1];
+}
+
+beforeEach(() => {
+	MockEventSource.instances = [];
+});
+
+afterEach(() => {
+	resetResourceSyncForTests();
+	vi.unstubAllGlobals();
+});
+
+describe('resource sync interleavings', () => {
+	it('commit before hello is in the snapshot once', async () => {
+		const snapshotSongs: SongItem[] = [];
+		const { controller, sources, store, upserted, fetchCalls } = setup({
+			loadSnapshot: async () => {
+				snapshotSongs.push(song({ generation_count: 1, generations: [gen('g-before')] }));
+				return true;
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '1' });
+		latestSource(sources).emit('generation.created', created('1', 'g-before'));
+		await flush();
+		await controller.waitForReady();
+		expect(get(store).status).toBe('live');
+		expect(fetchCalls).toEqual([]);
+		expect(upserted).toEqual([]);
+		expect(snapshotSongs[0].generations.map((item) => item.id)).toEqual(['g-before']);
+		expect(snapshotSongs).toHaveLength(1);
+	});
+
+	it('commit between hello and snapshot is applied once after merge', async () => {
+		const gate = deferred<boolean>();
+		const { controller, sources, upserted, fetchCalls, store } = setup({
+			loadSnapshot: () => gate.promise,
+			fetchSong: async () => song({ generation_count: 1, generations: [gen('g-mid')] })
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).emit('generation.created', created('1', 'g-mid'));
+		gate.resolve(true);
+		await flush();
+		await controller.waitForReady();
+		expect(get(store).status).toBe('live');
+		expect(upserted.at(-1)?.generations.map((item) => item.id)).toEqual(['g-mid']);
+		expect(fetchCalls.filter((id) => id === 's1').length).toBe(1);
+	});
+
+	it('commit during snapshot is buffered and visible once', async () => {
+		const gate = deferred<boolean>();
+		const { controller, sources, upserted, fetchCalls, store } = setup({
+			loadSnapshot: () => gate.promise,
+			fetchSong: async () => song({ generation_count: 1, generations: [gen('g-during')] })
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		expect(fetchCalls).toEqual([]);
+		latestSource(sources).emit('generation.created', created('1', 'g-during'));
+		await flush();
+		expect(fetchCalls).toEqual([]);
+		gate.resolve(true);
+		await flush();
+		await controller.waitForReady();
+		expect(get(store).status).toBe('live');
+		expect(fetchCalls.filter((id) => id === 's1')).toHaveLength(1);
+		const ids = upserted.flatMap((item) => item.generations.map((generation) => generation.id));
+		expect(ids.filter((id) => id === 'g-during')).toEqual(['g-during']);
+	});
+
+	it('commit after snapshot is a live fetch without a toast owner', async () => {
+		let snapshotDone = false;
+		const { controller, sources, upserted } = setup({
+			fetchSong: async () =>
+				snapshotDone
+					? song({ generation_count: 1, generations: [gen('g-live')] })
+					: song({ generations: [] })
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		snapshotDone = true;
+		upserted.length = 0;
+		latestSource(sources).emit('generation.created', created('1', 'g-live'));
+		await flush();
+		expect(upserted).toHaveLength(1);
+		expect(upserted[0].generations[0].id).toBe('g-live');
+	});
+});
+
+describe('resource sync owner', () => {
+	it('duplicate sequence and generation id stay idempotent', async () => {
+		let snapshotDone = false;
+		const { controller, sources, fetchCalls, upserted } = setup({
+			fetchSong: async () =>
+				snapshotDone
+					? song({ generation_count: 1, generations: [gen('g-dup')] })
+					: song({ generations: [] })
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		snapshotDone = true;
+		const fetchesAfterReady = fetchCalls.length;
+		latestSource(sources).emit('generation.created', created('1', 'g-dup'));
+		latestSource(sources).emit('generation.created', created('1', 'g-dup'));
+		await flush();
+		expect(fetchCalls.length - fetchesAfterReady).toBe(1);
+		expect(upserted.filter((item) => item.generations[0]?.id === 'g-dup')).toHaveLength(1);
+	});
+
+	it('stale fetch completions are discarded by revision', async () => {
+		const first = deferred<SongItem>();
+		let calls = 0;
+		const { controller, sources, upserted } = setup({
+			fetchSong: async () => {
+				calls += 1;
+				if (calls === 1) return first.promise;
+				return song({ generation_count: 1, generations: [gen('g-new')] });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		upserted.length = 0;
+		latestSource(sources).emit('generation.created', created('1', 'g-old'));
+		await flush();
+		latestSource(sources).emit('generation.created', created('2', 'g-new'));
+		await flush();
+		first.resolve(song({ generation_count: 1, generations: [gen('g-old')] }));
+		await flush();
+		expect(upserted.map((item) => item.generations[0]?.id)).toEqual(['g-new']);
+	});
+
+	it('disconnect during snapshot does not mark the store live', async () => {
+		const gate = deferred<boolean>();
+		const { controller, sources, store } = setup({
+			loadSnapshot: () => gate.promise
+		});
+		controller.start();
+		const ready = controller.waitForReady();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).error();
+		await flush();
+		expect(get(store).status).toBe('reconnecting');
+		expect(get(store).ready).toBe(false);
+		gate.resolve(true);
+		await flush();
+		expect(get(store).status).toBe('reconnecting');
+		expect(get(store).ready).toBe(false);
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		expect(await ready).toBe(true);
+		expect(get(store).status).toBe('live');
+	});
+
+	it('resync during bootstrap reloads the snapshot before live', async () => {
+		const loads: number[] = [];
+		const first = deferred<boolean>();
+		const { controller, sources, store } = setup({
+			loadSnapshot: async () => {
+				loads.push(1);
+				if (loads.length === 1) return first.promise;
+				return true;
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).emit('resync', { high_water_mark: '4' });
+		first.resolve(true);
+		await flush();
+		await controller.waitForReady();
+		expect(loads.length).toBeGreaterThanOrEqual(2);
+		expect(get(store).status).toBe('live');
+		expect(get(store).highWaterMark).toBe('4');
+	});
+
+	it('focus revalidation fetches selected and currently loaded songs', async () => {
+		const { controller, sources, fetchCalls } = setup({
+			listLoadedSongIds: () => ['s1', 's2']
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		const before = fetchCalls.length;
+		await controller.handleVisibility();
+		expect(fetchCalls.slice(before).sort()).toEqual(['s1', 's2']);
+	});
+
+	it('refresh errors are visible and retryable', async () => {
+		let fail = true;
+		const { controller, sources, store } = setup({
+			loadSnapshot: async () => {
+				if (fail) return false;
+				return true;
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		expect(get(store).status).toBe('error');
+		expect(get(store).error).toBe(RESOURCE_SYNC_ERROR);
+		expect(get(store).ready).toBe(false);
+		fail = false;
+		const ready = controller.retry();
+		await flush();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		expect(await ready).toBe(true);
+		expect(get(store).status).toBe('live');
+		expect(get(store).error).toBeNull();
+	});
+
+	it('live fetch errors stay pending for retry', async () => {
+		let fail = true;
+		const { controller, sources, store, upserted } = setup({
+			fetchSong: async () => {
+				if (fail) throw new Error('boom');
+				return song({ generations: [gen('g1')] });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+		expect(get(store).status).toBe('error');
+		expect(get(store).error).toBe('boom');
+		fail = false;
+		expect(await controller.retry()).toBe(true);
+		expect(get(store).status).toBe('live');
+		expect(upserted.at(-1)?.generations[0]?.id).toBe('g1');
+	});
+
+	it('unauthorized stream errors stop the owner and clear auth', async () => {
+		const onUnauthorized = vi.fn(async () => undefined);
+		const { controller, sources, store } = setup({
+			probeAuth: async () => 'unauthorized',
+			onUnauthorized
+		});
+		controller.start();
+		const source = latestSource(sources);
+		source.error();
+		await flush();
+		expect(source.closed).toBe(true);
+		expect(get(store).status).toBe('error');
+		expect(onUnauthorized).toHaveBeenCalledOnce();
+	});
+
+	it('opens a native EventSource with credentials and cleans it up', async () => {
+		const { controller, sources, store } = setup();
+		controller.start();
+		expect(sources).toHaveLength(1);
+		expect(sources[0].url).toBe(RESOURCE_EVENT_STREAM_PATH);
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		controller.stop();
+		expect(sources[0].closed).toBe(true);
+		expect(get(store)).toEqual(EMPTY_RESOURCE_SYNC);
+	});
+
+	it('cleanup unbinds visibility revalidation', async () => {
+		const { controller, sources, fetchCalls } = setup();
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		controller.stop();
+		const before = fetchCalls.length;
+		window.dispatchEvent(new Event('focus'));
+		await flush();
+		expect(fetchCalls.length).toBe(before);
+	});
+});
+
+describe('library resource sync wiring', () => {
+	it('starts a credentialed EventSource and stops it on demand', () => {
+		vi.stubGlobal('EventSource', MockEventSource);
+		startLibraryResourceSync();
+		expect(MockEventSource.instances).toHaveLength(1);
+		expect(MockEventSource.instances[0].url).toBe(RESOURCE_EVENT_STREAM_PATH);
+		expect(MockEventSource.instances[0].withCredentials).toBe(true);
+		stopLibraryResourceSync();
+		expect(MockEventSource.instances[0].closed).toBe(true);
+	});
+});

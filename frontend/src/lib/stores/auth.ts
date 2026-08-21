@@ -48,6 +48,8 @@ export function clearAuth(): void {
 }
 
 export async function logout(): Promise<void> {
+	const { stopLibraryResourceSync } = await import('$lib/stores/resourceSync');
+	stopLibraryResourceSync();
 	try {
 		await apiLogout();
 	} catch {

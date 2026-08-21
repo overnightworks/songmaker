@@ -62,3 +62,10 @@ export const LIBRARY_SHARED_EMPTY = 'Nothing shared';
 export const LIBRARY_SHARED_LOADING = 'Loading shared…';
 export const LIBRARY_NEW_PLAYLIST_LABEL = 'New playlist';
 export const LIBRARY_NEW_SONG_LABEL = 'New Song';
+
+export const RESOURCE_EVENT_STREAM_PATH = '/api/resource-events/stream';
+export const RESOURCE_EVENT_HELLO = 'hello';
+export const RESOURCE_EVENT_RESYNC = 'resync';
+export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';
+export const RESOURCE_SYNC_ERROR = 'Library sync failed';
+export const JOB_TYPE_GENERATE = 'generate';

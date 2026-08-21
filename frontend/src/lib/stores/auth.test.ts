@@ -4,6 +4,7 @@ import { get } from 'svelte/store';
 const mockFetchMe = vi.fn();
 const mockApiLogin = vi.fn();
 const mockApiLogout = vi.fn();
+const mockStopLibraryResourceSync = vi.fn();
 
 vi.mock('$lib/api/client', async () => {
 	const { ApiError } = await vi.importActual<typeof import('$lib/api/client')>('$lib/api/client');
@@ -14,6 +15,10 @@ vi.mock('$lib/api/client', async () => {
 		logout: (...args: unknown[]) => mockApiLogout(...args)
 	};
 });
+
+vi.mock('$lib/stores/resourceSync', () => ({
+	stopLibraryResourceSync: (...args: unknown[]) => mockStopLibraryResourceSync(...args)
+}));
 
 import {
 	currentUser,
@@ -31,6 +36,7 @@ beforeEach(() => {
 	mockFetchMe.mockReset();
 	mockApiLogin.mockReset();
 	mockApiLogout.mockReset();
+	mockStopLibraryResourceSync.mockReset();
 	currentUser.set(null);
 	authLoading.set(true);
 	authError.set('');
@@ -111,6 +117,20 @@ describe('clearAuth', () => {
 });
 
 describe('logout', () => {
+	it('stops resource sync before the logout request', async () => {
+		const order: string[] = [];
+		mockStopLibraryResourceSync.mockImplementation(() => {
+			order.push('stop');
+		});
+		mockApiLogout.mockImplementation(async () => {
+			order.push('api');
+		});
+		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
+		await logout();
+		expect(order).toEqual(['stop', 'api']);
+		expect(get(currentUser)).toBeNull();
+	});
+
 	it('clears currentUser', async () => {
 		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
 		mockApiLogout.mockResolvedValueOnce(undefined);

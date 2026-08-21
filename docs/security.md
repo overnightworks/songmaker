@@ -157,7 +157,9 @@ the async event loop, is awaited only for the remaining wall time, and no DB ses
 spans an SSE yield or sleep. The response applies the same wall around ASGI sends, so
 a slow reader cannot keep the socket or lease alive after the deadline. The endpoint
 emits 15-second comment heartbeats so a correctly configured proxy sees activity
-before the deliberate reconnect.
+before the deliberate reconnect. The library page's native EventSource probes
+`/api/auth/me` on `onerror`; 401/403 stop the stream and clear auth, and logout
+closes the owner before the logout request.
 
 ## Claude Chat Security
 

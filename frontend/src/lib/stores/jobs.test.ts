@@ -1,16 +1,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 
-const mockFetchSong = vi.fn();
+const mockRequestSongRefresh = vi.fn();
 
-vi.mock('$lib/api/client', () => ({
-	fetchSong: (...args: unknown[]) => mockFetchSong(...args)
+vi.mock('$lib/stores/resourceSync', () => ({
+	requestSongRefresh: (...args: unknown[]) => mockRequestSongRefresh(...args)
 }));
-
-vi.mock('$lib/stores/player', async () => {
-	const { writable } = await import('svelte/store');
-	return { songList: writable([]) };
-});
 
 import { activeJobs, trackJob, removeJob, stopTracking } from './jobs';
 import { toasts } from './toast';
@@ -70,7 +65,8 @@ function latestSource(): MockEventSource {
 
 beforeEach(() => {
 	activeJobs.set([]);
-	mockFetchSong.mockReset();
+	mockRequestSongRefresh.mockReset();
+	mockRequestSongRefresh.mockResolvedValue(undefined);
 	MockEventSource.instances = [];
 	vi.stubGlobal('EventSource', MockEventSource);
 	vi.useFakeTimers();
@@ -111,7 +107,6 @@ describe('jobs store', () => {
 	});
 
 	it('closes EventSource and removes job on completed', async () => {
-		mockFetchSong.mockRejectedValue(new Error('no song'));
 		trackJob(makeJob(), {});
 		const source = latestSource();
 		latestSource().simulateMessage(makeJob({ status: 'completed', progress: 1.0 }));
@@ -128,7 +123,6 @@ describe('jobs store', () => {
 	});
 
 	it('handles partial completion', async () => {
-		mockFetchSong.mockRejectedValue(new Error('no song'));
 		trackJob(makeJob(), {});
 		latestSource().simulateMessage(
 			makeJob({ status: 'partial', error: 'some generations failed' })
@@ -166,27 +160,25 @@ describe('jobs store', () => {
 		expect(get(activeJobs)[0].job.status).toBe('queued');
 	});
 
-	it('refreshes song data on completion with songId', async () => {
-		mockFetchSong.mockResolvedValue({ id: 's1', title: 'Updated' });
+	it('does not load the song for a completed generation job', async () => {
 		trackJob(makeJob(), { songId: 's1' });
 		latestSource().simulateMessage(makeJob({ status: 'completed' }));
 		await vi.advanceTimersByTimeAsync(0);
-		expect(mockFetchSong).toHaveBeenCalledWith('s1');
+		expect(mockRequestSongRefresh).not.toHaveBeenCalled();
 	});
 
-	it('handles refreshSongData failure silently', async () => {
-		mockFetchSong.mockRejectedValue(new Error('refresh failed'));
-		trackJob(makeJob(), { songId: 's1' });
-		latestSource().simulateMessage(makeJob({ status: 'completed' }));
+	it('requests refresh through the resource-sync owner for other job types', async () => {
+		trackJob(makeJob({ type: 'score' }), { songId: 's1' });
+		latestSource().simulateMessage(makeJob({ type: 'score', status: 'completed' }));
 		await vi.advanceTimersByTimeAsync(0);
-		expect(get(activeJobs)).toHaveLength(0);
+		expect(mockRequestSongRefresh).toHaveBeenCalledWith('s1');
 	});
 
 	it('skips refresh when no songId', async () => {
-		trackJob(makeJob(), {});
-		latestSource().simulateMessage(makeJob({ status: 'completed' }));
+		trackJob(makeJob({ type: 'score' }), {});
+		latestSource().simulateMessage(makeJob({ type: 'score', status: 'completed' }));
 		await vi.advanceTimersByTimeAsync(0);
-		expect(mockFetchSong).not.toHaveBeenCalled();
+		expect(mockRequestSongRefresh).not.toHaveBeenCalled();
 	});
 
 	it('removeJob closes EventSource and removes from store', () => {
