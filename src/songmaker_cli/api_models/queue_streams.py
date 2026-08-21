@@ -43,6 +43,12 @@ class QueueStreamTrackResponse(BaseModel):
     end_offset: float
 
 
+class QueueStreamSkipResponse(BaseModel):
+    song_id: str
+    generation_id: str
+    reason: Literal["missing_path", "missing_file", "unreadable_file"]
+
+
 class QueueStreamManifestResponse(BaseModel):
     snapshot_id: str
     stream_url: str
@@ -50,6 +56,8 @@ class QueueStreamManifestResponse(BaseModel):
     total_duration: float
     tracks: list[QueueStreamTrackResponse]
     windowed: bool = False
+    skipped: list[QueueStreamSkipResponse] = Field(default_factory=list)
+    skipped_complete: bool = True
 
 
 class QueueStreamPinResponse(BaseModel):

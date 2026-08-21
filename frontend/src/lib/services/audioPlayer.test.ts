@@ -80,7 +80,9 @@ function makeStreamManifest(): QueueStreamManifest {
 				end_offset: 30
 			}
 		],
-		windowed: false
+		windowed: false,
+		skipped: [],
+		skipped_complete: true
 	};
 }
 
@@ -146,6 +148,7 @@ beforeEach(() => {
 	vi.stubGlobal('fetch', fetchMock);
 	audioPlayer.destroy();
 	audioPlayer.onEnded = null;
+	audioPlayer.onPlaybackStarted = null;
 	audioPlayer.onAuthLost = null;
 	audioPlayer.onStreamRebuild = null;
 	audioPlayer.onCurrentChange = null;
@@ -391,6 +394,47 @@ describe('stream playback', () => {
 		expect(audioPlayer.current?.songTitle).toBe('Second');
 		expect(fakeAudio.currentTime).toBe(10);
 		expect(fakeAudio.playMock).toHaveBeenCalled();
+	});
+
+	it('ends a windowed stream once without wrapping the final track', () => {
+		const onEnded = vi.fn();
+		const onPlaybackStarted = vi.fn();
+		audioPlayer.onEnded = onEnded;
+		audioPlayer.onPlaybackStarted = onPlaybackStarted;
+		audioPlayer.loadStream({ ...makeStreamManifest(), windowed: true }, 1, { autoplay: false });
+
+		fakeAudio.fire('ended');
+		fakeAudio.fire('ended');
+
+		expect(audioPlayer.current?.songTitle).toBe('Second');
+		expect(audioPlayer.status).toBe('idle');
+		expect(onEnded).toHaveBeenCalledTimes(1);
+		expect(onEnded).toHaveBeenCalledWith('window-end');
+
+		fakeAudio.fire('play');
+		fakeAudio.fire('ended');
+		expect(onPlaybackStarted).toHaveBeenCalledOnce();
+		expect(onEnded).toHaveBeenCalledTimes(2);
+	});
+
+	it('keeps modulo navigation for a non-windowed stream', () => {
+		audioPlayer.loadStream(makeStreamManifest(), 1, { autoplay: false });
+
+		expect(audioPlayer.nextStreamTrack()).toBe(true);
+		expect(audioPlayer.current?.songTitle).toBe('First');
+	});
+
+	it('resets the terminal end guard on destroy', () => {
+		const onEnded = vi.fn();
+		audioPlayer.onEnded = onEnded;
+		audioPlayer.loadStream({ ...makeStreamManifest(), windowed: true }, 1, { autoplay: false });
+		fakeAudio.fire('ended');
+
+		audioPlayer.destroy();
+		audioPlayer.loadStream({ ...makeStreamManifest(), windowed: true }, 1, { autoplay: false });
+		fakeAudio.fire('ended');
+
+		expect(onEnded).toHaveBeenCalledTimes(2);
 	});
 
 	it('starts at the clicked track once metadata arrives, not track one', () => {

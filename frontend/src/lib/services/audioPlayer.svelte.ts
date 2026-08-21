@@ -14,6 +14,8 @@ export type PlayerStatus =
 	| 'buffering'
 	| 'error';
 
+export type StreamEndReason = 'normal' | 'window-end';
+
 const AUDIO_URL_PREFIX = '/audio/';
 const ERROR_MSG_GENERIC = 'Playback failed. Click play to retry.';
 const ERROR_MSG_NOT_FOUND = 'Audio file not found.';
@@ -31,7 +33,8 @@ class AudioPlayer {
 	current = $state<PlaybackInfo | null>(null);
 	mode = $state<'classic' | 'stream'>('classic');
 
-	onEnded: (() => void) | null = null;
+	onEnded: ((reason: StreamEndReason) => void) | null = null;
+	onPlaybackStarted: (() => void) | null = null;
 	onAuthLost: (() => void | Promise<void>) | null = null;
 	onStreamRebuild: ((state: StreamFallbackState) => Promise<QueueStreamManifest | null>) | null =
 		null;
@@ -45,6 +48,17 @@ class AudioPlayer {
 	private recoveryAttempts = 0;
 	private pendingRecoverySeek: number | null = null;
 	private lastObservedTime = 0;
+	private streamEndSignaled = false;
+	private streamCanNext = $state(false);
+	private streamCanPrev = $state(false);
+
+	get canNextStreamTrack(): boolean {
+		return this.streamCanNext;
+	}
+
+	get canPrevStreamTrack(): boolean {
+		return this.streamCanPrev;
+	}
 
 	getElement(): HTMLAudioElement | null {
 		return this.audio;
@@ -62,6 +76,8 @@ class AudioPlayer {
 			this.current?.generation.mp3_path === info.generation.mp3_path;
 
 		this.streamEngine.clear();
+		this.syncStreamBoundaries();
+		this.streamEndSignaled = false;
 		this.mode = 'classic';
 		this.setCurrent(info);
 		this.error = null;
@@ -93,6 +109,7 @@ class AudioPlayer {
 		const autoplay = opts.autoplay ?? true;
 		const streamState = this.streamEngine.start(manifest, startIndex);
 		if (!streamState) return;
+		this.syncStreamBoundaries();
 		if (opts.resumeAt !== undefined) this.streamEngine.resumeAt(opts.resumeAt);
 		const el = this.ensureAudio();
 		this.clearStallRecoveryTimer();
@@ -168,6 +185,7 @@ class AudioPlayer {
 		const autoplay = opts.autoplay ?? !this.audio.paused;
 		const streamState = this.streamEngine.seekToTrack(this.audio, index);
 		if (!streamState) return false;
+		this.syncStreamBoundaries();
 		this.setCurrent(streamState.info);
 		this.currentTime = streamState.currentTime;
 		this.duration = streamState.duration;
@@ -179,6 +197,7 @@ class AudioPlayer {
 	nextStreamTrack(opts: { autoplay?: boolean } = {}): boolean {
 		if (!this.audio || !this.streamEngine.active) return false;
 		const streamState = this.streamEngine.nextTrack(this.audio);
+		this.syncStreamBoundaries();
 		if (!streamState) return false;
 		this.setCurrent(streamState.info);
 		this.currentTime = streamState.currentTime;
@@ -191,6 +210,7 @@ class AudioPlayer {
 	prevStreamTrack(opts: { autoplay?: boolean } = {}): boolean {
 		if (!this.audio || !this.streamEngine.active) return false;
 		const streamState = this.streamEngine.prevTrack(this.audio);
+		this.syncStreamBoundaries();
 		if (!streamState) return false;
 		this.setCurrent(streamState.info);
 		this.currentTime = streamState.currentTime;
@@ -201,7 +221,12 @@ class AudioPlayer {
 	}
 
 	destroy(): void {
-		if (!this.audio) return;
+		this.streamEndSignaled = false;
+		if (!this.audio) {
+			this.streamEngine.clear();
+			this.syncStreamBoundaries();
+			return;
+		}
 		this.clearStallRecoveryTimer();
 		this.audio.pause();
 		this.audio.src = '';
@@ -215,6 +240,7 @@ class AudioPlayer {
 		this.duration = 0;
 		this.error = null;
 		this.streamEngine.clear();
+		this.syncStreamBoundaries();
 		this.recoveryAttempts = 0;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
@@ -273,6 +299,8 @@ class AudioPlayer {
 			this.currentTime = el.currentTime;
 		});
 		el.addEventListener('play', () => {
+			this.streamEndSignaled = false;
+			this.onPlaybackStarted?.();
 			if (this.status !== 'error') this.status = 'playing';
 		});
 		el.addEventListener('playing', () => {
@@ -305,9 +333,14 @@ class AudioPlayer {
 		el.addEventListener('ended', () => {
 			this.clearStallRecoveryTimer();
 			if (this.streamEngine.active && this.nextStreamTrack({ autoplay: true })) return;
+			const reason: StreamEndReason =
+				this.streamEngine.active && this.streamEngine.windowed ? 'window-end' : 'normal';
 			this.status = 'idle';
 			this.currentTime = 0;
-			this.onEnded?.();
+			if (!this.streamEndSignaled) {
+				this.streamEndSignaled = true;
+				this.onEnded?.(reason);
+			}
 		});
 		el.addEventListener('error', () => {
 			if (this.streamEngine.active) {
@@ -406,6 +439,7 @@ class AudioPlayer {
 	private updateStreamPosition(absoluteTime: number): void {
 		const streamState = this.streamEngine.updatePosition(absoluteTime);
 		if (!streamState) return;
+		this.syncStreamBoundaries();
 		if (this.current?.generation.id !== streamState.info.generation.id) {
 			this.setCurrent(streamState.info);
 		}
@@ -414,6 +448,11 @@ class AudioPlayer {
 		this.lastObservedTime = absoluteTime;
 		this.clearStallRecoveryTimer();
 		if (this.status === 'buffering') this.status = 'playing';
+	}
+
+	private syncStreamBoundaries(): void {
+		this.streamCanNext = this.streamEngine.canNext;
+		this.streamCanPrev = this.streamEngine.canPrev;
 	}
 
 	// Stream recovery never falls back to per-track playback: the per-track

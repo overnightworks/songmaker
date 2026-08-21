@@ -10,6 +10,7 @@ import type {
 	GenerationItem,
 	PlaylistEntryItem,
 	QueueStreamManifest,
+	QueueStreamSkipItem,
 	SongItem
 } from '$lib/api/types';
 import {
@@ -130,6 +131,18 @@ export async function toggleShuffle(): Promise<void> {
 
 export type LibraryQueueNotice = 'idle' | 'building' | 'empty' | 'error';
 export const libraryQueueNotice = writable<LibraryQueueNotice>('idle');
+export const libraryQueueSkipped = writable<QueueStreamSkipItem[]>([]);
+export const libraryQueueSkippedComplete = writable(true);
+export const windowEnded = writable(false);
+
+function clearWindowEnd(): void {
+	windowEnded.set(false);
+}
+
+function clearLibraryQueueSkipFeedback(): void {
+	libraryQueueSkipped.set([]);
+	libraryQueueSkippedComplete.set(true);
+}
 
 export async function chooseLibraryTakePool(pool: LibraryTakePool): Promise<void> {
 	setLibraryTakePool(pool);
@@ -177,6 +190,8 @@ export function playGeneration(
 	song: SongItem,
 	opts: { restart?: boolean } = {}
 ): void {
+	clearWindowEnd();
+	clearLibraryQueueSkipFeedback();
 	const info = toPlaybackInfo(gen, song);
 	if (opts.restart) audioPlayer.load(info, { restart: true });
 	else audioPlayer.load(info);
@@ -230,6 +245,8 @@ async function playStreamEntries(
 	startIndex: number,
 	opts: { restart?: boolean; resumeAtTrackTime?: number }
 ): Promise<void> {
+	clearWindowEnd();
+	clearLibraryQueueSkipFeedback();
 	let manifest: QueueStreamManifest;
 	try {
 		manifest = await createQueueStreamSnapshot(
@@ -260,12 +277,15 @@ export async function playLibraryFromGeneration(
 ): Promise<void> {
 	queueContext.set({ type: 'library' });
 	libraryQueueNotice.set('building');
+	clearLibraryQueueSkipFeedback();
+	clearWindowEnd();
 	let manifest: QueueStreamManifest;
 	try {
 		manifest = await createLibraryQueueStreamSnapshot(gen.id, librarySnapshotOpts());
 	} catch (err) {
 		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
 		libraryQueueNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
+		clearLibraryQueueSkipFeedback();
 		addToast(libraryStreamFailureToast(err), 'error');
 		return;
 	}
@@ -274,10 +294,13 @@ export async function playLibraryFromGeneration(
 	if (startIndex < 0) {
 		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
 		libraryQueueNotice.set('error');
+		clearLibraryQueueSkipFeedback();
 		addToast(QUEUE_TAKE_MISSING_TOAST, 'error');
 		return;
 	}
 	libraryQueueNotice.set('idle');
+	libraryQueueSkipped.set(manifest.skipped ?? []);
+	libraryQueueSkippedComplete.set(manifest.skipped_complete ?? true);
 	audioPlayer.loadStream(
 		manifest,
 		startIndex,
@@ -291,17 +314,22 @@ export async function playLibraryFromGeneration(
 export async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<void> {
 	queueContext.set({ type: 'library' });
 	libraryQueueNotice.set('building');
+	clearLibraryQueueSkipFeedback();
+	clearWindowEnd();
 	let manifest: QueueStreamManifest;
 	try {
 		manifest = await createLibraryQueueStreamSnapshot(null, librarySnapshotOpts());
 	} catch (err) {
 		retryPlayIntent = () => playLibrary(opts);
 		libraryQueueNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
+		clearLibraryQueueSkipFeedback();
 		addToast(libraryStreamFailureToast(err), 'error');
 		return;
 	}
 	retryPlayIntent = null;
 	libraryQueueNotice.set('idle');
+	libraryQueueSkipped.set(manifest.skipped ?? []);
+	libraryQueueSkippedComplete.set(manifest.skipped_complete ?? true);
 	audioPlayer.loadStream(
 		manifest,
 		0,
@@ -372,6 +400,7 @@ export function canPlayPrevSong(
 	songs: SongItem[],
 	ctx: QueueContext
 ): boolean {
+	if (audioPlayer.mode === 'stream') return audioPlayer.canPrevStreamTrack;
 	if (!current) return false;
 	if (ctx.type === 'playlist') return ctx.entries.length > 1;
 	const pool = ctx.type === 'album' ? songs.filter((s) => s.album_id === ctx.albumId) : songs;
@@ -384,6 +413,7 @@ export function canPlayNextSong(
 	ctx: QueueContext,
 	_shuffle = false
 ): boolean {
+	if (audioPlayer.mode === 'stream') return audioPlayer.canNextStreamTrack;
 	if (!current) return false;
 	if (ctx.type === 'playlist') {
 		return ctx.entries.length > 1;
@@ -571,6 +601,8 @@ export async function playPrevSong(): Promise<void> {
 }
 
 export async function playAlbum(albumId: string): Promise<void> {
+	clearWindowEnd();
+	clearLibraryQueueSkipFeedback();
 	queueContext.set({ type: 'album', albumId });
 	const { entries, startIndex } = await collectAlbumQueue(albumId);
 	if (entries.length === 0) return;
@@ -593,6 +625,8 @@ export async function playAlbumFromGeneration(
 	gen: GenerationItem,
 	opts: { resumeAtTrackTime?: number } = {}
 ): Promise<void> {
+	clearWindowEnd();
+	clearLibraryQueueSkipFeedback();
 	queueContext.set({ type: 'album', albumId });
 	const { entries, startIndex } = await collectAlbumQueue(albumId, { song, gen });
 	if (entries.length === 0) return;
@@ -634,6 +668,8 @@ export async function playPlaylistEntries(
 	opts: { restart?: boolean; resumeAtTrackTime?: number } = {}
 ): Promise<void> {
 	if (entries.length === 0) return;
+	clearWindowEnd();
+	clearLibraryQueueSkipFeedback();
 	queueContext.set({ type: 'playlist', entries, index: startIndex });
 	const ordered = shuffledWithStart(entries, startIndex);
 	if (useStreamForQueue()) {
@@ -650,11 +686,15 @@ async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStre
 	const ctx = get(queueContext);
 	try {
 		if (ctx.type === 'library') {
+			clearLibraryQueueSkipFeedback();
 			const currentTrack = state.manifest.tracks[state.trackIndex];
-			return await createLibraryQueueStreamSnapshot(
+			const manifest = await createLibraryQueueStreamSnapshot(
 				currentTrack?.generation_id ?? null,
 				librarySnapshotOpts()
 			);
+			libraryQueueSkipped.set(manifest.skipped ?? []);
+			libraryQueueSkippedComplete.set(manifest.skipped_complete ?? true);
+			return manifest;
 		}
 		return await createQueueStreamSnapshot(
 			state.manifest.tracks.map((track) => ({
@@ -670,6 +710,7 @@ async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStre
 
 audioPlayer.onStreamRebuild = rebuildQueueStream;
 audioPlayer.onCurrentChange = updateMediaSessionMetadata;
+audioPlayer.onPlaybackStarted = clearWindowEnd;
 
 setupMediaSessionHandlers({
 	play: () => audioPlayer.play(),
@@ -805,7 +846,11 @@ export function updateGenerationScores(
 	}));
 }
 
-export function handlePlaybackEnded(): void {
+export function handlePlaybackEnded(reason: 'normal' | 'window-end' = 'normal'): void {
+	if (reason === 'window-end') {
+		windowEnded.set(true);
+		return;
+	}
 	void playNextSong();
 }
 

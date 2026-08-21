@@ -31,6 +31,8 @@ function makeManifest(overrides: Partial<QueueStreamManifest> = {}): QueueStream
 		total_duration: 120,
 		tracks: [],
 		windowed: false,
+		skipped: [],
+		skipped_complete: true,
 		...overrides
 	};
 }

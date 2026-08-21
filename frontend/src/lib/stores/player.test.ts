@@ -32,6 +32,8 @@ import {
 	playGeneration,
 	chooseLibraryTakePool,
 	libraryQueueNotice,
+	libraryQueueSkipped,
+	libraryQueueSkippedComplete,
 	playLibrary,
 	playLibraryFromGeneration,
 	playAlbumFromGeneration,
@@ -52,7 +54,8 @@ import {
 	shuffleEnabled,
 	songList,
 	toggleShuffle,
-	updateGenerationScores
+	updateGenerationScores,
+	windowEnded
 } from './player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
@@ -157,6 +160,8 @@ afterEach(() => {
 	setShuffle(false);
 	setLibraryTakePool('mix');
 	libraryQueueNotice.set('idle');
+	libraryQueueSkipped.set([]);
+	windowEnded.set(false);
 	audioPlayer.mode = 'classic';
 	audioPlayer.currentTime = 0;
 	toasts.set([]);
@@ -362,6 +367,32 @@ describe('playback dispatch', () => {
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
 			expect.objectContaining({ songTitle: 'Second' })
 		);
+	});
+
+	it('records window-end without starting another track', () => {
+		handlePlaybackEnded('window-end');
+
+		expect(get(windowEnded)).toBe(true);
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('clears window-end when playback starts again', () => {
+		windowEnded.set(true);
+
+		audioPlayer.onPlaybackStarted?.();
+
+		expect(get(windowEnded)).toBe(false);
+	});
+
+	it('clears library feedback when playback switches to a playlist', () => {
+		libraryQueueSkipped.set([{ song_id: 's1', generation_id: 'g1', reason: 'missing_file' }]);
+		windowEnded.set(true);
+
+		playPlaylistEntries([makePlaylistEntry()]);
+
+		expect(get(libraryQueueSkipped)).toEqual([]);
+		expect(get(windowEnded)).toBe(false);
+		expect(get(queueContext).type).toBe('playlist');
 	});
 
 	it('toggleShuffle flips shuffle mode', async () => {
@@ -729,6 +760,8 @@ function makeManifest(overrides: Partial<QueueStreamManifest> = {}): QueueStream
 		total_duration: 180,
 		tracks: [],
 		windowed: false,
+		skipped: [],
+		skipped_complete: true,
 		...overrides
 	};
 }
@@ -924,6 +957,18 @@ describe('playLibraryFromGeneration', () => {
 		expect(infoToasts[0].message).toMatch(/Streaming the first 2 tracks/);
 	});
 
+	it('preserves whether the library skip report is complete', async () => {
+		const manifest = makeManifest({
+			skipped_complete: false,
+			tracks: [makeTrack()]
+		});
+		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+
+		await playLibraryFromGeneration(makeGen());
+
+		expect(get(libraryQueueSkippedComplete)).toBe(false);
+	});
+
 	it('sends the current shuffle flag with the library snapshot request', async () => {
 		setShuffle(true);
 		const manifest = makeManifest({ tracks: [makeTrack({ generation_id: 'g1' })] });
@@ -947,7 +992,17 @@ describe('rebuildQueueStream routing', () => {
 
 	it('routes library context rebuild to the library endpoint', async () => {
 		queueContext.set({ type: 'library' });
-		const freshManifest = makeManifest({ snapshot_id: 'fresh' });
+		libraryQueueSkipped.set([
+			{ song_id: 'old-song', generation_id: 'old-generation', reason: 'missing_file' }
+		]);
+		libraryQueueSkippedComplete.set(true);
+		const freshManifest = makeManifest({
+			snapshot_id: 'fresh',
+			skipped: [
+				{ song_id: 'new-song', generation_id: 'new-generation', reason: 'unreadable_file' }
+			],
+			skipped_complete: false
+		});
 		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(freshManifest);
 
 		const state: StreamFallbackState = {
@@ -962,6 +1017,28 @@ describe('rebuildQueueStream routing', () => {
 			pool: 'mix'
 		});
 		expect(result).toBe(freshManifest);
+		expect(get(libraryQueueSkipped)).toEqual(freshManifest.skipped);
+		expect(get(libraryQueueSkippedComplete)).toBe(false);
+	});
+
+	it('clears stale library skip feedback when rebuild fails', async () => {
+		queueContext.set({ type: 'library' });
+		libraryQueueSkipped.set([
+			{ song_id: 'old-song', generation_id: 'old-generation', reason: 'missing_file' }
+		]);
+		libraryQueueSkippedComplete.set(false);
+		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(new Error('expired'));
+		const state: StreamFallbackState = {
+			manifest: makeManifest({ tracks: [makeTrack({ generation_id: 'g-cur' })] }),
+			trackIndex: 0,
+			trackTime: 30
+		};
+
+		const result = await rebuildStream(state);
+
+		expect(result).toBeNull();
+		expect(get(libraryQueueSkipped)).toEqual([]);
+		expect(get(libraryQueueSkippedComplete)).toBe(true);
 	});
 
 	it('routes playlist context rebuild to the generic endpoint', async () => {
@@ -1418,7 +1495,13 @@ describe('library take pool', () => {
 
 	it('idle play starts the library snapshot at the chosen pool', async () => {
 		setLibraryTakePool('picks');
-		const manifest = makeManifest({ tracks: [makeTrack({ generation_id: 'g-pick' })] });
+		const skipped = [
+			{ song_id: 's2', generation_id: 'g-missing', reason: 'missing_file' as const }
+		];
+		const manifest = makeManifest({
+			tracks: [makeTrack({ generation_id: 'g-pick' })],
+			skipped
+		});
 		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
 
 		await playLibrary();
@@ -1429,10 +1512,12 @@ describe('library take pool', () => {
 		});
 		expect(loadStreamSpy).toHaveBeenCalledWith(manifest, 0, { restart: true });
 		expect(get(queueContext)).toEqual({ type: 'library' });
+		expect(get(libraryQueueSkipped)).toEqual(skipped);
 	});
 
 	it('empty pool toast names the active pool', async () => {
 		setLibraryTakePool('keeps');
+		libraryQueueSkipped.set([{ song_id: 'stale', generation_id: 'stale', reason: 'missing_file' }]);
 		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(
 			new ApiError(422, "No playable takes in pool 'keeps'", '/api/queue-streams/library')
 		);
@@ -1440,6 +1525,7 @@ describe('library take pool', () => {
 		await playLibrary();
 
 		expect(get(libraryQueueNotice)).toBe('empty');
+		expect(get(libraryQueueSkipped)).toEqual([]);
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({ message: 'Keine Takes (Keeps)', type: 'error' })
 		]);

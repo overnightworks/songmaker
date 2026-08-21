@@ -230,7 +230,9 @@ export async function saveStream(
 	const cache = await caches.open(OFFLINE_STREAMS_CACHE);
 	const offlineManifest: QueueStreamManifest = {
 		...manifest,
-		stream_url: offlineStreamUrl(manifest.snapshot_id)
+		stream_url: offlineStreamUrl(manifest.snapshot_id),
+		skipped: manifest.skipped ?? [],
+		skipped_complete: manifest.skipped_complete ?? true
 	};
 	await cache.put(
 		manifestCacheKey(manifest.snapshot_id),

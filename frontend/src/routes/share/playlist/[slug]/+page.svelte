@@ -73,7 +73,8 @@
 					currentTrack = entry;
 					playerRef?.loadAndPlay(manifest.stream_url, {
 						startIndex: streamIndex,
-						streamTracks: manifest.tracks
+						streamTracks: manifest.tracks,
+						streamWindowed: manifest.windowed
 					});
 					return;
 				}
@@ -83,7 +84,7 @@
 		}
 		streamManifest = null;
 		currentTrack = entry;
-		playerRef?.loadAndPlay(entry.audio_url, { streamTracks: null });
+		playerRef?.loadAndPlay(entry.audio_url, { streamTracks: null, streamWindowed: false });
 	}
 
 	async function getStreamManifest(): Promise<QueueStreamManifest> {
@@ -131,7 +132,7 @@
 		if (!streamManifest || !currentTrack?.audio_url) return;
 		streamManifest = null;
 		streamStartIndex = 0;
-		playerRef?.loadAndPlay(currentTrack.audio_url, { streamTracks: null });
+		playerRef?.loadAndPlay(currentTrack.audio_url, { streamTracks: null, streamWindowed: false });
 	}
 </script>
 
@@ -218,6 +219,7 @@
 		subtitle={currentTrack.artist}
 		autoplay
 		streamTracks={streamManifest?.tracks}
+		streamWindowed={streamManifest?.windowed ?? false}
 		startIndex={streamStartIndex}
 		onended={onEnded}
 		onnext={() => advanceTrack(1)}

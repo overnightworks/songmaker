@@ -9,6 +9,7 @@
 	} from '$lib/services/mediaSession';
 	import { formatTime } from '$lib/utils/format';
 	import Icon from './Icon.svelte';
+	import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 	import {
 		AudioVisualizer,
 		FFT_SIZE,
@@ -24,6 +25,7 @@
 		subtitle?: string;
 		autoplay?: boolean;
 		streamTracks?: QueueStreamTrackItem[];
+		streamWindowed?: boolean;
 		startIndex?: number;
 		onended?: () => void;
 		onnext?: () => void;
@@ -38,6 +40,7 @@
 		| {
 				startIndex?: number;
 				streamTracks?: QueueStreamTrackItem[] | null;
+				streamWindowed?: boolean;
 		  };
 
 	let {
@@ -46,6 +49,7 @@
 		subtitle,
 		autoplay,
 		streamTracks,
+		streamWindowed = false,
 		startIndex = 0,
 		onended,
 		onnext,
@@ -70,10 +74,18 @@
 	let frequencyData: Uint8Array<ArrayBuffer> | undefined;
 	let waveformData: Uint8Array<ArrayBuffer> | undefined;
 	let playbackStreamTracks: QueueStreamTrackItem[] | null | undefined = $state(undefined);
+	let playbackStreamWindowed: boolean | undefined = $state(undefined);
 	let prevUrl: string | undefined = $state(undefined);
+	let prevManifest: QueueStreamTrackItem[] | undefined;
+	let prevStreamWindowed: boolean | undefined;
 	let activeStreamIndex = $state(0);
+	let windowEnded = $state(false);
+	let terminalSignaled = false;
 	const effectiveStreamTracks = $derived(
 		playbackStreamTracks === undefined ? streamTracks : playbackStreamTracks
+	);
+	const effectiveStreamWindowed = $derived(
+		playbackStreamWindowed === undefined ? streamWindowed : playbackStreamWindowed
 	);
 	const progressPercent = $derived(
 		duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0
@@ -81,6 +93,15 @@
 	const activeStreamTrack = $derived(effectiveStreamTracks?.[activeStreamIndex] ?? null);
 	const displayTitle = $derived(activeStreamTrack?.song_title ?? title);
 	const displaySubtitle = $derived(activeStreamTrack?.artist ?? subtitle);
+	const canPrev = $derived(
+		!effectiveStreamTracks ||
+			(effectiveStreamTracks.length > 1 && (!effectiveStreamWindowed || activeStreamIndex > 0))
+	);
+	const canNext = $derived(
+		!effectiveStreamTracks ||
+			(effectiveStreamTracks.length > 1 &&
+				(!effectiveStreamWindowed || activeStreamIndex < effectiveStreamTracks.length - 1))
+	);
 
 	const viz = new AudioVisualizer();
 
@@ -104,9 +125,18 @@
 		});
 		audio.addEventListener('ended', () => {
 			setPaused();
+			if (effectiveStreamTracks && effectiveStreamWindowed) {
+				if (!terminalSignaled) {
+					terminalSignaled = true;
+					windowEnded = true;
+				}
+				return;
+			}
 			onended?.();
 		});
 		audio.addEventListener('play', () => {
+			terminalSignaled = false;
+			windowEnded = false;
 			isPlaying = true;
 			startVisualizerLoop();
 		});
@@ -135,8 +165,11 @@
 	}
 
 	export function loadAndPlay(nextUrl: string = audioUrl, options: LoadAndPlayOptions = {}): void {
+		windowEnded = false;
+		terminalSignaled = false;
 		const normalized = typeof options === 'number' ? { startIndex: options } : options;
 		playbackStreamTracks = normalized.streamTracks;
+		playbackStreamWindowed = normalized.streamWindowed;
 		const tracks = effectiveStreamTracks;
 		const el = ensureAudio();
 		if (el.src !== new URL(nextUrl, window.location.href).href) {
@@ -204,11 +237,22 @@
 	}
 
 	$effect(() => {
-		if (audioUrl === prevUrl) return;
+		if (
+			audioUrl === prevUrl &&
+			streamTracks === prevManifest &&
+			streamWindowed === prevStreamWindowed
+		)
+			return;
 		const isInitial = prevUrl === undefined;
 		prevUrl = audioUrl;
+		prevManifest = streamTracks;
+		prevStreamWindowed = streamWindowed;
 		if (isInitial && !autoplay) return;
-		loadAndPlay(audioUrl, { startIndex, streamTracks: streamTracks ?? null });
+		loadAndPlay(audioUrl, {
+			startIndex,
+			streamTracks: streamTracks ?? null,
+			streamWindowed
+		});
 	});
 
 	$effect(() => {
@@ -252,6 +296,7 @@
 	export function seekToTrack(index: number): void {
 		const tracks = effectiveStreamTracks;
 		if (!audio || !tracks || tracks.length === 0) return;
+		if (effectiveStreamWindowed && (index < 0 || index >= tracks.length)) return;
 		const nextIndex = (index + tracks.length) % tracks.length;
 		activeStreamIndex = nextIndex;
 		const track = tracks[nextIndex];
@@ -317,6 +362,7 @@
 			audio.src = '';
 		}
 		if (audioCtx) audioCtx.close();
+		terminalSignaled = false;
 	});
 </script>
 
@@ -327,7 +373,13 @@
 	<div class="player-content">
 		<div class="player-controls">
 			{#if onprev}
-				<button class="nav-btn" onclick={onprev} aria-label="Previous" title="Previous">
+				<button
+					class="nav-btn"
+					onclick={onprev}
+					disabled={!canPrev}
+					aria-label="Previous"
+					title="Previous"
+				>
 					<Icon name="skip-back" size={21} />
 				</button>
 			{/if}
@@ -349,10 +401,11 @@
 				</span>
 			</button>
 			{#if onnext}
-				<button class="nav-btn" onclick={onnext} aria-label="Next" title="Next">
+				<button class="nav-btn" onclick={onnext} disabled={!canNext} aria-label="Next" title="Next">
 					<Icon name="skip-forward" size={21} />
 				</button>
 			{/if}
+			<QueueStreamFeedback {windowEnded} />
 		</div>
 		<div class="track-info">
 			<span

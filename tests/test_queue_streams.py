@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -17,11 +18,16 @@ from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, 
 from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.queue_stream_api import (
     _check_queue_stream_rate_limit,
+    _library_skip,
     collect_library_pool_generations,
     generation_matches_pool,
     shuffle_library_sources,
 )
-from songmaker_cli.queue_streams import QueueStreamSource
+from songmaker_cli.queue_streams import (
+    QueueStreamSource,
+    build_queue_stream_snapshot,
+    track_source_from_generation,
+)
 
 
 def _seed_queue_data(session) -> None:
@@ -40,18 +46,39 @@ def _seed_queue_data(session) -> None:
     session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="two"))
     session.add(Version(id="v3", song_id="s3", version_number=1, lyrics="other"))
     session.flush()
-    session.add(Generation(
-        id="g1", song_id="s1", version_id="v1", generation_number=1,
-        mp3_path="owner-id/g1.mp3", seed=1, is_picked=True,
-    ))
-    session.add(Generation(
-        id="g2", song_id="s2", version_id="v2", generation_number=1,
-        mp3_path="owner-id/g2.mp3", seed=2, is_picked=True,
-    ))
-    session.add(Generation(
-        id="g3", song_id="s3", version_id="v3", generation_number=1,
-        mp3_path="other-id/g3.mp3", seed=3, is_picked=True,
-    ))
+    session.add(
+        Generation(
+            id="g1",
+            song_id="s1",
+            version_id="v1",
+            generation_number=1,
+            mp3_path="owner-id/g1.mp3",
+            seed=1,
+            is_picked=True,
+        )
+    )
+    session.add(
+        Generation(
+            id="g2",
+            song_id="s2",
+            version_id="v2",
+            generation_number=1,
+            mp3_path="owner-id/g2.mp3",
+            seed=2,
+            is_picked=True,
+        )
+    )
+    session.add(
+        Generation(
+            id="g3",
+            song_id="s3",
+            version_id="v3",
+            generation_number=1,
+            mp3_path="other-id/g3.mp3",
+            seed=3,
+            is_picked=True,
+        )
+    )
     playlist = Playlist(id="pl1", title="Mix", created_by=owner.id)
     session.add(playlist)
     session.add(PlaylistEntry(id="pe1", playlist_id="pl1", generation_id="g1", position=0))
@@ -87,7 +114,10 @@ def test_queue_stream_rate_limiter_failure_is_503(monkeypatch) -> None:
         lambda _request: limiter,
     )
     user = AuthenticatedUser(
-        id="owner-id", username="owner", role="user", is_active=True,
+        id="owner-id",
+        username="owner",
+        role="user",
+        is_active=True,
     )
 
     with pytest.raises(HTTPException) as exc_info:
@@ -97,7 +127,8 @@ def test_queue_stream_rate_limiter_failure_is_503(monkeypatch) -> None:
 
 
 def test_authenticated_queue_stream_snapshot_and_audio_range(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
@@ -117,6 +148,7 @@ def test_authenticated_queue_stream_snapshot_and_audio_range(
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_duration"] == 20
+    assert data["skipped"] == []
     assert [t["key"] for t in data["tracks"]] == ["pe1", "pe2"]
     assert data["tracks"][1]["start_offset"] == 10
 
@@ -127,7 +159,8 @@ def test_authenticated_queue_stream_snapshot_and_audio_range(
 
 
 def test_authenticated_queue_stream_rejects_inaccessible_generation(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
@@ -140,7 +173,8 @@ def test_authenticated_queue_stream_rejects_inaccessible_generation(
 
 
 def test_authenticated_queue_stream_rate_limited(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     import songmaker_cli.constants as consts
@@ -161,7 +195,8 @@ def test_authenticated_queue_stream_rate_limited(
 
 
 def test_shared_playlist_queue_stream_snapshot_and_audio(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
@@ -189,7 +224,8 @@ def test_shared_playlist_queue_stream_snapshot_and_audio(
 
 
 def test_shared_playlist_queue_stream_revalidates_entries(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
@@ -212,7 +248,8 @@ def test_shared_playlist_queue_stream_revalidates_entries(
 
 
 def test_queue_stream_cache_quota_keeps_new_snapshot(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
@@ -298,6 +335,91 @@ def test_queue_stream_windowed_by_duration(tmp_path: Path, monkeypatch) -> None:
     assert data["windowed"] is True
     assert len(data["tracks"]) == 1
     assert data["tracks"][0]["generation_id"] == "g1"
+
+
+def test_queue_stream_cache_identity_includes_windowed_semantics(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    import songmaker_cli.queue_streams as qs
+
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 15)
+    windowed = client.post(
+        "/api/queue-streams",
+        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
+    )
+    assert windowed.status_code == 200
+    assert windowed.json()["windowed"] is True
+
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 60 * 60 * 6)
+    complete = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    assert complete.status_code == 200
+    assert complete.json()["windowed"] is False
+    assert complete.json()["snapshot_id"] != windowed.json()["snapshot_id"]
+
+
+def test_queue_stream_cache_identity_includes_count_windowing(tmp_path: Path, monkeypatch) -> None:
+    _patch_audio_build(monkeypatch)
+    import songmaker_cli.queue_streams as qs
+
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner", "pass1234")
+
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 1)
+    windowed = client.post(
+        "/api/queue-streams",
+        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
+    )
+    assert windowed.status_code == 200
+    assert windowed.json()["windowed"] is True
+
+    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 2)
+    complete = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    assert complete.status_code == 200
+    assert complete.json()["windowed"] is False
+    assert complete.json()["snapshot_id"] != windowed.json()["snapshot_id"]
+
+
+def test_queue_stream_cache_identity_includes_forced_windowing(tmp_path: Path, monkeypatch) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    ctx = client.app.state.ctx
+
+    with ctx.db() as session:
+        generation = session.get(Generation, "g1")
+        assert generation is not None
+        source = track_source_from_generation(
+            generation,
+            key=generation.id,
+            index=0,
+            entry_id=None,
+            audio_url=f"/audio/{generation.mp3_path}",
+        )
+        complete = build_queue_stream_snapshot(
+            ctx,
+            [source],
+            scope="auth",
+            scope_id="owner-id",
+            stream_url="",
+        )
+        windowed = build_queue_stream_snapshot(
+            ctx,
+            [source],
+            scope="auth",
+            scope_id="owner-id",
+            stream_url="",
+            force_windowed=True,
+        )
+
+    assert complete.windowed is False
+    assert windowed.windowed is True
+    assert complete.snapshot_id != windowed.snapshot_id
 
 
 def test_queue_stream_not_windowed_when_within_limits(tmp_path: Path, monkeypatch) -> None:
@@ -397,30 +519,67 @@ def _seed_library_data(session) -> None:
     session.flush()
 
     # s1: non-picked gen first (by created_at desc: g1b > g1), g1b is picked
-    session.add(Generation(
-        id="g1", song_id="s1", version_id="v1", generation_number=1,
-        mp3_path="user-a/g1.mp3", seed=1, is_picked=False,
-    ))
-    session.add(Generation(
-        id="g1b", song_id="s1", version_id="v1", generation_number=2,
-        mp3_path="user-a/g1b.mp3", seed=2, is_picked=True,
-    ))
+    session.add(
+        Generation(
+            id="g1",
+            song_id="s1",
+            version_id="v1",
+            generation_number=1,
+            mp3_path="user-a/g1.mp3",
+            seed=1,
+            is_picked=False,
+        )
+    )
+    session.add(
+        Generation(
+            id="g1b",
+            song_id="s1",
+            version_id="v1",
+            generation_number=2,
+            mp3_path="user-a/g1b.mp3",
+            seed=2,
+            is_picked=True,
+        )
+    )
     # s2: kept, not picked — mix includes it; picks does not
-    session.add(Generation(
-        id="g2", song_id="s2", version_id="v2", generation_number=1,
-        mp3_path="user-a/g2.mp3", seed=3, is_picked=False, is_kept=True,
-    ))
+    session.add(
+        Generation(
+            id="g2",
+            song_id="s2",
+            version_id="v2",
+            generation_number=1,
+            mp3_path="user-a/g2.mp3",
+            seed=3,
+            is_picked=False,
+            is_kept=True,
+        )
+    )
     # s3: single archived gen → song has no eligible generation
-    session.add(Generation(
-        id="g3", song_id="s3", version_id="v3", generation_number=1,
-        mp3_path="user-a/g3.mp3", seed=4, is_picked=False, is_archived=True,
-    ))
+    session.add(
+        Generation(
+            id="g3",
+            song_id="s3",
+            version_id="v3",
+            generation_number=1,
+            mp3_path="user-a/g3.mp3",
+            seed=4,
+            is_picked=False,
+            is_archived=True,
+        )
+    )
     # s4: no generations at all
     # s5 (user B)
-    session.add(Generation(
-        id="g5", song_id="s5", version_id="v5", generation_number=1,
-        mp3_path="user-b/g5.mp3", seed=5, is_picked=True,
-    ))
+    session.add(
+        Generation(
+            id="g5",
+            song_id="s5",
+            version_id="v5",
+            generation_number=1,
+            mp3_path="user-b/g5.mp3",
+            seed=5,
+            is_picked=True,
+        )
+    )
 
 
 def _write_library_audio_files(root: Path) -> None:
@@ -484,7 +643,8 @@ def test_library_stream_excludes_archived_generations(tmp_path: Path, monkeypatc
 
 
 def test_library_stream_skips_songs_without_playable_generations(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
@@ -513,9 +673,7 @@ def test_library_stream_rotation_via_start_generation_id(tmp_path: Path, monkeyp
     assert [t["index"] for t in data["tracks"]] == [0, 1]
 
 
-def test_library_stream_start_take_is_the_clicked_generation(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_library_stream_start_take_is_the_clicked_generation(tmp_path: Path, monkeypatch) -> None:
     """Clicking a non-picked take streams that take, not the song's pick."""
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
@@ -532,7 +690,8 @@ def test_library_stream_start_take_is_the_clicked_generation(
 
 
 def test_library_stream_start_generation_id_not_found_returns_404(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
@@ -540,14 +699,16 @@ def test_library_stream_start_generation_id_not_found_returns_404(
     login_and_csrf(client, "usera", "pass1234")
 
     resp = client.post(
-        "/api/queue-streams/library", json={"start_generation_id": "nonexistent-id"},
+        "/api/queue-streams/library",
+        json={"start_generation_id": "nonexistent-id"},
     )
 
     assert resp.status_code == 404
 
 
 def test_library_stream_start_generation_id_owned_by_other_user_returns_404(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
@@ -555,14 +716,16 @@ def test_library_stream_start_generation_id_owned_by_other_user_returns_404(
     login_and_csrf(client, "usera", "pass1234")
 
     resp = client.post(
-        "/api/queue-streams/library", json={"start_generation_id": "g5"},
+        "/api/queue-streams/library",
+        json={"start_generation_id": "g5"},
     )
 
     assert resp.status_code == 404
 
 
 def test_library_stream_archived_start_generation_returns_422(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
@@ -570,7 +733,8 @@ def test_library_stream_archived_start_generation_returns_422(
     login_and_csrf(client, "usera", "pass1234")
 
     resp = client.post(
-        "/api/queue-streams/library", json={"start_generation_id": "g3"},
+        "/api/queue-streams/library",
+        json={"start_generation_id": "g3"},
     )
 
     assert resp.status_code == 422
@@ -778,9 +942,7 @@ def test_pinned_snapshot_excluded_from_quota_eviction(tmp_path: Path, monkeypatc
     assert not (stream_dir / f"{snapshot_b}.mp3").exists(), "Unpinned snapshot should be evicted"
 
 
-def test_pin_snapshot_refused_when_pinned_bytes_cap_exceeded(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_pin_snapshot_refused_when_pinned_bytes_cap_exceeded(tmp_path: Path, monkeypatch) -> None:
     """PIN must be refused with 409 when the pinned-bytes cap would be exceeded."""
     _patch_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
@@ -1059,13 +1221,9 @@ def test_library_stream_without_shuffle_keeps_album_track_order(
     ]
 
 
-def test_library_stream_shuffle_uses_injected_rng(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_library_stream_shuffle_uses_injected_rng(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
-    monkeypatch.setattr(
-        "songmaker_cli.queue_stream_api.random.shuffle", _reverse_in_place
-    )
+    monkeypatch.setattr("songmaker_cli.queue_stream_api.random.shuffle", _reverse_in_place)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera", "pass1234")
@@ -1083,6 +1241,235 @@ def test_library_stream_shuffle_uses_injected_rng(
         "g1",
     ]
     assert [track["index"] for track in resp.json()["tracks"]] == [0, 1, 2, 3]
+
+
+def test_library_stream_scan_is_bounded_and_marks_unscanned_tail(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    import songmaker_cli.queue_stream_api as queue_stream_api
+    import songmaker_cli.queue_streams as queue_streams
+
+    monkeypatch.setattr(queue_stream_api, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 2)
+    monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 5)
+    original_skip = queue_stream_api._library_skip
+    scanned: list[str] = []
+
+    def recording_skip(ctx, generation):
+        scanned.append(generation.id)
+        return original_skip(ctx, generation)
+
+    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
+    _write_shuffle_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post("/api/queue-streams/library", json={"shuffle": False})
+
+    assert resp.status_code == 200
+    assert scanned == ["g1", "g2"]
+    assert [track["generation_id"] for track in resp.json()["tracks"]] == [
+        "g1",
+        "g2",
+    ]
+    assert resp.json()["windowed"] is True
+
+
+def test_library_stream_default_scan_limit_is_explicitly_partial(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import songmaker_cli.queue_stream_api as queue_stream_api
+    import songmaker_cli.queue_streams as queue_streams
+
+    assert queue_stream_api.LIBRARY_QUEUE_STREAM_SCAN_LIMIT == 1_000
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
+    login_and_csrf(client, "usera", "pass1234")
+    album = Album(id="scan-album", title="Scan", artist="A", created_by="user-a")
+    songs: list[Song] = []
+    for index in range(1, 1_002):
+        song = Song(
+            id=f"scan-song-{index:04d}",
+            title=f"Song {index}",
+            album=album,
+            album_id=album.id,
+            track_number=index,
+        )
+        song.generations.append(
+            Generation(
+                id=f"scan-gen-{index:04d}",
+                song_id=song.id,
+                generation_number=1,
+                mp3_path=f"user-a/scan-{index:04d}.mp3",
+                is_archived=False,
+                is_picked=True,
+                is_kept=False,
+            )
+        )
+        songs.append(song)
+
+    scanned: list[str] = []
+
+    def recording_skip(_ctx, generation):
+        scanned.append(generation.id)
+        if generation.id == "scan-gen-1001":
+            return queue_stream_api.QueueStreamSkipResponse(
+                song_id=generation.song_id,
+                generation_id=generation.id,
+                reason="missing_file",
+            )
+        return None
+
+    captured: dict[str, object] = {}
+
+    def fake_build(_ctx, sources, *, force_windowed=False, **_kwargs):
+        captured["source_count"] = len(sources)
+        captured["force_windowed"] = force_windowed
+        return queue_stream_api.QueueStreamManifestResponse(
+            snapshot_id="bounded-scan",
+            stream_url="",
+            expires_at="2099-01-01T00:00:00Z",
+            total_duration=0,
+            tracks=[],
+            windowed=force_windowed,
+        )
+
+    monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 1_500)
+    monkeypatch.setattr(queue_stream_api, "list_songs", lambda *_args, **_kwargs: songs)
+    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    monkeypatch.setattr(queue_stream_api, "build_queue_stream_snapshot", fake_build)
+
+    resp = client.post("/api/queue-streams/library", json={"shuffle": False})
+
+    assert resp.status_code == 200
+    assert len(scanned) == 1_000
+    assert scanned[-1] == "scan-gen-1000"
+    assert "scan-gen-1001" not in scanned
+    assert captured == {"source_count": 1_000, "force_windowed": True}
+    assert resp.json()["windowed"] is True
+    assert resp.json()["skipped"] == []
+    assert resp.json()["skipped_complete"] is False
+
+
+def test_library_stream_scan_stops_after_one_more_than_track_limit(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    import songmaker_cli.queue_stream_api as queue_stream_api
+    import songmaker_cli.queue_streams as queue_streams
+
+    monkeypatch.setattr(queue_stream_api, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 10)
+    monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 1)
+    original_skip = queue_stream_api._library_skip
+    scanned: list[str] = []
+
+    def recording_skip(ctx, generation):
+        scanned.append(generation.id)
+        return original_skip(ctx, generation)
+
+    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
+    _write_shuffle_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post("/api/queue-streams/library", json={"shuffle": False})
+
+    assert resp.status_code == 200
+    assert scanned == ["g1", "g2"]
+    assert [track["generation_id"] for track in resp.json()["tracks"]] == ["g1"]
+    assert resp.json()["windowed"] is True
+    assert resp.json()["skipped_complete"] is False
+
+
+def test_library_stream_shuffles_before_bounded_scan(tmp_path: Path, monkeypatch) -> None:
+    _patch_audio_build(monkeypatch)
+    import songmaker_cli.queue_stream_api as queue_stream_api
+    import songmaker_cli.queue_streams as queue_streams
+
+    monkeypatch.setattr(queue_stream_api, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
+    monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 5)
+    monkeypatch.setattr(queue_stream_api.random, "shuffle", _reverse_in_place)
+    original_skip = queue_stream_api._library_skip
+    scanned: list[str] = []
+
+    def recording_skip(ctx, generation):
+        scanned.append(generation.id)
+        return original_skip(ctx, generation)
+
+    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
+    _write_shuffle_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post("/api/queue-streams/library", json={"shuffle": True})
+
+    assert resp.status_code == 200
+    assert scanned == ["g4"]
+    assert [track["generation_id"] for track in resp.json()["tracks"]] == ["g4"]
+    assert resp.json()["windowed"] is True
+
+
+def test_library_stream_start_is_first_and_scanned_once_with_small_budget(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    import songmaker_cli.queue_stream_api as queue_stream_api
+    import songmaker_cli.queue_streams as queue_streams
+
+    monkeypatch.setattr(queue_stream_api, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
+    monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 5)
+    original_skip = queue_stream_api._library_skip
+    scanned: list[str] = []
+
+    def recording_skip(ctx, generation):
+        scanned.append(generation.id)
+        return original_skip(ctx, generation)
+
+    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
+    _write_shuffle_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams/library",
+        json={"shuffle": False, "start_generation_id": "g4"},
+    )
+
+    assert resp.status_code == 200
+    assert scanned == ["g4"]
+    assert [track["generation_id"] for track in resp.json()["tracks"]] == ["g4"]
+    assert resp.json()["windowed"] is True
+
+
+def test_library_stream_unplayable_start_is_scanned_once_with_small_budget(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    import songmaker_cli.queue_stream_api as queue_stream_api
+    import songmaker_cli.queue_streams as queue_streams
+
+    monkeypatch.setattr(queue_stream_api, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
+    monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 5)
+    original_skip = queue_stream_api._library_skip
+    scanned: list[str] = []
+
+    def recording_skip(ctx, generation):
+        scanned.append(generation.id)
+        return original_skip(ctx, generation)
+
+    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
+    _write_shuffle_audio_files(tmp_path)
+    (tmp_path / "audio" / "user-a" / "g4.mp3").unlink()
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams/library",
+        json={"shuffle": False, "start_generation_id": "g4"},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
+    assert scanned == ["g4"]
 
 
 def test_library_stream_unknown_pool_is_422(tmp_path: Path, monkeypatch) -> None:
@@ -1147,10 +1534,10 @@ def test_collect_library_pool_dedupes_pick_and_keep_and_pins_out_of_pool_start()
     song = Song(id="s1", title="One", album_id="a1", track_number=1)
     song.generations = [older, both, keep]
 
-    mixed = collect_library_pool_generations([song], "mix", older, lambda _gen: True)
+    mixed = collect_library_pool_generations([song], "mix", older)
     assert [gen.id for gen in mixed] == ["g-old", "g-both", "g-keep"]
 
-    mix_only = collect_library_pool_generations([song], "mix", None, lambda _gen: True)
+    mix_only = collect_library_pool_generations([song], "mix", None)
     assert [gen.id for gen in mix_only] == ["g-both", "g-keep"]
 
 
@@ -1310,11 +1697,152 @@ def test_library_stream_default_pool_is_mix(tmp_path: Path, monkeypatch) -> None
         "g-keep-b",
         "g-pick-b",
     ]
+    assert resp.json()["skipped"] == [
+        {"song_id": "s2", "generation_id": "g-missing", "reason": "missing_file"}
+    ]
+
+    reused = client.post("/api/queue-streams/library", json={})
+    assert reused.status_code == 200
+    assert reused.json()["snapshot_id"] == resp.json()["snapshot_id"]
+    assert reused.json()["skipped"] == resp.json()["skipped"]
 
 
-def test_library_stream_out_of_pool_start_is_temporary(
-    tmp_path: Path, monkeypatch
+def test_library_stream_reports_every_unplayable_reason(tmp_path: Path, monkeypatch) -> None:
+    def seed_with_unplayable(session) -> None:
+        _seed_library_pool_data(session)
+        session.add_all(
+            [
+                Generation(
+                    id="g-no-path",
+                    song_id="s2",
+                    version_id="v2",
+                    generation_number=3,
+                    mp3_path="",
+                    is_kept=True,
+                ),
+                Generation(
+                    id="g-directory",
+                    song_id="s3",
+                    version_id="v3",
+                    generation_number=2,
+                    mp3_path="user-a/directory.mp3",
+                    is_picked=True,
+                ),
+            ]
+        )
+
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=seed_with_unplayable)
+    _write_pool_audio_files(tmp_path)
+    (tmp_path / "audio" / "user-a" / "directory.mp3").mkdir()
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.post("/api/queue-streams/library", json={"pool": "all"})
+
+    assert resp.status_code == 200
+    assert resp.json()["skipped"] == [
+        {"song_id": "s2", "generation_id": "g-no-path", "reason": "missing_path"},
+        {"song_id": "s2", "generation_id": "g-missing", "reason": "missing_file"},
+        {"song_id": "s3", "generation_id": "g-directory", "reason": "unreadable_file"},
+    ]
+    assert resp.json()["skipped_complete"] is True
+
+
+def test_library_skip_classifies_missing_path(tmp_path: Path) -> None:
+    generation = Generation(id="g-no-path", song_id="s2", mp3_path=None)
+    ctx = type("Context", (), {"audio_dir": tmp_path / "audio"})()
+
+    skip = _library_skip(ctx, generation)
+
+    assert skip is not None
+    assert skip.model_dump() == {
+        "song_id": "s2",
+        "generation_id": "g-no-path",
+        "reason": "missing_path",
+    }
+
+
+def test_library_skip_rejects_fifo_before_open(tmp_path: Path, monkeypatch) -> None:
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    fifo_path = audio_dir / "take.mp3"
+    os.mkfifo(fifo_path)
+    generation = Generation(id="g-fifo", song_id="s2", mp3_path="take.mp3")
+    ctx = type("Context", (), {"audio_dir": audio_dir})()
+    original_open = Path.open
+
+    def guarded_open(path: Path, *args, **kwargs):
+        if path == fifo_path:
+            pytest.fail("FIFO must be rejected before open")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", guarded_open)
+
+    skip = _library_skip(ctx, generation)
+
+    assert skip is not None
+    assert skip.reason == "unreadable_file"
+
+
+@pytest.mark.parametrize("failure", ["open", "read", "probe"])
+def test_library_skip_maps_file_failures_to_unreadable(
+    tmp_path: Path, monkeypatch, failure: str
 ) -> None:
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    audio_path = audio_dir / "take.mp3"
+    audio_path.write_bytes(b"audio")
+    generation = Generation(id="g-broken", song_id="s-broken", mp3_path="take.mp3")
+    ctx = type("Context", (), {"audio_dir": audio_dir})()
+    original_open = Path.open
+
+    class FailingReader:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self, _size: int):
+            raise OSError("read failed")
+
+    if failure == "open":
+
+        def fail_open(path: Path, *args, **kwargs):
+            if path == audio_path:
+                raise PermissionError("open failed")
+            return original_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", fail_open)
+    elif failure == "read":
+
+        def fail_read(path: Path, *args, **kwargs):
+            if path == audio_path:
+                return FailingReader()
+            return original_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", fail_read)
+    else:
+
+        def fail_probe(_path: Path) -> float:
+            raise HTTPException(422, "probe failed")
+
+        monkeypatch.setattr(
+            "songmaker_cli.queue_stream_api.queue_streams.probe_audio_duration",
+            fail_probe,
+        )
+
+    skip = _library_skip(ctx, generation)
+
+    assert skip is not None
+    assert skip.model_dump() == {
+        "song_id": "s-broken",
+        "generation_id": "g-broken",
+        "reason": "unreadable_file",
+    }
+
+
+def test_library_stream_out_of_pool_start_is_temporary(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)

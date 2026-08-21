@@ -458,6 +458,12 @@ export interface QueueStreamTrackItem {
 	end_offset: number;
 }
 
+export interface QueueStreamSkipItem {
+	song_id: string;
+	generation_id: string;
+	reason: 'missing_path' | 'missing_file' | 'unreadable_file';
+}
+
 export interface QueueStreamManifest {
 	snapshot_id: string;
 	stream_url: string;
@@ -465,6 +471,8 @@ export interface QueueStreamManifest {
 	total_duration: number;
 	tracks: QueueStreamTrackItem[];
 	windowed: boolean;
+	skipped: QueueStreamSkipItem[];
+	skipped_complete: boolean;
 }
 
 export interface WorkerIdentityItem {
