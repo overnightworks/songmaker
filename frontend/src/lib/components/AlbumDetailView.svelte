@@ -9,8 +9,10 @@
 	import { fetchSongs } from '$lib/api/songs';
 	import {
 		albumList,
+		albumSongsLoad,
 		songList,
 		selectedAlbumId,
+		loadSongsForAlbum,
 		playAlbum,
 		addAlbumToList,
 		addSongsToList,
@@ -21,6 +23,7 @@
 	import { deselectAlbum, selectSong } from '$lib/stores/navigation';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
+	import { LIBRARY_ALBUMS_LOADING, LIBRARY_RETRY_LABEL } from '$lib/constants';
 	import ActionButton from './ActionButton.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
@@ -44,8 +47,9 @@
 					.sort((a, b) => a.track_number - b.track_number)
 			: []
 	);
-	const albumSongCount = $derived(albumSongs.length);
+	const albumSongCount = $derived(selectedAlbum?.song_count ?? albumSongs.length);
 	const albumGenCount = $derived(albumSongs.reduce((sum, s) => sum + s.generation_count, 0));
+	const albumLoad = $derived(currentAlbumId ? $albumSongsLoad[currentAlbumId] : undefined);
 
 	async function onRenameAlbum(newTitle: string): Promise<void> {
 		if (!selectedAlbum) return;
@@ -185,16 +189,24 @@
 		{/if}
 
 		<div class="item-list">
-			{#each albumSongs as s (s.id)}
-				<button class="item-row" onclick={() => selectSong(s.id)}>
-					<span class="item-title">{s.title}</span>
-					<span class="item-meta">
-						{s.generation_count} gen{s.generation_count !== 1 ? 's' : ''}
-					</span>
-				</button>
-			{/each}
-			{#if albumSongs.length === 0}
+			{#if albumLoad?.status === 'loading' && albumSongs.length === 0}
+				<p class="empty-tab" role="status">{LIBRARY_ALBUMS_LOADING}</p>
+			{:else if albumLoad?.status === 'error' && albumSongs.length === 0}
+				<p class="empty-tab" role="alert">{albumLoad.error}</p>
+				<button class="retry-btn" onclick={() => currentAlbumId && loadSongsForAlbum(currentAlbumId)}
+					>{LIBRARY_RETRY_LABEL}</button
+				>
+			{:else if albumSongs.length === 0}
 				<p class="empty-tab">No songs in this album yet.</p>
+			{:else}
+				{#each albumSongs as s (s.id)}
+					<button class="item-row" onclick={() => selectSong(s.id)}>
+						<span class="item-title">{s.title}</span>
+						<span class="item-meta">
+							{s.generation_count} gen{s.generation_count !== 1 ? 's' : ''}
+						</span>
+					</button>
+				{/each}
 			{/if}
 		</div>
 	</div>

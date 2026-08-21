@@ -475,7 +475,9 @@ async function collectAlbumQueue(
 	start?: { song: SongItem; gen: GenerationItem }
 ): Promise<{ entries: PlaylistEntryItem[]; startIndex: number }> {
 	await loadSongsForAlbum(albumId);
-	const songs = get(songList).filter((s) => s.album_id === albumId);
+	const songs = get(songList)
+		.filter((s) => s.album_id === albumId)
+		.sort((a, b) => a.track_number - b.track_number);
 	const entries: PlaylistEntryItem[] = [];
 	for (const song of songs) {
 		if (song.generation_count === 0) continue;

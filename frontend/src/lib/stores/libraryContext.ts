@@ -176,6 +176,7 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 		try {
 			await loadPlaylistDetail(state.playlistId);
 		} catch (err) {
+			if (generation !== historyApplyGeneration) return false;
 			if (isNotFound(err)) deselectPlaylist();
 			else if (get(selectedPlaylistDetail)?.id !== state.playlistId) {
 				selectedPlaylistDetail.set(null);

@@ -230,8 +230,6 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 	const generation = ++browseGeneration;
 	const reset = options?.reset ?? true;
 	const sort = get(librarySort);
-	const albums = get(albumList);
-	const songs = get(songList);
 	const browse = get(libraryBrowse);
 	const albumOffset = reset ? 0 : browse.albumOffset;
 	const songOffset = reset ? 0 : browse.songOffset;
@@ -246,8 +244,8 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 			albumList.set(albumPage.items);
 			songList.set(songPage.items);
 		} else {
-			albumList.set(dedupeById([...albums, ...albumPage.items]));
-			songList.set(dedupeById([...songs, ...songPage.items]));
+			albumList.set(dedupeById([...get(albumList), ...albumPage.items]));
+			songList.set(dedupeById([...get(songList), ...songPage.items]));
 		}
 		libraryBrowse.set({
 			status: 'ready',

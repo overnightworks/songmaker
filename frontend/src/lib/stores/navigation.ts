@@ -54,6 +54,7 @@ function currentHistoryIndex(): number {
 
 function replaceLibraryHistory(): void {
 	if (suppressPush) return;
+	cancelLibraryHistoryApply();
 	const next = snapshotLibraryHistory(currentHistoryIndex());
 	history.replaceState(next, '', urlFromState(next));
 }
