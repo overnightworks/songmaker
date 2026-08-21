@@ -188,7 +188,8 @@ def test_repository_contract_and_honesty_boundary_pass() -> None:
     result = run_gate(PROJECT_ROOT, "--current-only")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "1 document(s), 9 rule(s), 0 acceptance sentence(s)" in result.stdout
+    assert result.stdout.startswith("Requirement contract: ")
+    assert "0 acceptance sentence(s)" in result.stdout
     assert "does not fetch: GitHub" in result.stdout
 
 

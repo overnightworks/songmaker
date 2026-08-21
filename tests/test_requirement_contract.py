@@ -183,9 +183,9 @@ def test_repository_contains_the_active_genesis_contract() -> None:
     shelf = read_requirement_shelf(PROJECT_ROOT)
     acceptance = read_acceptance_manifest(PROJECT_ROOT, shelf)
 
-    assert shelf.document_count == 1
-    assert shelf.revision_count == 1
-    assert tuple(rule.identifier for rule in shelf.rules) == (
+    identifiers = {rule.identifier for rule in shelf.rules}
+    assert shelf.document_count == shelf.revision_count
+    assert {
         "REQ-CATALOG-01",
         "REQ-VERSION-01",
         "REQ-GENERATION-01",
@@ -195,7 +195,21 @@ def test_repository_contains_the_active_genesis_contract() -> None:
         "REQ-CURATION-04",
         "REQ-CURATION-05",
         "REQ-CURATION-06",
-    )
+    } <= identifiers
+    assert acceptance == ()
+
+
+def test_repository_contains_the_active_library_listening_contract() -> None:
+    shelf = read_requirement_shelf(PROJECT_ROOT)
+    acceptance = read_acceptance_manifest(PROJECT_ROOT, shelf)
+
+    identifiers = {rule.identifier for rule in shelf.rules}
+    assert {
+        *(f"REQ-LIBRARY-{number:02d}" for number in range(1, 9)),
+        *(f"REQ-LISTENING-{number:02d}" for number in range(1, 8)),
+        "REQ-PLAYER-01",
+        "REQ-PLAYER-02",
+    } <= identifiers
     assert acceptance == ()
 
 

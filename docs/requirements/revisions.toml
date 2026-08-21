@@ -7,3 +7,11 @@ content_sha256 = "eefcfc7034906e9123069351b7fd4938a00bbbf13d66051167ec39f1f397bf
 witness_path = "docs/requirements/witnesses/5363884635.json"
 witness_sha256 = "e455aa95a03d3eb271fb5dd5d1eb158dea58e381a734c42c930c0d166e7d3350"
 predecessor = "GENESIS"
+
+[[revision]]
+document = "0002"
+path = "docs/requirements/0002-library-and-listening.md"
+content_sha256 = "84626578ad0c44ce9235071ccf51d5fb02827507272a92ed5008a79beea256c3"
+witness_path = "docs/requirements/witnesses/5364807875.json"
+witness_sha256 = "511c96e9bb0e451c9125310120e4f5ca3a72c632ce1f64241fc27349d2202663"
+predecessor = "GENESIS"
