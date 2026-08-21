@@ -16,6 +16,7 @@
 		readVizColors,
 		boxShadowStyle,
 		titleGlowStyle,
+		playbackVisualizerAllowed,
 		type VizColors
 	} from '$lib/utils/visualizer';
 
@@ -73,9 +74,11 @@
 	let analyser: AnalyserNode | undefined;
 	let frequencyData: Uint8Array<ArrayBuffer> | undefined;
 	let waveformData: Uint8Array<ArrayBuffer> | undefined;
+	let playWhenReady = false;
+	let playIntentRevision = 0;
 	let playbackStreamTracks: QueueStreamTrackItem[] | null | undefined = $state(undefined);
 	let playbackStreamWindowed: boolean | undefined = $state(undefined);
-	let prevUrl: string | undefined = $state(undefined);
+	let prevUrl: string | undefined;
 	let prevManifest: QueueStreamTrackItem[] | undefined;
 	let prevStreamWindowed: boolean | undefined;
 	let activeStreamIndex = $state(0);
@@ -110,13 +113,16 @@
 		audio = new Audio();
 		audio.crossOrigin = 'anonymous';
 		audio.preload = 'auto';
-		audio.src = audioUrl;
 
 		audio.addEventListener('loadstart', () => (isLoading = true));
 		audio.addEventListener('canplay', () => {
 			isLoading = false;
 			duration = activeStreamTrack?.duration ?? audio?.duration ?? 0;
 			applyPendingStreamStart();
+			if (audio && playWhenReady) {
+				playWhenReady = false;
+				requestPlay(audio);
+			}
 			connectAnalyser();
 		});
 		audio.addEventListener('timeupdate', () => {
@@ -140,9 +146,7 @@
 			isPlaying = true;
 			startVisualizerLoop();
 		});
-		audio.addEventListener('pause', () => {
-			setPaused();
-		});
+		audio.addEventListener('pause', () => setPaused(!isLoading));
 		audio.addEventListener('error', () => {
 			setPaused();
 			isLoading = false;
@@ -153,49 +157,84 @@
 	}
 
 	function requestPlay(el: HTMLAudioElement): void {
+		playWhenReady = false;
+		const requestRevision = ++playIntentRevision;
 		el.play().catch(() => {
+			if (requestRevision !== playIntentRevision) return;
 			setPaused();
 			isLoading = false;
 		});
 	}
 
-	function setPaused(): void {
+	function setPaused(cancelPendingPlay = true): void {
 		isPlaying = false;
+		if (cancelPendingPlay) {
+			playWhenReady = false;
+			playIntentRevision += 1;
+		}
 		stopVisualizerLoop();
+	}
+
+	function pausePlayback(): void {
+		setPaused();
+		audio?.pause();
+	}
+
+	function audioUrlChanged(el: HTMLAudioElement, nextUrl: string): boolean {
+		return el.src !== new URL(nextUrl, window.location.href).href;
+	}
+
+	function prepareWithoutAutoplay(nextUrl: string): HTMLAudioElement {
+		const el = ensureAudio();
+		if (audioUrlChanged(el, nextUrl)) {
+			setPaused();
+			el.pause();
+			isLoading = true;
+			el.src = nextUrl;
+			el.load();
+		} else {
+			isLoading = el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
+		}
+		return el;
 	}
 
 	export function loadAndPlay(nextUrl: string = audioUrl, options: LoadAndPlayOptions = {}): void {
 		windowEnded = false;
 		terminalSignaled = false;
+		playIntentRevision += 1;
+		playWhenReady = false;
 		const normalized = typeof options === 'number' ? { startIndex: options } : options;
 		playbackStreamTracks = normalized.streamTracks;
 		playbackStreamWindowed = normalized.streamWindowed;
 		const tracks = effectiveStreamTracks;
 		const el = ensureAudio();
-		if (el.src !== new URL(nextUrl, window.location.href).href) {
+		const changed = audioUrlChanged(el, nextUrl);
+		if (changed) {
 			setPaused();
-			el.src = nextUrl;
-			el.load();
+			el.pause();
 		}
 		prevUrl = nextUrl;
 		const nextStartIndex = normalized.startIndex ?? startIndex;
 		activeStreamIndex = Math.max(0, Math.min(nextStartIndex, (tracks?.length ?? 1) - 1));
 		currentTime = 0;
 		duration = activeStreamTrack?.duration ?? 0;
-		isLoading = true;
+		isLoading = changed || el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
+		playWhenReady = true;
+		if (changed) {
+			el.src = nextUrl;
+			el.load();
+		}
 		applyPendingStreamStart();
-		requestPlay(el);
-	}
-
-	function visualizerAllowed(): boolean {
-		if (typeof window === 'undefined') return false;
-		if (document.hidden) return false;
-		return !window.matchMedia('(max-width: 640px)').matches;
+		if (el.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA && playWhenReady) {
+			playWhenReady = false;
+			isLoading = false;
+			requestPlay(el);
+		}
 	}
 
 	function connectAnalyser(): void {
 		if (!audio || audioCtx) return;
-		if (!visualizerAllowed()) return;
+		if (!playbackVisualizerAllowed()) return;
 		try {
 			audioCtx = new AudioContext();
 			analyser = audioCtx.createAnalyser();
@@ -213,7 +252,7 @@
 
 	function startVisualizerLoop(): void {
 		if (!vizCanvas) return;
-		if (!visualizerAllowed()) return;
+		if (!playbackVisualizerAllowed()) return;
 		if (!audioCtx) connectAnalyser();
 		if (!analyser || !frequencyData || !waveformData) return;
 		if (audioCtx?.state === 'suspended') audioCtx.resume();
@@ -247,7 +286,10 @@
 		prevUrl = audioUrl;
 		prevManifest = streamTracks;
 		prevStreamWindowed = streamWindowed;
-		if (isInitial && !autoplay) return;
+		if (isInitial && !autoplay) {
+			prepareWithoutAutoplay(audioUrl);
+			return;
+		}
 		loadAndPlay(audioUrl, {
 			startIndex,
 			streamTracks: streamTracks ?? null,
@@ -269,10 +311,14 @@
 		return pushMediaSessionHandlers({
 			play: () => {
 				const el = ensureAudio();
-				requestPlay(el);
+				if (!el.src) prepareWithoutAutoplay(audioUrl);
+				if (isLoading || el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+					playIntentRevision += 1;
+					playWhenReady = true;
+				} else requestPlay(el);
 			},
-			pause: () => audio?.pause(),
-			stop: () => audio?.pause(),
+			pause: pausePlayback,
+			stop: pausePlayback,
 			next: () => onnext?.(),
 			prev: () => onprev?.(),
 			seekTo: (seconds) => {
@@ -286,11 +332,15 @@
 
 	export function togglePlay(): void {
 		const el = ensureAudio();
-		if (el.paused) requestPlay(el);
-		else {
-			setPaused();
-			el.pause();
+		if (!el.src) prepareWithoutAutoplay(audioUrl);
+		if (isLoading || el.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
+			isLoading = true;
+			playIntentRevision += 1;
+			playWhenReady = !playWhenReady;
+			return;
 		}
+		if (el.paused) requestPlay(el);
+		else pausePlayback();
 	}
 
 	export function seekToTrack(index: number): void {
@@ -357,6 +407,8 @@
 
 	onDestroy(() => {
 		viz.destroy();
+		playWhenReady = false;
+		playIntentRevision += 1;
 		if (audio) {
 			audio.pause();
 			audio.src = '';
@@ -372,40 +424,52 @@
 	<canvas class="viz-canvas" bind:this={vizCanvas}></canvas>
 	<div class="player-content">
 		<div class="player-controls">
-			{#if onprev}
+			<div class="transport-controls">
+				{#if onprev}
+					<button
+						class="nav-btn"
+						onclick={onprev}
+						disabled={!canPrev}
+						aria-label="Previous"
+						title="Previous"
+					>
+						<Icon name="skip-back" size={21} />
+					</button>
+				{:else}
+					<span class="nav-spacer" aria-hidden="true"></span>
+				{/if}
 				<button
-					class="nav-btn"
-					onclick={onprev}
-					disabled={!canPrev}
-					aria-label="Previous"
-					title="Previous"
+					class="play-btn"
+					class:loading={isLoading}
+					class:playing={isPlaying}
+					onclick={togglePlay}
+					aria-label={isPlaying ? 'Pause' : 'Play'}
 				>
-					<Icon name="skip-back" size={21} />
+					<span
+						class="play-btn-face"
+						style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
+					>
+						{#if isLoading}<span class="spinner"></span>{:else}<Icon
+								name={isPlaying ? 'pause' : 'play'}
+								size={26}
+							/>{/if}
+					</span>
 				</button>
-			{/if}
-			<button
-				class="play-btn"
-				class:loading={isLoading}
-				class:playing={isPlaying}
-				onclick={togglePlay}
-				aria-label={isPlaying ? 'Pause' : 'Play'}
-			>
-				<span
-					class="play-btn-face"
-					style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
-				>
-					{#if isLoading}<span class="spinner"></span>{:else}<Icon
-							name={isPlaying ? 'pause' : 'play'}
-							size={26}
-						/>{/if}
-				</span>
-			</button>
-			{#if onnext}
-				<button class="nav-btn" onclick={onnext} disabled={!canNext} aria-label="Next" title="Next">
-					<Icon name="skip-forward" size={21} />
-				</button>
-			{/if}
-			<QueueStreamFeedback {windowEnded} />
+				{#if onnext}
+					<button
+						class="nav-btn"
+						onclick={onnext}
+						disabled={!canNext}
+						aria-label="Next"
+						title="Next"
+					>
+						<Icon name="skip-forward" size={21} />
+					</button>
+				{:else}
+					<span class="nav-spacer" aria-hidden="true"></span>
+				{/if}
+			</div>
+			<div class="queue-feedback"><QueueStreamFeedback {windowEnded} /></div>
 		</div>
 		<div class="track-info">
 			<span
@@ -471,6 +535,13 @@
 		align-items: center;
 		gap: 6px;
 		flex-shrink: 0;
+		position: relative;
+	}
+
+	.transport-controls {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 	}
 
 	.nav-btn {
@@ -496,6 +567,12 @@
 		color: var(--text, #e0e0e0);
 		border-color: color-mix(in srgb, var(--primary, #ff3220) 65%, var(--border, #333));
 		background: color-mix(in srgb, var(--primary, #ff3220) 12%, var(--surface, #111));
+	}
+
+	.nav-spacer {
+		width: 44px;
+		height: 44px;
+		flex: 0 0 44px;
 	}
 
 	.play-btn {
@@ -728,13 +805,22 @@
 			height: 40px;
 		}
 
+		.nav-spacer {
+			width: 40px;
+			height: 40px;
+			flex-basis: 40px;
+		}
+
 		.play-btn {
 			width: 56px;
 			height: 56px;
 		}
 	}
 
-	@media (max-width: 640px) {
+	@media (max-width: 640px), (any-pointer: coarse) {
+		.shared-player {
+			overflow: visible;
+		}
 		.player-content {
 			display: flex;
 			flex-direction: column;
@@ -747,26 +833,34 @@
 			width: 100%;
 		}
 
+		.transport-controls {
+			gap: 8px;
+		}
+		.queue-feedback {
+			position: absolute;
+			right: 0;
+			bottom: calc(100% + 4px);
+		}
+
 		.track-info {
 			display: flex;
-			flex-direction: row;
+			flex-direction: column;
 			align-items: center;
 			justify-content: center;
-			gap: 0.5rem;
+			gap: 0;
 			width: 100%;
 			text-align: center;
-			white-space: nowrap;
 		}
 
 		.track-title {
 			font-size: 0.85rem;
-			max-width: 55%;
+			width: 100%;
+			max-width: 100%;
 			min-width: 0;
 		}
 
 		.track-detail {
-			max-width: 45%;
-			min-width: 0;
+			display: none;
 		}
 
 		.timeline {
@@ -775,10 +869,45 @@
 		}
 
 		.nav-btn {
+			position: relative;
 			width: 44px;
 			height: 44px;
 			min-width: 44px;
 			min-height: 44px;
+			border-color: transparent;
+			background: transparent;
+			isolation: isolate;
+		}
+
+		.nav-spacer {
+			width: 44px;
+			height: 44px;
+			flex-basis: 44px;
+		}
+
+		.nav-btn::before {
+			content: '';
+			position: absolute;
+			z-index: -1;
+			width: 36px;
+			height: 36px;
+			border: 1px solid color-mix(in srgb, var(--border, #333) 80%, transparent);
+			border-radius: 50%;
+			background: color-mix(in srgb, var(--surface, #111) 70%, transparent);
+		}
+		.nav-btn:hover {
+			border-color: transparent;
+			background: transparent;
+		}
+		.nav-btn:hover::before {
+			border-color: color-mix(in srgb, var(--primary, #ff3220) 65%, var(--border, #333));
+			background: color-mix(in srgb, var(--primary, #ff3220) 12%, var(--surface, #111));
+		}
+		.nav-btn :global(svg) {
+			position: relative;
+			z-index: 1;
+			width: 18px;
+			height: 18px;
 		}
 
 		.play-btn {
@@ -796,5 +925,73 @@
 			font-size: 0.7rem;
 			min-width: 28px;
 		}
+	}
+	:global(html[data-pointer='coarse']) .shared-player {
+		overflow: visible;
+	}
+	:global(html[data-pointer='coarse']) .player-content {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	:global(html[data-pointer='coarse']) .player-controls {
+		justify-content: center;
+		gap: 8px;
+		width: 100%;
+	}
+	:global(html[data-pointer='coarse']) .transport-controls {
+		gap: 8px;
+	}
+	:global(html[data-pointer='coarse']) .queue-feedback {
+		position: absolute;
+		right: 0;
+		bottom: calc(100% + 4px);
+	}
+	:global(html[data-pointer='coarse']) .track-info {
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0;
+		width: 100%;
+		text-align: center;
+	}
+	:global(html[data-pointer='coarse']) .track-title {
+		font-size: 0.85rem;
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+	}
+	:global(html[data-pointer='coarse']) .track-detail {
+		display: none;
+	}
+	:global(html[data-pointer='coarse']) .timeline {
+		width: 100%;
+		gap: 6px;
+	}
+	:global(html[data-pointer='coarse']) .nav-btn {
+		position: relative;
+		width: 44px;
+		height: 44px;
+		min-width: 44px;
+		min-height: 44px;
+		border-color: transparent;
+		background: transparent;
+		isolation: isolate;
+	}
+	:global(html[data-pointer='coarse']) .nav-btn::before {
+		content: '';
+		position: absolute;
+		z-index: -1;
+		width: 36px;
+		height: 36px;
+		border: 1px solid color-mix(in srgb, var(--border, #333) 80%, transparent);
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--surface, #111) 70%, transparent);
+	}
+	:global(html[data-pointer='coarse']) .nav-btn :global(svg) {
+		position: relative;
+		z-index: 1;
+		width: 18px;
+		height: 18px;
 	}
 </style>

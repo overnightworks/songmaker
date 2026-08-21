@@ -73,15 +73,18 @@ function manifest(tracks: QueueStreamTrackItem[]): QueueStreamManifest {
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
 let audio: FakeAudio;
+let audioContextConstructor: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
 	target = document.createElement('div');
 	document.body.appendChild(target);
 	audio = new FakeAudio();
+	audioContextConstructor = vi.fn();
 	vi.stubGlobal(
 		'Audio',
 		vi.fn(() => audio)
 	);
+	vi.stubGlobal('AudioContext', audioContextConstructor);
 	vi.stubGlobal(
 		'matchMedia',
 		vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
@@ -123,5 +126,46 @@ describe('PlayerBar stream boundaries', () => {
 
 		expect(previous?.disabled).toBe(true);
 		expect(next?.disabled).toBe(true);
+	});
+
+	it('keeps Play enabled and queues one loading tap until canplay', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+		const play = target.querySelector<HTMLButtonElement>('.play-btn');
+		if (!play) throw new Error('Expected player Play button');
+		const playSpy = vi.spyOn(audio, 'play');
+
+		expect(play.disabled).toBe(false);
+		play.click();
+		await tick();
+		await Promise.resolve();
+		expect(playSpy).not.toHaveBeenCalled();
+
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+		audio.fire('canplay');
+		await tick();
+
+		expect(playSpy).toHaveBeenCalledOnce();
+		expect(audioContextConstructor).not.toHaveBeenCalled();
+	});
+
+	it('cancels a queued loading play on a second tap', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+		const play = target.querySelector<HTMLButtonElement>('.play-btn');
+		if (!play) throw new Error('Expected player Play button');
+		const playSpy = vi.spyOn(audio, 'play');
+
+		play.click();
+		play.click();
+		await tick();
+		await Promise.resolve();
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+		audio.fire('canplay');
+		await tick();
+
+		expect(playSpy).not.toHaveBeenCalled();
 	});
 });
