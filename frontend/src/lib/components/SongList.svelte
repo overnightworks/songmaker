@@ -38,7 +38,9 @@
 		librarySort,
 		loadLibraryBrowse,
 		loadMoreLibrarySearch,
+		resourceSync,
 		retryLibrarySearch,
+		retryResourceSync,
 		syncLibrarySearch
 	} from '$lib/stores/librarySearch';
 	import { addToast } from '$lib/stores/toast';
@@ -64,6 +66,7 @@
 		LIBRARY_SECTIONS,
 		LIBRARY_SHARED_EMPTY,
 		LIBRARY_SHARED_LOADING,
+		RESOURCE_SYNC_ERROR,
 		type LibrarySection
 	} from '$lib/constants';
 
@@ -76,6 +79,7 @@
 	const createdSort = $derived($librarySort);
 	const searchState = $derived($librarySearch);
 	const browseState = $derived($libraryBrowse);
+	const syncState = $derived($resourceSync);
 	const searching = $derived(search.trim().length > 0);
 	const section = $derived($librarySection);
 	const expanded = $derived($expandedAlbumIds);
@@ -452,6 +456,10 @@
 			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
 			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
 		{/if}
+	{/if}
+	{#if syncState.error}
+		<p class="empty" role="alert">{syncState.error || RESOURCE_SYNC_ERROR}</p>
+		<button class="retry-btn" onclick={() => retryResourceSync()}>{LIBRARY_RETRY_LABEL}</button>
 	{/if}
 </div>
 

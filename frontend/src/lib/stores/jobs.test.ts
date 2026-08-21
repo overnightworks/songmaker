@@ -166,27 +166,20 @@ describe('jobs store', () => {
 		expect(get(activeJobs)[0].job.status).toBe('queued');
 	});
 
-	it('refreshes song data on completion with songId', async () => {
-		mockFetchSong.mockResolvedValue({ id: 's1', title: 'Updated' });
+	it('does not fetch song data on completion', async () => {
 		trackJob(makeJob(), { songId: 's1' });
-		latestSource().simulateMessage(makeJob({ status: 'completed' }));
-		await vi.advanceTimersByTimeAsync(0);
-		expect(mockFetchSong).toHaveBeenCalledWith('s1');
-	});
-
-	it('handles refreshSongData failure silently', async () => {
-		mockFetchSong.mockRejectedValue(new Error('refresh failed'));
-		trackJob(makeJob(), { songId: 's1' });
-		latestSource().simulateMessage(makeJob({ status: 'completed' }));
-		await vi.advanceTimersByTimeAsync(0);
-		expect(get(activeJobs)).toHaveLength(0);
-	});
-
-	it('skips refresh when no songId', async () => {
-		trackJob(makeJob(), {});
 		latestSource().simulateMessage(makeJob({ status: 'completed' }));
 		await vi.advanceTimersByTimeAsync(0);
 		expect(mockFetchSong).not.toHaveBeenCalled();
+		expect(get(activeJobs)).toHaveLength(0);
+	});
+
+	it('toasts completion only for the tab that tracked the job', async () => {
+		toasts.set([]);
+		trackJob(makeJob(), { songId: 's1' });
+		latestSource().simulateMessage(makeJob({ status: 'completed' }));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(get(toasts).map((toast) => toast.message)).toEqual(['generate completed']);
 	});
 
 	it('removeJob closes EventSource and removes from store', () => {

@@ -50,3 +50,8 @@ export const LIBRARY_SHARED_EMPTY = 'Nothing shared';
 export const LIBRARY_SHARED_LOADING = 'Loading shared…';
 export const LIBRARY_NEW_PLAYLIST_LABEL = 'New playlist';
 export const LIBRARY_NEW_SONG_LABEL = 'New Song';
+
+export const RESOURCE_EVENTS_PATH = '/api/resource-events/stream';
+export const RESOURCE_SYNC_ERROR = 'Could not sync new takes';
+export const RESOURCE_SYNC_RECONNECT_BASE_MS = 500;
+export const RESOURCE_SYNC_RECONNECT_MAX_MS = 15000;

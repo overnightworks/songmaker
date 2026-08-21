@@ -40,6 +40,7 @@ from songmaker_cli.db.queries import (
     get_song,
     get_version,
     lock_active_job,
+    record_generation_created,
 )
 from songmaker_cli.generate import (
     _decode_audio,
@@ -404,7 +405,7 @@ def _persist_generation_row(
             if lock_active_job(session, job_id) is None:
                 _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel)
                 return
-            create_generation(
+            gen = create_generation(
                 session,
                 song_id=ctx.song_id,
                 version_id=ctx.version_id,
@@ -414,6 +415,12 @@ def _persist_generation_row(
                 wav_path=wav_rel,
                 model_mode=ctx.model_name,
                 src_generation_id=ctx.src_generation_id,
+            )
+            record_generation_created(
+                session,
+                user_id=ctx.user_id,
+                song_id=ctx.song_id,
+                generation_id=gen.id,
             )
             session.commit()
     except Exception:

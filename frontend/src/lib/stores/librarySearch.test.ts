@@ -17,7 +17,8 @@ vi.mock('$lib/api/albums', () => ({
 	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args)
 }));
 vi.mock('$lib/api/songs', () => ({
-	fetchSongs: (...args: unknown[]) => fetchSongs(...args)
+	fetchSongs: (...args: unknown[]) => fetchSongs(...args),
+	fetchSong: vi.fn()
 }));
 
 import {
@@ -27,6 +28,7 @@ import {
 	libraryBrowse,
 	loadLibraryBrowse,
 	loadMoreLibrarySearch,
+	loadVisibleLibrary,
 	resetLibrarySearchForTests,
 	restoreLibraryBrowse,
 	restoreLibrarySearch,
@@ -358,6 +360,28 @@ describe('loadLibraryBrowse', () => {
 			sort: 'newest'
 		});
 		expect(get(libraryBrowse).songOffset).toBe(2);
+	});
+
+	it('loadVisibleLibrary reloads the browse snapshot when search is empty', async () => {
+		fetchAlbums.mockResolvedValue({
+			items: [album({ id: 'a-vis' })],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		fetchSongs.mockResolvedValue({
+			items: [song({ id: 's-vis' })],
+			total: 1,
+			offset: 0,
+			limit: 200,
+			has_more: false
+		});
+		const ok = await loadVisibleLibrary();
+		expect(ok).toBe(true);
+		expect(fetchAlbums).toHaveBeenCalled();
+		expect(fetchSongs).toHaveBeenCalled();
+		expect(get(libraryBrowse).status).toBe('ready');
 	});
 });
 

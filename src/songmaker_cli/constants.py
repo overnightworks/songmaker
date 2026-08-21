@@ -226,6 +226,23 @@ RATE_LIMIT_SETTING_KEYS = frozenset({
 
 # SSE streaming
 SSE_POLL_INTERVAL_SECONDS = 1
+SSE_MEDIA_TYPE: Final[str] = "text/event-stream"
+
+RESOURCE_EVENT_KIND_GENERATION_CREATED: Final[str] = "generation.created"
+RESOURCE_EVENT_TYPE_HELLO: Final[str] = "hello"
+RESOURCE_EVENT_TYPE_RESYNC: Final[str] = "resync"
+RESOURCE_EVENT_TYPE_HEARTBEAT: Final[str] = "heartbeat"
+RESOURCE_EVENT_RETENTION_DAYS: Final[int] = 30
+RESOURCE_EVENT_POLL_SECONDS: Final[float] = 1.0
+RESOURCE_EVENT_HEARTBEAT_SECONDS: Final[float] = 15.0
+RESOURCE_EVENT_CURSOR_LOCK_ATTEMPTS: Final[int] = 8
+LAST_EVENT_ID_INVALID: Final[str] = "Invalid Last-Event-ID"
+RESOURCE_CURSOR_LOCK_FAILED: Final[str] = "Could not lock resource event cursor"
+RESOURCE_EVENT_USER_ID_REQUIRED: Final[str] = "user_id is required to record a resource event"
+RESOURCE_EVENT_SONG_ID_REQUIRED: Final[str] = "song_id is required to record a resource event"
+RESOURCE_EVENT_GENERATION_ID_REQUIRED: Final[str] = (
+    "generation_id is required to record a resource event"
+)
 
 # Audio file serving
 AUDIO_MEDIA_TYPES: dict[str, str] = {

@@ -2,7 +2,8 @@ import { get, writable } from 'svelte/store';
 import { ApiError } from '$lib/api/fetch';
 import { fetchAlbums } from '$lib/api/albums';
 import { searchLibrary, type LibrarySearchHit, type LibrarySort } from '$lib/api/library';
-import { fetchSongs } from '$lib/api/songs';
+import { openResourceEventStream } from '$lib/api/resourceEvents';
+import { fetchSong, fetchSongs } from '$lib/api/songs';
 import type { AlbumItem, SongItem } from '$lib/api/types';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
@@ -11,7 +12,8 @@ import {
 	LIBRARY_SEARCH_PAGE_SIZE,
 	LIBRARY_SONG_PAGE_SIZE
 } from '$lib/constants';
-import { albumList, songList } from '$lib/stores/player';
+import { albumList, selectedSongId, songList, upsertSongInList } from '$lib/stores/player';
+import { resourceSync, ResourceSyncController } from '$lib/stores/resourceSync';
 
 export type LibrarySearchStatus = 'idle' | 'loading' | 'error' | 'ready';
 
@@ -61,6 +63,9 @@ export const libraryBrowse = writable<LibraryBrowseState>({
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchGeneration = 0;
 let browseGeneration = 0;
+let resourceController: ResourceSyncController | null = null;
+
+export { resourceSync };
 
 export function groupSearchHits(hits: LibrarySearchHit[]): LibraryAlbumGroup[] {
 	const groups = new Map<string, LibraryAlbumGroup>();
@@ -267,6 +272,44 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 	}
 }
 
+export async function loadVisibleLibrary(): Promise<boolean> {
+	const q = get(librarySearch).q;
+	if (q) {
+		await runLibrarySearch(q, get(librarySort), { reset: true });
+		return get(librarySearch).status === 'ready';
+	}
+	return loadLibraryBrowse({ reset: true });
+}
+
+export function startLibraryResourceSync(): void {
+	if (resourceController === null) {
+		resourceController = new ResourceSyncController({
+			openStream: openResourceEventStream,
+			fetchSong,
+			upsertSong: upsertLibrarySong,
+			loadVisibleLibrary,
+			getOpenSongId: () => get(selectedSongId)
+		});
+	}
+	resourceController.start();
+}
+
+export function stopLibraryResourceSync(): void {
+	resourceController?.stop();
+}
+
+export function waitForResourceReady(): Promise<boolean> {
+	startLibraryResourceSync();
+	if (resourceController === null) return Promise.resolve(false);
+	return resourceController.waitForReady();
+}
+
+export function retryResourceSync(): Promise<boolean> {
+	startLibraryResourceSync();
+	if (resourceController === null) return Promise.resolve(false);
+	return resourceController.retry();
+}
+
 export function resetLibrarySearchForTests(): void {
 	if (searchTimer !== null) {
 		clearTimeout(searchTimer);
@@ -284,6 +327,18 @@ export function resetLibrarySearchForTests(): void {
 		albumOffset: 0,
 		songOffset: 0
 	});
+	resourceController?.resetForTests();
+	resourceController = null;
+}
+
+function upsertLibrarySong(item: SongItem): void {
+	upsertSongInList(item);
+	librarySearch.update((state) => ({
+		...state,
+		items: state.items.map((hit) =>
+			hit.type === 'song' && hit.song.id === item.id ? { ...hit, song: item } : hit
+		)
+	}));
 }
 
 async function runLibrarySearch(
