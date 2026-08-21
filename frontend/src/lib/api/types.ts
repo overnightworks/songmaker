@@ -10,6 +10,7 @@ export interface PaginatedResponse<T> {
 	total: number;
 	offset: number;
 	limit: number;
+	has_more: boolean;
 }
 
 export interface GenerationParams {

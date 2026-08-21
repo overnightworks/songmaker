@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fetchAlbums, fetchSongs } from '$lib/api/client';
 	import {
 		albumList,
-		songList,
 		selectedSong,
 		selectedGeneration,
 		selectedAlbumId
 	} from '$lib/stores/player';
+	import { loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { detailTab, initNavigation } from '$lib/stores/navigation';
 	import { selectedPlaylistDetail, loadPlaylists } from '$lib/stores/playlists';
 	import { loadActiveModels } from '$lib/stores/presets';
@@ -46,14 +45,15 @@
 
 		(async () => {
 			try {
-				const [a, s] = await Promise.all([
-					fetchAlbums(),
-					fetchSongs(),
+				const [browseOk] = await Promise.all([
+					loadLibraryBrowse({ reset: true }),
 					loadPlaylists(),
 					loadActiveModels()
 				]);
-				albumList.set(a.items);
-				songList.set(s.items);
+				if (!browseOk) {
+					addToast('Failed to load', 'error');
+					loadError = true;
+				}
 			} catch (e) {
 				addToast(e instanceof Error ? e.message : 'Failed to load', 'error');
 				loadError = true;

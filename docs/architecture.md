@@ -188,7 +188,9 @@ PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| GET | `/api/albums?offset=0&limit=50` | user | List albums with pagination (filtered by ownership) |
+| GET | `/api/albums?offset=0&limit=50` | user | List the caller's albums (`q` title contains, `sort=newest\|oldest\|title`). `has_more` is explicit. |
+| GET | `/api/songs?offset=0&limit=50` | user | List the caller's songs (`album_id`, `q`, `sort`). `has_more` is explicit. |
+| GET | `/api/library/search` | user | Keyset search of the caller's album and song titles. `q` required; `next_cursor` is null iff `has_more` is false. Invalid or mismatched cursors are 422. |
 | POST | `/api/albums` | user | Create album |
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |
 | GET/PUT | `/api/songs/{id}` | user | Get/update song |

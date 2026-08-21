@@ -15,6 +15,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
+from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 from songmaker_cli.db.soft_delete import include_deleted
 from songmaker_cli.settings import get_settings
@@ -37,33 +38,28 @@ def list_songs(
     light: bool = False,
     offset: int = 0,
     limit: int | None = None,
+    q: str | None = None,
+    sort: str | None = None,
 ) -> list[Song]:
     if light:
-        query = (
-            session.query(Song)
-            .options(
-                joinedload(Song.versions),
-                joinedload(Song.generations),
-                joinedload(Song.album),
-            )
-            .order_by(Song.album_id, Song.track_number)
+        query = session.query(Song).options(
+            joinedload(Song.versions),
+            joinedload(Song.generations),
+            joinedload(Song.album),
         )
     else:
-        query = (
-            session.query(Song)
-            .options(
-                joinedload(Song.versions),
-                joinedload(Song.generations).joinedload(Generation.scores),
-                joinedload(Song.generations).joinedload(Generation.rating),
-                joinedload(Song.generations).joinedload(Generation.src_generation),
-                joinedload(Song.album),
-            )
-            .order_by(Song.album_id, Song.track_number)
+        query = session.query(Song).options(
+            joinedload(Song.versions),
+            joinedload(Song.generations).joinedload(Generation.scores),
+            joinedload(Song.generations).joinedload(Generation.rating),
+            joinedload(Song.generations).joinedload(Generation.src_generation),
+            joinedload(Song.album),
         )
-    if album_id:
-        query = query.filter_by(album_id=album_id)
-    if user_id:
-        query = query.join(Album).filter(Album.created_by == user_id)
+    query = _apply_song_filters(query, album_id=album_id, user_id=user_id, q=q)
+    if sort is None:
+        query = query.order_by(Song.album_id, Song.track_number, Song.id)
+    else:
+        query = apply_library_sort(query, Song, sort)
     query = query.offset(offset)
     if limit is not None:
         query = query.limit(limit)
@@ -74,13 +70,27 @@ def count_songs(
     session: Session,
     album_id: str | None = None,
     user_id: str | None = None,
+    q: str | None = None,
 ) -> int:
     query = session.query(Song)
+    query = _apply_song_filters(query, album_id=album_id, user_id=user_id, q=q)
+    return query.count()
+
+
+def _apply_song_filters(
+    query,
+    *,
+    album_id: str | None,
+    user_id: str | None,
+    q: str | None,
+):
     if album_id:
         query = query.filter_by(album_id=album_id)
     if user_id:
         query = query.join(Album).filter(Album.created_by == user_id)
-    return query.count()
+    if q:
+        query = query.filter(title_matches(Song.title, q))
+    return query
 
 
 def get_song(

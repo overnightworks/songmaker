@@ -18,6 +18,7 @@ from songmaker_cli.auth import (
     ROLE_ADMIN,
 )
 from songmaker_cli.constants import (
+    LIBRARY_QUERY_REQUIRED,
     PAGE_ADMIN_DEFAULT_LIMIT,
     PAGE_ADMIN_MAX_LIMIT,
     PAGE_DEFAULT_LIMIT,
@@ -390,3 +391,23 @@ def _admin_page_params(
 
 Pagination = Annotated[PageParams, Depends(_page_params)]
 AdminPagination = Annotated[PageParams, Depends(_admin_page_params)]
+
+
+def page_has_more(*, offset: int, fetched: int, total: int) -> bool:
+    return offset + fetched < total
+
+
+def parse_optional_search_query(q: str | None) -> str | None:
+    if q is None:
+        return None
+    stripped = q.strip()
+    if not stripped:
+        raise HTTPException(422, LIBRARY_QUERY_REQUIRED)
+    return stripped
+
+
+def parse_required_search_query(q: str) -> str:
+    stripped = q.strip()
+    if not stripped:
+        raise HTTPException(422, LIBRARY_QUERY_REQUIRED)
+    return stripped

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,8 @@ from songmaker_cli.api_helpers import (
     Pagination,
     check_album_access,
     cleanup_generation_files,
-    owner_filter,
+    page_has_more,
+    parse_optional_search_query,
     slugify,
     unique_album_id,
 )
@@ -20,6 +21,7 @@ from songmaker_cli.api_models import (
     AlbumCreateRequest,
     AlbumResponse,
     CleanupResponse,
+    LibrarySort,
     PaginatedResponse,
     ShareResponse,
     StatusResponse,
@@ -51,15 +53,22 @@ router = APIRouter()
 @router.get("/albums")
 def api_list_albums(
     page: Pagination,
+    q: str | None = Query(None),
+    sort: LibrarySort | None = Query(None),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> PaginatedResponse[AlbumResponse]:
-    uid = owner_filter(user)
-    total = count_albums(session, user_id=uid)
-    albums = list_albums(session, user_id=uid, offset=page.offset, limit=page.limit)
+    query = parse_optional_search_query(q)
+    total = count_albums(session, user_id=user.id, q=query)
+    albums = list_albums(
+        session, user_id=user.id, offset=page.offset, limit=page.limit,
+        q=query, sort=sort,
+    )
+    items = [AlbumResponse.from_orm(a) for a in albums]
     return PaginatedResponse(
-        items=[AlbumResponse.from_orm(a) for a in albums],
+        items=items,
         total=total, offset=page.offset, limit=page.limit,
+        has_more=page_has_more(offset=page.offset, fetched=len(items), total=total),
     )
 
 

@@ -1,13 +1,17 @@
 import type { CleanupResult, PaginatedResponse, ShareResult, SongItem, VersionItem } from './types';
 import { apiFetch } from './fetch';
+import type { LibraryListOptions } from './library';
 
 export async function fetchSongs(
 	albumId?: string,
 	offset: number = 0,
-	limit: number = 200
+	limit: number = 200,
+	options?: LibraryListOptions
 ): Promise<PaginatedResponse<SongItem>> {
 	const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
 	if (albumId) params.set('album_id', albumId);
+	if (options?.q) params.set('q', options.q);
+	if (options?.sort) params.set('sort', options.sort);
 	const resp = await apiFetch<PaginatedResponse<SongItem>>(`/api/songs?${params}`);
 	return {
 		...resp,

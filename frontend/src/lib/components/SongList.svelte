@@ -9,15 +9,34 @@
 	import { selectAlbumOverview, selectPlaylistView, selectSong } from '$lib/stores/navigation';
 	import { searchQuery } from '$lib/stores/filter';
 	import { createNewPlaylist, playlistList, selectedPlaylistId } from '$lib/stores/playlists';
+	import {
+		changeLibrarySort,
+		groupSearchHits,
+		libraryBrowse,
+		librarySearch,
+		librarySort,
+		loadLibraryBrowse,
+		loadMoreLibrarySearch,
+		retryLibrarySearch,
+		syncLibrarySearch
+	} from '$lib/stores/librarySearch';
 	import { addToast } from '$lib/stores/toast';
 	import AlbumNode from './AlbumNode.svelte';
 	import type { SongItem, AlbumItem } from '$lib/api/types';
 	import {
 		CREATED_SORT_LABELS,
 		CREATED_SORTS,
-		compareByCreatedAt,
-		type CreatedSort
+		compareByCreatedAt
 	} from '$lib/utils/recency';
+	import {
+		LIBRARY_BROWSE_EMPTY,
+		LIBRARY_LOAD_MORE,
+		LIBRARY_RETRY_LABEL,
+		LIBRARY_SEARCH_EMPTY,
+		LIBRARY_SEARCH_ERROR,
+		LIBRARY_SEARCH_LOADING,
+		LIBRARY_SEARCH_PLACEHOLDER
+	} from '$lib/constants';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	const albums = $derived($albumList);
@@ -26,6 +45,10 @@
 	const currentAlbumId = $derived($selectedAlbumId);
 	const playlists = $derived($playlistList);
 	const currentPlaylistId = $derived($selectedPlaylistId);
+	const createdSort = $derived($librarySort);
+	const searchState = $derived($librarySearch);
+	const browseState = $derived($libraryBrowse);
+	const searching = $derived(search.trim().length > 0);
 
 	interface SharedItem {
 		id: string;
@@ -61,7 +84,10 @@
 	let expandedAlbums = new SvelteSet<string>();
 	let playlistsExpanded = $state(true);
 	let sharedExpanded = $state(true);
-	let createdSort = $state<CreatedSort>('newest');
+
+	$effect(() => {
+		syncLibrarySearch(search);
+	});
 
 	$effect(() => {
 		if (albums.length > 0 && expandedAlbums.size === 0) {
@@ -75,16 +101,14 @@
 	}
 
 	const albumGroups = $derived.by(() => {
-		let filtered = songs;
-		if (search) {
-			const q = search.toLowerCase();
-			filtered = filtered.filter((s) => s.title.toLowerCase().includes(q));
+		if (searching) {
+			return groupSearchHits(searchState.items);
 		}
 
 		const orderedAlbums = [...albums].sort((a, b) => compareByCreatedAt(a, b, createdSort));
 		const groups: AlbumGroup[] = [];
 		for (const album of orderedAlbums) {
-			const albumSongs = filtered
+			const albumSongs = songs
 				.filter((s) => s.album_id === album.id)
 				.sort((a, b) => compareByCreatedAt(a, b, createdSort));
 			if (albumSongs.length > 0) {
@@ -113,10 +137,11 @@
 	<input
 		class="search"
 		type="text"
-		placeholder="Search songs..."
+		placeholder={LIBRARY_SEARCH_PLACEHOLDER}
 		value={search}
 		oninput={(e: Event) => searchQuery.set((e.target as HTMLInputElement).value)}
-		aria-label="Search songs"
+		aria-label={LIBRARY_SEARCH_PLACEHOLDER}
+		aria-busy={searching && searchState.status === 'loading'}
 	/>
 	<div class="sort-strip" role="radiogroup" aria-label="List sort" tabindex="-1">
 		{#each CREATED_SORTS as option (option)}
@@ -126,7 +151,7 @@
 				role="radio"
 				aria-checked={createdSort === option}
 				aria-label={CREATED_SORT_LABELS[option]}
-				onclick={() => (createdSort = option)}
+				onclick={() => changeLibrarySort(option, search)}
 			>
 				{CREATED_SORT_LABELS[option]}
 			</button>
@@ -208,8 +233,38 @@
 		/>
 	{/each}
 
-	{#if albumGroups.length === 0}
-		<p class="empty">{search ? 'No songs match' : 'No songs yet'}</p>
+	{#if searching && searchState.status === 'loading' && searchState.items.length === 0}
+		<p class="empty" role="status">{LIBRARY_SEARCH_LOADING}</p>
+	{:else if searching && searchState.status === 'error'}
+		<p class="empty" role="alert">{searchState.error || LIBRARY_SEARCH_ERROR}</p>
+		<button class="retry-btn" onclick={() => retryLibrarySearch()}>{LIBRARY_RETRY_LABEL}</button>
+	{:else if albumGroups.length === 0}
+		<p class="empty">{searching ? LIBRARY_SEARCH_EMPTY : LIBRARY_BROWSE_EMPTY}</p>
+	{/if}
+
+	{#if searching && searchState.hasMore}
+		<button
+			class="load-more"
+			onclick={() => loadMoreLibrarySearch()}
+			disabled={searchState.status === 'loading'}
+		>
+			{LIBRARY_LOAD_MORE}
+		</button>
+	{:else if !searching && (browseState.albumHasMore || browseState.songHasMore)}
+		<button
+			class="load-more"
+			onclick={() => loadLibraryBrowse({ reset: false })}
+			disabled={browseState.status === 'loading'}
+		>
+			{LIBRARY_LOAD_MORE}
+		</button>
+	{/if}
+
+	{#if !searching && browseState.status === 'error'}
+		<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
+		<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: true })}
+			>{LIBRARY_RETRY_LABEL}</button
+		>
 	{/if}
 </div>
 
@@ -392,6 +447,31 @@
 		color: var(--text-subtle);
 		text-align: center;
 		font-size: var(--label-font-size);
+	}
+
+	.retry-btn,
+	.load-more {
+		display: block;
+		margin: 0 auto 16px;
+		padding: 6px 12px;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text-muted);
+		font-size: var(--label-font-size);
+		font-family: var(--font-body);
+		cursor: pointer;
+	}
+
+	.retry-btn:hover,
+	.load-more:hover {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.load-more:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 
 	@media (max-width: 768px) {

@@ -151,6 +151,10 @@ from songmaker_cli.db.queries.jobs import (
 )
 from songmaker_cli.db.queries.jobs import update_job_heartbeat as update_job_heartbeat
 from songmaker_cli.db.queries.jobs import update_job_status as update_job_status
+from songmaker_cli.db.queries.library import apply_library_sort as apply_library_sort
+from songmaker_cli.db.queries.library import like_contains_pattern as like_contains_pattern
+from songmaker_cli.db.queries.library import search_library as search_library
+from songmaker_cli.db.queries.library import title_matches as title_matches
 from songmaker_cli.db.queries.loras import (
     add_user_lora_sample as add_user_lora_sample,
 )

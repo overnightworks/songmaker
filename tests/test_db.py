@@ -164,6 +164,9 @@ def test_list_albums_filtered_by_user(db_session: Session) -> None:
     assert len(list_albums(db_session)) == 3
     assert len(list_albums(db_session, user_id=u1.id)) == 2
     assert len(list_albums(db_session, user_id=u2.id)) == 1
+    assert [a.id for a in list_albums(db_session, user_id=u1.id, q="album a")] == ["a1"]
+    titled = list_albums(db_session, user_id=u1.id, sort="title")
+    assert [a.id for a in titled] == ["a1", "a3"]
 
 
 def test_create_album(db_session: Session) -> None:
