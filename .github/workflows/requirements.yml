@@ -1,0 +1,41 @@
+name: Requirement contract
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: requirements-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Offline requirement contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Check pull request against its exact base
+        if: github.event_name == 'pull_request'
+        run: python scripts/check_requirements.py --base-revision "${{ github.event.pull_request.base.sha }}"
+
+      - name: Check push against its exact before commit
+        if: github.event_name == 'push'
+        run: python scripts/check_requirements.py --base-revision "${{ github.event.before }}"
+
+      - name: Check current contract on manual dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: python scripts/check_requirements.py --current-only

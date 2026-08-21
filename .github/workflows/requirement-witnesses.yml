@@ -1,0 +1,40 @@
+name: Requirement witnesses
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+  issue_comment:
+    types: [edited, deleted]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: requirement-witnesses-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live:
+    name: Live requirement witnesses
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Re-fetch approval witnesses from GitHub
+        run: timeout --signal=TERM --kill-after=5s 120s python scripts/check_requirement_witnesses.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
