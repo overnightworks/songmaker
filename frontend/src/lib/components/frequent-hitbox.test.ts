@@ -9,9 +9,10 @@ import type {
 } from '$lib/api/types';
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { GENERATION_ACTIONS_KEY, type GenerationActions } from '$lib/contexts/generation-actions';
+import { librarySection, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
-import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
+import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { theme } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
@@ -52,9 +53,11 @@ vi.mock('$lib/services/offline', () => ({
 }));
 vi.mock('$lib/stores/navigation', () => ({
 	selectAlbumOverview: vi.fn(),
+	selectLibrarySection: vi.fn(),
 	selectPlaylistView: vi.fn(),
 	selectSong: vi.fn(),
-	deselectPlaylistView: vi.fn()
+	deselectPlaylistView: vi.fn(),
+	persistLibraryHistory: vi.fn()
 }));
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
@@ -279,6 +282,7 @@ beforeEach(() => {
 	sheet.textContent = hitboxCss;
 	document.head.append(sheet);
 	resetLibrarySearchForTests();
+	resetLibraryContextForTests();
 	albumList.set([
 		{
 			id: 'a-local',
@@ -295,6 +299,7 @@ beforeEach(() => {
 	]);
 	songList.set([song({ generations: [] })]);
 	playlistList.set([]);
+	playlistLoad.set({ status: 'ready', error: null });
 	selectedPlaylistDetail.set(playlistDetail());
 	theme.set('dark');
 	document.documentElement.dataset.theme = 'dark';
@@ -305,6 +310,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	clearPointer();
 	resetLibrarySearchForTests();
+	resetLibraryContextForTests();
 	selectedPlaylistDetail.set(null);
 });
 
@@ -332,6 +338,8 @@ async function renderInventory(): Promise<HTMLElement> {
 	mounted.push(
 		mount(PlaylistPicker, { target: pickerTarget, props: { onselect: vi.fn(), onclose: vi.fn() } })
 	);
+	await tick();
+	librarySection.set('playlists');
 	await tick();
 	return root;
 }
