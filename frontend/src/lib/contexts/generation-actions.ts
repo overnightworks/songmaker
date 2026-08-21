@@ -15,12 +15,12 @@ export interface GenerationActions {
 	useAsSource: (gen: GenerationItem) => void;
 }
 
-const KEY = Symbol('generation-actions');
+export const GENERATION_ACTIONS_KEY = Symbol('generation-actions');
 
 export function setGenerationActions(actions: GenerationActions): void {
-	setContext(KEY, actions);
+	setContext(GENERATION_ACTIONS_KEY, actions);
 }
 
 export function getGenerationActions(): GenerationActions {
-	return getContext<GenerationActions>(KEY);
+	return getContext<GenerationActions>(GENERATION_ACTIONS_KEY);
 }

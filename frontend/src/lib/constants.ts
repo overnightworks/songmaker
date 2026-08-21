@@ -28,3 +28,6 @@ export const LIBRARY_SEARCH_DEBOUNCE_MS = 200;
 export const LIBRARY_ALBUM_PAGE_SIZE = 50;
 export const LIBRARY_SONG_PAGE_SIZE = 200;
 export const LIBRARY_SEARCH_PAGE_SIZE = 50;
+
+export const HITBOX_FREQUENT_PX = 44;
+export const HITBOX_COMPACT_PX = 24;

@@ -238,6 +238,7 @@
 							<button
 								class="pick-btn"
 								class:picked={gen.is_picked}
+								data-hitbox="frequent"
 								onclick={(e) => {
 									e.stopPropagation();
 									actions.pick(gen.id, !gen.is_picked);
@@ -249,6 +250,7 @@
 							<button
 								class="keep-btn"
 								class:kept={gen.is_kept}
+								data-hitbox="frequent"
 								onclick={(e) => {
 									e.stopPropagation();
 									actions.keep(gen.id, !gen.is_kept);
@@ -496,9 +498,8 @@
 		background: none;
 		border: none;
 		font-size: 1.07rem;
-		cursor: pointer;
 		color: var(--text-decoration);
-		padding: 2px;
+		line-height: 1;
 	}
 
 	.pick-btn:hover {
@@ -514,9 +515,8 @@
 		background: none;
 		border: none;
 		font-size: 1.07rem;
-		cursor: pointer;
 		color: var(--text-decoration);
-		padding: 2px;
+		line-height: 1;
 	}
 
 	.keep-btn:hover {

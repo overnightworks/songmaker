@@ -161,7 +161,14 @@
 		{/each}
 	</div>
 	{#if onNewSong}
-		<button class="new-btn" onclick={onNewSong} title="New Song" aria-label="New Song">+</button>
+		<button
+			class="new-btn"
+			data-hitbox="frequent"
+			data-hitbox-face
+			onclick={onNewSong}
+			title="New Song"
+			aria-label="New Song">+</button
+		>
 	{/if}
 </div>
 
@@ -202,6 +209,8 @@
 			</button>
 			<button
 				class="new-btn"
+				data-hitbox="frequent"
+				data-hitbox-face
 				onclick={onCreatePlaylist}
 				title="New playlist"
 				aria-label="New playlist">+</button
@@ -316,23 +325,13 @@
 	}
 
 	.new-btn {
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 4px;
 		color: var(--text-muted);
-		width: 30px;
-		height: 30px;
 		font-size: 1rem;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
 		font-family: var(--font-body);
+		line-height: 1;
 	}
 
 	.new-btn:hover {
-		border-color: var(--primary);
 		color: var(--primary);
 	}
 
@@ -481,11 +480,6 @@
 		.search {
 			font-size: 1rem;
 			padding: 8px 12px;
-		}
-
-		.new-btn {
-			width: 36px;
-			height: 36px;
 		}
 	}
 </style>

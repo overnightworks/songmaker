@@ -5,12 +5,13 @@
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { APP_NAME } from '$lib/constants';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { canGoBack, deselectSong, backToSong } from '$lib/stores/navigation';
 	import { selectedGeneration } from '$lib/stores/player';
-	import { theme, toggleTheme, initTheme } from '$lib/stores/ui';
+	import { initTheme } from '$lib/stores/ui';
 	import { dev, browser } from '$app/environment';
 
 	let { children } = $props();
@@ -92,9 +93,7 @@
 		</div>
 		<nav class="top-right">
 			<span class="top-username">{me.username}</span>
-			<button class="theme-toggle" onclick={toggleTheme} aria-label="Toggle theme">
-				{$theme === 'dark' ? '☀' : '☾'}
-			</button>
+			<ThemeToggle />
 			<a href="/loras">Voices</a>
 			<a href="/settings">Settings</a>
 			<button class="top-logout" onclick={handleLogout}>Logout</button>
@@ -306,20 +305,6 @@
 	.top-logout:hover {
 		color: var(--score-bad);
 		border-color: var(--score-bad);
-	}
-
-	.theme-toggle {
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 1rem;
-		cursor: pointer;
-		padding: 2px 4px;
-		line-height: 1;
-	}
-
-	.theme-toggle:hover {
-		color: var(--text);
 	}
 
 	.app-body {

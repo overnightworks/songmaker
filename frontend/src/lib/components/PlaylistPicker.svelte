@@ -60,7 +60,14 @@
 				if (e.key === 'Enter') handleCreate();
 			}}
 		/>
-		<button class="picker-add" onclick={handleCreate} disabled={creating || !newTitle.trim()}>
+		<button
+			class="picker-add"
+			data-hitbox="frequent"
+			data-hitbox-face
+			onclick={handleCreate}
+			disabled={creating || !newTitle.trim()}
+			aria-label="Add playlist"
+		>
 			+
 		</button>
 	</div>
@@ -154,21 +161,12 @@
 	}
 
 	.picker-add {
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 3px;
 		color: var(--text-muted);
-		width: 24px;
-		height: 24px;
 		font-size: 14px;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
+		line-height: 1;
 	}
 
 	.picker-add:hover:not(:disabled) {
-		border-color: var(--primary);
 		color: var(--primary);
 	}
 

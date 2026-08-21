@@ -339,6 +339,8 @@
 							{#if i > 0}
 								<button
 									class="move-btn"
+									data-hitbox="frequent"
+									data-hitbox-face
 									onclick={(e) => {
 										e.stopPropagation();
 										void onMoveEntry(entry.id, i - 1);
@@ -346,12 +348,15 @@
 									disabled={reorderBusy}
 									title="Move up"
 									aria-label={`Move ${entry.song_title} up`}
-									><Icon name="chevron-up" size={14} /></button
 								>
+									<Icon name="chevron-up" size={14} />
+								</button>
 							{/if}
 							{#if i < playlistDetail.entries.length - 1}
 								<button
 									class="move-btn"
+									data-hitbox="frequent"
+									data-hitbox-face
 									onclick={(e) => {
 										e.stopPropagation();
 										void onMoveEntry(entry.id, i + 1);
@@ -359,20 +364,24 @@
 									disabled={reorderBusy}
 									title="Move down"
 									aria-label={`Move ${entry.song_title} down`}
-									><Icon name="chevron-down" size={14} /></button
 								>
+									<Icon name="chevron-down" size={14} />
+								</button>
 							{/if}
 						</div>
 						<button
 							class="remove-btn"
+							data-hitbox="frequent"
+							data-hitbox-face
 							onclick={(e) => {
 								e.stopPropagation();
 								void onRemoveEntry(entry.id);
 							}}
 							title="Remove from playlist"
 							aria-label={`Remove ${entry.song_title} from playlist`}
-							><Icon name="x" size={14} /></button
 						>
+							<Icon name="x" size={14} />
+						</button>
 					</div>
 				</div>
 			{/each}
@@ -615,26 +624,14 @@
 		flex-direction: column;
 		gap: 2px;
 		flex-shrink: 0;
-		min-width: 28px;
 	}
 
 	.move-btn {
-		background: color-mix(in srgb, var(--surface) 80%, transparent);
-		border: 1px solid var(--border);
-		border-radius: 3px;
 		color: var(--text-muted);
-		width: 28px;
-		height: 24px;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0;
 		line-height: 1;
 		opacity: 0.7;
 		transition:
 			opacity 0.15s,
-			border-color 0.15s,
 			color 0.15s;
 	}
 
@@ -643,7 +640,6 @@
 	}
 
 	.move-btn:hover {
-		border-color: var(--primary);
 		color: var(--primary);
 	}
 
@@ -676,27 +672,12 @@
 	}
 
 	.remove-btn {
-		background: color-mix(in srgb, var(--surface) 80%, transparent);
-		border: 1px solid var(--border);
-		border-radius: 3px;
 		color: var(--text-muted);
-		width: 30px;
-		height: 30px;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-		padding: 0;
 		line-height: 1;
-		transition:
-			background 0.15s,
-			border-color 0.15s,
-			color 0.15s;
+		transition: color 0.15s;
 	}
 
 	.remove-btn:hover {
-		border-color: var(--score-bad);
 		color: var(--score-bad);
 	}
 

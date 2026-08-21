@@ -1,0 +1,65 @@
+:root {
+	--hitbox-frequent: 44px;
+	--hitbox-compact: 24px;
+}
+
+[data-hitbox='frequent'] {
+	box-sizing: border-box;
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: var(--hitbox-compact);
+	min-height: var(--hitbox-compact);
+	margin: 0;
+	padding: 0;
+	flex-shrink: 0;
+	isolation: isolate;
+	cursor: pointer;
+}
+
+[data-hitbox='frequent']:disabled {
+	cursor: default;
+}
+
+@media (pointer: coarse) {
+	[data-hitbox='frequent'] {
+		min-width: var(--hitbox-frequent);
+		min-height: var(--hitbox-frequent);
+	}
+}
+
+html[data-pointer='coarse'] [data-hitbox='frequent'] {
+	min-width: var(--hitbox-frequent);
+	min-height: var(--hitbox-frequent);
+}
+
+html[data-pointer='fine'] [data-hitbox='frequent'] {
+	min-width: var(--hitbox-compact);
+	min-height: var(--hitbox-compact);
+}
+
+[data-hitbox='frequent'][data-hitbox-face] {
+	background: transparent;
+	border-style: none;
+}
+
+[data-hitbox='frequent'][data-hitbox-face]::before {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: var(--hitbox-compact);
+	height: var(--hitbox-compact);
+	transform: translate(-50%, -50%);
+	border: 1px solid var(--border);
+	border-radius: var(--btn-radius-sm);
+	background: color-mix(in srgb, var(--surface) 80%, transparent);
+	pointer-events: none;
+	z-index: -1;
+	box-sizing: border-box;
+}
+
+[data-hitbox='frequent'][data-hitbox-face]:hover:not(:disabled)::before {
+	border-color: currentColor;
+}
