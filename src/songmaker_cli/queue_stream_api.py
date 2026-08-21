@@ -12,12 +12,14 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 import songmaker_cli.constants as _consts
+from songmaker_cli import queue_streams
 from songmaker_cli.api_helpers import check_generation_access
 from songmaker_cli.api_models.queue_streams import (
     LibraryTakePool,
     QueueStreamLibraryRequest,
     QueueStreamManifestResponse,
     QueueStreamPinResponse,
+    QueueStreamSkipResponse,
     QueueStreamSnapshotRequest,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
@@ -32,7 +34,6 @@ from songmaker_cli.queue_streams import (
     load_queue_stream_manifest,
     pin_snapshot,
     queue_stream_audio_path,
-    resolve_audio_path,
     track_source_from_generation,
     unpin_snapshot,
 )
@@ -40,6 +41,7 @@ from songmaker_cli.redis_client import RedisRateLimiter
 
 router = APIRouter()
 log = logging.getLogger(__name__)
+LIBRARY_QUEUE_STREAM_SCAN_LIMIT = 1_000
 
 
 def _get_queue_stream_limiter(request: Request) -> RedisRateLimiter:
@@ -105,7 +107,7 @@ def api_create_queue_stream(
 
 
 def generation_matches_pool(generation: Generation, pool: LibraryTakePool) -> bool:
-    if generation.is_archived or not generation.mp3_path:
+    if generation.is_archived:
         return False
     if pool == "mix":
         return bool(generation.is_picked or generation.is_kept)
@@ -128,7 +130,6 @@ def collect_library_pool_generations(
     songs: list[Song],
     pool: LibraryTakePool,
     start_gen: Generation | None,
-    is_readable: Callable[[Generation], bool],
 ) -> list[Generation]:
     selected: list[Generation] = []
     seen: set[str] = set()
@@ -136,37 +137,53 @@ def collect_library_pool_generations(
         takes = [gen for gen in song.generations if generation_matches_pool(gen, pool)]
         takes.sort(key=_take_sort_key)
         for gen in takes:
-            if gen.id in seen or not is_readable(gen):
+            if gen.id in seen:
                 continue
             seen.add(gen.id)
             selected.append(gen)
-    if (
-        start_gen is not None
-        and start_gen.id not in seen
-        and not start_gen.is_archived
-        and start_gen.mp3_path
-        and is_readable(start_gen)
-    ):
+    if start_gen is not None and start_gen.id not in seen and not start_gen.is_archived:
         selected.insert(0, start_gen)
     return selected
 
 
-def _library_audio_readable(ctx: AppContext, generation: Generation) -> bool:
+def _library_skip(ctx: AppContext, generation: Generation) -> QueueStreamSkipResponse | None:
     if not generation.mp3_path:
-        return False
+        return QueueStreamSkipResponse(
+            song_id=generation.song_id,
+            generation_id=generation.id,
+            reason="missing_path",
+        )
     try:
-        resolve_audio_path(ctx.audio_dir, generation.mp3_path)
-    except HTTPException:
-        return False
-    return True
-
-
-def _library_start_take_playable(ctx: AppContext, generation: Generation) -> bool:
-    return (
-        not generation.is_archived
-        and bool(generation.mp3_path)
-        and _library_audio_readable(ctx, generation)
-    )
+        audio_path = queue_streams.resolve_audio_path(ctx.audio_dir, generation.mp3_path)
+        if not audio_path.exists():
+            return QueueStreamSkipResponse(
+                song_id=generation.song_id,
+                generation_id=generation.id,
+                reason="missing_file",
+            )
+    except (HTTPException, OSError):
+        return QueueStreamSkipResponse(
+            song_id=generation.song_id,
+            generation_id=generation.id,
+            reason="missing_file",
+        )
+    try:
+        if not audio_path.is_file():
+            return QueueStreamSkipResponse(
+                song_id=generation.song_id,
+                generation_id=generation.id,
+                reason="unreadable_file",
+            )
+        with audio_path.open("rb") as audio_file:
+            audio_file.read(1)
+        queue_streams.probe_audio_duration(audio_path)
+    except (HTTPException, OSError):
+        return QueueStreamSkipResponse(
+            song_id=generation.song_id,
+            generation_id=generation.id,
+            reason="unreadable_file",
+        )
+    return None
 
 
 def shuffle_library_sources(
@@ -224,44 +241,75 @@ def api_create_library_queue_stream(
     start_gen: Generation | None = None
     if req.start_generation_id is not None:
         start_gen = check_generation_access(session, req.start_generation_id, user)
-        if not _library_start_take_playable(ctx, start_gen):
+        if start_gen.is_archived:
             raise HTTPException(422, _consts.QUEUE_STREAM_UNPLAYABLE_START_DETAIL)
 
     pool_generations = collect_library_pool_generations(
         songs,
         req.pool,
         start_gen,
-        lambda gen: _library_audio_readable(ctx, gen),
     )
-    if not pool_generations:
-        raise HTTPException(
-            422, f"{_consts.QUEUE_STREAM_EMPTY_POOL_DETAIL} '{req.pool}'",
-        )
-
-    sources: list[QueueStreamSource] = [
+    candidate_sources: list[QueueStreamSource] = [
         track_source_from_generation(
             gen,
             key=gen.id,
-            index=0,
+            index=index,
             entry_id=None,
             audio_url=f"/audio/{gen.mp3_path}",
         )
-        for gen in pool_generations
+        for index, gen in enumerate(pool_generations)
     ]
+    canonical_rank = {source.generation.id: rank for rank, source in enumerate(candidate_sources)}
 
     if req.shuffle:
-        sources = shuffle_library_sources(
-            sources, start_gen.id if start_gen is not None else None
+        candidate_sources = shuffle_library_sources(
+            candidate_sources, start_gen.id if start_gen is not None else None
         )
     elif start_gen is not None:
         rotation_pos = next(
-            (i for i, s in enumerate(sources) if s.generation.id == start_gen.id),
+            (
+                i
+                for i, source in enumerate(candidate_sources)
+                if source.generation.id == start_gen.id
+            ),
             None,
         )
         if rotation_pos is not None:
-            sources = sources[rotation_pos:] + sources[:rotation_pos]
+            candidate_sources = candidate_sources[rotation_pos:] + candidate_sources[:rotation_pos]
 
-    sources = [replace(s, index=new_idx) for new_idx, s in enumerate(sources)]
+    skipped: list[QueueStreamSkipResponse] = []
+    playable_sources: list[QueueStreamSource] = []
+    scanned = 0
+    playable_scan_limit = queue_streams.QUEUE_STREAM_MAX_TRACKS + 1
+    for source in candidate_sources:
+        if (
+            scanned >= LIBRARY_QUEUE_STREAM_SCAN_LIMIT
+            or len(playable_sources) >= playable_scan_limit
+        ):
+            break
+        scanned += 1
+        skip = _library_skip(ctx, source.generation)
+        if skip is not None:
+            if start_gen is not None and source.generation.id == start_gen.id:
+                raise HTTPException(422, _consts.QUEUE_STREAM_UNPLAYABLE_START_DETAIL)
+            skipped.append(skip)
+        else:
+            playable_sources.append(source)
+
+    unscanned_tail = scanned < len(candidate_sources)
+    if not playable_sources:
+        if unscanned_tail:
+            raise HTTPException(422, "No playable takes in scanned library window")
+        raise HTTPException(
+            422,
+            f"{_consts.QUEUE_STREAM_EMPTY_POOL_DETAIL} '{req.pool}'",
+        )
+
+    skipped.sort(key=lambda item: canonical_rank[item.generation_id])
+
+    sources = [
+        replace(source, index=new_index) for new_index, source in enumerate(playable_sources)
+    ]
 
     snapshot = build_queue_stream_snapshot(
         ctx,
@@ -269,8 +317,11 @@ def api_create_library_queue_stream(
         scope="auth",
         scope_id=user.id,
         stream_url="",
+        force_windowed=unscanned_tail,
     )
     snapshot.stream_url = f"/api/queue-streams/{snapshot.snapshot_id}/audio"
+    snapshot.skipped = skipped
+    snapshot.skipped_complete = not unscanned_tail
     return snapshot
 
 

@@ -33,6 +33,22 @@ export class QueueStreamEngine {
 		return this.activeTrack?.duration ?? 0;
 	}
 
+	get canNext(): boolean {
+		const session = this.session;
+		if (!session || session.manifest.tracks.length <= 1) return false;
+		return !session.manifest.windowed || session.activeIndex < session.manifest.tracks.length - 1;
+	}
+
+	get canPrev(): boolean {
+		const session = this.session;
+		if (!session || session.manifest.tracks.length <= 1) return false;
+		return !session.manifest.windowed || session.activeIndex > 0;
+	}
+
+	get windowed(): boolean {
+		return this.session?.manifest.windowed ?? false;
+	}
+
 	start(manifest: QueueStreamManifest, startIndex: number): StreamTrackState | null {
 		if (manifest.tracks.length === 0) return null;
 		const index = Math.max(0, Math.min(startIndex, manifest.tracks.length - 1));
@@ -70,14 +86,14 @@ export class QueueStreamEngine {
 
 	nextTrack(el: HTMLAudioElement): StreamTrackState | null {
 		const session = this.session;
-		if (!session || session.manifest.tracks.length <= 1) return null;
+		if (!session || !this.canNext) return null;
 		const next = (session.activeIndex + 1) % session.manifest.tracks.length;
 		return this.seekToTrack(el, next);
 	}
 
 	prevTrack(el: HTMLAudioElement): StreamTrackState | null {
 		const session = this.session;
-		if (!session || session.manifest.tracks.length <= 1) return null;
+		if (!session || !this.canPrev) return null;
 		const prev =
 			(session.activeIndex - 1 + session.manifest.tracks.length) % session.manifest.tracks.length;
 		return this.seekToTrack(el, prev);

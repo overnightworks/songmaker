@@ -108,11 +108,13 @@ def build_queue_stream_snapshot(
     scope: SnapshotScope,
     scope_id: str,
     stream_url: str,
+    force_windowed: bool = False,
 ) -> QueueStreamManifestResponse:
     if not sources:
         raise HTTPException(422, "Queue has no playable tracks")
-    windowed_by_count = len(sources) > QUEUE_STREAM_MAX_TRACKS
-    if windowed_by_count:
+    over_track_limit = len(sources) > QUEUE_STREAM_MAX_TRACKS
+    windowed_by_count = force_windowed or over_track_limit
+    if over_track_limit:
         sources = sources[:QUEUE_STREAM_MAX_TRACKS]
 
     stream_dir = _stream_dir(ctx)
@@ -122,7 +124,8 @@ def build_queue_stream_snapshot(
     prepared_sources, windowed_by_duration = _prepare_sources(ctx, sources)
     if not prepared_sources:
         raise HTTPException(422, "Queue is too long for stream playback")
-    content_hash = _content_hash(scope, scope_id, prepared_sources)
+    windowed = windowed_by_count or windowed_by_duration
+    content_hash = _content_hash(scope, scope_id, prepared_sources, windowed=windowed)
     with _build_lock(content_hash):
         reusable = _find_reusable_snapshot(ctx, content_hash, stream_url)
         if reusable:
@@ -271,11 +274,15 @@ def _content_hash(
     scope: SnapshotScope,
     scope_id: str,
     prepared_sources: list[QueueStreamPreparedSource],
+    *,
+    windowed: bool,
 ) -> str:
     hasher = hashlib.sha256()
     hasher.update(scope.encode("utf-8"))
     hasher.update(b"\0")
     hasher.update(scope_id.encode("utf-8"))
+    hasher.update(b"\0")
+    hasher.update(str(windowed).encode("ascii"))
     for prepared in prepared_sources:
         source = prepared.source
         gen = source.generation

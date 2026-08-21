@@ -8,11 +8,14 @@
 		canPlayPrevSong,
 		canPlayNextSong,
 		libraryQueueNotice,
+		libraryQueueSkipped,
+		libraryQueueSkippedComplete,
 		queueContext,
 		retryLastPlayIntent,
 		songList,
 		shuffleEnabled,
-		toggleShuffle
+		toggleShuffle,
+		windowEnded
 	} from '$lib/stores/player';
 	import { LIBRARY_TAKE_POOL_LABELS, libraryTakePool } from '$lib/stores/playbackSettings';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -23,6 +26,7 @@
 	} from '$lib/services/mediaSession';
 	import { formatTime } from '$lib/utils/format';
 	import Icon from './Icon.svelte';
+	import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 	import {
 		AudioVisualizer,
 		FFT_SIZE,
@@ -51,6 +55,11 @@
 	const shuffle = $derived($shuffleEnabled);
 	const poolName = $derived(LIBRARY_TAKE_POOL_LABELS[$libraryTakePool]);
 	const queueNotice = $derived($libraryQueueNotice);
+	const skipped = $derived($queueContext.type === 'library' ? $libraryQueueSkipped : []);
+	const skippedComplete = $derived(
+		$queueContext.type === 'library' ? $libraryQueueSkippedComplete : true
+	);
+	const ended = $derived($windowEnded);
 
 	const isPlaying = $derived(status === 'playing');
 	const isLoading = $derived(status === 'loading' || status === 'buffering');
@@ -214,6 +223,7 @@
 			>
 				<Icon name="skip-forward" size={21} />
 			</button>
+			<QueueStreamFeedback {skipped} {skippedComplete} windowEnded={ended} />
 		</div>
 		<button
 			class="track-info"
@@ -286,7 +296,7 @@
 		position: relative;
 		z-index: 1;
 		display: grid;
-		grid-template-columns: auto minmax(140px, 260px) minmax(180px, 1fr);
+		grid-template-columns: auto minmax(120px, 260px) minmax(100px, 1fr);
 		align-items: center;
 		gap: 14px;
 		width: 100%;
