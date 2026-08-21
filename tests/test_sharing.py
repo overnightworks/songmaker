@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth import hash_password, sign_session_id
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.models import Album, Generation, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Playlist, Song, User, Version
 
 
 def _seed_sharing_data(session) -> None:
@@ -333,3 +333,246 @@ def test_disable_sharing_not_found(tmp_path: Path) -> None:
     with factory() as session:
         with pytest.raises(ValueError, match="Album not found"):
             disable_album_sharing(session, "nonexistent")
+
+
+# ── Share inventory ────────────────────────────────────────────────
+
+
+USER_A = "user-a"
+USER_B = "user-b"
+ADMIN_ID = "user-admin"
+
+
+def _ts(offset_seconds: int) -> datetime:
+    return datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=offset_seconds)
+
+
+def _inventory_factory(tmp_path: Path):
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        session.add(User(id=USER_A, username="alice", password_hash="unused", role="user"))
+        session.add(User(id=USER_B, username="bob", password_hash="unused", role="user"))
+        session.add(User(id=ADMIN_ID, username="admin", password_hash="unused", role="admin"))
+        session.flush()
+        _seed_inventory(session)
+        session.commit()
+    return factory
+
+
+def _seed_inventory(session) -> None:
+    session.add(Album(
+        id="alice-album", title="Alice Album", artist="Artist",
+        created_by=USER_A, created_at=_ts(40),
+        is_shared=True, share_slug="slug-album",
+    ))
+    session.add(Song(
+        id="alice-song", title="Alice Song", album_id="alice-album",
+        created_at=_ts(30), is_shared=True, share_slug="slug-song",
+    ))
+    session.add(Version(id="alice-v1", song_id="alice-song", version_number=1, lyrics="Hi"))
+    session.add(Generation(
+        id="alice-gen", song_id="alice-song", version_id="alice-v1",
+        generation_number=1, mp3_path="alice/g1.mp3", seed=1,
+        created_at=_ts(20), is_shared=True, share_slug="slug-gen",
+    ))
+    session.add(Playlist(
+        id="alice-pl", title="Alice Playlist", created_by=USER_A,
+        created_at=_ts(10), is_shared=True, share_slug="slug-pl",
+    ))
+    session.add(Album(
+        id="bob-album", title="Bob Album", artist="Artist",
+        created_by=USER_B, created_at=_ts(100),
+        is_shared=True, share_slug="slug-bob",
+    ))
+    session.add(Album(
+        id="admin-album", title="Admin Album", artist="Artist",
+        created_by=ADMIN_ID, created_at=_ts(5),
+        is_shared=True, share_slug="slug-admin",
+    ))
+
+
+def _inventory_client(tmp_path: Path, user_id: str, role: str = "user"):
+    from fastapi import FastAPI
+
+    from songmaker_cli.api import router
+    from songmaker_cli.app_context import AppContext
+    from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+
+    factory = _inventory_factory(tmp_path)
+    ctx = AppContext(
+        db=factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+    app = FastAPI()
+    app.state.ctx = ctx
+    app.dependency_overrides[get_current_user] = (
+        lambda: AuthenticatedUser(id=user_id, username=f"test-{user_id}", role=role, is_active=True)
+    )
+    app.include_router(router)
+    return TestClient(app), factory
+
+
+def test_share_inventory_lists_four_types_for_owner(tmp_path: Path) -> None:
+    from songmaker_cli.db.models import Album, Generation, Playlist, Song
+    from songmaker_cli.db.queries import list_shared_inventory
+
+    factory = _inventory_factory(tmp_path)
+    with factory() as session:
+        page = list_shared_inventory(session, USER_A, offset=0, limit=50)
+    assert page.total == 4
+    assert page.filtered_total == 4
+    assert [(type(item), item.id) for item in page.items] == [
+        (Album, "alice-album"),
+        (Song, "alice-song"),
+        (Generation, "alice-gen"),
+        (Playlist, "alice-pl"),
+    ]
+    assert {item.share_slug for item in page.items} == {
+        "slug-album", "slug-song", "slug-gen", "slug-pl",
+    }
+
+
+def test_share_inventory_isolates_by_user_id(tmp_path: Path) -> None:
+    from songmaker_cli.db.queries import list_shared_inventory
+
+    factory = _inventory_factory(tmp_path)
+    with factory() as session:
+        alice = list_shared_inventory(session, USER_A, offset=0, limit=50)
+        bob = list_shared_inventory(session, USER_B, offset=0, limit=50)
+        admin = list_shared_inventory(session, ADMIN_ID, offset=0, limit=50)
+    assert {item.id for item in alice.items} == {
+        "alice-album", "alice-song", "alice-gen", "alice-pl",
+    }
+    assert {item.id for item in bob.items} == {"bob-album"}
+    assert {item.id for item in admin.items} == {"admin-album"}
+    assert admin.total == 1
+
+
+def test_share_inventory_excludes_soft_deleted(tmp_path: Path) -> None:
+    from songmaker_cli.db.queries import list_shared_inventory, soft_delete_album, soft_delete_song
+
+    factory = _inventory_factory(tmp_path)
+    with factory() as session:
+        soft_delete_song(session, "alice-song")
+        session.commit()
+    with factory() as session:
+        page = list_shared_inventory(session, USER_A, offset=0, limit=50)
+    assert {item.id for item in page.items} == {"alice-album", "alice-pl"}
+    assert page.total == 2
+
+    with factory() as session:
+        soft_delete_album(session, "alice-album")
+        session.commit()
+    with factory() as session:
+        page = list_shared_inventory(session, USER_A, offset=0, limit=50)
+    assert {item.id for item in page.items} == {"alice-pl"}
+    assert page.total == 1
+
+
+def test_share_inventory_includes_archived_take(tmp_path: Path) -> None:
+    from songmaker_cli.db.queries import archive_generation, list_shared_inventory
+
+    factory = _inventory_factory(tmp_path)
+    with factory() as session:
+        archive_generation(session, "alice-gen")
+        session.commit()
+    with factory() as session:
+        page = list_shared_inventory(session, USER_A, offset=0, limit=50)
+    gens = [item for item in page.items if item.id == "alice-gen"]
+    assert len(gens) == 1
+    assert gens[0].is_archived is True
+    assert page.total == 4
+
+
+def test_share_inventory_pagination_total_is_unfiltered(tmp_path: Path) -> None:
+    from songmaker_cli.constants import LIBRARY_ITEM_ALBUM
+    from songmaker_cli.db.queries import list_shared_inventory
+
+    factory = _inventory_factory(tmp_path)
+    with factory() as session:
+        first = list_shared_inventory(session, USER_A, offset=0, limit=2)
+        second = list_shared_inventory(session, USER_A, offset=2, limit=2)
+        albums = list_shared_inventory(
+            session, USER_A, item_type=LIBRARY_ITEM_ALBUM, offset=0, limit=50,
+        )
+    assert first.total == 4
+    assert first.filtered_total == 4
+    assert len(first.items) == 2
+    assert [item.id for item in first.items] == ["alice-album", "alice-song"]
+    assert second.total == 4
+    assert [item.id for item in second.items] == ["alice-gen", "alice-pl"]
+    assert albums.total == 4
+    assert albums.filtered_total == 1
+    assert [item.id for item in albums.items] == ["alice-album"]
+
+
+def test_share_inventory_requires_public_slug_reachability(tmp_path: Path) -> None:
+    from songmaker_cli.db.queries import list_shared_inventory
+
+    factory = _inventory_factory(tmp_path)
+    with factory() as session:
+        session.query(Album).filter_by(id="alice-album").update({
+            "is_shared": False,
+        })
+        session.query(Song).filter_by(id="alice-song").update({
+            "share_slug": None,
+        })
+        session.commit()
+    with factory() as session:
+        page = list_shared_inventory(session, USER_A, offset=0, limit=50)
+    assert {item.id for item in page.items} == {"alice-gen", "alice-pl"}
+    assert page.total == 2
+
+
+def test_api_library_shares_uses_user_id_not_owner_filter(tmp_path: Path) -> None:
+    admin, _ = _inventory_client(tmp_path, ADMIN_ID, role="admin")
+    resp = admin.get("/api/library/shares")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert [item["id"] for item in data["items"]] == ["admin-album"]
+    assert data["items"][0]["type"] == "album"
+    assert data["items"][0]["public_path"] == "/share/slug-admin"
+
+
+def test_api_library_shares_type_filter_does_not_change_n(tmp_path: Path) -> None:
+    alice, _ = _inventory_client(tmp_path, USER_A)
+    all_items = alice.get("/api/library/shares").json()
+    albums = alice.get("/api/library/shares", params={"type": "album"}).json()
+    takes = alice.get("/api/library/shares", params={"type": "generation"}).json()
+    assert all_items["total"] == 4
+    assert albums["total"] == 4
+    assert takes["total"] == 4
+    assert [item["type"] for item in albums["items"]] == ["album"]
+    assert takes["items"][0]["type"] == "generation"
+    assert takes["items"][0]["is_archived"] is False
+    assert takes["items"][0]["generation_number"] == 1
+    assert takes["items"][0]["public_path"] == "/share/gen/slug-gen"
+    assert albums["has_more"] is False
+
+
+def test_api_library_shares_paginates(tmp_path: Path) -> None:
+    alice, _ = _inventory_client(tmp_path, USER_A)
+    first = alice.get("/api/library/shares", params={"offset": 0, "limit": 3}).json()
+    second = alice.get("/api/library/shares", params={"offset": 3, "limit": 3}).json()
+    assert first["total"] == 4
+    assert first["has_more"] is True
+    assert len(first["items"]) == 3
+    assert second["total"] == 4
+    assert second["has_more"] is False
+    assert [item["id"] for item in second["items"]] == ["alice-pl"]
+
+
+def test_api_library_shares_rejects_unknown_type(tmp_path: Path) -> None:
+    alice, _ = _inventory_client(tmp_path, USER_A)
+    resp = alice.get("/api/library/shares", params={"type": "voice"})
+    assert resp.status_code == 422
+
+
+def test_api_library_shares_requires_auth(sharing_app: TestClient) -> None:
+    unauthed = TestClient(sharing_app.app, cookies={})
+    resp = unauthed.get("/api/library/shares")
+    assert resp.status_code == 401

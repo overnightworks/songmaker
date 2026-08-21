@@ -1,9 +1,21 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
+import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX, librarySharesStatusLabel } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
+import { resetSharesForTests } from '$lib/stores/shares';
 import HeaderMenu from './HeaderMenu.svelte';
+
+const fetchShares = vi.fn();
+const persistLibraryHistory = vi.fn();
+
+vi.mock('$lib/api/library', () => ({
+	fetchShares: (...args: unknown[]) => fetchShares(...args)
+}));
+vi.mock('$lib/stores/navigation', () => ({
+	persistLibraryHistory: (...args: unknown[]) => persistLibraryHistory(...args),
+	isLibraryWorkspacePath: () => true
+}));
 
 let afterNavigateCb: (() => void) | undefined;
 
@@ -73,6 +85,16 @@ async function openMenu(target: HTMLElement): Promise<HTMLDivElement> {
 beforeEach(() => {
 	afterNavigateCb = undefined;
 	onlogout.mockReset();
+	persistLibraryHistory.mockReset();
+	fetchShares.mockReset();
+	fetchShares.mockResolvedValue({
+		items: [],
+		total: 4,
+		offset: 0,
+		limit: 1,
+		has_more: false
+	});
+	resetSharesForTests();
 	const sheet = document.createElement('style');
 	sheet.dataset.hitboxStyles = 'true';
 	sheet.textContent = hitboxCss;
@@ -85,10 +107,44 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
+	resetSharesForTests();
 	vi.unstubAllGlobals();
 });
 
 describe('HeaderMenu', () => {
+	it('shows Shared · N outside the overflow on compact and wide layouts', async () => {
+		const compact = await renderMenu(true);
+		await Promise.resolve();
+		await tick();
+		const compactStatus = requireElement<HTMLButtonElement>(compact, '.shares-status');
+		expect(compactStatus.textContent).toBe(librarySharesStatusLabel(4));
+		expect(compact.querySelector('[aria-haspopup="dialog"]')).not.toBeNull();
+		expect(compact.querySelector('[role="dialog"]')).toBeNull();
+
+		if (mounted) await unmount(mounted);
+		mounted = undefined;
+		document.body.replaceChildren();
+		const wide = await renderMenu(false);
+		await Promise.resolve();
+		await tick();
+		expect(requireElement<HTMLButtonElement>(wide, '.shares-status').textContent).toBe(
+			librarySharesStatusLabel(4)
+		);
+		expect(wide.querySelector('.header-nav')).not.toBeNull();
+	});
+
+	it('lets the Shared chip shrink with ellipsis outside the overflow menu', async () => {
+		const target = await renderMenu(true);
+		await Promise.resolve();
+		await tick();
+		const tools = requireElement<HTMLDivElement>(target, '.header-tools');
+		const chip = requireElement<HTMLButtonElement>(tools, '.shares-status');
+		const trigger = requireElement<HTMLButtonElement>(tools, '[aria-haspopup="dialog"]');
+		expect(tools.contains(trigger)).toBe(true);
+		expect(chip.contains(trigger)).toBe(false);
+		expect(target.querySelector('[role="dialog"]')).toBeNull();
+	});
+
 	it('shows one overflow trigger on compact viewports instead of inline nav', async () => {
 		const target = await renderMenu(true);
 		const trigger = requireElement<HTMLButtonElement>(

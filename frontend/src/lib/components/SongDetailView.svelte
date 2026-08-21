@@ -18,6 +18,7 @@
 		keepGeneration,
 		unkeepGeneration
 	} from '$lib/api/client';
+	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { activeJobs, trackJob, removeJob } from '$lib/stores/jobs';
 	import { health, startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 	import {
@@ -301,6 +302,7 @@
 		const songId = song.id;
 		const result = await shareSong(songId);
 		updateSongInList(songId, (s) => ({ ...s, is_shared: true, share_slug: result.share_slug }));
+		await refreshSharesAfterMutation();
 		return result;
 	}
 
@@ -309,6 +311,7 @@
 		const songId = song.id;
 		await unshareSong(songId);
 		updateSongInList(songId, (s) => ({ ...s, is_shared: false, share_slug: null }));
+		await refreshSharesAfterMutation();
 	}
 
 	async function onDeleteSong(): Promise<void> {
@@ -342,12 +345,14 @@
 			is_shared: true,
 			share_slug: result.share_slug
 		}));
+		await refreshSharesAfterMutation();
 		return result;
 	}
 
 	async function onGenShareDisable(genId: string) {
 		await unshareGeneration(genId);
 		updateGenerationInList(genId, (g) => ({ ...g, is_shared: false, share_slug: null }));
+		await refreshSharesAfterMutation();
 	}
 
 	async function onDeleteGeneration(genId: string): Promise<void> {

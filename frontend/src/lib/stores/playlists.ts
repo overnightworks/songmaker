@@ -99,6 +99,14 @@ export function deselectPlaylist(): void {
 	selectedPlaylistDetail.set(null);
 }
 
+export function updatePlaylistInList(
+	playlistId: string,
+	updater: (p: PlaylistItem) => PlaylistItem
+): void {
+	playlistList.update((list) => list.map((p) => (p.id === playlistId ? updater(p) : p)));
+	selectedPlaylistDetail.update((d) => (d && d.id === playlistId ? { ...d, ...updater(d) } : d));
+}
+
 export async function createNewPlaylist(title: string): Promise<PlaylistItem> {
 	const playlist = await apiCreatePlaylist(title);
 	playlistList.update((list) => [...list, playlist]);

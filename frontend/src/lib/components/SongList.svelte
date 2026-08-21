@@ -10,7 +10,11 @@
 		albumSongsLoad,
 		loadSongsForAlbum,
 		songList,
-		selectedAlbumId
+		selectedAlbumId,
+		selectedGenerationId,
+		updateAlbumInList,
+		updateGenerationInList,
+		updateSongInList
 	} from '$lib/stores/player';
 	import {
 		persistLibraryHistory,
@@ -19,13 +23,26 @@
 		selectPlaylistView,
 		selectSong
 	} from '$lib/stores/navigation';
+	import {
+		loadMoreShares,
+		loadShareInventory,
+		refreshSharesAfterMutation,
+		setShareTypeFilter,
+		shareInventory,
+		sharesViewOpen,
+		watchShareView
+	} from '$lib/stores/shares';
+	import { fetchAlbum } from '$lib/api/albums';
+	import { unshareAlbum, unshareGeneration, unsharePlaylist, unshareSong } from '$lib/api/client';
+	import type { AlbumItem, ShareInventoryItem, SongItem } from '$lib/api/types';
 	import { searchQuery } from '$lib/stores/filter';
 	import {
 		createNewPlaylist,
 		playlistList,
 		playlistLoad,
 		loadPlaylists,
-		selectedPlaylistId
+		selectedPlaylistId,
+		updatePlaylistInList
 	} from '$lib/stores/playlists';
 	import {
 		albumIsExpanded,
@@ -49,7 +66,7 @@
 	} from '$lib/stores/librarySearch';
 	import { addToast } from '$lib/stores/toast';
 	import AlbumNode from './AlbumNode.svelte';
-	import type { SongItem, AlbumItem } from '$lib/api/types';
+
 	import { CREATED_SORT_LABELS, CREATED_SORTS, compareByCreatedAt } from '$lib/utils/recency';
 	import {
 		LIBRARY_ALBUMS_EMPTY,
@@ -68,10 +85,23 @@
 		LIBRARY_SECTION_LABELS,
 		LIBRARY_SECTION_NAV_LABEL,
 		LIBRARY_SECTIONS,
+		LIBRARY_SHARES_ALL_LABEL,
+		LIBRARY_SHARES_FILTER_LABEL,
+		LIBRARY_SHARES_COPY_LABEL,
+		LIBRARY_SHARES_ERROR,
+		LIBRARY_SHARES_OPEN_LABEL,
+		LIBRARY_SHARES_TYPE_EMPTY,
+		LIBRARY_SHARES_TYPE_LABELS,
+		LIBRARY_SHARES_TYPES,
+		LIBRARY_SHARES_UNSHARE_LABEL,
+		LIBRARY_SHARES_UNSHARE_TITLE,
+		LIBRARY_SHARES_UNSHARE_WARNING,
 		LIBRARY_SHARED_EMPTY,
 		LIBRARY_SHARED_LOADING,
+		NOW_PLAYING_TAKE_PREFIX,
 		type LibrarySection
 	} from '$lib/constants';
+	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
 	const albums = $derived($albumList);
 	const songs = $derived($songList);
@@ -88,36 +118,13 @@
 	const playlistStatus = $derived($playlistLoad);
 	const restoredScroll = $derived($libraryScrollAnchor);
 	const albumLoads = $derived($albumSongsLoad);
+	const sharesOpen = $derived($sharesViewOpen);
+	const sharesState = $derived($shareInventory);
+	let pendingUnshare = $state<ShareInventoryItem | null>(null);
 
-	interface SharedItem {
-		id: string;
-		type: 'album' | 'song' | 'generation' | 'playlist';
-		label: string;
-		parentSongId?: string;
-	}
-
-	const sharedItems = $derived.by(() => {
-		const items: SharedItem[] = [];
-		for (const a of albums) {
-			if (a.is_shared) items.push({ id: a.id, type: 'album', label: a.title });
-		}
-		for (const s of songs) {
-			if (s.is_shared) items.push({ id: s.id, type: 'song', label: s.title });
-			for (const g of s.generations) {
-				if (g.is_shared) {
-					items.push({
-						id: g.id,
-						type: 'generation',
-						label: `Gen #${g.generation_number} — ${s.title}`,
-						parentSongId: s.id
-					});
-				}
-			}
-		}
-		for (const p of playlists) {
-			if (p.is_shared) items.push({ id: p.id, type: 'playlist', label: p.title });
-		}
-		return items;
+	$effect(() => {
+		if (!sharesOpen) return;
+		return watchShareView();
 	});
 
 	$effect(() => {
@@ -154,7 +161,7 @@
 	$effect(() => {
 		void albumGroups.length;
 		void orderedPlaylists.length;
-		void sharedItems.length;
+		void sharesState.items.length;
 		if (browseEl) {
 			browseEl.scrollTop = restoredScroll;
 		}
@@ -221,14 +228,66 @@
 		}
 	}
 
-	function onSharedItem(item: SharedItem): void {
-		if (item.type === 'album') selectAlbumOverview(item.id);
-		else if (item.type === 'song') selectSong(item.id);
-		else if (item.type === 'playlist') selectPlaylistView(item.id);
-		else if (item.parentSongId) selectSong(item.parentSongId);
+	function shareRowLabel(item: ShareInventoryItem): string {
+		if (item.type === 'generation') {
+			const number = item.generation_number ?? 0;
+			return `${NOW_PLAYING_TAKE_PREFIX} #${number} — ${item.title}`;
+		}
+		return item.title;
 	}
 
-	const panelSection = $derived(searching ? 'search' : section);
+	async function onOpenShare(item: ShareInventoryItem): Promise<void> {
+		if (item.type === 'album') {
+			try {
+				hydrateAndOpenAlbum(await fetchAlbum(item.id));
+			} catch {
+				addToast('Open failed', 'error');
+			}
+		} else if (item.type === 'song') selectSong(item.id);
+		else if (item.type === 'playlist') selectPlaylistView(item.id);
+		else if (item.song_id) {
+			selectSong(item.song_id);
+			selectedGenerationId.set(item.id);
+			persistLibraryHistory();
+		}
+	}
+
+	async function onCopyShareLink(item: ShareInventoryItem): Promise<void> {
+		try {
+			await navigator.clipboard.writeText(`${window.location.origin}${item.public_path}`);
+			addToast('Link copied', 'success');
+		} catch {
+			addToast('Copy failed', 'error');
+		}
+	}
+
+	async function confirmUnshare(): Promise<void> {
+		const item = pendingUnshare;
+		if (!item) return;
+		pendingUnshare = null;
+		try {
+			if (item.type === 'album') {
+				await unshareAlbum(item.id);
+				updateAlbumInList(item.id, (a) => ({ ...a, is_shared: false, share_slug: null }));
+			} else if (item.type === 'song') {
+				await unshareSong(item.id);
+				updateSongInList(item.id, (s) => ({ ...s, is_shared: false, share_slug: null }));
+			} else if (item.type === 'playlist') {
+				await unsharePlaylist(item.id);
+				updatePlaylistInList(item.id, (p) => ({ ...p, is_shared: false, share_slug: null }));
+			} else {
+				await unshareGeneration(item.id);
+				updateGenerationInList(item.id, (g) => ({ ...g, is_shared: false, share_slug: null }));
+			}
+			await refreshSharesAfterMutation();
+			addToast('Sharing disabled', 'success');
+		} catch {
+			addToast('Unshare failed', 'error');
+		}
+	}
+
+	const panelSection = $derived(searching ? 'search' : sharesOpen ? 'shares' : section);
+	const sharesPageComplete = $derived(sharesState.status === 'ready' && !sharesState.hasMore);
 </script>
 
 <div class="library-nav">
@@ -272,12 +331,12 @@
 		{#each LIBRARY_SECTIONS as item (item)}
 			<button
 				class="section-tab"
-				class:active={section === item}
+				class:active={section === item && !sharesOpen}
 				role="tab"
 				id="library-tab-{item}"
-				aria-selected={section === item}
+				aria-selected={section === item && !sharesOpen}
 				aria-controls="library-panel"
-				tabindex={section === item ? 0 : -1}
+				tabindex={section === item && !sharesOpen ? 0 : -1}
 				onclick={() => onSelectSection(item)}
 				onkeydown={(event) => onSectionKeydown(event, item)}
 			>
@@ -334,6 +393,85 @@
 			>
 				{LIBRARY_LOAD_MORE}
 			</button>
+		{/if}
+	{:else if sharesOpen}
+		<div class="share-filters" role="radiogroup" aria-label={LIBRARY_SHARES_FILTER_LABEL}>
+			<button
+				class="sort-btn"
+				class:active={sharesState.typeFilter === null}
+				role="radio"
+				aria-checked={sharesState.typeFilter === null}
+				onclick={() => setShareTypeFilter(null)}
+			>
+				{LIBRARY_SHARES_ALL_LABEL}
+			</button>
+			{#each LIBRARY_SHARES_TYPES as type (type)}
+				<button
+					class="sort-btn"
+					class:active={sharesState.typeFilter === type}
+					role="radio"
+					aria-checked={sharesState.typeFilter === type}
+					onclick={() => setShareTypeFilter(type)}
+				>
+					{LIBRARY_SHARES_TYPE_LABELS[type]}
+				</button>
+			{/each}
+		</div>
+		{#if sharesState.status === 'loading' && sharesState.items.length === 0}
+			<p class="empty" role="status">{LIBRARY_SHARED_LOADING}</p>
+		{:else if sharesState.status === 'error' && sharesState.items.length === 0}
+			<p class="empty" role="alert">{sharesState.error || LIBRARY_SHARES_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadShareInventory({ reset: true })}
+				>{LIBRARY_RETRY_LABEL}</button
+			>
+		{:else if sharesPageComplete && sharesState.items.length === 0}
+			<p class="empty">
+				{sharesState.typeFilter
+					? LIBRARY_SHARES_TYPE_EMPTY[sharesState.typeFilter]
+					: LIBRARY_SHARED_EMPTY}
+			</p>
+		{:else}
+			{#each sharesState.items as item (item.type + item.id)}
+				<div class="share-row">
+					<button
+						class="share-open"
+						onclick={() => onOpenShare(item)}
+						aria-label={`${LIBRARY_SHARES_OPEN_LABEL} ${shareRowLabel(item)}`}
+					>
+						<span class="playlist-count">{LIBRARY_SHARES_TYPE_LABELS[item.type]}</span>
+						<span class="playlist-title">{shareRowLabel(item)}</span>
+					</button>
+					<button
+						class="share-action"
+						onclick={() => onCopyShareLink(item)}
+						aria-label={LIBRARY_SHARES_COPY_LABEL}
+					>
+						{LIBRARY_SHARES_COPY_LABEL}
+					</button>
+					<button
+						class="share-action"
+						onclick={() => (pendingUnshare = item)}
+						aria-label={LIBRARY_SHARES_UNSHARE_LABEL}
+					>
+						{LIBRARY_SHARES_UNSHARE_LABEL}
+					</button>
+				</div>
+			{/each}
+		{/if}
+		{#if sharesState.hasMore}
+			<button
+				class="load-more"
+				onclick={() => loadMoreShares()}
+				disabled={sharesState.status === 'loading'}
+			>
+				{LIBRARY_LOAD_MORE}
+			</button>
+		{/if}
+		{#if sharesState.status === 'error' && sharesState.items.length > 0}
+			<p class="empty" role="alert">{sharesState.error || LIBRARY_SHARES_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadShareInventory({ reset: true })}
+				>{LIBRARY_RETRY_LABEL}</button
+			>
 		{/if}
 	{:else if section === 'albums'}
 		<div class="album-overview">
@@ -419,47 +557,19 @@
 			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
 			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
 		{/if}
-	{:else if section === 'shared'}
-		{#if playlistStatus.status === 'loading' && sharedItems.length === 0}
-			<p class="empty" role="status">{LIBRARY_SHARED_LOADING}</p>
-		{:else if sharedItems.length === 0 && playlistStatus.status === 'error'}
-			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
-			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
-		{:else if sharedItems.length === 0 && !browseState.albumHasMore && !browseState.songHasMore}
-			<p class="empty">{LIBRARY_SHARED_EMPTY}</p>
-		{:else}
-			{#each sharedItems as item (item.type + item.id)}
-				<button class="playlist-row shared-row" onclick={() => onSharedItem(item)}>
-					<span class="shared-icon">&#128279;</span>
-					<span class="playlist-title">{item.label}</span>
-					<span class="playlist-count">{item.type}</span>
-				</button>
-			{/each}
-		{/if}
-		{#if browseState.albumHasMore || browseState.songHasMore}
-			<button
-				class="load-more"
-				onclick={async () => {
-					await loadLibraryBrowse({ reset: false });
-					persistLibraryHistory();
-				}}
-				disabled={browseState.status === 'loading'}
-			>
-				{LIBRARY_LOAD_MORE}
-			</button>
-		{/if}
-		{#if browseState.status === 'error'}
-			<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
-			<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: false })}
-				>{LIBRARY_RETRY_LABEL}</button
-			>
-		{/if}
-		{#if playlistStatus.status === 'error' && sharedItems.length > 0}
-			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
-			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
-		{/if}
 	{/if}
 </div>
+
+{#if pendingUnshare}
+	<ConfirmDeleteDialog
+		title={LIBRARY_SHARES_UNSHARE_TITLE}
+		items={[shareRowLabel(pendingUnshare)]}
+		warning={LIBRARY_SHARES_UNSHARE_WARNING}
+		confirmLabel={LIBRARY_SHARES_UNSHARE_LABEL}
+		onconfirm={() => confirmUnshare()}
+		oncancel={() => (pendingUnshare = null)}
+	/>
+{/if}
 
 <style>
 	.library-nav {
@@ -612,10 +722,56 @@
 		background: var(--surface-hover);
 	}
 
-	.shared-icon {
-		font-size: 0.7rem;
+	.share-filters {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 2px;
+		padding: 8px 12px;
+	}
+
+	.share-row {
+		display: flex;
+		align-items: center;
+		width: 100%;
+		min-width: 0;
+		gap: 4px;
+		padding: 4px 8px 4px 4px;
+	}
+
+	.share-open {
+		display: flex;
+		align-items: center;
+		flex: 1;
+		min-width: 0;
+		padding: 8px;
+		background: none;
+		border: none;
+		color: var(--text-light);
+		font-size: var(--label-font-size);
+		cursor: pointer;
+		text-align: left;
+		gap: 8px;
+	}
+
+	.share-open:hover {
+		color: var(--text);
+	}
+
+	.share-action {
 		flex-shrink: 0;
-		margin-right: 8px;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text-muted);
+		font-size: 0.68rem;
+		font-family: var(--font-body);
+		padding: 4px 8px;
+		cursor: pointer;
+	}
+
+	.share-action:hover {
+		border-color: var(--primary);
+		color: var(--primary);
 	}
 
 	.playlist-title {

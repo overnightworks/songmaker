@@ -1,12 +1,42 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { afterNavigate } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { tick } from 'svelte';
+	import { LIBRARY_SHARES_LABEL, librarySharesStatusLabel } from '$lib/constants';
+	import { closeSharesView, openSharesView, setLibrarySurface } from '$lib/stores/libraryContext';
+	import { isLibraryWorkspacePath, persistLibraryHistory } from '$lib/stores/navigation';
+	import { shareCount, sharesViewOpen, watchShareStatus } from '$lib/stores/shares';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from './Icon.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
+
+	const countState = $derived($shareCount);
+	const sharesOpen = $derived($sharesViewOpen);
+	const sharesLabel = $derived(
+		countState.status === 'ready' && countState.total !== null
+			? librarySharesStatusLabel(countState.total)
+			: LIBRARY_SHARES_LABEL
+	);
+
+	$effect(() => {
+		return watchShareStatus();
+	});
+
+	function onSharesClick(): void {
+		if (sharesOpen) {
+			closeSharesView();
+		} else {
+			openSharesView();
+			setLibrarySurface('browse');
+		}
+		if (isLibraryWorkspacePath(window.location.pathname)) {
+			persistLibraryHistory();
+		} else {
+			void goto('/');
+		}
+	}
 
 	const MENU_FOCUSABLE = 'a[href], button:not(:disabled)';
 	const ACCOUNT_MENU_LABEL = 'Account menu';
@@ -83,47 +113,91 @@
 	<button class="logout" onclick={onlogout}>Logout</button>
 {/snippet}
 
-{#if compact}
-	<div class="menu-root">
-		<button
-			bind:this={triggerButton}
-			class="menu-trigger"
-			data-hitbox="frequent"
-			aria-haspopup="dialog"
-			aria-expanded={menuOpen}
-			aria-label={ACCOUNT_MENU_LABEL}
-			onclick={toggleMenu}
-		>
-			<Icon name="more-horizontal" size={18} />
-		</button>
-		{#if menuOpen}
-			<div class="menu-modal">
-				<button
-					class="menu-backdrop"
-					tabindex="-1"
-					onclick={() => closeMenu()}
-					aria-label="Close menu"
-				></button>
-				<div
-					bind:this={menu}
-					class="account-menu"
-					role="dialog"
-					aria-modal="true"
-					aria-label={ACCOUNT_MENU_LABEL}
-					tabindex="-1"
-				>
-					{@render actions()}
+{#snippet sharesStatus()}
+	<button
+		class="shares-status"
+		class:active={sharesOpen}
+		type="button"
+		aria-pressed={sharesOpen}
+		aria-label={sharesLabel}
+		onclick={onSharesClick}
+	>
+		{sharesLabel}
+	</button>
+{/snippet}
+
+<div class="header-tools">
+	{@render sharesStatus()}
+	{#if compact}
+		<div class="menu-root">
+			<button
+				bind:this={triggerButton}
+				class="menu-trigger"
+				data-hitbox="frequent"
+				aria-haspopup="dialog"
+				aria-expanded={menuOpen}
+				aria-label={ACCOUNT_MENU_LABEL}
+				onclick={toggleMenu}
+			>
+				<Icon name="more-horizontal" size={18} />
+			</button>
+			{#if menuOpen}
+				<div class="menu-modal">
+					<button
+						class="menu-backdrop"
+						tabindex="-1"
+						onclick={() => closeMenu()}
+						aria-label="Close menu"
+					></button>
+					<div
+						bind:this={menu}
+						class="account-menu"
+						role="dialog"
+						aria-modal="true"
+						aria-label={ACCOUNT_MENU_LABEL}
+						tabindex="-1"
+					>
+						{@render actions()}
+					</div>
 				</div>
-			</div>
-		{/if}
-	</div>
-{:else}
-	<nav class="header-nav" aria-label={ACCOUNT_NAV_LABEL}>
-		{@render actions()}
-	</nav>
-{/if}
+			{/if}
+		</div>
+	{:else}
+		<nav class="header-nav" aria-label={ACCOUNT_NAV_LABEL}>
+			{@render actions()}
+		</nav>
+	{/if}
+</div>
 
 <style>
+	.header-tools {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		min-width: 0;
+	}
+
+	.shares-status {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		color: var(--text-muted);
+		padding: 3px 10px;
+		font-size: 0.75rem;
+		font-family: var(--font-body);
+		cursor: pointer;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.shares-status:hover,
+	.shares-status.active {
+		color: var(--text);
+		border-color: var(--accent);
+	}
+
 	.header-nav {
 		display: flex;
 		align-items: center;

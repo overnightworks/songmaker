@@ -11,6 +11,7 @@ export {
 	cleanupAlbum
 } from './albums';
 export {
+	fetchShares,
 	searchLibrary,
 	type LibrarySearchHit,
 	type LibrarySearchResponse,

@@ -1,6 +1,7 @@
-import type { AlbumItem, SongItem } from './types';
+import type { AlbumItem, PaginatedResponse, ShareInventoryItem, SongItem } from './types';
 import { apiFetch } from './fetch';
-import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
+import { LIBRARY_QUERY_REQUIRED, LIBRARY_SHARES_PAGE_SIZE } from '$lib/constants';
+import type { ShareInventoryType } from '$lib/constants';
 import type { CreatedSort } from '$lib/utils/recency';
 
 export type LibrarySort = CreatedSort;
@@ -59,4 +60,17 @@ function normalizeHit(hit: LibrarySearchHit): LibrarySearchHit {
 		...hit,
 		song: { ...hit.song, generations: hit.song.generations ?? [] }
 	};
+}
+
+export async function fetchShares(options?: {
+	offset?: number;
+	limit?: number;
+	type?: ShareInventoryType | null;
+}): Promise<PaginatedResponse<ShareInventoryItem>> {
+	const params = new URLSearchParams({
+		offset: String(options?.offset ?? 0),
+		limit: String(options?.limit ?? LIBRARY_SHARES_PAGE_SIZE)
+	});
+	if (options?.type) params.set('type', options.type);
+	return apiFetch<PaginatedResponse<ShareInventoryItem>>(`/api/library/shares?${params}`);
 }

@@ -36,6 +36,18 @@ LIBRARY_SORTS: Final[frozenset[str]] = frozenset({
 })
 LIBRARY_ITEM_ALBUM: Final[str] = "album"
 LIBRARY_ITEM_SONG: Final[str] = "song"
+LIBRARY_ITEM_GENERATION: Final[str] = "generation"
+LIBRARY_ITEM_PLAYLIST: Final[str] = "playlist"
+SHARE_INVENTORY_TYPES: Final[frozenset[str]] = frozenset({
+    LIBRARY_ITEM_ALBUM,
+    LIBRARY_ITEM_SONG,
+    LIBRARY_ITEM_GENERATION,
+    LIBRARY_ITEM_PLAYLIST,
+})
+SHARE_PUBLIC_PATH_ALBUM: Final[str] = "/share/{slug}"
+SHARE_PUBLIC_PATH_SONG: Final[str] = "/share/song/{slug}"
+SHARE_PUBLIC_PATH_GENERATION: Final[str] = "/share/gen/{slug}"
+SHARE_PUBLIC_PATH_PLAYLIST: Final[str] = "/share/playlist/{slug}"
 LIBRARY_CURSOR_VERSION: Final[int] = 1
 LIBRARY_CURSOR_KEY_VERSION: Final[str] = "v"
 LIBRARY_CURSOR_KEY_Q: Final[str] = "q"

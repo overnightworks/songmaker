@@ -10,6 +10,7 @@
 	} from '$lib/stores/playlists';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { addToast } from '$lib/stores/toast';
+	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { pinQueueStream, unpinQueueStream } from '$lib/api/queue-streams';
 	import {
 		saveStream,
@@ -34,6 +35,7 @@
 		selectedPlaylistDetail.update((d) =>
 			d ? { ...d, is_shared: true, share_slug: result.share_slug } : d
 		);
+		await refreshSharesAfterMutation();
 		return result;
 	}
 
@@ -41,6 +43,7 @@
 		if (!playlistDetail) return;
 		await unsharePlaylist(playlistDetail.id);
 		selectedPlaylistDetail.update((d) => (d ? { ...d, is_shared: false, share_slug: null } : d));
+		await refreshSharesAfterMutation();
 	}
 
 	async function onPlaylistDelete(): Promise<void> {

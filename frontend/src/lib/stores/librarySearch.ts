@@ -20,6 +20,7 @@ import {
 	songList,
 	upsertSongInList
 } from '$lib/stores/player';
+import { patchSharesFromSong } from '$lib/stores/shares';
 
 export type LibrarySearchStatus = 'idle' | 'loading' | 'error' | 'ready';
 
@@ -301,6 +302,7 @@ export function applySyncedSong(song: SongItem): void {
 			hit.type === 'song' && hit.song.id === song.id ? { ...hit, song } : hit
 		)
 	}));
+	patchSharesFromSong(song);
 }
 
 export function listLoadedSongIds(): string[] {
