@@ -79,6 +79,7 @@ import {
 	canGoBack,
 	goBack,
 	initNavigation,
+	isLibraryWorkspacePath,
 	openLibraryCreate,
 	resetNavigationForTests,
 	selectAlbumOverview,
@@ -258,6 +259,12 @@ describe('library history', () => {
 		expect(get(selectedAlbumId)).toBe('a1');
 		expect(get(librarySurface)).toBe('detail');
 		cleanup();
+	});
+
+	it('treats only the home path as the library workspace', () => {
+		expect(isLibraryWorkspacePath('/')).toBe(true);
+		expect(isLibraryWorkspacePath('/loras')).toBe(false);
+		expect(isLibraryWorkspacePath('/settings')).toBe(false);
 	});
 
 	it('hydrates a search-only song and its album into the library', () => {

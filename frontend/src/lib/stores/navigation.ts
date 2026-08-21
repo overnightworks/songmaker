@@ -90,6 +90,10 @@ export function persistLibraryHistory(): void {
 	replaceLibraryHistory();
 }
 
+export function isLibraryWorkspacePath(pathname: string): boolean {
+	return pathname === '/';
+}
+
 export function selectAlbumOverview(albumId: string): void {
 	storeDeselectPlaylist();
 	playerSelectAlbum(albumId);
@@ -278,16 +282,22 @@ export function initNavigation(): () => void {
 
 	function onPopstate(e: PopStateEvent): void {
 		suppressPush = true;
-		if (isLibraryHistoryState(e.state)) {
-			void applyLibraryHistory(e.state);
-			if (e.state.songId) {
-				ensureGenerationsLoaded(e.state.songId);
+		const state = e.state;
+		void (async () => {
+			try {
+				if (isLibraryHistoryState(state)) {
+					const applied = await applyLibraryHistory(state);
+					if (applied && state.songId) {
+						await ensureGenerationsLoaded(state.songId);
+					}
+				} else {
+					await applyLibraryHistory(libraryRootState());
+				}
+			} finally {
+				detailTab.set('generations');
+				suppressPush = false;
 			}
-		} else {
-			void applyLibraryHistory(libraryRootState());
-		}
-		detailTab.set('generations');
-		suppressPush = false;
+		})();
 	}
 
 	window.addEventListener('popstate', onPopstate);

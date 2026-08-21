@@ -1,5 +1,6 @@
 import { get, writable } from 'svelte/store';
 import { fetchAlbum } from '$lib/api/albums';
+import { ApiError } from '$lib/api/fetch';
 import type { LibrarySort } from '$lib/api/library';
 import { fetchSong } from '$lib/api/songs';
 import {
@@ -60,6 +61,8 @@ export const libraryScrollAnchor = writable(0);
 const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail', 'create']);
 
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
+
+let historyApplyGeneration = 0;
 
 export function isLibrarySection(value: unknown): value is LibrarySection {
 	return LIBRARY_SECTIONS.some((section) => section === value);
@@ -156,7 +159,8 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 	};
 }
 
-export async function applyLibraryHistory(state: LibraryHistoryState): Promise<void> {
+export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
+	const generation = ++historyApplyGeneration;
 	librarySection.set(state.section);
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
@@ -169,44 +173,71 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<v
 	if (state.playlistId) {
 		try {
 			await loadPlaylistDetail(state.playlistId);
-		} catch {
-			deselectPlaylist();
+		} catch (err) {
+			if (isNotFound(err)) deselectPlaylist();
 		}
 	} else {
 		deselectPlaylist();
 	}
+	if (generation !== historyApplyGeneration) return false;
 	if (state.section === 'playlists' || state.section === 'shared') {
 		void ensurePlaylistsLoaded();
 	}
 	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
+	if (generation !== historyApplyGeneration) return false;
 	if (state.query.trim()) {
 		await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
 	}
-	await hydrateSelectedResources(state);
+	if (generation !== historyApplyGeneration) return false;
+	await hydrateSelectedResources(state, generation);
+	if (generation !== historyApplyGeneration) return false;
 	fallbackBrowseIfDetailGone(state.surface);
+	return true;
 }
 
-async function hydrateSelectedResources(state: LibraryHistoryState): Promise<void> {
+async function hydrateSelectedResources(
+	state: LibraryHistoryState,
+	generation: number
+): Promise<void> {
 	if (state.albumId && !get(albumList).some((album) => album.id === state.albumId)) {
-		const album = await fetchAlbum(state.albumId).catch(() => null);
-		if (album) {
-			albumList.update((list) => upsertById(list, album));
-		} else {
-			selectedAlbumId.set(null);
+		try {
+			const album = await fetchAlbum(state.albumId);
+			if (generation !== historyApplyGeneration) return;
+			albumList.update((list) => upsertReplace(list, album));
+		} catch (err) {
+			if (generation !== historyApplyGeneration) return;
+			if (isNotFound(err)) selectedAlbumId.set(null);
 		}
 	}
-	if (state.songId && !get(songList).some((song) => song.id === state.songId)) {
-		const song = await fetchSong(state.songId).catch(() => null);
-		if (!song) {
+	if (!state.songId) return;
+	const listed = get(songList).find((song) => song.id === state.songId);
+	if (listed && listed.generations.length > 0) {
+		await hydrateSongAlbum(listed.album_id, generation);
+		return;
+	}
+	try {
+		const song = await fetchSong(state.songId);
+		if (generation !== historyApplyGeneration) return;
+		songList.update((list) => upsertReplace(list, song));
+		await hydrateSongAlbum(song.album_id, generation);
+	} catch (err) {
+		if (generation !== historyApplyGeneration) return;
+		if (isNotFound(err)) {
 			selectedSongId.set(null);
 			selectedGenerationId.set(null);
-			return;
 		}
-		songList.update((list) => upsertById(list, song));
-		if (!get(albumList).some((album) => album.id === song.album_id)) {
-			const album = await fetchAlbum(song.album_id).catch(() => null);
-			if (album) albumList.update((list) => upsertById(list, album));
-		}
+	}
+}
+
+async function hydrateSongAlbum(albumId: string, generation: number): Promise<void> {
+	if (get(albumList).some((album) => album.id === albumId)) return;
+	try {
+		const album = await fetchAlbum(albumId);
+		if (generation !== historyApplyGeneration) return;
+		albumList.update((list) => upsertReplace(list, album));
+	} catch (err) {
+		if (generation !== historyApplyGeneration) return;
+		if (isNotFound(err)) return;
 	}
 }
 
@@ -221,9 +252,11 @@ function fallbackBrowseIfDetailGone(intendedSurface: LibrarySurface): void {
 export async function hydrateLibraryFromHistory(): Promise<boolean> {
 	const existing = history.state;
 	if (isLibraryHistoryState(existing)) {
-		await applyLibraryHistory(existing);
-		const restored = snapshotLibraryHistory(existing.index);
-		history.replaceState(restored, '', libraryHistoryUrl(restored));
+		const applied = await applyLibraryHistory(existing);
+		if (applied) {
+			const restored = snapshotLibraryHistory(existing.index);
+			history.replaceState(restored, '', libraryHistoryUrl(restored));
+		}
 		if (existing.query.trim()) return get(librarySearch).status !== 'error';
 		return get(libraryBrowse).status !== 'error';
 	}
@@ -302,6 +335,7 @@ export function albumIsExpanded(
 }
 
 export function resetLibraryContextForTests(): void {
+	historyApplyGeneration += 1;
 	librarySection.set(LIBRARY_DEFAULT_SECTION);
 	librarySurface.set('browse');
 	expandedAlbumIds.set(new Set());
@@ -317,6 +351,12 @@ function isIdOrNull(value: unknown): value is string | null {
 	return value === null || typeof value === 'string';
 }
 
-function upsertById<T extends { id: string }>(items: T[], item: T): T[] {
-	return items.some((existing) => existing.id === item.id) ? items : [...items, item];
+function upsertReplace<T extends { id: string }>(items: T[], item: T): T[] {
+	const index = items.findIndex((existing) => existing.id === item.id);
+	if (index === -1) return [...items, item];
+	return items.map((existing, i) => (i === index ? item : existing));
+}
+
+function isNotFound(err: unknown): boolean {
+	return err instanceof ApiError && err.status === 404;
 }

@@ -10,7 +10,7 @@
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { canGoBack, goBack } from '$lib/stores/navigation';
+	import { canGoBack, goBack, isLibraryWorkspacePath } from '$lib/stores/navigation';
 	import { initTheme } from '$lib/stores/ui';
 	import { dev, browser } from '$app/environment';
 
@@ -23,7 +23,7 @@
 			page.url.pathname.startsWith('/legal')
 	);
 	const isSettings = $derived(page.url.pathname.startsWith('/settings'));
-	const hasBack = $derived(isSettings || $canGoBack);
+	const hasLibraryBack = $derived(isLibraryWorkspacePath(page.url.pathname) && $canGoBack);
 	const me = $derived($currentUser);
 	const hasPlayback = $derived(audioPlayer.current !== null);
 
@@ -88,7 +88,7 @@
 		<div class="top-left">
 			{#if isSettings}
 				<a href="/" class="back-btn" aria-label="Back to home">←</a>
-			{:else if hasBack}
+			{:else if hasLibraryBack}
 				<button class="back-btn" onclick={goBack} aria-label="Back">←</button>
 			{/if}
 			<a href="/" class="brand" data-text={APP_NAME}>{APP_NAME}</a>

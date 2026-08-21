@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, SongItem } from '$lib/api/types';
+import { ApiError } from '$lib/api/fetch';
+import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import { LIBRARY_DEFAULT_SECTION, LIBRARY_HISTORY_KIND } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
 import {
@@ -121,6 +122,31 @@ function emptyPage<T>(items: T[] = []) {
 		offset: 0,
 		limit: 50,
 		has_more: false
+	};
+}
+
+function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
+	return {
+		id: 'g1',
+		song_id: 's9',
+		version_id: 'v1',
+		version_number: 1,
+		generation_number: 1,
+		mp3_path: '/audio/g1.mp3',
+		wav_path: null,
+		seed: 1,
+		status: 'complete',
+		is_archived: false,
+		is_picked: false,
+		is_kept: false,
+		is_shared: false,
+		model_mode: 'base',
+		whisper_text: null,
+		whisper_cues: null,
+		scores: null,
+		generation_params: null,
+		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
 	};
 }
 
@@ -281,7 +307,7 @@ describe('library history snapshot', () => {
 	});
 
 	it('clears a deleted playlist and falls back to browse', async () => {
-		fetchPlaylist.mockRejectedValueOnce(new Error('not found'));
+		fetchPlaylist.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/playlists/p-gone'));
 		await applyLibraryHistory({
 			...libraryRootState(),
 			surface: 'detail',
@@ -311,6 +337,90 @@ describe('library history snapshot', () => {
 		expect(snap.searchCursor).toBeNull();
 	});
 
+	it('replaces a browse summary with the full selected song after restore', async () => {
+		const summary = song({ id: 's9', album_id: 'a9', generation_count: 1, generations: [] });
+		fetchSongs.mockResolvedValue({ ...emptyPage([summary]), limit: 200 });
+		fetchSong.mockResolvedValue(
+			song({
+				id: 's9',
+				album_id: 'a9',
+				generation_count: 1,
+				generations: [generation({ id: 'g1', song_id: 's9' })]
+			})
+		);
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			albumId: 'a9',
+			songId: 's9'
+		});
+		expect(fetchSong).toHaveBeenCalledWith('s9');
+		expect(get(songList).find((item) => item.id === 's9')?.generations.map((item) => item.id)).toEqual(
+			['g1']
+		);
+	});
+
+	it('lets a newer history restore win over an in-flight playlist fetch', async () => {
+		let resolveFirst: ((value: unknown) => void) | undefined;
+		fetchPlaylist.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveFirst = resolve;
+				})
+		);
+		fetchPlaylist.mockResolvedValue({
+			id: 'p2',
+			title: 'Second',
+			entry_count: 0,
+			is_shared: false,
+			share_slug: null,
+			created_at: '2026-01-01T00:00:00+00:00',
+			entries: []
+		});
+		const first = applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			section: 'playlists',
+			playlistId: 'p1'
+		});
+		const second = applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			section: 'playlists',
+			playlistId: 'p2'
+		});
+		await second;
+		resolveFirst?.({
+			id: 'p1',
+			title: 'First',
+			entry_count: 0,
+			is_shared: false,
+			share_slug: null,
+			created_at: '2026-01-01T00:00:00+00:00',
+			entries: []
+		});
+		await first;
+		expect(get(selectedPlaylistId)).toBe('p2');
+	});
+
+	it('clears missing resources on 404 but keeps them after a transient error', async () => {
+		fetchAlbum.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/albums/a9'));
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			albumId: 'a9'
+		});
+		expect(get(selectedAlbumId)).toBe('a9');
+		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'gone', '/api/albums/a9'));
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			albumId: 'a9'
+		});
+		expect(get(selectedAlbumId)).toBeNull();
+		expect(get(librarySurface)).toBe('browse');
+	});
+
 	it('replaces history after hydrate so a deleted playlist is not replayed', async () => {
 		history.replaceState(
 			{
@@ -322,7 +432,7 @@ describe('library history snapshot', () => {
 			'',
 			'/'
 		);
-		fetchPlaylist.mockRejectedValueOnce(new Error('not found'));
+		fetchPlaylist.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/playlists/p-gone'));
 		await hydrateLibraryFromHistory();
 		expect(history.state.playlistId).toBeNull();
 		expect(history.state.surface).toBe('browse');
