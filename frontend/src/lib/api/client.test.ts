@@ -10,6 +10,7 @@ vi.mock('$lib/stores/auth', () => ({ clearAuth: (...args: unknown[]) => mockClea
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => mockGoto(...args) }));
 
 import {
+	fetchAlbum,
 	fetchAlbums,
 	fetchSongs,
 	fetchSong,
@@ -73,6 +74,16 @@ describe('API client', () => {
 		expect(result.total).toBe(1);
 		expect(mockFetch).toHaveBeenCalledWith(
 			'/api/albums?offset=0&limit=50',
+			expect.objectContaining({ credentials: 'include' })
+		);
+	});
+
+	it('fetchAlbum calls GET /api/albums/:id', async () => {
+		mockOk({ id: 'a1', title: 'Album' });
+		const result = await fetchAlbum('a1');
+		expect(result.id).toBe('a1');
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/albums/a1',
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});

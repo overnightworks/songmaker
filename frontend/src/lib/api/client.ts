@@ -1,5 +1,6 @@
 export { ApiError, type JobStatus } from './fetch';
 export {
+	fetchAlbum,
 	fetchAlbums,
 	createAlbum,
 	renameAlbum,

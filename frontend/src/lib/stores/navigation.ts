@@ -25,6 +25,7 @@ import {
 	hasLibrarySelection,
 	isLibraryHistoryState,
 	libraryBrowseStateFrom,
+	libraryHistoryUrl,
 	libraryRootState,
 	librarySurface,
 	setLibrarySection,
@@ -40,9 +41,7 @@ export const detailTab = writable<DetailTab>('generations');
 let suppressPush = false;
 
 function urlFromState(state: LibraryHistoryState): string {
-	if (state.songId && state.generationId) return `/?song=${state.songId}&gen=${state.generationId}`;
-	if (state.songId) return `/?song=${state.songId}`;
-	return '/';
+	return libraryHistoryUrl(state);
 }
 
 function currentHistoryIndex(): number {

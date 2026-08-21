@@ -113,7 +113,7 @@ export function syncLibrarySearch(rawQuery: string): void {
 		return;
 	}
 	const current = get(librarySearch);
-	if (current.q === q && (current.status === 'loading' || current.items.length > 0)) {
+	if (current.q === q && (current.status === 'loading' || current.status === 'ready')) {
 		return;
 	}
 	librarySearch.set({
@@ -137,10 +137,10 @@ export function retryLibrarySearch(): void {
 	void runLibrarySearch(state.q, get(librarySort), { reset: state.items.length === 0 });
 }
 
-export function loadMoreLibrarySearch(): void {
+export async function loadMoreLibrarySearch(): Promise<void> {
 	const state = get(librarySearch);
 	if (!state.q || !state.hasMore || state.status === 'loading') return;
-	void runLibrarySearch(state.q, get(librarySort), { reset: false });
+	await runLibrarySearch(state.q, get(librarySort), { reset: false });
 }
 
 export async function restoreLibrarySearch(

@@ -20,9 +20,11 @@ vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
 }));
 vi.mock('$lib/api/albums', () => ({
+	fetchAlbum: vi.fn(),
 	fetchAlbums: vi.fn()
 }));
 vi.mock('$lib/api/songs', () => ({
+	fetchSong: vi.fn(),
 	fetchSongs: vi.fn()
 }));
 vi.mock('$lib/api/client', async (importOriginal) => {

@@ -1,35 +1,42 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
+import type { AlbumItem, SongItem } from '$lib/api/types';
 import { LIBRARY_DEFAULT_SECTION, LIBRARY_HISTORY_KIND } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
-import { libraryBrowse, librarySort, resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
+import {
+	libraryBrowse,
+	librarySearch,
+	librarySort,
+	resetLibrarySearchForTests
+} from '$lib/stores/librarySearch';
+import {
+	albumList,
+	selectedAlbumId,
+	selectedGenerationId,
+	selectedSongId,
+	songList
+} from '$lib/stores/player';
 import { playlistLoad, selectedPlaylistId } from '$lib/stores/playlists';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
+const fetchAlbum = vi.fn();
+const fetchAlbums = vi.fn();
+const fetchSong = vi.fn();
+const fetchSongs = vi.fn();
+const searchLibrary = vi.fn();
 
 vi.mock('$lib/api/library', () => ({
-	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
+	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
 }));
 vi.mock('$lib/api/albums', () => ({
-	fetchAlbums: vi.fn().mockResolvedValue({
-		items: [],
-		total: 0,
-		offset: 0,
-		limit: 50,
-		has_more: false
-	})
+	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
+	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args)
 }));
 vi.mock('$lib/api/songs', () => ({
-	fetchSongs: vi.fn().mockResolvedValue({
-		items: [],
-		total: 0,
-		offset: 0,
-		limit: 200,
-		has_more: false
-	})
+	fetchSong: (...args: unknown[]) => fetchSong(...args),
+	fetchSongs: (...args: unknown[]) => fetchSongs(...args)
 }));
 
 vi.mock('$lib/api/client', () => ({
@@ -51,6 +58,7 @@ import {
 	captureLibraryScroll,
 	expandAlbum,
 	expandedAlbumIds,
+	hydrateLibraryFromHistory,
 	isLibraryHistoryState,
 	libraryBrowseStateFrom,
 	libraryRootState,
@@ -63,9 +71,67 @@ import {
 	toggleAlbumExpanded
 } from './libraryContext';
 
+function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
+	return {
+		id: 'a1',
+		title: 'Nachtstrom',
+		artist: 'Artist',
+		subtitle: '',
+		year: '',
+		colors: {},
+		song_count: 1,
+		is_shared: false,
+		share_slug: null,
+		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
+	};
+}
+
+function song(overrides: Partial<SongItem> = {}): SongItem {
+	return {
+		id: 's1',
+		title: 'Tide',
+		album_id: 'a1',
+		album_title: 'Nachtstrom',
+		artist: 'Artist',
+		track_number: 1,
+		vocal_language: 'en',
+		lyrics: '',
+		prompt: '',
+		bpm: 120,
+		audio_duration: 180,
+		key_scale: 'Am',
+		generation_params: null,
+		version_count: 1,
+		generation_count: 0,
+		best_scores: null,
+		best_rating: null,
+		generations: [],
+		created_at: '2026-01-01T00:00:00+00:00',
+		is_shared: false,
+		share_slug: null,
+		...overrides
+	};
+}
+
+function emptyPage<T>(items: T[] = []) {
+	return {
+		items,
+		total: items.length,
+		offset: 0,
+		limit: 50,
+		has_more: false
+	};
+}
+
 beforeEach(() => {
 	fetchPlaylists.mockReset();
 	fetchPlaylist.mockReset();
+	fetchAlbum.mockReset();
+	fetchAlbums.mockReset();
+	fetchSong.mockReset();
+	fetchSongs.mockReset();
+	searchLibrary.mockReset();
 	fetchPlaylists.mockResolvedValue([]);
 	fetchPlaylist.mockResolvedValue({
 		id: 'p1',
@@ -76,14 +142,22 @@ beforeEach(() => {
 		created_at: '2026-01-01T00:00:00+00:00',
 		entries: []
 	});
+	fetchAlbums.mockResolvedValue(emptyPage());
+	fetchSongs.mockResolvedValue({ ...emptyPage(), limit: 200 });
+	searchLibrary.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
+	fetchAlbum.mockResolvedValue(album({ id: 'a9', title: 'Remote' }));
+	fetchSong.mockResolvedValue(song({ id: 's9', album_id: 'a9', album_title: 'Remote' }));
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	searchQuery.set('');
+	albumList.set([]);
+	songList.set([]);
 	selectedAlbumId.set(null);
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	selectedPlaylistId.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
+	history.replaceState(null, '', '/');
 });
 
 afterEach(() => {
@@ -179,6 +253,79 @@ describe('library history snapshot', () => {
 		expect(get(expandedAlbumIds).has('a9')).toBe(true);
 		expect(get(libraryScrollAnchor)).toBe(80);
 		expect(fetchPlaylists).toHaveBeenCalled();
+	});
+
+	it('restores browse pages even when a search query is replayed', async () => {
+		fetchAlbums.mockResolvedValue(emptyPage([album()]));
+		searchLibrary.mockResolvedValue({
+			items: [{ type: 'album', album: album({ id: 'a-hit' }) }],
+			next_cursor: null,
+			has_more: false
+		});
+		await applyLibraryHistory({ ...libraryRootState(), query: 'Tide' });
+		expect(fetchAlbums).toHaveBeenCalled();
+		expect(searchLibrary).toHaveBeenCalled();
+		expect(get(albumList).map((item) => item.id)).toEqual(['a1']);
+		expect(get(librarySearch).items).toHaveLength(1);
+	});
+
+	it('fetches a selected album that is not on the restored browse pages', async () => {
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			albumId: 'a9'
+		});
+		expect(fetchAlbum).toHaveBeenCalledWith('a9');
+		expect(get(albumList).some((item) => item.id === 'a9')).toBe(true);
+		expect(get(librarySurface)).toBe('detail');
+	});
+
+	it('clears a deleted playlist and falls back to browse', async () => {
+		fetchPlaylist.mockRejectedValueOnce(new Error('not found'));
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			section: 'playlists',
+			playlistId: 'p-gone'
+		});
+		expect(get(selectedPlaylistId)).toBeNull();
+		expect(get(librarySurface)).toBe('browse');
+	});
+
+	it('does not snapshot a previous search page count onto a new query', () => {
+		searchQuery.set('new');
+		librarySearch.set({
+			q: 'old',
+			status: 'ready',
+			error: null,
+			items: [
+				{ type: 'album', album: album({ id: 'a1' }) },
+				{ type: 'album', album: album({ id: 'a2' }) }
+			],
+			hasMore: true,
+			nextCursor: 'cursor-old'
+		});
+		const snap = snapshotLibraryHistory(1);
+		expect(snap.query).toBe('new');
+		expect(snap.searchLoadedCount).toBe(0);
+		expect(snap.searchCursor).toBeNull();
+	});
+
+	it('replaces history after hydrate so a deleted playlist is not replayed', async () => {
+		history.replaceState(
+			{
+				...libraryRootState(),
+				surface: 'detail',
+				section: 'playlists',
+				playlistId: 'p-gone'
+			},
+			'',
+			'/'
+		);
+		fetchPlaylist.mockRejectedValueOnce(new Error('not found'));
+		await hydrateLibraryFromHistory();
+		expect(history.state.playlistId).toBeNull();
+		expect(history.state.surface).toBe('browse');
 	});
 
 	it('browse-from-current clears the resource but keeps section, query, sort, and scroll', () => {

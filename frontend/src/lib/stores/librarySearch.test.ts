@@ -208,6 +208,17 @@ describe('syncLibrarySearch', () => {
 		syncLibrarySearch('Catalog');
 		expect(searchLibrary).toHaveBeenCalledTimes(2);
 	});
+
+	it('does not re-fetch a restored search that already settled with zero hits', async () => {
+		searchLibrary.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
+		await restoreLibrarySearch('zzz', 'newest', 0);
+		expect(searchLibrary).toHaveBeenCalledTimes(1);
+		expect(get(librarySearch).status).toBe('ready');
+		expect(get(librarySearch).items).toHaveLength(0);
+		syncLibrarySearch('zzz');
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+		expect(searchLibrary).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe('changeLibrarySort', () => {

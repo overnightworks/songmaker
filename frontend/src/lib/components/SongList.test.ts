@@ -6,6 +6,7 @@ import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
 import {
 	LIBRARY_ALBUMS_EMPTY,
 	LIBRARY_PLAYLISTS_EMPTY,
+	LIBRARY_LOAD_MORE,
 	LIBRARY_RETRY_LABEL,
 	LIBRARY_SEARCH_DEBOUNCE_MS,
 	LIBRARY_SEARCH_EMPTY,
@@ -27,9 +28,11 @@ vi.mock('$lib/api/library', () => ({
 	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
 }));
 vi.mock('$lib/api/albums', () => ({
+	fetchAlbum: vi.fn(),
 	fetchAlbums: vi.fn()
 }));
 vi.mock('$lib/api/songs', () => ({
+	fetchSong: vi.fn(),
 	fetchSongs: vi.fn()
 }));
 vi.mock('$lib/api/client', () => ({
@@ -240,6 +243,40 @@ describe('SongList search', () => {
 		expect(target.textContent).toContain('Nachtstrom');
 		expect(target.textContent).toContain('Tide');
 		expect(target.querySelector('.song-row')?.textContent).toContain('Tide');
+	});
+
+	it('persists search pagination after load more', async () => {
+		searchLibrary
+			.mockResolvedValueOnce({
+				items: [{ type: 'album', album: album({ id: 'a1', title: 'One' }) }],
+				next_cursor: 'cursor-1',
+				has_more: true
+			})
+			.mockResolvedValueOnce({
+				items: [{ type: 'album', album: album({ id: 'a2', title: 'Two' }) }],
+				next_cursor: null,
+				has_more: false
+			});
+		const target = render();
+		await tick();
+		searchQuery.set('Catalog');
+		await tick();
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+		await tick();
+		await Promise.resolve();
+		await tick();
+		expect(target.textContent).toContain('One');
+		const loadMore = [...target.querySelectorAll('button')].find(
+			(button) => button.textContent === LIBRARY_LOAD_MORE
+		);
+		expect(loadMore).toBeDefined();
+		await loadMore?.click();
+		await tick();
+		await Promise.resolve();
+		await Promise.resolve();
+		await tick();
+		expect(target.textContent).toContain('Two');
+		expect(history.state.searchLoadedCount).toBe(2);
 	});
 });
 

@@ -200,6 +200,7 @@
 		const value = (event.target as HTMLInputElement).value;
 		searchQuery.set(value);
 		if (value.trim()) setLibrarySurface('browse');
+		syncLibrarySearch(value);
 		persistLibraryHistory();
 	}
 
@@ -316,7 +317,10 @@
 		{#if searchState.hasMore}
 			<button
 				class="load-more"
-				onclick={() => loadMoreLibrarySearch()}
+				onclick={async () => {
+					await loadMoreLibrarySearch();
+					persistLibraryHistory();
+				}}
 				disabled={searchState.status === 'loading'}
 			>
 				{LIBRARY_LOAD_MORE}
@@ -354,7 +358,10 @@
 		{#if browseState.albumHasMore || browseState.songHasMore}
 			<button
 				class="load-more"
-				onclick={() => loadLibraryBrowse({ reset: false })}
+				onclick={async () => {
+					await loadLibraryBrowse({ reset: false });
+					persistLibraryHistory();
+				}}
 				disabled={browseState.status === 'loading'}
 			>
 				{LIBRARY_LOAD_MORE}
@@ -421,7 +428,10 @@
 		{#if browseState.albumHasMore || browseState.songHasMore}
 			<button
 				class="load-more"
-				onclick={() => loadLibraryBrowse({ reset: false })}
+				onclick={async () => {
+					await loadLibraryBrowse({ reset: false });
+					persistLibraryHistory();
+				}}
 				disabled={browseState.status === 'loading'}
 			>
 				{LIBRARY_LOAD_MORE}

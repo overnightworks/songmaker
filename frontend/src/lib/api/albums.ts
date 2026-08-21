@@ -2,6 +2,10 @@ import type { AlbumItem, CleanupResult, PaginatedResponse, ShareResult } from '.
 import { apiFetch } from './fetch';
 import type { LibraryListOptions } from './library';
 
+export async function fetchAlbum(albumId: string): Promise<AlbumItem> {
+	return apiFetch<AlbumItem>(`/api/albums/${albumId}`);
+}
+
 export async function fetchAlbums(
 	offset: number = 0,
 	limit: number = 50,

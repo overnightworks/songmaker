@@ -28,6 +28,18 @@ vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
 vi.mock('$lib/api/albums', () => ({
+	fetchAlbum: vi.fn().mockResolvedValue({
+		id: 'a1',
+		title: 'Nachtstrom',
+		artist: 'Artist',
+		subtitle: '',
+		year: '',
+		colors: {},
+		song_count: 1,
+		is_shared: false,
+		share_slug: null,
+		created_at: '2026-01-01T00:00:00+00:00'
+	}),
 	fetchAlbums: vi.fn().mockResolvedValue({
 		items: [],
 		total: 0,
@@ -37,6 +49,7 @@ vi.mock('$lib/api/albums', () => ({
 	})
 }));
 vi.mock('$lib/api/songs', () => ({
+	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	fetchSongs: vi.fn().mockResolvedValue({
 		items: [],
 		total: 0,

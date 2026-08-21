@@ -1,5 +1,7 @@
 import { get, writable } from 'svelte/store';
+import { fetchAlbum } from '$lib/api/albums';
 import type { LibrarySort } from '$lib/api/library';
+import { fetchSong } from '$lib/api/songs';
 import {
 	LIBRARY_DEFAULT_SECTION,
 	LIBRARY_HISTORY_KIND,
@@ -14,11 +16,17 @@ import {
 	restoreLibraryBrowse,
 	restoreLibrarySearch
 } from '$lib/stores/librarySearch';
-import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
+import {
+	albumList,
+	selectedAlbumId,
+	selectedGenerationId,
+	selectedSongId,
+	songList
+} from '$lib/stores/player';
 import {
 	deselectPlaylist,
 	ensurePlaylistsLoaded,
-	selectPlaylist,
+	loadPlaylistDetail,
 	selectedPlaylistId
 } from '$lib/stores/playlists';
 import { CREATED_SORTS } from '$lib/utils/recency';
@@ -117,20 +125,28 @@ export function libraryBrowseStateFrom(state: LibraryHistoryState): LibraryHisto
 	};
 }
 
+export function libraryHistoryUrl(state: LibraryHistoryState): string {
+	if (state.songId && state.generationId) return `/?song=${state.songId}&gen=${state.generationId}`;
+	if (state.songId) return `/?song=${state.songId}`;
+	return '/';
+}
+
 export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 	const browse = get(libraryBrowse);
 	const search = get(librarySearch);
+	const query = get(searchQuery);
+	const searchMatchesQuery = search.q === query.trim();
 	return {
 		kind: LIBRARY_HISTORY_KIND,
 		index,
 		section: get(librarySection),
 		surface: get(librarySurface),
-		query: get(searchQuery),
+		query,
 		sort: get(librarySort),
 		albumOffset: browse.albumOffset,
 		songOffset: browse.songOffset,
-		searchCursor: search.nextCursor,
-		searchLoadedCount: search.items.length,
+		searchCursor: searchMatchesQuery ? search.nextCursor : null,
+		searchLoadedCount: searchMatchesQuery ? search.items.length : 0,
 		albumId: get(selectedAlbumId),
 		songId: get(selectedSongId),
 		generationId: get(selectedGenerationId),
@@ -151,24 +167,63 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<v
 	selectedSongId.set(state.songId);
 	selectedGenerationId.set(state.generationId);
 	if (state.playlistId) {
-		selectPlaylist(state.playlistId);
+		try {
+			await loadPlaylistDetail(state.playlistId);
+		} catch {
+			deselectPlaylist();
+		}
 	} else {
 		deselectPlaylist();
 	}
 	if (state.section === 'playlists' || state.section === 'shared') {
 		void ensurePlaylistsLoaded();
 	}
+	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
 	if (state.query.trim()) {
 		await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
-		return;
 	}
-	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
+	await hydrateSelectedResources(state);
+	fallbackBrowseIfDetailGone(state.surface);
+}
+
+async function hydrateSelectedResources(state: LibraryHistoryState): Promise<void> {
+	if (state.albumId && !get(albumList).some((album) => album.id === state.albumId)) {
+		const album = await fetchAlbum(state.albumId).catch(() => null);
+		if (album) {
+			albumList.update((list) => upsertById(list, album));
+		} else {
+			selectedAlbumId.set(null);
+		}
+	}
+	if (state.songId && !get(songList).some((song) => song.id === state.songId)) {
+		const song = await fetchSong(state.songId).catch(() => null);
+		if (!song) {
+			selectedSongId.set(null);
+			selectedGenerationId.set(null);
+			return;
+		}
+		songList.update((list) => upsertById(list, song));
+		if (!get(albumList).some((album) => album.id === song.album_id)) {
+			const album = await fetchAlbum(song.album_id).catch(() => null);
+			if (album) albumList.update((list) => upsertById(list, album));
+		}
+	}
+}
+
+function fallbackBrowseIfDetailGone(intendedSurface: LibrarySurface): void {
+	if (intendedSurface !== 'detail') return;
+	if (get(selectedAlbumId) !== null) return;
+	if (get(selectedSongId) !== null) return;
+	if (get(selectedPlaylistId) !== null) return;
+	librarySurface.set('browse');
 }
 
 export async function hydrateLibraryFromHistory(): Promise<boolean> {
 	const existing = history.state;
 	if (isLibraryHistoryState(existing)) {
 		await applyLibraryHistory(existing);
+		const restored = snapshotLibraryHistory(existing.index);
+		history.replaceState(restored, '', libraryHistoryUrl(restored));
 		if (existing.query.trim()) return get(librarySearch).status !== 'error';
 		return get(libraryBrowse).status !== 'error';
 	}
@@ -260,4 +315,8 @@ function isLibrarySurface(value: unknown): value is LibrarySurface {
 
 function isIdOrNull(value: unknown): value is string | null {
 	return value === null || typeof value === 'string';
+}
+
+function upsertById<T extends { id: string }>(items: T[], item: T): T[] {
+	return items.some((existing) => existing.id === item.id) ? items : [...items, item];
 }
