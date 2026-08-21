@@ -62,6 +62,7 @@ def test_default_settings_values() -> None:
     assert settings.max_user_active_jobs == 10
     assert settings.login_lockout_threshold == 15
     assert settings.login_lockout_window_seconds == 3600
+    assert settings.max_concurrent_sessions_per_user == 10
 
 
 # -- HMAC session signing ---------------------------------------------------

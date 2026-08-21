@@ -123,12 +123,14 @@ def create_session(
 
 
 def get_session_with_user(session: Session, session_id: str) -> UserSession | None:
-    return (
+    query = (
         session.query(UserSession)
         .options(joinedload(UserSession.user))
         .filter_by(id=session_id)
-        .first()
     )
+    if session.bind.dialect.name != "sqlite":
+        query = query.with_for_update(of=UserSession)
+    return query.first()
 
 
 def delete_session(session: Session, session_id: str) -> None:
@@ -173,6 +175,27 @@ def delete_expired_sessions(session: Session) -> int:
     count = session.query(UserSession).filter(UserSession.expires_at <= now).delete()
     session.flush()
     return count
+
+
+def prune_overflow_sessions(
+    session: Session, user_id: str, max_sessions: int,
+) -> list[str]:
+    """Delete oldest unexpired sessions above max_sessions. Returns pruned ids."""
+    if max_sessions < 1:
+        raise ValueError("max_sessions must be >= 1")
+    now = datetime.now(timezone.utc)
+    active = (
+        session.query(UserSession)
+        .filter(UserSession.user_id == user_id, UserSession.expires_at > now)
+        .order_by(UserSession.created_at.asc(), UserSession.id.asc())
+        .all()
+    )
+    overflow = active[:-max_sessions]
+    pruned_ids = [row.id for row in overflow]
+    for row in overflow:
+        session.delete(row)
+    session.flush()
+    return pruned_ids
 
 
 # ── Login attempts ────────────────────────────────────────────────

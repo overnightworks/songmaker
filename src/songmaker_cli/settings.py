@@ -95,6 +95,9 @@ class Settings(BaseSettings):
     login_rate_limit: int = 5
     login_lockout_threshold: int = 15
     login_lockout_window_seconds: int = Field(default=3600, alias="LOGIN_LOCKOUT_WINDOW")
+    max_concurrent_sessions_per_user: int = Field(
+        default=10, alias="MAX_CONCURRENT_SESSIONS_PER_USER", ge=1,
+    )
 
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 3

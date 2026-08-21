@@ -39,6 +39,9 @@ from songmaker_cli.db.queries.auth import list_active_sessions as list_active_se
 from songmaker_cli.db.queries.auth import list_audit_log as list_audit_log
 from songmaker_cli.db.queries.auth import list_login_attempts as list_login_attempts
 from songmaker_cli.db.queries.auth import list_users as list_users
+from songmaker_cli.db.queries.auth import (
+    prune_overflow_sessions as prune_overflow_sessions,
+)
 from songmaker_cli.db.queries.auth import record_audit as record_audit
 from songmaker_cli.db.queries.auth import record_login_attempt as record_login_attempt
 from songmaker_cli.db.queries.auth import update_user as update_user
