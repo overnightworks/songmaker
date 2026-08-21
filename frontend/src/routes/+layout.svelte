@@ -146,6 +146,8 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
+		min-width: 0;
+		flex-shrink: 1;
 	}
 
 	.back-btn {
@@ -178,6 +180,10 @@
 		text-decoration: none;
 		position: relative;
 		text-shadow: none;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	@media (prefers-reduced-motion: no-preference) {
