@@ -36,6 +36,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries import (
     create_generation,
+    create_generation_created_event,
     get_default_preset,
     get_song,
     get_version,
@@ -317,6 +318,7 @@ def _persist_generation_row(
 ) -> None:
     mp3_rel = f"{ctx.user_id}/{generation_id}.mp3"
     wav_rel = f"{ctx.user_id}/{generation_id}.wav"
+    raw_wav_rel = f"{ctx.user_id}/{generation_id}.raw.wav"
     is_repaint = ctx.ace_config.task_type == "repaint"
     is_cover = ctx.ace_config.task_type == "cover"
     stored = StoredGenerationParams(
@@ -402,9 +404,11 @@ def _persist_generation_row(
     try:
         with db_factory() as session:
             if lock_active_job(session, job_id) is None:
-                _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel)
+                _cleanup_orphaned_files(
+                    ctx.audio_dir, mp3_rel, wav_rel, raw_wav_rel,
+                )
                 return
-            create_generation(
+            generation = create_generation(
                 session,
                 song_id=ctx.song_id,
                 version_id=ctx.version_id,
@@ -415,9 +419,15 @@ def _persist_generation_row(
                 model_mode=ctx.model_name,
                 src_generation_id=ctx.src_generation_id,
             )
+            create_generation_created_event(
+                session,
+                user_id=ctx.user_id,
+                song_id=ctx.song_id,
+                generation_id=generation.id,
+            )
             session.commit()
     except Exception:
-        _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel)
+        _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel, raw_wav_rel)
         raise
 
     log.info("Generated: %s (seed=%s)", mp3_rel, seed)

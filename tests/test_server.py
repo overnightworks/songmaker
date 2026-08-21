@@ -516,17 +516,39 @@ def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
     )
 
     async def _run():
-        with patch(
-            "songmaker_cli.arq_pool.init_arq_pool",
-            new_callable=AsyncMock,
-        ) as mock_get, patch(
-            "songmaker_cli.arq_pool.close_arq_pool",
-            new_callable=AsyncMock,
-        ) as mock_close:
+        cleanup_started = asyncio.Event()
+        cleanup_cancelled = asyncio.Event()
+
+        async def _cleanup_loop(_app):
+            cleanup_started.set()
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                cleanup_cancelled.set()
+                raise
+
+        with (
+            patch(
+                "songmaker_cli.arq_pool.init_arq_pool",
+                new_callable=AsyncMock,
+            ) as mock_get,
+            patch(
+                "songmaker_cli.arq_pool.close_arq_pool",
+                new_callable=AsyncMock,
+            ) as mock_close,
+            patch("songmaker_cli.server.cleanup_expired_resource_events") as cleanup,
+            patch(
+                "songmaker_cli.server.resource_event_cleanup_loop",
+                new=AsyncMock(side_effect=_cleanup_loop),
+            ) as cleanup_loop,
+        ):
             async with _lifespan(mock_app):
-                pass
+                await asyncio.wait_for(cleanup_started.wait(), timeout=1)
         mock_get.assert_called_once()
         mock_close.assert_called_once()
+        cleanup.assert_called_once_with(mock_app.state.ctx)
+        cleanup_loop.assert_awaited_once_with(mock_app)
+        assert cleanup_cancelled.is_set()
 
     asyncio.run(_run())
 

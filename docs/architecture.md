@@ -104,7 +104,7 @@ User clicks "Generate"                    User clicks "Score"
   │   ├── read worker WAV from volume
   │   ├── decode + splice (if repaint)
   │   ├── master → MP3 + ID3 tags
-  │   └── INSERT generation row
+  │   └── INSERT generation + `generation.created` event (one DB transaction)
   └── Job status: completed
 
   Repaint: POST /generations/{id}/repaint
@@ -182,6 +182,8 @@ User (username, role: admin|user, bcrypt hash)
   │           │     └── Rating (0-100, notes)
   │           └── ChatMessage (role, content — per-song conversation history)
   ├── CowriterUserMemory (durable co-writer notes; survives new conversations)
+  ├── ResourceEventCursor (per-user monotonic high-water mark)
+  ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
   ├── Job (type, status, progress, error, queue_position)
   └── AuditLog (action, resource_type, resource_id, detail)
 
@@ -192,6 +194,21 @@ Also: UserSession, LoginAttempt, Playlist (share_slug?, is_shared), PlaylistEntr
 ```
 
 PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
+
+### Resource event ledger
+
+Every successfully persisted generation from the generation job or reimport path
+writes one `generation.created` row in the same transaction. A per-user cursor is
+incremented with `UPDATE … RETURNING`, so PostgreSQL serializes concurrent writers
+without a process-local lock. The event stores immutable song and generation IDs;
+they deliberately are not foreign keys, so retained history survives later resource
+deletion. User deletion cascades both cursor and events.
+
+The web-server lifecycle owns a named hourly cleanup task. Events older than 30 days
+are deleted while the cursor high-water mark remains intact, allowing the replay
+transport to detect retention gaps. Redis is not an authority or publisher for this
+ledger. The SSE reader and frontend synchronization owner are separate later phases
+of issue #40 and are not part of the durable-ledger phase.
 
 ## API Endpoints
 
@@ -258,6 +275,7 @@ POST /api/songs/{id}/generate  (optional: {"model": "sft"} for model validation)
       → POST /load_model if the target mode is not loaded
       → POST /generate and consume /tasks/{id}/stream SSE until done
     → read worker WAV from the shared audio volume
+    → persist Generation + per-user `generation.created` event atomically
     → decode → splice if repaint → master (multiband compress, LUFS normalize) → MP3
     → create Generation record in DB
   → Job status: completed

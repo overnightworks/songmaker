@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,7 +12,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth import hash_password
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, ResourceEvent, Song, User, Version
 from songmaker_cli.db.queries import get_generation
 from songmaker_cli.reimport import _extract_seed, reimport_files
 
@@ -68,11 +69,15 @@ def test_reimport_mp3(seeded_db, tmp_path: Path) -> None:
         gen = get_generation(session, gen_id)
         assert gen is not None
         assert gen.song_id == SONG_ID
+        assert gen.id in gen.mp3_path
         assert gen.mp3_path.startswith(f"{USER_ID}/")
         assert gen.mp3_path.endswith(".mp3")
         dst = audio_dir / gen.mp3_path
         assert dst.exists()
         assert dst.read_bytes() == b"fake-mp3-data"
+        event = session.query(ResourceEvent).one()
+        assert event.generation_id == gen.id
+        assert event.resource_id == SONG_ID
 
 
 def test_reimport_wav(seeded_db, tmp_path: Path) -> None:
@@ -117,6 +122,30 @@ def test_reimport_no_files_raises(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         with pytest.raises(ValueError, match="At least one"):
             reimport_files(session, tmp_path / "audio", USER_ID, SONG_ID)
+
+
+def test_reimport_event_failure_rolls_back_and_removes_files(
+    seeded_db, tmp_path: Path,
+) -> None:
+    audio_dir = tmp_path / "audio"
+    mp3_src = tmp_path / "source.mp3"
+    mp3_src.write_bytes(b"fake-mp3")
+
+    with (
+        seeded_db() as session,
+        patch(
+            "songmaker_cli.reimport.create_generation_created_event",
+            side_effect=RuntimeError("event write failed"),
+        ),
+        pytest.raises(RuntimeError, match="event write failed"),
+    ):
+        reimport_files(session, audio_dir, USER_ID, SONG_ID, mp3_file=mp3_src)
+        session.rollback()
+
+    with seeded_db() as session:
+        assert session.query(ResourceEvent).count() == 0
+        assert session.query(Generation).count() == 0
+    assert list((audio_dir / USER_ID).glob("*")) == []
 
 
 def test_extract_seed_no_tags(tmp_path: Path) -> None:
@@ -188,11 +217,33 @@ def test_reimport_api_mp3(reimport_client: TestClient) -> None:
     data = resp.json()
     assert data["mp3_path"].endswith(".mp3")
     assert data["song_id"] == SONG_ID
+    with reimport_client.app.state.ctx.db() as session:
+        event = session.query(ResourceEvent).one()
+        assert event.generation_id == data["id"]
 
 
 def test_reimport_api_no_files(reimport_client: TestClient) -> None:
     resp = reimport_client.post(f"/api/songs/{SONG_ID}/reimport")
     assert resp.status_code == 422
+
+
+def test_reimport_api_commit_failure_removes_files(
+    reimport_client: TestClient,
+) -> None:
+    with (
+        patch("sqlalchemy.orm.Session.commit", side_effect=RuntimeError("commit failed")),
+        pytest.raises(RuntimeError, match="commit failed"),
+    ):
+        reimport_client.post(
+            f"/api/songs/{SONG_ID}/reimport",
+            files={"mp3": ("test.mp3", b"fake-mp3", "audio/mpeg")},
+        )
+
+    audio_dir = reimport_client.app.state.ctx.audio_dir
+    assert list((audio_dir / USER_ID).glob("*")) == []
+    with reimport_client.app.state.ctx.db() as session:
+        assert session.query(Generation).count() == 0
+        assert session.query(ResourceEvent).count() == 0
 
 
 def test_reimport_api_wrong_song(reimport_client: TestClient) -> None:

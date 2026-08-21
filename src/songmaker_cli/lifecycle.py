@@ -9,9 +9,37 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import (
+    RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS,
+    RESOURCE_EVENT_RETENTION_DAYS,
+)
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
+
+
+def cleanup_expired_resource_events(ctx: AppContext) -> int:
+    """Delete delivered event history beyond retention, preserving cursors."""
+    from songmaker_cli.db.queries import delete_resource_events_before
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RESOURCE_EVENT_RETENTION_DAYS)
+    with ctx.db() as session:
+        deleted = delete_resource_events_before(session, cutoff)
+        session.commit()
+    if deleted:
+        log.info("Resource event cleanup: deleted %d expired event(s)", deleted)
+    return deleted
+
+
+async def resource_event_cleanup_loop(app: FastAPI) -> None:
+    """Run resource-event retention hourly for the server lifetime."""
+    ctx: AppContext = app.state.ctx
+    while True:
+        await asyncio.sleep(RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS)
+        try:
+            await asyncio.to_thread(cleanup_expired_resource_events, ctx)
+        except Exception:
+            log.exception("Resource event cleanup failed")
 
 
 def reconcile_crashed_loras(ctx: AppContext) -> int:

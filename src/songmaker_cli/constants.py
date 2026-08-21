@@ -305,6 +305,14 @@ class ResourceType(StrEnum):
     LORA = "lora"
 
 
+class ResourceEventKind(StrEnum):
+    GENERATION_CREATED = "generation.created"
+
+
+RESOURCE_EVENT_RETENTION_DAYS: Final = 30
+RESOURCE_EVENT_CLEANUP_INTERVAL_SECONDS: Final = 60 * 60
+
+
 class AuditAction(StrEnum):
     GENERATE = "generate"
     REPAINT = "repaint"

@@ -11,7 +11,16 @@ import pytest
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.models import Album, Generation, Job, Score, Song, Version
+from songmaker_cli.db.models import (
+    Album,
+    Generation,
+    Job,
+    ResourceEvent,
+    Score,
+    Song,
+    User,
+    Version,
+)
 from songmaker_cli.db.queries import get_generation, get_job, update_job_status
 from songmaker_cli.jobs import (
     GenerationContext,
@@ -61,7 +70,9 @@ def db_factory(tmp_path: Path):
 @pytest.fixture()
 def seeded_db(db_factory, tmp_path: Path):
     with db_factory() as session:
-        session.add(Album(id="rock", title="Rock", artist="Band"))
+        session.add(User(id="u1", username="user1", password_hash="hash", role="user"))
+        session.flush()
+        session.add(Album(id="rock", title="Rock", artist="Band", created_by="u1"))
         session.add(Song(
             id="s1", title="Song One", album_id="rock",
             track_number=1, vocal_language="en",
@@ -71,7 +82,7 @@ def seeded_db(db_factory, tmp_path: Path):
             lyrics="Hello world", prompt="rock style", bpm=120,
             audio_duration=60, key_scale="Am",
         ))
-        session.add(Job(id="j1", type="generate", status="queued"))
+        session.add(Job(id="j1", type="generate", status="queued", user_id="u1"))
         session.add(Job(id="j2", type="score", status="queued"))
         session.commit()
 
@@ -142,6 +153,9 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
         assert len(gens) == 1
         assert gens[0].seed == 42
         assert gens[0].model_mode == "sft"
+        events = session.query(ResourceEvent).all()
+        assert len(events) == 1
+        assert events[0].generation_id == gens[0].id
 
 
 def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
@@ -160,6 +174,7 @@ def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
     with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 3
+        assert session.query(ResourceEvent).count() == 3
 
 
 def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
@@ -183,6 +198,7 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
 
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 1
+        assert session.query(ResourceEvent).count() == 1
 
 
 def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
@@ -199,6 +215,7 @@ def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
         job = get_job(session, "j1")
         assert job.status == "failed"
         assert "Song not found" in job.error
+        assert session.query(ResourceEvent).count() == 0
 
 
 def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
@@ -300,7 +317,7 @@ def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
     )
     with dispatch, post_process, defaults:
         _run(run_generation_job(
-            "j1", "s1", "v1", 1, "u1",
+            "j1", "s1", "v1", 3, "u1",
             db_factory=seeded_db,
             audio_dir=tmp_path / "audio",
             data_dir=tmp_path / "data",
@@ -312,6 +329,46 @@ def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
         job = get_job(session, "j1")
         assert job.status == "failed"
         assert job.error == "Internal error during processing"
+        assert session.query(Generation).count() == 0
+        assert session.query(ResourceEvent).count() == 0
+
+
+def test_generation_event_failure_rolls_back_generation(
+    seeded_db, tmp_path: Path,
+) -> None:
+    def persist_with_artifacts(*, ctx, generation_id, db_factory, **kwargs):
+        for suffix in (".mp3", ".wav", ".raw.wav"):
+            path = ctx.audio_dir / ctx.user_id / f"{generation_id}{suffix}"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"audio")
+        _persist_via_post_process(
+            ctx=ctx, generation_id=generation_id, db_factory=db_factory, **kwargs,
+        )
+
+    dispatch = AsyncMock(return_value=_make_dto())
+    with (
+        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_with_artifacts),
+        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+        patch(
+            "songmaker_cli.jobs.generation.create_generation_created_event",
+            side_effect=RuntimeError("event write failed"),
+        ),
+    ):
+        _run(run_generation_job(
+            "j1", "s1", "v1", 1, "u1",
+            db_factory=seeded_db,
+            audio_dir=tmp_path / "audio",
+            data_dir=tmp_path / "data",
+            redis=MagicMock(),
+            target_model="sft",
+        ))
+
+    with seeded_db() as session:
+        assert get_job(session, "j1").status == "failed"
+        assert session.query(Generation).count() == 0
+        assert session.query(ResourceEvent).count() == 0
+    assert list((tmp_path / "audio" / "u1").glob("*")) == []
 
 
 def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> None:
@@ -409,6 +466,7 @@ def test_generation_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Pa
         assert job.status == "cancelled"
         assert job.completed_at is not None
         assert session.query(Generation).filter_by(song_id="s1").count() == 0
+        assert session.query(ResourceEvent).count() == 0
 
 
 def test_generation_job_cancel_after_first_variant_skips_rest(
@@ -443,6 +501,7 @@ def test_generation_job_cancel_after_first_variant_skips_rest(
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 1
         assert gens[0].seed == 100
+        assert session.query(ResourceEvent).count() == 1
 
 
 def test_generation_job_cancel_after_worker_skips_persist(
@@ -476,6 +535,7 @@ def test_generation_job_cancel_after_worker_skips_persist(
         assert job.status == "cancelled"
         assert job.completed_at is not None
         assert session.query(Generation).filter_by(song_id="s1").count() == 0
+        assert session.query(ResourceEvent).count() == 0
 
 
 def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:

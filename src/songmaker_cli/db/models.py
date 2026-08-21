@@ -334,6 +334,40 @@ class User(Base):
     )
 
 
+class ResourceEventCursor(Base):
+    """Per-user allocator retained independently from delivered event history."""
+
+    __tablename__ = "resource_event_cursors"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
+    )
+    high_water_mark: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+
+
+class ResourceEvent(Base):
+    """Durable user-scoped invalidation event with historical resource IDs."""
+
+    __tablename__ = "resource_events"
+    __table_args__ = (
+        UniqueConstraint("user_id", "sequence", name="uq_resource_event_user_sequence"),
+        UniqueConstraint("kind", "generation_id", name="uq_resource_event_kind_generation"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+    )
+    sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    resource_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    generation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TZDateTime, nullable=False, default=_utcnow, index=True,
+    )
+
+
 class UserSession(Base):
     __tablename__ = "user_sessions"
 

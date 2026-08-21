@@ -28,7 +28,9 @@ from songmaker_cli.constants import APP_NAME
 from songmaker_cli.health_api import _compute_script_hashes
 from songmaker_cli.lifecycle import (
     auto_setup_admin,
+    cleanup_expired_resource_events,
     reconcile_crashed_loras,
+    resource_event_cleanup_loop,
     session_sync_loop,
 )
 from songmaker_cli.middleware import (
@@ -79,19 +81,21 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     auto_setup_admin(ctx)
     reconcile_crashed_loras(ctx)
+    await asyncio.to_thread(cleanup_expired_resource_events, ctx)
 
     await init_arq_pool()
     log.info("arq pool connected")
 
     app.state.startup_time = datetime.now(timezone.utc)
     sync_task = asyncio.create_task(session_sync_loop(app))
-    yield
-    sync_task.cancel()
+    event_cleanup_task = asyncio.create_task(resource_event_cleanup_loop(app))
     try:
-        await sync_task
-    except asyncio.CancelledError:
-        pass
-    await close_arq_pool()
+        yield
+    finally:
+        sync_task.cancel()
+        event_cleanup_task.cancel()
+        await asyncio.gather(sync_task, event_cleanup_task, return_exceptions=True)
+        await close_arq_pool()
 
 
 def create_app(

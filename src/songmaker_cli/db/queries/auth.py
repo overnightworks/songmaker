@@ -12,6 +12,7 @@ from songmaker_cli.db.models import (
     AuditLog,
     LoginAttempt,
     Playlist,
+    ResourceEventCursor,
     User,
     UserSession,
 )
@@ -43,6 +44,8 @@ def create_user(
 ) -> User:
     user = User(username=username, password_hash=password_hash, role=role)
     session.add(user)
+    session.flush()
+    session.add(ResourceEventCursor(user_id=user.id))
     session.flush()
     log.info("Created user '%s' (role=%s)", username, role)
     return user

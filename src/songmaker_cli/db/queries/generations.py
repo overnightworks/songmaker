@@ -48,6 +48,7 @@ def create_generation(
     generation_params: dict | None = None,
     wav_path: str | None = None,
     src_generation_id: str | None = None,
+    generation_id: str | None = None,
 ) -> Generation:
     max_num = (
         session.query(Generation.generation_number)
@@ -69,6 +70,8 @@ def create_generation(
         src_generation_id=src_generation_id,
         status=JobStatus.COMPLETED,
     )
+    if generation_id is not None:
+        gen.id = generation_id
     session.add(gen)
     session.flush()
     log.info("Created generation #%d for song %s (seed=%s)", gen_number, song_id, seed)

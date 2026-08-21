@@ -28,6 +28,14 @@ Two-layer defense:
 
 Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. Demotion or deactivation of the last active admin is blocked to prevent lockout. When a user is deactivated or their role is changed, all their sessions are immediately invalidated.
 
+Generation invalidation history is partitioned by `user_id` in PostgreSQL. Its
+monotonic sequence allocator and event row participate in the same transaction as
+the generation, with unique constraints on `(user_id, sequence)` and
+`(kind, generation_id)`. Cursor and event rows cascade only with their owning user;
+historical song/generation identifiers are intentionally not foreign keys. The
+durable ledger has no public endpoint in its first phase; authenticated SSE access
+and its strict same-user filter are delivered and reviewed separately in issue #40.
+
 ## CSRF Protection
 
 Four-layer defense:

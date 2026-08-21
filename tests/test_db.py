@@ -106,13 +106,21 @@ def seeded_session(db_session: Session) -> Session:
     db_session.add(ver)
 
     gen1 = Generation(
-        id="g1", song_id="s1", version_id="v1", generation_number=1,
-        mp3_path="test/01_song_one_v1.mp3", seed=42,
+        id="g1",
+        song_id="s1",
+        version_id="v1",
+        generation_number=1,
+        mp3_path="test/01_song_one_v1.mp3",
+        seed=42,
         generation_params={"bpm": 120, "key_scale": "Am"},
     )
     gen2 = Generation(
-        id="g2", song_id="s1", version_id="v1", generation_number=2,
-        mp3_path="test/01_song_one_v2.mp3", seed=99,
+        id="g2",
+        song_id="s1",
+        version_id="v1",
+        generation_number=2,
+        mp3_path="test/01_song_one_v2.mp3",
+        seed=99,
     )
     db_session.add_all([gen1, gen2])
 
@@ -202,7 +210,6 @@ def test_get_song(seeded_session: Session) -> None:
     assert len(song.generations) == 2
 
 
-
 def test_save_rating_create(seeded_session: Session) -> None:
     save_rating(seeded_session, "g2", 75.0, "decent")
     seeded_session.commit()
@@ -246,8 +253,11 @@ def test_create_generation_first_for_song_uses_initial_number(
     seeded_session.add(Song(id="s2", title="S2", album_id="a2", track_number=1))
     seeded_session.flush()
     gen = create_generation(
-        seeded_session, song_id="s2", version_id=None,
-        mp3_path="x.mp3", model_mode="sft",
+        seeded_session,
+        song_id="s2",
+        version_id=None,
+        mp3_path="x.mp3",
+        model_mode="sft",
     )
     seeded_session.commit()
     assert gen.generation_number == INITIAL_GENERATION_NUMBER
@@ -548,7 +558,8 @@ def test_update_job_failed(seeded_session: Session) -> None:
 
 @pytest.mark.parametrize("terminal", ["cancelled", "completed", "failed", "partial"])
 def test_update_job_status_does_not_overwrite_terminal(
-    seeded_session: Session, terminal: str,
+    seeded_session: Session,
+    terminal: str,
 ) -> None:
     job = create_job(seeded_session, "generate")
     seeded_session.commit()
@@ -635,8 +646,13 @@ def test_job_to_dict(seeded_session: Session) -> None:
 
 def test_create_generation(seeded_session: Session) -> None:
     gen = create_generation(
-        seeded_session, "s1", "v1", "test/new_gen.mp3", model_mode="sft",
-        seed=123, generation_params={"bpm": 140},
+        seeded_session,
+        "s1",
+        "v1",
+        "test/new_gen.mp3",
+        model_mode="sft",
+        seed=123,
+        generation_params={"bpm": 140},
     )
     seeded_session.commit()
     assert gen.generation_number == 3
@@ -646,7 +662,12 @@ def test_create_generation(seeded_session: Session) -> None:
 
 def test_create_generation_with_model_mode(seeded_session: Session) -> None:
     gen = create_generation(
-        seeded_session, "s1", "v1", "test/gen.mp3", model_mode="turbo", seed=1,
+        seeded_session,
+        "s1",
+        "v1",
+        "test/gen.mp3",
+        model_mode="turbo",
+        seed=1,
     )
     seeded_session.commit()
     assert gen.model_mode == "turbo"
@@ -654,7 +675,12 @@ def test_create_generation_with_model_mode(seeded_session: Session) -> None:
 
 def test_create_generation_with_wav_path(seeded_session: Session) -> None:
     gen = create_generation(
-        seeded_session, "s1", "v1", "test/gen.mp3", model_mode="sft", seed=1,
+        seeded_session,
+        "s1",
+        "v1",
+        "test/gen.mp3",
+        model_mode="sft",
+        seed=1,
         wav_path="test/gen.wav",
     )
     seeded_session.commit()
@@ -717,10 +743,15 @@ def test_save_scores_upsert_persists(tmp_path: Path) -> None:
         session.add(Album(id="t2", title="T2", artist="A"))
         session.add(Song(id="s2", title="S2", album_id="t2", track_number=1))
         session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="x", prompt="y"))
-        session.add(Generation(
-            id="gx", song_id="s2", version_id="v2", generation_number=1,
-            mp3_path="t2/test.mp3",
-        ))
+        session.add(
+            Generation(
+                id="gx",
+                song_id="s2",
+                version_id="v2",
+                generation_number=1,
+                mp3_path="t2/test.mp3",
+            )
+        )
         session.add(Score(id="scx", generation_id="gx", scorer="batch", value={"old": 1.0}))
         session.commit()
 
@@ -849,7 +880,9 @@ def test_version_validator_rejects_unknown_key(db_session: Session) -> None:
     db_session.flush()
     with pytest.raises(PydanticValidationError, match="not permitted|extra"):
         create_song(
-            db_session, "S", "a1",
+            db_session,
+            "S",
+            "a1",
             generation_params={"infrence_steps": 50},
         )
 
@@ -860,11 +893,17 @@ def test_generation_validator_rejects_unknown_key(seeded_session: Session) -> No
     from songmaker_cli.db.models import Generation
 
     with pytest.raises(PydanticValidationError, match="not permitted|extra"):
-        seeded_session.add(Generation(
-            id="gx", song_id="s1", version_id="v1", generation_number=99,
-            mp3_path="user1/gx.mp3", model_mode="sft",
-            generation_params={"acestep_model": "sft", "bogus": True},
-        ))
+        seeded_session.add(
+            Generation(
+                id="gx",
+                song_id="s1",
+                version_id="v1",
+                generation_number=99,
+                mp3_path="user1/gx.mp3",
+                model_mode="sft",
+                generation_params={"acestep_model": "sft", "bogus": True},
+            )
+        )
 
 
 def test_preset_validator_rejects_unknown_key(db_session: Session) -> None:
@@ -873,9 +912,13 @@ def test_preset_validator_rejects_unknown_key(db_session: Session) -> None:
     from songmaker_cli.db.models import GenerationPreset
 
     with pytest.raises(PydanticValidationError, match="not permitted|extra"):
-        db_session.add(GenerationPreset(
-            name="p", model_mode="sft", params={"shift": 2.0, "junk": 1},
-        ))
+        db_session.add(
+            GenerationPreset(
+                name="p",
+                model_mode="sft",
+                params={"shift": 2.0, "junk": 1},
+            )
+        )
 
 
 def test_update_song_sets_generation_params(seeded_session: Session) -> None:
@@ -1012,12 +1055,15 @@ def test_delete_generation_files_path_traversal_blocked(tmp_path: Path) -> None:
 
 
 def test_create_user(db_session: Session) -> None:
+    from songmaker_cli.db.models import ResourceEventCursor
+
     user = create_user(db_session, "alice", "hash123", role="admin")
     db_session.commit()
     assert user.username == "alice"
     assert user.role == "admin"
     assert user.is_active is True
     assert user.created_at is not None
+    assert db_session.get(ResourceEventCursor, user.id).high_water_mark == 0
 
 
 def test_get_user_by_username(db_session: Session) -> None:
@@ -1186,7 +1232,9 @@ def test_count_recent_failed_attempts_outside_window(db_session: Session) -> Non
     from datetime import datetime, timedelta, timezone
 
     old = LoginAttempt(
-        ip_address="10.0.0.1", username="alice", success=False,
+        ip_address="10.0.0.1",
+        username="alice",
+        success=False,
         attempted_at=datetime.now(timezone.utc) - timedelta(seconds=600),
     )
     db_session.add(old)
@@ -1235,7 +1283,11 @@ def test_session_response_from_orm(db_session: Session) -> None:
     user = _make_user(db_session, "alice")
     expires = datetime.now(timezone.utc) + timedelta(days=30)
     sess = create_session(
-        db_session, user.id, expires, ip_address="127.0.0.1", user_agent="Mozilla/5.0",
+        db_session,
+        user.id,
+        expires,
+        ip_address="127.0.0.1",
+        user_agent="Mozilla/5.0",
     )
     db_session.commit()
 
@@ -1313,7 +1365,8 @@ def test_count_user_jobs_outside_window(db_session: Session) -> None:
     user = create_user(db_session, "testuser", "hash", role="user")
     db_session.flush()
     old_job = Job(
-        type="generate", user_id=user.id,
+        type="generate",
+        user_id=user.id,
         started_at=datetime.now(timezone.utc) - timedelta(hours=2),
     )
     db_session.add(old_job)
@@ -1392,6 +1445,7 @@ def test_recover_stale_jobs_none(db_session: Session) -> None:
     db_session.commit()
 
     from songmaker_cli.db.queries import update_job_status
+
     update_job_status(db_session, j1.id, "completed", progress=1.0)
     db_session.commit()
 
@@ -1489,7 +1543,9 @@ def test_recover_stale_jobs_by_age_and_type_distinguishes_queued_vs_running(
     db_session.commit()
 
     count = recover_stale_jobs_by_age_and_type(
-        db_session, "generate", threshold_seconds=1800,
+        db_session,
+        "generate",
+        threshold_seconds=1800,
     )
     db_session.commit()
 
@@ -1830,15 +1886,33 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
     engine.dispose()
 
     expected = {
-        "albums", "songs", "versions", "generations", "scores", "ratings",
-        "jobs", "users", "user_sessions", "login_attempts", "audit_log",
-        "generation_presets", "rate_limit_settings", "available_models",
-        "playlists", "playlist_entries", "chat_messages",
-        "conversations", "conversation_summaries",
-        "cowriter_user_memories", "cowriter_song_memories",
+        "albums",
+        "songs",
+        "versions",
+        "generations",
+        "scores",
+        "ratings",
+        "jobs",
+        "users",
+        "user_sessions",
+        "login_attempts",
+        "audit_log",
+        "generation_presets",
+        "rate_limit_settings",
+        "available_models",
+        "playlists",
+        "playlist_entries",
+        "chat_messages",
+        "conversations",
+        "conversation_summaries",
+        "cowriter_user_memories",
+        "cowriter_song_memories",
         "cowriter_album_memories",
         "acestep_workers",
-        "user_loras", "user_lora_samples",
+        "user_loras",
+        "user_lora_samples",
+        "resource_event_cursors",
+        "resource_events",
         "alembic_version",
     }
     assert tables == expected
@@ -1866,17 +1940,25 @@ def test_acestep_canonical_names_migration_renames_json_keys(tmp_path: Path) -> 
     }
     with factory() as session:
         session.add(Album(id="a1", title="A", artist="X"))
-        session.add(Song(
-            id="s1", title="S", album_id="a1",
-            vocal_language="en", track_number=1,
-        ))
+        session.add(
+            Song(
+                id="s1",
+                title="S",
+                album_id="a1",
+                vocal_language="en",
+                track_number=1,
+            )
+        )
         session.commit()
-        session.execute(_sql_text(
-            "INSERT INTO versions (id, song_id, version_number, lyrics, prompt, "
-            "bpm, audio_duration, key_scale, generation_params, created_at) "
-            "VALUES ('v1', 's1', 1, 'l', 'p', 120, 180, 'Am', :params, "
-            "CURRENT_TIMESTAMP)",
-        ), {"params": _json.dumps(old_params)})
+        session.execute(
+            _sql_text(
+                "INSERT INTO versions (id, song_id, version_number, lyrics, prompt, "
+                "bpm, audio_duration, key_scale, generation_params, created_at) "
+                "VALUES ('v1', 's1', 1, 'l', 'p', 120, 180, 'Am', :params, "
+                "CURRENT_TIMESTAMP)",
+            ),
+            {"params": _json.dumps(old_params)},
+        )
         session.commit()
 
     engine = factory.kw["bind"]
@@ -1928,12 +2010,15 @@ def test_acestep_canonical_names_migration_downgrade_reverses_json_keys(tmp_path
         session.add(Album(id="a1", title="A", artist="X"))
         session.add(Song(id="s1", title="S", album_id="a1", track_number=1))
         session.commit()
-        session.execute(_sql_text(
-            "INSERT INTO versions (id, song_id, version_number, lyrics, prompt, "
-            "bpm, audio_duration, key_scale, generation_params, created_at) "
-            "VALUES ('v1', 's1', 1, 'l', 'p', 120, 180, 'Am', :params, "
-            "CURRENT_TIMESTAMP)",
-        ), {"params": _json.dumps(new_params)})
+        session.execute(
+            _sql_text(
+                "INSERT INTO versions (id, song_id, version_number, lyrics, prompt, "
+                "bpm, audio_duration, key_scale, generation_params, created_at) "
+                "VALUES ('v1', 's1', 1, 'l', 'p', 120, 180, 'Am', :params, "
+                "CURRENT_TIMESTAMP)",
+            ),
+            {"params": _json.dumps(new_params)},
+        )
         session.commit()
 
     engine = factory.kw["bind"]
@@ -1997,6 +2082,7 @@ def test_whisper_cues_migration_adds_nullable_column(tmp_path: Path) -> None:
 
 def test_get_claude_chat_model_fallback(db_session: Session) -> None:
     from songmaker_cli.db.queries.settings import get_claude_chat_model
+
     # No DB row → falls back to Settings default ("claude-opus-4-6")
     assert get_claude_chat_model(db_session) == "claude-opus-4-6"
 
@@ -2006,6 +2092,7 @@ def test_set_and_get_claude_chat_model(db_session: Session) -> None:
         get_claude_chat_model,
         set_claude_model,
     )
+
     set_claude_model(db_session, "claude_chat_model", "claude-sonnet-4-6")
     assert get_claude_chat_model(db_session) == "claude-sonnet-4-6"
 
@@ -2015,6 +2102,7 @@ def test_set_claude_chat_model_updates_existing(db_session: Session) -> None:
         get_claude_chat_model,
         set_claude_model,
     )
+
     set_claude_model(db_session, "claude_chat_model", "claude-sonnet-4-6")
     set_claude_model(db_session, "claude_chat_model", "claude-haiku-4-5-20251001")
     assert get_claude_chat_model(db_session) == "claude-haiku-4-5-20251001"

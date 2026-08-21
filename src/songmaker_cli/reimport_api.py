@@ -15,7 +15,7 @@ from songmaker_cli.app_context import AppContext, get_app_context, get_db_sessio
 from songmaker_cli.constants import AUDIO_UPLOAD_FILE_MAX_BYTES
 from songmaker_cli.db.queries import get_generation
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
-from songmaker_cli.reimport import reimport_files
+from songmaker_cli.reimport import cleanup_reimported_files, reimport_files
 
 log = logging.getLogger(__name__)
 
@@ -79,6 +79,11 @@ async def api_reimport(
             mp3_file=mp3_path, wav_file=wav_path,
         )
 
-    session.commit()
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        cleanup_reimported_files(ctx.audio_dir, user.id, gen_id)
+        raise
     gen = get_generation(session, gen_id)
     return GenerationResponse.from_orm(gen)

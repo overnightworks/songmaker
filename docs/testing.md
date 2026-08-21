@@ -34,6 +34,7 @@ Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tes
 - **CI backend**: 90% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (scoring modules excluded — require GPU extras not installed in CI, see `.coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
 - **Local**: aim for 100% on non-scoring core modules (exclude `main.py` CLI entrypoint)
 - **CI frontend**: `pnpm test:coverage` (70% statement/line floor on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`. 100% on `lib/` remains a local aspiration, not a CI gate.
+- **CI PostgreSQL contract**: `tests/test_postgresql.py` runs serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, transactional rollback, and retention gaps; SQLite tests do not stand in for these guarantees.
 
 GitHub workflows (`.github/workflows/ci.yml`, `security.yml`,
 `requirements.yml`, and `requirement-witnesses.yml`) run on push/PR to `main`.
@@ -44,6 +45,7 @@ while issue #31 remains open. The live checks are:
 | Job | What |
 |---|---|
 | Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · pytest + 90% coverage |
+| PostgreSQL contract | Serial PostgreSQL 16 tests for dialect-specific migrations, concurrency, rollback, and event retention gaps |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit · `pnpm audit --prod` |
 | Requirements | strict offline requirement/acceptance schema · exact bytes and linear history · exact PR/push base · derived PRODUCT view |
@@ -82,7 +84,8 @@ tests/
 ├── test_*client*.py               CLI client, ACE-Step client, and training client tests
 ├── test_auth*.py                  Auth utilities and auth endpoints
 ├── test_config.py                 ACE-Step config building, defaults, path resolution
-├── test_db.py / test_postgresql.py Database models, migrations, concurrency
+├── test_db.py / test_postgresql.py Database models, migrations, PostgreSQL concurrency
+├── test_resource_events.py         Durable event sequencing, atomicity, retention, lifecycle
 ├── test_generation*.py            Generation params, retention, LoRA integration
 └── test_*                         Audio I/O, lifecycle, middleware, parser, Redis, scheduler,
                                    soft delete, constants, MCP server, mastering

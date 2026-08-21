@@ -65,6 +65,35 @@ jobs:
           skipped=$(grep -oP '\d+ skipped' pytest-output.txt | awk '{print $1}')
           echo "### Backend: ${passed} passed, ${skipped:-0} skipped — ${total} coverage" >> "$GITHUB_STEP_SUMMARY"
 
+  postgresql-contract:
+    name: PostgreSQL contract (serial)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: songmaker
+          POSTGRES_PASSWORD: songmaker
+          POSTGRES_DB: songmaker_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U songmaker -d songmaker_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[server,dev]"
+      - name: Run PostgreSQL contracts serially
+        run: pytest tests/test_postgresql.py -n 0 -q --tb=short
+
   frontend:
     name: Frontend (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
