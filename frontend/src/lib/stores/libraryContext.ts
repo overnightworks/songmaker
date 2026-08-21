@@ -412,14 +412,8 @@ export function captureLibraryScroll(scrollTop: number): void {
 	rememberLibraryScroll(currentScrollSlot());
 }
 
-export function albumIsExpanded(
-	albumId: string,
-	expanded: ReadonlySet<string>,
-	options: { selectedAlbumId: string | null; searching: boolean; songHits: number }
-): boolean {
-	if (options.searching) return options.songHits > 0 || expanded.has(albumId);
-	if (options.selectedAlbumId === albumId) return true;
-	return expanded.has(albumId);
+export function albumIsExpanded(options: { searching: boolean; songHits: number }): boolean {
+	return options.searching && options.songHits > 0;
 }
 
 export function resetLibraryContextForTests(): void {

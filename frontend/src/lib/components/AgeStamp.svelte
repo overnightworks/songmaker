@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { formatExactLocalTime, formatRelativeAge } from '$lib/utils/recency';
+	import { formatCreatedAge, formatExactLocalTime, formatRelativeAge } from '$lib/utils/recency';
 
-	let { createdAt }: { createdAt?: string | null } = $props();
+	let { createdAt, named = false }: { createdAt?: string | null; named?: boolean } = $props();
 
 	const exact = $derived(formatExactLocalTime(createdAt));
-	const relative = $derived(formatRelativeAge(createdAt));
+	const relative = $derived(named ? formatCreatedAge(createdAt) : formatRelativeAge(createdAt));
 </script>
 
 <span class="age" title={exact} aria-label={exact}>{relative}</span>

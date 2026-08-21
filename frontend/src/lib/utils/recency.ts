@@ -20,6 +20,8 @@ export function parseCreatedAt(iso: string | null | undefined): Date | null {
 	return date;
 }
 
+export const CREATED_AGE_PREFIX = 'created';
+
 export function formatRelativeAge(iso: string | null | undefined, now: Date = new Date()): string {
 	const date = parseCreatedAt(iso);
 	if (!date) return 'unknown';
@@ -29,6 +31,10 @@ export function formatRelativeAge(iso: string | null | undefined, now: Date = ne
 	if (delta < HOUR_MS) return `${Math.floor(delta / MINUTE_MS)}m`;
 	if (delta < DAY_MS) return `${Math.floor(delta / HOUR_MS)}h`;
 	return `${Math.floor(delta / DAY_MS)}d`;
+}
+
+export function formatCreatedAge(iso: string | null | undefined, now: Date = new Date()): string {
+	return `${CREATED_AGE_PREFIX} ${formatRelativeAge(iso, now)}`;
 }
 
 export function formatExactLocalTime(iso: string | null | undefined): string {
