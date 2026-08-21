@@ -3,6 +3,7 @@ import { get } from 'svelte/store';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import type {
 	GenerationItem,
+	PaginatedResponse,
 	PlaylistEntryItem,
 	QueueStreamManifest,
 	QueueStreamTrackItem,
@@ -257,10 +258,10 @@ describe('browsing state', () => {
 	});
 
 	it('cancelAlbumSongLoads drops an in-flight album merge', async () => {
-		let resolvePage: ((value: unknown) => void) | undefined;
+		let resolvePage: ((value: PaginatedResponse<SongItem>) => void) | undefined;
 		vi.mocked(fetchSongs).mockImplementationOnce(
 			() =>
-				new Promise((resolve) => {
+				new Promise<PaginatedResponse<SongItem>>((resolve) => {
 					resolvePage = resolve;
 				})
 		);
