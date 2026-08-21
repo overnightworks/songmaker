@@ -201,6 +201,27 @@ export function changeLibrarySort(sort: LibrarySort, searchRaw: string): void {
 	void runLibrarySearch(q, sort, { reset: true });
 }
 
+export async function restoreLibraryBrowse(
+	sort: LibrarySort,
+	targetAlbumOffset: number,
+	targetSongOffset: number
+): Promise<boolean> {
+	librarySort.set(sort);
+	const ok = await loadLibraryBrowse({ reset: true });
+	if (!ok) return false;
+	const albumTarget = Math.max(0, targetAlbumOffset);
+	const songTarget = Math.max(0, targetSongOffset);
+	while (
+		get(libraryBrowse).status === 'ready' &&
+		(get(libraryBrowse).albumOffset < albumTarget || get(libraryBrowse).songOffset < songTarget) &&
+		(get(libraryBrowse).albumHasMore || get(libraryBrowse).songHasMore)
+	) {
+		const more = await loadLibraryBrowse({ reset: false });
+		if (!more) return false;
+	}
+	return true;
+}
+
 export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<boolean> {
 	const generation = ++browseGeneration;
 	const reset = options?.reset ?? true;

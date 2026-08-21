@@ -27,6 +27,7 @@
 		expandedAlbumIds,
 		libraryScrollAnchor,
 		librarySection,
+		setLibrarySurface,
 		toggleAlbumExpanded
 	} from '$lib/stores/libraryContext';
 	import {
@@ -116,12 +117,6 @@
 		syncLibrarySearch(search);
 	});
 
-	$effect(() => {
-		if (browseEl && browseEl.scrollTop !== restoredScroll) {
-			browseEl.scrollTop = restoredScroll;
-		}
-	});
-
 	interface AlbumGroup {
 		album: AlbumItem;
 		songs: SongItem[];
@@ -148,6 +143,15 @@
 	);
 
 	let browseEl = $state<HTMLElement | null>(null);
+
+	$effect(() => {
+		void albumGroups.length;
+		void orderedPlaylists.length;
+		void sharedItems.length;
+		if (browseEl) {
+			browseEl.scrollTop = restoredScroll;
+		}
+	});
 
 	function onBrowseScroll(event: Event): void {
 		const target = event.currentTarget;
@@ -193,7 +197,9 @@
 	}
 
 	function onSearchInput(event: Event): void {
-		searchQuery.set((event.target as HTMLInputElement).value);
+		const value = (event.target as HTMLInputElement).value;
+		searchQuery.set(value);
+		if (value.trim()) setLibrarySurface('browse');
 		persistLibraryHistory();
 	}
 

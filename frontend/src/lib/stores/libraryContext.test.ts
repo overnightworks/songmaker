@@ -13,6 +13,24 @@ const fetchPlaylist = vi.fn();
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
+vi.mock('$lib/api/albums', () => ({
+	fetchAlbums: vi.fn().mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 50,
+		has_more: false
+	})
+}));
+vi.mock('$lib/api/songs', () => ({
+	fetchSongs: vi.fn().mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 200,
+		has_more: false
+	})
+}));
 
 vi.mock('$lib/api/client', () => ({
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
@@ -140,7 +158,7 @@ describe('library history snapshot', () => {
 		expect(isLibraryHistoryState(libraryRootState())).toBe(true);
 	});
 
-	it('apply restores stores from a snapshot', () => {
+	it('apply restores stores from a snapshot', async () => {
 		const state = {
 			...libraryRootState(),
 			section: 'shared' as const,
@@ -151,7 +169,7 @@ describe('library history snapshot', () => {
 			expandedAlbumIds: ['a9'],
 			scrollAnchor: 80
 		};
-		applyLibraryHistory(state);
+		await applyLibraryHistory(state);
 		expect(get(librarySection)).toBe('shared');
 		expect(get(librarySurface)).toBe('browse');
 		expect(get(searchQuery)).toBe('Nachtstrom');

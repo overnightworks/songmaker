@@ -4,6 +4,7 @@ import { get } from 'svelte/store';
 import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import {
+	hydrateLibraryFromHistory,
 	librarySection,
 	librarySurface,
 	resetLibraryContextForTests,
@@ -25,6 +26,24 @@ const fetchPlaylist = vi.fn();
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
+vi.mock('$lib/api/albums', () => ({
+	fetchAlbums: vi.fn().mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 50,
+		has_more: false
+	})
+}));
+vi.mock('$lib/api/songs', () => ({
+	fetchSongs: vi.fn().mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 200,
+		has_more: false
+	})
+}));
 
 vi.mock('$lib/api/client', () => ({
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
@@ -41,11 +60,13 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import {
+	backToAlbum,
+	backToSong,
 	canGoBack,
 	goBack,
 	initNavigation,
+	openLibraryCreate,
 	resetNavigationForTests,
-	backToSong,
 	selectAlbumOverview,
 	selectLibrarySection,
 	selectSong
@@ -155,7 +176,7 @@ describe('library history', () => {
 		cleanup();
 	});
 
-	it('keeps a valid songmaker history entry instead of replacing it on init', () => {
+	it('keeps a valid songmaker history entry instead of replacing it on init', async () => {
 		history.replaceState(
 			{
 				kind: 'songmaker',
@@ -178,11 +199,11 @@ describe('library history', () => {
 			'',
 			'/'
 		);
-		const cleanup = initNavigation();
+		await hydrateLibraryFromHistory();
 		expect(get(librarySection)).toBe('playlists');
 		expect(get(searchQuery)).toBe('Tide');
+		expect(get(librarySurface)).toBe('browse');
 		expect(history.state.scrollAnchor).toBe(80);
-		cleanup();
 	});
 
 	it('backToSong from a generation URL keeps the song at history index 0', () => {
@@ -201,5 +222,25 @@ describe('library history', () => {
 		setLibrarySection('playlists');
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(librarySection)).toBe('playlists');
+	});
+
+	it('create surface is a backable library destination', () => {
+		const cleanup = initNavigation();
+		openLibraryCreate();
+		expect(get(librarySurface)).toBe('create');
+		expect(get(canGoBack)).toBe(true);
+		goBack();
+		expect(get(librarySurface)).toBe('browse');
+		cleanup();
+	});
+
+	it('backToAlbum keeps the album when a song was opened without album history', () => {
+		const cleanup = initNavigation();
+		selectSong('s1');
+		backToAlbum();
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(selectedAlbumId)).toBe('a1');
+		expect(get(librarySurface)).toBe('detail');
+		cleanup();
 	});
 });

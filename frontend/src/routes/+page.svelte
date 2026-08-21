@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { albumList, selectedSong, selectedGeneration, selectedAlbumId } from '$lib/stores/player';
-	import { loadLibraryBrowse } from '$lib/stores/librarySearch';
-	import { librarySurface } from '$lib/stores/libraryContext';
-	import { detailTab, initNavigation } from '$lib/stores/navigation';
+	import { hydrateLibraryFromHistory, librarySurface } from '$lib/stores/libraryContext';
+	import { detailTab, goBack, initNavigation, openLibraryCreate } from '$lib/stores/navigation';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
 	import { loadActiveModels } from '$lib/stores/presets';
 	import { addToast } from '$lib/stores/toast';
@@ -17,7 +16,6 @@
 
 	let loading = $state(true);
 	let loadError = $state(false);
-	let showCreate = $state(false);
 
 	const song = $derived($selectedSong);
 	const activeGen = $derived($selectedGeneration);
@@ -29,21 +27,16 @@
 	const playlistDetail = $derived($selectedPlaylistDetail);
 	const tab = $derived($detailTab);
 	const hasSelection = $derived(!!song || !!activeGen || !!selectedAlbum || !!playlistDetail);
-	const hasDetail = $derived(showCreate || ($librarySurface === 'detail' && hasSelection));
-
-	$effect(() => {
-		if (song) showCreate = false;
-	});
+	const hasDetail = $derived(
+		$librarySurface === 'create' || ($librarySurface === 'detail' && hasSelection)
+	);
 
 	onMount(() => {
 		let cleanup: (() => void) | undefined;
 
 		(async () => {
 			try {
-				const [browseOk] = await Promise.all([
-					loadLibraryBrowse({ reset: true }),
-					loadActiveModels()
-				]);
+				const [browseOk] = await Promise.all([hydrateLibraryFromHistory(), loadActiveModels()]);
 				if (!browseOk) {
 					addToast('Failed to load', 'error');
 					loadError = true;
@@ -71,12 +64,13 @@
 	<div class="workspace" class:has-detail={hasDetail}>
 		<SongList
 			onNewSong={() => {
-				showCreate = !showCreate;
+				if ($librarySurface === 'create') goBack();
+				else openLibraryCreate();
 			}}
 		/>
 
 		<main class="detail-panel" class:chat-active={!!song && tab === 'chat'}>
-			{#if showCreate}
+			{#if $librarySurface === 'create'}
 				<CreateForm albums={$albumList} />
 			{:else if activeGen && song}
 				<GenerationView />

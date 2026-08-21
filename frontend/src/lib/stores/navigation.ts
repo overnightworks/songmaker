@@ -61,7 +61,18 @@ function pushLibraryHistory(): void {
 	if (isLibraryHistoryState(current)) {
 		const leaving = snapshotLibraryHistory(current.index);
 		history.replaceState(
-			{ ...current, scrollAnchor: leaving.scrollAnchor },
+			{
+				...current,
+				scrollAnchor: leaving.scrollAnchor,
+				albumOffset: leaving.albumOffset,
+				songOffset: leaving.songOffset,
+				searchCursor: leaving.searchCursor,
+				searchLoadedCount: leaving.searchLoadedCount,
+				expandedAlbumIds: leaving.expandedAlbumIds,
+				query: leaving.query,
+				sort: leaving.sort,
+				section: leaving.section
+			},
 			'',
 			urlFromState(current)
 		);
@@ -93,7 +104,27 @@ export function deselectAlbum(): void {
 }
 
 export function backToAlbum(): void {
-	goBack();
+	const songId = get(selectedSongId);
+	const song = songId ? get(songList).find((item) => item.id === songId) : undefined;
+	const albumId = get(selectedAlbumId) ?? song?.album_id ?? null;
+	suppressPush = true;
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
+	detailTab.set('generations');
+	if (albumId) {
+		playerSelectAlbum(albumId);
+		expandAlbum(albumId);
+		setLibrarySurface('detail');
+	} else {
+		setLibrarySurface('browse');
+	}
+	suppressPush = false;
+	replaceLibraryHistory();
+}
+
+export function openLibraryCreate(): void {
+	setLibrarySurface('create');
+	pushLibraryHistory();
 }
 
 export function selectSong(songId: string): void {
@@ -163,6 +194,11 @@ export function switchTab(tab: DetailTab): void {
 }
 
 export function goBack(): void {
+	if (get(librarySurface) === 'create') {
+		setLibrarySurface('browse');
+		replaceLibraryHistory();
+		return;
+	}
 	if (get(librarySurface) === 'browse' && hasLibrarySelection()) {
 		setLibrarySurface('detail');
 		replaceLibraryHistory();
@@ -175,7 +211,7 @@ export function goBack(): void {
 	}
 	const current = isLibraryHistoryState(state) ? state : snapshotLibraryHistory(0);
 	suppressPush = true;
-	applyLibraryHistory(libraryBrowseStateFrom(current));
+	void applyLibraryHistory(libraryBrowseStateFrom(current));
 	detailTab.set('generations');
 	setLibrarySurface('browse');
 	suppressPush = false;
@@ -184,14 +220,7 @@ export function goBack(): void {
 
 export function initNavigation(): () => void {
 	const existing = history.state;
-	if (isLibraryHistoryState(existing)) {
-		suppressPush = true;
-		applyLibraryHistory(existing);
-		if (existing.songId) {
-			ensureGenerationsLoaded(existing.songId);
-		}
-		suppressPush = false;
-	} else {
+	if (!isLibraryHistoryState(existing)) {
 		const params = new URLSearchParams(window.location.search);
 		const songId = params.get('song');
 		const genId = params.get('gen');
@@ -208,17 +237,19 @@ export function initNavigation(): () => void {
 		}
 
 		replaceLibraryHistory();
+	} else if (existing.songId) {
+		ensureGenerationsLoaded(existing.songId);
 	}
 
 	function onPopstate(e: PopStateEvent): void {
 		suppressPush = true;
 		if (isLibraryHistoryState(e.state)) {
-			applyLibraryHistory(e.state);
+			void applyLibraryHistory(e.state);
 			if (e.state.songId) {
 				ensureGenerationsLoaded(e.state.songId);
 			}
 		} else {
-			applyLibraryHistory(libraryRootState());
+			void applyLibraryHistory(libraryRootState());
 		}
 		detailTab.set('generations');
 		suppressPush = false;
@@ -234,7 +265,11 @@ export function resetNavigationForTests(): void {
 }
 
 export const canGoBack = derived(
-	[selectedSongId, selectedGenerationId, selectedAlbumId, selectedPlaylistId],
-	([$songId, $genId, $albumId, $playlistId]) =>
-		$songId !== null || $genId !== null || $albumId !== null || $playlistId !== null
+	[selectedSongId, selectedGenerationId, selectedAlbumId, selectedPlaylistId, librarySurface],
+	([$songId, $genId, $albumId, $playlistId, $surface]) =>
+		$surface === 'create' ||
+		$songId !== null ||
+		$genId !== null ||
+		$albumId !== null ||
+		$playlistId !== null
 );

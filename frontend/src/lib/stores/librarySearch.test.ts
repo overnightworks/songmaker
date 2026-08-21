@@ -28,6 +28,7 @@ import {
 	loadLibraryBrowse,
 	loadMoreLibrarySearch,
 	resetLibrarySearchForTests,
+	restoreLibraryBrowse,
 	restoreLibrarySearch,
 	retryLibrarySearch,
 	syncLibrarySearch
@@ -222,6 +223,45 @@ describe('changeLibrarySort', () => {
 			limit: LIBRARY_SEARCH_PAGE_SIZE,
 			cursor: null
 		});
+	});
+});
+
+describe('restoreLibraryBrowse', () => {
+	it('replays pages until the saved offsets are loaded', async () => {
+		fetchAlbums
+			.mockResolvedValueOnce({
+				items: [album({ id: 'a1' })],
+				total: 2,
+				offset: 0,
+				limit: 50,
+				has_more: true
+			})
+			.mockResolvedValueOnce({
+				items: [album({ id: 'a2', title: 'Second' })],
+				total: 2,
+				offset: 1,
+				limit: 50,
+				has_more: false
+			});
+		fetchSongs
+			.mockResolvedValueOnce({
+				items: [song({ id: 's1' })],
+				total: 1,
+				offset: 0,
+				limit: 200,
+				has_more: false
+			})
+			.mockResolvedValueOnce({
+				items: [],
+				total: 1,
+				offset: 1,
+				limit: 200,
+				has_more: false
+			});
+		await restoreLibraryBrowse('newest', 2, 1);
+		expect(fetchAlbums).toHaveBeenCalledTimes(2);
+		expect(get(libraryBrowse).albumOffset).toBe(2);
+		expect(get(albumList).map((item) => item.id)).toEqual(['a1', 'a2']);
 	});
 });
 

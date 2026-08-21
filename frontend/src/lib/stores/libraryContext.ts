@@ -11,6 +11,7 @@ import {
 	libraryBrowse,
 	librarySearch,
 	librarySort,
+	restoreLibraryBrowse,
 	restoreLibrarySearch
 } from '$lib/stores/librarySearch';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
@@ -22,7 +23,7 @@ import {
 } from '$lib/stores/playlists';
 import { CREATED_SORTS } from '$lib/utils/recency';
 
-export type LibrarySurface = 'browse' | 'detail';
+export type LibrarySurface = 'browse' | 'detail' | 'create';
 
 export interface LibraryHistoryState {
 	kind: typeof LIBRARY_HISTORY_KIND;
@@ -48,7 +49,7 @@ export const librarySurface = writable<LibrarySurface>('browse');
 export const expandedAlbumIds = writable<ReadonlySet<string>>(new Set());
 export const libraryScrollAnchor = writable(0);
 
-const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail']);
+const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail', 'create']);
 
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
@@ -139,7 +140,7 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 	};
 }
 
-export function applyLibraryHistory(state: LibraryHistoryState): void {
+export async function applyLibraryHistory(state: LibraryHistoryState): Promise<void> {
 	librarySection.set(state.section);
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
@@ -154,15 +155,24 @@ export function applyLibraryHistory(state: LibraryHistoryState): void {
 	} else {
 		deselectPlaylist();
 	}
-	libraryBrowse.update((browse) => ({
-		...browse,
-		albumOffset: state.albumOffset,
-		songOffset: state.songOffset
-	}));
-	void restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
 	if (state.section === 'playlists' || state.section === 'shared') {
 		void ensurePlaylistsLoaded();
 	}
+	if (state.query.trim()) {
+		await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
+		return;
+	}
+	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
+}
+
+export async function hydrateLibraryFromHistory(): Promise<boolean> {
+	const existing = history.state;
+	if (isLibraryHistoryState(existing)) {
+		await applyLibraryHistory(existing);
+		if (existing.query.trim()) return get(librarySearch).status !== 'error';
+		return get(libraryBrowse).status !== 'error';
+	}
+	return restoreLibraryBrowse(get(librarySort), 0, 0);
 }
 
 export function setLibrarySection(section: LibrarySection): void {
