@@ -70,6 +70,11 @@ from songmaker_cli.api_models.queue_streams import (
     QueueStreamTrackRequest,
     QueueStreamTrackResponse,
 )
+from songmaker_cli.api_models.resource_events import (
+    GenerationCreatedResourceEvent,
+    ResourceHelloEvent,
+    ResourceResyncEvent,
+)
 from songmaker_cli.api_models.settings import (
     CapabilitiesResponse,
     ChatHistoryResponse,
@@ -249,6 +254,7 @@ __all__ = [
     "DefaultConfigResponse",
     "EvictModelOnWorkerRequest",
     "GenerateRequest",
+    "GenerationCreatedResourceEvent",
     "GenerationDefaultsRequest",
     "GenerationParams",
     "GenerationResponse",
@@ -294,6 +300,8 @@ __all__ = [
     "ReorderPlaylistEntryRequest",
     "RateResponse",
     "RecentChatItem",
+    "ResourceHelloEvent",
+    "ResourceResyncEvent",
     "ScorerSchemaItem",
     "ScoreRequest",
     "ScoringSchemaResponse",

@@ -35,6 +35,7 @@ Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tes
 - **Local**: aim for 100% on non-scoring core modules (exclude `main.py` CLI entrypoint)
 - **CI frontend**: `pnpm test:coverage` (70% statement/line floor on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`. 100% on `lib/` remains a local aspiration, not a CI gate.
 - **CI PostgreSQL contract**: `tests/test_postgresql.py` runs serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, transactional rollback, and retention gaps; SQLite tests do not stand in for these guarantees.
+- **Resource-event transport**: `tests/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 
 GitHub workflows (`.github/workflows/ci.yml`, `security.yml`,
 `requirements.yml`, and `requirement-witnesses.yml`) run on push/PR to `main`.
@@ -86,6 +87,7 @@ tests/
 ├── test_config.py                 ACE-Step config building, defaults, path resolution
 ├── test_db.py / test_postgresql.py Database models, migrations, PostgreSQL concurrency
 ├── test_resource_events.py         Durable event sequencing, atomicity, retention, lifecycle
+├── test_resource_event_api.py      Authenticated SSE replay, gaps, limits, headers, isolation
 ├── test_generation*.py            Generation params, retention, LoRA integration
 └── test_*                         Audio I/O, lifecycle, middleware, parser, Redis, scheduler,
                                    soft delete, constants, MCP server, mastering

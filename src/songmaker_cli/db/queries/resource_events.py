@@ -71,6 +71,7 @@ def list_resource_events_after(
     sequence: int,
     *,
     through: int | None = None,
+    limit: int | None = None,
 ) -> list[ResourceEvent]:
     statement = select(ResourceEvent).where(
         ResourceEvent.user_id == user_id,
@@ -78,7 +79,12 @@ def list_resource_events_after(
     )
     if through is not None:
         statement = statement.where(ResourceEvent.sequence <= through)
-    return list(session.scalars(statement.order_by(ResourceEvent.sequence)))
+    statement = statement.order_by(ResourceEvent.sequence)
+    if limit is not None:
+        if limit <= 0:
+            raise ValueError("limit must be positive")
+        statement = statement.limit(limit)
+    return list(session.scalars(statement))
 
 
 def delete_resource_events_before(session: Session, cutoff: datetime) -> int:

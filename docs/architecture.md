@@ -207,8 +207,17 @@ deletion. User deletion cascades both cursor and events.
 The web-server lifecycle owns a named hourly cleanup task. Events older than 30 days
 are deleted while the cursor high-water mark remains intact, allowing the replay
 transport to detect retention gaps. Redis is not an authority or publisher for this
-ledger. The SSE reader and frontend synchronization owner are separate later phases
-of issue #40 and are not part of the durable-ledger phase.
+ledger.
+
+`GET /api/resource-events/stream` is the authenticated read side. Its auth check and
+handshake use one function-local DB session that closes before the response begins;
+polls use separate short sessions. A fresh stream sends `hello` with `id: H`. A
+reconnect sends `hello` without an ID, replays only `L < sequence <= H`, then becomes
+live. Missing retained history, an internal sequence hole, or `L > H` produces one
+`resync` at `H`. Heartbeats are SSE comments. Every connection ends after at most 60
+seconds so native EventSource reconnect rechecks the session. Sequence and high-water
+JSON fields are decimal strings, matching SSE IDs without JavaScript precision loss.
+The frontend synchronization owner remains the separate third phase of issue #40.
 
 ## API Endpoints
 
@@ -217,6 +226,7 @@ of issue #40 and are not part of the durable-ledger phase.
 | GET | `/api/albums?offset=0&limit=50` | user | List the caller's albums (`q` title contains, `sort=newest\|oldest\|title`). `has_more` is explicit. |
 | GET | `/api/songs?offset=0&limit=50` | user | List the caller's songs (`album_id`, `q`, `sort`). `has_more` is explicit. |
 | GET | `/api/library/search` | user | Keyset search of the caller's album and song titles. `q` required; `next_cursor` is null iff `has_more` is false. Invalid or mismatched cursors are 422. |
+| GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay, gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |
 | GET/PUT | `/api/songs/{id}` | user | Get/update song |

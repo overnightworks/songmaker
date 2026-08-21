@@ -15,6 +15,9 @@ from songmaker_cli.middleware.csrf import (
     CsrfTokenMiddleware,
 )
 from songmaker_cli.middleware.rate_limit import IpRateLimitMiddleware
+from songmaker_cli.middleware.resource_stream_deadline import (
+    ResourceStreamDeadlineMiddleware,
+)
 from songmaker_cli.middleware.security_headers import SecurityHeadersMiddleware
 
 __all__ = [
@@ -25,6 +28,7 @@ __all__ = [
     "CsrfOriginMiddleware",
     "CsrfTokenMiddleware",
     "IpRateLimitMiddleware",
+    "ResourceStreamDeadlineMiddleware",
     "SecurityHeadersMiddleware",
     "get_current_user",
     "require_admin",

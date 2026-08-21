@@ -46,6 +46,8 @@ def test_redis_health_returns_false_on_error() -> None:
 def test_create_redis_returns_client() -> None:
     r = create_redis("redis://localhost:6379/0")
     assert r is not None
+    assert r.connection_pool.connection_kwargs["socket_connect_timeout"] == 2.0
+    assert r.connection_pool.connection_kwargs["socket_timeout"] == 2.0
 
 
 # ── RedisRateLimiter ─────────────────────────────────────────────
@@ -63,6 +65,16 @@ class TestRedisRateLimiter:
         limiter.is_allowed("10.0.0.1")
         limiter.is_allowed("10.0.0.1")
         assert limiter.is_allowed("10.0.0.1") is False
+
+    def test_counts_requests_with_identical_timestamps(self, fake_redis) -> None:
+        limiter = RedisRateLimiter(fake_redis, "rl:test", max_requests=2, window_seconds=60)
+        with patch("songmaker_cli.redis_client.time.time", return_value=1234.5):
+            assert limiter.is_allowed("10.0.0.1") is True
+            assert limiter.is_allowed("10.0.0.1") is True
+            assert limiter.is_allowed("10.0.0.1") is False
+            for _ in range(1_000):
+                assert limiter.is_allowed("10.0.0.1") is False
+            assert fake_redis.zcard("rl:test:10.0.0.1") == 2
 
     def test_different_ips_independent(self, fake_redis) -> None:
         limiter = RedisRateLimiter(fake_redis, "rl:test", max_requests=1, window_seconds=60)

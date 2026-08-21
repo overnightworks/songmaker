@@ -39,6 +39,7 @@ from songmaker_cli.middleware import (
     CsrfOriginMiddleware,
     CsrfTokenMiddleware,
     IpRateLimitMiddleware,
+    ResourceStreamDeadlineMiddleware,
     SecurityHeadersMiddleware,
 )
 from songmaker_cli.settings import get_settings
@@ -145,12 +146,14 @@ def create_app(
     app.state.session_cache = SessionCache(ctx.redis)
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
-    #   1. BodySizeLimitMiddleware  -- reject oversized bodies before processing
-    #   2. IpRateLimitMiddleware    -- rate-limit before auth/CSRF to bound cost
-    #   3. CsrfOriginMiddleware     -- reject cross-origin state-changing requests
-    #   4. CsrfTokenMiddleware      -- verify double-submit CSRF token
-    #   5. AccessLogMiddleware       -- log all requests (after security checks)
-    #   6. SecurityHeadersMiddleware -- add security headers to responses
+    #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
+    #   2. CORS middleware            -- add configured cross-origin policy
+    #   3. BodySizeLimitMiddleware    -- reject oversized bodies before processing
+    #   4. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
+    #   5. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
+    #   6. CsrfTokenMiddleware        -- verify double-submit CSRF token
+    #   7. AccessLogMiddleware        -- log all requests (after security checks)
+    #   8. SecurityHeadersMiddleware  -- add security headers to responses
     # WARNING: reordering these lines changes security behavior.
     script_hashes = _compute_script_hashes(project_root / "frontend" / "build" / "index.html")
     app.add_middleware(SecurityHeadersMiddleware, script_hashes=script_hashes)
@@ -182,6 +185,7 @@ def create_app(
     else:
         cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:(8080|5173))?$"
     app.add_middleware(CORSMiddleware, **cors_kwargs)
+    app.add_middleware(ResourceStreamDeadlineMiddleware)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(

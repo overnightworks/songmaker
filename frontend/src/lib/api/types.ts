@@ -204,6 +204,23 @@ export interface JobItem {
 	completed_at?: string | null;
 }
 
+export interface ResourceHelloEvent {
+	high_water_mark: string;
+}
+
+export interface ResourceResyncEvent {
+	high_water_mark: string;
+}
+
+export interface GenerationCreatedResourceEvent {
+	kind: 'generation.created';
+	sequence: string;
+	resource_type: 'song';
+	resource_id: string;
+	generation_id: string;
+	created_at: string;
+}
+
 export interface Capabilities {
 	claude_api: boolean;
 	claude_cli: boolean;

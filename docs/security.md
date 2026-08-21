@@ -33,8 +33,11 @@ monotonic sequence allocator and event row participate in the same transaction a
 the generation, with unique constraints on `(user_id, sequence)` and
 `(kind, generation_id)`. Cursor and event rows cascade only with their owning user;
 historical song/generation identifiers are intentionally not foreign keys. The
-durable ledger has no public endpoint in its first phase; authenticated SSE access
-and its strict same-user filter are delivered and reviewed separately in issue #40.
+authenticated SSE endpoint reads only the exact authenticated user partition; admin
+role does not bypass this filter and frames contain no user ID. Authentication and
+the initial cursor reads finish in a function-local DB session before streaming
+begins. Polls use independent short sessions, and every connection ends after at
+most 60 seconds so deactivation or session expiry is enforced on reconnect.
 
 ## CSRF Protection
 
@@ -79,6 +82,19 @@ All requests are subject to a global per-IP rate limit (default: 120 requests/mi
 
 Configure via env vars: `LOGIN_RATE_LIMIT`, `LOGIN_LOCKOUT_THRESHOLD`, `LOGIN_LOCKOUT_WINDOW`, `GENERATION_RATE_LIMIT_USER`, `GENERATION_RATE_LIMIT_ADMIN`, `SCORING_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_ADMIN`, `CHAT_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_ADMIN`, `MAX_QUEUE_DEPTH`, `IP_RATE_LIMIT`.
 
+### Resource-event streams
+
+The global IP limit is supplemented by a fail-closed per-user opening limit of 12
+streams per minute; rejected attempts are not retained in the bounded Redis window.
+Redis leases cap live streams at six per user and at most 12
+globally, reduced automatically when the configured DB pool has less spare capacity.
+If reserving one non-stream DB slot leaves no capacity, stream admission returns 503.
+Acquire is one Lua operation across user and global sorted sets; UUID lease members
+carry absolute expiry scores and release targets that exact token on disconnect. A
+crashed process cannot retain a slot beyond 65 seconds. Lease release runs off the async loop; the
+Redis client bounds connect and socket waits to two seconds, with expiry as the final
+fallback. Redis failure returns 503 rather than opening an unbounded poller.
+
 ## Security Headers
 
 All responses include:
@@ -89,7 +105,7 @@ All responses include:
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only; `X-Forwarded-Proto` only honored from `TRUSTED_PROXIES`)
-- `Cache-Control: no-store` (API responses only — prevents caching of authenticated data)
+- `Cache-Control: no-store` (API responses only — prevents caching of authenticated data). The exact resource-event SSE path uses `no-cache, no-store` so intermediaries do not cache or transform its reconnect stream; other API and SSE paths retain `no-store`.
 
 ## CORS
 
@@ -135,6 +151,13 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 ## Request Timeout
 
 Uvicorn's `timeout-keep-alive` is set to `REQUEST_TIMEOUT` (default 30s). Idle connections exceeding this are closed. For production, use a reverse proxy timeout (e.g., nginx `proxy_read_timeout`) for full request-level timeout enforcement.
+
+The resource-event SSE has its own monotonic 60-second wall. DB polling runs outside
+the async event loop, is awaited only for the remaining wall time, and no DB session
+spans an SSE yield or sleep. The response applies the same wall around ASGI sends, so
+a slow reader cannot keep the socket or lease alive after the deadline. The endpoint
+emits 15-second comment heartbeats so a correctly configured proxy sees activity
+before the deliberate reconnect.
 
 ## Claude Chat Security
 

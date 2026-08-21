@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,7 @@ from songmaker_cli.constants import (
     REDIS_METRICS_HTTP_KEY,
     REDIS_METRICS_TOTAL_KEY,
     REDIS_SESSION_PREFIX,
+    REDIS_SOCKET_TIMEOUT_SECONDS,
     REDIS_USER_SESSIONS_PREFIX,
 )
 
@@ -24,7 +26,12 @@ if TYPE_CHECKING:
 def create_redis(url: str) -> Redis:
     from redis import Redis as RedisClient
 
-    return RedisClient.from_url(url, decode_responses=True)
+    return RedisClient.from_url(
+        url,
+        decode_responses=True,
+        socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+        socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+    )
 
 
 def redis_health(r: Redis) -> bool:
@@ -50,18 +57,102 @@ class RedisRateLimiter:
     local now = tonumber(ARGV[1])
     local window = tonumber(ARGV[2])
     local max_requests = tonumber(ARGV[3])
+    local member = ARGV[4]
     redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
-    redis.call('ZADD', key, now, tostring(now))
     local count = redis.call('ZCARD', key)
+    if count >= max_requests then return count + 1 end
+    redis.call('ZADD', key, now, member)
     redis.call('EXPIRE', key, window)
-    return count
+    return count + 1
     """
 
     def is_allowed(self, ip: str) -> bool:
         now = time.time()
         key = f"{self._prefix}:{ip}"
-        count = self._redis.eval(self._LUA_SLIDING_WINDOW, 1, key, now, self._window, self._max)
+        count = self._redis.eval(
+            self._LUA_SLIDING_WINDOW,
+            1,
+            key,
+            now,
+            self._window,
+            self._max,
+            uuid.uuid4().hex,
+        )
         return count <= self._max
+
+
+class RedisConcurrentLeaseLimiter:
+    """Atomic expiring per-scope and global concurrency leases."""
+
+    _LUA_ACQUIRE = """
+    local redis_time = redis.call('TIME')
+    local now = tonumber(redis_time[1]) + (tonumber(redis_time[2]) / 1000000)
+    local lease_seconds = tonumber(ARGV[1])
+    local scope_max = tonumber(ARGV[2])
+    local global_max = tonumber(ARGV[3])
+    local token = ARGV[4]
+    local expires_at = now + lease_seconds
+
+    redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now)
+    redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', now)
+    if redis.call('ZCARD', KEYS[1]) >= scope_max then return 0 end
+    if redis.call('ZCARD', KEYS[2]) >= global_max then return 0 end
+
+    redis.call('ZADD', KEYS[1], expires_at, token)
+    redis.call('ZADD', KEYS[2], expires_at, token)
+    redis.call('EXPIRE', KEYS[1], math.ceil(lease_seconds) + 1)
+    redis.call('EXPIRE', KEYS[2], math.ceil(lease_seconds) + 1)
+    return 1
+    """
+
+    _LUA_RELEASE = """
+    redis.call('ZREM', KEYS[1], ARGV[1])
+    redis.call('ZREM', KEYS[2], ARGV[1])
+    return 1
+    """
+
+    def __init__(
+        self,
+        redis: Redis,
+        *,
+        scope_prefix: str,
+        global_key: str,
+        max_per_scope: int,
+        max_global: int,
+        lease_seconds: int,
+    ) -> None:
+        self._redis = redis
+        self._scope_prefix = scope_prefix
+        self._global_key = global_key
+        self._max_per_scope = max_per_scope
+        self._max_global = max_global
+        self._lease_seconds = lease_seconds
+
+    def _scope_key(self, scope_id: str) -> str:
+        return f"{self._scope_prefix}:{scope_id}"
+
+    def acquire(self, scope_id: str) -> str | None:
+        token = uuid.uuid4().hex
+        acquired = self._redis.eval(
+            self._LUA_ACQUIRE,
+            2,
+            self._scope_key(scope_id),
+            self._global_key,
+            self._lease_seconds,
+            self._max_per_scope,
+            self._max_global,
+            token,
+        )
+        return token if acquired == 1 else None
+
+    def release(self, scope_id: str, token: str) -> None:
+        self._redis.eval(
+            self._LUA_RELEASE,
+            2,
+            self._scope_key(scope_id),
+            self._global_key,
+            token,
+        )
 
 
 class RedisHttpMetrics:

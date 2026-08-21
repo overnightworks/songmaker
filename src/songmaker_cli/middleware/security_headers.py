@@ -6,6 +6,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import RESOURCE_EVENT_STREAM_PATH
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -28,7 +29,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         response = await call_next(request)
-        if request.url.path.startswith("/api/"):
+        if request.url.path == RESOURCE_EVENT_STREAM_PATH:
+            response.headers["Cache-Control"] = "no-cache, no-store"
+        elif request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
