@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.config import audio_file_path
 from songmaker_cli.constants import MODEL_DEFAULT_MODE
-from songmaker_cli.db.queries import create_generation, record_generation_created
+from songmaker_cli.db.queries import create_generation
 
 log = logging.getLogger(__name__)
 
@@ -67,12 +67,6 @@ def reimport_files(
         model_mode=MODEL_DEFAULT_MODE,
         seed=seed,
         wav_path=wav_rel,
-    )
-    record_generation_created(
-        session,
-        user_id=user_id,
-        song_id=song_id,
-        generation_id=gen.id,
     )
 
     log.info("Reimported %s as generation %s for song %s", mp3_file or wav_file, gen.id, song_id)

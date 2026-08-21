@@ -9,10 +9,6 @@
 	import { APP_NAME } from '$lib/constants';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
-	import {
-		startLibraryResourceSync,
-		stopLibraryResourceSync
-	} from '$lib/stores/librarySearch';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { canGoBack, goBack, isLibraryWorkspacePath } from '$lib/stores/navigation';
 	import { initTheme } from '$lib/stores/ui';
@@ -45,15 +41,6 @@
 		sheet.textContent = HITBOX_STYLE;
 		document.head.append(sheet);
 		return () => sheet.remove();
-	});
-
-	$effect(() => {
-		if (isPublicRoute || !me) {
-			stopLibraryResourceSync();
-			return;
-		}
-		startLibraryResourceSync();
-		return () => stopLibraryResourceSync();
 	});
 
 	async function initAuth() {

@@ -150,15 +150,6 @@ def _sync_sessions(ctx: AppContext, session_cache) -> int:
     return synced
 
 
-def _purge_expired_resource_events(ctx: AppContext) -> int:
-    from songmaker_cli.db.queries.resource_events import purge_expired_resource_events
-
-    with ctx.db() as db:
-        purged = purge_expired_resource_events(db)
-        db.commit()
-    return purged
-
-
 async def session_sync_loop(app: FastAPI) -> None:
     from songmaker_cli.constants import (
         REDIS_SESSION_SYNC_INTERVAL_SECONDS,
@@ -182,12 +173,9 @@ async def session_sync_loop(app: FastAPI) -> None:
                 continue
             try:
                 synced = await asyncio.to_thread(_sync_sessions, ctx, session_cache)
-                purged = await asyncio.to_thread(_purge_expired_resource_events, ctx)
                 consecutive_failures = 0
                 if synced:
                     log.info("Session sync: updated %d sessions", synced)
-                if purged:
-                    log.info("Session sync: purged %d expired resource events", purged)
             finally:
                 await asyncio.to_thread(ctx.redis.delete, SESSION_SYNC_LOCK_KEY)
         except Exception:

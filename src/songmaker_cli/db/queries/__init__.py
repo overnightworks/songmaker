@@ -253,25 +253,6 @@ from songmaker_cli.db.queries.rate_limits import resolve_rate_limit as resolve_r
 from songmaker_cli.db.queries.rate_limits import (
     upsert_rate_limit_setting as upsert_rate_limit_setting,
 )
-from songmaker_cli.db.queries.resource_events import (
-    get_oldest_retained_sequence as get_oldest_retained_sequence,
-)
-from songmaker_cli.db.queries.resource_events import (
-    get_user_high_water_mark as get_user_high_water_mark,
-)
-from songmaker_cli.db.queries.resource_events import has_retention_gap as has_retention_gap
-from songmaker_cli.db.queries.resource_events import (
-    list_user_events_after as list_user_events_after,
-)
-from songmaker_cli.db.queries.resource_events import (
-    lock_user_resource_cursor as lock_user_resource_cursor,
-)
-from songmaker_cli.db.queries.resource_events import (
-    purge_expired_resource_events as purge_expired_resource_events,
-)
-from songmaker_cli.db.queries.resource_events import (
-    record_generation_created as record_generation_created,
-)
 from songmaker_cli.db.queries.settings import create_preset as create_preset
 from songmaker_cli.db.queries.settings import delete_preset as delete_preset
 from songmaker_cli.db.queries.settings import (

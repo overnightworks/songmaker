@@ -2,16 +2,10 @@
 	import { onMount } from 'svelte';
 	import { albumList, selectedSong, selectedGeneration, selectedAlbumId } from '$lib/stores/player';
 	import { hydrateLibraryFromHistory, librarySurface } from '$lib/stores/libraryContext';
-	import {
-		resourceSync,
-		retryResourceSync,
-		waitForResourceReady
-	} from '$lib/stores/librarySearch';
 	import { detailTab, goBack, initNavigation, openLibraryCreate } from '$lib/stores/navigation';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
 	import { loadActiveModels } from '$lib/stores/presets';
 	import { addToast } from '$lib/stores/toast';
-	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
 	import SongList from '$lib/components/SongList.svelte';
 	import CreateForm from '$lib/components/CreateForm.svelte';
 	import SongDetailView from '$lib/components/SongDetailView.svelte';
@@ -22,7 +16,6 @@
 
 	let loading = $state(true);
 	let loadError = $state(false);
-	let navCleanup: (() => void) | undefined;
 
 	const song = $derived($selectedSong);
 	const activeGen = $derived($selectedGeneration);
@@ -39,69 +32,34 @@
 	);
 
 	onMount(() => {
-		void bootstrapLibrary().then((ok) => {
-			if (ok) navCleanup = initNavigation();
-		});
-		return () => navCleanup?.();
+		let cleanup: (() => void) | undefined;
+
+		(async () => {
+			try {
+				const [browseOk] = await Promise.all([hydrateLibraryFromHistory(), loadActiveModels()]);
+				if (!browseOk) {
+					addToast('Failed to load', 'error');
+					loadError = true;
+				}
+			} catch (e) {
+				addToast(e instanceof Error ? e.message : 'Failed to load', 'error');
+				loadError = true;
+			} finally {
+				loading = false;
+			}
+			if (!loadError) {
+				cleanup = initNavigation();
+			}
+		})();
+
+		return () => cleanup?.();
 	});
-
-	async function bootstrapLibrary(): Promise<boolean> {
-		try {
-			const syncOk = await waitForResourceReady();
-			if (!syncOk) {
-				loadError = true;
-				return false;
-			}
-			const browseOk = await hydrateLibraryFromHistory();
-			await loadActiveModels();
-			if (!browseOk) {
-				addToast('Failed to load', 'error');
-				loadError = true;
-				return false;
-			}
-			return true;
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : RESOURCE_SYNC_ERROR, 'error');
-			loadError = true;
-			return false;
-		} finally {
-			loading = false;
-		}
-	}
-
-	async function retryLoad(): Promise<void> {
-		loading = true;
-		loadError = false;
-		try {
-			const syncOk = await retryResourceSync();
-			if (!syncOk) {
-				loadError = true;
-				return;
-			}
-			const browseOk = await hydrateLibraryFromHistory();
-			await loadActiveModels();
-			if (!browseOk) {
-				loadError = true;
-				return;
-			}
-			navCleanup?.();
-			navCleanup = initNavigation();
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : RESOURCE_SYNC_ERROR, 'error');
-			loadError = true;
-		} finally {
-			loading = false;
-		}
-	}
 </script>
 
 {#if loading}
 	<div class="loading">Loading...</div>
 {:else if loadError}
-	<div class="error" role="alert">
-		<p>{$resourceSync.error || RESOURCE_SYNC_ERROR}</p>
-		<button class="retry-btn" onclick={() => retryLoad()}>{LIBRARY_RETRY_LABEL}</button>
-	</div>
+	<div class="error">Failed to load. Please refresh.</div>
 {:else}
 	<div class="workspace" class:has-detail={hasDetail}>
 		<SongList
@@ -198,24 +156,6 @@
 		font-style: italic;
 		flex-direction: column;
 		gap: 16px;
-	}
-
-	.retry-btn {
-		display: block;
-		margin: 12px auto 0;
-		padding: 6px 12px;
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text-muted);
-		font-size: var(--label-font-size);
-		font-family: var(--font-body);
-		cursor: pointer;
-	}
-
-	.retry-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
 	}
 
 	.error {

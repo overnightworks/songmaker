@@ -11,16 +11,7 @@ import pytest
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.models import (
-    Album,
-    Generation,
-    Job,
-    Score,
-    Song,
-    User,
-    UserResourceEvent,
-    Version,
-)
+from songmaker_cli.db.models import Album, Generation, Job, Score, Song, Version
 from songmaker_cli.db.queries import get_generation, get_job, update_job_status
 from songmaker_cli.jobs import (
     GenerationContext,
@@ -70,9 +61,6 @@ def db_factory(tmp_path: Path):
 @pytest.fixture()
 def seeded_db(db_factory, tmp_path: Path):
     with db_factory() as session:
-        session.add(User(
-            id="u1", username="gen-user", password_hash="unused", role="user",
-        ))
         session.add(Album(id="rock", title="Rock", artist="Band"))
         session.add(Song(
             id="s1", title="Song One", album_id="rock",
@@ -154,11 +142,6 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
         assert len(gens) == 1
         assert gens[0].seed == 42
         assert gens[0].model_mode == "sft"
-        events = session.query(UserResourceEvent).filter_by(user_id="u1").all()
-        assert len(events) == 1
-        assert events[0].song_id == "s1"
-        assert events[0].generation_id == gens[0].id
-        assert events[0].sequence == 1
 
 
 def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:

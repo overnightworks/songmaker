@@ -16,7 +16,6 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
-    Index,
     Integer,
     String,
     Text,
@@ -584,31 +583,3 @@ class AuditLog(Base):
     resource_id: Mapped[str] = mapped_column(String(64), default="")
     detail: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, index=True)
-
-
-class UserResourceCursor(Base):
-    __tablename__ = "user_resource_cursors"
-
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
-    )
-    high_water_mark: Mapped[int] = mapped_column(BigInteger, default=0)
-
-
-class UserResourceEvent(Base):
-    __tablename__ = "user_resource_events"
-    __table_args__ = (
-        UniqueConstraint("user_id", "sequence", name="uq_user_resource_event_seq"),
-        UniqueConstraint("generation_id", name="uq_user_resource_event_generation"),
-        Index("ix_user_resource_events_created_at", "created_at"),
-    )
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True,
-    )
-    sequence: Mapped[int] = mapped_column(BigInteger)
-    kind: Mapped[str] = mapped_column(String(40))
-    song_id: Mapped[str] = mapped_column(String(36))
-    generation_id: Mapped[str] = mapped_column(String(36))
-    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)

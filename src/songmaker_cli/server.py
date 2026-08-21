@@ -63,11 +63,7 @@ def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
-    from songmaker_cli.db.queries import (
-        cleanup_old_login_attempts,
-        delete_expired_sessions,
-        purge_expired_resource_events,
-    )
+    from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
     ctx: AppContext = app.state.ctx
@@ -79,9 +75,6 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         pruned = cleanup_old_login_attempts(session)
         if pruned:
             log.info("Startup: pruned %d old login attempts", pruned)
-        expired_events = purge_expired_resource_events(session)
-        if expired_events:
-            log.info("Startup: purged %d expired resource events", expired_events)
         session.commit()
 
     auto_setup_admin(ctx)
