@@ -230,10 +230,14 @@ and loaded search hits through explicit adapters; events for songs that are stil
 in flight stay queued until those songs enter the loaded set. History restore
 awaits every expanded album before the snapshot is ready so those tracks are in
 the loaded set for the buffer flush. Window `focus` and document `visibilitychange`
-revalidate the same loaded set without resetting the open song editor; the editor
-reloads only when the selected song id changes or the user explicitly applies a
-fresh song. A live refresh error stays visible across the 60-second reconnect
-and is retried on the next `hello`; a later successful fetch clears Retry.
+revalidate the selected song and any failed refresh, not the whole browse page —
+a 200-song library would otherwise exceed the 120/min IP limiter. Missed takes for
+other loaded songs arrive through EventSource replay. Song fetches run with bounded
+concurrency. A 404 drops the song from the loaded set instead of retrying forever.
+The open song editor reloads only when the selected song id changes or the user
+explicitly applies a fresh song, including after deleting the version on screen.
+A live refresh error stays visible across the 60-second reconnect and is retried
+on the next `hello`; a later successful fetch clears Retry.
 Generation jobs no longer fetch the song themselves. The job tab still shows its
 success toast; other tabs update silently. Bootstrap failures retry a bounded
 number of times, then surface one accessible Retry status rather than hanging on

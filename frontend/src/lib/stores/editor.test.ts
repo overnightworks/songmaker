@@ -183,13 +183,18 @@ describe('handleSave', () => {
 
 describe('handleDeleteVersion', () => {
 	it('calls deleteVersion and refreshes', async () => {
-		const { deleteVersion, fetchSong } = await import('$lib/api/client');
+		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
+		loadSongData(makeSong({ lyrics: 'deleted version' }));
 		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
-		vi.mocked(fetchSong).mockResolvedValueOnce(makeSong());
+		vi.mocked(fetchSong).mockResolvedValueOnce(makeSong({ lyrics: 'remaining lyrics' }));
+		vi.mocked(fetchVersions).mockResolvedValueOnce([
+			makeVersion({ lyrics: 'remaining lyrics', prompt: 'rock' })
+		]);
 
 		await handleDeleteVersion('s1', 'v1', false);
 
 		expect(deleteVersion).toHaveBeenCalledWith('v1', false);
+		expect(get(editLyrics)).toBe('remaining lyrics');
 	});
 
 	it('shows error on failure', async () => {

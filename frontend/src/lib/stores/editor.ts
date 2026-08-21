@@ -217,6 +217,8 @@ export async function handleDeleteVersion(
 		const updated = await fetchSong(songId);
 		replaceSongInList(updated);
 		await loadVersions(songId);
+		if (get(versions)[0]) loadVersion(0);
+		else loadSongData(updated);
 	} catch {
 		showStatus('Delete failed');
 	}

@@ -22,6 +22,7 @@ vi.mock('$lib/api/songs', () => ({
 
 import {
 	applySyncedSong,
+	forgetSyncedSong,
 	changeLibrarySort,
 	groupSearchHits,
 	librarySearch,
@@ -415,6 +416,25 @@ describe('applySyncedSong', () => {
 			song: expect.objectContaining({ title: 'Search Updated' })
 		});
 		expect(listLoadedSongIds().sort()).toEqual(['s-search', 's1']);
+	});
+
+	it('forgetSyncedSong removes browse, search, and selection', () => {
+		songList.set([song({ id: 's1' }), song({ id: 's2' })]);
+		selectedSongId.set('s1');
+		librarySearch.set({
+			q: 'Tide',
+			status: 'ready',
+			error: null,
+			items: [
+				{ type: 'song', song: song({ id: 's1' }), album_id: 'a1', album_title: 'Nachtstrom' }
+			],
+			hasMore: false,
+			nextCursor: null
+		});
+		forgetSyncedSong('s1');
+		expect(get(songList).map((item) => item.id)).toEqual(['s2']);
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(librarySearch).items).toEqual([]);
 	});
 
 	it('does not insert an unlisted unselected song into browse', () => {

@@ -15,15 +15,19 @@ import {
 	RESOURCE_EVENT_RESYNC,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
-	RESOURCE_SYNC_ERROR
+	RESOURCE_SYNC_FETCH_CONCURRENCY,
+	RESOURCE_SYNC_ERROR,
+	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
 } from '$lib/constants';
 import { cancelLibraryHistoryApply, hydrateLibraryFromHistory } from '$lib/stores/libraryContext';
 import {
 	applySyncedSong,
 	cancelLibraryDataLoads,
+	forgetSyncedSong,
 	listLoadedSongIds,
 	watchLoadedSongIds
 } from '$lib/stores/librarySearch';
+import { selectedSongId } from '$lib/stores/player';
 import { clearAuth } from '$lib/stores/auth';
 
 export type ResourceSyncStatus =
@@ -56,6 +60,8 @@ export interface ResourceSyncDeps {
 	fetchSong: (songId: string) => Promise<SongItem>;
 	applySong: (song: SongItem) => void;
 	listLoadedSongIds: () => string[];
+	listPrioritySongIds: () => string[];
+	forgetSong: (songId: string) => void;
 	watchLoadedSongs: (onChange: () => void) => () => void;
 	loadSnapshot: () => Promise<boolean>;
 	cancelSnapshot: () => void;
@@ -88,6 +94,7 @@ export class ResourceSyncController {
 	private flushing: Promise<void> | null = null;
 	private readyWaiters: Array<(ok: boolean) => void> = [];
 	private visibilityBound = false;
+	private visibilityTimer: ReturnType<typeof setTimeout> | null = null;
 	private loadedWatchUnsub: (() => void) | null = null;
 	private loadedNotifyQueued = false;
 	private syncedOnce = false;
@@ -131,7 +138,7 @@ export class ResourceSyncController {
 			this.restartConnection();
 			return this.waitForReady();
 		}
-		const retryIds = new Set([...this.failedSongIds, ...this.deps.listLoadedSongIds()]);
+		const retryIds = new Set([...this.failedSongIds, ...this.deps.listPrioritySongIds()]);
 		this.failedSongIds.clear();
 		for (const songId of retryIds) {
 			this.invalidateSong(songId);
@@ -152,9 +159,11 @@ export class ResourceSyncController {
 	async handleVisibility(): Promise<void> {
 		if (!this.started || !this.syncedOnce) return;
 		if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-		for (const songId of this.deps.listLoadedSongIds()) {
+		const retryIds = new Set([...this.failedSongIds, ...this.deps.listPrioritySongIds()]);
+		for (const songId of retryIds) {
 			this.invalidateSong(songId);
 		}
+		if (this.pendingSongIds.size === 0) return;
 		await this.flushPending(this.epoch);
 	}
 
@@ -197,6 +206,7 @@ export class ResourceSyncController {
 		this.started = false;
 		this.closeSource();
 		this.unbindVisibility();
+		this.clearVisibilityTimer();
 		this.unbindLoadedWatch();
 		this.abandonEpoch();
 		this.syncedOnce = false;
@@ -458,7 +468,9 @@ export class ResourceSyncController {
 		while (this.isCurrentEpoch(epoch) && this.pendingSongIds.size > 0) {
 			const songIds = [...this.pendingSongIds];
 			this.pendingSongIds.clear();
-			await Promise.all(songIds.map((songId) => this.fetchAndApply(songId, epoch)));
+			await runLimited(songIds, RESOURCE_SYNC_FETCH_CONCURRENCY, (songId) =>
+				this.fetchAndApply(songId, epoch)
+			);
 		}
 	}
 
@@ -477,6 +489,12 @@ export class ResourceSyncController {
 		} catch (err) {
 			if (!this.isCurrentEpoch(epoch)) return;
 			if (this.songRevisions.get(songId) !== revision) return;
+			if (err instanceof ApiError && err.status === 404) {
+				this.failedSongIds.delete(songId);
+				this.deps.forgetSong(songId);
+				this.clearLiveErrorIfHealed();
+				return;
+			}
 			this.failedSongIds.add(songId);
 			this.setVisibleError(errorMessage(err));
 		}
@@ -558,6 +576,7 @@ export class ResourceSyncController {
 	private unbindVisibility(): void {
 		if (!this.visibilityBound || typeof window === 'undefined') return;
 		this.visibilityBound = false;
+		this.clearVisibilityTimer();
 		window.removeEventListener('focus', this.onVisibility);
 		if (typeof document !== 'undefined') {
 			document.removeEventListener('visibilitychange', this.onVisibility);
@@ -565,8 +584,18 @@ export class ResourceSyncController {
 	}
 
 	private onVisibility = (): void => {
-		void this.handleVisibility();
+		this.clearVisibilityTimer();
+		this.visibilityTimer = setTimeout(() => {
+			this.visibilityTimer = null;
+			void this.handleVisibility();
+		}, RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
 	};
+
+	private clearVisibilityTimer(): void {
+		if (this.visibilityTimer === null) return;
+		clearTimeout(this.visibilityTimer);
+		this.visibilityTimer = null;
+	}
 
 	private bindLoadedWatch(): void {
 		if (this.loadedWatchUnsub) return;
@@ -590,6 +619,25 @@ export class ResourceSyncController {
 			void this.flushPending(this.epoch);
 		});
 	};
+}
+
+async function runLimited<T>(
+	items: readonly T[],
+	limit: number,
+	worker: (item: T) => Promise<void>
+): Promise<void> {
+	if (items.length === 0) return;
+	let next = 0;
+	const workers = Math.min(limit, items.length);
+	await Promise.all(
+		Array.from({ length: workers }, async () => {
+			while (next < items.length) {
+				const current = next;
+				next += 1;
+				await worker(items[current]);
+			}
+		})
+	);
 }
 
 function errorMessage(err: unknown): string {
@@ -627,6 +675,11 @@ function librarySyncDeps(): ResourceSyncDeps {
 		fetchSong,
 		applySong: applySyncedSong,
 		listLoadedSongIds,
+		listPrioritySongIds: () => {
+			const selected = get(selectedSongId);
+			return selected ? [selected] : [];
+		},
+		forgetSong: forgetSyncedSong,
 		watchLoadedSongs: watchLoadedSongIds,
 		loadSnapshot: hydrateLibraryFromHistory,
 		cancelSnapshot: cancelLibrarySnapshot,

@@ -11,7 +11,14 @@ import {
 	LIBRARY_SEARCH_PAGE_SIZE,
 	LIBRARY_SONG_PAGE_SIZE
 } from '$lib/constants';
-import { albumList, selectedSongId, songList, upsertSongInList } from '$lib/stores/player';
+import {
+	albumList,
+	removeSongFromList,
+	selectedGenerationId,
+	selectedSongId,
+	songList,
+	upsertSongInList
+} from '$lib/stores/player';
 
 export type LibrarySearchStatus = 'idle' | 'loading' | 'error' | 'ready';
 
@@ -265,6 +272,18 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 		}));
 		return false;
 	}
+}
+
+export function forgetSyncedSong(songId: string): void {
+	removeSongFromList(songId);
+	if (get(selectedSongId) === songId) {
+		selectedSongId.set(null);
+		selectedGenerationId.set(null);
+	}
+	librarySearch.update((state) => ({
+		...state,
+		items: state.items.filter((hit) => hit.type !== 'song' || hit.song.id !== songId)
+	}));
 }
 
 export function applySyncedSong(song: SongItem): void {

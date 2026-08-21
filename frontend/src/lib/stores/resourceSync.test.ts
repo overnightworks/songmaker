@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
+import { ApiError } from '$lib/api/fetch';
 import type { GenerationCreatedResourceEvent, GenerationItem, SongItem } from '$lib/api/types';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
-	RESOURCE_SYNC_ERROR
+	RESOURCE_SYNC_ERROR,
+	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
 } from '$lib/constants';
 import {
 	EMPTY_RESOURCE_SYNC,
@@ -146,6 +148,8 @@ function setup(options?: {
 	loadSnapshot?: ResourceSyncDeps['loadSnapshot'];
 	fetchSong?: ResourceSyncDeps['fetchSong'];
 	listLoadedSongIds?: ResourceSyncDeps['listLoadedSongIds'];
+	listPrioritySongIds?: ResourceSyncDeps['listPrioritySongIds'];
+	forgetSong?: ResourceSyncDeps['forgetSong'];
 	probeAuth?: ResourceSyncDeps['probeAuth'];
 	onUnauthorized?: ResourceSyncDeps['onUnauthorized'];
 	applySong?: ResourceSyncDeps['applySong'];
@@ -157,6 +161,7 @@ function setup(options?: {
 	const fetchCalls: string[] = [];
 	const snapshotStarts: number[] = [];
 	const cancelled: number[] = [];
+	const forgotten: string[] = [];
 	const loadedWatch: { notify: (() => void) | null } = { notify: null };
 	const innerFetch =
 		options?.fetchSong ??
@@ -182,6 +187,11 @@ function setup(options?: {
 				options?.applySong?.(item);
 			},
 			listLoadedSongIds: options?.listLoadedSongIds ?? (() => ['s1']),
+			listPrioritySongIds: options?.listPrioritySongIds ?? (() => ['s1']),
+			forgetSong: (songId) => {
+				forgotten.push(songId);
+				options?.forgetSong?.(songId);
+			},
 			watchLoadedSongs:
 				options?.watchLoadedSongs ??
 				((onChange) => {
@@ -212,6 +222,7 @@ function setup(options?: {
 		fetchCalls,
 		snapshotStarts,
 		cancelled,
+		forgotten,
 		loadedWatch
 	};
 }
@@ -227,6 +238,7 @@ beforeEach(() => {
 afterEach(() => {
 	resetResourceSyncForTests();
 	vi.unstubAllGlobals();
+	vi.useRealTimers();
 });
 
 describe('resource sync interleavings', () => {
@@ -402,9 +414,10 @@ describe('resource sync owner', () => {
 		expect(get(store).highWaterMark).toBe('4');
 	});
 
-	it('focus revalidation fetches selected and currently loaded songs', async () => {
+	it('focus revalidation fetches the selected song, not the whole browse page', async () => {
 		const { controller, sources, fetchCalls } = setup({
-			listLoadedSongIds: () => ['s1', 's2']
+			listLoadedSongIds: () => ['s1', 's2', 's3'],
+			listPrioritySongIds: () => ['s1']
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
@@ -412,7 +425,7 @@ describe('resource sync owner', () => {
 		await controller.waitForReady();
 		const before = fetchCalls.length;
 		await controller.handleVisibility();
-		expect(fetchCalls.slice(before).sort()).toEqual(['s1', 's2']);
+		expect(fetchCalls.slice(before)).toEqual(['s1']);
 	});
 
 	it('refresh errors are visible and retryable', async () => {
@@ -614,9 +627,11 @@ describe('resource sync owner', () => {
 		expect(get(store).error).toBeNull();
 	});
 
-	it('revalidates on document visibilitychange', async () => {
+	it('revalidates the selected song on document visibilitychange', async () => {
+		vi.useFakeTimers();
 		const { controller, sources, fetchCalls } = setup({
-			listLoadedSongIds: () => ['s1', 's2']
+			listLoadedSongIds: () => ['s1', 's2'],
+			listPrioritySongIds: () => ['s1']
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
@@ -628,8 +643,28 @@ describe('resource sync owner', () => {
 			value: 'visible'
 		});
 		document.dispatchEvent(new Event('visibilitychange'));
+		document.dispatchEvent(new Event('visibilitychange'));
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
 		await flush();
-		expect(fetchCalls.slice(before).sort()).toEqual(['s1', 's2']);
+		expect(fetchCalls.slice(before)).toEqual(['s1']);
+		vi.useRealTimers();
+	});
+
+	it('drops a 404 song instead of retrying it forever', async () => {
+		const { controller, sources, store, forgotten } = setup({
+			fetchSong: async () => {
+				throw new ApiError(404, 'Song not found', '/api/songs/s1');
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+		expect(forgotten).toEqual(['s1']);
+		expect(get(store).status).toBe('live');
+		expect(get(store).error).toBeNull();
 	});
 });
 
