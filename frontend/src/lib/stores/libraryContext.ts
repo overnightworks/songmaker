@@ -18,7 +18,8 @@ import {
 	librarySearch,
 	librarySort,
 	restoreLibraryBrowse,
-	restoreLibrarySearch
+	restoreLibrarySearch,
+	syncLibrarySearch
 } from '$lib/stores/librarySearch';
 import {
 	albumList,
@@ -38,6 +39,7 @@ import {
 import { CREATED_SORTS } from '$lib/utils/recency';
 
 export type LibrarySurface = 'browse' | 'detail' | 'create';
+export type DetailTab = 'generations' | 'edit' | 'chat';
 
 export interface LibraryHistoryState {
 	kind: typeof LIBRARY_HISTORY_KIND;
@@ -56,18 +58,28 @@ export interface LibraryHistoryState {
 	playlistId: string | null;
 	expandedAlbumIds: string[];
 	scrollAnchor: number;
+	detailTab?: DetailTab;
 }
 
 export const librarySection = writable<LibrarySection>(LIBRARY_DEFAULT_SECTION);
 export const librarySurface = writable<LibrarySurface>('browse');
+export const detailTab = writable<DetailTab>('generations');
 export const expandedAlbumIds = writable<ReadonlySet<string>>(new Set());
 export const libraryScrollAnchor = writable(0);
 
 const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail', 'create']);
+const DETAIL_TABS: ReadonlySet<DetailTab> = new Set(['generations', 'edit', 'chat']);
 
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
 let historyApplyGeneration = 0;
+
+const EMPTY_MODE_BAGS: Record<LibrarySection, LibraryHistoryState | null> = {
+	albums: null,
+	playlists: null
+};
+
+let modeBags: Record<LibrarySection, LibraryHistoryState | null> = { ...EMPTY_MODE_BAGS };
 
 export function isLibrarySection(value: unknown): value is LibrarySection {
 	return LIBRARY_SECTIONS.some((section) => section === value);
@@ -101,7 +113,9 @@ export function isLibraryHistoryState(value: unknown): value is LibraryHistorySt
 	if (!isIdOrNull(state.generationId)) return false;
 	if (!isIdOrNull(state.playlistId)) return false;
 	if (!Array.isArray(state.expandedAlbumIds)) return false;
-	return state.expandedAlbumIds.every((id) => typeof id === 'string');
+	if (!state.expandedAlbumIds.every((id) => typeof id === 'string')) return false;
+	if (state.detailTab !== undefined && !isDetailTab(state.detailTab)) return false;
+	return true;
 }
 
 export function libraryRootState(): LibraryHistoryState {
@@ -121,7 +135,8 @@ export function libraryRootState(): LibraryHistoryState {
 		generationId: null,
 		playlistId: null,
 		expandedAlbumIds: [],
-		scrollAnchor: 0
+		scrollAnchor: 0,
+		detailTab: 'generations'
 	};
 }
 
@@ -164,7 +179,8 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 		generationId: get(selectedGenerationId),
 		playlistId: get(selectedPlaylistId),
 		expandedAlbumIds: [...get(expandedAlbumIds)],
-		scrollAnchor: get(libraryScrollAnchor)
+		scrollAnchor: get(libraryScrollAnchor),
+		detailTab: get(detailTab)
 	};
 }
 
@@ -176,9 +192,13 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 		closeSharesView();
 		librarySection.set(state.section);
 	}
+	if (state.section === 'playlists') {
+		syncLibrarySearch('');
+	}
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
+	detailTab.set(state.detailTab ?? 'generations');
 	expandedAlbumIds.set(new Set(state.expandedAlbumIds));
 	libraryScrollAnchor.set(state.scrollAnchor);
 	selectedAlbumId.set(state.albumId);
@@ -203,7 +223,7 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	}
 	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
 	if (generation !== historyApplyGeneration) return false;
-	if (state.query.trim()) {
+	if (state.query.trim() && state.section !== 'playlists') {
 		await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
 	}
 	if (generation !== historyApplyGeneration) return false;
@@ -217,6 +237,7 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	}
 	if (generation !== historyApplyGeneration) return false;
 	fallbackBrowseIfDetailGone(state.surface);
+	writeActiveModeBag(state);
 	return true;
 }
 
@@ -335,16 +356,22 @@ export function closeSharesView(): void {
 	showSharesView(false);
 }
 
-export function setLibrarySection(section: LibrarySection): void {
+export function setLibrarySection(section: LibrarySection): LibraryHistoryState {
 	closeSharesView();
 	const previous = get(librarySection);
+	const index = libraryHistoryIndex();
 	rememberLibraryScroll(previous);
-	librarySection.set(section);
-	librarySurface.set('browse');
-	restoreLibraryScroll(section);
-	if (section === 'playlists') {
-		void ensurePlaylistsLoaded();
+	if (previous === section) {
+		restoreLibraryScroll(section);
+		if (section === 'playlists') {
+			void ensurePlaylistsLoaded();
+		}
+		return snapshotLibraryHistory(index);
 	}
+	rememberModeBag(previous);
+	const bag = modeSwitchState(section, index);
+	void applyLibraryHistory(bag);
+	return bag;
 }
 
 export function setLibrarySurface(surface: LibrarySurface): void {
@@ -399,13 +426,44 @@ export function resetLibraryContextForTests(): void {
 	historyApplyGeneration += 1;
 	librarySection.set(LIBRARY_DEFAULT_SECTION);
 	librarySurface.set('browse');
+	detailTab.set('generations');
 	expandedAlbumIds.set(new Set());
 	libraryScrollAnchor.set(0);
 	libraryScrollBySection.set({ ...EMPTY_SECTION_SCROLL });
+	modeBags = { ...EMPTY_MODE_BAGS };
+}
+
+function libraryHistoryIndex(): number {
+	const state = history.state;
+	return isLibraryHistoryState(state) ? state.index : 0;
+}
+
+function defaultModeBag(section: LibrarySection): LibraryHistoryState {
+	return { ...libraryRootState(), section };
+}
+
+function rememberModeBag(section: LibrarySection): void {
+	modeBags[section] = { ...snapshotLibraryHistory(libraryHistoryIndex()), section };
+}
+
+function modeSwitchState(section: LibrarySection, index: number): LibraryHistoryState {
+	return { ...(modeBags[section] ?? defaultModeBag(section)), index, section };
+}
+
+function writeActiveModeBag(state: LibraryHistoryState): void {
+	if (!isLibrarySection(state.section)) return;
+	modeBags[state.section] = {
+		...snapshotLibraryHistory(state.index),
+		section: state.section
+	};
 }
 
 function isLibrarySurface(value: unknown): value is LibrarySurface {
 	return typeof value === 'string' && SURFACES.has(value as LibrarySurface);
+}
+
+function isDetailTab(value: unknown): value is DetailTab {
+	return typeof value === 'string' && DETAIL_TABS.has(value as DetailTab);
 }
 
 function isIdOrNull(value: unknown): value is string | null {

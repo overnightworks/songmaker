@@ -6,6 +6,7 @@ import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import {
 	LIBRARY_DEFAULT_SECTION,
 	LIBRARY_HISTORY_KIND,
+	LIBRARY_SEARCH_DEBOUNCE_MS,
 	LIBRARY_SHARES_HISTORY_SECTION
 } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
@@ -13,7 +14,8 @@ import {
 	libraryBrowse,
 	librarySearch,
 	librarySort,
-	resetLibrarySearchForTests
+	resetLibrarySearchForTests,
+	syncLibrarySearch
 } from '$lib/stores/librarySearch';
 import {
 	albumList,
@@ -66,6 +68,7 @@ import {
 	applyLibraryHistory,
 	captureLibraryScroll,
 	closeSharesView,
+	detailTab,
 	expandAlbum,
 	expandedAlbumIds,
 	hydrateLibraryFromHistory,
@@ -269,7 +272,8 @@ describe('library history snapshot', () => {
 			albumId: 'a1',
 			songId: 's1',
 			expandedAlbumIds: ['a1'],
-			scrollAnchor: 240
+			scrollAnchor: 240,
+			detailTab: 'generations'
 		});
 		expect(isLibraryHistoryState(snap)).toBe(true);
 	});
@@ -281,6 +285,10 @@ describe('library history snapshot', () => {
 		expect(
 			isLibraryHistoryState({ ...libraryRootState(), section: LIBRARY_SHARES_HISTORY_SECTION })
 		).toBe(true);
+		const { detailTab: _detailTab, ...withoutDetailTab } = libraryRootState();
+		expect(_detailTab).toBe('generations');
+		expect(isLibraryHistoryState(withoutDetailTab)).toBe(true);
+		expect(isLibraryHistoryState({ ...libraryRootState(), detailTab: 'lyrics' })).toBe(false);
 	});
 
 	it('apply restores stores from a snapshot', async () => {
@@ -554,6 +562,70 @@ describe('library history snapshot', () => {
 		await hydrateLibraryFromHistory();
 		expect(history.state.playlistId).toBeNull();
 		expect(history.state.surface).toBe('browse');
+	});
+
+	it('defaults a missing detailTab to Takes without failing restore', async () => {
+		const { detailTab: recordedTab, ...withoutDetailTab } = libraryRootState();
+		expect(recordedTab).toBe('generations');
+		detailTab.set('edit');
+		await applyLibraryHistory(withoutDetailTab);
+		expect(get(detailTab)).toBe('generations');
+		expect(get(librarySurface)).toBe('browse');
+	});
+
+	it('cancels a pending Studio search when applying Listen', async () => {
+		vi.useFakeTimers();
+		try {
+			searchQuery.set('Tide');
+			syncLibrarySearch('Tide');
+			const applied = applyLibraryHistory({ ...libraryRootState(), section: 'playlists' });
+			await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+			expect(await applied).toBe(true);
+			expect(searchLibrary).not.toHaveBeenCalled();
+			expect(get(libraryBrowse).status).toBe('ready');
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('restores Studio song detail after visiting Listen', () => {
+		selectedAlbumId.set('a1');
+		selectedSongId.set('s1');
+		librarySurface.set('detail');
+		detailTab.set('edit');
+		setLibrarySection('playlists');
+		expect(get(librarySection)).toBe('playlists');
+		expect(get(librarySurface)).toBe('browse');
+		expect(get(selectedSongId)).toBeNull();
+		setLibrarySection('albums');
+		expect(get(librarySection)).toBe('albums');
+		expect(get(librarySurface)).toBe('detail');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedAlbumId)).toBe('a1');
+		expect(get(detailTab)).toBe('edit');
+	});
+
+	it('apply restores the active mode without wiping the Listen bag', async () => {
+		selectedAlbumId.set('a1');
+		selectedSongId.set('s1');
+		librarySurface.set('detail');
+		setLibrarySection('playlists');
+		selectedPlaylistId.set('p1');
+		librarySurface.set('detail');
+		setLibrarySection('albums');
+		expect(get(selectedSongId)).toBe('s1');
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			albumId: 'a9',
+			songId: 's9'
+		});
+		expect(get(selectedSongId)).toBe('s9');
+		setLibrarySection('playlists');
+		expect(get(librarySection)).toBe('playlists');
+		expect(get(selectedPlaylistId)).toBe('p1');
+		expect(get(librarySurface)).toBe('detail');
+		expect(get(selectedSongId)).toBeNull();
 	});
 
 	it('browse-from-current clears the resource but keeps section, query, sort, and scroll', () => {
