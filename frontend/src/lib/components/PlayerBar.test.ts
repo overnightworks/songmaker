@@ -4,6 +4,7 @@ import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 import { NOW_PLAYING_LABEL, NOW_PLAYING_NO_LYRICS } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { queueContext, songList } from '$lib/stores/player';
+import * as playerStore from '$lib/stores/player';
 import PlayerBar from './PlayerBar.svelte';
 
 class FakeAudio {
@@ -108,6 +109,21 @@ afterEach(async () => {
 });
 
 describe('PlayerBar stream boundaries', () => {
+	it('keeps the existing Mix library start affordance available while idle', async () => {
+		queueContext.set({ type: 'library' });
+		const playLibrary = vi.spyOn(playerStore, 'playLibrary').mockResolvedValue();
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		expect(audioPlayer.current).toBeNull();
+		const play = target.querySelector<HTMLButtonElement>('button[aria-label="Play"]');
+		const trackInfo = target.querySelector<HTMLButtonElement>('button[aria-label="Play Mix"]');
+		expect(play?.disabled).toBe(false);
+		expect(trackInfo).not.toBeNull();
+		play?.click();
+		expect(playLibrary).toHaveBeenCalledOnce();
+	});
+
 	it('reacts at window boundaries even when adjacent entries use the same generation', async () => {
 		audioPlayer.loadStream(manifest([track(0), track(1)]), 0, { autoplay: false });
 		component = mount(PlayerBar, { target });

@@ -9,7 +9,6 @@
 	import { APP_NAME } from '$lib/constants';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { canGoBack, goBack, isLibraryWorkspacePath } from '$lib/stores/navigation';
 	import { initTheme } from '$lib/stores/ui';
 	import { dev, browser } from '$app/environment';
@@ -25,7 +24,7 @@
 	const isSettings = $derived(page.url.pathname.startsWith('/settings'));
 	const hasLibraryBack = $derived(isLibraryWorkspacePath(page.url.pathname) && $canGoBack);
 	const me = $derived($currentUser);
-	const hasPlayback = $derived(audioPlayer.current !== null);
+	const hasPrivatePlayer = $derived(me !== null);
 
 	$effect(() => {
 		initTheme();
@@ -96,11 +95,11 @@
 		<HeaderMenu username={me.username} onlogout={handleLogout} />
 	</header>
 
-	<div class="app-body" class:has-player={hasPlayback}>
+	<div class="app-body" class:has-player={hasPrivatePlayer}>
 		{@render children()}
 	</div>
 
-	{#if hasPlayback}
+	{#if hasPrivatePlayer}
 		<PlayerBar />
 	{/if}
 {/if}

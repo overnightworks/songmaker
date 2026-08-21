@@ -2,7 +2,8 @@ import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
-import { currentUser, authLoading } from '$lib/stores/auth';
+import { checkAuth, currentUser, authLoading } from '$lib/stores/auth';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { selectedAlbumId } from '$lib/stores/player';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
@@ -50,7 +51,7 @@ const USER = { id: 'u1', username: 'felix', role: 'user' as const };
 
 let mounted: ReturnType<typeof mount> | undefined;
 const children = createRawSnippet(() => ({
-	render: () => `<div></div>`
+	render: () => `<main><button data-testid="workspace-focus">Workspace action</button></main>`
 }));
 
 function stubMatchMedia(matches: boolean): void {
@@ -103,10 +104,30 @@ async function renderLayout(path: string): Promise<HTMLElement> {
 	return target;
 }
 
+function mountLayout(path: string): HTMLElement {
+	pageState.url = new URL(`https://songmaker.test${path}`);
+	const target = document.createElement('div');
+	document.body.append(target);
+	mounted = mount(Layout, { target, props: { children } });
+	return target;
+}
+
+async function unmountCurrentLayout(): Promise<void> {
+	if (mounted) await unmount(mounted);
+	mounted = undefined;
+	document.body.replaceChildren();
+}
+
 beforeEach(() => {
 	stubMatchMedia(true);
 	document.documentElement.dataset.pointer = 'coarse';
 	Object.defineProperty(window, 'innerWidth', { configurable: true, value: VIEWPORT_PX });
+	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+	vi.mocked(checkAuth).mockImplementation(async () => {
+		currentUser.set(USER);
+		authLoading.set(false);
+		return USER;
+	});
 	selectedAlbumId.set('a1');
 	const sheet = document.createElement('style');
 	sheet.dataset.hitboxStyles = 'true';
@@ -115,17 +136,66 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	if (mounted) await unmount(mounted);
-	mounted = undefined;
-	document.body.replaceChildren();
+	await unmountCurrentLayout();
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
 	selectedAlbumId.set(null);
 	currentUser.set(null);
+	authLoading.set(false);
+	audioPlayer.destroy();
+	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
 });
 
 describe('app shell header', () => {
+	it('keeps the private PlayerBar and body reservation visible while idle', async () => {
+		const target = await renderLayout('/');
+		const body = requireElement<HTMLElement>(target, '.app-body');
+
+		expect(audioPlayer.current).toBeNull();
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+		expect(body.classList.contains('has-player')).toBe(true);
+		const workspaceAction = requireElement<HTMLButtonElement>(
+			target,
+			'[data-testid="workspace-focus"]'
+		);
+		workspaceAction.focus();
+		expect(document.activeElement).toBe(workspaceAction);
+		expect(body.compareDocumentPosition(requireElement(target, '.player-bar'))).toBe(
+			Node.DOCUMENT_POSITION_FOLLOWING
+		);
+	});
+
+	it.each(['/login', '/setup', '/legal', '/share/public-token'])(
+		'keeps the PlayerBar and reservation out of public route %s',
+		async (path) => {
+			const target = await renderLayout(path);
+			expect(target.querySelector('.player-bar')).toBeNull();
+			expect(target.querySelector('.app-body')).toBeNull();
+		}
+	);
+
+	it('keeps the PlayerBar and reservation out while auth is loading', async () => {
+		currentUser.set(null);
+		authLoading.set(true);
+		vi.mocked(checkAuth).mockImplementationOnce(() => new Promise(() => {}));
+		const target = mountLayout('/');
+		await tick();
+
+		expect(target.querySelector('.loading')).not.toBeNull();
+		expect(target.querySelector('.player-bar')).toBeNull();
+		expect(target.querySelector('.app-body')).toBeNull();
+	});
+
+	it('removes the PlayerBar and reservation after auth loss', async () => {
+		const privateTarget = await renderLayout('/');
+		expect(privateTarget.querySelector('.player-bar')).not.toBeNull();
+		currentUser.set(null);
+		await tick();
+		expect(privateTarget.querySelector('.player-bar')).toBeNull();
+		expect(privateTarget.querySelector('.app-body')).toBeNull();
+	});
+
 	it('keeps Brand, Back, and the account menu trigger inside 320px', async () => {
 		const target = await renderLayout('/');
 		const header = requireElement<HTMLElement>(target, '.top-bar');
