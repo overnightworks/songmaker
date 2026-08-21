@@ -6,11 +6,11 @@ import { resolve } from '$app/paths';
 import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import {
+	detailTab,
 	hydrateLibraryFromHistory,
 	librarySection,
 	librarySurface,
-	resetLibraryContextForTests,
-	setLibrarySection
+	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
 import {
 	albumList,
@@ -86,12 +86,14 @@ import {
 	initNavigation,
 	isLibraryWorkspacePath,
 	openLibraryCreate,
+	persistLibraryHistory,
 	resetNavigationForTests,
 	revealPlayingSong,
 	selectAlbumOverview,
 	selectGeneration,
 	selectLibrarySection,
-	selectSong
+	selectSong,
+	switchTab
 } from './navigation';
 
 function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
@@ -226,7 +228,6 @@ describe('library history', () => {
 	it('goBack without a predecessor clears the resource through the same apply path', () => {
 		const cleanup = initNavigation();
 		selectedSongId.set('s1');
-		selectLibrarySection('playlists');
 		expect(get(canGoBack)).toBe(true);
 		expect(get(librarySurface)).toBe('browse');
 		goBack();
@@ -236,7 +237,7 @@ describe('library history', () => {
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(selectedAlbumId)).toBeNull();
 		expect(get(librarySurface)).toBe('browse');
-		expect(get(librarySection)).toBe('playlists');
+		expect(get(librarySection)).toBe('albums');
 		expect(window.location.pathname).toBe('/');
 		cleanup();
 	});
@@ -343,11 +344,59 @@ describe('library history', () => {
 		cleanup();
 	});
 
-	it('switching section does not clear the selected song', () => {
-		selectedSongId.set('s1');
-		setLibrarySection('playlists');
+	it('Studio song then Listen then Studio restores the song detail surface', () => {
+		const cleanup = initNavigation();
+		selectSong('s1');
+		expect(get(librarySurface)).toBe('detail');
 		expect(get(selectedSongId)).toBe('s1');
+		const index = history.state.index;
+		const push = vi.spyOn(history, 'pushState');
+		selectLibrarySection('playlists');
+		expect(push).not.toHaveBeenCalled();
+		expect(history.state.index).toBe(index);
 		expect(get(librarySection)).toBe('playlists');
+		expect(get(librarySurface)).toBe('browse');
+		selectLibrarySection('albums');
+		expect(get(librarySection)).toBe('albums');
+		expect(get(librarySurface)).toBe('detail');
+		expect(get(selectedSongId)).toBe('s1');
+		push.mockRestore();
+		cleanup();
+	});
+
+	it('restores Recipe when returning to Studio instead of opening Takes', () => {
+		const cleanup = initNavigation();
+		selectSong('s1');
+		switchTab('edit');
+		selectLibrarySection('playlists');
+		selectLibrarySection('albums');
+		expect(get(detailTab)).toBe('edit');
+		expect(get(librarySurface)).toBe('detail');
+		expect(get(selectedSongId)).toBe('s1');
+		cleanup();
+	});
+
+	it('popstate restores the song surface from history instead of opening Takes', () => {
+		const cleanup = initNavigation();
+		selectSong('s1');
+		switchTab('edit');
+		persistLibraryHistory();
+		const recipe = history.state;
+		switchTab('generations');
+		window.dispatchEvent(new PopStateEvent('popstate', { state: recipe }));
+		expect(get(detailTab)).toBe('edit');
+		cleanup();
+	});
+
+	it('goBack on Listen does not reopen a leftover Studio song', () => {
+		const cleanup = initNavigation();
+		selectLibrarySection('playlists');
+		selectedSongId.set('s1');
+		expect(get(librarySurface)).toBe('browse');
+		goBack();
+		expect(get(librarySection)).toBe('playlists');
+		expect(get(librarySurface)).toBe('browse');
+		cleanup();
 	});
 
 	it('create surface is a backable library destination', () => {

@@ -1,4 +1,4 @@
-import { writable, derived, get } from 'svelte/store';
+import { derived, get } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { fetchAlbum } from '$lib/api/albums';
@@ -26,22 +26,23 @@ import type { LibrarySection } from '$lib/constants';
 import {
 	applyLibraryHistory,
 	cancelLibraryHistoryApply,
+	detailTab,
 	expandAlbum,
-	hasLibrarySelection,
 	isLibraryHistoryState,
 	libraryBrowseStateFrom,
 	libraryHistoryUrl,
 	libraryRootState,
+	librarySection,
 	librarySurface,
 	setLibrarySection,
 	setLibrarySurface,
 	snapshotLibraryHistory,
+	type DetailTab,
 	type LibraryHistoryState
 } from '$lib/stores/libraryContext';
 
-export type DetailTab = 'generations' | 'edit' | 'chat';
-
-export const detailTab = writable<DetailTab>('generations');
+export type { DetailTab };
+export { detailTab };
 
 let suppressPush = false;
 
@@ -89,8 +90,9 @@ function pushLibraryHistory(): void {
 }
 
 export function selectLibrarySection(section: LibrarySection): void {
-	setLibrarySection(section);
-	replaceLibraryHistory();
+	const next = setLibrarySection(section);
+	if (suppressPush) return;
+	history.replaceState(next, '', urlFromState(next));
 }
 
 export function persistLibraryHistory(): void {
@@ -254,7 +256,7 @@ export function goBack(): void {
 		replaceLibraryHistory();
 		return;
 	}
-	if (get(librarySurface) === 'browse' && hasLibrarySelection()) {
+	if (get(librarySurface) === 'browse' && browseSelectionFitsActiveMode()) {
 		setLibrarySurface('detail');
 		replaceLibraryHistory();
 		return;
@@ -308,7 +310,6 @@ export function initNavigation(): () => void {
 			} else {
 				await applyLibraryHistory(libraryRootState());
 			}
-			openTakesSurface();
 		})();
 	}
 
@@ -322,11 +323,28 @@ export function resetNavigationForTests(): void {
 }
 
 export const canGoBack = derived(
-	[selectedSongId, selectedGenerationId, selectedAlbumId, selectedPlaylistId, librarySurface],
-	([$songId, $genId, $albumId, $playlistId, $surface]) =>
-		$surface === 'create' ||
-		$songId !== null ||
-		$genId !== null ||
-		$albumId !== null ||
-		$playlistId !== null
+	[
+		selectedSongId,
+		selectedGenerationId,
+		selectedAlbumId,
+		selectedPlaylistId,
+		librarySurface,
+		librarySection
+	],
+	([$songId, $genId, $albumId, $playlistId, $surface, $section]) => {
+		if ($surface === 'create') return true;
+		if ($section === 'playlists') return $playlistId !== null || $surface === 'detail';
+		return $songId !== null || $genId !== null || $albumId !== null || $surface === 'detail';
+	}
 );
+
+function browseSelectionFitsActiveMode(): boolean {
+	if (get(librarySection) === 'playlists') {
+		return get(selectedPlaylistId) !== null;
+	}
+	return (
+		get(selectedAlbumId) !== null ||
+		get(selectedSongId) !== null ||
+		get(selectedGenerationId) !== null
+	);
+}

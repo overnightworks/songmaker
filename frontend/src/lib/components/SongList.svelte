@@ -112,8 +112,8 @@
 	const createdSort = $derived($librarySort);
 	const searchState = $derived($librarySearch);
 	const browseState = $derived($libraryBrowse);
-	const searching = $derived(search.trim().length > 0);
 	const section = $derived($librarySection);
+	const searching = $derived(section !== 'playlists' && search.trim().length > 0);
 	const expanded = $derived($expandedAlbumIds);
 	const playlistStatus = $derived($playlistLoad);
 	const restoredScroll = $derived($libraryScrollAnchor);
@@ -128,6 +128,7 @@
 	});
 
 	$effect(() => {
+		if (section === 'playlists') return;
 		syncLibrarySearch(search);
 	});
 
@@ -292,15 +293,17 @@
 
 <div class="library-nav">
 	<div class="search-bar">
-		<input
-			class="search"
-			type="text"
-			placeholder={LIBRARY_SEARCH_PLACEHOLDER}
-			value={search}
-			oninput={onSearchInput}
-			aria-label={LIBRARY_SEARCH_PLACEHOLDER}
-			aria-busy={searching && searchState.status === 'loading'}
-		/>
+		{#if section !== 'playlists'}
+			<input
+				class="search"
+				type="text"
+				placeholder={LIBRARY_SEARCH_PLACEHOLDER}
+				value={search}
+				oninput={onSearchInput}
+				aria-label={LIBRARY_SEARCH_PLACEHOLDER}
+				aria-busy={searching && searchState.status === 'loading'}
+			/>
+		{/if}
 		<div class="sort-strip" role="radiogroup" aria-label="List sort" tabindex="-1">
 			{#each CREATED_SORTS as option (option)}
 				<button

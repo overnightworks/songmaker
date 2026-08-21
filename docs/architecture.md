@@ -126,18 +126,22 @@ User clicks "Generate"                    User clicks "Score"
 
 SvelteKit single-page app. All state in Svelte stores.
 
-The home library has two exclusive sections (Albums, Playlists). Share inventory is
-a complete server list of the current user's public slugs (`GET /api/library/shares`),
-opened from `Shared · N` in the header — including when mobile detail hides the
-library nav — not a third library tab. Membership is public slug reachability
-(`is_shared` plus slug, not soft-deleted; archived takes stay). `N` is the
-unfiltered server total; a type filter pages a subset without changing `N`. Old
-`history.state.section === 'shared'` still opens that inventory. Unshare stays the
-four resource DELETE endpoints. Albums start collapsed. Desktop keeps compact
-section navigation in the sidebar and uses the album overview as the main surface.
-Library context (section, query, sort, loaded page, selection, scroll) is stored on
-`history.state` (`kind: 'songmaker'`) so browser-back and shell-back restore the
-same view.
+The home library has two exclusive modes (Studio and Listen; internal section IDs
+`albums` and `playlists`). Studio is albums and songs; Listen is playlists. Share
+inventory is a complete server list of the current user's public slugs
+(`GET /api/library/shares`), opened from `Shared · N` in the header — including
+when mobile detail hides the library nav — not a third library tab. Membership is
+public slug reachability (`is_shared` plus slug, not soft-deleted; archived takes
+stay). `N` is the unfiltered server total; a type filter pages a subset without
+changing `N`. Old `history.state.section === 'shared'` still opens that inventory.
+Unshare stays the four resource DELETE endpoints. Albums start collapsed. Desktop
+keeps compact Studio/Listen navigation in the sidebar and uses the album overview
+as the main surface. Each mode keeps its last visible browse/detail context
+(selection, query, sort, loaded page, scroll, and song surface) in memory;
+switching Studio↔Listen replaces the current history entry and restores that
+mode's surface. Library context is also stored on `history.state`
+(`kind: 'songmaker'`) so browser-back and shell-back restore the same view.
+Older history blobs without `detailTab` default to Takes.
 
 | Layer | What | Key files |
 |-------|------|-----------|

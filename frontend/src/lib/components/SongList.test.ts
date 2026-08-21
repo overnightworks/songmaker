@@ -24,7 +24,9 @@ import { searchQuery } from '$lib/stores/filter';
 import {
 	applyLibraryHistory,
 	libraryRootState,
-	resetLibraryContextForTests
+	librarySurface,
+	resetLibraryContextForTests,
+	setLibrarySurface
 } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, selectedAlbumId, selectedSongId, songList } from '$lib/stores/player';
@@ -36,6 +38,7 @@ const fetchPlaylists = vi.fn();
 const fetchShares = vi.fn();
 const fetchAlbum = vi.fn();
 const fetchAlbums = vi.fn();
+const fetchSong = vi.fn();
 const fetchSongs = vi.fn();
 const unshareAlbum = vi.fn();
 
@@ -48,7 +51,7 @@ vi.mock('$lib/api/albums', () => ({
 	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args)
 }));
 vi.mock('$lib/api/songs', () => ({
-	fetchSong: vi.fn(),
+	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	fetchSongs: (...args: unknown[]) => fetchSongs(...args)
 }));
 vi.mock('$lib/api/client', () => ({
@@ -174,6 +177,11 @@ beforeEach(() => {
 	});
 	fetchAlbums.mockReset();
 	fetchAlbum.mockReset();
+	fetchAlbum.mockImplementation(async (id: unknown) => album({ id: String(id) }));
+	fetchSong.mockReset();
+	fetchSong.mockImplementation(async (id: unknown) =>
+		song({ id: String(id), album_id: 'a-local' })
+	);
 	unshareAlbum.mockReset();
 	unshareAlbum.mockResolvedValue(undefined);
 	fetchSongs.mockReset();
@@ -205,11 +213,11 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+	resetLibraryContextForTests();
+	resetLibrarySearchForTests();
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	vi.useRealTimers();
-	resetLibrarySearchForTests();
-	resetLibraryContextForTests();
 	resetSharesForTests();
 	searchQuery.set('');
 	selectedAlbumId.set(null);
@@ -387,10 +395,12 @@ describe('SongList sections', () => {
 		]);
 	});
 
-	it('keeps exactly one section active and preserves selection when switching', async () => {
+	it('keeps exactly one section active and restores Studio song detail after Listen', async () => {
 		playlistList.set([playlist()]);
 		playlistLoad.set({ status: 'ready', error: null });
+		selectedAlbumId.set('a-local');
 		selectedSongId.set('s-local');
+		setLibrarySurface('detail');
 		const target = render();
 		await tick();
 
@@ -398,8 +408,9 @@ describe('SongList sections', () => {
 		await tick();
 		expect(target.querySelector('[data-library-section="playlists"]')).not.toBeNull();
 		expect(target.querySelector('[data-library-section="albums"]')).toBeNull();
+		expect(target.querySelector('input.search')).toBeNull();
 		expect(target.textContent).toContain('Late Night');
-		expect(get(selectedSongId)).toBe('s-local');
+		expect(get(librarySurface)).toBe('browse');
 		expect(
 			[...target.querySelectorAll('[role="tab"][aria-selected="true"]')].map(
 				(tab) => tab.textContent
@@ -409,7 +420,36 @@ describe('SongList sections', () => {
 		sectionTab(target, LIBRARY_SECTION_LABELS.albums).click();
 		await tick();
 		expect(target.querySelector('[data-library-section="albums"]')).not.toBeNull();
+		expect(get(librarySurface)).toBe('detail');
 		expect(get(selectedSongId)).toBe('s-local');
+		expect(target.querySelector('input.search')).not.toBeNull();
+	});
+
+	it('hides search on Listen and does not query library search', async () => {
+		const target = render();
+		await tick();
+		sectionTab(target, LIBRARY_SECTION_LABELS.playlists).click();
+		await tick();
+		expect(target.querySelector('input.search')).toBeNull();
+		searchQuery.set('Tide');
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+		await tick();
+		expect(searchLibrary).not.toHaveBeenCalled();
+		expect(target.querySelector('[data-library-section="playlists"]')).not.toBeNull();
+	});
+
+	it('does not fire a pending Studio search after switching to Listen', async () => {
+		const target = render();
+		await tick();
+		searchQuery.set('Tide');
+		await tick();
+		expect(searchLibrary).not.toHaveBeenCalled();
+		sectionTab(target, LIBRARY_SECTION_LABELS.playlists).click();
+		await tick();
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+		await tick();
+		expect(searchLibrary).not.toHaveBeenCalled();
+		expect(target.querySelector('input.search')).toBeNull();
 	});
 
 	it('moves focus with the active section tab on arrow keys', async () => {

@@ -79,8 +79,8 @@ export const LIBRARY_SECTIONS = ['albums', 'playlists'] as const;
 export type LibrarySection = (typeof LIBRARY_SECTIONS)[number];
 export const LIBRARY_DEFAULT_SECTION: LibrarySection = 'albums';
 export const LIBRARY_SECTION_LABELS: Record<LibrarySection, string> = {
-	albums: 'Albums',
-	playlists: 'Playlists'
+	albums: 'Studio',
+	playlists: 'Listen'
 };
 export const LIBRARY_SECTION_NAV_LABEL = 'Library sections';
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
