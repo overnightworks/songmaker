@@ -57,6 +57,22 @@ describe('readCompactLayout', () => {
 });
 
 describe('subscribeCompactLayout', () => {
+	it('falls back to the pointer hint when matchMedia is unavailable', async () => {
+		vi.stubGlobal('matchMedia', undefined);
+		delete document.documentElement.dataset.pointer;
+		const values: boolean[] = [];
+		const stop = subscribeCompactLayout((compact) => {
+			values.push(compact);
+		});
+
+		expect(values).toEqual([false]);
+
+		document.documentElement.dataset.pointer = 'coarse';
+		await vi.waitFor(() => expect(values.at(-1)).toBe(true));
+
+		stop();
+	});
+
 	it('syncs on subscribe, media change, and data-pointer mutations', async () => {
 		const media = stubMatchMedia(false);
 		delete document.documentElement.dataset.pointer;

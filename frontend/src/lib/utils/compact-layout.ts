@@ -9,19 +9,22 @@ export function readCompactLayout(
 
 export function subscribeCompactLayout(onChange: (compact: boolean) => void): () => void {
 	if (typeof window === 'undefined') return () => {};
-	const media = window.matchMedia(COMPACT_LAYOUT_MEDIA);
+	const media =
+		typeof window.matchMedia === 'function' ? window.matchMedia(COMPACT_LAYOUT_MEDIA) : null;
 	const sync = () => {
-		onChange(readCompactLayout(media));
+		onChange(
+			media ? readCompactLayout(media) : document.documentElement.dataset.pointer === 'coarse'
+		);
 	};
 	sync();
-	media.addEventListener('change', sync);
+	media?.addEventListener('change', sync);
 	const observer = new MutationObserver(sync);
 	observer.observe(document.documentElement, {
 		attributes: true,
 		attributeFilter: ['data-pointer']
 	});
 	return () => {
-		media.removeEventListener('change', sync);
+		media?.removeEventListener('change', sync);
 		observer.disconnect();
 	};
 }
