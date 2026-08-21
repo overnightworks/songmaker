@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+	import { get } from 'svelte/store';
 	import {
 		cancelJob,
 		fetchSong,
@@ -23,6 +25,8 @@
 	import { health, startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 	import {
 		selectedSong,
+		selectedGeneration,
+		selectedGenerationId,
 		ensureGenerationsLoaded,
 		songList,
 		replaceSongInList,
@@ -35,9 +39,12 @@
 	import {
 		selectGeneration,
 		navigateToSongTab,
-		switchTab,
 		backToAlbum,
-		detailTab
+		clearGenerationSelection,
+		persistLibraryHistory,
+		detailTab,
+		openRecipeSurface,
+		openTakesSurface
 	} from '$lib/stores/navigation';
 	import {
 		isDirty,
@@ -49,16 +56,31 @@
 		loadSongData,
 		loadVersion,
 		handleSave,
-		handleDeleteVersion
+		handleDeleteVersion,
+		applyGenerationSettings
 	} from '$lib/stores/editor';
 	import { activeModels } from '$lib/stores/presets';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addGenerationToPlaylist, addSongToPlaylist } from '$lib/stores/playlists';
-	import { pendingSource } from '$lib/stores/source';
+	import { pendingSource, recipeParamsFromTake, type SourceMode } from '$lib/stores/source';
 	import { setGenerationActions } from '$lib/contexts/generation-actions';
 	import type { GenerationItem } from '$lib/api/types';
-	import { EXPIRY_WARN_DAYS } from '$lib/constants';
+	import {
+		EXPIRY_WARN_DAYS,
+		SONG_SPLIT_PANE_GAP_PX,
+		SONG_SPLIT_PANE_MIN_PX,
+		SONG_SURFACE_COWRITER,
+		SONG_SURFACE_RECIPE,
+		SONG_SURFACE_SWITCH_LABEL,
+		SONG_SURFACE_TAKES,
+		TAKE_AUDIO_COVER_LABEL,
+		TAKE_REPAINT_LABEL,
+		TAKES_ERROR,
+		canSplitSongPanes
+	} from '$lib/constants';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import GenerationsList from './GenerationsList.svelte';
+	import GenerationView from './GenerationView.svelte';
 	import SongEditor from './SongEditor.svelte';
 	import CoWriterPanel from './CoWriterPanel.svelte';
 	import ActionButton from './ActionButton.svelte';
@@ -67,11 +89,14 @@
 	import ShareButton from './ShareButton.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
+	const COWRITER_FOCUSABLE =
+		'a[href], button:not(:disabled), textarea:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
 	let genCount = $state(1);
 	let selectedModel = $state<string | null>(null);
 	let showDeleteConfirm = $state(false);
 	let sourceGeneration = $state<GenerationItem | null>(null);
-	let sourceMode = $state<'repaint' | 'cover'>('repaint');
+	let sourceMode = $state<SourceMode>('repaint');
 	let repaintStart = $state(0);
 	let repaintEnd = $state(1);
 	let coverStrength = $state(0.7);
@@ -81,14 +106,28 @@
 	let playlistPickerFor = $state<
 		{ type: 'song'; id: string } | { type: 'generation'; id: string } | null
 	>(null);
+	let coWriterOpen = $state(false);
+	let compact = $state(false);
+	let split = $state(false);
+	let panesEl: HTMLElement | undefined = $state();
+	let recipePaneEl: HTMLElement | undefined = $state();
+	let coWriterPanelEl: HTMLDivElement | undefined = $state();
+	let coWriterTrigger: HTMLButtonElement | undefined = $state();
+	let recipeScrollTop = 0;
+	let takesStatus = $state<'loading' | 'ready' | 'error'>('ready');
+	let takesError = $state<string | null>(null);
 
 	const song = $derived($selectedSong);
+	const inspected = $derived($selectedGeneration);
 	const songs = $derived($songList);
 	const jobs = $derived($activeJobs);
 	const tab = $derived($detailTab);
+	const recipe = $derived(tab !== 'generations');
 	const dirty = $derived($isDirty);
 	const isSaving = $derived($saving);
 	const statusMsg = $derived($status);
+	const cowriterShowing = $derived(coWriterOpen && (split || recipe));
+	const cowriterModal = $derived(cowriterShowing && !split);
 
 	let editorSongId: string | null = null;
 
@@ -100,21 +139,19 @@
 		}
 		if (current.id !== editorSongId) {
 			editorSongId = current.id;
+			coWriterOpen = false;
 			loadSongData(current);
+			void refreshTakes(current.id);
+			return;
 		}
 		void ensureGenerationsLoaded(current.id);
 	});
 
 	$effect(() => {
 		const pending = $pendingSource;
-		if (pending) {
-			sourceGeneration = pending;
-			sourceMode = 'repaint';
-			repaintStart = 0;
-			repaintEnd = 1;
-			pendingSource.set(null);
-			switchTab('edit');
-		}
+		if (!pending) return;
+		applySource(pending.generation, pending.mode);
+		pendingSource.set(null);
 	});
 
 	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
@@ -154,6 +191,36 @@
 		}
 	});
 
+	$effect(() => {
+		return subscribeCompactLayout((value) => {
+			compact = value;
+		});
+	});
+
+	$effect(() => {
+		const el = panesEl;
+		const isCompact = compact;
+		if (!el || isCompact || typeof ResizeObserver === 'undefined') {
+			split = false;
+			return;
+		}
+		const syncSplit = () => {
+			split = canSplitSongPanes(el.getBoundingClientRect().width);
+		};
+		syncSplit();
+		const observer = new ResizeObserver(() => {
+			syncSplit();
+		});
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
+
+	$effect(() => {
+		if (!split && !recipe) {
+			coWriterOpen = false;
+		}
+	});
+
 	setGenerationActions({
 		score: onScore,
 		pick: onPick,
@@ -171,14 +238,109 @@
 			addToast(`Seed ${seed} pinned for next generation`, 'success');
 		},
 		clickVersion: onVersionClick,
-		useAsSource: (gen) => {
-			sourceGeneration = gen;
-			sourceMode = 'repaint';
+		useAsSource: (gen) => applySource(gen, 'repaint')
+	});
+
+	async function refreshTakes(songId: string): Promise<void> {
+		const current = get(selectedSong);
+		if (
+			current &&
+			current.id === songId &&
+			current.generations.length >= current.generation_count
+		) {
+			takesStatus = 'ready';
+			takesError = null;
+			return;
+		}
+		takesStatus = 'loading';
+		takesError = null;
+		try {
+			await ensureGenerationsLoaded(songId);
+			if (editorSongId !== songId) return;
+			takesStatus = 'ready';
+		} catch (e) {
+			if (editorSongId !== songId) return;
+			takesStatus = 'error';
+			takesError = e instanceof Error ? e.message : TAKES_ERROR;
+		}
+	}
+
+	function applySource(gen: GenerationItem, mode: SourceMode): void {
+		sourceGeneration = gen;
+		sourceMode = mode;
+		if (mode === 'repaint') {
 			repaintStart = 0;
 			repaintEnd = 1;
-			switchTab('edit');
 		}
+		openRecipeSurface();
+	}
+
+	function applyAgain(gen: GenerationItem): void {
+		sourceGeneration = null;
+		const takeRecipeParams = recipeParamsFromTake(gen.generation_params);
+		if (Object.keys(takeRecipeParams).length > 0) {
+			applyGenerationSettings(takeRecipeParams);
+		}
+		if (gen.seed != null && gen.seed >= 0) pinnedSeed.set(gen.seed);
+		openRecipeSurface();
+	}
+
+	function closeInspector(): void {
+		clearGenerationSelection();
+		persistLibraryHistory();
+	}
+
+	function openCoWriter(): void {
+		recipeScrollTop = recipePaneEl?.scrollTop ?? 0;
+		coWriterOpen = true;
+	}
+
+	function closeCoWriter(): void {
+		if (!coWriterOpen) return;
+		coWriterOpen = false;
+		void tick().then(() => {
+			if (recipePaneEl) recipePaneEl.scrollTop = recipeScrollTop;
+			coWriterTrigger?.focus();
+		});
+	}
+
+	$effect(() => {
+		if (!cowriterShowing) return;
+		void tick().then(() => {
+			const first = coWriterPanelEl?.querySelector<HTMLElement>(COWRITER_FOCUSABLE);
+			(first ?? coWriterPanelEl)?.focus();
+		});
 	});
+
+	function onCoWriterKeydown(event: KeyboardEvent): void {
+		if (!cowriterShowing || !coWriterPanelEl) return;
+		if (event.key === 'Escape') {
+			if (event.defaultPrevented) return;
+			event.preventDefault();
+			closeCoWriter();
+			return;
+		}
+		if (!cowriterModal || event.key !== 'Tab') return;
+		const focusable = Array.from(coWriterPanelEl.querySelectorAll<HTMLElement>(COWRITER_FOCUSABLE));
+		if (focusable.length === 0) {
+			event.preventDefault();
+			coWriterPanelEl.focus();
+			return;
+		}
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		const active = document.activeElement;
+		if (
+			event.shiftKey &&
+			(active === first || active === coWriterPanelEl || !coWriterPanelEl.contains(active))
+		) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && (active === last || !coWriterPanelEl.contains(active))) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
 
 	function onSave(): void {
 		if (song) handleSave(song.id);
@@ -357,10 +519,15 @@
 
 	async function onDeleteGeneration(genId: string): Promise<void> {
 		if (!song) return;
+		const selectedId = get(selectedGenerationId);
 		try {
 			await deleteGeneration(genId);
 			removeGenerationFromSong(song.id, genId);
-			addToast('Generation deleted', 'success');
+			if (selectedId === genId) {
+				clearGenerationSelection();
+				persistLibraryHistory();
+			}
+			addToast('Take deleted', 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Delete failed', 'error');
 		}
@@ -384,8 +551,15 @@
 	}
 </script>
 
+<svelte:window onkeydown={onCoWriterKeydown} />
+
 {#if song}
-	<div class="detail-panel" class:chat-active={tab === 'chat'}>
+	<div
+		class="detail-panel"
+		class:split
+		style:--song-split-pane-min="{SONG_SPLIT_PANE_MIN_PX}px"
+		style:--song-split-gap="{SONG_SPLIT_PANE_GAP_PX}px"
+	>
 		<div class="detail-header">
 			<div>
 				<h2 class="song-title">
@@ -394,64 +568,6 @@
 				<span class="song-album">{song.artist}</span>
 			</div>
 			<div class="detail-actions">
-				{#if tab === 'edit' || tab === 'chat'}
-					{#if dirty}
-						<button class="save-btn" onclick={onSave} disabled={isSaving}>
-							{isSaving ? 'Saving...' : 'Save'}
-						</button>
-					{/if}
-					<button
-						class="generate-btn"
-						class:generating={isGenerating}
-						onclick={onGenerate}
-						disabled={isGenerating || !song?.lyrics || !song?.prompt || selectedModel === null}
-						title={!song?.lyrics || !song?.prompt
-							? 'Add lyrics and style prompt first'
-							: selectedModel === null
-								? $activeModels.length === 0
-									? 'No models enabled. Ask admin to enable one.'
-									: 'Select a model first'
-								: queueDepthCapReached
-									? 'System busy — submit may be rejected'
-									: ''}
-					>
-						{#if isGenerating && activeGenerateJob?.status === 'queued'}
-							{activeGenerateJob.queue_position
-								? `Queued (#${activeGenerateJob.queue_position})`
-								: 'Queued...'}
-						{:else if sourceGeneration}
-							{isGenerating ? 'Generating...' : sourceMode === 'repaint' ? 'Repaint' : 'Cover'}
-						{:else}
-							{isGenerating ? 'Generating...' : 'Generate'}
-						{/if}
-					</button>
-					<select class="gen-count-select" bind:value={genCount}>
-						{#each [1, 2, 3, 5, 10] as n (n)}
-							<option value={n}>×{n}</option>
-						{/each}
-					</select>
-					{#if $activeModels.length > 1}
-						<select class="model-select" bind:value={selectedModel}>
-							{#each $activeModels as m (m.id)}
-								<option value={m.id}>{m.id.toUpperCase()}</option>
-							{/each}
-						</select>
-					{/if}
-					{#if $activeModels.length === 0}
-						<span class="no-models-warning" data-testid="no-models-warning">
-							No models enabled. Ask admin to enable one.
-						</span>
-					{/if}
-					{#if $pinnedSeed != null}
-						<button
-							class="pinned-seed"
-							onclick={() => pinnedSeed.set(null)}
-							title="Click to clear pinned seed"
-						>
-							seed:{$pinnedSeed} ✕
-						</button>
-					{/if}
-				{/if}
 				<ShareButton
 					isShared={song.is_shared}
 					shareSlug={song.share_slug}
@@ -486,6 +602,7 @@
 								{j.job.status === 'queued' ? 'queued' : `${Math.round(j.job.progress * 100)}%`}
 							</span>
 							<button
+								type="button"
 								class="job-cancel"
 								onclick={() =>
 									cancelJob(j.job.id)
@@ -504,6 +621,7 @@
 
 		{#if song.is_shared && song.share_slug}
 			<button
+				type="button"
 				class="share-link"
 				onclick={() => {
 					const url = `${window.location.origin}/share/song/${song.share_slug}`;
@@ -516,87 +634,213 @@
 			</button>
 		{/if}
 
-		<div class="tab-bar">
-			<button
-				class="tab-btn"
-				class:active={tab === 'generations'}
-				onclick={() => switchTab('generations')}
-			>
-				Generations
-			</button>
-			<button class="tab-btn" class:active={tab === 'edit'} onclick={() => switchTab('edit')}>
-				Edit
-			</button>
-			<button class="tab-btn" class:active={tab === 'chat'} onclick={() => switchTab('chat')}>
-				Co-Writer
-			</button>
-		</div>
-
-		{#if tab === 'generations'}
-			{#if expiringSoon.count > 0}
-				<div class="expiry-digest">
-					<span class="expiry-digest-icon">⏳</span>
-					<span>
-						{expiringSoon.count} generation{expiringSoon.count === 1 ? '' : 's'} expire{expiringSoon.count ===
-						1
-							? 's'
-							: ''}
-						{expiringSoon.minDays === 0
-							? 'soon'
-							: `in ${expiringSoon.minDays} day${expiringSoon.minDays === 1 ? '' : 's'}`} — pick or keep
-						to preserve.
-					</span>
-				</div>
-			{/if}
-			<GenerationsList {song} onselect={(gen) => selectGeneration(gen, song)} />
-		{:else if tab === 'edit'}
-			<SongEditor
-				ondeleteversion={onDeleteVersion}
-				{selectedModel}
-				{song}
-				{sourceGeneration}
-				{sourceMode}
-				{repaintStart}
-				{repaintEnd}
-				{coverStrength}
-				{repaintMode}
-				{repaintStrength}
-				{coverNoiseStrength}
-				onrepaintrangechange={(s, e) => {
-					repaintStart = s;
-					repaintEnd = e;
-				}}
-				oncoverstrengthchange={(s) => (coverStrength = s)}
-				onrepaintmodechange={(m) => (repaintMode = m)}
-				onrepaintstrengthchange={(s) => (repaintStrength = s)}
-				oncovernoisestrengthchange={(s) => (coverNoiseStrength = s)}
-				onsourcemodechange={(m) => (sourceMode = m)}
-				onsourceclear={() => (sourceGeneration = null)}
-				onsourceselect={(gen) => {
-					sourceGeneration = gen;
-					sourceMode = 'repaint';
-					repaintStart = 0;
-					repaintEnd = 1;
-				}}
-			/>
+		{#if !split}
+			<div class="surface-switch" role="tablist" aria-label={SONG_SURFACE_SWITCH_LABEL}>
+				<button
+					type="button"
+					class="tab-btn"
+					role="tab"
+					aria-selected={recipe}
+					class:active={recipe}
+					onclick={() => openRecipeSurface()}
+				>
+					{SONG_SURFACE_RECIPE}
+				</button>
+				<button
+					type="button"
+					class="tab-btn"
+					role="tab"
+					aria-selected={!recipe}
+					class:active={!recipe}
+					onclick={() => openTakesSurface()}
+				>
+					{SONG_SURFACE_TAKES}
+				</button>
+			</div>
 		{/if}
-		<div class="chat-tab" class:hidden={tab !== 'chat'}>
-			<CoWriterPanel
-				currentSongId={song?.id ?? ''}
-				currentAlbumId={song?.album_id ?? ''}
-				currentAlbumTitle={song?.album_title ?? ''}
-				allSongs={songs}
-				versions={$versions}
-				visible={tab === 'chat'}
-				onturncompleted={() => {
-					if (song) {
-						void fetchSong(song.id).then((fresh) => {
-							replaceSongInList(fresh);
-							loadSongData(fresh);
-						});
-					}
-				}}
-			/>
+
+		<div class="panes" bind:this={panesEl}>
+			<section
+				class="recipe-pane"
+				class:hidden={!split && !recipe}
+				bind:this={recipePaneEl}
+				aria-label={SONG_SURFACE_RECIPE}
+			>
+				{#if split}
+					<h3 class="pane-title">{SONG_SURFACE_RECIPE}</h3>
+				{/if}
+				<div class="recipe-toolbar">
+					{#if dirty}
+						<button type="button" class="save-btn" onclick={onSave} disabled={isSaving}>
+							{isSaving ? 'Saving...' : 'Save'}
+						</button>
+					{/if}
+					<button
+						type="button"
+						class="generate-btn"
+						class:generating={isGenerating}
+						onclick={onGenerate}
+						disabled={isGenerating || !song?.lyrics || !song?.prompt || selectedModel === null}
+						title={!song?.lyrics || !song?.prompt
+							? 'Add lyrics and style prompt first'
+							: selectedModel === null
+								? $activeModels.length === 0
+									? 'No models enabled. Ask admin to enable one.'
+									: 'Select a model first'
+								: queueDepthCapReached
+									? 'System busy — submit may be rejected'
+									: ''}
+					>
+						{#if isGenerating && activeGenerateJob?.status === 'queued'}
+							{activeGenerateJob.queue_position
+								? `Queued (#${activeGenerateJob.queue_position})`
+								: 'Queued...'}
+						{:else if sourceGeneration}
+							{isGenerating
+								? 'Generating...'
+								: sourceMode === 'repaint'
+									? TAKE_REPAINT_LABEL
+									: TAKE_AUDIO_COVER_LABEL}
+						{:else}
+							{isGenerating ? 'Generating...' : 'Generate'}
+						{/if}
+					</button>
+					<select class="gen-count-select" bind:value={genCount}>
+						{#each [1, 2, 3, 5, 10] as n (n)}
+							<option value={n}>×{n}</option>
+						{/each}
+					</select>
+					{#if $activeModels.length > 1}
+						<select class="model-select" bind:value={selectedModel}>
+							{#each $activeModels as m (m.id)}
+								<option value={m.id}>{m.id.toUpperCase()}</option>
+							{/each}
+						</select>
+					{/if}
+					{#if $activeModels.length === 0}
+						<span class="no-models-warning" data-testid="no-models-warning">
+							No models enabled. Ask admin to enable one.
+						</span>
+					{/if}
+					{#if $pinnedSeed != null}
+						<button
+							type="button"
+							class="pinned-seed"
+							onclick={() => pinnedSeed.set(null)}
+							title="Click to clear pinned seed"
+						>
+							seed:{$pinnedSeed} ✕
+						</button>
+					{/if}
+					<button
+						type="button"
+						class="cowriter-open"
+						bind:this={coWriterTrigger}
+						aria-expanded={cowriterShowing}
+						onclick={openCoWriter}
+					>
+						{SONG_SURFACE_COWRITER}
+					</button>
+				</div>
+				<SongEditor
+					ondeleteversion={onDeleteVersion}
+					{selectedModel}
+					{song}
+					{sourceGeneration}
+					{sourceMode}
+					{repaintStart}
+					{repaintEnd}
+					{coverStrength}
+					{repaintMode}
+					{repaintStrength}
+					{coverNoiseStrength}
+					onrepaintrangechange={(s, e) => {
+						repaintStart = s;
+						repaintEnd = e;
+					}}
+					oncoverstrengthchange={(s) => (coverStrength = s)}
+					onrepaintmodechange={(m) => (repaintMode = m)}
+					onrepaintstrengthchange={(s) => (repaintStrength = s)}
+					oncovernoisestrengthchange={(s) => (coverNoiseStrength = s)}
+					onsourcemodechange={(m) => (sourceMode = m)}
+					onsourceclear={() => (sourceGeneration = null)}
+					onsourceselect={(gen) => applySource(gen, 'repaint')}
+				/>
+				<div class="cowriter-layer" class:open={cowriterShowing} class:compact>
+					{#if compact}
+						<button
+							type="button"
+							class="cowriter-backdrop"
+							tabindex="-1"
+							onclick={closeCoWriter}
+							aria-label="Close"
+						></button>
+					{/if}
+					<div
+						class="cowriter-sheet"
+						bind:this={coWriterPanelEl}
+						role="dialog"
+						aria-modal={cowriterModal}
+						aria-label={SONG_SURFACE_COWRITER}
+						tabindex="-1"
+					>
+						<CoWriterPanel
+							currentSongId={song?.id ?? ''}
+							currentAlbumId={song?.album_id ?? ''}
+							currentAlbumTitle={song?.album_title ?? ''}
+							allSongs={songs}
+							versions={$versions}
+							visible={coWriterOpen}
+							onclose={closeCoWriter}
+							onturncompleted={() => {
+								if (song) {
+									void fetchSong(song.id).then((fresh) => {
+										replaceSongInList(fresh);
+										loadSongData(fresh);
+									});
+								}
+							}}
+						/>
+					</div>
+				</div>
+			</section>
+
+			<section class="takes-pane" class:hidden={!split && recipe} aria-label={SONG_SURFACE_TAKES}>
+				{#if split}
+					<h3 class="pane-title">{SONG_SURFACE_TAKES}</h3>
+				{/if}
+				{#if expiringSoon.count > 0}
+					<div class="expiry-digest">
+						<span class="expiry-digest-icon">⏳</span>
+						<span>
+							{expiringSoon.count} take{expiringSoon.count === 1 ? '' : 's'} expire{expiringSoon.count ===
+							1
+								? 's'
+								: ''}
+							{expiringSoon.minDays === 0
+								? 'soon'
+								: `in ${expiringSoon.minDays} day${expiringSoon.minDays === 1 ? '' : 's'}`} — pick or
+							keep to preserve.
+						</span>
+					</div>
+				{/if}
+				<GenerationsList
+					{song}
+					selectedId={inspected?.id ?? null}
+					loadStatus={takesStatus}
+					loadError={takesError}
+					onselect={(gen) => selectGeneration(gen, song)}
+					onagain={applyAgain}
+					onrepaint={(gen) => applySource(gen, 'repaint')}
+					onaudiocover={(gen) => applySource(gen, 'cover')}
+					onretry={() => {
+						if (song) void refreshTakes(song.id);
+					}}
+				/>
+				{#if inspected}
+					<GenerationView onclose={closeInspector} />
+				{/if}
+			</section>
 		</div>
 	</div>
 {/if}
@@ -605,7 +849,7 @@
 	<ConfirmDeleteDialog
 		title={`Delete "${song.title}"?`}
 		items={[
-			`${song.generation_count} generation${song.generation_count !== 1 ? 's' : ''}`,
+			`${song.generation_count} take${song.generation_count !== 1 ? 's' : ''}`,
 			`${song.version_count} version${song.version_count !== 1 ? 's' : ''}`,
 			'All scores, ratings, and chat history'
 		]}
@@ -648,11 +892,6 @@
 		min-height: 0;
 	}
 
-	.detail-panel.chat-active {
-		padding-left: 2.1rem;
-		padding-right: 2.1rem;
-	}
-
 	.detail-header {
 		display: flex;
 		justify-content: space-between;
@@ -683,29 +922,103 @@
 		color: var(--success);
 	}
 
-	.save-btn {
-		padding: var(--btn-padding-pill);
-		border: none;
-		border-radius: var(--btn-radius-pill);
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
-		font-family: var(--font-display);
-		font-size: var(--btn-font-size);
-		letter-spacing: var(--btn-letter-spacing);
-		text-transform: uppercase;
+	.share-link {
+		font-size: 0.75rem;
+		color: var(--text-subtle);
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		padding: 0.3rem 0.6rem;
 		cursor: pointer;
-		white-space: nowrap;
-		transition: box-shadow 0.2s;
+		word-break: break-all;
+		text-align: left;
 	}
 
-	.save-btn:hover:not(:disabled) {
-		box-shadow: 0 0 20px rgba(160, 32, 240, 0.3);
+	.share-link:hover {
+		border-color: var(--primary);
+		color: var(--primary);
 	}
 
-	.save-btn:disabled {
-		opacity: 0.4;
+	.surface-switch {
+		display: flex;
+		gap: 2px;
+		border-bottom: 1px solid var(--border);
+		padding-bottom: 0;
 	}
 
+	.tab-btn {
+		padding: 0.55rem 1.1rem;
+		background: none;
+		border: none;
+		border-bottom: 2px solid transparent;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 0.87rem;
+		text-transform: uppercase;
+		letter-spacing: var(--btn-letter-spacing);
+		cursor: pointer;
+	}
+
+	.tab-btn:hover {
+		color: var(--text);
+	}
+
+	.tab-btn.active {
+		color: var(--primary);
+		border-bottom: 2px solid transparent;
+		border-image: linear-gradient(90deg, var(--primary), var(--accent)) 1;
+	}
+
+	.panes {
+		display: flex;
+		flex: 1;
+		min-height: 0;
+		min-width: 0;
+	}
+
+	.detail-panel.split .panes {
+		display: grid;
+		grid-template-columns: minmax(var(--song-split-pane-min), 1fr) minmax(
+				var(--song-split-pane-min),
+				1fr
+			);
+		gap: var(--song-split-gap);
+	}
+
+	.recipe-pane,
+	.takes-pane {
+		flex: 1;
+		min-width: 0;
+		min-height: 0;
+		overflow-y: auto;
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+	}
+
+	.recipe-pane.hidden,
+	.takes-pane.hidden {
+		display: none;
+	}
+
+	.pane-title {
+		margin: 0;
+		font-family: var(--font-display);
+		font-size: 0.87rem;
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: var(--btn-letter-spacing);
+	}
+
+	.recipe-toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.55rem;
+		align-items: center;
+	}
+
+	.save-btn,
 	.generate-btn {
 		padding: var(--btn-padding-pill);
 		border: none;
@@ -721,10 +1034,12 @@
 		transition: box-shadow 0.2s;
 	}
 
+	.save-btn:hover:not(:disabled),
 	.generate-btn:hover:not(:disabled) {
 		box-shadow: 0 0 20px rgba(160, 32, 240, 0.3);
 	}
 
+	.save-btn:disabled,
 	.generate-btn:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
@@ -770,6 +1085,69 @@
 	.pinned-seed:hover {
 		background: var(--accent);
 		color: #fff;
+	}
+
+	.cowriter-open {
+		padding: 0.3rem 0.7rem;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: var(--label-font-size);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		cursor: pointer;
+	}
+
+	.cowriter-open:hover,
+	.cowriter-open[aria-expanded='true'] {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.cowriter-layer {
+		display: none;
+	}
+
+	.cowriter-layer.open {
+		display: block;
+		position: absolute;
+		inset: 0;
+		z-index: 20;
+	}
+
+	.cowriter-backdrop {
+		position: absolute;
+		inset: 0;
+		border: none;
+		background: rgba(0, 0, 0, 0.45);
+		cursor: pointer;
+	}
+
+	.cowriter-sheet {
+		height: 100%;
+		min-height: 0;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		display: flex;
+		flex-direction: column;
+	}
+
+	.cowriter-layer.open.compact .cowriter-sheet {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 85%;
+		border-bottom: none;
+		border-radius: 12px 12px 0 0;
+	}
+
+	.cowriter-sheet :global(.cowriter) {
+		border-left: none;
+		flex: 1;
+		min-height: 0;
 	}
 
 	.job-indicator {
@@ -820,47 +1198,6 @@
 	.job-cancel:hover {
 		color: var(--score-bad);
 		border-color: var(--score-bad);
-	}
-
-	.tab-bar {
-		display: flex;
-		gap: 2px;
-		border-bottom: 1px solid var(--border);
-		padding-bottom: 0;
-	}
-
-	.tab-btn {
-		padding: 0.55rem 1.1rem;
-		background: none;
-		border: none;
-		border-bottom: 2px solid transparent;
-		color: var(--text-muted);
-		font-family: var(--font-display);
-		font-size: 0.87rem;
-		text-transform: uppercase;
-		letter-spacing: var(--btn-letter-spacing);
-		cursor: pointer;
-	}
-
-	.tab-btn:hover {
-		color: var(--text);
-	}
-
-	.tab-btn.active {
-		color: var(--primary);
-		border-bottom: 2px solid transparent;
-		border-image: linear-gradient(90deg, var(--primary), var(--accent)) 1;
-	}
-
-	.chat-tab {
-		flex: 1;
-		min-height: 400px;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.chat-tab.hidden {
-		display: none;
 	}
 
 	.picker-anchor {

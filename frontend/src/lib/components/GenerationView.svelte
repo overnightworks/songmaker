@@ -1,44 +1,26 @@
 <script lang="ts">
-	import {
-		fetchSong,
-		scoreGeneration,
-		pickGeneration,
-		unpickGeneration,
-		keepGeneration,
-		unkeepGeneration,
-		unarchiveGeneration,
-		shareGeneration,
-		unshareGeneration,
-		deleteGeneration,
-		rateGeneration,
-		remasterGeneration
-	} from '$lib/api/client';
+	import { fetchSong, scoreGeneration, rateGeneration } from '$lib/api/client';
 	import {
 		selectedSong,
 		selectedGeneration,
 		replaceSongInList,
-		removeGenerationFromSong,
-		updateGenerationInList,
 		playGeneration
 	} from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { backToSong } from '$lib/stores/navigation';
-	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { addToast } from '$lib/stores/toast';
-	import { addGenerationToPlaylist } from '$lib/stores/playlists';
-	import { pendingSource } from '$lib/stores/source';
-	import { setGenerationActions } from '$lib/contexts/generation-actions';
-	import { pinnedSeed, applyGenerationSettings } from '$lib/stores/editor';
-	import type { VersionGenerationParams } from '$lib/api/types';
+	import {
+		NOW_PLAYING_TAKE_PREFIX,
+		TAKE_FROM_RECIPE_PREFIX,
+		TAKE_INSPECTOR_CLOSE,
+		TAKE_SCORE_LABEL,
+		TAKE_SCORING_LABEL
+	} from '$lib/constants';
 	import { scoreColor } from '$lib/utils/scores';
 	import ActionButton from './ActionButton.svelte';
-	import PlaylistPicker from './PlaylistPicker.svelte';
-	import ShareButton from './ShareButton.svelte';
-	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
-	let showPlaylistPicker = $state(false);
-	let showDeleteConfirm = $state(false);
+	let { onclose }: { onclose: () => void } = $props();
+
 	let ratingValue = $state(50);
 	let ratingNotes = $state('');
 	let ratingSaving = $state(false);
@@ -148,42 +130,6 @@
 		}
 	}
 
-	async function onPick(picked: boolean): Promise<void> {
-		if (!generation || !song) return;
-		try {
-			if (picked) await pickGeneration(generation.id);
-			else await unpickGeneration(generation.id);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Pick failed', 'error');
-		}
-	}
-
-	async function onKeep(kept: boolean): Promise<void> {
-		if (!generation || !song) return;
-		try {
-			if (kept) await keepGeneration(generation.id);
-			else await unkeepGeneration(generation.id);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Keep failed', 'error');
-		}
-	}
-
-	async function onUnarchive(): Promise<void> {
-		if (!generation || !song) return;
-		try {
-			await unarchiveGeneration(generation.id);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-			addToast('Generation restored', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Unarchive failed', 'error');
-		}
-	}
-
 	function formatExpiryLine(): string | null {
 		if (!generation) return null;
 		if (generation.is_picked) return 'Kept forever — picked for album';
@@ -198,38 +144,6 @@
 		}
 		if (days <= 0) return 'Auto-archive due any time now';
 		return `Auto-archives in ${days} day${days === 1 ? '' : 's'} (${expiry.toLocaleDateString()}) unless picked or kept`;
-	}
-
-	async function onDelete(): Promise<void> {
-		if (!generation || !song) return;
-		try {
-			await deleteGeneration(generation.id);
-			removeGenerationFromSong(song.id, generation.id);
-			backToSong();
-			addToast('Generation deleted', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Delete failed', 'error');
-		}
-	}
-
-	async function onShareEnable() {
-		if (!generation) throw new Error('No generation');
-		const result = await shareGeneration(generation.id);
-		updateGenerationInList(generation.id, (g) => ({
-			...g,
-			is_shared: true,
-			share_slug: result.share_slug
-		}));
-		await refreshSharesAfterMutation();
-		return result;
-	}
-
-	async function onShareDisable() {
-		if (!generation) return;
-		const genId = generation.id;
-		await unshareGeneration(genId);
-		updateGenerationInList(genId, (g) => ({ ...g, is_shared: false, share_slug: null }));
-		await refreshSharesAfterMutation();
 	}
 
 	async function onRate(): Promise<void> {
@@ -248,121 +162,24 @@
 			ratingSaving = false;
 		}
 	}
-
-	let remastering = $state(false);
-
-	async function onRemaster(): Promise<void> {
-		if (!generation || !song || remastering) return;
-		remastering = true;
-		try {
-			await remasterGeneration(generation.id);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-			addToast('Remastered', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Remaster failed', 'error');
-		} finally {
-			remastering = false;
-		}
-	}
-
-	function onUseAsSource(): void {
-		if (!generation) return;
-		pendingSource.set(generation);
-		backToSong();
-	}
-
-	function onPinSeed(seed: number): void {
-		pinnedSeed.set(seed);
-		addToast(`Seed ${seed} pinned for next generation`, 'success');
-	}
-
-	const VERSION_PARAM_KEYS: (keyof VersionGenerationParams)[] = [
-		'inference_steps',
-		'guidance_scale',
-		'shift',
-		'thinking',
-		'lm_temperature',
-		'lm_top_k',
-		'lm_top_p',
-		'lm_cfg_scale',
-		'lm_negative_prompt',
-		'infer_method',
-		'batch_size',
-		'repaint_mode',
-		'repaint_strength',
-		'lm_repetition_penalty',
-		'use_cot_caption',
-		'use_cot_language',
-		'use_adg',
-		'cfg_interval_start',
-		'cfg_interval_end',
-		'sampler_mode',
-		'velocity_norm_threshold',
-		'velocity_ema_factor',
-		'latent_shift',
-		'latent_rescale',
-		'audio_cover_strength'
-	];
-
-	function onUseSettings(): void {
-		if (!params) return;
-		const filtered: VersionGenerationParams = {};
-		for (const key of VERSION_PARAM_KEYS) {
-			if (params[key] != null) {
-				(filtered as Record<string, unknown>)[key] = params[key];
-			}
-		}
-		applyGenerationSettings(filtered);
-		addToast('Settings loaded into editor', 'success');
-	}
-
-	setGenerationActions({
-		score: () => onScore(),
-		pick: (_id, picked) => onPick(picked),
-		keep: (_id, kept) => onKeep(kept),
-		del: () => onDelete(),
-		rate: async (_id, rating, notes) => {
-			ratingValue = rating;
-			ratingNotes = notes;
-			await onRate();
-		},
-		share: () => onShareEnable(),
-		unshare: () => onShareDisable(),
-		addToPlaylist: async (playlistId, genId) => {
-			await addGenerationToPlaylist(playlistId, genId);
-			addToast('Added to playlist', 'success');
-		},
-		pinSeed: onPinSeed,
-		clickVersion: () => {
-			backToSong();
-		},
-		useAsSource: onUseAsSource
-	});
 </script>
 
 {#if generation && song}
-	<div class="detail-panel">
-		<div class="detail-header">
+	<div class="inspector" role="region" aria-label="{NOW_PLAYING_TAKE_PREFIX} inspector">
+		<div class="inspector-header">
 			<div>
-				<h2 class="detail-title">Generation {generation.generation_number}</h2>
-				<div class="detail-meta">
+				<h2 class="inspector-title">
+					{`${NOW_PLAYING_TAKE_PREFIX} ${generation.generation_number}`}
+				</h2>
+				<div class="inspector-meta">
 					{#if generation.version_number !== null}
-						<span class="version-tag">v{generation.version_number}</span>
+						<span class="version-tag">{TAKE_FROM_RECIPE_PREFIX} {generation.version_number}</span>
 					{/if}
 					{#if generation.model_mode}
 						<span class="model-tag">{generation.model_mode}</span>
 					{/if}
-					{#if generation.seed}
-						<button
-							type="button"
-							class="seed-tag seed-tag-button"
-							class:pinned={$pinnedSeed === generation.seed}
-							onclick={() => onPinSeed(generation.seed ?? 0)}
-							title="Click to pin this seed for the next generation"
-						>
-							seed:{generation.seed}
-						</button>
+					{#if generation.seed != null}
+						<span class="seed-tag">seed:{generation.seed}</span>
 					{/if}
 				</div>
 				{#if formatExpiryLine()}
@@ -372,88 +189,19 @@
 						class:safe={generation.is_picked || generation.is_kept}
 					>
 						{formatExpiryLine()}
-						{#if generation.is_archived}
-							<button type="button" class="unarchive-btn" onclick={onUnarchive}> Restore </button>
-						{/if}
 					</div>
 				{/if}
 			</div>
-			<div class="detail-actions">
-				<ActionButton
-					icon="star"
-					activeIcon="star-filled"
-					label={generation.is_picked ? 'Unpick' : 'Pick'}
-					active={generation.is_picked}
-					onclick={() => onPick(!generation.is_picked)}
-				/>
-				<ActionButton
-					icon="heart"
-					activeIcon="heart-filled"
-					label={generation.is_kept ? 'Unkept' : 'Keep'}
-					active={generation.is_kept}
-					onclick={() => onKeep(!generation.is_kept)}
-				/>
+			<div class="inspector-actions">
 				<ActionButton
 					icon="refresh-cw"
-					label={scoring ? 'Scoring...' : 'Score'}
+					label={scoring ? TAKE_SCORING_LABEL : TAKE_SCORE_LABEL}
 					disabled={scoring}
 					onclick={onScore}
 				/>
-				<div class="picker-anchor">
-					<ActionButton
-						icon="list-plus"
-						label="Add to Playlist"
-						onclick={() => (showPlaylistPicker = true)}
-					/>
-					{#if showPlaylistPicker}
-						<PlaylistPicker
-							onselect={async (playlistId) => {
-								await addGenerationToPlaylist(playlistId, generation.id);
-								showPlaylistPicker = false;
-								addToast('Added to playlist', 'success');
-							}}
-							onclose={() => (showPlaylistPicker = false)}
-						/>
-					{/if}
-				</div>
-				<ShareButton
-					isShared={generation.is_shared}
-					shareSlug={generation.share_slug}
-					onshare={onShareEnable}
-					onunshare={onShareDisable}
-				/>
-				<ActionButton
-					icon="wand"
-					label={remastering ? 'Remastering...' : 'Remaster'}
-					disabled={remastering}
-					onclick={onRemaster}
-				/>
-				<ActionButton
-					icon="trash"
-					label="Delete"
-					destructive
-					onclick={() => (showDeleteConfirm = true)}
-				/>
-				<button class="use-as-source-btn" onclick={onUseAsSource}>Use as Source</button>
-				{#if params}
-					<button class="use-as-source-btn" onclick={onUseSettings}>Use Settings</button>
-				{/if}
+				<button type="button" class="close-btn" onclick={onclose}>{TAKE_INSPECTOR_CLOSE}</button>
 			</div>
 		</div>
-
-		{#if generation.is_shared && generation.share_slug}
-			<button
-				class="share-link"
-				onclick={() => {
-					const url = `${window.location.origin}/share/gen/${generation.share_slug}`;
-					navigator.clipboard.writeText(url);
-					addToast('Link copied', 'success');
-				}}
-				title="Click to copy share link"
-			>
-				{window.location.origin}/share/gen/{generation.share_slug}
-			</button>
-		{/if}
 
 		{#if generation.src_generation_number}
 			{@const srcGen = song?.generations.find((g) => g.id === generation.src_generation_id)}
@@ -467,24 +215,28 @@
 				<span class="lineage-label">Source</span>
 				<span class="lineage-chain">
 					{#if generation.generation_params?.task_type === 'repaint'}
-						Repainted from Gen #{generation.src_generation_number}
+						Repainted from {NOW_PLAYING_TAKE_PREFIX}
+						#{generation.src_generation_number}
 						{#if generation.generation_params?.repainting_start != null && generation.generation_params.repainting_end != null}
 							({(generation.generation_params.repainting_start * 100).toFixed(0)}%–{(
 								generation.generation_params.repainting_end * 100
 							).toFixed(0)}%)
 						{/if}
 					{:else if generation.generation_params?.task_type === 'cover'}
-						Covered from Gen #{generation.src_generation_number}
+						Covered from {NOW_PLAYING_TAKE_PREFIX}
+						#{generation.src_generation_number}
 						{#if generation.generation_params?.audio_cover_strength != null}
 							(strength {(generation.generation_params.audio_cover_strength * 100).toFixed(0)}%)
 						{/if}
 					{:else}
-						From Gen #{generation.src_generation_number}
+						From {NOW_PLAYING_TAKE_PREFIX}
+						#{generation.src_generation_number}
 					{/if}
 				</span>
 				{#if srcGen && song && repaintStartSec !== null}
 					<div class="compare-buttons">
 						<button
+							type="button"
 							class="compare-btn"
 							class:active={audioPlayer.current?.generation.id === srcGen.id}
 							onclick={() => {
@@ -493,6 +245,7 @@
 							}}>Source</button
 						>
 						<button
+							type="button"
 							class="compare-btn"
 							class:active={audioPlayer.current?.generation.id === generation.id}
 							onclick={() => {
@@ -549,7 +302,7 @@
 					rows="2"
 				></textarea>
 				{#if ratingDirty}
-					<button class="rating-save" onclick={onRate} disabled={ratingSaving}>
+					<button type="button" class="rating-save" onclick={onRate} disabled={ratingSaving}>
 						{ratingSaving ? 'Saving...' : 'Save Rating'}
 					</button>
 				{/if}
@@ -579,55 +332,39 @@
 			{/if}
 		{/if}
 	</div>
-
-	{#if showDeleteConfirm}
-		<ConfirmDeleteDialog
-			title={`Delete Generation #${generation.generation_number}?`}
-			items={['Audio files will be permanently deleted']}
-			confirmLabel="Delete Generation"
-			onconfirm={() => {
-				showDeleteConfirm = false;
-				onDelete();
-			}}
-			oncancel={() => (showDeleteConfirm = false)}
-		/>
-	{/if}
 {/if}
 
 <style>
-	.picker-anchor {
-		position: relative;
-	}
-
-	.detail-panel {
-		padding: 1.2rem 1.5rem calc(var(--player-height) + 1.2rem);
+	.inspector {
+		padding: 0.8rem 0 0;
 		display: flex;
 		flex-direction: column;
 		gap: 0.8rem;
-		flex: 1;
-		max-width: 1200px;
-		width: 100%;
 		min-width: 0;
-		min-height: 0;
+		border-top: 1px solid var(--border);
+		margin-top: 0.8rem;
 	}
 
-	.detail-header {
+	.inspector-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
+		gap: 0.7rem;
 	}
 
-	.detail-title {
+	.inspector-title {
 		font-family: var(--font-display);
-		font-size: 1.73rem;
+		font-size: 1.2rem;
 		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 0.13rem;
+		margin: 0;
 	}
 
-	.detail-meta {
+	.inspector-meta {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 0.55rem;
 		margin-top: 0.3rem;
 	}
@@ -647,21 +384,6 @@
 
 	.expiry-line.safe {
 		color: #60a070;
-	}
-
-	.unarchive-btn {
-		font-size: 0.7rem;
-		padding: 0.15rem 0.5rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		color: var(--text);
-		border-radius: 3px;
-		cursor: pointer;
-	}
-
-	.unarchive-btn:hover {
-		background: var(--surface-hover, var(--surface));
-		border-color: var(--accent);
 	}
 
 	.version-tag {
@@ -691,63 +413,28 @@
 		font-family: var(--font-body);
 	}
 
-	.seed-tag-button {
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		padding: 0.15rem 0.5rem;
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-
-	.seed-tag-button:hover {
-		color: var(--accent);
-		border-color: var(--accent);
-	}
-
-	.seed-tag-button.pinned {
-		color: var(--accent);
-		border-color: var(--accent);
-		background: rgba(160, 32, 240, 0.1);
-	}
-
-	.detail-actions {
+	.inspector-actions {
 		display: flex;
 		gap: 0.55rem;
 		align-items: center;
 		flex-wrap: wrap;
+		flex-shrink: 0;
 	}
 
-	.use-as-source-btn {
-		padding: var(--btn-padding-pill);
-		border: none;
-		border-radius: var(--btn-radius-pill);
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
-		font-size: 0.78rem;
-		font-family: var(--font-display);
-		letter-spacing: var(--btn-letter-spacing);
-		cursor: pointer;
-		white-space: nowrap;
-	}
-
-	.use-as-source-btn:hover {
-		filter: brightness(1.2);
-	}
-
-	.share-link {
-		font-size: 0.75rem;
-		color: var(--text-subtle);
-		background: none;
+	.close-btn {
+		padding: 0.25rem 0.6rem;
 		border: 1px solid var(--border);
-		border-radius: 4px;
-		padding: 0.3rem 0.6rem;
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: var(--label-font-size);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
 		cursor: pointer;
-		word-break: break-all;
-		text-align: left;
 	}
 
-	.share-link:hover {
+	.close-btn:hover {
 		border-color: var(--primary);
 		color: var(--primary);
 	}

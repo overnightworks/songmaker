@@ -57,7 +57,6 @@ vi.mock('$app/state', () => ({
 }));
 
 import AlbumDetailView from './AlbumDetailView.svelte';
-import GenerationView from './GenerationView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import SongDetailView from './SongDetailView.svelte';
 import SettingsLayout from '../../routes/settings/+layout.svelte';
@@ -193,9 +192,30 @@ describe('detail views own no content back', () => {
 		expect(playlistTarget.textContent).toContain('Night Drive');
 
 		selectedGenerationId.set('g1');
-		const generationTarget = await renderView((target) => mount(GenerationView, { target }));
+		const generationTarget = await renderView((target) => mount(SongDetailView, { target }));
 		expect(generationTarget.querySelector('.back-btn')).toBeNull();
-		expect(generationTarget.textContent).toContain('Generation 1');
+		expect(generationTarget.textContent?.replace(/\s+/g, ' ')).toContain('Local Only');
+		expect(generationTarget.textContent?.replace(/\s+/g, ' ')).toContain('Take 1');
+		expect(generationTarget.querySelector('[role="tablist"]')?.textContent).toContain('Recipe');
+		expect(generationTarget.querySelector('[role="tablist"]')?.textContent).toContain('Takes');
+		expect(generationTarget.querySelector('[role="tablist"]')?.textContent).not.toContain(
+			'Co-Writer'
+		);
+	});
+
+	it('does not treat a take as a separate back destination', async () => {
+		const { goBack, initNavigation, resetNavigationForTests } =
+			await import('$lib/stores/navigation');
+		resetNavigationForTests();
+		history.replaceState(null, '', '/?song=s1&gen=g1');
+		const cleanup = initNavigation();
+		expect(history.state.index).toBe(0);
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedGenerationId)).toBe('g1');
+		goBack();
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(selectedGenerationId)).toBeNull();
+		cleanup();
 	});
 
 	it('does not render a settings content back beside the shell', async () => {

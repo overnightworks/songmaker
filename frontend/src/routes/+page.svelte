@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { albumList, selectedSong, selectedGeneration, selectedAlbumId } from '$lib/stores/player';
+	import { albumList, selectedSong, selectedAlbumId } from '$lib/stores/player';
 	import { librarySurface } from '$lib/stores/libraryContext';
-	import { detailTab, goBack, initNavigation, openLibraryCreate } from '$lib/stores/navigation';
+	import { goBack, initNavigation, openLibraryCreate } from '$lib/stores/navigation';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
 	import { loadActiveModels } from '$lib/stores/presets';
 	import {
@@ -17,7 +17,6 @@
 	import SongList from '$lib/components/SongList.svelte';
 	import CreateForm from '$lib/components/CreateForm.svelte';
 	import SongDetailView from '$lib/components/SongDetailView.svelte';
-	import GenerationView from '$lib/components/GenerationView.svelte';
 	import AlbumDetailView from '$lib/components/AlbumDetailView.svelte';
 	import PlaylistDetailView from '$lib/components/PlaylistDetailView.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -28,15 +27,13 @@
 	let navCleanup: (() => void) | undefined;
 
 	const song = $derived($selectedSong);
-	const activeGen = $derived($selectedGeneration);
 	const currentAlbumId = $derived($selectedAlbumId);
 	const albums = $derived($albumList);
 	const selectedAlbum = $derived(
 		currentAlbumId ? (albums.find((a) => a.id === currentAlbumId) ?? null) : null
 	);
 	const playlistDetail = $derived($selectedPlaylistDetail);
-	const tab = $derived($detailTab);
-	const hasSelection = $derived(!!song || !!activeGen || !!selectedAlbum || !!playlistDetail);
+	const hasSelection = $derived(!!song || !!selectedAlbum || !!playlistDetail);
 	const hasDetail = $derived(
 		$librarySurface === 'create' || ($librarySurface === 'detail' && hasSelection)
 	);
@@ -114,11 +111,9 @@
 				}}
 			/>
 
-			<main class="detail-panel" class:chat-active={!!song && tab === 'chat'}>
+			<main class="detail-panel">
 				{#if $librarySurface === 'create'}
 					<CreateForm albums={$albumList} />
-				{:else if activeGen && song}
-					<GenerationView />
 				{:else if song}
 					<SongDetailView />
 				{:else if selectedAlbum}
@@ -193,10 +188,6 @@
 
 	.workspace.has-detail > .detail-panel {
 		display: flex;
-	}
-
-	.detail-panel.chat-active {
-		overflow-y: hidden;
 	}
 
 	.loading,
