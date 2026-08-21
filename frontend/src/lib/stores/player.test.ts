@@ -253,7 +253,11 @@ describe('browsing state', () => {
 		});
 		await loadSongsForAlbum('a1');
 		expect(vi.mocked(fetchSongs)).toHaveBeenCalledWith('a1', 0, 200);
-		expect(get(songList).map((item) => item.id).sort()).toEqual(['s-hidden', 's-page']);
+		expect(
+			get(songList)
+				.map((item) => item.id)
+				.sort()
+		).toEqual(['s-hidden', 's-page']);
 	});
 
 	it('upsertSongInList appends an absent song and replaces a present one', () => {

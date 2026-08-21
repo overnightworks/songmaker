@@ -193,7 +193,9 @@
 				<p class="empty-tab" role="status">{LIBRARY_ALBUMS_LOADING}</p>
 			{:else if albumLoad?.status === 'error' && albumSongs.length === 0}
 				<p class="empty-tab" role="alert">{albumLoad.error}</p>
-				<button class="retry-btn" onclick={() => currentAlbumId && loadSongsForAlbum(currentAlbumId)}
+				<button
+					class="retry-btn"
+					onclick={() => currentAlbumId && loadSongsForAlbum(currentAlbumId)}
 					>{LIBRARY_RETRY_LABEL}</button
 				>
 			{:else if albumSongs.length === 0}

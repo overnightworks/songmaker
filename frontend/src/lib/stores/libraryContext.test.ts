@@ -356,9 +356,11 @@ describe('library history snapshot', () => {
 			songId: 's9'
 		});
 		expect(fetchSong).toHaveBeenCalledWith('s9');
-		expect(get(songList).find((item) => item.id === 's9')?.generations.map((item) => item.id)).toEqual(
-			['g1']
-		);
+		expect(
+			get(songList)
+				.find((item) => item.id === 's9')
+				?.generations.map((item) => item.id)
+		).toEqual(['g1']);
 	});
 
 	it('lets a newer history restore win over an in-flight playlist fetch', async () => {

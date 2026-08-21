@@ -5,7 +5,13 @@
 
 	let { onNewSong }: Props = $props();
 
-	import { albumList, albumSongsLoad, loadSongsForAlbum, songList, selectedAlbumId } from '$lib/stores/player';
+	import {
+		albumList,
+		albumSongsLoad,
+		loadSongsForAlbum,
+		songList,
+		selectedAlbumId
+	} from '$lib/stores/player';
 	import {
 		persistLibraryHistory,
 		selectAlbumOverview,

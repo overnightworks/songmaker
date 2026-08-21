@@ -1752,10 +1752,11 @@ def test_stream_job_initial_state(client: TestClient) -> None:
 
 
 def test_stream_job_sends_updates(client: TestClient) -> None:
+    import asyncio
     import json
-    import threading
 
     from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.generation_api import _job_event_generator
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -1763,23 +1764,17 @@ def test_stream_job_sends_updates(client: TestClient) -> None:
         session.commit()
         job_id = job.id
 
-    def _complete_after_delay():
-        import time
-        time.sleep(0.3)
+    async def _collect_updates() -> list[dict]:
+        stream = _job_event_generator(ctx, job_id)
+        first = json.loads((await anext(stream)).removeprefix("data: "))
         with ctx.db() as session:
             update_job_status(session, job_id, "completed", progress=1.0)
             session.commit()
+        second = json.loads((await anext(stream)).removeprefix("data: "))
+        await stream.aclose()
+        return [first, second]
 
-    updater = threading.Thread(target=_complete_after_delay, daemon=True)
-    updater.start()
-
-    events = []
-    with client.stream("GET", f"/api/jobs/{job_id}/stream") as resp:
-        for line in resp.iter_lines():
-            if line.startswith("data: "):
-                events.append(json.loads(line[len("data: "):]))
-
-    updater.join(timeout=5)
+    events = asyncio.run(_collect_updates())
 
     statuses = [e["status"] for e in events]
     assert "queued" in statuses
