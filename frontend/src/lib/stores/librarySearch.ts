@@ -29,6 +29,8 @@ export interface LibraryBrowseState {
 	error: string | null;
 	albumHasMore: boolean;
 	songHasMore: boolean;
+	albumOffset: number;
+	songOffset: number;
 }
 
 export interface LibraryAlbumGroup {
@@ -51,7 +53,9 @@ export const libraryBrowse = writable<LibraryBrowseState>({
 	status: 'idle',
 	error: null,
 	albumHasMore: false,
-	songHasMore: false
+	songHasMore: false,
+	albumOffset: 0,
+	songOffset: 0
 });
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -160,8 +164,9 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 	const sort = get(librarySort);
 	const albums = get(albumList);
 	const songs = get(songList);
-	const albumOffset = reset ? 0 : albums.length;
-	const songOffset = reset ? 0 : songs.length;
+	const browse = get(libraryBrowse);
+	const albumOffset = reset ? 0 : browse.albumOffset;
+	const songOffset = reset ? 0 : browse.songOffset;
 	libraryBrowse.update((state) => ({ ...state, status: 'loading', error: null }));
 	try {
 		const [albumPage, songPage] = await Promise.all([
@@ -180,7 +185,9 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 			status: 'ready',
 			error: null,
 			albumHasMore: albumPage.has_more,
-			songHasMore: songPage.has_more
+			songHasMore: songPage.has_more,
+			albumOffset: albumOffset + albumPage.items.length,
+			songOffset: songOffset + songPage.items.length
 		});
 		return true;
 	} catch (err) {
@@ -207,7 +214,9 @@ export function resetLibrarySearchForTests(): void {
 		status: 'idle',
 		error: null,
 		albumHasMore: false,
-		songHasMore: false
+		songHasMore: false,
+		albumOffset: 0,
+		songOffset: 0
 	});
 }
 

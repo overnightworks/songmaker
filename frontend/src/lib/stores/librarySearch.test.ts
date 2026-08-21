@@ -24,6 +24,8 @@ import {
 	changeLibrarySort,
 	groupSearchHits,
 	librarySearch,
+	libraryBrowse,
+	loadLibraryBrowse,
 	loadMoreLibrarySearch,
 	resetLibrarySearchForTests,
 	retryLibrarySearch,
@@ -200,6 +202,48 @@ describe('changeLibrarySort', () => {
 			limit: LIBRARY_SEARCH_PAGE_SIZE,
 			cursor: null
 		});
+	});
+});
+
+describe('loadLibraryBrowse', () => {
+	it('keeps browse offsets independent of songs appended from search', async () => {
+		fetchAlbums.mockResolvedValue({
+			items: [album({ id: 'a-page' })],
+			total: 2,
+			offset: 0,
+			limit: 50,
+			has_more: true
+		});
+		fetchSongs.mockResolvedValue({
+			items: [song({ id: 's-page' })],
+			total: 2,
+			offset: 0,
+			limit: 200,
+			has_more: true
+		});
+		await loadLibraryBrowse({ reset: true });
+		expect(get(libraryBrowse).songOffset).toBe(1);
+
+		songList.update((songs) => [...songs, song({ id: 's-search-only' })]);
+		fetchAlbums.mockResolvedValue({
+			items: [],
+			total: 2,
+			offset: 1,
+			limit: 50,
+			has_more: false
+		});
+		fetchSongs.mockResolvedValue({
+			items: [song({ id: 's-page-2' })],
+			total: 2,
+			offset: 1,
+			limit: 200,
+			has_more: false
+		});
+		await loadLibraryBrowse({ reset: false });
+		expect(fetchSongs).toHaveBeenLastCalledWith(undefined, 1, expect.any(Number), {
+			sort: 'newest'
+		});
+		expect(get(libraryBrowse).songOffset).toBe(2);
 	});
 });
 

@@ -1582,7 +1582,7 @@ def test_admin_product_index_is_personal_library(tmp_path: Path) -> None:
         session.commit()
     listed = c.get("/api/albums")
     assert listed.status_code == 200
-    assert listed.json()["items"] == []
+    assert {album["id"] for album in listed.json()["items"]} >= {"other"}
     by_id = c.get("/api/albums/other")
     assert by_id.status_code == 200
     assert by_id.json()["id"] == "other"

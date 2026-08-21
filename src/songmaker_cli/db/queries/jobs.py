@@ -109,6 +109,18 @@ def get_job(session: Session, job_id: str) -> Job | None:
     return session.query(Job).filter_by(id=job_id).first()
 
 
+def lock_active_job(session: Session, job_id: str) -> Job | None:
+    job = (
+        session.query(Job)
+        .filter_by(id=job_id)
+        .with_for_update()
+        .first()
+    )
+    if job is None or job.status in JOB_TERMINAL_STATUSES:
+        return None
+    return job
+
+
 def get_queue_position(session: Session, job: Job) -> int | None:
     """Return 1-based queue position for a queued job, or None if not queued.
 

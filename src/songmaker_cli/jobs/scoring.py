@@ -13,6 +13,7 @@ from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.queries import (
     get_claude_scoring_model,
     get_generation,
+    lock_active_job,
     save_scores,
 )
 from songmaker_cli.parser import SongMeta
@@ -112,6 +113,9 @@ def run_scoring_job(
 
         with db_factory() as session:
             from songmaker_cli.db.models import Generation as GenModel
+            if lock_active_job(session, job_id) is None:
+                log.info("Scoring job %s stopping because job is terminal", job_id)
+                return
             save_scores(session, gen_id, scores_dict)
             if text_accuracy is not None:
                 gen_record = session.query(GenModel).filter_by(id=gen_id).first()

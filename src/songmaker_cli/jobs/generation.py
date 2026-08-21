@@ -29,7 +29,6 @@ from songmaker_cli.config import (
     resolve_model_mode,
 )
 from songmaker_cli.constants import (
-    JOB_TERMINAL_STATUSES,
     WORKER_SHARED_TMP_DIRNAME,
     JobStatus,
     JobType,
@@ -38,9 +37,9 @@ from songmaker_cli.db.models import GenerationPreset
 from songmaker_cli.db.queries import (
     create_generation,
     get_default_preset,
-    get_job,
     get_song,
     get_version,
+    lock_active_job,
 )
 from songmaker_cli.generate import (
     _decode_audio,
@@ -402,8 +401,7 @@ def _persist_generation_row(
 
     try:
         with db_factory() as session:
-            job = get_job(session, job_id)
-            if job is None or job.status in JOB_TERMINAL_STATUSES:
+            if lock_active_job(session, job_id) is None:
                 _cleanup_orphaned_files(ctx.audio_dir, mp3_rel, wav_rel)
                 return
             create_generation(

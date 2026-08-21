@@ -1,11 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import {
-		albumList,
-		selectedSong,
-		selectedGeneration,
-		selectedAlbumId
-	} from '$lib/stores/player';
+	import { albumList, selectedSong, selectedGeneration, selectedAlbumId } from '$lib/stores/player';
 	import { loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { detailTab, initNavigation } from '$lib/stores/navigation';
 	import { selectedPlaylistDetail, loadPlaylists } from '$lib/stores/playlists';

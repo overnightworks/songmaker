@@ -12,6 +12,7 @@ from songmaker_cli.api_helpers import (
     Pagination,
     check_album_access,
     cleanup_generation_files,
+    owner_filter,
     page_has_more,
     parse_optional_search_query,
     slugify,
@@ -59,9 +60,10 @@ def api_list_albums(
     session: Session = Depends(get_db_session),
 ) -> PaginatedResponse[AlbumResponse]:
     query = parse_optional_search_query(q)
-    total = count_albums(session, user_id=user.id, q=query)
+    uid = owner_filter(user)
+    total = count_albums(session, user_id=uid, q=query)
     albums = list_albums(
-        session, user_id=user.id, offset=page.offset, limit=page.limit,
+        session, user_id=uid, offset=page.offset, limit=page.limit,
         q=query, sort=sort,
     )
     items = [AlbumResponse.from_orm(a) for a in albums]

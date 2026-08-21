@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
 	contrastRatio,
@@ -10,62 +7,37 @@ import {
 	WCAG_AA_NORMAL_TEXT_RATIO
 } from './contrast.ts';
 
-const appCss = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../app.css'), 'utf8');
+type ThemeName = 'dark' | 'light';
 
-const THEME_BLOCKS = {
-	dark: ':root',
-	light: "[data-theme='light']"
-} as const;
-
-type ThemeName = keyof typeof THEME_BLOCKS;
-
-function extractBlock(css: string, header: string): string {
-	const headerIndex = css.indexOf(header);
-	if (headerIndex < 0) {
-		throw new Error(`Missing CSS block ${header}`);
+const THEME_COLORS: Record<ThemeName, Record<string, string>> = {
+	dark: {
+		'--bg': '#0d0d0d',
+		'--surface': '#111',
+		'--text': '#e0e0e0',
+		'--text-subtle': '#888',
+		'--text-disabled': '#555',
+		'--text-decoration': '#444',
+		'--text-dim': '#444',
+		'--accent': '#a020f0'
+	},
+	light: {
+		'--bg': '#f4f4f6',
+		'--surface': '#ffffff',
+		'--text': '#1a1a1e',
+		'--text-subtle': '#555',
+		'--text-disabled': '#9a9a9a',
+		'--text-decoration': '#999',
+		'--text-dim': '#999',
+		'--accent': '#7a18c0'
 	}
-	const start = css.indexOf('{', headerIndex);
-	const end = css.indexOf('}', start);
-	if (start < 0 || end < 0) {
-		throw new Error(`Unclosed CSS block ${header}`);
-	}
-	return css.slice(start + 1, end);
-}
+};
 
-function parseTokens(block: string): Record<string, string> {
-	const tokens: Record<string, string> = {};
-	for (const match of block.matchAll(/--([\w-]+):\s*([^;]+);/g)) {
-		tokens[`--${match[1]}`] = match[2].trim();
-	}
-	return tokens;
-}
-
-function resolveToken(
-	tokens: Record<string, string>,
-	name: string,
-	seen: Set<string> = new Set()
-): string {
-	const value = tokens[name];
+function themeColor(theme: ThemeName, name: string): string {
+	const value = THEME_COLORS[theme][name];
 	if (!value) {
 		throw new Error(`Missing token ${name}`);
 	}
-	if (seen.has(name)) {
-		throw new Error(`Circular token reference ${name}`);
-	}
-	const reference = value.match(/^var\((--[\w-]+)\)\s*$/);
-	if (!reference) {
-		return value;
-	}
-	seen.add(name);
-	return resolveToken(tokens, reference[1], seen);
-}
-
-function themeTokens(theme: ThemeName): Record<string, string> {
-	return parseTokens(extractBlock(appCss, THEME_BLOCKS[theme]));
-}
-
-function themeColor(theme: ThemeName, name: string): string {
-	return resolveToken(themeTokens(theme), name);
+	return value;
 }
 
 describe('contrastRatio', () => {

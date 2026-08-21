@@ -23,11 +23,7 @@
 	import { addToast } from '$lib/stores/toast';
 	import AlbumNode from './AlbumNode.svelte';
 	import type { SongItem, AlbumItem } from '$lib/api/types';
-	import {
-		CREATED_SORT_LABELS,
-		CREATED_SORTS,
-		compareByCreatedAt
-	} from '$lib/utils/recency';
+	import { CREATED_SORT_LABELS, CREATED_SORTS, compareByCreatedAt } from '$lib/utils/recency';
 	import {
 		LIBRARY_BROWSE_EMPTY,
 		LIBRARY_LOAD_MORE,
@@ -121,6 +117,13 @@
 	function toggleAlbum(albumId: string): void {
 		if (expandedAlbums.has(albumId)) expandedAlbums.delete(albumId);
 		else expandedAlbums.add(albumId);
+	}
+
+	function hydrateAndOpenAlbum(album: AlbumItem): void {
+		albumList.update((list) =>
+			list.some((item) => item.id === album.id) ? list : [...list, album]
+		);
+		selectAlbumOverview(album.id);
 	}
 
 	async function onCreatePlaylist(): Promise<void> {
@@ -229,7 +232,7 @@
 			expanded={expandedAlbums.has(group.album.id)}
 			selected={group.album.id === currentAlbumId}
 			ontoggle={() => toggleAlbum(group.album.id)}
-			onselect={() => selectAlbumOverview(group.album.id)}
+			onselect={() => hydrateAndOpenAlbum(group.album)}
 		/>
 	{/each}
 

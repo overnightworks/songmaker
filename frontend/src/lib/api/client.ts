@@ -9,7 +9,12 @@ export {
 	restoreAlbum,
 	cleanupAlbum
 } from './albums';
-export { searchLibrary, type LibrarySearchHit, type LibrarySearchResponse, type LibrarySort } from './library';
+export {
+	searchLibrary,
+	type LibrarySearchHit,
+	type LibrarySearchResponse,
+	type LibrarySort
+} from './library';
 export {
 	fetchSongs,
 	fetchSong,

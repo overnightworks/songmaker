@@ -274,9 +274,10 @@ def test_user_b_never_sees_user_a_titles(alice: TestClient, bob: TestClient) -> 
     assert "song-nacht" not in bob_songs
 
 
-def test_admin_product_index_is_own_library_only(admin: TestClient) -> None:
-    albums = admin.get("/api/albums").json()["items"]
-    assert {a["id"] for a in albums} == {"admin-own"}
+def test_admin_browse_sees_all_search_stays_personal(admin: TestClient) -> None:
+    albums = {a["id"] for a in admin.get("/api/albums").json()["items"]}
+    assert "admin-own" in albums
+    assert "nachtstrom" in albums
     hits = admin.get("/api/library/search", params={"q": "nachtstrom"}).json()["items"]
     assert hits == []
     own = admin.get("/api/library/search", params={"q": "admin"}).json()["items"]

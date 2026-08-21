@@ -141,6 +141,7 @@ from songmaker_cli.db.queries.jobs import (
     job_counts_by_type_and_status as job_counts_by_type_and_status,
 )
 from songmaker_cli.db.queries.jobs import job_duration_stats as job_duration_stats
+from songmaker_cli.db.queries.jobs import lock_active_job as lock_active_job
 from songmaker_cli.db.queries.jobs import recover_stale_jobs as recover_stale_jobs
 from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_age as recover_stale_jobs_by_age
 from songmaker_cli.db.queries.jobs import (
