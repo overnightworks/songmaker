@@ -2,7 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
+import type { AlbumItem, PlaylistItem, ShareInventoryItem, SongItem } from '$lib/api/types';
 import {
 	LIBRARY_ALBUMS_EMPTY,
 	LIBRARY_PLAYLISTS_EMPTY,
@@ -13,27 +13,43 @@ import {
 	LIBRARY_SEARCH_LOADING,
 	LIBRARY_SEARCH_PLACEHOLDER,
 	LIBRARY_SECTION_LABELS,
-	LIBRARY_SHARED_EMPTY
+	LIBRARY_SHARED_EMPTY,
+	LIBRARY_SHARED_LOADING,
+	LIBRARY_SHARES_HISTORY_SECTION,
+	LIBRARY_SHARES_OPEN_LABEL,
+	LIBRARY_SHARES_TYPE_LABELS,
+	LIBRARY_SHARES_UNSHARE_LABEL
 } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
-import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import {
+	applyLibraryHistory,
+	libraryRootState,
+	resetLibraryContextForTests
+} from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, selectedAlbumId, selectedSongId, songList } from '$lib/stores/player';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
+import { openSharesInventory, resetSharesForTests } from '$lib/stores/shares';
 
 const searchLibrary = vi.fn();
 const fetchPlaylists = vi.fn();
+const fetchShares = vi.fn();
+const fetchAlbum = vi.fn();
+const fetchAlbums = vi.fn();
+const fetchSongs = vi.fn();
+const unshareAlbum = vi.fn();
 
 vi.mock('$lib/api/library', () => ({
-	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
+	searchLibrary: (...args: unknown[]) => searchLibrary(...args),
+	fetchShares: (...args: unknown[]) => fetchShares(...args)
 }));
 vi.mock('$lib/api/albums', () => ({
-	fetchAlbum: vi.fn(),
-	fetchAlbums: vi.fn()
+	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
+	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args)
 }));
 vi.mock('$lib/api/songs', () => ({
 	fetchSong: vi.fn(),
-	fetchSongs: vi.fn()
+	fetchSongs: (...args: unknown[]) => fetchSongs(...args)
 }));
 vi.mock('$lib/api/client', () => ({
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
@@ -46,7 +62,11 @@ vi.mock('$lib/api/client', () => ({
 		limit: 200,
 		has_more: false
 	}),
-	createPlaylist: vi.fn()
+	createPlaylist: vi.fn(),
+	unshareAlbum: (...args: unknown[]) => unshareAlbum(...args),
+	unshareSong: vi.fn(),
+	unsharePlaylist: vi.fn(),
+	unshareGeneration: vi.fn()
 }));
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
@@ -127,13 +147,53 @@ function sectionTab(target: HTMLElement, label: string): HTMLButtonElement {
 	return tab;
 }
 
+function shareItem(overrides: Partial<ShareInventoryItem> = {}): ShareInventoryItem {
+	return {
+		type: 'song',
+		id: 's-server',
+		title: 'Server Shared',
+		share_slug: 'slug-server',
+		created_at: '2026-01-01T00:00:00+00:00',
+		public_path: '/share/song/slug-server',
+		...overrides
+	};
+}
+
 beforeEach(() => {
 	vi.useFakeTimers();
 	searchLibrary.mockReset();
 	fetchPlaylists.mockReset();
+	fetchShares.mockReset();
 	fetchPlaylists.mockResolvedValue([]);
+	fetchShares.mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 50,
+		has_more: false
+	});
+	fetchAlbums.mockReset();
+	fetchAlbum.mockReset();
+	unshareAlbum.mockReset();
+	unshareAlbum.mockResolvedValue(undefined);
+	fetchSongs.mockReset();
+	fetchAlbums.mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 50,
+		has_more: false
+	});
+	fetchSongs.mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 200,
+		has_more: false
+	});
 	resetLibrarySearchForTests();
 	resetLibraryContextForTests();
+	resetSharesForTests();
 	searchQuery.set('');
 	playlistList.set([]);
 	playlistLoad.set({ status: 'idle', error: null });
@@ -150,6 +210,7 @@ afterEach(async () => {
 	vi.useRealTimers();
 	resetLibrarySearchForTests();
 	resetLibraryContextForTests();
+	resetSharesForTests();
 	searchQuery.set('');
 	selectedAlbumId.set(null);
 	selectedSongId.set(null);
@@ -307,9 +368,9 @@ describe('SongList sections', () => {
 
 		expect(target.querySelector('[data-library-section="albums"]')).not.toBeNull();
 		expect(target.querySelector('[data-library-section="playlists"]')).toBeNull();
-		expect(target.querySelector('[data-library-section="shared"]')).toBeNull();
+		expect(target.querySelector('[data-library-section="shares"]')).toBeNull();
 		expect(target.querySelector('.song-row')).toBeNull();
-		expect(target.querySelector('.shared-row')).toBeNull();
+		expect(target.querySelector('.share-row')).toBeNull();
 		expect(target.textContent).not.toContain('Late Night');
 		expect(target.textContent).toContain('First');
 		expect(target.textContent).toContain('Artist');
@@ -320,9 +381,10 @@ describe('SongList sections', () => {
 		expect(sectionTab(target, LIBRARY_SECTION_LABELS.playlists).getAttribute('aria-selected')).toBe(
 			'false'
 		);
-		expect(sectionTab(target, LIBRARY_SECTION_LABELS.shared).getAttribute('aria-selected')).toBe(
-			'false'
-		);
+		expect([...target.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
+			LIBRARY_SECTION_LABELS.albums,
+			LIBRARY_SECTION_LABELS.playlists
+		]);
 	});
 
 	it('keeps exactly one section active and preserves selection when switching', async () => {
@@ -365,13 +427,13 @@ describe('SongList sections', () => {
 			new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
 		);
 		await tick();
-		expect(sectionTab(target, LIBRARY_SECTION_LABELS.shared)).toBe(document.activeElement);
-		expect(sectionTab(target, LIBRARY_SECTION_LABELS.shared).getAttribute('aria-selected')).toBe(
+		expect(sectionTab(target, LIBRARY_SECTION_LABELS.albums)).toBe(document.activeElement);
+		expect(sectionTab(target, LIBRARY_SECTION_LABELS.albums).getAttribute('aria-selected')).toBe(
 			'true'
 		);
 	});
 
-	it('shows playlists and shared empty copy for those sections', async () => {
+	it('shows playlists empty copy for that section', async () => {
 		playlistLoad.set({ status: 'ready', error: null });
 		const target = render();
 		await tick();
@@ -379,8 +441,58 @@ describe('SongList sections', () => {
 		sectionTab(target, LIBRARY_SECTION_LABELS.playlists).click();
 		await tick();
 		expect(target.textContent).toContain(LIBRARY_PLAYLISTS_EMPTY);
+	});
 
-		sectionTab(target, LIBRARY_SECTION_LABELS.shared).click();
+	it('does not build share inventory from loaded lists', async () => {
+		albumList.update((list) => list.map((item) => ({ ...item, is_shared: true, title: 'Loaded Shared' })));
+		fetchShares.mockResolvedValue({
+			items: [shareItem()],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		const target = render();
+		await tick();
+		openSharesInventory();
+		await tick();
+		await Promise.resolve();
+		await tick();
+		expect(target.querySelector('[data-library-section="shares"]')).not.toBeNull();
+		expect(target.textContent).toContain('Server Shared');
+		expect(target.textContent).toContain(LIBRARY_SHARES_TYPE_LABELS.song);
+		expect(target.textContent).not.toContain('Loaded Shared');
+		expect(fetchShares).toHaveBeenCalled();
+	});
+
+	it('opens inventory from history.section shared and waits for a complete empty response', async () => {
+		let resolvePage: ((value: unknown) => void) | undefined;
+		fetchShares.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolvePage = resolve;
+				})
+		);
+		const target = render();
+		await tick();
+		const restore = applyLibraryHistory({
+			...libraryRootState(),
+			section: LIBRARY_SHARES_HISTORY_SECTION
+		});
+		await tick();
+		expect(target.querySelector('[data-library-section="shares"]')).not.toBeNull();
+		expect(target.textContent).toContain(LIBRARY_SHARED_LOADING);
+		expect(target.textContent).not.toContain(LIBRARY_SHARED_EMPTY);
+		resolvePage?.({
+			items: [],
+			total: 0,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		await restore;
+		await tick();
+		await Promise.resolve();
 		await tick();
 		expect(target.textContent).toContain(LIBRARY_SHARED_EMPTY);
 	});
@@ -400,5 +512,83 @@ describe('SongList sections', () => {
 		const rows = [...target.querySelectorAll('.song-row')].map((row) => row.textContent);
 		expect(rows.some((text) => text?.includes('Song One'))).toBe(true);
 		expect(rows.some((text) => text?.includes('Song Two'))).toBe(false);
+	});
+});
+
+describe('SongList share inventory', () => {
+	async function showShares(items: ShareInventoryItem[]): Promise<HTMLElement> {
+		fetchShares.mockResolvedValueOnce({
+			items,
+			total: items.length,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		const target = render();
+		await tick();
+		openSharesInventory();
+		await tick();
+		await Promise.resolve();
+		await tick();
+		return target;
+	}
+
+	it('hydrates an inventory album that is not in albumList', async () => {
+		const remote = album({
+			id: 'a-remote',
+			title: 'Remote Shared',
+			is_shared: true,
+			share_slug: 'slug-album'
+		});
+		fetchAlbum.mockResolvedValue(remote);
+		const target = await showShares([
+			shareItem({
+				type: 'album',
+				id: 'a-remote',
+				title: 'Remote Shared',
+				share_slug: 'slug-album',
+				public_path: '/share/album/slug-album'
+			})
+		]);
+		const open = [...target.querySelectorAll('button')].find(
+			(button) => button.getAttribute('aria-label') === `${LIBRARY_SHARES_OPEN_LABEL} Remote Shared`
+		);
+		expect(open).toBeDefined();
+		open?.click();
+		await Promise.resolve();
+		await Promise.resolve();
+		await tick();
+		expect(get(albumList).some((item) => item.id === 'a-remote')).toBe(true);
+		expect(get(selectedAlbumId)).toBe('a-remote');
+	});
+
+	it('clears is_shared on an inventory album already in albumList', async () => {
+		albumList.set([
+			album({ id: 'a-local', title: 'Local Album', is_shared: true, share_slug: 'slug-local' })
+		]);
+		const target = await showShares([
+			shareItem({
+				type: 'album',
+				id: 'a-local',
+				title: 'Local Album',
+				share_slug: 'slug-local',
+				public_path: '/share/album/slug-local'
+			})
+		]);
+		const unshare = [...target.querySelectorAll('button')].find(
+			(button) => button.getAttribute('aria-label') === LIBRARY_SHARES_UNSHARE_LABEL
+		);
+		expect(unshare).toBeDefined();
+		unshare?.click();
+		await tick();
+		const confirm = target.querySelector('.confirm-btn');
+		expect(confirm).toBeInstanceOf(HTMLButtonElement);
+		(confirm as HTMLButtonElement).click();
+		await Promise.resolve();
+		await Promise.resolve();
+		await tick();
+		const updated = get(albumList).find((item) => item.id === 'a-local');
+		expect(updated?.is_shared).toBe(false);
+		expect(updated?.share_slug).toBeNull();
 	});
 });

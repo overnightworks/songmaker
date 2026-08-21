@@ -35,6 +35,8 @@ from songmaker_cli.api_models.library import (
     LibrarySearchResponse,
     LibrarySongHit,
     LibrarySort,
+    ShareInventoryItem,
+    ShareInventoryType,
 )
 from songmaker_cli.api_models.loras import (
     UserLoraCreateRequest,
@@ -309,6 +311,8 @@ __all__ = [
     "SessionResponse",
     "SetupRequest",
     "SetupRequiredResponse",
+    "ShareInventoryItem",
+    "ShareInventoryType",
     "ShareResponse",
     "SharedPlaylistEntryResponse",
     "SharedPlaylistResponse",

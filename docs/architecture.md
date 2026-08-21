@@ -126,12 +126,18 @@ User clicks "Generate"                    User clicks "Score"
 
 SvelteKit single-page app. All state in Svelte stores.
 
-The home library has three exclusive sections (Albums, Playlists, Shared). Mobile
-defaults to Albums; Playlists and Shared render only after that section is chosen.
-Albums start collapsed. Desktop keeps compact section navigation in the sidebar and
-uses the album overview as the main surface. Library context (section, query, sort,
-loaded page, selection, scroll) is stored on `history.state` (`kind: 'songmaker'`)
-so browser-back and shell-back restore the same view.
+The home library has two exclusive sections (Albums, Playlists). Share inventory is
+a complete server list of the current user's public slugs (`GET /api/library/shares`),
+opened from `Shared · N` in the header — including when mobile detail hides the
+library nav — not a third library tab. Membership is public slug reachability
+(`is_shared` plus slug, not soft-deleted; archived takes stay). `N` is the
+unfiltered server total; a type filter pages a subset without changing `N`. Old
+`history.state.section === 'shared'` still opens that inventory. Unshare stays the
+four resource DELETE endpoints. Albums start collapsed. Desktop keeps compact
+section navigation in the sidebar and uses the album overview as the main surface.
+Library context (section, query, sort, loaded page, selection, scroll) is stored on
+`history.state` (`kind: 'songmaker'`) so browser-back and shell-back restore the
+same view.
 
 | Layer | What | Key files |
 |-------|------|-----------|
@@ -152,7 +158,7 @@ The compact player title is the single entry to Now Playing. That sheet shows th
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, SPA fallback | `server.py` |
 | Auth | Session dependencies, login/setup/logout, password change, brute-force protection | `middleware/auth.py`, `auth_api.py`, `auth.py` |
-| API | REST endpoints split by domain: albums, songs, generations, playlists, LoRAs, chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `lora_api.py`, `chat_api.py`, `settings_api.py`, `admin_api.py` |
+| API | REST endpoints split by domain: albums, songs, generations, playlists, library search/shares, LoRAs, chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `library_api.py`, `lora_api.py`, `chat_api.py`, `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
 | Jobs | Background generation + scoring runners | `jobs/` (package: `_runtime.py`, `generation.py`, `scoring.py`, `model_lifecycle.py`) |

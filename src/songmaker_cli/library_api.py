@@ -1,12 +1,18 @@
-"""Personal library index search."""
+"""Personal library index search and share inventory."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from songmaker_cli.api_helpers import parse_required_search_query
-from songmaker_cli.api_models import LibrarySearchResponse, LibrarySort
+from songmaker_cli.api_helpers import Pagination, page_has_more, parse_required_search_query
+from songmaker_cli.api_models import (
+    LibrarySearchResponse,
+    LibrarySort,
+    PaginatedResponse,
+    ShareInventoryItem,
+    ShareInventoryType,
+)
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.constants import (
     LIBRARY_CURSOR_INVALID,
@@ -15,7 +21,7 @@ from songmaker_cli.constants import (
     PAGE_DEFAULT_LIMIT,
     PAGE_MAX_LIMIT,
 )
-from songmaker_cli.db.queries import search_library
+from songmaker_cli.db.queries import list_shared_inventory, search_library
 from songmaker_cli.library_cursor import (
     LibraryCursorInvalidError,
     LibraryCursorMismatchError,
@@ -67,4 +73,30 @@ def api_library_search(
         )
     return LibrarySearchResponse.from_orm(
         page.items, has_more=page.has_more, next_cursor=next_cursor,
+    )
+
+
+@router.get("/library/shares")
+def api_library_shares(
+    page: Pagination,
+    resource_type: ShareInventoryType | None = Query(None, alias="type"),
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> PaginatedResponse[ShareInventoryItem]:
+    result = list_shared_inventory(
+        session,
+        user_id=user.id,
+        item_type=resource_type,
+        offset=page.offset,
+        limit=page.limit,
+    )
+    items = [ShareInventoryItem.from_orm(entity) for entity in result.items]
+    return PaginatedResponse(
+        items=items,
+        total=result.total,
+        offset=page.offset,
+        limit=page.limit,
+        has_more=page_has_more(
+            offset=page.offset, fetched=len(items), total=result.filtered_total,
+        ),
     )

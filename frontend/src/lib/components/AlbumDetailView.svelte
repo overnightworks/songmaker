@@ -24,6 +24,7 @@
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import { LIBRARY_ALBUMS_LOADING, LIBRARY_RETRY_LABEL } from '$lib/constants';
+	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import ActionButton from './ActionButton.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
@@ -69,6 +70,7 @@
 		const albumId = selectedAlbum.id;
 		const result = await shareAlbum(albumId);
 		updateAlbumInList(albumId, (a) => ({ ...a, is_shared: true, share_slug: result.share_slug }));
+		await refreshSharesAfterMutation();
 		return result;
 	}
 
@@ -77,6 +79,7 @@
 		const albumId = selectedAlbum.id;
 		await unshareAlbum(albumId);
 		updateAlbumInList(albumId, (a) => ({ ...a, is_shared: false, share_slug: null }));
+		await refreshSharesAfterMutation();
 	}
 
 	async function onAlbumDelete(): Promise<void> {

@@ -23,6 +23,7 @@
 	} from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { backToSong } from '$lib/stores/navigation';
+	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { addToast } from '$lib/stores/toast';
 	import { addGenerationToPlaylist } from '$lib/stores/playlists';
@@ -219,6 +220,7 @@
 			is_shared: true,
 			share_slug: result.share_slug
 		}));
+		await refreshSharesAfterMutation();
 		return result;
 	}
 
@@ -227,6 +229,7 @@
 		const genId = generation.id;
 		await unshareGeneration(genId);
 		updateGenerationInList(genId, (g) => ({ ...g, is_shared: false, share_slug: null }));
+		await refreshSharesAfterMutation();
 	}
 
 	async function onRate(): Promise<void> {

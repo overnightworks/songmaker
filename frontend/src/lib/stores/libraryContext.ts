@@ -7,8 +7,11 @@ import {
 	LIBRARY_DEFAULT_SECTION,
 	LIBRARY_HISTORY_KIND,
 	LIBRARY_SECTIONS,
+	LIBRARY_SHARES_HISTORY_SECTION,
+	type LibraryHistorySection,
 	type LibrarySection
 } from '$lib/constants';
+import { closeSharesInventory, openSharesInventory, sharesViewOpen } from '$lib/stores/shares';
 import { searchQuery } from '$lib/stores/filter';
 import {
 	libraryBrowse,
@@ -39,7 +42,7 @@ export type LibrarySurface = 'browse' | 'detail' | 'create';
 export interface LibraryHistoryState {
 	kind: typeof LIBRARY_HISTORY_KIND;
 	index: number;
-	section: LibrarySection;
+	section: LibraryHistorySection;
 	surface: LibrarySurface;
 	query: string;
 	sort: LibrarySort;
@@ -70,6 +73,10 @@ export function isLibrarySection(value: unknown): value is LibrarySection {
 	return LIBRARY_SECTIONS.some((section) => section === value);
 }
 
+export function isLibraryHistorySection(value: unknown): value is LibraryHistorySection {
+	return isLibrarySection(value) || value === LIBRARY_SHARES_HISTORY_SECTION;
+}
+
 export function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
 }
@@ -81,7 +88,7 @@ export function isLibraryHistoryState(value: unknown): value is LibraryHistorySt
 	if (typeof state.index !== 'number' || !Number.isInteger(state.index) || state.index < 0) {
 		return false;
 	}
-	if (!isLibrarySection(state.section)) return false;
+	if (!isLibraryHistorySection(state.section)) return false;
 	if (!isLibrarySurface(state.surface)) return false;
 	if (typeof state.query !== 'string') return false;
 	if (!isLibrarySort(state.sort)) return false;
@@ -144,7 +151,7 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 	return {
 		kind: LIBRARY_HISTORY_KIND,
 		index,
-		section: get(librarySection),
+		section: get(sharesViewOpen) ? LIBRARY_SHARES_HISTORY_SECTION : get(librarySection),
 		surface: get(librarySurface),
 		query,
 		sort: get(librarySort),
@@ -163,7 +170,12 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 
 export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
 	const generation = ++historyApplyGeneration;
-	librarySection.set(state.section);
+	if (state.section === LIBRARY_SHARES_HISTORY_SECTION) {
+		openSharesView();
+	} else {
+		closeSharesView();
+		librarySection.set(state.section);
+	}
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
@@ -186,7 +198,7 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 		deselectPlaylist();
 	}
 	if (generation !== historyApplyGeneration) return false;
-	if (state.section === 'playlists' || state.section === 'shared') {
+	if (state.section === 'playlists') {
 		void ensurePlaylistsLoaded();
 	}
 	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
@@ -280,26 +292,57 @@ export async function hydrateLibraryFromHistory(): Promise<boolean> {
 	return restoreLibraryBrowse(get(librarySort), 0, 0);
 }
 
-const EMPTY_SECTION_SCROLL: Record<LibrarySection, number> = {
+const EMPTY_SECTION_SCROLL: Record<LibraryHistorySection, number> = {
 	albums: 0,
 	playlists: 0,
-	shared: 0
+	[LIBRARY_SHARES_HISTORY_SECTION]: 0
 };
 
-export const libraryScrollBySection = writable<Record<LibrarySection, number>>({
+export const libraryScrollBySection = writable<Record<LibraryHistorySection, number>>({
 	...EMPTY_SECTION_SCROLL
 });
 
-export function setLibrarySection(section: LibrarySection): void {
-	const previous = get(librarySection);
+function currentScrollSlot(): LibraryHistorySection {
+	return get(sharesViewOpen) ? LIBRARY_SHARES_HISTORY_SECTION : get(librarySection);
+}
+
+function rememberLibraryScroll(slot: LibraryHistorySection): void {
 	libraryScrollBySection.update((anchors) => ({
 		...anchors,
-		[previous]: get(libraryScrollAnchor)
+		[slot]: get(libraryScrollAnchor)
 	}));
+}
+
+function restoreLibraryScroll(slot: LibraryHistorySection): void {
+	libraryScrollAnchor.set(get(libraryScrollBySection)[slot] ?? 0);
+}
+
+function showSharesView(open: boolean): void {
+	if (open === get(sharesViewOpen)) return;
+	const leaving = currentScrollSlot();
+	const entering = open ? LIBRARY_SHARES_HISTORY_SECTION : get(librarySection);
+	rememberLibraryScroll(leaving);
+	if (open) openSharesInventory();
+	else closeSharesInventory();
+	restoreLibraryScroll(entering);
+}
+
+export function openSharesView(): void {
+	showSharesView(true);
+}
+
+export function closeSharesView(): void {
+	showSharesView(false);
+}
+
+export function setLibrarySection(section: LibrarySection): void {
+	closeSharesView();
+	const previous = get(librarySection);
+	rememberLibraryScroll(previous);
 	librarySection.set(section);
 	librarySurface.set('browse');
-	libraryScrollAnchor.set(get(libraryScrollBySection)[section] ?? 0);
-	if (section === 'playlists' || section === 'shared') {
+	restoreLibraryScroll(section);
+	if (section === 'playlists') {
 		void ensurePlaylistsLoaded();
 	}
 }
@@ -339,8 +382,7 @@ export function expandAlbum(albumId: string): void {
 
 export function captureLibraryScroll(scrollTop: number): void {
 	libraryScrollAnchor.set(scrollTop);
-	const section = get(librarySection);
-	libraryScrollBySection.update((anchors) => ({ ...anchors, [section]: scrollTop }));
+	rememberLibraryScroll(currentScrollSlot());
 }
 
 export function albumIsExpanded(

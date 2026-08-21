@@ -3,7 +3,11 @@ import { get } from 'svelte/store';
 
 import { ApiError } from '$lib/api/fetch';
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
-import { LIBRARY_DEFAULT_SECTION, LIBRARY_HISTORY_KIND } from '$lib/constants';
+import {
+	LIBRARY_DEFAULT_SECTION,
+	LIBRARY_HISTORY_KIND,
+	LIBRARY_SHARES_HISTORY_SECTION
+} from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
 import {
 	libraryBrowse,
@@ -19,6 +23,7 @@ import {
 	songList
 } from '$lib/stores/player';
 import { playlistLoad, selectedPlaylistId } from '$lib/stores/playlists';
+import { resetSharesForTests, sharesViewOpen } from '$lib/stores/shares';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
@@ -27,9 +32,11 @@ const fetchAlbums = vi.fn();
 const fetchSong = vi.fn();
 const fetchSongs = vi.fn();
 const searchLibrary = vi.fn();
+const fetchShares = vi.fn();
 
 vi.mock('$lib/api/library', () => ({
-	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
+	searchLibrary: (...args: unknown[]) => searchLibrary(...args),
+	fetchShares: (...args: unknown[]) => fetchShares(...args)
 }));
 vi.mock('$lib/api/albums', () => ({
 	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
@@ -58,6 +65,7 @@ import {
 	albumIsExpanded,
 	applyLibraryHistory,
 	captureLibraryScroll,
+	closeSharesView,
 	expandAlbum,
 	expandedAlbumIds,
 	hydrateLibraryFromHistory,
@@ -65,8 +73,10 @@ import {
 	libraryBrowseStateFrom,
 	libraryRootState,
 	libraryScrollAnchor,
+	libraryScrollBySection,
 	librarySection,
 	librarySurface,
+	openSharesView,
 	resetLibraryContextForTests,
 	setLibrarySection,
 	snapshotLibraryHistory,
@@ -160,6 +170,14 @@ beforeEach(() => {
 	fetchSong.mockReset();
 	fetchSongs.mockReset();
 	searchLibrary.mockReset();
+	fetchShares.mockReset();
+	fetchShares.mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 50,
+		has_more: false
+	});
 	fetchPlaylists.mockResolvedValue([]);
 	fetchPlaylist.mockResolvedValue({
 		id: 'p1',
@@ -177,6 +195,7 @@ beforeEach(() => {
 	fetchSong.mockResolvedValue(song({ id: 's9', album_id: 'a9', album_title: 'Remote' }));
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
+	resetSharesForTests();
 	searchQuery.set('');
 	albumList.set([]);
 	songList.set([]);
@@ -191,6 +210,7 @@ beforeEach(() => {
 afterEach(() => {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
+	resetSharesForTests();
 });
 
 describe('albumIsExpanded', () => {
@@ -258,12 +278,15 @@ describe('library history snapshot', () => {
 		expect(isLibraryHistoryState(null)).toBe(false);
 		expect(isLibraryHistoryState({ kind: LIBRARY_HISTORY_KIND, section: 'queue' })).toBe(false);
 		expect(isLibraryHistoryState(libraryRootState())).toBe(true);
+		expect(
+			isLibraryHistoryState({ ...libraryRootState(), section: LIBRARY_SHARES_HISTORY_SECTION })
+		).toBe(true);
 	});
 
 	it('apply restores stores from a snapshot', async () => {
 		const state = {
 			...libraryRootState(),
-			section: 'shared' as const,
+			section: LIBRARY_SHARES_HISTORY_SECTION,
 			query: 'Nachtstrom',
 			sort: 'title' as const,
 			albumId: 'a9',
@@ -272,7 +295,8 @@ describe('library history snapshot', () => {
 			scrollAnchor: 80
 		};
 		await applyLibraryHistory(state);
-		expect(get(librarySection)).toBe('shared');
+		expect(get(librarySection)).toBe(LIBRARY_DEFAULT_SECTION);
+		expect(get(sharesViewOpen)).toBe(true);
 		expect(get(librarySurface)).toBe('browse');
 		expect(get(searchQuery)).toBe('Nachtstrom');
 		expect(get(librarySort)).toBe('title');
@@ -280,7 +304,7 @@ describe('library history snapshot', () => {
 		expect(get(selectedSongId)).toBe('s9');
 		expect(get(expandedAlbumIds).has('a9')).toBe(true);
 		expect(get(libraryScrollAnchor)).toBe(80);
-		expect(fetchPlaylists).toHaveBeenCalled();
+		expect(fetchPlaylists).not.toHaveBeenCalled();
 	});
 
 	it('restores browse pages even when a search query is replayed', async () => {
@@ -560,6 +584,30 @@ describe('setLibrarySection', () => {
 		expect(fetchPlaylists).not.toHaveBeenCalled();
 		setLibrarySection('playlists');
 		expect(fetchPlaylists).toHaveBeenCalled();
+	});
+
+	it('closes the share inventory when a library section is chosen', async () => {
+		await applyLibraryHistory({
+			...libraryRootState(),
+			section: LIBRARY_SHARES_HISTORY_SECTION
+		});
+		expect(get(sharesViewOpen)).toBe(true);
+		setLibrarySection('albums');
+		expect(get(sharesViewOpen)).toBe(false);
+		expect(snapshotLibraryHistory(0).section).toBe('albums');
+	});
+
+	it('keeps albums scroll when Shared is opened, scrolled, and closed', () => {
+		captureLibraryScroll(240);
+		expect(get(libraryScrollBySection).albums).toBe(240);
+		openSharesView();
+		expect(get(libraryScrollAnchor)).toBe(0);
+		captureLibraryScroll(80);
+		expect(get(libraryScrollBySection).albums).toBe(240);
+		expect(get(libraryScrollBySection)[LIBRARY_SHARES_HISTORY_SECTION]).toBe(80);
+		closeSharesView();
+		expect(get(libraryScrollBySection).albums).toBe(240);
+		expect(get(libraryScrollAnchor)).toBe(240);
 	});
 
 	it('toggleAlbumExpanded adds and removes without expanding the rest', () => {
