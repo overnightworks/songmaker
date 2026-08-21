@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { fetchPlaylist } from '$lib/api/client';
+import { fetchPlaylist, fetchPlaylists } from '$lib/api/client';
+import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
 import type { PlaylistDetailItem } from '$lib/api/types';
 import {
-	deselectPlaylist,
+	ensurePlaylistsLoaded,
 	loadPlaylistDetail,
+	loadPlaylists,
+	playlistList,
+	playlistLoad,
+	resetPlaylistsForTests,
 	selectedPlaylistDetail,
 	selectedPlaylistId
 } from './playlists';
@@ -35,10 +40,11 @@ function makeDetail(id: string): PlaylistDetailItem {
 }
 
 beforeEach(() => {
-	deselectPlaylist();
+	resetPlaylistsForTests();
 });
 
 afterEach(() => {
+	resetPlaylistsForTests();
 	vi.restoreAllMocks();
 });
 
@@ -61,5 +67,29 @@ describe('loadPlaylistDetail', () => {
 
 		expect(get(selectedPlaylistId)).toBe('b');
 		expect(get(selectedPlaylistDetail)?.id).toBe('b');
+	});
+});
+
+describe('loadPlaylists', () => {
+	it('records an error without throwing so the albums section can stay up', async () => {
+		vi.mocked(fetchPlaylists).mockRejectedValueOnce(new Error('offline'));
+		const ok = await loadPlaylists();
+		expect(ok).toBe(false);
+		expect(get(playlistLoad)).toEqual({ status: 'error', error: 'offline' });
+	});
+
+	it('ensurePlaylistsLoaded does not refetch when already ready', async () => {
+		vi.mocked(fetchPlaylists).mockResolvedValueOnce([]);
+		expect(await ensurePlaylistsLoaded()).toBe(true);
+		expect(await ensurePlaylistsLoaded()).toBe(true);
+		expect(fetchPlaylists).toHaveBeenCalledTimes(1);
+		expect(get(playlistList)).toEqual([]);
+		expect(get(playlistLoad).status).toBe('ready');
+	});
+
+	it('uses the named load error when the failure is not an Error', async () => {
+		vi.mocked(fetchPlaylists).mockRejectedValueOnce('nope');
+		await loadPlaylists();
+		expect(get(playlistLoad).error).toBe(LIBRARY_PLAYLISTS_ERROR);
 	});
 });

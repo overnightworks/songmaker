@@ -126,6 +126,13 @@ User clicks "Generate"                    User clicks "Score"
 
 SvelteKit single-page app. All state in Svelte stores.
 
+The home library has three exclusive sections (Albums, Playlists, Shared). Mobile
+defaults to Albums; Playlists and Shared render only after that section is chosen.
+Albums start collapsed. Desktop keeps compact section navigation in the sidebar and
+uses the album overview as the main surface. Library context (section, query, sort,
+loaded page, selection, scroll) is stored on `history.state` (`kind: 'songmaker'`)
+so browser-back and shell-back restore the same view.
+
 | Layer | What | Key files |
 |-------|------|-----------|
 | Routes | Pages: main view, login, setup, settings | `src/routes/` |

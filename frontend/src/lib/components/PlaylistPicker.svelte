@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { playlistList, createNewPlaylist } from '$lib/stores/playlists';
+	import { onMount } from 'svelte';
+	import { playlistList, createNewPlaylist, ensurePlaylistsLoaded } from '$lib/stores/playlists';
 	import { addToast } from '$lib/stores/toast';
 
 	interface Props {
@@ -13,6 +14,10 @@
 	let creating = $state(false);
 
 	const playlists = $derived($playlistList);
+
+	onMount(() => {
+		void ensurePlaylistsLoaded();
+	});
 
 	function handleClickOutside(event: MouseEvent): void {
 		if (menuRef && !menuRef.contains(event.target as Node)) {

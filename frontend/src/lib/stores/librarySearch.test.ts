@@ -270,5 +270,6 @@ describe('groupSearchHits', () => {
 		expect(groups[1].album.id).toBe('other');
 		expect(groups[1].album.title).toBe('Other');
 		expect(groups[1].songs).toHaveLength(1);
+		expect(groups[1].album.song_count).toBe(1);
 	});
 });

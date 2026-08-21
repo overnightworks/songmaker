@@ -1,19 +1,33 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import {
 	selectedSongId,
 	selectedGenerationId,
+	selectedAlbumId,
 	selectSong as playerSelectSong,
 	selectAlbum as playerSelectAlbum,
 	selectGenerationInSidebar as playerSelectGeneration,
 	clearGenerationSelection as playerClearGeneration,
-	ensureGenerationsLoaded
+	ensureGenerationsLoaded,
+	songList
 } from '$lib/stores/player';
 import {
 	deselectPlaylist as storeDeselectPlaylist,
-	selectPlaylist as storeSelectPlaylist
+	selectPlaylist as storeSelectPlaylist,
+	selectedPlaylistId
 } from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
+import type { LibrarySection } from '$lib/constants';
+import {
+	applyLibraryHistory,
+	expandAlbum,
+	isLibraryHistoryState,
+	libraryBrowseStateFrom,
+	libraryRootState,
+	setLibrarySection,
+	snapshotLibraryHistory,
+	type LibraryHistoryState
+} from '$lib/stores/libraryContext';
 
 export type DetailTab = 'generations' | 'edit' | 'chat';
 
@@ -21,46 +35,75 @@ export const detailTab = writable<DetailTab>('generations');
 
 let suppressPush = false;
 
-function buildUrl(songId: string | null, genId: string | null): string {
-	if (songId && genId) return `/?song=${songId}&gen=${genId}`;
-	if (songId) return `/?song=${songId}`;
+function urlFromState(state: LibraryHistoryState): string {
+	if (state.songId && state.generationId) return `/?song=${state.songId}&gen=${state.generationId}`;
+	if (state.songId) return `/?song=${state.songId}`;
 	return '/';
 }
 
-function pushUrl(songId: string | null, genId: string | null = null): void {
-	if (suppressPush) return;
-	const url = buildUrl(songId, genId);
-	history.pushState({ songId, genId }, '', url);
+function currentHistoryIndex(): number {
+	const state = history.state;
+	return isLibraryHistoryState(state) ? state.index : 0;
 }
 
-function replaceUrl(songId: string | null, genId: string | null = null): void {
-	const url = buildUrl(songId, genId);
-	history.replaceState({ songId, genId }, '', url);
+function replaceLibraryHistory(): void {
+	if (suppressPush) return;
+	const next = snapshotLibraryHistory(currentHistoryIndex());
+	history.replaceState(next, '', urlFromState(next));
+}
+
+function pushLibraryHistory(): void {
+	if (suppressPush) return;
+	const current = history.state;
+	if (isLibraryHistoryState(current)) {
+		const leaving = snapshotLibraryHistory(current.index);
+		history.replaceState(
+			{ ...current, scrollAnchor: leaving.scrollAnchor },
+			'',
+			urlFromState(current)
+		);
+	}
+	const next = snapshotLibraryHistory(currentHistoryIndex() + 1);
+	history.pushState(next, '', urlFromState(next));
+}
+
+export function selectLibrarySection(section: LibrarySection): void {
+	setLibrarySection(section);
+	replaceLibraryHistory();
+}
+
+export function persistLibraryHistory(): void {
+	replaceLibraryHistory();
 }
 
 export function selectAlbumOverview(albumId: string): void {
 	storeDeselectPlaylist();
 	playerSelectAlbum(albumId);
+	expandAlbum(albumId);
 	closeSidebar();
+	pushLibraryHistory();
 }
 
 export function deselectAlbum(): void {
-	playerSelectAlbum(null);
+	goBack();
 }
 
 export function backToAlbum(): void {
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	pushUrl(null);
+	goBack();
 }
 
 export function selectSong(songId: string): void {
 	storeDeselectPlaylist();
+	const song = get(songList).find((item) => item.id === songId);
+	if (song) {
+		selectedAlbumId.set(song.album_id);
+		expandAlbum(song.album_id);
+	}
 	playerSelectSong(songId);
 	ensureGenerationsLoaded(songId);
 	detailTab.set('generations');
 	closeSidebar();
-	pushUrl(songId);
+	pushLibraryHistory();
 }
 
 export function selectPlaylistView(playlistId: string): void {
@@ -69,30 +112,24 @@ export function selectPlaylistView(playlistId: string): void {
 	selectedGenerationId.set(null);
 	storeSelectPlaylist(playlistId);
 	closeSidebar();
+	pushLibraryHistory();
 }
 
 export function deselectPlaylistView(): void {
-	storeDeselectPlaylist();
+	goBack();
 }
 
 export function deselectSong(): void {
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	detailTab.set('generations');
-	pushUrl(null);
+	goBack();
 }
 
 export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 	playerSelectGeneration(gen, song);
-	pushUrl(song.id, gen.id);
+	pushLibraryHistory();
 }
 
 export function backToSong(): void {
-	const songId = playerGetSongId();
-	playerClearGeneration();
-	if (songId) {
-		pushUrl(songId);
-	}
+	goBack();
 }
 
 export function clearGenerationSelection(): void {
@@ -108,19 +145,24 @@ export function switchTab(tab: DetailTab): void {
 	detailTab.set(tab);
 }
 
-function playerGetSongId(): string | null {
-	let id: string | null = null;
-	const unsub = selectedSongId.subscribe((v) => (id = v));
-	unsub();
-	return id;
+export function goBack(): void {
+	const state = history.state;
+	if (isLibraryHistoryState(state) && state.index > 0) {
+		history.back();
+		return;
+	}
+	const current = isLibraryHistoryState(state) ? state : snapshotLibraryHistory(0);
+	suppressPush = true;
+	applyLibraryHistory(libraryBrowseStateFrom(current));
+	detailTab.set('generations');
+	suppressPush = false;
+	replaceLibraryHistory();
 }
 
 export function initNavigation(): () => void {
 	const params = new URLSearchParams(window.location.search);
 	const songId = params.get('song');
 	const genId = params.get('gen');
-
-	replaceUrl(songId, genId);
 
 	if (songId) {
 		suppressPush = true;
@@ -132,23 +174,17 @@ export function initNavigation(): () => void {
 		suppressPush = false;
 	}
 
+	replaceLibraryHistory();
+
 	function onPopstate(e: PopStateEvent): void {
 		suppressPush = true;
-		const state = (e.state as { songId: string | null; genId: string | null } | null) ?? {
-			songId: null,
-			genId: null
-		};
-		if (state.songId) {
-			playerSelectSong(state.songId);
-			ensureGenerationsLoaded(state.songId);
-			if (state.genId) {
-				selectedGenerationId.set(state.genId);
-			} else {
-				selectedGenerationId.set(null);
+		if (isLibraryHistoryState(e.state)) {
+			applyLibraryHistory(e.state);
+			if (e.state.songId) {
+				ensureGenerationsLoaded(e.state.songId);
 			}
 		} else {
-			selectedSongId.set(null);
-			selectedGenerationId.set(null);
+			applyLibraryHistory(libraryRootState());
 		}
 		detailTab.set('generations');
 		suppressPush = false;
@@ -158,4 +194,13 @@ export function initNavigation(): () => void {
 	return () => window.removeEventListener('popstate', onPopstate);
 }
 
-export const canGoBack = derived(selectedSongId, ($songId) => $songId !== null);
+export function resetNavigationForTests(): void {
+	suppressPush = false;
+	detailTab.set('generations');
+}
+
+export const canGoBack = derived(
+	[selectedSongId, selectedGenerationId, selectedAlbumId, selectedPlaylistId],
+	([$songId, $genId, $albumId, $playlistId]) =>
+		$songId !== null || $genId !== null || $albumId !== null || $playlistId !== null
+);

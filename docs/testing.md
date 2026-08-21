@@ -102,7 +102,8 @@ frontend/src/
 ├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA
 ├── lib/components/*.test.ts       Component tests: library, share status, frequent-action hitboxes
 ├── lib/stores/*.test.ts           Store coverage: admin polling, auth, editor, filter,
-│                                  health, jobs, LoRA, player, toast
+│                                  health, jobs, library search/context, navigation,
+│                                  LoRA, player, playlists, toast
 ├── lib/services/*.test.ts         Audio player service tests
 └── lib/utils/*.test.ts            Chat context, contrast, diff, and format helpers
 ```

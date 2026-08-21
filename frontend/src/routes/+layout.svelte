@@ -10,8 +10,7 @@
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { canGoBack, deselectSong, backToSong } from '$lib/stores/navigation';
-	import { selectedGeneration } from '$lib/stores/player';
+	import { canGoBack, goBack } from '$lib/stores/navigation';
 	import { initTheme } from '$lib/stores/ui';
 	import { dev, browser } from '$app/environment';
 
@@ -90,11 +89,7 @@
 			{#if isSettings}
 				<a href="/" class="back-btn" aria-label="Back to home">←</a>
 			{:else if hasBack}
-				<button
-					class="back-btn"
-					onclick={() => ($selectedGeneration ? backToSong() : deselectSong())}
-					aria-label="Back">←</button
-				>
+				<button class="back-btn" onclick={goBack} aria-label="Back">←</button>
 			{/if}
 			<a href="/" class="brand" data-text={APP_NAME}>{APP_NAME}</a>
 		</div>

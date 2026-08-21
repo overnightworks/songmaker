@@ -80,7 +80,7 @@ export function groupSearchHits(hits: LibrarySearchHit[]): LibraryAlbumGroup[] {
 				album: {
 					id: hit.album_id,
 					title: hit.album_title,
-					artist: hit.song.artist ?? '',
+					artist: hit.song.artist,
 					subtitle: '',
 					year: '',
 					colors: {},
@@ -94,6 +94,9 @@ export function groupSearchHits(hits: LibrarySearchHit[]): LibraryAlbumGroup[] {
 			groups.set(hit.album_id, group);
 		}
 		group.songs.push(hit.song);
+		if (group.album.song_count < group.songs.length) {
+			group.album = { ...group.album, song_count: group.songs.length };
+		}
 	}
 	return [...groups.values()];
 }

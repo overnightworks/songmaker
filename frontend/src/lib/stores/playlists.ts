@@ -1,4 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
+import { ApiError } from '$lib/api/fetch';
 import {
 	fetchPlaylists,
 	fetchPlaylist,
@@ -12,22 +13,66 @@ import {
 	reorderPlaylistEntry as apiReorder
 } from '$lib/api/client';
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
+import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
+
+export type PlaylistLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface PlaylistLoadState {
+	status: PlaylistLoadStatus;
+	error: string | null;
+}
 
 export const playlistList = writable<PlaylistItem[]>([]);
 export const selectedPlaylistId = writable<string | null>(null);
 export const selectedPlaylistDetail = writable<PlaylistDetailItem | null>(null);
+export const playlistLoad = writable<PlaylistLoadState>({ status: 'idle', error: null });
 
 export const selectedPlaylist = derived(
 	[playlistList, selectedPlaylistId],
 	([$list, $id]) => $list.find((p) => p.id === $id) ?? null
 );
 
-export async function loadPlaylists(): Promise<void> {
-	const items = await fetchPlaylists();
-	playlistList.set(items);
+let playlistsInflight: Promise<boolean> | null = null;
+let playlistDetailRequest = 0;
+
+export async function loadPlaylists(): Promise<boolean> {
+	if (playlistsInflight) return playlistsInflight;
+	playlistLoad.set({ status: 'loading', error: null });
+	playlistsInflight = (async () => {
+		try {
+			const items = await fetchPlaylists();
+			playlistList.set(items);
+			playlistLoad.set({ status: 'ready', error: null });
+			return true;
+		} catch (err) {
+			playlistLoad.set({ status: 'error', error: playlistErrorMessage(err) });
+			return false;
+		} finally {
+			playlistsInflight = null;
+		}
+	})();
+	return playlistsInflight;
 }
 
-let playlistDetailRequest = 0;
+export async function ensurePlaylistsLoaded(): Promise<boolean> {
+	if (get(playlistLoad).status === 'ready') return true;
+	return loadPlaylists();
+}
+
+export function resetPlaylistsForTests(): void {
+	playlistsInflight = null;
+	playlistList.set([]);
+	selectedPlaylistId.set(null);
+	selectedPlaylistDetail.set(null);
+	playlistLoad.set({ status: 'idle', error: null });
+	playlistDetailRequest += 1;
+}
+
+function playlistErrorMessage(err: unknown): string {
+	if (err instanceof ApiError) return err.detail || err.message;
+	if (err instanceof Error) return err.message;
+	return LIBRARY_PLAYLISTS_ERROR;
+}
 
 export async function loadPlaylistDetail(id: string): Promise<void> {
 	const request = ++playlistDetailRequest;

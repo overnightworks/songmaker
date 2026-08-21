@@ -40,9 +40,14 @@
 		>
 			{expanded ? '▾' : '▸'}
 		</button>
-		<span class="album-title">{album.title}</span>
+		<span class="album-text">
+			<span class="album-title">{album.title}</span>
+			{#if album.artist}
+				<span class="album-artist">{album.artist}</span>
+			{/if}
+		</span>
 		<AgeStamp createdAt={album.created_at} />
-		<span class="album-count">{songs.length}</span>
+		<span class="album-count">{album.song_count}</span>
 	</div>
 
 	{#if expanded}
@@ -99,11 +104,29 @@
 		color: var(--text-muted);
 	}
 
-	.album-title {
+	.album-text {
 		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+
+	.album-title {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.album-artist {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: var(--font-body);
+		font-size: 0.72rem;
+		letter-spacing: 0;
+		text-transform: none;
+		color: var(--text-muted);
 	}
 
 	.album-count {

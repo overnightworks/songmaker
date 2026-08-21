@@ -1,0 +1,154 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
+
+import { searchQuery } from '$lib/stores/filter';
+import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
+import {
+	librarySection,
+	resetLibraryContextForTests,
+	setLibrarySection
+} from '$lib/stores/libraryContext';
+import {
+	selectedAlbumId,
+	selectedGenerationId,
+	selectedSongId,
+	songList
+} from '$lib/stores/player';
+import { selectedPlaylistId } from '$lib/stores/playlists';
+import type { SongItem } from '$lib/api/types';
+
+const fetchSong = vi.fn();
+const fetchPlaylists = vi.fn();
+const fetchPlaylist = vi.fn();
+
+vi.mock('$lib/api/client', () => ({
+	fetchSong: (...args: unknown[]) => fetchSong(...args),
+	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
+	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
+	createPlaylist: vi.fn(),
+	deletePlaylistApi: vi.fn(),
+	updatePlaylist: vi.fn(),
+	addGenerationToPlaylist: vi.fn(),
+	addSongToPlaylist: vi.fn(),
+	addAlbumToPlaylist: vi.fn(),
+	removeFromPlaylist: vi.fn(),
+	reorderPlaylistEntry: vi.fn()
+}));
+
+import {
+	canGoBack,
+	goBack,
+	initNavigation,
+	resetNavigationForTests,
+	selectAlbumOverview,
+	selectLibrarySection,
+	selectSong
+} from './navigation';
+
+function song(overrides: Partial<SongItem> = {}): SongItem {
+	return {
+		id: 's1',
+		title: 'Tide',
+		album_id: 'a1',
+		album_title: 'Nachtstrom',
+		artist: 'Artist',
+		track_number: 1,
+		vocal_language: 'en',
+		lyrics: '',
+		prompt: '',
+		bpm: 120,
+		audio_duration: 180,
+		key_scale: 'Am',
+		generation_params: null,
+		version_count: 1,
+		generation_count: 0,
+		best_scores: null,
+		best_rating: null,
+		generations: [],
+		created_at: '2026-01-01T00:00:00+00:00',
+		is_shared: false,
+		share_slug: null,
+		...overrides
+	};
+}
+
+beforeEach(() => {
+	fetchSong.mockReset();
+	fetchPlaylists.mockReset();
+	fetchPlaylist.mockReset();
+	fetchPlaylists.mockResolvedValue([]);
+	fetchSong.mockResolvedValue(song());
+	resetLibraryContextForTests();
+	resetLibrarySearchForTests();
+	resetNavigationForTests();
+	searchQuery.set('');
+	selectedAlbumId.set(null);
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
+	selectedPlaylistId.set(null);
+	songList.set([song()]);
+	history.replaceState(null, '', '/');
+});
+
+afterEach(() => {
+	resetLibraryContextForTests();
+	resetLibrarySearchForTests();
+	resetNavigationForTests();
+	history.replaceState(null, '', '/');
+});
+
+describe('library history', () => {
+	it('pushes a songmaker state so goBack can pop to the previous library context', () => {
+		const cleanup = initNavigation();
+		searchQuery.set('Tide');
+		selectLibrarySection('albums');
+		selectAlbumOverview('a1');
+		selectSong('s1');
+		expect(history.state).toMatchObject({
+			kind: 'songmaker',
+			songId: 's1',
+			section: 'albums',
+			query: 'Tide'
+		});
+		expect(history.state.index).toBeGreaterThan(0);
+		const back = vi.spyOn(history, 'back');
+		goBack();
+		expect(back).toHaveBeenCalled();
+		back.mockRestore();
+		cleanup();
+	});
+
+	it('popstate restores section, query, sort, and selection', () => {
+		const cleanup = initNavigation();
+		searchQuery.set('Tide');
+		selectLibrarySection('albums');
+		const libraryState = history.state;
+		selectSong('s1');
+		expect(get(selectedSongId)).toBe('s1');
+
+		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryState }));
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(librarySection)).toBe('albums');
+		expect(get(searchQuery)).toBe('Tide');
+		cleanup();
+	});
+
+	it('goBack without a predecessor clears the resource through the same apply path', () => {
+		const cleanup = initNavigation();
+		selectedSongId.set('s1');
+		selectLibrarySection('playlists');
+		expect(get(canGoBack)).toBe(true);
+		goBack();
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(librarySection)).toBe('playlists');
+		expect(window.location.pathname).toBe('/');
+		cleanup();
+	});
+
+	it('switching section does not clear the selected song', () => {
+		selectedSongId.set('s1');
+		setLibrarySection('playlists');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(librarySection)).toBe('playlists');
+	});
+});

@@ -6,9 +6,29 @@
 	let { onNewSong }: Props = $props();
 
 	import { albumList, songList, selectedAlbumId } from '$lib/stores/player';
-	import { selectAlbumOverview, selectPlaylistView, selectSong } from '$lib/stores/navigation';
+	import {
+		persistLibraryHistory,
+		selectAlbumOverview,
+		selectLibrarySection,
+		selectPlaylistView,
+		selectSong
+	} from '$lib/stores/navigation';
 	import { searchQuery } from '$lib/stores/filter';
-	import { createNewPlaylist, playlistList, selectedPlaylistId } from '$lib/stores/playlists';
+	import {
+		createNewPlaylist,
+		playlistList,
+		playlistLoad,
+		loadPlaylists,
+		selectedPlaylistId
+	} from '$lib/stores/playlists';
+	import {
+		albumIsExpanded,
+		captureLibraryScroll,
+		expandedAlbumIds,
+		libraryScrollAnchor,
+		librarySection,
+		toggleAlbumExpanded
+	} from '$lib/stores/libraryContext';
 	import {
 		changeLibrarySort,
 		groupSearchHits,
@@ -25,15 +45,26 @@
 	import type { SongItem, AlbumItem } from '$lib/api/types';
 	import { CREATED_SORT_LABELS, CREATED_SORTS, compareByCreatedAt } from '$lib/utils/recency';
 	import {
-		LIBRARY_BROWSE_EMPTY,
+		LIBRARY_ALBUMS_EMPTY,
+		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_LOAD_MORE,
+		LIBRARY_NEW_PLAYLIST_LABEL,
+		LIBRARY_NEW_SONG_LABEL,
+		LIBRARY_PLAYLISTS_EMPTY,
+		LIBRARY_PLAYLISTS_ERROR,
+		LIBRARY_PLAYLISTS_LOADING,
 		LIBRARY_RETRY_LABEL,
 		LIBRARY_SEARCH_EMPTY,
 		LIBRARY_SEARCH_ERROR,
 		LIBRARY_SEARCH_LOADING,
-		LIBRARY_SEARCH_PLACEHOLDER
+		LIBRARY_SEARCH_PLACEHOLDER,
+		LIBRARY_SECTION_LABELS,
+		LIBRARY_SECTION_NAV_LABEL,
+		LIBRARY_SECTIONS,
+		LIBRARY_SHARED_EMPTY,
+		LIBRARY_SHARED_LOADING,
+		type LibrarySection
 	} from '$lib/constants';
-	import { SvelteSet } from 'svelte/reactivity';
 
 	const albums = $derived($albumList);
 	const songs = $derived($songList);
@@ -45,6 +76,10 @@
 	const searchState = $derived($librarySearch);
 	const browseState = $derived($libraryBrowse);
 	const searching = $derived(search.trim().length > 0);
+	const section = $derived($librarySection);
+	const expanded = $derived($expandedAlbumIds);
+	const playlistStatus = $derived($playlistLoad);
+	const restoredScroll = $derived($libraryScrollAnchor);
 
 	interface SharedItem {
 		id: string;
@@ -77,17 +112,13 @@
 		return items;
 	});
 
-	let expandedAlbums = new SvelteSet<string>();
-	let playlistsExpanded = $state(true);
-	let sharedExpanded = $state(true);
-
 	$effect(() => {
 		syncLibrarySearch(search);
 	});
 
 	$effect(() => {
-		if (albums.length > 0 && expandedAlbums.size === 0) {
-			for (const a of albums) expandedAlbums.add(a.id);
+		if (browseEl && browseEl.scrollTop !== restoredScroll) {
+			browseEl.scrollTop = restoredScroll;
 		}
 	});
 
@@ -107,16 +138,26 @@
 			const albumSongs = songs
 				.filter((s) => s.album_id === album.id)
 				.sort((a, b) => compareByCreatedAt(a, b, createdSort));
-			if (albumSongs.length > 0) {
-				groups.push({ album, songs: albumSongs });
-			}
+			groups.push({ album, songs: albumSongs });
 		}
 		return groups;
 	});
 
-	function toggleAlbum(albumId: string): void {
-		if (expandedAlbums.has(albumId)) expandedAlbums.delete(albumId);
-		else expandedAlbums.add(albumId);
+	const orderedPlaylists = $derived(
+		[...playlists].sort((a, b) => compareByCreatedAt(a, b, createdSort))
+	);
+
+	let browseEl = $state<HTMLElement | null>(null);
+
+	function onBrowseScroll(event: Event): void {
+		const target = event.currentTarget;
+		if (!(target instanceof HTMLElement)) return;
+		captureLibraryScroll(target.scrollTop);
+	}
+
+	function onToggleAlbum(albumId: string): void {
+		toggleAlbumExpanded(albumId);
+		persistLibraryHistory();
 	}
 
 	function hydrateAndOpenAlbum(album: AlbumItem): void {
@@ -126,161 +167,265 @@
 		selectAlbumOverview(album.id);
 	}
 
+	function onSelectSection(next: LibrarySection): void {
+		selectLibrarySection(next);
+	}
+
+	function onSectionKeydown(event: KeyboardEvent, current: LibrarySection): void {
+		const index = LIBRARY_SECTIONS.indexOf(current);
+		if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+			event.preventDefault();
+			onSelectSection(LIBRARY_SECTIONS[(index + 1) % LIBRARY_SECTIONS.length]);
+			return;
+		}
+		if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+			event.preventDefault();
+			onSelectSection(
+				LIBRARY_SECTIONS[(index - 1 + LIBRARY_SECTIONS.length) % LIBRARY_SECTIONS.length]
+			);
+		}
+	}
+
+	function onSortChange(option: (typeof CREATED_SORTS)[number]): void {
+		changeLibrarySort(option, search);
+		persistLibraryHistory();
+	}
+
+	function onSearchInput(event: Event): void {
+		searchQuery.set((event.target as HTMLInputElement).value);
+		persistLibraryHistory();
+	}
+
 	async function onCreatePlaylist(): Promise<void> {
 		try {
 			const playlist = await createNewPlaylist('Playlist');
+			selectLibrarySection('playlists');
 			selectPlaylistView(playlist.id);
 		} catch {
 			addToast('Create failed', 'error');
 		}
 	}
+
+	function onSharedItem(item: SharedItem): void {
+		if (item.type === 'album') selectAlbumOverview(item.id);
+		else if (item.type === 'song') selectSong(item.id);
+		else if (item.type === 'playlist') selectPlaylistView(item.id);
+		else if (item.parentSongId) selectSong(item.parentSongId);
+	}
+
+	const panelSection = $derived(searching ? 'search' : section);
 </script>
 
-<div class="search-bar">
-	<input
-		class="search"
-		type="text"
-		placeholder={LIBRARY_SEARCH_PLACEHOLDER}
-		value={search}
-		oninput={(e: Event) => searchQuery.set((e.target as HTMLInputElement).value)}
-		aria-label={LIBRARY_SEARCH_PLACEHOLDER}
-		aria-busy={searching && searchState.status === 'loading'}
-	/>
-	<div class="sort-strip" role="radiogroup" aria-label="List sort" tabindex="-1">
-		{#each CREATED_SORTS as option (option)}
+<div class="library-nav">
+	<div class="search-bar">
+		<input
+			class="search"
+			type="text"
+			placeholder={LIBRARY_SEARCH_PLACEHOLDER}
+			value={search}
+			oninput={onSearchInput}
+			aria-label={LIBRARY_SEARCH_PLACEHOLDER}
+			aria-busy={searching && searchState.status === 'loading'}
+		/>
+		<div class="sort-strip" role="radiogroup" aria-label="List sort" tabindex="-1">
+			{#each CREATED_SORTS as option (option)}
+				<button
+					class="sort-btn"
+					class:active={createdSort === option}
+					role="radio"
+					aria-checked={createdSort === option}
+					aria-label={CREATED_SORT_LABELS[option]}
+					onclick={() => onSortChange(option)}
+				>
+					{CREATED_SORT_LABELS[option]}
+				</button>
+			{/each}
+		</div>
+		{#if onNewSong}
 			<button
-				class="sort-btn"
-				class:active={createdSort === option}
-				role="radio"
-				aria-checked={createdSort === option}
-				aria-label={CREATED_SORT_LABELS[option]}
-				onclick={() => changeLibrarySort(option, search)}
+				class="new-btn"
+				data-hitbox="frequent"
+				data-hitbox-face
+				onclick={onNewSong}
+				title={LIBRARY_NEW_SONG_LABEL}
+				aria-label={LIBRARY_NEW_SONG_LABEL}>+</button
 			>
-				{CREATED_SORT_LABELS[option]}
+		{/if}
+	</div>
+
+	<div class="section-nav" role="tablist" aria-label={LIBRARY_SECTION_NAV_LABEL}>
+		{#each LIBRARY_SECTIONS as item (item)}
+			<button
+				class="section-tab"
+				class:active={section === item}
+				role="tab"
+				id="library-tab-{item}"
+				aria-selected={section === item}
+				aria-controls="library-panel"
+				tabindex={section === item ? 0 : -1}
+				onclick={() => onSelectSection(item)}
+				onkeydown={(event) => onSectionKeydown(event, item)}
+			>
+				{LIBRARY_SECTION_LABELS[item]}
 			</button>
 		{/each}
 	</div>
-	{#if onNewSong}
-		<button
-			class="new-btn"
-			data-hitbox="frequent"
-			data-hitbox-face
-			onclick={onNewSong}
-			title="New Song"
-			aria-label="New Song">+</button
-		>
-	{/if}
 </div>
 
-<div class="tree" role="tree" aria-label="Albums and songs">
-	{#if sharedItems.length > 0}
-		<div class="section-group">
-			<button class="section-header" onclick={() => (sharedExpanded = !sharedExpanded)}>
-				<span class="section-arrow" class:collapsed={!sharedExpanded}>▸</span>
-				<span class="section-label">Shared</span>
-				<span class="section-count">{sharedItems.length}</span>
-			</button>
-			{#if sharedExpanded}
-				{#each sharedItems as item (item.type + item.id)}
-					<button
-						class="playlist-row"
-						onclick={() => {
-							if (item.type === 'album') selectAlbumOverview(item.id);
-							else if (item.type === 'song') selectSong(item.id);
-							else if (item.type === 'playlist') selectPlaylistView(item.id);
-							else if (item.parentSongId) selectSong(item.parentSongId);
-						}}
-					>
-						<span class="shared-icon">&#128279;</span>
-						<span class="playlist-title">{item.label}</span>
-						<span class="playlist-count">{item.type}</span>
-					</button>
-				{/each}
-			{/if}
-		</div>
-	{/if}
+<div
+	class="library-browse"
+	id="library-panel"
+	role="tabpanel"
+	data-library-section={panelSection}
+	aria-labelledby="library-tab-{section}"
+	bind:this={browseEl}
+	onscroll={onBrowseScroll}
+>
+	{#if searching}
+		{#each albumGroups as group (group.album.id)}
+			<AlbumNode
+				album={group.album}
+				songs={group.songs}
+				expanded={albumIsExpanded(group.album.id, expanded, {
+					selectedAlbumId: currentAlbumId,
+					searching: true,
+					songHits: group.songs.length
+				})}
+				selected={group.album.id === currentAlbumId}
+				ontoggle={() => onToggleAlbum(group.album.id)}
+				onselect={() => hydrateAndOpenAlbum(group.album)}
+			/>
+		{/each}
 
-	<div class="section-group">
-		<div class="section-header-row">
-			<button class="section-header" onclick={() => (playlistsExpanded = !playlistsExpanded)}>
-				<span class="section-arrow" class:collapsed={!playlistsExpanded}>▸</span>
-				<span class="section-label">Playlists</span>
-				<span class="section-count">{playlists.length}</span>
+		{#if searchState.status === 'loading' && searchState.items.length === 0}
+			<p class="empty" role="status">{LIBRARY_SEARCH_LOADING}</p>
+		{:else if searchState.status === 'error'}
+			<p class="empty" role="alert">{searchState.error || LIBRARY_SEARCH_ERROR}</p>
+			<button class="retry-btn" onclick={() => retryLibrarySearch()}>{LIBRARY_RETRY_LABEL}</button>
+		{:else if albumGroups.length === 0}
+			<p class="empty">{LIBRARY_SEARCH_EMPTY}</p>
+		{/if}
+
+		{#if searchState.hasMore}
+			<button
+				class="load-more"
+				onclick={() => loadMoreLibrarySearch()}
+				disabled={searchState.status === 'loading'}
+			>
+				{LIBRARY_LOAD_MORE}
 			</button>
+		{/if}
+	{:else if section === 'albums'}
+		<div class="album-overview">
+			{#each albumGroups as group (group.album.id)}
+				<AlbumNode
+					album={group.album}
+					songs={group.songs}
+					expanded={albumIsExpanded(group.album.id, expanded, {
+						selectedAlbumId: currentAlbumId,
+						searching: false,
+						songHits: group.songs.length
+					})}
+					selected={group.album.id === currentAlbumId}
+					ontoggle={() => onToggleAlbum(group.album.id)}
+					onselect={() => hydrateAndOpenAlbum(group.album)}
+				/>
+			{/each}
+		</div>
+
+		{#if browseState.status === 'loading' && albums.length === 0}
+			<p class="empty" role="status">{LIBRARY_ALBUMS_LOADING}</p>
+		{:else if browseState.status === 'error' && albums.length === 0}
+			<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: true })}
+				>{LIBRARY_RETRY_LABEL}</button
+			>
+		{:else if albumGroups.length === 0}
+			<p class="empty">{LIBRARY_ALBUMS_EMPTY}</p>
+		{/if}
+
+		{#if browseState.albumHasMore || browseState.songHasMore}
+			<button
+				class="load-more"
+				onclick={() => loadLibraryBrowse({ reset: false })}
+				disabled={browseState.status === 'loading'}
+			>
+				{LIBRARY_LOAD_MORE}
+			</button>
+		{/if}
+
+		{#if browseState.status === 'error' && albums.length > 0}
+			<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: true })}
+				>{LIBRARY_RETRY_LABEL}</button
+			>
+		{/if}
+	{:else if section === 'playlists'}
+		<div class="section-toolbar">
 			<button
 				class="new-btn"
 				data-hitbox="frequent"
 				data-hitbox-face
 				onclick={onCreatePlaylist}
-				title="New playlist"
-				aria-label="New playlist">+</button
+				title={LIBRARY_NEW_PLAYLIST_LABEL}
+				aria-label={LIBRARY_NEW_PLAYLIST_LABEL}>+</button
 			>
 		</div>
-		{#if playlistsExpanded}
-			{#if playlists.length === 0}
-				<p class="empty">No playlists</p>
-			{:else}
-				{#each playlists as p (p.id)}
-					<button
-						class="playlist-row"
-						class:selected={p.id === currentPlaylistId}
-						onclick={() => selectPlaylistView(p.id)}
-					>
-						<span class="playlist-title">{p.title}</span>
-						<span class="playlist-count">{p.entry_count}</span>
-					</button>
-				{/each}
-			{/if}
+		{#if playlistStatus.status === 'loading' && playlists.length === 0}
+			<p class="empty" role="status">{LIBRARY_PLAYLISTS_LOADING}</p>
+		{:else if playlistStatus.status === 'error' && playlists.length === 0}
+			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
+		{:else if playlists.length === 0}
+			<p class="empty">{LIBRARY_PLAYLISTS_EMPTY}</p>
+		{:else}
+			{#each orderedPlaylists as p (p.id)}
+				<button
+					class="playlist-row"
+					class:selected={p.id === currentPlaylistId}
+					onclick={() => selectPlaylistView(p.id)}
+				>
+					<span class="playlist-title">{p.title}</span>
+					<span class="playlist-count">{p.entry_count}</span>
+				</button>
+			{/each}
 		{/if}
-	</div>
-
-	{#each albumGroups as group (group.album.id)}
-		<AlbumNode
-			album={group.album}
-			songs={group.songs}
-			expanded={expandedAlbums.has(group.album.id)}
-			selected={group.album.id === currentAlbumId}
-			ontoggle={() => toggleAlbum(group.album.id)}
-			onselect={() => hydrateAndOpenAlbum(group.album)}
-		/>
-	{/each}
-
-	{#if searching && searchState.status === 'loading' && searchState.items.length === 0}
-		<p class="empty" role="status">{LIBRARY_SEARCH_LOADING}</p>
-	{:else if searching && searchState.status === 'error'}
-		<p class="empty" role="alert">{searchState.error || LIBRARY_SEARCH_ERROR}</p>
-		<button class="retry-btn" onclick={() => retryLibrarySearch()}>{LIBRARY_RETRY_LABEL}</button>
-	{:else if albumGroups.length === 0}
-		<p class="empty">{searching ? LIBRARY_SEARCH_EMPTY : LIBRARY_BROWSE_EMPTY}</p>
-	{/if}
-
-	{#if searching && searchState.hasMore}
-		<button
-			class="load-more"
-			onclick={() => loadMoreLibrarySearch()}
-			disabled={searchState.status === 'loading'}
-		>
-			{LIBRARY_LOAD_MORE}
-		</button>
-	{:else if !searching && (browseState.albumHasMore || browseState.songHasMore)}
-		<button
-			class="load-more"
-			onclick={() => loadLibraryBrowse({ reset: false })}
-			disabled={browseState.status === 'loading'}
-		>
-			{LIBRARY_LOAD_MORE}
-		</button>
-	{/if}
-
-	{#if !searching && browseState.status === 'error'}
-		<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
-		<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: true })}
-			>{LIBRARY_RETRY_LABEL}</button
-		>
+		{#if playlistStatus.status === 'error' && playlists.length > 0}
+			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
+		{/if}
+	{:else if section === 'shared'}
+		{#if playlistStatus.status === 'loading' && sharedItems.length === 0}
+			<p class="empty" role="status">{LIBRARY_SHARED_LOADING}</p>
+		{:else if sharedItems.length === 0 && playlistStatus.status === 'error'}
+			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
+		{:else if sharedItems.length === 0}
+			<p class="empty">{LIBRARY_SHARED_EMPTY}</p>
+		{:else}
+			{#each sharedItems as item (item.type + item.id)}
+				<button class="playlist-row shared-row" onclick={() => onSharedItem(item)}>
+					<span class="shared-icon">&#128279;</span>
+					<span class="playlist-title">{item.label}</span>
+					<span class="playlist-count">{item.type}</span>
+				</button>
+			{/each}
+		{/if}
+		{#if playlistStatus.status === 'error' && sharedItems.length > 0}
+			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
+		{/if}
 	{/if}
 </div>
 
 <style>
+	.library-nav {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		flex-shrink: 0;
+	}
+
 	.search-bar {
 		padding: 8px 12px;
 		flex-shrink: 0;
@@ -293,6 +438,8 @@
 		display: flex;
 		gap: 2px;
 		flex-shrink: 0;
+		flex-wrap: wrap;
+		min-width: 0;
 	}
 
 	.sort-btn {
@@ -344,69 +491,66 @@
 		color: var(--text-subtle);
 	}
 
-	.tree {
-		flex: 1;
-		overflow-y: auto;
-		padding: 0;
-	}
-
-	.section-group {
+	.section-nav {
+		display: flex;
+		width: 100%;
+		min-width: 0;
 		border-bottom: 1px solid var(--border);
-		padding-bottom: 4px;
-		margin-bottom: 4px;
 	}
 
-	.section-header-row {
-		display: flex;
-		align-items: center;
-		padding-right: 8px;
-	}
-	.section-header {
-		display: flex;
-		align-items: center;
-		gap: 6px;
+	.section-tab {
 		flex: 1;
 		min-width: 0;
-		padding: 6px 12px;
+		padding: 8px 6px;
 		background: none;
 		border: none;
+		border-bottom: 2px solid transparent;
 		color: var(--text-muted);
 		font-size: 0.7rem;
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 1px;
 		cursor: pointer;
-		text-align: left;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.section-header:hover {
+	.section-tab.active {
+		color: var(--text);
+		border-bottom-color: var(--accent);
+	}
+
+	.section-tab:hover {
 		color: var(--text);
 	}
 
-	.section-arrow {
-		font-size: 0.6rem;
-		transition: transform 0.15s;
-		display: inline-block;
-	}
-
-	.section-arrow:not(.collapsed) {
-		transform: rotate(90deg);
-	}
-
-	.section-label {
+	.library-browse {
 		flex: 1;
+		min-width: 0;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: auto;
+		padding: 0;
 	}
 
-	.section-count {
-		font-size: 0.6rem;
-		color: var(--text-subtle);
+	.album-overview {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.section-toolbar {
+		display: flex;
+		justify-content: flex-end;
+		padding: 8px 12px;
 	}
 
 	.playlist-row {
 		display: flex;
 		align-items: center;
 		width: 100%;
-		padding: 5px 12px 5px 26px;
+		min-width: 0;
+		padding: 8px 12px;
 		background: none;
 		border: none;
 		color: var(--text-light);
@@ -428,10 +572,12 @@
 	.shared-icon {
 		font-size: 0.7rem;
 		flex-shrink: 0;
+		margin-right: 8px;
 	}
 
 	.playlist-title {
 		flex: 1;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -480,6 +626,10 @@
 		.search {
 			font-size: 1rem;
 			padding: 8px 12px;
+		}
+
+		.section-tab {
+			padding: 10px 4px;
 		}
 	}
 </style>

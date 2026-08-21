@@ -2,21 +2,26 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, SongItem } from '$lib/api/types';
+import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
 import {
-	LIBRARY_BROWSE_EMPTY,
+	LIBRARY_ALBUMS_EMPTY,
+	LIBRARY_PLAYLISTS_EMPTY,
 	LIBRARY_RETRY_LABEL,
 	LIBRARY_SEARCH_DEBOUNCE_MS,
 	LIBRARY_SEARCH_EMPTY,
 	LIBRARY_SEARCH_LOADING,
-	LIBRARY_SEARCH_PLACEHOLDER
+	LIBRARY_SEARCH_PLACEHOLDER,
+	LIBRARY_SECTION_LABELS,
+	LIBRARY_SHARED_EMPTY
 } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
+import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { albumList, songList } from '$lib/stores/player';
-import { playlistList } from '$lib/stores/playlists';
+import { albumList, selectedAlbumId, selectedSongId, songList } from '$lib/stores/player';
+import { playlistList, playlistLoad } from '$lib/stores/playlists';
 
 const searchLibrary = vi.fn();
+const fetchPlaylists = vi.fn();
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
@@ -27,10 +32,11 @@ vi.mock('$lib/api/albums', () => ({
 vi.mock('$lib/api/songs', () => ({
 	fetchSongs: vi.fn()
 }));
-vi.mock('$lib/stores/navigation', () => ({
-	selectAlbumOverview: vi.fn(),
-	selectPlaylistView: vi.fn(),
-	selectSong: vi.fn()
+vi.mock('$lib/api/client', () => ({
+	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
+	fetchPlaylist: vi.fn(),
+	fetchSong: vi.fn(),
+	createPlaylist: vi.fn()
 }));
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
@@ -83,6 +89,18 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 	};
 }
 
+function playlist(overrides: Partial<PlaylistItem> = {}): PlaylistItem {
+	return {
+		id: 'p1',
+		title: 'Late Night',
+		entry_count: 2,
+		is_shared: false,
+		share_slug: null,
+		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
+	};
+}
+
 function render() {
 	const target = document.createElement('div');
 	document.body.appendChild(target);
@@ -91,14 +109,29 @@ function render() {
 	return target;
 }
 
+function sectionTab(target: HTMLElement, label: string): HTMLButtonElement {
+	const tab = [...target.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+		(button) => button.textContent === label
+	);
+	if (!tab) throw new Error(`Expected section tab ${label}`);
+	return tab;
+}
+
 beforeEach(() => {
 	vi.useFakeTimers();
 	searchLibrary.mockReset();
+	fetchPlaylists.mockReset();
+	fetchPlaylists.mockResolvedValue([]);
 	resetLibrarySearchForTests();
+	resetLibraryContextForTests();
 	searchQuery.set('');
 	playlistList.set([]);
+	playlistLoad.set({ status: 'idle', error: null });
 	albumList.set([album()]);
 	songList.set([song()]);
+	selectedAlbumId.set(null);
+	selectedSongId.set(null);
+	history.replaceState(null, '', '/');
 });
 
 afterEach(async () => {
@@ -106,7 +139,10 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	vi.useRealTimers();
 	resetLibrarySearchForTests();
+	resetLibraryContextForTests();
 	searchQuery.set('');
+	selectedAlbumId.set(null);
+	selectedSongId.set(null);
 });
 
 describe('SongList search', () => {
@@ -117,12 +153,12 @@ describe('SongList search', () => {
 		expect(input.placeholder).toBe(LIBRARY_SEARCH_PLACEHOLDER);
 	});
 
-	it('shows browse empty copy when there are no songs', async () => {
+	it('shows albums empty copy when there are no albums', async () => {
 		albumList.set([]);
 		songList.set([]);
 		const target = render();
 		await tick();
-		expect(target.textContent).toContain(LIBRARY_BROWSE_EMPTY);
+		expect(target.textContent).toContain(LIBRARY_ALBUMS_EMPTY);
 		expect(target.textContent).not.toContain(LIBRARY_SEARCH_EMPTY);
 	});
 
@@ -162,7 +198,7 @@ describe('SongList search', () => {
 		await Promise.resolve();
 		await tick();
 		expect(target.textContent).toContain(LIBRARY_SEARCH_EMPTY);
-		expect(target.textContent).not.toContain(LIBRARY_BROWSE_EMPTY);
+		expect(target.textContent).not.toContain(LIBRARY_ALBUMS_EMPTY);
 	});
 
 	it('shows retry when search fails', async () => {
@@ -179,5 +215,125 @@ describe('SongList search', () => {
 			(button) => button.textContent === LIBRARY_RETRY_LABEL
 		);
 		expect(retry).toBeDefined();
+	});
+
+	it('keeps album context on song hits and expands those albums', async () => {
+		searchLibrary.mockResolvedValue({
+			items: [
+				{
+					type: 'song',
+					song: song({ id: 's-tide', title: 'Tide', album_id: 'nachtstrom' }),
+					album_id: 'nachtstrom',
+					album_title: 'Nachtstrom'
+				}
+			],
+			next_cursor: null,
+			has_more: false
+		});
+		const target = render();
+		await tick();
+		searchQuery.set('Tide');
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+		await tick();
+		await Promise.resolve();
+		await tick();
+		expect(target.textContent).toContain('Nachtstrom');
+		expect(target.textContent).toContain('Tide');
+		expect(target.querySelector('.song-row')?.textContent).toContain('Tide');
+	});
+});
+
+describe('SongList sections', () => {
+	it('starts on albums with albums collapsed and playlists/shared not rendered as lists', async () => {
+		playlistList.set([playlist()]);
+		playlistLoad.set({ status: 'ready', error: null });
+		albumList.set([
+			album({ id: 'a1', title: 'First', song_count: 2 }),
+			album({ id: 'a2', title: 'Second', artist: 'Other', song_count: 3 })
+		]);
+		songList.set([
+			song({ id: 's1', album_id: 'a1', title: 'Song One' }),
+			song({ id: 's2', album_id: 'a2', title: 'Song Two' })
+		]);
+		albumList.update((list) =>
+			list.map((item) => (item.id === 'a1' ? { ...item, is_shared: true } : item))
+		);
+		const target = render();
+		await tick();
+
+		expect(target.querySelector('[data-library-section="albums"]')).not.toBeNull();
+		expect(target.querySelector('[data-library-section="playlists"]')).toBeNull();
+		expect(target.querySelector('[data-library-section="shared"]')).toBeNull();
+		expect(target.querySelector('.song-row')).toBeNull();
+		expect(target.querySelector('.shared-row')).toBeNull();
+		expect(target.textContent).not.toContain('Late Night');
+		expect(target.textContent).toContain('First');
+		expect(target.textContent).toContain('Artist');
+		expect(target.textContent).toContain('Other');
+		expect(sectionTab(target, LIBRARY_SECTION_LABELS.albums).getAttribute('aria-selected')).toBe(
+			'true'
+		);
+		expect(sectionTab(target, LIBRARY_SECTION_LABELS.playlists).getAttribute('aria-selected')).toBe(
+			'false'
+		);
+		expect(sectionTab(target, LIBRARY_SECTION_LABELS.shared).getAttribute('aria-selected')).toBe(
+			'false'
+		);
+	});
+
+	it('keeps exactly one section active and preserves selection when switching', async () => {
+		playlistList.set([playlist()]);
+		playlistLoad.set({ status: 'ready', error: null });
+		selectedSongId.set('s-local');
+		const target = render();
+		await tick();
+
+		sectionTab(target, LIBRARY_SECTION_LABELS.playlists).click();
+		await tick();
+		expect(target.querySelector('[data-library-section="playlists"]')).not.toBeNull();
+		expect(target.querySelector('[data-library-section="albums"]')).toBeNull();
+		expect(target.textContent).toContain('Late Night');
+		expect(get(selectedSongId)).toBe('s-local');
+		expect(
+			[...target.querySelectorAll('[role="tab"][aria-selected="true"]')].map(
+				(tab) => tab.textContent
+			)
+		).toEqual([LIBRARY_SECTION_LABELS.playlists]);
+
+		sectionTab(target, LIBRARY_SECTION_LABELS.albums).click();
+		await tick();
+		expect(target.querySelector('[data-library-section="albums"]')).not.toBeNull();
+		expect(get(selectedSongId)).toBe('s-local');
+	});
+
+	it('shows playlists and shared empty copy for those sections', async () => {
+		playlistLoad.set({ status: 'ready', error: null });
+		const target = render();
+		await tick();
+
+		sectionTab(target, LIBRARY_SECTION_LABELS.playlists).click();
+		await tick();
+		expect(target.textContent).toContain(LIBRARY_PLAYLISTS_EMPTY);
+
+		sectionTab(target, LIBRARY_SECTION_LABELS.shared).click();
+		await tick();
+		expect(target.textContent).toContain(LIBRARY_SHARED_EMPTY);
+	});
+
+	it('auto-opens only the selected album', async () => {
+		albumList.set([
+			album({ id: 'a1', title: 'First', song_count: 1 }),
+			album({ id: 'a2', title: 'Second', song_count: 1 })
+		]);
+		songList.set([
+			song({ id: 's1', album_id: 'a1', title: 'Song One' }),
+			song({ id: 's2', album_id: 'a2', title: 'Song Two' })
+		]);
+		selectedAlbumId.set('a1');
+		const target = render();
+		await tick();
+		const rows = [...target.querySelectorAll('.song-row')].map((row) => row.textContent);
+		expect(rows.some((text) => text?.includes('Song One'))).toBe(true);
+		expect(rows.some((text) => text?.includes('Song Two'))).toBe(false);
 	});
 });

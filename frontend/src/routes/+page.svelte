@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { albumList, selectedSong, selectedGeneration, selectedAlbumId } from '$lib/stores/player';
+	import { searchQuery } from '$lib/stores/filter';
 	import { loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { detailTab, initNavigation } from '$lib/stores/navigation';
-	import { selectedPlaylistDetail, loadPlaylists } from '$lib/stores/playlists';
+	import { selectedPlaylistDetail } from '$lib/stores/playlists';
 	import { loadActiveModels } from '$lib/stores/presets';
 	import { addToast } from '$lib/stores/toast';
 	import SongList from '$lib/components/SongList.svelte';
@@ -30,6 +31,7 @@
 	const hasDetail = $derived(
 		!!song || !!activeGen || showCreate || !!selectedAlbum || !!playlistDetail
 	);
+	const searching = $derived($searchQuery.trim().length > 0);
 
 	$effect(() => {
 		if (song) showCreate = false;
@@ -42,7 +44,6 @@
 			try {
 				const [browseOk] = await Promise.all([
 					loadLibraryBrowse({ reset: true }),
-					loadPlaylists(),
 					loadActiveModels()
 				]);
 				if (!browseOk) {
@@ -69,78 +70,104 @@
 {:else if loadError}
 	<div class="error">Failed to load. Please refresh.</div>
 {:else}
-	<aside class="sidebar" class:has-detail={hasDetail}>
+	<div class="workspace" class:has-detail={hasDetail} class:searching>
 		<SongList
 			onNewSong={() => {
 				showCreate = !showCreate;
 			}}
 		/>
-	</aside>
 
-	<main
-		class="main-content"
-		class:has-detail={hasDetail}
-		class:chat-active={!!song && tab === 'chat'}
-	>
-		{#if showCreate}
-			<CreateForm albums={$albumList} />
-		{:else if activeGen && song}
-			<GenerationView />
-		{:else if song}
-			<SongDetailView />
-		{:else if selectedAlbum}
-			<AlbumDetailView />
-		{:else if playlistDetail}
-			<PlaylistDetailView />
-		{:else}
-			<div class="empty-state">
-				<div class="empty-waveform" aria-hidden="true">
-					<span class="wave-bar"></span>
-					<span class="wave-bar"></span>
-					<span class="wave-bar"></span>
-					<span class="wave-bar"></span>
-					<span class="wave-bar"></span>
-				</div>
-				Select a song or create a new one
-			</div>
-		{/if}
-	</main>
+		<main class="detail-panel" class:chat-active={!!song && tab === 'chat'}>
+			{#if showCreate}
+				<CreateForm albums={$albumList} />
+			{:else if activeGen && song}
+				<GenerationView />
+			{:else if song}
+				<SongDetailView />
+			{:else if selectedAlbum}
+				<AlbumDetailView />
+			{:else if playlistDetail}
+				<PlaylistDetailView />
+			{/if}
+		</main>
+	</div>
 {/if}
 
 <ToastContainer />
 
 <style>
-	.sidebar {
-		width: 320px;
-		min-width: 280px;
+	.workspace {
+		display: grid;
+		flex: 1;
+		width: 100%;
 		height: 100%;
-		display: flex;
-		flex-direction: column;
+		min-width: 0;
+		min-height: 0;
+		overflow-x: hidden;
+		grid-template-columns: 260px minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr);
+		grid-template-areas: 'nav browse';
+	}
+
+	.workspace.has-detail {
+		grid-template-areas: 'nav detail';
+	}
+
+	.workspace > :global(.library-nav) {
+		grid-area: nav;
+		min-width: 0;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: auto;
 		border-right: 1px solid var(--border);
-		flex-shrink: 0;
-		position: relative;
 		background-image:
 			linear-gradient(rgba(160, 32, 240, 0.02) 1px, transparent 1px),
 			linear-gradient(90deg, rgba(160, 32, 240, 0.02) 1px, transparent 1px);
 		background-size: 40px 40px;
 	}
 
-	.main-content {
-		flex: 1;
-		overflow-y: auto;
-		overflow-x: hidden;
-		display: flex;
-		flex-direction: column;
+	.workspace > :global(.library-browse) {
+		grid-area: browse;
 		min-width: 0;
+		min-height: 0;
 	}
 
-	.main-content.chat-active {
+	.workspace.has-detail > :global(.library-browse) {
+		display: none;
+	}
+
+	.workspace.has-detail.searching {
+		grid-template-areas: 'nav browse';
+	}
+
+	.workspace.has-detail.searching > :global(.library-browse) {
+		display: block;
+	}
+
+	.workspace.has-detail.searching > .detail-panel {
+		display: none;
+	}
+
+	.detail-panel {
+		grid-area: detail;
+		display: none;
+		min-width: 0;
+		min-height: 0;
+		overflow-y: auto;
+		overflow-x: hidden;
+		flex-direction: column;
+	}
+
+	.workspace.has-detail > .detail-panel {
+		display: flex;
+	}
+
+	.detail-panel.chat-active {
 		overflow-y: hidden;
 	}
 
 	.loading,
-	.error,
-	.empty-state {
+	.error {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -155,94 +182,39 @@
 		color: var(--score-bad);
 	}
 
-	.empty-waveform {
-		display: flex;
-		align-items: flex-end;
-		gap: 3px;
-		height: 32px;
-	}
-
-	.wave-bar {
-		width: 3px;
-		background: linear-gradient(to top, var(--primary), var(--accent));
-		border-radius: 2px;
-		opacity: 0.3;
-	}
-
-	@media (prefers-reduced-motion: no-preference) {
-		.wave-bar {
-			animation: wave-idle 1.5s ease-in-out infinite;
-		}
-
-		.wave-bar:nth-child(1) {
-			animation-delay: 0s;
-			height: 12px;
-		}
-		.wave-bar:nth-child(2) {
-			animation-delay: 0.15s;
-			height: 20px;
-		}
-		.wave-bar:nth-child(3) {
-			animation-delay: 0.3s;
-			height: 28px;
-		}
-		.wave-bar:nth-child(4) {
-			animation-delay: 0.45s;
-			height: 20px;
-		}
-		.wave-bar:nth-child(5) {
-			animation-delay: 0.6s;
-			height: 12px;
-		}
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.wave-bar:nth-child(1) {
-			height: 12px;
-		}
-		.wave-bar:nth-child(2) {
-			height: 20px;
-		}
-		.wave-bar:nth-child(3) {
-			height: 28px;
-		}
-		.wave-bar:nth-child(4) {
-			height: 20px;
-		}
-		.wave-bar:nth-child(5) {
-			height: 12px;
-		}
-	}
-
-	@keyframes wave-idle {
-		0%,
-		100% {
-			transform: scaleY(0.6);
-		}
-		50% {
-			transform: scaleY(1);
-		}
-	}
-
 	@media (max-width: 768px) {
-		.sidebar {
-			position: static;
-			width: 100%;
-			min-width: 0;
-			height: 100%;
+		.workspace {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-rows: auto minmax(0, 1fr);
+			grid-template-areas:
+				'nav'
+				'browse';
+		}
+
+		.workspace > :global(.library-nav) {
 			border-right: none;
-			transform: none;
+			border-bottom: 1px solid var(--border);
 		}
 
-		.sidebar.has-detail {
+		.workspace.has-detail {
+			grid-template-rows: minmax(0, 1fr);
+			grid-template-areas: 'detail';
+		}
+
+		.workspace.has-detail > :global(.library-nav),
+		.workspace.has-detail > :global(.library-browse) {
 			display: none;
 		}
 
-		.main-content {
+		.workspace.has-detail.searching {
+			grid-template-areas: 'detail';
+		}
+
+		.workspace.has-detail.searching > :global(.library-browse) {
 			display: none;
 		}
 
-		.main-content.has-detail {
+		.workspace.has-detail.searching > .detail-panel {
 			display: flex;
 		}
 	}
