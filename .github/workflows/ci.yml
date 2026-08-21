@@ -65,6 +65,50 @@ jobs:
           skipped=$(grep -oP '\d+ skipped' pytest-output.txt | awk '{print $1}')
           echo "### Backend: ${passed} passed, ${skipped:-0} skipped — ${total} coverage" >> "$GITHUB_STEP_SUMMARY"
 
+  acceptance-evidence:
+    name: Acceptance evidence (integration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[server,dev,mcp]"
+
+      - name: Run acceptance evidence pilot
+        id: evidence
+        run: |
+          report=artifacts/acceptance-evidence.json
+          rm -f "$report"
+          set +e
+          python scripts/acceptance_evidence.py run --output "$report"
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Verify acceptance evidence report
+        if: always()
+        run: |
+          report=artifacts/acceptance-evidence.json
+          test -s "$report"
+          sha256sum "$report" | tee -a "$GITHUB_STEP_SUMMARY"
+          git rev-parse HEAD | sed 's/^/Acceptance evidence HEAD: /' >> "$GITHUB_STEP_SUMMARY"
+          test "${{ steps.evidence.outputs.status }}" = "0"
+
+      - name: Upload acceptance evidence report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/acceptance-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
   postgresql-contract:
     name: PostgreSQL contract (serial)
     runs-on: ubuntu-latest

@@ -1,1 +1,8 @@
 schema_version = 1
+
+[[acceptance]]
+id = "ACC-CURATION-02"
+text = "After a musician selects a second take as a Pick for the same song, the former Pick is not selected and the second take is selected."
+requirements = ["REQ-CURATION-02"]
+proof_kind = "integration"
+critical = true

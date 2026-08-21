@@ -196,7 +196,10 @@ def test_repository_contains_the_active_genesis_contract() -> None:
         "REQ-CURATION-05",
         "REQ-CURATION-06",
     } <= identifiers
-    assert acceptance == ()
+    assert [
+        (entry.identifier, entry.requirements, entry.proof_kind, entry.critical)
+        for entry in acceptance
+    ] == [("ACC-CURATION-02", ("REQ-CURATION-02",), "integration", True)]
 
 
 def test_repository_contains_the_active_library_listening_contract() -> None:
@@ -210,7 +213,10 @@ def test_repository_contains_the_active_library_listening_contract() -> None:
         "REQ-PLAYER-01",
         "REQ-PLAYER-02",
     } <= identifiers
-    assert acceptance == ()
+    assert [
+        (entry.identifier, entry.requirements, entry.proof_kind, entry.critical)
+        for entry in acceptance
+    ] == [("ACC-CURATION-02", ("REQ-CURATION-02",), "integration", True)]
 
 
 def test_a_strict_active_requirement_and_acceptance_edge_are_readable(

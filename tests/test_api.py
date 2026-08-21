@@ -478,9 +478,12 @@ def test_pick_generation_api(client: TestClient) -> None:
     assert resp.json()["is_picked"] is True
 
 
+@pytest.mark.acceptance("ACC-CURATION-02")
 def test_pick_replaces_previous(client: TestClient) -> None:
-    client.post("/api/generations/g1/pick")
-    client.post("/api/generations/g2/pick")
+    first = client.post("/api/generations/g1/pick")
+    assert first.status_code == 200
+    second = client.post("/api/generations/g2/pick")
+    assert second.status_code == 200
     resp = client.get("/api/generations/g1")
     assert resp.json()["is_picked"] is False
     resp = client.get("/api/generations/g2")

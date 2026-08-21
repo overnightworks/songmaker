@@ -51,6 +51,20 @@ while issue #31 remains open. The live checks are:
 | Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit · `pnpm audit --prod` |
 | Requirements | strict offline requirement/acceptance schema · exact bytes and linear history · exact PR/push base · derived PRODUCT view |
 | Requirement witnesses | fixed GitHub repo/issue/comment re-fetch · exact identity, URL, author, timestamp, and approval-body match |
+| Acceptance evidence | #42-A1 runs the marked Pick-replacement API test and retains its commit-bound JSON report for 30 days |
+
+### Acceptance evidence pilot
+
+#42-A1 is one Pytest integration proof for `ACC-CURATION-02` →
+`REQ-CURATION-02`. It exercises the FastAPI router and SQLite persistence through
+the test client with its test-auth override. It does not prove session/login,
+PostgreSQL, a separate server, browser, UI, accessibility, or E2E behavior.
+`scripts/acceptance_evidence.py` accepts only one literal direct marker per
+top-level test, rejects unknown or orphaned critical integration claims, runs the
+claimed tests serially, and writes a point-in-time report containing the checked
+out commit, command, exit status, and result. The CI job uploads that report even
+when the test fails; its visible result is not a required merge gate until branch
+protection is configured.
 
 The witness test suite uses injected fake GitHub clients and transports; local
 tests never need a token or make network calls. It covers strict witness parsing,

@@ -15,7 +15,8 @@ non-normative [vision](../VISION.md) remains an overview of product direction.
 - An active registry tip owns approved normative product intent.
 - [`acceptance.toml`](../acceptance/acceptance.toml) owns each
   Acceptance→Requirement edge.
-- Tests and executed reports will own Test→Acceptance proof under issue #42.
+- #42-A1 owns one Test→Acceptance integration claim and its point-in-time CI
+  report; browser and E2E evidence remain separately approved future work.
 - Architecture, security, API schemas, and test documentation retain their
   existing technical ownership.
 - [PRODUCT](../PRODUCT.md) is an exact derived count view and currently makes no
@@ -149,7 +150,9 @@ The acceptance manifest may declare `ACC-<AREA>-<nn>`, one observable sentence,
 one or more active REQ IDs, a proof kind (`unit`, `integration`, `browser`, or
 `operator`), and whether it is critical. This foundation validates the schema
 and Acceptance→Requirement edges only. It does not scan tests, consume run
-reports, or claim proof; those capabilities belong to issue #42.
+reports, or claim proof. #42-A1 separately validates one literal Pytest
+integration claim and publishes its point-in-time CI report; it does not imply
+browser, E2E, or whole-product evidence.
 
 <!-- requirement-gate-bound:start -->
 ```text

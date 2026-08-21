@@ -132,6 +132,9 @@ skips = [
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-n auto"
+markers = [
+    "acceptance(identifier): exact Acceptance evidence claim.",
+]
 
 # ---------------------------------------------------------------
 # External tools (must be on system PATH):
