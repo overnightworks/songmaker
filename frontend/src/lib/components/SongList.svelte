@@ -407,7 +407,7 @@
 		{:else if sharedItems.length === 0 && playlistStatus.status === 'error'}
 			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
 			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
-		{:else if sharedItems.length === 0}
+		{:else if sharedItems.length === 0 && !browseState.albumHasMore && !browseState.songHasMore}
 			<p class="empty">{LIBRARY_SHARED_EMPTY}</p>
 		{:else}
 			{#each sharedItems as item (item.type + item.id)}
@@ -417,6 +417,15 @@
 					<span class="playlist-count">{item.type}</span>
 				</button>
 			{/each}
+		{/if}
+		{#if browseState.albumHasMore || browseState.songHasMore}
+			<button
+				class="load-more"
+				onclick={() => loadLibraryBrowse({ reset: false })}
+				disabled={browseState.status === 'loading'}
+			>
+				{LIBRARY_LOAD_MORE}
+			</button>
 		{/if}
 		{#if playlistStatus.status === 'error' && sharedItems.length > 0}
 			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>

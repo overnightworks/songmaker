@@ -11,6 +11,7 @@ import {
 	setLibrarySection
 } from '$lib/stores/libraryContext';
 import {
+	albumList,
 	selectedAlbumId,
 	selectedGenerationId,
 	selectedSongId,
@@ -229,8 +230,10 @@ describe('library history', () => {
 		openLibraryCreate();
 		expect(get(librarySurface)).toBe('create');
 		expect(get(canGoBack)).toBe(true);
+		const back = vi.spyOn(history, 'back');
 		goBack();
-		expect(get(librarySurface)).toBe('browse');
+		expect(back).toHaveBeenCalled();
+		back.mockRestore();
 		cleanup();
 	});
 
@@ -241,6 +244,21 @@ describe('library history', () => {
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(selectedAlbumId)).toBe('a1');
 		expect(get(librarySurface)).toBe('detail');
+		cleanup();
+	});
+
+	it('hydrates a search-only song and its album into the library', () => {
+		const cleanup = initNavigation();
+		selectSong('s-remote', {
+			...song(),
+			id: 's-remote',
+			album_id: 'a-remote',
+			album_title: 'Remote Album'
+		});
+		expect(get(selectedSongId)).toBe('s-remote');
+		expect(get(selectedAlbumId)).toBe('a-remote');
+		expect(get(songList).some((item) => item.id === 's-remote')).toBe(true);
+		expect(get(albumList).some((item) => item.id === 'a-remote')).toBe(true);
 		cleanup();
 	});
 });

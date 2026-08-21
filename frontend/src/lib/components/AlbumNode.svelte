@@ -15,7 +15,6 @@
 	let { album, songs, expanded, selected, ontoggle, onselect }: Props = $props();
 
 	function handleClick(): void {
-		if (!expanded) ontoggle();
 		onselect();
 	}
 </script>

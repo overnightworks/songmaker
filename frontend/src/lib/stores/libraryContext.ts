@@ -175,9 +175,25 @@ export async function hydrateLibraryFromHistory(): Promise<boolean> {
 	return restoreLibraryBrowse(get(librarySort), 0, 0);
 }
 
+const EMPTY_SECTION_SCROLL: Record<LibrarySection, number> = {
+	albums: 0,
+	playlists: 0,
+	shared: 0
+};
+
+export const libraryScrollBySection = writable<Record<LibrarySection, number>>({
+	...EMPTY_SECTION_SCROLL
+});
+
 export function setLibrarySection(section: LibrarySection): void {
+	const previous = get(librarySection);
+	libraryScrollBySection.update((anchors) => ({
+		...anchors,
+		[previous]: get(libraryScrollAnchor)
+	}));
 	librarySection.set(section);
 	librarySurface.set('browse');
+	libraryScrollAnchor.set(get(libraryScrollBySection)[section] ?? 0);
 	if (section === 'playlists' || section === 'shared') {
 		void ensurePlaylistsLoaded();
 	}
@@ -216,6 +232,8 @@ export function expandAlbum(albumId: string): void {
 
 export function captureLibraryScroll(scrollTop: number): void {
 	libraryScrollAnchor.set(scrollTop);
+	const section = get(librarySection);
+	libraryScrollBySection.update((anchors) => ({ ...anchors, [section]: scrollTop }));
 }
 
 export function albumIsExpanded(
@@ -233,6 +251,7 @@ export function resetLibraryContextForTests(): void {
 	librarySurface.set('browse');
 	expandedAlbumIds.set(new Set());
 	libraryScrollAnchor.set(0);
+	libraryScrollBySection.set({ ...EMPTY_SECTION_SCROLL });
 }
 
 function isLibrarySurface(value: unknown): value is LibrarySurface {

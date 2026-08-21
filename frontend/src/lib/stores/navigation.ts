@@ -8,6 +8,7 @@ import {
 	selectGenerationInSidebar as playerSelectGeneration,
 	clearGenerationSelection as playerClearGeneration,
 	ensureGenerationsLoaded,
+	albumList,
 	songList
 } from '$lib/stores/player';
 import {
@@ -16,7 +17,7 @@ import {
 	selectedPlaylistId
 } from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import type { LibrarySection } from '$lib/constants';
 import {
 	applyLibraryHistory,
@@ -113,7 +114,6 @@ export function backToAlbum(): void {
 	detailTab.set('generations');
 	if (albumId) {
 		playerSelectAlbum(albumId);
-		expandAlbum(albumId);
 		setLibrarySurface('detail');
 	} else {
 		setLibrarySurface('browse');
@@ -127,19 +127,50 @@ export function openLibraryCreate(): void {
 	pushLibraryHistory();
 }
 
-export function selectSong(songId: string): void {
+export function selectSong(songId: string, knownSong?: SongItem): void {
 	storeDeselectPlaylist();
-	const song = get(songList).find((item) => item.id === songId);
-	if (song) {
-		selectedAlbumId.set(song.album_id);
-		expandAlbum(song.album_id);
+	if (knownSong) hydrateSongIntoLibrary(knownSong);
+	const song = get(songList).find((item) => item.id === songId) ?? knownSong;
+	const albumId = song?.album_id ?? null;
+	if (albumId) {
+		selectedAlbumId.set(albumId);
 	}
 	playerSelectSong(songId);
 	ensureGenerationsLoaded(songId);
 	detailTab.set('generations');
 	setLibrarySurface('detail');
 	closeSidebar();
+	const current = history.state;
+	if (
+		isLibraryHistoryState(current) &&
+		albumId !== null &&
+		current.albumId === albumId &&
+		current.songId === null
+	) {
+		replaceLibraryHistory();
+		return;
+	}
 	pushLibraryHistory();
+}
+
+function hydrateSongIntoLibrary(song: SongItem): void {
+	if (!get(songList).some((item) => item.id === song.id)) {
+		songList.update((list) => [...list, song]);
+	}
+	if (get(albumList).some((item) => item.id === song.album_id)) return;
+	const album: AlbumItem = {
+		id: song.album_id,
+		title: song.album_title,
+		artist: song.artist,
+		subtitle: '',
+		year: '',
+		colors: {},
+		song_count: 0,
+		is_shared: false,
+		share_slug: null,
+		created_at: song.created_at
+	};
+	albumList.update((list) => [...list, album]);
 }
 
 export function selectPlaylistView(playlistId: string): void {
@@ -195,6 +226,11 @@ export function switchTab(tab: DetailTab): void {
 
 export function goBack(): void {
 	if (get(librarySurface) === 'create') {
+		const createState = history.state;
+		if (isLibraryHistoryState(createState) && createState.index > 0) {
+			history.back();
+			return;
+		}
 		setLibrarySurface('browse');
 		replaceLibraryHistory();
 		return;

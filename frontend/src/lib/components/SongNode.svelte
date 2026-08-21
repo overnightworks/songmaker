@@ -22,8 +22,8 @@
 	class="song-row"
 	class:active={song.id === activeSongId}
 	class:playing={isPlaying}
-	onclick={() => selectSong(song.id)}
-	onkeydown={(e) => e.key === 'Enter' && selectSong(song.id)}
+	onclick={() => selectSong(song.id, song)}
+	onkeydown={(e) => e.key === 'Enter' && selectSong(song.id, song)}
 	role="button"
 	tabindex="0"
 >
