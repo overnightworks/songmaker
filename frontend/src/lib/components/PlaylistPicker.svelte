@@ -1,7 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { playlistList, createNewPlaylist, ensurePlaylistsLoaded } from '$lib/stores/playlists';
+	import {
+		createNewPlaylist,
+		ensurePlaylistsLoaded,
+		loadPlaylists,
+		playlistList,
+		playlistLoad
+	} from '$lib/stores/playlists';
 	import { addToast } from '$lib/stores/toast';
+	import {
+		LIBRARY_PLAYLISTS_ERROR,
+		LIBRARY_PLAYLISTS_LOADING,
+		LIBRARY_RETRY_LABEL
+	} from '$lib/constants';
 
 	interface Props {
 		onselect: (playlistId: string) => void;
@@ -14,6 +25,7 @@
 	let creating = $state(false);
 
 	const playlists = $derived($playlistList);
+	const load = $derived($playlistLoad);
 
 	onMount(() => {
 		void ensurePlaylistsLoaded();
@@ -48,12 +60,23 @@
 <div class="picker" bind:this={menuRef}>
 	<div class="picker-header">Add to Playlist</div>
 	<div class="picker-list">
-		{#each playlists as p (p.id)}
-			<button class="picker-item" onclick={() => onselect(p.id)}>
-				<span class="picker-title">{p.title}</span>
-				<span class="picker-count">{p.entry_count}</span>
-			</button>
-		{/each}
+		{#if load.status === 'loading' && playlists.length === 0}
+			<p class="picker-status" role="status">{LIBRARY_PLAYLISTS_LOADING}</p>
+		{:else if load.status === 'error' && playlists.length === 0}
+			<p class="picker-status" role="alert">{load.error || LIBRARY_PLAYLISTS_ERROR}</p>
+			<button class="picker-retry" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
+		{:else}
+			{#each playlists as p (p.id)}
+				<button class="picker-item" onclick={() => onselect(p.id)}>
+					<span class="picker-title">{p.title}</span>
+					<span class="picker-count">{p.entry_count}</span>
+				</button>
+			{/each}
+		{/if}
+		{#if load.status === 'error' && playlists.length > 0}
+			<p class="picker-status" role="alert">{load.error || LIBRARY_PLAYLISTS_ERROR}</p>
+			<button class="picker-retry" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
+		{/if}
 	</div>
 	<div class="picker-create">
 		<input
@@ -108,6 +131,23 @@
 	.picker-list {
 		overflow-y: auto;
 		max-height: 200px;
+	}
+
+	.picker-status {
+		margin: 0;
+		padding: 8px 12px;
+		font-size: 12px;
+		color: var(--text-muted);
+	}
+
+	.picker-retry {
+		margin: 0 12px 8px;
+		padding: 4px 8px;
+		background: none;
+		border: 1px solid var(--border);
+		color: var(--text);
+		font-size: 11px;
+		cursor: pointer;
 	}
 
 	.picker-item {

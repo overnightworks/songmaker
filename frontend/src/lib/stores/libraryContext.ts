@@ -19,6 +19,7 @@ import {
 } from '$lib/stores/librarySearch';
 import {
 	albumList,
+	loadSongsForAlbum,
 	selectedAlbumId,
 	selectedGenerationId,
 	selectedSongId,
@@ -28,6 +29,7 @@ import {
 	deselectPlaylist,
 	ensurePlaylistsLoaded,
 	loadPlaylistDetail,
+	selectedPlaylistDetail,
 	selectedPlaylistId
 } from '$lib/stores/playlists';
 import { CREATED_SORTS } from '$lib/utils/recency';
@@ -175,6 +177,9 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 			await loadPlaylistDetail(state.playlistId);
 		} catch (err) {
 			if (isNotFound(err)) deselectPlaylist();
+			else if (get(selectedPlaylistDetail)?.id !== state.playlistId) {
+				selectedPlaylistDetail.set(null);
+			}
 		}
 	} else {
 		deselectPlaylist();
@@ -191,8 +196,18 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	if (generation !== historyApplyGeneration) return false;
 	await hydrateSelectedResources(state, generation);
 	if (generation !== historyApplyGeneration) return false;
+	if (state.albumId) await loadSongsForAlbum(state.albumId);
+	if (generation !== historyApplyGeneration) return false;
+	for (const albumId of state.expandedAlbumIds) {
+		if (albumId === state.albumId) continue;
+		void loadSongsForAlbum(albumId);
+	}
 	fallbackBrowseIfDetailGone(state.surface);
 	return true;
+}
+
+export function cancelLibraryHistoryApply(): void {
+	historyApplyGeneration += 1;
 }
 
 async function hydrateSelectedResources(
@@ -307,6 +322,7 @@ export function toggleAlbumExpanded(albumId: string): void {
 		else next.add(albumId);
 		return next;
 	});
+	if (get(expandedAlbumIds).has(albumId)) void loadSongsForAlbum(albumId);
 }
 
 export function expandAlbum(albumId: string): void {
@@ -316,6 +332,7 @@ export function expandAlbum(albumId: string): void {
 		next.add(albumId);
 		return next;
 	});
+	void loadSongsForAlbum(albumId);
 }
 
 export function captureLibraryScroll(scrollTop: number): void {

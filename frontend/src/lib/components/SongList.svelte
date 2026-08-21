@@ -437,6 +437,12 @@
 				{LIBRARY_LOAD_MORE}
 			</button>
 		{/if}
+		{#if browseState.status === 'error'}
+			<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: false })}
+				>{LIBRARY_RETRY_LABEL}</button
+			>
+		{/if}
 		{#if playlistStatus.status === 'error' && sharedItems.length > 0}
 			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
 			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>

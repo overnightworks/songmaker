@@ -8,7 +8,7 @@ import type {
 	QueueStreamTrackItem,
 	SongItem
 } from '$lib/api/types';
-import { createQueueStreamSnapshot, fetchSong } from '$lib/api/client';
+import { createQueueStreamSnapshot, fetchSong, fetchSongs } from '$lib/api/client';
 import { toasts } from '$lib/stores/toast';
 import { QUEUE_STREAM_UNPLAYABLE_START_DETAIL, QUEUE_TAKE_MISSING_TOAST } from '$lib/constants';
 import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
@@ -16,7 +16,14 @@ import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 vi.mock('$lib/api/client', () => ({
 	createQueueStreamSnapshot: vi.fn(),
 	createLibraryQueueStreamSnapshot: vi.fn(),
-	fetchSong: vi.fn()
+	fetchSong: vi.fn(),
+	fetchSongs: vi.fn().mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 200,
+		has_more: false
+	})
 }));
 import {
 	canPlayNextGen,
@@ -25,6 +32,7 @@ import {
 	canPlayPrevSong,
 	clearGenerationSelection,
 	ensureGenerationsLoaded,
+	loadSongsForAlbum,
 	upsertSongInList,
 	filteredSongs,
 	handlePlaybackEnded,
@@ -144,6 +152,13 @@ beforeEach(() => {
 	// These tests pin the classic per-track queue path; stream is now the
 	// product default, so classic must be an explicit choice here.
 	setQueuePlaybackMode('classic');
+	vi.mocked(fetchSongs).mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 200,
+		has_more: false
+	});
 	vi.spyOn(audioPlayer, 'load').mockImplementation((info) => {
 		audioPlayer.current = info;
 	});
@@ -215,6 +230,23 @@ describe('browsing state', () => {
 		expect(get(songList).map((s) => s.id)).toContain('s-direct');
 		selectedSongId.set('s-direct');
 		expect(get(selectedSong)?.generations.length).toBe(1);
+	});
+
+	it('loadSongsForAlbum merges album tracks that were outside the browse slice', async () => {
+		songList.set([makeSong({ id: 's-page', album_id: 'a1' })]);
+		vi.mocked(fetchSongs).mockResolvedValueOnce({
+			items: [
+				makeSong({ id: 's-page', album_id: 'a1', title: 'Page' }),
+				makeSong({ id: 's-hidden', album_id: 'a1', title: 'Hidden' })
+			],
+			total: 2,
+			offset: 0,
+			limit: 200,
+			has_more: false
+		});
+		await loadSongsForAlbum('a1');
+		expect(vi.mocked(fetchSongs)).toHaveBeenCalledWith('a1', 0, 200);
+		expect(get(songList).map((item) => item.id).sort()).toEqual(['s-hidden', 's-page']);
 	});
 
 	it('upsertSongInList appends an absent song and replaces a present one', () => {

@@ -21,6 +21,7 @@ import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import type { LibrarySection } from '$lib/constants';
 import {
 	applyLibraryHistory,
+	cancelLibraryHistoryApply,
 	expandAlbum,
 	hasLibrarySelection,
 	isLibraryHistoryState,
@@ -57,6 +58,7 @@ function replaceLibraryHistory(): void {
 
 function pushLibraryHistory(): void {
 	if (suppressPush) return;
+	cancelLibraryHistoryApply();
 	const current = history.state;
 	if (isLibraryHistoryState(current)) {
 		const leaving = snapshotLibraryHistory(current.index);
@@ -281,22 +283,17 @@ export function initNavigation(): () => void {
 	}
 
 	function onPopstate(e: PopStateEvent): void {
-		suppressPush = true;
 		const state = e.state;
 		void (async () => {
-			try {
-				if (isLibraryHistoryState(state)) {
-					const applied = await applyLibraryHistory(state);
-					if (applied && state.songId) {
-						await ensureGenerationsLoaded(state.songId);
-					}
-				} else {
-					await applyLibraryHistory(libraryRootState());
+			if (isLibraryHistoryState(state)) {
+				const applied = await applyLibraryHistory(state);
+				if (applied && state.songId) {
+					await ensureGenerationsLoaded(state.songId);
 				}
-			} finally {
-				detailTab.set('generations');
-				suppressPush = false;
+			} else {
+				await applyLibraryHistory(libraryRootState());
 			}
+			detailTab.set('generations');
 		})();
 	}
 

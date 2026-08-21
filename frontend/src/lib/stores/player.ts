@@ -3,7 +3,8 @@ import { ApiError } from '$lib/api/fetch';
 import {
 	createLibraryQueueStreamSnapshot,
 	createQueueStreamSnapshot,
-	fetchSong
+	fetchSong,
+	fetchSongs
 } from '$lib/api/client';
 import type {
 	AlbumItem,
@@ -29,6 +30,7 @@ import {
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
 import {
+	LIBRARY_SONG_PAGE_SIZE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
 	QUEUE_TAKE_MISSING_TOAST
@@ -472,6 +474,7 @@ async function collectAlbumQueue(
 	albumId: string,
 	start?: { song: SongItem; gen: GenerationItem }
 ): Promise<{ entries: PlaylistEntryItem[]; startIndex: number }> {
+	await loadSongsForAlbum(albumId);
 	const songs = get(songList).filter((s) => s.album_id === albumId);
 	const entries: PlaylistEntryItem[] = [];
 	for (const song of songs) {
@@ -774,6 +777,45 @@ export function upsertSongInList(song: SongItem): void {
 			? list.map((s) => (s.id === song.id ? song : s))
 			: [...list, song]
 	);
+}
+
+const albumSongLoads = new Map<string, Promise<void>>();
+
+export async function loadSongsForAlbum(albumId: string): Promise<void> {
+	const inflight = albumSongLoads.get(albumId);
+	if (inflight) return inflight;
+	const load = (async () => {
+		let offset = 0;
+		const collected: SongItem[] = [];
+		for (;;) {
+			const page = await fetchSongs(albumId, offset, LIBRARY_SONG_PAGE_SIZE);
+			collected.push(...page.items);
+			offset += page.items.length;
+			if (!page.has_more || page.items.length === 0) break;
+		}
+		songList.update((list) => mergeAlbumSongs(list, collected));
+	})();
+	albumSongLoads.set(albumId, load);
+	try {
+		await load;
+	} finally {
+		albumSongLoads.delete(albumId);
+	}
+}
+
+function mergeAlbumSongs(list: SongItem[], incoming: SongItem[]): SongItem[] {
+	let next = list;
+	for (const song of incoming) {
+		const current = next.find((item) => item.id === song.id);
+		const merged =
+			current && current.generations.length > 0 && song.generations.length === 0
+				? { ...song, generations: current.generations }
+				: song;
+		next = next.some((item) => item.id === merged.id)
+			? next.map((item) => (item.id === merged.id ? merged : item))
+			: [...next, merged];
+	}
+	return next;
 }
 
 export function updateSongInList(songId: string, updater: (s: SongItem) => SongItem): void {

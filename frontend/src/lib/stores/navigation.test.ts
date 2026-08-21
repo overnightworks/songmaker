@@ -61,6 +61,13 @@ vi.mock('$lib/api/songs', () => ({
 
 vi.mock('$lib/api/client', () => ({
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
+	fetchSongs: vi.fn().mockResolvedValue({
+		items: [],
+		total: 0,
+		offset: 0,
+		limit: 200,
+		has_more: false
+	}),
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
 	createPlaylist: vi.fn(),

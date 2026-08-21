@@ -43,6 +43,7 @@ vi.mock('$lib/api/songs', () => ({
 vi.mock('$lib/api/client', () => ({
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
+	fetchSongs: (...args: unknown[]) => fetchSongs(...args),
 	createPlaylist: vi.fn(),
 	deletePlaylistApi: vi.fn(),
 	updatePlaylist: vi.fn(),
@@ -401,6 +402,19 @@ describe('library history snapshot', () => {
 		});
 		await first;
 		expect(get(selectedPlaylistId)).toBe('p2');
+	});
+
+	it('keeps restoring after a transient playlist-detail failure', async () => {
+		fetchPlaylist.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/playlists/p1'));
+		fetchAlbums.mockResolvedValue(emptyPage([album()]));
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			section: 'playlists',
+			playlistId: 'p1'
+		});
+		expect(get(selectedPlaylistId)).toBe('p1');
+		expect(get(albumList).map((item) => item.id)).toEqual(['a1']);
 	});
 
 	it('clears missing resources on 404 but keeps them after a transient error', async () => {

@@ -274,6 +274,34 @@ describe('restoreLibraryBrowse', () => {
 		expect(get(libraryBrowse).albumOffset).toBe(2);
 		expect(get(albumList).map((item) => item.id)).toEqual(['a1', 'a2']);
 	});
+
+	it('stops paging a resource once it is exhausted even if the other target remains', async () => {
+		fetchAlbums.mockResolvedValue({
+			items: [album({ id: 'a1' })],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		fetchSongs
+			.mockResolvedValueOnce({
+				items: [song({ id: 's1' })],
+				total: 1,
+				offset: 0,
+				limit: 200,
+				has_more: false
+			})
+			.mockResolvedValueOnce({
+				items: [],
+				total: 1,
+				offset: 1,
+				limit: 200,
+				has_more: false
+			});
+		await restoreLibraryBrowse('newest', 50, 1);
+		expect(fetchAlbums).toHaveBeenCalledTimes(1);
+		expect(fetchSongs).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe('loadLibraryBrowse', () => {

@@ -211,11 +211,11 @@ export async function restoreLibraryBrowse(
 	if (!ok) return false;
 	const albumTarget = Math.max(0, targetAlbumOffset);
 	const songTarget = Math.max(0, targetSongOffset);
-	while (
-		get(libraryBrowse).status === 'ready' &&
-		(get(libraryBrowse).albumOffset < albumTarget || get(libraryBrowse).songOffset < songTarget) &&
-		(get(libraryBrowse).albumHasMore || get(libraryBrowse).songHasMore)
-	) {
+	while (get(libraryBrowse).status === 'ready') {
+		const browse = get(libraryBrowse);
+		const needAlbums = browse.albumOffset < albumTarget && browse.albumHasMore;
+		const needSongs = browse.songOffset < songTarget && browse.songHasMore;
+		if (!needAlbums && !needSongs) break;
 		const more = await loadLibraryBrowse({ reset: false });
 		if (!more) return false;
 	}
