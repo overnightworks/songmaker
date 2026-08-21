@@ -1,14 +1,37 @@
 <script lang="ts">
 	import type { SongItem, GenerationItem } from '$lib/api/types';
-	import { EXPIRY_WARN_DAYS } from '$lib/constants';
+	import {
+		EXPIRY_WARN_DAYS,
+		LIBRARY_RETRY_LABEL,
+		NOW_PLAYING_TAKE_PREFIX,
+		SONG_SURFACE_RECIPE,
+		TAKE_AGAIN_LABEL,
+		TAKE_AUDIO_COVER_LABEL,
+		TAKE_COPY_LINK_LABEL,
+		TAKE_DELETE_LABEL,
+		TAKE_KEEP_LABEL,
+		TAKE_OVERFLOW_LABEL,
+		TAKE_PICK_LABEL,
+		TAKE_PLAYLIST_LABEL,
+		TAKE_REMASTER_LABEL,
+		TAKE_REPAINT_LABEL,
+		TAKE_RESTORE_LABEL,
+		TAKE_SHARE_LABEL,
+		TAKE_UNSHARE_LABEL,
+		TAKES_EMPTY,
+		TAKES_ERROR,
+		TAKES_LOADING
+	} from '$lib/constants';
 	import {
 		playGeneration,
 		playAlbumFromGeneration,
 		playLibraryFromGeneration,
 		queueContext,
 		selectedAlbumId,
-		removeGenerationFromSong
+		removeGenerationFromSong,
+		replaceSongInList
 	} from '$lib/stores/player';
+	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
 	import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { scoreColor } from '$lib/utils/scores';
@@ -22,24 +45,52 @@
 		selectionCount
 	} from '$lib/stores/selection';
 	import { addToast } from '$lib/stores/toast';
-	import { bulkDeleteGenerations } from '$lib/api/client';
+	import {
+		bulkDeleteGenerations,
+		fetchSong,
+		remasterGeneration,
+		unarchiveGeneration
+	} from '$lib/api/client';
 	import AgeStamp from './AgeStamp.svelte';
 	import Icon from './Icon.svelte';
+	import PlaylistPicker from './PlaylistPicker.svelte';
+	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
 	interface Props {
 		song: SongItem;
+		selectedId?: string | null;
+		loadStatus?: 'loading' | 'ready' | 'error';
+		loadError?: string | null;
 		onselect: (gen: GenerationItem) => void;
+		onagain?: (gen: GenerationItem) => void;
+		onrepaint?: (gen: GenerationItem) => void;
+		onaudiocover?: (gen: GenerationItem) => void;
+		onretry?: () => void;
 	}
 
-	let { song, onselect }: Props = $props();
+	let {
+		song,
+		selectedId = null,
+		loadStatus = 'ready',
+		loadError = null,
+		onselect,
+		onagain,
+		onrepaint,
+		onaudiocover,
+		onretry
+	}: Props = $props();
 
 	const actions = getGenerationActions();
 
 	const playingGenId = $derived(audioPlayer.current?.generation.id ?? null);
-	const audioPlaying = $derived(audioPlayer.status === 'playing');
 	const buffering = $derived(
 		audioPlayer.status === 'loading' || audioPlayer.status === 'buffering'
 	);
+
+	let overflowId = $state<string | null>(null);
+	let playlistFor = $state<string | null>(null);
+	let deleteFor = $state<GenerationItem | null>(null);
+	let remasteringId = $state<string | null>(null);
 
 	interface VersionGroup {
 		label: string;
@@ -53,7 +104,10 @@
 			const key = gen.version_number !== null ? `v${gen.version_number}` : 'unknown';
 			if (!map[key]) {
 				map[key] = {
-					label: gen.version_number !== null ? `Version ${gen.version_number}` : 'Unknown version',
+					label:
+						gen.version_number !== null
+							? `${SONG_SURFACE_RECIPE} ${gen.version_number}`
+							: 'Unknown recipe',
 					versionNumber: gen.version_number,
 					generations: []
 				};
@@ -80,7 +134,7 @@
 	}
 
 	function playOrToggle(gen: GenerationItem): void {
-		if (isGenPlaying(gen) && audioPlaying) {
+		if (isGenPlaying(gen) && audioPlayer.status === 'playing') {
 			audioPlayer.toggle();
 			return;
 		}
@@ -95,11 +149,6 @@
 		}
 		queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
 		playGeneration(gen, song, { restart: true });
-	}
-
-	function handlePlay(e: Event, gen: GenerationItem): void {
-		e.stopPropagation();
-		playOrToggle(gen);
 	}
 
 	function handleCardClick(gen: GenerationItem, e: MouseEvent): void {
@@ -127,26 +176,126 @@
 		playOrToggle(gen);
 	}
 
+	function toggleOverflow(genId: string, e: MouseEvent): void {
+		e.stopPropagation();
+		overflowId = overflowId === genId ? null : genId;
+		playlistFor = null;
+	}
+
+	$effect(() => {
+		if (!overflowId) return;
+		function onClick(): void {
+			overflowId = null;
+		}
+		document.addEventListener('click', onClick);
+		return () => document.removeEventListener('click', onClick);
+	});
+
 	async function handleBulkDelete(): Promise<void> {
 		const ids = [...$selectedIds];
 		if (ids.length === 0) return;
+		const inspectedTakeId = selectedId;
 		try {
 			await bulkDeleteGenerations(ids);
 			for (const id of ids) {
 				removeGenerationFromSong(song.id, id);
 			}
+			if (inspectedTakeId !== null && ids.includes(inspectedTakeId)) {
+				clearGenerationSelection();
+				persistLibraryHistory();
+			}
 			clearSelection();
-			addToast(`Deleted ${ids.length} generation${ids.length !== 1 ? 's' : ''}`, 'success');
+			addToast(`Deleted ${ids.length} take${ids.length !== 1 ? 's' : ''}`, 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Bulk delete failed', 'error');
 		}
 	}
+
+	async function copyShareUrl(gen: GenerationItem): Promise<void> {
+		if (!gen.share_slug) return;
+		await navigator.clipboard.writeText(`${window.location.origin}/share/gen/${gen.share_slug}`);
+		addToast('Link copied', 'success');
+	}
+
+	async function onShare(gen: GenerationItem): Promise<void> {
+		try {
+			const result = await actions.share(gen.id);
+			await navigator.clipboard.writeText(result.share_url);
+			addToast('Link copied', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Share failed', 'error');
+		}
+	}
+
+	async function onUnshare(gen: GenerationItem): Promise<void> {
+		try {
+			await actions.unshare(gen.id);
+			addToast('Sharing disabled', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Unshare failed', 'error');
+		}
+	}
+
+	async function onRemaster(gen: GenerationItem): Promise<void> {
+		if (remasteringId) return;
+		remasteringId = gen.id;
+		try {
+			await remasterGeneration(gen.id);
+			const updated = await fetchSong(song.id);
+			replaceSongInList(updated);
+			addToast('Remastered', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Remaster failed', 'error');
+		} finally {
+			remasteringId = null;
+		}
+	}
+
+	async function onRestore(gen: GenerationItem): Promise<void> {
+		try {
+			await unarchiveGeneration(gen.id);
+			const updated = await fetchSong(song.id);
+			replaceSongInList(updated);
+			addToast('Take restored', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Restore failed', 'error');
+		}
+	}
+
+	async function onAddToPlaylist(playlistId: string): Promise<void> {
+		if (!playlistFor) return;
+		try {
+			await actions.addToPlaylist(playlistId, playlistFor);
+			addToast('Added to playlist', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Failed to add', 'error');
+		} finally {
+			playlistFor = null;
+		}
+	}
 </script>
 
-{#if song.generations.length === 0}
-	<div class="empty">No generations yet — hit Generate to create some</div>
+{#if loadStatus === 'error' && song.generations.length === 0}
+	<div class="empty" role="alert">
+		<p>{loadError || TAKES_ERROR}</p>
+		{#if onretry}
+			<button type="button" class="retry-btn" onclick={onretry}>{LIBRARY_RETRY_LABEL}</button>
+		{/if}
+	</div>
+{:else if loadStatus === 'loading' && song.generations.length === 0}
+	<div class="empty" role="status">{TAKES_LOADING}</div>
+{:else if song.generations.length === 0}
+	<div class="empty">{TAKES_EMPTY}</div>
 {:else}
 	<div class="gen-list">
+		{#if loadStatus === 'error'}
+			<div class="load-error" role="alert">
+				<span>{loadError || TAKES_ERROR}</span>
+				{#if onretry}
+					<button type="button" class="retry-btn" onclick={onretry}>{LIBRARY_RETRY_LABEL}</button>
+				{/if}
+			</div>
+		{/if}
 		{#each groups as group (group.label)}
 			<div class="version-section">
 				<div class="version-header">{group.label}</div>
@@ -156,10 +305,12 @@
 						class:playing={isGenPlaying(gen)}
 						class:buffering={isGenLoading(gen)}
 						class:selected={$selectedIds.has(gen.id)}
+						class:inspected={selectedId === gen.id}
 						onclick={(e) => handleCardClick(gen, e)}
 						onkeydown={(e) => handleCardKeydown(gen, e)}
 						role="button"
 						tabindex="0"
+						aria-pressed={selectedId === gen.id}
 					>
 						{#if $selectionMode}
 							<span class="selection-checkbox">
@@ -167,24 +318,10 @@
 							</span>
 						{/if}
 
-						<button
-							class="play-btn"
-							class:loading={isGenLoading(gen)}
-							onclick={(e) => handlePlay(e, gen)}
-							aria-label={isGenPlaying(gen) && audioPlaying
-								? 'Pause'
-								: isGenLoading(gen)
-									? 'Loading'
-									: 'Play'}
-						>
-							{#if isGenLoading(gen)}<span class="spinner"
-								></span>{:else if isGenPlaying(gen) && audioPlaying}⏸{:else}▶{/if}
-						</button>
-
 						<div class="gen-info">
 							<span class="gen-name">
 								{#if gen.is_picked}<span class="picked-star">★</span>{/if}
-								gen{gen.generation_number}
+								{`${NOW_PLAYING_TAKE_PREFIX} ${gen.generation_number}`}
 							</span>
 							<AgeStamp createdAt={gen.created_at} />
 							{#if gen.seed}
@@ -236,6 +373,7 @@
 								</span>
 							{/if}
 							<button
+								type="button"
 								class="pick-btn"
 								class:picked={gen.is_picked}
 								data-hitbox="frequent"
@@ -243,11 +381,13 @@
 									e.stopPropagation();
 									actions.pick(gen.id, !gen.is_picked);
 								}}
-								aria-label={gen.is_picked ? 'Unpick' : 'Pick for album'}
+								aria-pressed={gen.is_picked}
+								aria-label={gen.is_picked ? 'Unpick' : TAKE_PICK_LABEL}
 							>
-								{gen.is_picked ? '★' : '☆'}
+								{TAKE_PICK_LABEL}
 							</button>
 							<button
+								type="button"
 								class="keep-btn"
 								class:kept={gen.is_kept}
 								data-hitbox="frequent"
@@ -255,10 +395,134 @@
 									e.stopPropagation();
 									actions.keep(gen.id, !gen.is_kept);
 								}}
-								aria-label={gen.is_kept ? 'Unkeep' : 'Keep'}
+								aria-pressed={gen.is_kept}
+								aria-label={gen.is_kept ? 'Unkeep' : TAKE_KEEP_LABEL}
 							>
-								{gen.is_kept ? '♥' : '♡'}
+								{TAKE_KEEP_LABEL}
 							</button>
+							{#if !$selectionMode}
+								<button
+									type="button"
+									class="continue-btn"
+									onclick={(e) => {
+										e.stopPropagation();
+										onagain?.(gen);
+									}}>{TAKE_AGAIN_LABEL}</button
+								>
+								<button
+									type="button"
+									class="continue-btn"
+									onclick={(e) => {
+										e.stopPropagation();
+										onrepaint?.(gen);
+									}}>{TAKE_REPAINT_LABEL}</button
+								>
+								<button
+									type="button"
+									class="continue-btn"
+									onclick={(e) => {
+										e.stopPropagation();
+										onaudiocover?.(gen);
+									}}>{TAKE_AUDIO_COVER_LABEL}</button
+								>
+								<div class="overflow-anchor">
+									<button
+										type="button"
+										class="overflow-btn"
+										aria-haspopup="menu"
+										aria-expanded={overflowId === gen.id}
+										aria-label={TAKE_OVERFLOW_LABEL}
+										onclick={(e) => toggleOverflow(gen.id, e)}
+									>
+										<Icon name="more-horizontal" size={16} />
+									</button>
+									{#if overflowId === gen.id}
+										<div
+											class="overflow-menu"
+											role="menu"
+											tabindex="-1"
+											onclick={(e) => e.stopPropagation()}
+											onkeydown={(e) => e.stopPropagation()}
+										>
+											{#if gen.is_shared}
+												<button
+													type="button"
+													role="menuitem"
+													class="overflow-item"
+													onclick={() => {
+														overflowId = null;
+														void copyShareUrl(gen);
+													}}>{TAKE_COPY_LINK_LABEL}</button
+												>
+												<button
+													type="button"
+													role="menuitem"
+													class="overflow-item"
+													onclick={() => {
+														overflowId = null;
+														void onUnshare(gen);
+													}}>{TAKE_UNSHARE_LABEL}</button
+												>
+											{:else}
+												<button
+													type="button"
+													role="menuitem"
+													class="overflow-item"
+													onclick={() => {
+														overflowId = null;
+														void onShare(gen);
+													}}>{TAKE_SHARE_LABEL}</button
+												>
+											{/if}
+											<button
+												type="button"
+												role="menuitem"
+												class="overflow-item"
+												onclick={() => {
+													overflowId = null;
+													playlistFor = gen.id;
+												}}>{TAKE_PLAYLIST_LABEL}</button
+											>
+											<button
+												type="button"
+												role="menuitem"
+												class="overflow-item"
+												disabled={remasteringId === gen.id}
+												onclick={() => {
+													overflowId = null;
+													void onRemaster(gen);
+												}}>{TAKE_REMASTER_LABEL}</button
+											>
+											{#if gen.is_archived}
+												<button
+													type="button"
+													role="menuitem"
+													class="overflow-item"
+													onclick={() => {
+														overflowId = null;
+														void onRestore(gen);
+													}}>{TAKE_RESTORE_LABEL}</button
+												>
+											{/if}
+											<button
+												type="button"
+												role="menuitem"
+												class="overflow-item destructive"
+												onclick={() => {
+													overflowId = null;
+													deleteFor = gen;
+												}}>{TAKE_DELETE_LABEL}</button
+											>
+										</div>
+									{/if}
+									{#if playlistFor === gen.id}
+										<PlaylistPicker
+											onselect={onAddToPlaylist}
+											onclose={() => (playlistFor = null)}
+										/>
+									{/if}
+								</div>
+							{/if}
 						</div>
 					</div>
 				{/each}
@@ -267,17 +531,31 @@
 
 		{#if $selectionMode}
 			<div class="selection-toolbar">
-				<button class="toolbar-btn" onclick={() => selectAllUnkept(song.generations)}>
+				<button type="button" class="toolbar-btn" onclick={() => selectAllUnkept(song.generations)}>
 					Select All Unkept
 				</button>
 				<span class="toolbar-count">{$selectionCount} selected</span>
-				<button class="toolbar-btn destructive" onclick={handleBulkDelete}>
+				<button type="button" class="toolbar-btn destructive" onclick={handleBulkDelete}>
 					Delete Selected
 				</button>
-				<button class="toolbar-btn" onclick={clearSelection}> Cancel </button>
+				<button type="button" class="toolbar-btn" onclick={clearSelection}> Cancel </button>
 			</div>
 		{/if}
 	</div>
+{/if}
+
+{#if deleteFor}
+	<ConfirmDeleteDialog
+		title={`Delete ${NOW_PLAYING_TAKE_PREFIX} #${deleteFor.generation_number}?`}
+		items={['Audio files will be permanently deleted']}
+		confirmLabel="Delete Take"
+		onconfirm={() => {
+			const id = deleteFor?.id;
+			deleteFor = null;
+			if (id) actions.del(id);
+		}}
+		oncancel={() => (deleteFor = null)}
+	/>
 {/if}
 
 <style>
@@ -333,7 +611,8 @@
 		animation: buffer-pulse 1.5s ease-in-out infinite;
 	}
 
-	.gen-card.selected {
+	.gen-card.selected,
+	.gen-card.inspected {
 		border-color: var(--accent);
 		background: rgba(160, 32, 240, 0.05);
 	}
@@ -348,52 +627,6 @@
 			border-color: var(--accent);
 			box-shadow: 0 0 12px rgba(160, 32, 240, 0.15);
 		}
-	}
-
-	.play-btn.loading {
-		border-color: var(--accent);
-		cursor: wait;
-	}
-
-	.spinner {
-		display: inline-block;
-		width: 14px;
-		height: 14px;
-		border: 2px solid var(--accent);
-		border-top-color: transparent;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	.play-btn {
-		width: 2.4rem;
-		height: 2.4rem;
-		border-radius: 50%;
-		border: 2px solid var(--border);
-		background: transparent;
-		color: var(--text-muted);
-		font-size: 0.93rem;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-	}
-
-	.play-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.gen-card.playing .play-btn {
-		border-color: var(--accent);
-		color: var(--accent);
 	}
 
 	.gen-info {
@@ -458,6 +691,7 @@
 	.gen-actions {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 0.4rem;
 		flex-shrink: 0;
 	}
@@ -498,38 +732,112 @@
 		color: var(--score-bad);
 	}
 
-	.pick-btn {
+	.pick-btn,
+	.keep-btn,
+	.continue-btn {
 		background: none;
-		border: none;
-		font-size: 1.07rem;
-		color: var(--text-decoration);
-		line-height: 1;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		padding: 0.15rem 0.45rem;
+		font-size: 0.7rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.4px;
+		color: var(--text-muted);
+		cursor: pointer;
+		line-height: 1.2;
 	}
 
 	.pick-btn:hover {
 		color: var(--accent);
+		border-color: var(--accent);
 	}
 
 	.pick-btn.picked {
 		color: var(--accent);
-		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
-	}
-
-	.keep-btn {
-		background: none;
-		border: none;
-		font-size: 1.07rem;
-		color: var(--text-decoration);
-		line-height: 1;
+		border-color: var(--accent);
+		background: rgba(160, 32, 240, 0.1);
 	}
 
 	.keep-btn:hover {
 		color: var(--keep);
+		border-color: var(--keep);
 	}
 
 	.keep-btn.kept {
 		color: var(--keep);
-		text-shadow: 0 0 6px color-mix(in srgb, var(--keep) 40%, transparent);
+		border-color: var(--keep);
+		background: color-mix(in srgb, var(--keep) 12%, transparent);
+	}
+
+	.continue-btn:hover {
+		color: var(--primary);
+		border-color: var(--primary);
+	}
+
+	.overflow-anchor {
+		position: relative;
+	}
+
+	.overflow-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		color: var(--text-muted);
+		padding: 0.15rem 0.3rem;
+		cursor: pointer;
+	}
+
+	.overflow-btn:hover,
+	.overflow-btn[aria-expanded='true'] {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.overflow-menu {
+		position: absolute;
+		right: 0;
+		top: calc(100% + 4px);
+		z-index: 5;
+		min-width: 10rem;
+		display: flex;
+		flex-direction: column;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		padding: 0.25rem;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	}
+
+	.overflow-item {
+		background: none;
+		border: none;
+		text-align: left;
+		padding: 0.4rem 0.55rem;
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.4px;
+		cursor: pointer;
+		border-radius: 3px;
+	}
+
+	.overflow-item:hover:not(:disabled) {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+
+	.overflow-item.destructive:hover:not(:disabled) {
+		color: var(--score-bad);
+	}
+
+	.overflow-item:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 
 	.selection-checkbox {
@@ -590,12 +898,41 @@
 		letter-spacing: 0.5px;
 	}
 
-	.empty {
+	.empty,
+	.load-error {
 		padding: 2.7rem 1.3rem;
 		text-align: center;
 		color: var(--text-subtle);
 		font-style: italic;
 		font-size: 0.87rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.7rem;
+	}
+
+	.load-error {
+		padding: 0.6rem 0.8rem;
+		font-style: normal;
+		color: var(--score-bad);
+		flex-direction: row;
+		justify-content: space-between;
+	}
+
+	.retry-btn {
+		padding: 0.3rem 0.7rem;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text-muted);
+		font-size: var(--label-font-size);
+		font-family: var(--font-body);
+		cursor: pointer;
+	}
+
+	.retry-btn:hover {
+		border-color: var(--primary);
+		color: var(--primary);
 	}
 
 	@media (max-width: 768px) {
@@ -619,11 +956,6 @@
 		.gen-actions {
 			flex-basis: 100%;
 			justify-content: flex-end;
-		}
-
-		.play-btn {
-			width: 2.7rem;
-			height: 2.7rem;
 		}
 	}
 </style>

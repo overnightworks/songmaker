@@ -20,7 +20,7 @@ import {
 	songList
 } from '$lib/stores/player';
 import { selectedPlaylistId } from '$lib/stores/playlists';
-import type { SongItem } from '$lib/api/types';
+import type { GenerationItem, SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
 const fetchAlbum = vi.fn();
@@ -89,9 +89,36 @@ import {
 	resetNavigationForTests,
 	revealPlayingSong,
 	selectAlbumOverview,
+	selectGeneration,
 	selectLibrarySection,
 	selectSong
 } from './navigation';
+
+function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
+	return {
+		id: 'g1',
+		song_id: 's1',
+		version_id: 'v1',
+		version_number: 1,
+		generation_number: 1,
+		mp3_path: 'g1.mp3',
+		wav_path: null,
+		seed: 7,
+		status: 'completed',
+		is_archived: false,
+		is_picked: false,
+		is_kept: false,
+		is_shared: false,
+		model_mode: 'turbo',
+		whisper_text: null,
+		whisper_cues: null,
+		version_lyrics: null,
+		scores: null,
+		generation_params: null,
+		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
+	};
+}
 
 function song(overrides: Partial<SongItem> = {}): SongItem {
 	return {
@@ -265,6 +292,54 @@ describe('library history', () => {
 		backToSong();
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBeNull();
+		cleanup();
+	});
+
+	it('selectGeneration replaces the current history entry and does not push', () => {
+		const cleanup = initNavigation();
+		selectSong('s1');
+		const index = history.state.index;
+		const push = vi.spyOn(history, 'pushState');
+		selectGeneration(generation(), song());
+		expect(push).not.toHaveBeenCalled();
+		expect(history.state.index).toBe(index);
+		expect(history.state.generationId).toBe('g1');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedGenerationId)).toBe('g1');
+		push.mockRestore();
+		cleanup();
+	});
+
+	it('goBack from a song with a selected take leaves the song', () => {
+		const cleanup = initNavigation();
+		selectSong('s1');
+		const songIndex = history.state.index;
+		selectGeneration(generation(), song());
+		expect(history.state.index).toBe(songIndex);
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedGenerationId)).toBe('g1');
+		const back = vi.spyOn(history, 'back');
+		goBack();
+		expect(back).toHaveBeenCalled();
+		back.mockRestore();
+		cleanup();
+	});
+
+	it('?gen= selects a take without a second history page', () => {
+		history.replaceState(null, '', '/?song=s1&gen=g1');
+		const push = vi.spyOn(history, 'pushState');
+		const cleanup = initNavigation();
+		expect(push).not.toHaveBeenCalled();
+		expect(history.state.index).toBe(0);
+		expect(history.state.songId).toBe('s1');
+		expect(history.state.generationId).toBe('g1');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedGenerationId)).toBe('g1');
+		selectGeneration(generation({ id: 'g2' }), song());
+		expect(push).not.toHaveBeenCalled();
+		expect(history.state.index).toBe(0);
+		expect(history.state.generationId).toBe('g2');
+		push.mockRestore();
 		cleanup();
 	});
 

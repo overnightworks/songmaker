@@ -121,7 +121,7 @@ export function backToAlbum(): void {
 	suppressPush = true;
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
-	detailTab.set('generations');
+	openTakesSurface();
 	if (albumId) {
 		playerSelectAlbum(albumId);
 		setLibrarySurface('detail');
@@ -149,7 +149,7 @@ export function selectSong(songId: string, knownSong?: SongItem): void {
 	}
 	playerSelectSong(songId);
 	ensureGenerationsLoaded(songId);
-	detailTab.set('generations');
+	openTakesSurface();
 	setLibrarySurface('detail');
 	closeSidebar();
 	const current = history.state;
@@ -199,19 +199,15 @@ export function deselectSong(): void {
 
 export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 	playerSelectGeneration(gen, song);
+	openTakesSurface();
 	setLibrarySurface('detail');
-	pushLibraryHistory();
+	replaceLibraryHistory();
 }
 
 export function backToSong(): void {
-	const state = history.state;
-	if (isLibraryHistoryState(state) && state.index > 0) {
-		history.back();
-		return;
-	}
 	suppressPush = true;
 	playerClearGeneration();
-	detailTab.set('generations');
+	openTakesSurface();
 	setLibrarySurface('detail');
 	suppressPush = false;
 	replaceLibraryHistory();
@@ -228,6 +224,14 @@ export function navigateToSongTab(tab: DetailTab): void {
 
 export function switchTab(tab: DetailTab): void {
 	detailTab.set(tab);
+}
+
+export function openRecipeSurface(): void {
+	detailTab.set('edit');
+}
+
+export function openTakesSurface(): void {
+	detailTab.set('generations');
 }
 
 export async function revealPlayingSong(song: SongItem, generationId: string): Promise<void> {
@@ -263,7 +267,7 @@ export function goBack(): void {
 	const current = isLibraryHistoryState(state) ? state : snapshotLibraryHistory(0);
 	suppressPush = true;
 	void applyLibraryHistory(libraryBrowseStateFrom(current));
-	detailTab.set('generations');
+	openTakesSurface();
 	setLibrarySurface('browse');
 	suppressPush = false;
 	replaceLibraryHistory();
@@ -282,6 +286,7 @@ export function initNavigation(): () => void {
 			ensureGenerationsLoaded(songId);
 			if (genId) {
 				selectedGenerationId.set(genId);
+				openTakesSurface();
 			}
 			setLibrarySurface('detail');
 			suppressPush = false;
@@ -303,7 +308,7 @@ export function initNavigation(): () => void {
 			} else {
 				await applyLibraryHistory(libraryRootState());
 			}
-			detailTab.set('generations');
+			openTakesSurface();
 		})();
 	}
 
@@ -313,7 +318,7 @@ export function initNavigation(): () => void {
 
 export function resetNavigationForTests(): void {
 	suppressPush = false;
-	detailTab.set('generations');
+	openTakesSurface();
 }
 
 export const canGoBack = derived(

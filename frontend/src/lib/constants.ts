@@ -22,6 +22,38 @@ export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
 export const NOW_PLAYING_TAKE_PREFIX = 'Take';
 
+export const SONG_SURFACE_RECIPE = 'Recipe';
+export const SONG_SURFACE_TAKES = 'Takes';
+export const SONG_SURFACE_COWRITER = 'Co-Writer';
+export const SONG_SURFACE_SWITCH_LABEL = 'Song surfaces';
+export const SONG_SPLIT_PANE_MIN_PX = 360;
+export const SONG_SPLIT_PANE_GAP_PX = 16;
+
+export function canSplitSongPanes(availableWidthPx: number): boolean {
+	return availableWidthPx >= SONG_SPLIT_PANE_MIN_PX * 2 + SONG_SPLIT_PANE_GAP_PX;
+}
+
+export const TAKE_AGAIN_LABEL = 'Again';
+export const TAKE_REPAINT_LABEL = 'Repaint';
+export const TAKE_AUDIO_COVER_LABEL = 'Audio cover';
+export const TAKE_PICK_LABEL = 'Pick';
+export const TAKE_KEEP_LABEL = 'Keep';
+export const TAKE_OVERFLOW_LABEL = 'More';
+export const TAKE_SHARE_LABEL = 'Share';
+export const TAKE_UNSHARE_LABEL = 'Unshare';
+export const TAKE_COPY_LINK_LABEL = 'Copy link';
+export const TAKE_PLAYLIST_LABEL = 'Playlist';
+export const TAKE_REMASTER_LABEL = 'Remaster';
+export const TAKE_RESTORE_LABEL = 'Restore';
+export const TAKE_DELETE_LABEL = 'Delete';
+export const TAKE_SCORE_LABEL = 'Score';
+export const TAKE_SCORING_LABEL = 'Scoring...';
+export const TAKES_EMPTY = 'No takes yet';
+export const TAKES_LOADING = 'Loading takes…';
+export const TAKES_ERROR = 'Failed to load takes';
+export const TAKE_INSPECTOR_CLOSE = 'Close';
+export const TAKE_FROM_RECIPE_PREFIX = 'from Recipe';
+
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const LIBRARY_SEARCH_PLACEHOLDER = 'Search albums and songs';
 export const LIBRARY_SEARCH_EMPTY = 'No albums or songs match';
