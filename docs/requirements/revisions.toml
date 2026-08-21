@@ -15,3 +15,11 @@ content_sha256 = "84626578ad0c44ce9235071ccf51d5fb02827507272a92ed5008a79beea256
 witness_path = "docs/requirements/witnesses/5364807875.json"
 witness_sha256 = "511c96e9bb0e451c9125310120e4f5ca3a72c632ce1f64241fc27349d2202663"
 predecessor = "GENESIS"
+
+[[revision]]
+document = "0003"
+path = "docs/requirements/0003-creation-and-generation.md"
+content_sha256 = "b5187d4dcd6883d9c49d6a72ab8a4bce6d43ac84c8b47b4d05b338d4f1ce7d4d"
+witness_path = "docs/requirements/witnesses/5372449451.json"
+witness_sha256 = "40b2da451f345183f25f207f6bcaddf14434b3d0415aa39b37a66932a3af8ee3"
+predecessor = "GENESIS"
