@@ -13,29 +13,7 @@ import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { theme } from '$lib/stores/ui';
-
-const hitboxCss = `:root {
-	--hitbox-frequent: ${HITBOX_FREQUENT_PX}px;
-	--hitbox-compact: ${HITBOX_COMPACT_PX}px;
-}
-[data-hitbox='frequent'] {
-	min-width: var(--hitbox-compact);
-	min-height: var(--hitbox-compact);
-}
-@media (any-pointer: coarse) {
-	[data-hitbox='frequent'] {
-		min-width: var(--hitbox-frequent);
-		min-height: var(--hitbox-frequent);
-	}
-}
-html[data-pointer='coarse'] [data-hitbox='frequent'] {
-	min-width: var(--hitbox-frequent);
-	min-height: var(--hitbox-frequent);
-}
-html[data-pointer='fine'] [data-hitbox='frequent'] {
-	min-width: var(--hitbox-compact);
-	min-height: var(--hitbox-compact);
-}`;
+import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
@@ -363,6 +341,8 @@ describe('frequent action hitboxes', () => {
 		const style = getComputedStyle(document.documentElement);
 		expect(style.getPropertyValue('--hitbox-frequent').trim()).toBe(`${HITBOX_FREQUENT_PX}px`);
 		expect(style.getPropertyValue('--hitbox-compact').trim()).toBe(`${HITBOX_COMPACT_PX}px`);
+		expect(hitboxCss).toContain(`--hitbox-frequent: ${HITBOX_FREQUENT_PX}px`);
+		expect(hitboxCss).toContain(`--hitbox-compact: ${HITBOX_COMPACT_PX}px`);
 		expect(hitboxCss).toContain('@media (any-pointer: coarse)');
 	});
 

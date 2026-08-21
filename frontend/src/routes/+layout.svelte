@@ -7,6 +7,7 @@
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { APP_NAME } from '$lib/constants';
+	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { canGoBack, deselectSong, backToSong } from '$lib/stores/navigation';
@@ -35,6 +36,12 @@
 				// SW registration failure is non-fatal — the app still works online.
 			});
 		}
+		if (!browser) return;
+		const sheet = document.createElement('style');
+		sheet.dataset.hitboxStyles = 'true';
+		sheet.textContent = HITBOX_STYLE;
+		document.head.append(sheet);
+		return () => sheet.remove();
 	});
 
 	async function initAuth() {
@@ -336,9 +343,7 @@
 		.top-username {
 			display: none;
 		}
-	}
 
-	@media (max-width: 390px) {
 		.top-bar {
 			padding: 0 8px;
 			gap: 8px;

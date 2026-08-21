@@ -1,6 +1,8 @@
-:root {
-	--hitbox-frequent: 44px;
-	--hitbox-compact: 24px;
+import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
+
+export const HITBOX_STYLE = `:root {
+	--hitbox-frequent: ${HITBOX_FREQUENT_PX}px;
+	--hitbox-compact: ${HITBOX_COMPACT_PX}px;
 }
 
 [data-hitbox='frequent'] {
@@ -63,3 +65,4 @@ html[data-pointer='fine'] [data-hitbox='frequent'] {
 [data-hitbox='frequent'][data-hitbox-face]:hover:not(:disabled)::before {
 	border-color: currentColor;
 }
+`;
