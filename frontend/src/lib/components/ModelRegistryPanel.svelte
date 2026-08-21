@@ -6,6 +6,8 @@
 	import { addToast } from '$lib/stores/toast';
 	import { ApiError } from '$lib/api/fetch';
 	import type { RegistryResponse } from '$lib/api/types';
+	import { COMPACT_STACK_CLASS, ensureCompactUiStyles } from '$lib/styles/compact-ui';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 
 	const POLL_INTERVAL_MS = 5000;
 	const DOWNLOAD_JOB_TYPE = 'download_model_on_worker';
@@ -33,6 +35,12 @@
 
 	let busyMode = $state<Record<string, boolean>>({});
 	let actionError = $state('');
+	let compact = $state(false);
+
+	$effect(() => {
+		ensureCompactUiStyles();
+		return subscribeCompactLayout((value) => (compact = value));
+	});
 
 	let trackedDownloadJobIds = new Set<string>();
 	$effect(() => {
@@ -98,7 +106,7 @@
 		{#if actionError}
 			<p class="panel-error">{actionError}</p>
 		{/if}
-		<table class="registry-table">
+		<table class="registry-table {compact ? COMPACT_STACK_CLASS : ''}">
 			<thead>
 				<tr>
 					<th>Mode</th>
@@ -112,16 +120,16 @@
 				{#each models as model (model.mode)}
 					{@const dlJob = downloadingByMode.get(model.mode)}
 					<tr>
-						<td class="mode-cell">{model.mode}</td>
-						<td>
+						<td class="mode-cell" data-label="Mode">{model.mode}</td>
+						<td data-label="Status">
 							{#if model.downloaded}
 								<span class="badge ok">downloaded</span>
 							{:else}
 								<span class="badge missing">not downloaded</span>
 							{/if}
 						</td>
-						<td class="count-cell">×{model.loaded_on.length}</td>
-						<td class="count-cell">
+						<td class="count-cell" data-label="Loaded">×{model.loaded_on.length}</td>
+						<td class="count-cell" data-label="Loading">
 							{#if model.loading_on.length > 0}
 								×{model.loading_on.length}
 							{:else}
@@ -187,6 +195,7 @@
 
 	.registry-table {
 		width: 100%;
+		max-width: 100%;
 		border-collapse: collapse;
 		font-size: 0.85rem;
 	}

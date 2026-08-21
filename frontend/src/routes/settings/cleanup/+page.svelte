@@ -156,12 +156,14 @@
 
 	.windows {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 1rem;
 		margin: 1.5rem 0;
 	}
 
 	.window-card {
-		flex: 1;
+		flex: 1 1 8rem;
+		min-width: 0;
 		padding: 0.8rem 1rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
@@ -183,12 +185,14 @@
 
 	.counts {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 1rem;
 		margin: 1.5rem 0;
 	}
 
 	.count-card {
-		flex: 1;
+		flex: 1 1 8rem;
+		min-width: 0;
 		padding: 1rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
@@ -216,6 +220,7 @@
 
 	.actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.8rem;
 		justify-content: flex-end;
 		margin-top: 1rem;

@@ -31,6 +31,12 @@ export const LIBRARY_SEARCH_PAGE_SIZE = 50;
 export const HITBOX_FREQUENT_PX = 44;
 export const HITBOX_COMPACT_PX = 24;
 
+export const COMPACT_LAYOUT_MAX_PX = 768;
+export const COMPACT_LAYOUT_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px), (any-pointer: coarse)`;
+
+export const SETTINGS_NAV_LABEL = 'Settings sections';
+export const ADMIN_TABS_LABEL = 'Admin sections';
+
 export const LIBRARY_SECTIONS = ['albums', 'playlists', 'shared'] as const;
 export type LibrarySection = (typeof LIBRARY_SECTIONS)[number];
 export const LIBRARY_DEFAULT_SECTION: LibrarySection = 'albums';

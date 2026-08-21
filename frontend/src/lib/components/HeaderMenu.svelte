@@ -2,12 +2,12 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { afterNavigate } from '$app/navigation';
 	import { tick } from 'svelte';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from './Icon.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
 
-	const OVERFLOW_MEDIA = '(max-width: 768px), (any-pointer: coarse)';
 	const MENU_FOCUSABLE = 'a[href], button:not(:disabled)';
 	const ACCOUNT_MENU_LABEL = 'Account menu';
 	const ACCOUNT_NAV_LABEL = 'Account';
@@ -18,23 +18,10 @@
 	let menu: HTMLDivElement | undefined = $state();
 
 	$effect(() => {
-		if (typeof window === 'undefined') return;
-		const media = window.matchMedia(OVERFLOW_MEDIA);
-		const syncCompact = () => {
-			compact = media.matches || document.documentElement.dataset.pointer === 'coarse';
-			if (!compact) closeMenu(false);
-		};
-		syncCompact();
-		media.addEventListener('change', syncCompact);
-		const pointerObserver = new MutationObserver(syncCompact);
-		pointerObserver.observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ['data-pointer']
+		return subscribeCompactLayout((value) => {
+			compact = value;
+			if (!value) closeMenu(false);
 		});
-		return () => {
-			media.removeEventListener('change', syncCompact);
-			pointerObserver.disconnect();
-		};
 	});
 
 	afterNavigate(() => {

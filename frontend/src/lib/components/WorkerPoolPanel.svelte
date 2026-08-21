@@ -408,6 +408,7 @@
 
 	.card-header {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
 		margin-bottom: 0.5rem;
@@ -433,16 +434,21 @@
 	.worker-id {
 		font-family: var(--font-mono, monospace);
 		font-weight: 600;
-		flex: 1;
+		flex: 1 1 auto;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.header-meta {
 		color: var(--text-muted);
 		font-size: 0.75rem;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.card-row {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.5rem;
 		padding: 0.15rem 0;
 	}
@@ -454,6 +460,8 @@
 
 	.row-value {
 		color: var(--text);
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.row-value.dim {
@@ -479,6 +487,7 @@
 		flex-wrap: wrap;
 		gap: 0.4rem;
 		margin-top: 0.6rem;
+		max-width: 100%;
 	}
 
 	.mode-select {
@@ -489,6 +498,8 @@
 		padding: 0.2rem 0.4rem;
 		font-size: 0.75rem;
 		font-family: var(--font-body);
+		max-width: 100%;
+		min-width: 0;
 	}
 
 	.action-btn {

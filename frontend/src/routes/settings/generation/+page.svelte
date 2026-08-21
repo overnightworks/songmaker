@@ -266,6 +266,8 @@
 	.page {
 		padding: 2rem;
 		max-width: 700px;
+		width: 100%;
+		min-width: 0;
 	}
 
 	h1 {
@@ -346,6 +348,7 @@
 
 	.actions-row {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.5rem;
 	}
 
@@ -393,8 +396,10 @@
 
 	.section-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: center;
+		gap: 0.5rem;
 		margin-bottom: 0.75rem;
 	}
 
@@ -443,8 +448,8 @@
 		border-radius: var(--input-radius);
 		color: var(--text);
 		font-size: var(--input-font-size);
-		flex: 1;
-		min-width: 150px;
+		flex: 1 1 10rem;
+		min-width: 0;
 		font-family: var(--font-body);
 	}
 
@@ -488,6 +493,7 @@
 
 	.preset-row {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
 		padding: var(--row-padding);
@@ -497,9 +503,11 @@
 	}
 
 	.preset-name {
-		flex: 1;
+		flex: 1 1 8rem;
+		min-width: 0;
 		font-size: 0.9rem;
 		color: var(--text);
+		overflow-wrap: anywhere;
 	}
 
 	.preset-mode-tag {

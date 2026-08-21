@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HITBOX_FREQUENT_PX } from '$lib/constants';
+import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import HeaderMenu from './HeaderMenu.svelte';
 
@@ -22,7 +22,7 @@ function stubMatchMedia(matches: boolean): void {
 		'matchMedia',
 		vi.fn(() => ({
 			matches,
-			media: '(max-width: 768px), (any-pointer: coarse)',
+			media: COMPACT_LAYOUT_MEDIA,
 			onchange: null,
 			addEventListener: vi.fn(),
 			removeEventListener: vi.fn(),

@@ -39,14 +39,62 @@
 	import ParamControls from '$lib/components/ParamControls.svelte';
 	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
+	import { ADMIN_TABS_LABEL } from '$lib/constants';
+	import {
+		COMPACT_SELECT_CLASS,
+		COMPACT_STACK_CLASS,
+		ensureCompactUiStyles
+	} from '$lib/styles/compact-ui';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 
 	let users = $state<UserItem[]>([]);
 	let sessions = $state<SessionItem[]>([]);
 	let attempts = $state<LoginAttemptItem[]>([]);
 	let error = $state('');
-	let tab = $state<
-		'users' | 'sessions' | 'attempts' | 'acestep' | 'ratelimits' | 'generation' | 'claude'
-	>('users');
+	let compact = $state(false);
+
+	const ADMIN_TABS = [
+		{ id: 'users', label: 'Users' },
+		{ id: 'sessions', label: 'Sessions' },
+		{ id: 'attempts', label: 'Login Attempts' },
+		{ id: 'ratelimits', label: 'Rate Limits' },
+		{ id: 'generation', label: 'Generation' },
+		{ id: 'claude', label: 'Claude' },
+		{ id: 'acestep', label: 'ACE-Step' }
+	] as const;
+
+	type AdminTab = (typeof ADMIN_TABS)[number]['id'];
+
+	let tab = $state<AdminTab>('users');
+
+	$effect(() => {
+		ensureCompactUiStyles();
+		return subscribeCompactLayout((value) => (compact = value));
+	});
+
+	function parseAdminTab(value: string): AdminTab | null {
+		for (const item of ADMIN_TABS) {
+			if (item.id === value) return item.id;
+		}
+		return null;
+	}
+
+	function selectTab(next: AdminTab): void {
+		tab = next;
+		if (next === 'ratelimits') {
+			void loadGlobalLimits();
+		} else if (next === 'generation' || next === 'acestep') {
+			void loadGenDefaults();
+		} else if (next === 'claude') {
+			void loadClaudeModels();
+		}
+	}
+
+	function onTabChange(event: Event): void {
+		const next = parseAdminTab((event.currentTarget as HTMLSelectElement).value);
+		if (next === null) return;
+		selectTab(next);
+	}
 
 	let globalLimits = $state<RateLimitItem[]>([]);
 	let globalEdits = $state<Record<string, string>>({});
@@ -403,44 +451,29 @@
 {#if !admin}
 	<div class="denied">Admin access required.</div>
 {:else}
-	<div class="settings-page">
+	<div class="settings-page" class:compact>
 		<h1>Admin</h1>
 
-		<div class="tabs">
-			<button class:active={tab === 'users'} onclick={() => (tab = 'users')}>Users</button>
-			<button class:active={tab === 'sessions'} onclick={() => (tab = 'sessions')}>Sessions</button>
-			<button class:active={tab === 'attempts'} onclick={() => (tab = 'attempts')}
-				>Login Attempts</button
+		{#if compact}
+			<select
+				class="tab-select {COMPACT_SELECT_CLASS}"
+				aria-label={ADMIN_TABS_LABEL}
+				value={tab}
+				onchange={onTabChange}
 			>
-			<button
-				class:active={tab === 'ratelimits'}
-				onclick={() => {
-					tab = 'ratelimits';
-					loadGlobalLimits();
-				}}>Rate Limits</button
-			>
-			<button
-				class:active={tab === 'generation'}
-				onclick={() => {
-					tab = 'generation';
-					loadGenDefaults();
-				}}>Generation</button
-			>
-			<button
-				class:active={tab === 'claude'}
-				onclick={() => {
-					tab = 'claude';
-					loadClaudeModels();
-				}}>Claude</button
-			>
-			<button
-				class:active={tab === 'acestep'}
-				onclick={async () => {
-					tab = 'acestep';
-					await loadGenDefaults();
-				}}>ACE-Step</button
-			>
-		</div>
+				{#each ADMIN_TABS as item (item.id)}
+					<option value={item.id}>{item.label}</option>
+				{/each}
+			</select>
+		{:else}
+			<div class="tabs">
+				{#each ADMIN_TABS as item (item.id)}
+					<button class:active={tab === item.id} onclick={() => selectTab(item.id)}>
+						{item.label}
+					</button>
+				{/each}
+			</div>
+		{/if}
 
 		{#if error}
 			<p class="error">{error}</p>
@@ -482,7 +515,7 @@
 				</form>
 
 				<h2>Users</h2>
-				<table>
+				<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
 					<thead>
 						<tr>
 							<th>Username</th>
@@ -495,14 +528,16 @@
 					<tbody>
 						{#each users as user (user.id)}
 							<tr class:inactive={!user.is_active}>
-								<td>{user.username}</td>
-								<td>
+								<td data-label="Username">{user.username}</td>
+								<td data-label="Role">
 									<span class="badge" class:admin-badge={user.role === 'admin'}>
 										{user.role}
 									</span>
 								</td>
-								<td>{user.is_active ? 'Yes' : 'No'}</td>
-								<td>{user.created_at ? new Date(user.created_at).toLocaleDateString() : ''}</td>
+								<td data-label="Active">{user.is_active ? 'Yes' : 'No'}</td>
+								<td data-label="Created"
+									>{user.created_at ? new Date(user.created_at).toLocaleDateString() : ''}</td
+								>
 								<td class="actions">
 									{#if me && user.id !== me.id}
 										<button class="small" onclick={() => handleToggleRole(user)}>
@@ -621,7 +656,7 @@
 		{#if tab === 'sessions'}
 			<section>
 				<h2>Active Sessions</h2>
-				<table>
+				<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
 					<thead>
 						<tr>
 							<th>User</th>
@@ -634,11 +669,15 @@
 					<tbody>
 						{#each sessions as sess (sess.id)}
 							<tr>
-								<td>{sess.username}</td>
-								<td>{sess.ip_address}</td>
-								<td>{sess.created_at ? new Date(sess.created_at).toLocaleString() : ''}</td>
-								<td>{sess.expires_at ? new Date(sess.expires_at).toLocaleString() : ''}</td>
-								<td>
+								<td data-label="User">{sess.username}</td>
+								<td data-label="IP">{sess.ip_address}</td>
+								<td data-label="Created"
+									>{sess.created_at ? new Date(sess.created_at).toLocaleString() : ''}</td
+								>
+								<td data-label="Expires"
+									>{sess.expires_at ? new Date(sess.expires_at).toLocaleString() : ''}</td
+								>
+								<td class="actions">
 									<button class="small danger" onclick={() => handleForceLogout(sess.id)}>
 										Revoke
 									</button>
@@ -653,7 +692,7 @@
 		{#if tab === 'attempts'}
 			<section>
 				<h2>Recent Login Attempts</h2>
-				<table>
+				<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
 					<thead>
 						<tr>
 							<th>Time</th>
@@ -665,10 +704,12 @@
 					<tbody>
 						{#each attempts as att (att.id)}
 							<tr>
-								<td>{att.attempted_at ? new Date(att.attempted_at).toLocaleString() : ''}</td>
-								<td>{att.username}</td>
-								<td>{att.ip_address}</td>
-								<td>
+								<td data-label="Time"
+									>{att.attempted_at ? new Date(att.attempted_at).toLocaleString() : ''}</td
+								>
+								<td data-label="Username">{att.username}</td>
+								<td data-label="IP">{att.ip_address}</td>
+								<td data-label="Result">
 									<span class:success={att.success} class:fail={!att.success}>
 										{att.success ? 'OK' : 'Failed'}
 									</span>
@@ -706,7 +747,7 @@
 
 				<h2>Per-User Overrides</h2>
 				<p class="hint">Click a user to set individual limits. Empty = uses global default.</p>
-				<table>
+				<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
 					<thead>
 						<tr>
 							<th>Username</th>
@@ -721,13 +762,13 @@
 								class:expanded={expandedUserId === user.id}
 								onclick={() => handleExpandUser(user.id)}
 							>
-								<td>{user.username}</td>
-								<td>
+								<td data-label="Username">{user.username}</td>
+								<td data-label="Role">
 									<span class="badge" class:admin-badge={user.role === 'admin'}>
 										{user.role}
 									</span>
 								</td>
-								<td>
+								<td data-label="Overrides">
 									{#if expandedUserId === user.id && userLimitsData}
 										{userLimitsData.overrides.length} custom
 									{:else}
@@ -944,6 +985,12 @@
 		padding: 2rem;
 		overflow-y: auto;
 		max-width: 900px;
+		width: 100%;
+		min-width: 0;
+	}
+
+	.settings-page.compact {
+		padding: 1rem;
 	}
 
 	.denied {
@@ -991,6 +1038,19 @@
 		color: var(--primary);
 		border-bottom: 2px solid transparent;
 		border-image: linear-gradient(90deg, var(--primary), var(--accent)) 1;
+	}
+
+	.tab-select {
+		margin-bottom: 1.5rem;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: var(--input-radius);
+		color: var(--text);
+		padding: var(--input-padding);
+		font-size: 0.9rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: var(--btn-letter-spacing);
 	}
 
 	.error {
@@ -1086,6 +1146,7 @@
 
 	.actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.3rem;
 	}
 
@@ -1117,6 +1178,7 @@
 
 	.inline-form {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.5rem;
 		align-items: center;
 	}
@@ -1129,6 +1191,8 @@
 		padding: var(--input-padding);
 		font-size: var(--input-font-size);
 		font-family: var(--font-body);
+		min-width: 0;
+		flex: 1 1 12rem;
 	}
 
 	.delete-confirm {
@@ -1208,6 +1272,7 @@
 
 	.limit-row {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 1rem;
 	}
@@ -1283,6 +1348,7 @@
 
 	.override-actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.5rem;
 		align-items: center;
 		margin-top: 0.5rem;
@@ -1308,6 +1374,7 @@
 
 	.gen-model-tabs {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 6px;
 		margin-bottom: 1rem;
 	}
@@ -1342,6 +1409,7 @@
 
 	.gen-actions-row {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.75rem;
 		align-items: center;
 	}

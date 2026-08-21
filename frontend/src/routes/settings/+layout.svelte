@@ -1,7 +1,11 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { SETTINGS_NAV_LABEL } from '$lib/constants';
+	import { COMPACT_SELECT_CLASS, ensureCompactUiStyles } from '$lib/styles/compact-ui';
 	import { isAdmin } from '$lib/stores/auth';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 
 	let { children } = $props();
 
@@ -24,17 +28,47 @@
 
 	const visibleItems = $derived(NAV_ITEMS.filter((item) => !item.adminOnly || admin));
 	const currentPath = $derived(page.url.pathname);
+	const selectedHref = $derived(
+		visibleItems.some((item) => item.href === currentPath) ? currentPath : ''
+	);
+
+	let compact = $state(false);
+
+	$effect(() => {
+		ensureCompactUiStyles();
+		return subscribeCompactLayout((value) => (compact = value));
+	});
+
+	function onNavChange(event: Event): void {
+		const href = (event.currentTarget as HTMLSelectElement).value;
+		if (!visibleItems.some((item) => item.href === href)) return;
+		if (href === currentPath) return;
+		void goto(href);
+	}
 </script>
 
-<div class="settings-layout">
-	<nav class="settings-sidebar">
-		<div class="nav-items">
-			{#each visibleItems as item (item.href)}
-				<a href={item.href} class="nav-link" class:active={currentPath === item.href}>
-					{item.label}
-				</a>
-			{/each}
-		</div>
+<div class="settings-layout" class:compact>
+	<nav class="settings-sidebar" aria-label={SETTINGS_NAV_LABEL}>
+		{#if compact}
+			<select
+				class="nav-select {COMPACT_SELECT_CLASS}"
+				aria-label={SETTINGS_NAV_LABEL}
+				value={selectedHref}
+				onchange={onNavChange}
+			>
+				{#each visibleItems as item (item.href)}
+					<option value={item.href}>{item.label}</option>
+				{/each}
+			</select>
+		{:else}
+			<div class="nav-items">
+				{#each visibleItems as item (item.href)}
+					<a href={item.href} class="nav-link" class:active={currentPath === item.href}>
+						{item.label}
+					</a>
+				{/each}
+			</div>
+		{/if}
 	</nav>
 	<main class="settings-content">
 		{@render children()}
@@ -97,28 +131,33 @@
 		border-left-color: var(--accent);
 	}
 
+	.nav-select {
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: var(--input-radius);
+		color: var(--text);
+		padding: var(--input-padding);
+		font-size: 0.85rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
 	.settings-content {
 		flex: 1;
 		overflow-y: auto;
+		min-width: 0;
 	}
 
-	@media (max-width: 768px) {
-		.settings-sidebar {
-			width: auto;
-			flex-shrink: 0;
-			border-right: none;
-			border-bottom: 1px solid var(--border);
-			padding: 0.75rem 1rem;
-		}
+	.settings-layout.compact {
+		flex-direction: column;
+	}
 
-		.nav-items {
-			flex-direction: row;
-			gap: 4px;
-			flex-wrap: wrap;
-		}
-
-		.settings-layout {
-			flex-direction: column;
-		}
+	.settings-layout.compact .settings-sidebar {
+		width: auto;
+		flex-shrink: 0;
+		border-right: none;
+		border-bottom: 1px solid var(--border);
+		padding: 0.75rem 1rem;
 	}
 </style>
