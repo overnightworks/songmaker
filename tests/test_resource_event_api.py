@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import event as sqlalchemy_event
 
+import songmaker_cli.middleware.resource_stream_deadline as deadline_middleware
 import songmaker_cli.resource_event_api as resource_api
 from songmaker_cli.api_models import (
     GenerationCreatedResourceEvent,
@@ -29,6 +30,7 @@ from songmaker_cli.constants import (
     RESOURCE_EVENT_STREAM_CAPACITY_UNAVAILABLE,
     RESOURCE_EVENT_STREAM_CONNECTION_SECONDS,
     RESOURCE_EVENT_STREAM_OPEN_LIMIT,
+    RESOURCE_EVENT_STREAM_PATH,
     ResourceEventKind,
 )
 from songmaker_cli.db.models import Job, ResourceEvent, ResourceEventCursor, User
@@ -760,31 +762,7 @@ def test_disconnect_releases_lease_off_loop_and_contains_failure(
     assert "Resource stream lease release failed" in caplog.text
 
 
-def test_outer_app_deadline_cancels_blocked_send_and_schedules_lease_release(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    clients, _, _ = _authenticated_clients(tmp_path)
-    app = clients["alice"].app
-    released = threading.Event()
-
-    class _OpenLimiter:
-        def is_allowed(self, _user_id: str) -> bool:
-            return True
-
-    class _Limiter:
-        def acquire(self, _user_id: str) -> str:
-            return "lease-token"
-
-        def release(self, _user_id: str, _token: str) -> None:
-            released.set()
-
-    async def _one_frame(*_args, **_kwargs):
-        yield "event: hello\ndata: {}\n\n"
-
-    monkeypatch.setattr(resource_api, "_resource_event_generator", _one_frame)
-    app.state._resource_stream_open_limiter = _OpenLimiter()
-    app.state._resource_stream_lease_limiter = _Limiter()
+def _set_resource_stream_deadline(app, deadline_seconds: float) -> None:
     deadline_middleware = [
         middleware
         for middleware in app.user_middleware
@@ -800,23 +778,86 @@ def test_outer_app_deadline_cancels_blocked_send_and_schedules_lease_release(
     ):
         runtime_middleware = getattr(runtime_middleware, "app", None)
     assert isinstance(runtime_middleware, ResourceStreamDeadlineMiddleware)
-    runtime_middleware.deadline_seconds = 0.5
+    runtime_middleware.deadline_seconds = deadline_seconds
+
+
+def _resource_event_stream_scope(client: TestClient) -> dict:
+    cookie = "; ".join(f"{key}={value}" for key, value in client.cookies.items())
+    return {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.4"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": RESOURCE_EVENT_STREAM_PATH,
+        "raw_path": RESOURCE_EVENT_STREAM_PATH.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "headers": [(b"host", b"testserver"), (b"cookie", cookie.encode())],
+        "client": ("testclient", 50_000),
+        "server": ("testserver", 80),
+    }
+
+
+async def _wait_for_released_lease(released: threading.Event) -> None:
+    assert await asyncio.to_thread(released.wait, 1)
+    for _ in range(100):
+        if not resource_api._LEASE_RELEASE_TASKS:
+            break
+        await asyncio.sleep(0.01)
+    assert not resource_api._LEASE_RELEASE_TASKS
+
+
+def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases_lease(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clients, _, user_ids = _authenticated_clients(tmp_path)
+    app = clients["alice"].app
+    released = threading.Event()
+    release_calls: list[tuple[str, str]] = []
+
+    class _OpenLimiter:
+        def is_allowed(self, _user_id: str) -> bool:
+            return True
+
+    class _Limiter:
+        def acquire(self, _user_id: str) -> str:
+            return "lease-token"
+
+        def release(self, user_id: str, token: str) -> None:
+            release_calls.append((user_id, token))
+            released.set()
+
+    async def _one_frame(*_args, **_kwargs):
+        yield "event: hello\ndata: {}\n\n"
+
+    monkeypatch.setattr(resource_api, "_resource_event_generator", _one_frame)
+    app.state._resource_stream_open_limiter = _OpenLimiter()
+    app.state._resource_stream_lease_limiter = _Limiter()
+    _set_resource_stream_deadline(app, 2)
 
     async def _run() -> float:
         body_send_started = asyncio.Event()
-        response_status: list[int] = []
+        body_send_cancelled = asyncio.Event()
+        messages: list[dict] = []
         request_sent = False
 
         async def _send(message: dict) -> None:
+            messages.append(message)
             if message["type"] == "http.response.start":
-                response_status.append(message["status"])
-            elif (
+                return
+            if (
                 message["type"] == "http.response.body"
                 and message.get("body")
                 and message.get("more_body")
             ):
                 body_send_started.set()
-                await asyncio.Event().wait()
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    body_send_cancelled.set()
+                    raise
 
         async def _receive() -> dict:
             nonlocal request_sent
@@ -826,36 +867,233 @@ def test_outer_app_deadline_cancels_blocked_send_and_schedules_lease_release(
             await asyncio.Event().wait()
             raise AssertionError("unreachable")
 
-        cookie = "; ".join(f"{key}={value}" for key, value in clients["alice"].cookies.items())
-        scope = {
-            "type": "http",
-            "asgi": {"version": "3.0", "spec_version": "2.4"},
-            "http_version": "1.1",
-            "method": "GET",
-            "scheme": "http",
-            "path": "/api/resource-events/stream",
-            "raw_path": b"/api/resource-events/stream",
-            "query_string": b"",
-            "root_path": "",
-            "headers": [(b"host", b"testserver"), (b"cookie", cookie.encode())],
-            "client": ("testclient", 50_000),
-            "server": ("testserver", 80),
-        }
         loop = asyncio.get_running_loop()
         started_at = loop.time()
-        await app(scope, _receive, _send)
+        await app(_resource_event_stream_scope(clients["alice"]), _receive, _send)
         elapsed = loop.time() - started_at
-        assert response_status == [200]
+        assert [
+            message["status"]
+            for message in messages
+            if message["type"] == "http.response.start"
+        ] == [200]
+        assert [
+            message
+            for message in messages
+            if message["type"] == "http.response.body" and not message.get("more_body", False)
+        ] == [{"type": "http.response.body", "body": b"", "more_body": False}]
         assert body_send_started.is_set()
-        assert await asyncio.to_thread(released.wait, 1)
-        for _ in range(100):
-            if not resource_api._LEASE_RELEASE_TASKS:
-                break
-            await asyncio.sleep(0.01)
-        assert not resource_api._LEASE_RELEASE_TASKS
+        assert body_send_cancelled.is_set()
+        await _wait_for_released_lease(released)
+        assert release_calls == [(user_ids["alice"], "lease-token")]
         return elapsed
 
-    assert asyncio.run(_run()) < 1.5
+    assert asyncio.run(_run()) < 2.5
+
+
+def test_outer_app_deadline_does_not_duplicate_normal_stream_completion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clients, _, _ = _authenticated_clients(tmp_path)
+    app = clients["alice"].app
+
+    class _OpenLimiter:
+        def is_allowed(self, _user_id: str) -> bool:
+            return True
+
+    class _Limiter:
+        def acquire(self, _user_id: str) -> str:
+            return "lease-token"
+
+        def release(self, _user_id: str, _token: str) -> None:
+            return None
+
+    async def _one_frame(*_args, **_kwargs):
+        yield "event: hello\ndata: {}\n\n"
+
+    monkeypatch.setattr(resource_api, "_resource_event_generator", _one_frame)
+    app.state._resource_stream_open_limiter = _OpenLimiter()
+    app.state._resource_stream_lease_limiter = _Limiter()
+
+    async def _run() -> list[dict]:
+        messages: list[dict] = []
+        request_sent = False
+
+        async def _send(message: dict) -> None:
+            messages.append(message)
+
+        async def _receive() -> dict:
+            nonlocal request_sent
+            if not request_sent:
+                request_sent = True
+                return {"type": "http.request", "body": b"", "more_body": False}
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+        await app(_resource_event_stream_scope(clients["alice"]), _receive, _send)
+        return messages
+
+    messages = asyncio.run(_run())
+    assert [
+        message["status"] for message in messages if message["type"] == "http.response.start"
+    ] == [200]
+    assert len(
+        [
+            message
+            for message in messages
+            if message["type"] == "http.response.body" and not message.get("more_body", False)
+        ]
+    ) == 1
+
+
+def test_outer_app_deadline_contains_synthetic_terminal_oserror_and_releases_lease(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clients, _, user_ids = _authenticated_clients(tmp_path)
+    app = clients["alice"].app
+    released = threading.Event()
+    release_calls: list[tuple[str, str]] = []
+
+    class _OpenLimiter:
+        def is_allowed(self, _user_id: str) -> bool:
+            return True
+
+    class _Limiter:
+        def acquire(self, _user_id: str) -> str:
+            return "lease-token"
+
+        def release(self, user_id: str, token: str) -> None:
+            release_calls.append((user_id, token))
+            released.set()
+
+    async def _one_frame(*_args, **_kwargs):
+        yield "event: hello\ndata: {}\n\n"
+
+    monkeypatch.setattr(resource_api, "_resource_event_generator", _one_frame)
+    app.state._resource_stream_open_limiter = _OpenLimiter()
+    app.state._resource_stream_lease_limiter = _Limiter()
+    _set_resource_stream_deadline(app, 2)
+
+    async def _run() -> None:
+        terminal_attempts = 0
+        request_sent = False
+
+        async def _send(message: dict) -> None:
+            nonlocal terminal_attempts
+            if message["type"] != "http.response.body":
+                return
+            if message.get("body") and message.get("more_body"):
+                await asyncio.Event().wait()
+            if not message.get("more_body", False):
+                terminal_attempts += 1
+                raise OSError("client disconnected")
+
+        async def _receive() -> dict:
+            nonlocal request_sent
+            if not request_sent:
+                request_sent = True
+                return {"type": "http.request", "body": b"", "more_body": False}
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+        await app(_resource_event_stream_scope(clients["alice"]), _receive, _send)
+        assert terminal_attempts == 1
+        await _wait_for_released_lease(released)
+        assert release_calls == [(user_ids["alice"], "lease-token")]
+
+    asyncio.run(_run())
+
+
+def test_outer_app_deadline_bounds_blocked_synthetic_terminal_and_releases_lease(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clients, _, user_ids = _authenticated_clients(tmp_path)
+    app = clients["alice"].app
+    released = threading.Event()
+    release_calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(deadline_middleware, "_SYNTHETIC_TERMINAL_SEND_TIMEOUT_SECONDS", 0.05)
+
+    class _OpenLimiter:
+        def is_allowed(self, _user_id: str) -> bool:
+            return True
+
+    class _Limiter:
+        def acquire(self, _user_id: str) -> str:
+            return "lease-token"
+
+        def release(self, user_id: str, token: str) -> None:
+            release_calls.append((user_id, token))
+            released.set()
+
+    async def _one_frame(*_args, **_kwargs):
+        yield "event: hello\ndata: {}\n\n"
+
+    monkeypatch.setattr(resource_api, "_resource_event_generator", _one_frame)
+    app.state._resource_stream_open_limiter = _OpenLimiter()
+    app.state._resource_stream_lease_limiter = _Limiter()
+    _set_resource_stream_deadline(app, 2)
+
+    async def _run() -> float:
+        synthetic_send_cancelled = asyncio.Event()
+        terminal_attempts = 0
+        request_sent = False
+
+        async def _send(message: dict) -> None:
+            nonlocal terminal_attempts
+            if message["type"] != "http.response.body":
+                return
+            if message.get("body") and message.get("more_body"):
+                await asyncio.Event().wait()
+            if not message.get("more_body", False):
+                terminal_attempts += 1
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    synthetic_send_cancelled.set()
+                    raise
+
+        async def _receive() -> dict:
+            nonlocal request_sent
+            if not request_sent:
+                request_sent = True
+                return {"type": "http.request", "body": b"", "more_body": False}
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+        loop = asyncio.get_running_loop()
+        started_at = loop.time()
+        await app(_resource_event_stream_scope(clients["alice"]), _receive, _send)
+        elapsed = loop.time() - started_at
+        assert synthetic_send_cancelled.is_set()
+        assert terminal_attempts == 1
+        await _wait_for_released_lease(released)
+        assert release_calls == [(user_ids["alice"], "lease-token")]
+        return elapsed
+
+    assert asyncio.run(_run()) < 2.5
+
+
+def test_outer_app_deadline_propagates_application_and_regular_send_errors() -> None:
+    scope = {"type": "http", "path": RESOURCE_EVENT_STREAM_PATH}
+
+    async def _receive() -> dict:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def _send(_message: dict) -> None:
+        raise ValueError("downstream send failed")
+
+    async def _broken_app(_scope, _receive, _send) -> None:
+        raise RuntimeError("application failed")
+
+    async def _starts_response(_scope, _receive, send) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+
+    with pytest.raises(RuntimeError, match="application failed"):
+        asyncio.run(ResourceStreamDeadlineMiddleware(_broken_app, 1)(scope, _receive, _send))
+    with pytest.raises(ValueError, match="downstream send failed"):
+        asyncio.run(ResourceStreamDeadlineMiddleware(_starts_response, 1)(scope, _receive, _send))
 
 
 def test_per_user_open_rate_is_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
