@@ -170,6 +170,6 @@ describe('HeaderMenu', () => {
 		await tick();
 		await Promise.resolve();
 		expect(document.querySelector('[role="dialog"]')).toBeNull();
-		expect(document.activeElement).toBe(trigger);
+		expect(document.activeElement).not.toBe(trigger);
 	});
 });

@@ -38,7 +38,7 @@
 	});
 
 	afterNavigate(() => {
-		closeMenu(true);
+		closeMenu(false);
 	});
 
 	async function openMenu(): Promise<void> {

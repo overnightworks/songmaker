@@ -249,6 +249,14 @@ export function goBack(): void {
 		history.back();
 		return;
 	}
+	if (get(selectedGenerationId)) {
+		backToSong();
+		return;
+	}
+	if (get(selectedSongId)) {
+		backToAlbum();
+		return;
+	}
 	const current = isLibraryHistoryState(state) ? state : snapshotLibraryHistory(0);
 	suppressPush = true;
 	void applyLibraryHistory(libraryBrowseStateFrom(current));
