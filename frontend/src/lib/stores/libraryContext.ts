@@ -7,7 +7,12 @@ import {
 	type LibrarySection
 } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
-import { libraryBrowse, librarySearch, librarySort } from '$lib/stores/librarySearch';
+import {
+	libraryBrowse,
+	librarySearch,
+	librarySort,
+	restoreLibrarySearch
+} from '$lib/stores/librarySearch';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import {
 	deselectPlaylist,
@@ -17,15 +22,19 @@ import {
 } from '$lib/stores/playlists';
 import { CREATED_SORTS } from '$lib/utils/recency';
 
+export type LibrarySurface = 'browse' | 'detail';
+
 export interface LibraryHistoryState {
 	kind: typeof LIBRARY_HISTORY_KIND;
 	index: number;
 	section: LibrarySection;
+	surface: LibrarySurface;
 	query: string;
 	sort: LibrarySort;
 	albumOffset: number;
 	songOffset: number;
 	searchCursor: string | null;
+	searchLoadedCount: number;
 	albumId: string | null;
 	songId: string | null;
 	generationId: string | null;
@@ -35,8 +44,11 @@ export interface LibraryHistoryState {
 }
 
 export const librarySection = writable<LibrarySection>(LIBRARY_DEFAULT_SECTION);
+export const librarySurface = writable<LibrarySurface>('browse');
 export const expandedAlbumIds = writable<ReadonlySet<string>>(new Set());
 export const libraryScrollAnchor = writable(0);
+
+const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail']);
 
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
@@ -56,9 +68,11 @@ export function isLibraryHistoryState(value: unknown): value is LibraryHistorySt
 		return false;
 	}
 	if (!isLibrarySection(state.section)) return false;
+	if (!isLibrarySurface(state.surface)) return false;
 	if (typeof state.query !== 'string') return false;
 	if (!isLibrarySort(state.sort)) return false;
 	if (typeof state.albumOffset !== 'number' || typeof state.songOffset !== 'number') return false;
+	if (typeof state.searchLoadedCount !== 'number' || state.searchLoadedCount < 0) return false;
 	if (typeof state.scrollAnchor !== 'number') return false;
 	if (!isIdOrNull(state.searchCursor)) return false;
 	if (!isIdOrNull(state.albumId)) return false;
@@ -74,11 +88,13 @@ export function libraryRootState(): LibraryHistoryState {
 		kind: LIBRARY_HISTORY_KIND,
 		index: 0,
 		section: LIBRARY_DEFAULT_SECTION,
+		surface: 'browse',
 		query: '',
 		sort: 'newest',
 		albumOffset: 0,
 		songOffset: 0,
 		searchCursor: null,
+		searchLoadedCount: 0,
 		albumId: null,
 		songId: null,
 		generationId: null,
@@ -92,6 +108,7 @@ export function libraryBrowseStateFrom(state: LibraryHistoryState): LibraryHisto
 	return {
 		...state,
 		index: 0,
+		surface: 'browse',
 		albumId: null,
 		songId: null,
 		generationId: null,
@@ -106,11 +123,13 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 		kind: LIBRARY_HISTORY_KIND,
 		index,
 		section: get(librarySection),
+		surface: get(librarySurface),
 		query: get(searchQuery),
 		sort: get(librarySort),
 		albumOffset: browse.albumOffset,
 		songOffset: browse.songOffset,
 		searchCursor: search.nextCursor,
+		searchLoadedCount: search.items.length,
 		albumId: get(selectedAlbumId),
 		songId: get(selectedSongId),
 		generationId: get(selectedGenerationId),
@@ -122,6 +141,7 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 
 export function applyLibraryHistory(state: LibraryHistoryState): void {
 	librarySection.set(state.section);
+	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
 	expandedAlbumIds.set(new Set(state.expandedAlbumIds));
@@ -139,6 +159,7 @@ export function applyLibraryHistory(state: LibraryHistoryState): void {
 		albumOffset: state.albumOffset,
 		songOffset: state.songOffset
 	}));
+	void restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
 	if (state.section === 'playlists' || state.section === 'shared') {
 		void ensurePlaylistsLoaded();
 	}
@@ -146,9 +167,23 @@ export function applyLibraryHistory(state: LibraryHistoryState): void {
 
 export function setLibrarySection(section: LibrarySection): void {
 	librarySection.set(section);
+	librarySurface.set('browse');
 	if (section === 'playlists' || section === 'shared') {
 		void ensurePlaylistsLoaded();
 	}
+}
+
+export function setLibrarySurface(surface: LibrarySurface): void {
+	librarySurface.set(surface);
+}
+
+export function hasLibrarySelection(): boolean {
+	return (
+		get(selectedAlbumId) !== null ||
+		get(selectedSongId) !== null ||
+		get(selectedGenerationId) !== null ||
+		get(selectedPlaylistId) !== null
+	);
 }
 
 export function toggleAlbumExpanded(albumId: string): void {
@@ -185,8 +220,13 @@ export function albumIsExpanded(
 
 export function resetLibraryContextForTests(): void {
 	librarySection.set(LIBRARY_DEFAULT_SECTION);
+	librarySurface.set('browse');
 	expandedAlbumIds.set(new Set());
 	libraryScrollAnchor.set(0);
+}
+
+function isLibrarySurface(value: unknown): value is LibrarySurface {
+	return typeof value === 'string' && SURFACES.has(value as LibrarySurface);
 }
 
 function isIdOrNull(value: unknown): value is string | null {

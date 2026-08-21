@@ -10,6 +10,10 @@ import { playlistLoad, selectedPlaylistId } from '$lib/stores/playlists';
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
 
+vi.mock('$lib/api/library', () => ({
+	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
+}));
+
 vi.mock('$lib/api/client', () => ({
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
@@ -34,6 +38,7 @@ import {
 	libraryRootState,
 	libraryScrollAnchor,
 	librarySection,
+	librarySurface,
 	resetLibraryContextForTests,
 	setLibrarySection,
 	snapshotLibraryHistory,
@@ -116,6 +121,7 @@ describe('library history snapshot', () => {
 			kind: LIBRARY_HISTORY_KIND,
 			index: 3,
 			section: 'playlists',
+			surface: 'browse',
 			query: 'Tide',
 			sort: 'oldest',
 			albumOffset: 50,
@@ -147,6 +153,7 @@ describe('library history snapshot', () => {
 		};
 		applyLibraryHistory(state);
 		expect(get(librarySection)).toBe('shared');
+		expect(get(librarySurface)).toBe('browse');
 		expect(get(searchQuery)).toBe('Nachtstrom');
 		expect(get(librarySort)).toBe('title');
 		expect(get(selectedAlbumId)).toBe('a9');

@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { fetchPlaylist, fetchPlaylists } from '$lib/api/client';
+import { createPlaylist, fetchPlaylist, fetchPlaylists } from '$lib/api/client';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
-import type { PlaylistDetailItem } from '$lib/api/types';
+import type { PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import {
+	createNewPlaylist,
 	ensurePlaylistsLoaded,
 	loadPlaylistDetail,
 	loadPlaylists,
@@ -91,5 +92,30 @@ describe('loadPlaylists', () => {
 		vi.mocked(fetchPlaylists).mockRejectedValueOnce('nope');
 		await loadPlaylists();
 		expect(get(playlistLoad).error).toBe(LIBRARY_PLAYLISTS_ERROR);
+	});
+
+	it('keeps a playlist created while the lazy fetch is still in flight', async () => {
+		let resolveList: ((value: PlaylistItem[]) => void) | undefined;
+		vi.mocked(fetchPlaylists).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveList = resolve;
+				})
+		);
+		vi.mocked(createPlaylist).mockResolvedValueOnce({
+			id: 'new',
+			title: 'New',
+			entry_count: 0,
+			is_shared: false,
+			share_slug: null,
+			created_at: '2026-01-01T00:00:00+00:00'
+		});
+
+		const pending = loadPlaylists();
+		await createNewPlaylist('New');
+		expect(get(playlistList).map((item) => item.id)).toEqual(['new']);
+		resolveList?.([]);
+		await pending;
+		expect(get(playlistList).map((item) => item.id)).toEqual(['new']);
 	});
 });

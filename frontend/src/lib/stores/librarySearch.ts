@@ -112,6 +112,10 @@ export function syncLibrarySearch(rawQuery: string): void {
 		librarySearch.set({ ...EMPTY_SEARCH });
 		return;
 	}
+	const current = get(librarySearch);
+	if (current.q === q && (current.status === 'loading' || current.items.length > 0)) {
+		return;
+	}
 	librarySearch.set({
 		q,
 		status: 'loading',
@@ -137,6 +141,42 @@ export function loadMoreLibrarySearch(): void {
 	const state = get(librarySearch);
 	if (!state.q || !state.hasMore || state.status === 'loading') return;
 	void runLibrarySearch(state.q, get(librarySort), { reset: false });
+}
+
+export async function restoreLibrarySearch(
+	rawQuery: string,
+	sort: LibrarySort,
+	loadedCount: number
+): Promise<void> {
+	if (searchTimer !== null) {
+		clearTimeout(searchTimer);
+		searchTimer = null;
+	}
+	const q = rawQuery.trim();
+	if (!q) {
+		searchGeneration += 1;
+		librarySearch.set({ ...EMPTY_SEARCH });
+		return;
+	}
+	librarySort.set(sort);
+	librarySearch.set({
+		q,
+		status: 'loading',
+		error: null,
+		items: [],
+		hasMore: false,
+		nextCursor: null
+	});
+	await runLibrarySearch(q, sort, { reset: true });
+	const target = Math.max(0, loadedCount);
+	while (
+		get(librarySearch).q === q &&
+		get(librarySearch).status === 'ready' &&
+		get(librarySearch).hasMore &&
+		get(librarySearch).items.length < target
+	) {
+		await runLibrarySearch(q, sort, { reset: false });
+	}
 }
 
 export function changeLibrarySort(sort: LibrarySort, searchRaw: string): void {

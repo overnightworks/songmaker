@@ -5,6 +5,7 @@ import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import {
 	librarySection,
+	librarySurface,
 	resetLibraryContextForTests,
 	setLibrarySection
 } from '$lib/stores/libraryContext';
@@ -20,6 +21,10 @@ import type { SongItem } from '$lib/api/types';
 const fetchSong = vi.fn();
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
+
+vi.mock('$lib/api/library', () => ({
+	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
+}));
 
 vi.mock('$lib/api/client', () => ({
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
@@ -40,6 +45,7 @@ import {
 	goBack,
 	initNavigation,
 	resetNavigationForTests,
+	backToSong,
 	selectAlbumOverview,
 	selectLibrarySection,
 	selectSong
@@ -138,10 +144,55 @@ describe('library history', () => {
 		selectedSongId.set('s1');
 		selectLibrarySection('playlists');
 		expect(get(canGoBack)).toBe(true);
+		expect(get(librarySurface)).toBe('browse');
+		goBack();
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(librarySurface)).toBe('detail');
 		goBack();
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(librarySection)).toBe('playlists');
 		expect(window.location.pathname).toBe('/');
+		cleanup();
+	});
+
+	it('keeps a valid songmaker history entry instead of replacing it on init', () => {
+		history.replaceState(
+			{
+				kind: 'songmaker',
+				index: 0,
+				section: 'playlists',
+				surface: 'browse',
+				query: 'Tide',
+				sort: 'newest',
+				albumOffset: 0,
+				songOffset: 0,
+				searchCursor: null,
+				searchLoadedCount: 0,
+				albumId: null,
+				songId: null,
+				generationId: null,
+				playlistId: null,
+				expandedAlbumIds: [],
+				scrollAnchor: 80
+			},
+			'',
+			'/'
+		);
+		const cleanup = initNavigation();
+		expect(get(librarySection)).toBe('playlists');
+		expect(get(searchQuery)).toBe('Tide');
+		expect(history.state.scrollAnchor).toBe(80);
+		cleanup();
+	});
+
+	it('backToSong from a generation URL keeps the song at history index 0', () => {
+		history.replaceState(null, '', '/?song=s1&gen=g1');
+		selectedSongId.set('s1');
+		selectedGenerationId.set('g1');
+		const cleanup = initNavigation();
+		backToSong();
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedGenerationId)).toBeNull();
 		cleanup();
 	});
 

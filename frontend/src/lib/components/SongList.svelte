@@ -173,17 +173,18 @@
 
 	function onSectionKeydown(event: KeyboardEvent, current: LibrarySection): void {
 		const index = LIBRARY_SECTIONS.indexOf(current);
+		let next: LibrarySection | null = null;
 		if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
 			event.preventDefault();
-			onSelectSection(LIBRARY_SECTIONS[(index + 1) % LIBRARY_SECTIONS.length]);
-			return;
-		}
-		if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+			next = LIBRARY_SECTIONS[(index + 1) % LIBRARY_SECTIONS.length];
+		} else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
 			event.preventDefault();
-			onSelectSection(
-				LIBRARY_SECTIONS[(index - 1 + LIBRARY_SECTIONS.length) % LIBRARY_SECTIONS.length]
-			);
+			next = LIBRARY_SECTIONS[(index - 1 + LIBRARY_SECTIONS.length) % LIBRARY_SECTIONS.length];
 		}
+		if (!next) return;
+		onSelectSection(next);
+		const tab = document.getElementById(`library-tab-${next}`);
+		if (tab instanceof HTMLButtonElement) tab.focus();
 	}
 
 	function onSortChange(option: (typeof CREATED_SORTS)[number]): void {

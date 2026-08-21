@@ -28,6 +28,7 @@ import {
 	loadLibraryBrowse,
 	loadMoreLibrarySearch,
 	resetLibrarySearchForTests,
+	restoreLibrarySearch,
 	retryLibrarySearch,
 	syncLibrarySearch
 } from './librarySearch';
@@ -186,6 +187,25 @@ describe('syncLibrarySearch', () => {
 		});
 		expect(get(librarySearch).items).toHaveLength(2);
 		expect(get(librarySearch).hasMore).toBe(false);
+	});
+
+	it('restoreLibrarySearch replays pages until the saved count is loaded', async () => {
+		searchLibrary
+			.mockResolvedValueOnce({
+				items: [{ type: 'album', album: album({ id: 'a1' }) }],
+				next_cursor: 'cursor-1',
+				has_more: true
+			})
+			.mockResolvedValueOnce({
+				items: [{ type: 'album', album: album({ id: 'a2', title: 'Catalog 2' }) }],
+				next_cursor: null,
+				has_more: false
+			});
+		await restoreLibrarySearch('Catalog', 'newest', 2);
+		expect(searchLibrary).toHaveBeenCalledTimes(2);
+		expect(get(librarySearch).items).toHaveLength(2);
+		syncLibrarySearch('Catalog');
+		expect(searchLibrary).toHaveBeenCalledTimes(2);
 	});
 });
 

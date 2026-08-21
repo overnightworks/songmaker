@@ -41,7 +41,7 @@ export async function loadPlaylists(): Promise<boolean> {
 	playlistsInflight = (async () => {
 		try {
 			const items = await fetchPlaylists();
-			playlistList.set(items);
+			playlistList.update((current) => mergeFetchedPlaylists(items, current));
 			playlistLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
@@ -66,6 +66,12 @@ export function resetPlaylistsForTests(): void {
 	selectedPlaylistDetail.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
 	playlistDetailRequest += 1;
+}
+
+function mergeFetchedPlaylists(server: PlaylistItem[], local: PlaylistItem[]): PlaylistItem[] {
+	const serverIds = new Set(server.map((playlist) => playlist.id));
+	const createdWhileLoading = local.filter((playlist) => !serverIds.has(playlist.id));
+	return [...server, ...createdWhileLoading];
 }
 
 function playlistErrorMessage(err: unknown): string {

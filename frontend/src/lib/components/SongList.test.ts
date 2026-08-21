@@ -306,6 +306,27 @@ describe('SongList sections', () => {
 		expect(get(selectedSongId)).toBe('s-local');
 	});
 
+	it('moves focus with the active section tab on arrow keys', async () => {
+		const target = render();
+		await tick();
+		const albums = sectionTab(target, LIBRARY_SECTION_LABELS.albums);
+		albums.focus();
+		albums.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		await tick();
+		expect(sectionTab(target, LIBRARY_SECTION_LABELS.playlists)).toBe(document.activeElement);
+		expect(sectionTab(target, LIBRARY_SECTION_LABELS.playlists).getAttribute('aria-selected')).toBe(
+			'true'
+		);
+		sectionTab(target, LIBRARY_SECTION_LABELS.playlists).dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+		);
+		await tick();
+		expect(sectionTab(target, LIBRARY_SECTION_LABELS.shared)).toBe(document.activeElement);
+		expect(sectionTab(target, LIBRARY_SECTION_LABELS.shared).getAttribute('aria-selected')).toBe(
+			'true'
+		);
+	});
+
 	it('shows playlists and shared empty copy for those sections', async () => {
 		playlistLoad.set({ status: 'ready', error: null });
 		const target = render();

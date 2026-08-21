@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { albumList, selectedSong, selectedGeneration, selectedAlbumId } from '$lib/stores/player';
-	import { searchQuery } from '$lib/stores/filter';
 	import { loadLibraryBrowse } from '$lib/stores/librarySearch';
+	import { librarySurface } from '$lib/stores/libraryContext';
 	import { detailTab, initNavigation } from '$lib/stores/navigation';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
 	import { loadActiveModels } from '$lib/stores/presets';
@@ -28,10 +28,8 @@
 	);
 	const playlistDetail = $derived($selectedPlaylistDetail);
 	const tab = $derived($detailTab);
-	const hasDetail = $derived(
-		!!song || !!activeGen || showCreate || !!selectedAlbum || !!playlistDetail
-	);
-	const searching = $derived($searchQuery.trim().length > 0);
+	const hasSelection = $derived(!!song || !!activeGen || !!selectedAlbum || !!playlistDetail);
+	const hasDetail = $derived(showCreate || ($librarySurface === 'detail' && hasSelection));
 
 	$effect(() => {
 		if (song) showCreate = false;
@@ -70,7 +68,7 @@
 {:else if loadError}
 	<div class="error">Failed to load. Please refresh.</div>
 {:else}
-	<div class="workspace" class:has-detail={hasDetail} class:searching>
+	<div class="workspace" class:has-detail={hasDetail}>
 		<SongList
 			onNewSong={() => {
 				showCreate = !showCreate;
@@ -136,18 +134,6 @@
 		display: none;
 	}
 
-	.workspace.has-detail.searching {
-		grid-template-areas: 'nav browse';
-	}
-
-	.workspace.has-detail.searching > :global(.library-browse) {
-		display: block;
-	}
-
-	.workspace.has-detail.searching > .detail-panel {
-		display: none;
-	}
-
 	.detail-panel {
 		grid-area: detail;
 		display: none;
@@ -204,18 +190,6 @@
 		.workspace.has-detail > :global(.library-nav),
 		.workspace.has-detail > :global(.library-browse) {
 			display: none;
-		}
-
-		.workspace.has-detail.searching {
-			grid-template-areas: 'detail';
-		}
-
-		.workspace.has-detail.searching > :global(.library-browse) {
-			display: none;
-		}
-
-		.workspace.has-detail.searching > .detail-panel {
-			display: flex;
 		}
 	}
 </style>
