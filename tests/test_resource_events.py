@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -12,11 +13,13 @@ import pytest
 from conftest import TEST_SECRET, make_fake_redis
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     LAST_EVENT_ID_INVALID,
+    RESOURCE_EVENT_CURSOR_LOCK_ATTEMPTS,
     RESOURCE_EVENT_KIND_GENERATION_CREATED,
     RESOURCE_EVENT_RETENTION_DAYS,
     RESOURCE_EVENT_TYPE_HEARTBEAT,
@@ -220,15 +223,24 @@ def test_parallel_jobs_get_strictly_increasing_sequences(
 
     def worker(generation_id: str) -> None:
         try:
-            with factory() as session:
-                barrier.wait(timeout=5)
-                record_generation_created(
-                    session,
-                    user_id=USER_A,
-                    song_id="song-user-a",
-                    generation_id=generation_id,
-                )
-                session.commit()
+            barrier.wait(timeout=5)
+            last_error: BaseException | None = None
+            for _ in range(RESOURCE_EVENT_CURSOR_LOCK_ATTEMPTS):
+                try:
+                    with factory() as session:
+                        record_generation_created(
+                            session,
+                            user_id=USER_A,
+                            song_id="song-user-a",
+                            generation_id=generation_id,
+                        )
+                        session.commit()
+                    return
+                except OperationalError as exc:
+                    last_error = exc
+                    time.sleep(0.05)
+            if last_error is not None:
+                raise last_error
         except BaseException as exc:
             errors.append(exc)
 

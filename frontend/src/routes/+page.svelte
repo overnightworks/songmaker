@@ -22,6 +22,7 @@
 
 	let loading = $state(true);
 	let loadError = $state(false);
+	let navCleanup: (() => void) | undefined;
 
 	const song = $derived($selectedSong);
 	const activeGen = $derived($selectedGeneration);
@@ -38,11 +39,10 @@
 	);
 
 	onMount(() => {
-		let cleanup: (() => void) | undefined;
 		void bootstrapLibrary().then((ok) => {
-			if (ok) cleanup = initNavigation();
+			if (ok) navCleanup = initNavigation();
 		});
-		return () => cleanup?.();
+		return () => navCleanup?.();
 	});
 
 	async function bootstrapLibrary(): Promise<boolean> {
@@ -84,7 +84,8 @@
 				loadError = true;
 				return;
 			}
-			initNavigation();
+			navCleanup?.();
+			navCleanup = initNavigation();
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : RESOURCE_SYNC_ERROR, 'error');
 			loadError = true;

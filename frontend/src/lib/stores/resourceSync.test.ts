@@ -300,12 +300,12 @@ describe('resource sync handshake', () => {
 		await flush();
 		stream.close();
 		await flush();
-		expect(await ready).toBe(false);
-		expect(get(store).phase).toBe('error');
-		expect(get(store).error).toBe(RESOURCE_SYNC_ERROR);
+		expect(get(store).phase).not.toBe('live');
 		gate.resolve(true);
-		await vi.advanceTimersByTimeAsync(0);
-		expect(get(store).phase).toBe('error');
+		await flush();
+		expect(await ready).toBe(true);
+		expect(get(store).phase).toBe('live');
+		controller.stop();
 	});
 
 	it('resync during bootstrap reloads the snapshot before live', async () => {

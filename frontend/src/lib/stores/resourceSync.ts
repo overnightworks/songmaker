@@ -57,6 +57,7 @@ export class ResourceSyncController {
 	private readyWaiters: Array<(ok: boolean) => void> = [];
 	private reconnectAttempt = 0;
 	private visibilityBound = false;
+	private loopGeneration = 0;
 
 	constructor(
 		private readonly deps: ResourceSyncDeps,
@@ -71,11 +72,13 @@ export class ResourceSyncController {
 		if (this.started) return;
 		this.started = true;
 		this.bindVisibility();
-		void this.runLoop();
+		this.loopGeneration += 1;
+		void this.runLoop(this.loopGeneration);
 	}
 
 	stop(): void {
 		this.started = false;
+		this.loopGeneration += 1;
 		this.abort?.abort();
 		this.abort = null;
 		this.unbindVisibility();
@@ -112,8 +115,9 @@ export class ResourceSyncController {
 
 	async handleVisibility(): Promise<void> {
 		if (!this.started || this.state.phase !== 'live') return;
-		const ok = await this.revalidateOpenSong();
-		if (!ok) this.setError(RESOURCE_SYNC_ERROR);
+		const libraryOk = await this.deps.loadVisibleLibrary();
+		const songOk = await this.revalidateOpenSong();
+		if (!libraryOk || !songOk) this.setError(RESOURCE_SYNC_ERROR);
 	}
 
 	resetForTests(): void {
@@ -132,11 +136,12 @@ export class ResourceSyncController {
 			this.started = true;
 			this.bindVisibility();
 		}
-		void this.runLoop();
+		this.loopGeneration += 1;
+		void this.runLoop(this.loopGeneration);
 	}
 
-	private async runLoop(): Promise<void> {
-		while (this.started) {
+	private async runLoop(generation: number): Promise<void> {
+		while (this.started && generation === this.loopGeneration) {
 			this.abort = new AbortController();
 			const signal = this.abort.signal;
 			const cursor = this.reconnectCursor();
@@ -147,23 +152,18 @@ export class ResourceSyncController {
 			}));
 			try {
 				for await (const event of this.deps.openStream(cursor, signal)) {
-					if (!this.started || signal.aborted) return;
+					if (!this.started || signal.aborted || generation !== this.loopGeneration) return;
 					await this.handleEvent(event);
 				}
-				if (!this.started || signal.aborted) return;
-				if (this.state.phase !== 'live') {
-					this.failBootstrap(RESOURCE_SYNC_ERROR);
-					return;
-				}
+				if (!this.started || signal.aborted || generation !== this.loopGeneration) return;
 			} catch (err) {
-				if (!this.started || signal.aborted) return;
+				if (!this.started || signal.aborted || generation !== this.loopGeneration) return;
 				if (this.state.phase !== 'live') {
-					this.failBootstrap(errorMessage(err));
-					return;
+					this.setError(errorMessage(err));
 				}
 			}
 			this.reconnectAttempt += 1;
-			await this.waitBackoff();
+			await this.waitBackoff(signal);
 		}
 	}
 
@@ -257,18 +257,24 @@ export class ResourceSyncController {
 		const ordered = [...events].sort((a, b) => a.sequence - b.sequence);
 		const unique = new Map<string, GenerationCreatedEvent>();
 		for (const event of ordered) {
-			this.advanceSequence(event.sequence);
-			if (this.seenGenerationIds.has(event.generation_id)) continue;
+			if (this.seenGenerationIds.has(event.generation_id)) {
+				this.advanceSequence(event.sequence);
+				continue;
+			}
 			unique.set(event.song_id, event);
 		}
 		for (const event of [...unique.values()].sort((a, b) => a.sequence - b.sequence)) {
-			if (this.seenGenerationIds.has(event.generation_id)) continue;
+			if (this.seenGenerationIds.has(event.generation_id)) {
+				this.advanceSequence(event.sequence);
+				continue;
+			}
 			const song = await this.deps.fetchSong(event.song_id);
 			this.deps.upsertSong(song);
 			this.seenGenerationIds.add(event.generation_id);
 			for (const generation of song.generations) {
 				this.seenGenerationIds.add(generation.id);
 			}
+			this.advanceSequence(event.sequence);
 		}
 	}
 
@@ -321,13 +327,16 @@ export class ResourceSyncController {
 		for (const waiter of waiters) waiter(ok);
 	}
 
-	private async waitBackoff(): Promise<void> {
-		const delay = Math.min(
+	private async waitBackoff(signal: AbortSignal): Promise<void> {
+		const delayMs = Math.min(
 			RESOURCE_SYNC_RECONNECT_MAX_MS,
 			RESOURCE_SYNC_RECONNECT_BASE_MS * 2 ** Math.max(0, this.reconnectAttempt - 1)
 		);
-		const wait = this.deps.delay ?? sleep;
-		await wait(delay);
+		if (this.deps.delay) {
+			await this.deps.delay(delayMs);
+			return;
+		}
+		await sleep(delayMs, signal);
 	}
 
 	private bindVisibility(): void {
@@ -350,8 +359,18 @@ export class ResourceSyncController {
 	};
 }
 
-function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+	return new Promise((resolve) => {
+		const timer = setTimeout(resolve, ms);
+		signal?.addEventListener(
+			'abort',
+			() => {
+				clearTimeout(timer);
+				resolve();
+			},
+			{ once: true }
+		);
+	});
 }
 
 function errorMessage(err: unknown): string {
