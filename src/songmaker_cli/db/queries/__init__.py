@@ -274,21 +274,6 @@ from songmaker_cli.db.queries.resource_events import (
 from songmaker_cli.db.queries.resource_events import (
     list_resource_events_after as list_resource_events_after,
 )
-from songmaker_cli.db.queries.sharing import (
-    SharedInventoryPage as SharedInventoryPage,
-)
-from songmaker_cli.db.queries.sharing import (
-    count_shared_inventory as count_shared_inventory,
-)
-from songmaker_cli.db.queries.sharing import (
-    disable_sharing as disable_sharing,
-)
-from songmaker_cli.db.queries.sharing import (
-    enable_sharing as enable_sharing,
-)
-from songmaker_cli.db.queries.sharing import (
-    list_shared_inventory as list_shared_inventory,
-)
 from songmaker_cli.db.queries.settings import create_preset as create_preset
 from songmaker_cli.db.queries.settings import delete_preset as delete_preset
 from songmaker_cli.db.queries.settings import (
@@ -325,6 +310,21 @@ from songmaker_cli.db.queries.settings import (
 from songmaker_cli.db.queries.settings import set_default_preset as set_default_preset
 from songmaker_cli.db.queries.settings import toggle_model as toggle_model
 from songmaker_cli.db.queries.settings import update_preset as update_preset
+from songmaker_cli.db.queries.sharing import (
+    SharedInventoryPage as SharedInventoryPage,
+)
+from songmaker_cli.db.queries.sharing import (
+    count_shared_inventory as count_shared_inventory,
+)
+from songmaker_cli.db.queries.sharing import (
+    disable_sharing as disable_sharing,
+)
+from songmaker_cli.db.queries.sharing import (
+    enable_sharing as enable_sharing,
+)
+from songmaker_cli.db.queries.sharing import (
+    list_shared_inventory as list_shared_inventory,
+)
 from songmaker_cli.db.queries.songs import UNSET as UNSET
 from songmaker_cli.db.queries.songs import cleanup_song as cleanup_song
 from songmaker_cli.db.queries.songs import count_songs as count_songs
