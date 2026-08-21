@@ -7,10 +7,17 @@
 			(function () {
 				var t = localStorage.getItem('theme') || 'dark';
 				document.documentElement.dataset.theme = t;
-				var coarse =
-					typeof window.matchMedia === 'function' &&
-					window.matchMedia('(any-pointer: coarse)').matches;
-				document.documentElement.dataset.pointer = coarse ? 'coarse' : 'fine';
+				if (typeof window.matchMedia !== 'function') {
+					document.documentElement.dataset.pointer = 'fine';
+					return;
+				}
+				var mq = window.matchMedia('(any-pointer: coarse)');
+				function applyPointer() {
+					document.documentElement.dataset.pointer = mq.matches ? 'coarse' : 'fine';
+				}
+				applyPointer();
+				if (mq.addEventListener) mq.addEventListener('change', applyPointer);
+				else if (mq.addListener) mq.addListener(applyPointer);
 			})();
 		</script>
 		%sveltekit.head%

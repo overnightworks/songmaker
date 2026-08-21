@@ -626,6 +626,16 @@
 		flex-shrink: 0;
 	}
 
+	@media (any-pointer: coarse) {
+		.entry-controls {
+			flex-direction: row;
+		}
+	}
+
+	:global(html[data-pointer='coarse']) .entry-controls {
+		flex-direction: row;
+	}
+
 	.move-btn {
 		color: var(--text-muted);
 		line-height: 1;

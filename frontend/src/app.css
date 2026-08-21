@@ -161,7 +161,7 @@ button {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-	button:active:not(:disabled):not(.play-btn) {
+	button:active:not(:disabled):not(.play-btn):not([data-hitbox='frequent']) {
 		transform: scale(0.97);
 	}
 }

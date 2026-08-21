@@ -24,6 +24,14 @@ export const HITBOX_STYLE = `:root {
 	cursor: default;
 }
 
+[data-hitbox='frequent']:focus-visible {
+	outline-offset: -2px;
+}
+
+[data-hitbox='frequent']:active:not(:disabled)::before {
+	transform: translate(-50%, -50%) scale(0.97);
+}
+
 @media (any-pointer: coarse) {
 	[data-hitbox='frequent'] {
 		min-width: var(--hitbox-frequent);
