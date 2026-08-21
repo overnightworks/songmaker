@@ -5,10 +5,9 @@ product. This page owns the offline document contract;
 [`revisions.toml`](revisions.toml) owns active revision history, and the
 `witnesses/` directory owns the exact captured GitHub approval evidence.
 
-Songmaker is currently a greenfield requirement shelf: there are no numbered
-requirement documents and therefore no approved normative product claims. The
-non-normative [vision](../VISION.md) is only an overview of existing repository
-descriptions.
+Songmaker's requirement shelf contains approved normative product claims. The
+active registry tips, not this page, state their exact current set. The
+non-normative [vision](../VISION.md) remains an overview of product direction.
 
 ## Information owners
 
@@ -84,7 +83,8 @@ the delegation, agent, digest, and review results before the coordinator posts
 the exact authorization line. This procedural disclosure is reviewable but not
 machine-enforced. The local binder revalidates GitHub immediately before
 writing, and a pushed commit still must pass the live check. This repository
-still contains no approval, witness, or active revision.
+contains account-bound approval witnesses and active revisions. Those artifacts
+prove authorization, not human authorship or implementation.
 
 ## Binding ritual
 
@@ -140,8 +140,8 @@ Git history. Existing revision-record fields remain identical while history
 grows by a valid successor. TOML whitespace is not an owned fact. There is no
 `HEAD^` fallback. Local snapshot checks must explicitly pass `--current-only`.
 `workflow_dispatch` performs an explicitly current-only check. The separate
-workflow is visible but is not an enforced merge gate while issue #31 remains
-open.
+workflow is visible but is not an enforced merge gate. Branch protection must
+require it before documentation may describe it that way.
 
 ## Acceptance boundary
 

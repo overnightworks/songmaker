@@ -10,13 +10,19 @@ CHECKER = Path("scripts/check_requirement_witnesses.py")
 WORKFLOW = Path(".github/workflows/requirement-witnesses.yml")
 
 
-def test_empty_repository_check_needs_no_token_and_makes_no_network_request() -> None:
+def test_empty_repository_check_needs_no_token_and_makes_no_network_request(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "empty-project"
+    registry = project / "docs/requirements/revisions.toml"
+    registry.parent.mkdir(parents=True)
+    registry.write_text("schema_version = 2\n", encoding="utf-8")
     environment = os.environ.copy()
     environment.pop("GITHUB_TOKEN", None)
 
     result = subprocess.run(
-        [sys.executable, str(CHECKER)],
-        cwd=PROJECT_ROOT,
+        [sys.executable, str(PROJECT_ROOT / CHECKER)],
+        cwd=project,
         check=False,
         capture_output=True,
         text=True,
