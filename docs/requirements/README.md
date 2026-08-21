@@ -76,10 +76,14 @@ pushes, same-repository pull requests, a weekly schedule, and manual dispatch
 rerun the live check. Fork pull requests deliberately skip the token-bearing
 job while the offline pull-request gate still runs.
 
-Approval remains a procedural human STOP ritual for this single-operator
-repository; neither gate can distinguish a human account action from automation
-using that account. The local binder revalidates GitHub immediately before
-writing, but a pushed commit still must pass the live check. This repository
+Approval is an account-bound authorization step, not proof of a human action.
+The repository operator may post it directly or explicitly delegate it to the
+coordinating agent. Under delegation, the exact candidate bytes first require
+independent semantic and trace reviews; a neighboring issue comment discloses
+the delegation, agent, digest, and review results before the coordinator posts
+the exact authorization line. This procedural disclosure is reviewable but not
+machine-enforced. The local binder revalidates GitHub immediately before
+writing, and a pushed commit still must pass the live check. This repository
 still contains no approval, witness, or active revision.
 
 ## Binding ritual
@@ -91,8 +95,10 @@ worktree delta. The binder accepts the narrower safe filename subset
 HEAD. This candidate-only window is deliberately red locally and must never be
 committed by itself.
 
-Review the exact candidate bytes, calculate their SHA-256, and post one GitHub
-issue comment containing only:
+Review the exact candidate bytes and calculate their SHA-256. Obtain the
+independent reviews required by the owning issue. When approval is delegated,
+first post the disclosure described above. Then post one GitHub issue comment
+from the configured authorization account containing only:
 
 ```text
 APPROVE REQUIREMENT REVISION NNNN sha256:<content-digest>

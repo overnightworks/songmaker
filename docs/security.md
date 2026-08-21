@@ -195,11 +195,14 @@ If exposure to untrusted traffic becomes a concern, the next step is to bind `/a
 
 ## Requirement Approval Witnesses
 
-Requirement approval uses a procedural STOP comment from the repository
-operator account. The offline registry pins a strict witness file by SHA-256;
-the witness pins the numeric repository, issue, comment, and author identities,
-timestamps, and exact approval body. This proves durable byte relationships but
-does not prove that an account action was performed by a human.
+Requirement approval uses an authorization comment from the configured
+repository account. The operator may act directly or explicitly delegate the
+posting to a coordinating agent after the required independent reviews and a
+transparent disclosure in the owning issue. The offline registry pins a strict
+witness file by SHA-256; the witness pins the numeric repository, issue,
+comment, and author identities, timestamps, and exact approval body. This proves
+durable byte relationships but neither human authorship nor compliance with the
+procedural review/disclosure policy.
 
 The live verifier uses Python's standard HTTPS stack with the default verified
 TLS context. It permits only `api.github.com` and three fixed read-only route
