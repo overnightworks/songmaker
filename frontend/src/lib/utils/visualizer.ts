@@ -2,6 +2,15 @@ export const FFT_SIZE = 1024;
 const MAX_PARTICLES = 150;
 const BASS_THRESHOLD = 0.35;
 
+export function playbackVisualizerAllowed(): boolean {
+	if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+	if (document.hidden || document.documentElement.dataset.pointer === 'coarse') return false;
+	return (
+		!window.matchMedia('(max-width: 640px)').matches &&
+		!window.matchMedia('(any-pointer: coarse)').matches
+	);
+}
+
 export interface Particle {
 	x: number;
 	y: number;

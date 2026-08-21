@@ -34,14 +34,22 @@
 
 	$effect(() => {
 		if (typeof window === 'undefined') return;
-		const media = window.matchMedia('(max-width: 640px)');
-		narrow = media.matches;
-		const onChange = () => {
-			narrow = media.matches;
-			if (!media.matches) closeSheet();
+		const media = window.matchMedia('(max-width: 640px), (any-pointer: coarse)');
+		const syncNarrow = () => {
+			narrow = media.matches || document.documentElement.dataset.pointer === 'coarse';
+			if (!narrow) closeSheet();
 		};
-		media.addEventListener('change', onChange);
-		return () => media.removeEventListener('change', onChange);
+		syncNarrow();
+		media.addEventListener('change', syncNarrow);
+		const pointerObserver = new MutationObserver(syncNarrow);
+		pointerObserver.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ['data-pointer']
+		});
+		return () => {
+			media.removeEventListener('change', syncNarrow);
+			pointerObserver.disconnect();
+		};
 	});
 
 	$effect(() => {
@@ -186,15 +194,17 @@
 				{/each}
 			</div>
 		{/if}
-		<button
-			class="pool-info"
-			onclick={() => (helpOpen = !helpOpen)}
-			aria-expanded={helpOpen}
-			aria-label="What Mix Picks Keeps Alle mean"
-			title="What Mix Picks Keeps Alle mean"
-		>
-			<Icon name="info" size={15} />
-		</button>
+		{#if !narrow}
+			<button
+				class="pool-info"
+				onclick={() => (helpOpen = !helpOpen)}
+				aria-expanded={helpOpen}
+				aria-label="What Mix Picks Keeps Alle mean"
+				title="What Mix Picks Keeps Alle mean"
+			>
+				<Icon name="info" size={15} />
+			</button>
+		{/if}
 		{#if helpOpen}
 			<p class="pool-help">{POOL_HELP}</p>
 		{/if}
@@ -215,6 +225,7 @@
 				aria-label="Take pool"
 				tabindex="-1"
 			>
+				<p class="sheet-help"><Icon name="info" size={16} /><span>{POOL_HELP}</span></p>
 				<div class="sheet-options" role="radiogroup" aria-label="Take pool choices">
 					{#each LIBRARY_TAKE_POOLS as option (option)}
 						<button
@@ -367,6 +378,21 @@
 		border-top: 1px solid var(--border);
 		z-index: 1;
 	}
+	.sheet-help {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		max-width: 420px;
+		margin: 0 auto 0.65rem;
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		line-height: 1.35;
+	}
+	.sheet-help :global(svg) {
+		flex: 0 0 auto;
+		margin-top: 1px;
+		color: var(--accent);
+	}
 	.sheet-options {
 		display: flex;
 		gap: 8px;
@@ -387,9 +413,82 @@
 		color: var(--text);
 		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
 	}
-	@media (max-width: 640px) {
+	@media (max-width: 640px), (any-pointer: coarse) {
 		.pool-current {
-			padding: 0 8px;
+			position: relative;
+			height: 44px;
+			padding: 0 6px;
+			border-color: transparent;
+			background: transparent;
+			isolation: isolate;
 		}
+		.pool-current.mix,
+		.pool-current.picks,
+		.pool-current.keeps,
+		.pool-current.all {
+			background: transparent;
+		}
+		.pool-current::before {
+			content: '';
+			position: absolute;
+			z-index: -1;
+			left: 0;
+			right: 0;
+			top: 4px;
+			height: 36px;
+			border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+			border-radius: 999px;
+			background: color-mix(in srgb, var(--surface) 70%, transparent);
+		}
+		.pool-current.mix::before {
+			background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+		}
+		.pool-current.picks::before {
+			background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+		}
+		.pool-current.keeps::before {
+			background: color-mix(in srgb, var(--keep) 16%, var(--surface));
+		}
+		.pool-current.all::before {
+			background: color-mix(in srgb, var(--text) 12%, var(--surface));
+		}
+	}
+	:global(html[data-pointer='coarse']) .pool-current {
+		position: relative;
+		height: 44px;
+		padding: 0 6px;
+		border-color: transparent;
+		background: transparent;
+		isolation: isolate;
+	}
+	:global(html[data-pointer='coarse']) .pool-current.mix,
+	:global(html[data-pointer='coarse']) .pool-current.picks,
+	:global(html[data-pointer='coarse']) .pool-current.keeps,
+	:global(html[data-pointer='coarse']) .pool-current.all {
+		background: transparent;
+	}
+	:global(html[data-pointer='coarse']) .pool-current::before {
+		content: '';
+		position: absolute;
+		z-index: -1;
+		left: 0;
+		right: 0;
+		top: 4px;
+		height: 36px;
+		border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--surface) 70%, transparent);
+	}
+	:global(html[data-pointer='coarse']) .pool-current.mix::before {
+		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+	}
+	:global(html[data-pointer='coarse']) .pool-current.picks::before {
+		background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+	}
+	:global(html[data-pointer='coarse']) .pool-current.keeps::before {
+		background: color-mix(in srgb, var(--keep) 16%, var(--surface));
+	}
+	:global(html[data-pointer='coarse']) .pool-current.all::before {
+		background: color-mix(in srgb, var(--text) 12%, var(--surface));
 	}
 </style>

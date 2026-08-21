@@ -110,4 +110,12 @@ describe('LibraryPoolControl mobile dialog', () => {
 		expect(document.querySelector('.pool-sheet')).toBeNull();
 		expect(document.activeElement).toBe(trigger);
 	});
+
+	it('keeps the pool explanation in the compact sheet instead of adding a second control', async () => {
+		const target = await renderNarrow();
+		expect(target.querySelector('.pool-info')).toBeNull();
+
+		const sheet = await openSheet(target);
+		expect(sheet.querySelector('.sheet-help')?.textContent).toContain('Mix: Picks und Keeps');
+	});
 });

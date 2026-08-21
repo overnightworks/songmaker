@@ -86,6 +86,16 @@
 	}
 }
 
+@media (any-pointer: coarse) {
+	:root {
+		--player-height: calc(144px + env(safe-area-inset-bottom, 0px));
+	}
+}
+
+html[data-pointer='coarse'] {
+	--player-height: calc(144px + env(safe-area-inset-bottom, 0px));
+}
+
 [data-theme='light'] {
 	--primary: #d41a0a;
 	--accent: #7a18c0;

@@ -33,6 +33,7 @@
 		readVizColors,
 		boxShadowStyle,
 		titleGlowStyle,
+		playbackVisualizerAllowed,
 		type VizColors
 	} from '$lib/utils/visualizer';
 
@@ -89,16 +90,10 @@
 		updateMediaSessionPositionState(currentTime, duration);
 	});
 
-	function visualizerAllowed(): boolean {
-		if (typeof window === 'undefined') return false;
-		if (document.hidden) return false;
-		return !window.matchMedia('(max-width: 640px)').matches;
-	}
-
 	function connectAnalyser(): void {
 		const audio = audioPlayer.getElement();
 		if (!audio || audioCtx) return;
-		if (!visualizerAllowed()) return;
+		if (!playbackVisualizerAllowed()) return;
 		try {
 			audioCtx = new AudioContext();
 			analyser = audioCtx.createAnalyser();
@@ -116,7 +111,7 @@
 
 	function startVisualizerLoop(): void {
 		if (!vizCanvas) return;
-		if (!visualizerAllowed()) return;
+		if (!playbackVisualizerAllowed()) return;
 		if (!audioCtx) connectAnalyser();
 		if (!analyser || !frequencyData || !waveformData) return;
 		if (audioCtx?.state === 'suspended') audioCtx.resume();
@@ -175,9 +170,48 @@
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
 	<div class="player-content">
 		<div class="player-controls">
-			<LibraryPoolControl />
+			<div class="library-controls"><LibraryPoolControl /></div>
+			<div class="transport-controls">
+				<button
+					class="nav-btn"
+					onclick={playPrevSong}
+					disabled={!prevSong}
+					aria-label="Previous"
+					title="Previous"
+				>
+					<Icon name="skip-back" size={21} />
+				</button>
+				<button
+					class="play-btn"
+					class:loading={isLoading}
+					class:playing={isPlaying}
+					class:errored={isError}
+					onclick={togglePlay}
+					aria-label={isError ? 'Retry' : isPlaying ? 'Pause' : 'Play'}
+					title={isError && errorMsg ? errorMsg : ''}
+				>
+					<span
+						class="play-btn-face"
+						style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
+					>
+						{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
+								name="refresh-cw"
+								size={24}
+							/>{:else}<Icon name={isPlaying ? 'pause' : 'play'} size={26} />{/if}
+					</span>
+				</button>
+				<button
+					class="nav-btn"
+					onclick={playNextSong}
+					disabled={!nextSong}
+					aria-label="Next"
+					title="Next"
+				>
+					<Icon name="skip-forward" size={21} />
+				</button>
+			</div>
 			<button
-				class="nav-btn mode-btn"
+				class="nav-btn mode-btn shuffle-control"
 				class:active={shuffle}
 				onclick={toggleShuffle}
 				aria-label={shuffle ? `Disable shuffle (${shuffleScope})` : `Shuffle ${shuffleScope}`}
@@ -186,44 +220,9 @@
 			>
 				<Icon name="shuffle" size={20} />
 			</button>
-			<button
-				class="nav-btn"
-				onclick={playPrevSong}
-				disabled={!prevSong}
-				aria-label="Previous"
-				title="Previous"
-			>
-				<Icon name="skip-back" size={21} />
-			</button>
-			<button
-				class="play-btn"
-				class:loading={isLoading}
-				class:playing={isPlaying}
-				class:errored={isError}
-				onclick={togglePlay}
-				aria-label={isError ? 'Retry' : isPlaying ? 'Pause' : 'Play'}
-				title={isError && errorMsg ? errorMsg : ''}
-			>
-				<span
-					class="play-btn-face"
-					style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
-				>
-					{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
-							name="refresh-cw"
-							size={24}
-						/>{:else}<Icon name={isPlaying ? 'pause' : 'play'} size={26} />{/if}
-				</span>
-			</button>
-			<button
-				class="nav-btn"
-				onclick={playNextSong}
-				disabled={!nextSong}
-				aria-label="Next"
-				title="Next"
-			>
-				<Icon name="skip-forward" size={21} />
-			</button>
-			<QueueStreamFeedback {skipped} {skippedComplete} windowEnded={ended} />
+			<div class="queue-feedback">
+				<QueueStreamFeedback {skipped} {skippedComplete} windowEnded={ended} />
+			</div>
 		</div>
 		<button
 			class="track-info"
@@ -307,6 +306,15 @@
 		align-items: center;
 		gap: 6px;
 		flex-shrink: 0;
+		position: relative;
+	}
+	.library-controls,
+	.transport-controls {
+		display: flex;
+		align-items: center;
+	}
+	.transport-controls {
+		gap: 6px;
 	}
 	.play-btn {
 		width: 62px;
@@ -582,46 +590,97 @@
 		}
 	}
 
-	@media (max-width: 640px) {
+	@media (max-width: 640px), (any-pointer: coarse) {
+		.player-bar {
+			overflow: visible;
+		}
 		.player-content {
 			display: flex;
 			flex-direction: column;
 			gap: 8px;
 		}
 		.player-controls {
-			justify-content: center;
-			gap: 8px;
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+			gap: 4px;
 			width: 100%;
+		}
+		.library-controls {
+			grid-column: 1;
+			grid-row: 1;
+			justify-self: start;
+		}
+		.transport-controls {
+			grid-column: 2;
+			grid-row: 1;
+			justify-self: center;
+			gap: 8px;
+		}
+		.shuffle-control {
+			grid-column: 3;
+			grid-row: 1;
+			justify-self: end;
+		}
+		.queue-feedback {
+			position: absolute;
+			right: 0;
+			bottom: calc(100% + 4px);
 		}
 		.track-info {
 			display: flex;
-			flex-direction: row;
+			flex-direction: column;
 			align-items: center;
 			justify-content: center;
-			gap: 0.5rem;
+			gap: 0;
 			width: 100%;
 			text-align: center;
 			padding: 0 0.25rem;
-			white-space: nowrap;
 		}
 		.track-title {
 			font-size: 0.85rem;
-			max-width: 55%;
+			width: 100%;
+			max-width: 100%;
 			min-width: 0;
 		}
 		.track-detail {
-			max-width: 45%;
-			min-width: 0;
+			display: none;
 		}
 		.timeline {
 			width: 100%;
 			gap: 6px;
 		}
 		.nav-btn {
+			position: relative;
 			width: 44px;
 			height: 44px;
 			min-width: 44px;
 			min-height: 44px;
+			border-color: transparent;
+			background: transparent;
+			isolation: isolate;
+		}
+		.nav-btn::before {
+			content: '';
+			position: absolute;
+			z-index: -1;
+			width: 36px;
+			height: 36px;
+			border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+			border-radius: 50%;
+			background: color-mix(in srgb, var(--surface) 70%, transparent);
+		}
+		.nav-btn:hover:not(:disabled),
+		.nav-btn.active {
+			border-color: transparent;
+			background: transparent;
+		}
+		.nav-btn:hover:not(:disabled)::before {
+			border-color: color-mix(in srgb, var(--primary) 65%, var(--border));
+			background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+		}
+		.nav-btn.active::before {
+			border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+			background: color-mix(in srgb, var(--accent) 14%, var(--surface));
 		}
 		.play-btn {
 			width: 56px;
@@ -632,9 +691,98 @@
 		.play-btn-face {
 			transform: none !important;
 		}
+		.nav-btn :global(svg) {
+			position: relative;
+			z-index: 1;
+			width: 18px;
+			height: 18px;
+		}
 		.time {
 			font-size: 0.7rem;
 			min-width: 28px;
 		}
+	}
+	:global(html[data-pointer='coarse']) .player-bar {
+		overflow: visible;
+	}
+	:global(html[data-pointer='coarse']) .player-content {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	:global(html[data-pointer='coarse']) .player-controls {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+		gap: 4px;
+		width: 100%;
+	}
+	:global(html[data-pointer='coarse']) .library-controls {
+		grid-column: 1;
+		grid-row: 1;
+		justify-self: start;
+	}
+	:global(html[data-pointer='coarse']) .transport-controls {
+		grid-column: 2;
+		grid-row: 1;
+		justify-self: center;
+		gap: 8px;
+	}
+	:global(html[data-pointer='coarse']) .shuffle-control {
+		grid-column: 3;
+		grid-row: 1;
+		justify-self: end;
+	}
+	:global(html[data-pointer='coarse']) .queue-feedback {
+		position: absolute;
+		right: 0;
+		bottom: calc(100% + 4px);
+	}
+	:global(html[data-pointer='coarse']) .track-info {
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0;
+		width: 100%;
+		text-align: center;
+		padding: 0 0.25rem;
+	}
+	:global(html[data-pointer='coarse']) .track-title {
+		font-size: 0.85rem;
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+	}
+	:global(html[data-pointer='coarse']) .track-detail {
+		display: none;
+	}
+	:global(html[data-pointer='coarse']) .timeline {
+		width: 100%;
+		gap: 6px;
+	}
+	:global(html[data-pointer='coarse']) .nav-btn {
+		position: relative;
+		width: 44px;
+		height: 44px;
+		min-width: 44px;
+		min-height: 44px;
+		border-color: transparent;
+		background: transparent;
+		isolation: isolate;
+	}
+	:global(html[data-pointer='coarse']) .nav-btn::before {
+		content: '';
+		position: absolute;
+		z-index: -1;
+		width: 36px;
+		height: 36px;
+		border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--surface) 70%, transparent);
+	}
+	:global(html[data-pointer='coarse']) .nav-btn :global(svg) {
+		position: relative;
+		z-index: 1;
+		width: 18px;
+		height: 18px;
 	}
 </style>
