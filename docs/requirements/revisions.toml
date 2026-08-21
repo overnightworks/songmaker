@@ -23,3 +23,11 @@ content_sha256 = "b5187d4dcd6883d9c49d6a72ab8a4bce6d43ac84c8b47b4d05b338d4f1ce7d
 witness_path = "docs/requirements/witnesses/5372449451.json"
 witness_sha256 = "40b2da451f345183f25f207f6bcaddf14434b3d0415aa39b37a66932a3af8ee3"
 predecessor = "GENESIS"
+
+[[revision]]
+document = "0004"
+path = "docs/requirements/0004-co-writer.md"
+content_sha256 = "a4d0917ed3734d38e47d279340477ac902b11134f9baad35a25f10db32d1ea19"
+witness_path = "docs/requirements/witnesses/5373509738.json"
+witness_sha256 = "91ef724801d0793bd95e79a37c5d68f1bd145844d154206f124876990888b8ad"
+predecessor = "GENESIS"
