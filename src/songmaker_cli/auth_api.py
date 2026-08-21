@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from songmaker_cli.api_helpers import _begin_exclusive
+from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import (
     AuthMeResponse,
     ChangePasswordRequest,
@@ -39,6 +39,7 @@ from songmaker_cli.db.queries import (
     delete_user_sessions,
     get_user,
     get_user_by_username,
+    prune_overflow_sessions,
     record_login_attempt,
     user_count,
 )
@@ -217,19 +218,45 @@ def login(
         db.commit()
         raise HTTPException(401, "Invalid username or password")
 
-    record_login_attempt(db, ip, req.username, success=True)
-    delete_user_sessions(db, user.id)
+    assert not db.new and not db.dirty and not db.deleted, (
+        "login: session has uncommitted mutations — "
+        "the commit() below would persist them unconditionally"
+    )
+    db.commit()
+    _begin_exclusive(db, _SESSION_CAP_LOCK_ID)
 
+    record_login_attempt(db, ip, req.username, success=True)
     ua = _client_user_agent(request)
     expires = datetime.now(timezone.utc) + timedelta(seconds=settings.session_max_age_seconds)
     user_session = create_session(
         db, user.id, expires,
         ip_address=ip, user_agent=ua,
     )
-    db.commit()
+    pruned_ids = prune_overflow_sessions(
+        db, user.id, settings.max_concurrent_sessions_per_user,
+    )
 
-    _clear_user_cache(request, user.id)
+    session_cache: SessionCache | None = getattr(request.app.state, "session_cache", None)
+    if session_cache is not None:
+        try:
+            for pruned_id in pruned_ids:
+                session_cache.delete(pruned_id, user.id)
+        except Exception:
+            log.warning("Redis session cache delete failed on login prune")
+            db.rollback()
+            raise HTTPException(503, "Service temporarily degraded — try again shortly")
+
     _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
+    try:
+        db.commit()
+    except Exception:
+        if session_cache is not None:
+            try:
+                session_cache.delete(user_session.id, user.id)
+            except Exception:
+                log.warning("Redis session cache delete failed after login commit failure")
+        raise
+
     _set_session_cookie(response, user_session.id, ctx, request)
     return UserResponse.from_orm(user)
 

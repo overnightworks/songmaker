@@ -18,6 +18,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
 from songmaker_cli.db.engine import (
     init_test_db,
     resolve_database_url,
@@ -30,15 +31,18 @@ from songmaker_cli.db.models import (
     ResourceEventCursor,
     Song,
     User,
+    UserSession,
 )
 from songmaker_cli.db.queries import (
     create_generation_created_event,
     create_job,
+    create_session,
     delete_resource_events_before,
     get_oldest_resource_event_sequence,
     get_resource_event_high_water_mark,
     job_duration_stats,
     list_resource_events_after,
+    prune_overflow_sessions,
 )
 from songmaker_cli.settings import get_settings
 
@@ -137,6 +141,48 @@ def test_concurrent_job_creation(pg_factory) -> None:
     assert not errors, f"Errors during concurrent job creation: {errors}"
     assert len(results) == 10
     assert len(set(results)) == 10
+
+
+@SKIP_NO_PG
+def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
+    max_sessions = 3
+    thread_count = 10
+    user_id = "session-cap-user"
+    with pg_factory() as session:
+        session.add(User(id=user_id, username="session-cap", password_hash="x", role="user"))
+        session.commit()
+
+    errors: list[Exception] = []
+    start = threading.Barrier(thread_count)
+
+    def _create_capped_session() -> None:
+        try:
+            with pg_factory() as session:
+                start.wait(timeout=10)
+                assert not session.new and not session.dirty and not session.deleted
+                session.commit()
+                _begin_exclusive(session, _SESSION_CAP_LOCK_ID)
+                expires = datetime.now(timezone.utc) + timedelta(hours=1)
+                create_session(session, user_id, expires)
+                prune_overflow_sessions(session, user_id, max_sessions)
+                session.commit()
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_create_capped_session) for _ in range(thread_count)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert not errors, f"Errors during concurrent session cap: {errors}"
+    with pg_factory() as session:
+        remaining = (
+            session.query(UserSession)
+            .filter(UserSession.user_id == user_id)
+            .all()
+        )
+        assert len(remaining) == max_sessions
 
 
 @SKIP_NO_PG

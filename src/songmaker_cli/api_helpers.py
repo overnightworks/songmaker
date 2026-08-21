@@ -56,6 +56,7 @@ from songmaker_cli.settings import get_settings
 _RATE_LIMIT_LOCK_ID = 1
 _ALBUM_ID_LOCK_ID = 2
 _LORA_SLUG_LOCK_ID = 3
+_SESSION_CAP_LOCK_ID = 4
 
 
 def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> None:

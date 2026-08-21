@@ -70,6 +70,7 @@ from songmaker_cli.db.queries import (
     list_users,
     move_song,
     pick_generation,
+    prune_overflow_sessions,
     record_login_attempt,
     recover_stale_jobs,
     recover_stale_jobs_by_age,
@@ -1252,6 +1253,69 @@ def test_delete_expired_sessions(db_session: Session) -> None:
     deleted = delete_expired_sessions(db_session)
     db_session.commit()
     assert deleted == 1
+
+
+def test_prune_overflow_sessions_deletes_oldest_above_cap(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = _make_user(db_session)
+    other = _make_user(db_session, "other")
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(days=30)
+    created = []
+    for index in range(11):
+        sess = create_session(db_session, user.id, expires)
+        sess.created_at = now - timedelta(seconds=11 - index)
+        created.append(sess)
+    other_session = create_session(db_session, other.id, expires)
+    db_session.flush()
+
+    pruned = prune_overflow_sessions(db_session, user.id, 10)
+    db_session.commit()
+
+    assert pruned == [created[0].id]
+    assert get_session_with_user(db_session, created[0].id) is None
+    assert get_session_with_user(db_session, created[1].id) is not None
+    assert get_session_with_user(db_session, created[-1].id) is not None
+    assert get_session_with_user(db_session, other_session.id) is not None
+
+
+def test_prune_overflow_sessions_under_cap_returns_empty(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = _make_user(db_session)
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(days=30)
+    ids = [create_session(db_session, user.id, expires).id for _ in range(3)]
+    db_session.flush()
+
+    pruned = prune_overflow_sessions(db_session, user.id, 10)
+    db_session.commit()
+
+    assert pruned == []
+    for session_id in ids:
+        assert get_session_with_user(db_session, session_id) is not None
+
+
+def test_prune_overflow_sessions_ignores_expired(db_session: Session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    user = _make_user(db_session)
+    now = datetime.now(timezone.utc)
+    expired = create_session(db_session, user.id, now - timedelta(days=1))
+    active_ids = [
+        create_session(db_session, user.id, now + timedelta(days=30)).id
+        for _ in range(10)
+    ]
+    db_session.flush()
+
+    pruned = prune_overflow_sessions(db_session, user.id, 10)
+    db_session.commit()
+
+    assert pruned == []
+    assert get_session_with_user(db_session, expired.id) is not None
+    for session_id in active_ids:
+        assert get_session_with_user(db_session, session_id) is not None
 
 
 # ── Login attempt queries ───────────────────────────────────────────

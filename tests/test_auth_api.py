@@ -347,27 +347,163 @@ def test_login_populates_redis(client: TestClient) -> None:
     assert session_cache.get(sid) is not None
 
 
-def test_login_clears_old_redis_sessions(client: TestClient) -> None:
+def test_second_login_keeps_existing_sessions(client: TestClient) -> None:
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
     from songmaker_cli.redis_client import SessionCache
 
     _seed_admin(client)
     session_cache: SessionCache = client.app.state.session_cache
-
-    client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
     redis = client.app.state.ctx.redis
     user_id = _get_user_id(client, "admin")
+
+    first = TestClient(client.app, cookies={})
+    second = TestClient(client.app, cookies={})
+    assert first.post(
+        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
+    ).status_code == 200
+    assert second.post(
+        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
+    ).status_code == 200
+
+    sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    assert len(sids) == 2
+    for sid in sids:
+        assert session_cache.get(sid) is not None
+    assert first.get("/api/auth/me").status_code == 200
+    assert second.get("/api/auth/me").status_code == 200
+
+
+def test_login_prunes_oldest_session_over_cap(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    from songmaker_cli.db.models import UserSession
+    from songmaker_cli.settings import get_settings
+
+    monkeypatch.setattr(get_settings(), "max_concurrent_sessions_per_user", 2)
+    _seed_admin(client)
+    redis = client.app.state.ctx.redis
+    session_cache = client.app.state.session_cache
+    user_id = _get_user_id(client, "admin")
+
+    first = TestClient(client.app, cookies={})
+    second = TestClient(client.app, cookies={})
+    third = TestClient(client.app, cookies={})
+    assert first.post(
+        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
+    ).status_code == 200
+    oldest_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    assert len(oldest_sids) == 1
+    oldest_sid = next(iter(oldest_sids))
+    assert second.post(
+        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
+    ).status_code == 200
+    assert third.post(
+        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
+    ).status_code == 200
+
+    members = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    assert len(members) == 2
+    assert oldest_sid not in members
+    assert session_cache.get(oldest_sid) is None
+    assert first.get("/api/auth/me").status_code == 401
+    assert second.get("/api/auth/me").status_code == 200
+    assert third.get("/api/auth/me").status_code == 200
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        remaining = session.query(UserSession).filter_by(user_id=user_id).all()
+        remaining_ids = {row.id for row in remaining}
+        assert len(remaining_ids) == 2
+        assert oldest_sid not in remaining_ids
+
+
+def test_login_redis_prune_failure_rolls_back(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    from songmaker_cli.db.models import UserSession
+    from songmaker_cli.settings import get_settings
+
+    monkeypatch.setattr(get_settings(), "max_concurrent_sessions_per_user", 1)
+    _seed_admin(client)
+    redis = client.app.state.ctx.redis
+    session_cache = client.app.state.session_cache
+    user_id = _get_user_id(client, "admin")
+
+    first = TestClient(client.app, cookies={})
+    assert first.post(
+        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
+    ).status_code == 200
     old_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
     assert len(old_sids) == 1
-    old_sid = list(old_sids)[0]
+    old_sid = next(iter(old_sids))
 
-    other = TestClient(client.app, cookies={})
-    other.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
-    new_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-    assert len(new_sids) == 1
-    new_sid = list(new_sids)[0]
-    assert new_sid != old_sid
-    assert session_cache.get(old_sid) is None
+    monkeypatch.setattr(
+        session_cache, "delete", MagicMock(side_effect=RuntimeError("redis down")),
+    )
+    second = TestClient(client.app, cookies={})
+    resp = second.post(
+        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
+    )
+    assert resp.status_code == 503
+    assert "degraded" in resp.json()["detail"]
+
+    assert first.get("/api/auth/me").status_code == 200
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        remaining = session.query(UserSession).filter_by(user_id=user_id).all()
+        remaining_ids = {row.id for row in remaining}
+        assert remaining_ids == {old_sid}
+    assert redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}") == old_sids
+    assert session_cache.get(old_sid) is not None
+
+
+def test_login_commit_failure_does_not_leave_redis_session(client: TestClient) -> None:
+    from unittest.mock import patch
+
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    from songmaker_cli.db.models import UserSession
+    from songmaker_cli.db.queries import create_session as real_create_session
+
+    _seed_admin(client)
+    user_id = _get_user_id(client, "admin")
+    session_cache = client.app.state.session_cache
+    redis = client.app.state.ctx.redis
+    created_ids: list[str] = []
+    cached_before_commit = {"present": False}
+
+    def create_session_then_fail_commit(db, *args, **kwargs):
+        user_session = real_create_session(db, *args, **kwargs)
+        created_ids.append(user_session.id)
+
+        def fail_commit() -> None:
+            cached_before_commit["present"] = session_cache.get(user_session.id) is not None
+            raise RuntimeError("commit failed")
+
+        db.commit = fail_commit
+        return user_session
+
+    with patch(
+        "songmaker_cli.auth_api.create_session",
+        side_effect=create_session_then_fail_commit,
+    ):
+        with pytest.raises(RuntimeError, match="commit failed"):
+            client.post(
+                "/api/auth/login",
+                json={"username": "admin", "password": "admin12345"},
+            )
+
+    assert created_ids
+    new_sid = created_ids[0]
+    assert cached_before_commit["present"] is True
+    assert session_cache.get(new_sid) is None
+    assert new_sid not in redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        remaining = session.query(UserSession).filter_by(user_id=user_id).all()
+        assert remaining == []
 
 
 def test_logout_clears_redis(client: TestClient) -> None:
