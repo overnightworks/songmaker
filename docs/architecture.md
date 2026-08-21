@@ -135,13 +135,17 @@ public slug reachability (`is_shared` plus slug, not soft-deleted; archived take
 stay). `N` is the unfiltered server total; a type filter pages a subset without
 changing `N`. Old `history.state.section === 'shared'` still opens that inventory.
 Unshare stays the four resource DELETE endpoints. Albums start collapsed. Desktop
-keeps compact Studio/Listen navigation in the sidebar and uses the album overview
-as the main surface. Each mode keeps its last visible browse/detail context
-(selection, query, sort, loaded page, scroll, and song surface) in memory;
-switching Studio↔Listen replaces the current history entry and restores that
-mode's surface. Library context is also stored on `history.state`
-(`kind: 'songmaker'`) so browser-back and shell-back restore the same view.
-Older history blobs without `detailTab` default to Takes.
+keeps compact Studio/Listen navigation in the sidebar. Opening a Studio song on
+the detail surface keeps the album/song list in a named browse column beside
+song detail (`nav browse detail`); Listen playlist detail, Create, and album
+overview hide browse. Shared still forces browse, so the inventory never sits
+beside `SongDetailView`. On viewports ≤768px, any detail hides browse and the
+song header offers album title plus previous/next track. Each mode keeps its
+last visible browse/detail context (selection, query, sort, loaded page, scroll,
+and song surface) in memory; switching Studio↔Listen replaces the current
+history entry and restores that mode's surface. Library context is also stored
+on `history.state` (`kind: 'songmaker'`) so browser-back and shell-back restore
+the same view. Older history blobs without `detailTab` default to Takes.
 
 | Layer | What | Key files |
 |-------|------|-----------|
@@ -152,7 +156,7 @@ Older history blobs without `detailTab` default to Takes.
 
 The API client and `types.ts` are the frontend's contract with the backend. When `src/songmaker_cli/api_models/` changes, `types.ts` must match.
 
-Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new song/playlist, playlist-picker add, account-menu trigger) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). PlayerBar and SharedPlayer are out of this primitive's scope. On viewports ≤768px or any coarse pointer, the shell shows Brand/Back and one account overflow menu (theme, Voices, Settings, username, Logout) instead of inline header links; desktop keeps the same actions inline. Album, song, and playlist details use the app-shell back only — `goBack()` pops browser history when a Songmaker predecessor exists, otherwise restores library browse at `/`. A selected song stays on `SongDetailView` with two surfaces: Recipe (lyrics, prompt, params, Generate) and Takes (list plus in-song inspector). Selecting a take replaces the current history entry and does not push a page. Co-Writer is a Recipe drawer, not a peer tab. Desktop splits Recipe and Takes only when the panes box can give each column at least 360px after the split gap; otherwise the same Recipe | Takes switch as compact. Take rows wrap pick/keep onto their own row so seed text does not paint under the rating. The header is 46px so a 44px overflow-menu hitbox stays inside the 2px bottom border. Settings and Admin use that same compact media: a one-control section/tab selector and stacked action rows, so every control stays reachable at 320px without sideways scroll.
+Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new song/playlist, playlist-picker add, account-menu trigger) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). PlayerBar and SharedPlayer are out of this primitive's scope. On viewports ≤768px or any coarse pointer, the shell shows Brand/Back and one account overflow menu (theme, Voices, Settings, username, Logout) instead of inline header links; desktop keeps the same actions inline. Album, song, and playlist details use the app-shell back only — `goBack()` pops browser history when a Songmaker predecessor exists, otherwise restores library browse at `/`. A selected song stays on `SongDetailView` with two surfaces: Recipe (lyrics, prompt, params, Generate) and Takes (list plus in-song inspector). Selecting a take replaces the current history entry and does not push a page. List clicks and previous/next between songs also replace the current song history entry and keep Recipe/Takes; Back returns to the album overview or browse that opened the song, not through every neighbor. Go to song from Now Playing uses that same replace-or-stack rule, then opens Takes on the playing generation. Co-Writer is a Recipe drawer, not a peer tab. Desktop splits Recipe and Takes only when the panes box can give each column at least 360px after the split gap; otherwise the same Recipe | Takes switch as compact. Take rows wrap pick/keep onto their own row so seed text does not paint under the rating. The header is 46px so a 44px overflow-menu hitbox stays inside the 2px bottom border. Settings and Admin use that same compact media: a one-control section/tab selector and stacked action rows, so every control stays reachable at 320px without sideways scroll.
 
 The compact player title is the single entry to Now Playing. That sheet shows the playing take’s song, album/artist, take number, and the lyrics of the version that produced that generation — never the song’s latest draft.
 

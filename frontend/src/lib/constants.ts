@@ -71,6 +71,13 @@ export const HITBOX_COMPACT_PX = 24;
 
 export const COMPACT_LAYOUT_MAX_PX = 768;
 export const COMPACT_LAYOUT_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px), (any-pointer: coarse)`;
+export const LIBRARY_NARROW_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px)`;
+export const LIBRARY_KEEP_BROWSE_CLASS = 'keep-browse';
+export const LIBRARY_SONG_WORKSPACE_AREAS = 'nav browse detail';
+export const LIBRARY_DETAIL_WORKSPACE_AREAS = 'nav detail';
+export const LIBRARY_BROWSE_WORKSPACE_AREAS = 'nav browse';
+export const SONG_PREVIOUS_LABEL = 'Previous song';
+export const SONG_NEXT_LABEL = 'Next song';
 
 export const SETTINGS_NAV_LABEL = 'Settings sections';
 export const ADMIN_TABS_LABEL = 'Admin sections';

@@ -2,9 +2,16 @@
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { albumList, selectedSong, selectedAlbumId } from '$lib/stores/player';
-	import { librarySurface } from '$lib/stores/libraryContext';
-	import { goBack, initNavigation, openLibraryCreate } from '$lib/stores/navigation';
+	import { librarySection, librarySurface } from '$lib/stores/libraryContext';
+	import {
+		goBack,
+		initNavigation,
+		libraryKeepsBrowseColumn,
+		libraryWorkspaceGrid,
+		openLibraryCreate
+	} from '$lib/stores/navigation';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
+	import { sharesViewOpen } from '$lib/stores/shares';
 	import { loadActiveModels } from '$lib/stores/presets';
 	import {
 		resourceSync,
@@ -37,6 +44,15 @@
 	const hasDetail = $derived(
 		$librarySurface === 'create' || ($librarySurface === 'detail' && hasSelection)
 	);
+	const keepBrowse = $derived(
+		libraryKeepsBrowseColumn({
+			surface: $librarySurface,
+			section: $librarySection,
+			songSelected: !!song,
+			sharesOpen: $sharesViewOpen
+		})
+	);
+	const workspaceGrid = $derived(libraryWorkspaceGrid({ hasDetail, keepBrowse }));
 	const sync = $derived($resourceSync);
 
 	onMount(() => {
@@ -103,7 +119,11 @@
 				<button class="retry-btn" onclick={() => retryLoad()}>{LIBRARY_RETRY_LABEL}</button>
 			</div>
 		{/if}
-		<div class="workspace" class:has-detail={hasDetail}>
+		<div
+			class="workspace {workspaceGrid.className}"
+			class:has-detail={hasDetail}
+			style:--library-workspace-areas={`'${workspaceGrid.areas}'`}
+		>
 			<SongList
 				onNewSong={() => {
 					if ($librarySurface === 'create') goBack();
@@ -146,11 +166,11 @@
 		overflow-x: hidden;
 		grid-template-columns: 260px minmax(0, 1fr);
 		grid-template-rows: minmax(0, 1fr);
-		grid-template-areas: 'nav browse';
+		grid-template-areas: var(--library-workspace-areas, 'nav browse');
 	}
 
-	.workspace.has-detail {
-		grid-template-areas: 'nav detail';
+	.workspace.has-detail.keep-browse {
+		grid-template-columns: [nav] 260px [browse] minmax(0, 1fr) [detail] minmax(0, 1fr);
 	}
 
 	.workspace > :global(.library-nav) {
@@ -174,6 +194,11 @@
 
 	.workspace.has-detail > :global(.library-browse) {
 		display: none;
+	}
+
+	.workspace.has-detail.keep-browse > :global(.library-browse) {
+		display: block;
+		grid-area: browse;
 	}
 
 	.detail-panel {
@@ -243,13 +268,16 @@
 			border-bottom: 1px solid var(--border);
 		}
 
-		.workspace.has-detail {
+		.workspace.has-detail,
+		.workspace.has-detail.keep-browse {
+			grid-template-columns: minmax(0, 1fr);
 			grid-template-rows: minmax(0, 1fr);
 			grid-template-areas: 'detail';
 		}
 
 		.workspace.has-detail > :global(.library-nav),
-		.workspace.has-detail > :global(.library-browse) {
+		.workspace.has-detail > :global(.library-browse),
+		.workspace.has-detail.keep-browse > :global(.library-browse) {
 			display: none;
 		}
 	}

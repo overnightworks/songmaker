@@ -22,7 +22,13 @@ import {
 } from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
-import type { LibrarySection } from '$lib/constants';
+import {
+	LIBRARY_BROWSE_WORKSPACE_AREAS,
+	LIBRARY_DETAIL_WORKSPACE_AREAS,
+	LIBRARY_KEEP_BROWSE_CLASS,
+	LIBRARY_SONG_WORKSPACE_AREAS,
+	type LibrarySection
+} from '$lib/constants';
 import {
 	applyLibraryHistory,
 	cancelLibraryHistoryApply,
@@ -38,7 +44,8 @@ import {
 	setLibrarySurface,
 	snapshotLibraryHistory,
 	type DetailTab,
-	type LibraryHistoryState
+	type LibraryHistoryState,
+	type LibrarySurface
 } from '$lib/stores/libraryContext';
 
 export type { DetailTab };
@@ -140,7 +147,67 @@ export function openLibraryCreate(): void {
 	pushLibraryHistory();
 }
 
-export function selectSong(songId: string, knownSong?: SongItem): void {
+export function libraryKeepsBrowseColumn(input: {
+	surface: LibrarySurface;
+	section: LibrarySection;
+	songSelected: boolean;
+	sharesOpen: boolean;
+}): boolean {
+	return (
+		input.surface === 'detail' &&
+		input.section === 'albums' &&
+		input.songSelected &&
+		!input.sharesOpen
+	);
+}
+
+export function libraryWorkspaceGrid(input: { hasDetail: boolean; keepBrowse: boolean }): {
+	className: string;
+	areas: string;
+} {
+	if (input.hasDetail && input.keepBrowse) {
+		return { className: LIBRARY_KEEP_BROWSE_CLASS, areas: LIBRARY_SONG_WORKSPACE_AREAS };
+	}
+	if (input.hasDetail) {
+		return { className: '', areas: LIBRARY_DETAIL_WORKSPACE_AREAS };
+	}
+	return { className: '', areas: LIBRARY_BROWSE_WORKSPACE_AREAS };
+}
+
+export interface AlbumTrackNeighbors {
+	previous: SongItem | null;
+	next: SongItem | null;
+}
+
+function compareAlbumTracks(a: SongItem, b: SongItem): number {
+	if (a.track_number !== b.track_number) return a.track_number - b.track_number;
+	return a.id.localeCompare(b.id);
+}
+
+export function albumTrackNeighbors(
+	songId: string,
+	songs: SongItem[] = get(songList)
+): AlbumTrackNeighbors {
+	const current = songs.find((item) => item.id === songId);
+	if (!current) return { previous: null, next: null };
+	const tracks = songs
+		.filter((item) => item.album_id === current.album_id)
+		.slice()
+		.sort(compareAlbumTracks);
+	const index = tracks.findIndex((item) => item.id === songId);
+	if (index < 0) return { previous: null, next: null };
+	return {
+		previous: index > 0 ? tracks[index - 1] : null,
+		next: index < tracks.length - 1 ? tracks[index + 1] : null
+	};
+}
+
+function applySelectedSong(
+	songId: string,
+	knownSong: SongItem | undefined,
+	historyMode: 'stack' | 'replace',
+	tab: 'keep' | 'takes'
+): void {
 	storeDeselectPlaylist();
 	if (knownSong) hydrateSongIntoLibrary(knownSong);
 	const song = get(songList).find((item) => item.id === songId) ?? knownSong;
@@ -151,9 +218,13 @@ export function selectSong(songId: string, knownSong?: SongItem): void {
 	}
 	playerSelectSong(songId);
 	ensureGenerationsLoaded(songId);
-	openTakesSurface();
+	if (tab === 'takes') openTakesSurface();
 	setLibrarySurface('detail');
 	closeSidebar();
+	if (historyMode === 'replace') {
+		replaceLibraryHistory();
+		return;
+	}
 	const current = history.state;
 	if (
 		isLibraryHistoryState(current) &&
@@ -165,6 +236,19 @@ export function selectSong(songId: string, knownSong?: SongItem): void {
 		return;
 	}
 	pushLibraryHistory();
+}
+
+function selectedSongHistoryMode(): 'stack' | 'replace' {
+	return get(librarySurface) === 'detail' && get(selectedSongId) !== null ? 'replace' : 'stack';
+}
+
+export function selectSong(songId: string, knownSong?: SongItem): void {
+	const historyMode = selectedSongHistoryMode();
+	applySelectedSong(songId, knownSong, historyMode, historyMode === 'replace' ? 'keep' : 'takes');
+}
+
+export function selectNeighborSong(song: SongItem): void {
+	applySelectedSong(song.id, song, 'replace', 'keep');
 }
 
 function hydrateSongIntoLibrary(song: SongItem): void {
@@ -240,7 +324,7 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 	if (!isLibraryWorkspacePath(window.location.pathname)) {
 		await goto(resolve('/'));
 	}
-	selectSong(song.id, song);
+	applySelectedSong(song.id, song, selectedSongHistoryMode(), 'takes');
 	selectedGenerationId.set(generationId);
 	persistLibraryHistory();
 }

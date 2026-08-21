@@ -79,12 +79,20 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import {
+	LIBRARY_BROWSE_WORKSPACE_AREAS,
+	LIBRARY_DETAIL_WORKSPACE_AREAS,
+	LIBRARY_KEEP_BROWSE_CLASS,
+	LIBRARY_SONG_WORKSPACE_AREAS
+} from '$lib/constants';
+import {
 	backToAlbum,
 	backToSong,
 	canGoBack,
 	goBack,
 	initNavigation,
 	isLibraryWorkspacePath,
+	libraryKeepsBrowseColumn,
+	libraryWorkspaceGrid,
 	openLibraryCreate,
 	persistLibraryHistory,
 	resetNavigationForTests,
@@ -92,8 +100,10 @@ import {
 	selectAlbumOverview,
 	selectGeneration,
 	selectLibrarySection,
+	selectNeighborSong,
 	selectSong,
-	switchTab
+	switchTab,
+	albumTrackNeighbors
 } from './navigation';
 
 function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
@@ -434,6 +444,35 @@ describe('library history', () => {
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
 		expect(get(librarySurface)).toBe('detail');
+		expect(get(detailTab)).toBe('generations');
+		cleanup();
+	});
+
+	it('revealPlayingSong opens Takes without stacking when Recipe is already open', async () => {
+		const cleanup = initNavigation();
+		const other = song({ id: 's2', title: 'Second', track_number: 2 });
+		songList.set([song(), other]);
+		selectSong('s1');
+		switchTab('edit');
+		const index = history.state.index;
+		const push = vi.spyOn(history, 'pushState');
+
+		await revealPlayingSong(song(), 'g1');
+		expect(push).not.toHaveBeenCalled();
+		expect(history.state.index).toBe(index);
+		expect(get(detailTab)).toBe('generations');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedGenerationId)).toBe('g1');
+
+		switchTab('edit');
+		await revealPlayingSong(other, 'g2');
+		expect(push).not.toHaveBeenCalled();
+		expect(history.state.index).toBe(index);
+		expect(get(detailTab)).toBe('generations');
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(selectedGenerationId)).toBe('g2');
+
+		push.mockRestore();
 		cleanup();
 	});
 
@@ -458,6 +497,138 @@ describe('library history', () => {
 		expect(get(selectedAlbumId)).toBe('a-remote');
 		expect(get(songList).some((item) => item.id === 's-remote')).toBe(true);
 		expect(get(albumList).some((item) => item.id === 'a-remote')).toBe(true);
+		cleanup();
+	});
+});
+
+describe('studio keep-browse grid', () => {
+	it('names browse beside Studio song detail and hides it for album, Listen, Create, and Shared', () => {
+		expect(
+			libraryKeepsBrowseColumn({
+				surface: 'detail',
+				section: 'albums',
+				songSelected: true,
+				sharesOpen: false
+			})
+		).toBe(true);
+		expect(libraryWorkspaceGrid({ hasDetail: true, keepBrowse: true })).toEqual({
+			className: LIBRARY_KEEP_BROWSE_CLASS,
+			areas: LIBRARY_SONG_WORKSPACE_AREAS
+		});
+		expect(LIBRARY_SONG_WORKSPACE_AREAS).toBe('nav browse detail');
+
+		expect(
+			libraryKeepsBrowseColumn({
+				surface: 'detail',
+				section: 'albums',
+				songSelected: false,
+				sharesOpen: false
+			})
+		).toBe(false);
+		expect(libraryWorkspaceGrid({ hasDetail: true, keepBrowse: false })).toEqual({
+			className: '',
+			areas: LIBRARY_DETAIL_WORKSPACE_AREAS
+		});
+		expect(LIBRARY_DETAIL_WORKSPACE_AREAS).toBe('nav detail');
+
+		expect(
+			libraryKeepsBrowseColumn({
+				surface: 'detail',
+				section: 'playlists',
+				songSelected: true,
+				sharesOpen: false
+			})
+		).toBe(false);
+		expect(
+			libraryKeepsBrowseColumn({
+				surface: 'create',
+				section: 'albums',
+				songSelected: false,
+				sharesOpen: false
+			})
+		).toBe(false);
+		expect(
+			libraryKeepsBrowseColumn({
+				surface: 'detail',
+				section: 'albums',
+				songSelected: true,
+				sharesOpen: true
+			})
+		).toBe(false);
+		expect(libraryWorkspaceGrid({ hasDetail: false, keepBrowse: false })).toEqual({
+			className: '',
+			areas: LIBRARY_BROWSE_WORKSPACE_AREAS
+		});
+	});
+});
+
+describe('album track neighbors', () => {
+	it('orders loaded same-album songs by track_number and does not wrap', () => {
+		const first = song({ id: 's-first', track_number: 1, title: 'First' });
+		const middle = song({ id: 's-middle', track_number: 2, title: 'Middle' });
+		const last = song({ id: 's-last', track_number: 3, title: 'Last' });
+		const other = song({ id: 's-other', album_id: 'a2', track_number: 1, title: 'Other' });
+		const songs = [middle, last, other, first];
+
+		expect(albumTrackNeighbors(middle.id, songs)).toEqual({
+			previous: first,
+			next: last
+		});
+		expect(albumTrackNeighbors(first.id, songs)).toEqual({
+			previous: null,
+			next: middle
+		});
+		expect(albumTrackNeighbors(last.id, songs)).toEqual({
+			previous: middle,
+			next: null
+		});
+		expect(albumTrackNeighbors(other.id, songs)).toEqual({
+			previous: null,
+			next: null
+		});
+	});
+});
+
+describe('song-to-song history', () => {
+	it('replaces and keeps Recipe when a song is already selected', () => {
+		const cleanup = initNavigation();
+		songList.set([song(), song({ id: 's2', title: 'Second', track_number: 2 })]);
+		selectSong('s1');
+		switchTab('edit');
+		const index = history.state.index;
+		const push = vi.spyOn(history, 'pushState');
+		selectSong('s2');
+		expect(push).not.toHaveBeenCalled();
+		expect(history.state.index).toBe(index);
+		expect(history.state.songId).toBe('s2');
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(detailTab)).toBe('edit');
+		push.mockRestore();
+		cleanup();
+	});
+
+	it('replaces neighbor moves without stacking history or opening Takes', () => {
+		const cleanup = initNavigation();
+		const first = song({ id: 's-first', track_number: 1, title: 'First' });
+		const middle = song({ id: 's-middle', track_number: 2, title: 'Middle' });
+		const last = song({ id: 's-last', track_number: 3, title: 'Last' });
+		songList.set([first, middle, last]);
+		selectAlbumOverview('a1');
+		selectSong(middle.id);
+		switchTab('edit');
+		const index = history.state.index;
+		const push = vi.spyOn(history, 'pushState');
+		selectNeighborSong(last);
+		selectNeighborSong(first);
+		expect(push).not.toHaveBeenCalled();
+		expect(history.state.index).toBe(index);
+		expect(history.state.songId).toBe(first.id);
+		expect(get(detailTab)).toBe('edit');
+		const back = vi.spyOn(history, 'back');
+		goBack();
+		expect(back).toHaveBeenCalledTimes(1);
+		back.mockRestore();
+		push.mockRestore();
 		cleanup();
 	});
 });
