@@ -71,6 +71,9 @@ def get_playlist(session: Session, playlist_id: str) -> Playlist | None:
             .joinedload(PlaylistEntry.generation)
             .joinedload(Generation.song)
             .joinedload(Song.album),
+            joinedload(Playlist.entries)
+            .joinedload(PlaylistEntry.generation)
+            .joinedload(Generation.version),
         )
         .filter_by(id=playlist_id)
         .first()

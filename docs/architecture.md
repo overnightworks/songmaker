@@ -144,6 +144,8 @@ The API client and `types.ts` are the frontend's contract with the backend. When
 
 Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new song/playlist, playlist-picker add, account-menu trigger) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). PlayerBar and SharedPlayer are out of this primitive's scope. On viewports ≤768px or any coarse pointer, the shell shows Brand/Back and one account overflow menu (theme, Voices, Settings, username, Logout) instead of inline header links; desktop keeps the same actions inline. Album, song, playlist, and generation details use the app-shell back only — `goBack()` pops browser history when a Songmaker predecessor exists, otherwise restores library browse at `/`. Generation cards wrap pick/keep onto their own row so seed text does not paint under the rating. The header is 46px so a 44px overflow-menu hitbox stays inside the 2px bottom border. Settings and Admin use that same compact media: a one-control section/tab selector and stacked action rows, so every control stays reachable at 320px without sideways scroll.
 
+The compact player title is the single entry to Now Playing. That sheet shows the playing take’s song, album/artist, take number, and the lyrics of the version that produced that generation — never the song’s latest draft.
+
 ### Backend (`src/songmaker_cli/`)
 
 | Layer | Responsibility | Key files |

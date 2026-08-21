@@ -138,6 +138,7 @@ export interface GenerationItem {
 	src_generation_number?: number | null;
 	whisper_text: string | null;
 	whisper_cues: WhisperCue[] | null;
+	version_lyrics: string | null;
 	scores: TrackScores | null;
 	generation_params: GenerationParams | null;
 	created_at: string;
@@ -410,6 +411,7 @@ export interface PlaylistEntryItem {
 	mp3_path: string;
 	seed: number | null;
 	model_mode: string;
+	lyrics: string | null;
 }
 
 export interface PlaylistItem {
@@ -465,6 +467,8 @@ export interface QueueStreamTrackItem {
 	song_id: string;
 	song_title: string;
 	artist: string;
+	album_title: string;
+	lyrics: string | null;
 	generation_number: number;
 	mp3_path: string;
 	audio_url: string;

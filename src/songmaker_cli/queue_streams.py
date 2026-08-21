@@ -16,11 +16,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from songmaker_cli.api_models.queue_streams import (
     QueueStreamManifestResponse,
     QueueStreamTrackResponse,
 )
+from songmaker_cli.api_models.songs import generation_version_lyrics
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.models import Generation
 
@@ -168,29 +170,9 @@ def _build_queue_stream_snapshot(
         source = prepared.source
         gen = source.generation
         duration = prepared.duration
-        song = gen.song
-        album = song.album if song else None
         start = offset
         end = start + duration
-        tracks.append(
-            QueueStreamTrackResponse(
-                key=source.key,
-                index=source.index,
-                entry_id=source.entry_id,
-                generation_id=gen.id,
-                song_id=song.id if song else "",
-                song_title=song.title if song else "",
-                artist=album.artist if album else "",
-                generation_number=gen.generation_number,
-                mp3_path=gen.mp3_path,
-                audio_url=source.audio_url,
-                seed=gen.seed,
-                model_mode=gen.model_mode,
-                duration=round(duration, 3),
-                start_offset=round(start, 3),
-                end_offset=round(end, 3),
-            )
-        )
+        tracks.append(_track_response(source, gen, duration, start, end))
         audio_paths.append(prepared.audio_path)
         offset = end
 
@@ -338,16 +320,20 @@ def _find_reusable_snapshot(
         audio_path = queue_stream_audio_path(ctx, snapshot_id)
         if not audio_path.exists():
             continue
+        try:
+            tracks = [
+                QueueStreamTrackResponse.model_validate(track)
+                for track in manifest.get("tracks", [])
+            ]
+        except (TypeError, ValidationError):
+            continue
         return QueueStreamManifestResponse(
             snapshot_id=snapshot_id,
             stream_url=stream_url,
             expires_at=str(manifest["expires_at"]),
             total_duration=float(manifest["total_duration"]),
             windowed=bool(manifest.get("windowed", False)),
-            tracks=[
-                QueueStreamTrackResponse.model_validate(track)
-                for track in manifest.get("tracks", [])
-            ],
+            tracks=tracks,
         )
     return None
 
@@ -501,6 +487,36 @@ def run_ffmpeg_concat(concat_path: Path, output_path: Path) -> None:
 
 def _stream_dir(ctx: AppContext) -> Path:
     return ctx.data_dir / QUEUE_STREAM_DIRNAME
+
+
+def _track_response(
+    source: QueueStreamSource,
+    gen: Generation,
+    duration: float,
+    start: float,
+    end: float,
+) -> QueueStreamTrackResponse:
+    song = gen.song
+    album = song.album if song else None
+    return QueueStreamTrackResponse(
+        key=source.key,
+        index=source.index,
+        entry_id=source.entry_id,
+        generation_id=gen.id,
+        song_id=song.id if song else "",
+        song_title=song.title if song else "",
+        artist=album.artist if album else "",
+        album_title=album.title if album else "",
+        lyrics=generation_version_lyrics(gen),
+        generation_number=gen.generation_number,
+        mp3_path=gen.mp3_path,
+        audio_url=source.audio_url,
+        seed=gen.seed,
+        model_mode=gen.model_mode,
+        duration=round(duration, 3),
+        start_offset=round(start, 3),
+        end_offset=round(end, 3),
+    )
 
 
 def _enforce_cache_quota(

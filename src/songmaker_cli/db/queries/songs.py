@@ -44,7 +44,7 @@ def list_songs(
     if light:
         query = session.query(Song).options(
             joinedload(Song.versions),
-            joinedload(Song.generations),
+            joinedload(Song.generations).joinedload(Generation.version),
             joinedload(Song.album),
         )
     else:
@@ -53,6 +53,7 @@ def list_songs(
             joinedload(Song.generations).joinedload(Generation.scores),
             joinedload(Song.generations).joinedload(Generation.rating),
             joinedload(Song.generations).joinedload(Generation.src_generation),
+            joinedload(Song.generations).joinedload(Generation.version),
             joinedload(Song.album),
         )
     query = _apply_song_filters(query, album_id=album_id, user_id=user_id, q=q)
@@ -101,6 +102,7 @@ def get_song(
         joinedload(Song.generations).joinedload(Generation.scores),
         joinedload(Song.generations).joinedload(Generation.rating),
         joinedload(Song.generations).joinedload(Generation.src_generation),
+        joinedload(Song.generations).joinedload(Generation.version),
         joinedload(Song.album),
     )
     if include_deleted_rows:

@@ -183,8 +183,15 @@ function libraryStreamFailureToast(err: unknown): string {
 
 // --- Playback dispatch ---
 
-function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
-	return { generation: gen, songId: song.id, songTitle: song.title, artist: song.artist };
+export function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
+	return {
+		generation: gen,
+		songId: song.id,
+		songTitle: song.title,
+		artist: song.artist,
+		albumTitle: song.album_title,
+		lyrics: gen.version_lyrics
+	};
 }
 
 export function playGeneration(
@@ -466,7 +473,8 @@ function toAlbumQueueEntry(song: SongItem, gen: GenerationItem): PlaylistEntryIt
 		generation_number: gen.generation_number,
 		mp3_path: gen.mp3_path,
 		seed: gen.seed,
-		model_mode: gen.model_mode
+		model_mode: gen.model_mode,
+		lyrics: gen.version_lyrics
 	};
 }
 
@@ -654,12 +662,7 @@ function playPlaylistIndex(
 	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
 	const entry = ctx.entries[newIndex];
 	queueContext.set({ type: 'playlist', entries: ctx.entries, index: newIndex });
-	const info = {
-		generation: playlistEntryToGeneration(entry),
-		songId: entry.song_id,
-		songTitle: entry.song_title,
-		artist: entry.artist
-	};
+	const info = playlistEntryToPlaybackInfo(entry);
 	if (opts.restart || opts.startAt !== undefined) {
 		audioPlayer.load(info, { restart: opts.restart, startAt: opts.startAt });
 	} else {
@@ -748,21 +751,41 @@ function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 		model_mode: entry.model_mode,
 		whisper_text: null,
 		whisper_cues: null,
+		version_lyrics: entry.lyrics,
 		scores: null,
 		generation_params: null,
 		created_at: ''
 	};
 }
 
-export function navigateToPlaying(): void {
+function playlistEntryToPlaybackInfo(entry: PlaylistEntryItem): PlaybackInfo {
+	return {
+		generation: playlistEntryToGeneration(entry),
+		songId: entry.song_id,
+		songTitle: entry.song_title,
+		artist: entry.artist,
+		albumTitle: entry.album_title,
+		lyrics: entry.lyrics
+	};
+}
+
+export async function navigateToPlaying(): Promise<void> {
 	const cur = audioPlayer.current;
 	if (!cur) return;
-	const songs = get(songList);
-	const song = songs.find((s) => s.id === cur.songId);
-	if (song) {
-		selectedAlbumId.set(song.album_id);
-		selectedSongId.set(song.id);
+	let song = get(songList).find((s) => s.id === cur.songId) ?? null;
+	if (!song) {
+		try {
+			song = await fetchSong(cur.songId);
+		} catch (err) {
+			addToast(albumSongsErrorMessage(err), 'error');
+			return;
+		}
+		upsertSongInList(song);
 	}
+	selectedAlbumId.set(song.album_id);
+	selectedSongId.set(song.id);
+	selectedGenerationId.set(cur.generation.id);
+	await ensureGenerationsLoaded(song.id);
 }
 
 // --- Song/album list mutations ---

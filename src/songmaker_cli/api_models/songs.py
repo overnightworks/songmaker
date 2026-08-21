@@ -25,6 +25,20 @@ if TYPE_CHECKING:
     from songmaker_cli.db.models import Generation, Song, Version
 
 
+def generation_version_lyrics(gen: Generation) -> str | None:
+    if not gen.version_id:
+        return None
+    version = gen.version
+    if version is None:
+        raise RuntimeError(
+            f"Generation {gen.id} references version {gen.version_id} which is not loaded"
+        )
+    lyrics = version.lyrics
+    if not lyrics:
+        return None
+    return lyrics
+
+
 def _safe_json_dict(
     value: object, entity_type: str, entity_id: str,
 ) -> dict | None:
@@ -133,6 +147,7 @@ class GenerationResponse(BaseModel):
     src_generation_number: int | None = None
     whisper_text: str | None
     whisper_cues: list[WhisperCue] | None
+    version_lyrics: str | None
     scores: dict | None
     generation_params: dict | None
     created_at: str
@@ -201,6 +216,7 @@ class GenerationResponse(BaseModel):
             ),
             whisper_text=gen.whisper_text,
             whisper_cues=generation_whisper_cues(gen.whisper_cues),
+            version_lyrics=generation_version_lyrics(gen),
             scores=scores if scores else None,
             generation_params=generation_params,
             created_at=gen.created_at.isoformat(),

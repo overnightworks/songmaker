@@ -160,7 +160,9 @@ export function streamTrackToPlaybackInfo(track: QueueStreamTrackItem): Playback
 		generation: streamTrackToGeneration(track),
 		songId: track.song_id,
 		songTitle: track.song_title,
-		artist: track.artist
+		artist: track.artist,
+		albumTitle: track.album_title,
+		lyrics: track.lyrics
 	};
 }
 
@@ -182,6 +184,7 @@ function streamTrackToGeneration(track: QueueStreamTrackItem): GenerationItem {
 		model_mode: track.model_mode,
 		whisper_text: null,
 		whisper_cues: null,
+		version_lyrics: track.lyrics,
 		scores: null,
 		generation_params: null,
 		created_at: ''

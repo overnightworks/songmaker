@@ -277,6 +277,53 @@ def test_generation_to_dict(seeded_session: Session) -> None:
     assert d["scores"]["dynamics"] == 55.0
     assert d["scores"]["user_rating"] == 82.5
     assert d["whisper_cues"] is None
+    assert d["version_lyrics"] == "verse one"
+
+
+def test_generation_version_lyrics_stay_on_the_producing_version(
+    seeded_session: Session,
+) -> None:
+    update_song(seeded_session, "s1", lyrics="latest draft")
+    seeded_session.commit()
+    gen = get_generation(seeded_session, "g1")
+    song = get_song(seeded_session, "s1")
+    assert GenerationResponse.from_orm(gen).version_lyrics == "verse one"
+    assert SongResponse.from_orm(song).lyrics == "latest draft"
+
+
+def test_generation_missing_version_lyrics_is_null(seeded_session: Session) -> None:
+    gen = create_generation(
+        seeded_session,
+        song_id="s1",
+        version_id=None,
+        mp3_path="test/no_version.mp3",
+        model_mode="sft",
+    )
+    seeded_session.commit()
+    loaded = get_generation(seeded_session, gen.id)
+    assert GenerationResponse.from_orm(loaded).version_lyrics is None
+
+
+def test_generation_empty_version_lyrics_is_null(seeded_session: Session) -> None:
+    empty = Version(
+        id="v-empty",
+        song_id="s1",
+        version_number=99,
+        lyrics="",
+        prompt="empty",
+    )
+    seeded_session.add(empty)
+    seeded_session.flush()
+    gen = create_generation(
+        seeded_session,
+        song_id="s1",
+        version_id=empty.id,
+        mp3_path="test/empty_lyrics.mp3",
+        model_mode="sft",
+    )
+    seeded_session.commit()
+    loaded = get_generation(seeded_session, gen.id)
+    assert GenerationResponse.from_orm(loaded).version_lyrics is None
 
 
 def test_song_to_dict(seeded_session: Session) -> None:

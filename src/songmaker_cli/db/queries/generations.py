@@ -26,6 +26,7 @@ def get_generation(session: Session, gen_id: str) -> Generation | None:
             joinedload(Generation.rating),
             joinedload(Generation.song).joinedload(Song.album),
             joinedload(Generation.src_generation),
+            joinedload(Generation.version),
         )
         .filter_by(id=gen_id)
         .first()

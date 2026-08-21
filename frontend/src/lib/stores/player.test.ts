@@ -8,6 +8,7 @@ import type {
 	QueueStreamTrackItem,
 	SongItem
 } from '$lib/api/types';
+import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import { createQueueStreamSnapshot, fetchSong, fetchSongs } from '$lib/api/client';
 import { toasts } from '$lib/stores/toast';
 import { QUEUE_STREAM_UNPLAYABLE_START_DETAIL, QUEUE_TAKE_MISSING_TOAST } from '$lib/constants';
@@ -39,6 +40,7 @@ import {
 	handlePlaybackEnded,
 	navigateToPlaying,
 	playGeneration,
+	toPlaybackInfo,
 	chooseLibraryTakePool,
 	libraryQueueNotice,
 	libraryQueueSkipped,
@@ -123,6 +125,7 @@ function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		model_mode: 'sft',
 		whisper_text: null,
 		whisper_cues: null,
+		version_lyrics: null,
 		scores: null,
 		generation_params: null,
 		created_at: '',
@@ -145,6 +148,7 @@ function makePlaylistEntry(overrides: Partial<PlaylistEntryItem> = {}): Playlist
 		mp3_path: 'a1/song_v1.mp3',
 		seed: 42,
 		model_mode: 'sft',
+		lyrics: null,
 		...overrides
 	};
 }
@@ -160,6 +164,7 @@ beforeEach(() => {
 		limit: 200,
 		has_more: false
 	});
+	vi.mocked(fetchSong).mockReset();
 	vi.spyOn(audioPlayer, 'load').mockImplementation((info) => {
 		audioPlayer.current = info;
 	});
@@ -318,7 +323,31 @@ describe('playback dispatch', () => {
 			generation: gen,
 			songId: 's1',
 			songTitle: 'Song',
-			artist: 'Artist'
+			artist: 'Artist',
+			albumTitle: 'Album',
+			lyrics: null
+		});
+	});
+
+	it('playGeneration maps version lyrics, never the song draft', () => {
+		const gen = makeGen({ version_lyrics: 'old verse' });
+		const song = makeSong({ lyrics: 'latest draft', album_title: 'Nachtstrom' });
+		expect(toPlaybackInfo(gen, song)).toEqual({
+			generation: gen,
+			songId: 's1',
+			songTitle: 'Song',
+			artist: 'Artist',
+			albumTitle: 'Nachtstrom',
+			lyrics: 'old verse'
+		});
+		playGeneration(gen, song);
+		expect(audioPlayer.load).toHaveBeenCalledWith({
+			generation: gen,
+			songId: 's1',
+			songTitle: 'Song',
+			artist: 'Artist',
+			albumTitle: 'Nachtstrom',
+			lyrics: 'old verse'
 		});
 	});
 
@@ -331,7 +360,9 @@ describe('playback dispatch', () => {
 				generation: gen,
 				songId: 's1',
 				songTitle: 'Song',
-				artist: 'Artist'
+				artist: 'Artist',
+				albumTitle: 'Album',
+				lyrics: null
 			},
 			{ restart: true }
 		);
@@ -357,11 +388,28 @@ describe('playback dispatch', () => {
 		expect(get(selectedSongId)).toBe('keep');
 	});
 
-	it('navigateToPlaying does nothing if playing song is not in list', () => {
+	it('navigateToPlaying fetches a song missing from the library page', async () => {
+		songList.set([]);
+		const hidden = makeSong({ id: 's-hidden', album_id: 'a-hidden', title: 'Hidden' });
+		vi.mocked(fetchSong).mockResolvedValueOnce(hidden);
+		playGeneration(makeGen({ song_id: 's-hidden' }), hidden);
+		selectedAlbumId.set(null);
+		selectedSongId.set('keep');
+
+		await navigateToPlaying();
+
+		expect(fetchSong).toHaveBeenCalledWith('s-hidden');
+		expect(get(songList).map((s) => s.id)).toContain('s-hidden');
+		expect(get(selectedAlbumId)).toBe('a-hidden');
+		expect(get(selectedSongId)).toBe('s-hidden');
+	});
+
+	it('navigateToPlaying does nothing if playing song is not in list', async () => {
 		songList.set([]);
 		playGeneration(makeGen(), makeSong());
+		vi.mocked(fetchSong).mockRejectedValueOnce(new Error('offline'));
 		selectedSongId.set('keep');
-		navigateToPlaying();
+		await navigateToPlaying();
 		expect(get(selectedSongId)).toBe('keep');
 	});
 
@@ -393,7 +441,9 @@ describe('playback dispatch', () => {
 			generation: secondGen,
 			songId: 's2',
 			songTitle: 'Second',
-			artist: 'Artist'
+			artist: 'Artist',
+			albumTitle: 'Album',
+			lyrics: null
 		});
 	});
 
@@ -526,7 +576,9 @@ describe('playback dispatch', () => {
 			generation: firstGen,
 			songId: 's1',
 			songTitle: 'First',
-			artist: 'Artist'
+			artist: 'Artist',
+			albumTitle: 'Album',
+			lyrics: null
 		});
 	});
 
@@ -557,7 +609,9 @@ describe('playback dispatch', () => {
 			generation: secondGen,
 			songId: 's2',
 			songTitle: 'Second',
-			artist: 'Artist'
+			artist: 'Artist',
+			albumTitle: 'Album',
+			lyrics: null
 		});
 	});
 });
@@ -568,7 +622,7 @@ describe('canPlay predicates', () => {
 	});
 
 	it('canPlayPrevGen false when song not found', () => {
-		const cur = { generation: makeGen(), songId: 'unknown', songTitle: '', artist: '' };
+		const cur = { generation: makeGen(), songId: 'unknown', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayPrevGen(cur, [makeSong()])).toBe(false);
 	});
 
@@ -576,20 +630,20 @@ describe('canPlay predicates', () => {
 		const g1 = makeGen({ id: 'g1' });
 		const g2 = makeGen({ id: 'g2' });
 		const song = makeSong({ generations: [g1, g2] });
-		const cur = { generation: g2, songId: 's1', songTitle: '', artist: '' };
+		const cur = { generation: g2, songId: 's1', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayPrevGen(cur, [song])).toBe(true);
 	});
 
 	it('canPlayNextGen false at last generation', () => {
 		const g1 = makeGen();
 		const song = makeSong({ generations: [g1] });
-		const cur = { generation: g1, songId: 's1', songTitle: '', artist: '' };
+		const cur = { generation: g1, songId: 's1', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayNextGen(cur, [song])).toBe(false);
 	});
 
 	it('canPlayNextGen false when generation not found in song', () => {
 		const song = makeSong({ generations: [makeGen({ id: 'other' })] });
-		const cur = { generation: makeGen({ id: 'gone' }), songId: 's1', songTitle: '', artist: '' };
+		const cur = { generation: makeGen({ id: 'gone' }), songId: 's1', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayNextGen(cur, [song])).toBe(false);
 	});
 
@@ -600,34 +654,34 @@ describe('canPlay predicates', () => {
 	it('canPlayNextSong scoped to album in album context', () => {
 		const s1 = makeSong({ id: 's1', album_id: 'a1' });
 		const s2 = makeSong({ id: 's2', album_id: 'a2' });
-		const cur = { generation: makeGen({ id: 'g1' }), songId: 's1', songTitle: '', artist: '' };
+		const cur = { generation: makeGen({ id: 'g1' }), songId: 's1', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayNextSong(cur, [s1, s2], { type: 'album', albumId: 'a1' })).toBe(false);
 	});
 
 	it('canPlayNextSong true for next song in same album', () => {
 		const s1 = makeSong({ id: 's1', album_id: 'a1' });
 		const s2 = makeSong({ id: 's2', album_id: 'a1', generations: [makeGen({ id: 'g2' })] });
-		const cur = { generation: makeGen({ id: 'g1' }), songId: 's1', songTitle: '', artist: '' };
+		const cur = { generation: makeGen({ id: 'g1' }), songId: 's1', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayNextSong(cur, [s1, s2], { type: 'album', albumId: 'a1' })).toBe(true);
 	});
 
 	it('canPlayNextSong skips songs with zero generations', () => {
 		const s1 = makeSong({ id: 's1', album_id: 'a1' });
 		const s2 = makeSong({ id: 's2', album_id: 'a1', generation_count: 0, generations: [] });
-		const cur = { generation: makeGen(), songId: 's1', songTitle: '', artist: '' };
+		const cur = { generation: makeGen(), songId: 's1', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayNextSong(cur, [s1, s2], { type: 'album', albumId: 'a1' })).toBe(false);
 	});
 
 	it('canPlayPrevSong skips songs with zero generations', () => {
 		const s1 = makeSong({ id: 's1', album_id: 'a1', generation_count: 0, generations: [] });
 		const s2 = makeSong({ id: 's2', album_id: 'a1' });
-		const cur = { generation: makeGen({ id: 'g1' }), songId: 's2', songTitle: '', artist: '' };
+		const cur = { generation: makeGen({ id: 'g1' }), songId: 's2', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayPrevSong(cur, [s1, s2], { type: 'album', albumId: 'a1' })).toBe(false);
 	});
 
 	it('canPlayPrevSong false for a single playable album song', () => {
 		const s1 = makeSong({ id: 's1', album_id: 'a1' });
-		const cur = { generation: makeGen({ id: 'g1' }), songId: 's1', songTitle: '', artist: '' };
+		const cur = { generation: makeGen({ id: 'g1' }), songId: 's1', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayPrevSong(cur, [s1], { type: 'album', albumId: 'a1' })).toBe(false);
 	});
 
@@ -636,7 +690,7 @@ describe('canPlay predicates', () => {
 			makePlaylistEntry({ id: 'pe1', position: 0 }),
 			makePlaylistEntry({ id: 'pe2', position: 1, generation_id: 'g2', mp3_path: 'b.mp3' })
 		];
-		const cur = { generation: makeGen(), songId: '', songTitle: '', artist: '' };
+		const cur = { generation: makeGen(), songId: '', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayNextSong(cur, [], { type: 'playlist', entries, index: 0 })).toBe(true);
 		expect(canPlayPrevSong(cur, [], { type: 'playlist', entries, index: 0 })).toBe(true);
 	});
@@ -646,13 +700,13 @@ describe('canPlay predicates', () => {
 			makePlaylistEntry({ id: 'pe1', position: 0 }),
 			makePlaylistEntry({ id: 'pe2', position: 1 })
 		];
-		const cur = { generation: makeGen(), songId: '', songTitle: '', artist: '' };
+		const cur = { generation: makeGen(), songId: '', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayPrevSong(cur, [], { type: 'playlist', entries, index: 1 })).toBe(true);
 	});
 
 	it('playlist context: canPlayNextSong false for a single-entry playlist', () => {
 		const entries = [makePlaylistEntry({ id: 'pe1', position: 0 })];
-		const cur = { generation: makeGen(), songId: '', songTitle: '', artist: '' };
+		const cur = { generation: makeGen(), songId: '', songTitle: '', artist: '', albumTitle: '', lyrics: null };
 		expect(canPlayNextSong(cur, [], { type: 'playlist', entries, index: 0 })).toBe(false);
 	});
 
@@ -665,7 +719,9 @@ describe('canPlay predicates', () => {
 			generation: makeGen({ id: 'g2', mp3_path: 'b.mp3' }),
 			songId: '',
 			songTitle: '',
-			artist: ''
+			artist: '',
+			albumTitle: '',
+			lyrics: null
 		};
 		expect(canPlayNextSong(cur, [], { type: 'playlist', entries, index: 1 }, true)).toBe(true);
 	});
@@ -679,7 +735,9 @@ describe('canPlay predicates', () => {
 			generation: makeGen({ id: 'g2', mp3_path: 'b.mp3' }),
 			songId: '',
 			songTitle: '',
-			artist: ''
+			artist: '',
+			albumTitle: '',
+			lyrics: null
 		};
 		expect(canPlayNextSong(cur, [], { type: 'playlist', entries, index: 0 })).toBe(true);
 		expect(canPlayPrevSong(cur, [], { type: 'playlist', entries, index: 0 })).toBe(true);
@@ -705,6 +763,25 @@ describe('playPlaylistEntries', () => {
 		playPlaylistEntries(entries);
 		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 0 });
 		expect(audioPlayer.load).toHaveBeenCalledWith(expect.objectContaining({ songTitle: 'First' }));
+	});
+
+	it('playPlaylistEntries uses entry lyrics, not a later song draft', () => {
+		const entries = [
+			makePlaylistEntry({
+				id: 'pe1',
+				song_title: 'First',
+				lyrics: 'old verse',
+				album_title: 'Nachtstrom'
+			})
+		];
+		playPlaylistEntries(entries);
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({
+				lyrics: 'old verse',
+				albumTitle: 'Nachtstrom',
+				generation: expect.objectContaining({ version_lyrics: 'old verse' })
+			})
+		);
 	});
 
 	it('can start playback from a requested playlist entry', () => {
@@ -783,6 +860,8 @@ function makeTrack(overrides: Partial<QueueStreamTrackItem> = {}): QueueStreamTr
 		song_id: 's1',
 		song_title: 'Song',
 		artist: 'Artist',
+		album_title: 'Album',
+		lyrics: null,
 		generation_number: 1,
 		mp3_path: 'a.mp3',
 		audio_url: '/audio/a.mp3',
@@ -845,6 +924,8 @@ describe('stream path', () => {
 					song_id: 's1',
 					song_title: 'Song',
 					artist: 'Artist',
+					album_title: 'Album',
+					lyrics: null,
 					generation_number: 1,
 					mp3_path: 'a.mp3',
 					audio_url: '/audio/a.mp3',
@@ -1172,8 +1253,8 @@ describe('playAlbumFromGeneration', () => {
 	});
 });
 
-function makePlayback(gen: GenerationItem, song: SongItem) {
-	return { generation: gen, songId: song.id, songTitle: song.title, artist: song.artist };
+function makePlayback(gen: GenerationItem, song: SongItem): PlaybackInfo {
+	return toPlaybackInfo(gen, song);
 }
 
 describe('shuffle rebuilds the playing queue', () => {
@@ -1317,7 +1398,9 @@ describe('shuffle rebuilds the playing queue', () => {
 			generation: makeGen({ id: 'g2', mp3_path: 'b.mp3' }),
 			songId: '',
 			songTitle: 'Playlist Song',
-			artist: 'Artist'
+			artist: 'Artist',
+			albumTitle: 'Album',
+			lyrics: null
 		};
 		audioPlayer.currentTime = 5;
 		queueContext.set({ type: 'playlist', entries, index: 1 });
@@ -1466,7 +1549,9 @@ describe('shuffle rebuilds the playing queue', () => {
 			generation: currentGen,
 			songId: '',
 			songTitle: 'Playlist Song',
-			artist: 'Artist'
+			artist: 'Artist',
+			albumTitle: 'Album',
+			lyrics: null
 		};
 		audioPlayer.currentTime = 11;
 		queueContext.set({ type: 'playlist', entries, index: 0 });

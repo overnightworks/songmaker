@@ -177,6 +177,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		model_mode: 'turbo',
 		whisper_text: null,
 		whisper_cues: null,
+		version_lyrics: null,
 		scores: null,
 		generation_params: null,
 		created_at: '2026-01-01T00:00:00+00:00',
@@ -224,6 +225,7 @@ function playlistEntry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntr
 		mp3_path: 'g1.mp3',
 		seed: 7,
 		model_mode: 'turbo',
+		lyrics: null,
 		...overrides
 	};
 }

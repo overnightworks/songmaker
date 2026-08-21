@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
+import { NOW_PLAYING_LABEL, NOW_PLAYING_NO_LYRICS } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { queueContext, songList } from '$lib/stores/player';
 import PlayerBar from './PlayerBar.svelte';
@@ -37,7 +38,7 @@ class FakeAudio {
 	}
 }
 
-function track(index: number): QueueStreamTrackItem {
+function track(index: number, overrides: Partial<QueueStreamTrackItem> = {}): QueueStreamTrackItem {
 	return {
 		key: `entry-${index}`,
 		index,
@@ -46,6 +47,8 @@ function track(index: number): QueueStreamTrackItem {
 		song_id: 'same-song',
 		song_title: 'Repeated take',
 		artist: 'Artist',
+		album_title: 'Album',
+		lyrics: 'old verse',
 		generation_number: 1,
 		mp3_path: 'take.mp3',
 		audio_url: '/audio/take.mp3',
@@ -53,7 +56,8 @@ function track(index: number): QueueStreamTrackItem {
 		model_mode: 'sft',
 		duration: 10,
 		start_offset: index * 10,
-		end_offset: (index + 1) * 10
+		end_offset: (index + 1) * 10,
+		...overrides
 	};
 }
 
@@ -167,5 +171,59 @@ describe('PlayerBar stream boundaries', () => {
 		await tick();
 
 		expect(playSpy).not.toHaveBeenCalled();
+	});
+});
+
+describe('PlayerBar Now Playing', () => {
+	it('opens Now Playing from the compact title and swaps lyrics with the take', async () => {
+		audioPlayer.loadStream(
+			manifest([
+				track(0, {
+					generation_id: 'g-old',
+					song_id: 's-old',
+					song_title: 'Tide',
+					lyrics: 'old verse'
+				}),
+				track(1, {
+					generation_id: 'g-new',
+					song_id: 's-new',
+					song_title: 'Second',
+					lyrics: 'second verse',
+					generation_number: 4
+				})
+			]),
+			0,
+			{ autoplay: false }
+		);
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		const title = target.querySelector<HTMLButtonElement>(
+			`button[aria-label="${NOW_PLAYING_LABEL}"]`
+		);
+		title?.click();
+		await tick();
+
+		const sheet = document.querySelector('.now-playing-sheet');
+		expect(sheet?.textContent).toContain('Tide');
+		expect(sheet?.textContent).toContain('old verse');
+		expect(sheet?.textContent).not.toContain('second verse');
+
+		audio.currentTime = 15;
+		audio.fire('timeupdate');
+		await tick();
+
+		expect(sheet?.textContent).toContain('Second');
+		expect(sheet?.textContent).toContain('second verse');
+		expect(sheet?.textContent).not.toContain('old verse');
+	});
+
+	it('shows the empty lyrics state for a take without version lyrics', async () => {
+		audioPlayer.loadStream(manifest([track(0, { lyrics: null })]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		await tick();
+		expect(document.querySelector('.now-playing-sheet')?.textContent).toContain(NOW_PLAYING_NO_LYRICS);
 	});
 });

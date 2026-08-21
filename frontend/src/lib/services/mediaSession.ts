@@ -43,7 +43,7 @@ export function updateMediaSessionMetadata(info: PlaybackInfo | null): void {
 	navigator.mediaSession.metadata = new MediaMetadata({
 		title: info.songTitle,
 		artist: info.artist,
-		album: `Gen #${info.generation.generation_number}`
+		album: info.albumTitle
 	});
 }
 

@@ -16,6 +16,12 @@ export const QUEUE_STREAM_UNPLAYABLE_START_DETAIL = 'Requested take is not playa
 
 export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';
 
+export const NOW_PLAYING_LABEL = 'Now Playing';
+export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
+export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
+export const NOW_PLAYING_CLOSE = 'Close';
+export const NOW_PLAYING_TAKE_PREFIX = 'Take';
+
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const LIBRARY_SEARCH_PLACEHOLDER = 'Search albums and songs';
 export const LIBRARY_SEARCH_EMPTY = 'No albums or songs match';

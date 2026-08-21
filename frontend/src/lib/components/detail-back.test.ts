@@ -81,6 +81,7 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		model_mode: 'turbo',
 		whisper_text: null,
 		whisper_cues: null,
+		version_lyrics: null,
 		scores: null,
 		generation_params: null,
 		created_at: '2026-01-01T00:00:00+00:00',

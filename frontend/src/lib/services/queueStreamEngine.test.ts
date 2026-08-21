@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
-import { QueueStreamEngine } from './queueStreamEngine';
+import { QueueStreamEngine, streamTrackToPlaybackInfo } from './queueStreamEngine';
 
 function manifest(windowed: boolean): QueueStreamManifest {
 	return {
@@ -20,6 +20,8 @@ function manifest(windowed: boolean): QueueStreamManifest {
 				song_id: 's1',
 				song_title: 'First',
 				artist: 'Artist',
+				album_title: 'Album',
+				lyrics: 'old verse',
 				generation_number: 1,
 				mp3_path: 'first.mp3',
 				audio_url: '/audio/first.mp3',
@@ -37,6 +39,8 @@ function manifest(windowed: boolean): QueueStreamManifest {
 				song_id: 's2',
 				song_title: 'Second',
 				artist: 'Artist',
+				album_title: 'Album',
+				lyrics: null,
 				generation_number: 1,
 				mp3_path: 'second.mp3',
 				audio_url: '/audio/second.mp3',
@@ -49,6 +53,21 @@ function manifest(windowed: boolean): QueueStreamManifest {
 		]
 	};
 }
+
+describe('streamTrackToPlaybackInfo', () => {
+	it('maps version lyrics and album title from the stream track', () => {
+		const info = streamTrackToPlaybackInfo(manifest(false).tracks[0]);
+		expect(info.lyrics).toBe('old verse');
+		expect(info.albumTitle).toBe('Album');
+		expect(info.generation.version_lyrics).toBe('old verse');
+	});
+
+	it('keeps missing version lyrics as null', () => {
+		const info = streamTrackToPlaybackInfo(manifest(false).tracks[1]);
+		expect(info.lyrics).toBeNull();
+		expect(info.generation.version_lyrics).toBeNull();
+	});
+});
 
 describe('QueueStreamEngine window boundaries', () => {
 	it('does not wrap a windowed stream at either boundary', () => {

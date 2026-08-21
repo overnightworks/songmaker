@@ -33,6 +33,8 @@ class QueueStreamTrackResponse(BaseModel):
     song_id: str
     song_title: str
     artist: str
+    album_title: str
+    lyrics: str | None
     generation_number: int
     mp3_path: str
     audio_url: str

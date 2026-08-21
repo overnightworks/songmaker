@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+from songmaker_cli.api_models.songs import generation_version_lyrics
+
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Playlist, PlaylistEntry
 
@@ -39,6 +41,7 @@ class PlaylistEntryResponse(BaseModel):
     mp3_path: str
     seed: int | None
     model_mode: str
+    lyrics: str | None
 
     @classmethod
     def from_orm(cls, entry: PlaylistEntry) -> PlaylistEntryResponse:
@@ -57,6 +60,7 @@ class PlaylistEntryResponse(BaseModel):
             mp3_path=gen.mp3_path,
             seed=gen.seed,
             model_mode=gen.model_mode,
+            lyrics=generation_version_lyrics(gen),
         )
 
 

@@ -67,6 +67,8 @@ function manifest(windowed: boolean): QueueStreamManifest {
 			song_id: song.id,
 			song_title: song.title,
 			artist: album.artist,
+			album_title: album.title,
+			lyrics: null,
 			generation_number: 1,
 			mp3_path: `${song.id}.mp3`,
 			audio_url: song.audio_url,

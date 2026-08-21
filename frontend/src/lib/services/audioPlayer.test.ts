@@ -19,6 +19,7 @@ function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		model_mode: 'sft',
 		whisper_text: null,
 		whisper_cues: null,
+		version_lyrics: null,
 		scores: null,
 		generation_params: null,
 		created_at: '2026-01-01T00:00:00Z',
@@ -34,6 +35,8 @@ function makeInfo(overrides: Partial<PlaybackInfo> = {}): PlaybackInfo {
 		songId: 's1',
 		songTitle: 'Song',
 		artist: 'Artist',
+		albumTitle: 'Album',
+		lyrics: null,
 		...overrides
 	};
 }
@@ -53,6 +56,8 @@ function makeStreamManifest(): QueueStreamManifest {
 				song_id: 's1',
 				song_title: 'First',
 				artist: 'Artist',
+				album_title: 'Album',
+				lyrics: 'first verse',
 				generation_number: 1,
 				mp3_path: 'a1/first.mp3',
 				audio_url: '/audio/a1/first.mp3',
@@ -70,6 +75,8 @@ function makeStreamManifest(): QueueStreamManifest {
 				song_id: 's2',
 				song_title: 'Second',
 				artist: 'Artist',
+				album_title: 'Album',
+				lyrics: 'second verse',
 				generation_number: 1,
 				mp3_path: 'a1/second.mp3',
 				audio_url: '/audio/a1/second.mp3',

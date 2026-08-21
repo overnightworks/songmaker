@@ -126,6 +126,112 @@ def test_queue_stream_rate_limiter_failure_is_503(monkeypatch) -> None:
     assert exc_info.value.status_code == 503
 
 
+def _seed_versioned_lyrics(session) -> None:
+    owner = User(id="owner-id", username="owner", password_hash=hash_password("pass1234"))
+    session.add(owner)
+    session.flush()
+    session.add(Album(id="a1", title="Nachtstrom", artist="Artist", created_by=owner.id))
+    session.flush()
+    session.add(Song(id="s1", title="Tide", album_id="a1", track_number=1))
+    session.flush()
+    session.add(Version(id="v-old", song_id="s1", version_number=1, lyrics="old verse"))
+    session.add(Version(id="v-new", song_id="s1", version_number=2, lyrics="latest draft"))
+    session.add(Version(id="v-empty", song_id="s1", version_number=3, lyrics=""))
+    session.flush()
+    session.add(
+        Generation(
+            id="g-old",
+            song_id="s1",
+            version_id="v-old",
+            generation_number=1,
+            mp3_path="owner-id/g-old.mp3",
+            seed=1,
+            is_picked=True,
+        )
+    )
+    session.add(
+        Generation(
+            id="g-empty",
+            song_id="s1",
+            version_id="v-empty",
+            generation_number=2,
+            mp3_path="owner-id/g-empty.mp3",
+            seed=2,
+        )
+    )
+    session.add(
+        Generation(
+            id="g-none",
+            song_id="s1",
+            version_id=None,
+            generation_number=3,
+            mp3_path="owner-id/g-none.mp3",
+            seed=3,
+        )
+    )
+
+
+def test_queue_stream_track_uses_generation_version_lyrics(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_versioned_lyrics)
+    audio_root = tmp_path / "audio" / "owner-id"
+    audio_root.mkdir(parents=True, exist_ok=True)
+    for name in ("g-old.mp3", "g-empty.mp3", "g-none.mp3"):
+        (audio_root / name).write_bytes(b"source")
+    login_and_csrf(client, "owner", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams",
+        json={"tracks": [{"generation_id": "g-old"}]},
+    )
+    assert resp.status_code == 200
+    track = resp.json()["tracks"][0]
+    assert track["lyrics"] == "old verse"
+    assert track["album_title"] == "Nachtstrom"
+
+    song = client.get("/api/songs/s1")
+    assert song.status_code == 200
+    data = song.json()
+    by_id = {gen["id"]: gen for gen in data["generations"]}
+    assert by_id["g-old"]["version_lyrics"] == "old verse"
+    assert data["lyrics"] != "old verse"
+
+
+def test_queue_stream_missing_version_lyrics_are_null(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_versioned_lyrics)
+    audio_root = tmp_path / "audio" / "owner-id"
+    audio_root.mkdir(parents=True, exist_ok=True)
+    for name in ("g-old.mp3", "g-empty.mp3", "g-none.mp3"):
+        (audio_root / name).write_bytes(b"source")
+    login_and_csrf(client, "owner", "pass1234")
+
+    resp = client.post(
+        "/api/queue-streams",
+        json={
+            "tracks": [
+                {"generation_id": "g-empty"},
+                {"generation_id": "g-none"},
+            ]
+        },
+    )
+    assert resp.status_code == 200
+    tracks = resp.json()["tracks"]
+    assert [track["lyrics"] for track in tracks] == [None, None]
+
+    song = client.get("/api/songs/s1")
+    by_id = {gen["id"]: gen for gen in song.json()["generations"]}
+    assert by_id["g-empty"]["version_lyrics"] is None
+    assert by_id["g-none"]["version_lyrics"] is None
+    assert song.json()["lyrics"] is not None
+
+
 def test_authenticated_queue_stream_snapshot_and_audio_range(
     tmp_path: Path,
     monkeypatch,

@@ -19,7 +19,9 @@
 	} from '$lib/stores/player';
 	import { LIBRARY_TAKE_POOL_LABELS, libraryTakePool } from '$lib/stores/playbackSettings';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { NOW_PLAYING_LABEL } from '$lib/constants';
 	import LibraryPoolControl from './LibraryPoolControl.svelte';
+	import NowPlaying from './NowPlaying.svelte';
 	import {
 		updateMediaSessionPlaybackState,
 		updateMediaSessionPositionState
@@ -37,6 +39,8 @@
 		type VizColors
 	} from '$lib/utils/visualizer';
 
+	let nowPlayingOpen = $state(false);
+	let trackInfoButton: HTMLButtonElement | undefined = $state();
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
 	let audioCtx: AudioContext | undefined;
 	let analyser: AnalyserNode | undefined;
@@ -162,11 +166,40 @@
 			if (!retried) audioPlayer.toggle();
 		});
 	}
+
+	function openNowPlaying(): void {
+		if (!current) return;
+		nowPlayingOpen = true;
+	}
+
+	function closeNowPlaying(): void {
+		if (!nowPlayingOpen) return;
+		nowPlayingOpen = false;
+		queueMicrotask(() => trackInfoButton?.focus());
+	}
+
+	function onTrackInfoClick(): void {
+		if (current) openNowPlaying();
+		else togglePlay();
+	}
+
+	function goToPlayingSong(): void {
+		closeNowPlaying();
+		void navigateToPlaying();
+	}
+
+	$effect(() => {
+		if (!current) nowPlayingOpen = false;
+	});
 </script>
 
 <svelte:document onvisibilitychange={handleVisibilityChange} />
 
-<footer class="player-bar" style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}>
+<footer
+	class="player-bar"
+	class:now-playing-open={nowPlayingOpen}
+	style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}
+>
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
 	<div class="player-content">
 		<div class="player-controls">
@@ -225,9 +258,12 @@
 			</div>
 		</div>
 		<button
+			bind:this={trackInfoButton}
 			class="track-info"
-			onclick={() => (current ? navigateToPlaying() : togglePlay())}
-			aria-label={current ? 'Go to playing song' : `Play ${poolName}`}
+			onclick={onTrackInfoClick}
+			aria-label={current ? NOW_PLAYING_LABEL : `Play ${poolName}`}
+			aria-haspopup={current ? 'dialog' : undefined}
+			aria-expanded={current ? nowPlayingOpen : undefined}
 		>
 			{#if current}
 				<span
@@ -273,6 +309,9 @@
 		</div>
 	</div>
 </footer>
+{#if nowPlayingOpen && current}
+	<NowPlaying info={current} onclose={closeNowPlaying} onGoToSong={goToPlayingSong} />
+{/if}
 
 <style>
 	.player-bar {
@@ -290,6 +329,9 @@
 		z-index: 100;
 		overflow: hidden;
 		transition: box-shadow 0.3s;
+	}
+	.player-bar.now-playing-open {
+		overflow: visible;
 	}
 	.player-content {
 		position: relative;
