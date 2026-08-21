@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 
 import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
@@ -26,7 +28,10 @@ const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
 
 vi.mock('$app/navigation', () => ({
-	goto: vi.fn()
+	goto: vi.fn().mockResolvedValue(undefined)
+}));
+vi.mock('$app/paths', () => ({
+	resolve: vi.fn((path: string) => path)
 }));
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
@@ -116,6 +121,8 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 }
 
 beforeEach(() => {
+	vi.mocked(goto).mockClear();
+	vi.mocked(resolve).mockClear();
 	fetchSong.mockReset();
 	fetchAlbum.mockReset();
 	fetchPlaylists.mockReset();
@@ -296,13 +303,21 @@ describe('library history', () => {
 		expect(isLibraryWorkspacePath('/settings')).toBe(false);
 	});
 
-	it('revealPlayingSong opens library detail for the playing take', async () => {
+	it('revealPlayingSong opens library detail without navigating from the library', async () => {
 		const cleanup = initNavigation();
 		await revealPlayingSong(song(), 'g1');
+		expect(goto).not.toHaveBeenCalled();
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
 		expect(get(librarySurface)).toBe('detail');
 		cleanup();
+	});
+
+	it('revealPlayingSong navigates from another workspace through the resolved library root', async () => {
+		history.replaceState(null, '', '/loras');
+		await revealPlayingSong(song(), 'g1');
+		expect(resolve).toHaveBeenCalledWith('/');
+		expect(goto).toHaveBeenCalledWith('/');
 	});
 
 	it('hydrates a search-only song and its album into the library', async () => {

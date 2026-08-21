@@ -224,6 +224,8 @@ describe('PlayerBar Now Playing', () => {
 		await tick();
 		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
 		await tick();
-		expect(document.querySelector('.now-playing-sheet')?.textContent).toContain(NOW_PLAYING_NO_LYRICS);
+		expect(document.querySelector('.now-playing-sheet')?.textContent).toContain(
+			NOW_PLAYING_NO_LYRICS
+		);
 	});
 });

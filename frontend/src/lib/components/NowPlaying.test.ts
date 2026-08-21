@@ -58,7 +58,10 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 
-async function renderSheet(playback: PlaybackInfo, handlers = { onclose: vi.fn(), onGoToSong: vi.fn() }) {
+async function renderSheet(
+	playback: PlaybackInfo,
+	handlers = { onclose: vi.fn(), onGoToSong: vi.fn() }
+) {
 	target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(NowPlaying, {
