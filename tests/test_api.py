@@ -1498,11 +1498,22 @@ def test_user_cannot_see_other_song(tmp_path: Path) -> None:
     assert resp.status_code == 404
 
 
-def test_admin_sees_all_albums(tmp_path: Path) -> None:
+def test_admin_product_index_is_personal_library(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
-    resp = c.get("/api/albums")
-    assert resp.status_code == 200
-    assert len(resp.json()["items"]) == 1
+    ctx: AppContext = c.app.state.ctx
+    with ctx.db() as session:
+        session.add(User(
+            id="u-other", username="other", password_hash="x", role="user",
+        ))
+        session.flush()
+        session.add(Album(id="other", title="Other", artist="X", created_by="u-other"))
+        session.commit()
+    listed = c.get("/api/albums")
+    assert listed.status_code == 200
+    assert listed.json()["items"] == []
+    by_id = c.get("/api/albums/other")
+    assert by_id.status_code == 200
+    assert by_id.json()["id"] == "other"
 
 
 def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:

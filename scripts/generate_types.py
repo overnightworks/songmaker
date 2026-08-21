@@ -34,6 +34,7 @@ export interface PaginatedResponse<T> {
 \ttotal: number;
 \toffset: number;
 \tlimit: number;
+\thas_more: boolean;
 }"""
 
 _RESPONSE_MODEL_NAMES: dict[str, str] = {

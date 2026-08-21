@@ -26,6 +26,28 @@ PAGE_MAX_LIMIT = 200
 PAGE_ADMIN_DEFAULT_LIMIT = 100
 PAGE_ADMIN_MAX_LIMIT = 500
 
+LIBRARY_SORT_NEWEST: Final[str] = "newest"
+LIBRARY_SORT_OLDEST: Final[str] = "oldest"
+LIBRARY_SORT_TITLE: Final[str] = "title"
+LIBRARY_SORTS: Final[frozenset[str]] = frozenset({
+    LIBRARY_SORT_NEWEST,
+    LIBRARY_SORT_OLDEST,
+    LIBRARY_SORT_TITLE,
+})
+LIBRARY_ITEM_ALBUM: Final[str] = "album"
+LIBRARY_ITEM_SONG: Final[str] = "song"
+LIBRARY_CURSOR_VERSION: Final[int] = 1
+LIBRARY_CURSOR_KEY_VERSION: Final[str] = "v"
+LIBRARY_CURSOR_KEY_Q: Final[str] = "q"
+LIBRARY_CURSOR_KEY_SORT: Final[str] = "sort"
+LIBRARY_CURSOR_KEY_TYPE: Final[str] = "type"
+LIBRARY_CURSOR_KEY_SORT_VALUE: Final[str] = "sort_value"
+LIBRARY_CURSOR_KEY_ID: Final[str] = "id"
+LIBRARY_QUERY_REQUIRED: Final[str] = "Search query is required"
+LIBRARY_CURSOR_INVALID: Final[str] = "Invalid library cursor"
+LIBRARY_CURSOR_MISMATCH: Final[str] = "Library cursor does not match query and sort"
+LIKE_ESCAPE_CHAR: Final[str] = "\\"
+
 # Scoring pipeline
 SILENCE_TOP_DB = 40
 SILENCE_MIN_GAP_SECONDS = 2.0

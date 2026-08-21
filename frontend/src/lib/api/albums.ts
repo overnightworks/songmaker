@@ -1,11 +1,16 @@
 import type { AlbumItem, CleanupResult, PaginatedResponse, ShareResult } from './types';
 import { apiFetch } from './fetch';
+import type { LibraryListOptions } from './library';
 
 export async function fetchAlbums(
 	offset: number = 0,
-	limit: number = 50
+	limit: number = 50,
+	options?: LibraryListOptions
 ): Promise<PaginatedResponse<AlbumItem>> {
-	return apiFetch<PaginatedResponse<AlbumItem>>(`/api/albums?offset=${offset}&limit=${limit}`);
+	const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+	if (options?.q) params.set('q', options.q);
+	if (options?.sort) params.set('sort', options.sort);
+	return apiFetch<PaginatedResponse<AlbumItem>>(`/api/albums?${params}`);
 }
 
 export async function createAlbum(title: string, artist: string = ''): Promise<AlbumItem> {

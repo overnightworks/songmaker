@@ -28,6 +28,14 @@ from songmaker_cli.api_models.generation_params import (
     RepaintTaskParams,
     StoredGenerationParams,
 )
+from songmaker_cli.api_models.library import (
+    LIBRARY_SORT_VALUES,
+    LibraryAlbumHit,
+    LibrarySearchHit,
+    LibrarySearchResponse,
+    LibrarySongHit,
+    LibrarySort,
+)
 from songmaker_cli.api_models.loras import (
     UserLoraCreateRequest,
     UserLoraListResponse,
@@ -143,6 +151,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
     total: int
     offset: int
     limit: int
+    has_more: bool
 
 
 class JobResponse(BaseModel):
@@ -240,6 +249,12 @@ __all__ = [
     "GenerationResponse",
     "GenerationRetentionReportResponse",
     "JobResponse",
+    "LIBRARY_SORT_VALUES",
+    "LibraryAlbumHit",
+    "LibrarySearchHit",
+    "LibrarySearchResponse",
+    "LibrarySongHit",
+    "LibrarySort",
     "LibraryTakePool",
     "LoadedModelDetail",
     "LoadModelOnWorkerRequest",

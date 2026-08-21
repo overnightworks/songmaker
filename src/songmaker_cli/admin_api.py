@@ -22,6 +22,7 @@ from songmaker_cli.api_helpers import (
     AdminPagination,
     cleanup_generation_files,
     ensure_not_last_admin,
+    page_has_more,
 )
 from songmaker_cli.api_models import (
     AuditLogResponse,
@@ -238,6 +239,7 @@ def audit_log_endpoint(
     return PaginatedResponse(
         items=[AuditLogResponse.from_orm(e) for e in entries],
         total=total, offset=page.offset, limit=page.limit,
+        has_more=page_has_more(offset=page.offset, fetched=len(entries), total=total),
     )
 
 
@@ -252,6 +254,7 @@ def login_attempts_endpoint(
     return PaginatedResponse(
         items=[LoginAttemptResponse.from_orm(a) for a in attempts],
         total=total, offset=page.offset, limit=page.limit,
+        has_more=page_has_more(offset=page.offset, fetched=len(attempts), total=total),
     )
 
 
@@ -266,6 +269,7 @@ def sessions_endpoint(
     return PaginatedResponse(
         items=[SessionResponse.from_orm(s) for s in sessions],
         total=total, offset=page.offset, limit=page.limit,
+        has_more=page_has_more(offset=page.offset, fetched=len(sessions), total=total),
     )
 
 

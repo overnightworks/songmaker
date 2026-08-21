@@ -14,10 +14,12 @@ from songmaker_cli.api_helpers import (
     check_song_access_including_deleted,
     cleanup_generation_files,
     gen_params_to_json,
-    owner_filter,
+    page_has_more,
+    parse_optional_search_query,
 )
 from songmaker_cli.api_models import (
     CleanupResponse,
+    LibrarySort,
     PaginatedResponse,
     ShareResponse,
     SongCreateRequest,
@@ -76,18 +78,22 @@ router = APIRouter()
 def api_list_songs(
     page: Pagination,
     album_id: str | None = Query(None),
+    q: str | None = Query(None),
+    sort: LibrarySort | None = Query(None),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> PaginatedResponse[SongSummaryResponse]:
-    uid = owner_filter(user)
-    total = count_songs(session, album_id=album_id, user_id=uid)
+    query = parse_optional_search_query(q)
+    total = count_songs(session, album_id=album_id, user_id=user.id, q=query)
     songs = list_songs(
-        session, album_id=album_id, user_id=uid, light=True,
-        offset=page.offset, limit=page.limit,
+        session, album_id=album_id, user_id=user.id, light=True,
+        offset=page.offset, limit=page.limit, q=query, sort=sort,
     )
+    items = [SongSummaryResponse.from_orm(s) for s in songs]
     return PaginatedResponse(
-        items=[SongSummaryResponse.from_orm(s) for s in songs],
+        items=items,
         total=total, offset=page.offset, limit=page.limit,
+        has_more=page_has_more(offset=page.offset, fetched=len(items), total=total),
     )
 
 

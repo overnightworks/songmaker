@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import Album, Generation, Song
+from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 from songmaker_cli.db.soft_delete import include_deleted
 from songmaker_cli.settings import get_settings
@@ -24,21 +25,40 @@ def list_albums(
     user_id: str | None = None,
     offset: int = 0,
     limit: int | None = None,
+    q: str | None = None,
+    sort: str | None = None,
 ) -> list[Album]:
-    query = session.query(Album).options(joinedload(Album.songs))
-    if user_id:
-        query = query.filter_by(created_by=user_id)
-    query = query.order_by(Album.title).offset(offset)
+    query = _album_query(session, user_id=user_id, q=q)
+    query = query.options(joinedload(Album.songs))
+    if sort is None:
+        query = query.order_by(Album.title, Album.id)
+    else:
+        query = apply_library_sort(query, Album, sort)
+    query = query.offset(offset)
     if limit is not None:
         query = query.limit(limit)
     return query.all()
 
 
-def count_albums(session: Session, user_id: str | None = None) -> int:
+def count_albums(
+    session: Session,
+    user_id: str | None = None,
+    q: str | None = None,
+) -> int:
+    return _album_query(session, user_id=user_id, q=q).count()
+
+
+def _album_query(
+    session: Session,
+    user_id: str | None = None,
+    q: str | None = None,
+):
     query = session.query(Album)
     if user_id:
         query = query.filter_by(created_by=user_id)
-    return query.count()
+    if q:
+        query = query.filter(title_matches(Album.title, q))
+    return query
 
 
 def get_album(
