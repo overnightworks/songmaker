@@ -2,57 +2,96 @@
 	import AgeStamp from './AgeStamp.svelte';
 	import SongNode from './SongNode.svelte';
 	import type { SongItem, AlbumItem } from '$lib/api/types';
-	import { LIBRARY_ALBUMS_LOADING, LIBRARY_RETRY_LABEL } from '$lib/constants';
+	import {
+		ALBUM_ART_EMPTY_INITIALS,
+		ALBUM_ART_INITIAL_COUNT,
+		LIBRARY_ALBUMS_LOADING,
+		LIBRARY_RETRY_LABEL
+	} from '$lib/constants';
 	import type { AlbumSongsLoadState } from '$lib/stores/player';
+	import { hexToRgb } from '$lib/utils/contrast';
 
 	interface Props {
 		album: AlbumItem;
-		songs: SongItem[];
-		expanded: boolean;
+		songs?: SongItem[];
+		expanded?: boolean;
 		selected: boolean;
+		variant?: 'card' | 'hit';
+		showCreatedAge?: boolean;
 		loadState?: AlbumSongsLoadState;
-		ontoggle: () => void;
 		onselect: () => void;
 		onretry?: () => void;
 	}
 
-	let { album, songs, expanded, selected, loadState, ontoggle, onselect, onretry }: Props =
-		$props();
+	let {
+		album,
+		songs = [],
+		expanded = false,
+		selected,
+		variant = 'card',
+		showCreatedAge = true,
+		loadState,
+		onselect,
+		onretry
+	}: Props = $props();
 
-	function handleClick(): void {
-		onselect();
+	const artFill = $derived(usableAlbumPrimary(album.colors));
+	const initials = $derived(albumTitleInitials(album.title));
+
+	function usableAlbumPrimary(colors: Record<string, string>): string | null {
+		const primary = colors.primary;
+		if (typeof primary !== 'string') return null;
+		const value = primary.trim();
+		if (!value) return null;
+		try {
+			hexToRgb(value);
+		} catch {
+			return null;
+		}
+		return value;
+	}
+
+	function albumTitleInitials(title: string): string {
+		const trimmed = title.trim();
+		if (!trimmed) return ALBUM_ART_EMPTY_INITIALS;
+		const words = trimmed.split(/\s+/);
+		if (words.length === 1) {
+			const letters = Array.from(words[0]).slice(0, ALBUM_ART_INITIAL_COUNT).join('');
+			return letters.toUpperCase() || ALBUM_ART_EMPTY_INITIALS;
+		}
+		const first = Array.from(words[0])[0];
+		const second = Array.from(words[1])[0];
+		if (!first) return ALBUM_ART_EMPTY_INITIALS;
+		return `${first}${second ?? ''}`.toUpperCase();
 	}
 </script>
 
 <div class="album-group">
-	<div
-		class="album-header"
-		class:expanded
+	<button
+		type="button"
+		class="album-card"
+		class:album-hit={variant === 'hit'}
 		class:selected
-		onclick={handleClick}
-		onkeydown={(e) => e.key === 'Enter' && handleClick()}
-		role="button"
-		tabindex="0"
+		onclick={onselect}
 	>
-		<button
-			class="album-chevron"
-			onclick={(e) => {
-				e.stopPropagation();
-				ontoggle();
-			}}
-			aria-label={expanded ? 'Collapse' : 'Expand'}
-		>
-			{expanded ? '▾' : '▸'}
-		</button>
+		{#if artFill}
+			<span class="album-art" style:background={artFill} aria-hidden="true"></span>
+		{:else}
+			<span class="album-art album-art-initials" aria-hidden="true">{initials}</span>
+		{/if}
 		<span class="album-text">
 			<span class="album-title">{album.title}</span>
 			{#if album.artist}
 				<span class="album-artist">{album.artist}</span>
 			{/if}
 		</span>
-		<AgeStamp createdAt={album.created_at} />
+		{#if showCreatedAge}
+			<span class="album-age">
+				<AgeStamp createdAt={album.created_at} named />
+			</span>
+		{/if}
 		<span class="album-count">{album.song_count}</span>
-	</div>
+	</button>
 
 	{#if expanded}
 		{#if loadState?.status === 'loading' && songs.length === 0}
@@ -60,7 +99,7 @@
 		{:else if loadState?.status === 'error'}
 			<p class="album-status" role="alert">{loadState.error}</p>
 			{#if onretry}
-				<button class="album-retry" onclick={onretry}>{LIBRARY_RETRY_LABEL}</button>
+				<button type="button" class="album-retry" onclick={onretry}>{LIBRARY_RETRY_LABEL}</button>
 			{/if}
 		{/if}
 		{#each songs as song (song.id)}
@@ -71,53 +110,62 @@
 
 <style>
 	.album-group {
-		border-bottom: 1px solid var(--border);
+		min-width: 0;
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		background: var(--surface);
+		overflow: hidden;
 	}
 
-	.album-header {
-		display: flex;
+	.album-card {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-rows: auto auto auto;
 		align-items: center;
-		gap: 6px;
+		gap: 4px 8px;
 		width: 100%;
-		padding: 8px 12px;
-		background: var(--surface);
+		min-width: 0;
+		padding: 8px;
+		background: transparent;
 		border: none;
 		color: var(--text);
-		font-size: var(--label-font-size);
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 1px;
+		font-family: var(--font-body);
 		cursor: pointer;
 		text-align: left;
 	}
 
-	.album-header:hover {
+	.album-card:hover {
 		background: var(--surface-hover);
 	}
 
-	.album-header.selected {
+	.album-card.selected {
 		background: rgba(160, 32, 240, 0.06);
-		border-left: 3px solid var(--accent);
-		padding-left: 9px;
+		box-shadow: inset 3px 0 0 var(--accent);
 	}
 
-	.album-chevron {
-		background: none;
-		border: none;
-		font-size: 0.7rem;
-		color: var(--text-decoration);
-		width: 16px;
-		flex-shrink: 0;
-		cursor: pointer;
-		padding: 0;
+	.album-card:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
 	}
 
-	.album-chevron:hover {
-		color: var(--text-muted);
+	.album-art {
+		grid-column: 1 / -1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		aspect-ratio: 1;
+		background: var(--surface-hover);
+		color: var(--text);
+		font-family: var(--font-display);
+		font-size: 1.6rem;
+		letter-spacing: 0.06em;
+		user-select: none;
+		overflow: hidden;
 	}
 
 	.album-text {
-		flex: 1;
+		grid-column: 1 / -1;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
@@ -128,17 +176,21 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		font-family: var(--font-display);
+		font-size: 0.9rem;
+		letter-spacing: 0.4px;
 	}
 
 	.album-artist {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-family: var(--font-body);
 		font-size: 0.72rem;
-		letter-spacing: 0;
-		text-transform: none;
 		color: var(--text-muted);
+	}
+
+	.album-age {
+		min-width: 0;
 	}
 
 	.album-count {
@@ -147,15 +199,45 @@
 		flex-shrink: 0;
 	}
 
+	.album-hit {
+		grid-template-columns: 3.5rem minmax(0, 1fr) auto auto;
+		grid-template-rows: auto auto;
+		align-items: center;
+	}
+
+	.album-hit .album-art {
+		grid-column: 1;
+		grid-row: 1 / span 2;
+		width: 3.5rem;
+		height: 3.5rem;
+		aspect-ratio: auto;
+		font-size: 0.85rem;
+	}
+
+	.album-hit .album-text {
+		grid-column: 2;
+		grid-row: 1 / span 2;
+	}
+
+	.album-hit .album-age {
+		grid-column: 3;
+		grid-row: 1 / span 2;
+	}
+
+	.album-hit .album-count {
+		grid-column: 4;
+		grid-row: 1 / span 2;
+	}
+
 	.album-status {
 		margin: 0;
-		padding: 8px 12px 8px 28px;
+		padding: 8px 12px;
 		font-size: 0.8rem;
 		color: var(--text-muted);
 	}
 
 	.album-retry {
-		margin: 0 12px 8px 28px;
+		margin: 0 12px 8px;
 		padding: 4px 8px;
 		background: none;
 		border: 1px solid var(--border);
@@ -165,9 +247,34 @@
 	}
 
 	@media (max-width: 768px) {
-		.album-header {
-			padding: 10px 12px;
-			font-size: var(--label-font-size);
+		.album-card {
+			grid-template-columns: 3.5rem minmax(0, 1fr) auto auto;
+			grid-template-rows: auto auto;
+			align-items: center;
+		}
+
+		.album-art {
+			grid-column: 1;
+			grid-row: 1 / span 2;
+			width: 3.5rem;
+			height: 3.5rem;
+			aspect-ratio: auto;
+			font-size: 0.85rem;
+		}
+
+		.album-text {
+			grid-column: 2;
+			grid-row: 1 / span 2;
+		}
+
+		.album-age {
+			grid-column: 3;
+			grid-row: 1 / span 2;
+		}
+
+		.album-count {
+			grid-column: 4;
+			grid-row: 1 / span 2;
 		}
 	}
 </style>

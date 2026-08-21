@@ -217,27 +217,11 @@ afterEach(() => {
 });
 
 describe('albumIsExpanded', () => {
-	it('keeps albums collapsed until selected, toggled, or a search hit lists songs', () => {
-		const expanded = new Set<string>();
-		expect(
-			albumIsExpanded('a1', expanded, { selectedAlbumId: null, searching: false, songHits: 2 })
-		).toBe(false);
-		expect(
-			albumIsExpanded('a1', expanded, { selectedAlbumId: 'a1', searching: false, songHits: 2 })
-		).toBe(true);
-		expect(
-			albumIsExpanded('a1', new Set(['a1']), {
-				selectedAlbumId: null,
-				searching: false,
-				songHits: 0
-			})
-		).toBe(true);
-		expect(
-			albumIsExpanded('a1', expanded, { selectedAlbumId: null, searching: true, songHits: 1 })
-		).toBe(true);
-		expect(
-			albumIsExpanded('a1', expanded, { selectedAlbumId: null, searching: true, songHits: 0 })
-		).toBe(false);
+	it('expands search groups with song hits, not Studio browse', () => {
+		expect(albumIsExpanded({ searching: false, songHits: 2 })).toBe(false);
+		expect(albumIsExpanded({ searching: false, songHits: 0 })).toBe(false);
+		expect(albumIsExpanded({ searching: true, songHits: 1 })).toBe(true);
+		expect(albumIsExpanded({ searching: true, songHits: 0 })).toBe(false);
 	});
 });
 

@@ -5,8 +5,8 @@ import { get } from 'svelte/store';
 import type { AlbumItem, PlaylistItem, ShareInventoryItem, SongItem } from '$lib/api/types';
 import {
 	LIBRARY_ALBUMS_EMPTY,
-	LIBRARY_PLAYLISTS_EMPTY,
 	LIBRARY_LOAD_MORE,
+	LIBRARY_PLAYLISTS_EMPTY,
 	LIBRARY_RETRY_LABEL,
 	LIBRARY_SEARCH_DEBOUNCE_MS,
 	LIBRARY_SEARCH_EMPTY,
@@ -18,17 +18,21 @@ import {
 	LIBRARY_SHARES_HISTORY_SECTION,
 	LIBRARY_SHARES_OPEN_LABEL,
 	LIBRARY_SHARES_TYPE_LABELS,
-	LIBRARY_SHARES_UNSHARE_LABEL
+	LIBRARY_SHARES_UNSHARE_LABEL,
+	SONG_SURFACE_RECIPE,
+	SONG_SURFACE_TAKES
 } from '$lib/constants';
 import { searchQuery } from '$lib/stores/filter';
 import {
 	applyLibraryHistory,
+	expandAlbum,
 	libraryRootState,
 	librarySurface,
 	resetLibraryContextForTests,
 	setLibrarySurface
 } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
+import { CREATED_AGE_PREFIX, formatExactLocalTime } from '$lib/utils/recency';
 import { albumList, selectedAlbumId, selectedSongId, songList } from '$lib/stores/player';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { openSharesInventory, resetSharesForTests } from '$lib/stores/shares';
@@ -242,6 +246,7 @@ describe('SongList search', () => {
 	});
 
 	it('searches the server instead of filtering the loaded song list', async () => {
+		expandAlbum('nachtstrom');
 		searchLibrary.mockResolvedValue({
 			items: [
 				{
@@ -265,6 +270,12 @@ describe('SongList search', () => {
 		expect(target.textContent).toContain('Nachtstrom');
 		expect(target.textContent).not.toContain('Local Only');
 		expect(get(songList)[0].title).toBe('Local Only');
+		expect(target.querySelector('.album-card')).not.toBeNull();
+		expect(target.querySelector('.album-chevron')).toBeNull();
+		expect(target.querySelector('.album-overview')).toBeNull();
+		expect(target.querySelector('.song-row')).toBeNull();
+		expect(target.querySelector('.album-status')).toBeNull();
+		expect(target.querySelector('.album-card .age')?.textContent).toContain(CREATED_AGE_PREFIX);
 	});
 
 	it('shows search empty copy when the server returns no hits', async () => {
@@ -319,6 +330,56 @@ describe('SongList search', () => {
 		expect(target.textContent).toContain('Nachtstrom');
 		expect(target.textContent).toContain('Tide');
 		expect(target.querySelector('.song-row')?.textContent).toContain('Tide');
+		expect(target.querySelector('.album-card')).not.toBeNull();
+		expect(target.querySelector('.album-chevron')).toBeNull();
+		expect(target.querySelector('.album-overview')).toBeNull();
+		expect(target.querySelector('.album-card .age')).toBeNull();
+		expect(target.textContent).not.toContain(CREATED_AGE_PREFIX);
+	});
+
+	it('names created age on album-only search hits and omits it on song-hit groups', async () => {
+		vi.setSystemTime(new Date('2026-08-20T12:00:00.000Z'));
+		const albumCreatedAt = '2026-08-19T18:00:00.000Z';
+		const songCreatedAt = '2026-08-20T06:00:00.000Z';
+		searchLibrary.mockResolvedValue({
+			items: [
+				{
+					type: 'album',
+					album: album({
+						id: 'nachtstrom',
+						title: 'Nachtstrom',
+						created_at: albumCreatedAt
+					})
+				},
+				{
+					type: 'song',
+					song: song({
+						id: 's-tide',
+						title: 'Tide',
+						album_id: 'other',
+						created_at: songCreatedAt
+					}),
+					album_id: 'other',
+					album_title: 'Other'
+				}
+			],
+			next_cursor: null,
+			has_more: false
+		});
+		const target = render();
+		await tick();
+		searchQuery.set('Tide');
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+		await tick();
+		await Promise.resolve();
+		await tick();
+		const cards = [...target.querySelectorAll('.album-card')];
+		expect(cards).toHaveLength(2);
+		const albumOnly = cards.find((card) => card.textContent?.includes('Nachtstrom'));
+		const songHit = cards.find((card) => card.textContent?.includes('Other'));
+		expect(albumOnly?.querySelector('.age')?.textContent).toBe(`${CREATED_AGE_PREFIX} 18h`);
+		expect(songHit?.querySelector('.age')).toBeNull();
+		expect(target.querySelector('.song-row .age')?.textContent).toBe('6h');
 	});
 
 	it('persists search pagination after load more', async () => {
@@ -378,6 +439,9 @@ describe('SongList sections', () => {
 		expect(target.querySelector('[data-library-section="playlists"]')).toBeNull();
 		expect(target.querySelector('[data-library-section="shares"]')).toBeNull();
 		expect(target.querySelector('.song-row')).toBeNull();
+		expect(target.querySelector('.album-chevron')).toBeNull();
+		expect(target.querySelector('.album-card')).not.toBeNull();
+		expect(target.querySelector('.album-overview')).not.toBeNull();
 		expect(target.querySelector('.share-row')).toBeNull();
 		expect(target.textContent).not.toContain('Late Night');
 		expect(target.textContent).toContain('First');
@@ -539,7 +603,7 @@ describe('SongList sections', () => {
 		expect(target.textContent).toContain(LIBRARY_SHARED_EMPTY);
 	});
 
-	it('auto-opens only the selected album', async () => {
+	it('does not nest songs under a selected Studio album', async () => {
 		albumList.set([
 			album({ id: 'a1', title: 'First', song_count: 1 }),
 			album({ id: 'a2', title: 'Second', song_count: 1 })
@@ -551,9 +615,10 @@ describe('SongList sections', () => {
 		selectedAlbumId.set('a1');
 		const target = render();
 		await tick();
-		const rows = [...target.querySelectorAll('.song-row')].map((row) => row.textContent);
-		expect(rows.some((text) => text?.includes('Song One'))).toBe(true);
-		expect(rows.some((text) => text?.includes('Song Two'))).toBe(false);
+		expect(target.querySelector('.song-row')).toBeNull();
+		expect(target.querySelector('.album-chevron')).toBeNull();
+		expect(target.textContent).toContain('First');
+		expect(target.textContent).not.toContain('Song One');
 	});
 });
 
@@ -632,5 +697,93 @@ describe('SongList share inventory', () => {
 		const updated = get(albumList).find((item) => item.id === 'a-local');
 		expect(updated?.is_shared).toBe(false);
 		expect(updated?.share_slug).toBeNull();
+	});
+});
+
+describe('SongList album cards', () => {
+	it('shows card fields, named created age, and primary or initials art', async () => {
+		vi.setSystemTime(new Date('2026-08-20T12:00:00.000Z'));
+		const createdAt = '2026-08-19T18:00:00.000Z';
+		albumList.set([
+			album({
+				id: 'a1',
+				title: 'Nachtstrom',
+				artist: 'Tide',
+				song_count: 4,
+				created_at: createdAt,
+				colors: { primary: '#ff0000' }
+			}),
+			album({
+				id: 'a2',
+				title: 'Local Album',
+				artist: 'Artist',
+				song_count: 2,
+				colors: { accent: '#00ff00' }
+			})
+		]);
+		songList.set([
+			song({ id: 's1', album_id: 'a1', title: 'Song One' }),
+			song({ id: 's2', album_id: 'a2', title: 'Song Two' })
+		]);
+		selectedAlbumId.set('a1');
+		const target = render();
+		await tick();
+
+		expect(target.querySelector('.album-chevron')).toBeNull();
+		expect(target.querySelector('.song-row')).toBeNull();
+		expect(target.querySelector('.album-overview')).not.toBeNull();
+		expect(target.textContent).not.toContain(SONG_SURFACE_RECIPE);
+		expect(target.textContent).not.toContain(SONG_SURFACE_TAKES);
+
+		const cards = [...target.querySelectorAll('.album-card')];
+		expect(cards).toHaveLength(2);
+		const colored = cards.find((card) => card.textContent?.includes('Nachtstrom'));
+		const initials = cards.find((card) => card.textContent?.includes('Local Album'));
+		expect(colored).toBeDefined();
+		expect(initials).toBeDefined();
+		expect(colored?.querySelector('.album-count')?.textContent).toBe('4');
+		expect(colored?.querySelector('.age')?.textContent).toBe(`${CREATED_AGE_PREFIX} 18h`);
+		expect(colored?.querySelector('.age')?.getAttribute('title')).toBe(
+			formatExactLocalTime(createdAt)
+		);
+		expect(colored?.querySelector('.age')?.getAttribute('aria-label')).toBe(
+			formatExactLocalTime(createdAt)
+		);
+		const colorArt = colored?.querySelector('.album-art');
+		expect(colorArt?.classList.contains('album-art-initials')).toBe(false);
+		expect(colorArt?.getAttribute('style')).toMatch(/#ff0000|rgb\(255,\s*0,\s*0\)/);
+		expect(colorArt?.textContent).toBe('');
+		const initialArt = initials?.querySelector('.album-art');
+		expect(initialArt?.classList.contains('album-art-initials')).toBe(true);
+		expect(initialArt?.textContent).toBe('LA');
+	});
+
+	it('opens the album overview from the card', async () => {
+		const target = render();
+		await tick();
+		const card = target.querySelector('.album-card');
+		expect(card).toBeInstanceOf(HTMLButtonElement);
+		(card as HTMLButtonElement).click();
+		await tick();
+		expect(get(selectedAlbumId)).toBe('a-local');
+		expect(get(librarySurface)).toBe('detail');
+	});
+
+	it('falls back to title initials when primary is missing or unusable', async () => {
+		albumList.set([
+			album({ id: 'a-empty', title: 'Tide', colors: {} }),
+			album({ id: 'a-bad', title: 'Open Sea', colors: { primary: 'not-a-color' } }),
+			album({ id: 'a-blank', title: '   ', colors: { primary: '  ' } })
+		]);
+		const target = render();
+		await tick();
+		const cards = [...target.querySelectorAll('.album-card')];
+		const artFor = (title: string): string | null | undefined =>
+			cards
+				.find((card) => card.querySelector('.album-title')?.textContent === title)
+				?.querySelector('.album-art')?.textContent;
+		expect(artFor('Tide')).toBe('TI');
+		expect(artFor('Open Sea')).toBe('OS');
+		expect(artFor('   ')).toBe('?');
 	});
 });

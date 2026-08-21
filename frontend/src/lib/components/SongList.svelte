@@ -47,11 +47,9 @@
 	import {
 		albumIsExpanded,
 		captureLibraryScroll,
-		expandedAlbumIds,
 		libraryScrollAnchor,
 		librarySection,
-		setLibrarySurface,
-		toggleAlbumExpanded
+		setLibrarySurface
 	} from '$lib/stores/libraryContext';
 	import {
 		changeLibrarySort,
@@ -69,6 +67,7 @@
 
 	import { CREATED_SORT_LABELS, CREATED_SORTS, compareByCreatedAt } from '$lib/utils/recency';
 	import {
+		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
 		LIBRARY_ALBUMS_EMPTY,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_LOAD_MORE,
@@ -114,7 +113,6 @@
 	const browseState = $derived($libraryBrowse);
 	const section = $derived($librarySection);
 	const searching = $derived(section !== 'playlists' && search.trim().length > 0);
-	const expanded = $derived($expandedAlbumIds);
 	const playlistStatus = $derived($playlistLoad);
 	const restoredScroll = $derived($libraryScrollAnchor);
 	const albumLoads = $derived($albumSongsLoad);
@@ -172,11 +170,6 @@
 		const target = event.currentTarget;
 		if (!(target instanceof HTMLElement)) return;
 		captureLibraryScroll(target.scrollTop);
-	}
-
-	function onToggleAlbum(albumId: string): void {
-		toggleAlbumExpanded(albumId);
-		persistLibraryHistory();
 	}
 
 	function hydrateAndOpenAlbum(album: AlbumItem): void {
@@ -363,14 +356,14 @@
 			<AlbumNode
 				album={group.album}
 				songs={group.songs}
-				expanded={albumIsExpanded(group.album.id, expanded, {
-					selectedAlbumId: currentAlbumId,
+				variant="hit"
+				showCreatedAge={group.songs.length === 0}
+				expanded={albumIsExpanded({
 					searching: true,
 					songHits: group.songs.length
 				})}
 				selected={group.album.id === currentAlbumId}
 				loadState={albumLoads[group.album.id]}
-				ontoggle={() => onToggleAlbum(group.album.id)}
 				onselect={() => hydrateAndOpenAlbum(group.album)}
 				onretry={() => loadSongsForAlbum(group.album.id)}
 			/>
@@ -477,21 +470,12 @@
 			>
 		{/if}
 	{:else if section === 'albums'}
-		<div class="album-overview">
+		<div class="album-overview" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
 			{#each albumGroups as group (group.album.id)}
 				<AlbumNode
 					album={group.album}
-					songs={group.songs}
-					expanded={albumIsExpanded(group.album.id, expanded, {
-						selectedAlbumId: currentAlbumId,
-						searching: false,
-						songHits: group.songs.length
-					})}
 					selected={group.album.id === currentAlbumId}
-					loadState={albumLoads[group.album.id]}
-					ontoggle={() => onToggleAlbum(group.album.id)}
 					onselect={() => hydrateAndOpenAlbum(group.album)}
-					onretry={() => loadSongsForAlbum(group.album.id)}
 				/>
 			{/each}
 		</div>
@@ -692,7 +676,10 @@
 
 	.album-overview {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr);
+		grid-template-columns: repeat(auto-fill, minmax(0, var(--album-card-track)));
+		gap: 8px;
+		padding: 8px;
+		min-width: 0;
 	}
 
 	.section-toolbar {
@@ -832,6 +819,10 @@
 
 		.section-tab {
 			padding: 10px 4px;
+		}
+
+		.album-overview {
+			grid-template-columns: minmax(0, 1fr);
 		}
 	}
 </style>

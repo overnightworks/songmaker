@@ -134,13 +134,18 @@ when mobile detail hides the library nav — not a third library tab. Membership
 public slug reachability (`is_shared` plus slug, not soft-deleted; archived takes
 stay). `N` is the unfiltered server total; a type filter pages a subset without
 changing `N`. Old `history.state.section === 'shared'` still opens that inventory.
-Unshare stays the four resource DELETE endpoints. Albums start collapsed. Desktop
-keeps compact Studio/Listen navigation in the sidebar. Opening a Studio song on
-the detail surface keeps the album/song list in a named browse column beside
-song detail (`nav browse detail`); Listen playlist detail, Create, and album
-overview hide browse. Shared still forces browse, so the inventory never sits
-beside `SongDetailView`. On viewports ≤768px, any detail hides browse and the
-song header offers album title plus previous/next track. Each mode keeps its
+Unshare stays the four resource DELETE endpoints. Studio browse is a wrapping
+album-card grid (title, artist, song count, created age, and `colors.primary` or
+title initials), not a nested song tree; the album overview remains the track
+list. Cards wrap with `minmax(0, …)` above 768px and stack at ≤768px
+(`LIBRARY_NARROW_MEDIA`); keep-browse uses that same card grid, not a horizontal
+shelf. Search still lists song hits under album context; album-only hits may use
+card chrome. Desktop keeps compact Studio/Listen navigation in the sidebar.
+Opening a Studio song on the detail surface keeps that card grid in a named
+browse column beside song detail (`nav browse detail`); Listen playlist detail,
+Create, and album overview hide browse. Shared still forces browse, so the
+inventory never sits beside `SongDetailView`. On viewports ≤768px, any detail
+hides browse and the song header offers album title plus previous/next track. Each mode keeps its
 last visible browse/detail context (selection, query, sort, loaded page, scroll,
 and song surface) in memory; switching Studio↔Listen replaces the current
 history entry and restores that mode's surface. Library context is also stored
