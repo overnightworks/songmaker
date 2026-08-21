@@ -44,7 +44,6 @@ def list_songs(
     if light:
         query = session.query(Song).options(
             joinedload(Song.versions),
-            joinedload(Song.generations).joinedload(Generation.version),
             joinedload(Song.album),
         )
     else:

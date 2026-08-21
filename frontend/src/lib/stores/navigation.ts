@@ -235,6 +235,7 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 	}
 	selectSong(song.id, song);
 	selectedGenerationId.set(generationId);
+	persistLibraryHistory();
 }
 
 export function goBack(): void {

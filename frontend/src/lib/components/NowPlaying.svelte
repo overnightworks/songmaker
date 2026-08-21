@@ -50,7 +50,7 @@
 		const first = focusable[0];
 		const last = focusable[focusable.length - 1];
 		const active = document.activeElement;
-		if (event.shiftKey && (active === first || !sheet.contains(active))) {
+		if (event.shiftKey && (active === first || active === sheet || !sheet.contains(active))) {
 			event.preventDefault();
 			last.focus();
 		} else if (!event.shiftKey && (active === last || !sheet.contains(active))) {
@@ -112,7 +112,7 @@
 	.now-playing-modal {
 		position: fixed;
 		inset: 0;
-		z-index: 109;
+		z-index: 301;
 	}
 	.sheet-backdrop {
 		position: absolute;
