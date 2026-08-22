@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
-import { NOW_PLAYING_LABEL, NOW_PLAYING_NO_LYRICS } from '$lib/constants';
+import { NOW_PLAYING_LABEL, NOW_PLAYING_NO_LYRICS, RAIL_LIBRARY_LABEL } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { AlbumItem, PlaylistDetailItem } from '$lib/api/types';
 import {
@@ -171,7 +171,7 @@ afterEach(async () => {
 });
 
 describe('PlayerBar stream boundaries', () => {
-	it('keeps the existing Mix library start affordance available while idle', async () => {
+	it('names the library, never the take pool, as the idle Play target with no collection open', async () => {
 		queueContext.set({ type: 'library' });
 		openCollection.set(null);
 		selectedPlaylistDetail.set(null);
@@ -182,7 +182,7 @@ describe('PlayerBar stream boundaries', () => {
 		expect(audioPlayer.current).toBeNull();
 		const play = target.querySelector<HTMLButtonElement>('button[aria-label="Play"]');
 		expect(play?.disabled).toBe(false);
-		expect(target.querySelector('.track-title')?.textContent).toBe('Mix');
+		expect(target.querySelector('.track-title')?.textContent).toBe(RAIL_LIBRARY_LABEL);
 		play?.click();
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});

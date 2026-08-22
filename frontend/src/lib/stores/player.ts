@@ -37,7 +37,8 @@ import {
 	LIBRARY_SONG_PAGE_SIZE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
-	QUEUE_TAKE_MISSING_TOAST
+	QUEUE_TAKE_MISSING_TOAST,
+	RAIL_LIBRARY_LABEL
 } from '$lib/constants';
 
 // --- Data ---
@@ -496,10 +497,13 @@ export function idlePlayTarget(input: {
 	collection: OpenCollection | null;
 	playlist: PlaylistDetailItem | null;
 	albums: AlbumItem[];
-	poolLabel: string;
 }): IdlePlayTarget {
 	if (input.collection?.kind === 'playlist') {
-		return { type: 'playlist', label: input.playlist?.title ?? '' };
+		// A playlist whose detail failed to load (or hasn't loaded yet) has no
+		// title to show and nothing to natively play — fall back to the named
+		// library target instead of an empty label and a dead Play button.
+		if (!input.playlist) return { type: 'library', label: RAIL_LIBRARY_LABEL };
+		return { type: 'playlist', label: input.playlist.title };
 	}
 	if (input.collection?.kind === 'album') {
 		return {
@@ -508,15 +512,14 @@ export function idlePlayTarget(input: {
 			albumId: input.collection.id
 		};
 	}
-	return { type: 'library', label: input.poolLabel };
+	return { type: 'library', label: RAIL_LIBRARY_LABEL };
 }
 
 export async function playIdleStart(): Promise<void> {
 	const target = idlePlayTarget({
 		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
-		albums: get(albumList),
-		poolLabel: poolLabel()
+		albums: get(albumList)
 	});
 	if (target.type === 'playlist') {
 		const playlist = get(selectedPlaylistDetail);

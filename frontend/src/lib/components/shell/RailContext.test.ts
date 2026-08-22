@@ -1,8 +1,10 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 
 import type { GenerationItem, PlaylistDetailItem, SongItem } from '$lib/api/types';
 import { openCollection } from '$lib/stores/collection';
+import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList, selectedSongId, songList } from '$lib/stores/player';
 import { resetPlaylistsForTests, selectedPlaylistDetail } from '$lib/stores/playlists';
 
@@ -112,6 +114,7 @@ async function render(): Promise<HTMLElement> {
 
 beforeEach(() => {
 	resetPlaylistsForTests();
+	resetLibraryContextForTests();
 	albumList.set([
 		{
 			id: 'a1',
@@ -139,6 +142,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	openCollection.set(null);
 	resetPlaylistsForTests();
+	resetLibraryContextForTests();
 });
 
 describe('RailContext', () => {
@@ -206,5 +210,39 @@ describe('RailContext', () => {
 		expect(target.textContent).toContain('Night Drive');
 		expect(target.textContent).toContain('First Track');
 		expect(target.querySelector('.context-add')).toBeNull();
+	});
+
+	it('opens the album interior from the header, replacing history, while a song inside it is open', async () => {
+		openCollection.set({ kind: 'album', id: 'a1' });
+		selectedSongId.set('s1');
+		librarySurface.set('detail');
+		const target = await render();
+		const header = target.querySelector<HTMLButtonElement>('.context-head');
+		if (!header) throw new Error('Expected .context-head to be rendered');
+		expect(header.getAttribute('aria-current')).toBeNull();
+
+		const before = history.state?.index ?? 0;
+		header.click();
+		await tick();
+
+		expect(get(selectedSongId)).toBeNull();
+		expect(header.getAttribute('aria-current')).toBe('page');
+		expect(history.state?.index ?? 0).toBe(before);
+	});
+
+	it('opens the album interior from the header, pushing history, when browsing elsewhere', async () => {
+		openCollection.set({ kind: 'album', id: 'a1' });
+		selectedSongId.set(null);
+		librarySurface.set('browse');
+		const target = await render();
+		const header = target.querySelector<HTMLButtonElement>('.context-head');
+		if (!header) throw new Error('Expected .context-head to be rendered');
+
+		const before = history.state?.index ?? 0;
+		header.click();
+		await tick();
+
+		expect(header.getAttribute('aria-current')).toBe('page');
+		expect(history.state?.index ?? 0).toBe(before + 1);
 	});
 });

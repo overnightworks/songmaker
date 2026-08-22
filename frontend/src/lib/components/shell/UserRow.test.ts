@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import UserMenu from './UserMenu.svelte';
+import UserRow from './UserRow.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
 const onlogout = vi.fn();
@@ -15,7 +15,7 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 async function renderRow(): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(UserMenu, { target, props: { username: 'felix', onlogout } });
+	mounted = mount(UserRow, { target, props: { username: 'felix', onlogout } });
 	await tick();
 	return target;
 }
@@ -27,7 +27,7 @@ afterEach(async () => {
 	onlogout.mockReset();
 });
 
-describe('UserMenu', () => {
+describe('UserRow', () => {
 	it('shows the username, a theme toggle, and a Logout action inline, with no popup', async () => {
 		const target = await renderRow();
 		expect(target.textContent).toContain('felix');

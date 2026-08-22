@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
+	import { RAIL_DRAWER_CLOSE_LABEL } from '$lib/constants';
 	import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 
@@ -32,7 +33,7 @@
 			class="drawer-backdrop"
 			tabindex="-1"
 			onclick={() => closeSidebar()}
-			aria-label="Close menu"
+			aria-label={RAIL_DRAWER_CLOSE_LABEL}
 		></button>
 		<div
 			bind:this={panel}

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, PlaylistDetailItem, SongItem } from '$lib/api/types';
+import type { AlbumItem, GenerationItem, PlaylistDetailItem, SongItem } from '$lib/api/types';
 import { LIBRARY_HISTORY_KIND } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import { searchQuery } from '$lib/stores/filter';
@@ -53,7 +53,10 @@ import {
 	albumIsExpanded,
 	applyLibraryHistory,
 	captureLibraryScroll,
+	detailTab,
+	hydrateLibraryFromHistory,
 	isLibraryHistoryState,
+	librarySurface,
 	libraryRootState,
 	libraryScrollAnchor,
 	libraryFilter,
@@ -114,6 +117,32 @@ function playlistDetail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDe
 		share_slug: null,
 		created_at: '2026-01-01T00:00:00+00:00',
 		entries: [],
+		...overrides
+	};
+}
+
+function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
+	return {
+		id: 'g1',
+		song_id: 's9',
+		version_id: 'v1',
+		version_number: 1,
+		generation_number: 1,
+		mp3_path: '/audio/g1.mp3',
+		wav_path: null,
+		seed: 1,
+		status: 'completed',
+		is_archived: false,
+		is_picked: false,
+		is_kept: false,
+		is_shared: false,
+		model_mode: 'turbo',
+		whisper_text: null,
+		whisper_cues: null,
+		version_lyrics: null,
+		scores: null,
+		generation_params: null,
+		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides
 	};
 }
@@ -270,5 +299,103 @@ describe('applyLibraryHistory', () => {
 		await applyLibraryHistory(state);
 		expect(get(openCollection)).toBeNull();
 		expect(get(selectedPlaylistDetail)).toBeNull();
+	});
+
+	it('lets a newer history restore win over an in-flight playlist fetch', async () => {
+		let resolveFirst: ((value: PlaylistDetailItem) => void) | undefined;
+		fetchPlaylist.mockImplementationOnce(
+			() =>
+				new Promise<PlaylistDetailItem>((resolve) => {
+					resolveFirst = resolve;
+				})
+		);
+		fetchPlaylist.mockResolvedValueOnce(playlistDetail({ id: 'p2', title: 'Second' }));
+		const first = applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'playlist', id: 'p1' }
+		});
+		const second = applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'playlist', id: 'p2' }
+		});
+		await second;
+		resolveFirst?.(playlistDetail({ id: 'p1', title: 'First' }));
+		await first;
+		expect(get(selectedPlaylistDetail)?.id).toBe('p2');
+	});
+
+	it('fetches the selected song when retained takes are fewer than generation_count', async () => {
+		songList.set([
+			song({
+				id: 's9',
+				album_id: 'a9',
+				generation_count: 2,
+				generations: [generation({ id: 'g1', song_id: 's9' })]
+			})
+		]);
+		fetchSong.mockResolvedValueOnce(
+			song({
+				id: 's9',
+				album_id: 'a9',
+				generation_count: 2,
+				generations: [
+					generation({ id: 'g1', song_id: 's9' }),
+					generation({ id: 'g2', song_id: 's9' })
+				]
+			})
+		);
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			songId: 's9'
+		});
+		expect(fetchSong).toHaveBeenCalledWith('s9');
+		expect(
+			get(songList)
+				.find((item) => item.id === 's9')
+				?.generations.map((item) => item.id)
+		).toEqual(['g1', 'g2']);
+	});
+
+	it('keeps the selected song after a transient fetch error but clears it on 404', async () => {
+		const { ApiError } = await import('$lib/api/fetch');
+		fetchSong.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/songs/s9'));
+		await applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's9' });
+		expect(get(selectedSongId)).toBe('s9');
+
+		fetchSong.mockRejectedValueOnce(new ApiError(404, 'gone', '/api/songs/s9'));
+		await applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's9' });
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(librarySurface)).toBe('browse');
+	});
+
+	it('defaults a missing detailTab to the takes tab without failing restore', async () => {
+		const { detailTab: recordedTab, ...withoutDetailTab } = libraryRootState();
+		expect(recordedTab).toBe('generations');
+		detailTab.set('edit');
+		await applyLibraryHistory(withoutDetailTab);
+		expect(get(detailTab)).toBe('generations');
+		expect(get(librarySurface)).toBe('browse');
+	});
+});
+
+describe('hydrateLibraryFromHistory', () => {
+	it('replaces history after hydrate so a deleted playlist is not replayed', async () => {
+		const { ApiError } = await import('$lib/api/fetch');
+		history.replaceState(
+			{
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'playlist', id: 'p-gone' }
+			},
+			'',
+			'/'
+		);
+		fetchPlaylist.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/playlists/p-gone'));
+		await hydrateLibraryFromHistory();
+		expect(history.state.collection).toBeNull();
+		expect(history.state.surface).toBe('browse');
 	});
 });

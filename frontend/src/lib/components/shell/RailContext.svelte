@@ -7,11 +7,24 @@
 		setShuffle,
 		songList
 	} from '$lib/stores/player';
-	import { openLibraryCreate, selectSong } from '$lib/stores/navigation';
+	import {
+		backToCollection,
+		compareAlbumTracks,
+		openAlbum,
+		openLibraryCreate,
+		openPlaylist,
+		selectSong
+	} from '$lib/stores/navigation';
+	import { librarySurface } from '$lib/stores/libraryContext';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { titleInitials } from '$lib/utils/format';
-	import { ALBUM_ART_EMPTY_INITIALS } from '$lib/constants';
+	import {
+		ALBUM_ART_EMPTY_INITIALS,
+		RAIL_CONTEXT_ADD_SONG_LABEL,
+		RAIL_CONTEXT_EMPTY,
+		RAIL_CONTEXT_NO_TAKES
+	} from '$lib/constants';
 	import type { PlaylistEntryItem, SongItem } from '$lib/api/types';
 
 	const collection = $derived($openCollection);
@@ -27,9 +40,7 @@
 	);
 	const albumTracks = $derived(
 		collection?.kind === 'album'
-			? songs
-					.filter((song) => song.album_id === collection.id)
-					.sort((a, b) => a.track_number - b.track_number)
+			? songs.filter((song) => song.album_id === collection.id).sort(compareAlbumTracks)
 			: []
 	);
 
@@ -37,13 +48,17 @@
 		collection?.kind === 'album' ? (album?.title ?? '') : (playlistDetail?.title ?? '')
 	);
 	const initials = $derived(title ? titleInitials(title) : ALBUM_ART_EMPTY_INITIALS);
+	// The interior (AlbumDetailView/PlaylistDetailView) is the visible surface
+	// only once a song stops covering it — see routes/+page.svelte's
+	// song-first precedence.
+	const isInteriorVisible = $derived($librarySurface === 'detail' && currentSongId === null);
 
 	function isSongPlaying(song: SongItem): boolean {
 		return current?.songId === song.id && playing;
 	}
 
 	function trackMeta(song: SongItem): string {
-		if (song.generation_count === 0) return '—';
+		if (song.generation_count === 0) return RAIL_CONTEXT_NO_TAKES;
 		const takes = `${song.generation_count} take${song.generation_count !== 1 ? 's' : ''}`;
 		const hasPick = song.generations.some((generation) => generation.is_picked);
 		return hasPick ? `${takes} · pick` : takes;
@@ -74,14 +89,51 @@
 		setShuffle(false);
 		playPlaylistEntries(playlistDetail.entries, index, { restart: true });
 	}
+
+	// A song (or take) open inside the collection covers the interior even
+	// while librarySurface stays 'detail' (see +page.svelte's song-first
+	// precedence) — clicking the header then means "back to the collection",
+	// which replaces history instead of pushing a fresh detail entry.
+	function onHeaderClick(): void {
+		if (!collection) return;
+		if (currentSongId !== null) {
+			backToCollection();
+			return;
+		}
+		if (collection.kind === 'album') openAlbum(collection.id);
+		else openPlaylist(collection.id);
+	}
 </script>
+
+{#snippet contextHead()}
+	<button
+		type="button"
+		class="context-head"
+		onclick={onHeaderClick}
+		aria-current={isInteriorVisible ? 'page' : undefined}
+	>
+		<span class="context-cover" aria-hidden="true">{initials}</span>
+		<span class="context-title">{title}</span>
+		<svg
+			class="context-chevron"
+			width="14"
+			height="14"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			aria-hidden="true"
+		>
+			<polyline points="9 6 15 12 9 18" />
+		</svg>
+	</button>
+{/snippet}
 
 {#if collection?.kind === 'album' && album}
 	<div class="rail-context">
-		<div class="context-head">
-			<span class="context-cover" aria-hidden="true">{initials}</span>
-			<span class="context-title">{title}</span>
-		</div>
+		{@render contextHead()}
 		<div class="context-tracks">
 			{#each albumTracks as song (song.id)}
 				<button
@@ -100,16 +152,13 @@
 				</button>
 			{/each}
 			<button type="button" class="context-row context-add" onclick={openLibraryCreate}>
-				+ Song
+				{RAIL_CONTEXT_ADD_SONG_LABEL}
 			</button>
 		</div>
 	</div>
 {:else if collection?.kind === 'playlist' && playlistDetail}
 	<div class="rail-context">
-		<div class="context-head">
-			<span class="context-cover" aria-hidden="true">{initials}</span>
-			<span class="context-title">{title}</span>
-		</div>
+		{@render contextHead()}
 		<div class="context-tracks">
 			{#each playlistDetail.entries as entry, index (entry.id)}
 				<button
@@ -129,7 +178,7 @@
 		</div>
 	</div>
 {:else}
-	<p class="context-empty">No album or playlist open — its tracks appear here.</p>
+	<p class="context-empty">{RAIL_CONTEXT_EMPTY}</p>
 {/if}
 
 <style>
@@ -145,7 +194,20 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
+		width: 100%;
 		padding: 4px 16px 8px;
+		background: none;
+		border: none;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.context-head:hover .context-title {
+		color: var(--primary);
+	}
+
+	.context-head[aria-current='page'] .context-title {
+		color: var(--primary);
 	}
 
 	.context-cover {
@@ -163,6 +225,8 @@
 	}
 
 	.context-title {
+		flex: 1;
+		min-width: 0;
 		font-family: var(--font-display);
 		font-size: 0.8rem;
 		color: var(--text);
@@ -171,6 +235,11 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.context-chevron {
+		flex-shrink: 0;
+		color: var(--text-subtle);
 	}
 
 	.context-tracks {

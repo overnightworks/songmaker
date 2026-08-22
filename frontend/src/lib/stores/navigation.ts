@@ -1,4 +1,4 @@
-import { derived, get } from 'svelte/store';
+import { get } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { fetchAlbum } from '$lib/api/albums';
@@ -148,6 +148,7 @@ export function backToCollection(): void {
 
 export function openLibraryCreate(): void {
 	setLibrarySurface('create');
+	closeSidebar();
 	pushLibraryHistory();
 }
 
@@ -162,6 +163,7 @@ export async function openLibraryWall(): Promise<void> {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	setLibrarySurface('browse');
+	closeSidebar();
 	pushLibraryHistory();
 }
 
@@ -170,7 +172,7 @@ export interface AlbumTrackNeighbors {
 	next: SongItem | null;
 }
 
-function compareAlbumTracks(a: SongItem, b: SongItem): number {
+export function compareAlbumTracks(a: SongItem, b: SongItem): number {
 	if (a.track_number !== b.track_number) return a.track_number - b.track_number;
 	return a.id.localeCompare(b.id);
 }
@@ -219,8 +221,22 @@ function applySelectedSong(
 	pushLibraryHistory();
 }
 
+// Selecting a song already inside the open collection (e.g. clicking a
+// track in the currently open album) replaces the current history entry,
+// like selectNeighborSong. Selecting a song outside it (search hit, deep
+// link, a different collection) pushes, since it changes the rail context.
+function selectSongHistoryMode(
+	songId: string,
+	knownSong: SongItem | undefined
+): 'stack' | 'replace' {
+	const collection = get(openCollection);
+	if (collection?.kind !== 'album') return 'stack';
+	const song = get(songList).find((item) => item.id === songId) ?? knownSong;
+	return song?.album_id === collection.id ? 'replace' : 'stack';
+}
+
 export function selectSong(songId: string, knownSong?: SongItem): void {
-	applySelectedSong(songId, knownSong, 'stack', 'takes');
+	applySelectedSong(songId, knownSong, selectSongHistoryMode(songId, knownSong), 'takes');
 }
 
 export function selectNeighborSong(song: SongItem): void {
@@ -362,11 +378,3 @@ export function resetNavigationForTests(): void {
 	suppressPush = false;
 	openTakesSurface();
 }
-
-export const canGoBack = derived(
-	[selectedSongId, selectedGenerationId, openCollection, librarySurface],
-	([$songId, $genId, $collection, $surface]) => {
-		if ($surface === 'create') return true;
-		return $songId !== null || $genId !== null || $collection !== null || $surface === 'detail';
-	}
-);

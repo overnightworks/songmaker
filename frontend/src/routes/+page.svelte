@@ -105,7 +105,7 @@
 			{:else if surface === 'detail' && collection?.kind === 'playlist'}
 				<PlaylistDetailView />
 			{:else}
-				<LibraryWall onNewSong={openLibraryCreate} />
+				<LibraryWall oncreate={openLibraryCreate} />
 			{/if}
 		</main>
 	</div>

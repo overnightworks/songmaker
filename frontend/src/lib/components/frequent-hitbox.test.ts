@@ -1,4 +1,4 @@
-import { mount, tick, unmount } from 'svelte';
+import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -9,11 +9,12 @@ import type {
 } from '$lib/api/types';
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { GENERATION_ACTIONS_KEY, type GenerationActions } from '$lib/contexts/generation-actions';
-import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
 import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
-import { theme } from '$lib/stores/ui';
+import { currentUser, authLoading } from '$lib/stores/auth';
+import { closeSidebar, theme, toggleSidebar } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 vi.mock('$lib/api/library', () => ({
@@ -38,7 +39,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchPlaylists: vi.fn().mockResolvedValue([]),
 		fetchPlaylist: vi.fn(),
 		removeFromPlaylist: vi.fn().mockResolvedValue(undefined),
-		reorderPlaylistEntry: vi.fn().mockResolvedValue(undefined)
+		reorderPlaylistEntry: vi.fn().mockResolvedValue(undefined),
+		fetchCapabilities: vi.fn().mockResolvedValue({}),
+		checkSetupRequired: vi.fn()
 	};
 });
 vi.mock('$lib/api/queue-streams', () => ({
@@ -55,6 +58,8 @@ vi.mock('$lib/services/offline', () => ({
 }));
 vi.mock('$lib/stores/navigation', () => ({
 	openAlbum: vi.fn(),
+	openLibraryCreate: vi.fn(),
+	openLibraryWall: vi.fn(),
 	openPlaylist: vi.fn(),
 	selectLibraryFilter: vi.fn(),
 	selectSong: vi.fn(),
@@ -63,6 +68,29 @@ vi.mock('$lib/stores/navigation', () => ({
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
 }));
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn().mockResolvedValue(undefined),
+	afterNavigate: vi.fn()
+}));
+vi.mock('$app/environment', () => ({
+	browser: true,
+	dev: true
+}));
+vi.mock('$app/state', () => ({
+	page: { url: new URL('https://songmaker.test/') }
+}));
+vi.mock('$lib/stores/auth', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/stores/auth')>();
+	return {
+		...actual,
+		checkAuth: vi.fn(async () => {
+			const user = { id: 'u1', username: 'felix', role: 'user' as const };
+			actual.currentUser.set(user);
+			actual.authLoading.set(false);
+			return user;
+		})
+	};
+});
 
 import { removeFromPlaylist, reorderPlaylistEntry } from '$lib/api/client';
 import GenerationsList from './GenerationsList.svelte';
@@ -70,6 +98,7 @@ import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
 import LibraryWall from './LibraryWall.svelte';
 import ThemeToggle from './ThemeToggle.svelte';
+import Layout from '../../routes/+layout.svelte';
 
 type PointerKind = 'coarse' | 'fine';
 
@@ -87,7 +116,9 @@ const INVENTORY = [
 	},
 	{ name: 'playlist-remove', selector: '.remove-btn[data-hitbox="frequent"]' },
 	{ name: 'new-album', selector: '[data-hitbox="frequent"][aria-label="New album"]' },
-	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' }
+	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' },
+	{ name: 'drawer-trigger', selector: '.drawer-trigger[data-hitbox="frequent"]' },
+	{ name: 'collection-menu', selector: '.menu-trigger[data-hitbox="frequent"]' }
 ] as const;
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -305,6 +336,22 @@ beforeEach(() => {
 	selectedPlaylistDetail.set(playlistDetail());
 	theme.set('dark');
 	document.documentElement.dataset.theme = 'dark';
+	vi.stubGlobal(
+		'matchMedia',
+		vi.fn(() => ({
+			matches: true,
+			media: '',
+			onchange: null,
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+			dispatchEvent: vi.fn()
+		}))
+	);
+	currentUser.set({ id: 'u1', username: 'felix', role: 'user' as const });
+	authLoading.set(false);
+	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 });
 
 afterEach(async () => {
@@ -314,7 +361,14 @@ afterEach(async () => {
 	resetLibrarySearchForTests();
 	resetLibraryContextForTests();
 	selectedPlaylistDetail.set(null);
+	currentUser.set(null);
+	closeSidebar();
+	vi.unstubAllGlobals();
 });
+
+const layoutChildren = createRawSnippet(() => ({
+	render: () => `<div></div>`
+}));
 
 async function renderInventory(): Promise<HTMLElement> {
 	const root = document.createElement('div');
@@ -325,7 +379,8 @@ async function renderInventory(): Promise<HTMLElement> {
 	const playlistTarget = document.createElement('div');
 	const songTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
-	root.append(themeTarget, genTarget, playlistTarget, songTarget, pickerTarget);
+	const layoutTarget = document.createElement('div');
+	root.append(themeTarget, genTarget, playlistTarget, songTarget, pickerTarget, layoutTarget);
 
 	mounted.push(mount(ThemeToggle, { target: themeTarget }));
 	mounted.push(
@@ -336,10 +391,15 @@ async function renderInventory(): Promise<HTMLElement> {
 		})
 	);
 	mounted.push(mount(PlaylistDetailView, { target: playlistTarget }));
-	mounted.push(mount(LibraryWall, { target: songTarget, props: { onNewSong: vi.fn() } }));
+	mounted.push(mount(LibraryWall, { target: songTarget, props: { oncreate: vi.fn() } }));
 	mounted.push(
 		mount(PlaylistPicker, { target: pickerTarget, props: { onselect: vi.fn(), onclose: vi.fn() } })
 	);
+	mounted.push(mount(Layout, { target: layoutTarget, props: { children: layoutChildren } }));
+	await tick();
+	await Promise.resolve();
+	await tick();
+	toggleSidebar();
 	await tick();
 	return root;
 }
@@ -419,6 +479,27 @@ describe('frequent action hitboxes', () => {
 				}
 			}
 		}
+	});
+
+	it('sizes the new-playlist create action to the frequent hitbox on the Playlists filter', async () => {
+		const root = await renderInventory();
+		libraryFilter.set('playlists');
+		await tick();
+		const newPlaylistBtn = requireButton(
+			root,
+			'new-playlist',
+			'[data-hitbox="frequent"][aria-label="New playlist"]'
+		);
+
+		setPointer('coarse');
+		const coarse = minBox(newPlaylistBtn, 'new-playlist');
+		expect(coarse.width).toBe(HITBOX_FREQUENT_PX);
+		expect(coarse.height).toBe(HITBOX_FREQUENT_PX);
+
+		setPointer('fine');
+		const fine = minBox(newPlaylistBtn, 'new-playlist');
+		expect(fine.width).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+		expect(fine.height).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 	});
 
 	it('keeps pick, keep, reorder, and remove on the same button hitbox for pointer and keyboard', async () => {

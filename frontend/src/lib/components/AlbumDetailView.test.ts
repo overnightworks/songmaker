@@ -1,9 +1,11 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 
 import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
 import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ALT_TYPE } from '$lib/constants';
 import { albumList, selectedAlbumId, songList } from '$lib/stores/player';
+import { openCollection } from '$lib/stores/collection';
 
 const uploadAlbumCover = vi.fn();
 
@@ -16,7 +18,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		renameAlbum: vi.fn(),
 		shareAlbum: vi.fn(),
 		unshareAlbum: vi.fn(),
-		deleteAlbum: vi.fn(),
+		deleteAlbum: vi.fn().mockResolvedValue(undefined),
 		restoreAlbum: vi.fn()
 	};
 });
@@ -109,6 +111,7 @@ afterEach(async () => {
 	selectedAlbumId.set(null);
 	albumList.set([]);
 	songList.set([]);
+	openCollection.set(null);
 });
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -193,6 +196,20 @@ describe('AlbumDetailView header', () => {
 		await tick();
 		expect(document.body.querySelector('.menu-panel')).toBeNull();
 		expect(target.querySelector('.editable-title-input')).not.toBeNull();
+	});
+
+	it('clears the open collection on delete so the wall takes over instead of a blank panel', async () => {
+		openCollection.set({ kind: 'album', id: 'a-local' });
+		const target = await renderDetail();
+		const menu = await openCollectionMenu(target);
+		requireElement<HTMLButtonElement>(menu, '.menu-item.destructive').click();
+		await tick();
+		requireElement<HTMLButtonElement>(document.body, '.confirm-btn').click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(get(openCollection)).toBeNull();
 	});
 });
 

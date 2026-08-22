@@ -16,7 +16,6 @@
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
-	import { LIBRARY_TAKE_POOL_LABELS, libraryTakePool } from '$lib/stores/playbackSettings';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
@@ -60,7 +59,6 @@
 	const errorMsg = $derived(audioPlayer.error);
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
-	const poolName = $derived(LIBRARY_TAKE_POOL_LABELS[$libraryTakePool]);
 	const startNotice = $derived($playStartNotice);
 
 	const isPlaying = $derived(status === 'playing');
@@ -73,8 +71,7 @@
 		idlePlayTarget({
 			collection: $openCollection,
 			playlist: $selectedPlaylistDetail,
-			albums: $albumList,
-			poolLabel: poolName
+			albums: $albumList
 		})
 	);
 	const prevSong = $derived(canPlayPrevSong(current, songs, ctx));

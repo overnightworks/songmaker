@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList, songList } from '$lib/stores/player';
-import { playlistList, resetPlaylistsForTests } from '$lib/stores/playlists';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn().mockResolvedValue(undefined),
@@ -27,12 +27,13 @@ vi.mock('$lib/api/songs', () => ({
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
+const fetchPlaylists = vi.fn().mockResolvedValue([]);
 vi.mock('$lib/api/client', () => ({
 	fetchSong: vi.fn(),
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false }),
-	fetchPlaylists: vi.fn().mockResolvedValue([]),
+	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: vi.fn()
 }));
 
@@ -56,6 +57,7 @@ async function render(): Promise<HTMLElement> {
 }
 
 beforeEach(() => {
+	fetchPlaylists.mockReset().mockResolvedValue([]);
 	resetLibraryContextForTests();
 	resetPlaylistsForTests();
 	albumList.set([]);
@@ -106,5 +108,35 @@ describe('Rail', () => {
 		expect(get(librarySurface)).toBe('browse');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 		expect(history.state.index).toBeGreaterThan(before);
+	});
+
+	it('loads the playlist count on mount instead of showing 0 until the Playlists chip is visited', async () => {
+		fetchPlaylists.mockResolvedValue([
+			{
+				id: 'p1',
+				title: 'Night Drive',
+				entry_count: 0,
+				is_shared: false,
+				share_slug: null,
+				created_at: '2026-01-01T00:00:00+00:00'
+			}
+		]);
+		const target = await render();
+		await vi.waitFor(() => expect(get(playlistLoad).status).toBe('ready'));
+		await tick();
+		expect(target.textContent).toContain('1 playlist');
+	});
+
+	it('acts as the Library link when the brand wordmark is clicked', async () => {
+		openCollection.set({ kind: 'album', id: 'a1' });
+		librarySurface.set('detail');
+		const target = await render();
+		const brand = requireElement<HTMLButtonElement>(target, '.brand');
+		expect(brand.getAttribute('aria-label')).toBe('Library');
+		brand.click();
+		await tick();
+		await Promise.resolve();
+		expect(get(librarySurface)).toBe('browse');
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 });

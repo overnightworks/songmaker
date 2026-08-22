@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {
 		deleteAlbum,
+		deleteAlbumCover,
 		renameAlbum,
 		restoreAlbum,
 		shareAlbum,
@@ -23,6 +24,7 @@
 		updateAlbumInList
 	} from '$lib/stores/player';
 	import { selectSong } from '$lib/stores/navigation';
+	import { setOpenCollection } from '$lib/stores/collection';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import {
@@ -121,6 +123,20 @@
 		coverInput?.click();
 	}
 
+	async function onCoverRemove(): Promise<void> {
+		if (!selectedAlbum) return;
+		coverBusy = true;
+		try {
+			const updated = await deleteAlbumCover(selectedAlbum.id);
+			updateAlbumInList(selectedAlbum.id, () => updated);
+			addToast('Cover removed', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Cover remove failed', 'error');
+		} finally {
+			coverBusy = false;
+		}
+	}
+
 	async function onRenameAlbum(newTitle: string): Promise<void> {
 		if (!selectedAlbum) return;
 		const albumId = selectedAlbum.id;
@@ -159,6 +175,7 @@
 			await deleteAlbum(albumId);
 			removeAlbumFromList(albumId);
 			removeSongsForAlbum(albumId);
+			setOpenCollection(null);
 			addUndoToast('Album deleted', {
 				label: 'Undo',
 				handler: async () => {
@@ -220,6 +237,7 @@
 			onunshare={onAlbumShareDisable}
 			ondelete={() => (showDeleteConfirm = true)}
 			oncover={onCoverAction}
+			onremovecover={onCoverRemove}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
 		/>
 		<input

@@ -1,10 +1,12 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 
 import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { checkAuth, currentUser, authLoading } from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { openCollection } from '$lib/stores/collection';
+import { librarySurface } from '$lib/stores/libraryContext';
 import { closeSidebar } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
@@ -61,9 +63,17 @@ vi.mock('$lib/api/songs', () => ({
 }));
 
 import Layout from './+layout.svelte';
+import layoutSource from './+layout.svelte?raw';
 
 const VIEWPORT_PX = 320;
 const USER = { id: 'u1', username: 'felix', role: 'user' as const };
+
+function extractRule(source: string, selector: string): string {
+	const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const match = new RegExp(`${escaped}\\s*{([^}]*)}`).exec(source);
+	if (!match) throw new Error(`Expected rule ${selector} in stylesheet`);
+	return match[1];
+}
 
 let mounted: ReturnType<typeof mount> | undefined;
 const children = createRawSnippet(() => ({
@@ -217,7 +227,7 @@ describe('app shell', () => {
 		const target = await renderLayout('/');
 		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
 		const trigger = requireElement<HTMLButtonElement>(strip, '.drawer-trigger');
-		const brand = requireElement<HTMLAnchorElement>(strip, '.brand');
+		const brand = requireElement<HTMLButtonElement>(strip, '.brand');
 
 		expect(target.querySelector('.rail')).toBeNull();
 		expect(brand.textContent).toBeTruthy();
@@ -230,13 +240,25 @@ describe('app shell', () => {
 		expect(used).toBeLessThanOrEqual(VIEWPORT_PX);
 	});
 
+	it('acts as the Library link when the mobile-strip brand is clicked', async () => {
+		librarySurface.set('detail');
+		const target = await renderLayout('/');
+		const brand = requireElement<HTMLButtonElement>(target, '.mobile-strip .brand');
+		expect(brand.getAttribute('aria-label')).toBe('Library');
+		brand.click();
+		await tick();
+		await Promise.resolve();
+		expect(get(librarySurface)).toBe('browse');
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
 	it('opens the rail drawer from the trigger on every private route', async () => {
 		const target = await renderLayout('/loras');
 		expect(document.body.querySelector('.rail')).toBeNull();
 		requireElement<HTMLButtonElement>(target, '.drawer-trigger').click();
 		await tick();
 		const rail = requireElement<HTMLElement>(document.body, '.rail');
-		expect(requireElement<HTMLAnchorElement>(rail, 'a[href="/"]').textContent).toBeTruthy();
+		expect(requireElement<HTMLButtonElement>(rail, '.brand').textContent).toBeTruthy();
 	});
 
 	it('renders the rail inline instead of a drawer on wide layouts', async () => {
@@ -245,5 +267,11 @@ describe('app shell', () => {
 		const target = await renderLayout('/');
 		expect(target.querySelector('.mobile-strip')).toBeNull();
 		expect(requireElement(target, '.rail')).toBeTruthy();
+	});
+
+	it('lays out the mobile app-shell as a flex column, mirroring desktop, so content below the fold stays reachable', () => {
+		const rule = extractRule(layoutSource, '.app-shell.mobile');
+		expect(rule).toContain('display: flex');
+		expect(rule).toContain('flex-direction: column');
 	});
 });

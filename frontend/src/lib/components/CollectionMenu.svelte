@@ -2,6 +2,19 @@
 	import { tick } from 'svelte';
 	import type { ShareResult } from '$lib/api/types';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	import {
+		COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
+		COLLECTION_MENU_CLOSE_LABEL,
+		COLLECTION_MENU_COVER_LABEL,
+		COLLECTION_MENU_COVER_REMOVE_LABEL,
+		COLLECTION_MENU_DELETE_PREFIX,
+		COLLECTION_MENU_LABEL,
+		COLLECTION_MENU_RENAME_LABEL,
+		COLLECTION_MENU_SAVE_OFFLINE_LABEL,
+		COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL,
+		COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL,
+		COLLECTION_MENU_SHARE_PREFIX
+	} from '$lib/constants';
 	import Icon from './Icon.svelte';
 	import ShareButton from './ShareButton.svelte';
 
@@ -15,6 +28,8 @@
 		onrename: () => void;
 		ondelete: () => void;
 		oncover?: () => void;
+		hasCover?: boolean;
+		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
 		onsaveoffline?: () => void;
 		offlineSaved?: boolean;
@@ -32,6 +47,8 @@
 		onrename,
 		ondelete,
 		oncover,
+		hasCover = false,
+		onremovecover,
 		onaddtoplaylist,
 		onsaveoffline,
 		offlineSaved = false,
@@ -39,10 +56,9 @@
 		offlineProgressLabel = null
 	}: Props = $props();
 
-	const MENU_LABEL = 'More';
 	const kindLabel = $derived(kind === 'album' ? 'Album' : 'Playlist');
-	const shareLabel = $derived(kind === 'album' ? 'Share album' : 'Share playlist');
-	const deleteLabel = $derived(kind === 'album' ? 'Delete album' : 'Delete playlist');
+	const shareLabel = $derived(`${COLLECTION_MENU_SHARE_PREFIX} ${kind}`);
+	const deleteLabel = $derived(`${COLLECTION_MENU_DELETE_PREFIX} ${kind}`);
 
 	let menuOpen = $state(false);
 	let triggerButton: HTMLButtonElement | undefined = $state();
@@ -85,61 +101,70 @@
 		data-hitbox="frequent"
 		aria-haspopup="dialog"
 		aria-expanded={menuOpen}
-		aria-label={MENU_LABEL}
+		aria-label={COLLECTION_MENU_LABEL}
 		onclick={toggleMenu}
 	>
 		<Icon name="more-horizontal" size={18} />
 	</button>
 	{#if menuOpen}
-		<div class="menu-modal">
+		<div class="menu-backdrop-layer">
 			<button
 				class="menu-backdrop"
 				tabindex="-1"
 				onclick={() => closeMenu()}
-				aria-label="Close menu"
+				aria-label={COLLECTION_MENU_CLOSE_LABEL}
 			></button>
-			<div
-				bind:this={menu}
-				class="menu-panel"
-				role="dialog"
-				aria-modal="true"
-				aria-label={MENU_LABEL}
-				tabindex="-1"
-			>
-				<p class="menu-heading">{kindLabel} · {title}</p>
-				<div class="menu-row">
-					<span class="menu-row-label">{shareLabel}</span>
-					<ShareButton {isShared} {shareSlug} {onshare} {onunshare} />
-				</div>
-				{#if kind === 'album' && oncover}
-					<button class="menu-item" onclick={() => runAndClose(oncover)}>Cover…</button>
-				{/if}
-				{#if kind === 'playlist' && onsaveoffline}
-					<button
-						class="menu-item"
-						onclick={() => runAndClose(onsaveoffline)}
-						disabled={offlineSaving}
-					>
-						{#if offlineSaved}
-							Saved offline · Remove
-						{:else if offlineSaving}
-							{offlineProgressLabel ?? 'Saving…'}
-						{:else}
-							Save offline
-						{/if}
-					</button>
-				{/if}
-				<button class="menu-item" onclick={() => runAndClose(onrename)}>Rename</button>
-				{#if kind === 'album' && onaddtoplaylist}
-					<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}
-						>Add to playlist</button
-					>
-				{/if}
-				<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
-					<Icon name="trash" size={14} />
-					{deleteLabel}
-				</button>
+		</div>
+		<div
+			bind:this={menu}
+			class="menu-panel"
+			role="dialog"
+			aria-modal="true"
+			aria-label={COLLECTION_MENU_LABEL}
+			tabindex="-1"
+		>
+			<p class="menu-heading">{kindLabel} · {title}</p>
+			<div class="menu-row">
+				<span class="menu-row-label">{shareLabel}</span>
+				<ShareButton {isShared} {shareSlug} {onshare} {onunshare} />
 			</div>
+			{#if kind === 'album' && oncover}
+				<button class="menu-item" onclick={() => runAndClose(oncover)}
+					>{COLLECTION_MENU_COVER_LABEL}</button
+				>
+			{/if}
+			{#if kind === 'album' && hasCover && onremovecover}
+				<button class="menu-item" onclick={() => runAndClose(onremovecover)}
+					>{COLLECTION_MENU_COVER_REMOVE_LABEL}</button
+				>
+			{/if}
+			{#if kind === 'playlist' && onsaveoffline}
+				<button
+					class="menu-item"
+					onclick={() => runAndClose(onsaveoffline)}
+					disabled={offlineSaving}
+				>
+					{#if offlineSaved}
+						{COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL}
+					{:else if offlineSaving}
+						{offlineProgressLabel ?? COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL}
+					{:else}
+						{COLLECTION_MENU_SAVE_OFFLINE_LABEL}
+					{/if}
+				</button>
+			{/if}
+			<button class="menu-item" onclick={() => runAndClose(onrename)}
+				>{COLLECTION_MENU_RENAME_LABEL}</button
+			>
+			{#if kind === 'album' && onaddtoplaylist}
+				<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}
+					>{COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL}</button
+				>
+			{/if}
+			<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
+				<Icon name="trash" size={14} />
+				{deleteLabel}
+			</button>
 		</div>
 	{/if}
 </div>
@@ -165,7 +190,7 @@
 		color: var(--primary);
 	}
 
-	.menu-modal {
+	.menu-backdrop-layer {
 		position: fixed;
 		inset: 0;
 		z-index: 300;
@@ -182,8 +207,8 @@
 
 	.menu-panel {
 		position: absolute;
-		top: 3.5rem;
-		right: 1.5rem;
+		top: calc(100% + 0.5rem);
+		right: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
@@ -193,7 +218,7 @@
 		background: var(--header-bg);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
-		z-index: 1;
+		z-index: 301;
 	}
 
 	.menu-heading {

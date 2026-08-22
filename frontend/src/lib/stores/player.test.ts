@@ -99,6 +99,7 @@ import { ApiError } from '$lib/api/fetch';
 import { libraryTakePool, setLibraryTakePool } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { openCollection } from '$lib/stores/collection';
+import { RAIL_LIBRARY_LABEL } from '$lib/constants';
 
 async function rebuildStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
 	const rebuild = audioPlayer.onStreamRebuild;
@@ -1909,28 +1910,35 @@ describe('idlePlayTarget', () => {
 	};
 
 	it.each([
-		['none: falls back to the library pool label', null, { type: 'library', label: 'Picks' }],
+		[
+			'none: falls back to the named library target',
+			null,
+			playlist,
+			{ type: 'library', label: RAIL_LIBRARY_LABEL }
+		],
 		[
 			'album: names the open album',
 			{ kind: 'album' as const, id: 'a1' },
+			playlist,
 			{ type: 'album', label: 'Nachtstrom', albumId: 'a1' }
 		],
 		[
 			'playlist: names the open playlist',
 			{ kind: 'playlist' as const, id: 'p1' },
+			playlist,
 			{ type: 'playlist', label: 'Night Drive' }
 		],
 		[
-			// Pins the #93 fix: a song open inside an album keeps the album as
-			// the idle target — because openCollection stays the album the
-			// whole time a song within it is open — instead of falling back
-			// to the library pool the way the old albumId/songId tuple did.
-			'song-inside-album: still targets the album, not the library pool',
-			{ kind: 'album' as const, id: 'a1' },
-			{ type: 'album', label: 'Nachtstrom', albumId: 'a1' }
+			// A playlist whose detail failed to load (or hasn't loaded yet)
+			// has no title and nothing to natively play — fall back to the
+			// named library target instead of an empty label and dead Play.
+			'playlist: falls back to the library target when the detail failed to load',
+			{ kind: 'playlist' as const, id: 'p1' },
+			null,
+			{ type: 'library', label: RAIL_LIBRARY_LABEL }
 		]
-	])('%s', (_name, collection, expected) => {
-		const target = idlePlayTarget({ collection, albums, playlist, poolLabel: 'Picks' });
+	])('%s', (_name, collection, playlistDetail, expected) => {
+		const target = idlePlayTarget({ collection, albums, playlist: playlistDetail });
 		expect(target).toEqual(expected);
 	});
 });
@@ -1981,5 +1989,12 @@ describe('playIdleStart', () => {
 			expect.objectContaining({ songTitle: 'Listed' }),
 			{ restart: true }
 		);
+	});
+
+	it('falls back to the library pool when the open playlist detail failed to load', async () => {
+		openCollection.set({ kind: 'playlist', id: 'p1' });
+		selectedPlaylistDetail.set(null);
+		await playIdleStart();
+		expect(fetchLibraryPoolQueue).toHaveBeenCalled();
 	});
 });

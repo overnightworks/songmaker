@@ -1,9 +1,9 @@
 <script lang="ts">
 	interface Props {
-		onNewSong?: () => void;
+		oncreate?: () => void;
 	}
 
-	let { onNewSong }: Props = $props();
+	let { oncreate }: Props = $props();
 
 	import {
 		albumList,
@@ -332,7 +332,7 @@
 				<button
 					class="new-btn"
 					data-hitbox="frequent"
-					onclick={onNewSong}
+					onclick={oncreate}
 					aria-label={LIBRARY_NEW_ALBUM_LABEL}
 				>
 					+ Album

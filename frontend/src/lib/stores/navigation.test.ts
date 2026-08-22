@@ -6,9 +6,10 @@ import { resolve } from '$app/paths';
 import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { openCollection } from '$lib/stores/collection';
+import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, selectedGenerationId, selectedSongId, songList } from '$lib/stores/player';
 import { resetPlaylistsForTests, selectedPlaylistId } from '$lib/stores/playlists';
+import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
@@ -57,12 +58,12 @@ vi.mock('$lib/api/client', () => ({
 import {
 	albumTrackNeighbors,
 	backToCollection,
-	canGoBack,
 	goBack,
 	initNavigation,
 	isLibraryWorkspacePath,
 	openAlbum,
 	openLibraryCreate,
+	openLibraryWall,
 	openPlaylist,
 	resetNavigationForTests,
 	revealPlayingSong,
@@ -148,6 +149,11 @@ beforeEach(() => {
 	songList.set([song()]);
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
+	// Must run after selectedSongId is cleared: the album/song-list reset
+	// above briefly recomputes `selectedSong` against the previous test's
+	// stale selectedSongId and re-derives openCollection through the
+	// selectedSong subscription in navigation.ts before this line clears it.
+	resetCollectionForTests();
 	history.replaceState(null, '', '/');
 	vi.mocked(goto).mockClear();
 });
@@ -156,6 +162,7 @@ afterEach(() => {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylistsForTests();
+	resetCollectionForTests();
 });
 
 function album(id: string, title: string) {
@@ -206,6 +213,20 @@ describe('openAlbum / openPlaylist', () => {
 	});
 });
 
+describe.each([
+	['openAlbum', () => openAlbum('a1')],
+	['openPlaylist', () => openPlaylist('p1')],
+	['openLibraryWall', () => openLibraryWall()],
+	['openLibraryCreate', () => openLibraryCreate()]
+])('%s closes the rail drawer', (_name, action) => {
+	it('closes an open drawer instead of leaving it over the new surface', async () => {
+		toggleSidebar();
+		expect(get(sidebarOpen)).toBe(true);
+		await action();
+		expect(get(sidebarOpen)).toBe(false);
+	});
+});
+
 describe('selectSong keeps the rail context pinned to the song album', () => {
 	it('opens a song and sets the collection to that song album, even with no prior collection', () => {
 		expect(get(openCollection)).toBeNull();
@@ -239,6 +260,24 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 		const before = history.state?.index ?? 0;
 		selectSong('s1');
 		expect(history.state.index).toBe(before + 1);
+	});
+
+	it('replaces the current history entry when the song is already inside the open collection', () => {
+		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a1' })]);
+		openAlbum('a1');
+		const afterOpen = history.state.index;
+		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		expect(history.state.index).toBe(afterOpen);
+		expect(get(selectedSongId)).toBe('s2');
+	});
+
+	it('pushes a new history entry when the song is outside the open collection', () => {
+		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a2' })]);
+		openAlbum('a1');
+		const afterOpen = history.state.index;
+		selectSong('s2', song({ id: 's2', album_id: 'a2' }));
+		expect(history.state.index).toBe(afterOpen + 1);
+		expect(get(selectedSongId)).toBe('s2');
 	});
 });
 
@@ -292,17 +331,6 @@ describe('goBack', () => {
 		librarySurface.set('create');
 		goBack();
 		expect(get(librarySurface)).toBe('browse');
-	});
-});
-
-describe('canGoBack', () => {
-	it('is true whenever a song, collection, or create surface is active', () => {
-		expect(get(canGoBack)).toBe(false);
-		openAlbum('a1');
-		expect(get(canGoBack)).toBe(true);
-		resetLibraryContextForTests();
-		openLibraryCreate();
-		expect(get(canGoBack)).toBe(true);
 	});
 });
 

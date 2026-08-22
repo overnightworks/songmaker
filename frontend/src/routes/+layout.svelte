@@ -7,9 +7,10 @@
 	import Rail from '$lib/components/shell/Rail.svelte';
 	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
-	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL } from '$lib/constants';
+	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
+	import { openLibraryWall } from '$lib/stores/navigation';
 	import { sidebarOpen, toggleSidebar, initTheme } from '$lib/stores/ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { dev, browser } from '$app/environment';
@@ -117,7 +118,13 @@
 					<line x1="4" y1="17" x2="20" y2="17" />
 				</svg>
 			</button>
-			<a class="brand" href="/" data-text={APP_NAME}>{APP_NAME}</a>
+			<button
+				type="button"
+				class="brand"
+				onclick={() => openLibraryWall()}
+				aria-label={RAIL_LIBRARY_LABEL}
+				data-text={APP_NAME}>{APP_NAME}</button
+			>
 		</header>
 		<RailDrawer>
 			<Rail username={me.username} onlogout={handleLogout} />
@@ -165,6 +172,10 @@
 	}
 
 	.brand {
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
 		font-family: var(--font-display);
 		font-size: 16px;
 		font-weight: 700;
@@ -197,6 +208,8 @@
 		margin-top: var(--header-height);
 		height: calc(100dvh - var(--header-height));
 		overflow: hidden;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.app-shell.mobile.has-player {

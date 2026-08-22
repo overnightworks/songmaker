@@ -20,6 +20,7 @@
 		onunshare: () => Promise<void>;
 		ondelete: () => void;
 		oncover?: () => void;
+		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
 		onsaveoffline?: () => void;
 		offlineSaved?: boolean;
@@ -43,6 +44,7 @@
 		onunshare,
 		ondelete,
 		oncover,
+		onremovecover,
 		onaddtoplaylist,
 		onsaveoffline,
 		offlineSaved = false,
@@ -100,6 +102,8 @@
 			{onunshare}
 			{ondelete}
 			{oncover}
+			hasCover={showCover}
+			{onremovecover}
 			{onaddtoplaylist}
 			{onsaveoffline}
 			{offlineSaved}

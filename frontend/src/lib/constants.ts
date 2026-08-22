@@ -99,10 +99,25 @@ export const SONG_NEXT_LABEL = 'Next song';
 export const SETTINGS_NAV_LABEL = 'Settings sections';
 export const ADMIN_TABS_LABEL = 'Admin sections';
 
+export const COLLECTION_MENU_LABEL = 'More';
+export const COLLECTION_MENU_CLOSE_LABEL = 'Close menu';
+export const COLLECTION_MENU_SHARE_PREFIX = 'Share';
+export const COLLECTION_MENU_DELETE_PREFIX = 'Delete';
+export const COLLECTION_MENU_COVER_LABEL = 'Cover…';
+export const COLLECTION_MENU_COVER_REMOVE_LABEL = 'Remove cover';
+export const COLLECTION_MENU_RENAME_LABEL = 'Rename';
+export const COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
+export const COLLECTION_MENU_SAVE_OFFLINE_LABEL = 'Save offline';
+export const COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL = 'Saving…';
+export const COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL = 'Saved offline · Remove';
+
 export const RAIL_LIBRARY_LABEL = 'Library';
 export const RAIL_SETTINGS_LABEL = 'Settings';
 export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
 export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
+export const RAIL_CONTEXT_NO_TAKES = '—';
+export const RAIL_CONTEXT_ADD_SONG_LABEL = '+ Song';
+export const RAIL_CONTEXT_EMPTY = 'No album or playlist open — its tracks appear here.';
 
 export function librarySummaryLabel(albumCount: number, playlistCount: number): string {
 	const albums = `${albumCount} album${albumCount === 1 ? '' : 's'}`;

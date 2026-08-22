@@ -32,6 +32,7 @@ function baseProps(): CollectionHeaderProps {
 		onunshare: vi.fn().mockResolvedValue(undefined),
 		ondelete: vi.fn(),
 		oncover: vi.fn(),
+		onremovecover: vi.fn(),
 		onaddtoplaylist: vi.fn()
 	};
 }
@@ -80,7 +81,7 @@ describe('CollectionHeader', () => {
 		expect(target.querySelector('.share-btn')).toBeNull();
 	});
 
-	it('names the object first in the menu and lists album entries in order', async () => {
+	it('names the object first in the menu and lists album entries in order, without Remove cover when there is no cover', async () => {
 		const target = await render(baseProps());
 		const menu = await openMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
@@ -88,6 +89,21 @@ describe('CollectionHeader', () => {
 			el.textContent?.trim()
 		);
 		expect(items).toEqual(['Cover…', 'Rename', 'Add to playlist', 'Delete album']);
+	});
+
+	it('adds Remove cover once a cover exists and wires it to onremovecover', async () => {
+		const props = { ...baseProps(), coverUrl: 'https://x/cover.jpg' };
+		const target = await render(props);
+		const menu = await openMenu(target);
+		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
+			el.textContent?.trim()
+		);
+		expect(items).toEqual(['Cover…', 'Remove cover', 'Rename', 'Add to playlist', 'Delete album']);
+		const removeItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
+			(el) => el.textContent?.trim() === 'Remove cover'
+		);
+		removeItem?.click();
+		expect(props.onremovecover).toHaveBeenCalledTimes(1);
 	});
 
 	it('lists playlist entries: Share, Save offline, Rename, Delete — no Cover or Add to playlist', async () => {

@@ -2,7 +2,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { albumList } from '$lib/stores/player';
 	import { openLibraryWall } from '$lib/stores/navigation';
-	import { playlistList } from '$lib/stores/playlists';
+	import { ensurePlaylistsLoaded, playlistList } from '$lib/stores/playlists';
 	import {
 		APP_NAME,
 		RAIL_LIBRARY_LABEL,
@@ -10,18 +10,28 @@
 		librarySummaryLabel
 	} from '$lib/constants';
 	import RailContext from './RailContext.svelte';
-	import UserMenu from './UserMenu.svelte';
+	import UserRow from './UserRow.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
 
 	const albumCount = $derived($albumList.length);
 	const playlistCount = $derived($playlistList.length);
 	const summary = $derived(librarySummaryLabel(albumCount, playlistCount));
+
+	$effect(() => {
+		void ensurePlaylistsLoaded();
+	});
 </script>
 
 <nav class="rail" aria-label="Primary">
 	<div class="rail-top">
-		<a class="brand" href="/" data-text={APP_NAME}>{APP_NAME}</a>
+		<button
+			type="button"
+			class="brand"
+			onclick={() => openLibraryWall()}
+			aria-label={RAIL_LIBRARY_LABEL}
+			data-text={APP_NAME}>{APP_NAME}</button
+		>
 	</div>
 
 	<button type="button" class="library-link" onclick={() => openLibraryWall()}>
@@ -54,7 +64,7 @@
 
 	<div class="rail-bottom">
 		<a class="settings-link" href="/settings">{RAIL_SETTINGS_LABEL}</a>
-		<UserMenu {username} {onlogout} />
+		<UserRow {username} {onlogout} />
 	</div>
 </nav>
 
@@ -80,6 +90,10 @@
 	}
 
 	.brand {
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
 		font-family: var(--font-display);
 		font-size: 16px;
 		font-weight: 700;
