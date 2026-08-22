@@ -402,12 +402,17 @@ def test_api_add_generation_to_playlist(client: TestClient) -> None:
     assert resp.status_code == 200
     assert resp.json()["generation_id"] == "g1"
     assert resp.json()["lyrics"] == "hi"
+    assert resp.json()["is_picked"] is True
+    assert resp.json()["version_number"] == 1
 
     resp = client.get(f"/api/playlists/{pid}")
     entries = resp.json()["entries"]
     assert len(entries) == 1
     assert entries[0]["lyrics"] == "hi"
     assert entries[0]["album_title"] == "Album One"
+    assert entries[0]["is_picked"] is True
+    assert entries[0]["version_number"] == 1
+    assert entries[0]["audio_duration"] == 0
 
 
 def test_api_add_song_to_playlist(client: TestClient) -> None:
