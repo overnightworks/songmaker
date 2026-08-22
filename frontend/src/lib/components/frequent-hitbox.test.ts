@@ -9,7 +9,7 @@ import type {
 } from '$lib/api/types';
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { GENERATION_ACTIONS_KEY, type GenerationActions } from '$lib/contexts/generation-actions';
-import { librarySection, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
 import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -54,11 +54,10 @@ vi.mock('$lib/services/offline', () => ({
 	loadSavedOfflinePlaylist: vi.fn().mockResolvedValue(null)
 }));
 vi.mock('$lib/stores/navigation', () => ({
-	selectAlbumOverview: vi.fn(),
-	selectLibrarySection: vi.fn(),
-	selectPlaylistView: vi.fn(),
+	openAlbum: vi.fn(),
+	openPlaylist: vi.fn(),
+	selectLibraryFilter: vi.fn(),
 	selectSong: vi.fn(),
-	deselectPlaylistView: vi.fn(),
 	persistLibraryHistory: vi.fn()
 }));
 vi.mock('$lib/stores/toast', () => ({
@@ -69,7 +68,7 @@ import { removeFromPlaylist, reorderPlaylistEntry } from '$lib/api/client';
 import GenerationsList from './GenerationsList.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
-import SongList from './SongList.svelte';
+import LibraryWall from './LibraryWall.svelte';
 import ThemeToggle from './ThemeToggle.svelte';
 
 type PointerKind = 'coarse' | 'fine';
@@ -87,7 +86,7 @@ const INVENTORY = [
 		selector: '.move-btn[data-hitbox="frequent"][aria-label$=" down"]'
 	},
 	{ name: 'playlist-remove', selector: '.remove-btn[data-hitbox="frequent"]' },
-	{ name: 'new-song', selector: '[data-hitbox="frequent"][aria-label="New Song"]' },
+	{ name: 'new-album', selector: '[data-hitbox="frequent"][aria-label="New album"]' },
 	{ name: 'new-playlist', selector: '[data-hitbox="frequent"][aria-label="New playlist"]' },
 	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' }
 ] as const;
@@ -338,12 +337,12 @@ async function renderInventory(): Promise<HTMLElement> {
 		})
 	);
 	mounted.push(mount(PlaylistDetailView, { target: playlistTarget }));
-	mounted.push(mount(SongList, { target: songTarget, props: { onNewSong: vi.fn() } }));
+	mounted.push(mount(LibraryWall, { target: songTarget, props: { onNewSong: vi.fn() } }));
 	mounted.push(
 		mount(PlaylistPicker, { target: pickerTarget, props: { onselect: vi.fn(), onclose: vi.fn() } })
 	);
 	await tick();
-	librarySection.set('playlists');
+	libraryFilter.set('playlists');
 	await tick();
 	return root;
 }

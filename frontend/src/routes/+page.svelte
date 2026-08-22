@@ -1,17 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { albumList, selectedSong, selectedAlbumId } from '$lib/stores/player';
-	import { librarySection, librarySurface } from '$lib/stores/libraryContext';
-	import {
-		goBack,
-		initNavigation,
-		libraryKeepsBrowseColumn,
-		libraryWorkspaceGrid,
-		openLibraryCreate
-	} from '$lib/stores/navigation';
-	import { selectedPlaylistDetail } from '$lib/stores/playlists';
-	import { sharesViewOpen } from '$lib/stores/shares';
+	import { albumList, selectedSong } from '$lib/stores/player';
+	import { librarySurface } from '$lib/stores/libraryContext';
+	import { initNavigation, openLibraryCreate } from '$lib/stores/navigation';
+	import { openCollection } from '$lib/stores/collection';
 	import { loadActiveModels } from '$lib/stores/presets';
 	import {
 		resourceSync,
@@ -21,7 +14,7 @@
 		waitForResourceReady
 	} from '$lib/stores/resourceSync';
 	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
-	import SongList from '$lib/components/SongList.svelte';
+	import LibraryWall from '$lib/components/LibraryWall.svelte';
 	import CreateForm from '$lib/components/CreateForm.svelte';
 	import SongDetailView from '$lib/components/SongDetailView.svelte';
 	import AlbumDetailView from '$lib/components/AlbumDetailView.svelte';
@@ -34,27 +27,8 @@
 	let navCleanup: (() => void) | undefined;
 
 	const song = $derived($selectedSong);
-	const currentAlbumId = $derived($selectedAlbumId);
-	const albums = $derived($albumList);
-	const selectedAlbum = $derived(
-		currentAlbumId ? (albums.find((a) => a.id === currentAlbumId) ?? null) : null
-	);
-	const playlistDetail = $derived($selectedPlaylistDetail);
-	const listenInterior = $derived(
-		$librarySection === 'playlists' && (!!selectedAlbum || !!playlistDetail)
-	);
-	const hasSelection = $derived(!!song || listenInterior);
-	const hasDetail = $derived(
-		$librarySurface === 'create' || ($librarySurface === 'detail' && hasSelection)
-	);
-	const keepBrowse = $derived(
-		libraryKeepsBrowseColumn({
-			surface: $librarySurface,
-			section: $librarySection,
-			sharesOpen: $sharesViewOpen
-		})
-	);
-	const workspaceGrid = $derived(libraryWorkspaceGrid({ hasDetail, keepBrowse }));
+	const surface = $derived($librarySurface);
+	const collection = $derived($openCollection);
 	const sync = $derived($resourceSync);
 
 	onMount(() => {
@@ -121,30 +95,19 @@
 				<button class="retry-btn" onclick={() => retryLoad()}>{LIBRARY_RETRY_LABEL}</button>
 			</div>
 		{/if}
-		<div
-			class="workspace {workspaceGrid.className}"
-			class:has-detail={hasDetail}
-			style:--library-workspace-areas={`'${workspaceGrid.areas}'`}
-		>
-			<SongList
-				onNewSong={() => {
-					if ($librarySurface === 'create') goBack();
-					else openLibraryCreate();
-				}}
-			/>
-
-			<main class="detail-panel">
-				{#if $librarySurface === 'create'}
-					<CreateForm albums={$albumList} />
-				{:else if song}
-					<SongDetailView />
-				{:else if $librarySection === 'playlists' && selectedAlbum}
-					<AlbumDetailView />
-				{:else if playlistDetail}
-					<PlaylistDetailView />
-				{/if}
-			</main>
-		</div>
+		<main class="main">
+			{#if song}
+				<SongDetailView />
+			{:else if surface === 'create'}
+				<CreateForm albums={$albumList} />
+			{:else if surface === 'detail' && collection?.kind === 'album'}
+				<AlbumDetailView albumId={collection.id} />
+			{:else if surface === 'detail' && collection?.kind === 'playlist'}
+				<PlaylistDetailView />
+			{:else}
+				<LibraryWall onNewSong={openLibraryCreate} />
+			{/if}
+		</main>
 	</div>
 {/if}
 
@@ -159,62 +122,15 @@
 		min-height: 0;
 	}
 
-	.workspace {
-		display: grid;
+	.main {
 		flex: 1;
 		width: 100%;
 		min-width: 0;
 		min-height: 0;
-		overflow-x: hidden;
-		grid-template-columns: 260px minmax(0, 1fr);
-		grid-template-rows: minmax(0, 1fr);
-		grid-template-areas: var(--library-workspace-areas, 'nav browse');
-	}
-
-	.workspace.has-detail.keep-browse {
-		grid-template-columns: [nav] 260px [browse] minmax(0, 1fr) [detail] minmax(0, 1fr);
-	}
-
-	.workspace > :global(.library-nav) {
-		grid-area: nav;
-		min-width: 0;
-		min-height: 0;
-		overflow-x: hidden;
-		overflow-y: auto;
-		border-right: 1px solid var(--border);
-		background-image:
-			linear-gradient(rgba(160, 32, 240, 0.02) 1px, transparent 1px),
-			linear-gradient(90deg, rgba(160, 32, 240, 0.02) 1px, transparent 1px);
-		background-size: 40px 40px;
-	}
-
-	.workspace > :global(.library-browse) {
-		grid-area: browse;
-		min-width: 0;
-		min-height: 0;
-	}
-
-	.workspace.has-detail > :global(.library-browse) {
-		display: none;
-	}
-
-	.workspace.has-detail.keep-browse > :global(.library-browse) {
-		display: block;
-		grid-area: browse;
-	}
-
-	.detail-panel {
-		grid-area: detail;
-		display: none;
-		min-width: 0;
-		min-height: 0;
-		overflow-y: auto;
-		overflow-x: hidden;
-		flex-direction: column;
-	}
-
-	.workspace.has-detail > .detail-panel {
 		display: flex;
+		flex-direction: column;
+		overflow-y: auto;
+		overflow-x: hidden;
 	}
 
 	.loading,
@@ -254,33 +170,5 @@
 	.retry-btn:hover {
 		border-color: var(--primary);
 		color: var(--primary);
-	}
-
-	@media (max-width: 768px) {
-		.workspace {
-			grid-template-columns: minmax(0, 1fr);
-			grid-template-rows: auto minmax(0, 1fr);
-			grid-template-areas:
-				'nav'
-				'browse';
-		}
-
-		.workspace > :global(.library-nav) {
-			border-right: none;
-			border-bottom: 1px solid var(--border);
-		}
-
-		.workspace.has-detail,
-		.workspace.has-detail.keep-browse {
-			grid-template-columns: minmax(0, 1fr);
-			grid-template-rows: minmax(0, 1fr);
-			grid-template-areas: 'detail';
-		}
-
-		.workspace.has-detail > :global(.library-nav),
-		.workspace.has-detail > :global(.library-browse),
-		.workspace.has-detail.keep-browse > :global(.library-browse) {
-			display: none;
-		}
 	}
 </style>

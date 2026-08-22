@@ -45,7 +45,7 @@
 		albumTrackNeighbors,
 		selectGeneration,
 		navigateToSongTab,
-		backToAlbum,
+		backToCollection,
 		clearGenerationSelection,
 		persistLibraryHistory,
 		detailTab,
@@ -616,7 +616,7 @@
 		try {
 			await deleteSong(songId);
 			removeSongFromList(songId);
-			backToAlbum();
+			backToCollection();
 			addUndoToast('Song deleted', {
 				label: 'Undo',
 				handler: async () => {
@@ -747,7 +747,7 @@
 							>
 								<Icon name="skip-back" size={14} />
 							</button>
-							<button type="button" class="song-album" onclick={() => backToAlbum()}>
+							<button type="button" class="song-album" onclick={() => backToCollection()}>
 								{song.album_title}
 							</button>
 							<button

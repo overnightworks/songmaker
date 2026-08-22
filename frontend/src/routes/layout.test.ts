@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { checkAuth, currentUser, authLoading } from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { selectedAlbumId } from '$lib/stores/player';
+import { openCollection } from '$lib/stores/collection';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { pageState } = vi.hoisted(() => ({
@@ -128,7 +128,7 @@ beforeEach(() => {
 		authLoading.set(false);
 		return USER;
 	});
-	selectedAlbumId.set('a1');
+	openCollection.set({ kind: 'album', id: 'a1' });
 	const sheet = document.createElement('style');
 	sheet.dataset.hitboxStyles = 'true';
 	sheet.textContent = hitboxCss;
@@ -139,7 +139,7 @@ afterEach(async () => {
 	await unmountCurrentLayout();
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
-	selectedAlbumId.set(null);
+	openCollection.set(null);
 	currentUser.set(null);
 	authLoading.set(false);
 	audioPlayer.destroy();

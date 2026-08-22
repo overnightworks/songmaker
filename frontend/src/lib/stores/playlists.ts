@@ -14,6 +14,7 @@ import {
 } from '$lib/api/client';
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
+import { openCollection, setOpenCollection } from '$lib/stores/collection';
 
 export type PlaylistLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -23,7 +24,13 @@ export interface PlaylistLoadState {
 }
 
 export const playlistList = writable<PlaylistItem[]>([]);
-export const selectedPlaylistId = writable<string | null>(null);
+// The currently open playlist is a projection of the single navigation
+// collection (see stores/collection.ts) — not an independently writable
+// selection. Opening a playlist detail is the only writer, via
+// loadPlaylistDetail below.
+export const selectedPlaylistId = derived(openCollection, ($collection) =>
+	$collection?.kind === 'playlist' ? $collection.id : null
+);
 export const selectedPlaylistDetail = writable<PlaylistDetailItem | null>(null);
 export const playlistLoad = writable<PlaylistLoadState>({ status: 'idle', error: null });
 
@@ -62,7 +69,7 @@ export async function ensurePlaylistsLoaded(): Promise<boolean> {
 export function resetPlaylistsForTests(): void {
 	playlistsInflight = null;
 	playlistList.set([]);
-	selectedPlaylistId.set(null);
+	setOpenCollection(null);
 	selectedPlaylistDetail.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
 	playlistDetailRequest += 1;
@@ -82,20 +89,17 @@ function playlistErrorMessage(err: unknown): string {
 
 export async function loadPlaylistDetail(id: string): Promise<void> {
 	const request = ++playlistDetailRequest;
-	selectedPlaylistId.set(id);
+	setOpenCollection({ kind: 'playlist', id });
 	const detail = await fetchPlaylist(id);
 	if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
 	selectedPlaylistDetail.set(detail);
 }
 
-export function selectPlaylist(id: string): void {
-	selectedPlaylistId.set(id);
-	loadPlaylistDetail(id);
-}
-
 export function deselectPlaylist(): void {
 	playlistDetailRequest += 1;
-	selectedPlaylistId.set(null);
+	if (get(openCollection)?.kind === 'playlist') {
+		setOpenCollection(null);
+	}
 	selectedPlaylistDetail.set(null);
 }
 

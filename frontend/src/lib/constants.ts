@@ -19,6 +19,8 @@ export const LIBRARY_QUEUE_PLAY_DETAIL = 'Play';
 export const SHUFFLE_SCOPE_PLAYLIST = 'this playlist';
 export const SHUFFLE_SCOPE_ALBUM = 'this album';
 export const SHUFFLE_SCOPE_LIBRARY = 'all albums';
+// LIBRARY_POOL_HELP / LIBRARY_POOL_HELP_LABEL live with LibraryPoolControl,
+// deleted together with it once the transport-only PlayerBar lands.
 export const LIBRARY_POOL_HELP =
 	'Mix: Picks and Keeps. Picks: the album take. Keeps: favorites, more than one per song. All: every playable take.';
 export const LIBRARY_POOL_HELP_LABEL = 'What Mix Picks Keeps All mean';
@@ -96,30 +98,25 @@ export const SONG_COVER_ALT_TYPE = 'Song';
 export const SONG_COVER_UPLOAD_LABEL = 'Upload song cover';
 export const SONG_COVER_REPLACE_LABEL = 'Replace song cover';
 export const SONG_COVER_REMOVE_LABEL = 'Remove song cover';
-export const LIBRARY_KEEP_BROWSE_CLASS = 'keep-browse';
-export const LIBRARY_SONG_WORKSPACE_AREAS = 'nav browse detail';
-export const LIBRARY_DETAIL_WORKSPACE_AREAS = 'nav detail';
-export const LIBRARY_BROWSE_WORKSPACE_AREAS = 'nav browse';
 export const SONG_PREVIOUS_LABEL = 'Previous song';
 export const SONG_NEXT_LABEL = 'Next song';
 
 export const SETTINGS_NAV_LABEL = 'Settings sections';
 export const ADMIN_TABS_LABEL = 'Admin sections';
 
-export const LIBRARY_SECTIONS = ['albums', 'playlists'] as const;
-export type LibrarySection = (typeof LIBRARY_SECTIONS)[number];
-export const LIBRARY_DEFAULT_SECTION: LibrarySection = 'albums';
-export const LIBRARY_SECTION_LABELS: Record<LibrarySection, string> = {
-	albums: 'Studio',
-	playlists: 'Listen'
+export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
+export type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
+export const LIBRARY_DEFAULT_FILTER: LibraryFilter = 'albums';
+export const LIBRARY_FILTER_LABELS: Record<LibraryFilter, string> = {
+	albums: 'Albums',
+	playlists: 'Playlists',
+	shared: 'Shared'
 };
-export const LIBRARY_SECTION_NAV_LABEL = 'Library sections';
+export const LIBRARY_FILTER_NAV_LABEL = 'Library filter';
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
-export const LIBRARY_SHARES_HISTORY_SECTION = 'shared' as const;
-export type LibraryHistorySection = LibrarySection | typeof LIBRARY_SHARES_HISTORY_SECTION;
 export const LIBRARY_ALBUMS_EMPTY = 'No albums yet';
 export const LIBRARY_ALBUMS_LOADING = 'Loading albums…';
-export const LIBRARY_LISTEN_EMPTY = 'No albums or playlists';
+export const LIBRARY_PLAYLISTS_EMPTY = 'No playlists yet';
 export const LIBRARY_PLAYLISTS_LOADING = 'Loading playlists…';
 export const LIBRARY_PLAYLISTS_ERROR = 'Failed to load playlists';
 export const LIBRARY_SHARES_LABEL = 'Shared';
@@ -150,7 +147,7 @@ export const LIBRARY_SHARES_TYPE_EMPTY: Record<ShareInventoryType, string> = {
 	playlist: 'No shared playlists'
 };
 export const LIBRARY_NEW_PLAYLIST_LABEL = 'New playlist';
-export const LIBRARY_NEW_SONG_LABEL = 'New Song';
+export const LIBRARY_NEW_ALBUM_LABEL = 'New album';
 
 export function librarySharesStatusLabel(total: number): string {
 	return `${LIBRARY_SHARES_LABEL}${LIBRARY_SHARES_COUNT_SEP}${total}`;
