@@ -82,6 +82,7 @@ export const EDITOR_UNSAVED_MESSAGE =
 	'Save this draft as a new version before leaving, or discard it?';
 export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
 export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
+export const EDITOR_NETWORK_ERROR = 'Network error. Check connection and retry.';
 
 export const SONG_MENU_SAVE_VERSION_LABEL = 'Save version';
 export const SONG_MENU_SHARE_LABEL = 'Share song';

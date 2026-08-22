@@ -6,7 +6,12 @@ import {
 	fetchSong
 } from '$lib/api/client';
 import { replaceSongInList, selectedSongId } from '$lib/stores/player';
-import type { SongItem, VersionGenerationParams, VersionItem } from '$lib/api/types';
+import type {
+	GenerationItem,
+	SongItem,
+	VersionGenerationParams,
+	VersionItem
+} from '$lib/api/types';
 
 export interface SongData {
 	lyrics: string;
@@ -153,6 +158,25 @@ export function loadVersion(index: number): void {
 	currentVersionIndex.set(index);
 	const data = songDataFromVersion(v);
 	editorState.set({ saved: data, draft: { ...data } });
+}
+
+/**
+ * Predicts the version number a save will produce, mirroring the backend's
+ * `update_song()`: the highest existing version is overwritten in place
+ * (its own number, no increment) when it has no takes yet; otherwise a save
+ * creates `version_number + 1`. `versions` must be newest-first, matching
+ * `fetchVersions()`. Never derive this from `song.version_count` — that is a
+ * *count* of surviving versions, not the highest version number, and the two
+ * diverge as soon as any version has been deleted.
+ */
+export function computeDraftVersionNumber(
+	versions: VersionItem[],
+	generations: GenerationItem[]
+): number {
+	const latest = versions[0];
+	if (!latest) return 1;
+	const latestHasTakes = generations.some((g) => g.version_number === latest.version_number);
+	return latestHasTakes ? latest.version_number + 1 : latest.version_number;
 }
 
 /**

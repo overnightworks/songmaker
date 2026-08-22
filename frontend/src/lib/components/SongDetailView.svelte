@@ -21,6 +21,7 @@
 		uploadSongCover,
 		deleteSongCover
 	} from '$lib/api/client';
+	import { ApiError } from '$lib/api/fetch';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
@@ -63,6 +64,7 @@
 		loadSongData,
 		loadVersion,
 		handleSave,
+		computeDraftVersionNumber,
 		discardDraft,
 		pinnedSeed,
 		editLyrics,
@@ -111,6 +113,7 @@
 		EDITOR_GENERATE_LABEL,
 		EDITOR_GENERATING_LABEL,
 		EDITOR_MISSING_CONTENT_TITLE,
+		EDITOR_NETWORK_ERROR,
 		EDITOR_NO_MODELS_WARNING,
 		EDITOR_QUEUED_LABEL,
 		EDITOR_QUEUE_BUSY_TITLE,
@@ -202,7 +205,13 @@
 	const jobs = $derived($activeJobs);
 	const tab = $derived($detailTab);
 	const dirty = $derived($isDirty);
-	const draftVersionNumber = $derived(song ? song.version_count + 1 : 1);
+	// song.version_count is a *count* of surviving versions, not the highest
+	// version number — the two diverge once any version has been deleted, so
+	// neither label below may use it. See computeDraftVersionNumber().
+	const draftVersionNumber = $derived(
+		computeDraftVersionNumber($versions, song?.generations ?? [])
+	);
+	const latestVersionNumber = $derived($versions[0]?.version_number ?? song?.version_count ?? 1);
 
 	let editorSongId: string | null = null;
 
@@ -640,13 +649,27 @@
 
 	let songPlaylistPickerOpen = $state(false);
 
+	/**
+	 * `updateSong` fails either as an `ApiError` (server responded with a
+	 * useful detail message) or a raw fetch rejection (offline, timeout —
+	 * `TypeError: Failed to fetch`, which is not user-facing copy). Reuse the
+	 * network-error copy already shown elsewhere in the app instead of
+	 * surfacing the raw browser message.
+	 */
+	function describeSaveFailure(e: unknown): string {
+		if (e instanceof ApiError) return e.message || 'Save failed';
+		if (e instanceof Error) return EDITOR_NETWORK_ERROR;
+		return 'Save failed';
+	}
+
 	async function onSaveVersion(): Promise<void> {
 		if (!song) return;
 		try {
-			const updated = await handleSave(song.id);
-			addToast(`Saved version ${updated.version_count}`, 'success');
+			await handleSave(song.id);
+			const savedVersionNumber = get(versions)[0]?.version_number;
+			addToast(`Saved version ${savedVersionNumber}`, 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Save failed', 'error');
+			addToast(describeSaveFailure(e), 'error');
 		}
 	}
 
@@ -668,7 +691,7 @@
 			try {
 				await handleSave(song.id);
 			} catch (e) {
-				addToast(e instanceof Error ? e.message : 'Save failed', 'error');
+				addToast(describeSaveFailure(e), 'error');
 				return;
 			}
 		} else {
@@ -807,6 +830,7 @@
 					loadError={takesError}
 					{dirty}
 					{draftVersionNumber}
+					{latestVersionNumber}
 					{generateJob}
 					compact
 					onselect={(gen) => selectGeneration(gen, song)}
@@ -843,6 +867,7 @@
 						loadError={takesError}
 						{dirty}
 						{draftVersionNumber}
+						{latestVersionNumber}
 						{generateJob}
 						onselect={(gen) => selectGeneration(gen, song)}
 						onagain={applyAgain}
@@ -1085,7 +1110,10 @@
 
 	@media (max-width: 768px) {
 		.detail-panel {
-			padding: 0.8rem 0.8rem calc(var(--player-height) + 0.8rem);
+			/* Reserves space below the last take row / draft controls for both
+			   fixed bars stacked at the bottom of the compact layout: the
+			   sticky Generate bar sitting on top of the player bar. */
+			padding: 0.8rem 0.8rem calc(var(--player-height) + var(--editor-generate-bar-height) + 0.8rem);
 		}
 	}
 </style>

@@ -32,10 +32,11 @@ import {
 	loadVersion,
 	handleSave,
 	handleDeleteVersion,
-	discardDraft
+	discardDraft,
+	computeDraftVersionNumber
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
-import type { SongItem, VersionItem } from '$lib/api/types';
+import type { GenerationItem, SongItem, VersionItem } from '$lib/api/types';
 
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
@@ -73,6 +74,32 @@ function makeVersion(overrides: Partial<VersionItem> = {}): VersionItem {
 		bpm: 120,
 		audio_duration: 180,
 		key_scale: 'Am',
+		generation_params: null,
+		created_at: '',
+		...overrides
+	};
+}
+
+function makeGeneration(overrides: Partial<GenerationItem> = {}): GenerationItem {
+	return {
+		id: 'g1',
+		song_id: 's1',
+		version_id: 'v1',
+		version_number: 1,
+		generation_number: 1,
+		mp3_path: 'g1.mp3',
+		wav_path: null,
+		seed: null,
+		status: 'completed',
+		is_archived: false,
+		is_picked: false,
+		is_kept: false,
+		is_shared: false,
+		model_mode: 'turbo',
+		whisper_text: null,
+		whisper_cues: null,
+		version_lyrics: null,
+		scores: null,
 		generation_params: null,
 		created_at: '',
 		...overrides
@@ -192,6 +219,43 @@ describe('discardDraft', () => {
 
 		expect(get(editLyrics)).toBe('saved lyrics');
 		expect(get(isDirty)).toBe(false);
+	});
+});
+
+describe('computeDraftVersionNumber', () => {
+	it('predicts version_number + 1 for a normal save onto a version that already has takes', () => {
+		const versions = [makeVersion({ id: 'v2', version_number: 2 }), makeVersion({ id: 'v1' })];
+		const generations = [makeGeneration({ version_number: 2 })];
+
+		expect(computeDraftVersionNumber(versions, generations)).toBe(3);
+	});
+
+	it('predicts the current version number when the take-less latest version will be overwritten in place', () => {
+		// v1 has never been generated into — handleSave() overwrites it rather
+		// than creating v2.
+		const versions = [makeVersion({ id: 'v1', version_number: 1 })];
+		const generations: GenerationItem[] = [];
+
+		expect(computeDraftVersionNumber(versions, generations)).toBe(1);
+	});
+
+	it('predicts from the highest surviving version_number, not the count, after a middle version was deleted', () => {
+		// v2 was deleted; v1 and v3 remain, both with takes. song.version_count
+		// would now read 2, but the next save must land on v4.
+		const versions = [
+			makeVersion({ id: 'v3', version_number: 3 }),
+			makeVersion({ id: 'v1', version_number: 1 })
+		];
+		const generations = [
+			makeGeneration({ id: 'g1', version_number: 3 }),
+			makeGeneration({ id: 'g2', version_number: 1 })
+		];
+
+		expect(computeDraftVersionNumber(versions, generations)).toBe(4);
+	});
+
+	it('returns 1 when the song has no versions yet', () => {
+		expect(computeDraftVersionNumber([], [])).toBe(1);
 	});
 });
 

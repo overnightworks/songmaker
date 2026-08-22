@@ -57,6 +57,7 @@
 		loadError?: string | null;
 		dirty: boolean;
 		draftVersionNumber: number;
+		latestVersionNumber: number;
 		generateJob?: JobItem | null;
 		compact?: boolean;
 		onselect: (gen: GenerationItem) => void;
@@ -72,6 +73,7 @@
 		loadError = null,
 		dirty,
 		draftVersionNumber,
+		latestVersionNumber,
 		generateJob = null,
 		compact = false,
 		onselect,
@@ -146,22 +148,26 @@
 		return isGenPlaying(gen) && buffering;
 	}
 
-	function playOrToggle(gen: GenerationItem): void {
+	async function playOrToggle(gen: GenerationItem): Promise<void> {
 		if (isGenPlaying(gen) && audioPlayer.status === 'playing') {
 			audioPlayer.toggle();
 			return;
 		}
-		const albumId = $selectedAlbumId;
-		if (shouldUseQueueStream($queuePlaybackMode)) {
-			if (albumId) {
-				void playAlbumFromGeneration(albumId, song, gen);
+		try {
+			const albumId = $selectedAlbumId;
+			if (shouldUseQueueStream($queuePlaybackMode)) {
+				if (albumId) {
+					await playAlbumFromGeneration(albumId, song, gen);
+					return;
+				}
+				await playLibraryFromGeneration(gen);
 				return;
 			}
-			void playLibraryFromGeneration(gen);
-			return;
+			queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
+			playGeneration(gen, song, { restart: true });
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Playback failed', 'error');
 		}
-		queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
-		playGeneration(gen, song, { restart: true });
 	}
 
 	function handleRowClick(gen: GenerationItem, e: MouseEvent): void {
@@ -174,7 +180,7 @@
 			return;
 		}
 		onselect(gen);
-		playOrToggle(gen);
+		void playOrToggle(gen);
 	}
 
 	function handleRowKeydown(gen: GenerationItem, e: KeyboardEvent): void {
@@ -186,7 +192,7 @@
 			return;
 		}
 		onselect(gen);
-		playOrToggle(gen);
+		void playOrToggle(gen);
 	}
 
 	async function handleBulkDelete(): Promise<void> {
@@ -326,7 +332,7 @@
 		{#if generateJob && (generateJob.status === 'queued' || generateJob.status === 'running')}
 			<div class="generating-row">
 				<span class="generating-label">
-					v{song.version_count} · {TAKES_GENERATING_LABEL}
+					v{latestVersionNumber} · {TAKES_GENERATING_LABEL}
 					{#if generateJob.status === 'queued'}
 						{generateJob.queue_position ? `· queued #${generateJob.queue_position}` : '· queued'}
 					{/if}

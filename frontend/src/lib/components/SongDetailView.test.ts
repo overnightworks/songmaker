@@ -2,7 +2,13 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, GenerationItem, SongItem, VersionGenerationParams } from '$lib/api/types';
+import type {
+	AlbumItem,
+	GenerationItem,
+	SongItem,
+	VersionGenerationParams,
+	VersionItem
+} from '$lib/api/types';
 import {
 	ALBUM_COVER_ALT_TYPE,
 	COMPACT_LAYOUT_MEDIA,
@@ -120,6 +126,8 @@ vi.mock('$lib/stores/toast', () => ({
 }));
 
 import SongDetailView from './SongDetailView.svelte';
+import songDetailViewSource from './SongDetailView.svelte?raw';
+import { addToast } from '$lib/stores/toast';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -144,6 +152,21 @@ function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 		version_lyrics: null,
 		scores: null,
 		generation_params: { inference_steps: 8, guidance_scale: 1.5 },
+		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
+	};
+}
+
+function version(overrides: Partial<VersionItem> = {}): VersionItem {
+	return {
+		id: 'v1',
+		version_number: 1,
+		lyrics: 'verse',
+		prompt: 'dark folk',
+		bpm: 120,
+		audio_duration: 180,
+		key_scale: 'Am',
+		generation_params: null,
 		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides
 	};
@@ -281,6 +304,7 @@ beforeEach(() => {
 	uploadSongCover.mockReset();
 	deleteSongCover.mockReset();
 	deleteAlbumCover.mockReset();
+	vi.mocked(addToast).mockClear();
 });
 
 afterEach(async () => {
@@ -549,6 +573,26 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 		expect(updateSong).toHaveBeenCalled();
 		expect(get(selectedSongId)).toBe('s1');
+	});
+
+	it('toasts the actual saved version number from the versions API response, not version_count', async () => {
+		const { updateSong, fetchVersions } = await import('$lib/api/client');
+		vi.mocked(updateSong).mockResolvedValueOnce(song({ version_count: 2 }));
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+
+		// Only override the *post-save* reload — the initial render already
+		// consumed one fetchVersions() call while loading the song.
+		vi.mocked(fetchVersions).mockResolvedValueOnce([version({ id: 'v5', version_number: 5 })]);
+		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		await tick();
+		clickNamed(target, 'Save version');
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(addToast).toHaveBeenCalledWith('Saved version 5', 'success');
 	});
 });
 
@@ -881,5 +925,18 @@ describe('SongDetailView cover hero', () => {
 			'/api/albums/a-local/cover?variant=detail'
 		);
 		expect(target.querySelector('.cover-remove')).toBeNull();
+	});
+});
+
+describe('mobile layout reserves space for the sticky Generate bar', () => {
+	// jsdom cannot compute fixed-element layout, so this pins the stylesheet
+	// rule directly (the same technique routes/layout.test.ts uses).
+	it("keeps the takes scroll container's bottom padding clear of both the sticky Generate bar and the player bar", () => {
+		const media = /@media \(max-width: 768px\) \{[\s\S]*?\.detail-panel \{([\s\S]*?)\}/.exec(
+			songDetailViewSource
+		);
+		if (!media) throw new Error('Expected a mobile .detail-panel rule in the stylesheet');
+		expect(media[1]).toContain('--editor-generate-bar-height');
+		expect(media[1]).toContain('--player-height');
 	});
 });

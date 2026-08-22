@@ -853,6 +853,10 @@
 
 	.messages {
 		flex: 1;
+		/* Without this, a flex child defaults to min-height: auto — its full
+		   message-list content height — so it never shrinks to the column's
+		   bound and the pinned input below it gets pushed out of view. */
+		min-height: 0;
 		overflow-y: auto;
 		padding: 8px;
 		display: flex;

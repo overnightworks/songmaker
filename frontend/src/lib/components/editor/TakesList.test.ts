@@ -33,7 +33,17 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
 	return { ...actual, persistLibraryHistory: vi.fn() };
 });
+vi.mock('$lib/stores/player', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/stores/player')>();
+	return {
+		...actual,
+		playLibraryFromGeneration: vi.fn(async () => undefined),
+		playAlbumFromGeneration: vi.fn(async () => undefined)
+	};
+});
 
+import { addToast } from '$lib/stores/toast';
+import { playLibraryFromGeneration } from '$lib/stores/player';
 import TakesList from './TakesList.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -120,6 +130,8 @@ beforeEach(() => {
 	keep.mockReset();
 	pinSeed.mockReset();
 	useAsSource.mockReset();
+	vi.mocked(addToast).mockClear();
+	vi.mocked(playLibraryFromGeneration).mockClear();
 	clearSelection();
 	const sheet = document.createElement('style');
 	sheet.dataset.hitboxStyles = 'true';
@@ -142,6 +154,7 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 		song: song(),
 		dirty: false,
 		draftVersionNumber: 4,
+		latestVersionNumber: 3,
 		onselect: vi.fn(),
 		onagain: vi.fn(),
 		onuseasreference: vi.fn(),
@@ -184,15 +197,28 @@ describe('TakesList', () => {
 	});
 
 	it('labels the generating row with the version actually being generated, not the next draft version', async () => {
-		// song().version_count is 3; draftVersionNumber (the number Generate
-		// would create *next*) is 4 here — the two must not be conflated, since
-		// a running job always targets an already-saved version.
+		// draftVersionNumber (the number Generate would create *next*) is 4
+		// here — the two must not be conflated, since a running job always
+		// targets an already-saved version (latestVersionNumber).
 		const { target } = await render({
 			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 },
-			draftVersionNumber: 4
+			draftVersionNumber: 4,
+			latestVersionNumber: 3
 		});
 		expect(target.querySelector('.generating-label')?.textContent).toContain('v3');
 		expect(target.querySelector('.generating-label')?.textContent).not.toContain('v4');
+	});
+
+	it('labels the generating row from the actual highest version number, not the stale version_count after a mid-run deletion', async () => {
+		// A middle version (v2) was deleted after this job started: song.version_count
+		// dropped to 2, but the job still targets the highest surviving version, v3.
+		const { target } = await render({
+			song: song({ version_count: 2 }),
+			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 },
+			latestVersionNumber: 3
+		});
+		expect(target.querySelector('.generating-label')?.textContent).toContain('v3');
+		expect(target.querySelector('.generating-label')?.textContent).not.toContain('v2');
 	});
 
 	it('deletes a version and its takes from the group header, with confirmation', async () => {
@@ -213,6 +239,18 @@ describe('TakesList', () => {
 		await Promise.resolve();
 
 		expect(deleteVersion).toHaveBeenCalledWith('v1', true);
+	});
+
+	it('shows a toast instead of leaking an error when playback fails', async () => {
+		vi.mocked(playLibraryFromGeneration).mockRejectedValueOnce(new Error('422 unplayable'));
+		const { target } = await render();
+		const row = target.querySelector<HTMLElement>('.take-row');
+		row?.click();
+		await tick();
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(addToast).toHaveBeenCalledWith('422 unplayable', 'error');
 	});
 
 	it('calls pick and keep from the take actions', async () => {
