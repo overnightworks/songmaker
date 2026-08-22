@@ -1,8 +1,10 @@
 import { mount, tick, unmount } from 'svelte';
+import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { VersionGenerationParams } from '$lib/api/types';
 import { COMPACT_LAYOUT_MEDIA } from '$lib/constants';
+import { toasts } from '$lib/stores/toast';
 
 import ParamControls from './ParamControls.svelte';
 
@@ -85,6 +87,7 @@ afterEach(async () => {
 	document.head.querySelectorAll('[data-compact-ui]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
 	vi.unstubAllGlobals();
+	toasts.set([]);
 });
 
 describe('ParamControls compact layout', () => {
@@ -125,5 +128,35 @@ describe('ParamControls placeholders', () => {
 		if (!(select instanceof HTMLSelectElement)) throw new Error('Expected a select input');
 		expect(select.options[0].textContent).toBe(`default (${LOADED_PLACEHOLDERS.infer_method})`);
 		expect(target.textContent).not.toContain('undefined');
+	});
+
+	it('contains a missing default after load to that one field, not the whole panel', async () => {
+		const { inference_steps: _omitted, ...incompletePlaceholders } = LOADED_PLACEHOLDERS;
+		const target = await renderControls(false, incompletePlaceholders);
+
+		const errorText = target.querySelector('.param-error-text');
+		expect(errorText?.textContent).toBe('Default missing for inference_steps');
+		expect(
+			Array.from(target.querySelectorAll('input[type="number"]')).some(
+				(input) =>
+					(input as HTMLInputElement).placeholder === String(LOADED_PLACEHOLDERS.inference_steps)
+			)
+		).toBe(false);
+
+		const guidanceInput = Array.from(target.querySelectorAll('input[type="number"]')).find(
+			(input) =>
+				(input as HTMLInputElement).placeholder === String(LOADED_PLACEHOLDERS.guidance_scale)
+		);
+		expect(guidanceInput).toBeDefined();
+
+		const select = target.querySelector('select');
+		if (!(select instanceof HTMLSelectElement)) throw new Error('Expected a select input');
+		expect(select.options[0].textContent).toBe(`default (${LOADED_PLACEHOLDERS.infer_method})`);
+
+		expect(
+			get(toasts).some(
+				(t) => t.type === 'error' && t.message === 'Default missing for inference_steps'
+			)
+		).toBe(true);
 	});
 });

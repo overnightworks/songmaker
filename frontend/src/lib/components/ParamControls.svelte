@@ -4,6 +4,7 @@
 	import { ACESTEP_PARAM_DESCRIPTIONS } from '$lib/constants/acestep-params';
 	import { ensureCompactUiStyles } from '$lib/styles/compact-ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import { addToast } from '$lib/stores/toast';
 
 	interface Props {
 		values: VersionGenerationParams;
@@ -127,51 +128,81 @@
 
 	const defaultsLoaded = $derived(Object.keys(placeholders).length > 0);
 
+	const DEFAULT_MISSING_PREFIX = 'Default missing for';
+
 	// Once defaultsLoaded is true, every rendered field is either hidden by
 	// hiddenParams or must have a resolved default. A visible field with no
 	// default at that point means the loaded defaults are incomplete for the
 	// active model — a bug worth failing loudly on, not silently blanking.
+	// Each field is wrapped in its own <svelte:boundary> below, so this only
+	// takes down the one field, not the whole panel.
 	function resolvedPlaceholder(key: keyof VersionGenerationParams): number | string | boolean {
 		const value = placeholders[key];
 		if (value === undefined || value === null) {
-			throw new Error(`Missing loaded default for param "${key}"`);
+			throw new Error(`${DEFAULT_MISSING_PREFIX} ${key}`);
 		}
 		return value;
 	}
+
+	function fieldErrorMessage(error: unknown): string {
+		return error instanceof Error ? error.message : DEFAULT_MISSING_PREFIX;
+	}
+
+	function reportFieldError(error: unknown): void {
+		console.error(error);
+		addToast(fieldErrorMessage(error), 'error');
+	}
 </script>
 
-{#snippet numberField(f: NumberField)}
-	<label class="setting" title={tooltip(f.key)}>
+{#snippet fieldError(f: { key: keyof VersionGenerationParams; label: string }, error: unknown)}
+	<div class="setting param-error" title={tooltip(f.key)}>
 		<span>{f.label}</span>
-		<input
-			type="number"
-			min={f.min}
-			max={f.max}
-			step={f.step}
-			value={values[f.key] ?? ''}
-			placeholder={defaultsLoaded ? String(resolvedPlaceholder(f.key)) : ''}
-			title={tooltip(f.key)}
-			oninput={(e) => handleNumber(f.key, e.currentTarget.value)}
-		/>
-	</label>
+		<p class="param-error-text">{fieldErrorMessage(error)}</p>
+	</div>
+{/snippet}
+
+{#snippet numberField(f: NumberField)}
+	<svelte:boundary onerror={reportFieldError}>
+		<label class="setting" title={tooltip(f.key)}>
+			<span>{f.label}</span>
+			<input
+				type="number"
+				min={f.min}
+				max={f.max}
+				step={f.step}
+				value={values[f.key] ?? ''}
+				placeholder={defaultsLoaded ? String(resolvedPlaceholder(f.key)) : ''}
+				title={tooltip(f.key)}
+				oninput={(e) => handleNumber(f.key, e.currentTarget.value)}
+			/>
+		</label>
+		{#snippet failed(error)}
+			{@render fieldError(f, error)}
+		{/snippet}
+	</svelte:boundary>
 {/snippet}
 
 {#snippet selectField(f: SelectField)}
-	<label class="setting" title={tooltip(f.key)}>
-		<span>{f.label}</span>
-		<select
-			value={values[f.key] ?? ''}
-			title={tooltip(f.key)}
-			onchange={(e) => setParam(f.key, e.currentTarget.value || undefined)}
-		>
-			<option value=""
-				>{defaultsLoaded ? `default (${resolvedPlaceholder(f.key)})` : 'default'}</option
+	<svelte:boundary onerror={reportFieldError}>
+		<label class="setting" title={tooltip(f.key)}>
+			<span>{f.label}</span>
+			<select
+				value={values[f.key] ?? ''}
+				title={tooltip(f.key)}
+				onchange={(e) => setParam(f.key, e.currentTarget.value || undefined)}
 			>
-			{#each f.options as opt (opt)}
-				<option value={opt}>{opt}</option>
-			{/each}
-		</select>
-	</label>
+				<option value=""
+					>{defaultsLoaded ? `default (${resolvedPlaceholder(f.key)})` : 'default'}</option
+				>
+				{#each f.options as opt (opt)}
+					<option value={opt}>{opt}</option>
+				{/each}
+			</select>
+		</label>
+		{#snippet failed(error)}
+			{@render fieldError(f, error)}
+		{/snippet}
+	</svelte:boundary>
 {/snippet}
 
 {#snippet boolField(f: BoolField)}
@@ -292,6 +323,12 @@
 
 	.setting.toggle input[type='checkbox'] {
 		accent-color: var(--accent);
+	}
+
+	.param-error-text {
+		margin: 0;
+		color: #d34;
+		font-size: 1rem;
 	}
 
 	.setting input[type='text'],
