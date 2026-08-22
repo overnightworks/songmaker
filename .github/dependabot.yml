@@ -9,9 +9,10 @@ updates:
         patterns: ["*"]
     open-pull-requests-limit: 5
     ignore:
-      # mcp 2.0 removed mcp.server.fastmcp
+      # mcp 2.0 removed mcp.server.fastmcp. The semver-major filter didn't
+      # stop dependabot widening the pyproject.toml range ceiling (mcp>=1.2,<2
+      # -> <3) without an exact major bump, so ignore all update types.
       - dependency-name: "mcp"
-        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -24,6 +25,10 @@ updates:
     ignore:
       # TypeScript 7 needs svelte-check's dual TS6+TS7 --tsgo setup
       - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # prettier-plugin-svelte 4.x reformats existing .svelte/.ts files,
+      # breaking `prettier --check .` in CI (see PR #109)
+      - dependency-name: "prettier-plugin-svelte"
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
