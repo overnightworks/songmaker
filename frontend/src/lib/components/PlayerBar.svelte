@@ -202,6 +202,9 @@
 	style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}
 >
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
+	<div class="mobile-progress" aria-hidden="true">
+		<div class="mobile-progress-fill" style:width="{progressPercent}%"></div>
+	</div>
 	<div class="player-content">
 		<div class="transport-controls">
 			<button
@@ -307,7 +310,15 @@
 	</div>
 </footer>
 {#if nowPlayingOpen && current}
-	<NowPlaying info={current} onclose={closeNowPlaying} onGoToSong={goToPlayingSong} />
+	<NowPlaying
+		info={current}
+		onclose={closeNowPlaying}
+		onGoToSong={goToPlayingSong}
+		canPrev={Boolean(prevSong)}
+		canNext={Boolean(nextSong)}
+		onprev={playPrevSong}
+		onnext={playNextSong}
+	/>
 {/if}
 
 <style>
@@ -629,6 +640,13 @@
 		pointer-events: none;
 		z-index: 0;
 	}
+	.mobile-progress {
+		display: none;
+	}
+	.mobile-progress-fill {
+		height: 100%;
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+	}
 
 	@media (max-width: 900px) {
 		.player-bar {
@@ -651,125 +669,114 @@
 		}
 	}
 
+	/* One 64px transport row on mobile / coarse pointers: cover, title,
+	   play/pause, and the Now Playing chevron. Prev/Next move into the Now
+	   Playing overlay — see NowPlaying.svelte — and the interactive seek
+	   timeline is replaced by the decorative .mobile-progress line above. */
 	@media (max-width: 640px), (any-pointer: coarse) {
 		.player-bar {
 			overflow: visible;
+			padding: 0 14px env(safe-area-inset-bottom, 0px);
+		}
+		.mobile-progress {
+			display: block;
+			position: absolute;
+			left: 0;
+			right: 0;
+			top: 0;
+			height: 2px;
+			background: color-mix(in srgb, var(--border) 45%, transparent);
+			z-index: 2;
 		}
 		.player-content {
 			display: flex;
-			flex-wrap: wrap;
-			gap: 8px;
-		}
-		.transport-controls {
-			order: 1;
-			gap: 8px;
-		}
-		.now-playing-btn {
-			order: 2;
-			margin-left: auto;
+			align-items: center;
+			gap: 10px;
 		}
 		.track-info {
-			order: 3;
-			width: 100%;
+			order: 1;
+			flex: 1;
+			width: auto;
+			min-width: 0;
 		}
-		.timeline {
-			order: 4;
-			width: 100%;
-			gap: 6px;
+		.track-cover {
+			width: 40px;
+			height: 40px;
+		}
+		.transport-controls {
+			order: 2;
+			flex-shrink: 0;
 		}
 		.nav-btn {
-			position: relative;
-			width: 44px;
-			height: 44px;
-			min-width: 44px;
-			min-height: 44px;
-			border-color: transparent;
-			background: transparent;
-			isolation: isolate;
-		}
-		.nav-btn::before {
-			content: '';
-			position: absolute;
-			z-index: -1;
-			width: 36px;
-			height: 36px;
-			border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-			border-radius: 50%;
-			background: color-mix(in srgb, var(--surface) 70%, transparent);
-		}
-		.nav-btn:hover:not(:disabled)::before {
-			border-color: color-mix(in srgb, var(--primary) 65%, var(--border));
-			background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+			display: none;
 		}
 		.play-btn {
-			width: 56px;
-			height: 56px;
-			min-width: 56px;
-			min-height: 56px;
+			width: 40px;
+			height: 40px;
+			min-width: 40px;
+			min-height: 40px;
 		}
 		.play-btn-face {
 			transform: none !important;
 		}
-		.nav-btn :global(svg) {
-			position: relative;
-			z-index: 1;
-			width: 18px;
-			height: 18px;
+		.now-playing-btn {
+			order: 3;
+			flex-shrink: 0;
 		}
-		.time {
-			font-size: 0.7rem;
-			min-width: 28px;
+		.timeline {
+			display: none;
 		}
 	}
 	:global(html[data-pointer='coarse']) .player-bar {
 		overflow: visible;
+		padding: 0 14px env(safe-area-inset-bottom, 0px);
+	}
+	:global(html[data-pointer='coarse']) .mobile-progress {
+		display: block;
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 0;
+		height: 2px;
+		background: color-mix(in srgb, var(--border) 45%, transparent);
+		z-index: 2;
 	}
 	:global(html[data-pointer='coarse']) .player-content {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-	}
-	:global(html[data-pointer='coarse']) .transport-controls {
-		order: 1;
-		gap: 8px;
-	}
-	:global(html[data-pointer='coarse']) .now-playing-btn {
-		order: 2;
-		margin-left: auto;
+		align-items: center;
+		gap: 10px;
 	}
 	:global(html[data-pointer='coarse']) .track-info {
-		order: 3;
-		width: 100%;
+		order: 1;
+		flex: 1;
+		width: auto;
+		min-width: 0;
 	}
-	:global(html[data-pointer='coarse']) .timeline {
-		order: 4;
-		width: 100%;
-		gap: 6px;
+	:global(html[data-pointer='coarse']) .track-cover {
+		width: 40px;
+		height: 40px;
+	}
+	:global(html[data-pointer='coarse']) .transport-controls {
+		order: 2;
+		flex-shrink: 0;
 	}
 	:global(html[data-pointer='coarse']) .nav-btn {
-		position: relative;
-		width: 44px;
-		height: 44px;
-		min-width: 44px;
-		min-height: 44px;
-		border-color: transparent;
-		background: transparent;
-		isolation: isolate;
+		display: none;
 	}
-	:global(html[data-pointer='coarse']) .nav-btn::before {
-		content: '';
-		position: absolute;
-		z-index: -1;
-		width: 36px;
-		height: 36px;
-		border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-		border-radius: 50%;
-		background: color-mix(in srgb, var(--surface) 70%, transparent);
+	:global(html[data-pointer='coarse']) .play-btn {
+		width: 40px;
+		height: 40px;
+		min-width: 40px;
+		min-height: 40px;
 	}
-	:global(html[data-pointer='coarse']) .nav-btn :global(svg) {
-		position: relative;
-		z-index: 1;
-		width: 18px;
-		height: 18px;
+	:global(html[data-pointer='coarse']) .play-btn-face {
+		transform: none !important;
+	}
+	:global(html[data-pointer='coarse']) .now-playing-btn {
+		order: 3;
+		flex-shrink: 0;
+	}
+	:global(html[data-pointer='coarse']) .timeline {
+		display: none;
 	}
 </style>

@@ -115,6 +115,40 @@ describe('NowPlaying', () => {
 		expect(handlers.onGoToSong).toHaveBeenCalledOnce();
 	});
 
+	it('wires Previous and Next to the given handlers, respecting can-navigate flags', async () => {
+		const onprev = vi.fn();
+		const onnext = vi.fn();
+		target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(NowPlaying, {
+			target,
+			props: {
+				info: info(),
+				onclose: vi.fn(),
+				onGoToSong: vi.fn(),
+				canPrev: false,
+				canNext: true,
+				onprev,
+				onnext
+			}
+		});
+		await tick();
+
+		const previous = target.querySelector<HTMLButtonElement>('button[aria-label="Previous song"]');
+		const next = target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]');
+		expect(previous?.disabled).toBe(true);
+		expect(next?.disabled).toBe(false);
+		next?.click();
+		expect(onnext).toHaveBeenCalledOnce();
+		expect(onprev).not.toHaveBeenCalled();
+	});
+
+	it('omits Previous and Next when no handlers are given', async () => {
+		await renderSheet(info());
+		expect(target.querySelector('button[aria-label="Previous song"]')).toBeNull();
+		expect(target.querySelector('button[aria-label="Next song"]')).toBeNull();
+	});
+
 	it('toggles shuffle from the overlay, scoped to the current queue', async () => {
 		setShuffle(false);
 		queueContext.set({ type: 'album', albumId: 'a1' });

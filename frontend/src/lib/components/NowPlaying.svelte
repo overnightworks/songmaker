@@ -10,7 +10,9 @@
 		NOW_PLAYING_TAKE_PREFIX,
 		SHUFFLE_SCOPE_ALBUM,
 		SHUFFLE_SCOPE_LIBRARY,
-		SHUFFLE_SCOPE_PLAYLIST
+		SHUFFLE_SCOPE_PLAYLIST,
+		SONG_NEXT_LABEL,
+		SONG_PREVIOUS_LABEL
 	} from '$lib/constants';
 	import {
 		libraryQueueSkipped,
@@ -27,11 +29,19 @@
 	let {
 		info,
 		onclose,
-		onGoToSong
+		onGoToSong,
+		canPrev = false,
+		canNext = false,
+		onprev,
+		onnext
 	}: {
 		info: PlaybackInfo;
 		onclose: () => void;
 		onGoToSong: () => void;
+		canPrev?: boolean;
+		canNext?: boolean;
+		onprev?: () => void;
+		onnext?: () => void;
 	} = $props();
 
 	let sheet: HTMLDivElement | undefined = $state();
@@ -88,6 +98,30 @@
 					<p class="sheet-take">{takeLabel}</p>
 				</div>
 				<div class="sheet-actions">
+					{#if onprev}
+						<button
+							class="icon-btn"
+							style:min-width="{HITBOX_FREQUENT_PX}px"
+							style:min-height="{HITBOX_FREQUENT_PX}px"
+							onclick={onprev}
+							disabled={!canPrev}
+							aria-label={SONG_PREVIOUS_LABEL}
+						>
+							<Icon name="skip-back" size={18} />
+						</button>
+					{/if}
+					{#if onnext}
+						<button
+							class="icon-btn"
+							style:min-width="{HITBOX_FREQUENT_PX}px"
+							style:min-height="{HITBOX_FREQUENT_PX}px"
+							onclick={onnext}
+							disabled={!canNext}
+							aria-label={SONG_NEXT_LABEL}
+						>
+							<Icon name="skip-forward" size={18} />
+						</button>
+					{/if}
 					<button
 						class="icon-btn"
 						class:active={shuffle}
@@ -220,10 +254,14 @@
 		background: transparent;
 		color: var(--text-muted);
 	}
-	.icon-btn:hover {
+	.icon-btn:hover:not(:disabled) {
 		color: var(--text);
 		border-color: var(--border);
 		background: var(--surface-hover);
+	}
+	.icon-btn:disabled {
+		color: var(--text-disabled);
+		cursor: default;
 	}
 	.icon-btn.active {
 		color: var(--accent);
