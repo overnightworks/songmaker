@@ -34,7 +34,7 @@ from songmaker_cli.library_cursor import (
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_stream_api import (
-    _check_queue_stream_rate_limit,
+    check_queue_stream_rate_limit,
     resolve_library_pool_membership,
 )
 
@@ -93,7 +93,7 @@ def api_library_pool_queue(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> LibraryPoolQueueResponse:
-    _check_queue_stream_rate_limit(request, user)
+    check_queue_stream_rate_limit(request, user)
     membership = resolve_library_pool_membership(
         session,
         user,
