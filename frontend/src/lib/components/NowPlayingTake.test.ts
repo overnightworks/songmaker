@@ -115,6 +115,16 @@ describe('NowPlayingTake', () => {
 		expect(target.textContent).toContain('schmeckt breit');
 	});
 
+	it('ignores blank lines and [Section] markers, which are never sung', async () => {
+		await render({
+			lyrics: '[Verse]\ndie Luft schmeckt weit\n\n[Chorus]\nhalt die Haende auf',
+			generation: generation({
+				whisper_text: 'die Luft schmeckt weit\nhalt die Haende auf'
+			})
+		});
+		expect(target.textContent).toContain('Sung text matches the lyrics');
+	});
+
 	it('shows a matches-the-lyrics state when the transcript is identical', async () => {
 		await render({
 			lyrics: 'die Luft schmeckt weit',

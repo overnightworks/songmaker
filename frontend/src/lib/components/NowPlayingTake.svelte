@@ -96,6 +96,22 @@
 		sungLine: string | null;
 	}
 
+	const STRUCTURAL_LINE = /^\[[^\]]+\]$/;
+
+	// The whisper transcript is a plain sung transcription: it never contains
+	// the lyrics text's blank paragraph breaks or [Verse]/[Chorus] markers.
+	// Left in, computeDiff's line-level comparison flags nearly every lyrics
+	// line as "removed" against those artifacts alone, drowning out the sung
+	// deviations that actually matter. Dropping them from both sides before
+	// diffing compares only lines that could plausibly have been sung.
+	function normalizeForDiff(text: string): string {
+		return text
+			.split('\n')
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0 && !STRUCTURAL_LINE.test(line))
+			.join('\n');
+	}
+
 	function pairDeviations(diffLines: DiffLine[]): DeviationRow[] {
 		const rows: DeviationRow[] = [];
 		let i = 0;
@@ -122,7 +138,9 @@
 	const hasTranscript = $derived(Boolean(lyrics && generation.whisper_text));
 	const deviationRows = $derived.by((): DeviationRow[] => {
 		if (!lyrics || !generation.whisper_text) return [];
-		return pairDeviations(computeDiff(lyrics, generation.whisper_text));
+		return pairDeviations(
+			computeDiff(normalizeForDiff(lyrics), normalizeForDiff(generation.whisper_text))
+		);
 	});
 
 	let ratingValue = $state(50);
