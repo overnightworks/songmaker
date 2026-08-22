@@ -24,6 +24,7 @@ scoring = [
     "soundfile",
     "audiobox-aesthetics>=0.0.4,<1",
     "torch>=2.2,<3",
+    "torchaudio>=2.2,<3",
     "nvidia-ml-py3>=7.352,<8",
 ]
 whisper = [
@@ -52,7 +53,7 @@ claude = [
     "anthropic>=0.20,<1",
 ]
 mcp = [
-    "mcp>=1.2,<2",
+    "mcp>=2,<3",
 ]
 acestep-worker = [
     "fastapi>=0.100,<1",
@@ -99,6 +100,7 @@ override-dependencies = [
 [[tool.uv.index]]
 name = "pytorch-cu121"
 url = "https://download.pytorch.org/whl/cu121"
+explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu121" }
