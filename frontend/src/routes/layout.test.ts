@@ -5,6 +5,7 @@ import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { checkAuth, currentUser, authLoading } from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { openCollection } from '$lib/stores/collection';
+import { closeSidebar } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { pageState } = vi.hoisted(() => ({
@@ -43,6 +44,21 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		logout: vi.fn()
 	};
 });
+vi.mock('$lib/api/library', () => ({
+	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
+}));
+vi.mock('$lib/api/albums', () => ({
+	fetchAlbum: vi.fn(),
+	fetchAlbums: vi
+		.fn()
+		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false })
+}));
+vi.mock('$lib/api/songs', () => ({
+	fetchSong: vi.fn(),
+	fetchSongs: vi
+		.fn()
+		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
+}));
 
 import Layout from './+layout.svelte';
 
@@ -142,15 +158,16 @@ afterEach(async () => {
 	openCollection.set(null);
 	currentUser.set(null);
 	authLoading.set(false);
+	closeSidebar();
 	audioPlayer.destroy();
 	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
 });
 
-describe('app shell header', () => {
+describe('app shell', () => {
 	it('keeps the private PlayerBar and body reservation visible while idle', async () => {
 		const target = await renderLayout('/');
-		const body = requireElement<HTMLElement>(target, '.app-body');
+		const body = requireElement<HTMLElement>(target, '.app-shell');
 
 		expect(audioPlayer.current).toBeNull();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
@@ -171,7 +188,7 @@ describe('app shell header', () => {
 		async (path) => {
 			const target = await renderLayout(path);
 			expect(target.querySelector('.player-bar')).toBeNull();
-			expect(target.querySelector('.app-body')).toBeNull();
+			expect(target.querySelector('.app-shell')).toBeNull();
 		}
 	);
 
@@ -184,7 +201,7 @@ describe('app shell header', () => {
 
 		expect(target.querySelector('.loading')).not.toBeNull();
 		expect(target.querySelector('.player-bar')).toBeNull();
-		expect(target.querySelector('.app-body')).toBeNull();
+		expect(target.querySelector('.app-shell')).toBeNull();
 	});
 
 	it('removes the PlayerBar and reservation after auth loss', async () => {
@@ -193,64 +210,40 @@ describe('app shell header', () => {
 		currentUser.set(null);
 		await tick();
 		expect(privateTarget.querySelector('.player-bar')).toBeNull();
-		expect(privateTarget.querySelector('.app-body')).toBeNull();
+		expect(privateTarget.querySelector('.app-shell')).toBeNull();
 	});
 
-	it('keeps Brand, Back, and the account menu trigger inside 320px', async () => {
+	it('keeps the mobile strip trigger and brand inside 320px', async () => {
 		const target = await renderLayout('/');
-		const header = requireElement<HTMLElement>(target, '.top-bar');
-		const back = requireElement<HTMLButtonElement>(header, '.back-btn');
-		const brand = requireElement<HTMLAnchorElement>(header, '.brand');
-		const trigger = requireElement<HTMLButtonElement>(
-			header,
-			'[data-hitbox="frequent"][aria-haspopup="dialog"]'
-		);
+		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
+		const trigger = requireElement<HTMLButtonElement>(strip, '.drawer-trigger');
+		const brand = requireElement<HTMLAnchorElement>(strip, '.brand');
 
-		expect(header.querySelector('.header-nav')).toBeNull();
-		expect(header.querySelectorAll('.back-btn')).toHaveLength(1);
-		expect(header.querySelector('a[href="/loras"]')).toBeNull();
-		expect(header.querySelector('a[href="/settings"]')).toBeNull();
-		expect(header.querySelector('.logout')).toBeNull();
-		expect(back.tagName).toBe('BUTTON');
+		expect(target.querySelector('.rail')).toBeNull();
 		expect(brand.textContent).toBeTruthy();
 
-		const headerStyle = getComputedStyle(header);
-		const pad = px(headerStyle.paddingLeft) + px(headerStyle.paddingRight);
-		const gap = px(headerStyle.gap);
-		const leftGap = px(getComputedStyle(requireElement(header, '.top-left')).gap);
-		expect(px(getComputedStyle(brand).minWidth)).toBe(0);
+		const stripStyle = getComputedStyle(strip);
+		const pad = px(stripStyle.paddingLeft) + px(stripStyle.paddingRight);
+		const gap = px(stripStyle.gap);
 		expect(minUsedWidth(trigger)).toBe(HITBOX_FREQUENT_PX);
-		const used =
-			pad +
-			minUsedWidth(back) +
-			leftGap +
-			px(getComputedStyle(brand).minWidth) +
-			gap +
-			minUsedWidth(trigger);
+		const used = pad + minUsedWidth(trigger) + gap + px(getComputedStyle(brand).minWidth || '0');
 		expect(used).toBeLessThanOrEqual(VIEWPORT_PX);
 	});
 
-	it('keeps library back on home and uses the settings home link elsewhere', async () => {
-		const home = await renderLayout('/');
-		const homeBack = requireElement<HTMLButtonElement>(home, '.back-btn');
-		expect(homeBack.tagName).toBe('BUTTON');
-		expect(homeBack.getAttribute('aria-label')).toBe('Back');
-		if (mounted) await unmount(mounted);
-		mounted = undefined;
-		document.body.replaceChildren();
+	it('opens the rail drawer from the trigger on every private route', async () => {
+		const target = await renderLayout('/loras');
+		expect(document.body.querySelector('.rail')).toBeNull();
+		requireElement<HTMLButtonElement>(target, '.drawer-trigger').click();
+		await tick();
+		const rail = requireElement<HTMLElement>(document.body, '.rail');
+		expect(requireElement<HTMLAnchorElement>(rail, 'a[href="/"]').textContent).toBeTruthy();
+	});
 
-		const voices = await renderLayout('/loras');
-		expect(voices.querySelector('.back-btn')).toBeNull();
-		expect(voices.querySelector('.brand')).not.toBeNull();
-		if (mounted) await unmount(mounted);
-		mounted = undefined;
-		document.body.replaceChildren();
-
-		const settings = await renderLayout('/settings');
-		const settingsBack = requireElement<HTMLAnchorElement>(settings, '.back-btn');
-		expect(settingsBack.tagName).toBe('A');
-		expect(settingsBack.getAttribute('href')).toBe('/');
-		expect(settingsBack.getAttribute('aria-label')).toBe('Back to home');
-		expect(settings.querySelectorAll('.back-btn')).toHaveLength(1);
+	it('renders the rail inline instead of a drawer on wide layouts', async () => {
+		stubMatchMedia(false);
+		delete document.documentElement.dataset.pointer;
+		const target = await renderLayout('/');
+		expect(target.querySelector('.mobile-strip')).toBeNull();
+		expect(requireElement(target, '.rail')).toBeTruthy();
 	});
 });

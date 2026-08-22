@@ -330,17 +330,6 @@ export function setLibrarySurface(surface: LibrarySurface): void {
 	librarySurface.set(surface);
 }
 
-// Transitional: HeaderMenu's shares-status chip still calls these directly.
-// It is replaced by the wall's Shared filter chip and deleted in the next
-// commit, at which point these two thin wrappers go with it.
-export function openSharesView(): void {
-	setLibraryFilter('shared');
-}
-
-export function closeSharesView(): void {
-	if (get(libraryFilter) === 'shared') setLibraryFilter(LIBRARY_DEFAULT_FILTER);
-}
-
 export function captureLibraryScroll(scrollTop: number): void {
 	libraryScrollAnchor.set(scrollTop);
 	rememberLibraryScroll(get(libraryFilter));

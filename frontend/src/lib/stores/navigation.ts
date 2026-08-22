@@ -151,6 +151,20 @@ export function openLibraryCreate(): void {
 	pushLibraryHistory();
 }
 
+// The rail's "Library" link: leaves the open song (if any) but keeps the
+// open collection in the rail context (GitLab-style — the context persists
+// until another collection replaces it), and always pushes a fresh history
+// entry so the browser back button returns to whatever was open before.
+export async function openLibraryWall(): Promise<void> {
+	if (!isLibraryWorkspacePath(window.location.pathname)) {
+		await goto(resolve('/'));
+	}
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
+	setLibrarySurface('browse');
+	pushLibraryHistory();
+}
+
 export interface AlbumTrackNeighbors {
 	previous: SongItem | null;
 	next: SongItem | null;

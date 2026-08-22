@@ -104,6 +104,17 @@ export const SONG_NEXT_LABEL = 'Next song';
 export const SETTINGS_NAV_LABEL = 'Settings sections';
 export const ADMIN_TABS_LABEL = 'Admin sections';
 
+export const RAIL_LIBRARY_LABEL = 'Library';
+export const RAIL_SETTINGS_LABEL = 'Settings';
+export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
+export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
+
+export function librarySummaryLabel(albumCount: number, playlistCount: number): string {
+	const albums = `${albumCount} album${albumCount === 1 ? '' : 's'}`;
+	const playlists = `${playlistCount} playlist${playlistCount === 1 ? '' : 's'}`;
+	return `${albums} · ${playlists}`;
+}
+
 export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
 export type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
 export const LIBRARY_DEFAULT_FILTER: LibraryFilter = 'albums';
