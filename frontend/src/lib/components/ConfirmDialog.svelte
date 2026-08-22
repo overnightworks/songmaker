@@ -1,8 +1,12 @@
 <script lang="ts">
+	import { tick } from 'svelte';
+	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	import { DIALOG_CANCEL_LABEL, DIALOG_CONFIRM_LABEL } from '$lib/constants';
+
 	let {
 		title,
 		message,
-		confirmLabel = 'Confirm',
+		confirmLabel = DIALOG_CONFIRM_LABEL,
 		onconfirm,
 		secondaryLabel,
 		onsecondary,
@@ -17,24 +21,37 @@
 		oncancel: () => void;
 	} = $props();
 
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') oncancel();
+	let dialog: HTMLDivElement | undefined = $state();
+
+	$effect(() => {
+		void tick().then(() => {
+			if (dialog) focusFirstIn(dialog);
+		});
+	});
+
+	function onWindowKeydown(event: KeyboardEvent): void {
+		if (!dialog) return;
+		handleFocusTrapKeydown(dialog, event, oncancel);
 	}
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={onWindowKeydown} />
 
-<div
-	class="overlay"
-	onclick={oncancel}
-	onkeydown={(e) => e.key === 'Escape' && oncancel()}
-	role="presentation"
->
-	<div class="dialog" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+<div class="overlay">
+	<button class="overlay-backdrop" tabindex="-1" onclick={oncancel} aria-label={DIALOG_CANCEL_LABEL}
+	></button>
+	<div
+		bind:this={dialog}
+		class="dialog"
+		role="dialog"
+		aria-modal="true"
+		aria-label={title}
+		tabindex="-1"
+	>
 		<h3>{title}</h3>
 		<p class="message">{message}</p>
 		<div class="actions">
-			<button class="cancel-btn" onclick={oncancel}>Cancel</button>
+			<button class="cancel-btn" onclick={oncancel}>{DIALOG_CANCEL_LABEL}</button>
 			{#if secondaryLabel && onsecondary}
 				<button class="secondary-btn" onclick={onsecondary}>{secondaryLabel}</button>
 			{/if}
@@ -47,14 +64,26 @@
 	.overlay {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.6);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		z-index: 1000;
 	}
 
+	.overlay-backdrop {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: rgba(0, 0, 0, 0.6);
+		cursor: default;
+	}
+
 	.dialog {
+		position: relative;
+		z-index: 1;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);

@@ -1,5 +1,8 @@
 export const APP_NAME = 'Hallucinai';
 
+export const DIALOG_CANCEL_LABEL = 'Cancel';
+export const DIALOG_CONFIRM_LABEL = 'Confirm';
+
 export const EXPIRY_WARN_DAYS = 3;
 
 export const LORA_POLL_INTERVAL_MS = 5000;

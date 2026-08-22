@@ -2,7 +2,8 @@ import { get, writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { fetchAlbum } from '$lib/api/albums';
-import { isDirty } from '$lib/stores/editor';
+import { handleSave, isDirty } from '$lib/stores/editor';
+import { addToast } from '$lib/stores/toast';
 import {
 	selectedSongId,
 	selectedGenerationId,
@@ -109,12 +110,17 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 // (Cancel).
 export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | null>(null);
 
-function guardDirtyNavigation(action: () => void | Promise<void>): void {
+// The single gatekeeper for every navigation that would drop the current
+// editor draft: a dirty draft parks `action` in `pendingDirtyNavigation`
+// instead of running it (see the comment above), a clean draft runs it
+// immediately. Every song-switch/leave entry point must route through this
+// — never re-implement the if/else inline.
+async function guardDirtyNavigation(action: () => void | Promise<void>): Promise<void> {
 	if (get(isDirty)) {
 		pendingDirtyNavigation.set(action);
 		return;
 	}
-	void action();
+	await action();
 }
 
 // The rail context (and every other "song open" entry point — search hits,
@@ -189,7 +195,7 @@ export function openLibraryCreate(): void {
 // until another collection replaces it), and always pushes a fresh history
 // entry so the browser back button returns to whatever was open before.
 export async function openLibraryWall(): Promise<void> {
-	const action = async (): Promise<void> => {
+	await guardDirtyNavigation(async () => {
 		if (!isLibraryWorkspacePath(window.location.pathname)) {
 			await goto(resolve('/'));
 		}
@@ -198,12 +204,7 @@ export async function openLibraryWall(): Promise<void> {
 		setLibrarySurface('browse');
 		closeSidebar();
 		pushLibraryHistory();
-	};
-	if (get(isDirty)) {
-		pendingDirtyNavigation.set(action);
-		return;
-	}
-	await action();
+	});
 }
 
 export interface AlbumTrackNeighbors {
@@ -347,9 +348,11 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 	if (!isLibraryWorkspacePath(window.location.pathname)) {
 		await goto(resolve('/'));
 	}
-	applySelectedSong(song.id, song, 'stack', 'takes');
-	selectedGenerationId.set(generationId);
-	persistLibraryHistory();
+	await guardDirtyNavigation(() => {
+		applySelectedSong(song.id, song, 'stack', 'takes');
+		selectedGenerationId.set(generationId);
+		persistLibraryHistory();
+	});
 }
 
 export function goBack(): void {
@@ -375,6 +378,22 @@ export function goBack(): void {
 	setLibrarySurface('browse');
 	suppressPush = false;
 	replaceLibraryHistory();
+}
+
+// Browser Back/Forward has already committed the history change by the time
+// `popstate` fires — there is no pending entry left to park a cancellable
+// navigation into, unlike every other guarded path (see
+// `pendingDirtyNavigation` above). A dirty draft is saved instead; a failed
+// save surfaces a toast but never blocks the already-committed navigation.
+// Documented next to the dirty-guard paragraph in docs/architecture.md.
+async function saveDirtyDraftBeforePopstate(): Promise<void> {
+	const songId = get(selectedSongId);
+	if (!get(isDirty) || !songId) return;
+	try {
+		await handleSave(songId);
+	} catch (e) {
+		addToast(e instanceof Error ? e.message : 'Save failed', 'error');
+	}
 }
 
 export function initNavigation(): () => void {
@@ -404,6 +423,7 @@ export function initNavigation(): () => void {
 	function onPopstate(e: PopStateEvent): void {
 		const state = e.state;
 		void (async () => {
+			await saveDirtyDraftBeforePopstate();
 			if (isLibraryHistoryState(state)) {
 				const applied = await applyLibraryHistory(state);
 				if (applied && state.songId) {

@@ -65,4 +65,46 @@ describe('ConfirmDialog', () => {
 		const { target } = await render({ secondaryLabel: undefined, onsecondary: undefined });
 		expect(target.querySelector('.secondary-btn')).toBeNull();
 	});
+
+	it('marks the dialog aria-modal and labels it with the title', async () => {
+		const { target } = await render();
+		const dialog = target.querySelector('[role="dialog"]');
+		expect(dialog?.getAttribute('aria-modal')).toBe('true');
+		expect(dialog?.getAttribute('aria-label')).toBe('Unsaved changes');
+	});
+
+	it('focuses the first focusable element on open', async () => {
+		const { target } = await render();
+		await tick();
+		expect(document.activeElement).toBe(target.querySelector('.cancel-btn'));
+	});
+
+	it('traps Tab within the dialog', async () => {
+		const { target } = await render();
+		await tick();
+		const cancelBtn = target.querySelector<HTMLButtonElement>('.cancel-btn');
+		const confirmBtn = target.querySelector<HTMLButtonElement>('.confirm-btn');
+		confirmBtn?.focus();
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+		expect(document.activeElement).toBe(cancelBtn);
+
+		window.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true })
+		);
+		expect(document.activeElement).toBe(confirmBtn);
+	});
+
+	it('prevents the default action when Escape cancels', async () => {
+		await render();
+		const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+		window.dispatchEvent(event);
+		expect(event.defaultPrevented).toBe(true);
+	});
+
+	it('cancels on a backdrop click', async () => {
+		const { target, props } = await render();
+		target.querySelector<HTMLButtonElement>('.overlay-backdrop')?.click();
+		expect(props.oncancel).toHaveBeenCalledTimes(1);
+	});
 });
