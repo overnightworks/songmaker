@@ -173,7 +173,7 @@ export function openCollectionEntry(collection: OpenCollection): void {
 }
 
 export function backToCollection(): void {
-	guardDirtyNavigation(() => {
+	void guardDirtyNavigation(() => {
 		suppressPush = true;
 		selectedSongId.set(null);
 		selectedGenerationId.set(null);
@@ -280,13 +280,13 @@ function selectSongHistoryMode(
 }
 
 export function selectSong(songId: string, knownSong?: SongItem): void {
-	guardDirtyNavigation(() =>
+	void guardDirtyNavigation(() =>
 		applySelectedSong(songId, knownSong, selectSongHistoryMode(songId, knownSong), 'takes')
 	);
 }
 
 export function selectNeighborSong(song: SongItem): void {
-	guardDirtyNavigation(() => applySelectedSong(song.id, song, 'replace', 'keep'));
+	void guardDirtyNavigation(() => applySelectedSong(song.id, song, 'replace', 'keep'));
 }
 
 function hydrateSongIntoLibrary(song: SongItem): void {
@@ -386,14 +386,31 @@ export function goBack(): void {
 // `pendingDirtyNavigation` above). A dirty draft is saved instead; a failed
 // save surfaces a toast but never blocks the already-committed navigation.
 // Documented next to the dirty-guard paragraph in docs/architecture.md.
-async function saveDirtyDraftBeforePopstate(): Promise<void> {
-	const songId = get(selectedSongId);
-	if (!get(isDirty) || !songId) return;
+//
+// `savingDraft` memoises the in-flight save: two popstates firing before the
+// first save settles (e.g. rapid Back/Back) await the same promise instead
+// of each POSTing the draft.
+let savingDraft: Promise<void> | null = null;
+
+async function saveDraft(songId: string): Promise<void> {
 	try {
 		await handleSave(songId);
 	} catch (e) {
 		addToast(e instanceof Error ? e.message : 'Save failed', 'error');
 	}
+}
+
+async function saveDirtyDraftBeforePopstate(): Promise<void> {
+	if (savingDraft) {
+		await savingDraft;
+		return;
+	}
+	const songId = get(selectedSongId);
+	if (!get(isDirty) || !songId) return;
+	savingDraft = saveDraft(songId).finally(() => {
+		savingDraft = null;
+	});
+	await savingDraft;
 }
 
 export function initNavigation(): () => void {

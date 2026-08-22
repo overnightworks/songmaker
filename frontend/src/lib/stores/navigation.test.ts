@@ -537,6 +537,29 @@ describe('initNavigation', () => {
 		cleanup();
 	});
 
+	it('saves a dirty draft once when two popstates fire before the first save settles', async () => {
+		history.replaceState(null, '', '/');
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+		let resolveSave: (value: SongItem) => void = () => undefined;
+		vi.mocked(updateSong).mockReturnValue(
+			new Promise((resolve) => {
+				resolveSave = resolve;
+			})
+		);
+
+		const cleanup = initNavigation();
+		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
+		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
+		resolveSave(song({ id: 's1', lyrics: 'unsaved edit' }));
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+
+		expect(updateSong).toHaveBeenCalledTimes(1);
+		cleanup();
+	});
+
 	it('still applies the browser-back navigation when the auto-save fails', async () => {
 		history.replaceState(null, '', '/');
 		openAlbum('a1');
