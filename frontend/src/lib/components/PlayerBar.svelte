@@ -9,7 +9,7 @@
 		playPrevSong,
 		canPlayPrevSong,
 		canPlayNextSong,
-		libraryQueueNotice,
+		playStartNotice,
 		libraryQueueSkipped,
 		libraryQueueSkippedComplete,
 		queueContext,
@@ -73,7 +73,7 @@
 	const duration = $derived(audioPlayer.duration);
 	const shuffle = $derived($shuffleEnabled);
 	const poolName = $derived(LIBRARY_TAKE_POOL_LABELS[$libraryTakePool]);
-	const queueNotice = $derived($libraryQueueNotice);
+	const startNotice = $derived($playStartNotice);
 	const skipped = $derived($queueContext.type === 'library' ? $libraryQueueSkipped : []);
 	const skippedComplete = $derived(
 		$queueContext.type === 'library' ? $libraryQueueSkippedComplete : true
@@ -305,13 +305,13 @@
 							class="loading-text">Loading...</span
 						>{:else if isError}<span class="error-text">{errorMsg ?? 'Error'}</span>{/if}</span
 				>
-			{:else if idleTarget.type === 'library' && queueNotice === 'building'}
+			{:else if startNotice === 'building'}
 				<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
 				<span class="track-detail">{idleTarget.label}</span>
-			{:else if idleTarget.type === 'library' && queueNotice === 'empty'}
+			{:else if startNotice === 'empty'}
 				<span class="track-title">{LIBRARY_QUEUE_EMPTY_TITLE}</span>
 				<span class="track-detail">{idleTarget.label}</span>
-			{:else if idleTarget.type === 'library' && queueNotice === 'error'}
+			{:else if startNotice === 'error'}
 				<span class="track-title">{idleTarget.label} failed</span>
 				<span class="track-detail">{LIBRARY_QUEUE_RETRY_DETAIL}</span>
 			{:else}

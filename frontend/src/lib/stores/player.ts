@@ -138,8 +138,8 @@ export async function toggleShuffle(): Promise<void> {
 	await rebuildQueueAfterShuffleToggle();
 }
 
-export type LibraryQueueNotice = 'idle' | 'building' | 'empty' | 'error';
-export const libraryQueueNotice = writable<LibraryQueueNotice>('idle');
+export type PlayStartNotice = 'idle' | 'building' | 'empty' | 'error';
+export const playStartNotice = writable<PlayStartNotice>('idle');
 export const libraryQueueSkipped = writable<QueueStreamSkipItem[]>([]);
 export const libraryQueueSkippedComplete = writable(true);
 export const windowEnded = writable(false);
@@ -180,6 +180,17 @@ function isUnplayableStartError(err: unknown): boolean {
 		err.status === 422 &&
 		err.message === QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 	);
+}
+
+function reportNothingPlayable(label: string, retry: () => Promise<void>): void {
+	retryPlayIntent = retry;
+	playStartNotice.set('empty');
+	clearLibraryQueueSkipFeedback();
+	addToast(`${LIBRARY_QUEUE_EMPTY_TITLE} (${label})`, 'error');
+}
+
+function albumTitle(albums: AlbumItem[], albumId: string): string {
+	return albums.find((album) => album.id === albumId)?.title ?? '';
 }
 
 function libraryStreamFailureToast(err: unknown): string {
@@ -259,6 +270,7 @@ function beginPlayStart(): { seq: number; signal: AbortSignal } {
 	playStartAbort?.abort();
 	playStartAbort = new AbortController();
 	playStartSeq += 1;
+	retryPlayIntent = null;
 	return { seq: playStartSeq, signal: playStartAbort.signal };
 }
 
@@ -403,7 +415,7 @@ export async function playLibraryFromGeneration(
 ): Promise<void> {
 	const { seq, signal } = beginPlayStart();
 	queueContext.set({ type: 'library' });
-	libraryQueueNotice.set('building');
+	playStartNotice.set('building');
 	clearLibraryQueueSkipFeedback();
 	clearWindowEnd();
 	let queue;
@@ -416,7 +428,7 @@ export async function playLibraryFromGeneration(
 	} catch (err) {
 		if (!playStartIsCurrent(seq)) return;
 		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
-		libraryQueueNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
+		playStartNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
 		clearLibraryQueueSkipFeedback();
 		addToast(libraryStreamFailureToast(err), 'error');
 		return;
@@ -426,13 +438,12 @@ export async function playLibraryFromGeneration(
 	const startIndex = takes.findIndex((take) => take.generation.id === gen.id);
 	if (startIndex < 0) {
 		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
-		libraryQueueNotice.set('error');
+		playStartNotice.set('error');
 		clearLibraryQueueSkipFeedback();
 		addToast(QUEUE_TAKE_MISSING_TOAST, 'error');
 		return;
 	}
-	retryPlayIntent = null;
-	libraryQueueNotice.set('idle');
+	playStartNotice.set('idle');
 	libraryQueueSkipped.set(queue.skipped ?? []);
 	libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
 	playNativeLibraryTakes(takes, startIndex, opts.resumeAtTrackTime);
@@ -441,7 +452,7 @@ export async function playLibraryFromGeneration(
 export async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<void> {
 	const { seq, signal } = beginPlayStart();
 	queueContext.set({ type: 'library' });
-	libraryQueueNotice.set('building');
+	playStartNotice.set('building');
 	clearLibraryQueueSkipFeedback();
 	clearWindowEnd();
 	let queue;
@@ -454,21 +465,17 @@ export async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Pr
 	} catch (err) {
 		if (!playStartIsCurrent(seq)) return;
 		retryPlayIntent = () => playLibrary(opts);
-		libraryQueueNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
+		playStartNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
 		clearLibraryQueueSkipFeedback();
 		addToast(libraryStreamFailureToast(err), 'error');
 		return;
 	}
 	if (!playStartIsCurrent(seq)) return;
 	if (queue.takes.length === 0) {
-		retryPlayIntent = () => playLibrary(opts);
-		libraryQueueNotice.set('empty');
-		clearLibraryQueueSkipFeedback();
-		addToast(`${LIBRARY_QUEUE_EMPTY_TITLE} (${poolLabel()})`, 'error');
+		reportNothingPlayable(poolLabel(), () => playLibrary(opts));
 		return;
 	}
-	retryPlayIntent = null;
-	libraryQueueNotice.set('idle');
+	playStartNotice.set('idle');
 	libraryQueueSkipped.set(queue.skipped ?? []);
 	libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
 	playNativeLibraryTakes(queue.takes.map(poolTakeToPlaybackInfo), 0, opts.resumeAtTrackTime);
@@ -490,8 +497,11 @@ export function idlePlayTarget(input: {
 		return { type: 'playlist', label: input.playlist.title };
 	}
 	if (input.albumId !== null && input.songId === null) {
-		const album = input.albums.find((item) => item.id === input.albumId);
-		return { type: 'album', label: album?.title ?? '', albumId: input.albumId };
+		return {
+			type: 'album',
+			label: albumTitle(input.albums, input.albumId),
+			albumId: input.albumId
+		};
 	}
 	return { type: 'library', label: input.poolLabel };
 }
@@ -507,7 +517,7 @@ export async function playIdleStart(): Promise<void> {
 	if (target.type === 'playlist') {
 		const playlist = get(selectedPlaylistDetail);
 		if (!playlist) return;
-		await playPlaylistEntries(playlist.entries, 0, { restart: true });
+		await playPlaylist(playlist);
 		return;
 	}
 	if (target.type === 'album') {
@@ -826,17 +836,23 @@ export async function playAlbum(albumId: string): Promise<void> {
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
 	queueContext.set({ type: 'album', albumId });
+	playStartNotice.set('building');
 	if (albumSongsInOrder(albumId).length === 0) {
 		await loadSongsForAlbum(albumId);
 		if (!playStartIsCurrent(seq)) return;
 	}
 	const startSong = albumSongsInOrder(albumId).find((song) => song.generation_count > 0);
-	if (!startSong) return;
-	await ensureGenerationsLoaded(startSong.id);
+	if (startSong) await ensureGenerationsLoaded(startSong.id);
 	if (!playStartIsCurrent(seq)) return;
-	const freshStart = get(songList).find((item) => item.id === startSong.id) ?? startSong;
-	const startGen = bestGen(freshStart);
-	if (!startGen) return;
+	const freshStart = startSong
+		? (get(songList).find((item) => item.id === startSong.id) ?? startSong)
+		: undefined;
+	const startGen = freshStart ? bestGen(freshStart) : undefined;
+	if (!freshStart || !startGen) {
+		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId));
+		return;
+	}
+	playStartNotice.set('idle');
 	playNativeAlbumTakes(
 		albumId,
 		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(freshStart, startGen))],
@@ -886,12 +902,20 @@ function playPlaylistIndex(
 	audioPlayer.load(info);
 }
 
+async function playPlaylist(playlist: PlaylistDetailItem): Promise<void> {
+	if (playlist.entries.length === 0) {
+		reportNothingPlayable(playlist.title, () => playPlaylist(playlist));
+		return;
+	}
+	playStartNotice.set('idle');
+	await playPlaylistEntries(playlist.entries, 0, { restart: true });
+}
+
 export async function playPlaylistEntries(
 	entries: PlaylistEntryItem[],
 	startIndex = 0,
 	opts: { restart?: boolean; resumeAtTrackTime?: number } = {}
 ): Promise<void> {
-	if (entries.length === 0) return;
 	beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
