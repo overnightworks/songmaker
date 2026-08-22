@@ -324,7 +324,7 @@
 						</span>
 						<span class="entry-meta">
 							{entry.artist} · Gen #{entry.generation_number}{#if entry.version_number !== null}
-								· v{entry.version_number}{/if}{#if entry.audio_duration > 0}
+								· v{entry.version_number}{/if}{#if entry.audio_duration !== null && entry.audio_duration > 0}
 								· {formatTime(entry.audio_duration)}{/if}
 						</span>
 					</div>
