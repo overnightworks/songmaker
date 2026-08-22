@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
 	import {
+		albumList,
+		idlePlayTarget,
 		navigateToPlaying,
-		playLibrary,
+		playIdleStart,
 		playNextSong,
 		playPrevSong,
 		canPlayPrevSong,
@@ -12,14 +14,26 @@
 		libraryQueueSkippedComplete,
 		queueContext,
 		retryLastPlayIntent,
+		selectedAlbumId,
+		selectedSongId,
 		songList,
 		shuffleEnabled,
 		toggleShuffle,
 		windowEnded
 	} from '$lib/stores/player';
+	import { selectedPlaylistDetail } from '$lib/stores/playlists';
 	import { LIBRARY_TAKE_POOL_LABELS, libraryTakePool } from '$lib/stores/playbackSettings';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { NOW_PLAYING_LABEL } from '$lib/constants';
+	import {
+		LIBRARY_QUEUE_EMPTY_TITLE,
+		LIBRARY_QUEUE_LOADING_TITLE,
+		LIBRARY_QUEUE_PLAY_DETAIL,
+		LIBRARY_QUEUE_RETRY_DETAIL,
+		NOW_PLAYING_LABEL,
+		SHUFFLE_SCOPE_ALBUM,
+		SHUFFLE_SCOPE_LIBRARY,
+		SHUFFLE_SCOPE_PLAYLIST
+	} from '$lib/constants';
 	import LibraryPoolControl from './LibraryPoolControl.svelte';
 	import NowPlaying from './NowPlaying.svelte';
 	import {
@@ -72,8 +86,23 @@
 
 	const songs = $derived($songList);
 	const ctx = $derived($queueContext);
+	const idleTarget = $derived(
+		idlePlayTarget({
+			playlist: $selectedPlaylistDetail,
+			albumId: $selectedAlbumId,
+			songId: $selectedSongId,
+			albums: $albumList,
+			poolLabel: poolName
+		})
+	);
 	const shuffleScope = $derived(
-		ctx.type === 'playlist' ? 'this playlist' : ctx.type === 'album' ? 'this album' : 'all albums'
+		current
+			? ctx.type === 'playlist'
+				? SHUFFLE_SCOPE_PLAYLIST
+				: ctx.type === 'album'
+					? SHUFFLE_SCOPE_ALBUM
+					: SHUFFLE_SCOPE_LIBRARY
+			: idleTarget.label
 	);
 	const prevSong = $derived(canPlayPrevSong(current, songs, ctx));
 	const nextSong = $derived(canPlayNextSong(current, songs, ctx, shuffle));
@@ -159,7 +188,7 @@
 
 	function togglePlay(): void {
 		if (!current) {
-			void playLibrary();
+			void playIdleStart();
 			return;
 		}
 		void retryLastPlayIntent().then((retried) => {
@@ -261,7 +290,7 @@
 			bind:this={trackInfoButton}
 			class="track-info"
 			onclick={onTrackInfoClick}
-			aria-label={current ? NOW_PLAYING_LABEL : `Play ${poolName}`}
+			aria-label={current ? NOW_PLAYING_LABEL : `${LIBRARY_QUEUE_PLAY_DETAIL} ${idleTarget.label}`}
 			aria-haspopup={current ? 'dialog' : undefined}
 			aria-expanded={current ? nowPlayingOpen : undefined}
 		>
@@ -276,18 +305,18 @@
 							class="loading-text">Loading...</span
 						>{:else if isError}<span class="error-text">{errorMsg ?? 'Error'}</span>{/if}</span
 				>
-			{:else if queueNotice === 'building'}
-				<span class="track-title">Queue wird gebaut</span>
-				<span class="track-detail">{poolName}</span>
-			{:else if queueNotice === 'empty'}
-				<span class="track-title">Keine Takes</span>
-				<span class="track-detail">{poolName}</span>
-			{:else if queueNotice === 'error'}
-				<span class="track-title">{poolName} failed</span>
-				<span class="track-detail">Tap play</span>
+			{:else if idleTarget.type === 'library' && queueNotice === 'building'}
+				<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
+				<span class="track-detail">{idleTarget.label}</span>
+			{:else if idleTarget.type === 'library' && queueNotice === 'empty'}
+				<span class="track-title">{LIBRARY_QUEUE_EMPTY_TITLE}</span>
+				<span class="track-detail">{idleTarget.label}</span>
+			{:else if idleTarget.type === 'library' && queueNotice === 'error'}
+				<span class="track-title">{idleTarget.label} failed</span>
+				<span class="track-detail">{LIBRARY_QUEUE_RETRY_DETAIL}</span>
 			{:else}
-				<span class="track-title">{poolName}</span>
-				<span class="track-detail">Play</span>
+				<span class="track-title">{idleTarget.label}</span>
+				<span class="track-detail">{LIBRARY_QUEUE_PLAY_DETAIL}</span>
 			{/if}
 		</button>
 		<div class="timeline">

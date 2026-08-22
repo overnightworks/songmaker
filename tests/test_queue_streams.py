@@ -1969,3 +1969,124 @@ def test_library_stream_out_of_pool_start_is_temporary(tmp_path: Path, monkeypat
         "g-keep-b",
         "g-pick-b",
     ]
+
+
+def test_library_pool_queue_matches_collect_without_ffmpeg(tmp_path: Path, monkeypatch) -> None:
+    concat_calls: list[object] = []
+    import songmaker_cli.queue_streams as qs
+
+    monkeypatch.setattr(qs, "probe_audio_duration", lambda _path: 10.0)
+    monkeypatch.setattr(
+        qs,
+        "run_ffmpeg_concat",
+        lambda *_args, **_kwargs: concat_calls.append("concat"),
+    )
+    monkeypatch.setattr(
+        qs,
+        "build_queue_stream_snapshot",
+        lambda *_args, **_kwargs: concat_calls.append("snapshot"),
+    )
+    client, factory = make_test_app(tmp_path, seed_db=_seed_library_data)
+    _write_library_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.get("/api/library/pool-queue", params={"pool": "mix"})
+
+    assert resp.status_code == 200
+    assert concat_calls == []
+    data = resp.json()
+    assert data["pool"] == "mix"
+    take_ids = [take["generation_id"] for take in data["takes"]]
+    assert take_ids == ["g1b", "g2"]
+    assert {take["song_id"] for take in data["takes"]} == {"s1", "s2"}
+    assert all(take["mp3_path"] for take in data["takes"])
+
+    from songmaker_cli.db.queries import list_songs
+
+    with factory() as session:
+        songs = list_songs(session, user_id="user-a", light=False)
+        songs = sorted(
+            songs,
+            key=lambda song: (
+                song.album.title if song.album is not None else "",
+                song.track_number,
+                song.id,
+            ),
+        )
+        collected = collect_library_pool_generations(songs, "mix", None)
+    assert take_ids == [generation.id for generation in collected]
+
+
+def test_library_pool_queue_foreign_start_generation_is_404(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
+    _write_library_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.get(
+        "/api/library/pool-queue",
+        params={"pool": "mix", "start_generation_id": "g5"},
+    )
+
+    assert resp.status_code == 404
+
+
+def test_library_pool_queue_empty_pool_is_422(tmp_path: Path, monkeypatch) -> None:
+    def seed_unplayable(session) -> None:
+        _seed_library_data(session)
+        from songmaker_cli.db.models import Generation
+
+        for gen in session.query(Generation).filter(Generation.id.in_(["g1", "g1b", "g2"])):
+            gen.is_archived = True
+        session.flush()
+
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=seed_unplayable)
+    login_and_csrf(client, "usera", "pass1234")
+
+    resp = client.get("/api/library/pool-queue", params={"pool": "mix"})
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "No playable takes in pool 'mix'"
+
+
+
+def test_library_pool_queue_rate_limited(tmp_path: Path, monkeypatch) -> None:
+    _patch_audio_build(monkeypatch)
+    import songmaker_cli.constants as consts
+    import songmaker_cli.queue_stream_api as queue_stream_api
+
+    monkeypatch.setattr(consts, "QUEUE_STREAM_AUTH_RATE_LIMIT", 1)
+    monkeypatch.setattr(queue_stream_api._consts, "QUEUE_STREAM_AUTH_RATE_LIMIT", 1)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
+    _write_library_audio_files(tmp_path)
+    login_and_csrf(client, "usera", "pass1234")
+
+    first = client.get("/api/library/pool-queue", params={"pool": "mix"})
+    second = client.get("/api/library/pool-queue", params={"pool": "mix"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.headers["Retry-After"] == str(consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS)
+
+
+def test_library_pool_queue_rate_limiter_failure_is_503(
+    tmp_path: Path, monkeypatch
+) -> None:
+    class BrokenLimiter:
+        def is_allowed(self, _user_id):
+            raise RuntimeError("down")
+
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
+    login_and_csrf(client, "usera", "pass1234")
+    monkeypatch.setattr(
+        "songmaker_cli.queue_stream_api._get_queue_stream_limiter",
+        lambda _request: BrokenLimiter(),
+    )
+
+    resp = client.get("/api/library/pool-queue", params={"pool": "mix"})
+
+    assert resp.status_code == 503

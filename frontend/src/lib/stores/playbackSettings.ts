@@ -40,7 +40,7 @@ export const LIBRARY_TAKE_POOL_LABELS: Record<LibraryTakePool, string> = {
 	mix: 'Mix',
 	picks: 'Picks',
 	keeps: 'Keeps',
-	all: 'Alle'
+	all: 'All'
 };
 
 const POOL_STORAGE_KEY = 'libraryTakePool';

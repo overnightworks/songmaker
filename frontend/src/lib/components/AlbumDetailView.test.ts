@@ -120,14 +120,14 @@ afterEach(async () => {
 });
 
 describe('AlbumDetailView cover hero', () => {
-	it('keeps title and Play Album beside a compact cover', async () => {
+	it('keeps title beside a compact cover without Play Album', async () => {
 		const target = await renderDetail();
 		expect(target.textContent).toContain('Night Drive');
-		expect(target.textContent).toContain('Play Album');
+		expect(target.textContent).not.toContain('Play Album');
 		const header = target.querySelector('.detail-header');
 		expect(header?.querySelector('.cover-hero')).not.toBeNull();
 		expect(header?.querySelector('.detail-title')?.textContent).toContain('Night Drive');
-		expect(header?.querySelector('.action-btn-primary')?.textContent).toContain('Play Album');
+		expect(header?.querySelector('.action-btn-primary')).toBeNull();
 		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
 			ALBUM_COVER_UPLOAD_LABEL
 		);
@@ -152,7 +152,7 @@ describe('AlbumDetailView cover hero', () => {
 		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledTimes(1));
 		await tick();
 		expect(target.textContent).toContain('Night Drive');
-		expect(target.textContent).toContain('Play Album');
+		expect(target.textContent).not.toContain('Play Album');
 		expect(target.querySelector('img')?.getAttribute('alt')).toBe(
 			`${ALBUM_COVER_ALT_TYPE} Night Drive`
 		);

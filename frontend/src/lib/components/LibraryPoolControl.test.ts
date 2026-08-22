@@ -116,6 +116,6 @@ describe('LibraryPoolControl mobile dialog', () => {
 		expect(target.querySelector('.pool-info')).toBeNull();
 
 		const sheet = await openSheet(target);
-		expect(sheet.querySelector('.sheet-help')?.textContent).toContain('Mix: Picks und Keeps');
+		expect(sheet.querySelector('.sheet-help')?.textContent).toContain('Mix: Picks and Keeps');
 	});
 });

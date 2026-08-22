@@ -518,6 +518,28 @@ export interface QueueStreamManifest {
 	skipped_complete: boolean;
 }
 
+export interface LibraryPoolTakeItem {
+	generation_id: string;
+	song_id: string;
+	song_title: string;
+	artist: string;
+	album_title: string;
+	lyrics: string | null;
+	generation_number: number;
+	mp3_path: string;
+	seed: number | null;
+	model_mode: string;
+	is_picked: boolean;
+	is_kept: boolean;
+}
+
+export interface LibraryPoolQueue {
+	pool: 'mix' | 'picks' | 'keeps' | 'all';
+	takes: LibraryPoolTakeItem[];
+	skipped: QueueStreamSkipItem[];
+	skipped_complete: boolean;
+}
+
 export interface WorkerIdentityItem {
 	id: string;
 	host: string;

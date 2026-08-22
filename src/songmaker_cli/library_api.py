@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import Pagination, page_has_more, parse_required_search_query
 from songmaker_cli.api_models import (
+    DEFAULT_LIBRARY_TAKE_POOL,
+    LibraryPoolQueueResponse,
     LibrarySearchResponse,
     LibrarySort,
+    LibraryTakePool,
     PaginatedResponse,
     ShareInventoryItem,
     ShareInventoryType,
@@ -30,6 +33,10 @@ from songmaker_cli.library_cursor import (
     encode_library_cursor,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from songmaker_cli.queue_stream_api import (
+    _check_queue_stream_rate_limit,
+    resolve_library_pool_membership,
+)
 
 router = APIRouter()
 
@@ -73,6 +80,33 @@ def api_library_search(
         )
     return LibrarySearchResponse.from_orm(
         page.items, has_more=page.has_more, next_cursor=next_cursor,
+    )
+
+
+@router.get("/library/pool-queue")
+def api_library_pool_queue(
+    request: Request,
+    pool: LibraryTakePool = Query(DEFAULT_LIBRARY_TAKE_POOL),
+    shuffle: bool = Query(False),
+    start_generation_id: str | None = Query(default=None, min_length=1, max_length=36),
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> LibraryPoolQueueResponse:
+    _check_queue_stream_rate_limit(request, user)
+    membership = resolve_library_pool_membership(
+        session,
+        user,
+        ctx,
+        pool=pool,
+        start_generation_id=start_generation_id,
+        shuffle=shuffle,
+    )
+    return LibraryPoolQueueResponse.from_orm(
+        pool=membership.pool,
+        generations=[source.generation for source in membership.sources],
+        skipped=membership.skipped,
+        skipped_complete=membership.skipped_complete,
     )
 
 

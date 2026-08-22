@@ -111,22 +111,6 @@
 		playPlaylistEntries(playlistDetail.entries, index, { restart: true });
 	}
 
-	function playSequential(): void {
-		if (!playlistDetail || playlistDetail.entries.length === 0) return;
-		setShuffle(false);
-		playPlaylistEntries(playlistDetail.entries, 0, { restart: true });
-	}
-
-	function playShuffled(): void {
-		if (!playlistDetail || playlistDetail.entries.length === 0) return;
-		setShuffle(true);
-		playPlaylistEntries(
-			playlistDetail.entries,
-			Math.floor(Math.random() * playlistDetail.entries.length),
-			{ restart: true }
-		);
-	}
-
 	function isEntryCurrent(entry: { generation_id: string; mp3_path: string }): boolean {
 		return (
 			audioPlayer.current?.generation.id === entry.generation_id &&
@@ -243,16 +227,6 @@
 				</span>
 			</div>
 			<div class="detail-actions">
-				{#if playlistDetail.entries.length > 0}
-					<button class="action-btn-primary" onclick={playSequential}>
-						<Icon name="play" size={15} />
-						Play
-					</button>
-					<button class="action-btn-secondary" onclick={playShuffled}>
-						<Icon name="shuffle" size={15} />
-						Shuffle
-					</button>
-				{/if}
 				{#if offlineSavedStreamUrl}
 					<button class="action-btn-offline saved" onclick={onRemoveOffline}>
 						Saved ✓ · Remove
@@ -428,42 +402,6 @@
 		align-items: center;
 	}
 
-	.action-btn-primary,
-	.action-btn-secondary {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		padding: var(--btn-padding-pill);
-		border-radius: var(--btn-radius-pill);
-		font-family: var(--font-display);
-		font-size: var(--btn-font-size);
-		letter-spacing: var(--btn-letter-spacing);
-		text-transform: uppercase;
-		cursor: pointer;
-		white-space: nowrap;
-		transition:
-			box-shadow 0.2s,
-			border-color 0.15s,
-			color 0.15s,
-			background 0.15s;
-	}
-
-	.action-btn-primary {
-		border: none;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
-	}
-
-	.action-btn-secondary {
-		border: 1px solid var(--border);
-		background: color-mix(in srgb, var(--surface) 75%, transparent);
-		color: var(--text-muted);
-	}
-
-	.action-btn-primary:hover {
-		box-shadow: 0 0 20px rgba(160, 32, 240, 0.3);
-	}
-
 	.action-btn-offline {
 		display: inline-flex;
 		align-items: center;
@@ -506,12 +444,6 @@
 		border-color: var(--score-bad);
 		color: var(--score-bad);
 		background: color-mix(in srgb, var(--score-bad) 8%, var(--surface));
-	}
-
-	.action-btn-secondary:hover {
-		border-color: var(--accent);
-		color: var(--text);
-		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 	}
 
 	.entry-list {

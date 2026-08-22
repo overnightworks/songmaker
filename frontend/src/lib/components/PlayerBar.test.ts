@@ -3,8 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 import { NOW_PLAYING_LABEL, NOW_PLAYING_NO_LYRICS } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { queueContext, songList } from '$lib/stores/player';
+import type { AlbumItem, PlaylistDetailItem } from '$lib/api/types';
+import {
+	albumList,
+	libraryQueueNotice,
+	queueContext,
+	selectedAlbumId,
+	selectedSongId,
+	songList
+} from '$lib/stores/player';
 import * as playerStore from '$lib/stores/player';
+import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
 
 class FakeAudio {
@@ -37,6 +47,52 @@ class FakeAudio {
 	fire(name: string) {
 		for (const listener of this.listeners.get(name) ?? []) listener({ type: name } as Event);
 	}
+}
+
+
+function albumItem(overrides: Partial<AlbumItem> = {}): AlbumItem {
+	return {
+		id: 'a1',
+		title: 'Nachtstrom',
+		artist: 'Artist',
+		subtitle: '',
+		year: '',
+		colors: {},
+		song_count: 1,
+		is_shared: false,
+		share_slug: null,
+		cover: null,
+		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
+	};
+}
+
+function playlistItem(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
+	return {
+		id: 'p1',
+		title: 'Night Drive',
+		entry_count: 1,
+		is_shared: false,
+		share_slug: null,
+		created_at: '2026-01-01T00:00:00+00:00',
+		entries: [
+			{
+				id: 'pe1',
+				position: 0,
+				generation_id: 'g1',
+				song_id: 's1',
+				song_title: 'Tide',
+				album_title: 'Nachtstrom',
+				artist: 'Artist',
+				generation_number: 1,
+				mp3_path: 'tide.mp3',
+				seed: 1,
+				model_mode: 'sft',
+				lyrics: null
+			}
+		],
+		...overrides
+	};
 }
 
 function track(index: number, overrides: Partial<QueueStreamTrackItem> = {}): QueueStreamTrackItem {
@@ -96,7 +152,12 @@ beforeEach(() => {
 	);
 	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 	songList.set([]);
+	albumList.set([]);
 	queueContext.set({ type: 'playlist', entries: [], index: 0 });
+	selectedAlbumId.set(null);
+	selectedSongId.set(null);
+	selectedPlaylistDetail.set(null);
+	libraryQueueNotice.set('idle');
 });
 
 afterEach(async () => {
@@ -111,7 +172,9 @@ afterEach(async () => {
 describe('PlayerBar stream boundaries', () => {
 	it('keeps the existing Mix library start affordance available while idle', async () => {
 		queueContext.set({ type: 'library' });
-		const playLibrary = vi.spyOn(playerStore, 'playLibrary').mockResolvedValue();
+		selectedAlbumId.set(null);
+		selectedPlaylistDetail.set(null);
+		const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
 		component = mount(PlayerBar, { target });
 		await tick();
 
@@ -121,7 +184,45 @@ describe('PlayerBar stream boundaries', () => {
 		expect(play?.disabled).toBe(false);
 		expect(trackInfo).not.toBeNull();
 		play?.click();
-		expect(playLibrary).toHaveBeenCalledOnce();
+		expect(playIdleStart).toHaveBeenCalledOnce();
+	});
+
+	it('idle Play copy follows an open album interior', async () => {
+		selectedAlbumId.set('a1');
+		selectedSongId.set(null);
+		selectedPlaylistDetail.set(null);
+		albumList.set([albumItem()]);
+		vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
+		component = mount(PlayerBar, { target });
+		await tick();
+		expect(target.querySelector('button[aria-label="Play Nachtstrom"]')).not.toBeNull();
+		expect(target.textContent).toContain('Nachtstrom');
+		expect(target.querySelector('button[aria-label="Shuffle Nachtstrom"]')).not.toBeNull();
+	});
+
+	it('idle Play copy follows an open playlist interior', async () => {
+		selectedAlbumId.set(null);
+		selectedSongId.set(null);
+		selectedPlaylistDetail.set(playlistItem());
+		vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
+		component = mount(PlayerBar, { target });
+		await tick();
+		expect(target.querySelector('button[aria-label="Play Night Drive"]')).not.toBeNull();
+		expect(target.textContent).toContain('Night Drive');
+		expect(target.querySelector('button[aria-label="Shuffle Night Drive"]')).not.toBeNull();
+	});
+
+	it('uses English loading and empty copy instead of German leftovers', async () => {
+		queueContext.set({ type: 'library' });
+		libraryQueueNotice.set('building');
+		component = mount(PlayerBar, { target });
+		await tick();
+		expect(target.textContent).toContain(LIBRARY_QUEUE_LOADING_TITLE);
+		expect(target.textContent).not.toContain('Queue wird gebaut');
+		libraryQueueNotice.set('empty');
+		await tick();
+		expect(target.textContent).toContain(LIBRARY_QUEUE_EMPTY_TITLE);
+		expect(target.textContent).not.toContain('Keine Takes');
 	});
 
 	it('reacts at window boundaries even when adjacent entries use the same generation', async () => {

@@ -6,7 +6,7 @@ vi.mock('$lib/stores/auth', () => ({ clearAuth: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
-import { searchLibrary } from './library';
+import { fetchLibraryPoolQueue, searchLibrary } from './library';
 
 function mockOk(data: unknown) {
 	mockFetch.mockResolvedValueOnce({
@@ -55,5 +55,41 @@ describe('searchLibrary', () => {
 			expect(resp.items[0].song.generations).toEqual([]);
 			expect(resp.items[0].album_title).toBe('Nachtstrom');
 		}
+	});
+});
+
+
+describe('fetchLibraryPoolQueue', () => {
+	it('calls GET /api/library/pool-queue with pool, shuffle, and start take', async () => {
+		mockOk({
+			pool: 'mix',
+			takes: [
+				{
+					generation_id: 'g1',
+					song_id: 's1',
+					song_title: 'Tide',
+					artist: 'Artist',
+					album_title: 'Nachtstrom',
+					lyrics: null,
+					generation_number: 1,
+					mp3_path: 'a/g1.mp3',
+					seed: 1,
+					model_mode: 'sft',
+					is_picked: true,
+					is_kept: false
+				}
+			],
+			skipped: [],
+			skipped_complete: true
+		});
+		await fetchLibraryPoolQueue({
+			pool: 'mix',
+			shuffle: true,
+			startGenerationId: 'g1'
+		});
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/library/pool-queue?pool=mix&shuffle=true&start_generation_id=g1',
+			expect.objectContaining({ credentials: 'include' })
+		);
 	});
 });
