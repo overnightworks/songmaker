@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 scoring = [
-    "librosa>=0.10,<1",
+    "librosa>=0.10,<2",
     "soundfile",
     "audiobox-aesthetics>=0.0.4,<1",
     "torch>=2.2,<3",
@@ -31,7 +31,7 @@ whisper = [
     "faster-whisper>=1.1,<2",
     "torch>=2.2,<3",
     "soundfile",
-    "librosa>=0.10,<1",
+    "librosa>=0.10,<2",
     "numba",
 ]
 server = [
@@ -39,10 +39,10 @@ server = [
     "uvicorn>=0.20,<1",
     "sqlalchemy>=2.0,<3",
     "alembic>=1.13,<2",
-    "bcrypt>=4.0,<5",
+    "bcrypt>=4.0,<6",
     "python-dotenv>=1.0,<2",
-    "structlog>=24.0,<26",
-    "redis[hiredis]>=5.0,<6",
+    "structlog>=24.0,<27",
+    "redis[hiredis]>=5.0,<9",
     "psycopg2-binary>=2.9,<3",
     "arq>=0.26,<1",
     "mutagen>=1.47,<2",
@@ -58,8 +58,8 @@ mcp = [
 acestep-worker = [
     "fastapi>=0.100,<1",
     "uvicorn>=0.20,<1",
-    "redis[hiredis]>=5.0,<6",
-    "huggingface_hub>=0.20,<1",
+    "redis[hiredis]>=5.0,<9",
+    "huggingface_hub>=0.20,<2",
     "nvidia-ml-py3>=7.352,<8",
 ]
 dev = [
