@@ -110,6 +110,7 @@
 		currentSongTitle={playback.currentTrack?.title ?? view?.title ?? ''}
 		onJump={(index) => playback.jump(index)}
 		windowEnded={playback.windowEnded}
+		showTakeLabel={false}
 	/>
 {/snippet}
 
@@ -203,6 +204,7 @@
 		onToggleShuffle={() => playback.setShuffle(!playback.shuffle)}
 		upNextTitle={playback.queue.upNext?.songTitle ?? null}
 		rightPanelLabel="Queue"
+		showTakeLabel={false}
 		{rightPanel}
 	/>
 {/if}

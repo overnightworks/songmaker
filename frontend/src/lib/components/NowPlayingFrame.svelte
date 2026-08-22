@@ -38,6 +38,7 @@
 		upNextTitle,
 		rightPanelLabel,
 		rightPanelOpenOnMount = false,
+		showTakeLabel = true,
 		rightPanel
 	}: {
 		info: PlaybackInfo;
@@ -54,6 +55,11 @@
 		upNextTitle: string | null;
 		rightPanelLabel: string;
 		rightPanelOpenOnMount?: boolean;
+		// Take/version numbering is an internal editing concept — the app's
+		// NowPlaying shows it, a public share listener never sees "Take N"
+		// (share's classic-mode playback has no real take number to show
+		// anyway; see trackPlaybackInfo()).
+		showTakeLabel?: boolean;
 		rightPanel: Snippet;
 	} = $props();
 
@@ -164,7 +170,7 @@
 				<div class="cover-meta">
 					<span class="cover-title">{info.songTitle}</span>
 					{#if albumLine}<span class="cover-line">{albumLine}</span>{/if}
-					<span class="cover-line">{takeLabel}</span>
+					{#if showTakeLabel}<span class="cover-line">{takeLabel}</span>{/if}
 				</div>
 				<div class="progress">
 					<span class="time">{formatTime(currentTime)}</span>

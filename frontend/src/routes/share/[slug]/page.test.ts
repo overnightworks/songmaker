@@ -269,4 +269,24 @@ describe('shared album page', () => {
 		);
 		expect(queueTitles).toEqual(['First', 'Second']);
 	});
+
+	it('never shows an internal take number to a public listener', async () => {
+		mockFetch
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => album })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(false) });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+
+		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+		target.querySelector<HTMLButtonElement>('.now-playing-btn')?.click();
+		await tick();
+		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
+		await tick();
+
+		expect(target.querySelector('.cover-meta')?.textContent).not.toContain('Take');
+		expect(target.querySelectorAll('.queue-take')).toHaveLength(0);
+	});
 });
