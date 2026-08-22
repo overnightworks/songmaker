@@ -11,6 +11,7 @@ import {
 	songList
 } from '$lib/stores/player';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '$lib/constants';
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
@@ -196,11 +197,9 @@ describe('detail views own no content back', () => {
 		expect(generationTarget.querySelector('.back-btn')).toBeNull();
 		expect(generationTarget.textContent?.replace(/\s+/g, ' ')).toContain('Local Only');
 		expect(generationTarget.textContent?.replace(/\s+/g, ' ')).toContain('Take 1');
-		expect(generationTarget.querySelector('[role="tablist"]')?.textContent).toContain('Recipe');
-		expect(generationTarget.querySelector('[role="tablist"]')?.textContent).toContain('Takes');
-		expect(generationTarget.querySelector('[role="tablist"]')?.textContent).not.toContain(
-			'Co-Writer'
-		);
+		expect(generationTarget.textContent).toContain(EDITOR_STYLE_PROMPT_LABEL);
+		expect(generationTarget.textContent).toContain(EDITOR_LYRICS_LABEL);
+		expect(generationTarget.querySelector('.cowriter-chat')).toBeNull();
 	});
 
 	it('does not treat a take as a separate back destination', async () => {
