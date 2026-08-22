@@ -124,6 +124,20 @@
 			if (!isNaN(num)) setParam(key, num);
 		}
 	}
+
+	const defaultsLoaded = $derived(Object.keys(placeholders).length > 0);
+
+	// Once defaultsLoaded is true, every rendered field is either hidden by
+	// hiddenParams or must have a resolved default. A visible field with no
+	// default at that point means the loaded defaults are incomplete for the
+	// active model — a bug worth failing loudly on, not silently blanking.
+	function resolvedPlaceholder(key: keyof VersionGenerationParams): number | string | boolean {
+		const value = placeholders[key];
+		if (value === undefined || value === null) {
+			throw new Error(`Missing loaded default for param "${key}"`);
+		}
+		return value;
+	}
 </script>
 
 {#snippet numberField(f: NumberField)}
@@ -135,7 +149,7 @@
 			max={f.max}
 			step={f.step}
 			value={values[f.key] ?? ''}
-			placeholder={String(placeholders[f.key])}
+			placeholder={defaultsLoaded ? String(resolvedPlaceholder(f.key)) : ''}
 			title={tooltip(f.key)}
 			oninput={(e) => handleNumber(f.key, e.currentTarget.value)}
 		/>
@@ -150,7 +164,9 @@
 			title={tooltip(f.key)}
 			onchange={(e) => setParam(f.key, e.currentTarget.value || undefined)}
 		>
-			<option value="">default ({placeholders[f.key]})</option>
+			<option value=""
+				>{defaultsLoaded ? `default (${resolvedPlaceholder(f.key)})` : 'default'}</option
+			>
 			{#each f.options as opt (opt)}
 				<option value={opt}>{opt}</option>
 			{/each}
