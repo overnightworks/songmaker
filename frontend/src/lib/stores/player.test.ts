@@ -1389,7 +1389,7 @@ describe('playLibraryFromGeneration', () => {
 
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: 'Mix queue failed. Tap play to retry.',
+				message: '+ Keeps queue failed. Tap play to retry.',
 				type: 'error'
 			})
 		]);
@@ -1799,7 +1799,7 @@ describe('library take pool', () => {
 	});
 
 	it('library start sends the stored pool with shuffle', async () => {
-		setLibraryTakePool('keeps');
+		setLibraryTakePool('mix');
 		setShuffle(true);
 		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(makePoolQueue());
 		await playLibraryFromGeneration(makeGen());
@@ -1807,7 +1807,7 @@ describe('library take pool', () => {
 		expect(fetchLibraryPoolQueue).toHaveBeenCalledWith({
 			startGenerationId: 'g1',
 			shuffle: true,
-			pool: 'keeps',
+			pool: 'mix',
 			signal: expect.any(AbortSignal)
 		});
 	});
@@ -1843,10 +1843,10 @@ describe('library take pool', () => {
 	});
 
 	it('empty pool toast names the active pool', async () => {
-		setLibraryTakePool('keeps');
+		setLibraryTakePool('mix');
 		libraryQueueSkipped.set([{ song_id: 'stale', generation_id: 'stale', reason: 'missing_file' }]);
 		vi.mocked(fetchLibraryPoolQueue).mockRejectedValueOnce(
-			new ApiError(422, "No playable takes in pool 'keeps'", '/api/library/pool-queue')
+			new ApiError(422, "No playable takes in pool 'mix'", '/api/library/pool-queue')
 		);
 
 		await playLibrary();
@@ -1855,7 +1855,7 @@ describe('library take pool', () => {
 		expect(get(libraryQueueSkipped)).toEqual([]);
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: `${LIBRARY_QUEUE_EMPTY_TITLE} (Keeps)`,
+				message: `${LIBRARY_QUEUE_EMPTY_TITLE} (+ Keeps)`,
 				type: 'error'
 			})
 		]);
