@@ -8,11 +8,6 @@ updates:
       python-dependencies:
         patterns: ["*"]
     open-pull-requests-limit: 5
-    ignore:
-      # mcp 2.0 removed mcp.server.fastmcp. The semver-major filter didn't
-      # stop dependabot widening the pyproject.toml range ceiling (mcp>=1.2,<2
-      # -> <3) without an exact major bump, so ignore all update types.
-      - dependency-name: "mcp"
 
   - package-ecosystem: npm
     directory: /frontend

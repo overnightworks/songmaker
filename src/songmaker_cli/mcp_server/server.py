@@ -1,6 +1,6 @@
-"""FastMCP server wiring — session/user plumbing around the tool functions.
+"""MCPServer wiring — session/user plumbing around the tool functions.
 
-Each FastMCP tool is a thin wrapper: open a DB session via the shared
+Each MCPServer tool is a thin wrapper: open a DB session via the shared
 session factory, resolve the acting user from env, delegate to the
 corresponding ``tool_*`` function in ``tools.py``, commit writes, and
 return the Pydantic result. All DB access and ownership checks live
@@ -12,7 +12,7 @@ import logging
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from sqlalchemy.orm import sessionmaker
 
 from songmaker_cli.mcp_server import auth, tools
@@ -46,7 +46,7 @@ def _default_factory() -> sessionmaker:
 
 def build_server(
     session_factory: sessionmaker | None = None,
-) -> FastMCP:
+) -> MCPServer:
     """Construct the MCP server. Accepts an explicit session factory for tests."""
     resolved_factory: sessionmaker | None = session_factory
 
@@ -72,7 +72,7 @@ def build_server(
     def resolved_user(session: Session):
         return auth.load_user(session, auth.require_user_id())
 
-    mcp = FastMCP(
+    mcp = MCPServer(
         name=SERVER_NAME,
         instructions=SERVER_INSTRUCTIONS,
     )

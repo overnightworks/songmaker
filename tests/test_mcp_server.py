@@ -2,7 +2,7 @@
 
 Most coverage comes from calling the pure ``tool_*`` functions
 directly with a DB session + ``AuthenticatedUser``. A small end-to-end
-suite drives the FastMCP server via ``call_tool()`` to exercise the
+suite drives the MCPServer via ``call_tool()`` to exercise the
 session/auth plumbing in ``server.py``.
 """
 from __future__ import annotations
@@ -368,7 +368,7 @@ def test_write_tools_block_other_users(db_session: Session):
         )
 
 
-# ── End-to-end via FastMCP.call_tool ──────────────────────────────────
+# ── End-to-end via MCPServer.call_tool ──────────────────────────────────
 
 
 @pytest.fixture()
@@ -396,7 +396,7 @@ def test_e2e_read_and_write(e2e_setup, db_factory):
 
 
 def test_e2e_every_tool_wrapper(e2e_setup, db_factory):
-    """Exercise every FastMCP tool wrapper once so server.py is covered."""
+    """Exercise every MCPServer tool wrapper once so server.py is covered."""
     srv, _, _, album_id, song_id = e2e_setup
 
     # Seed a generation for get_generation
@@ -483,14 +483,14 @@ def test_default_factory_resolves_via_settings(db_factory, monkeypatch):
 
 
 def test_main_runs_server(monkeypatch):
-    """main() wires stdio transport — mock FastMCP.run so it doesn't block."""
+    """main() wires stdio transport — mock MCPServer.run so it doesn't block."""
     called = {}
 
-    def _fake_run(self, transport="stdio", mount_path=None):
+    def _fake_run(self, transport="stdio", **kwargs):
         called["transport"] = transport
 
     monkeypatch.setattr(
-        "mcp.server.fastmcp.FastMCP.run", _fake_run,
+        "mcp.server.mcpserver.MCPServer.run", _fake_run,
     )
     monkeypatch.setattr(
         "songmaker_cli.mcp_server.server._default_factory",
@@ -501,22 +501,16 @@ def test_main_runs_server(monkeypatch):
 
 
 def _extract_payload(call_result):
-    # FastMCP.call_tool returns a dict with "result" containing the
-    # tool's structured output, or a (content, structured) tuple
-    # depending on SDK version. Normalize both.
-    if isinstance(call_result, tuple):
-        content_blocks, structured = call_result
-        if structured is not None:
-            return _unwrap_structured(structured)
-        return json.loads(content_blocks[0].text)
-    if isinstance(call_result, dict):
-        return _unwrap_structured(call_result)
-    # Fallback — a list/sequence of ContentBlock
-    return json.loads(call_result[0].text)
+    # MCPServer.call_tool returns a CallToolResult with structured_content
+    # set from the tool's Pydantic return value, falling back to the text
+    # content block for tools with no structured output schema.
+    if call_result.structured_content is not None:
+        return _unwrap_structured(call_result.structured_content)
+    return json.loads(call_result.content[0].text)
 
 
 def _unwrap_structured(payload):
-    # FastMCP wraps list outputs in {"result": [...]} for JSON-RPC; peel it off.
+    # MCPServer wraps list outputs in {"result": [...]} for JSON-RPC; peel it off.
     if isinstance(payload, dict) and set(payload.keys()) == {"result"}:
         return payload["result"]
     return payload
