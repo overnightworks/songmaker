@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import (
@@ -34,7 +35,22 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.constants import AuditAction, ResourceType
+from songmaker_cli.constants import (
+    COVER_MAX_BYTES,
+    COVER_NOT_FOUND,
+    COVER_VARIANT_DETAIL,
+    COVER_VERSION_QUERY,
+    AuditAction,
+    ResourceType,
+)
+from songmaker_cli.covers import (
+    COVER_RESPONSE_HEADERS,
+    CoverRejectedError,
+    cover_media_type,
+    remove_song_cover_files,
+    resolve_song_cover_file,
+    write_song_cover,
+)
 from songmaker_cli.db.queries import (
     RestoreWindowExpiredError,
     cleanup_song,
@@ -49,6 +65,7 @@ from songmaker_cli.db.queries import (
     record_audit,
     rename_song,
     restore_song,
+    set_song_cover_key,
     soft_delete_song,
     update_song,
 )
@@ -267,6 +284,66 @@ def api_share_song(
         share_url=f"{base_url}/share/song/{song.share_slug}",
         share_slug=song.share_slug,
     )
+
+
+@router.get("/songs/{song_id}/cover")
+async def api_get_song_cover(
+    song_id: str,
+    variant: str = Query(COVER_VARIANT_DETAIL),
+    v: str | None = Query(None, alias=COVER_VERSION_QUERY),
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    song = check_song_access(session, song_id, user)
+    if v is not None and v != song.cover_key:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    try:
+        path = resolve_song_cover_file(ctx.audio_dir, song.id, song.cover_key, variant)
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    return FileResponse(
+        path,
+        media_type=cover_media_type(variant, song.cover_key or ""),
+        headers=COVER_RESPONSE_HEADERS,
+    )
+
+
+@router.post("/songs/{song_id}/cover")
+async def api_upload_song_cover(
+    song_id: str,
+    file: UploadFile,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> SongResponse:
+    song = check_song_access(session, song_id, user)
+    payload = await file.read(COVER_MAX_BYTES + 1)
+    try:
+        cover_key = write_song_cover(ctx.audio_dir, song.id, payload)
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    song = set_song_cover_key(session, song.id, cover_key)
+    record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song.id)
+    session.commit()
+    return SongResponse.from_orm(song)
+
+
+@router.delete("/songs/{song_id}/cover")
+def api_delete_song_cover(
+    song_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> SongResponse:
+    song = check_song_access(session, song_id, user)
+    song = set_song_cover_key(session, song.id, None)
+    record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song.id)
+    session.commit()
+    remove_song_cover_files(ctx.audio_dir, song.id)
+    return SongResponse.from_orm(song)
 
 
 @router.delete("/songs/{song_id}/share")

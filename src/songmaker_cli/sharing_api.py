@@ -19,7 +19,7 @@ from songmaker_cli.api_models import (
     SharedSongItem,
     SharedSongResponse,
 )
-from songmaker_cli.api_models.songs import public_album_cover_urls
+from songmaker_cli.api_models.songs import public_album_cover_urls, public_song_cover_urls
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import get_client_ip
 from songmaker_cli.constants import (
@@ -36,6 +36,8 @@ from songmaker_cli.covers import (
     album_cover_file_exists,
     cover_media_type,
     resolve_cover_file,
+    resolve_song_cover_file,
+    song_cover_file_exists,
 )
 from songmaker_cli.db.queries import (
     get_album_by_slug,
@@ -340,12 +342,19 @@ def get_shared_song(
     slug: str,
     request: Request,
     db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
 ) -> JSONResponse:
     _check_shared_rate_limit(request)
     song = get_song_by_slug(db, slug)
     if not song:
         raise HTTPException(404, "Not found")
     picked_path = _picked_filename(song)
+    cover = None
+    if (
+        song.cover_key
+        and song_cover_file_exists(ctx.audio_dir, song.id, song.cover_key)
+    ):
+        cover = public_song_cover_urls(slug, song.cover_key)
     response = SharedSongResponse(
         title=song.title,
         artist=song.album.artist if song.album else "",
@@ -354,8 +363,37 @@ def get_shared_song(
             f"/shared/song/{slug}/audio/{picked_path}"
             if picked_path else None
         ),
+        cover=cover,
     )
     return JSONResponse(response.model_dump())
+
+
+@router.get("/shared/song/{slug}/cover")
+async def get_shared_song_cover(
+    slug: str,
+    request: Request,
+    variant: str = Query(COVER_VARIANT_DETAIL),
+    v: str | None = Query(None, alias=COVER_VERSION_QUERY),
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    _check_shared_rate_limit(request)
+    song = get_song_by_slug(db, slug)
+    if not song:
+        raise HTTPException(404, "Not found")
+    if v is not None and v != song.cover_key:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    try:
+        path = resolve_song_cover_file(ctx.audio_dir, song.id, song.cover_key, variant)
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    return FileResponse(
+        path,
+        media_type=cover_media_type(variant, song.cover_key or ""),
+        headers=COVER_RESPONSE_HEADERS,
+    )
 
 
 @router.get("/shared/song/{slug}/audio/{filename:path}")

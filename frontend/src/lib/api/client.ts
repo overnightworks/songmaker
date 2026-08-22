@@ -33,7 +33,9 @@ export {
 	renameSong,
 	shareSong,
 	unshareSong,
-	cleanupSong
+	cleanupSong,
+	uploadSongCover,
+	deleteSongCover
 } from './songs';
 export {
 	generateSong,

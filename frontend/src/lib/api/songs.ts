@@ -103,3 +103,13 @@ export async function unshareSong(songId: string): Promise<void> {
 export async function cleanupSong(songId: string): Promise<CleanupResult> {
 	return apiFetch<CleanupResult>(`/api/songs/${songId}/cleanup`, { method: 'POST' });
 }
+
+export async function uploadSongCover(songId: string, file: File): Promise<SongItem> {
+	const form = new FormData();
+	form.append('file', file);
+	return apiFetch<SongItem>(`/api/songs/${songId}/cover`, { method: 'POST', body: form });
+}
+
+export async function deleteSongCover(songId: string): Promise<SongItem> {
+	return apiFetch<SongItem>(`/api/songs/${songId}/cover`, { method: 'DELETE' });
+}

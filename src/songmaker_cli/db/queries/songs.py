@@ -109,6 +109,37 @@ def get_song(
     return query.filter_by(id=song_id).first()
 
 
+def set_song_cover_key(session: Session, song_id: str, cover_key: str | None) -> Song:
+    song = get_song(session, song_id)
+    if not song:
+        raise ValueError(f"Song not found: {song_id}")
+    song.cover_key = cover_key
+    session.flush()
+    log.info("Set song %s cover_key=%r", song_id, cover_key)
+    return song
+
+
+def list_song_ids_for_albums(
+    session: Session, album_ids: list[str], *, include_deleted_rows: bool = False,
+) -> list[str]:
+    if not album_ids:
+        return []
+    query = session.query(Song.id).filter(Song.album_id.in_(album_ids))
+    if include_deleted_rows:
+        query = query.execution_options(include_deleted=True)
+    return [song_id for (song_id,) in query.all()]
+
+
+def list_song_ids_for_owner(session: Session, user_id: str) -> list[str]:
+    query = (
+        session.query(Song.id)
+        .join(Album)
+        .filter(Album.created_by == user_id)
+        .execution_options(include_deleted=True)
+    )
+    return [song_id for (song_id,) in query.all()]
+
+
 def create_song(
     session: Session,
     title: str,

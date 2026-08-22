@@ -11,9 +11,11 @@ vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => mockGoto(...ar
 
 import {
 	deleteAlbumCover,
+	deleteSongCover,
 	fetchAlbum,
 	fetchAlbums,
 	uploadAlbumCover,
+	uploadSongCover,
 	fetchSongs,
 	fetchSong,
 	createSong,
@@ -410,6 +412,35 @@ describe('Admin API', () => {
 		await deleteAlbumCover('a1');
 		expect(mockFetch).toHaveBeenCalledWith(
 			'/api/albums/a1/cover',
+			expect.objectContaining({ method: 'DELETE', credentials: 'include' })
+		);
+	});
+
+	it('uploadSongCover posts the file as multipart', async () => {
+		mockOk({
+			id: 's1',
+			cover: {
+				card: '/api/songs/s1/cover?variant=card',
+				detail: '/api/songs/s1/cover?variant=detail'
+			}
+		});
+		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
+		await uploadSongCover('s1', file);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/songs/s1/cover',
+			expect.objectContaining({
+				method: 'POST',
+				body: expect.any(FormData),
+				credentials: 'include'
+			})
+		);
+	});
+
+	it('deleteSongCover deletes the cover', async () => {
+		mockOk({ id: 's1', cover: null });
+		await deleteSongCover('s1');
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/songs/s1/cover',
 			expect.objectContaining({ method: 'DELETE', credentials: 'include' })
 		);
 	});

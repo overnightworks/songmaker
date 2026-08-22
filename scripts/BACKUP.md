@@ -88,7 +88,7 @@ You'll be asked to confirm before anything is overwritten.
 | Data | Backed up? | Why |
 |------|-----------|-----|
 | PostgreSQL (songs, users, scores) | Yes | Source of truth |
-| Audio files (MP3 + WAV + album covers) | Yes | Not reproducible without re-generating; covers live on the same audio volume |
+| Audio files (MP3 + WAV + album and song covers) | Yes | Not reproducible without re-generating; covers live on the same audio volume (`covers/` and `song-covers/`) |
 | Redis | No | Ephemeral cache, rebuilds on restart |
 | Model weights (`_models/`) | No | Re-downloadable, ~10GB |
 | `.env` | No | Copy manually to the backup drive |

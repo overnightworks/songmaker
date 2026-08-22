@@ -156,6 +156,11 @@ export interface VersionItem {
 	created_at: string;
 }
 
+export interface AlbumCoverUrls {
+	card: string;
+	detail: string;
+}
+
 export interface SongItem {
 	id: string;
 	title: string;
@@ -176,13 +181,9 @@ export interface SongItem {
 	share_slug?: string | null;
 	best_scores?: TrackScores | null;
 	best_rating?: number | null;
+	cover?: AlbumCoverUrls | null;
 	created_at: string;
 	generations: GenerationItem[];
-}
-
-export interface AlbumCoverUrls {
-	card: string;
-	detail: string;
 }
 
 export interface AlbumItem {

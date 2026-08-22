@@ -109,6 +109,7 @@ class Song(ShareMixin, Base):
     album_id: Mapped[str] = mapped_column(ForeignKey("albums.id"), index=True)
     vocal_language: Mapped[str] = mapped_column(String(10), default="")
     track_number: Mapped[int] = mapped_column(Integer, default=0)
+    cover_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_utcnow, onupdate=_utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
