@@ -45,6 +45,7 @@ vi.mock('$lib/api/client', () => ({
 }));
 import {
 	albumList,
+	buildQueueViewModel,
 	canPlayNextGen,
 	canPlayNextSong,
 	canPlayPrevGen,
@@ -61,6 +62,7 @@ import {
 	filteredSongs,
 	handlePlaybackEnded,
 	idlePlayTarget,
+	jumpToQueueIndex,
 	navigateToPlaying,
 	playGeneration,
 	toPlaybackInfo,
@@ -1999,5 +2001,86 @@ describe('playIdleStart', () => {
 		selectedPlaylistDetail.set(null);
 		await playIdleStart();
 		expect(fetchLibraryPoolQueue).toHaveBeenCalled();
+	});
+});
+
+describe('buildQueueViewModel', () => {
+	it('classic-mode contexts without takes render current only, with no up next', () => {
+		const vm = buildQueueViewModel({ type: 'library' }, makePlayback(makeGen(), makeSong()), []);
+		expect(vm.items).toEqual([]);
+		expect(vm.currentIndex).toBe(-1);
+		expect(vm.upNext).toBeNull();
+	});
+
+	it('exposes the current item and up next for a native library/album queue', () => {
+		const songs = [makeSong({ id: 's1', audio_duration: 200 }), makeSong({ id: 's2' })];
+		const current = makePlayback(makeGen({ id: 'g1' }), songs[0]);
+		const next = makePlayback(makeGen({ id: 'g2' }), songs[1]);
+		const ctx = { type: 'library' as const, takes: [current, next], index: 0 };
+
+		const vm = buildQueueViewModel(ctx, current, songs);
+
+		expect(vm.items.map((item) => item.generationId)).toEqual(['g1', 'g2']);
+		expect(vm.items[0]?.durationSec).toBe(200);
+		expect(vm.currentIndex).toBe(0);
+		expect(vm.upNext).toEqual(expect.objectContaining({ generationId: 'g2' }));
+	});
+
+	it('has no up next for a single-item native queue', () => {
+		const song = makeSong();
+		const current = makePlayback(makeGen(), song);
+		const ctx = { type: 'library' as const, takes: [current], index: 0 };
+
+		const vm = buildQueueViewModel(ctx, current, [song]);
+
+		expect(vm.upNext).toBeNull();
+	});
+
+	it('exposes the current item and up next for a playlist queue', () => {
+		const entries = [
+			makePlaylistEntry({ id: 'e1', generation_id: 'g1', song_title: 'First' }),
+			makePlaylistEntry({ id: 'e2', generation_id: 'g2', song_title: 'Second' })
+		];
+		const ctx = { type: 'playlist' as const, entries, index: 0 };
+
+		const vm = buildQueueViewModel(ctx, null, []);
+
+		expect(vm.currentIndex).toBe(0);
+		expect(vm.upNext).toEqual(expect.objectContaining({ generationId: 'g2' }));
+	});
+});
+
+describe('jumpToQueueIndex', () => {
+	it('plays the take at the requested index in a native queue', () => {
+		const songA = makeSong({ id: 's1' });
+		const songB = makeSong({ id: 's2' });
+		const takes = [
+			makePlayback(makeGen({ id: 'g1' }), songA),
+			makePlayback(makeGen({ id: 'g2' }), songB)
+		];
+		queueContext.set({ type: 'library', takes, index: 0 });
+
+		jumpToQueueIndex(1);
+
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) })
+		);
+		expect(get(queueContext)).toEqual({ type: 'library', takes, index: 1 });
+	});
+
+	it('plays the entry at the requested index in a playlist queue', () => {
+		const entries = [
+			makePlaylistEntry({ id: 'e1' }),
+			makePlaylistEntry({ id: 'e2', generation_id: 'g2' })
+		];
+		queueContext.set({ type: 'playlist', entries, index: 0 });
+
+		jumpToQueueIndex(1);
+
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) }),
+			{ restart: true }
+		);
+		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 1 });
 	});
 });
