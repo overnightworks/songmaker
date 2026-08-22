@@ -9,6 +9,9 @@
 		albumList,
 		albumSongsLoad,
 		loadSongsForAlbum,
+		playAlbum,
+		playPlaylistEntries,
+		setShuffle,
 		songList,
 		selectedGenerationId,
 		updateAlbumInList,
@@ -34,8 +37,14 @@
 		watchShareView
 	} from '$lib/stores/shares';
 	import { fetchAlbum } from '$lib/api/albums';
-	import { unshareAlbum, unshareGeneration, unsharePlaylist, unshareSong } from '$lib/api/client';
-	import type { AlbumItem, ShareInventoryItem, SongItem } from '$lib/api/types';
+	import {
+		fetchPlaylist,
+		unshareAlbum,
+		unshareGeneration,
+		unsharePlaylist,
+		unshareSong
+	} from '$lib/api/client';
+	import type { AlbumItem, PlaylistItem, ShareInventoryItem, SongItem } from '$lib/api/types';
 	import { searchQuery } from '$lib/stores/filter';
 	import {
 		createNewPlaylist,
@@ -64,9 +73,13 @@
 	} from '$lib/stores/librarySearch';
 	import { addToast } from '$lib/stores/toast';
 	import AlbumNode from './AlbumNode.svelte';
+	import Icon from './Icon.svelte';
 
 	import { CREATED_SORT_LABELS, CREATED_SORTS, compareByCreatedAt } from '$lib/utils/recency';
+	import { hexToRgb } from '$lib/utils/contrast';
+	import { albumSummaryLabel, playlistSummaryLabel, titleInitials } from '$lib/utils/format';
 	import {
+		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
 		LIBRARY_ALBUMS_EMPTY,
 		LIBRARY_ALBUMS_LOADING,
@@ -180,6 +193,37 @@
 			list.some((item) => item.id === album.id) ? list : [...list, album]
 		);
 		openAlbum(album.id);
+	}
+
+	function tileCoverFill(colors: Record<string, string>): string | null {
+		const primary = colors.primary;
+		if (typeof primary !== 'string') return null;
+		const value = primary.trim();
+		if (!value) return null;
+		try {
+			hexToRgb(value);
+		} catch {
+			return null;
+		}
+		return value;
+	}
+
+	function albumPickCount(songs: SongItem[]): number {
+		return songs.filter((s) => s.generations.some((g) => g.is_picked)).length;
+	}
+
+	function onPlayAlbum(albumId: string): void {
+		void playAlbum(albumId);
+	}
+
+	async function onPlayPlaylist(playlist: PlaylistItem): Promise<void> {
+		try {
+			const detail = await fetchPlaylist(playlist.id);
+			setShuffle(false);
+			playPlaylistEntries(detail.entries, 0, { restart: true });
+		} catch {
+			addToast('Play failed', 'error');
+		}
 	}
 
 	function onSelectFilter(next: LibraryFilter): void {
@@ -475,12 +519,48 @@
 		{:else if filter === 'albums'}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
 				{#each albumGroups as group (group.album.id)}
-					<AlbumNode
-						album={group.album}
-						selected={currentCollection?.kind === 'album' &&
+					{@const fill = tileCoverFill(group.album.colors)}
+					{@const coverUrl = group.album.cover?.card ?? null}
+					<div
+						class="wall-tile"
+						class:selected={currentCollection?.kind === 'album' &&
 							currentCollection.id === group.album.id}
-						onselect={() => hydrateAndOpenAlbum(group.album)}
-					/>
+					>
+						<button
+							type="button"
+							class="wall-tile-body"
+							onclick={() => hydrateAndOpenAlbum(group.album)}
+						>
+							<span class="wall-tile-cover">
+								{#if coverUrl}
+									<img src={coverUrl} alt={`${ALBUM_COVER_ALT_TYPE} ${group.album.title}`} />
+								{:else if fill}
+									<span class="wall-tile-cover-fill" style:background={fill} aria-hidden="true"
+									></span>
+								{:else}
+									<span class="wall-tile-cover-fill wall-tile-cover-initials" aria-hidden="true"
+										>{titleInitials(group.album.title)}</span
+									>
+								{/if}
+							</span>
+							<span class="wall-tile-meta">
+								<span class="wall-tile-title">{group.album.title}</span>
+								<span class="wall-tile-subtitle"
+									>{albumSummaryLabel(group.album.song_count, albumPickCount(group.songs))}</span
+								>
+							</span>
+						</button>
+						<button
+							type="button"
+							class="wall-tile-play"
+							data-hitbox="frequent"
+							data-hitbox-face
+							aria-label={`Play ${group.album.title}`}
+							onclick={() => onPlayAlbum(group.album.id)}
+						>
+							<Icon name="play" size={16} />
+						</button>
+					</div>
 				{/each}
 			</div>
 
@@ -518,12 +598,39 @@
 			{#if orderedPlaylists.length > 0}
 				<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
 					{#each orderedPlaylists as playlist (playlist.id)}
-						<AlbumNode
-							{playlist}
-							selected={currentCollection?.kind === 'playlist' &&
+						<div
+							class="wall-tile"
+							class:selected={currentCollection?.kind === 'playlist' &&
 								currentCollection.id === playlist.id}
-							onselect={() => openPlaylist(playlist.id)}
-						/>
+						>
+							<button
+								type="button"
+								class="wall-tile-body"
+								onclick={() => openPlaylist(playlist.id)}
+							>
+								<span class="wall-tile-cover">
+									<span class="wall-tile-cover-fill wall-tile-cover-initials" aria-hidden="true"
+										>{titleInitials(playlist.title)}</span
+									>
+								</span>
+								<span class="wall-tile-meta">
+									<span class="wall-tile-title">{playlist.title}</span>
+									<span class="wall-tile-subtitle"
+										>{playlistSummaryLabel(playlist.entry_count)}</span
+									>
+								</span>
+							</button>
+							<button
+								type="button"
+								class="wall-tile-play"
+								data-hitbox="frequent"
+								data-hitbox-face
+								aria-label={`Play ${playlist.title}`}
+								onclick={() => onPlayPlaylist(playlist)}
+							>
+								<Icon name="play" size={16} />
+							</button>
+						</div>
 					{/each}
 				</div>
 			{:else if playlistStatus.status === 'loading'}
@@ -667,6 +774,105 @@
 		grid-template-columns: repeat(auto-fill, minmax(0, var(--album-card-track)));
 		gap: 12px;
 		min-width: 0;
+	}
+
+	.wall-tile {
+		position: relative;
+		min-width: 0;
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		background: var(--surface);
+		overflow: hidden;
+	}
+
+	.wall-tile.selected {
+		box-shadow: inset 0 0 0 2px var(--accent);
+	}
+
+	.wall-tile-body {
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+		min-width: 0;
+		background: transparent;
+		border: none;
+		color: var(--text);
+		font-family: var(--font-body);
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.wall-tile-body:hover {
+		background: var(--surface-hover);
+	}
+
+	.wall-tile-cover {
+		display: block;
+		width: 100%;
+		aspect-ratio: 1;
+		background: var(--surface-hover);
+		overflow: hidden;
+	}
+
+	.wall-tile-cover img,
+	.wall-tile-cover-fill {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.wall-tile-cover-initials {
+		font-family: var(--font-display);
+		font-size: 1.4rem;
+		letter-spacing: 0.06em;
+		color: var(--text);
+		user-select: none;
+	}
+
+	.wall-tile-meta {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		gap: 1px;
+		padding: 8px 40px 8px 8px;
+	}
+
+	.wall-tile-title {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-family: var(--font-display);
+		font-size: 0.85rem;
+		letter-spacing: 0.3px;
+	}
+
+	.wall-tile-subtitle {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.68rem;
+		color: var(--text-subtle);
+	}
+
+	.wall-tile-play {
+		position: absolute;
+		right: 6px;
+		bottom: 6px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		background: none;
+		color: var(--text-muted);
+	}
+
+	.wall-tile-play:hover {
+		color: var(--primary);
 	}
 
 	.share-filters {

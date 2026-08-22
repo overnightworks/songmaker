@@ -116,6 +116,7 @@ const INVENTORY = [
 	},
 	{ name: 'playlist-remove', selector: '.remove-btn[data-hitbox="frequent"]' },
 	{ name: 'new-album', selector: '[data-hitbox="frequent"][aria-label="New album"]' },
+	{ name: 'wall-tile-play', selector: '.wall-tile-play[data-hitbox="frequent"]' },
 	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' },
 	{ name: 'drawer-trigger', selector: '.drawer-trigger[data-hitbox="frequent"]' },
 	{ name: 'collection-menu', selector: '.menu-trigger[data-hitbox="frequent"]' }
