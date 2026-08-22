@@ -18,8 +18,11 @@
 		deleteGeneration,
 		rateGeneration,
 		keepGeneration,
-		unkeepGeneration
+		unkeepGeneration,
+		uploadSongCover,
+		deleteSongCover
 	} from '$lib/api/client';
+	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { activeJobs, trackJob, removeJob } from '$lib/stores/jobs';
 	import { health, startHealthPolling, stopHealthPolling } from '$lib/stores/health';
@@ -28,13 +31,15 @@
 		selectedGeneration,
 		selectedGenerationId,
 		ensureGenerationsLoaded,
+		albumList,
 		songList,
 		replaceSongInList,
 		updateSongInList,
 		updateGenerationInList,
 		removeGenerationFromSong,
 		removeSongFromList,
-		addSongsToList
+		addSongsToList,
+		addAlbumToList
 	} from '$lib/stores/player';
 	import {
 		albumTrackNeighbors,
@@ -78,11 +83,20 @@
 		SONG_SURFACE_RECIPE,
 		SONG_SURFACE_SWITCH_LABEL,
 		SONG_SURFACE_TAKES,
+		ALBUM_ART_EMPTY_INITIALS,
+		ALBUM_ART_INITIAL_COUNT,
+		ALBUM_COVER_ACCEPT,
+		ALBUM_COVER_ALT_TYPE,
+		SONG_COVER_ALT_TYPE,
+		SONG_COVER_REMOVE_LABEL,
+		SONG_COVER_REPLACE_LABEL,
+		SONG_COVER_UPLOAD_LABEL,
 		TAKE_AUDIO_COVER_LABEL,
 		TAKE_REPAINT_LABEL,
 		TAKES_ERROR,
 		canSplitSongPanes
 	} from '$lib/constants';
+	import { hexToRgb } from '$lib/utils/contrast';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import GenerationsList from './GenerationsList.svelte';
 	import GenerationView from './GenerationView.svelte';
@@ -123,10 +137,34 @@
 	let recipeScrollTop = 0;
 	let takesStatus = $state<'loading' | 'ready' | 'error'>('ready');
 	let takesError = $state<string | null>(null);
+	let coverFailed = $state(false);
+	let coverBusy = $state(false);
+	let coverInput: HTMLInputElement | null = $state(null);
+	let requestedParentAlbumId: string | null = $state(null);
 
 	const song = $derived($selectedSong);
 	const inspected = $derived($selectedGeneration);
 	const songs = $derived($songList);
+	const albums = $derived($albumList);
+	const parentAlbum = $derived(
+		song ? (albums.find((album) => album.id === song.album_id) ?? null) : null
+	);
+	const ownCoverUrl = $derived(song?.cover?.detail ?? null);
+	const inheritedCoverUrl = $derived(ownCoverUrl ? null : (parentAlbum?.cover?.detail ?? null));
+	const coverUrl = $derived(ownCoverUrl ?? inheritedCoverUrl);
+	const hasOwnCover = $derived(Boolean(song?.cover));
+	const coverAlt = $derived(
+		ownCoverUrl && song
+			? `${SONG_COVER_ALT_TYPE} ${song.title}`
+			: parentAlbum
+				? `${ALBUM_COVER_ALT_TYPE} ${parentAlbum.title}`
+				: SONG_COVER_ALT_TYPE
+	);
+	const artFill = $derived(parentAlbum ? usableAlbumPrimary(parentAlbum.colors) : null);
+	const initials = $derived(song ? titleInitials(song.title) : ALBUM_ART_EMPTY_INITIALS);
+	const coverActionLabel = $derived(
+		hasOwnCover ? SONG_COVER_REPLACE_LABEL : SONG_COVER_UPLOAD_LABEL
+	);
 	const neighbors = $derived(
 		song ? albumTrackNeighbors(song.id, songs) : { previous: null, next: null }
 	);
@@ -140,6 +178,92 @@
 	const cowriterModal = $derived(cowriterShowing && !split);
 
 	let editorSongId: string | null = null;
+
+	function usableAlbumPrimary(colors: Record<string, string>): string | null {
+		const primary = colors.primary;
+		if (typeof primary !== 'string') return null;
+		const value = primary.trim();
+		if (!value) return null;
+		try {
+			hexToRgb(value);
+		} catch {
+			return null;
+		}
+		return value;
+	}
+
+	function titleInitials(title: string): string {
+		const trimmed = title.trim();
+		if (!trimmed) return ALBUM_ART_EMPTY_INITIALS;
+		const words = trimmed.split(/\s+/);
+		if (words.length === 1) {
+			const letters = Array.from(words[0]).slice(0, ALBUM_ART_INITIAL_COUNT).join('');
+			return letters.toUpperCase() || ALBUM_ART_EMPTY_INITIALS;
+		}
+		const first = Array.from(words[0])[0];
+		const second = Array.from(words[1])[0];
+		if (!first) return ALBUM_ART_EMPTY_INITIALS;
+		return `${first}${second ?? ''}`.toUpperCase();
+	}
+
+	$effect(() => {
+		void coverUrl;
+		coverFailed = false;
+	});
+
+	$effect(() => {
+		const current = song;
+		if (!current) {
+			requestedParentAlbumId = null;
+			return;
+		}
+		if (parentAlbum) {
+			requestedParentAlbumId = current.album_id;
+			return;
+		}
+		if (requestedParentAlbumId === current.album_id) return;
+		const albumId = current.album_id;
+		requestedParentAlbumId = albumId;
+		void fetchAlbum(albumId)
+			.then((album) => {
+				if (album.id !== albumId) return;
+				addAlbumToList(album);
+			})
+			.catch(() => undefined);
+	});
+
+	async function onCoverFile(event: Event): Promise<void> {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file || !song) return;
+		coverBusy = true;
+		try {
+			const updated = await uploadSongCover(song.id, file);
+			updateSongInList(song.id, (current) => ({ ...current, cover: updated.cover }));
+			coverFailed = false;
+			addToast('Cover saved', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Cover upload failed', 'error');
+		} finally {
+			coverBusy = false;
+		}
+	}
+
+	async function onCoverRemove(): Promise<void> {
+		if (!song) return;
+		coverBusy = true;
+		try {
+			const updated = await deleteSongCover(song.id);
+			updateSongInList(song.id, (current) => ({ ...current, cover: updated.cover ?? null }));
+			coverFailed = false;
+			addToast('Cover removed', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Cover remove failed', 'error');
+		} finally {
+			coverBusy = false;
+		}
+	}
 
 	$effect(() => {
 		const current = song;
@@ -585,41 +709,77 @@
 		style:--song-split-gap="{SONG_SPLIT_PANE_GAP_PX}px"
 	>
 		<div class="detail-header">
-			<div class="song-heading">
-				<h2 class="song-title">
-					<EditableTitle value={song.title} onsave={onRenameSong} ariaLabel="Song title" />
-				</h2>
-				{#if songRail}
-					<div class="song-rail">
+			<div class="detail-identity">
+				<div class="cover-hero">
+					{#if coverUrl && !coverFailed}
+						<img src={coverUrl} alt={coverAlt} onerror={() => (coverFailed = true)} />
+					{:else if artFill}
+						<span class="cover-fallback" style:background={artFill} aria-hidden="true"></span>
+					{:else}
+						<span class="cover-fallback cover-initials" aria-hidden="true">{initials}</span>
+					{/if}
+					<input
+						bind:this={coverInput}
+						class="cover-file-input"
+						type="file"
+						accept={ALBUM_COVER_ACCEPT}
+						onchange={onCoverFile}
+					/>
+					<button
+						type="button"
+						class="cover-hit"
+						onclick={() => coverInput?.click()}
+						disabled={coverBusy}
+						aria-label={coverActionLabel}
+					></button>
+					{#if hasOwnCover}
 						<button
 							type="button"
-							class="song-neighbor"
-							data-hitbox="frequent"
-							data-hitbox-face
-							aria-label={SONG_PREVIOUS_LABEL}
-							disabled={!neighbors.previous}
-							onclick={() => neighbors.previous && selectNeighborSong(neighbors.previous)}
+							class="cover-remove"
+							onclick={onCoverRemove}
+							disabled={coverBusy}
+							aria-label={SONG_COVER_REMOVE_LABEL}
 						>
-							<Icon name="skip-back" size={14} />
+							×
 						</button>
-						<button type="button" class="song-album" onclick={() => backToAlbum()}>
-							{song.album_title}
-						</button>
-						<button
-							type="button"
-							class="song-neighbor"
-							data-hitbox="frequent"
-							data-hitbox-face
-							aria-label={SONG_NEXT_LABEL}
-							disabled={!neighbors.next}
-							onclick={() => neighbors.next && selectNeighborSong(neighbors.next)}
-						>
-							<Icon name="skip-forward" size={14} />
-						</button>
-					</div>
-				{:else}
-					<span class="song-album">{song.album_title}</span>
-				{/if}
+					{/if}
+				</div>
+				<div class="song-heading">
+					<h2 class="song-title">
+						<EditableTitle value={song.title} onsave={onRenameSong} ariaLabel="Song title" />
+					</h2>
+					{#if songRail}
+						<div class="song-rail">
+							<button
+								type="button"
+								class="song-neighbor"
+								data-hitbox="frequent"
+								data-hitbox-face
+								aria-label={SONG_PREVIOUS_LABEL}
+								disabled={!neighbors.previous}
+								onclick={() => neighbors.previous && selectNeighborSong(neighbors.previous)}
+							>
+								<Icon name="skip-back" size={14} />
+							</button>
+							<button type="button" class="song-album" onclick={() => backToAlbum()}>
+								{song.album_title}
+							</button>
+							<button
+								type="button"
+								class="song-neighbor"
+								data-hitbox="frequent"
+								data-hitbox-face
+								aria-label={SONG_NEXT_LABEL}
+								disabled={!neighbors.next}
+								onclick={() => neighbors.next && selectNeighborSong(neighbors.next)}
+							>
+								<Icon name="skip-forward" size={14} />
+							</button>
+						</div>
+					{:else}
+						<span class="song-album">{song.album_title}</span>
+					{/if}
+				</div>
 			</div>
 			<div class="detail-actions">
 				<ShareButton
@@ -953,6 +1113,83 @@
 		align-items: flex-start;
 		gap: 0.55rem;
 		min-width: 0;
+	}
+
+	.detail-identity {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.cover-hero {
+		position: relative;
+		width: 4.5rem;
+		height: 4.5rem;
+		flex-shrink: 0;
+		overflow: hidden;
+		background: var(--surface-hover);
+	}
+
+	.cover-hero img,
+	.cover-fallback {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+
+	.cover-fallback {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.cover-initials {
+		font-family: var(--font-display);
+		font-size: 1.1rem;
+		letter-spacing: 0.06em;
+		user-select: none;
+	}
+
+	.cover-file-input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	.cover-hit {
+		position: absolute;
+		inset: 0;
+		padding: 0;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+	}
+
+	.cover-hit:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
+	}
+
+	.cover-remove {
+		position: absolute;
+		top: 0;
+		right: 0;
+		z-index: 1;
+		width: 1.5rem;
+		height: 1.5rem;
+		padding: 0;
+		border: none;
+		background: color-mix(in srgb, var(--bg) 75%, transparent);
+		color: var(--text);
+		font-size: 1rem;
+		line-height: 1;
+		cursor: pointer;
 	}
 
 	.song-heading {
@@ -1309,6 +1546,11 @@
 		.detail-header {
 			flex-direction: column;
 			gap: 8px;
+		}
+
+		.cover-hero {
+			width: 3.5rem;
+			height: 3.5rem;
 		}
 
 		.detail-actions {

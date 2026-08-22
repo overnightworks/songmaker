@@ -1,22 +1,29 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
-	import { APP_NAME } from '$lib/constants';
+	import { APP_NAME, SONG_COVER_ALT_TYPE } from '$lib/constants';
 	import LegalContent from '$lib/components/LegalContent.svelte';
 	import SharedPlayer from '$lib/components/SharedPlayer.svelte';
 	import ShareStatus from '$lib/components/ShareStatus.svelte';
+
+	interface SharedSongCover {
+		card: string;
+		detail: string;
+	}
 
 	interface SharedSong {
 		title: string;
 		artist: string;
 		album_title: string;
 		audio_url: string | null;
+		cover?: SharedSongCover | null;
 	}
 
 	let data: SharedSong | null = $state(null);
 	let errorKind: 'missing' | 'error' | null = $state(null);
 	let loading = $state(true);
 	let legalSection: string | null = $state(null);
+	let coverFailed = $state(false);
 
 	const slug = $derived(page.params.slug ?? '');
 
@@ -27,6 +34,7 @@
 	async function fetchData(s: string) {
 		loading = true;
 		errorKind = null;
+		coverFailed = false;
 		try {
 			const resp = await fetch(`/shared/song/${s}`);
 			if (!resp.ok) {
@@ -67,6 +75,14 @@
 		/>
 	{:else if data}
 		<div class="song-header">
+			{#if data.cover?.detail && !coverFailed}
+				<img
+					class="share-cover"
+					src={data.cover.detail}
+					alt={`${SONG_COVER_ALT_TYPE} ${data.title}`}
+					onerror={() => (coverFailed = true)}
+				/>
+			{/if}
 			<h1>{data.title}</h1>
 			<p class="artist">{data.artist}</p>
 			{#if data.album_title}<p class="album">{data.album_title}</p>{/if}
@@ -104,6 +120,14 @@
 {/if}
 
 <style>
+	.share-cover {
+		width: 8rem;
+		height: 8rem;
+		object-fit: cover;
+		margin: 0 auto 1rem;
+		display: block;
+	}
+
 	.shared-page {
 		max-width: 600px;
 		margin: 0 auto;

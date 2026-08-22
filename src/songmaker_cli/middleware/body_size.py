@@ -15,27 +15,31 @@ def is_large_upload_path(path: str) -> bool:
     if path == "/api/audio/upload":
         return True
     parts = path.split("/")
-    return (
-        len(parts) == 5
-        and parts[1] == "api"
-        and bool(parts[3])
-        and (
-            (parts[2] == "loras" and parts[4] == "samples")
-            or (parts[2] == "songs" and parts[4] == "reimport")
-            or (parts[2] == "albums" and parts[4] == "cover")
-        )
-    )
+    if len(parts) != 5 or parts[1] != "api" or not parts[3]:
+        return False
+    resource = parts[2]
+    action = parts[4]
+    if resource == "loras" and action == "samples":
+        return True
+    if resource == "songs" and action == "reimport":
+        return True
+    if resource == "albums" and action == "cover":
+        return True
+    if resource == "songs" and action == "cover":
+        return True
+    return False
 
 
 def body_limit_for_path(path: str) -> int:
     settings = get_settings()
     if not is_large_upload_path(path):
         return settings.max_request_body_bytes
-    kind = path.split("/")[2]
-    if kind == "songs":
-        return settings.max_reimport_body_bytes
-    if kind == "albums":
+    parts = path.split("/")
+    action = parts[4] if len(parts) > 4 else ""
+    if action == "cover":
         return settings.max_cover_upload_body_bytes
+    if action == "reimport":
+        return settings.max_reimport_body_bytes
     return settings.max_upload_body_bytes
 
 

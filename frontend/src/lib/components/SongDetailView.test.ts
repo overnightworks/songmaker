@@ -4,9 +4,14 @@ import { get } from 'svelte/store';
 
 import type { AlbumItem, GenerationItem, SongItem, VersionGenerationParams } from '$lib/api/types';
 import {
+	ALBUM_COVER_ALT_TYPE,
 	COMPACT_LAYOUT_MEDIA,
 	HITBOX_FREQUENT_PX,
 	LIBRARY_NARROW_MEDIA,
+	SONG_COVER_ALT_TYPE,
+	SONG_COVER_REMOVE_LABEL,
+	SONG_COVER_REPLACE_LABEL,
+	SONG_COVER_UPLOAD_LABEL,
 	SONG_NEXT_LABEL,
 	SONG_PREVIOUS_LABEL,
 	SONG_SPLIT_PANE_GAP_PX,
@@ -39,22 +44,16 @@ import {
 import { clearSelection, toggleSelection } from '$lib/stores/selection';
 import { pendingSource } from '$lib/stores/source';
 
+const fetchAlbum = vi.fn();
+const uploadSongCover = vi.fn();
+const deleteSongCover = vi.fn();
+const deleteAlbumCover = vi.fn();
+
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
 }));
 vi.mock('$lib/api/albums', () => ({
-	fetchAlbum: vi.fn().mockResolvedValue({
-		id: 'a-local',
-		title: 'Local Album',
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 1,
-		is_shared: false,
-		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00'
-	}),
+	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
 	fetchAlbums: vi.fn()
 }));
 vi.mock('$lib/api/songs', () => ({
@@ -104,7 +103,10 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchActiveModels: vi.fn().mockResolvedValue([]),
 		fetchPresets: vi.fn().mockResolvedValue([]),
 		fetchBuiltinDefaults: vi.fn().mockResolvedValue({}),
-		bulkDeleteGenerations: vi.fn().mockResolvedValue({ deleted: 1 })
+		bulkDeleteGenerations: vi.fn().mockResolvedValue({ deleted: 1 }),
+		uploadSongCover: (...args: unknown[]) => uploadSongCover(...args),
+		deleteSongCover: (...args: unknown[]) => deleteSongCover(...args),
+		deleteAlbumCover: (...args: unknown[]) => deleteAlbumCover(...args)
 	};
 });
 vi.mock('$lib/stores/toast', () => ({
@@ -233,7 +235,7 @@ function px(value: string): number {
 	return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function album(): AlbumItem {
+function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	return {
 		id: 'a-local',
 		title: 'Local Album',
@@ -244,7 +246,9 @@ function album(): AlbumItem {
 		song_count: 3,
 		is_shared: false,
 		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00'
+		cover: null,
+		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
 	};
 }
 
@@ -264,6 +268,11 @@ beforeEach(() => {
 	songList.set([song()]);
 	selectedSongId.set('s1');
 	selectedGenerationId.set(null);
+	fetchAlbum.mockReset();
+	fetchAlbum.mockResolvedValue(album());
+	uploadSongCover.mockReset();
+	deleteSongCover.mockReset();
+	deleteAlbumCover.mockReset();
 });
 
 afterEach(async () => {
@@ -662,5 +671,139 @@ describe('song header album rail', () => {
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(selectedAlbumId)).toBe('a-local');
 		cleanup();
+	});
+});
+
+describe('SongDetailView cover hero', () => {
+	it('inherits parent album cover and does not show remove', async () => {
+		albumList.set([
+			album({
+				cover: {
+					card: '/api/albums/a-local/cover?variant=card&v=album.jpg',
+					detail: '/api/albums/a-local/cover?variant=detail&v=album.jpg'
+				}
+			})
+		]);
+		const target = await renderView();
+		const img = target.querySelector<HTMLImageElement>('img');
+		expect(img?.getAttribute('src')).toContain('/api/albums/a-local/cover?variant=detail');
+		expect(img?.getAttribute('alt')).toBe(`${ALBUM_COVER_ALT_TYPE} Local Album`);
+		expect(target.querySelector('.cover-remove')).toBeNull();
+		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
+			SONG_COVER_UPLOAD_LABEL
+		);
+		expect(fetchAlbum).not.toHaveBeenCalled();
+	});
+
+	it('does not pick some other album when the parent is missing', async () => {
+		albumList.set([
+			album({
+				id: 'other-album',
+				title: 'Other Album',
+				cover: {
+					card: '/api/albums/other-album/cover?variant=card&v=other.jpg',
+					detail: '/api/albums/other-album/cover?variant=detail&v=other.jpg'
+				}
+			})
+		]);
+		fetchAlbum.mockResolvedValue(
+			album({
+				cover: {
+					card: '/api/albums/a-local/cover?variant=card&v=parent.jpg',
+					detail: '/api/albums/a-local/cover?variant=detail&v=parent.jpg'
+				}
+			})
+		);
+		const target = await renderView();
+		await vi.waitFor(() => expect(fetchAlbum).toHaveBeenCalledWith('a-local'));
+		await vi.waitFor(() =>
+			expect(target.querySelector('img')?.getAttribute('src')).toContain(
+				'/api/albums/a-local/cover?variant=detail'
+			)
+		);
+		expect(target.querySelector('img')?.getAttribute('src')).not.toContain('other-album');
+		expect(target.querySelector('.cover-remove')).toBeNull();
+	});
+
+	it('shows own cover, song alt, and remove', async () => {
+		songList.set([
+			song({
+				cover: {
+					card: '/api/songs/s1/cover?variant=card&v=own.jpg',
+					detail: '/api/songs/s1/cover?variant=detail&v=own.jpg'
+				}
+			})
+		]);
+		albumList.set([
+			album({
+				cover: {
+					card: '/api/albums/a-local/cover?variant=card&v=album.jpg',
+					detail: '/api/albums/a-local/cover?variant=detail&v=album.jpg'
+				}
+			})
+		]);
+		const target = await renderView();
+		const img = target.querySelector<HTMLImageElement>('img');
+		expect(img?.getAttribute('src')).toContain('/api/songs/s1/cover?variant=detail');
+		expect(img?.getAttribute('alt')).toBe(`${SONG_COVER_ALT_TYPE} Local Only`);
+		expect(
+			target.querySelector<HTMLButtonElement>('.cover-remove')?.getAttribute('aria-label')
+		).toBe(SONG_COVER_REMOVE_LABEL);
+		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
+			SONG_COVER_REPLACE_LABEL
+		);
+	});
+
+	it('uploads a song override', async () => {
+		albumList.set([album()]);
+		uploadSongCover.mockResolvedValue(
+			song({
+				cover: {
+					card: '/api/songs/s1/cover?variant=card&v=new.jpg',
+					detail: '/api/songs/s1/cover?variant=detail&v=new.jpg'
+				}
+			})
+		);
+		const target = await renderView();
+		const input = target.querySelector('.cover-file-input');
+		expect(input).toBeInstanceOf(HTMLInputElement);
+		if (!(input instanceof HTMLInputElement)) return;
+		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
+		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+		input.dispatchEvent(new Event('change', { bubbles: true }));
+		await vi.waitFor(() => expect(uploadSongCover).toHaveBeenCalledTimes(1));
+		await tick();
+		expect(target.querySelector('img')?.getAttribute('src')).toContain('/api/songs/s1/cover');
+		expect(target.querySelector('.cover-remove')).not.toBeNull();
+	});
+
+	it('removes only the own cover and then inherits the parent album', async () => {
+		songList.set([
+			song({
+				cover: {
+					card: '/api/songs/s1/cover?variant=card&v=own.jpg',
+					detail: '/api/songs/s1/cover?variant=detail&v=own.jpg'
+				}
+			})
+		]);
+		albumList.set([
+			album({
+				cover: {
+					card: '/api/albums/a-local/cover?variant=card&v=album.jpg',
+					detail: '/api/albums/a-local/cover?variant=detail&v=album.jpg'
+				}
+			})
+		]);
+		deleteSongCover.mockResolvedValue(song({ cover: null }));
+		const target = await renderView();
+		expect(target.querySelector('img')?.getAttribute('src')).toContain('/api/songs/s1/cover');
+		target.querySelector<HTMLButtonElement>('.cover-remove')?.click();
+		await vi.waitFor(() => expect(deleteSongCover).toHaveBeenCalledTimes(1));
+		expect(deleteAlbumCover).not.toHaveBeenCalled();
+		await tick();
+		expect(target.querySelector('img')?.getAttribute('src')).toContain(
+			'/api/albums/a-local/cover?variant=detail'
+		);
+		expect(target.querySelector('.cover-remove')).toBeNull();
 	});
 });

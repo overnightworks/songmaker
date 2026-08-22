@@ -110,7 +110,7 @@ User clicks "Generate"                    User clicks "Score"
   Repaint: POST /generations/{id}/repaint
   Cover:   POST /generations/{id}/cover
   Upload:  POST /api/audio/upload (reference audio)
-  Art:     POST /api/albums/{id}/cover (album cover files on the audio volume)
+  Art:     POST /api/albums/{id}/cover and POST /api/songs/{id}/cover (files on the audio volume)
 
   User clicks "Chat"
         │
@@ -277,6 +277,7 @@ stream.
 | GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay, gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
 | GET/POST/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, or remove the album cover (JPEG/PNG; ownership 404) |
+| GET/POST/DELETE | `/api/songs/{id}/cover` | user | Read, upload/replace, or remove the song's own cover (JPEG/PNG; ownership 404). JSON `cover` is the song file or null — never the parent album's URLs. |
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |
 | GET/PUT | `/api/songs/{id}` | user | Get/update song |
 | PUT | `/api/songs/{id}/album` | user | Move song to different album |
@@ -308,10 +309,11 @@ stream.
 | POST/DELETE | `/api/generations/{id}/share` | user | Enable/revoke generation sharing |
 | POST/DELETE | `/api/playlists/{id}/share` | user | Enable/revoke playlist sharing |
 | GET | `/shared/{slug}` | public | Read-only album JSON (no auth, rate-limited). `cover` is present only while shared and the file exists. |
-| GET | `/shared/song/{slug}` | public | Read-only song JSON (no auth, rate-limited) |
+| GET | `/shared/song/{slug}` | public | Read-only song JSON (no auth, rate-limited). `cover` is present only while shared and the **song** file exists. |
 | GET | `/shared/gen/{slug}` | public | Read-only generation JSON (no auth, rate-limited) |
 | GET | `/shared/playlist/{slug}` | public | Read-only playlist JSON (no auth, rate-limited) |
 | GET | `/shared/{slug}/cover` | public | Stream the shared album cover after the same share-slug gate as album JSON |
+| GET | `/shared/song/{slug}/cover` | public | Stream the shared song's own cover after the song share-slug gate. 404 when the song has no file of its own, even if the album has one. |
 | GET | `/shared/{slug}/audio/{file}` | public | Stream shared album audio after filename allowlist validation |
 | GET | `/shared/song/{slug}/audio/{file}` | public | Stream shared song audio after filename allowlist validation |
 | GET | `/shared/gen/{slug}/audio/{file}` | public | Stream shared generation audio after filename allowlist validation |
@@ -474,4 +476,4 @@ Health endpoint at `/health` reports:
 
 DB and audio must be backed up and restored together — one without the other leaves orphaned records or unreachable files.
 
-Album covers live as files on that same audio volume (`covers/{album_id}/` for original plus card and detail derivatives). They are not stored as Base64 in PostgreSQL; the album row only stores `cover_key`. Backup/restore of the audio volume therefore includes covers with no extra volume.
+Album covers live as files on that same audio volume (`covers/{album_id}/` for original plus card and detail derivatives). Song covers live beside them at `song-covers/{song_id}/` — not under `covers/songs/`, because an album slug can be `songs`. They are not stored as Base64 in PostgreSQL; the album or song row only stores `cover_key`. Authenticated song JSON advertises `cover` only from that song's key; display inheritance of album art is a UI concern. Backup/restore of the audio volume therefore includes covers with no extra volume.

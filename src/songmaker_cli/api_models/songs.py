@@ -44,9 +44,7 @@ def generation_version_lyrics(gen: Generation) -> str | None:
     return lyrics
 
 
-def _safe_json_dict(
-    value: object, entity_type: str, entity_id: str,
-) -> dict | None:
+def _safe_json_dict(value: object, entity_type: str, entity_id: str) -> dict | None:
     if value is None:
         return None
     if isinstance(value, dict):
@@ -172,6 +170,8 @@ class SharedSongResponse(BaseModel):
     album_title: str
     audio_url: str | None
 
+    cover: AlbumCoverUrls | None = None
+
 
 class SharedGenerationResponse(BaseModel):
     title: str
@@ -280,6 +280,32 @@ class GenerationResponse(BaseModel):
         )
 
 
+def song_cover_urls(song_id: str, cover_key: str) -> AlbumCoverUrls:
+    return AlbumCoverUrls(
+        card=(
+            f"/api/songs/{song_id}/cover?variant={COVER_VARIANT_CARD}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+        detail=(
+            f"/api/songs/{song_id}/cover?variant={COVER_VARIANT_DETAIL}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+    )
+
+
+def public_song_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
+    return AlbumCoverUrls(
+        card=(
+            f"/shared/song/{slug}/cover?variant={COVER_VARIANT_CARD}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+        detail=(
+            f"/shared/song/{slug}/cover?variant={COVER_VARIANT_DETAIL}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+    )
+
+
 class VersionResponse(BaseModel):
     id: str
     version_number: int
@@ -327,6 +353,7 @@ class SongSummaryResponse(BaseModel):
     share_slug: str | None = None
     best_scores: dict | None = None
     best_rating: float | None = None
+    cover: AlbumCoverUrls | None = None
     created_at: str
 
     @classmethod
@@ -336,6 +363,7 @@ class SongSummaryResponse(BaseModel):
             _safe_json_dict(ver.generation_params, "version", ver.id)
             if ver else None
         )
+        cover = song_cover_urls(song.id, song.cover_key) if song.cover_key else None
         return cls(
             id=song.id,
             title=song.title,
@@ -354,6 +382,7 @@ class SongSummaryResponse(BaseModel):
             generation_count=len(song.generations),
             is_shared=song.is_shared,
             share_slug=song.share_slug,
+            cover=cover,
             created_at=song.created_at.isoformat(),
         )
 

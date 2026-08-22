@@ -57,7 +57,7 @@ from songmaker_cli.constants import (
     JobStatus,
     ResourceType,
 )
-from songmaker_cli.covers import remove_album_cover_files
+from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     count_active_sessions,
@@ -73,6 +73,7 @@ from songmaker_cli.db.queries import (
     list_active_sessions,
     list_audit_log,
     list_login_attempts,
+    list_song_ids_for_owner,
     list_users,
     list_worker_identities,
     record_audit,
@@ -208,12 +209,16 @@ def hard_delete_user_endpoint(
     if user.role == "admin":
         ensure_not_last_admin(db, user_id)
 
-    user_albums = db.query(Album).filter_by(created_by=user_id).all()
-    album_count = len(user_albums)
-    song_count = sum(len(a.songs) for a in user_albums)
+    song_ids = list_song_ids_for_owner(db, user_id)
+    album_count = (
+        db.query(Album)
+        .execution_options(include_deleted=True)
+        .filter_by(created_by=user_id)
+        .count()
+    )
     record_audit(
         db, admin.id, AuditAction.HARD_DELETE, ResourceType.USER, user_id,
-        f"username={user.username}, albums={album_count}, songs={song_count}",
+        f"username={user.username}, albums={album_count}, songs={len(song_ids)}",
     )
 
     paths, album_ids = hard_delete_user(db, user_id)
@@ -223,6 +228,8 @@ def hard_delete_user_endpoint(
     cleanup_generation_files(ctx.audio_dir, paths)
     for album_id in album_ids:
         remove_album_cover_files(ctx.audio_dir, album_id)
+    for song_id in song_ids:
+        remove_song_cover_files(ctx.audio_dir, song_id)
     user_dir = ctx.audio_dir / user_id
     if user_dir.is_dir() and not any(user_dir.iterdir()):
         user_dir.rmdir()
