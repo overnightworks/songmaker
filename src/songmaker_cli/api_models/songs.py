@@ -44,9 +44,7 @@ def generation_version_lyrics(gen: Generation) -> str | None:
     return lyrics
 
 
-def _safe_json_dict(
-    value: object, entity_type: str, entity_id: str,
-) -> dict | None:
+def _safe_json_dict(value: object, entity_type: str, entity_id: str) -> dict | None:
     if value is None:
         return None
     if isinstance(value, dict):
@@ -91,32 +89,6 @@ def public_album_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
         ),
         detail=(
             f"/shared/{slug}/cover?variant={COVER_VARIANT_DETAIL}"
-            f"&{COVER_VERSION_QUERY}={cover_key}"
-        ),
-    )
-
-
-def song_cover_urls(song_id: str, cover_key: str) -> AlbumCoverUrls:
-    return AlbumCoverUrls(
-        card=(
-            f"/api/songs/{song_id}/cover?variant={COVER_VARIANT_CARD}"
-            f"&{COVER_VERSION_QUERY}={cover_key}"
-        ),
-        detail=(
-            f"/api/songs/{song_id}/cover?variant={COVER_VARIANT_DETAIL}"
-            f"&{COVER_VERSION_QUERY}={cover_key}"
-        ),
-    )
-
-
-def public_song_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
-    return AlbumCoverUrls(
-        card=(
-            f"/shared/song/{slug}/cover?variant={COVER_VARIANT_CARD}"
-            f"&{COVER_VERSION_QUERY}={cover_key}"
-        ),
-        detail=(
-            f"/shared/song/{slug}/cover?variant={COVER_VARIANT_DETAIL}"
             f"&{COVER_VERSION_QUERY}={cover_key}"
         ),
     )
@@ -197,6 +169,7 @@ class SharedSongResponse(BaseModel):
     artist: str
     album_title: str
     audio_url: str | None
+
     cover: AlbumCoverUrls | None = None
 
 
@@ -305,6 +278,32 @@ class GenerationResponse(BaseModel):
             generation_params=generation_params,
             created_at=gen.created_at.isoformat(),
         )
+
+
+def song_cover_urls(song_id: str, cover_key: str) -> AlbumCoverUrls:
+    return AlbumCoverUrls(
+        card=(
+            f"/api/songs/{song_id}/cover?variant={COVER_VARIANT_CARD}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+        detail=(
+            f"/api/songs/{song_id}/cover?variant={COVER_VARIANT_DETAIL}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+    )
+
+
+def public_song_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
+    return AlbumCoverUrls(
+        card=(
+            f"/shared/song/{slug}/cover?variant={COVER_VARIANT_CARD}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+        detail=(
+            f"/shared/song/{slug}/cover?variant={COVER_VARIANT_DETAIL}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+    )
 
 
 class VersionResponse(BaseModel):
