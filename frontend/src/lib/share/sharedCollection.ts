@@ -153,6 +153,23 @@ export function playableTracks(tracks: SharedTrack[]): SharedTrack[] {
 	);
 }
 
+// The header's byline, one string per collection kind — pure so the
+// collection surface never has to branch on `kind` itself.
+export function collectionSubtitle(view: SharedCollectionView): string {
+	if (view.kind === 'playlist') {
+		const count = view.tracks.length;
+		return `${count} track${count !== 1 ? 's' : ''}`;
+	}
+	if (view.kind === 'take') {
+		const takeLabel = view.takeNumber != null ? `take ${view.takeNumber}` : null;
+		return [view.artist, view.albumTitle, takeLabel].filter(Boolean).join(' · ');
+	}
+	if (view.kind === 'song') {
+		return [view.artist, view.albumTitle].filter(Boolean).join(' · ');
+	}
+	return [view.artist, view.year].filter(Boolean).join(' · ');
+}
+
 const SHARE_GENERATION_NUMBER = 1;
 const SHARE_MODEL_MODE = 'sft';
 

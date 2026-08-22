@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	collectionSubtitle,
 	fromSharedAlbum,
 	fromSharedGeneration,
 	fromSharedPlaylist,
@@ -188,5 +189,63 @@ describe('trackPlaybackInfo', () => {
 
 		expect(info.artist).toBe('Artist');
 		expect(info.albumTitle).toBe('Album');
+	});
+});
+
+describe('collectionSubtitle', () => {
+	it('shows artist and year for an album', () => {
+		const view = fromSharedAlbum({
+			title: 'Album',
+			artist: 'Artist',
+			subtitle: '',
+			year: '2026',
+			songs: []
+		});
+		expect(collectionSubtitle(view)).toBe('Artist · 2026');
+	});
+
+	it('shows the track count for a playlist', () => {
+		const view = fromSharedPlaylist({
+			title: 'Mix',
+			entries: [
+				{
+					entry_id: 'e1',
+					song_title: 'First',
+					artist: 'Artist',
+					generation_number: 1,
+					audio_url: '/a.mp3'
+				},
+				{
+					entry_id: 'e2',
+					song_title: 'Second',
+					artist: 'Artist',
+					generation_number: 1,
+					audio_url: '/b.mp3'
+				}
+			]
+		});
+		expect(collectionSubtitle(view)).toBe('2 tracks');
+	});
+
+	it('shows artist and album for a song', () => {
+		const view = fromSharedSong({
+			title: 'Solo',
+			artist: 'Artist',
+			album_title: 'Album',
+			audio_url: '/a.mp3'
+		});
+		expect(collectionSubtitle(view)).toBe('Artist · Album');
+	});
+
+	it('shows artist, album, and take number for a take', () => {
+		const view = fromSharedGeneration({
+			title: 'Solo',
+			artist: 'Artist',
+			album_title: 'Album',
+			generation_number: 3,
+			seed: null,
+			audio_url: '/a.mp3'
+		});
+		expect(collectionSubtitle(view)).toBe('Artist · Album · take 3');
 	});
 });

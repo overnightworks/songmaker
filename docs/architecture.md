@@ -168,7 +168,11 @@ queueing — never written from `openCollection`.
 
 A collection interior (`AlbumDetailView` / `PlaylistDetailView`) shares one
 header, `CollectionHeader.svelte`: cover, title, subtitle, a primary Play
-action, and a single `…` menu (`CollectionMenu.svelte`). There is no visible
+action, and a single `…` menu (`CollectionMenu.svelte`). `CollectionHeader`
+itself is a thin wrapper around `CollectionHeaderFrame.svelte` — the
+presentational cover/Play markup with no store or auth coupling — so the
+share surface (below) can reuse the identical frame with a plain title in
+place of `EditableTitle`/`Breadcrumb`/`CollectionMenu`. There is no visible
 Share icon — the menu's first line names the object ("Album · <title>" /
 "Playlist · <title>"), then album entries are Share album · Cover… · Remove
 cover (only when a cover is set) · Rename · Add to playlist · Delete album,
@@ -195,7 +199,13 @@ straight back to that level (`openLibraryWall` / the open collection).
 
 `PlayerBar` is transport-only: prev/play/next, a 44px cover, title/subtitle,
 the seek bar, and a "Now Playing" word-button with an up-chevron that opens
-the existing `NowPlaying` overlay. `idlePlayTarget` (in `stores/player.ts`)
+the existing `NowPlaying` overlay. The transport chrome and visualizer live in `TransportBarFrame.svelte`, a
+presentational component driven by props plus the `audioPlayer` singleton
+directly (never a store) — `PlayerBar` supplies the app's idle-state copy,
+store-derived prev/next, and its own media-session position/playback-state
+wiring; the share surface's `SharedCollection.svelte` drives the same frame
+from its own `SharePlayback` owner instead, with no media-session wiring of
+its own. `idlePlayTarget` (in `stores/player.ts`)
 now takes the single `openCollection` instead of the old
 `albumId`/`songId`/`playlist` tuple, so a song open inside an album keeps
 that album as the idle Play target instead of falling back to the library
@@ -246,18 +256,56 @@ root.
 
 | Layer | What | Key files |
 |-------|------|-----------|
-| Routes | Pages: main view, login, setup, settings | `src/routes/` |
-| Components | Editor (`components/editor/`: `EditorHeader`, `SongMenu`, `RecipeChips`, `RecipePanel`, `EditorStacked`, `WriteColumn`, `TakeStrip`, `TakesList`, `TakeMenu`, `EditorSheet`), `ConfirmDialog` (generic Save/Discard/Cancel-style confirm), PlayerBar, `NowPlaying`/`NowPlayingQueue`/`NowPlayingTake`, LibraryWall, CollectionHeader/Menu, shell/Rail, CoWriterPanel, etc. | `src/lib/components/` |
+| Routes | Pages: main view, login, setup, settings, public share pages (`share/[slug]`, `share/playlist`/`song`/`gen`) | `src/routes/` |
+| Components | Editor (`components/editor/`: `EditorHeader`, `SongMenu`, `RecipeChips`, `RecipePanel`, `EditorStacked`, `WriteColumn`, `TakeStrip`, `TakesList`, `TakeMenu`, `EditorSheet`), `ConfirmDialog` (generic Save/Discard/Cancel-style confirm), PlayerBar/`TransportBarFrame`, `NowPlaying`/`NowPlayingFrame`/`NowPlayingQueue`/`NowPlayingTake`, LibraryWall, `CollectionHeader`/`CollectionHeaderFrame`/Menu, shell/Rail, CoWriterPanel, `components/share/` (`SharedCollection`, `SharedFooter`), etc. | `src/lib/components/` |
 | Stores | Reactive state: player, collection, libraryContext, navigation, editor, recipe, filter, jobs, auth, settings, ui | `src/lib/stores/` |
 | API client | Typed HTTP client, mirrors `songmaker_cli.api_models` | `src/lib/api/client.ts`, `types.ts` |
 
 The API client and `types.ts` are the frontend's contract with the backend. When `src/songmaker_cli/api_models/` changes, `types.ts` must match.
 
-Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new album/playlist, playlist-picker add) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). PlayerBar and SharedPlayer are out of this primitive's scope.
+Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new album/playlist, playlist-picker add) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). PlayerBar and the share surface's transport/Now Playing frames are out of this primitive's scope.
 
 A selected song stays on `SongDetailView`, which composes the `components/editor/` set (epic #98 slice 2). One header row (`EditorHeader`) is identical in every state: cover, editable title, and `SongMenu` (Share song / Rename / Add to playlist / Delete song) on the left; the two independent, stackable views `Co-Writer` and `Recipe` as toggles, a divider, and the single `Generate` action on the right — never a second toolbar row, never a duplicate model/count control next to Generate. `RecipeChips` (Model · Takes · BPM · Duration · Key · Voice · Seed · LM · DIT · Repaint) sit under the header and expand into `RecipePanel`'s Sound / Text / Reproduce groups with a Preset row on top; model, takes-per-generate, and any repaint/cover source are session state in `stores/recipe.ts`; version-scoped edits (lyrics, prompt, BPM, duration, key, generation params) stay in `stores/editor.ts`. Below that, `subscribeCompactLayout` (the same single switch used everywhere else) decides the Write/Takes layout: desktop shows `WriteColumn` and `TakesList` as two simultaneous columns with no tab switcher; compact shows a `Write | Takes` tab pair, defaulting to Takes. Turning on Co-Writer replaces the Write/Takes area with `WriteColumn`'s Co-Writer mode (Chat + Lyrics + a `TakeStrip` of ★/♥-badged takes side by side on desktop, Chat | Lyrics tabs with no take strip on mobile) regardless of the Write/Takes tab; on compact it opens as an `EditorSheet` instead, so the `Write | Takes` tabs stay reachable underneath. When Co-Writer and Recipe are both open on desktop, the full `RecipePanel` would push the chat column below the fold, so `RecipeChips`' expansion renders `EditorStacked` instead — one summary row per group (Sound/Text/Reproduce) with an "Edit" button that swaps in the full panel on demand. `TakesList` groups takes by version (newest first), shows a draft banner when the draft differs from the latest saved version, and a generating row while a `generate` job runs, labelled with the version actually generating (`song.version_count`, not the draft's next-version number); each take's `TakeMenu` (`role="menu"`, `data-escape-overlay`) opens with "Take · vN · k" as its first row, and each version group header has a "Delete version…" action (`handleDeleteVersion`, with its takes, behind a confirm). Clicking a take row plays it and opens Now Playing straight on its judging panel (`stores/player.ts#playTakeAndShowNowPlaying`; see the Now Playing section below). A take clicked from the Co-Writer `TakeStrip` always just plays — it never opens Now Playing. Generate is enabled from the draft (unsaved lyrics/prompt), not the last-saved song, so a freshly written song can generate before its first save; `handleSave` and `handleDeleteVersion` in `stores/editor.ts` fail loud (reject instead of swallowing) so a caller — Generate, the song menu's "Save version", or the unsaved-draft guard below — never proceeds past a failed save. Switching or leaving a song with a dirty draft (a rail row, previous/next, the breadcrumb, Escape, or the Library link — all routed through `stores/navigation.ts`) is guarded: the navigation is parked in `pendingDirtyNavigation` until `SongDetailView` resolves a Save / Discard / Cancel confirm (`ConfirmDialog.svelte`, a generic two-or-three-action dialog). `guardDirtyNavigation` in `stores/navigation.ts` is the sole gatekeeper for this — every entry point that changes `selectedSongId` (`selectSong`, `selectNeighborSong`, `backToCollection`, `openLibraryWall`, `revealPlayingSong`) routes through it rather than re-implementing the check inline. Browser Back/Forward is the one exception: `popstate` fires after the history entry has already changed, so there is no pending navigation left to cancel back into — a dirty draft is auto-saved instead before the popstate state is applied, with a failed save surfacing a toast but never blocking the already-committed navigation. Opening a song from the album interior (the track list, no song open yet) always pushes, since the visible surface changes from the list to the song editor. Once a song is open, selecting another song already inside the open collection (list clicks, previous/next) replaces the current song history entry and keeps the active Write/Takes tab; selecting a song outside the open collection (a search hit, a deep link) pushes, since the rail context changes with it. Back from the second track of an opened album therefore lands on the album, not the wall. Back leaves the song for the rail's open collection (`backToCollection`), or the wall if none is open. Go to song from Now Playing opens the song and pins the rail context to its album, then opens Takes on the playing generation. Take rows wrap pick/keep onto their own row so seed text does not paint under the rating. Settings and Admin use that same compact media: a one-control section/tab selector and stacked action rows, so every control stays reachable at 320px without sideways scroll.
 
-Now Playing (`NowPlaying.svelte`) is a full-screen surface over the transport-only player bar, opened from `PlayerBar`'s Now Playing button (which also closes the rail drawer) or by clicking a take row in `TakesList`, which opens it straight on the This-take judging panel instead of the Queue panel. Both paths flip the same `stores/player.ts` request state (`nowPlayingOpen`, `nowPlayingPanel`), read once by `NowPlaying` on mount since PlayerBar remounts it fresh on every open. Three columns at ≥1100px — cover/transport, static lyrics, a right panel toggling Queue / This take — stack into one column with the right panel as a bottom sheet below that width or on coarse pointers; the sheet seeds its open state from the requested panel once per mount, so a take-row click still lands on the This-take sheet instead of a closed trigger labelled "Queue". The Queue panel (`NowPlayingQueue.svelte`) renders `stores/player.ts#buildQueueViewModel`, a pure projection of the active queue context (library/album takes or a playlist's entries) into ordered rows labelled `vN · take k` with current/up-next; the pool trio `Picks → + Keeps → All takes` (`stores/playbackSettings.ts`, stored `keeps` migrates to `mix`) shows only for the library context. Clicking a row calls `jumpToQueueIndex`. The This-take panel (`NowPlayingTake.svelte`) is Now Playing's only write surface: pick/keep/rate/pin-seed route through `stores/takeActions.ts`, the single mutation owner for a take's judged state, shared with the editor's `TakesList`/`TakeMenu` via `contexts/generation-actions.ts#takeActionsFor`. "Use as reference" hands the take to `stores/recipe.ts`'s `pendingSource`, closes Now Playing, and navigates to the song (`stores/navigation.ts#revealPlayingSong`); `SongDetailView` only applies `pendingSource` once its `song_id` matches the song actually open, opening the Recipe panel on it as a repaint source, and drops it if the dirty-draft guard's confirm is cancelled instead of applying it to the song the user stayed on. It resolves the playing generation against `songList` component-locally (`$derived` + `$effect` calling `ensureGenerationsLoaded`) and stays absent until resolved. Sung-vs-lyrics deviations tokenise both texts with `utils/lyrics-normalize.ts` (the #45 contract) and diff them word-wise via `utils/diff.ts#computeDiffByKey`.
+Now Playing (`NowPlaying.svelte`) is a full-screen surface over the transport-only player bar, opened from `PlayerBar`'s Now Playing button (which also closes the rail drawer) or by clicking a take row in `TakesList`, which opens it straight on the This-take judging panel instead of the Queue panel. Both paths flip the same `stores/player.ts` request state (`nowPlayingOpen`, `nowPlayingPanel`), read once by `NowPlaying` on mount since PlayerBar remounts it fresh on every open. `NowPlaying` wraps `NowPlayingFrame.svelte` — the dialog shell, focus trap, cover/transport/shuffle column, and lyrics column, driven by props plus `audioPlayer` directly — and supplies its own two-tab (Queue / This take) right panel via a snippet; the share surface supplies a queue-only right panel to the same frame instead. Three columns at ≥1100px — cover/transport, static lyrics, the right panel — stack into one column with the right panel as a bottom sheet below that width or on coarse pointers; the sheet seeds its open state once per mount, so a take-row click still lands on the This-take sheet instead of a closed trigger labelled "Queue". The Queue panel (`NowPlayingQueue.svelte`, `pool`/`onChoosePool` optional so a non-library queue context can omit the pool trio) renders `stores/player.ts#buildQueueViewModel`, a pure projection of the active queue context (library/album takes or a playlist's entries) into ordered rows labelled `vN · take k` with current/up-next; the pool trio `Picks → + Keeps → All takes` (`stores/playbackSettings.ts`, stored `keeps` migrates to `mix`) shows only for the library context. Clicking a row calls `jumpToQueueIndex`. The This-take panel (`NowPlayingTake.svelte`) is Now Playing's only write surface: pick/keep/rate/pin-seed route through `stores/takeActions.ts`, the single mutation owner for a take's judged state, shared with the editor's `TakesList`/`TakeMenu` via `contexts/generation-actions.ts#takeActionsFor`. "Use as reference" hands the take to `stores/recipe.ts`'s `pendingSource`, closes Now Playing, and navigates to the song (`stores/navigation.ts#revealPlayingSong`); `SongDetailView` only applies `pendingSource` once its `song_id` matches the song actually open, opening the Recipe panel on it as a repaint source, and drops it if the dirty-draft guard's confirm is cancelled instead of applying it to the song the user stayed on. It resolves the playing generation against `songList` component-locally (`$derived` + `$effect` calling `ensureGenerationsLoaded`) and stays absent until resolved. Sung-vs-lyrics deviations tokenise both texts with `utils/lyrics-normalize.ts` (the #45 contract) and diff them word-wise via `utils/diff.ts#computeDiffByKey`.
+
+The public share pages (`/share/[slug]`, `/share/playlist/[slug]`,
+`/share/song/[slug]`, `/share/gen/[slug]`) render on the same collection
+surface as the logged-in app instead of a hand-rolled listening UI: each
+`+page.svelte` fetches its `/shared/*` payload, adapts it with
+`lib/share/sharedCollection.ts` (`fromSharedAlbum`/`fromSharedPlaylist`/
+`fromSharedSong`/`fromSharedGeneration` → one `SharedCollectionView`; a song
+or take share becomes a one-track collection; `playableTracks()` drops rows
+whose `audio_url` is `null` — a listener sees a finished album, not disabled
+"--" rows), and renders `lib/components/share/SharedCollection.svelte`. That
+component composes `CollectionHeaderFrame` (read-only, no `…` menu),
+`TransportBarFrame`, and `NowPlayingFrame` with a queue-only right panel, plus
+`SharedFooter.svelte` (Powered by · Impressum · Datenschutz ·
+Nutzungsbedingungen, its `LegalContent` overlay carrying `aria-modal` for the
+Escape contract above). Playback is owned by `lib/share/sharePlayback.svelte.ts`
+(`SharePlayback`), never `stores/player.ts` — a `share-import-boundary.test.ts`
+grep gate enforces that nothing under `lib/share/`, `lib/components/share/`,
+or the four share routes runtime-imports `stores/player`, `navigation`,
+`editor`, `takeActions`, or `auth`. `SharePlayback` drives the shared
+`audioPlayer` singleton directly: stream mode reuses `audioPlayer.loadStream()`
+against a manifest the page fetches (`fetchSharedAlbumStream`/
+`fetchSharedPlaylistStream`; song/take shares have no stream endpoint and stay
+classic), classic per-track playback uses `audioPlayer.loadUrl(info, url)` —
+the URL-owning sibling of `load()` that lets classic share recovery/probing
+work against a `/shared/.../audio/...` URL instead of the app's
+`/audio/{mp3_path}` convention. `SharePlayback.start()` installs its own
+`AudioPlayerCallbacks` via `audioPlayer.swapCallbacks()` (`onAuthLost: null`,
+`onCurrentChange` only resyncing its own queue position — never the app's
+media-session metadata or `windowEnded` store) and `stop()` calls
+`audioPlayer.restoreCallbacks()` then `audioPlayer.unload()`, so a logged-in
+tab that navigates into a share route and back never carries share state (or
+loses the app's callbacks) into the app. Shuffle on share is share-local
+(never touches `queueShuffleEnabled`) and, per product decision, switches
+playback to per-track `loadUrl` over a shuffled permutation while enabled,
+returning to stream mode when disabled. Classic-mode rows show no duration
+and Now Playing shows the no-lyrics empty state — an accepted gap tracked by
+issue #128 to add `audio_duration`/`lyrics`/`generation_id` to the share
+payloads.
 
 ### Backend (`src/songmaker_cli/`)
 
