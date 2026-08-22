@@ -14,7 +14,6 @@
 		NOW_PLAYING_RATING_SAVING,
 		NOW_PLAYING_SCORES_EMPTY,
 		NOW_PLAYING_SCORES_LABEL,
-		NOW_PLAYING_SUNG_ROW_LABEL,
 		NOW_PLAYING_UNKEEP_LABEL,
 		NOW_PLAYING_UNPICK_LABEL
 	} from '$lib/constants/now-playing';
@@ -91,57 +90,64 @@
 		return entries;
 	});
 
-	interface DeviationRow {
-		lyricsLine: string | null;
-		sungLine: string | null;
+	interface DeviationToken {
+		text: string;
+		kind: 'same' | 'changed' | 'missing';
+		lyricsText?: string;
 	}
 
 	const STRUCTURAL_LINE = /^\[[^\]]+\]$/;
 
-	// The whisper transcript is a plain sung transcription: it never contains
-	// the lyrics text's blank paragraph breaks or [Verse]/[Chorus] markers.
-	// Left in, computeDiff's line-level comparison flags nearly every lyrics
-	// line as "removed" against those artifacts alone, drowning out the sung
-	// deviations that actually matter. Dropping them from both sides before
-	// diffing compares only lines that could plausibly have been sung.
-	function normalizeForDiff(text: string): string {
+	// computeDiff works line by line. The whisper transcript is a plain sung
+	// transcription with its own line breaks (or none) — it shares neither the
+	// lyrics text's line wrapping nor its blank paragraph breaks and
+	// [Verse]/[Chorus] markers. Comparing whole lines against that would
+	// flag nearly every lyrics line as "removed" without ever finding the
+	// sung line it corresponds to. Tokenizing both texts into one word per
+	// line first — after dropping the lines-only artifacts — reuses the same
+	// line-diff function at word granularity, where a real sung deviation
+	// (a substituted, skipped, or added word) is actually visible.
+	function tokenizeWords(text: string): string {
 		return text
 			.split('\n')
 			.map((line) => line.trim())
 			.filter((line) => line.length > 0 && !STRUCTURAL_LINE.test(line))
+			.join(' ')
+			.split(/\s+/)
+			.filter(Boolean)
 			.join('\n');
 	}
 
-	function pairDeviations(diffLines: DiffLine[]): DeviationRow[] {
-		const rows: DeviationRow[] = [];
+	function buildDeviationTokens(diffLines: DiffLine[]): DeviationToken[] {
+		const tokens: DeviationToken[] = [];
 		let i = 0;
 		while (i < diffLines.length) {
 			const line = diffLines[i];
 			if (line.type === 'same') {
+				tokens.push({ text: line.text, kind: 'same' });
 				i++;
-				continue;
-			}
-			if (line.type === 'remove' && diffLines[i + 1]?.type === 'add') {
-				rows.push({ lyricsLine: line.text, sungLine: diffLines[i + 1].text });
+			} else if (line.type === 'remove' && diffLines[i + 1]?.type === 'add') {
+				tokens.push({ text: diffLines[i + 1].text, kind: 'changed', lyricsText: line.text });
 				i += 2;
 			} else if (line.type === 'remove') {
-				rows.push({ lyricsLine: line.text, sungLine: null });
+				tokens.push({ text: line.text, kind: 'missing' });
 				i++;
 			} else {
-				rows.push({ lyricsLine: null, sungLine: line.text });
+				tokens.push({ text: line.text, kind: 'changed' });
 				i++;
 			}
 		}
-		return rows;
+		return tokens;
 	}
 
 	const hasTranscript = $derived(Boolean(lyrics && generation.whisper_text));
-	const deviationRows = $derived.by((): DeviationRow[] => {
+	const deviationTokens = $derived.by((): DeviationToken[] => {
 		if (!lyrics || !generation.whisper_text) return [];
-		return pairDeviations(
-			computeDiff(normalizeForDiff(lyrics), normalizeForDiff(generation.whisper_text))
+		return buildDeviationTokens(
+			computeDiff(tokenizeWords(lyrics), tokenizeWords(generation.whisper_text))
 		);
 	});
+	const hasDeviations = $derived(deviationTokens.some((token) => token.kind !== 'same'));
 
 	let ratingValue = $state(50);
 	let ratingNotes = $state('');
@@ -233,26 +239,19 @@
 		<h4 class="section-title">{NOW_PLAYING_DEVIATIONS_LABEL}</h4>
 		{#if !hasTranscript}
 			<p class="empty-note">{NOW_PLAYING_DEVIATIONS_UNAVAILABLE}</p>
-		{:else if deviationRows.length === 0}
+		{:else if !hasDeviations}
 			<p class="empty-note">{NOW_PLAYING_DEVIATIONS_EMPTY}</p>
 		{:else}
-			<ul class="deviation-list">
-				{#each deviationRows as row, index (index)}
-					<li class="deviation-row">
-						{#if row.lyricsLine != null}
-							<span class="deviation-line lyrics-line"
-								><span class="deviation-tag">{NOW_PLAYING_LYRICS_ROW_LABEL}</span
-								>{row.lyricsLine}</span
-							>
-						{/if}
-						{#if row.sungLine != null}
-							<span class="deviation-line sung-line"
-								><span class="deviation-tag">{NOW_PLAYING_SUNG_ROW_LABEL}</span>{row.sungLine}</span
-							>
-						{/if}
-					</li>
-				{/each}
-			</ul>
+			<p class="deviation-text">
+				{#each deviationTokens as token, index (index)}<span
+						class="dev-token"
+						class:changed={token.kind === 'changed'}
+						class:missing={token.kind === 'missing'}
+						title={token.lyricsText
+							? `${NOW_PLAYING_LYRICS_ROW_LABEL}: ${token.lyricsText}`
+							: undefined}>{token.text}</span
+					>{/each}
+			</p>
 		{/if}
 	</section>
 
@@ -381,41 +380,29 @@
 		font-family: var(--font-display);
 		color: var(--text);
 	}
-	.deviation-list {
-		list-style: none;
+	.deviation-text {
 		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-	}
-	.deviation-row {
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-		padding: 0.5rem 0.6rem;
+		padding: 0.6rem 0.7rem;
 		background: var(--surface);
 		border-radius: 4px;
 		font-family: 'Courier New', monospace;
-		font-size: 0.78rem;
-	}
-	.deviation-line {
+		font-size: 0.8rem;
+		line-height: 1.8;
+		color: var(--text-muted);
 		overflow-wrap: anywhere;
 	}
-	.deviation-tag {
-		display: inline-block;
-		min-width: 3.6rem;
-		color: var(--text-subtle);
-		font-family: var(--font-display);
-		font-size: 0.6rem;
-		text-transform: uppercase;
-		letter-spacing: 0.4px;
+	.dev-token {
+		margin-right: 0.3em;
 	}
-	.lyrics-line {
-		color: var(--text-muted);
-	}
-	.sung-line {
+	.dev-token.changed {
 		color: #f44;
+		text-decoration: underline dotted;
+		text-underline-offset: 2px;
+		cursor: help;
+	}
+	.dev-token.missing {
+		color: var(--text-subtle);
+		text-decoration: line-through;
 	}
 	.rating-row {
 		display: flex;

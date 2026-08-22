@@ -20,7 +20,6 @@ export const NOW_PLAYING_DEVIATIONS_LABEL = 'Sung vs. lyrics';
 export const NOW_PLAYING_DEVIATIONS_EMPTY = 'Sung text matches the lyrics';
 export const NOW_PLAYING_DEVIATIONS_UNAVAILABLE = 'No transcript to compare against yet';
 export const NOW_PLAYING_LYRICS_ROW_LABEL = 'Lyrics';
-export const NOW_PLAYING_SUNG_ROW_LABEL = 'Sung';
 
 export const NOW_PLAYING_PICK_LABEL = 'Pick';
 export const NOW_PLAYING_UNPICK_LABEL = 'Unpick';

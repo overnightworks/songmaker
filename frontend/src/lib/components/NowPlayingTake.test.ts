@@ -106,13 +106,17 @@ describe('NowPlayingTake', () => {
 		expect(target.textContent).toContain('No scores yet');
 	});
 
-	it('shows deviation rows only when the sung transcript differs from the lyrics', async () => {
+	it('highlights only the sung word that differs from the lyrics word at that position', async () => {
 		await render({
 			lyrics: 'die Luft schmeckt weit',
 			generation: generation({ whisper_text: 'die Luft schmeckt breit' })
 		});
-		expect(target.textContent).toContain('schmeckt weit');
-		expect(target.textContent).toContain('schmeckt breit');
+		const tokens = Array.from(target.querySelectorAll('.dev-token'));
+		expect(tokens.map((el) => el.textContent)).toEqual(['die', 'Luft', 'schmeckt', 'breit']);
+		const changed = target.querySelector('.dev-token.changed');
+		expect(changed?.textContent).toBe('breit');
+		expect(changed?.getAttribute('title')).toBe('Lyrics: weit');
+		expect(target.querySelectorAll('.dev-token.changed, .dev-token.missing')).toHaveLength(1);
 	});
 
 	it('ignores blank lines and [Section] markers, which are never sung', async () => {
