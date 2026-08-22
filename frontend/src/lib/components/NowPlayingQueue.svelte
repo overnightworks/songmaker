@@ -31,8 +31,8 @@
 		queue: QueueViewModel;
 		contextLabel: string | null;
 		currentSongTitle: string;
-		pool: LibraryTakePool;
-		onChoosePool: (pool: LibraryTakePool) => void;
+		pool?: LibraryTakePool;
+		onChoosePool?: (pool: LibraryTakePool) => void;
 		onJump: (index: number) => void;
 		skipped?: QueueStreamSkipItem[];
 		skippedComplete?: boolean;
@@ -54,7 +54,7 @@
 							class="pool-pill"
 							class:on={pool === option}
 							aria-pressed={pool === option}
-							onclick={() => onChoosePool(option)}
+							onclick={() => onChoosePool?.(option)}
 						>
 							{LIBRARY_TAKE_POOL_LABELS[option]}
 						</button>
