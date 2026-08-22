@@ -83,5 +83,7 @@ describe('PlaylistDetailView header', () => {
 		expect(actions?.textContent).not.toMatch(/\bShuffle\b/);
 		expect(target.querySelector('[aria-label="Delete Playlist"]')).not.toBeNull();
 		expect(target.textContent).toContain('Tide');
+		expect(target.querySelector('.cover-hero .cover-initials')?.textContent).toBe('ND');
+		expect(target.querySelector('.cover-file-input')).toBeNull();
 	});
 });

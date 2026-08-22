@@ -21,6 +21,7 @@
 		loadSavedOfflinePlaylist,
 		type StreamProgress
 	} from '$lib/services/offline';
+	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_ART_INITIAL_COUNT } from '$lib/constants';
 	import ActionButton from './ActionButton.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import Icon from './Icon.svelte';
@@ -28,6 +29,23 @@
 
 	const playlistDetail = $derived($selectedPlaylistDetail);
 	let reorderBusy = $state(false);
+	const initials = $derived(
+		playlistDetail ? playlistTitleInitials(playlistDetail.title) : ALBUM_ART_EMPTY_INITIALS
+	);
+
+	function playlistTitleInitials(title: string): string {
+		const trimmed = title.trim();
+		if (!trimmed) return ALBUM_ART_EMPTY_INITIALS;
+		const words = trimmed.split(/\s+/);
+		if (words.length === 1) {
+			const letters = Array.from(words[0]).slice(0, ALBUM_ART_INITIAL_COUNT).join('');
+			return letters.toUpperCase() || ALBUM_ART_EMPTY_INITIALS;
+		}
+		const first = Array.from(words[0])[0];
+		const second = Array.from(words[1])[0];
+		if (!first) return ALBUM_ART_EMPTY_INITIALS;
+		return `${first}${second ?? ''}`.toUpperCase();
+	}
 
 	async function onPlaylistShareEnable() {
 		if (!playlistDetail) throw new Error('No playlist');
@@ -214,17 +232,22 @@
 {#if playlistDetail}
 	<div class="detail-panel">
 		<div class="detail-header">
-			<div>
-				<h2 class="detail-title">
-					<EditableTitle
-						value={playlistDetail.title}
-						onsave={onPlaylistRename}
-						ariaLabel="Playlist title"
-					/>
-				</h2>
-				<span class="detail-subtitle">
-					{playlistDetail.entries.length} track{playlistDetail.entries.length !== 1 ? 's' : ''}
-				</span>
+			<div class="detail-identity">
+				<div class="cover-hero">
+					<span class="cover-fallback cover-initials" aria-hidden="true">{initials}</span>
+				</div>
+				<div class="detail-titles">
+					<h2 class="detail-title">
+						<EditableTitle
+							value={playlistDetail.title}
+							onsave={onPlaylistRename}
+							ariaLabel="Playlist title"
+						/>
+					</h2>
+					<span class="detail-subtitle">
+						{playlistDetail.entries.length} track{playlistDetail.entries.length !== 1 ? 's' : ''}
+					</span>
+				</div>
 			</div>
 			<div class="detail-actions">
 				{#if offlineSavedStreamUrl}
@@ -381,6 +404,44 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	.detail-identity {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.detail-titles {
+		min-width: 0;
+	}
+
+	.cover-hero {
+		position: relative;
+		width: 4.5rem;
+		height: 4.5rem;
+		flex-shrink: 0;
+		overflow: hidden;
+		background: var(--surface-hover);
+	}
+
+	.cover-fallback {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.cover-initials {
+		font-family: var(--font-display);
+		font-size: 1.1rem;
+		letter-spacing: 0.06em;
+		user-select: none;
 	}
 
 	.detail-title {
@@ -608,6 +669,11 @@
 		.detail-header {
 			flex-direction: column;
 			gap: 0.5rem;
+		}
+
+		.cover-hero {
+			width: 3.5rem;
+			height: 3.5rem;
 		}
 
 		.detail-actions {

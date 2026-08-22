@@ -66,6 +66,7 @@ vi.mock('$lib/api/client', () => ({
 import {
 	albumIsExpanded,
 	applyLibraryHistory,
+	browseTrackAlbumId,
 	captureLibraryScroll,
 	closeSharesView,
 	detailTab,
@@ -255,11 +256,18 @@ describe('library history snapshot', () => {
 			songOffset: 200,
 			albumId: 'a1',
 			songId: 's1',
+			browseTrackAlbumId: null,
 			expandedAlbumIds: ['a1'],
 			scrollAnchor: 240,
 			detailTab: 'generations'
 		});
 		expect(isLibraryHistoryState(snap)).toBe(true);
+	});
+
+	it('accepts older history blobs without browseTrackAlbumId', () => {
+		const { browseTrackAlbumId: _browse, ...withoutBrowse } = libraryRootState();
+		expect(_browse).toBeNull();
+		expect(isLibraryHistoryState(withoutBrowse)).toBe(true);
 	});
 
 	it('rejects unknown history payloads instead of guessing a section', () => {
@@ -620,15 +628,30 @@ describe('library history snapshot', () => {
 			query: 'x',
 			sort: 'oldest' as const,
 			songId: 's1',
+			browseTrackAlbumId: 'a1',
 			scrollAnchor: 12
 		};
 		const browse = libraryBrowseStateFrom(next);
 		expect(browse.songId).toBeNull();
 		expect(browse.albumId).toBeNull();
+		expect(browse.browseTrackAlbumId).toBeNull();
 		expect(browse.section).toBe('playlists');
 		expect(browse.query).toBe('x');
 		expect(browse.sort).toBe('oldest');
 		expect(browse.scrollAnchor).toBe(12);
+	});
+
+	it('restores Studio album track browse after visiting Listen', () => {
+		selectedAlbumId.set('a1');
+		selectedSongId.set('s1');
+		browseTrackAlbumId.set('a2');
+		librarySurface.set('detail');
+		setLibrarySection('playlists');
+		expect(get(browseTrackAlbumId)).toBeNull();
+		setLibrarySection('albums');
+		expect(get(browseTrackAlbumId)).toBe('a2');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedAlbumId)).toBe('a1');
 	});
 });
 

@@ -1,19 +1,21 @@
 <script lang="ts">
 	import AgeStamp from './AgeStamp.svelte';
 	import SongNode from './SongNode.svelte';
-	import type { SongItem, AlbumItem } from '$lib/api/types';
+	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_ART_INITIAL_COUNT,
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUMS_LOADING,
-		LIBRARY_RETRY_LABEL
+		LIBRARY_RETRY_LABEL,
+		PLAYLIST_COVER_ALT_TYPE
 	} from '$lib/constants';
 	import type { AlbumSongsLoadState } from '$lib/stores/player';
 	import { hexToRgb } from '$lib/utils/contrast';
 
 	interface Props {
-		album: AlbumItem;
+		album?: AlbumItem;
+		playlist?: PlaylistItem;
 		songs?: SongItem[];
 		expanded?: boolean;
 		selected: boolean;
@@ -26,6 +28,7 @@
 
 	let {
 		album,
+		playlist,
 		songs = [],
 		expanded = false,
 		selected,
@@ -36,9 +39,17 @@
 		onretry
 	}: Props = $props();
 
-	const artFill = $derived(usableAlbumPrimary(album.colors));
-	const initials = $derived(albumTitleInitials(album.title));
-	const coverUrl = $derived(album.cover?.card ?? null);
+	const cardTitle = $derived(album?.title ?? playlist?.title ?? '');
+	const cardArtist = $derived(album?.artist ?? '');
+	const cardCount = $derived(album?.song_count ?? playlist?.entry_count ?? 0);
+	const cardCreatedAt = $derived(album?.created_at ?? playlist?.created_at ?? '');
+	const cardColors = $derived(album?.colors ?? {});
+	const cardCover = $derived(album?.cover ?? null);
+	const collectionKind = $derived(album ? 'album' : 'playlist');
+	const coverAltType = $derived(album ? ALBUM_COVER_ALT_TYPE : PLAYLIST_COVER_ALT_TYPE);
+	const artFill = $derived(usableAlbumPrimary(cardColors));
+	const initials = $derived(albumTitleInitials(cardTitle));
+	const coverUrl = $derived(cardCover?.card ?? null);
 	let coverFailed = $state(false);
 
 	$effect(() => {
@@ -47,7 +58,7 @@
 	});
 
 	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
-	const coverAlt = $derived(`${ALBUM_COVER_ALT_TYPE} ${album.title}`);
+	const coverAlt = $derived(`${coverAltType} ${cardTitle}`);
 
 	function usableAlbumPrimary(colors: Record<string, string>): string | null {
 		const primary = colors.primary;
@@ -83,6 +94,7 @@
 		class="album-card"
 		class:album-hit={variant === 'hit'}
 		class:selected
+		data-collection-kind={collectionKind}
 		onclick={onselect}
 	>
 		{#if showCover && coverUrl}
@@ -95,17 +107,17 @@
 			<span class="album-art album-art-initials" aria-hidden="true">{initials}</span>
 		{/if}
 		<span class="album-text">
-			<span class="album-title">{album.title}</span>
-			{#if album.artist}
-				<span class="album-artist">{album.artist}</span>
+			<span class="album-title">{cardTitle}</span>
+			{#if cardArtist}
+				<span class="album-artist">{cardArtist}</span>
 			{/if}
 		</span>
 		{#if showCreatedAge}
 			<span class="album-age">
-				<AgeStamp createdAt={album.created_at} named />
+				<AgeStamp createdAt={cardCreatedAt} named />
 			</span>
 		{/if}
-		<span class="album-count">{album.song_count}</span>
+		<span class="album-count">{cardCount}</span>
 	</button>
 
 	{#if expanded}

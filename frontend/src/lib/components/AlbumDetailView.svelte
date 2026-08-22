@@ -43,12 +43,18 @@
 	import ShareButton from './ShareButton.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
+	interface Props {
+		albumId?: string;
+	}
+
+	let { albumId }: Props = $props();
+
 	let playlistPickerFor = $state<string | null>(null);
 	let showDeleteConfirm = $state(false);
 
 	const albums = $derived($albumList);
 	const allSongs = $derived($songList);
-	const currentAlbumId = $derived($selectedAlbumId);
+	const currentAlbumId = $derived(albumId ?? $selectedAlbumId);
 
 	const selectedAlbum = $derived(
 		currentAlbumId ? (albums.find((a) => a.id === currentAlbumId) ?? null) : null

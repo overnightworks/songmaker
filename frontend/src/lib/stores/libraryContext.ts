@@ -56,6 +56,7 @@ export interface LibraryHistoryState {
 	songId: string | null;
 	generationId: string | null;
 	playlistId: string | null;
+	browseTrackAlbumId?: string | null;
 	expandedAlbumIds: string[];
 	scrollAnchor: number;
 	detailTab?: DetailTab;
@@ -66,6 +67,7 @@ export const librarySurface = writable<LibrarySurface>('browse');
 export const detailTab = writable<DetailTab>('generations');
 export const expandedAlbumIds = writable<ReadonlySet<string>>(new Set());
 export const libraryScrollAnchor = writable(0);
+export const browseTrackAlbumId = writable<string | null>(null);
 
 const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail', 'create']);
 const DETAIL_TABS: ReadonlySet<DetailTab> = new Set(['generations', 'edit', 'chat']);
@@ -112,6 +114,9 @@ export function isLibraryHistoryState(value: unknown): value is LibraryHistorySt
 	if (!isIdOrNull(state.songId)) return false;
 	if (!isIdOrNull(state.generationId)) return false;
 	if (!isIdOrNull(state.playlistId)) return false;
+	if (state.browseTrackAlbumId !== undefined && !isIdOrNull(state.browseTrackAlbumId)) {
+		return false;
+	}
 	if (!Array.isArray(state.expandedAlbumIds)) return false;
 	if (!state.expandedAlbumIds.every((id) => typeof id === 'string')) return false;
 	if (state.detailTab !== undefined && !isDetailTab(state.detailTab)) return false;
@@ -134,6 +139,7 @@ export function libraryRootState(): LibraryHistoryState {
 		songId: null,
 		generationId: null,
 		playlistId: null,
+		browseTrackAlbumId: null,
 		expandedAlbumIds: [],
 		scrollAnchor: 0,
 		detailTab: 'generations'
@@ -148,7 +154,8 @@ export function libraryBrowseStateFrom(state: LibraryHistoryState): LibraryHisto
 		albumId: null,
 		songId: null,
 		generationId: null,
-		playlistId: null
+		playlistId: null,
+		browseTrackAlbumId: null
 	};
 }
 
@@ -178,6 +185,7 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 		songId: get(selectedSongId),
 		generationId: get(selectedGenerationId),
 		playlistId: get(selectedPlaylistId),
+		browseTrackAlbumId: get(browseTrackAlbumId),
 		expandedAlbumIds: [...get(expandedAlbumIds)],
 		scrollAnchor: get(libraryScrollAnchor),
 		detailTab: get(detailTab)
@@ -204,6 +212,7 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	selectedAlbumId.set(state.albumId);
 	selectedSongId.set(state.songId);
 	selectedGenerationId.set(state.generationId);
+	browseTrackAlbumId.set(state.browseTrackAlbumId ?? null);
 	if (state.playlistId) {
 		try {
 			await loadPlaylistDetail(state.playlistId);
@@ -230,7 +239,11 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	await hydrateSelectedResources(state, generation);
 	if (generation !== historyApplyGeneration) return false;
 	const albumIds = [
-		...new Set([...(state.albumId ? [state.albumId] : []), ...state.expandedAlbumIds])
+		...new Set([
+			...(state.albumId ? [state.albumId] : []),
+			...(state.browseTrackAlbumId ? [state.browseTrackAlbumId] : []),
+			...state.expandedAlbumIds
+		])
 	];
 	if (albumIds.length > 0) {
 		await Promise.all(albumIds.map((albumId) => loadSongsForAlbum(albumId)));
@@ -423,6 +436,7 @@ export function resetLibraryContextForTests(): void {
 	detailTab.set('generations');
 	expandedAlbumIds.set(new Set());
 	libraryScrollAnchor.set(0);
+	browseTrackAlbumId.set(null);
 	libraryScrollBySection.set({ ...EMPTY_SECTION_SCROLL });
 	modeBags = { ...EMPTY_MODE_BAGS };
 }
