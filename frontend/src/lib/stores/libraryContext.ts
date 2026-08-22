@@ -34,7 +34,10 @@ import { CREATED_SORTS } from '$lib/utils/recency';
 // whichever collection is currently open; 'create' shows the create form.
 // Song detail always wins over all three (see routes/+page.svelte).
 export type LibrarySurface = 'browse' | 'detail' | 'create';
-export type DetailTab = 'generations' | 'edit' | 'chat';
+// Editor tabs (epic #98): 'write' hosts style/lyrics (and Co-Writer mode),
+// 'takes' lists generations. Superseded the pre-#100 'generations'|'edit'|'chat'
+// trio; LEGACY_DETAIL_TAB_MAP below keeps old persisted history entries valid.
+export type DetailTab = 'write' | 'takes';
 
 type CollectionSnapshot = OpenCollection | null;
 
@@ -58,11 +61,16 @@ export interface LibraryHistoryState {
 
 export const libraryFilter = writable<LibraryFilter>(LIBRARY_DEFAULT_FILTER);
 export const librarySurface = writable<LibrarySurface>('browse');
-export const detailTab = writable<DetailTab>('generations');
+export const detailTab = writable<DetailTab>('takes');
 export const libraryScrollAnchor = writable(0);
 
 const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail', 'create']);
-const DETAIL_TABS: ReadonlySet<DetailTab> = new Set(['generations', 'edit', 'chat']);
+const DETAIL_TABS: ReadonlySet<DetailTab> = new Set(['write', 'takes']);
+const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
+	generations: 'takes',
+	edit: 'write',
+	chat: 'write'
+};
 const FILTERS: ReadonlySet<string> = new Set(['albums', 'playlists', 'shared']);
 
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
@@ -95,7 +103,7 @@ export function isLibraryHistoryState(value: unknown): value is LibraryHistorySt
 	if (!isCollectionSnapshot(state.collection)) return false;
 	if (!isIdOrNull(state.songId)) return false;
 	if (!isIdOrNull(state.generationId)) return false;
-	if (state.detailTab !== undefined && !isDetailTab(state.detailTab)) return false;
+	if (state.detailTab !== undefined && !isDetailTabToken(state.detailTab)) return false;
 	return true;
 }
 
@@ -115,7 +123,7 @@ export function libraryRootState(): LibraryHistoryState {
 		songId: null,
 		generationId: null,
 		scrollAnchor: 0,
-		detailTab: 'generations'
+		detailTab: 'takes'
 	};
 }
 
@@ -169,7 +177,7 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
-	detailTab.set(state.detailTab ?? 'generations');
+	detailTab.set(normalizeDetailTab(state.detailTab));
 	libraryScrollAnchor.set(state.scrollAnchor);
 	selectedSongId.set(state.songId);
 	selectedGenerationId.set(state.generationId);
@@ -343,7 +351,7 @@ export function resetLibraryContextForTests(): void {
 	historyApplyGeneration += 1;
 	libraryFilter.set(LIBRARY_DEFAULT_FILTER);
 	librarySurface.set('browse');
-	detailTab.set('generations');
+	detailTab.set('takes');
 	libraryScrollAnchor.set(0);
 	libraryScrollByFilter.set({ ...EMPTY_FILTER_SCROLL });
 	setOpenCollection(null);
@@ -360,6 +368,18 @@ function isLibrarySurface(value: unknown): value is LibrarySurface {
 
 function isDetailTab(value: unknown): value is DetailTab {
 	return typeof value === 'string' && DETAIL_TABS.has(value as DetailTab);
+}
+
+function isDetailTabToken(value: unknown): boolean {
+	return typeof value === 'string' && (isDetailTab(value) || value in LEGACY_DETAIL_TAB_MAP);
+}
+
+function normalizeDetailTab(value: unknown): DetailTab {
+	if (isDetailTab(value)) return value;
+	if (typeof value === 'string' && value in LEGACY_DETAIL_TAB_MAP) {
+		return LEGACY_DETAIL_TAB_MAP[value];
+	}
+	return 'takes';
 }
 
 function isIdOrNull(value: unknown): value is string | null {

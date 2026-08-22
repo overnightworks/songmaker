@@ -119,22 +119,22 @@ function showStatus(msg: string): void {
 	statusTimeout = setTimeout(() => status.set(''), 3000);
 }
 
-// --- Diff state ---
-export const diffBase = writable<VersionItem | null>(null);
-export const diffTarget = writable<VersionItem | null>(null);
+// --- Applied-diff state ---
+// The version-pair compare (former VersionTimeline double-click, diffBase /
+// diffTarget) is dropped per epic #98 decision 3. What remains is the
+// Co-Writer "applied changes" banner: handleApply stages a proposed edit as
+// a before/after pair so the editor can show what changed.
 export const appliedDiffBase = writable<VersionItem | null>(null);
 export const appliedDiffTarget = writable<VersionItem | null>(null);
 
-export const diffMode = derived([diffBase, diffTarget], ([$b, $t]) => $b !== null && $t !== null);
 export const appliedDiffMode = derived(
 	[appliedDiffBase, appliedDiffTarget],
 	([$b, $t]) => $b !== null && $t !== null
 );
 
 export const activeDiff = derived(
-	[diffBase, diffTarget, appliedDiffBase, appliedDiffTarget],
-	([$db, $dt, $ab, $at]): { old: VersionItem; new: VersionItem } | null => {
-		if ($db && $dt) return { old: $db, new: $dt };
+	[appliedDiffBase, appliedDiffTarget],
+	([$ab, $at]): { old: VersionItem; new: VersionItem } | null => {
 		if ($ab && $at) return { old: $ab, new: $at };
 		return null;
 	}
@@ -223,16 +223,6 @@ export async function handleDeleteVersion(
 		else loadSongData(updated);
 	} catch {
 		showStatus('Delete failed');
-	}
-}
-
-export function handleDiffChange(pair: [VersionItem, VersionItem] | null): void {
-	if (pair) {
-		diffBase.set(pair[0]);
-		diffTarget.set(pair[1]);
-	} else {
-		diffBase.set(null);
-		diffTarget.set(null);
 	}
 }
 

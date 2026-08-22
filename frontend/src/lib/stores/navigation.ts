@@ -308,11 +308,11 @@ export function switchTab(tab: DetailTab): void {
 }
 
 export function openRecipeSurface(): void {
-	detailTab.set('edit');
+	detailTab.set('write');
 }
 
 export function openTakesSurface(): void {
-	detailTab.set('generations');
+	detailTab.set('takes');
 }
 
 export async function revealPlayingSong(song: SongItem, generationId: string): Promise<void> {

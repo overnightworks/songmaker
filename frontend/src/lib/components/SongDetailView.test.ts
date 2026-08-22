@@ -6,6 +6,11 @@ import type { AlbumItem, GenerationItem, SongItem, VersionGenerationParams } fro
 import {
 	ALBUM_COVER_ALT_TYPE,
 	COMPACT_LAYOUT_MEDIA,
+	EDITOR_GENERATE_LABEL,
+	EDITOR_TAB_TAKES_LABEL,
+	EDITOR_TAB_WRITE_LABEL,
+	EDITOR_VIEW_COWRITER_LABEL,
+	EDITOR_VIEW_RECIPE_LABEL,
 	HITBOX_FREQUENT_PX,
 	LIBRARY_NARROW_MEDIA,
 	SONG_COVER_ALT_TYPE,
@@ -13,16 +18,7 @@ import {
 	SONG_COVER_REPLACE_LABEL,
 	SONG_COVER_UPLOAD_LABEL,
 	SONG_NEXT_LABEL,
-	SONG_PREVIOUS_LABEL,
-	SONG_SPLIT_PANE_GAP_PX,
-	SONG_SPLIT_PANE_MIN_PX,
-	SONG_SURFACE_COWRITER,
-	SONG_SURFACE_RECIPE,
-	SONG_SURFACE_TAKES,
-	TAKE_AGAIN_LABEL,
-	TAKE_AUDIO_COVER_LABEL,
-	TAKE_REPAINT_LABEL,
-	canSplitSongPanes
+	SONG_PREVIOUS_LABEL
 } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import { editGenParams, pinnedSeed } from '$lib/stores/editor';
@@ -42,7 +38,7 @@ import {
 	songList
 } from '$lib/stores/player';
 import { clearSelection, toggleSelection } from '$lib/stores/selection';
-import { pendingSource } from '$lib/stores/source';
+import { pendingSource, recipeModel, recipeOpen, coWriterOpen } from '$lib/stores/recipe';
 
 const fetchAlbum = vi.fn();
 const uploadSongCover = vi.fn();
@@ -186,9 +182,9 @@ async function renderView(options: { widthPx?: number } = {}): Promise<HTMLEleme
 	return target;
 }
 
-function tablist(target: HTMLElement): HTMLElement {
-	const el = target.querySelector<HTMLElement>('[role="tablist"]');
-	if (!el) throw new Error('Expected Recipe | Takes switch');
+function header(target: HTMLElement): HTMLElement {
+	const el = target.querySelector<HTMLElement>('.detail-header');
+	if (!el) throw new Error('Expected the Editor header row');
 	return el;
 }
 
@@ -264,6 +260,9 @@ beforeEach(() => {
 	resetNavigationForTests();
 	pendingSource.set(null);
 	pinnedSeed.set(null);
+	recipeOpen.set(false);
+	coWriterOpen.set(false);
+	recipeModel.set(null);
 	clearSelection();
 	songList.set([song()]);
 	selectedSongId.set('s1');
@@ -281,6 +280,8 @@ afterEach(async () => {
 	resetNavigationForTests();
 	pendingSource.set(null);
 	pinnedSeed.set(null);
+	recipeOpen.set(false);
+	coWriterOpen.set(false);
 	clearSelection();
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
@@ -291,40 +292,72 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 });
 
-describe('SongDetailView recipe and takes', () => {
-	it('exposes Recipe | Takes and does not treat Co-Writer as a peer tab', async () => {
+describe('SongDetailView header — one row, every state', () => {
+	it('shows Co-Writer/Recipe toggles stacked and Generate alone, never a second toolbar row', async () => {
 		const target = await renderView();
-		const switchText = tablist(target).textContent ?? '';
-		expect(switchText).toContain(SONG_SURFACE_RECIPE);
-		expect(switchText).toContain(SONG_SURFACE_TAKES);
-		expect(switchText).not.toContain(SONG_SURFACE_COWRITER);
-		expect(target.querySelector('.recipe-pane.hidden')).not.toBeNull();
-		expect(target.querySelector('.takes-pane.hidden')).toBeNull();
+		const actions = header(target).querySelector<HTMLElement>('.editor-header-actions');
+		if (!actions) throw new Error('Expected header actions');
+		expect(visibleText(actions)).toContain(EDITOR_VIEW_COWRITER_LABEL);
+		expect(visibleText(actions)).toContain(EDITOR_VIEW_RECIPE_LABEL);
+		expect(target.querySelectorAll('.generate-btn')).toHaveLength(1);
+		expect(target.querySelector('.generate-btn')?.textContent).toContain(EDITOR_GENERATE_LABEL);
+	});
 
-		clickNamed(tablist(target), SONG_SURFACE_RECIPE);
+	it('toggles the Recipe panel independently of the Write/Takes content', async () => {
+		const target = await renderView();
+		expect(target.querySelector('.recipe-panel')).toBeNull();
+		clickNamed(header(target), EDITOR_VIEW_RECIPE_LABEL);
 		await tick();
-		expect(get(detailTab)).toBe('edit');
-		expect(target.querySelector('.recipe-pane.hidden')).toBeNull();
-		expect(target.querySelector('.takes-pane.hidden')).not.toBeNull();
-		expect(target.querySelector('.generate-btn')).not.toBeNull();
-		expect(tablist(target).textContent).not.toContain(SONG_SURFACE_COWRITER);
-		expect(target.querySelector('.cowriter-open')?.textContent).toContain(SONG_SURFACE_COWRITER);
+		expect(get(recipeOpen)).toBe(true);
+		expect(target.querySelector('.recipe-panel')).not.toBeNull();
+	});
 
-		clickNamed(target, SONG_SURFACE_COWRITER);
+	it('switches the Write column into Co-Writer mode without hiding the header', async () => {
+		const target = await renderView();
+		clickNamed(header(target), EDITOR_VIEW_COWRITER_LABEL);
 		await tick();
 		await Promise.resolve();
 		await tick();
-		expect(target.querySelector('.cowriter-layer.open')).not.toBeNull();
-		expect(tablist(target).querySelectorAll('[role="tab"]')).toHaveLength(2);
+		expect(get(coWriterOpen)).toBe(true);
+		expect(target.querySelector('.cowriter-mode')).not.toBeNull();
+		expect(target.querySelector('.detail-header')).not.toBeNull();
+	});
+});
+
+describe('SongDetailView desktop vs compact layout', () => {
+	it('shows Write and Takes as two simultaneous columns on desktop, no tab switcher', async () => {
+		const target = await renderView();
+		expect(target.querySelector('.editor-columns')).not.toBeNull();
+		expect(target.querySelector('[role="tablist"]')).toBeNull();
+		expect(target.querySelector('.lyrics-area')).not.toBeNull();
+		expect(target.querySelector('.takes-column')).not.toBeNull();
 	});
 
-	it('keeps the take inspector in the song workspace', async () => {
+	it('shows Write | Takes tabs and only one at a time when compact, defaulting to Takes', async () => {
+		stubLibraryMedia({ narrow: false, compact: true });
+		const target = await renderView();
+		const tablist = target.querySelector('[role="tablist"]');
+		expect(tablist?.textContent).toContain(EDITOR_TAB_WRITE_LABEL);
+		expect(tablist?.textContent).toContain(EDITOR_TAB_TAKES_LABEL);
+		expect(target.querySelector('.editor-columns')).toBeNull();
+		expect(get(detailTab)).toBe('takes');
+		expect(target.querySelector('.lyrics-area')).toBeNull();
+		expect(target.querySelector('.takes-list, .empty')).not.toBeNull();
+
+		clickNamed(target, EDITOR_TAB_WRITE_LABEL);
+		await tick();
+		expect(get(detailTab)).toBe('write');
+		expect(target.querySelector('.lyrics-area')).not.toBeNull();
+		expect(target.querySelector('.takes-list')).toBeNull();
+	});
+});
+
+describe('SongDetailView recipe and takes', () => {
+	it('keeps the take inspector as a modal over the workspace', async () => {
 		selectedGenerationId.set('g1');
 		const target = await renderView();
 		expect(visibleText(target)).toContain('Local Only');
-		expect(visibleText(target)).toContain('Take 1');
-		expect(target.querySelector('.back-btn')).toBeNull();
-		expect(tablist(target).textContent).toContain(SONG_SURFACE_RECIPE);
+		expect(target.querySelector('.inspector-modal')).not.toBeNull();
 		expect(target.querySelector('.inspector')).not.toBeNull();
 
 		const closeBtn = target.querySelector<HTMLButtonElement>('.inspector .close-btn');
@@ -332,48 +365,22 @@ describe('SongDetailView recipe and takes', () => {
 		closeBtn.click();
 		await tick();
 		expect(get(selectedGenerationId)).toBeNull();
-		expect(get(detailTab)).toBe('generations');
-		expect(target.querySelector('.inspector')).toBeNull();
-		expect(tablist(target)).not.toBeNull();
+		expect(target.querySelector('.inspector-modal')).toBeNull();
 	});
 
-	it('lands pendingSource, Again, and Repaint on Recipe', async () => {
+	it('lands a picked-up source in the Recipe panel', async () => {
 		const target = await renderView();
-		expect(get(detailTab)).toBe('generations');
+		expect(get(recipeOpen)).toBe(false);
 
 		pendingSource.set({ generation: generation(), mode: 'repaint' });
 		await tick();
 		await tick();
-		expect(get(detailTab)).toBe('edit');
-		expect(target.querySelector('.recipe-pane.hidden')).toBeNull();
-		expect(target.textContent).toContain('Source: Gen #1');
-		expect(target.querySelector('.generate-btn')).not.toBeNull();
-
-		clickNamed(tablist(target), SONG_SURFACE_TAKES);
+		expect(get(recipeOpen)).toBe(true);
+		clickNamed(header(target), EDITOR_VIEW_RECIPE_LABEL);
 		await tick();
-		clickNamed(target, TAKE_AGAIN_LABEL);
+		clickNamed(header(target), EDITOR_VIEW_RECIPE_LABEL);
 		await tick();
-		expect(get(detailTab)).toBe('edit');
-		expect(get(pinnedSeed)).toBe(7);
-		expect(get(editGenParams)).toEqual({ inference_steps: 8, guidance_scale: 1.5 });
-		expect(target.querySelector('.pinned-seed')?.textContent).toContain('seed:7');
-		expect(target.textContent).not.toContain('Source: Gen #1');
-
-		clickNamed(tablist(target), SONG_SURFACE_TAKES);
-		await tick();
-		clickNamed(target, TAKE_REPAINT_LABEL);
-		await tick();
-		expect(get(detailTab)).toBe('edit');
-		expect(target.textContent).toContain('Source: Gen #1');
-		expect(target.querySelector('.mode-btn.active')?.textContent).toContain(TAKE_REPAINT_LABEL);
-
-		clickNamed(tablist(target), SONG_SURFACE_TAKES);
-		await tick();
-		clickNamed(target, TAKE_AUDIO_COVER_LABEL);
-		await tick();
-		expect(get(detailTab)).toBe('edit');
-		expect(target.textContent).toContain('Source: Gen #1');
-		expect(target.querySelector('.mode-btn.active')?.textContent).toContain('Cover');
+		expect(get(recipeOpen)).toBe(true);
 	});
 
 	it('keeps draft params when Again has no reusable take params', async () => {
@@ -385,38 +392,14 @@ describe('SongDetailView recipe and takes', () => {
 		]);
 		const target = await renderView();
 		expect(get(editGenParams)).toEqual({ inference_steps: 12, guidance_scale: 2 });
-		clickNamed(target, TAKE_AGAIN_LABEL);
+		const takeMenuBtn = target.querySelector<HTMLButtonElement>('.overflow-btn');
+		takeMenuBtn?.click();
 		await tick();
-		expect(get(detailTab)).toBe('edit');
+		clickNamed(target, 'Again');
+		await tick();
 		expect(get(pinnedSeed)).toBe(11);
 		expect(get(editGenParams)).toEqual({ inference_steps: 12, guidance_scale: 2 });
-		expect(target.querySelector('.pinned-seed')?.textContent).toContain('seed:11');
-	});
-
-	it('closes Co-Writer when leaving Recipe in stacked mode', async () => {
-		const target = await renderView();
-		clickNamed(tablist(target), SONG_SURFACE_RECIPE);
-		await tick();
-		clickNamed(target, SONG_SURFACE_COWRITER);
-		await tick();
-		await Promise.resolve();
-		await tick();
-		expect(target.querySelector('.cowriter-layer.open')).not.toBeNull();
-		expect(target.querySelector('.cowriter-sheet')?.getAttribute('aria-modal')).toBe('true');
-
-		document.body.tabIndex = 0;
-		document.body.focus();
-		const trapped = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
-		window.dispatchEvent(trapped);
-		expect(trapped.defaultPrevented).toBe(true);
-
-		clickNamed(tablist(target), SONG_SURFACE_TAKES);
-		await tick();
-		expect(target.querySelector('.cowriter-layer.open')).toBeNull();
-
-		clickNamed(tablist(target), SONG_SURFACE_RECIPE);
-		await tick();
-		expect(target.querySelector('.cowriter-layer.open')).toBeNull();
+		expect(get(recipeOpen)).toBe(true);
 	});
 
 	it('clears the inspector when bulk delete includes the inspected take', async () => {
@@ -424,7 +407,7 @@ describe('SongDetailView recipe and takes', () => {
 		persistLibraryHistory();
 		expect(history.state.generationId).toBe('g1');
 		const target = await renderView();
-		expect(target.querySelector('.inspector')).not.toBeNull();
+		expect(target.querySelector('.inspector-modal')).not.toBeNull();
 		toggleSelection('g1');
 		await tick();
 		clickNamed(target, 'Delete Selected');
@@ -433,109 +416,13 @@ describe('SongDetailView recipe and takes', () => {
 		await tick();
 		expect(get(selectedGenerationId)).toBeNull();
 		expect(history.state.generationId).toBeNull();
-		expect(target.querySelector('.inspector')).toBeNull();
-	});
-});
-
-describe('song workbench split', () => {
-	let restorePanesRect: (() => void) | undefined;
-
-	function stubDesktopPanes(width: number): { setWidth: (next: number) => void } {
-		document.documentElement.dataset.pointer = 'fine';
-		vi.stubGlobal(
-			'matchMedia',
-			vi.fn((query: string) => ({
-				matches: false,
-				media: query,
-				onchange: null,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				addListener: vi.fn(),
-				removeListener: vi.fn(),
-				dispatchEvent: vi.fn()
-			}))
-		);
-		const observers: ResizeObserverCallback[] = [];
-		vi.stubGlobal(
-			'ResizeObserver',
-			class {
-				constructor(cb: ResizeObserverCallback) {
-					observers.push(cb);
-				}
-				observe() {}
-				disconnect() {}
-				unobserve() {}
-			}
-		);
-		let panesWidth = width;
-		const original = HTMLElement.prototype.getBoundingClientRect;
-		restorePanesRect?.();
-		HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
-			if (this.classList.contains('panes')) {
-				return new DOMRect(0, 0, panesWidth, 100);
-			}
-			return original.call(this);
-		};
-		restorePanesRect = () => {
-			HTMLElement.prototype.getBoundingClientRect = original;
-		};
-		return {
-			setWidth: (next: number) => {
-				panesWidth = next;
-				for (const cb of observers) {
-					cb([], {} as ResizeObserver);
-				}
-			}
-		};
-	}
-
-	afterEach(() => {
-		restorePanesRect?.();
-		restorePanesRect = undefined;
-	});
-
-	it('splits only when both panes can be 360px after the gap', () => {
-		const min = SONG_SPLIT_PANE_MIN_PX * 2 + SONG_SPLIT_PANE_GAP_PX;
-		expect(canSplitSongPanes(SONG_SPLIT_PANE_MIN_PX * 2)).toBe(false);
-		expect(canSplitSongPanes(min - 1)).toBe(false);
-		expect(canSplitSongPanes(min)).toBe(true);
-	});
-
-	it('shows Recipe and Takes side by side only when the panes box fits both columns', async () => {
-		const min = SONG_SPLIT_PANE_MIN_PX * 2 + SONG_SPLIT_PANE_GAP_PX;
-		const panes = stubDesktopPanes(min - 1);
-		const target = await renderView();
-		expect(target.querySelector('.detail-panel.split')).toBeNull();
-		expect(tablist(target)).not.toBeNull();
-
-		panes.setWidth(min);
-		await tick();
-		expect(target.querySelector('.detail-panel.split')).not.toBeNull();
-		expect(target.querySelector('[role="tablist"]')).toBeNull();
-	});
-
-	it('does not make split Co-Writer a modal or tab trap', async () => {
-		stubDesktopPanes(SONG_SPLIT_PANE_MIN_PX * 2 + SONG_SPLIT_PANE_GAP_PX);
-		const target = await renderView();
-		expect(target.querySelector('.detail-panel.split')).not.toBeNull();
-		clickNamed(target, SONG_SURFACE_COWRITER);
-		await tick();
-		await Promise.resolve();
-		await tick();
-		expect(target.querySelector('.cowriter-layer.open')).not.toBeNull();
-		expect(target.querySelector('.cowriter-sheet')?.getAttribute('aria-modal')).toBe('false');
-
-		document.body.tabIndex = 0;
-		document.body.focus();
-		const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
-		window.dispatchEvent(tab);
-		expect(tab.defaultPrevented).toBe(false);
+		expect(target.querySelector('.inspector-modal')).toBeNull();
 	});
 });
 
 describe('recipe params from a take', () => {
 	it('copies reusable params on Again', async () => {
-		const { recipeParamsFromTake } = await import('$lib/stores/source');
+		const { recipeParamsFromTake } = await import('$lib/stores/recipe');
 		const params: VersionGenerationParams = recipeParamsFromTake({
 			inference_steps: 8,
 			guidance_scale: 1.5,
@@ -617,15 +504,15 @@ describe('song header album rail', () => {
 		expect(next.disabled).toBe(true);
 	});
 
-	it('replaces the song and keeps Recipe when next is clicked', async () => {
-		stubLibraryMedia({ narrow: true });
+	it('replaces the song and keeps the Write tab when next is clicked', async () => {
+		stubLibraryMedia({ narrow: true, compact: true });
 		const songs = albumSongs();
 		albumList.set([album()]);
 		songList.set(songs);
 		selectedSongId.set('s1');
 		const cleanup = initNavigation();
 		selectSong('s1');
-		switchTab('edit');
+		switchTab('write');
 		const index = history.state.index;
 		const push = vi.spyOn(history, 'pushState');
 		const target = await renderView();
@@ -636,7 +523,7 @@ describe('song header album rail', () => {
 		expect(push).not.toHaveBeenCalled();
 		expect(history.state.index).toBe(index);
 		expect(get(selectedSongId)).toBe('s-last');
-		expect(get(detailTab)).toBe('edit');
+		expect(get(detailTab)).toBe('write');
 		push.mockRestore();
 		cleanup();
 	});
@@ -649,11 +536,11 @@ describe('song header album rail', () => {
 		songList.set(albumSongs().map((item) => ({ ...item, album_title: longAlbumTitle })));
 		selectedSongId.set('s1');
 		const target = await renderView({ widthPx: 320 });
-		const header = target.querySelector('.detail-header');
+		const headerEl = target.querySelector('.detail-header');
 		const rail = target.querySelector('.song-rail');
 		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
 		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
-		if (!(header instanceof HTMLElement) || !(rail instanceof HTMLElement) || !prev || !next) {
+		if (!(headerEl instanceof HTMLElement) || !(rail instanceof HTMLElement) || !prev || !next) {
 			throw new Error('Expected header song rail');
 		}
 		const albumCrumb = Array.from(rail.querySelectorAll('.crumb-link')).find(
@@ -662,7 +549,7 @@ describe('song header album rail', () => {
 		expect(albumCrumb).toBeDefined();
 		expect(px(getComputedStyle(prev).minWidth)).toBe(HITBOX_FREQUENT_PX);
 		expect(px(getComputedStyle(next).minWidth)).toBe(HITBOX_FREQUENT_PX);
-		expect(header.scrollWidth).toBeLessThanOrEqual(320);
+		expect(headerEl.scrollWidth).toBeLessThanOrEqual(320);
 		expect(rail.scrollWidth).toBeLessThanOrEqual(320);
 	});
 
@@ -685,11 +572,11 @@ describe('song header album rail', () => {
 		const cleanup = initNavigation();
 		selectSong('s1');
 		const target = await renderView();
-		const album = Array.from(target.querySelectorAll<HTMLButtonElement>('.crumb-link')).find(
+		const albumBtn = Array.from(target.querySelectorAll<HTMLButtonElement>('.crumb-link')).find(
 			(el) => el.textContent === 'Local Album'
 		);
-		if (!album) throw new Error('Expected album control');
-		album.click();
+		if (!albumBtn) throw new Error('Expected album control');
+		albumBtn.click();
 		await tick();
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(selectedAlbumId)).toBe('a-local');

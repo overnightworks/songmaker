@@ -35,7 +35,6 @@ import {
 	loadVersion,
 	handleSave,
 	handleDeleteVersion,
-	handleDiffChange,
 	handleApply,
 	dismissAppliedDiff
 } from './editor';
@@ -226,22 +225,6 @@ describe('handleDeleteVersion', () => {
 		await handleDeleteVersion('s1', 'v1', false);
 
 		expect(get(status)).toBe('Delete failed');
-	});
-});
-
-describe('handleDiffChange', () => {
-	it('sets diff when pair provided', () => {
-		const v1 = makeVersion();
-		const v2 = makeVersion({ id: 'v2', version_number: 2 });
-		handleDiffChange([v1, v2]);
-		const diff = get(activeDiff);
-		expect(diff?.old.id).toBe('v1');
-		expect(diff?.new.id).toBe('v2');
-	});
-
-	it('clears diff when null', () => {
-		handleDiffChange(null);
-		expect(get(activeDiff)).toBeNull();
 	});
 });
 

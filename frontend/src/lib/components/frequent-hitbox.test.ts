@@ -14,7 +14,6 @@ import {
 	PLAYLIST_ENTRY_MOVE_UP_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL
 } from '$lib/constants';
-import { GENERATION_ACTIONS_KEY, type GenerationActions } from '$lib/contexts/generation-actions';
 import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
@@ -106,7 +105,6 @@ vi.mock('$lib/stores/auth', async (importOriginal) => {
 
 import { removeFromPlaylist, reorderPlaylistEntry } from '$lib/api/client';
 import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
-import GenerationsList from './GenerationsList.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
 import LibraryWall from './LibraryWall.svelte';
@@ -118,8 +116,6 @@ type PointerKind = 'coarse' | 'fine';
 
 const INVENTORY = [
 	{ name: 'theme-toggle', selector: '[data-hitbox="frequent"][aria-label="Toggle theme"]' },
-	{ name: 'pick', selector: '.pick-btn[data-hitbox="frequent"]' },
-	{ name: 'keep', selector: '.keep-btn[data-hitbox="frequent"]' },
 	{
 		name: 'playlist-move-up',
 		selector: '.entry-overflow-item[data-hitbox="frequent"]',
@@ -143,8 +139,6 @@ const INVENTORY = [
 ] as const;
 
 const mounted: Array<ReturnType<typeof mount>> = [];
-const pick = vi.fn();
-const keep = vi.fn();
 
 function setPointer(kind: PointerKind): void {
 	document.documentElement.dataset.pointer = kind;
@@ -309,22 +303,6 @@ function playlistDetail(): PlaylistDetailItem {
 	};
 }
 
-function mockActions(): GenerationActions {
-	return {
-		score: vi.fn(),
-		pick,
-		keep,
-		del: vi.fn(),
-		rate: vi.fn(async () => undefined),
-		share: vi.fn(async () => ({ status: 'ok', share_url: '', share_slug: '' })),
-		unshare: vi.fn(async () => undefined),
-		addToPlaylist: vi.fn(async () => undefined),
-		pinSeed: vi.fn(),
-		clickVersion: vi.fn(),
-		useAsSource: vi.fn()
-	};
-}
-
 function requireButton(
 	root: ParentNode,
 	name: string,
@@ -344,8 +322,6 @@ function openEntryOverflowMenu(row: HTMLElement): void {
 }
 
 beforeEach(() => {
-	pick.mockReset();
-	keep.mockReset();
 	const sheet = document.createElement('style');
 	sheet.dataset.hitboxStyles = 'true';
 	sheet.textContent = hitboxCss;
@@ -409,7 +385,6 @@ const layoutChildren = createRawSnippet(() => ({
 
 interface RenderedInventory {
 	root: HTMLElement;
-	genRoot: HTMLElement;
 	playlistPickerOnClose: ReturnType<typeof vi.fn>;
 }
 
@@ -418,23 +393,15 @@ async function renderInventory(): Promise<RenderedInventory> {
 	document.body.append(root);
 
 	const themeTarget = document.createElement('div');
-	const genTarget = document.createElement('div');
 	const playlistTarget = document.createElement('div');
 	const songTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
 	const layoutTarget = document.createElement('div');
-	root.append(themeTarget, genTarget, playlistTarget, songTarget, pickerTarget, layoutTarget);
+	root.append(themeTarget, playlistTarget, songTarget, pickerTarget, layoutTarget);
 
 	const playlistPickerOnClose = vi.fn();
 
 	mounted.push(mount(ThemeToggle, { target: themeTarget }));
-	mounted.push(
-		mount(GenerationsList, {
-			target: genTarget,
-			props: { song: song(), onselect: vi.fn() },
-			context: new Map([[GENERATION_ACTIONS_KEY, mockActions()]])
-		})
-	);
 	mounted.push(mount(PlaylistDetailView, { target: playlistTarget }));
 	mounted.push(mount(LibraryWall, { target: songTarget, props: { oncreate: vi.fn() } }));
 	mounted.push(
@@ -449,7 +416,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 	await tick();
 	toggleSidebar();
 	await tick();
-	return { root, genRoot: genTarget, playlistPickerOnClose };
+	return { root, playlistPickerOnClose };
 }
 
 describe('frequent action hitboxes', () => {
@@ -497,9 +464,7 @@ describe('frequent action hitboxes', () => {
 			expect(box.height, `${name} coarse height`).toBe(HITBOX_FREQUENT_PX);
 		}
 
-		const siblingGroups: Array<Array<{ name: string; el: HTMLButtonElement }>> = [
-			found.filter((item) => item.name === 'pick' || item.name === 'keep')
-		];
+		const siblingGroups: Array<Array<{ name: string; el: HTMLButtonElement }>> = [];
 		siblingGroups.push([
 			{
 				name: 'playlist-move-up',
@@ -559,10 +524,8 @@ describe('frequent action hitboxes', () => {
 		expect(fine.height).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 	});
 
-	it('keeps pick, keep, reorder, and remove on the same button hitbox for pointer and keyboard', async () => {
+	it('keeps reorder and remove on the same button hitbox for pointer and keyboard', async () => {
 		const { root } = await renderInventory();
-		const pickBtn = requireButton(root, 'pick', '.pick-btn[data-hitbox="frequent"]');
-		const keepBtn = requireButton(root, 'keep', '.keep-btn[data-hitbox="frequent"]');
 		const secondRow = root.querySelectorAll('.entry-row')[1];
 		if (!(secondRow instanceof HTMLElement)) {
 			throw new Error('Second Track row is missing');
@@ -588,11 +551,6 @@ describe('frequent action hitboxes', () => {
 			PLAYLIST_ENTRY_REMOVE_LABEL
 		);
 		const themeBtn = requireButton(root, 'theme-toggle', '[aria-label="Toggle theme"]');
-
-		pickBtn.click();
-		expect(pick).toHaveBeenCalledWith('g1', true);
-		keepBtn.click();
-		expect(keep).toHaveBeenCalledWith('g1', true);
 
 		upBtn.focus();
 		expect(document.activeElement).toBe(upBtn);
@@ -664,21 +622,6 @@ describe('Escape yields to an open popover before the global one-level-up shortc
 		await tick();
 
 		expect(playlistPickerOnClose).toHaveBeenCalledTimes(1);
-		expect(openLibraryWall).not.toHaveBeenCalled();
-		expect(backToCollection).not.toHaveBeenCalled();
-	});
-
-	it('closes the take overflow menu and does not run the global one-level-up navigation', async () => {
-		const { genRoot } = await renderInventory();
-		const overflowBtn = requireButton(genRoot, 'take-overflow', '.overflow-btn');
-		overflowBtn.click();
-		await tick();
-		expect(genRoot.querySelector('.overflow-menu')).not.toBeNull();
-
-		pressEscape();
-		await tick();
-
-		expect(genRoot.querySelector('.overflow-menu')).toBeNull();
 		expect(openLibraryWall).not.toHaveBeenCalled();
 		expect(backToCollection).not.toHaveBeenCalled();
 	});

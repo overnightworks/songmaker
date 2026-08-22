@@ -55,7 +55,6 @@
 		versions?: VersionItem[];
 		catalogLoading?: boolean;
 		visible?: boolean;
-		onclose?: () => void;
 		onturncompleted?: () => void;
 	}
 
@@ -67,7 +66,6 @@
 		versions = [],
 		catalogLoading = false,
 		visible = true,
-		onclose,
 		onturncompleted
 	}: Props = $props();
 
@@ -536,9 +534,6 @@
 		</div>
 		<div class="header-actions">
 			<button class="new-btn" onclick={startNew} aria-label="New conversation">+ New</button>
-			{#if onclose}
-				<button type="button" class="close-btn" onclick={onclose} aria-label="Close">Close</button>
-			{/if}
 		</div>
 	</div>
 
@@ -659,7 +654,6 @@
 		flex-direction: column;
 		height: 100%;
 		max-height: 100%;
-		border-left: 1px solid var(--border);
 		background: var(--bg);
 	}
 
@@ -835,21 +829,6 @@
 	.new-btn:hover {
 		background: var(--primary);
 		color: #fff;
-	}
-
-	.close-btn {
-		background: none;
-		border: 1px solid var(--border);
-		color: var(--text-muted);
-		padding: 2px 10px;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		cursor: pointer;
-	}
-
-	.close-btn:hover {
-		border-color: var(--primary);
-		color: var(--text);
 	}
 
 	.history-loading {
