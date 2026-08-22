@@ -395,6 +395,9 @@ describe('stream playback', () => {
 	it('advances and resumes when the stream audio element ends', () => {
 		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
 		fakeAudio.fire('loadedmetadata');
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('play');
+		fakeAudio.playMock.mockClear();
 
 		fakeAudio.fire('ended');
 
@@ -723,6 +726,40 @@ describe('toggle / play / pause', () => {
 		expect(fakeAudio.playMock).not.toHaveBeenCalled();
 	});
 
+	it('play while loading queues until canplay and does not throw', () => {
+		expect(audioPlayer.status).toBe('loading');
+		expect(() => audioPlayer.play()).not.toThrow();
+		expect(fakeAudio.playMock).not.toHaveBeenCalled();
+		fakeAudio.fire('canplay');
+		expect(fakeAudio.playMock).toHaveBeenCalled();
+	});
+
+	it('play then pause while loading cancels queued play', () => {
+		audioPlayer.play();
+		audioPlayer.pause();
+		fakeAudio.fire('canplay');
+		expect(fakeAudio.playMock).not.toHaveBeenCalled();
+	});
+
+	it('repeated play while loading still queues', () => {
+		audioPlayer.play();
+		audioPlayer.play();
+		fakeAudio.fire('canplay');
+		expect(fakeAudio.playMock).toHaveBeenCalled();
+	});
+
+	it('play while buffering queues until canplay', () => {
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('play');
+		fakeAudio.playMock.mockClear();
+		fakeAudio.fire('waiting');
+		expect(audioPlayer.status).toBe('buffering');
+		audioPlayer.play();
+		expect(fakeAudio.playMock).not.toHaveBeenCalled();
+		fakeAudio.fire('canplay');
+		expect(fakeAudio.playMock).toHaveBeenCalled();
+	});
+
 	it('toggle in error state retries (via play→reload)', async () => {
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
 		fakeAudio.fire('error');
@@ -749,6 +786,7 @@ describe('toggle / play / pause', () => {
 	});
 
 	it('NotAllowedError on autoplay sets paused with helpful error', async () => {
+		fakeAudio.fire('canplay');
 		fakeAudio.playMock.mockReset();
 		fakeAudio.playMock.mockImplementation(() =>
 			Promise.reject(Object.assign(new Error('autoplay blocked'), { name: 'NotAllowedError' }))
@@ -760,6 +798,7 @@ describe('toggle / play / pause', () => {
 	});
 
 	it('AbortError on play is silently ignored', async () => {
+		fakeAudio.fire('canplay');
 		fakeAudio.playMock.mockReset();
 		fakeAudio.playMock.mockImplementation(() =>
 			Promise.reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
@@ -770,6 +809,7 @@ describe('toggle / play / pause', () => {
 	});
 
 	it('non-Error rejection on play falls through to media error path', async () => {
+		fakeAudio.fire('canplay');
 		fakeAudio.playMock.mockReset();
 		fakeAudio.playMock.mockImplementation(() => Promise.reject('plain string'));
 		audioPlayer.play();
