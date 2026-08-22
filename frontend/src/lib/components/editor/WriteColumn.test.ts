@@ -15,13 +15,10 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchVersions: vi.fn().mockResolvedValue([])
 	};
 });
-vi.mock('$lib/stores/player', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/player')>();
-	return { ...actual, playLibraryFromGeneration: vi.fn().mockResolvedValue(undefined) };
-});
-
 import { editLyrics, loadSongData, setDraftLyrics } from '$lib/stores/editor';
-import { playLibraryFromGeneration } from '$lib/stores/player';
+import { nowPlayingOpen } from '$lib/stores/player';
+import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import WriteColumn from './WriteColumn.svelte';
 
@@ -147,14 +144,39 @@ describe('WriteColumn Co-Writer mode', () => {
 	});
 
 	it('plays a take from the strip on click without opening Now Playing', async () => {
-		const gen = generation({ id: 'g9' });
-		const { target } = await render({
-			coWriterOpen: true,
-			song: song({ generations: [gen] })
+		// Classic mode makes playTake's audioPlayer.load call synchronous and
+		// deterministic — no library-pool API round trip to mock. Asserting on
+		// audioPlayer (the real playback boundary) instead of a re-exported
+		// player.ts function exercises TakeStrip's actual entry point,
+		// playTake, rather than stubbing it out from under the click handler.
+		// The spy is scoped and restored locally so it never bleeds into the
+		// module-level $lib/api/client mocks the other tests in this file rely
+		// on being set once at module load.
+		setQueuePlaybackMode('classic');
+		const loadSpy = vi.spyOn(audioPlayer, 'load').mockImplementation((info) => {
+			audioPlayer.current = info;
 		});
-		target.querySelector<HTMLButtonElement>('.take-chip')?.click();
-		await tick();
-		await Promise.resolve();
-		expect(playLibraryFromGeneration).toHaveBeenCalledWith(gen);
+		try {
+			const gen = generation({ id: 'g9' });
+			const targetSong = song({ generations: [gen] });
+			const { target } = await render({
+				coWriterOpen: true,
+				song: targetSong
+			});
+			target.querySelector<HTMLButtonElement>('.take-chip')?.click();
+			await tick();
+			await Promise.resolve();
+			expect(audioPlayer.load).toHaveBeenCalledWith(
+				expect.objectContaining({
+					generation: expect.objectContaining({ id: gen.id }),
+					songId: targetSong.id
+				}),
+				expect.objectContaining({ restart: true })
+			);
+			expect(get(nowPlayingOpen)).toBe(false);
+		} finally {
+			loadSpy.mockRestore();
+			audioPlayer.current = null;
+		}
 	});
 });
