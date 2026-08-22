@@ -1,13 +1,33 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SongItem } from '$lib/api/types';
+import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
+import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import EditorHeader from './EditorHeader.svelte';
 
+function px(value: string): number {
+	const resolved = value.startsWith('var(')
+		? getComputedStyle(document.documentElement)
+				.getPropertyValue(value.slice('var('.length, -1).trim())
+				.trim()
+		: value;
+	return Number.parseFloat(resolved);
+}
+
 const mounted: Array<ReturnType<typeof mount>> = [];
+
+beforeEach(() => {
+	const sheet = document.createElement('style');
+	sheet.dataset.hitboxStyles = 'true';
+	sheet.textContent = hitboxCss;
+	document.head.append(sheet);
+});
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
+	delete document.documentElement.dataset.pointer;
 });
 
 function song(overrides: Partial<SongItem> = {}): SongItem {
@@ -49,6 +69,7 @@ function defaultProps() {
 		coverBusy: false,
 		coverActionLabel: 'Upload song cover',
 		onrenamesong: vi.fn(async () => undefined),
+		onsaveversion: vi.fn(),
 		oncoverfile: vi.fn(),
 		oncoverremove: vi.fn(),
 		oncovererror: vi.fn(),
@@ -136,6 +157,31 @@ describe('EditorHeader', () => {
 		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Song · Sommerlicht');
+	});
+
+	it('sizes the view toggles to the frequent hitbox on a coarse pointer', async () => {
+		const { target } = await render();
+		const toggle = target.querySelector<HTMLButtonElement>('.view-toggle');
+		if (!toggle) throw new Error('Expected a view toggle button');
+		document.documentElement.dataset.pointer = 'coarse';
+		const coarse = getComputedStyle(toggle);
+		expect(px(coarse.minWidth)).toBe(HITBOX_FREQUENT_PX);
+		expect(px(coarse.minHeight)).toBe(HITBOX_FREQUENT_PX);
+		document.documentElement.dataset.pointer = 'fine';
+		const fine = getComputedStyle(toggle);
+		expect(px(fine.minWidth)).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+	});
+
+	it('saves a version from the song menu', async () => {
+		const onsaveversion = vi.fn();
+		const { target } = await render({ onsaveversion });
+		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		await tick();
+		const item = Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
+			(el) => el.textContent?.trim() === 'Save version'
+		);
+		item?.click();
+		expect(onsaveversion).toHaveBeenCalledTimes(1);
 	});
 
 	it('moves Generate to a fixed bottom bar and drops it from the header row in compact mode', async () => {

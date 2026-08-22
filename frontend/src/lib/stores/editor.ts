@@ -7,7 +7,6 @@ import {
 } from '$lib/api/client';
 import { replaceSongInList, selectedSongId } from '$lib/stores/player';
 import type { SongItem, VersionGenerationParams, VersionItem } from '$lib/api/types';
-import type { ApplyData } from '$lib/utils/chat-context';
 
 export interface SongData {
 	lyrics: string;
@@ -64,6 +63,8 @@ export const isDirty = derived(editorState, (s) => {
 	);
 });
 
+export const savedSongData = derived(editorState, (s) => s.saved);
+
 export const editLyrics = derived(editorState, (s) => s.draft.lyrics);
 export const editPrompt = derived(editorState, (s) => s.draft.prompt);
 export const editBpm = derived(editorState, (s) => s.draft.bpm);
@@ -107,39 +108,6 @@ export function applyGenerationSettings(params: VersionGenerationParams): void {
 	setDraftGenParams(params);
 }
 
-// --- Status ---
-export const saving = writable(false);
-export const status = writable('');
-
-let statusTimeout: ReturnType<typeof setTimeout> | null = null;
-
-function showStatus(msg: string): void {
-	status.set(msg);
-	if (statusTimeout) clearTimeout(statusTimeout);
-	statusTimeout = setTimeout(() => status.set(''), 3000);
-}
-
-// --- Applied-diff state ---
-// The version-pair compare (former VersionTimeline double-click, diffBase /
-// diffTarget) is dropped per epic #98 decision 3. What remains is the
-// Co-Writer "applied changes" banner: handleApply stages a proposed edit as
-// a before/after pair so the editor can show what changed.
-export const appliedDiffBase = writable<VersionItem | null>(null);
-export const appliedDiffTarget = writable<VersionItem | null>(null);
-
-export const appliedDiffMode = derived(
-	[appliedDiffBase, appliedDiffTarget],
-	([$b, $t]) => $b !== null && $t !== null
-);
-
-export const activeDiff = derived(
-	[appliedDiffBase, appliedDiffTarget],
-	([$ab, $at]): { old: VersionItem; new: VersionItem } | null => {
-		if ($ab && $at) return { old: $ab, new: $at };
-		return null;
-	}
-);
-
 function songDataFromSong(s: SongItem): SongData {
 	return {
 		lyrics: s.lyrics,
@@ -165,8 +133,12 @@ function songDataFromVersion(v: VersionItem): SongData {
 export function loadSongData(s: SongItem): void {
 	const data = songDataFromSong(s);
 	editorState.set({ saved: data, draft: { ...data } });
-	dismissAppliedDiff();
 	loadVersions(s.id);
+}
+
+/** Resets the draft back to the last-saved values, discarding unsaved edits. */
+export function discardDraft(): void {
+	editorState.update((s) => ({ ...s, draft: { ...s.saved } }));
 }
 
 export async function loadVersions(songId: string): Promise<void> {
@@ -183,90 +155,40 @@ export function loadVersion(index: number): void {
 	editorState.set({ saved: data, draft: { ...data } });
 }
 
-export async function handleSave(songId: string): Promise<void> {
-	saving.set(true);
-	try {
-		const { draft } = get(editorState);
-		const updated = await updateSong(songId, {
-			lyrics: draft.lyrics,
-			prompt: draft.prompt,
-			bpm: draft.bpm,
-			audio_duration: draft.audio_duration,
-			key_scale: draft.key_scale,
-			generation_params: draft.genParams
-		});
-		editorState.update((s) => ({ ...s, saved: { ...s.draft } }));
-		replaceSongInList(updated);
-		await loadVersions(songId);
-		dismissAppliedDiff();
-		showStatus(`Saved version ${updated.version_count}`);
-	} catch (e) {
-		showStatus(e instanceof Error ? e.message : 'Save failed');
-	} finally {
-		saving.set(false);
-	}
-}
-
-export async function handleDeleteVersion(
-	songId: string,
-	versionId: string,
-	deleteGenerations: boolean
-): Promise<void> {
-	try {
-		await apiDeleteVersion(versionId, deleteGenerations);
-		const updated = await fetchSong(songId);
-		replaceSongInList(updated);
-		if (get(selectedSongId) !== songId) return;
-		await loadVersions(songId);
-		if (get(selectedSongId) !== songId) return;
-		if (get(versions)[0]) loadVersion(0);
-		else loadSongData(updated);
-	} catch {
-		showStatus('Delete failed');
-	}
-}
-
-export function handleApply(data: ApplyData): void {
+/**
+ * Persists the draft as a new version. Fails loud: a rejected `updateSong`
+ * call propagates to the caller instead of being swallowed, so a caller that
+ * depends on the save succeeding (e.g. Generate, which must never run
+ * against a stale version) aborts rather than proceeding silently.
+ */
+export async function handleSave(songId: string): Promise<SongItem> {
 	const { draft } = get(editorState);
-	const before: VersionItem = {
-		id: 'before',
-		version_number: 0,
+	const updated = await updateSong(songId, {
 		lyrics: draft.lyrics,
 		prompt: draft.prompt,
 		bpm: draft.bpm,
 		audio_duration: draft.audio_duration,
 		key_scale: draft.key_scale,
-		generation_params: draft.genParams,
-		created_at: ''
-	};
-	editorState.update((s) => ({
-		...s,
-		draft: {
-			...s.draft,
-			...(data.lyrics !== undefined && { lyrics: data.lyrics }),
-			...(data.prompt !== undefined && { prompt: data.prompt }),
-			...(data.bpm !== undefined && { bpm: data.bpm }),
-			...(data.audio_duration !== undefined && { audio_duration: data.audio_duration }),
-			...(data.key_scale !== undefined && { key_scale: data.key_scale })
-		}
-	}));
-	const afterDraft = get(editorState).draft;
-	const after: VersionItem = {
-		id: 'after',
-		version_number: 0,
-		lyrics: afterDraft.lyrics,
-		prompt: afterDraft.prompt,
-		bpm: afterDraft.bpm,
-		audio_duration: afterDraft.audio_duration,
-		key_scale: afterDraft.key_scale,
-		generation_params: afterDraft.genParams,
-		created_at: ''
-	};
-	appliedDiffBase.set(before);
-	appliedDiffTarget.set(after);
+		generation_params: draft.genParams
+	});
+	editorState.update((s) => ({ ...s, saved: { ...s.draft } }));
+	replaceSongInList(updated);
+	await loadVersions(songId);
+	return updated;
 }
 
-export function dismissAppliedDiff(): void {
-	appliedDiffBase.set(null);
-	appliedDiffTarget.set(null);
+/** Deletes a version and its takes. Fails loud — see {@link handleSave}. */
+export async function handleDeleteVersion(
+	songId: string,
+	versionId: string,
+	deleteGenerations: boolean
+): Promise<void> {
+	await apiDeleteVersion(versionId, deleteGenerations);
+	const updated = await fetchSong(songId);
+	replaceSongInList(updated);
+	if (get(selectedSongId) !== songId) return;
+	await loadVersions(songId);
+	if (get(selectedSongId) !== songId) return;
+	if (get(versions)[0]) loadVersion(0);
+	else loadSongData(updated);
 }

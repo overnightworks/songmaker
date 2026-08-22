@@ -9,6 +9,7 @@ import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_TAB_WRITE_LABEL,
+	EDITOR_UNSAVED_TITLE,
 	EDITOR_VIEW_COWRITER_LABEL,
 	EDITOR_VIEW_RECIPE_LABEL,
 	HITBOX_FREQUENT_PX,
@@ -21,7 +22,13 @@ import {
 	SONG_PREVIOUS_LABEL
 } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
-import { editGenParams, pinnedSeed } from '$lib/stores/editor';
+import {
+	editGenParams,
+	editLyrics,
+	pinnedSeed,
+	setDraftLyrics,
+	setDraftPrompt
+} from '$lib/stores/editor';
 import {
 	detailTab,
 	initNavigation,
@@ -102,7 +109,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		bulkDeleteGenerations: vi.fn().mockResolvedValue({ deleted: 1 }),
 		uploadSongCover: (...args: unknown[]) => uploadSongCover(...args),
 		deleteSongCover: (...args: unknown[]) => deleteSongCover(...args),
-		deleteAlbumCover: (...args: unknown[]) => deleteAlbumCover(...args)
+		deleteAlbumCover: (...args: unknown[]) => deleteAlbumCover(...args),
+		updateSong: vi.fn(),
+		deleteVersion: vi.fn()
 	};
 });
 vi.mock('$lib/stores/toast', () => ({
@@ -417,6 +426,163 @@ describe('SongDetailView recipe and takes', () => {
 		expect(get(selectedGenerationId)).toBeNull();
 		expect(history.state.generationId).toBeNull();
 		expect(target.querySelector('.inspector-modal')).toBeNull();
+	});
+
+	it('closes the inspector on Escape', async () => {
+		selectedGenerationId.set('g1');
+		const target = await renderView();
+		expect(target.querySelector('.inspector-modal')).not.toBeNull();
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		await tick();
+
+		expect(get(selectedGenerationId)).toBeNull();
+		expect(target.querySelector('.inspector-modal')).toBeNull();
+	});
+});
+
+describe('SongDetailView Generate is enabled from the draft', () => {
+	it('stays disabled until the draft has lyrics, a prompt, and a model — even on a freshly created song with nothing saved', async () => {
+		songList.set([song({ lyrics: '', prompt: '' })]);
+		const target = await renderView();
+		const generateBtn = () =>
+			Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
+				(el) => el.textContent?.trim() === EDITOR_GENERATE_LABEL
+			);
+		expect(generateBtn()?.disabled).toBe(true);
+
+		setDraftLyrics('typed lyrics');
+		setDraftPrompt('typed style');
+		recipeModel.set('turbo');
+		await tick();
+
+		expect(generateBtn()?.disabled).toBe(false);
+	});
+});
+
+describe('SongDetailView recipe chips read the draft', () => {
+	it('updates the BPM chip live as the Recipe panel edits it, and marks it changed', async () => {
+		const target = await renderView();
+		clickNamed(header(target), EDITOR_VIEW_RECIPE_LABEL);
+		await tick();
+
+		const bpmInput = target.querySelector<HTMLInputElement>('.recipe-groups input[type="number"]');
+		if (!bpmInput) throw new Error('Expected the BPM input');
+		bpmInput.value = '140';
+		bpmInput.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+
+		const bpmChip = Array.from(target.querySelectorAll('.chip')).find((el) =>
+			el.textContent?.includes('BPM')
+		);
+		expect(bpmChip?.textContent).toContain('140');
+		expect(bpmChip?.querySelector('.chip-changed-dot')).not.toBeNull();
+	});
+});
+
+describe('SongDetailView unsaved-draft guard', () => {
+	it('prompts before switching songs with a dirty draft; Cancel stays on the current song', async () => {
+		songList.set(albumSongs());
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+
+		selectSong('s-last', song({ id: 's-last', album_id: 'a-local', title: 'Last' }));
+		await tick();
+
+		expect(target.querySelector('.dialog h3')?.textContent).toBe(EDITOR_UNSAVED_TITLE);
+		expect(get(selectedSongId)).toBe('s1');
+
+		clickNamed(target, 'Cancel');
+		await tick();
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(editLyrics)).toBe('unsaved edit');
+	});
+
+	it('Discard switches songs without saving', async () => {
+		songList.set(albumSongs());
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+
+		selectSong('s-last', song({ id: 's-last', album_id: 'a-local', title: 'Last' }));
+		await tick();
+		clickNamed(target, 'Discard');
+		await tick();
+
+		expect(get(selectedSongId)).toBe('s-last');
+	});
+
+	it('Save persists the draft as a new version, then switches songs', async () => {
+		const { updateSong } = await import('$lib/api/client');
+		vi.mocked(updateSong).mockResolvedValueOnce(song({ lyrics: 'unsaved edit', version_count: 2 }));
+		songList.set(albumSongs());
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+
+		selectSong('s-last', song({ id: 's-last', album_id: 'a-local', title: 'Last' }));
+		await tick();
+		clickNamed(target, 'Save');
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(updateSong).toHaveBeenCalled();
+		expect(get(selectedSongId)).toBe('s-last');
+	});
+
+	it('saves a version from the song menu without switching songs', async () => {
+		const { updateSong } = await import('$lib/api/client');
+		vi.mocked(updateSong).mockResolvedValueOnce(song({ version_count: 2 }));
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+
+		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		await tick();
+		clickNamed(target, 'Save version');
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(updateSong).toHaveBeenCalled();
+		expect(get(selectedSongId)).toBe('s1');
+	});
+});
+
+describe('SongDetailView Co-Writer and Recipe stacked (both open)', () => {
+	it('shows the condensed EditorStacked summary instead of the full panel, keeping the chat visible; Edit reveals the full panel', async () => {
+		const target = await renderView();
+		coWriterOpen.set(true);
+		recipeOpen.set(true);
+		await tick();
+
+		expect(target.querySelector('.editor-stacked')).not.toBeNull();
+		expect(target.querySelector('.recipe-panel')).toBeNull();
+		expect(target.querySelector('.cowriter-chat')).not.toBeNull();
+
+		target.querySelector<HTMLButtonElement>('.stacked-edit')?.click();
+		await tick();
+
+		expect(target.querySelector('.recipe-panel')).not.toBeNull();
+		expect(target.querySelector('.editor-stacked')).toBeNull();
+	});
+});
+
+describe('SongDetailView mobile Co-Writer opens as a sheet', () => {
+	it('keeps the Write | Takes tabs underneath instead of replacing them', async () => {
+		stubLibraryMedia({ narrow: false, compact: true });
+		const target = await renderView();
+		expect(target.querySelector('.editor-tabs')).not.toBeNull();
+
+		coWriterOpen.set(true);
+		await tick();
+
+		expect(target.querySelector('.editor-tabs')).not.toBeNull();
+		expect(target.querySelector('.sheet-panel')).not.toBeNull();
+		expect(target.querySelector('.sheet-panel .cowriter-mode')).not.toBeNull();
 	});
 });
 

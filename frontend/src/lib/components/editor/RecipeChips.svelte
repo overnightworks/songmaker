@@ -19,9 +19,12 @@
 	{onclick}
 >
 	{#each chips as chip (chip.key)}
-		<span class="chip" title={chip.label}>
+		<span class="chip" title={chip.title}>
 			<span class="chip-label">{chip.label}</span>
 			<span class="chip-value">{chip.value}</span>
+			{#if chip.changed}
+				<span class="chip-changed-dot" aria-hidden="true"></span>
+			{/if}
 		</span>
 	{/each}
 </button>
@@ -67,5 +70,13 @@
 	.chip-value {
 		color: var(--text);
 		font-family: var(--font-display);
+	}
+
+	.chip-changed-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--score-bad);
+		flex-shrink: 0;
 	}
 </style>

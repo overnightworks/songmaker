@@ -26,17 +26,13 @@ import {
 	setDraftGenParams,
 	setDraftLyrics,
 	isDirty,
-	saving,
 	versions,
 	currentVersionIndex,
-	activeDiff,
-	status,
 	loadSongData,
 	loadVersion,
 	handleSave,
 	handleDeleteVersion,
-	handleApply,
-	dismissAppliedDiff
+	discardDraft
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
 import type { SongItem, VersionItem } from '$lib/api/types';
@@ -157,31 +153,45 @@ describe('loadVersion', () => {
 });
 
 describe('handleSave', () => {
-	it('calls updateSong and resets dirty state', async () => {
+	it('calls updateSong, resets dirty state, and returns the saved song', async () => {
 		const { updateSong } = await import('$lib/api/client');
 		const mockUpdate = vi.mocked(updateSong);
-		mockUpdate.mockResolvedValueOnce(makeSong({ version_count: 2 }));
+		const saved = makeSong({ version_count: 2 });
+		mockUpdate.mockResolvedValueOnce(saved);
 
 		loadSongData(makeSong());
 		setDraftLyrics('new lyrics');
 		expect(get(isDirty)).toBe(true);
 
-		await handleSave('s1');
+		const result = await handleSave('s1');
 
 		expect(mockUpdate).toHaveBeenCalled();
 		expect(get(isDirty)).toBe(false);
-		expect(get(saving)).toBe(false);
+		expect(result).toBe(saved);
 	});
 
-	it('shows error on failure', async () => {
+	it('fails loud: rejects instead of swallowing the error', async () => {
 		const { updateSong } = await import('$lib/api/client');
 		vi.mocked(updateSong).mockRejectedValueOnce(new Error('Network error'));
 
 		loadSongData(makeSong());
-		await handleSave('s1');
+		setDraftLyrics('new lyrics');
 
-		expect(get(status)).toBe('Network error');
-		expect(get(saving)).toBe(false);
+		await expect(handleSave('s1')).rejects.toThrow('Network error');
+		expect(get(isDirty)).toBe(true);
+	});
+});
+
+describe('discardDraft', () => {
+	it('resets the draft to the last-saved values', () => {
+		loadSongData(makeSong({ lyrics: 'saved lyrics' }));
+		setDraftLyrics('unsaved edit');
+		expect(get(isDirty)).toBe(true);
+
+		discardDraft();
+
+		expect(get(editLyrics)).toBe('saved lyrics');
+		expect(get(isDirty)).toBe(false);
 	});
 });
 
@@ -218,42 +228,10 @@ describe('handleDeleteVersion', () => {
 		expect(get(editLyrics)).toBe('unsaved on s2');
 	});
 
-	it('shows error on failure', async () => {
+	it('fails loud on failure', async () => {
 		const { deleteVersion } = await import('$lib/api/client');
 		vi.mocked(deleteVersion).mockRejectedValueOnce(new Error('fail'));
 
-		await handleDeleteVersion('s1', 'v1', false);
-
-		expect(get(status)).toBe('Delete failed');
-	});
-});
-
-describe('handleApply', () => {
-	it('sets applied diff and updates fields', () => {
-		loadSongData(makeSong());
-		handleApply({ lyrics: 'new lyrics', prompt: 'new prompt' });
-		expect(get(editLyrics)).toBe('new lyrics');
-		expect(get(editPrompt)).toBe('new prompt');
-		const diff = get(activeDiff);
-		expect(diff).not.toBeNull();
-		expect(diff?.old.lyrics).toBe('hello');
-		expect(diff?.new.lyrics).toBe('new lyrics');
-	});
-
-	it('only updates provided fields', () => {
-		loadSongData(makeSong({ bpm: 120 }));
-		handleApply({ bpm: 140 });
-		expect(get(editBpm)).toBe(140);
-		expect(get(editLyrics)).toBe('hello');
-	});
-});
-
-describe('dismissAppliedDiff', () => {
-	it('clears applied diff', () => {
-		loadSongData(makeSong());
-		handleApply({ lyrics: 'changed' });
-		expect(get(activeDiff)).not.toBeNull();
-		dismissAppliedDiff();
-		expect(get(activeDiff)).toBeNull();
+		await expect(handleDeleteVersion('s1', 'v1', false)).rejects.toThrow('fail');
 	});
 });

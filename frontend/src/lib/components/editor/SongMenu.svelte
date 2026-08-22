@@ -7,6 +7,7 @@
 		SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 		SONG_MENU_DELETE_LABEL,
 		SONG_MENU_RENAME_LABEL,
+		SONG_MENU_SAVE_VERSION_LABEL,
 		SONG_MENU_SHARE_LABEL,
 		TAKE_OVERFLOW_LABEL
 	} from '$lib/constants';
@@ -20,6 +21,7 @@
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
 		onrename: () => void;
+		onsaveversion: () => void;
 		onaddtoplaylist: () => void;
 		ondelete: () => void;
 	}
@@ -31,6 +33,7 @@
 		onshare,
 		onunshare,
 		onrename,
+		onsaveversion,
 		onaddtoplaylist,
 		ondelete
 	}: Props = $props();
@@ -106,6 +109,9 @@
 			<button class="menu-item" onclick={() => runAndClose(onrename)}
 				>{SONG_MENU_RENAME_LABEL}</button
 			>
+			<button class="menu-item" onclick={() => runAndClose(onsaveversion)}>
+				{SONG_MENU_SAVE_VERSION_LABEL}
+			</button>
 			<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
 				{SONG_MENU_ADD_TO_PLAYLIST_LABEL}
 			</button>

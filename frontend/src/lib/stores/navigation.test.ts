@@ -52,7 +52,10 @@ vi.mock('$lib/api/client', () => ({
 	addSongToPlaylist: vi.fn(),
 	addAlbumToPlaylist: vi.fn(),
 	removeFromPlaylist: vi.fn(),
-	reorderPlaylistEntry: vi.fn()
+	reorderPlaylistEntry: vi.fn(),
+	fetchVersions: vi.fn().mockResolvedValue([]),
+	updateSong: vi.fn(),
+	deleteVersion: vi.fn()
 }));
 
 import {
@@ -66,12 +69,14 @@ import {
 	openLibraryCreate,
 	openLibraryWall,
 	openPlaylist,
+	pendingDirtyNavigation,
 	resetNavigationForTests,
 	revealPlayingSong,
 	selectLibraryFilter,
 	selectNeighborSong,
 	selectSong
 } from './navigation';
+import { discardDraft, editLyrics, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 
 function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 	return {
@@ -330,6 +335,68 @@ describe('backToCollection', () => {
 		openCollection.set(null);
 		backToCollection();
 		expect(get(librarySurface)).toBe('browse');
+	});
+});
+
+describe('a dirty draft guards song switch / leave', () => {
+	afterEach(() => {
+		discardDraft();
+	});
+
+	it('defers selectSong instead of switching while the draft is dirty', () => {
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
+	it('runs the deferred switch on Discard', () => {
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+		songList.set([song({ id: 's1' }), song({ id: 's2', album_id: 'a1' })]);
+
+		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		discardDraft();
+		void get(pendingDirtyNavigation)?.();
+		pendingDirtyNavigation.set(null);
+
+		expect(get(selectedSongId)).toBe('s2');
+	});
+
+	it('stays put on Cancel', () => {
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		pendingDirtyNavigation.set(null);
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(editLyrics)).toBe('unsaved edit');
+	});
+
+	it('defers backToCollection and openLibraryWall the same way', async () => {
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		backToCollection();
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+		pendingDirtyNavigation.set(null);
+
+		await openLibraryWall();
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
 	});
 });
 

@@ -6,7 +6,8 @@
 		NOW_PLAYING_TAKE_PREFIX,
 		TAKE_KEEP_LABEL,
 		TAKE_PICK_LABEL,
-		TAKES_DRAFT_BANNER_SUFFIX,
+		TAKES_DELETE_VERSION_LABEL,
+		TAKES_DRAFT_BANNER_TEMPLATE,
 		TAKES_EMPTY,
 		TAKES_ERROR,
 		TAKES_GENERATING_LABEL,
@@ -36,6 +37,7 @@
 		selectionCount
 	} from '$lib/stores/selection';
 	import { addToast } from '$lib/stores/toast';
+	import { handleDeleteVersion } from '$lib/stores/editor';
 	import {
 		bulkDeleteGenerations,
 		cancelJob,
@@ -87,6 +89,7 @@
 
 	let playlistFor = $state<string | null>(null);
 	let deleteFor = $state<GenerationItem | null>(null);
+	let deleteVersionFor = $state<VersionGroup | null>(null);
 	let remasteringId = $state<string | null>(null);
 
 	interface VersionGroup {
@@ -277,6 +280,19 @@
 			/* best effort */
 		}
 	}
+
+	async function confirmDeleteVersion(): Promise<void> {
+		const group = deleteVersionFor;
+		deleteVersionFor = null;
+		const versionId = group?.generations[0]?.version_id;
+		if (!group || !versionId) return;
+		try {
+			await handleDeleteVersion(song.id, versionId, true);
+			addToast(`Deleted v${group.versionNumber}`, 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Delete failed', 'error');
+		}
+	}
 </script>
 
 {#if loadStatus === 'error' && song.generations.length === 0}
@@ -303,14 +319,14 @@
 
 		{#if dirty}
 			<div class="draft-banner">
-				Draft — {TAKES_DRAFT_BANNER_SUFFIX} v{draftVersionNumber}.
+				{TAKES_DRAFT_BANNER_TEMPLATE.replace('{version}', String(draftVersionNumber))}
 			</div>
 		{/if}
 
 		{#if generateJob && (generateJob.status === 'queued' || generateJob.status === 'running')}
 			<div class="generating-row">
 				<span class="generating-label">
-					v{draftVersionNumber} · {TAKES_GENERATING_LABEL}
+					v{song.version_count} · {TAKES_GENERATING_LABEL}
 					{#if generateJob.status === 'queued'}
 						{generateJob.queue_position ? `· queued #${generateJob.queue_position}` : '· queued'}
 					{/if}
@@ -323,9 +339,24 @@
 			</div>
 		{/if}
 
-		{#each groups as group (group.label)}
+		{#each groups as group (group.versionNumber ?? 'unknown')}
 			<div class="version-section">
-				<div class="version-header">{group.label}</div>
+				<div class="version-header-row">
+					<span class="version-header">{group.label}</span>
+					{#if group.versionNumber !== null}
+						<button
+							type="button"
+							class="version-delete-btn"
+							data-hitbox="frequent"
+							data-hitbox-face
+							onclick={() => (deleteVersionFor = group)}
+							aria-label={`${TAKES_DELETE_VERSION_LABEL} v${group.versionNumber}`}
+							title={TAKES_DELETE_VERSION_LABEL}
+						>
+							<Icon name="trash" size={12} />
+						</button>
+					{/if}
+				</div>
 				{#each group.generations as gen (gen.id)}
 					{@const duration = formatDuration(gen)}
 					<div
@@ -466,6 +497,18 @@
 	/>
 {/if}
 
+{#if deleteVersionFor}
+	<ConfirmDeleteDialog
+		title={`Delete v${deleteVersionFor.versionNumber}?`}
+		items={[
+			`${deleteVersionFor.generations.length} take${deleteVersionFor.generations.length !== 1 ? 's' : ''} will be deleted permanently`
+		]}
+		confirmLabel="Delete Version"
+		onconfirm={() => void confirmDeleteVersion()}
+		oncancel={() => (deleteVersionFor = null)}
+	/>
+{/if}
+
 <style>
 	.takes-list {
 		display: flex;
@@ -537,6 +580,12 @@
 		gap: 0.15rem;
 	}
 
+	.version-header-row {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
 	.version-header {
 		font-size: var(--label-font-size);
 		color: var(--text-subtle);
@@ -544,6 +593,21 @@
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 		padding: 0.3rem 0;
+	}
+
+	.version-delete-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: none;
+		color: var(--text-subtle);
+		cursor: pointer;
+		padding: 0.15rem;
+	}
+
+	.version-delete-btn:hover {
+		color: var(--score-bad);
 	}
 
 	.take-row {
@@ -559,6 +623,7 @@
 		color: var(--text);
 		font: inherit;
 		width: 100%;
+		min-width: 0;
 	}
 
 	.take-row:hover {
@@ -598,13 +663,18 @@
 		font-family: var(--font-display);
 		font-size: 0.85rem;
 		letter-spacing: 0.3px;
-		flex-shrink: 0;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.take-duration {
 		font-size: 0.75rem;
 		color: var(--text-subtle);
 		flex: 1;
+		flex-shrink: 0;
+		white-space: nowrap;
 	}
 
 	.score-badge {

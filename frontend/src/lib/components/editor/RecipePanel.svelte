@@ -43,6 +43,7 @@
 	import { addToast } from '$lib/stores/toast';
 	import {
 		RECIPE_COLLAPSE_LABEL,
+		RECIPE_DEFAULT_PINNED_SEED,
 		RECIPE_GROUP_REPRODUCE_LABEL,
 		RECIPE_GROUP_SOUND_LABEL,
 		RECIPE_GROUP_TEXT_LABEL,
@@ -76,9 +77,7 @@
 	let referenceFilename = $state<string | null>(null);
 	let referenceUploading = $state(false);
 
-	const activeMode = $derived(
-		$recipeModel ?? $activeModels[0]?.id ?? Object.keys($builtinDefaults)[0] ?? ''
-	);
+	const activeMode = $derived($recipeModel ?? '');
 	const activeModelData = $derived($activeModels.find((m) => m.id === activeMode));
 	const hiddenParams = $derived(activeModelData?.capabilities?.hidden_params ?? []);
 	const maxInferenceSteps = $derived(activeModelData?.capabilities?.max_inference_steps ?? 200);
@@ -313,7 +312,7 @@
 					<button
 						type="button"
 						class:active={$pinnedSeed != null}
-						onclick={() => pinnedSeed.set($pinnedSeed ?? 0)}
+						onclick={() => pinnedSeed.set($pinnedSeed ?? RECIPE_DEFAULT_PINNED_SEED)}
 					>
 						{RECIPE_SEED_PINNED_LABEL}{$pinnedSeed != null ? ` ${$pinnedSeed}` : ''}
 					</button>

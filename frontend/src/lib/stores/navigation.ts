@@ -1,7 +1,8 @@
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { fetchAlbum } from '$lib/api/albums';
+import { isDirty } from '$lib/stores/editor';
 import {
 	selectedSongId,
 	selectedGenerationId,
@@ -100,6 +101,22 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 	return pathname === '/';
 }
 
+// A dirty editor draft blocks a song switch or leave (rail row, prev/next,
+// breadcrumb, Escape, Library) until the owner resolves it: the deferred
+// navigation is parked here, and SongDetailView — the only surface where a
+// draft can be dirty — renders the Save / Discard / Cancel confirm and
+// either runs the parked action (Discard, or Save then run it) or drops it
+// (Cancel).
+export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | null>(null);
+
+function guardDirtyNavigation(action: () => void | Promise<void>): void {
+	if (get(isDirty)) {
+		pendingDirtyNavigation.set(action);
+		return;
+	}
+	void action();
+}
+
 // The rail context (and every other "song open" entry point — search hits,
 // ?song= deep links, history restore) never leaves the rail empty: whenever
 // the selected song's album is not the open collection, the collection
@@ -150,13 +167,15 @@ export function openCollectionEntry(collection: OpenCollection): void {
 }
 
 export function backToCollection(): void {
-	suppressPush = true;
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	openTakesSurface();
-	setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
-	suppressPush = false;
-	replaceLibraryHistory();
+	guardDirtyNavigation(() => {
+		suppressPush = true;
+		selectedSongId.set(null);
+		selectedGenerationId.set(null);
+		openTakesTab();
+		setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
+		suppressPush = false;
+		replaceLibraryHistory();
+	});
 }
 
 export function openLibraryCreate(): void {
@@ -170,14 +189,21 @@ export function openLibraryCreate(): void {
 // until another collection replaces it), and always pushes a fresh history
 // entry so the browser back button returns to whatever was open before.
 export async function openLibraryWall(): Promise<void> {
-	if (!isLibraryWorkspacePath(window.location.pathname)) {
-		await goto(resolve('/'));
+	const action = async (): Promise<void> => {
+		if (!isLibraryWorkspacePath(window.location.pathname)) {
+			await goto(resolve('/'));
+		}
+		selectedSongId.set(null);
+		selectedGenerationId.set(null);
+		setLibrarySurface('browse');
+		closeSidebar();
+		pushLibraryHistory();
+	};
+	if (get(isDirty)) {
+		pendingDirtyNavigation.set(action);
+		return;
 	}
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	setLibrarySurface('browse');
-	closeSidebar();
-	pushLibraryHistory();
+	await action();
 }
 
 export interface AlbumTrackNeighbors {
@@ -224,7 +250,7 @@ function applySelectedSong(
 	}
 	playerSelectSong(songId);
 	ensureGenerationsLoaded(songId);
-	if (tab === 'takes') openTakesSurface();
+	if (tab === 'takes') openTakesTab();
 	setLibrarySurface('detail');
 	closeSidebar();
 	if (historyMode === 'replace') {
@@ -253,11 +279,13 @@ function selectSongHistoryMode(
 }
 
 export function selectSong(songId: string, knownSong?: SongItem): void {
-	applySelectedSong(songId, knownSong, selectSongHistoryMode(songId, knownSong), 'takes');
+	guardDirtyNavigation(() =>
+		applySelectedSong(songId, knownSong, selectSongHistoryMode(songId, knownSong), 'takes')
+	);
 }
 
 export function selectNeighborSong(song: SongItem): void {
-	applySelectedSong(song.id, song, 'replace', 'keep');
+	guardDirtyNavigation(() => applySelectedSong(song.id, song, 'replace', 'keep'));
 }
 
 function hydrateSongIntoLibrary(song: SongItem): void {
@@ -280,7 +308,7 @@ export function deselectSong(): void {
 
 export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 	playerSelectGeneration(gen, song);
-	openTakesSurface();
+	openTakesTab();
 	setLibrarySurface('detail');
 	replaceLibraryHistory();
 }
@@ -288,7 +316,7 @@ export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 export function backToSong(): void {
 	suppressPush = true;
 	playerClearGeneration();
-	openTakesSurface();
+	openTakesTab();
 	setLibrarySurface('detail');
 	suppressPush = false;
 	replaceLibraryHistory();
@@ -307,11 +335,11 @@ export function switchTab(tab: DetailTab): void {
 	detailTab.set(tab);
 }
 
-export function openRecipeSurface(): void {
+export function openWriteTab(): void {
 	detailTab.set('write');
 }
 
-export function openTakesSurface(): void {
+export function openTakesTab(): void {
 	detailTab.set('takes');
 }
 
@@ -343,7 +371,7 @@ export function goBack(): void {
 	const current = isLibraryHistoryState(state) ? state : snapshotLibraryHistory(0);
 	suppressPush = true;
 	void applyLibraryHistory(libraryWallStateFrom(current));
-	openTakesSurface();
+	openTakesTab();
 	setLibrarySurface('browse');
 	suppressPush = false;
 	replaceLibraryHistory();
@@ -362,7 +390,7 @@ export function initNavigation(): () => void {
 			ensureGenerationsLoaded(songId);
 			if (genId) {
 				selectedGenerationId.set(genId);
-				openTakesSurface();
+				openTakesTab();
 			}
 			setLibrarySurface('detail');
 			suppressPush = false;
@@ -393,5 +421,6 @@ export function initNavigation(): () => void {
 
 export function resetNavigationForTests(): void {
 	suppressPush = false;
-	openTakesSurface();
+	pendingDirtyNavigation.set(null);
+	openTakesTab();
 }

@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import type { GenerationItem } from '$lib/api/types';
 	import {
+		TAKE_AGAIN_LABEL,
 		TAKE_COPY_LINK_LABEL,
 		TAKE_DELETE_LABEL,
 		TAKE_OVERFLOW_LABEL,
@@ -49,10 +51,16 @@
 	);
 
 	let open = $state(false);
+	let menuEl: HTMLDivElement | undefined = $state();
+	let flipUp = $state(false);
 
-	function toggle(e: MouseEvent): void {
+	async function toggle(e: MouseEvent): Promise<void> {
 		e.stopPropagation();
 		open = !open;
+		if (!open) return;
+		await tick();
+		if (!menuEl) return;
+		flipUp = menuEl.getBoundingClientRect().bottom > window.innerHeight;
 	}
 
 	function runAndClose(action: () => void): void {
@@ -83,6 +91,8 @@
 	<button
 		type="button"
 		class="overflow-btn"
+		data-hitbox="frequent"
+		data-hitbox-face
 		aria-haspopup="menu"
 		aria-expanded={open}
 		aria-label={TAKE_OVERFLOW_LABEL}
@@ -92,7 +102,9 @@
 	</button>
 	{#if open}
 		<div
+			bind:this={menuEl}
 			class="overflow-menu"
+			class:flip-up={flipUp}
 			role="menu"
 			data-escape-overlay="true"
 			tabindex="-1"
@@ -149,7 +161,7 @@
 				class="overflow-item"
 				onclick={() => runAndClose(onagain)}
 			>
-				Again
+				{TAKE_AGAIN_LABEL}
 			</button>
 			<button
 				type="button"
@@ -225,6 +237,11 @@
 		border-radius: var(--card-radius);
 		padding: 0.25rem;
 		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	}
+
+	.overflow-menu.flip-up {
+		top: auto;
+		bottom: calc(100% + 4px);
 	}
 
 	.menu-heading {

@@ -23,7 +23,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		cancelJob: vi.fn(),
 		remasterGeneration: vi.fn(),
 		unarchiveGeneration: vi.fn(),
-		fetchSong: vi.fn()
+		fetchSong: vi.fn(),
+		deleteVersion: vi.fn(),
+		fetchVersions: vi.fn().mockResolvedValue([])
 	};
 });
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
@@ -179,6 +181,38 @@ describe('TakesList', () => {
 			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 }
 		});
 		expect(target.querySelector('.generating-row')?.textContent).toContain('generating');
+	});
+
+	it('labels the generating row with the version actually being generated, not the next draft version', async () => {
+		// song().version_count is 3; draftVersionNumber (the number Generate
+		// would create *next*) is 4 here — the two must not be conflated, since
+		// a running job always targets an already-saved version.
+		const { target } = await render({
+			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 },
+			draftVersionNumber: 4
+		});
+		expect(target.querySelector('.generating-label')?.textContent).toContain('v3');
+		expect(target.querySelector('.generating-label')?.textContent).not.toContain('v4');
+	});
+
+	it('deletes a version and its takes from the group header, with confirmation', async () => {
+		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
+		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
+		vi.mocked(fetchSong).mockResolvedValueOnce(song({ version_count: 2 }));
+		vi.mocked(fetchVersions).mockResolvedValueOnce([]);
+
+		const { target } = await render();
+		const deleteBtn = target.querySelector<HTMLButtonElement>('.version-delete-btn');
+		if (!deleteBtn) throw new Error('Expected a delete-version button on the newest group');
+		deleteBtn.click();
+		await tick();
+		expect(document.querySelector('.dialog h3')?.textContent).toBe('Delete v3?');
+
+		document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
+		await tick();
+		await Promise.resolve();
+
+		expect(deleteVersion).toHaveBeenCalledWith('v1', true);
 	});
 
 	it('calls pick and keep from the take actions', async () => {

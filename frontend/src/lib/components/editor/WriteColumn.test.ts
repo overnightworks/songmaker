@@ -15,8 +15,13 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchVersions: vi.fn().mockResolvedValue([])
 	};
 });
+vi.mock('$lib/stores/player', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/stores/player')>();
+	return { ...actual, playLibraryFromGeneration: vi.fn().mockResolvedValue(undefined) };
+});
 
 import { editLyrics, loadSongData, setDraftLyrics } from '$lib/stores/editor';
+import { playLibraryFromGeneration } from '$lib/stores/player';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import WriteColumn from './WriteColumn.svelte';
 
@@ -92,7 +97,6 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 		allSongs: [song()],
 		coWriterOpen: false,
 		compact: false,
-		onselecttake: vi.fn(),
 		onturncompleted: vi.fn(),
 		...overrides
 	};
@@ -142,15 +146,15 @@ describe('WriteColumn Co-Writer mode', () => {
 		expect(target.querySelector('.cowriter-chat')).toBeNull();
 	});
 
-	it('plays a take from the strip via onselecttake', async () => {
-		const onselecttake = vi.fn();
+	it('plays a take from the strip on click, not open the inspector', async () => {
 		const gen = generation({ id: 'g9' });
 		const { target } = await render({
 			coWriterOpen: true,
-			song: song({ generations: [gen] }),
-			onselecttake
+			song: song({ generations: [gen] })
 		});
 		target.querySelector<HTMLButtonElement>('.take-chip')?.click();
-		expect(onselecttake).toHaveBeenCalledWith('g9');
+		await tick();
+		await Promise.resolve();
+		expect(playLibraryFromGeneration).toHaveBeenCalledWith(gen);
 	});
 });

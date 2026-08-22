@@ -48,11 +48,14 @@ export const TAKE_SCORING_LABEL = 'Scoring...';
 export const TAKES_EMPTY = 'No takes yet';
 export const TAKES_LOADING = 'Loading takes…';
 export const TAKES_ERROR = 'Failed to load takes';
-export const TAKES_DRAFT_BANNER_SUFFIX = 'unsaved changes. Generate creates';
+// {version} is replaced with the version number Generate would create next.
+export const TAKES_DRAFT_BANNER_TEMPLATE = 'Draft — unsaved changes. Generate creates v{version}.';
 export const TAKES_GENERATING_LABEL = 'generating';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 export const TAKE_INSPECTOR_CLOSE = 'Close';
+export const TAKE_INSPECTOR_LABEL = 'Take details';
 export const TAKE_FROM_RECIPE_PREFIX = 'from Recipe';
+export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 
 export const EDITOR_TABS_LABEL = 'Editor tabs';
 export const EDITOR_TAB_WRITE_LABEL = 'Write';
@@ -67,7 +70,17 @@ export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable 
 export const EDITOR_SELECT_MODEL_TITLE = 'Select a model first';
 export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';
 export const EDITOR_QUEUE_BUSY_TITLE = 'System busy — submit may be rejected';
+export const EDITOR_CHAT_LABEL = 'Chat';
+export const EDITOR_LYRICS_LABEL = 'Lyrics';
+export const EDITOR_STYLE_LABEL = 'Style';
+export const EDITOR_STYLE_PROMPT_LABEL = 'Style Prompt';
+export const EDITOR_UNSAVED_TITLE = 'Unsaved changes';
+export const EDITOR_UNSAVED_MESSAGE =
+	'Save this draft as a new version before leaving, or discard it?';
+export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
+export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
 
+export const SONG_MENU_SAVE_VERSION_LABEL = 'Save version';
 export const SONG_MENU_SHARE_LABEL = 'Share song';
 export const SONG_MENU_RENAME_LABEL = 'Rename';
 export const SONG_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
@@ -89,6 +102,13 @@ export const RECIPE_SEED_PINNED_LABEL = 'Pinned';
 export const RECIPE_REPAINT_OFF_LABEL = 'Off';
 export const RECIPE_SOURCE_LABEL = 'Source';
 export const RECIPE_USES_LABEL = 'Generate uses this recipe';
+// A freshly pinned seed with no prior value starts at 0 rather than a random
+// number, so pinning is deterministic and immediately editable.
+export const RECIPE_DEFAULT_PINNED_SEED = 0;
+// Shown instead of the full panel when Co-Writer and Recipe are both open, so
+// the chat column stays above the fold; "Edit" reveals the full panel.
+export const RECIPE_STACKED_LABEL = 'Recipe summary';
+export const RECIPE_STACKED_EDIT_LABEL = 'Edit';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const LIBRARY_SEARCH_PLACEHOLDER = 'Search albums and songs';

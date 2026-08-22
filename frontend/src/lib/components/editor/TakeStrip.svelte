@@ -1,17 +1,25 @@
 <script lang="ts">
-	import type { GenerationItem } from '$lib/api/types';
+	import type { GenerationItem, SongItem } from '$lib/api/types';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import {
+		playAlbumFromGeneration,
+		playGeneration,
+		playLibraryFromGeneration,
+		queueContext,
+		selectedAlbumId
+	} from '$lib/stores/player';
+	import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
+	import { addToast } from '$lib/stores/toast';
 	import Icon from '../Icon.svelte';
 
 	interface Props {
-		generations: GenerationItem[];
-		onselect: (gen: GenerationItem) => void;
+		song: SongItem;
 	}
 
-	let { generations, onselect }: Props = $props();
+	let { song }: Props = $props();
 
 	const sorted = $derived(
-		[...generations].sort((a, b) => {
+		[...song.generations].sort((a, b) => {
 			const versionDiff = (b.version_number ?? -1) - (a.version_number ?? -1);
 			if (versionDiff !== 0) return versionDiff;
 			return b.generation_number - a.generation_number;
@@ -19,6 +27,33 @@
 	);
 
 	const playingGenId = $derived(audioPlayer.current?.generation.id ?? null);
+
+	// Mirrors TakesList's playOrToggle: a take-strip click plays the take
+	// immediately — it never opens the take inspector. Every branch here
+	// already surfaces its own failures via addToast (playLibraryFromGeneration
+	// and playAlbumFromGeneration toast internally), so an archived or
+	// otherwise unplayable take reports a toast instead of an unhandled error.
+	async function playOrToggle(gen: GenerationItem): Promise<void> {
+		if (playingGenId === gen.id && audioPlayer.status === 'playing') {
+			audioPlayer.toggle();
+			return;
+		}
+		try {
+			const albumId = $selectedAlbumId;
+			if (shouldUseQueueStream($queuePlaybackMode)) {
+				if (albumId) {
+					await playAlbumFromGeneration(albumId, song, gen);
+					return;
+				}
+				await playLibraryFromGeneration(gen);
+				return;
+			}
+			queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
+			playGeneration(gen, song, { restart: true });
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Playback failed', 'error');
+		}
+	}
 </script>
 
 {#if sorted.length > 0}
@@ -28,7 +63,7 @@
 				type="button"
 				class="take-chip"
 				class:playing={playingGenId === gen.id}
-				onclick={() => onselect(gen)}
+				onclick={() => void playOrToggle(gen)}
 				title="v{gen.version_number ?? '—'} · take {gen.generation_number}"
 			>
 				<Icon name={playingGenId === gen.id ? 'pause' : 'play'} size={14} />

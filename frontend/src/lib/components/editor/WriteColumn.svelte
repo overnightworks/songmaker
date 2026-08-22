@@ -1,7 +1,5 @@
 <script lang="ts">
 	import {
-		activeDiff,
-		appliedDiffMode,
 		editLyrics,
 		editPrompt,
 		isDirty,
@@ -10,6 +8,13 @@
 		versions
 	} from '$lib/stores/editor';
 	import type { SongItem, VersionItem } from '$lib/api/types';
+	import {
+		EDITOR_CHAT_LABEL,
+		EDITOR_LYRICS_LABEL,
+		EDITOR_STYLE_LABEL,
+		EDITOR_STYLE_PROMPT_LABEL,
+		EDITOR_TAB_TAKES_LABEL
+	} from '$lib/constants';
 	import CoWriterPanel from '../CoWriterPanel.svelte';
 	import TakeStrip from './TakeStrip.svelte';
 
@@ -18,17 +23,14 @@
 		allSongs: SongItem[];
 		coWriterOpen: boolean;
 		compact: boolean;
-		onselecttake: (generationId: string) => void;
 		onturncompleted: () => void;
 	}
 
-	let { song, allSongs, coWriterOpen, compact, onselecttake, onturncompleted }: Props = $props();
+	let { song, allSongs, coWriterOpen, compact, onturncompleted }: Props = $props();
 
 	let mobileSubTab = $state<'chat' | 'lyrics'>('chat');
 
 	const dirty = $derived($isDirty);
-	const isAppliedDiff = $derived($appliedDiffMode);
-	const diff = $derived($activeDiff);
 	const latestVersion = $derived<VersionItem | null>($versions[0] ?? null);
 	const draftStamp = $derived(
 		latestVersion
@@ -50,7 +52,7 @@
 					aria-selected={mobileSubTab === 'chat'}
 					onclick={() => (mobileSubTab = 'chat')}
 				>
-					Chat
+					{EDITOR_CHAT_LABEL}
 				</button>
 				<button
 					type="button"
@@ -59,7 +61,7 @@
 					aria-selected={mobileSubTab === 'lyrics'}
 					onclick={() => (mobileSubTab = 'lyrics')}
 				>
-					Lyrics
+					{EDITOR_LYRICS_LABEL}
 				</button>
 			</div>
 		{/if}
@@ -79,14 +81,16 @@
 			{/if}
 			{#if !compact || mobileSubTab === 'lyrics'}
 				<div class="cowriter-lyrics">
-					<span class="lyrics-label">Lyrics <span class="field-stamp">{draftStamp}</span></span>
+					<span class="lyrics-label"
+						>{EDITOR_LYRICS_LABEL} <span class="field-stamp">{draftStamp}</span></span
+					>
 					<textarea
 						class="lyrics-area"
 						value={$editLyrics}
 						oninput={(e) => setDraftLyrics(e.currentTarget.value)}
 					></textarea>
 					<label class="style-field">
-						<span>Style</span>
+						<span>{EDITOR_STYLE_LABEL}</span>
 						<textarea
 							rows="2"
 							value={$editPrompt}
@@ -97,24 +101,21 @@
 			{/if}
 			{#if !compact}
 				<div class="cowriter-takes">
-					<span class="takes-heading">Takes</span>
-					<TakeStrip generations={song.generations} onselect={(gen) => onselecttake(gen.id)} />
+					<span class="takes-heading">{EDITOR_TAB_TAKES_LABEL}</span>
+					<TakeStrip {song} />
 				</div>
 			{/if}
 		</div>
 	</div>
 {:else}
 	<div class="write-mode">
-		{#if isAppliedDiff && diff}
-			<div class="diff-banner">Claude applied changes</div>
-		{/if}
 		<label class="edit-field">
-			<span>Style Prompt</span>
+			<span>{EDITOR_STYLE_PROMPT_LABEL}</span>
 			<textarea rows="4" value={$editPrompt} oninput={(e) => setDraftPrompt(e.currentTarget.value)}
 			></textarea>
 		</label>
 		<label class="edit-field">
-			<span>Lyrics <span class="field-stamp">{draftStamp}</span></span>
+			<span>{EDITOR_LYRICS_LABEL} <span class="field-stamp">{draftStamp}</span></span>
 			<textarea
 				class="lyrics-area"
 				rows="15"
@@ -130,18 +131,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-	}
-
-	.diff-banner {
-		padding: 0.4rem 0.7rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		font-size: 0.75rem;
-		color: var(--text-muted);
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
 	}
 
 	.edit-field {

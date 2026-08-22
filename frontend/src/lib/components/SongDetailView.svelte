@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { get } from 'svelte/store';
+	import { tick } from 'svelte';
 	import {
 		fetchSong,
 		generateSong,
@@ -51,7 +52,8 @@
 		persistLibraryHistory,
 		detailTab,
 		selectNeighborSong,
-		switchTab
+		switchTab,
+		pendingDirtyNavigation
 	} from '$lib/stores/navigation';
 	import { openCollection } from '$lib/stores/collection';
 	import {
@@ -61,7 +63,15 @@
 		loadSongData,
 		loadVersion,
 		handleSave,
-		pinnedSeed
+		discardDraft,
+		pinnedSeed,
+		editLyrics,
+		editPrompt,
+		editBpm,
+		editAudioDuration,
+		editKeyScale,
+		editGenParams,
+		savedSongData
 	} from '$lib/stores/editor';
 	import { activeModels, loadActiveModels } from '$lib/stores/presets';
 	import { loras } from '$lib/stores/loras';
@@ -108,19 +118,29 @@
 		EDITOR_TAB_TAKES_LABEL,
 		EDITOR_TAB_WRITE_LABEL,
 		EDITOR_TABS_LABEL,
+		EDITOR_UNSAVED_TITLE,
+		EDITOR_UNSAVED_MESSAGE,
+		EDITOR_UNSAVED_SAVE_LABEL,
+		EDITOR_UNSAVED_DISCARD_LABEL,
+		EDITOR_VIEW_COWRITER_LABEL,
+		EDITOR_VIEW_RECIPE_LABEL,
+		TAKE_INSPECTOR_LABEL,
 		TAKES_ERROR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import EditorHeader from './editor/EditorHeader.svelte';
 	import RecipeChips from './editor/RecipeChips.svelte';
 	import RecipePanel from './editor/RecipePanel.svelte';
+	import EditorStacked from './editor/EditorStacked.svelte';
 	import WriteColumn from './editor/WriteColumn.svelte';
 	import TakesList from './editor/TakesList.svelte';
 	import EditorSheet from './editor/EditorSheet.svelte';
 	import GenerationView from './GenerationView.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
+	import ConfirmDialog from './ConfirmDialog.svelte';
 
 	let showDeleteConfirm = $state(false);
 	let compact = $state(false);
@@ -130,6 +150,8 @@
 	let coverFailed = $state(false);
 	let coverBusy = $state(false);
 	let requestedParentAlbumId: string | null = $state(null);
+	let stackedExpanded = $state(false);
+	let inspectorSheet: HTMLDivElement | undefined = $state();
 
 	const song = $derived($selectedSong);
 	const inspected = $derived($selectedGeneration);
@@ -327,17 +349,30 @@
 		recipeChips({
 			model: $recipeModel,
 			takes: $takesPerGenerate,
-			bpm: song?.bpm ?? 0,
-			audioDuration: song?.audio_duration ?? 0,
-			keyScale: song?.key_scale ?? '',
-			voiceLabel: resolveVoiceLabel(song?.generation_params?.user_lora_id ?? null),
+			bpm: $editBpm,
+			audioDuration: $editAudioDuration,
+			keyScale: $editKeyScale,
+			voiceLabel: resolveVoiceLabel($editGenParams?.user_lora_id ?? null),
 			pinnedSeed: $pinnedSeed,
-			genParams: song?.generation_params ?? null,
+			genParams: $editGenParams,
 			sourceGeneration: $sourceGeneration,
 			sourceMode: $sourceMode,
-			repaintMode: $repaintMode
+			repaintMode: $repaintMode,
+			savedBpm: $savedSongData.bpm,
+			savedAudioDuration: $savedSongData.audio_duration,
+			savedKeyScale: $savedSongData.key_scale,
+			savedGenParams: $savedSongData.genParams
 		})
 	);
+
+	// Both toggles stacked pushes the full Recipe panel's three multi-field
+	// groups below the fold — see EditorStacked.svelte. Not relevant on
+	// compact, where Recipe is its own sheet.
+	const stacked = $derived($coWriterOpen && $recipeOpen && !compact);
+
+	$effect(() => {
+		if (!stacked) stackedExpanded = false;
+	});
 
 	function resolveVoiceLabel(loraId: string | null): string {
 		if (!loraId) return 'None';
@@ -397,11 +432,16 @@
 		persistLibraryHistory();
 	}
 
-	function onInspectorKeydown(event: KeyboardEvent): void {
+	$effect(() => {
 		if (!inspected) return;
-		if (event.key !== 'Escape') return;
-		event.preventDefault();
-		closeInspector();
+		void tick().then(() => {
+			if (inspectorSheet) focusFirstIn(inspectorSheet);
+		});
+	});
+
+	function onInspectorKeydown(event: KeyboardEvent): void {
+		if (!inspected || !inspectorSheet) return;
+		handleFocusTrapKeydown(inspectorSheet, event, closeInspector);
 	}
 
 	async function onGenerate(): Promise<void> {
@@ -600,8 +640,45 @@
 
 	let songPlaylistPickerOpen = $state(false);
 
+	async function onSaveVersion(): Promise<void> {
+		if (!song) return;
+		try {
+			const updated = await handleSave(song.id);
+			addToast(`Saved version ${updated.version_count}`, 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Save failed', 'error');
+		}
+	}
+
+	function onTurnCompleted(): void {
+		if (!song) return;
+		const songId = song.id;
+		void fetchSong(songId).then((fresh) => {
+			replaceSongInList(fresh);
+			loadSongData(fresh);
+		});
+	}
+
+	async function resolveDirtyNavigation(choice: 'save' | 'discard' | 'cancel'): Promise<void> {
+		const action = get(pendingDirtyNavigation);
+		pendingDirtyNavigation.set(null);
+		if (choice === 'cancel' || !action) return;
+		if (choice === 'save') {
+			if (!song) return;
+			try {
+				await handleSave(song.id);
+			} catch (e) {
+				addToast(e instanceof Error ? e.message : 'Save failed', 'error');
+				return;
+			}
+		} else {
+			discardDraft();
+		}
+		await action();
+	}
+
 	function generateTitle(): string {
-		if (!song?.lyrics || !song?.prompt) return EDITOR_MISSING_CONTENT_TITLE;
+		if (!$editLyrics || !$editPrompt) return EDITOR_MISSING_CONTENT_TITLE;
 		if ($recipeModel === null) {
 			return $activeModels.length === 0 ? EDITOR_NO_MODELS_WARNING : EDITOR_SELECT_MODEL_TITLE;
 		}
@@ -633,6 +710,7 @@
 			{coverBusy}
 			{coverActionLabel}
 			onrenamesong={onRenameSong}
+			onsaveversion={() => void onSaveVersion()}
 			oncoverfile={onCoverFile}
 			oncoverremove={onCoverRemove}
 			oncovererror={() => (coverFailed = true)}
@@ -654,7 +732,7 @@
 			ontogglecowriter={() => coWriterOpen.update((v) => !v)}
 			ongenerate={onGenerate}
 			generateLabel={generateLabel()}
-			generateDisabled={isGenerating || !song.lyrics || !song.prompt || $recipeModel === null}
+			generateDisabled={isGenerating || !$editLyrics || !$editPrompt || $recipeModel === null}
 			generateTitle={generateTitle()}
 			generating={isGenerating}
 			{compact}
@@ -677,27 +755,19 @@
 
 		<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
 		{#if $recipeOpen && !compact}
-			<RecipePanel onclose={() => recipeOpen.set(false)} />
+			{#if stacked && !stackedExpanded}
+				<EditorStacked {chips} onexpand={() => (stackedExpanded = true)} />
+			{:else}
+				<RecipePanel
+					onclose={() => {
+						if (stacked) stackedExpanded = false;
+						else recipeOpen.set(false);
+					}}
+				/>
+			{/if}
 		{/if}
 
-		{#if $coWriterOpen}
-			<WriteColumn
-				{song}
-				allSongs={songs}
-				coWriterOpen={true}
-				{compact}
-				onselecttake={(genId) => {
-					const gen = song.generations.find((g) => g.id === genId);
-					if (gen) selectGeneration(gen, song);
-				}}
-				onturncompleted={() => {
-					void fetchSong(song.id).then((fresh) => {
-						replaceSongInList(fresh);
-						loadSongData(fresh);
-					});
-				}}
-			/>
-		{:else if compact}
+		{#if compact}
 			<div class="editor-tabs" role="tablist" aria-label={EDITOR_TABS_LABEL}>
 				<button
 					type="button"
@@ -726,7 +796,6 @@
 					allSongs={songs}
 					coWriterOpen={false}
 					{compact}
-					onselecttake={() => {}}
 					onturncompleted={() => {}}
 				/>
 			{:else}
@@ -748,6 +817,14 @@
 					}}
 				/>
 			{/if}
+		{:else if $coWriterOpen}
+			<WriteColumn
+				{song}
+				allSongs={songs}
+				coWriterOpen={true}
+				{compact}
+				onturncompleted={onTurnCompleted}
+			/>
 		{:else}
 			<div class="editor-columns">
 				<WriteColumn
@@ -755,7 +832,6 @@
 					allSongs={songs}
 					coWriterOpen={false}
 					{compact}
-					onselecttake={() => {}}
 					onturncompleted={() => {}}
 				/>
 				<div class="takes-column">
@@ -811,7 +887,24 @@
 	{/if}
 
 	{#if compact}
-		<EditorSheet open={$recipeOpen} label="Recipe" onclose={() => recipeOpen.set(false)}>
+		<EditorSheet
+			open={$coWriterOpen}
+			label={EDITOR_VIEW_COWRITER_LABEL}
+			onclose={() => coWriterOpen.set(false)}
+		>
+			<WriteColumn
+				{song}
+				allSongs={songs}
+				coWriterOpen={true}
+				compact
+				onturncompleted={onTurnCompleted}
+			/>
+		</EditorSheet>
+		<EditorSheet
+			open={$recipeOpen}
+			label={EDITOR_VIEW_RECIPE_LABEL}
+			onclose={() => recipeOpen.set(false)}
+		>
 			<RecipePanel onclose={() => recipeOpen.set(false)} />
 		</EditorSheet>
 	{/if}
@@ -821,16 +914,29 @@
 			<button class="inspector-backdrop" tabindex="-1" onclick={closeInspector} aria-label="Close"
 			></button>
 			<div
+				bind:this={inspectorSheet}
 				class="inspector-sheet"
 				role="dialog"
 				aria-modal="true"
-				aria-label="Take details"
+				aria-label={TAKE_INSPECTOR_LABEL}
 				tabindex="-1"
 			>
 				<GenerationView onclose={closeInspector} />
 			</div>
 		</div>
 	{/if}
+{/if}
+
+{#if $pendingDirtyNavigation}
+	<ConfirmDialog
+		title={EDITOR_UNSAVED_TITLE}
+		message={EDITOR_UNSAVED_MESSAGE}
+		confirmLabel={EDITOR_UNSAVED_SAVE_LABEL}
+		onconfirm={() => void resolveDirtyNavigation('save')}
+		secondaryLabel={EDITOR_UNSAVED_DISCARD_LABEL}
+		onsecondary={() => void resolveDirtyNavigation('discard')}
+		oncancel={() => void resolveDirtyNavigation('cancel')}
+	/>
 {/if}
 
 {#if showDeleteConfirm && song}

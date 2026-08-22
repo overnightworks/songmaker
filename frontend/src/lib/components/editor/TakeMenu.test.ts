@@ -1,13 +1,33 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem } from '$lib/api/types';
+import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
+import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import TakeMenu from './TakeMenu.svelte';
 
+function px(value: string): number {
+	const resolved = value.startsWith('var(')
+		? getComputedStyle(document.documentElement)
+				.getPropertyValue(value.slice('var('.length, -1).trim())
+				.trim()
+		: value;
+	return Number.parseFloat(resolved);
+}
+
 const mounted: Array<ReturnType<typeof mount>> = [];
+
+beforeEach(() => {
+	const sheet = document.createElement('style');
+	sheet.dataset.hitboxStyles = 'true';
+	sheet.textContent = hitboxCss;
+	document.head.append(sheet);
+});
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
+	delete document.documentElement.dataset.pointer;
 });
 
 function gen(overrides: Partial<GenerationItem> = {}): GenerationItem {
@@ -96,10 +116,61 @@ describe('TakeMenu', () => {
 		expect(target.querySelector('.overflow-menu')).toBeNull();
 	});
 
+	it('sizes the overflow trigger to the frequent hitbox on a coarse pointer', async () => {
+		const { target } = await render();
+		const btn = target.querySelector<HTMLButtonElement>('.overflow-btn');
+		if (!btn) throw new Error('Expected the overflow trigger button');
+		document.documentElement.dataset.pointer = 'coarse';
+		const coarse = getComputedStyle(btn);
+		expect(px(coarse.minWidth)).toBe(HITBOX_FREQUENT_PX);
+		expect(px(coarse.minHeight)).toBe(HITBOX_FREQUENT_PX);
+		document.documentElement.dataset.pointer = 'fine';
+		const fine = getComputedStyle(btn);
+		expect(px(fine.minWidth)).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+	});
+
 	it('closes on Escape', async () => {
 		const { target } = await render();
 		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		await tick();
 		expect(target.querySelector('.overflow-menu')).toBeNull();
+	});
+
+	it('opens downward when there is enough space below the trigger', async () => {
+		vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+			bottom: 400,
+			top: 0,
+			left: 0,
+			right: 0,
+			height: 0,
+			width: 0,
+			x: 0,
+			y: 0,
+			toJSON: () => ({})
+		});
+		vi.stubGlobal('innerHeight', 800);
+		const { target } = await render();
+		await tick();
+		expect(target.querySelector('.overflow-menu')?.classList.contains('flip-up')).toBe(false);
+		vi.unstubAllGlobals();
+	});
+
+	it('flips upward when there is not enough space below the trigger', async () => {
+		vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+			bottom: 900,
+			top: 500,
+			left: 0,
+			right: 0,
+			height: 0,
+			width: 0,
+			x: 0,
+			y: 0,
+			toJSON: () => ({})
+		});
+		vi.stubGlobal('innerHeight', 800);
+		const { target } = await render();
+		await tick();
+		expect(target.querySelector('.overflow-menu')?.classList.contains('flip-up')).toBe(true);
+		vi.unstubAllGlobals();
 	});
 });

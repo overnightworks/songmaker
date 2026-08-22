@@ -165,6 +165,8 @@ export interface RecipeChip {
 	key: string;
 	label: string;
 	value: string;
+	title: string;
+	changed: boolean;
 }
 
 export interface RecipeChipInput {
@@ -179,6 +181,20 @@ export interface RecipeChipInput {
 	sourceGeneration: GenerationItem | null;
 	sourceMode: SourceMode;
 	repaintMode: RepaintMode;
+	// The last-saved version's values, compared against the draft fields above
+	// to mark a chip "changed". Omitted fields are treated as unchanged.
+	savedBpm?: number;
+	savedAudioDuration?: number;
+	savedKeyScale?: string;
+	savedGenParams?: VersionGenerationParams | null;
+}
+
+function paramsSubsetEqual(
+	a: VersionGenerationParams | null,
+	b: VersionGenerationParams | null,
+	keys: readonly (keyof VersionGenerationParams)[]
+): boolean {
+	return keys.every((key) => (a?.[key] ?? null) === (b?.[key] ?? null));
 }
 
 // Pure projection from editor/recipe state to the labeled chip row — kept
@@ -191,31 +207,87 @@ export function recipeChips(input: RecipeChipInput): RecipeChip[] {
 				? 'Cover'
 				: capitalize(input.repaintMode);
 	return [
-		{ key: 'model', label: 'Model', value: input.model ? input.model.toUpperCase() : '—' },
-		{ key: 'takes', label: 'Takes', value: `×${input.takes}` },
-		{ key: 'bpm', label: 'BPM', value: input.bpm > 0 ? String(input.bpm) : 'Auto' },
+		{
+			key: 'model',
+			label: 'Model',
+			value: input.model ? input.model.toUpperCase() : '—',
+			title: 'Model used for the next generation',
+			changed: false
+		},
+		{
+			key: 'takes',
+			label: 'Takes',
+			value: `×${input.takes}`,
+			title: 'How many takes Generate produces at once',
+			changed: false
+		},
+		{
+			key: 'bpm',
+			label: 'BPM',
+			value: input.bpm > 0 ? String(input.bpm) : 'Auto',
+			title: 'Target tempo (0 = let the model choose)',
+			changed: input.bpm !== (input.savedBpm ?? input.bpm)
+		},
 		{
 			key: 'duration',
 			label: 'Duration',
-			value: input.audioDuration > 0 ? `${input.audioDuration} s` : 'Auto'
+			value: input.audioDuration > 0 ? `${input.audioDuration} s` : 'Auto',
+			title: 'Target length (0 = let the model choose)',
+			changed: input.audioDuration !== (input.savedAudioDuration ?? input.audioDuration)
 		},
-		{ key: 'key', label: 'Key', value: input.keyScale || '—' },
-		{ key: 'voice', label: 'Voice', value: input.voiceLabel },
+		{
+			key: 'key',
+			label: 'Key',
+			value: input.keyScale || '—',
+			title: 'Target musical key',
+			changed: input.keyScale !== (input.savedKeyScale ?? input.keyScale)
+		},
+		{
+			key: 'voice',
+			label: 'Voice',
+			value: input.voiceLabel,
+			title: 'Cloned voice applied to vocals',
+			changed:
+				(input.genParams?.user_lora_id ?? null) !==
+				(input.savedGenParams === undefined
+					? (input.genParams?.user_lora_id ?? null)
+					: (input.savedGenParams?.user_lora_id ?? null))
+		},
 		{
 			key: 'seed',
 			label: 'Seed',
-			value: input.pinnedSeed != null ? `Pinned ${input.pinnedSeed}` : 'Random'
+			value: input.pinnedSeed != null ? `Pinned ${input.pinnedSeed}` : 'Random',
+			title: 'A pinned seed reproduces the same noise for A/B testing',
+			changed: false
 		},
 		{
 			key: 'lm',
 			label: 'LM',
-			value: hasAnyParam(input.genParams, LM_PARAM_KEYS) ? 'Custom' : 'Default'
+			value: hasAnyParam(input.genParams, LM_PARAM_KEYS) ? 'Custom' : 'Default',
+			title: 'Language-model generation parameters',
+			changed: !paramsSubsetEqual(
+				input.genParams,
+				input.savedGenParams === undefined ? input.genParams : input.savedGenParams,
+				LM_PARAM_KEYS
+			)
 		},
 		{
 			key: 'dit',
 			label: 'DIT',
-			value: hasAnyParam(input.genParams, DIT_PARAM_KEYS) ? 'Custom' : 'Default'
+			value: hasAnyParam(input.genParams, DIT_PARAM_KEYS) ? 'Custom' : 'Default',
+			title: 'Diffusion-transformer generation parameters',
+			changed: !paramsSubsetEqual(
+				input.genParams,
+				input.savedGenParams === undefined ? input.genParams : input.savedGenParams,
+				DIT_PARAM_KEYS
+			)
 		},
-		{ key: 'repaint', label: 'Repaint', value: repaintValue }
+		{
+			key: 'repaint',
+			label: 'Repaint',
+			value: repaintValue,
+			title: 'Regenerate part of a take instead of starting fresh',
+			changed: false
+		}
 	];
 }

@@ -170,6 +170,42 @@ describe('recipeChips', () => {
 			)?.value
 		).toBe('Cover');
 	});
+
+	it('marks a chip changed only when the draft value differs from the last-saved version', () => {
+		const base = {
+			model: 'turbo',
+			takes: 1,
+			bpm: 120,
+			audioDuration: 180,
+			keyScale: 'Am',
+			voiceLabel: 'None',
+			pinnedSeed: null,
+			genParams: null,
+			sourceGeneration: null,
+			sourceMode: 'repaint' as const,
+			repaintMode: 'conservative' as const,
+			savedBpm: 120,
+			savedAudioDuration: 180,
+			savedKeyScale: 'Am',
+			savedGenParams: null
+		};
+		expect(recipeChips(base).find((c) => c.key === 'bpm')?.changed).toBe(false);
+		expect(recipeChips({ ...base, bpm: 140 }).find((c) => c.key === 'bpm')?.changed).toBe(true);
+		expect(recipeChips({ ...base, keyScale: 'C' }).find((c) => c.key === 'key')?.changed).toBe(
+			true
+		);
+		expect(
+			recipeChips({ ...base, genParams: { lm_temperature: 0.8 } }).find((c) => c.key === 'lm')
+				?.changed
+		).toBe(true);
+		expect(
+			recipeChips({ ...base, genParams: { lm_temperature: 0.8 } }).find((c) => c.key === 'dit')
+				?.changed
+		).toBe(false);
+		expect(recipeChips({ ...base, model: 'base' }).find((c) => c.key === 'model')?.changed).toBe(
+			false
+		);
+	});
 });
 
 describe('recipeParamsFromTake', () => {

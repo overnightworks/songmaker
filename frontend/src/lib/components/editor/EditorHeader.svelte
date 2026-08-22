@@ -30,6 +30,7 @@
 		coverBusy: boolean;
 		coverActionLabel: string;
 		onrenamesong: (title: string) => Promise<void>;
+		onsaveversion: () => void;
 		oncoverfile: (event: Event) => void;
 		oncoverremove: () => void;
 		oncovererror: () => void;
@@ -68,6 +69,7 @@
 		coverBusy,
 		coverActionLabel,
 		onrenamesong,
+		onsaveversion,
 		oncoverfile,
 		oncoverremove,
 		oncovererror,
@@ -152,6 +154,7 @@
 					{onshare}
 					{onunshare}
 					onrename={() => titleEditor?.startEdit()}
+					{onsaveversion}
 					{onaddtoplaylist}
 					ondelete={ondeletesong}
 				/>
@@ -195,12 +198,21 @@
 			<button
 				type="button"
 				class="view-toggle"
+				data-hitbox="frequent"
+				data-hitbox-face
 				aria-pressed={coWriterOpen}
 				onclick={ontogglecowriter}
 			>
 				{EDITOR_VIEW_COWRITER_LABEL}
 			</button>
-			<button type="button" class="view-toggle" aria-pressed={recipeOpen} onclick={ontogglerecipe}>
+			<button
+				type="button"
+				class="view-toggle"
+				data-hitbox="frequent"
+				data-hitbox-face
+				aria-pressed={recipeOpen}
+				onclick={ontogglerecipe}
+			>
 				{EDITOR_VIEW_RECIPE_LABEL}
 			</button>
 		</div>
@@ -473,16 +485,28 @@
 	@media (max-width: 768px) {
 		.detail-header {
 			flex-direction: column;
-			gap: 8px;
+			gap: 6px;
 		}
 
 		.cover-hero {
-			width: 3.5rem;
-			height: 3.5rem;
+			width: 2.6rem;
+			height: 2.6rem;
 		}
 
 		.song-title {
-			font-size: 1.2rem;
+			font-size: 1.1rem;
+		}
+
+		.song-rail {
+			flex-direction: row;
+			align-items: center;
+			justify-content: space-between;
+			gap: 0.5rem;
+		}
+
+		.editor-header-actions {
+			width: 100%;
+			justify-content: flex-end;
 		}
 	}
 </style>
