@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -6,7 +6,7 @@ vi.stubGlobal('fetch', mockFetch);
 vi.mock('$lib/stores/auth', () => ({ clearAuth: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-import { sseFetch, ApiError } from './fetch';
+import { API_TIMEOUT_MS, apiFetch, sseFetch, ApiError } from './fetch';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -83,5 +83,41 @@ describe('sseFetch', () => {
 		const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
 		const headers = call[1].headers as Record<string, string>;
 		expect(headers['X-CSRF-Token']).toBe('token-xyz');
+	});
+});
+
+describe('apiFetch abort signal', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	function signalPassedToFetch(): AbortSignal {
+		const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+		return (call[1] as RequestInit).signal as AbortSignal;
+	}
+
+	function neverResolvingFetch(): void {
+		mockFetch.mockImplementationOnce(() => new Promise(() => {}));
+	}
+
+	it('aborts the request when the caller aborts', () => {
+		neverResolvingFetch();
+		const caller = new AbortController();
+		void apiFetch('/api/library/pool-queue', { signal: caller.signal }).catch(() => {});
+		expect(signalPassedToFetch().aborted).toBe(false);
+		caller.abort();
+		expect(signalPassedToFetch().aborted).toBe(true);
+	});
+
+	it('still times out when the caller never aborts', () => {
+		vi.useFakeTimers();
+		neverResolvingFetch();
+		const caller = new AbortController();
+		void apiFetch('/api/library/pool-queue', { signal: caller.signal }).catch(() => {});
+		vi.advanceTimersByTime(API_TIMEOUT_MS - 1);
+		expect(signalPassedToFetch().aborted).toBe(false);
+		vi.advanceTimersByTime(1);
+		expect(signalPassedToFetch().aborted).toBe(true);
+		expect(caller.signal.aborted).toBe(false);
 	});
 });

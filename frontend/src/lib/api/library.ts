@@ -5,7 +5,7 @@ import type {
 	ShareInventoryItem,
 	SongItem
 } from './types';
-import { API_TIMEOUT_MS, apiFetch } from './fetch';
+import { apiFetch } from './fetch';
 import { LIBRARY_QUERY_REQUIRED, LIBRARY_SHARES_PAGE_SIZE } from '$lib/constants';
 import type { ShareInventoryType } from '$lib/constants';
 import type { CreatedSort } from '$lib/utils/recency';
@@ -71,33 +71,6 @@ function normalizeHit(hit: LibrarySearchHit): LibrarySearchHit {
 	};
 }
 
-function mergeAbortSignals(userSignal: AbortSignal | undefined): {
-	signal: AbortSignal;
-	dispose: () => void;
-} {
-	const timeoutController = new AbortController();
-	const timeout = setTimeout(() => timeoutController.abort(), API_TIMEOUT_MS);
-	if (!userSignal) {
-		return { signal: timeoutController.signal, dispose: () => clearTimeout(timeout) };
-	}
-	if (userSignal.aborted) {
-		timeoutController.abort();
-		return { signal: userSignal, dispose: () => clearTimeout(timeout) };
-	}
-	const merged = new AbortController();
-	const abortMerged = () => merged.abort();
-	userSignal.addEventListener('abort', abortMerged);
-	timeoutController.signal.addEventListener('abort', abortMerged);
-	return {
-		signal: merged.signal,
-		dispose: () => {
-			clearTimeout(timeout);
-			userSignal.removeEventListener('abort', abortMerged);
-			timeoutController.signal.removeEventListener('abort', abortMerged);
-		}
-	};
-}
-
 export async function fetchLibraryPoolQueue(options?: {
 	startGenerationId?: string | null;
 	shuffle?: boolean;
@@ -111,12 +84,9 @@ export async function fetchLibraryPoolQueue(options?: {
 	if (options?.startGenerationId) {
 		params.set('start_generation_id', options.startGenerationId);
 	}
-	const { signal, dispose } = mergeAbortSignals(options?.signal);
-	try {
-		return await apiFetch<LibraryPoolQueue>(`${LIBRARY_POOL_QUEUE_PATH}?${params}`, { signal });
-	} finally {
-		dispose();
-	}
+	return apiFetch<LibraryPoolQueue>(`${LIBRARY_POOL_QUEUE_PATH}?${params}`, {
+		signal: options?.signal
+	});
 }
 
 export async function fetchShares(options?: {
