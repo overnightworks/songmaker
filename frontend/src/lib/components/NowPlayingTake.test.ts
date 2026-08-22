@@ -119,6 +119,34 @@ describe('NowPlayingTake', () => {
 		expect(target.querySelectorAll('.dev-token.changed, .dev-token.missing')).toHaveLength(1);
 	});
 
+	it('does not flag a punctuation-only difference as a deviation', async () => {
+		await render({
+			lyrics: 'Rahmen, Luft.',
+			generation: generation({ whisper_text: 'rahmen luft' })
+		});
+		expect(target.textContent).toContain('Sung text matches the lyrics');
+	});
+
+	it('does not flag a case-only difference as a deviation', async () => {
+		await render({
+			lyrics: 'Die Luft Schmeckt',
+			generation: generation({ whisper_text: 'die luft schmeckt' })
+		});
+		expect(target.textContent).toContain('Sung text matches the lyrics');
+	});
+
+	it('marks a sung word absent from the lyrics as added, with its own tooltip', async () => {
+		await render({
+			lyrics: 'die Luft schmeckt',
+			generation: generation({ whisper_text: 'die frische Luft schmeckt' })
+		});
+		const added = target.querySelector('.dev-token.added');
+		expect(added?.textContent).toBe('frische');
+		expect(added?.getAttribute('title')).toBe('Not in lyrics');
+		expect(added?.getAttribute('aria-label')).toBe('frische (Not in lyrics)');
+		expect(target.querySelector('.dev-token.changed')).toBeNull();
+	});
+
 	it('ignores blank lines and [Section] markers, which are never sung', async () => {
 		await render({
 			lyrics: '[Verse]\ndie Luft schmeckt weit\n\n[Chorus]\nhalt die Haende auf',
@@ -172,6 +200,20 @@ describe('NowPlayingTake', () => {
 		save?.click();
 		await tick();
 		expect(rate).toHaveBeenCalledWith('s1', 'g1', 80, '');
+	});
+
+	it('saves rating notes alongside the rating through takeActions', async () => {
+		await render({ generation: generation({ scores: { user_rating: 50 } }) });
+		const notes = target.querySelector<HTMLTextAreaElement>('.rating-notes');
+		if (!notes) throw new Error('Expected a notes textarea');
+		notes.value = 'Loved the bridge';
+		notes.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+
+		const save = target.querySelector<HTMLButtonElement>('.rating-save');
+		save?.click();
+		await tick();
+		expect(rate).toHaveBeenCalledWith('s1', 'g1', 50, 'Loved the bridge');
 	});
 
 	it('pins the seed through takeActions', async () => {

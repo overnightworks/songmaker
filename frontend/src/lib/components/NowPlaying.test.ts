@@ -264,6 +264,35 @@ describe('NowPlaying', () => {
 		expect(target.querySelector('.np-take')).not.toBeNull();
 	});
 
+	it('wires the panel tabs to their panel via aria-controls/role=tabpanel', async () => {
+		songList.set([song()]);
+		await renderSurface(info());
+		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+		const panel = target.querySelector('[role="tabpanel"]');
+		expect(panel).not.toBeNull();
+		for (const tab of tabs) {
+			expect(tab.getAttribute('aria-controls')).toBe(panel?.id);
+		}
+		expect(panel?.getAttribute('aria-labelledby')).toBe(tabs[0]?.id);
+	});
+
+	it('moves the panel tab selection and focus with the arrow keys', async () => {
+		songList.set([song()]);
+		await renderSurface(info());
+		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+		tabs[0]?.focus();
+
+		tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		await tick();
+		expect(tabs[1]?.getAttribute('aria-selected')).toBe('true');
+		expect(document.activeElement).toBe(tabs[1]);
+
+		tabs[1]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+		await tick();
+		expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
+		expect(document.activeElement).toBe(tabs[0]);
+	});
+
 	it('the take panel stays absent while the generation is not yet loaded', async () => {
 		songList.set([]);
 		await renderSurface(info());
@@ -295,5 +324,32 @@ describe('NowPlaying', () => {
 		target.querySelector<HTMLButtonElement>('.mobile-sheet-backdrop')?.click();
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
+	});
+
+	it('moves focus into the mobile sheet when it opens', async () => {
+		document.documentElement.dataset.pointer = 'coarse';
+		songList.set([song()]);
+		await renderSurface(info());
+
+		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
+		await tick();
+		await tick();
+
+		const sheet = target.querySelector('.mobile-sheet');
+		expect(sheet?.contains(document.activeElement)).toBe(true);
+	});
+
+	it('scopes the mobile sheet focus trap to the sheet, not the whole surface, on Escape', async () => {
+		document.documentElement.dataset.pointer = 'coarse';
+		const handlers = await renderSurface(info());
+
+		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
+		await tick();
+		expect(target.querySelector('.mobile-sheet')).not.toBeNull();
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		await tick();
+		expect(target.querySelector('.mobile-sheet')).toBeNull();
+		expect(handlers.onclose).not.toHaveBeenCalled();
 	});
 });

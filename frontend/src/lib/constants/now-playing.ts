@@ -26,13 +26,27 @@ export const NOW_PLAYING_UNPICK_LABEL = 'Unpick';
 export const NOW_PLAYING_KEEP_LABEL = 'Keep';
 export const NOW_PLAYING_UNKEEP_LABEL = 'Unkeep';
 export const NOW_PLAYING_RATING_LABEL = 'Your rating';
+export const NOW_PLAYING_RATING_NOTES_PLACEHOLDER = 'Notes (optional)';
 export const NOW_PLAYING_RATING_SAVE = 'Save rating';
 export const NOW_PLAYING_RATING_SAVING = 'Saving…';
 export const NOW_PLAYING_PIN_SEED_PREFIX = 'Pin seed';
+export const NOW_PLAYING_DEVIATION_ADDED_TITLE = 'Not in lyrics';
 
 export const NOW_PLAYING_Z_INDEX = 350;
 // Below this width the three columns (cover, lyrics, right panel) stack, and
 // the right panel becomes a sheet the listener opens explicitly. Matches
 // PlayerBar's coarse-pointer override so a touch device always gets the
 // stacked layout regardless of viewport width.
-export const NOW_PLAYING_STACKED_MEDIA = '(max-width: 1099px), (any-pointer: coarse)';
+export const NOW_PLAYING_STACKED_MAX_PX = 1099;
+export const NOW_PLAYING_STACKED_MEDIA = `(max-width: ${NOW_PLAYING_STACKED_MAX_PX}px), (any-pointer: coarse)`;
+
+// Queue-stream skip/progress feedback (QueueStreamFeedback). One owner for
+// this surface's copy, kept alongside the rest of Now Playing's strings.
+export const NOW_PLAYING_STREAM_SKIPPED_SUFFIX = 'takes skipped';
+export const NOW_PLAYING_STREAM_CHECK_INCOMPLETE = 'Check incomplete';
+export const NOW_PLAYING_STREAM_ENDED = 'End of stream';
+export const NOW_PLAYING_STREAM_MISSING_PATH_SUFFIX = 'no audio file';
+export const NOW_PLAYING_STREAM_MISSING_FILE_SUFFIX = 'file not found';
+export const NOW_PLAYING_STREAM_UNREADABLE_FILE_SUFFIX = 'file unreadable';
+export const NOW_PLAYING_STREAM_MORE_NOT_CHECKED = 'More takes not checked';
+export const NOW_PLAYING_STREAM_MORE_NOT_LOADED = 'More takes not loaded';

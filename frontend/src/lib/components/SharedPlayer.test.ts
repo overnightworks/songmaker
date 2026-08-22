@@ -149,15 +149,15 @@ describe('SharedPlayer stream windows', () => {
 		audio.fire('ended');
 		await tick();
 		expect(onended).not.toHaveBeenCalled();
-		expect(target.textContent).toContain('Weitere Takes nicht geladen');
+		expect(target.textContent).toContain('More takes not loaded');
 		expect(target.querySelector('button[aria-label="Next"]')?.hasAttribute('disabled')).toBe(true);
 		await audio.play();
 		await tick();
-		expect(target.textContent).not.toContain('Weitere Takes nicht geladen');
+		expect(target.textContent).not.toContain('More takes not loaded');
 		audio.fire('ended');
 		await tick();
 		expect(onended).not.toHaveBeenCalled();
-		expect(target.textContent).toContain('Weitere Takes nicht geladen');
+		expect(target.textContent).toContain('More takes not loaded');
 
 		component.loadAndPlay('/stream.mp3', {
 			startIndex: 0,
@@ -165,7 +165,7 @@ describe('SharedPlayer stream windows', () => {
 			streamWindowed: false
 		});
 		await tick();
-		expect(target.textContent).not.toContain('Weitere Takes nicht geladen');
+		expect(target.textContent).not.toContain('More takes not loaded');
 		audio.fire('ended');
 		expect(onended).toHaveBeenCalledOnce();
 	});

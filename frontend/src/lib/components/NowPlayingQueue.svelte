@@ -8,14 +8,10 @@
 	} from '$lib/stores/playbackSettings';
 	import {
 		NOW_PLAYING_QUEUE_TAB,
-		NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
-		NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 		NOW_PLAYING_UP_NEXT_PREFIX,
 		nowPlayingQueueHeading
 	} from '$lib/constants/now-playing';
-	import { HITBOX_FREQUENT_PX } from '$lib/constants';
 	import { formatTime } from '$lib/utils/format';
-	import Icon from './Icon.svelte';
 	import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 
 	let {
@@ -25,9 +21,6 @@
 		currentSongTitle,
 		pool,
 		onChoosePool,
-		shuffle,
-		shuffleScope,
-		onToggleShuffle,
 		onJump,
 		skipped = [],
 		skippedComplete = true,
@@ -39,9 +32,6 @@
 		currentSongTitle: string;
 		pool: LibraryTakePool;
 		onChoosePool: (pool: LibraryTakePool) => void;
-		shuffle: boolean;
-		shuffleScope: string;
-		onToggleShuffle: () => void;
 		onJump: (index: number) => void;
 		skipped?: QueueStreamSkipItem[];
 		skippedComplete?: boolean;
@@ -49,11 +39,6 @@
 	} = $props();
 
 	const heading = $derived(nowPlayingQueueHeading(ctx.type === 'library' ? null : contextLabel));
-	const shuffleLabel = $derived(
-		shuffle
-			? `${NOW_PLAYING_SHUFFLE_DISABLE_PREFIX} (${shuffleScope})`
-			: `${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${shuffleScope}`
-	);
 </script>
 
 <section class="np-queue" aria-label={NOW_PLAYING_QUEUE_TAB}>
@@ -75,19 +60,6 @@
 					{/each}
 				</div>
 			{/if}
-			<button
-				type="button"
-				class="icon-btn"
-				class:active={shuffle}
-				style:min-width="{HITBOX_FREQUENT_PX}px"
-				style:min-height="{HITBOX_FREQUENT_PX}px"
-				onclick={onToggleShuffle}
-				aria-pressed={shuffle}
-				aria-label={shuffleLabel}
-				title={shuffleLabel}
-			>
-				<Icon name="shuffle" size={18} />
-			</button>
 		</div>
 	</div>
 	<div class="queue-feedback">
@@ -174,28 +146,6 @@
 		background: var(--primary);
 		border-color: var(--primary);
 		color: #fff;
-	}
-	.icon-btn {
-		flex-shrink: 0;
-		width: 36px;
-		height: 36px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		border: 1px solid var(--border);
-		border-radius: 50%;
-		background: transparent;
-		color: var(--text-muted);
-		cursor: pointer;
-	}
-	.icon-btn:hover {
-		color: var(--text);
-		background: var(--surface-hover);
-	}
-	.icon-btn.active {
-		color: var(--accent);
-		border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
-		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
 	}
 	.queue-feedback {
 		align-self: flex-start;

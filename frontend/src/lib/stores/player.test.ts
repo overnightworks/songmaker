@@ -2083,4 +2083,15 @@ describe('jumpToQueueIndex', () => {
 		);
 		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 1 });
 	});
+
+	it('seeks the stream engine to the requested track when a shared-link stream is playing', () => {
+		const seekToStreamTrack = vi.spyOn(audioPlayer, 'seekToStreamTrack').mockReturnValue(true);
+		audioPlayer.mode = 'stream';
+		queueContext.set({ type: 'playlist', entries: [makePlaylistEntry({ id: 'e1' })], index: 0 });
+
+		jumpToQueueIndex(2);
+
+		expect(seekToStreamTrack).toHaveBeenCalledWith(2);
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
 });

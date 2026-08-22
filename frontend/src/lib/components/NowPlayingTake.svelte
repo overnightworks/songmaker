@@ -5,11 +5,13 @@
 		NOW_PLAYING_DEVIATIONS_EMPTY,
 		NOW_PLAYING_DEVIATIONS_LABEL,
 		NOW_PLAYING_DEVIATIONS_UNAVAILABLE,
+		NOW_PLAYING_DEVIATION_ADDED_TITLE,
 		NOW_PLAYING_KEEP_LABEL,
 		NOW_PLAYING_LYRICS_ROW_LABEL,
 		NOW_PLAYING_PICK_LABEL,
 		NOW_PLAYING_PIN_SEED_PREFIX,
 		NOW_PLAYING_RATING_LABEL,
+		NOW_PLAYING_RATING_NOTES_PLACEHOLDER,
 		NOW_PLAYING_RATING_SAVE,
 		NOW_PLAYING_RATING_SAVING,
 		NOW_PLAYING_SCORES_EMPTY,
@@ -18,7 +20,8 @@
 		NOW_PLAYING_UNPICK_LABEL
 	} from '$lib/constants/now-playing';
 	import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
-	import { computeDiff, type DiffLine } from '$lib/utils/diff';
+	import { computeDiffByKey } from '$lib/utils/diff';
+	import { normalizeLyricsToken } from '$lib/utils/lyrics-normalize';
 	import { scoreColor } from '$lib/utils/scores';
 	import Icon from './Icon.svelte';
 
@@ -92,22 +95,31 @@
 
 	interface DeviationToken {
 		text: string;
-		kind: 'same' | 'changed' | 'missing';
+		kind: 'same' | 'changed' | 'missing' | 'added';
 		lyricsText?: string;
+	}
+
+	interface WordToken {
+		raw: string;
+		key: string;
 	}
 
 	const STRUCTURAL_LINE = /^\[[^\]]+\]$/;
 
-	// computeDiff works line by line. The whisper transcript is a plain sung
-	// transcription with its own line breaks (or none) — it shares neither the
-	// lyrics text's line wrapping nor its blank paragraph breaks and
-	// [Verse]/[Chorus] markers. Comparing whole lines against that would
-	// flag nearly every lyrics line as "removed" without ever finding the
-	// sung line it corresponds to. Tokenizing both texts into one word per
-	// line first — after dropping the lines-only artifacts — reuses the same
-	// line-diff function at word granularity, where a real sung deviation
-	// (a substituted, skipped, or added word) is actually visible.
-	function tokenizeWords(text: string): string {
+	// The whisper transcript is a plain sung transcription with its own line
+	// breaks (or none) — it shares neither the lyrics text's line wrapping nor
+	// its blank paragraph breaks and [Verse]/[Chorus] markers. Comparing whole
+	// lines against that would flag nearly every lyrics line as "removed"
+	// without ever finding the sung line it corresponds to. Splitting both
+	// texts into words instead — after dropping the lines-only artifacts —
+	// makes a substituted, skipped, or added word the unit of comparison,
+	// where a real sung deviation is actually visible. Each word carries a
+	// normalized `key` (issue #45's contract) alongside its `raw` display
+	// text, so punctuation and casing differences never register as
+	// deviations — only an actually different word does. A word that
+	// normalizes to nothing (pure punctuation) carries no sung content and is
+	// dropped before diffing.
+	function tokenizeWords(text: string): WordToken[] {
 		return text
 			.split('\n')
 			.map((line) => line.trim())
@@ -115,25 +127,48 @@
 			.join(' ')
 			.split(/\s+/)
 			.filter(Boolean)
-			.join('\n');
+			.map((raw) => ({ raw, key: normalizeLyricsToken(raw) }))
+			.filter((token) => token.key.length > 0);
 	}
 
-	function buildDeviationTokens(diffLines: DiffLine[]): DeviationToken[] {
+	// computeDiffByKey only marks an index null on the side that has no
+	// matched token (an 'add' has no oldIndex, a 'remove' has no newIndex);
+	// every call site below reads the index on the side its own entry type
+	// guarantees is set, so a missing index here means the diff and the
+	// token arrays it was built from have gone out of sync — a bug worth
+	// failing loudly on, not silently working around.
+	function rawAt(tokens: WordToken[], index: number | null): string {
+		if (index === null) throw new Error('Expected a matched word-diff index');
+		return tokens[index].raw;
+	}
+
+	function buildDeviationTokens(
+		lyricsTokens: WordToken[],
+		whisperTokens: WordToken[]
+	): DeviationToken[] {
+		const diff = computeDiffByKey(
+			lyricsTokens.map((token) => token.key),
+			whisperTokens.map((token) => token.key)
+		);
 		const tokens: DeviationToken[] = [];
 		let i = 0;
-		while (i < diffLines.length) {
-			const line = diffLines[i];
-			if (line.type === 'same') {
-				tokens.push({ text: line.text, kind: 'same' });
+		while (i < diff.length) {
+			const entry = diff[i];
+			if (entry.type === 'same') {
+				tokens.push({ text: rawAt(whisperTokens, entry.newIndex), kind: 'same' });
 				i++;
-			} else if (line.type === 'remove' && diffLines[i + 1]?.type === 'add') {
-				tokens.push({ text: diffLines[i + 1].text, kind: 'changed', lyricsText: line.text });
+			} else if (entry.type === 'remove' && diff[i + 1]?.type === 'add') {
+				tokens.push({
+					text: rawAt(whisperTokens, diff[i + 1].newIndex),
+					kind: 'changed',
+					lyricsText: rawAt(lyricsTokens, entry.oldIndex)
+				});
 				i += 2;
-			} else if (line.type === 'remove') {
-				tokens.push({ text: line.text, kind: 'missing' });
+			} else if (entry.type === 'remove') {
+				tokens.push({ text: rawAt(lyricsTokens, entry.oldIndex), kind: 'missing' });
 				i++;
 			} else {
-				tokens.push({ text: line.text, kind: 'changed' });
+				tokens.push({ text: rawAt(whisperTokens, entry.newIndex), kind: 'added' });
 				i++;
 			}
 		}
@@ -143,9 +178,7 @@
 	const hasTranscript = $derived(Boolean(lyrics && generation.whisper_text));
 	const deviationTokens = $derived.by((): DeviationToken[] => {
 		if (!lyrics || !generation.whisper_text) return [];
-		return buildDeviationTokens(
-			computeDiff(tokenizeWords(lyrics), tokenizeWords(generation.whisper_text))
-		);
+		return buildDeviationTokens(tokenizeWords(lyrics), tokenizeWords(generation.whisper_text));
 	});
 	const hasDeviations = $derived(deviationTokens.some((token) => token.kind !== 'same'));
 
@@ -247,8 +280,14 @@
 						class="dev-token"
 						class:changed={token.kind === 'changed'}
 						class:missing={token.kind === 'missing'}
+						class:added={token.kind === 'added'}
 						title={token.lyricsText
 							? `${NOW_PLAYING_LYRICS_ROW_LABEL}: ${token.lyricsText}`
+							: token.kind === 'added'
+								? NOW_PLAYING_DEVIATION_ADDED_TITLE
+								: undefined}
+						aria-label={token.kind === 'added'
+							? `${token.text} (${NOW_PLAYING_DEVIATION_ADDED_TITLE})`
 							: undefined}>{token.text}</span
 					>{/each}
 			</p>
@@ -268,6 +307,12 @@
 			/>
 			<span class="rating-number">{ratingValue}</span>
 		</div>
+		<textarea
+			class="rating-notes"
+			placeholder={NOW_PLAYING_RATING_NOTES_PLACEHOLDER}
+			bind:value={ratingNotes}
+			rows="2"
+		></textarea>
 		{#if ratingDirty}
 			<button type="button" class="rating-save" onclick={onSaveRating} disabled={ratingSaving}>
 				{ratingSaving ? NOW_PLAYING_RATING_SAVING : NOW_PLAYING_RATING_SAVE}
@@ -389,7 +434,7 @@
 		font-size: 0.8rem;
 		line-height: 1.8;
 		color: var(--text-muted);
-		overflow-wrap: anywhere;
+		overflow-wrap: break-word;
 	}
 	.dev-token {
 		margin-right: 0.3em;
@@ -404,10 +449,30 @@
 		color: var(--text-subtle);
 		text-decoration: line-through;
 	}
+	.dev-token.added {
+		color: #f90;
+		text-decoration: underline dotted;
+		text-underline-offset: 2px;
+		cursor: help;
+	}
 	.rating-row {
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
+	}
+	.rating-notes {
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--text-muted);
+		font-size: 0.8rem;
+		font-family: var(--font-body);
+		padding: 0.4rem 0.55rem;
+		resize: vertical;
+	}
+	.rating-notes:focus {
+		outline: none;
+		border-color: var(--accent);
 	}
 	.rating-slider {
 		flex: 1;

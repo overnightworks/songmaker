@@ -16,8 +16,11 @@
 		SONG_PREVIOUS_LABEL
 	} from '$lib/constants';
 	import {
+		NOW_PLAYING_LYRICS_ROW_LABEL,
 		NOW_PLAYING_QUEUE_TAB,
 		NOW_PLAYING_RIGHT_PANEL_LABEL,
+		NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
+		NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 		NOW_PLAYING_STACKED_MEDIA,
 		NOW_PLAYING_TAKE_TAB,
 		NOW_PLAYING_UP_NEXT_PREFIX,
@@ -42,7 +45,7 @@
 	import { addToast } from '$lib/stores/toast';
 	import { ApiError } from '$lib/api/fetch';
 	import { formatTime } from '$lib/utils/format';
-	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from './Icon.svelte';
 	import NowPlayingQueue from './NowPlayingQueue.svelte';
@@ -70,6 +73,9 @@
 	let stacked = $state(false);
 	let rightPanelTab: 'queue' | 'take' = $state('queue');
 	let mobilePanelOpen = $state(false);
+	let mobileSheet: HTMLDivElement | undefined = $state();
+	let queueTabBtn: HTMLButtonElement | undefined = $state();
+	let takeTabBtn: HTMLButtonElement | undefined = $state();
 
 	const lyrics = $derived(info.lyrics);
 	const hasLyrics = $derived(lyrics != null && lyrics.length > 0);
@@ -90,7 +96,9 @@
 				: SHUFFLE_SCOPE_LIBRARY
 	);
 	const shuffleLabel = $derived(
-		shuffle ? `Disable shuffle (${shuffleScope})` : `Shuffle ${shuffleScope}`
+		shuffle
+			? `${NOW_PLAYING_SHUFFLE_DISABLE_PREFIX} (${shuffleScope})`
+			: `${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${shuffleScope}`
 	);
 	const skipped = $derived(ctx.type === 'library' ? $libraryQueueSkipped : []);
 	const skippedComplete = $derived(ctx.type === 'library' ? $libraryQueueSkippedComplete : true);
@@ -127,7 +135,12 @@
 
 	$effect(() => {
 		const songId = info.songId;
-		void info.generation.id;
+		// Read so Svelte tracks this effect on a take switch too, not just a
+		// song switch — ensureGenerationsLoaded only takes songId, but a new
+		// generation within the same song still needs playingGeneration
+		// re-resolved once its song's data is (re)loaded.
+		const trackedGenerationId = info.generation.id;
+		void trackedGenerationId;
 		void ensureGenerationsLoaded(songId).catch((err: unknown) => {
 			addToast(
 				err instanceof ApiError ? err.detail || err.message : 'Failed to load take details',
@@ -150,12 +163,26 @@
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!root) return;
 		if (mobilePanelOpen) {
-			handleFocusTrapKeydown(root, event, () => {
+			if (!mobileSheet) return;
+			handleFocusTrapKeydown(mobileSheet, event, () => {
 				mobilePanelOpen = false;
 			});
 			return;
 		}
 		handleFocusTrapKeydown(root, event, onclose);
+	}
+
+	async function openMobilePanel(): Promise<void> {
+		mobilePanelOpen = true;
+		await tick();
+		if (mobileSheet) focusFirstIn(mobileSheet);
+	}
+
+	function onTabsKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+		event.preventDefault();
+		rightPanelTab = rightPanelTab === 'queue' ? 'take' : 'queue';
+		(rightPanelTab === 'queue' ? queueTabBtn : takeTabBtn)?.focus();
 	}
 
 	function seekFromRange(e: Event): void {
@@ -171,27 +198,46 @@
 <svelte:window onkeydown={onWindowKeydown} />
 
 {#snippet rightPanel()}
-	<div class="panel-toggle" role="tablist" aria-label={NOW_PLAYING_RIGHT_PANEL_LABEL}>
+	<div
+		class="panel-toggle"
+		role="tablist"
+		aria-label={NOW_PLAYING_RIGHT_PANEL_LABEL}
+		tabindex="-1"
+		onkeydown={onTabsKeydown}
+	>
 		<button
+			bind:this={queueTabBtn}
 			type="button"
+			id="np-tab-queue"
 			role="tab"
 			class:on={rightPanelTab === 'queue'}
 			aria-selected={rightPanelTab === 'queue'}
+			aria-controls="np-tabpanel"
+			tabindex={rightPanelTab === 'queue' ? 0 : -1}
 			onclick={() => (rightPanelTab = 'queue')}
 		>
 			{NOW_PLAYING_QUEUE_TAB}
 		</button>
 		<button
+			bind:this={takeTabBtn}
 			type="button"
+			id="np-tab-take"
 			role="tab"
 			class:on={rightPanelTab === 'take'}
 			aria-selected={rightPanelTab === 'take'}
+			aria-controls="np-tabpanel"
+			tabindex={rightPanelTab === 'take' ? 0 : -1}
 			onclick={() => (rightPanelTab = 'take')}
 		>
 			{NOW_PLAYING_TAKE_TAB}
 		</button>
 	</div>
-	<div class="panel-content">
+	<div
+		id="np-tabpanel"
+		class="panel-content"
+		role="tabpanel"
+		aria-labelledby={rightPanelTab === 'queue' ? 'np-tab-queue' : 'np-tab-take'}
+	>
 		{#if rightPanelTab === 'queue'}
 			<NowPlayingQueue
 				{ctx}
@@ -200,9 +246,6 @@
 				currentSongTitle={info.songTitle}
 				{pool}
 				{onChoosePool}
-				{shuffle}
-				{shuffleScope}
-				onToggleShuffle={() => toggleShuffle()}
 				onJump={jumpToQueueIndex}
 				{skipped}
 				{skippedComplete}
@@ -322,7 +365,7 @@
 			</section>
 
 			<section class="np-lyrics-col">
-				<p class="lyrics-heading">Lyrics</p>
+				<p class="lyrics-heading">{NOW_PLAYING_LYRICS_ROW_LABEL}</p>
 				{#if hasLyrics}
 					<div class="lyrics">{lyrics}</div>
 				{:else}
@@ -348,7 +391,7 @@
 			<button
 				type="button"
 				class="mobile-panel-trigger"
-				onclick={() => (mobilePanelOpen = true)}
+				onclick={openMobilePanel}
 				aria-haspopup="dialog"
 				aria-expanded={mobilePanelOpen}
 			>
@@ -371,10 +414,12 @@
 					onclick={() => (mobilePanelOpen = false)}
 				></button>
 				<div
+					bind:this={mobileSheet}
 					class="mobile-sheet"
 					role="dialog"
 					aria-modal="true"
 					aria-label={NOW_PLAYING_RIGHT_PANEL_LABEL}
+					tabindex="-1"
 				>
 					{@render rightPanel()}
 				</div>
@@ -706,15 +751,6 @@
 		overflow-y: auto;
 	}
 
-	@media (max-width: 1099px) {
-		.np-body {
-			grid-template-columns: 1fr;
-			overflow-y: auto;
-		}
-		.np-right-col {
-			display: none;
-		}
-	}
 	.now-playing.stacked .np-body {
 		grid-template-columns: 1fr;
 		overflow-y: auto;

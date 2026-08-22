@@ -774,6 +774,11 @@ function nativeQueueItem(take: PlaybackInfo, songs: SongItem[]): QueueRowItem {
 		songId: take.songId,
 		songTitle: take.songTitle,
 		generationId: take.generation.id,
+		// SongItem.audio_duration is the latest version's requested duration,
+		// not this specific take's actual length — PlaybackInfo carries no
+		// per-take duration (that lives only on the loaded <audio> element).
+		// Good enough for a queue row estimate; the transport's own progress
+		// bar shows the real duration once the take is playing.
 		durationSec: songs.find((s) => s.id === take.songId)?.audio_duration ?? null
 	};
 }
@@ -811,11 +816,15 @@ export function buildQueueViewModel(
 	return { items, currentIndex, upNext: nextQueueItem(items, currentIndex) };
 }
 
-// Plays the queue row at `index` in whatever queue context is active. Native
-// (library/album) and playlist contexts each keep their own index semantics,
-// so this dispatches to the matching internal player rather than duplicating
-// that logic at the call site.
+// Plays the queue row at `index` in whatever queue context is active. A
+// shared-link stream, native (library/album), and playlist contexts each
+// keep their own index semantics, so this dispatches to the matching
+// internal player rather than duplicating that logic at the call site.
 export function jumpToQueueIndex(index: number): void {
+	if (audioPlayer.mode === 'stream') {
+		audioPlayer.seekToStreamTrack(index);
+		return;
+	}
 	const ctx = get(queueContext);
 	if (ctx.type === 'playlist') {
 		playPlaylistIndex(ctx, index, { restart: true });

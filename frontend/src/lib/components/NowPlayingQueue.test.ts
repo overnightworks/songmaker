@@ -31,7 +31,6 @@ async function render(props: Partial<NowPlayingQueueProps> = {}) {
 	const ctx: QueueContext = props.ctx ?? { type: 'library' };
 	const queue: QueueViewModel = props.queue ?? { items: [item()], currentIndex: 0, upNext: null };
 	const onChoosePool = vi.fn();
-	const onToggleShuffle = vi.fn();
 	const onJump = vi.fn();
 	mounted = mount(NowPlayingQueue, {
 		target,
@@ -42,15 +41,12 @@ async function render(props: Partial<NowPlayingQueueProps> = {}) {
 			currentSongTitle: 'Tide',
 			pool: 'picks',
 			onChoosePool,
-			shuffle: false,
-			shuffleScope: 'all albums',
-			onToggleShuffle,
 			onJump,
 			...props
 		}
 	});
 	await tick();
-	return { onChoosePool, onToggleShuffle, onJump };
+	return { onChoosePool, onJump };
 }
 
 describe('NowPlayingQueue', () => {
@@ -108,13 +104,5 @@ describe('NowPlayingQueue', () => {
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.textContent).toContain('Tide');
 		expect(target.textContent).not.toContain('Up next');
-	});
-
-	it('toggles shuffle with the given scope label', async () => {
-		const { onToggleShuffle } = await render({ shuffle: false, shuffleScope: 'this album' });
-		const shuffleBtn = target.querySelector<HTMLButtonElement>('.icon-btn[aria-pressed]');
-		expect(shuffleBtn?.getAttribute('aria-label')).toBe('Shuffle this album');
-		shuffleBtn?.click();
-		expect(onToggleShuffle).toHaveBeenCalledOnce();
 	});
 });

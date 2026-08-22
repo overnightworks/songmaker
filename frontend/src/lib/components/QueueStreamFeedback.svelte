@@ -1,5 +1,15 @@
 <script lang="ts">
 	import type { QueueStreamSkipItem } from '$lib/api/types';
+	import {
+		NOW_PLAYING_STREAM_CHECK_INCOMPLETE,
+		NOW_PLAYING_STREAM_ENDED,
+		NOW_PLAYING_STREAM_MISSING_FILE_SUFFIX,
+		NOW_PLAYING_STREAM_MISSING_PATH_SUFFIX,
+		NOW_PLAYING_STREAM_MORE_NOT_CHECKED,
+		NOW_PLAYING_STREAM_MORE_NOT_LOADED,
+		NOW_PLAYING_STREAM_SKIPPED_SUFFIX,
+		NOW_PLAYING_STREAM_UNREADABLE_FILE_SUFFIX
+	} from '$lib/constants/now-playing';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -17,9 +27,9 @@
 	const hasFeedback = $derived(skipped.length > 0 || !skippedComplete || windowEnded);
 	const summaryLabel = $derived(
 		[
-			skipped.length > 0 ? `${skipped.length} Takes übersprungen` : '',
-			!skippedComplete ? 'Prüfung unvollständig' : '',
-			windowEnded ? 'Stream-Ende' : ''
+			skipped.length > 0 ? `${skipped.length} ${NOW_PLAYING_STREAM_SKIPPED_SUFFIX}` : '',
+			!skippedComplete ? NOW_PLAYING_STREAM_CHECK_INCOMPLETE : '',
+			windowEnded ? NOW_PLAYING_STREAM_ENDED : ''
 		]
 			.filter(Boolean)
 			.join(', ')
@@ -40,13 +50,18 @@
 		</summary>
 		<div class="feedback-details">
 			{#if skipped.length > 0}
-				{#if grouped.missing_path > 0}<span>{grouped.missing_path} ohne Audiodatei</span>{/if}
-				{#if grouped.missing_file > 0}<span>{grouped.missing_file} Datei nicht gefunden</span>{/if}
-				{#if grouped.unreadable_file > 0}<span>{grouped.unreadable_file} Datei nicht lesbar</span
+				{#if grouped.missing_path > 0}<span
+						>{grouped.missing_path} {NOW_PLAYING_STREAM_MISSING_PATH_SUFFIX}</span
+					>{/if}
+				{#if grouped.missing_file > 0}<span
+						>{grouped.missing_file} {NOW_PLAYING_STREAM_MISSING_FILE_SUFFIX}</span
+					>{/if}
+				{#if grouped.unreadable_file > 0}<span
+						>{grouped.unreadable_file} {NOW_PLAYING_STREAM_UNREADABLE_FILE_SUFFIX}</span
 					>{/if}
 			{/if}
-			{#if !skippedComplete}<span>Weitere Takes nicht geprüft</span>{/if}
-			{#if windowEnded}<span>Weitere Takes nicht geladen</span>{/if}
+			{#if !skippedComplete}<span>{NOW_PLAYING_STREAM_MORE_NOT_CHECKED}</span>{/if}
+			{#if windowEnded}<span>{NOW_PLAYING_STREAM_MORE_NOT_LOADED}</span>{/if}
 		</div>
 	</details>
 {/if}

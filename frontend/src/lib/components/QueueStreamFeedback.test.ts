@@ -40,15 +40,15 @@ describe('QueueStreamFeedback', () => {
 
 		const summary = details.querySelector('summary') as HTMLElement;
 		expect(summary.getAttribute('aria-label')).toBe(
-			'3 Takes übersprungen, Prüfung unvollständig, Stream-Ende'
+			'3 takes skipped, Check incomplete, End of stream'
 		);
 		summary.focus();
 		expect(document.activeElement).toBe(summary);
 		summary.click();
 		expect(details.open).toBe(true);
-		expect(details.textContent).toContain('2 Datei nicht gefunden');
-		expect(details.textContent).toContain('1 Datei nicht lesbar');
-		expect(details.textContent).toContain('Weitere Takes nicht geprüft');
-		expect(details.textContent).toContain('Weitere Takes nicht geladen');
+		expect(details.textContent).toContain('2 file not found');
+		expect(details.textContent).toContain('1 file unreadable');
+		expect(details.textContent).toContain('More takes not checked');
+		expect(details.textContent).toContain('More takes not loaded');
 	});
 });
