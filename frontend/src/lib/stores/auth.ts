@@ -15,9 +15,14 @@ export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
 
 export type AuthFailureKind = 'unauthenticated' | 'transient';
 
-/** Only a 401 means the caller is logged out; every other failure is transient. */
+/**
+ * A 401 or 403 on auth/me means the caller is logged out — 403 covers
+ * `get_current_user` returning "Account disabled" for a revoked account, which
+ * is permanent, not transient. Every other failure (429, 5xx, network) is
+ * transient. Mirrors `probeResourceAuth` in `resourceSync.ts`.
+ */
 export function classifyAuthFailure(error: unknown): AuthFailureKind {
-	if (error instanceof ApiError && error.status === 401) {
+	if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
 		return 'unauthenticated';
 	}
 	return 'transient';

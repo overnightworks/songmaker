@@ -65,6 +65,7 @@ describe('auth store', () => {
 describe('classifyAuthFailure', () => {
 	it.each([
 		['a 401 ApiError', new ApiError(401, 'unauthorized', AUTH_ME_PATH), 'unauthenticated'],
+		['a 403 ApiError', new ApiError(403, 'Account disabled', AUTH_ME_PATH), 'unauthenticated'],
 		['a 429 ApiError', new ApiError(429, 'slow down', AUTH_ME_PATH), 'transient'],
 		['a 503 ApiError', new ApiError(503, 'unavailable', AUTH_ME_PATH), 'transient'],
 		['a network error', new TypeError('Failed to fetch'), 'transient']
@@ -87,6 +88,16 @@ describe('checkAuth', () => {
 	it('logs out on a 401 and clears the known user', async () => {
 		currentUser.set(KNOWN_USER);
 		mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
+		const user = await checkAuth();
+		expect(user).toBeNull();
+		expect(get(currentUser)).toBeNull();
+		expect(get(authLoading)).toBe(false);
+		expect(get(authCheckError)).toBeNull();
+	});
+
+	it('logs out on a 403 (account disabled) and clears the known user', async () => {
+		currentUser.set(KNOWN_USER);
+		mockFetchMe.mockRejectedValueOnce(new ApiError(403, 'Account disabled', AUTH_ME_PATH));
 		const user = await checkAuth();
 		expect(user).toBeNull();
 		expect(get(currentUser)).toBeNull();
