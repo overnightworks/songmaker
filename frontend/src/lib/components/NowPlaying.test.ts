@@ -338,6 +338,26 @@ describe('NowPlaying', () => {
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
 	});
 
+	it('labels the stacked trigger Queue and keeps the sheet closed when the queue panel is requested', async () => {
+		document.documentElement.dataset.pointer = 'coarse';
+		await renderSurface(info());
+		expect(target.querySelector('.mobile-sheet')).toBeNull();
+		expect(target.querySelector('.mobile-panel-trigger')?.textContent).toContain('Queue');
+	});
+
+	it('seeds the sheet open from a take-row request on a stacked layout, never labelling the trigger Queue', async () => {
+		document.documentElement.dataset.pointer = 'coarse';
+		songList.set([song()]);
+		nowPlayingPanel.set('take');
+		await renderSurface(info());
+
+		expect(target.querySelector('.mobile-sheet')).not.toBeNull();
+		expect(target.querySelector('.np-take')).not.toBeNull();
+		const triggerText = target.querySelector('.mobile-panel-trigger')?.textContent ?? '';
+		expect(triggerText).toContain('This take');
+		expect(triggerText).not.toContain('Queue');
+	});
+
 	it('moves focus into the mobile sheet when it opens', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
 		songList.set([song()]);

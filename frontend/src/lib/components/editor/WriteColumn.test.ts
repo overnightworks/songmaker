@@ -146,7 +146,7 @@ describe('WriteColumn Co-Writer mode', () => {
 		expect(target.querySelector('.cowriter-chat')).toBeNull();
 	});
 
-	it('plays a take from the strip on click, not open the inspector', async () => {
+	it('plays a take from the strip on click without opening Now Playing', async () => {
 		const gen = generation({ id: 'g9' });
 		const { target } = await render({
 			coWriterOpen: true,

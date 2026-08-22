@@ -34,6 +34,7 @@ import {
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { closeSidebar } from '$lib/stores/ui';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	LIBRARY_SONG_PAGE_SIZE,
@@ -102,11 +103,6 @@ export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	})();
 	songGenerationLoads.set(songId, load);
 	await load;
-}
-
-export function selectGenerationInSidebar(gen: GenerationItem, song: SongItem): void {
-	selectedSongId.set(song.id);
-	selectedGenerationId.set(gen.id);
 }
 
 export function clearGenerationSelection(): void {
@@ -850,6 +846,35 @@ export const nowPlayingOpen = writable(false);
 export type NowPlayingPanel = 'queue' | 'take';
 export const nowPlayingPanel = writable<NowPlayingPanel>('queue');
 
+// The element to return focus to when Now Playing closes. PlayerBar
+// registers its own "Now Playing" button here once on mount — every opener
+// (PlayerBar's button, a TakesList row, NowPlayingTake's "Use as reference")
+// shares that single restore target instead of each tracking its own.
+let nowPlayingFocusTrigger: HTMLElement | null = null;
+
+export function registerNowPlayingTrigger(el: HTMLElement | null): void {
+	nowPlayingFocusTrigger = el;
+}
+
+// The single open/close owner for Now Playing: every surface that opens or
+// closes it (PlayerBar's button, a TakesList row via playTakeAndShowNowPlaying,
+// NowPlayingTake's "Use as reference") routes through these two functions
+// instead of poking `nowPlayingOpen`/`nowPlayingPanel` directly, so closing
+// the mobile rail drawer on open and restoring focus on close happen exactly
+// once, the same way, regardless of entry point.
+export function openNowPlaying(panel: NowPlayingPanel): void {
+	closeSidebar();
+	nowPlayingPanel.set(panel);
+	nowPlayingOpen.set(true);
+}
+
+export function closeNowPlaying(): void {
+	if (!get(nowPlayingOpen)) return;
+	nowPlayingOpen.set(false);
+	const trigger = nowPlayingFocusTrigger;
+	queueMicrotask(() => trigger?.focus());
+}
+
 // The single playback entry point for a take row (TakesList, TakeStrip):
 // toggles pause if the row's take is already playing, otherwise starts it
 // through the active queue-playback mode (stream or classic), reporting any
@@ -884,8 +909,7 @@ export async function playTakeAndShowNowPlaying(
 	song: SongItem
 ): Promise<void> {
 	await playTake(gen, song);
-	nowPlayingPanel.set('take');
-	nowPlayingOpen.set(true);
+	openNowPlaying('take');
 }
 
 export async function playNextSong(): Promise<void> {

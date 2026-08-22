@@ -22,7 +22,6 @@
 	import { health, startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 	import {
 		selectedSong,
-		selectedGeneration,
 		selectedGenerationId,
 		ensureGenerationsLoaded,
 		albumList,
@@ -146,7 +145,6 @@
 	let stackedExpanded = $state(false);
 
 	const song = $derived($selectedSong);
-	const inspected = $derived($selectedGeneration);
 	const songs = $derived($songList);
 	const albums = $derived($albumList);
 	const parentAlbum = $derived(
@@ -281,7 +279,7 @@
 
 	$effect(() => {
 		const pending = $pendingSource;
-		if (!pending) return;
+		if (!pending || !song || pending.generation.song_id !== song.id) return;
 		setSourceFromGeneration(pending.generation, pending.mode);
 		pendingSource.set(null);
 	});
@@ -615,7 +613,11 @@
 	async function resolveDirtyNavigation(choice: 'save' | 'discard' | 'cancel'): Promise<void> {
 		const action = get(pendingDirtyNavigation);
 		pendingDirtyNavigation.set(null);
-		if (choice === 'cancel' || !action) return;
+		if (choice === 'cancel') {
+			pendingSource.set(null);
+			return;
+		}
+		if (!action) return;
 		if (choice === 'save') {
 			if (!song) return;
 			try {
@@ -753,7 +755,6 @@
 				{@render expiryDigest()}
 				<TakesList
 					{song}
-					selectedId={inspected?.id ?? null}
 					loadStatus={takesStatus}
 					loadError={takesError}
 					{dirty}
@@ -789,7 +790,6 @@
 					{@render expiryDigest()}
 					<TakesList
 						{song}
-						selectedId={inspected?.id ?? null}
 						loadStatus={takesStatus}
 						loadError={takesError}
 						{dirty}

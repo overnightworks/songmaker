@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
+import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -63,12 +64,15 @@ import {
 	handlePlaybackEnded,
 	idlePlayTarget,
 	jumpToQueueIndex,
+	closeNowPlaying,
 	navigateToPlaying,
 	nowPlayingOpen,
 	nowPlayingPanel,
+	openNowPlaying,
 	playGeneration,
 	playTake,
 	playTakeAndShowNowPlaying,
+	registerNowPlayingTrigger,
 	toPlaybackInfo,
 	chooseLibraryTakePool,
 	playStartNotice,
@@ -85,7 +89,6 @@ import {
 	playPlaylistEntries,
 	queueContext,
 	selectAlbum,
-	selectGenerationInSidebar,
 	selectSong,
 	selectedAlbumId,
 	selectedGeneration,
@@ -277,6 +280,8 @@ afterEach(() => {
 	toasts.set([]);
 	nowPlayingOpen.set(false);
 	nowPlayingPanel.set('queue');
+	registerNowPlayingTrigger(null);
+	sidebarOpen.set(false);
 	localStorage.removeItem('queueShuffleEnabled');
 	localStorage.removeItem('libraryTakePool');
 });
@@ -480,14 +485,6 @@ describe('browsing state', () => {
 		songList.set([makeSong(), makeSong({ id: 's2', album_id: 'a2' })]);
 		selectedAlbumId.set(null);
 		expect(get(filteredSongs)).toHaveLength(2);
-	});
-
-	it('selectGenerationInSidebar sets song and gen', () => {
-		const gen = makeGen();
-		const song = makeSong();
-		selectGenerationInSidebar(gen, song);
-		expect(get(selectedSongId)).toBe('s1');
-		expect(get(selectedGenerationId)).toBe('g1');
 	});
 
 	it('clearGenerationSelection clears gen id', () => {
@@ -2175,5 +2172,42 @@ describe('playTakeAndShowNowPlaying', () => {
 		});
 		expect(get(nowPlayingPanel)).toBe('take');
 		expect(get(nowPlayingOpen)).toBe(true);
+	});
+});
+
+describe('openNowPlaying / closeNowPlaying', () => {
+	it('openNowPlaying closes the sidebar and opens on the requested panel', () => {
+		toggleSidebar();
+		expect(get(sidebarOpen)).toBe(true);
+
+		openNowPlaying('take');
+
+		expect(get(sidebarOpen)).toBe(false);
+		expect(get(nowPlayingPanel)).toBe('take');
+		expect(get(nowPlayingOpen)).toBe(true);
+	});
+
+	it('closeNowPlaying closes and restores focus to the registered trigger', async () => {
+		const trigger = document.createElement('button');
+		document.body.append(trigger);
+		registerNowPlayingTrigger(trigger);
+		openNowPlaying('queue');
+
+		closeNowPlaying();
+		await Promise.resolve();
+
+		expect(get(nowPlayingOpen)).toBe(false);
+		expect(document.activeElement).toBe(trigger);
+		trigger.remove();
+	});
+
+	it('closeNowPlaying is a no-op while Now Playing is already closed', () => {
+		const trigger = document.createElement('button');
+		registerNowPlayingTrigger(trigger);
+		const focusSpy = vi.spyOn(trigger, 'focus');
+
+		closeNowPlaying();
+
+		expect(focusSpy).not.toHaveBeenCalled();
 	});
 });

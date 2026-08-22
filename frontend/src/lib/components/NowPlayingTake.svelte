@@ -20,7 +20,7 @@
 		NOW_PLAYING_UNPICK_LABEL
 	} from '$lib/constants/now-playing';
 	import { revealPlayingSong } from '$lib/stores/navigation';
-	import { nowPlayingOpen } from '$lib/stores/player';
+	import { closeNowPlaying } from '$lib/stores/player';
 	import { pendingSource } from '$lib/stores/recipe';
 	import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
 	import { computeDiffByKey } from '$lib/utils/diff';
@@ -222,13 +222,15 @@
 	}
 
 	// Hands the take off to the editor's repaint/cover source (stores/recipe.ts
-	// pendingSource) and navigates there with the Recipe panel open. Now
-	// Playing closes first so the editor underneath is visible; pendingSource
-	// survives the navigation and is picked up once the song mounts, even if
-	// a dirty-draft guard defers the actual page change.
+	// pendingSource) and navigates to its song. Now Playing closes first so
+	// the editor underneath is visible. SongDetailView only applies
+	// pendingSource once that target song is the one actually mounted — if a
+	// dirty-draft guard defers the navigation and the user then cancels it,
+	// SongDetailView clears pendingSource instead of applying it to the song
+	// the user stayed on.
 	function onUseAsReference(): void {
 		pendingSource.set({ generation, mode: 'repaint' });
-		nowPlayingOpen.set(false);
+		closeNowPlaying();
 		void revealPlayingSong(song, generation.id);
 	}
 </script>

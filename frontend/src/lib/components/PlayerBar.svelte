@@ -2,10 +2,11 @@
 	import { onDestroy, untrack } from 'svelte';
 	import {
 		albumList,
+		closeNowPlaying,
 		idlePlayTarget,
 		navigateToPlaying,
 		nowPlayingOpen,
-		nowPlayingPanel,
+		openNowPlaying,
 		playIdleStart,
 		playNextSong,
 		playPrevSong,
@@ -13,12 +14,12 @@
 		canPlayNextSong,
 		playStartNotice,
 		queueContext,
+		registerNowPlayingTrigger,
 		retryLastPlayIntent,
 		songList
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
-	import { closeSidebar } from '$lib/stores/ui';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
@@ -179,17 +180,9 @@
 		});
 	}
 
-	function openNowPlaying(): void {
+	function onOpenNowPlayingClick(): void {
 		if (!current) return;
-		closeSidebar();
-		nowPlayingPanel.set('queue');
-		nowPlayingOpen.set(true);
-	}
-
-	function closeNowPlaying(): void {
-		if (!$nowPlayingOpen) return;
-		nowPlayingOpen.set(false);
-		queueMicrotask(() => nowPlayingTrigger?.focus());
+		openNowPlaying('queue');
 	}
 
 	function goToPlayingSong(): void {
@@ -198,7 +191,12 @@
 	}
 
 	$effect(() => {
-		if (!current) nowPlayingOpen.set(false);
+		if (!current) closeNowPlaying();
+	});
+
+	$effect(() => {
+		registerNowPlayingTrigger(nowPlayingTrigger ?? null);
+		return () => registerNowPlayingTrigger(null);
 	});
 
 	$effect(() => {
@@ -313,7 +311,7 @@
 		<button
 			bind:this={nowPlayingTrigger}
 			class="now-playing-btn"
-			onclick={openNowPlaying}
+			onclick={onOpenNowPlayingClick}
 			disabled={!current}
 			aria-label={NOW_PLAYING_LABEL}
 			aria-haspopup="dialog"

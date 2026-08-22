@@ -17,7 +17,8 @@
 	import {
 		playTakeAndShowNowPlaying,
 		removeGenerationFromSong,
-		replaceSongInList
+		replaceSongInList,
+		selectedGenerationId
 	} from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -47,7 +48,6 @@
 
 	interface Props {
 		song: SongItem;
-		selectedId?: string | null;
 		loadStatus?: 'loading' | 'ready' | 'error';
 		loadError?: string | null;
 		dirty: boolean;
@@ -62,7 +62,6 @@
 
 	let {
 		song,
-		selectedId = null,
 		loadStatus = 'ready',
 		loadError = null,
 		dirty,
@@ -167,13 +166,13 @@
 	async function handleBulkDelete(): Promise<void> {
 		const ids = [...$selectedIds];
 		if (ids.length === 0) return;
-		const inspectedTakeId = selectedId;
+		const openGenerationId = $selectedGenerationId;
 		try {
 			await bulkDeleteGenerations(ids);
 			for (const id of ids) {
 				removeGenerationFromSong(song.id, id);
 			}
-			if (inspectedTakeId !== null && ids.includes(inspectedTakeId)) {
+			if (openGenerationId !== null && ids.includes(openGenerationId)) {
 				clearGenerationSelection();
 				persistLibraryHistory();
 			}
@@ -339,12 +338,10 @@
 						class:playing={isGenPlaying(gen)}
 						class:buffering={isGenLoading(gen)}
 						class:selected={$selectedIds.has(gen.id)}
-						class:inspected={selectedId === gen.id}
 						onclick={(e) => handleRowClick(gen, e)}
 						onkeydown={(e) => handleRowKeydown(gen, e)}
 						role="button"
 						tabindex="0"
-						aria-pressed={selectedId === gen.id}
 					>
 						{#if $selectionMode}
 							<span class="selection-checkbox">
@@ -616,8 +613,7 @@
 		animation: buffer-pulse 1.5s ease-in-out infinite;
 	}
 
-	.take-row.selected,
-	.take-row.inspected {
+	.take-row.selected {
 		border-color: var(--accent);
 		background: rgba(160, 32, 240, 0.05);
 	}
