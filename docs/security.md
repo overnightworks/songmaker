@@ -18,6 +18,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 - **Constant-time verification**: bcrypt always runs against a dummy hash when the user doesn't exist (login) or on password change, preventing timing-based enumeration
 - **Login attempt cleanup**: Records older than 90 days are pruned at startup
 - **Password strength**: Common passwords (~200 entries including seasonal/year variants) and low-entropy passwords (< 4 unique chars) are rejected on setup, user creation, and password change
+- **Frontend auth-check classification**: The SPA's startup `GET /api/auth/me` (`checkAuth()` in `frontend/src/lib/stores/auth.ts`) treats only a 401 as "not logged in" and redirects to `/login`. A 429 (e.g. from the per-IP rate limiter below), a 5xx, or a network error is transient: the known session state is kept and the layout shows a retry-able error instead of forcing a logout. This prevents a fast-reloading browser or test harness from being logged out purely because it tripped the IP rate limit.
 
 ## Authorization
 

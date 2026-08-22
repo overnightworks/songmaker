@@ -24,13 +24,18 @@ import {
 	currentUser,
 	authLoading,
 	authError,
+	authCheckError,
 	isAdmin,
 	checkAuth,
+	classifyAuthFailure,
 	login,
 	logout,
 	clearAuth
 } from './auth';
 import { ApiError } from '$lib/api/client';
+
+const AUTH_ME_PATH = '/api/auth/me';
+const KNOWN_USER = { id: 'u1', username: 'admin', role: 'admin' as const };
 
 beforeEach(() => {
 	mockFetchMe.mockReset();
@@ -40,6 +45,7 @@ beforeEach(() => {
 	currentUser.set(null);
 	authLoading.set(true);
 	authError.set('');
+	authCheckError.set(null);
 });
 
 describe('auth store', () => {
@@ -56,21 +62,58 @@ describe('auth store', () => {
 	});
 });
 
+describe('classifyAuthFailure', () => {
+	it.each([
+		['a 401 ApiError', new ApiError(401, 'unauthorized', AUTH_ME_PATH), 'unauthenticated'],
+		['a 429 ApiError', new ApiError(429, 'slow down', AUTH_ME_PATH), 'transient'],
+		['a 503 ApiError', new ApiError(503, 'unavailable', AUTH_ME_PATH), 'transient'],
+		['a network error', new TypeError('Failed to fetch'), 'transient']
+	])('classifies %s as %s', (_label, error, expected) => {
+		expect(classifyAuthFailure(error)).toBe(expected);
+	});
+});
+
 describe('checkAuth', () => {
-	it('sets currentUser on success', async () => {
+	it('sets currentUser on success and clears any prior check error', async () => {
+		authCheckError.set('stale error');
 		mockFetchMe.mockResolvedValueOnce({ id: 'u1', username: 'admin', role: 'admin' });
 		const user = await checkAuth();
 		expect(user).toEqual({ id: 'u1', username: 'admin', role: 'admin' });
 		expect(get(currentUser)).toEqual(user);
 		expect(get(authLoading)).toBe(false);
+		expect(get(authCheckError)).toBeNull();
 	});
 
-	it('clears user on failure', async () => {
-		mockFetchMe.mockRejectedValueOnce(new Error('401'));
+	it('logs out on a 401 and clears the known user', async () => {
+		currentUser.set(KNOWN_USER);
+		mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
 		const user = await checkAuth();
 		expect(user).toBeNull();
 		expect(get(currentUser)).toBeNull();
 		expect(get(authLoading)).toBe(false);
+		expect(get(authCheckError)).toBeNull();
+	});
+
+	it('keeps an unknown user null through a transient failure on first load', async () => {
+		mockFetchMe.mockRejectedValueOnce(new ApiError(429, 'slow down', AUTH_ME_PATH));
+		const user = await checkAuth();
+		expect(user).toBeNull();
+		expect(get(currentUser)).toBeNull();
+		expect(get(authCheckError)).not.toBeNull();
+	});
+
+	it.each([
+		['a 429 rate limit', new ApiError(429, 'slow down', AUTH_ME_PATH)],
+		['a 503 outage', new ApiError(503, 'unavailable', AUTH_ME_PATH)],
+		['a network error', new TypeError('Failed to fetch')]
+	])('keeps the known user through %s and records a retryable error', async (_label, error) => {
+		currentUser.set(KNOWN_USER);
+		mockFetchMe.mockRejectedValueOnce(error);
+		const user = await checkAuth();
+		expect(user).toEqual(KNOWN_USER);
+		expect(get(currentUser)).toEqual(KNOWN_USER);
+		expect(get(authLoading)).toBe(false);
+		expect(get(authCheckError)).not.toBeNull();
 	});
 });
 
