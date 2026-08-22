@@ -58,7 +58,6 @@ describe('searchLibrary', () => {
 	});
 });
 
-
 describe('fetchLibraryPoolQueue', () => {
 	it('calls GET /api/library/pool-queue with pool, shuffle, and start take', async () => {
 		mockOk({

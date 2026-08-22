@@ -580,7 +580,7 @@ export function canPlayPrevSong(
 	if (audioPlayer.mode === 'stream') return audioPlayer.canPrevStreamTrack;
 	if (!current) return false;
 	if (ctx.type === 'playlist') return ctx.entries.length > 1;
-	if (ctx.type !== 'playlist' && ctx.takes && ctx.takes.length > 0) return ctx.takes.length > 1;
+	if (ctx.takes && ctx.takes.length > 0) return ctx.takes.length > 1;
 	if (ctx.type === 'library') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
 	return pool.filter((s) => s.generation_count > 0).length > 1;
@@ -604,7 +604,7 @@ export function canPlayNextSong(
 		}
 		return ctx.takes.length > 1;
 	}
-	if (ctx.type !== 'playlist' && ctx.takes && ctx.takes.length > 0) return ctx.takes.length > 1;
+	if (ctx.takes && ctx.takes.length > 0) return ctx.takes.length > 1;
 	if (ctx.type === 'library') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
 	return pool.filter((s) => s.id !== current.songId && s.generation_count > 0).length > 0;
@@ -739,13 +739,11 @@ export async function playNextSong(): Promise<void> {
 		playPlaylistIndex(ctx, (currentIndex + 1) % ctx.entries.length);
 		return;
 	}
-	if (ctx.type !== 'playlist' && ctx.takes && ctx.takes.length > 0) {
+	if (ctx.takes && ctx.takes.length > 0) {
 		const index = nativeTakeIndex(ctx, audioPlayer.current);
 		if (index < 0) return;
 		const atWindowEnd =
-			ctx.type === 'library' &&
-			index === ctx.takes.length - 1 &&
-			!get(libraryQueueSkippedComplete);
+			ctx.type === 'library' && index === ctx.takes.length - 1 && !get(libraryQueueSkippedComplete);
 		if (atWindowEnd) {
 			windowEnded.set(true);
 			return;
@@ -799,7 +797,7 @@ export async function playPrevSong(): Promise<void> {
 		}
 		return;
 	}
-	if (ctx.type !== 'playlist' && ctx.takes && ctx.takes.length > 0) {
+	if (ctx.takes && ctx.takes.length > 0) {
 		const index = nativeTakeIndex(ctx, audioPlayer.current);
 		if (index < 0 || ctx.takes.length <= 1) return;
 		playNativeIndex(ctx, (index - 1 + ctx.takes.length) % ctx.takes.length);
@@ -839,7 +837,11 @@ export async function playAlbum(albumId: string): Promise<void> {
 	const freshStart = get(songList).find((item) => item.id === startSong.id) ?? startSong;
 	const startGen = bestGen(freshStart);
 	if (!startGen) return;
-	playNativeAlbumTakes(albumId, [playlistEntryToPlaybackInfo(toAlbumQueueEntry(freshStart, startGen))], 0);
+	playNativeAlbumTakes(
+		albumId,
+		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(freshStart, startGen))],
+		0
+	);
 	await loadSongsForAlbum(albumId);
 	if (!playStartIsCurrent(seq)) return;
 	const entries = await collectAlbumEntries(albumId, seq);

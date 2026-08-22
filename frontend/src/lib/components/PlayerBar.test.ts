@@ -49,7 +49,6 @@ class FakeAudio {
 	}
 }
 
-
 function albumItem(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	return {
 		id: 'a1',

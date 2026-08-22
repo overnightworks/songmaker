@@ -1404,9 +1404,7 @@ describe('playLibraryFromGeneration', () => {
 		await playNextSong();
 		expect(get(windowEnded)).toBe(true);
 		expect(vi.mocked(audioPlayer.load).mock.calls.at(-1)).toBe(lastLoad);
-		expect(
-			canPlayNextSong(audioPlayer.current, get(songList), get(queueContext))
-		).toBe(false);
+		expect(canPlayNextSong(audioPlayer.current, get(songList), get(queueContext))).toBe(false);
 	});
 
 	it('wraps Mix next when the membership window is complete', async () => {
@@ -1613,9 +1611,7 @@ describe('playAlbumFromGeneration', () => {
 			}),
 			{ restart: true }
 		);
-		expect(get(queueContext)).toEqual(
-			expect.objectContaining({ type: 'album', albumId: 'a1' })
-		);
+		expect(get(queueContext)).toEqual(expect.objectContaining({ type: 'album', albumId: 'a1' }));
 	});
 });
 
