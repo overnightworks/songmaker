@@ -34,7 +34,7 @@
 	} from '$lib/stores/shares';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { unshareAlbum, unshareGeneration, unsharePlaylist, unshareSong } from '$lib/api/client';
-	import type { AlbumItem, ShareInventoryItem, SongItem } from '$lib/api/types';
+	import type { AlbumItem, PlaylistItem, ShareInventoryItem, SongItem } from '$lib/api/types';
 	import { searchQuery } from '$lib/stores/filter';
 	import {
 		createNewPlaylist,
@@ -46,6 +46,7 @@
 	} from '$lib/stores/playlists';
 	import {
 		albumIsExpanded,
+		browseTrackAlbumId,
 		captureLibraryScroll,
 		libraryScrollAnchor,
 		librarySection,
@@ -63,6 +64,7 @@
 		syncLibrarySearch
 	} from '$lib/stores/librarySearch';
 	import { addToast } from '$lib/stores/toast';
+	import AlbumDetailView from './AlbumDetailView.svelte';
 	import AlbumNode from './AlbumNode.svelte';
 
 	import { CREATED_SORT_LABELS, CREATED_SORTS, compareByCreatedAt } from '$lib/utils/recency';
@@ -70,10 +72,10 @@
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
 		LIBRARY_ALBUMS_EMPTY,
 		LIBRARY_ALBUMS_LOADING,
+		LIBRARY_LISTEN_EMPTY,
 		LIBRARY_LOAD_MORE,
 		LIBRARY_NEW_PLAYLIST_LABEL,
 		LIBRARY_NEW_SONG_LABEL,
-		LIBRARY_PLAYLISTS_EMPTY,
 		LIBRARY_PLAYLISTS_ERROR,
 		LIBRARY_PLAYLISTS_LOADING,
 		LIBRARY_RETRY_LABEL,
@@ -118,6 +120,10 @@
 	const albumLoads = $derived($albumSongsLoad);
 	const sharesOpen = $derived($sharesViewOpen);
 	const sharesState = $derived($shareInventory);
+	const trackAlbumId = $derived($browseTrackAlbumId);
+	const trackAlbum = $derived(
+		trackAlbumId ? albums.find((item) => item.id === trackAlbumId) : undefined
+	);
 	let pendingUnshare = $state<ShareInventoryItem | null>(null);
 
 	$effect(() => {
@@ -151,15 +157,35 @@
 		return groups;
 	});
 
-	const orderedPlaylists = $derived(
-		[...playlists].sort((a, b) => compareByCreatedAt(a, b, createdSort))
-	);
+	type ListenWallItem =
+		| { kind: 'album'; id: string; created_at: string; title: string; album: AlbumItem }
+		| { kind: 'playlist'; id: string; created_at: string; title: string; playlist: PlaylistItem };
+
+	const listenWall = $derived.by((): ListenWallItem[] => {
+		const items: ListenWallItem[] = [
+			...albums.map((album) => ({
+				kind: 'album' as const,
+				id: album.id,
+				created_at: album.created_at,
+				title: album.title,
+				album
+			})),
+			...playlists.map((playlist) => ({
+				kind: 'playlist' as const,
+				id: playlist.id,
+				created_at: playlist.created_at,
+				title: playlist.title,
+				playlist
+			}))
+		];
+		return items.sort((a, b) => compareByCreatedAt(a, b, createdSort));
+	});
 
 	let browseEl = $state<HTMLElement | null>(null);
 
 	$effect(() => {
 		void albumGroups.length;
-		void orderedPlaylists.length;
+		void listenWall.length;
 		void sharesState.items.length;
 		if (browseEl) {
 			browseEl.scrollTop = restoredScroll;
@@ -470,45 +496,49 @@
 			>
 		{/if}
 	{:else if section === 'albums'}
-		<div class="album-overview" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
-			{#each albumGroups as group (group.album.id)}
-				<AlbumNode
-					album={group.album}
-					selected={group.album.id === currentAlbumId}
-					onselect={() => hydrateAndOpenAlbum(group.album)}
-				/>
-			{/each}
-		</div>
+		{#if trackAlbum}
+			<AlbumDetailView albumId={trackAlbum.id} />
+		{:else}
+			<div class="album-overview" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
+				{#each albumGroups as group (group.album.id)}
+					<AlbumNode
+						album={group.album}
+						selected={group.album.id === currentAlbumId}
+						onselect={() => hydrateAndOpenAlbum(group.album)}
+					/>
+				{/each}
+			</div>
 
-		{#if browseState.status === 'loading' && albums.length === 0}
-			<p class="empty" role="status">{LIBRARY_ALBUMS_LOADING}</p>
-		{:else if browseState.status === 'error' && albums.length === 0}
-			<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
-			<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: true })}
-				>{LIBRARY_RETRY_LABEL}</button
-			>
-		{:else if albumGroups.length === 0}
-			<p class="empty">{LIBRARY_ALBUMS_EMPTY}</p>
-		{/if}
+			{#if browseState.status === 'loading' && albums.length === 0}
+				<p class="empty" role="status">{LIBRARY_ALBUMS_LOADING}</p>
+			{:else if browseState.status === 'error' && albums.length === 0}
+				<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
+				<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: true })}
+					>{LIBRARY_RETRY_LABEL}</button
+				>
+			{:else if albumGroups.length === 0}
+				<p class="empty">{LIBRARY_ALBUMS_EMPTY}</p>
+			{/if}
 
-		{#if browseState.albumHasMore || browseState.songHasMore}
-			<button
-				class="load-more"
-				onclick={async () => {
-					await loadLibraryBrowse({ reset: false });
-					persistLibraryHistory();
-				}}
-				disabled={browseState.status === 'loading'}
-			>
-				{LIBRARY_LOAD_MORE}
-			</button>
-		{/if}
+			{#if browseState.albumHasMore || browseState.songHasMore}
+				<button
+					class="load-more"
+					onclick={async () => {
+						await loadLibraryBrowse({ reset: false });
+						persistLibraryHistory();
+					}}
+					disabled={browseState.status === 'loading'}
+				>
+					{LIBRARY_LOAD_MORE}
+				</button>
+			{/if}
 
-		{#if browseState.status === 'error' && albums.length > 0}
-			<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
-			<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: true })}
-				>{LIBRARY_RETRY_LABEL}</button
-			>
+			{#if browseState.status === 'error' && albums.length > 0}
+				<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
+				<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: true })}
+					>{LIBRARY_RETRY_LABEL}</button
+				>
+			{/if}
 		{/if}
 	{:else if section === 'playlists'}
 		<div class="section-toolbar">
@@ -521,28 +551,60 @@
 				aria-label={LIBRARY_NEW_PLAYLIST_LABEL}>+</button
 			>
 		</div>
-		{#if playlistStatus.status === 'loading' && playlists.length === 0}
+		{#if listenWall.length > 0}
+			<div class="album-overview" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
+				{#each listenWall as item (`${item.kind}:${item.id}`)}
+					{#if item.kind === 'album'}
+						<AlbumNode
+							album={item.album}
+							selected={item.album.id === currentAlbumId}
+							onselect={() => hydrateAndOpenAlbum(item.album)}
+						/>
+					{:else}
+						<AlbumNode
+							playlist={item.playlist}
+							selected={item.playlist.id === currentPlaylistId}
+							onselect={() => selectPlaylistView(item.playlist.id)}
+						/>
+					{/if}
+				{/each}
+			</div>
+		{:else if playlistStatus.status === 'loading' && playlists.length === 0 && albums.length === 0}
 			<p class="empty" role="status">{LIBRARY_PLAYLISTS_LOADING}</p>
-		{:else if playlistStatus.status === 'error' && playlists.length === 0}
+		{:else if browseState.status === 'loading' && albums.length === 0}
+			<p class="empty" role="status">{LIBRARY_ALBUMS_LOADING}</p>
+		{:else if playlistStatus.status === 'error' && playlists.length === 0 && albums.length === 0}
 			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
 			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
-		{:else if playlists.length === 0}
-			<p class="empty">{LIBRARY_PLAYLISTS_EMPTY}</p>
+		{:else if browseState.status === 'error' && albums.length === 0 && playlists.length === 0}
+			<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: true })}
+				>{LIBRARY_RETRY_LABEL}</button
+			>
 		{:else}
-			{#each orderedPlaylists as p (p.id)}
-				<button
-					class="playlist-row"
-					class:selected={p.id === currentPlaylistId}
-					onclick={() => selectPlaylistView(p.id)}
-				>
-					<span class="playlist-title">{p.title}</span>
-					<span class="playlist-count">{p.entry_count}</span>
-				</button>
-			{/each}
+			<p class="empty">{LIBRARY_LISTEN_EMPTY}</p>
+		{/if}
+		{#if listenWall.length > 0 && (browseState.albumHasMore || browseState.songHasMore)}
+			<button
+				class="load-more"
+				onclick={async () => {
+					await loadLibraryBrowse({ reset: false });
+					persistLibraryHistory();
+				}}
+				disabled={browseState.status === 'loading'}
+			>
+				{LIBRARY_LOAD_MORE}
+			</button>
 		{/if}
 		{#if playlistStatus.status === 'error' && playlists.length > 0}
 			<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
 			<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
+		{/if}
+		{#if browseState.status === 'error' && albums.length > 0}
+			<p class="empty" role="alert">{browseState.error || LIBRARY_SEARCH_ERROR}</p>
+			<button class="retry-btn" onclick={() => loadLibraryBrowse({ reset: true })}
+				>{LIBRARY_RETRY_LABEL}</button
+			>
 		{/if}
 	{/if}
 </div>
@@ -686,30 +748,6 @@
 		display: flex;
 		justify-content: flex-end;
 		padding: 8px 12px;
-	}
-
-	.playlist-row {
-		display: flex;
-		align-items: center;
-		width: 100%;
-		min-width: 0;
-		padding: 8px 12px;
-		background: none;
-		border: none;
-		color: var(--text-light);
-		font-size: var(--label-font-size);
-		cursor: pointer;
-		text-align: left;
-	}
-
-	.playlist-row:hover {
-		background: var(--surface-hover);
-		color: var(--text);
-	}
-
-	.playlist-row.selected {
-		color: var(--primary);
-		background: var(--surface-hover);
 	}
 
 	.share-filters {

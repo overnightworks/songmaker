@@ -5,8 +5,8 @@ import { get } from 'svelte/store';
 import type { AlbumItem, PlaylistItem, ShareInventoryItem, SongItem } from '$lib/api/types';
 import {
 	LIBRARY_ALBUMS_EMPTY,
+	LIBRARY_LISTEN_EMPTY,
 	LIBRARY_LOAD_MORE,
-	LIBRARY_PLAYLISTS_EMPTY,
 	LIBRARY_RETRY_LABEL,
 	LIBRARY_SEARCH_DEBOUNCE_MS,
 	LIBRARY_SEARCH_EMPTY,
@@ -25,6 +25,7 @@ import {
 import { searchQuery } from '$lib/stores/filter';
 import {
 	applyLibraryHistory,
+	browseTrackAlbumId,
 	expandAlbum,
 	libraryRootState,
 	librarySurface,
@@ -70,6 +71,12 @@ vi.mock('$lib/api/client', () => ({
 		has_more: false
 	}),
 	createPlaylist: vi.fn(),
+	uploadAlbumCover: vi.fn(),
+	deleteAlbumCover: vi.fn(),
+	renameAlbum: vi.fn(),
+	restoreAlbum: vi.fn(),
+	shareAlbum: vi.fn(),
+	deleteAlbum: vi.fn(),
 	unshareAlbum: (...args: unknown[]) => unshareAlbum(...args),
 	unshareSong: vi.fn(),
 	unsharePlaylist: vi.fn(),
@@ -537,14 +544,53 @@ describe('SongList sections', () => {
 		);
 	});
 
-	it('shows playlists empty copy for that section', async () => {
+	it('shows listen empty copy when the mixed wall has nothing', async () => {
+		albumList.set([]);
+		songList.set([]);
 		playlistLoad.set({ status: 'ready', error: null });
 		const target = render();
 		await tick();
 
 		sectionTab(target, LIBRARY_SECTION_LABELS.playlists).click();
 		await tick();
-		expect(target.textContent).toContain(LIBRARY_PLAYLISTS_EMPTY);
+		await Promise.resolve();
+		await Promise.resolve();
+		await tick();
+		expect(target.textContent).toContain(LIBRARY_LISTEN_EMPTY);
+	});
+
+	it('shows album and playlist cards on the Listen wall', async () => {
+		playlistList.set([playlist()]);
+		playlistLoad.set({ status: 'ready', error: null });
+		albumList.set([
+			album({ id: 'a1', title: 'First', song_count: 2 }),
+			album({ id: 'a2', title: 'Second', artist: 'Other', song_count: 3 })
+		]);
+		const target = render();
+		await tick();
+		sectionTab(target, LIBRARY_SECTION_LABELS.playlists).click();
+		await tick();
+		expect(target.querySelector('[data-library-section="playlists"]')).not.toBeNull();
+		expect(target.querySelector('.album-overview')).not.toBeNull();
+		expect(target.querySelector('.playlist-row')).toBeNull();
+		const cards = [...target.querySelectorAll('.album-card')];
+		expect(cards).toHaveLength(3);
+		expect(
+			cards.some(
+				(card) =>
+					card.getAttribute('data-collection-kind') === 'album' &&
+					card.textContent?.includes('First')
+			)
+		).toBe(true);
+		expect(
+			cards.some(
+				(card) =>
+					card.getAttribute('data-collection-kind') === 'playlist' &&
+					card.textContent?.includes('Late Night')
+			)
+		).toBe(true);
+		expect(target.textContent).not.toContain(SONG_SURFACE_RECIPE);
+		expect(target.textContent).not.toContain(SONG_SURFACE_TAKES);
 	});
 
 	it('does not build share inventory from loaded lists', async () => {
@@ -766,7 +812,55 @@ describe('SongList album cards', () => {
 		(card as HTMLButtonElement).click();
 		await tick();
 		expect(get(selectedAlbumId)).toBe('a-local');
+		expect(get(browseTrackAlbumId)).toBe('a-local');
 		expect(get(librarySurface)).toBe('detail');
+		expect(target.querySelector('.album-overview')).toBeNull();
+		expect(target.querySelector('.item-row')?.textContent).toContain('Local Only');
+	});
+
+	it('keeps an open song and shows album tracks after a Studio album click', async () => {
+		selectedSongId.set('s-local');
+		selectedAlbumId.set('a-local');
+		setLibrarySurface('detail');
+		const target = render();
+		await tick();
+		const card = target.querySelector('.album-card');
+		expect(card).toBeInstanceOf(HTMLButtonElement);
+		(card as HTMLButtonElement).click();
+		await tick();
+		expect(get(selectedSongId)).toBe('s-local');
+		expect(get(selectedAlbumId)).toBe('a-local');
+		expect(get(browseTrackAlbumId)).toBe('a-local');
+		expect(get(librarySurface)).toBe('detail');
+		expect(target.querySelector('.album-overview')).toBeNull();
+		expect(target.querySelector('.item-row')?.textContent).toContain('Local Only');
+	});
+
+	it('shows the clicked album tracks while keeping a song from another album', async () => {
+		albumList.set([
+			album({ id: 'a-local', title: 'Local Album', song_count: 1 }),
+			album({ id: 'a-other', title: 'Other Album', song_count: 1 })
+		]);
+		songList.set([
+			song({ id: 's-local', album_id: 'a-local', title: 'Local Only' }),
+			song({ id: 's-other', album_id: 'a-other', title: 'Other Song' })
+		]);
+		selectedSongId.set('s-other');
+		selectedAlbumId.set('a-other');
+		setLibrarySurface('detail');
+		const target = render();
+		await tick();
+		const card = [...target.querySelectorAll('.album-card')].find((el) =>
+			el.textContent?.includes('Local Album')
+		);
+		expect(card).toBeInstanceOf(HTMLButtonElement);
+		(card as HTMLButtonElement).click();
+		await tick();
+		expect(get(selectedSongId)).toBe('s-other');
+		expect(get(selectedAlbumId)).toBe('a-other');
+		expect(get(browseTrackAlbumId)).toBe('a-local');
+		expect(target.querySelector('.item-row')?.textContent).toContain('Local Only');
+		expect(target.querySelector('.item-row')?.textContent).not.toContain('Other Song');
 	});
 
 	it('falls back to title initials when primary is missing or unusable', async () => {

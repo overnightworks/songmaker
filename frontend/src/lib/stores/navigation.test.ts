@@ -6,6 +6,7 @@ import { resolve } from '$app/paths';
 import { searchQuery } from '$lib/stores/filter';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import {
+	browseTrackAlbumId,
 	detailTab,
 	hydrateLibraryFromHistory,
 	librarySection,
@@ -427,7 +428,119 @@ describe('library history', () => {
 		backToAlbum();
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(selectedAlbumId)).toBe('a1');
+		expect(get(browseTrackAlbumId)).toBe('a1');
 		expect(get(librarySurface)).toBe('detail');
+		cleanup();
+	});
+
+	it('backToAlbum returns to the song album after browsing another album', () => {
+		const cleanup = initNavigation();
+		songList.set([song(), song({ id: 's2', album_id: 'a2', title: 'Other', track_number: 1 })]);
+		selectSong('s1');
+		selectAlbumOverview('a2');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(browseTrackAlbumId)).toBe('a2');
+		backToAlbum();
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(selectedAlbumId)).toBe('a1');
+		expect(get(browseTrackAlbumId)).toBe('a1');
+		cleanup();
+	});
+
+	it('Studio album click keeps an open song and Recipe', () => {
+		const cleanup = initNavigation();
+		selectSong('s1');
+		switchTab('edit');
+		selectAlbumOverview('a1');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(detailTab)).toBe('edit');
+		expect(get(selectedAlbumId)).toBe('a1');
+		expect(get(browseTrackAlbumId)).toBe('a1');
+		expect(get(librarySurface)).toBe('detail');
+		cleanup();
+	});
+
+	it('Studio album click keeps a song from a different album', () => {
+		const cleanup = initNavigation();
+		songList.set([song(), song({ id: 's2', album_id: 'a2', title: 'Other', track_number: 1 })]);
+		selectSong('s2');
+		expect(get(selectedAlbumId)).toBe('a2');
+		selectAlbumOverview('a1');
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(selectedAlbumId)).toBe('a2');
+		expect(get(browseTrackAlbumId)).toBe('a1');
+		expect(get(librarySurface)).toBe('detail');
+		cleanup();
+	});
+
+	it('stacks the first song from a browsed other album so back restores those tracks', () => {
+		const cleanup = initNavigation();
+		const other = song({ id: 's2', album_id: 'a2', title: 'Other', track_number: 1 });
+		songList.set([song(), other]);
+		selectSong(other.id);
+		selectAlbumOverview('a1');
+		const albumBrowse = history.state;
+		expect(albumBrowse).toMatchObject({
+			albumId: 'a2',
+			songId: 's2',
+			browseTrackAlbumId: 'a1'
+		});
+		const albumIndex = albumBrowse.index;
+		const push = vi.spyOn(history, 'pushState');
+		selectSong('s1');
+		expect(push).toHaveBeenCalled();
+		expect(history.state.index).toBeGreaterThan(albumIndex);
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedAlbumId)).toBe('a1');
+		expect(get(browseTrackAlbumId)).toBe('a1');
+		const back = vi.spyOn(history, 'back');
+		goBack();
+		expect(back).toHaveBeenCalled();
+		back.mockRestore();
+		window.dispatchEvent(new PopStateEvent('popstate', { state: albumBrowse }));
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(selectedAlbumId)).toBe('a2');
+		expect(get(browseTrackAlbumId)).toBe('a1');
+		push.mockRestore();
+		cleanup();
+	});
+
+	it('replaces list moves on the browsed album when the open song is already on it', () => {
+		const cleanup = initNavigation();
+		const first = song({ id: 's-first', track_number: 1, title: 'First' });
+		const second = song({ id: 's-second', track_number: 2, title: 'Second' });
+		songList.set([first, second]);
+		selectSong(first.id);
+		selectAlbumOverview('a1');
+		const index = history.state.index;
+		const push = vi.spyOn(history, 'pushState');
+		selectSong(second.id);
+		expect(push).not.toHaveBeenCalled();
+		expect(history.state.index).toBe(index);
+		expect(get(selectedSongId)).toBe(second.id);
+		expect(get(selectedAlbumId)).toBe('a1');
+		expect(get(browseTrackAlbumId)).toBe('a1');
+		push.mockRestore();
+		cleanup();
+	});
+
+	it('Listen album click opens the album interior without a song', () => {
+		const cleanup = initNavigation();
+		selectSong('s1');
+		selectLibrarySection('playlists');
+		expect(get(selectedSongId)).toBeNull();
+		selectAlbumOverview('a1');
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(selectedAlbumId)).toBe('a1');
+		expect(get(browseTrackAlbumId)).toBeNull();
+		expect(get(librarySurface)).toBe('detail');
+		expect(
+			libraryKeepsBrowseColumn({
+				surface: 'detail',
+				section: 'playlists',
+				sharesOpen: false
+			})
+		).toBe(false);
 		cleanup();
 	});
 
@@ -531,12 +644,11 @@ describe('library history', () => {
 });
 
 describe('studio keep-browse grid', () => {
-	it('names browse beside Studio song detail and hides it for album, Listen, Create, and Shared', () => {
+	it('names browse beside Studio song and album detail and hides it for Listen, Create, and Shared', () => {
 		expect(
 			libraryKeepsBrowseColumn({
 				surface: 'detail',
 				section: 'albums',
-				songSelected: true,
 				sharesOpen: false
 			})
 		).toBe(true);
@@ -545,15 +657,6 @@ describe('studio keep-browse grid', () => {
 			areas: LIBRARY_SONG_WORKSPACE_AREAS
 		});
 		expect(LIBRARY_SONG_WORKSPACE_AREAS).toBe('nav browse detail');
-
-		expect(
-			libraryKeepsBrowseColumn({
-				surface: 'detail',
-				section: 'albums',
-				songSelected: false,
-				sharesOpen: false
-			})
-		).toBe(false);
 		expect(libraryWorkspaceGrid({ hasDetail: true, keepBrowse: false })).toEqual({
 			className: '',
 			areas: LIBRARY_DETAIL_WORKSPACE_AREAS
@@ -564,7 +667,6 @@ describe('studio keep-browse grid', () => {
 			libraryKeepsBrowseColumn({
 				surface: 'detail',
 				section: 'playlists',
-				songSelected: true,
 				sharesOpen: false
 			})
 		).toBe(false);
@@ -572,7 +674,6 @@ describe('studio keep-browse grid', () => {
 			libraryKeepsBrowseColumn({
 				surface: 'create',
 				section: 'albums',
-				songSelected: false,
 				sharesOpen: false
 			})
 		).toBe(false);
@@ -580,7 +681,6 @@ describe('studio keep-browse grid', () => {
 			libraryKeepsBrowseColumn({
 				surface: 'detail',
 				section: 'albums',
-				songSelected: true,
 				sharesOpen: true
 			})
 		).toBe(false);

@@ -31,7 +31,9 @@ import {
 } from '$lib/constants';
 import {
 	applyLibraryHistory,
+	browseTrackAlbumId,
 	cancelLibraryHistoryApply,
+	closeSharesView,
 	detailTab,
 	expandAlbum,
 	isLibraryHistoryState,
@@ -111,8 +113,17 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 }
 
 export function selectAlbumOverview(albumId: string): void {
+	closeSharesView();
 	storeDeselectPlaylist();
-	playerSelectAlbum(albumId);
+	if (get(librarySection) === 'playlists') {
+		playerSelectAlbum(albumId);
+		browseTrackAlbumId.set(null);
+	} else {
+		browseTrackAlbumId.set(albumId);
+		if (get(selectedSongId) === null) {
+			selectedAlbumId.set(albumId);
+		}
+	}
 	expandAlbum(albumId);
 	setLibrarySurface('detail');
 	closeSidebar();
@@ -126,16 +137,22 @@ export function deselectAlbum(): void {
 export function backToAlbum(): void {
 	const songId = get(selectedSongId);
 	const song = songId ? get(songList).find((item) => item.id === songId) : undefined;
-	const albumId = get(selectedAlbumId) ?? song?.album_id ?? null;
+	const albumId = song?.album_id ?? get(selectedAlbumId) ?? null;
 	suppressPush = true;
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	openTakesSurface();
 	if (albumId) {
 		playerSelectAlbum(albumId);
+		if (get(librarySection) === 'albums') {
+			browseTrackAlbumId.set(albumId);
+		} else {
+			browseTrackAlbumId.set(null);
+		}
 		setLibrarySurface('detail');
 		void loadSongsForAlbum(albumId);
 	} else {
+		browseTrackAlbumId.set(null);
 		setLibrarySurface('browse');
 	}
 	suppressPush = false;
@@ -150,15 +167,9 @@ export function openLibraryCreate(): void {
 export function libraryKeepsBrowseColumn(input: {
 	surface: LibrarySurface;
 	section: LibrarySection;
-	songSelected: boolean;
 	sharesOpen: boolean;
 }): boolean {
-	return (
-		input.surface === 'detail' &&
-		input.section === 'albums' &&
-		input.songSelected &&
-		!input.sharesOpen
-	);
+	return input.surface === 'detail' && input.section === 'albums' && !input.sharesOpen;
 }
 
 export function libraryWorkspaceGrid(input: { hasDetail: boolean; keepBrowse: boolean }): {
@@ -229,7 +240,13 @@ function applySelectedSong(
 }
 
 function selectedSongHistoryMode(): 'stack' | 'replace' {
-	return get(librarySurface) === 'detail' && get(selectedSongId) !== null ? 'replace' : 'stack';
+	const songId = get(selectedSongId);
+	if (get(librarySurface) !== 'detail' || songId === null) return 'stack';
+	const trackAlbumId = get(browseTrackAlbumId);
+	if (!trackAlbumId) return 'replace';
+	const song = get(songList).find((item) => item.id === songId);
+	if (!song || song.album_id !== trackAlbumId) return 'stack';
+	return 'replace';
 }
 
 export function selectSong(songId: string, knownSong?: SongItem): void {
@@ -259,6 +276,7 @@ export function selectPlaylistView(playlistId: string): void {
 	playerSelectAlbum(null);
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
+	browseTrackAlbumId.set(null);
 	storeSelectPlaylist(playlistId);
 	setLibrarySurface('detail');
 	closeSidebar();

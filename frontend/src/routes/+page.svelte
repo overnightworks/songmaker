@@ -40,7 +40,10 @@
 		currentAlbumId ? (albums.find((a) => a.id === currentAlbumId) ?? null) : null
 	);
 	const playlistDetail = $derived($selectedPlaylistDetail);
-	const hasSelection = $derived(!!song || !!selectedAlbum || !!playlistDetail);
+	const listenInterior = $derived(
+		$librarySection === 'playlists' && (!!selectedAlbum || !!playlistDetail)
+	);
+	const hasSelection = $derived(!!song || listenInterior);
 	const hasDetail = $derived(
 		$librarySurface === 'create' || ($librarySurface === 'detail' && hasSelection)
 	);
@@ -48,7 +51,6 @@
 		libraryKeepsBrowseColumn({
 			surface: $librarySurface,
 			section: $librarySection,
-			songSelected: !!song,
 			sharesOpen: $sharesViewOpen
 		})
 	);
@@ -136,7 +138,7 @@
 					<CreateForm albums={$albumList} />
 				{:else if song}
 					<SongDetailView />
-				{:else if selectedAlbum}
+				{:else if $librarySection === 'playlists' && selectedAlbum}
 					<AlbumDetailView />
 				{:else if playlistDetail}
 					<PlaylistDetailView />

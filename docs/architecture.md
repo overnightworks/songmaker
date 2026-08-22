@@ -128,26 +128,34 @@ User clicks "Generate"                    User clicks "Score"
 SvelteKit single-page app. All state in Svelte stores.
 
 The home library has two exclusive modes (Studio and Listen; internal section IDs
-`albums` and `playlists`). Studio is albums and songs; Listen is playlists. Share
+`albums` and `playlists`). Studio is albums and songs. Listen is one mixed wall of
+albums and playlists as the same tile chrome (cover image when `cover` is present,
+otherwise `colors.primary` or title initials) — not a third tab. Share
 inventory is a complete server list of the current user's public slugs
 (`GET /api/library/shares`), opened from `Shared · N` in the header — including
 when mobile detail hides the library nav — not a third library tab. Membership is
 public slug reachability (`is_shared` plus slug, not soft-deleted; archived takes
 stay). `N` is the unfiltered server total; a type filter pages a subset without
 changing `N`. Old `history.state.section === 'shared'` still opens that inventory.
-Unshare stays the four resource DELETE endpoints. Studio browse is a wrapping
-album-card grid (title, artist, song count, created age, and the cover image
-when `cover` is present, otherwise `colors.primary` or title initials), not a
-nested song tree; the album overview remains the track
-list. Cards wrap with `minmax(0, …)` above 768px and stack at ≤768px
-(`LIBRARY_NARROW_MEDIA`); keep-browse uses that same card grid, not a horizontal
-shelf. Search still lists song hits under album context; album-only hits may use
-card chrome. Desktop keeps compact Studio/Listen navigation in the sidebar.
-Opening a Studio song on the detail surface keeps that card grid in a named
-browse column beside song detail (`nav browse detail`); Listen playlist detail,
-Create, and album overview hide browse. Shared still forces browse, so the
-inventory never sits beside `SongDetailView`. On viewports ≤768px, any detail
-hides browse and the song header offers album title plus previous/next track. Each mode keeps its
+Unshare stays the four resource DELETE endpoints. Studio browse starts as a wrapping
+album-card grid (title, artist, song count, created age, and that same cover or
+fallback chrome), not a nested song tree. Clicking a Studio album card does not
+clear an open song or Recipe/Takes; the browse column becomes that album's track
+list (rows, not album-sized tiles), and Cover/Rename/Share/Delete stay album
+chrome rather than a page that replaces the editor. If the open song belongs to a
+different album, the editor stays and browse still shows the clicked album's
+tracks. Clicking a Listen tile opens that collection's track interior (album or
+playlist: cover, title, tracks) without Recipe/Takes. Cards wrap with
+`minmax(0, …)` above 768px and stack at ≤768px (`LIBRARY_NARROW_MEDIA`); keep-browse
+is not a horizontal shelf. Search still lists song hits under album context;
+album-only hits may use card chrome. Desktop keeps compact Studio/Listen
+navigation in the sidebar. Opening a Studio song on the detail surface keeps a
+named browse column beside song detail (`nav browse detail`); after a Studio
+album click that column is the focused album's tracks. Listen interiors, Create,
+and Shared hide browse beside detail, so the inventory never sits beside
+`SongDetailView`. On viewports ≤768px, any detail hides browse and the song
+header offers album title plus previous/next track in that album — no extra
+column at 320 and no third Studio/Listen/Shared tab. Each mode keeps its
 last visible browse/detail context (selection, query, sort, loaded page, scroll,
 and song surface) in memory; switching Studio↔Listen replaces the current
 history entry and restores that mode's surface. Library context is also stored

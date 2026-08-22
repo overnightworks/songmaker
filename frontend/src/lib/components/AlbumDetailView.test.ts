@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AlbumItem, SongItem } from '$lib/api/types';
+import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
 import {
 	ALBUM_ART_EMPTY_INITIALS,
 	ALBUM_COVER_ALT_TYPE,
@@ -120,6 +120,20 @@ afterEach(async () => {
 });
 
 describe('AlbumDetailView cover hero', () => {
+	it('renders the albumId prop instead of the selected album', async () => {
+		albumList.set([
+			album({ id: 'a-local', title: 'Night Drive' }),
+			album({ id: 'a-other', title: 'Other Night' })
+		]);
+		selectedAlbumId.set('a-other');
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(AlbumDetailView, { target, props: { albumId: 'a-local' } }));
+		await tick();
+		expect(target.textContent).toContain('Night Drive');
+		expect(target.textContent).not.toContain('Other Night');
+	});
+
 	it('keeps title beside a compact cover without Play Album', async () => {
 		const target = await renderDetail();
 		expect(target.textContent).toContain('Night Drive');
@@ -244,5 +258,31 @@ describe('AlbumNode cover vs fallback', () => {
 		const target = renderNode(album({ title: '   ', colors: {} }));
 		await tick();
 		expect(target.querySelector('.album-art-initials')?.textContent).toBe(ALBUM_ART_EMPTY_INITIALS);
+	});
+
+	it('renders playlist tiles with the same card chrome and title initials', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		const playlist: PlaylistItem = {
+			id: 'p1',
+			title: 'Night Drive',
+			entry_count: 3,
+			is_shared: false,
+			share_slug: null,
+			created_at: '2026-01-01T00:00:00+00:00'
+		};
+		mounted.push(
+			mount(AlbumNode, {
+				target,
+				props: { playlist, selected: false, onselect: () => undefined }
+			})
+		);
+		await tick();
+		expect(target.querySelector('.album-card')?.getAttribute('data-collection-kind')).toBe(
+			'playlist'
+		);
+		expect(target.querySelector('.album-art-initials')?.textContent).toBe('ND');
+		expect(target.querySelector('.album-title')?.textContent).toBe('Night Drive');
+		expect(target.querySelector('.album-count')?.textContent).toBe('3');
 	});
 });
