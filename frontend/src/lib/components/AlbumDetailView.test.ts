@@ -141,11 +141,12 @@ describe('AlbumDetailView cover hero', () => {
 			})
 		);
 		const target = await renderDetail();
-		const input = target.querySelector<HTMLInputElement>('.cover-file-input');
-		expect(input).not.toBeNull();
+		const input = target.querySelector('.cover-file-input');
+		expect(input).toBeInstanceOf(HTMLInputElement);
+		if (!(input instanceof HTMLInputElement)) return;
 		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
 		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
-		input!.dispatchEvent(new Event('change', { bubbles: true }));
+		input.dispatchEvent(new Event('change', { bubbles: true }));
 		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledTimes(1));
 		await tick();
 		expect(target.textContent).toContain('Night Drive');
@@ -170,6 +171,9 @@ describe('AlbumDetailView cover hero', () => {
 		deleteAlbumCover.mockResolvedValue(album({ cover: null }));
 		const target = await renderDetail();
 		expect(target.querySelector('img')).not.toBeNull();
+		expect(
+			target.querySelector<HTMLButtonElement>('.cover-remove')?.getAttribute('aria-label')
+		).toBe(ALBUM_COVER_REMOVE_LABEL);
 		target.querySelector<HTMLButtonElement>('.cover-remove')?.click();
 		await vi.waitFor(() => expect(deleteAlbumCover).toHaveBeenCalledTimes(1));
 		await tick();

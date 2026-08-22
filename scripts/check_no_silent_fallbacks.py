@@ -120,8 +120,8 @@ RULES: list[Rule] = [
             # GenerationResponse.expires_at is a computed field, not a DB
             # column — returns None for picked/kept generations since they
             # never expire. Legitimate nullable.
-            "src/songmaker_cli/api_models/songs.py:140",
-            "src/songmaker_cli/api_models/songs.py:182",
+            "src/songmaker_cli/api_models/songs.py:197",
+            "src/songmaker_cli/api_models/songs.py:239",
             # An absent memory row is represented as an empty scope with no
             # update timestamp; this is a computed response field.
             "src/songmaker_cli/api_models/settings.py:237",
