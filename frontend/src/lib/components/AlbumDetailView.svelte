@@ -15,7 +15,6 @@
 		songList,
 		selectedAlbumId,
 		loadSongsForAlbum,
-		playAlbum,
 		addAlbumToList,
 		addSongsToList,
 		removeAlbumFromList,
@@ -275,9 +274,6 @@
 				</div>
 			</div>
 			<div class="detail-actions">
-				<button class="action-btn-primary" onclick={() => playAlbum(selectedAlbum.id)}>
-					Play Album
-				</button>
 				<ShareButton
 					isShared={selectedAlbum.is_shared}
 					shareSlug={selectedAlbum.share_slug}
@@ -480,25 +476,6 @@
 		display: flex;
 		gap: 0.5rem;
 		align-items: center;
-	}
-
-	.action-btn-primary {
-		padding: var(--btn-padding-pill);
-		border: none;
-		border-radius: var(--btn-radius-pill);
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
-		font-family: var(--font-display);
-		font-size: var(--btn-font-size);
-		letter-spacing: var(--btn-letter-spacing);
-		text-transform: uppercase;
-		cursor: pointer;
-		white-space: nowrap;
-		transition: box-shadow 0.2s;
-	}
-
-	.action-btn-primary:hover {
-		box-shadow: 0 0 20px rgba(160, 32, 240, 0.3);
 	}
 
 	.picker-anchor {

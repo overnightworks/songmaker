@@ -274,6 +274,7 @@ stream.
 | GET | `/api/albums?offset=0&limit=50` | user | List the caller's albums (`q` title contains, `sort=newest\|oldest\|title`). `has_more` is explicit. |
 | GET | `/api/songs?offset=0&limit=50` | user | List the caller's songs (`album_id`, `q`, `sort`). `has_more` is explicit. |
 | GET | `/api/library/search` | user | Keyset search of the caller's album and song titles. `q` required; `next_cursor` is null iff `has_more` is false. Invalid or mismatched cursors are 422. |
+| GET | `/api/library/pool-queue` | user | Ordered playable Mix/Picks/Keeps/All takes (`pool`, `shuffle`, `start_generation_id`) without ffmpeg concat. Same membership as `POST /api/queue-streams/library`. Shares the queue-stream per-user rate limit (429; 503 if Redis is down). Empty pool 422; foreign start 404. |
 | GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay, gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
 | GET/POST/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, or remove the album cover (JPEG/PNG; ownership 404) |

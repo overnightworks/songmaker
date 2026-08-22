@@ -63,6 +63,8 @@ from songmaker_cli.api_models.playlists import (
 )
 from songmaker_cli.api_models.queue_streams import (
     DEFAULT_LIBRARY_TAKE_POOL,
+    LibraryPoolQueueResponse,
+    LibraryPoolTakeResponse,
     LibraryTakePool,
     QueueStreamLibraryRequest,
     QueueStreamManifestResponse,
@@ -270,6 +272,8 @@ __all__ = [
     "LibrarySearchResponse",
     "LibrarySongHit",
     "LibrarySort",
+    "LibraryPoolQueueResponse",
+    "LibraryPoolTakeResponse",
     "LibraryTakePool",
     "LoadedModelDetail",
     "LoadModelOnWorkerRequest",

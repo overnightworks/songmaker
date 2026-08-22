@@ -3,6 +3,8 @@ import { get } from 'svelte/store';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import type {
 	GenerationItem,
+	LibraryPoolQueue,
+	LibraryPoolTakeItem,
 	PaginatedResponse,
 	PlaylistEntryItem,
 	QueueStreamManifest,
@@ -10,9 +12,18 @@ import type {
 	SongItem
 } from '$lib/api/types';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
-import { createQueueStreamSnapshot, fetchSong, fetchSongs } from '$lib/api/client';
+import {
+	createQueueStreamSnapshot,
+	fetchLibraryPoolQueue,
+	fetchSong,
+	fetchSongs
+} from '$lib/api/client';
 import { toasts } from '$lib/stores/toast';
-import { QUEUE_STREAM_UNPLAYABLE_START_DETAIL, QUEUE_TAKE_MISSING_TOAST } from '$lib/constants';
+import {
+	LIBRARY_QUEUE_EMPTY_TITLE,
+	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
+	QUEUE_TAKE_MISSING_TOAST
+} from '$lib/constants';
 import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 
 vi.mock('$app/navigation', () => ({
@@ -21,6 +32,7 @@ vi.mock('$app/navigation', () => ({
 vi.mock('$lib/api/client', () => ({
 	createQueueStreamSnapshot: vi.fn(),
 	createLibraryQueueStreamSnapshot: vi.fn(),
+	fetchLibraryPoolQueue: vi.fn(),
 	fetchSong: vi.fn(),
 	fetchSongs: vi.fn().mockResolvedValue({
 		items: [],
@@ -53,6 +65,8 @@ import {
 	libraryQueueNotice,
 	libraryQueueSkipped,
 	libraryQueueSkippedComplete,
+	playAlbum,
+	playIdleStart,
 	playLibrary,
 	playLibraryFromGeneration,
 	playAlbumFromGeneration,
@@ -80,6 +94,7 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { ApiError } from '$lib/api/fetch';
 import { libraryTakePool, setLibraryTakePool } from '$lib/stores/playbackSettings';
+import { selectedPlaylistDetail } from '$lib/stores/playlists';
 
 async function rebuildStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
 	const rebuild = audioPlayer.onStreamRebuild;
@@ -161,6 +176,38 @@ function makePlaylistEntry(overrides: Partial<PlaylistEntryItem> = {}): Playlist
 	};
 }
 
+function makePoolTake(overrides: Partial<LibraryPoolTakeItem> = {}): LibraryPoolTakeItem {
+	return {
+		generation_id: 'g1',
+		song_id: 's1',
+		song_title: 'Song',
+		artist: 'Artist',
+		album_title: 'Album',
+		lyrics: null,
+		generation_number: 1,
+		mp3_path: 'a1/song_v1.mp3',
+		seed: 42,
+		model_mode: 'sft',
+		is_picked: true,
+		is_kept: false,
+		...overrides
+	};
+}
+
+function makePoolQueue(overrides: Partial<LibraryPoolQueue> = {}): LibraryPoolQueue {
+	return {
+		pool: 'mix',
+		takes: [makePoolTake()],
+		skipped: [],
+		skipped_complete: true,
+		...overrides
+	};
+}
+
+function makePlayback(gen: GenerationItem, song: SongItem): PlaybackInfo {
+	return toPlaybackInfo(gen, song);
+}
+
 beforeEach(() => {
 	// These tests pin the classic per-track queue path; stream is now the
 	// product default, so classic must be an explicit choice here.
@@ -186,6 +233,7 @@ afterEach(() => {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	queueContext.set({ type: 'library' });
+	selectedPlaylistDetail.set(null);
 	setShuffle(false);
 	setLibraryTakePool('mix');
 	libraryQueueNotice.set('idle');
@@ -1073,110 +1121,180 @@ function makeManifest(overrides: Partial<QueueStreamManifest> = {}): QueueStream
 	};
 }
 
-describe('stream path', () => {
-	let loadStreamSpy: ReturnType<typeof vi.spyOn>;
-
+describe('native first play ignores stream settings', () => {
 	beforeEach(() => {
 		setQueuePlaybackMode('stream');
-		loadStreamSpy = vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
 		toasts.set([]);
 	});
 
-	it('shows error toast and does not call loadStream when stream build fails', async () => {
-		vi.mocked(createQueueStreamSnapshot).mockRejectedValueOnce(new Error('network error'));
+	it('playPlaylistEntries loads the first take natively without concat', async () => {
 		const entries = [makePlaylistEntry()];
+		await playPlaylistEntries(entries);
+		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ songTitle: 'Playlist Song' })
+		);
+	});
 
-		playPlaylistEntries(entries);
-		await Promise.resolve();
+	it('playAlbum loads the first take natively without concat', async () => {
+		const song = makeSong({ generations: [makeGen({ is_picked: true })] });
+		songList.set([song]);
+		await playAlbum('a1');
+		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({
+				generation: expect.objectContaining({ id: 'g1', mp3_path: 'a1/song_v1.mp3' })
+			}),
+			{ restart: true }
+		);
+	});
 
-		const current = get(toasts);
-		expect(current).toEqual([
-			expect.objectContaining({ message: 'Stream unavailable. Tap play to retry.', type: 'error' })
+	it('loads the first album take before later songs resolve', async () => {
+		songList.set([
+			makeSong({ id: 's1', track_number: 1, generation_count: 1, generations: [] }),
+			makeSong({
+				id: 's2',
+				title: 'Two',
+				track_number: 2,
+				generation_count: 1,
+				generations: []
+			})
 		]);
-		expect(loadStreamSpy).not.toHaveBeenCalled();
-		expect(audioPlayer.load).not.toHaveBeenCalled();
-	});
-
-	it('shows windowed notice toast when manifest is windowed', async () => {
-		const manifest = makeManifest({
-			windowed: true,
-			tracks: [
-				{
-					key: 't1',
-					index: 0,
-					entry_id: 'pe1',
-					generation_id: 'g1',
-					song_id: 's1',
-					song_title: 'Song',
-					artist: 'Artist',
-					album_title: 'Album',
-					lyrics: null,
-					generation_number: 1,
-					mp3_path: 'a.mp3',
-					audio_url: '/audio/a.mp3',
-					seed: null,
-					model_mode: 'sft',
-					duration: 180,
-					start_offset: 0,
-					end_offset: 180
-				}
-			]
+		let resolveSecond: ((song: SongItem) => void) | undefined;
+		vi.mocked(fetchSong).mockImplementation((id: string) => {
+			if (id === 's1') {
+				return Promise.resolve(
+					makeSong({
+						id: 's1',
+						generation_count: 1,
+						generations: [makeGen({ id: 'g-first', is_picked: true })]
+					})
+				);
+			}
+			return new Promise((resolve) => {
+				resolveSecond = resolve;
+			});
 		});
-		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(manifest);
-		const entries = [makePlaylistEntry()];
-
-		playPlaylistEntries(entries);
-		await Promise.resolve();
-
-		const infoToasts = get(toasts).filter((t) => t.type === 'info');
-		expect(infoToasts).toHaveLength(1);
-		expect(infoToasts[0].message).toMatch(/Streaming the first 1 tracks/);
+		const pending = playAlbum('a1');
+		await vi.waitFor(() =>
+			expect(audioPlayer.load).toHaveBeenCalledWith(
+				expect.objectContaining({
+					generation: expect.objectContaining({ id: 'g-first' })
+				}),
+				{ restart: true }
+			)
+		);
+		await vi.waitFor(() => expect(resolveSecond).toEqual(expect.any(Function)));
+		resolveSecond?.(
+			makeSong({
+				id: 's2',
+				title: 'Two',
+				track_number: 2,
+				generation_count: 1,
+				generations: [makeGen({ id: 'g-second', song_id: 's2', is_picked: true })]
+			})
+		);
+		await pending;
 	});
 
-	it('does not show windowed notice when manifest is not windowed', async () => {
-		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(makeManifest({ windowed: false }));
-		const entries = [makePlaylistEntry()];
-
-		playPlaylistEntries(entries);
+	it('second playAlbum does not finish two full fetchSong walks', async () => {
+		songList.set(
+			[1, 2, 3].map((track) =>
+				makeSong({
+					id: `s${track}`,
+					track_number: track,
+					generation_count: 1,
+					generations: []
+				})
+			)
+		);
+		const fetches: string[] = [];
+		const waiters = new Map<string, (song: SongItem) => void>();
+		vi.mocked(fetchSong).mockImplementation((id: string) => {
+			fetches.push(id);
+			return new Promise((resolve) => {
+				waiters.set(id, resolve);
+			});
+		});
+		const first = playAlbum('a1');
 		await Promise.resolve();
-
-		const infoToasts = get(toasts).filter((t) => t.type === 'info');
-		expect(infoToasts).toHaveLength(0);
+		expect(fetches).toEqual(['s1']);
+		const second = playAlbum('a1');
+		waiters.get('s1')?.(
+			makeSong({
+				id: 's1',
+				track_number: 1,
+				generation_count: 1,
+				generations: [makeGen({ id: 'g1', is_picked: true })]
+			})
+		);
+		await vi.waitFor(() => expect(audioPlayer.load).toHaveBeenCalledTimes(1));
+		await vi.waitFor(() => expect(fetches).toContain('s2'));
+		waiters.get('s2')?.(
+			makeSong({
+				id: 's2',
+				track_number: 2,
+				generation_count: 1,
+				generations: [makeGen({ id: 'g2', song_id: 's2', is_picked: true })]
+			})
+		);
+		await vi.waitFor(() => expect(fetches).toContain('s3'));
+		waiters.get('s3')?.(
+			makeSong({
+				id: 's3',
+				track_number: 3,
+				generation_count: 1,
+				generations: [makeGen({ id: 'g3', song_id: 's3', is_picked: true })]
+			})
+		);
+		await Promise.all([first, second]);
+		expect(fetches).toEqual(['s1', 's2', 's3']);
 	});
 });
 
 describe('playLibraryFromGeneration', () => {
-	let loadStreamSpy: ReturnType<typeof vi.spyOn>;
-
 	beforeEach(() => {
 		setQueuePlaybackMode('stream');
-		loadStreamSpy = vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
 		toasts.set([]);
 	});
 
-	it('loads stream at the index matching the requested generation', async () => {
+	it('does not call createLibraryQueueStreamSnapshot and loads the start take natively', async () => {
 		const gen = makeGen({ id: 'g2' });
-		const manifest = makeManifest({
-			tracks: [
-				makeTrack({ generation_id: 'g1', index: 0 }),
-				makeTrack({ generation_id: 'g2', index: 1 })
-			]
-		});
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({
+				takes: [
+					makePoolTake({ generation_id: 'g2', song_id: 's2', song_title: 'Two' }),
+					makePoolTake({ generation_id: 'g1', is_picked: false, is_kept: true })
+				]
+			})
+		);
 
 		await playLibraryFromGeneration(gen);
 
-		expect(loadStreamSpy).toHaveBeenCalledWith(manifest, 1, { restart: true });
+		expect(createLibraryQueueStreamSnapshot).not.toHaveBeenCalled();
+		expect(fetchLibraryPoolQueue).toHaveBeenCalledWith({
+			startGenerationId: 'g2',
+			shuffle: false,
+			pool: 'mix',
+			signal: expect.any(AbortSignal)
+		});
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({
+				generation: expect.objectContaining({ id: 'g2' }),
+				songTitle: 'Two'
+			}),
+			{ restart: true }
+		);
 	});
 
-	it('does not load a substitute track when the requested generation is absent from the manifest', async () => {
-		const gen = makeGen({ id: 'g-absent' });
-		const manifest = makeManifest({ tracks: [makeTrack({ generation_id: 'g1' })] });
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+	it('does not load a substitute track when the requested generation is absent from the queue', async () => {
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({ takes: [makePoolTake({ generation_id: 'g1' })] })
+		);
 
-		await playLibraryFromGeneration(gen);
+		await playLibraryFromGeneration(makeGen({ id: 'g-absent' }));
 
-		expect(loadStreamSpy).not.toHaveBeenCalled();
+		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
 				message: QUEUE_TAKE_MISSING_TOAST,
@@ -1186,8 +1304,8 @@ describe('playLibraryFromGeneration', () => {
 	});
 
 	it('unplayable start take is not labeled as an empty pool', async () => {
-		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(
-			new ApiError(422, QUEUE_STREAM_UNPLAYABLE_START_DETAIL, '/api/queue-streams/library')
+		vi.mocked(fetchLibraryPoolQueue).mockRejectedValueOnce(
+			new ApiError(422, QUEUE_STREAM_UNPLAYABLE_START_DETAIL, '/api/library/pool-queue')
 		);
 
 		await playLibraryFromGeneration(makeGen({ id: 'g-dead' }));
@@ -1199,11 +1317,11 @@ describe('playLibraryFromGeneration', () => {
 				type: 'error'
 			})
 		]);
-		expect(loadStreamSpy).not.toHaveBeenCalled();
+		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 
-	it('shows error toast and does not call loadStream when library stream build fails', async () => {
-		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(new Error('server error'));
+	it('shows error toast and does not load when membership fetch fails', async () => {
+		vi.mocked(fetchLibraryPoolQueue).mockRejectedValueOnce(new Error('server error'));
 
 		await playLibraryFromGeneration(makeGen());
 
@@ -1213,82 +1331,164 @@ describe('playLibraryFromGeneration', () => {
 				type: 'error'
 			})
 		]);
-		expect(loadStreamSpy).not.toHaveBeenCalled();
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 
-	it('retries the same generation rotation after a failed build, not an unrotated default', async () => {
+	it('retries the same generation rotation after a failed membership fetch', async () => {
 		const gen = makeGen({ id: 'g2' });
-		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(
-			new Error('cold build timeout')
-		);
+		vi.mocked(fetchLibraryPoolQueue).mockRejectedValueOnce(new Error('timeout'));
 		await playLibraryFromGeneration(gen);
-		expect(loadStreamSpy).not.toHaveBeenCalled();
+		expect(audioPlayer.load).not.toHaveBeenCalled();
 
-		const manifest = makeManifest({
-			tracks: [
-				makeTrack({ generation_id: 'g2', index: 0 }),
-				makeTrack({ generation_id: 'g1', index: 1 })
-			]
-		});
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({
+				takes: [
+					makePoolTake({ generation_id: 'g2' }),
+					makePoolTake({ generation_id: 'g1', is_picked: false, is_kept: true })
+				]
+			})
+		);
 
 		await expect(retryLastPlayIntent()).resolves.toBe(true);
-
-		expect(vi.mocked(createLibraryQueueStreamSnapshot)).toHaveBeenLastCalledWith('g2', {
+		expect(vi.mocked(fetchLibraryPoolQueue)).toHaveBeenLastCalledWith({
+			startGenerationId: 'g2',
 			shuffle: false,
-			pool: 'mix'
+			pool: 'mix',
+			signal: expect.any(AbortSignal)
 		});
-		expect(loadStreamSpy).toHaveBeenCalledWith(manifest, 0, { restart: true });
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) }),
+			{ restart: true }
+		);
 	});
 
-	it('reports no retry intent once a stream start has succeeded', async () => {
-		const gen = makeGen({ id: 'g1' });
-		const manifest = makeManifest({ tracks: [makeTrack({ generation_id: 'g1' })] });
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
-
-		await playLibraryFromGeneration(gen);
-
+	it('reports no retry intent once a native start has succeeded', async () => {
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(makePoolQueue());
+		await playLibraryFromGeneration(makeGen());
 		await expect(retryLastPlayIntent()).resolves.toBe(false);
 	});
 
-	it('shows windowed notice for a windowed library manifest', async () => {
-		const manifest = makeManifest({
-			windowed: true,
-			tracks: [makeTrack(), makeTrack({ generation_id: 'g2', index: 1 })]
-		});
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
-
-		await playLibraryFromGeneration(makeGen());
-
-		const infoToasts = get(toasts).filter((t) => t.type === 'info');
-		expect(infoToasts).toHaveLength(1);
-		expect(infoToasts[0].message).toMatch(/Streaming the first 2 tracks/);
-	});
-
 	it('preserves whether the library skip report is complete', async () => {
-		const manifest = makeManifest({
-			skipped_complete: false,
-			tracks: [makeTrack()]
-		});
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
-
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({ skipped_complete: false })
+		);
 		await playLibraryFromGeneration(makeGen());
-
 		expect(get(libraryQueueSkippedComplete)).toBe(false);
 	});
 
-	it('sends the current shuffle flag with the library snapshot request', async () => {
+	it('sends the current shuffle flag with the membership request', async () => {
 		setShuffle(true);
-		const manifest = makeManifest({ tracks: [makeTrack({ generation_id: 'g1' })] });
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
-
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(makePoolQueue());
 		await playLibraryFromGeneration(makeGen());
-
-		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g1', {
+		expect(fetchLibraryPoolQueue).toHaveBeenCalledWith({
+			startGenerationId: 'g1',
 			shuffle: true,
-			pool: 'mix'
+			pool: 'mix',
+			signal: expect.any(AbortSignal)
 		});
+	});
+
+	it('does not wrap Mix next when the membership window is incomplete', async () => {
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({
+				takes: [
+					makePoolTake({ generation_id: 'g1' }),
+					makePoolTake({ generation_id: 'g2', song_id: 's2', song_title: 'Two' })
+				],
+				skipped_complete: false
+			})
+		);
+		await playLibrary();
+		await playNextSong();
+		const lastLoad = vi.mocked(audioPlayer.load).mock.calls.at(-1);
+		await playNextSong();
+		expect(get(windowEnded)).toBe(true);
+		expect(vi.mocked(audioPlayer.load).mock.calls.at(-1)).toBe(lastLoad);
+		expect(canPlayNextSong(audioPlayer.current, get(songList), get(queueContext))).toBe(false);
+	});
+
+	it('wraps Mix next when the membership window is complete', async () => {
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({
+				takes: [
+					makePoolTake({ generation_id: 'g1' }),
+					makePoolTake({ generation_id: 'g2', song_id: 's2', song_title: 'Two' })
+				],
+				skipped_complete: true
+			})
+		);
+		await playLibrary();
+		await playNextSong();
+		await playNextSong();
+		expect(get(windowEnded)).toBe(false);
+		expect(audioPlayer.load).toHaveBeenLastCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g1' }) })
+		);
+	});
+
+	it('next stays in Mix and does not fall through to All', async () => {
+		const mixKept = makePoolTake({
+			generation_id: 'g-keep',
+			song_id: 's2',
+			song_title: 'Keep',
+			is_picked: false,
+			is_kept: true,
+			mp3_path: 'keep.mp3'
+		});
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({
+				takes: [makePoolTake({ generation_id: 'g-pick' }), mixKept]
+			})
+		);
+		songList.set([
+			makeSong({
+				id: 's1',
+				generations: [makeGen({ id: 'g-pick', is_picked: true })]
+			}),
+			makeSong({
+				id: 's-plain',
+				title: 'Plain',
+				generations: [makeGen({ id: 'g-plain', is_picked: false, is_kept: false })]
+			})
+		]);
+		await playLibraryFromGeneration(makeGen({ id: 'g-pick' }));
+		await playNextSong();
+		expect(audioPlayer.load).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				generation: expect.objectContaining({ id: 'g-keep' }),
+				songTitle: 'Keep'
+			})
+		);
+	});
+
+	it('a second play aborts the in-flight membership GET and loads only the later start', async () => {
+		let firstSignal: AbortSignal | undefined;
+		vi.mocked(fetchLibraryPoolQueue).mockImplementationOnce((opts) => {
+			firstSignal = opts?.signal;
+			return new Promise((_resolve, reject) => {
+				opts?.signal?.addEventListener('abort', () => {
+					reject(new DOMException('Aborted', 'AbortError'));
+				});
+			});
+		});
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({ takes: [makePoolTake({ generation_id: 'g-second', song_title: 'Second' })] })
+		);
+
+		const first = playLibraryFromGeneration(makeGen({ id: 'g-first' }));
+		await playLibraryFromGeneration(makeGen({ id: 'g-second' }));
+		await first;
+
+		expect(firstSignal?.aborted).toBe(true);
+		expect(audioPlayer.load).toHaveBeenCalledTimes(1);
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({
+				generation: expect.objectContaining({ id: 'g-second' }),
+				songTitle: 'Second'
+			}),
+			{ restart: true }
+		);
+		expect(createLibraryQueueStreamSnapshot).not.toHaveBeenCalled();
 	});
 });
 
@@ -1372,15 +1572,12 @@ describe('rebuildQueueStream routing', () => {
 });
 
 describe('playAlbumFromGeneration', () => {
-	let loadStreamSpy: ReturnType<typeof vi.spyOn>;
-
 	beforeEach(() => {
 		setQueuePlaybackMode('stream');
-		loadStreamSpy = vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
 		toasts.set([]);
 	});
 
-	it('streams the clicked take for that song and the pick for the rest', async () => {
+	it('loads the clicked take natively without concat', async () => {
 		const picked = makeGen({ id: 'g-pick', is_picked: true, song_id: 's1' });
 		const clicked = makeGen({
 			id: 'g-click',
@@ -1404,100 +1601,54 @@ describe('playAlbumFromGeneration', () => {
 			generation_count: 1
 		});
 		songList.set([song1, song2]);
-		vi.mocked(createQueueStreamSnapshot).mockImplementation(async (tracks) =>
-			makeManifest({
-				tracks: tracks.map((track, index) =>
-					makeTrack({
-						generation_id: track.generation_id,
-						entry_id: track.entry_id ?? null,
-						index,
-						key: track.generation_id
-					})
-				)
-			})
-		);
 
 		await playAlbumFromGeneration('a1', song1, clicked);
-		await Promise.resolve();
 
-		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
-			{ generation_id: 'g-click', entry_id: 'album:s1:g-click' },
-			{ generation_id: 'g2', entry_id: 'album:s2:g2' }
-		]);
-		expect(loadStreamSpy).toHaveBeenCalledWith(
+		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
+		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({
-				tracks: [
-					expect.objectContaining({ generation_id: 'g-click' }),
-					expect.objectContaining({ generation_id: 'g2' })
-				]
+				generation: expect.objectContaining({ id: 'g-click', mp3_path: 'a1/click.mp3' })
 			}),
-			0,
-			expect.objectContaining({ restart: true })
+			{ restart: true }
 		);
-		expect(get(queueContext)).toEqual({ type: 'album', albumId: 'a1' });
+		expect(get(queueContext)).toEqual(expect.objectContaining({ type: 'album', albumId: 'a1' }));
 	});
 });
 
-function makePlayback(gen: GenerationItem, song: SongItem): PlaybackInfo {
-	return toPlaybackInfo(gen, song);
-}
-
 describe('shuffle rebuilds the playing queue', () => {
-	let loadStreamSpy: ReturnType<typeof vi.spyOn>;
-
 	beforeEach(() => {
 		setQueuePlaybackMode('stream');
-		loadStreamSpy = vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
 		toasts.set([]);
 	});
 
 	it('toggling shuffle mid-library-play rebuilds at the current take and time', async () => {
 		const gen = makeGen({ id: 'g-cur' });
 		const song = makeSong({ generations: [gen] });
-		audioPlayer.mode = 'stream';
 		audioPlayer.current = makePlayback(gen, song);
 		audioPlayer.currentTime = 14;
 		queueContext.set({ type: 'library' });
-		const shuffled = makeManifest({
-			tracks: [
-				makeTrack({ generation_id: 'g-cur', start_offset: 0 }),
-				makeTrack({ generation_id: 'g-other', index: 1, start_offset: 180 })
-			]
-		});
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(shuffled);
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({
+				takes: [
+					makePoolTake({ generation_id: 'g-cur' }),
+					makePoolTake({ generation_id: 'g-other', song_id: 's2' })
+				]
+			})
+		);
 
 		await toggleShuffle();
 
-		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g-cur', {
+		expect(createLibraryQueueStreamSnapshot).not.toHaveBeenCalled();
+		expect(fetchLibraryPoolQueue).toHaveBeenCalledWith({
+			startGenerationId: 'g-cur',
 			shuffle: true,
-			pool: 'mix'
+			pool: 'mix',
+			signal: expect.any(AbortSignal)
 		});
-		expect(loadStreamSpy).toHaveBeenCalledWith(shuffled, 0, { restart: true, resumeAt: 14 });
-	});
-
-	it('turning shuffle off rebuilds the library in deterministic order', async () => {
-		setShuffle(true);
-		const gen = makeGen({ id: 'g-cur' });
-		const song = makeSong({ generations: [gen] });
-		audioPlayer.mode = 'stream';
-		audioPlayer.current = makePlayback(gen, song);
-		audioPlayer.currentTime = 8;
-		queueContext.set({ type: 'library' });
-		const sequential = makeManifest({
-			tracks: [
-				makeTrack({ generation_id: 'g-cur', start_offset: 0 }),
-				makeTrack({ generation_id: 'g-other', index: 1, start_offset: 180 })
-			]
-		});
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(sequential);
-
-		await toggleShuffle();
-
-		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g-cur', {
-			shuffle: false,
-			pool: 'mix'
-		});
-		expect(loadStreamSpy).toHaveBeenCalledWith(sequential, 0, { restart: true, resumeAt: 8 });
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g-cur' }) }),
+			{ restart: true, startAt: 14 }
+		);
 	});
 
 	it('album shuffle keeps the current take first and mixes the rest', async () => {
@@ -1521,152 +1672,14 @@ describe('shuffle rebuilds the playing queue', () => {
 			generations: [makeGen({ id: 'g3', is_picked: true, song_id: 's3', mp3_path: 'a1/s3.mp3' })]
 		});
 		songList.set([song1, song2, song3]);
-		vi.mocked(createQueueStreamSnapshot).mockImplementation(async (tracks) =>
-			makeManifest({
-				tracks: tracks.map((track, index) =>
-					makeTrack({
-						generation_id: track.generation_id,
-						entry_id: track.entry_id ?? null,
-						index,
-						key: track.generation_id,
-						start_offset: index * 180
-					})
-				)
-			})
-		);
 
 		await playAlbumFromGeneration('a1', song1, song1.generations[0]);
-		await Promise.resolve();
 
-		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
-			{ generation_id: 'g1', entry_id: 'album:s1:g1' },
-			{ generation_id: 'g3', entry_id: 'album:s3:g3' },
-			{ generation_id: 'g2', entry_id: 'album:s2:g2' }
-		]);
-	});
-
-	it('cleared shuffle keeps playlist snapshot in original order', async () => {
-		vi.spyOn(Math, 'random').mockReturnValue(0);
-		setShuffle(true);
-		setShuffle(false);
-		const entries = [
-			makePlaylistEntry({ id: 'pe1', generation_id: 'g1' }),
-			makePlaylistEntry({ id: 'pe2', generation_id: 'g2' }),
-			makePlaylistEntry({ id: 'pe3', generation_id: 'g3' })
-		];
-		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(
-			makeManifest({
-				tracks: entries.map((entry, index) =>
-					makeTrack({ generation_id: entry.generation_id, entry_id: entry.id, index })
-				)
-			})
-		);
-
-		await playPlaylistEntries(entries, 0, { restart: true });
-
-		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
-			{ generation_id: 'g1', entry_id: 'pe1' },
-			{ generation_id: 'g2', entry_id: 'pe2' },
-			{ generation_id: 'g3', entry_id: 'pe3' }
-		]);
-	});
-
-	it('turning shuffle off mid-playlist resumes the current entry in original order', async () => {
-		setShuffle(true);
-		const entries = [
-			makePlaylistEntry({ id: 'pe1', generation_id: 'g1' }),
-			makePlaylistEntry({ id: 'pe2', generation_id: 'g2', mp3_path: 'b.mp3' }),
-			makePlaylistEntry({ id: 'pe3', generation_id: 'g3' })
-		];
-		audioPlayer.mode = 'stream';
-		audioPlayer.current = {
-			generation: makeGen({ id: 'g2', mp3_path: 'b.mp3' }),
-			songId: '',
-			songTitle: 'Playlist Song',
-			artist: 'Artist',
-			albumTitle: 'Album',
-			lyrics: null
-		};
-		audioPlayer.currentTime = 5;
-		queueContext.set({ type: 'playlist', entries, index: 1 });
-		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(
-			makeManifest({
-				tracks: [
-					makeTrack({ generation_id: 'g1', entry_id: 'pe1', index: 0, start_offset: 0 }),
-					makeTrack({
-						generation_id: 'g2',
-						entry_id: 'pe2',
-						index: 1,
-						start_offset: 180,
-						mp3_path: 'b.mp3'
-					}),
-					makeTrack({ generation_id: 'g3', entry_id: 'pe3', index: 2, start_offset: 360 })
-				]
-			})
-		);
-
-		await toggleShuffle();
-
-		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
-			{ generation_id: 'g1', entry_id: 'pe1' },
-			{ generation_id: 'g2', entry_id: 'pe2' },
-			{ generation_id: 'g3', entry_id: 'pe3' }
-		]);
-		expect(loadStreamSpy).toHaveBeenCalledWith(expect.anything(), 1, {
-			restart: true,
-			resumeAt: 185
-		});
-	});
-
-	it('turning shuffle off mid-album resumes the current take in album order', async () => {
-		setShuffle(true);
-		const song1 = makeSong({
-			id: 's1',
-			track_number: 1,
-			generations: [makeGen({ id: 'g1', is_picked: true, song_id: 's1' })]
-		});
-		const song2 = makeSong({
-			id: 's2',
-			title: 'Two',
-			track_number: 2,
-			generations: [makeGen({ id: 'g2', is_picked: true, song_id: 's2', mp3_path: 'a1/s2.mp3' })]
-		});
-		const song3 = makeSong({
-			id: 's3',
-			title: 'Three',
-			track_number: 3,
-			generations: [makeGen({ id: 'g3', is_picked: true, song_id: 's3', mp3_path: 'a1/s3.mp3' })]
-		});
-		songList.set([song1, song2, song3]);
-		audioPlayer.mode = 'stream';
-		audioPlayer.current = makePlayback(song2.generations[0], song2);
-		audioPlayer.currentTime = 6;
-		queueContext.set({ type: 'album', albumId: 'a1' });
-		vi.mocked(createQueueStreamSnapshot).mockImplementation(async (tracks) =>
-			makeManifest({
-				tracks: tracks.map((track, index) =>
-					makeTrack({
-						generation_id: track.generation_id,
-						entry_id: track.entry_id ?? null,
-						index,
-						key: track.generation_id,
-						start_offset: index * 180
-					})
-				)
-			})
-		);
-
-		await toggleShuffle();
-
-		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
-			{ generation_id: 'g1', entry_id: 'album:s1:g1' },
-			{ generation_id: 'g2', entry_id: 'album:s2:g2' },
-			{ generation_id: 'g3', entry_id: 'album:s3:g3' }
-		]);
-		expect(loadStreamSpy).toHaveBeenCalledWith(expect.anything(), 1, {
-			restart: true,
-			resumeAt: 186
-		});
+		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
+		const ctx = get(queueContext);
+		expect(ctx.type).toBe('album');
+		if (ctx.type !== 'album' || !ctx.takes) throw new Error('expected album takes');
+		expect(ctx.takes.map((take) => take.generation.id)).toEqual(['g1', 'g3', 'g2']);
 	});
 
 	it('playlist play without shuffle keeps entry order', async () => {
@@ -1675,21 +1688,8 @@ describe('shuffle rebuilds the playing queue', () => {
 			makePlaylistEntry({ id: 'pe2', generation_id: 'g2' }),
 			makePlaylistEntry({ id: 'pe3', generation_id: 'g3' })
 		];
-		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(
-			makeManifest({
-				tracks: entries.map((entry, index) =>
-					makeTrack({ generation_id: entry.generation_id, entry_id: entry.id, index })
-				)
-			})
-		);
-
 		await playPlaylistEntries(entries, 0, { restart: true });
-
-		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
-			{ generation_id: 'g1', entry_id: 'pe1' },
-			{ generation_id: 'g2', entry_id: 'pe2' },
-			{ generation_id: 'g3', entry_id: 'pe3' }
-		]);
+		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 0 });
 	});
 
@@ -1701,66 +1701,13 @@ describe('shuffle rebuilds the playing queue', () => {
 			makePlaylistEntry({ id: 'pe2', generation_id: 'g2' }),
 			makePlaylistEntry({ id: 'pe3', generation_id: 'g3' })
 		];
-		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(
-			makeManifest({
-				tracks: [
-					makeTrack({ generation_id: 'g1', entry_id: 'pe1', index: 0 }),
-					makeTrack({ generation_id: 'g3', entry_id: 'pe3', index: 1 }),
-					makeTrack({ generation_id: 'g2', entry_id: 'pe2', index: 2 })
-				]
-			})
-		);
-
 		await playPlaylistEntries(entries, 0, { restart: true });
-
-		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
-			{ generation_id: 'g1', entry_id: 'pe1' },
-			{ generation_id: 'g3', entry_id: 'pe3' },
-			{ generation_id: 'g2', entry_id: 'pe2' }
-		]);
-		expect(get(queueContext)).toEqual({ type: 'playlist', entries, index: 0 });
-	});
-
-	it('toggling shuffle mid-playlist-play resumes the current take', async () => {
-		vi.spyOn(Math, 'random').mockReturnValue(0);
-		const entries = [
-			makePlaylistEntry({ id: 'pe1', generation_id: 'g1' }),
-			makePlaylistEntry({ id: 'pe2', generation_id: 'g2' }),
-			makePlaylistEntry({ id: 'pe3', generation_id: 'g3' })
-		];
-		const currentGen = makeGen({ id: 'g1', mp3_path: 'a1/song_v1.mp3' });
-		audioPlayer.mode = 'stream';
-		audioPlayer.current = {
-			generation: currentGen,
-			songId: '',
-			songTitle: 'Playlist Song',
-			artist: 'Artist',
-			albumTitle: 'Album',
-			lyrics: null
-		};
-		audioPlayer.currentTime = 11;
-		queueContext.set({ type: 'playlist', entries, index: 0 });
-		vi.mocked(createQueueStreamSnapshot).mockResolvedValueOnce(
-			makeManifest({
-				tracks: [
-					makeTrack({ generation_id: 'g1', entry_id: 'pe1', index: 0, start_offset: 0 }),
-					makeTrack({ generation_id: 'g3', entry_id: 'pe3', index: 1, start_offset: 180 }),
-					makeTrack({ generation_id: 'g2', entry_id: 'pe2', index: 2, start_offset: 360 })
-				]
-			})
-		);
-
-		await toggleShuffle();
-
-		expect(createQueueStreamSnapshot).toHaveBeenCalledWith([
-			{ generation_id: 'g1', entry_id: 'pe1' },
-			{ generation_id: 'g3', entry_id: 'pe3' },
-			{ generation_id: 'g2', entry_id: 'pe2' }
-		]);
-		expect(loadStreamSpy).toHaveBeenCalledWith(expect.anything(), 0, {
-			restart: true,
-			resumeAt: 11
-		});
+		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
+		const ctx = get(queueContext);
+		expect(ctx.type).toBe('playlist');
+		if (ctx.type !== 'playlist') throw new Error('expected playlist');
+		expect(ctx.entries.map((entry) => entry.generation_id)).toEqual(['g1', 'g3', 'g2']);
+		expect(ctx.index).toBe(0);
 	});
 
 	it('expired library rebuild keeps the shuffle flag', async () => {
@@ -1784,55 +1731,60 @@ describe('shuffle rebuilds the playing queue', () => {
 });
 
 describe('library take pool', () => {
-	let loadStreamSpy: ReturnType<typeof vi.spyOn>;
-
 	beforeEach(() => {
 		setQueuePlaybackMode('stream');
-		loadStreamSpy = vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
 		toasts.set([]);
 	});
 
 	it('library start sends the stored pool with shuffle', async () => {
 		setLibraryTakePool('keeps');
 		setShuffle(true);
-		const manifest = makeManifest({ tracks: [makeTrack({ generation_id: 'g1' })] });
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
-
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(makePoolQueue());
 		await playLibraryFromGeneration(makeGen());
-
-		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g1', {
+		expect(createLibraryQueueStreamSnapshot).not.toHaveBeenCalled();
+		expect(fetchLibraryPoolQueue).toHaveBeenCalledWith({
+			startGenerationId: 'g1',
 			shuffle: true,
-			pool: 'keeps'
+			pool: 'keeps',
+			signal: expect.any(AbortSignal)
 		});
 	});
 
-	it('idle play starts the library snapshot at the chosen pool', async () => {
+	it('idle play starts the library membership at the chosen pool', async () => {
 		setLibraryTakePool('picks');
 		const skipped = [
 			{ song_id: 's2', generation_id: 'g-missing', reason: 'missing_file' as const }
 		];
-		const manifest = makeManifest({
-			tracks: [makeTrack({ generation_id: 'g-pick' })],
-			skipped
-		});
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(manifest);
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({
+				pool: 'picks',
+				takes: [makePoolTake({ generation_id: 'g-pick' })],
+				skipped
+			})
+		);
 
 		await playLibrary();
 
-		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith(null, {
+		expect(createLibraryQueueStreamSnapshot).not.toHaveBeenCalled();
+		expect(fetchLibraryPoolQueue).toHaveBeenCalledWith({
+			startGenerationId: null,
 			shuffle: false,
-			pool: 'picks'
+			pool: 'picks',
+			signal: expect.any(AbortSignal)
 		});
-		expect(loadStreamSpy).toHaveBeenCalledWith(manifest, 0, { restart: true });
-		expect(get(queueContext)).toEqual({ type: 'library' });
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g-pick' }) }),
+			{ restart: true }
+		);
+		expect(get(queueContext).type).toBe('library');
 		expect(get(libraryQueueSkipped)).toEqual(skipped);
 	});
 
 	it('empty pool toast names the active pool', async () => {
 		setLibraryTakePool('keeps');
 		libraryQueueSkipped.set([{ song_id: 'stale', generation_id: 'stale', reason: 'missing_file' }]);
-		vi.mocked(createLibraryQueueStreamSnapshot).mockRejectedValueOnce(
-			new ApiError(422, "No playable takes in pool 'keeps'", '/api/queue-streams/library')
+		vi.mocked(fetchLibraryPoolQueue).mockRejectedValueOnce(
+			new ApiError(422, "No playable takes in pool 'keeps'", '/api/library/pool-queue')
 		);
 
 		await playLibrary();
@@ -1840,42 +1792,95 @@ describe('library take pool', () => {
 		expect(get(libraryQueueNotice)).toBe('empty');
 		expect(get(libraryQueueSkipped)).toEqual([]);
 		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: 'Keine Takes (Keeps)', type: 'error' })
+			expect.objectContaining({
+				message: `${LIBRARY_QUEUE_EMPTY_TITLE} (Keeps)`,
+				type: 'error'
+			})
 		]);
-		expect(loadStreamSpy).not.toHaveBeenCalled();
+		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 
 	it('changing pool mid-play rebuilds the library at the current take and time', async () => {
 		const gen = makeGen({ id: 'g-cur' });
 		const song = makeSong({ generations: [gen] });
-		audioPlayer.mode = 'stream';
 		audioPlayer.current = makePlayback(gen, song);
 		audioPlayer.currentTime = 17;
 		queueContext.set({ type: 'library' });
-		const next = makeManifest({
-			tracks: [makeTrack({ generation_id: 'g-cur', start_offset: 0 })]
-		});
-		vi.mocked(createLibraryQueueStreamSnapshot).mockResolvedValueOnce(next);
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({ takes: [makePoolTake({ generation_id: 'g-cur' })] })
+		);
 
 		await chooseLibraryTakePool('all');
 
 		expect(get(libraryTakePool)).toBe('all');
 		expect(localStorage.getItem('libraryTakePool')).toBe('all');
-		expect(createLibraryQueueStreamSnapshot).toHaveBeenCalledWith('g-cur', {
+		expect(fetchLibraryPoolQueue).toHaveBeenCalledWith({
+			startGenerationId: 'g-cur',
 			shuffle: false,
-			pool: 'all'
+			pool: 'all',
+			signal: expect.any(AbortSignal)
 		});
-		expect(loadStreamSpy).toHaveBeenCalledWith(next, 0, { restart: true, resumeAt: 17 });
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g-cur' }) }),
+			{ restart: true, startAt: 17 }
+		);
 	});
 
 	it('changing pool during album play does not rebuild', async () => {
-		audioPlayer.mode = 'stream';
 		audioPlayer.current = makePlayback(makeGen(), makeSong());
 		queueContext.set({ type: 'album', albumId: 'a1' });
 
 		await chooseLibraryTakePool('picks');
 
+		expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
 		expect(createLibraryQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(get(libraryTakePool)).toBe('picks');
+	});
+});
+
+describe('playIdleStart', () => {
+	beforeEach(() => {
+		selectedAlbumId.set(null);
+		selectedSongId.set(null);
+		selectedPlaylistDetail.set(null);
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValue(makePoolQueue());
+	});
+
+	it('starts the chosen pool when no collection interior is open', async () => {
+		await playIdleStart();
+		expect(fetchLibraryPoolQueue).toHaveBeenCalled();
+		expect(createLibraryQueueStreamSnapshot).not.toHaveBeenCalled();
+	});
+
+	it('starts the open album natively when album interior is selected with no song', async () => {
+		const song = makeSong({ generations: [makeGen({ is_picked: true })] });
+		songList.set([song]);
+		selectedAlbumId.set('a1');
+		await playIdleStart();
+		expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
+		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g1' }) }),
+			{ restart: true }
+		);
+	});
+
+	it('starts the open playlist natively when playlist interior is selected', async () => {
+		selectedPlaylistDetail.set({
+			id: 'p1',
+			title: 'Night Drive',
+			entry_count: 1,
+			is_shared: false,
+			share_slug: null,
+			created_at: '',
+			entries: [makePlaylistEntry({ song_title: 'Listed' })]
+		});
+		await playIdleStart();
+		expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
+		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ songTitle: 'Listed' }),
+			{ restart: true }
+		);
 	});
 });

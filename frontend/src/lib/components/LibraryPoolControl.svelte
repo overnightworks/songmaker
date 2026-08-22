@@ -9,10 +9,8 @@
 	} from '$lib/stores/playbackSettings';
 	import { chooseLibraryTakePool, queueContext } from '$lib/stores/player';
 	import { detailTab } from '$lib/stores/navigation';
+	import { LIBRARY_POOL_HELP, LIBRARY_POOL_HELP_LABEL } from '$lib/constants';
 	import Icon from './Icon.svelte';
-
-	const POOL_HELP =
-		'Mix: Picks und Keeps. Picks: Album-Take. Keeps: Favoriten, mehrere je Song. Alle: jeder spielbare Take.';
 
 	const POOL_ICONS: Record<LibraryTakePool, 'star-filled' | 'heart-filled' | 'layers'> = {
 		mix: 'star-filled',
@@ -199,14 +197,14 @@
 				class="pool-info"
 				onclick={() => (helpOpen = !helpOpen)}
 				aria-expanded={helpOpen}
-				aria-label="What Mix Picks Keeps Alle mean"
-				title="What Mix Picks Keeps Alle mean"
+				aria-label={LIBRARY_POOL_HELP_LABEL}
+				title={LIBRARY_POOL_HELP_LABEL}
 			>
 				<Icon name="info" size={15} />
 			</button>
 		{/if}
 		{#if helpOpen}
-			<p class="pool-help">{POOL_HELP}</p>
+			<p class="pool-help">{LIBRARY_POOL_HELP}</p>
 		{/if}
 	</div>
 	{#if sheetOpen}
@@ -225,7 +223,7 @@
 				aria-label="Take pool"
 				tabindex="-1"
 			>
-				<p class="sheet-help"><Icon name="info" size={16} /><span>{POOL_HELP}</span></p>
+				<p class="sheet-help"><Icon name="info" size={16} /><span>{LIBRARY_POOL_HELP}</span></p>
 				<div class="sheet-options" role="radiogroup" aria-label="Take pool choices">
 					{#each LIBRARY_TAKE_POOLS as option (option)}
 						<button

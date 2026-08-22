@@ -14,6 +14,7 @@ export {
 	cleanupAlbum
 } from './albums';
 export {
+	fetchLibraryPoolQueue,
 	fetchShares,
 	searchLibrary,
 	type LibrarySearchHit,

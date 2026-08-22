@@ -12,6 +12,17 @@ export const LORA_AUDIO_EXTENSIONS = ['.wav', '.mp3', '.flac'] as const;
 
 export const QUEUE_STREAM_EMPTY_POOL_PREFIX = 'No playable takes in pool';
 
+export const LIBRARY_QUEUE_LOADING_TITLE = 'Loading';
+export const LIBRARY_QUEUE_EMPTY_TITLE = 'No takes';
+export const LIBRARY_QUEUE_RETRY_DETAIL = 'Tap play';
+export const LIBRARY_QUEUE_PLAY_DETAIL = 'Play';
+export const SHUFFLE_SCOPE_PLAYLIST = 'this playlist';
+export const SHUFFLE_SCOPE_ALBUM = 'this album';
+export const SHUFFLE_SCOPE_LIBRARY = 'all albums';
+export const LIBRARY_POOL_HELP =
+	'Mix: Picks and Keeps. Picks: the album take. Keeps: favorites, more than one per song. All: every playable take.';
+export const LIBRARY_POOL_HELP_LABEL = 'What Mix Picks Keeps All mean';
+
 export const QUEUE_STREAM_UNPLAYABLE_START_DETAIL = 'Requested take is not playable';
 
 export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';

@@ -3,12 +3,15 @@ import { ApiError } from '$lib/api/fetch';
 import {
 	createLibraryQueueStreamSnapshot,
 	createQueueStreamSnapshot,
+	fetchLibraryPoolQueue,
 	fetchSong,
 	fetchSongs
 } from '$lib/api/client';
 import type {
 	AlbumItem,
 	GenerationItem,
+	LibraryPoolTakeItem,
+	PlaylistDetailItem,
 	PlaylistEntryItem,
 	QueueStreamManifest,
 	QueueStreamSkipItem,
@@ -24,12 +27,12 @@ import { addToast } from '$lib/stores/toast';
 import {
 	LIBRARY_TAKE_POOL_LABELS,
 	libraryTakePool,
-	queuePlaybackMode,
 	setLibraryTakePool,
-	shouldUseQueueStream,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
+import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import {
+	LIBRARY_QUEUE_EMPTY_TITLE,
 	LIBRARY_SONG_PAGE_SIZE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
@@ -73,7 +76,7 @@ export function selectSong(songId: string): void {
 	selectedGenerationId.set(null);
 }
 
-const _loadingIds = new Set<string>();
+const songGenerationLoads = new Map<string, Promise<void>>();
 
 export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	const songs = get(songList);
@@ -83,14 +86,18 @@ export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	// must be fetched; otherwise a later snapshot can hide a take created while
 	// sync was stopped.
 	if (song && song.generations.length >= song.generation_count) return;
-	if (_loadingIds.has(songId)) return;
-	_loadingIds.add(songId);
-	try {
-		const full = await fetchSong(songId);
-		upsertSongInList(full);
-	} finally {
-		_loadingIds.delete(songId);
-	}
+	const inflight = songGenerationLoads.get(songId);
+	if (inflight) return inflight;
+	const load = (async () => {
+		try {
+			const full = await fetchSong(songId);
+			upsertSongInList(full);
+		} finally {
+			songGenerationLoads.delete(songId);
+		}
+	})();
+	songGenerationLoads.set(songId, load);
+	await load;
 }
 
 export function selectGenerationInSidebar(gen: GenerationItem, song: SongItem): void {
@@ -104,8 +111,8 @@ export function clearGenerationSelection(): void {
 
 // --- Playback queue context ---
 type QueueContext =
-	| { type: 'library' }
-	| { type: 'album'; albumId: string }
+	| { type: 'library'; takes?: PlaybackInfo[]; index?: number }
+	| { type: 'album'; albumId: string; takes?: PlaybackInfo[]; index?: number }
 	| { type: 'playlist'; entries: PlaylistEntryItem[]; index: number };
 
 export const queueContext = writable<QueueContext>({ type: 'library' });
@@ -176,7 +183,7 @@ function isUnplayableStartError(err: unknown): boolean {
 }
 
 function libraryStreamFailureToast(err: unknown): string {
-	if (isEmptyPoolError(err)) return `Keine Takes (${poolLabel()})`;
+	if (isEmptyPoolError(err)) return `${LIBRARY_QUEUE_EMPTY_TITLE} (${poolLabel()})`;
 	if (isUnplayableStartError(err)) return QUEUE_STREAM_UNPLAYABLE_START_DETAIL;
 	return `${poolLabel()} queue failed. Tap play to retry.`;
 }
@@ -204,10 +211,6 @@ export function playGeneration(
 	const info = toPlaybackInfo(gen, song);
 	if (opts.restart) audioPlayer.load(info, { restart: true });
 	else audioPlayer.load(info);
-}
-
-function useStreamForQueue(): boolean {
-	return shouldUseQueueStream(get(queuePlaybackMode));
 }
 
 function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; startIndex: number } {
@@ -249,7 +252,121 @@ export async function retryLastPlayIntent(): Promise<boolean> {
 	return true;
 }
 
-async function playStreamEntries(
+let playStartSeq = 0;
+let playStartAbort: AbortController | null = null;
+
+function beginPlayStart(): { seq: number; signal: AbortSignal } {
+	playStartAbort?.abort();
+	playStartAbort = new AbortController();
+	playStartSeq += 1;
+	return { seq: playStartSeq, signal: playStartAbort.signal };
+}
+
+function playStartIsCurrent(seq: number): boolean {
+	return seq === playStartSeq;
+}
+
+function poolTakeToPlaybackInfo(take: LibraryPoolTakeItem): PlaybackInfo {
+	return {
+		generation: {
+			id: take.generation_id,
+			song_id: take.song_id,
+			version_id: null,
+			version_number: null,
+			generation_number: take.generation_number,
+			mp3_path: take.mp3_path,
+			wav_path: null,
+			seed: take.seed,
+			status: 'completed',
+			is_archived: false,
+			is_picked: take.is_picked,
+			is_kept: take.is_kept,
+			is_shared: false,
+			model_mode: take.model_mode,
+			whisper_text: null,
+			whisper_cues: null,
+			version_lyrics: take.lyrics,
+			scores: null,
+			generation_params: null,
+			created_at: ''
+		},
+		songId: take.song_id,
+		songTitle: take.song_title,
+		artist: take.artist,
+		albumTitle: take.album_title,
+		lyrics: take.lyrics
+	};
+}
+
+function loadNativeTake(
+	info: PlaybackInfo,
+	opts: { restart?: boolean; startAt?: number } = {}
+): void {
+	clearWindowEnd();
+	if (opts.startAt !== undefined) {
+		audioPlayer.load(info, { restart: opts.restart ?? true, startAt: opts.startAt });
+		return;
+	}
+	if (opts.restart) {
+		audioPlayer.load(info, { restart: true });
+		return;
+	}
+	audioPlayer.load(info);
+}
+
+function playNativeLibraryTakes(
+	takes: PlaybackInfo[],
+	index: number,
+	resumeAtTrackTime?: number
+): void {
+	queueContext.set({ type: 'library', takes, index });
+	loadNativeTake(takes[index], { restart: true, startAt: resumeAtTrackTime });
+}
+
+function playNativeAlbumTakes(
+	albumId: string,
+	takes: PlaybackInfo[],
+	index: number,
+	resumeAtTrackTime?: number
+): void {
+	queueContext.set({ type: 'album', albumId, takes, index });
+	loadNativeTake(takes[index], { restart: true, startAt: resumeAtTrackTime });
+}
+
+function nativeTakeIndex(
+	ctx: Exclude<QueueContext, { type: 'playlist' }>,
+	current: PlaybackInfo | null
+): number {
+	if (!ctx.takes || ctx.takes.length === 0) return -1;
+	if (typeof ctx.index === 'number' && current) {
+		const indexed = ctx.takes[ctx.index];
+		if (
+			indexed?.generation.id === current.generation.id &&
+			indexed.generation.mp3_path === current.generation.mp3_path
+		) {
+			return ctx.index;
+		}
+	}
+	if (!current) return ctx.index ?? 0;
+	return ctx.takes.findIndex(
+		(take) =>
+			take.generation.id === current.generation.id &&
+			take.generation.mp3_path === current.generation.mp3_path
+	);
+}
+
+function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index: number): void {
+	const takes = ctx.takes;
+	if (!takes || index < 0 || index >= takes.length) return;
+	if (ctx.type === 'library') {
+		queueContext.set({ type: 'library', takes, index });
+	} else if (ctx.type === 'album') {
+		queueContext.set({ type: 'album', albumId: ctx.albumId, takes, index });
+	}
+	loadNativeTake(takes[index]);
+}
+
+export async function playStreamEntries(
 	entries: PlaylistEntryItem[],
 	startIndex: number,
 	opts: { restart?: boolean; resumeAtTrackTime?: number }
@@ -284,22 +401,29 @@ export async function playLibraryFromGeneration(
 	gen: GenerationItem,
 	opts: { resumeAtTrackTime?: number } = {}
 ): Promise<void> {
+	const { seq, signal } = beginPlayStart();
 	queueContext.set({ type: 'library' });
 	libraryQueueNotice.set('building');
 	clearLibraryQueueSkipFeedback();
 	clearWindowEnd();
-	let manifest: QueueStreamManifest;
+	let queue;
 	try {
-		manifest = await createLibraryQueueStreamSnapshot(gen.id, librarySnapshotOpts());
+		queue = await fetchLibraryPoolQueue({
+			startGenerationId: gen.id,
+			...librarySnapshotOpts(),
+			signal
+		});
 	} catch (err) {
+		if (!playStartIsCurrent(seq)) return;
 		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
 		libraryQueueNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
 		clearLibraryQueueSkipFeedback();
 		addToast(libraryStreamFailureToast(err), 'error');
 		return;
 	}
-	retryPlayIntent = null;
-	const startIndex = manifest.tracks.findIndex((t) => t.generation_id === gen.id);
+	if (!playStartIsCurrent(seq)) return;
+	const takes = queue.takes.map(poolTakeToPlaybackInfo);
+	const startIndex = takes.findIndex((take) => take.generation.id === gen.id);
 	if (startIndex < 0) {
 		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
 		libraryQueueNotice.set('error');
@@ -307,50 +431,94 @@ export async function playLibraryFromGeneration(
 		addToast(QUEUE_TAKE_MISSING_TOAST, 'error');
 		return;
 	}
+	retryPlayIntent = null;
 	libraryQueueNotice.set('idle');
-	libraryQueueSkipped.set(manifest.skipped ?? []);
-	libraryQueueSkippedComplete.set(manifest.skipped_complete ?? true);
-	audioPlayer.loadStream(
-		manifest,
-		startIndex,
-		streamLoadOpts(true, manifest.tracks[startIndex], opts.resumeAtTrackTime)
-	);
-	if (manifest.windowed) {
-		showWindowedNotice(manifest.tracks.length);
-	}
+	libraryQueueSkipped.set(queue.skipped ?? []);
+	libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
+	playNativeLibraryTakes(takes, startIndex, opts.resumeAtTrackTime);
 }
 
 export async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<void> {
+	const { seq, signal } = beginPlayStart();
 	queueContext.set({ type: 'library' });
 	libraryQueueNotice.set('building');
 	clearLibraryQueueSkipFeedback();
 	clearWindowEnd();
-	let manifest: QueueStreamManifest;
+	let queue;
 	try {
-		manifest = await createLibraryQueueStreamSnapshot(null, librarySnapshotOpts());
+		queue = await fetchLibraryPoolQueue({
+			startGenerationId: null,
+			...librarySnapshotOpts(),
+			signal
+		});
 	} catch (err) {
+		if (!playStartIsCurrent(seq)) return;
 		retryPlayIntent = () => playLibrary(opts);
 		libraryQueueNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
 		clearLibraryQueueSkipFeedback();
 		addToast(libraryStreamFailureToast(err), 'error');
 		return;
 	}
+	if (!playStartIsCurrent(seq)) return;
+	if (queue.takes.length === 0) {
+		retryPlayIntent = () => playLibrary(opts);
+		libraryQueueNotice.set('empty');
+		clearLibraryQueueSkipFeedback();
+		addToast(`${LIBRARY_QUEUE_EMPTY_TITLE} (${poolLabel()})`, 'error');
+		return;
+	}
 	retryPlayIntent = null;
 	libraryQueueNotice.set('idle');
-	libraryQueueSkipped.set(manifest.skipped ?? []);
-	libraryQueueSkippedComplete.set(manifest.skipped_complete ?? true);
-	audioPlayer.loadStream(
-		manifest,
-		0,
-		streamLoadOpts(true, manifest.tracks[0], opts.resumeAtTrackTime)
-	);
-	if (manifest.windowed) {
-		showWindowedNotice(manifest.tracks.length);
+	libraryQueueSkipped.set(queue.skipped ?? []);
+	libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
+	playNativeLibraryTakes(queue.takes.map(poolTakeToPlaybackInfo), 0, opts.resumeAtTrackTime);
+}
+
+export type IdlePlayTarget =
+	| { type: 'playlist'; label: string }
+	| { type: 'album'; label: string; albumId: string }
+	| { type: 'library'; label: string };
+
+export function idlePlayTarget(input: {
+	playlist: PlaylistDetailItem | null;
+	albumId: string | null;
+	songId: string | null;
+	albums: AlbumItem[];
+	poolLabel: string;
+}): IdlePlayTarget {
+	if (input.playlist !== null && input.songId === null && input.albumId === null) {
+		return { type: 'playlist', label: input.playlist.title };
 	}
+	if (input.albumId !== null && input.songId === null) {
+		const album = input.albums.find((item) => item.id === input.albumId);
+		return { type: 'album', label: album?.title ?? '', albumId: input.albumId };
+	}
+	return { type: 'library', label: input.poolLabel };
+}
+
+export async function playIdleStart(): Promise<void> {
+	const target = idlePlayTarget({
+		playlist: get(selectedPlaylistDetail),
+		albumId: get(selectedAlbumId),
+		songId: get(selectedSongId),
+		albums: get(albumList),
+		poolLabel: poolLabel()
+	});
+	if (target.type === 'playlist') {
+		const playlist = get(selectedPlaylistDetail);
+		if (!playlist) return;
+		await playPlaylistEntries(playlist.entries, 0, { restart: true });
+		return;
+	}
+	if (target.type === 'album') {
+		await playAlbum(target.albumId);
+		return;
+	}
+	await playLibrary();
 }
 
 async function rebuildLibraryQueueKeepingPlace(): Promise<void> {
-	if (audioPlayer.mode !== 'stream' || !audioPlayer.current) return;
+	if (!audioPlayer.current) return;
 	if (get(queueContext).type !== 'library') return;
 	await playLibraryFromGeneration(audioPlayer.current.generation, {
 		resumeAtTrackTime: audioPlayer.currentTime
@@ -358,7 +526,7 @@ async function rebuildLibraryQueueKeepingPlace(): Promise<void> {
 }
 
 async function rebuildQueueAfterShuffleToggle(): Promise<void> {
-	if (audioPlayer.mode !== 'stream' || !audioPlayer.current) return;
+	if (!audioPlayer.current) return;
 	const current = audioPlayer.current;
 	const trackTime = audioPlayer.currentTime;
 	const ctx = get(queueContext);
@@ -412,7 +580,9 @@ export function canPlayPrevSong(
 	if (audioPlayer.mode === 'stream') return audioPlayer.canPrevStreamTrack;
 	if (!current) return false;
 	if (ctx.type === 'playlist') return ctx.entries.length > 1;
-	const pool = ctx.type === 'album' ? songs.filter((s) => s.album_id === ctx.albumId) : songs;
+	if (ctx.takes && ctx.takes.length > 0) return ctx.takes.length > 1;
+	if (ctx.type === 'library') return false;
+	const pool = songs.filter((s) => s.album_id === ctx.albumId);
 	return pool.filter((s) => s.generation_count > 0).length > 1;
 }
 
@@ -427,7 +597,16 @@ export function canPlayNextSong(
 	if (ctx.type === 'playlist') {
 		return ctx.entries.length > 1;
 	}
-	const pool = ctx.type === 'album' ? songs.filter((s) => s.album_id === ctx.albumId) : songs;
+	if (ctx.type === 'library' && ctx.takes && ctx.takes.length > 0) {
+		if (!get(libraryQueueSkippedComplete)) {
+			const index = nativeTakeIndex(ctx, current);
+			return index >= 0 && index < ctx.takes.length - 1;
+		}
+		return ctx.takes.length > 1;
+	}
+	if (ctx.takes && ctx.takes.length > 0) return ctx.takes.length > 1;
+	if (ctx.type === 'library') return false;
+	const pool = songs.filter((s) => s.album_id === ctx.albumId);
 	return pool.filter((s) => s.id !== current.songId && s.generation_count > 0).length > 0;
 }
 
@@ -478,18 +657,23 @@ function toAlbumQueueEntry(song: SongItem, gen: GenerationItem): PlaylistEntryIt
 	};
 }
 
-async function collectAlbumQueue(
-	albumId: string,
-	start?: { song: SongItem; gen: GenerationItem }
-): Promise<{ entries: PlaylistEntryItem[]; startIndex: number }> {
-	await loadSongsForAlbum(albumId);
-	const songs = get(songList)
+function albumSongsInOrder(albumId: string): SongItem[] {
+	return get(songList)
 		.filter((s) => s.album_id === albumId)
 		.sort((a, b) => a.track_number - b.track_number);
+}
+
+async function collectAlbumEntries(
+	albumId: string,
+	seq: number,
+	start?: { song: SongItem; gen: GenerationItem }
+): Promise<PlaylistEntryItem[] | null> {
 	const entries: PlaylistEntryItem[] = [];
-	for (const song of songs) {
+	for (const song of albumSongsInOrder(albumId)) {
+		if (!playStartIsCurrent(seq)) return null;
 		if (song.generation_count === 0) continue;
 		await ensureGenerationsLoaded(song.id);
+		if (!playStartIsCurrent(seq)) return null;
 		const fresh = get(songList).find((s) => s.id === song.id);
 		if (!fresh) continue;
 		const gen =
@@ -499,13 +683,28 @@ async function collectAlbumQueue(
 		if (!gen) continue;
 		entries.push({ ...toAlbumQueueEntry(fresh, gen), position: entries.length });
 	}
-	const startIndex = start
+	return entries;
+}
+
+function setAlbumQueueTakes(
+	albumId: string,
+	entries: PlaylistEntryItem[],
+	startGenerationId: string | undefined
+): void {
+	if (entries.length === 0) return;
+	const startIndex = startGenerationId
 		? Math.max(
 				0,
-				entries.findIndex((entry) => entry.generation_id === start.gen.id)
+				entries.findIndex((entry) => entry.generation_id === startGenerationId)
 			)
 		: 0;
-	return { entries, startIndex };
+	const ordered = shuffledWithStart(entries, startIndex);
+	queueContext.set({
+		type: 'album',
+		albumId,
+		takes: ordered.items.map(playlistEntryToPlaybackInfo),
+		index: ordered.startIndex
+	});
 }
 
 function currentPlaylistIndex(
@@ -528,14 +727,6 @@ function currentPlaylistIndex(
 	return idx >= 0 ? idx : ctx.index;
 }
 
-function randomIndexExcluding(length: number, excludedIndex: number): number | null {
-	if (length <= 1) return null;
-	const candidates = Array.from({ length }, (_, index) => index).filter(
-		(index) => index !== excludedIndex
-	);
-	return candidates[Math.floor(Math.random() * candidates.length)] ?? null;
-}
-
 export async function playNextSong(): Promise<void> {
 	if (audioPlayer.mode === 'stream') {
 		audioPlayer.nextStreamTrack();
@@ -544,14 +735,24 @@ export async function playNextSong(): Promise<void> {
 	const ctx = get(queueContext);
 	if (ctx.type === 'playlist') {
 		const currentIndex = currentPlaylistIndex(ctx);
-		const nextIndex = get(shuffleEnabled)
-			? randomIndexExcluding(ctx.entries.length, currentIndex)
-			: ctx.entries.length > 1
-				? (currentIndex + 1) % ctx.entries.length
-				: null;
-		if (nextIndex !== null) playPlaylistIndex(ctx, nextIndex);
+		if (ctx.entries.length <= 1) return;
+		playPlaylistIndex(ctx, (currentIndex + 1) % ctx.entries.length);
 		return;
 	}
+	if (ctx.takes && ctx.takes.length > 0) {
+		const index = nativeTakeIndex(ctx, audioPlayer.current);
+		if (index < 0) return;
+		const atWindowEnd =
+			ctx.type === 'library' && index === ctx.takes.length - 1 && !get(libraryQueueSkippedComplete);
+		if (atWindowEnd) {
+			windowEnded.set(true);
+			return;
+		}
+		if (ctx.takes.length <= 1) return;
+		playNativeIndex(ctx, (index + 1) % ctx.takes.length);
+		return;
+	}
+	if (ctx.type === 'library') return;
 	const cur = audioPlayer.current;
 	if (!cur) return;
 	const songs = queueSongs();
@@ -596,6 +797,13 @@ export async function playPrevSong(): Promise<void> {
 		}
 		return;
 	}
+	if (ctx.takes && ctx.takes.length > 0) {
+		const index = nativeTakeIndex(ctx, audioPlayer.current);
+		if (index < 0 || ctx.takes.length <= 1) return;
+		playNativeIndex(ctx, (index - 1 + ctx.takes.length) % ctx.takes.length);
+		return;
+	}
+	if (ctx.type === 'library') return;
 	const cur = audioPlayer.current;
 	if (!cur) return;
 	const songs = queueSongs();
@@ -614,22 +822,31 @@ export async function playPrevSong(): Promise<void> {
 }
 
 export async function playAlbum(albumId: string): Promise<void> {
+	const { seq } = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
 	queueContext.set({ type: 'album', albumId });
-	const { entries, startIndex } = await collectAlbumQueue(albumId);
-	if (entries.length === 0) return;
-	const ordered = shuffledWithStart(entries, startIndex);
-	if (useStreamForQueue()) {
-		await playStreamEntries(ordered.items, ordered.startIndex, { restart: true });
-		return;
+	if (albumSongsInOrder(albumId).length === 0) {
+		await loadSongsForAlbum(albumId);
+		if (!playStartIsCurrent(seq)) return;
 	}
-	const first = ordered.items[ordered.startIndex];
-	const firstSong = get(songList).find((s) => s.id === first.id.split(':')[1]);
-	const firstGen = firstSong?.generations.find((g) => g.id === first.generation_id);
-	if (firstGen && firstSong) {
-		playGeneration(firstGen, firstSong);
-	}
+	const startSong = albumSongsInOrder(albumId).find((song) => song.generation_count > 0);
+	if (!startSong) return;
+	await ensureGenerationsLoaded(startSong.id);
+	if (!playStartIsCurrent(seq)) return;
+	const freshStart = get(songList).find((item) => item.id === startSong.id) ?? startSong;
+	const startGen = bestGen(freshStart);
+	if (!startGen) return;
+	playNativeAlbumTakes(
+		albumId,
+		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(freshStart, startGen))],
+		0
+	);
+	await loadSongsForAlbum(albumId);
+	if (!playStartIsCurrent(seq)) return;
+	const entries = await collectAlbumEntries(albumId, seq);
+	if (entries === null || !playStartIsCurrent(seq)) return;
+	setAlbumQueueTakes(albumId, entries, startGen.id);
 }
 
 export async function playAlbumFromGeneration(
@@ -638,20 +855,15 @@ export async function playAlbumFromGeneration(
 	gen: GenerationItem,
 	opts: { resumeAtTrackTime?: number } = {}
 ): Promise<void> {
+	const { seq } = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
-	queueContext.set({ type: 'album', albumId });
-	const { entries, startIndex } = await collectAlbumQueue(albumId, { song, gen });
-	if (entries.length === 0) return;
-	const ordered = shuffledWithStart(entries, startIndex);
-	if (useStreamForQueue()) {
-		await playStreamEntries(ordered.items, ordered.startIndex, {
-			restart: true,
-			resumeAtTrackTime: opts.resumeAtTrackTime
-		});
-		return;
-	}
-	playGeneration(gen, song, { restart: true });
+	playNativeAlbumTakes(albumId, [toPlaybackInfo(gen, song)], 0, opts.resumeAtTrackTime);
+	await loadSongsForAlbum(albumId);
+	if (!playStartIsCurrent(seq)) return;
+	const entries = await collectAlbumEntries(albumId, seq, { song, gen });
+	if (entries === null || !playStartIsCurrent(seq)) return;
+	setAlbumQueueTakes(albumId, entries, gen.id);
 }
 
 function playPlaylistIndex(
@@ -663,11 +875,15 @@ function playPlaylistIndex(
 	const entry = ctx.entries[newIndex];
 	queueContext.set({ type: 'playlist', entries: ctx.entries, index: newIndex });
 	const info = playlistEntryToPlaybackInfo(entry);
-	if (opts.restart || opts.startAt !== undefined) {
-		audioPlayer.load(info, { restart: opts.restart, startAt: opts.startAt });
-	} else {
-		audioPlayer.load(info);
+	if (opts.startAt !== undefined) {
+		audioPlayer.load(info, { restart: opts.restart ?? true, startAt: opts.startAt });
+		return;
 	}
+	if (opts.restart) {
+		audioPlayer.load(info, { restart: true });
+		return;
+	}
+	audioPlayer.load(info);
 }
 
 export async function playPlaylistEntries(
@@ -676,18 +892,17 @@ export async function playPlaylistEntries(
 	opts: { restart?: boolean; resumeAtTrackTime?: number } = {}
 ): Promise<void> {
 	if (entries.length === 0) return;
+	beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
-	queueContext.set({ type: 'playlist', entries, index: startIndex });
 	const ordered = shuffledWithStart(entries, startIndex);
-	if (useStreamForQueue()) {
-		await playStreamEntries(ordered.items, ordered.startIndex, {
-			restart: opts.restart ?? true,
-			resumeAtTrackTime: opts.resumeAtTrackTime
-		});
-		return;
-	}
-	playPlaylistIndex({ entries, index: startIndex }, startIndex, { restart: opts.restart });
+	const loadOpts: { restart?: boolean; startAt?: number } = { restart: opts.restart };
+	if (opts.resumeAtTrackTime !== undefined) loadOpts.startAt = opts.resumeAtTrackTime;
+	playPlaylistIndex(
+		{ entries: ordered.items, index: ordered.startIndex },
+		ordered.startIndex,
+		loadOpts
+	);
 }
 
 async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {

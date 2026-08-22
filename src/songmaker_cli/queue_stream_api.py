@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import random
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -186,6 +186,14 @@ def _library_skip(ctx: AppContext, generation: Generation) -> QueueStreamSkipRes
     return None
 
 
+@dataclass
+class LibraryPoolMembership:
+    pool: LibraryTakePool
+    sources: list[QueueStreamSource]
+    skipped: list[QueueStreamSkipResponse]
+    skipped_complete: bool
+
+
 def shuffle_library_sources(
     sources: list[QueueStreamSource],
     start_generation_id: str | None,
@@ -218,16 +226,15 @@ def shuffle_library_sources(
     return [start, *rest]
 
 
-@router.post("/queue-streams/library")
-def api_create_library_queue_stream(
-    req: QueueStreamLibraryRequest,
-    request: Request,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-    ctx: AppContext = Depends(get_app_context),
-) -> QueueStreamManifestResponse:
-    _check_queue_stream_rate_limit(request, user)
-
+def resolve_library_pool_membership(
+    session: Session,
+    user: AuthenticatedUser,
+    ctx: AppContext,
+    *,
+    pool: LibraryTakePool,
+    start_generation_id: str | None,
+    shuffle: bool,
+) -> LibraryPoolMembership:
     songs = list_songs(session, user_id=user.id, light=True)
     songs = sorted(
         songs,
@@ -239,14 +246,14 @@ def api_create_library_queue_stream(
     )
 
     start_gen: Generation | None = None
-    if req.start_generation_id is not None:
-        start_gen = check_generation_access(session, req.start_generation_id, user)
+    if start_generation_id is not None:
+        start_gen = check_generation_access(session, start_generation_id, user)
         if start_gen.is_archived:
             raise HTTPException(422, _consts.QUEUE_STREAM_UNPLAYABLE_START_DETAIL)
 
     pool_generations = collect_library_pool_generations(
         songs,
-        req.pool,
+        pool,
         start_gen,
     )
     candidate_sources: list[QueueStreamSource] = [
@@ -261,7 +268,7 @@ def api_create_library_queue_stream(
     ]
     canonical_rank = {source.generation.id: rank for rank, source in enumerate(candidate_sources)}
 
-    if req.shuffle:
+    if shuffle:
         candidate_sources = shuffle_library_sources(
             candidate_sources, start_gen.id if start_gen is not None else None
         )
@@ -302,26 +309,49 @@ def api_create_library_queue_stream(
             raise HTTPException(422, "No playable takes in scanned library window")
         raise HTTPException(
             422,
-            f"{_consts.QUEUE_STREAM_EMPTY_POOL_DETAIL} '{req.pool}'",
+            f"{_consts.QUEUE_STREAM_EMPTY_POOL_DETAIL} '{pool}'",
         )
 
     skipped.sort(key=lambda item: canonical_rank[item.generation_id])
-
     sources = [
         replace(source, index=new_index) for new_index, source in enumerate(playable_sources)
     ]
+    return LibraryPoolMembership(
+        pool=pool,
+        sources=sources,
+        skipped=skipped,
+        skipped_complete=not unscanned_tail,
+    )
 
+
+@router.post("/queue-streams/library")
+def api_create_library_queue_stream(
+    req: QueueStreamLibraryRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> QueueStreamManifestResponse:
+    _check_queue_stream_rate_limit(request, user)
+    membership = resolve_library_pool_membership(
+        session,
+        user,
+        ctx,
+        pool=req.pool,
+        start_generation_id=req.start_generation_id,
+        shuffle=req.shuffle,
+    )
     snapshot = build_queue_stream_snapshot(
         ctx,
-        sources,
+        membership.sources,
         scope="auth",
         scope_id=user.id,
         stream_url="",
-        force_windowed=unscanned_tail,
+        force_windowed=not membership.skipped_complete,
     )
     snapshot.stream_url = f"/api/queue-streams/{snapshot.snapshot_id}/audio"
-    snapshot.skipped = skipped
-    snapshot.skipped_complete = not unscanned_tail
+    snapshot.skipped = membership.skipped
+    snapshot.skipped_complete = membership.skipped_complete
     return snapshot
 
 
