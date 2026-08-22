@@ -25,6 +25,13 @@ updates:
       # breaking `prettier --check .` in CI (see PR #109)
       - dependency-name: "prettier-plugin-svelte"
         update-types: ["version-update:semver-major"]
+      # vitest 4 invokes `new` on vi.fn() arrow implementations, breaking
+      # Audio-mock stubs (`new Audio()` throws "not a constructor") in ~7
+      # frontend test files (see PR #114, issue #112)
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
