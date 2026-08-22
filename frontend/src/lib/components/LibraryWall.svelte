@@ -328,22 +328,25 @@
 					aria-busy={searching && searchState.status === 'loading'}
 				/>
 			{/if}
-			<button
-				class="new-btn"
-				data-hitbox="frequent"
-				onclick={onNewSong}
-				aria-label={LIBRARY_NEW_ALBUM_LABEL}
-			>
-				+ Album
-			</button>
-			<button
-				class="new-btn"
-				data-hitbox="frequent"
-				onclick={onCreatePlaylist}
-				aria-label={LIBRARY_NEW_PLAYLIST_LABEL}
-			>
-				+ Playlist
-			</button>
+			{#if filter === 'albums'}
+				<button
+					class="new-btn"
+					data-hitbox="frequent"
+					onclick={onNewSong}
+					aria-label={LIBRARY_NEW_ALBUM_LABEL}
+				>
+					+ Album
+				</button>
+			{:else if filter === 'playlists'}
+				<button
+					class="new-btn"
+					data-hitbox="frequent"
+					onclick={onCreatePlaylist}
+					aria-label={LIBRARY_NEW_PLAYLIST_LABEL}
+				>
+					+ Playlist
+				</button>
+			{/if}
 		</div>
 	</div>
 

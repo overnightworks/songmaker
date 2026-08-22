@@ -9,7 +9,7 @@ import type {
 } from '$lib/api/types';
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { GENERATION_ACTIONS_KEY, type GenerationActions } from '$lib/contexts/generation-actions';
-import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
 import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -87,7 +87,6 @@ const INVENTORY = [
 	},
 	{ name: 'playlist-remove', selector: '.remove-btn[data-hitbox="frequent"]' },
 	{ name: 'new-album', selector: '[data-hitbox="frequent"][aria-label="New album"]' },
-	{ name: 'new-playlist', selector: '[data-hitbox="frequent"][aria-label="New playlist"]' },
 	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' }
 ] as const;
 
@@ -341,8 +340,6 @@ async function renderInventory(): Promise<HTMLElement> {
 	mounted.push(
 		mount(PlaylistPicker, { target: pickerTarget, props: { onselect: vi.fn(), onclose: vi.fn() } })
 	);
-	await tick();
-	libraryFilter.set('playlists');
 	await tick();
 	return root;
 }

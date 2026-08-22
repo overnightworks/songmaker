@@ -214,6 +214,8 @@ describe('LibraryWall sort', () => {
 describe('LibraryWall create actions', () => {
 	it('creates and opens a new playlist', async () => {
 		const root = await render();
+		requireElement<HTMLButtonElement>(root, '#library-filter-playlists').click();
+		await tick();
 		requireElement<HTMLButtonElement>(root, '.new-btn[aria-label="New playlist"]').click();
 		await tick();
 		await tick();
@@ -229,6 +231,21 @@ describe('LibraryWall create actions', () => {
 		await tick();
 		requireElement<HTMLButtonElement>(target, '.new-btn[aria-label="New album"]').click();
 		expect(onNewSong).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows only the create action for the active filter, never both at once', async () => {
+		const root = await render();
+		expect(root.querySelector('.new-btn[aria-label="New album"]')).not.toBeNull();
+		expect(root.querySelector('.new-btn[aria-label="New playlist"]')).toBeNull();
+
+		requireElement<HTMLButtonElement>(root, '#library-filter-playlists').click();
+		await tick();
+		expect(root.querySelector('.new-btn[aria-label="New album"]')).toBeNull();
+		expect(root.querySelector('.new-btn[aria-label="New playlist"]')).not.toBeNull();
+
+		requireElement<HTMLButtonElement>(root, '#library-filter-shared').click();
+		await tick();
+		expect(root.querySelector('.new-btn')).toBeNull();
 	});
 });
 

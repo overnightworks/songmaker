@@ -42,6 +42,13 @@
 		return current?.songId === song.id && playing;
 	}
 
+	function trackMeta(song: SongItem): string {
+		if (song.generation_count === 0) return '—';
+		const takes = `${song.generation_count} take${song.generation_count !== 1 ? 's' : ''}`;
+		const hasPick = song.generations.some((generation) => generation.is_picked);
+		return hasPick ? `${takes} · pick` : takes;
+	}
+
 	function isEntryCurrent(entry: PlaylistEntryItem): boolean {
 		return (
 			current?.generation.id === entry.generation_id &&
@@ -89,6 +96,7 @@
 						</span>
 					{/if}
 					<span class="context-row-title">{song.title}</span>
+					<span class="context-row-meta">{trackMeta(song)}</span>
 				</button>
 			{/each}
 			<button type="button" class="context-row context-add" onclick={openLibraryCreate}>
@@ -120,6 +128,8 @@
 			{/each}
 		</div>
 	</div>
+{:else}
+	<p class="context-empty">No album or playlist open — its tracks appear here.</p>
 {/if}
 
 <style>
@@ -195,14 +205,29 @@
 	}
 
 	.context-row-title {
+		flex: 1;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
+	.context-row-meta {
+		flex-shrink: 0;
+		font-size: 0.68rem;
+		color: var(--text-subtle);
+	}
+
 	.context-add {
 		color: var(--text-subtle);
 		font-style: italic;
+	}
+
+	.context-empty {
+		margin: 0;
+		padding: 12px 16px;
+		font-size: 0.75rem;
+		color: var(--text-subtle);
 	}
 
 	.equalizer {

@@ -42,10 +42,8 @@
 			<rect x="3" y="14" width="7" height="7" rx="1" />
 			<rect x="14" y="14" width="7" height="7" rx="1" />
 		</svg>
-		<span class="library-text">
-			<span class="library-label">{RAIL_LIBRARY_LABEL}</span>
-			<span class="library-summary">{summary}</span>
-		</span>
+		<span class="library-label">{RAIL_LIBRARY_LABEL}</span>
+		<span class="library-summary">{summary}</span>
 	</button>
 
 	<div class="rail-divider"></div>
@@ -113,12 +111,6 @@
 		color: var(--text-muted);
 	}
 
-	.library-text {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-	}
-
 	.library-label {
 		font-family: var(--font-display);
 		font-size: 0.85rem;
@@ -127,8 +119,10 @@
 	}
 
 	.library-summary {
-		font-size: 0.7rem;
+		margin-left: auto;
+		font-size: 0.75rem;
 		color: var(--text-subtle);
+		white-space: nowrap;
 	}
 
 	.rail-divider {

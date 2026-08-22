@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PlaylistDetailItem, SongItem } from '$lib/api/types';
+import type { GenerationItem, PlaylistDetailItem, SongItem } from '$lib/api/types';
 import { openCollection } from '$lib/stores/collection';
 import { albumList, selectedSongId, songList } from '$lib/stores/player';
 import { resetPlaylistsForTests, selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -63,6 +63,32 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 	};
 }
 
+function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
+	return {
+		id: 'g1',
+		song_id: 's1',
+		version_id: 'v1',
+		version_number: 1,
+		generation_number: 1,
+		mp3_path: 'g1.mp3',
+		wav_path: null,
+		seed: 1,
+		status: 'completed',
+		is_archived: false,
+		is_picked: false,
+		is_kept: false,
+		is_shared: false,
+		model_mode: 'turbo',
+		whisper_text: null,
+		whisper_cues: null,
+		version_lyrics: null,
+		scores: null,
+		generation_params: null,
+		created_at: '2026-01-01T00:00:00+00:00',
+		...overrides
+	};
+}
+
 function playlistDetail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
 	return {
 		id: 'p1',
@@ -116,9 +142,12 @@ afterEach(async () => {
 });
 
 describe('RailContext', () => {
-	it('renders nothing when no collection is open', async () => {
+	it('shows a placeholder and no track rows when no collection is open', async () => {
 		const target = await render();
 		expect(target.querySelector('.rail-context')).toBeNull();
+		expect(target.querySelector('.context-empty')?.textContent).toContain(
+			'No album or playlist open'
+		);
 	});
 
 	it('shows the open album title and its tracks in order, with the selected track marked', async () => {
@@ -130,6 +159,25 @@ describe('RailContext', () => {
 		expect(target.querySelector('.context-add')?.textContent).toContain('+ Song');
 		const selected = target.querySelector('.context-row.selected .context-row-title');
 		expect(selected?.textContent).toBe('Ebb');
+	});
+
+	it('shows a take/pick summary per track', async () => {
+		openCollection.set({ kind: 'album', id: 'a1' });
+		songList.set([
+			song({ id: 's1', title: 'Tide', track_number: 1, generation_count: 0, generations: [] }),
+			song({
+				id: 's2',
+				title: 'Ebb',
+				track_number: 2,
+				generation_count: 3,
+				generations: [generation({ id: 'g1', is_picked: true })]
+			})
+		]);
+		const target = await render();
+		const meta = Array.from(target.querySelectorAll('.context-row-meta')).map(
+			(el) => el.textContent
+		);
+		expect(meta).toEqual(['—', '3 takes · pick']);
 	});
 
 	it('shows the open playlist title and its entries', async () => {

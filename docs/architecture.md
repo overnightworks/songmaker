@@ -129,11 +129,14 @@ SvelteKit single-page app. All state in Svelte stores.
 
 The app shell is one navigation, not modes. A left `Rail` (264px, inline on
 wide layouts, behind a drawer with a 46px trigger strip on ≤768px or any
-coarse pointer) holds: the brand, a "Library" link, the context of the single
-open collection, and a bottom Settings link + user menu. The rail context
-(`RailContext.svelte`) shows the open album's tracks or the open playlist's
-entries — an equalizer marks the one actually playing, a left-accent border
-marks the selected/current row — and renders nothing when no collection is
+coarse pointer) holds: the brand, a "Library" link (with a live album/playlist
+count), the context of the single open collection, and a bottom Settings link
+plus a user row (username, theme toggle, Logout — inline, no popup menu;
+`UserMenu.svelte`'s name is a holdover from an earlier iteration). The rail
+context (`RailContext.svelte`) shows the open album's tracks (with a
+takes/pick summary per row) or the open playlist's entries — an equalizer
+marks the one actually playing, a left-accent border marks the
+selected/current row — and shows a placeholder line when no collection is
 open. There is no Studio/Listen mode split and no third library tab for
 Shared; `LibraryWall.svelte` (the main-area library browser) filters by chips
 `Albums · Playlists · Shared` instead, backed by `libraryFilter` in
