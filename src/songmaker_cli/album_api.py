@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -29,7 +30,22 @@ from songmaker_cli.api_models import (
     TitleUpdateRequest,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.constants import AuditAction, ResourceType
+from songmaker_cli.constants import (
+    COVER_MAX_BYTES,
+    COVER_NOT_FOUND,
+    COVER_VARIANT_DETAIL,
+    COVER_VERSION_QUERY,
+    AuditAction,
+    ResourceType,
+)
+from songmaker_cli.covers import (
+    COVER_RESPONSE_HEADERS,
+    CoverRejectedError,
+    cover_media_type,
+    remove_album_cover_files,
+    resolve_cover_file,
+    write_album_cover,
+)
 from songmaker_cli.db.queries import (
     RestoreWindowExpiredError,
     cleanup_album,
@@ -42,6 +58,7 @@ from songmaker_cli.db.queries import (
     record_audit,
     rename_album,
     restore_album,
+    set_album_cover_key,
     soft_delete_album,
 )
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
@@ -210,3 +227,66 @@ def api_unshare_album(
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.ALBUM, album_id)
     session.commit()
     return StatusResponse()
+
+@router.get("/albums/{album_id}/cover")
+async def api_get_album_cover(
+    album_id: str,
+    variant: str = Query(COVER_VARIANT_DETAIL),
+    v: str | None = Query(None, alias=COVER_VERSION_QUERY),
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    if v is not None and v != album.cover_key:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    try:
+        path = resolve_cover_file(ctx.audio_dir, album.id, album.cover_key, variant)
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    return FileResponse(
+        path,
+        media_type=cover_media_type(variant, album.cover_key or ""),
+        headers=COVER_RESPONSE_HEADERS,
+    )
+
+
+@router.post("/albums/{album_id}/cover")
+async def api_upload_album_cover(
+    album_id: str,
+    file: UploadFile,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> AlbumResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    payload = await file.read(COVER_MAX_BYTES + 1)
+    try:
+        cover_key = write_album_cover(ctx.audio_dir, album.id, payload)
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    album = set_album_cover_key(session, album.id, cover_key)
+    record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album.id)
+    session.commit()
+    return AlbumResponse.from_orm(album)
+
+
+@router.delete("/albums/{album_id}/cover")
+def api_delete_album_cover(
+    album_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> AlbumResponse:
+    album = get_album(session, album_id)
+    check_album_access(album, user)
+    album = set_album_cover_key(session, album.id, None)
+    record_audit(session, user.id, AuditAction.UPDATE, ResourceType.ALBUM, album.id)
+    session.commit()
+    remove_album_cover_files(ctx.audio_dir, album.id)
+    return AlbumResponse.from_orm(album)
+

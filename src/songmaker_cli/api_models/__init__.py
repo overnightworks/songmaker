@@ -109,6 +109,7 @@ from songmaker_cli.api_models.settings import (
 )
 from songmaker_cli.api_models.songs import (
     VALID_SCORER_NAMES,
+    AlbumCoverUrls,
     AlbumCreateRequest,
     AlbumResponse,
     BulkDeleteRequest,
@@ -223,6 +224,7 @@ __all__ = [
     "AddAlbumToPlaylistResponse",
     "AddGenerationToPlaylistRequest",
     "AddSongToPlaylistRequest",
+    "AlbumCoverUrls",
     "AlbumCreateRequest",
     "AlbumResponse",
     "AuditLogResponse",

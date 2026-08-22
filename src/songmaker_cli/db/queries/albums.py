@@ -94,6 +94,16 @@ def rename_album(session: Session, album_id: str, title: str) -> Album:
     return album
 
 
+def set_album_cover_key(session: Session, album_id: str, cover_key: str | None) -> Album:
+    album = get_album(session, album_id)
+    if not album:
+        raise ValueError(f"Album not found: {album_id}")
+    album.cover_key = cover_key
+    session.flush()
+    log.info("Set album %s cover_key=%r", album_id, cover_key)
+    return album
+
+
 def get_album_by_slug(session: Session, slug: str) -> Album | None:
     return (
         session.query(Album)

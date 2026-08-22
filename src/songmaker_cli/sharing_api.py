@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
@@ -19,12 +19,23 @@ from songmaker_cli.api_models import (
     SharedSongItem,
     SharedSongResponse,
 )
+from songmaker_cli.api_models.songs import public_album_cover_urls
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import get_client_ip
 from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
+    COVER_NOT_FOUND,
+    COVER_VARIANT_DETAIL,
+    COVER_VERSION_QUERY,
     REDIS_RL_SHARED_PREFIX,
     REDIS_RL_SHARED_STREAM_PREFIX,
+)
+from songmaker_cli.covers import (
+    COVER_RESPONSE_HEADERS,
+    CoverRejectedError,
+    album_cover_file_exists,
+    cover_media_type,
+    resolve_cover_file,
 )
 from songmaker_cli.db.queries import (
     get_album_by_slug,
@@ -205,13 +216,17 @@ def get_shared_album(
     album = get_album_by_slug(db, slug)
     if not album:
         raise HTTPException(404, "Not found")
+    ctx: AppContext = request.app.state.ctx
     songs = sorted(album.songs, key=lambda s: s.track_number)
     picked_by_song = {s.id: _picked_filename(s) for s in songs}
-    response = SharedAlbumResponse(
-        title=album.title,
-        artist=album.artist,
-        subtitle=album.subtitle,
-        year=album.year,
+    cover = None
+    if (
+        album.cover_key
+        and album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key)
+    ):
+        cover = public_album_cover_urls(slug, album.cover_key)
+    response = SharedAlbumResponse.from_orm(
+        album,
         songs=[
             SharedSongItem(
                 id=s.id,
@@ -224,8 +239,37 @@ def get_shared_album(
             )
             for s in songs
         ],
+        cover=cover,
     )
     return JSONResponse(response.model_dump())
+
+
+@router.get("/shared/{slug}/cover")
+async def get_shared_album_cover(
+    slug: str,
+    request: Request,
+    variant: str = Query(COVER_VARIANT_DETAIL),
+    v: str | None = Query(None, alias=COVER_VERSION_QUERY),
+    db: Session = Depends(get_db_session),
+    ctx: AppContext = Depends(get_app_context),
+) -> FileResponse:
+    _check_shared_rate_limit(request)
+    album = get_album_by_slug(db, slug)
+    if not album:
+        raise HTTPException(404, "Not found")
+    if v is not None and v != album.cover_key:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    try:
+        path = resolve_cover_file(ctx.audio_dir, album.id, album.cover_key, variant)
+    except CoverRejectedError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(404, COVER_NOT_FOUND)
+    return FileResponse(
+        path,
+        media_type=cover_media_type(variant, album.cover_key or ""),
+        headers=COVER_RESPONSE_HEADERS,
+    )
 
 
 @router.post("/shared/{slug}/stream")

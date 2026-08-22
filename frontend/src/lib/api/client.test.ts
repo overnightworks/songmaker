@@ -10,8 +10,10 @@ vi.mock('$lib/stores/auth', () => ({ clearAuth: (...args: unknown[]) => mockClea
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => mockGoto(...args) }));
 
 import {
+	deleteAlbumCover,
 	fetchAlbum,
 	fetchAlbums,
+	uploadAlbumCover,
 	fetchSongs,
 	fetchSong,
 	createSong,
@@ -381,5 +383,24 @@ describe('Admin API', () => {
 		const result = await fetchLoginAttempts(0, 50);
 		expect(result.items).toHaveLength(1);
 		expect(mockFetch.mock.calls[0][0]).toBe('/api/admin/login-attempts?offset=0&limit=50');
+	});
+
+	it('uploadAlbumCover posts the file as multipart', async () => {
+		mockOk({ id: 'a1', cover: { card: '/api/albums/a1/cover?variant=card', detail: '/api/albums/a1/cover?variant=detail' } });
+		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
+		await uploadAlbumCover('a1', file);
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/albums/a1/cover',
+			expect.objectContaining({ method: 'POST', body: expect.any(FormData), credentials: 'include' })
+		);
+	});
+
+	it('deleteAlbumCover deletes the cover', async () => {
+		mockOk({ id: 'a1', cover: null });
+		await deleteAlbumCover('a1');
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/albums/a1/cover',
+			expect.objectContaining({ method: 'DELETE', credentials: 'include' })
+		);
 	});
 });

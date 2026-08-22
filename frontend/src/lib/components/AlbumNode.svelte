@@ -5,6 +5,7 @@
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_ART_INITIAL_COUNT,
+		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL
 	} from '$lib/constants';
@@ -37,6 +38,16 @@
 
 	const artFill = $derived(usableAlbumPrimary(album.colors));
 	const initials = $derived(albumTitleInitials(album.title));
+	const coverUrl = $derived(album.cover?.card ?? null);
+	let coverFailed = $state(false);
+
+	$effect(() => {
+		void coverUrl;
+		coverFailed = false;
+	});
+
+	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
+	const coverAlt = $derived(`${ALBUM_COVER_ALT_TYPE} ${album.title}`);
 
 	function usableAlbumPrimary(colors: Record<string, string>): string | null {
 		const primary = colors.primary;
@@ -74,7 +85,11 @@
 		class:selected
 		onclick={onselect}
 	>
-		{#if artFill}
+		{#if showCover && coverUrl}
+			<span class="album-art">
+				<img src={coverUrl} alt={coverAlt} onerror={() => (coverFailed = true)} />
+			</span>
+		{:else if artFill}
 			<span class="album-art" style:background={artFill} aria-hidden="true"></span>
 		{:else}
 			<span class="album-art album-art-initials" aria-hidden="true">{initials}</span>
@@ -162,6 +177,13 @@
 		letter-spacing: 0.06em;
 		user-select: none;
 		overflow: hidden;
+	}
+
+	.album-art img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
 	}
 
 	.album-text {

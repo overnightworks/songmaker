@@ -51,16 +51,17 @@ def create_user(
     return user
 
 
-def hard_delete_user(session: Session, user_id: str) -> list[str]:
+def hard_delete_user(session: Session, user_id: str) -> tuple[list[str], list[str]]:
     """Hard-delete a user and all their albums/songs/generations.
 
-    Returns relative audio file paths for post-commit cleanup.
+    Returns relative audio file paths and album ids for post-commit cleanup.
     """
     from songmaker_cli.db.soft_delete import include_deleted
 
     audio_paths: list[str] = []
     with include_deleted(session):
         albums = session.query(Album).filter_by(created_by=user_id).all()
+        album_ids = [album.id for album in albums]
         for album in albums:
             for song in album.songs:
                 for gen in song.generations:
@@ -77,8 +78,8 @@ def hard_delete_user(session: Session, user_id: str) -> list[str]:
         raise ValueError(f"User not found: {user_id}")
     session.delete(user)
     session.flush()
-    log.info("Hard-deleted user %s and %d album(s)", user_id, len(albums))
-    return audio_paths
+    log.info("Hard-deleted user %s and %d album(s)", user_id, len(album_ids))
+    return audio_paths, album_ids
 
 
 def update_user(

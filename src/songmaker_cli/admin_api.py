@@ -57,6 +57,7 @@ from songmaker_cli.constants import (
     JobStatus,
     ResourceType,
 )
+from songmaker_cli.covers import remove_album_cover_files
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     count_active_sessions,
@@ -215,11 +216,13 @@ def hard_delete_user_endpoint(
         f"username={user.username}, albums={album_count}, songs={song_count}",
     )
 
-    paths = hard_delete_user(db, user_id)
+    paths, album_ids = hard_delete_user(db, user_id)
     db.commit()
 
     _clear_user_session_cache(request, user_id)
     cleanup_generation_files(ctx.audio_dir, paths)
+    for album_id in album_ids:
+        remove_album_cover_files(ctx.audio_dir, album_id)
     user_dir = ctx.audio_dir / user_id
     if user_dir.is_dir() and not any(user_dir.iterdir()):
         user_dir.rmdir()

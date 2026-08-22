@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from songmaker_cli.api_helpers import cleanup_generation_files
+from songmaker_cli.covers import remove_album_cover_files
 from songmaker_cli.db.queries import (
     archive_generation,
     delete_album,
@@ -74,6 +75,8 @@ def run_cleanup_expired(db_factory, audio_dir) -> tuple[int, int]:
         session.commit()
 
     cleanup_generation_files(audio_dir, paths)
+    for album_id in expired_album_ids:
+        remove_album_cover_files(audio_dir, album_id)
     if album_count or song_count:
         log.info(
             "cleanup_expired: hard-deleted %d album(s) and %d orphan song(s)",

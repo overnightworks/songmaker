@@ -276,6 +276,44 @@ AUDIO_UPLOAD_FILE_MAX_BYTES = REFERENCE_AUDIO_MAX_BYTES
 AUDIO_UPLOAD_BODY_MAX_BYTES = AUDIO_UPLOAD_FILE_MAX_BYTES + MULTIPART_ENVELOPE_MAX_BYTES
 REIMPORT_BODY_MAX_BYTES = (2 * AUDIO_UPLOAD_FILE_MAX_BYTES) + MULTIPART_ENVELOPE_MAX_BYTES
 
+COVER_DIRNAME: Final[str] = "covers"
+COVER_MAX_BYTES: Final[int] = 8 * 1024 * 1024
+COVER_MAX_PIXELS: Final[int] = 20_000_000
+COVER_CARD_MAX_EDGE: Final[int] = 512
+COVER_DETAIL_MAX_EDGE: Final[int] = 1024
+COVER_JPEG_QUALITY: Final[int] = 85
+COVER_UPLOAD_BODY_MAX_BYTES: Final[int] = COVER_MAX_BYTES + MULTIPART_ENVELOPE_MAX_BYTES
+COVER_VARIANT_ORIGINAL: Final[str] = "original"
+COVER_VARIANT_CARD: Final[str] = "card"
+COVER_VARIANT_DETAIL: Final[str] = "detail"
+COVER_VARIANTS: Final[frozenset[str]] = frozenset({
+    COVER_VARIANT_ORIGINAL,
+    COVER_VARIANT_CARD,
+    COVER_VARIANT_DETAIL,
+})
+COVER_KEY_JPEG: Final[str] = "jpg"
+COVER_KEY_PNG: Final[str] = "png"
+COVER_KEYS: Final[frozenset[str]] = frozenset({COVER_KEY_JPEG, COVER_KEY_PNG})
+COVER_JPEG_EXTENSION: Final[str] = ".jpg"
+COVER_PNG_EXTENSION: Final[str] = ".png"
+COVER_JPEG_MAGIC: Final[bytes] = b"\xff\xd8\xff"
+COVER_PNG_MAGIC: Final[bytes] = b"\x89PNG\r\n\x1a\n"
+COVER_FORMAT_JPEG: Final[str] = "jpeg"
+COVER_FORMAT_PNG: Final[str] = "png"
+COVER_MEDIA_TYPE_JPEG: Final[str] = "image/jpeg"
+COVER_MEDIA_TYPE_PNG: Final[str] = "image/png"
+COVER_VERSION_QUERY: Final[str] = "v"
+COVER_CACHE_CONTROL: Final[str] = "no-store"
+COVER_UNSUPPORTED_TYPE: Final[str] = "Cover must be a JPEG or PNG image"
+COVER_TOO_LARGE: Final[str] = "Cover file is too large"
+COVER_TOO_MANY_PIXELS: Final[str] = "Cover image is too large"
+COVER_UNREADABLE: Final[str] = "Cover image could not be read"
+COVER_NOT_FOUND: Final[str] = "Cover not found"
+COVER_VARIANT_UNKNOWN: Final[str] = "Unknown cover variant"
+COVER_INVALID_ALBUM_ID: Final[str] = "Invalid album id for cover storage"
+COVER_OLD_DIRNAME_SUFFIX: Final[str] = ".old"
+COVER_STAGING_DIRNAME_SUFFIX: Final[str] = ".staging"
+
 # User LoRA training
 USER_LORAS_DIRNAME: Final[str] = "user_loras"
 USER_LORA_SAMPLES_DIRNAME: Final[str] = "samples"

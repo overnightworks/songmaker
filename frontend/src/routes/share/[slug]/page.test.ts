@@ -44,6 +44,7 @@ const album = {
 	artist: 'Artist',
 	subtitle: '',
 	year: '',
+	cover: null,
 	songs: [
 		{ id: 's1', title: 'First', track_number: 1, audio_url: '/audio/first.mp3' },
 		{ id: 's2', title: 'Second', track_number: 2, audio_url: '/audio/second.mp3' }
@@ -174,5 +175,48 @@ describe('shared album recovery', () => {
 
 		expect(target.querySelectorAll<HTMLButtonElement>('.track')[0].classList).toContain('active');
 		expect(target.textContent).not.toContain('Weitere Takes nicht geladen');
+	});
+
+	it('renders a cover image when the shared album includes one', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				...album,
+				cover: {
+					card: '/shared/shared-album/cover?variant=card&v=abc.jpg',
+					detail: '/shared/shared-album/cover?variant=detail&v=abc.jpg'
+				}
+			})
+		});
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await vi.waitFor(() => expect(target.querySelector('.share-cover')).not.toBeNull());
+		const img = target.querySelector<HTMLImageElement>('.share-cover');
+		expect(img?.getAttribute('src')).toContain('variant=detail');
+		expect(img?.getAttribute('alt')).toBe('Album Shared album');
+	});
+
+	it('hides a broken cover instead of leaving a dead image', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				...album,
+				cover: {
+					card: '/shared/shared-album/cover?variant=card&v=missing.jpg',
+					detail: '/shared/shared-album/cover?variant=detail&v=missing.jpg'
+				}
+			})
+		});
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await vi.waitFor(() => expect(target.querySelector('.share-cover')).not.toBeNull());
+		target.querySelector('img')?.dispatchEvent(new Event('error'));
+		await tick();
+		expect(target.querySelector('.share-cover')).toBeNull();
+		expect(target.querySelector('h1')?.textContent).toBe('Shared album');
 	});
 });

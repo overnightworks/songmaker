@@ -90,6 +90,7 @@ class Album(ShareMixin, Base):
     subtitle: Mapped[str] = mapped_column(String(400), default="")
     year: Mapped[str] = mapped_column(String(10), default="")
     colors: Mapped[dict] = mapped_column(JSON, default=dict)
+    cover_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True,
     )

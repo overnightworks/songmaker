@@ -104,6 +104,7 @@ def test_shared_album_view(sharing_app: TestClient) -> None:
     assert len(data["songs"]) == 1
     assert data["songs"][0]["title"] == "Song One"
     assert data["songs"][0]["audio_url"] is not None
+    assert data["cover"] is None
 
 
 def test_shared_album_not_found(sharing_app: TestClient) -> None:
