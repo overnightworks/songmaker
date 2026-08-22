@@ -431,6 +431,35 @@ describe('library history', () => {
 		cleanup();
 	});
 
+	it('opening a song from an album pushes so back restores the album detail', () => {
+		const cleanup = initNavigation();
+		selectAlbumOverview('a1');
+		const albumState = history.state;
+		expect(albumState).toMatchObject({
+			albumId: 'a1',
+			songId: null,
+			surface: 'detail'
+		});
+		const albumIndex = albumState.index;
+		const push = vi.spyOn(history, 'pushState');
+		selectSong('s1');
+		expect(push).toHaveBeenCalled();
+		expect(history.state.index).toBeGreaterThan(albumIndex);
+		expect(history.state.songId).toBe('s1');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedAlbumId)).toBe('a1');
+		const back = vi.spyOn(history, 'back');
+		goBack();
+		expect(back).toHaveBeenCalled();
+		back.mockRestore();
+		window.dispatchEvent(new PopStateEvent('popstate', { state: albumState }));
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(selectedAlbumId)).toBe('a1');
+		expect(get(librarySurface)).toBe('detail');
+		push.mockRestore();
+		cleanup();
+	});
+
 	it('treats only the home path as the library workspace', () => {
 		expect(isLibraryWorkspacePath('/')).toBe(true);
 		expect(isLibraryWorkspacePath('/loras')).toBe(false);

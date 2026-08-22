@@ -225,16 +225,6 @@ function applySelectedSong(
 		replaceLibraryHistory();
 		return;
 	}
-	const current = history.state;
-	if (
-		isLibraryHistoryState(current) &&
-		albumId !== null &&
-		current.albumId === albumId &&
-		current.songId === null
-	) {
-		replaceLibraryHistory();
-		return;
-	}
 	pushLibraryHistory();
 }
 
