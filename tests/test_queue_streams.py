@@ -17,8 +17,8 @@ from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 from songmaker_cli.middleware import AuthenticatedUser
 from songmaker_cli.queue_stream_api import (
-    _check_queue_stream_rate_limit,
     _library_skip,
+    check_queue_stream_rate_limit,
     collect_library_pool_generations,
     generation_matches_pool,
     shuffle_library_sources,
@@ -121,7 +121,7 @@ def test_queue_stream_rate_limiter_failure_is_503(monkeypatch) -> None:
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        _check_queue_stream_rate_limit(object(), user)
+        check_queue_stream_rate_limit(object(), user)
 
     assert exc_info.value.status_code == 503
 

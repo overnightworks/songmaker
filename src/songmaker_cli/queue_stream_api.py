@@ -58,7 +58,7 @@ def _get_queue_stream_limiter(request: Request) -> RedisRateLimiter:
     return limiter
 
 
-def _check_queue_stream_rate_limit(request: Request, user: AuthenticatedUser) -> None:
+def check_queue_stream_rate_limit(request: Request, user: AuthenticatedUser) -> None:
     try:
         allowed = _get_queue_stream_limiter(request).is_allowed(user.id)
     except Exception as exc:
@@ -80,7 +80,7 @@ def api_create_queue_stream(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> QueueStreamManifestResponse:
-    _check_queue_stream_rate_limit(request, user)
+    check_queue_stream_rate_limit(request, user)
     sources = []
     for index, item in enumerate(req.tracks):
         gen = check_generation_access(session, item.generation_id, user)
@@ -332,7 +332,7 @@ def api_create_library_queue_stream(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> QueueStreamManifestResponse:
-    _check_queue_stream_rate_limit(request, user)
+    check_queue_stream_rate_limit(request, user)
     membership = resolve_library_pool_membership(
         session,
         user,
@@ -376,7 +376,7 @@ def api_pin_queue_stream(
     user: AuthenticatedUser = Depends(get_current_user),
     ctx: AppContext = Depends(get_app_context),
 ) -> QueueStreamPinResponse:
-    _check_queue_stream_rate_limit(request, user)
+    check_queue_stream_rate_limit(request, user)
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
     if manifest.get("scope") != "auth" or manifest.get("scope_id") != user.id:
         raise HTTPException(404, "Queue stream not found")
@@ -398,7 +398,7 @@ def api_unpin_queue_stream(
     user: AuthenticatedUser = Depends(get_current_user),
     ctx: AppContext = Depends(get_app_context),
 ) -> QueueStreamPinResponse:
-    _check_queue_stream_rate_limit(request, user)
+    check_queue_stream_rate_limit(request, user)
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
     if manifest.get("scope") != "auth" or manifest.get("scope_id") != user.id:
         raise HTTPException(404, "Queue stream not found")

@@ -5,9 +5,17 @@
 		type QueuePlaybackMode
 	} from '$lib/stores/playbackSettings';
 
-	const playbackModes: { value: QueuePlaybackMode; label: string; note?: string }[] = [
-		{ value: 'stream', label: 'Continuous stream', note: 'Recommended' },
-		{ value: 'classic', label: 'Per-track (legacy)' }
+	const playbackModes: { value: QueuePlaybackMode; label: string; note: string }[] = [
+		{
+			value: 'stream',
+			label: 'Continuous stream',
+			note: 'Shared links (/share/…) play as one continuous stream. In your library a clicked take continues through its album or pool queue.'
+		},
+		{
+			value: 'classic',
+			label: 'Per-track',
+			note: 'Shared links play one track at a time. In your library a clicked take plays on its own.'
+		}
 	];
 </script>
 
@@ -26,9 +34,7 @@
 					onclick={() => setQueuePlaybackMode(mode.value)}
 				>
 					<span>{mode.label}</span>
-					{#if mode.note}
-						<small>{mode.note}</small>
-					{/if}
+					<small>{mode.note}</small>
 				</button>
 			{/each}
 		</div>
@@ -70,9 +76,9 @@
 
 	.mode-list button {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.35rem;
 		width: 100%;
 		min-height: 58px;
 		padding: 0.9rem 1rem;
@@ -106,9 +112,7 @@
 
 	.mode-list small {
 		color: var(--text-muted);
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		padding: 0.15rem 0.5rem;
 		font-size: 0.82rem;
+		line-height: 1.4;
 	}
 </style>

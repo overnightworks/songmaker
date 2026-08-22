@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatTime } from './format.ts';
+import { formatTime, titleInitials } from './format.ts';
 
 describe('formatTime', () => {
 	it('formats zero seconds', () => {
@@ -20,5 +20,19 @@ describe('formatTime', () => {
 
 	it('floors fractional seconds', () => {
 		expect(formatTime(61.7)).toBe('1:01');
+	});
+});
+
+describe('titleInitials', () => {
+	it.each([
+		['Nachtstrom', 'NA'],
+		['Night Drive', 'ND'],
+		['  after   the rain  ', 'AT'],
+		['x', 'X'],
+		['', '?'],
+		['   ', '?'],
+		['🎵 Song', '🎵S']
+	])('turns %j into %j', (title, expected) => {
+		expect(titleInitials(title)).toBe(expected);
 	});
 });

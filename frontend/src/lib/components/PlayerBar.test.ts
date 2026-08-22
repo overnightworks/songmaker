@@ -6,7 +6,7 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { AlbumItem, PlaylistDetailItem } from '$lib/api/types';
 import {
 	albumList,
-	libraryQueueNotice,
+	playStartNotice,
 	queueContext,
 	selectedAlbumId,
 	selectedSongId,
@@ -156,7 +156,7 @@ beforeEach(() => {
 	selectedAlbumId.set(null);
 	selectedSongId.set(null);
 	selectedPlaylistDetail.set(null);
-	libraryQueueNotice.set('idle');
+	playStartNotice.set('idle');
 });
 
 afterEach(async () => {
@@ -211,14 +211,32 @@ describe('PlayerBar stream boundaries', () => {
 		expect(target.querySelector('button[aria-label="Shuffle Night Drive"]')).not.toBeNull();
 	});
 
+	it('pressing Play on an empty playlist shows the no-takes notice', async () => {
+		selectedAlbumId.set(null);
+		selectedSongId.set(null);
+		selectedPlaylistDetail.set(playlistItem({ entry_count: 0, entries: [] }));
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		target.querySelector<HTMLButtonElement>('button[aria-label="Play"]')?.click();
+		await vi.waitFor(() => expect(target.textContent).toContain(LIBRARY_QUEUE_EMPTY_TITLE));
+		expect(target.textContent).toContain('Night Drive');
+		expect(audioPlayer.current).toBeNull();
+
+		selectedPlaylistDetail.set(playlistItem());
+		target.querySelector<HTMLButtonElement>('button[aria-label="Play"]')?.click();
+		await vi.waitFor(() => expect(audioPlayer.current?.songTitle).toBe('Tide'));
+		expect(target.textContent).not.toContain(LIBRARY_QUEUE_EMPTY_TITLE);
+	});
+
 	it('uses English loading and empty copy instead of German leftovers', async () => {
 		queueContext.set({ type: 'library' });
-		libraryQueueNotice.set('building');
+		playStartNotice.set('building');
 		component = mount(PlayerBar, { target });
 		await tick();
 		expect(target.textContent).toContain(LIBRARY_QUEUE_LOADING_TITLE);
 		expect(target.textContent).not.toContain('Queue wird gebaut');
-		libraryQueueNotice.set('empty');
+		playStartNotice.set('empty');
 		await tick();
 		expect(target.textContent).toContain(LIBRARY_QUEUE_EMPTY_TITLE);
 		expect(target.textContent).not.toContain('Keine Takes');

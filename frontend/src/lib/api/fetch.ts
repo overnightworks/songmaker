@@ -21,6 +21,13 @@ function getCsrfToken(): string {
 
 const AUTH_ENDPOINTS = ['/api/auth/login', '/api/auth/setup'];
 
+function abortOnCallerOrTimeout(
+	callerSignal: AbortSignal | null | undefined,
+	timeoutSignal: AbortSignal
+): AbortSignal {
+	return callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal;
+}
+
 export async function apiFetch<T>(
 	path: string,
 	init?: RequestInit,
@@ -29,7 +36,11 @@ export async function apiFetch<T>(
 	const method = init?.method?.toUpperCase() ?? 'GET';
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), timeoutMs ?? API_TIMEOUT_MS);
-	let opts: RequestInit = { credentials: 'include', signal: controller.signal, ...init };
+	let opts: RequestInit = {
+		credentials: 'include',
+		...init,
+		signal: abortOnCallerOrTimeout(init?.signal, controller.signal)
+	};
 	if (method !== 'GET' && method !== 'HEAD') {
 		const token = getCsrfToken();
 		if (token) {
@@ -75,8 +86,8 @@ export async function* sseFetch<T = unknown>(
 	const timeout = setTimeout(() => controller.abort(), timeoutMs ?? API_TIMEOUT_MS);
 	let opts: RequestInit = {
 		credentials: 'include',
-		signal: controller.signal,
 		...init,
+		signal: abortOnCallerOrTimeout(init.signal, controller.signal),
 		headers: {
 			Accept: 'text/event-stream',
 			...((init.headers as Record<string, string>) ?? {})

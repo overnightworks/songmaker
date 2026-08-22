@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import type {
+	AlbumItem,
 	GenerationItem,
 	LibraryPoolQueue,
 	LibraryPoolTakeItem,
@@ -43,6 +44,7 @@ vi.mock('$lib/api/client', () => ({
 	})
 }));
 import {
+	albumList,
 	canPlayNextGen,
 	canPlayNextSong,
 	canPlayPrevGen,
@@ -62,7 +64,7 @@ import {
 	playGeneration,
 	toPlaybackInfo,
 	chooseLibraryTakePool,
-	libraryQueueNotice,
+	playStartNotice,
 	libraryQueueSkipped,
 	libraryQueueSkippedComplete,
 	playAlbum,
@@ -102,6 +104,23 @@ async function rebuildStream(state: StreamFallbackState): Promise<QueueStreamMan
 		throw new Error('onStreamRebuild is not assigned');
 	}
 	return rebuild(state);
+}
+
+function makeAlbum(overrides: Partial<AlbumItem> = {}): AlbumItem {
+	return {
+		id: 'a1',
+		title: 'Album',
+		artist: 'Artist',
+		subtitle: '',
+		year: '',
+		colors: {},
+		song_count: 1,
+		is_shared: false,
+		share_slug: null,
+		cover: null,
+		created_at: '',
+		...overrides
+	};
 }
 
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
@@ -229,6 +248,7 @@ afterEach(() => {
 	vi.restoreAllMocks();
 	audioPlayer.current = null;
 	songList.set([]);
+	albumList.set([]);
 	selectedAlbumId.set(null);
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
@@ -236,7 +256,7 @@ afterEach(() => {
 	selectedPlaylistDetail.set(null);
 	setShuffle(false);
 	setLibraryTakePool('mix');
-	libraryQueueNotice.set('idle');
+	playStartNotice.set('idle');
 	libraryQueueSkipped.set([]);
 	windowEnded.set(false);
 	audioPlayer.mode = 'classic';
@@ -1136,6 +1156,41 @@ describe('native first play ignores stream settings', () => {
 		);
 	});
 
+	it('playing an album without a playable take reports it like an empty pool', async () => {
+		albumList.set([makeAlbum({ id: 'a1', title: 'Nachtstrom' })]);
+		songList.set([makeSong({ generation_count: 0, generations: [] })]);
+		await playAlbum('a1');
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(playStartNotice)).toBe('empty');
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({
+				message: `${LIBRARY_QUEUE_EMPTY_TITLE} (Nachtstrom)`,
+				type: 'error'
+			})
+		]);
+	});
+
+	it('idle play on an empty playlist reports it like an empty pool', async () => {
+		selectedPlaylistDetail.set({
+			id: 'p1',
+			title: 'Night Drive',
+			entry_count: 0,
+			is_shared: false,
+			share_slug: null,
+			created_at: '',
+			entries: []
+		});
+		await playIdleStart();
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(playStartNotice)).toBe('empty');
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({
+				message: `${LIBRARY_QUEUE_EMPTY_TITLE} (Night Drive)`,
+				type: 'error'
+			})
+		]);
+	});
+
 	it('playAlbum loads the first take natively without concat', async () => {
 		const song = makeSong({ generations: [makeGen({ is_picked: true })] });
 		songList.set([song]);
@@ -1310,7 +1365,7 @@ describe('playLibraryFromGeneration', () => {
 
 		await playLibraryFromGeneration(makeGen({ id: 'g-dead' }));
 
-		expect(get(libraryQueueNotice)).toBe('error');
+		expect(get(playStartNotice)).toBe('error');
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
 				message: QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
@@ -1789,7 +1844,7 @@ describe('library take pool', () => {
 
 		await playLibrary();
 
-		expect(get(libraryQueueNotice)).toBe('empty');
+		expect(get(playStartNotice)).toBe('empty');
 		expect(get(libraryQueueSkipped)).toEqual([]);
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
