@@ -16,6 +16,28 @@ export type PlayerStatus =
 
 export type StreamEndReason = 'normal' | 'window-end';
 
+// One typed object per owner of the singleton audioPlayer (the logged-in app
+// via stores/player.ts, a share route via sharePlayback). swapCallbacks/
+// restoreCallbacks move the whole set atomically so a new owner never
+// inherits — or silently drops — a stray handler from the previous one, and
+// app-only side effects (media-session metadata, the app's windowEnded
+// store) never fire for a caller that never opted into them.
+export interface AudioPlayerCallbacks {
+	onEnded: ((reason: StreamEndReason) => void) | null;
+	onPlaybackStarted: (() => void) | null;
+	onAuthLost: (() => void | Promise<void>) | null;
+	onStreamRebuild: ((state: StreamFallbackState) => Promise<QueueStreamManifest | null>) | null;
+	onCurrentChange: ((current: PlaybackInfo | null) => void) | null;
+}
+
+const NO_CALLBACKS: AudioPlayerCallbacks = {
+	onEnded: null,
+	onPlaybackStarted: null,
+	onAuthLost: null,
+	onStreamRebuild: null,
+	onCurrentChange: null
+};
+
 const AUDIO_URL_PREFIX = '/audio/';
 const ERROR_MSG_GENERIC = 'Playback failed. Click play to retry.';
 const ERROR_MSG_NOT_FOUND = 'Audio file not found.';
@@ -33,14 +55,9 @@ class AudioPlayer {
 	current = $state<PlaybackInfo | null>(null);
 	mode = $state<'classic' | 'stream'>('classic');
 
-	onEnded: ((reason: StreamEndReason) => void) | null = null;
-	onPlaybackStarted: (() => void) | null = null;
-	onAuthLost: (() => void | Promise<void>) | null = null;
-	onStreamRebuild: ((state: StreamFallbackState) => Promise<QueueStreamManifest | null>) | null =
-		null;
-	onCurrentChange: ((current: PlaybackInfo | null) => void) | null = null;
-
+	private callbacks: AudioPlayerCallbacks = NO_CALLBACKS;
 	private audio: HTMLAudioElement | null = null;
+	private currentUrl: string | null = null;
 	private autoplayPending = false;
 	private listenersAttached = false;
 	private streamEngine = new QueueStreamEngine();
@@ -51,6 +68,13 @@ class AudioPlayer {
 	private streamEndSignaled = false;
 	private streamCanNext = $state(false);
 	private streamCanPrev = $state(false);
+
+	// Read-only view of the active callback set. Mutation only ever happens
+	// through swapCallbacks/restoreCallbacks — this getter exists for
+	// introspection (tests, diagnostics), never as a second write path.
+	get currentCallbacks(): AudioPlayerCallbacks {
+		return this.callbacks;
+	}
 
 	get canNextStreamTrack(): boolean {
 		return this.streamCanNext;
@@ -64,22 +88,59 @@ class AudioPlayer {
 		return this.audio;
 	}
 
+	// Installs `next` as the active callback set and returns the set it
+	// replaced, so a caller that only wants to visit (a share route) can
+	// restore the previous owner's callbacks on teardown instead of leaving
+	// the player with none.
+	swapCallbacks(next: AudioPlayerCallbacks): AudioPlayerCallbacks {
+		const previous = this.callbacks;
+		this.callbacks = next;
+		return previous;
+	}
+
+	restoreCallbacks(previous: AudioPlayerCallbacks): void {
+		this.callbacks = previous;
+	}
+
 	load(
 		info: PlaybackInfo,
 		opts: { autoplay?: boolean; restart?: boolean; startAt?: number } = {}
+	): void {
+		this.loadFromUrl(info, AUDIO_URL_PREFIX + info.generation.mp3_path, opts);
+	}
+
+	// Classic per-track playback from a URL the caller already resolved
+	// (share routes have no `/audio/{mp3_path}` endpoint of their own — see
+	// `docs/architecture.md`'s share section). `load()` is `loadUrl()` with
+	// the app's own URL convention plugged in; both funnel through the same
+	// resolved-URL state so recovery and the auth probe never have to choose
+	// between two URL sources.
+	loadUrl(
+		info: PlaybackInfo,
+		url: string,
+		opts: { autoplay?: boolean; restart?: boolean; startAt?: number } = {}
+	): void {
+		this.loadFromUrl(info, url, opts);
+	}
+
+	private loadFromUrl(
+		info: PlaybackInfo,
+		url: string,
+		opts: { autoplay?: boolean; restart?: boolean; startAt?: number }
 	): void {
 		const autoplay = opts.autoplay ?? true;
 		const restart = opts.restart ?? false;
 		const sameGen =
 			!this.streamEngine.active &&
 			this.current?.generation.id === info.generation.id &&
-			this.current?.generation.mp3_path === info.generation.mp3_path;
+			this.currentUrl === url;
 
 		this.streamEngine.clear();
 		this.syncStreamBoundaries();
 		this.streamEndSignaled = false;
 		this.mode = 'classic';
 		this.setCurrent(info);
+		this.currentUrl = url;
 		this.error = null;
 
 		if (sameGen && this.audio && this.status !== 'error' && !restart) {
@@ -97,7 +158,7 @@ class AudioPlayer {
 		this.status = 'loading';
 		this.currentTime = 0;
 		this.duration = 0;
-		el.src = this.audioUrl(info.generation.mp3_path);
+		el.src = url;
 		el.load();
 	}
 
@@ -118,6 +179,7 @@ class AudioPlayer {
 		this.lastObservedTime = 0;
 		this.mode = 'stream';
 		this.setCurrent(streamState.info);
+		this.currentUrl = manifest.stream_url;
 		this.currentTime = streamState.currentTime;
 		this.duration = streamState.duration;
 		this.error = null;
@@ -224,6 +286,35 @@ class AudioPlayer {
 		return true;
 	}
 
+	// Resets playback state (pause, drop the current track, clear the stream
+	// session) but keeps the underlying <audio> element and its listeners —
+	// unlike destroy(), which is a full teardown. A share route calls this on
+	// unmount, after restoreCallbacks(), so a listener who navigates back
+	// into the logged-in app never finds a synthetic share PlaybackInfo still
+	// sitting in the transport bar.
+	unload(): void {
+		this.autoplayPending = false;
+		this.clearStallRecoveryTimer();
+		if (this.audio) {
+			this.audio.pause();
+			this.audio.src = '';
+			this.audio.removeAttribute('src');
+		}
+		this.status = 'idle';
+		this.setCurrent(null);
+		this.currentUrl = null;
+		this.mode = 'classic';
+		this.currentTime = 0;
+		this.duration = 0;
+		this.error = null;
+		this.streamEngine.clear();
+		this.syncStreamBoundaries();
+		this.recoveryAttempts = 0;
+		this.pendingRecoverySeek = null;
+		this.lastObservedTime = 0;
+		this.streamEndSignaled = false;
+	}
+
 	destroy(): void {
 		this.streamEndSignaled = false;
 		if (!this.audio) {
@@ -236,6 +327,7 @@ class AudioPlayer {
 		this.audio.src = '';
 		this.audio.removeAttribute('src');
 		this.audio = null;
+		this.currentUrl = null;
 		this.listenersAttached = false;
 		this.status = 'idle';
 		this.setCurrent(null);
@@ -304,7 +396,7 @@ class AudioPlayer {
 		});
 		el.addEventListener('play', () => {
 			this.streamEndSignaled = false;
-			this.onPlaybackStarted?.();
+			this.callbacks.onPlaybackStarted?.();
 			if (this.status !== 'error') this.status = 'playing';
 		});
 		el.addEventListener('playing', () => {
@@ -343,7 +435,7 @@ class AudioPlayer {
 			this.currentTime = 0;
 			if (!this.streamEndSignaled) {
 				this.streamEndSignaled = true;
-				this.onEnded?.(reason);
+				this.callbacks.onEnded?.(reason);
 			}
 		});
 		el.addEventListener('error', () => {
@@ -355,9 +447,8 @@ class AudioPlayer {
 		});
 	}
 
-	private audioUrl(mp3Path: string, recoveryAttempt?: number): string {
-		const url = AUDIO_URL_PREFIX + mp3Path;
-		return recoveryAttempt ? `${url}?recover=${recoveryAttempt}` : url;
+	private urlWithRecovery(url: string, recoveryAttempt: number): string {
+		return `${url}${url.includes('?') ? '&' : '?'}recover=${recoveryAttempt}`;
 	}
 
 	private scheduleStallRecovery(): void {
@@ -386,7 +477,14 @@ class AudioPlayer {
 		const target = this.current;
 		const el = this.audio;
 		if (this.streamEngine.active) return false;
-		if (!target || !el || el.ended || this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) return false;
+		if (
+			!target ||
+			!el ||
+			!this.currentUrl ||
+			el.ended ||
+			this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS
+		)
+			return false;
 
 		const observedTime = el.currentTime || this.currentTime || this.lastObservedTime;
 		if (observedTime < 1) return false;
@@ -409,7 +507,7 @@ class AudioPlayer {
 		});
 
 		el.pause();
-		el.src = this.audioUrl(target.generation.mp3_path, this.recoveryAttempts);
+		el.src = this.urlWithRecovery(this.currentUrl, this.recoveryAttempts);
 		el.load();
 		return true;
 	}
@@ -488,13 +586,13 @@ class AudioPlayer {
 		if (!this.streamEngine.active) return;
 
 		if (probe.status === 401) {
-			await this.onAuthLost?.();
+			await this.callbacks.onAuthLost?.();
 			return;
 		}
 		if (probe.status === 404) {
 			// Snapshot reaped server-side (TTL) — rebuild it from the manifest's
 			// own track list and resume at the same track position.
-			const fresh = await this.onStreamRebuild?.(state);
+			const fresh = await this.callbacks.onStreamRebuild?.(state);
 			if (fresh && fresh.tracks.length > 0) {
 				const currentId = track?.generation_id;
 				const matched = fresh.tracks.findIndex((item) => item.generation_id === currentId);
@@ -520,7 +618,7 @@ class AudioPlayer {
 		this.streamEngine.resumeAt(absoluteTime);
 		el.pause();
 		const url = state.manifest.stream_url;
-		el.src = `${url}${url.includes('?') ? '&' : '?'}recover=${this.recoveryAttempts}`;
+		el.src = this.urlWithRecovery(url, this.recoveryAttempts);
 		el.load();
 	}
 
@@ -549,14 +647,15 @@ class AudioPlayer {
 		this.error = ERROR_MSG_GENERIC;
 
 		const target = this.current;
-		if (!target) return;
+		const url = this.currentUrl;
+		if (!target || !url) return;
 
-		const probe = await this.probeAudioUrl(target.generation.mp3_path);
+		const probe = await this.probeUrl(url);
 
 		if (this.current !== target) return;
 
 		if (probe.status === 401) {
-			await this.onAuthLost?.();
+			await this.callbacks.onAuthLost?.();
 			return;
 		}
 		if (probe.status === 404) this.error = ERROR_MSG_NOT_FOUND;
@@ -566,19 +665,7 @@ class AudioPlayer {
 
 	private setCurrent(current: PlaybackInfo | null): void {
 		this.current = current;
-		this.onCurrentChange?.(current);
-	}
-
-	private async probeAudioUrl(mp3Path: string): Promise<{ ok: boolean; status: number }> {
-		try {
-			const resp = await fetch(AUDIO_URL_PREFIX + mp3Path, {
-				method: 'HEAD',
-				credentials: 'include'
-			});
-			return { ok: resp.ok, status: resp.status };
-		} catch {
-			return { ok: false, status: 0 };
-		}
+		this.callbacks.onCurrentChange?.(current);
 	}
 }
 

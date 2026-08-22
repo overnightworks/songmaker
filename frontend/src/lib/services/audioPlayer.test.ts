@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, QueueStreamManifest } from '$lib/api/types';
-import { audioPlayer, type PlaybackInfo } from './audioPlayer.svelte';
+import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
+
+function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCallbacks {
+	return {
+		onEnded: null,
+		onPlaybackStarted: null,
+		onAuthLost: null,
+		onStreamRebuild: null,
+		onCurrentChange: null,
+		...overrides
+	};
+}
 
 function makeGen(overrides: Partial<GenerationItem> = {}): GenerationItem {
 	return {
@@ -154,11 +165,7 @@ beforeEach(() => {
 	fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
 	vi.stubGlobal('fetch', fetchMock);
 	audioPlayer.destroy();
-	audioPlayer.onEnded = null;
-	audioPlayer.onPlaybackStarted = null;
-	audioPlayer.onAuthLost = null;
-	audioPlayer.onStreamRebuild = null;
-	audioPlayer.onCurrentChange = null;
+	audioPlayer.swapCallbacks(callbacks());
 });
 
 afterEach(() => {
@@ -341,7 +348,7 @@ describe('event handling', () => {
 
 	it('ended fires onEnded callback', () => {
 		const onEnded = vi.fn();
-		audioPlayer.onEnded = onEnded;
+		audioPlayer.swapCallbacks(callbacks({ onEnded }));
 		fakeAudio.fire('ended');
 		expect(onEnded).toHaveBeenCalled();
 		expect(audioPlayer.status).toBe('idle');
@@ -349,7 +356,7 @@ describe('event handling', () => {
 	});
 
 	it('ended without onEnded does not throw', () => {
-		audioPlayer.onEnded = null;
+		audioPlayer.swapCallbacks(callbacks());
 		expect(() => fakeAudio.fire('ended')).not.toThrow();
 	});
 });
@@ -409,8 +416,7 @@ describe('stream playback', () => {
 	it('ends a windowed stream once without wrapping the final track', () => {
 		const onEnded = vi.fn();
 		const onPlaybackStarted = vi.fn();
-		audioPlayer.onEnded = onEnded;
-		audioPlayer.onPlaybackStarted = onPlaybackStarted;
+		audioPlayer.swapCallbacks(callbacks({ onEnded, onPlaybackStarted }));
 		audioPlayer.loadStream({ ...makeStreamManifest(), windowed: true }, 1, { autoplay: false });
 
 		fakeAudio.fire('ended');
@@ -436,7 +442,7 @@ describe('stream playback', () => {
 
 	it('resets the terminal end guard on destroy', () => {
 		const onEnded = vi.fn();
-		audioPlayer.onEnded = onEnded;
+		audioPlayer.swapCallbacks(callbacks({ onEnded }));
 		audioPlayer.loadStream({ ...makeStreamManifest(), windowed: true }, 1, { autoplay: false });
 		fakeAudio.fire('ended');
 
@@ -480,7 +486,7 @@ describe('stream playback', () => {
 		fetchMock.mockResolvedValue({ ok: false, status: 404 });
 		const fresh = makeStreamManifest();
 		const onStreamRebuild = vi.fn().mockResolvedValue(fresh);
-		audioPlayer.onStreamRebuild = onStreamRebuild;
+		audioPlayer.swapCallbacks(callbacks({ onStreamRebuild }));
 		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
 		fakeAudio.fire('play');
 		fakeAudio.currentTime = 12;
@@ -523,7 +529,7 @@ describe('stream playback', () => {
 				}
 			]
 		};
-		audioPlayer.onStreamRebuild = vi.fn().mockResolvedValue(rotated);
+		audioPlayer.swapCallbacks(callbacks({ onStreamRebuild: vi.fn().mockResolvedValue(rotated) }));
 		audioPlayer.loadStream(original, 1, { autoplay: false });
 		fakeAudio.fire('loadedmetadata');
 		fakeAudio.fire('play');
@@ -605,7 +611,7 @@ describe('error handling', () => {
 	it('401 probe response triggers onAuthLost', async () => {
 		fetchMock.mockResolvedValueOnce({ ok: false, status: 401 });
 		const onAuthLost = vi.fn();
-		audioPlayer.onAuthLost = onAuthLost;
+		audioPlayer.swapCallbacks(callbacks({ onAuthLost }));
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
 		expect(onAuthLost).toHaveBeenCalled();
@@ -902,5 +908,124 @@ describe('getElement()', () => {
 
 	it('returns null before load', () => {
 		expect(audioPlayer.getElement()).toBeNull();
+	});
+});
+
+describe('loadUrl()', () => {
+	it('loads the given URL directly instead of the /audio/ prefix', () => {
+		const info = makeInfo();
+		audioPlayer.loadUrl(info, '/shared/slug/audio/first.mp3');
+		expect(audioPlayer.current?.songTitle).toBe('Song');
+		expect(audioPlayer.status).toBe('loading');
+		expect(fakeAudio.src).toBe('/shared/slug/audio/first.mp3');
+	});
+
+	it('does not reload when the same generation and URL are loaded again', () => {
+		const info = makeInfo();
+		audioPlayer.loadUrl(info, '/shared/slug/audio/first.mp3');
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('play');
+		const initialSrc = fakeAudio.src;
+		audioPlayer.loadUrl(makeInfo({ generation: makeGen() }), '/shared/slug/audio/first.mp3');
+		expect(fakeAudio.src).toBe(initialSrc);
+	});
+
+	it('reloads when the URL differs even for the same generation id', () => {
+		audioPlayer.loadUrl(makeInfo(), '/shared/slug/audio/first.mp3');
+		audioPlayer.loadUrl(makeInfo(), '/shared/other-slug/audio/first.mp3');
+		expect(fakeAudio.src).toBe('/shared/other-slug/audio/first.mp3');
+	});
+
+	it('recovers a stalled classic load against the loadUrl URL, not /audio/', () => {
+		vi.useFakeTimers();
+		audioPlayer.loadUrl(makeInfo(), '/shared/slug/audio/first.mp3', { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 40;
+		fakeAudio.fire('timeupdate');
+
+		fakeAudio.fire('stalled');
+		vi.advanceTimersByTime(5000);
+
+		expect(fakeAudio.src).toBe('/shared/slug/audio/first.mp3?recover=1');
+	});
+
+	it('probes the loadUrl URL on a media error and never calls onAuthLost when none is installed', async () => {
+		fetchMock.mockResolvedValueOnce({ ok: false, status: 401 });
+		audioPlayer.loadUrl(makeInfo(), '/shared/slug/audio/first.mp3', { autoplay: false });
+		fakeAudio.fire('error');
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(fetchMock).toHaveBeenCalledWith('/shared/slug/audio/first.mp3', {
+			method: 'HEAD',
+			credentials: 'include'
+		});
+		expect(audioPlayer.status).toBe('error');
+	});
+});
+
+describe('unload()', () => {
+	it('clears playback state but keeps the audio element for reuse', () => {
+		audioPlayer.load(makeInfo());
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('play');
+
+		audioPlayer.unload();
+
+		expect(audioPlayer.status).toBe('idle');
+		expect(audioPlayer.current).toBeNull();
+		expect(audioPlayer.currentTime).toBe(0);
+		expect(audioPlayer.duration).toBe(0);
+		expect(fakeAudio.src).toBe('');
+		expect(audioPlayer.getElement()).toBe(fakeAudio);
+	});
+
+	it('is safe to call before any load', () => {
+		expect(() => audioPlayer.unload()).not.toThrow();
+	});
+
+	it('a load after unload starts fresh rather than reusing stale sameGen state', () => {
+		const info = makeInfo();
+		audioPlayer.load(info);
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('play');
+		audioPlayer.unload();
+
+		audioPlayer.load(info);
+
+		expect(audioPlayer.status).toBe('loading');
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3');
+	});
+});
+
+describe('swapCallbacks() / restoreCallbacks()', () => {
+	beforeEach(() => {
+		audioPlayer.load(makeInfo(), { autoplay: false });
+	});
+
+	it('returns the previous callback set and installs the new one', () => {
+		const appOnEnded = vi.fn();
+		const previous = audioPlayer.swapCallbacks(callbacks({ onEnded: appOnEnded }));
+		expect(previous).toEqual(callbacks());
+
+		const shareOnEnded = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onEnded: shareOnEnded }));
+		fakeAudio.fire('ended');
+
+		expect(shareOnEnded).toHaveBeenCalled();
+		expect(appOnEnded).not.toHaveBeenCalled();
+	});
+
+	it('restoreCallbacks reinstates the exact previous set after a visiting owner is done', () => {
+		const appOnEnded = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onEnded: appOnEnded }));
+
+		const shareOnEnded = vi.fn();
+		const appCallbacks = audioPlayer.swapCallbacks(callbacks({ onEnded: shareOnEnded }));
+		audioPlayer.restoreCallbacks(appCallbacks);
+
+		fakeAudio.fire('ended');
+
+		expect(appOnEnded).toHaveBeenCalled();
+		expect(shareOnEnded).not.toHaveBeenCalled();
 	});
 });

@@ -111,7 +111,7 @@ import { openCollection } from '$lib/stores/collection';
 import { RAIL_LIBRARY_LABEL } from '$lib/constants';
 
 async function rebuildStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
-	const rebuild = audioPlayer.onStreamRebuild;
+	const rebuild = audioPlayer.currentCallbacks.onStreamRebuild;
 	if (!rebuild) {
 		throw new Error('onStreamRebuild is not assigned');
 	}
@@ -653,7 +653,7 @@ describe('playback dispatch', () => {
 	it('clears window-end when playback starts again', () => {
 		windowEnded.set(true);
 
-		audioPlayer.onPlaybackStarted?.();
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
 
 		expect(get(windowEnded)).toBe(false);
 	});
