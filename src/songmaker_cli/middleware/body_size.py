@@ -22,6 +22,7 @@ def is_large_upload_path(path: str) -> bool:
         and (
             (parts[2] == "loras" and parts[4] == "samples")
             or (parts[2] == "songs" and parts[4] == "reimport")
+            or (parts[2] == "albums" and parts[4] == "cover")
         )
     )
 
@@ -30,8 +31,11 @@ def body_limit_for_path(path: str) -> int:
     settings = get_settings()
     if not is_large_upload_path(path):
         return settings.max_request_body_bytes
-    if path.split("/")[2] == "songs":
+    kind = path.split("/")[2]
+    if kind == "songs":
         return settings.max_reimport_body_bytes
+    if kind == "albums":
+        return settings.max_cover_upload_body_bytes
     return settings.max_upload_body_bytes
 
 

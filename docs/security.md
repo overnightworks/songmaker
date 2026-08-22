@@ -69,12 +69,12 @@ Album, song, generation, and playlist shares expose public read-only endpoints w
 
 | Resource | JSON endpoint | Audio endpoint |
 |----------|---------------|----------------|
-| Album | `/shared/{slug}` | `/shared/{slug}/audio/{file}` |
+| Album | `/shared/{slug}` | `/shared/{slug}/audio/{file}`, `/shared/{slug}/cover` |
 | Song | `/shared/song/{slug}` | `/shared/song/{slug}/audio/{file}` |
 | Generation | `/shared/gen/{slug}` | `/shared/gen/{slug}/audio/{file}` |
 | Playlist | `/shared/playlist/{slug}` | `/shared/playlist/{slug}/audio/{file}` |
 
-Album and song shares serve the picked unarchived generation when one exists, otherwise the latest unarchived generation. Generation shares serve the shared generation. Playlist shares serve playlist entry generations. Public JSON responses omit scores and edit history; audio URLs include the exact stored relative audio path needed by the filename allowlist. Share slugs are UUID v4 values (122 bits of entropy, unguessable). Sharing is revocable by the resource owner.
+Album and song shares serve the picked unarchived generation when one exists, otherwise the latest unarchived generation. Generation shares serve the shared generation. Playlist shares serve playlist entry generations. Public JSON responses omit scores and edit history; audio URLs include the exact stored relative audio path needed by the filename allowlist. Album JSON includes `cover` only while the album is shared and the cover file exists. Public cover bytes are served from `/shared/{slug}/cover` using that same slug gate — never a client-supplied path on `/audio/{owner_id}/{filename}`. Unshare, replace, or delete 404s the previous public cover URL. Share slugs are UUID v4 values (122 bits of entropy, unguessable). Sharing is revocable by the resource owner.
 
 ### Per-IP (global middleware)
 
@@ -135,6 +135,7 @@ JSON API requests are capped at 1 MiB (`MAX_REQUEST_BODY_BYTES`). Large multipar
 | `POST /api/audio/upload` | 50 MiB per file | 50 MiB + 1 MiB envelope |
 | `POST /api/loras/{lora_id}/samples` | 50 MiB per file | 50 MiB + 1 MiB envelope |
 | `POST /api/songs/{song_id}/reimport` | two audio files | 100 MiB + 1 MiB envelope |
+| `POST /api/albums/{album_id}/cover` | 8 MiB per image | 8 MiB + 1 MiB envelope |
 
 File limits and body limits are separate so a legal 50 MiB file is not rejected for multipart headers. `POST /api/loras/{id}/samples/{sample_id}` is not a large-upload path.
 
@@ -146,7 +147,11 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 2. **Song write**: the path must resolve under `{audio_dir}/{authenticated_user_id}/refs`
 3. **Job execution**: the same owner-root resolver runs again; a foreign, symlink, or missing path fails the job instead of falling back to no reference
 
-**Note**: For production deployments exposed to the internet, configure equivalent path-specific limits at the reverse proxy so oversized requests are rejected at the network edge. A blanket 1 MiB proxy limit would also block the three documented audio-upload routes.
+### Album cover upload
+
+`POST /api/albums/{album_id}/cover` accepts JPEG and PNG only (SVG and WebP are rejected). The server checks magic bytes, decodes with Pillow, applies EXIF orientation, and strips metadata before writing. Named pixel and byte ceilings reject decompression bombs. Card and detail derivatives are written at upload time; GET never resizes. Files live at `{audio_dir}/covers/{album_id}/`. Authenticated GET/POST/DELETE use `check_album_access` (foreign albums 404). Public bytes use the album share slug.
+
+**Note**: For production deployments exposed to the internet, configure equivalent path-specific limits at the reverse proxy so oversized requests are rejected at the network edge. A blanket 1 MiB proxy limit would also block the documented audio-upload and album-cover routes.
 
 ## Request Timeout
 
@@ -331,7 +336,7 @@ All request models use Pydantic with strict constraints:
 
 ## Path Traversal Protection
 
-Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. The authenticated audio endpoint (`/audio/{owner_id}/{filename}`) checks that the requesting user owns the files (or is admin) — no DB lookup needed since the path is keyed by user ID. Shared audio endpoints first resolve the slug to a shared album, song, generation, or playlist, then validate the requested filename against that resource's allowed generation paths before reading from disk.
+Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory traversal. The authenticated audio endpoint (`/audio/{owner_id}/{filename}`) checks that the requesting user owns the files (or is admin) — no DB lookup needed since the path is keyed by user ID. Shared audio endpoints first resolve the slug to a shared album, song, generation, or playlist, then validate the requested filename against that resource's allowed generation paths before reading from disk. Album covers are never served from `/audio/{owner_id}/{filename}`; authenticated covers use `/api/albums/{id}/cover` and public covers use `/shared/{slug}/cover`.
 
 ## GPU Resource Safety
 

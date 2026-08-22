@@ -15,14 +15,19 @@ from songmaker_cli.api_models.whisper import (
     WhisperCue,
     generation_whisper_cues,
 )
-from songmaker_cli.constants import MODEL_AVAILABLE_MODES
+from songmaker_cli.constants import (
+    COVER_VARIANT_CARD,
+    COVER_VARIANT_DETAIL,
+    COVER_VERSION_QUERY,
+    MODEL_AVAILABLE_MODES,
+)
 from songmaker_cli.scoring.registry import VALID_SCORER_NAMES
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from songmaker_cli.db.models import Generation, Song, Version
+    from songmaker_cli.db.models import Album, Generation, Song, Version
 
 
 def generation_version_lyrics(gen: Generation) -> str | None:
@@ -60,6 +65,37 @@ _VALID_MODEL_MODES = MODEL_AVAILABLE_MODES
 GenerationParams = BaseGenerationParams
 
 
+class AlbumCoverUrls(BaseModel):
+    card: str
+    detail: str
+
+
+def album_cover_urls(album_id: str, cover_key: str) -> AlbumCoverUrls:
+    return AlbumCoverUrls(
+        card=(
+            f"/api/albums/{album_id}/cover?variant={COVER_VARIANT_CARD}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+        detail=(
+            f"/api/albums/{album_id}/cover?variant={COVER_VARIANT_DETAIL}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+    )
+
+
+def public_album_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
+    return AlbumCoverUrls(
+        card=(
+            f"/shared/{slug}/cover?variant={COVER_VARIANT_CARD}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+        detail=(
+            f"/shared/{slug}/cover?variant={COVER_VARIANT_DETAIL}"
+            f"&{COVER_VERSION_QUERY}={cover_key}"
+        ),
+    )
+
+
 class AlbumResponse(BaseModel):
     id: str
     title: str
@@ -70,10 +106,12 @@ class AlbumResponse(BaseModel):
     song_count: int = 0
     is_shared: bool = False
     share_slug: str | None = None
+    cover: AlbumCoverUrls | None = None
     created_at: str
 
     @classmethod
-    def from_orm(cls, album) -> AlbumResponse:
+    def from_orm(cls, album: Album) -> AlbumResponse:
+        cover = album_cover_urls(album.id, album.cover_key) if album.cover_key else None
         return cls(
             id=album.id,
             title=album.title,
@@ -84,6 +122,7 @@ class AlbumResponse(BaseModel):
             song_count=len(album.songs) if album.songs else 0,
             is_shared=album.is_shared,
             share_slug=album.share_slug,
+            cover=cover,
             created_at=album.created_at.isoformat(),
         )
 
@@ -107,6 +146,24 @@ class SharedAlbumResponse(BaseModel):
     subtitle: str
     year: str
     songs: list[SharedSongItem]
+    cover: AlbumCoverUrls | None = None
+
+    @classmethod
+    def from_orm(
+        cls,
+        album: Album,
+        *,
+        songs: list[SharedSongItem],
+        cover: AlbumCoverUrls | None = None,
+    ) -> SharedAlbumResponse:
+        return cls(
+            title=album.title,
+            artist=album.artist,
+            subtitle=album.subtitle,
+            year=album.year,
+            songs=songs,
+            cover=cover,
+        )
 
 
 class SharedSongResponse(BaseModel):

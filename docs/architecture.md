@@ -110,6 +110,7 @@ User clicks "Generate"                    User clicks "Score"
   Repaint: POST /generations/{id}/repaint
   Cover:   POST /generations/{id}/cover
   Upload:  POST /api/audio/upload (reference audio)
+  Art:     POST /api/albums/{id}/cover (album cover files on the audio volume)
 
   User clicks "Chat"
         │
@@ -135,8 +136,9 @@ public slug reachability (`is_shared` plus slug, not soft-deleted; archived take
 stay). `N` is the unfiltered server total; a type filter pages a subset without
 changing `N`. Old `history.state.section === 'shared'` still opens that inventory.
 Unshare stays the four resource DELETE endpoints. Studio browse is a wrapping
-album-card grid (title, artist, song count, created age, and `colors.primary` or
-title initials), not a nested song tree; the album overview remains the track
+album-card grid (title, artist, song count, created age, and the cover image
+when `cover` is present, otherwise `colors.primary` or title initials), not a
+nested song tree; the album overview remains the track
 list. Cards wrap with `minmax(0, …)` above 768px and stack at ≤768px
 (`LIBRARY_NARROW_MEDIA`); keep-browse uses that same card grid, not a horizontal
 shelf. Search still lists song hits under album context; album-only hits may use
@@ -274,6 +276,7 @@ stream.
 | GET | `/api/library/search` | user | Keyset search of the caller's album and song titles. `q` required; `next_cursor` is null iff `has_more` is false. Invalid or mismatched cursors are 422. |
 | GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay, gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
+| GET/POST/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, or remove the album cover (JPEG/PNG; ownership 404) |
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |
 | GET/PUT | `/api/songs/{id}` | user | Get/update song |
 | PUT | `/api/songs/{id}/album` | user | Move song to different album |
@@ -304,10 +307,11 @@ stream.
 | POST/DELETE | `/api/songs/{id}/share` | user | Enable/revoke song sharing |
 | POST/DELETE | `/api/generations/{id}/share` | user | Enable/revoke generation sharing |
 | POST/DELETE | `/api/playlists/{id}/share` | user | Enable/revoke playlist sharing |
-| GET | `/shared/{slug}` | public | Read-only album JSON (no auth, rate-limited) |
+| GET | `/shared/{slug}` | public | Read-only album JSON (no auth, rate-limited). `cover` is present only while shared and the file exists. |
 | GET | `/shared/song/{slug}` | public | Read-only song JSON (no auth, rate-limited) |
 | GET | `/shared/gen/{slug}` | public | Read-only generation JSON (no auth, rate-limited) |
 | GET | `/shared/playlist/{slug}` | public | Read-only playlist JSON (no auth, rate-limited) |
+| GET | `/shared/{slug}/cover` | public | Stream the shared album cover after the same share-slug gate as album JSON |
 | GET | `/shared/{slug}/audio/{file}` | public | Stream shared album audio after filename allowlist validation |
 | GET | `/shared/song/{slug}/audio/{file}` | public | Stream shared song audio after filename allowlist validation |
 | GET | `/shared/gen/{slug}/audio/{file}` | public | Stream shared generation audio after filename allowlist validation |
@@ -469,3 +473,5 @@ Health endpoint at `/health` reports:
 `scripts/backup.sh` dumps PostgreSQL + copies the audio Docker volume to `BACKUP_DIR` (default `/mnt/backup/songmaker`). `scripts/restore.sh` restores both. `scripts/backup-list.sh` lists snapshots. See [scripts/BACKUP.md](../scripts/BACKUP.md) for setup instructions.
 
 DB and audio must be backed up and restored together — one without the other leaves orphaned records or unreachable files.
+
+Album covers live as files on that same audio volume (`covers/{album_id}/` for original plus card and detail derivatives). They are not stored as Base64 in PostgreSQL; the album row only stores `cover_key`. Backup/restore of the audio volume therefore includes covers with no extra volume.

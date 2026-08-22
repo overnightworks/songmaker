@@ -1,3 +1,6 @@
+import { apiFetch } from './fetch';
+import type { AlbumItem } from './types';
+
 export { ApiError, type JobStatus } from './fetch';
 export {
 	fetchAlbum,
@@ -145,3 +148,13 @@ export {
 	trainLora,
 	type LoraSamplePatch
 } from './loras';
+
+export async function uploadAlbumCover(albumId: string, file: File): Promise<AlbumItem> {
+	const form = new FormData();
+	form.append('file', file);
+	return apiFetch<AlbumItem>(`/api/albums/${albumId}/cover`, { method: 'POST', body: form });
+}
+
+export async function deleteAlbumCover(albumId: string): Promise<AlbumItem> {
+	return apiFetch<AlbumItem>(`/api/albums/${albumId}/cover`, { method: 'DELETE' });
+}

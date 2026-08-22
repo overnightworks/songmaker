@@ -180,6 +180,11 @@ export interface SongItem {
 	generations: GenerationItem[];
 }
 
+export interface AlbumCoverUrls {
+	card: string;
+	detail: string;
+}
+
 export interface AlbumItem {
 	id: string;
 	title: string;
@@ -190,6 +195,7 @@ export interface AlbumItem {
 	song_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
+	cover?: AlbumCoverUrls | null;
 	created_at: string;
 }
 

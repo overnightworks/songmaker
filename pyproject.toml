@@ -46,6 +46,7 @@ server = [
     "arq>=0.26,<1",
     "mutagen>=1.47,<2",
     "python-multipart>=0.0.7,<1",
+    "pillow>=12.3,<13",
 ]
 claude = [
     "anthropic>=0.20,<1",

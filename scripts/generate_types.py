@@ -38,6 +38,7 @@ export interface PaginatedResponse<T> {
 }"""
 
 _RESPONSE_MODEL_NAMES: dict[str, str] = {
+    "AlbumCoverUrls": "AlbumCoverUrls",
     "AlbumResponse": "AlbumItem",
     "WhisperCue": "WhisperCue",
     "GenerationResponse": "GenerationItem",
@@ -116,6 +117,7 @@ _EMIT_ORDER: list[str] = [
     "GenerationItem",
     "VersionItem",
     "SongItem",
+    "AlbumCoverUrls",
     "AlbumItem",
     "JobItem",
     "ResourceHelloEvent",
@@ -292,6 +294,7 @@ def _build_track_scores_interface() -> str:
 def generate() -> str:
     from songmaker_cli.api_models import (
         AddAlbumToPlaylistResponse,
+        AlbumCoverUrls,
         AlbumResponse,
         AuditLogResponse,
         AuthMeResponse,
@@ -357,6 +360,7 @@ def generate() -> str:
         "GenerationItem": GenerationResponse,
         "VersionItem": VersionResponse,
         "SongItem": SongResponse,
+        "AlbumCoverUrls": AlbumCoverUrls,
         "AlbumItem": AlbumResponse,
         "JobItem": JobResponse,
         "ResourceHelloEvent": ResourceHelloEvent,

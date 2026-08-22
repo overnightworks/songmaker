@@ -22,6 +22,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
+    COVER_UPLOAD_BODY_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
     REIMPORT_BODY_MAX_BYTES,
 )
@@ -78,6 +79,7 @@ class Settings(BaseSettings):
     max_request_body_bytes: int = Field(default=JSON_REQUEST_BODY_MAX_BYTES)
     max_upload_body_bytes: int = Field(default=AUDIO_UPLOAD_BODY_MAX_BYTES)
     max_reimport_body_bytes: int = Field(default=REIMPORT_BODY_MAX_BYTES)
+    max_cover_upload_body_bytes: int = Field(default=COVER_UPLOAD_BODY_MAX_BYTES)
 
     # ── Logging ───────────────────────────────────────────────────────
     log_format: Literal["text", "json"] = "text"

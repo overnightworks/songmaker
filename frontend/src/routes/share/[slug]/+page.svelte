@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { fetchSharedAlbumStream } from '$lib/api/client';
 	import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
-	import { APP_NAME } from '$lib/constants';
+	import { APP_NAME, ALBUM_COVER_ALT_TYPE } from '$lib/constants';
 	import LegalContent from '$lib/components/LegalContent.svelte';
 	import SharedPlayer from '$lib/components/SharedPlayer.svelte';
 	import ShareStatus from '$lib/components/ShareStatus.svelte';
@@ -16,12 +16,18 @@
 		audio_url: string | null;
 	}
 
+	interface SharedAlbumCover {
+		card: string;
+		detail: string;
+	}
+
 	interface SharedAlbum {
 		title: string;
 		artist: string;
 		subtitle: string;
 		year: string;
 		songs: SharedSong[];
+		cover?: SharedAlbumCover | null;
 	}
 
 	let album: SharedAlbum | null = $state(null);
@@ -34,6 +40,7 @@
 	let playerLoading = $state(false);
 	let legalSection: string | null = $state(null);
 	let playerRef: ReturnType<typeof SharedPlayer> | undefined = $state();
+	let coverFailed = $state(false);
 
 	const slug = $derived(page.params.slug ?? '');
 	const STREAM_REFRESH_MARGIN_MS = 60_000;
@@ -52,6 +59,7 @@
 				return;
 			}
 			album = await resp.json();
+			coverFailed = false;
 		} catch {
 			errorKind = 'error';
 		} finally {
@@ -163,6 +171,14 @@
 		/>
 	{:else if album}
 		<div class="album-header">
+			{#if album.cover?.detail && !coverFailed}
+				<img
+					class="share-cover"
+					src={album.cover.detail}
+					alt={`${ALBUM_COVER_ALT_TYPE} ${album.title}`}
+					onerror={() => (coverFailed = true)}
+				/>
+			{/if}
 			<h1 data-text={album.title}>{album.title}</h1>
 			<p class="artist">{album.artist}</p>
 			{#if album.subtitle}<p class="subtitle">{album.subtitle}</p>{/if}
@@ -310,6 +326,14 @@
 		text-align: center;
 		margin-bottom: 2rem;
 		position: relative;
+	}
+
+	.share-cover {
+		width: 8rem;
+		height: 8rem;
+		object-fit: cover;
+		margin: 0 auto 1rem;
+		display: block;
 	}
 
 	.album-header h1 {

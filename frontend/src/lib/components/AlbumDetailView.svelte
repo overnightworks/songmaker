@@ -1,10 +1,12 @@
 <script lang="ts">
 	import {
 		deleteAlbum,
+		deleteAlbumCover,
 		renameAlbum,
 		restoreAlbum,
 		shareAlbum,
-		unshareAlbum
+		unshareAlbum,
+		uploadAlbumCover
 	} from '$lib/api/client';
 	import { fetchSongs } from '$lib/api/songs';
 	import {
@@ -23,7 +25,18 @@
 	import { selectSong } from '$lib/stores/navigation';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
-	import { LIBRARY_ALBUMS_LOADING, LIBRARY_RETRY_LABEL } from '$lib/constants';
+	import {
+		ALBUM_ART_EMPTY_INITIALS,
+		ALBUM_ART_INITIAL_COUNT,
+		ALBUM_COVER_ACCEPT,
+		ALBUM_COVER_ALT_TYPE,
+		ALBUM_COVER_REMOVE_LABEL,
+		ALBUM_COVER_REPLACE_LABEL,
+		ALBUM_COVER_UPLOAD_LABEL,
+		LIBRARY_ALBUMS_LOADING,
+		LIBRARY_RETRY_LABEL
+	} from '$lib/constants';
+	import { hexToRgb } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import ActionButton from './ActionButton.svelte';
 	import EditableTitle from './EditableTitle.svelte';
@@ -51,6 +64,87 @@
 	const albumSongCount = $derived(selectedAlbum?.song_count ?? albumSongs.length);
 	const albumGenCount = $derived(albumSongs.reduce((sum, s) => sum + s.generation_count, 0));
 	const albumLoad = $derived(currentAlbumId ? $albumSongsLoad[currentAlbumId] : undefined);
+	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
+	const coverAlt = $derived(
+		selectedAlbum ? `${ALBUM_COVER_ALT_TYPE} ${selectedAlbum.title}` : ALBUM_COVER_ALT_TYPE
+	);
+	const artFill = $derived(selectedAlbum ? usableAlbumPrimary(selectedAlbum.colors) : null);
+	const initials = $derived(
+		selectedAlbum ? albumTitleInitials(selectedAlbum.title) : ALBUM_ART_EMPTY_INITIALS
+	);
+	let coverFailed = $state(false);
+	let coverBusy = $state(false);
+	let coverInput: HTMLInputElement | null = $state(null);
+
+	$effect(() => {
+		void coverUrl;
+		coverFailed = false;
+	});
+
+	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
+	const coverActionLabel = $derived(
+		showCover ? ALBUM_COVER_REPLACE_LABEL : ALBUM_COVER_UPLOAD_LABEL
+	);
+
+	function usableAlbumPrimary(colors: Record<string, string>): string | null {
+		const primary = colors.primary;
+		if (typeof primary !== 'string') return null;
+		const value = primary.trim();
+		if (!value) return null;
+		try {
+			hexToRgb(value);
+		} catch {
+			return null;
+		}
+		return value;
+	}
+
+	function albumTitleInitials(title: string): string {
+		const trimmed = title.trim();
+		if (!trimmed) return ALBUM_ART_EMPTY_INITIALS;
+		const words = trimmed.split(/\s+/);
+		if (words.length === 1) {
+			const letters = Array.from(words[0]).slice(0, ALBUM_ART_INITIAL_COUNT).join('');
+			return letters.toUpperCase() || ALBUM_ART_EMPTY_INITIALS;
+		}
+		const first = Array.from(words[0])[0];
+		const second = Array.from(words[1])[0];
+		if (!first) return ALBUM_ART_EMPTY_INITIALS;
+		return `${first}${second ?? ''}`.toUpperCase();
+	}
+
+	async function onCoverFile(event: Event): Promise<void> {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file || !selectedAlbum) return;
+		coverBusy = true;
+		try {
+			const updated = await uploadAlbumCover(selectedAlbum.id, file);
+			updateAlbumInList(selectedAlbum.id, () => updated);
+			coverFailed = false;
+			addToast('Cover saved', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Cover upload failed', 'error');
+		} finally {
+			coverBusy = false;
+		}
+	}
+
+	async function onCoverRemove(): Promise<void> {
+		if (!selectedAlbum) return;
+		coverBusy = true;
+		try {
+			const updated = await deleteAlbumCover(selectedAlbum.id);
+			updateAlbumInList(selectedAlbum.id, () => updated);
+			coverFailed = false;
+			addToast('Cover removed', 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Cover remove failed', 'error');
+		} finally {
+			coverBusy = false;
+		}
+	}
 
 	async function onRenameAlbum(newTitle: string): Promise<void> {
 		if (!selectedAlbum) return;
@@ -129,20 +223,56 @@
 {#if selectedAlbum}
 	<div class="detail-panel">
 		<div class="detail-header">
-			<div>
-				<h2 class="detail-title">
-					<EditableTitle
-						value={selectedAlbum.title}
-						onsave={onRenameAlbum}
-						ariaLabel="Album title"
+			<div class="detail-identity">
+				<div class="cover-hero">
+					{#if showCover && coverUrl}
+						<img src={coverUrl} alt={coverAlt} onerror={() => (coverFailed = true)} />
+					{:else if artFill}
+						<span class="cover-fallback" style:background={artFill} aria-hidden="true"></span>
+					{:else}
+						<span class="cover-fallback cover-initials" aria-hidden="true">{initials}</span>
+					{/if}
+					<input
+						bind:this={coverInput}
+						class="cover-file-input"
+						type="file"
+						accept={ALBUM_COVER_ACCEPT}
+						onchange={onCoverFile}
 					/>
-				</h2>
-				<span class="detail-subtitle">
-					{albumSongCount} song{albumSongCount !== 1 ? 's' : ''} · {albumGenCount} generation{albumGenCount !==
-					1
-						? 's'
-						: ''}
-				</span>
+					<button
+						type="button"
+						class="cover-hit"
+						onclick={() => coverInput?.click()}
+						disabled={coverBusy}
+						aria-label={coverActionLabel}
+					></button>
+					{#if showCover}
+						<button
+							type="button"
+							class="cover-remove"
+							onclick={onCoverRemove}
+							disabled={coverBusy}
+							aria-label={ALBUM_COVER_REMOVE_LABEL}
+						>
+							×
+						</button>
+					{/if}
+				</div>
+				<div class="detail-titles">
+					<h2 class="detail-title">
+						<EditableTitle
+							value={selectedAlbum.title}
+							onsave={onRenameAlbum}
+							ariaLabel="Album title"
+						/>
+					</h2>
+					<span class="detail-subtitle">
+						{albumSongCount} song{albumSongCount !== 1 ? 's' : ''} · {albumGenCount} generation{albumGenCount !==
+						1
+							? 's'
+							: ''}
+					</span>
+				</div>
 			</div>
 			<div class="detail-actions">
 				<button class="action-btn-primary" onclick={() => playAlbum(selectedAlbum.id)}>
@@ -248,6 +378,89 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	.detail-identity {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.detail-titles {
+		min-width: 0;
+	}
+
+	.cover-hero {
+		position: relative;
+		width: 4.5rem;
+		height: 4.5rem;
+		flex-shrink: 0;
+		overflow: hidden;
+		background: var(--surface-hover);
+	}
+
+	.cover-hero img,
+	.cover-fallback {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+
+	.cover-fallback {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.cover-initials {
+		font-family: var(--font-display);
+		font-size: 1.1rem;
+		letter-spacing: 0.06em;
+		user-select: none;
+	}
+
+	.cover-file-input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	.cover-hit {
+		position: absolute;
+		inset: 0;
+		padding: 0;
+		border: none;
+		background: transparent;
+		cursor: pointer;
+	}
+
+	.cover-hit:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: -2px;
+	}
+
+	.cover-remove {
+		position: absolute;
+		top: 0;
+		right: 0;
+		z-index: 1;
+		width: 1.5rem;
+		height: 1.5rem;
+		padding: 0;
+		border: none;
+		background: color-mix(in srgb, var(--bg) 75%, transparent);
+		color: var(--text);
+		font-size: 1rem;
+		line-height: 1;
+		cursor: pointer;
 	}
 
 	.detail-title {
@@ -341,6 +554,11 @@
 		.detail-header {
 			flex-direction: column;
 			gap: 0.5rem;
+		}
+
+		.cover-hero {
+			width: 3.5rem;
+			height: 3.5rem;
 		}
 
 		.detail-actions {
