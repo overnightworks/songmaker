@@ -23,15 +23,20 @@
 	} from '$lib/services/offline';
 	import { ALBUM_ART_EMPTY_INITIALS } from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
-	import ActionButton from './ActionButton.svelte';
-	import EditableTitle from './EditableTitle.svelte';
+	import CollectionHeader from './CollectionHeader.svelte';
+	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
-	import ShareButton from './ShareButton.svelte';
 
 	const playlistDetail = $derived($selectedPlaylistDetail);
 	let reorderBusy = $state(false);
+	let showDeleteConfirm = $state(false);
 	const initials = $derived(
 		playlistDetail ? titleInitials(playlistDetail.title) : ALBUM_ART_EMPTY_INITIALS
+	);
+	const subtitle = $derived(
+		playlistDetail
+			? `${playlistDetail.entries.length} track${playlistDetail.entries.length !== 1 ? 's' : ''}`
+			: ''
 	);
 
 	async function onPlaylistShareEnable() {
@@ -169,6 +174,12 @@
 		};
 	});
 
+	const offlineProgressLabel = $derived(
+		offlineSaving && offlineProgress && offlineProgress.total
+			? `Saving… ${Math.round((offlineProgress.downloaded / offlineProgress.total) * 100)}%`
+			: null
+	);
+
 	async function onSaveForOffline(): Promise<void> {
 		if (!playlistDetail || offlineSaving) return;
 		offlineSaving = true;
@@ -214,78 +225,35 @@
 			addToast('Remove failed', 'error');
 		}
 	}
+
+	function onSaveOfflineToggle(): void {
+		if (offlineSavedStreamUrl) void onRemoveOffline();
+		else void onSaveForOffline();
+	}
 </script>
 
 {#if playlistDetail}
 	<div class="detail-panel">
-		<div class="detail-header">
-			<div class="detail-identity">
-				<div class="cover-hero">
-					<span class="cover-fallback cover-initials" aria-hidden="true">{initials}</span>
-				</div>
-				<div class="detail-titles">
-					<h2 class="detail-title">
-						<EditableTitle
-							value={playlistDetail.title}
-							onsave={onPlaylistRename}
-							ariaLabel="Playlist title"
-						/>
-					</h2>
-					<span class="detail-subtitle">
-						{playlistDetail.entries.length} track{playlistDetail.entries.length !== 1 ? 's' : ''}
-					</span>
-				</div>
-			</div>
-			<div class="detail-actions">
-				{#if offlineSavedStreamUrl}
-					<button class="action-btn-offline saved" onclick={onRemoveOffline}>
-						Saved ✓ · Remove
-					</button>
-				{:else}
-					<button
-						class="action-btn-offline"
-						onclick={onSaveForOffline}
-						disabled={offlineSaving || playlistDetail.entries.length === 0}
-					>
-						{#if offlineSaving && offlineProgress && offlineProgress.total}
-							Saving… {Math.round((offlineProgress.downloaded / offlineProgress.total) * 100)}%
-						{:else if offlineSaving}
-							Saving…
-						{:else}
-							Save offline
-						{/if}
-					</button>
-				{/if}
-				<ShareButton
-					isShared={playlistDetail.is_shared}
-					shareSlug={playlistDetail.share_slug}
-					onshare={onPlaylistShareEnable}
-					onunshare={onPlaylistShareDisable}
-				/>
-
-				<ActionButton
-					icon="trash"
-					label="Delete Playlist"
-					destructive
-					confirm
-					onclick={onPlaylistDelete}
-				/>
-			</div>
-		</div>
-
-		{#if playlistDetail.is_shared && playlistDetail.share_slug}
-			<button
-				class="share-link"
-				onclick={() => {
-					const url = `${window.location.origin}/share/playlist/${playlistDetail.share_slug}`;
-					navigator.clipboard.writeText(url);
-					addToast('Link copied', 'success');
-				}}
-				title="Click to copy share link"
-			>
-				{window.location.origin}/share/playlist/{playlistDetail.share_slug}
-			</button>
-		{/if}
+		<CollectionHeader
+			kind="playlist"
+			title={playlistDetail.title}
+			{subtitle}
+			coverUrl={null}
+			coverAlt=""
+			{initials}
+			artFill={null}
+			onplay={() => playEntry(0)}
+			onrename={onPlaylistRename}
+			isShared={playlistDetail.is_shared}
+			shareSlug={playlistDetail.share_slug}
+			onshare={onPlaylistShareEnable}
+			onunshare={onPlaylistShareDisable}
+			ondelete={() => (showDeleteConfirm = true)}
+			onsaveoffline={onSaveOfflineToggle}
+			offlineSaved={Boolean(offlineSavedStreamUrl)}
+			{offlineSaving}
+			{offlineProgressLabel}
+		/>
 
 		<div class="entry-list">
 			{#each playlistDetail.entries as entry, i (entry.id)}
@@ -374,9 +342,24 @@
 	</div>
 {/if}
 
+{#if showDeleteConfirm && playlistDetail}
+	<ConfirmDeleteDialog
+		title={`Delete "${playlistDetail.title}"?`}
+		items={[
+			`${playlistDetail.entries.length} track${playlistDetail.entries.length !== 1 ? 's' : ''}`
+		]}
+		confirmLabel="Delete Playlist"
+		onconfirm={() => {
+			showDeleteConfirm = false;
+			onPlaylistDelete();
+		}}
+		oncancel={() => (showDeleteConfirm = false)}
+	/>
+{/if}
+
 <style>
 	.detail-panel {
-		padding: 1.2rem 1.5rem calc(var(--player-height) + 1.2rem);
+		padding-bottom: var(--player-height);
 		display: flex;
 		flex-direction: column;
 		gap: 0.8rem;
@@ -387,117 +370,11 @@
 		min-height: 0;
 	}
 
-	.detail-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-
-	.detail-identity {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		min-width: 0;
-		flex: 1;
-	}
-
-	.detail-titles {
-		min-width: 0;
-	}
-
-	.cover-hero {
-		position: relative;
-		width: 4.5rem;
-		height: 4.5rem;
-		flex-shrink: 0;
-		overflow: hidden;
-		background: var(--surface-hover);
-	}
-
-	.cover-fallback {
-		width: 100%;
-		height: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.cover-initials {
-		font-family: var(--font-display);
-		font-size: 1.1rem;
-		letter-spacing: 0.06em;
-		user-select: none;
-	}
-
-	.detail-title {
-		font-family: var(--font-display);
-		font-size: 1.73rem;
-		color: var(--text);
-		text-transform: uppercase;
-		letter-spacing: 2px;
-	}
-
-	.detail-subtitle {
-		font-size: 0.87rem;
-		color: var(--text-muted);
-	}
-
-	.detail-actions {
-		display: flex;
-		gap: 0.5rem;
-		align-items: center;
-	}
-
-	.action-btn-offline {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		padding: var(--btn-padding-pill);
-		border-radius: var(--btn-radius-pill);
-		font-family: var(--font-display);
-		font-size: var(--btn-font-size-sm);
-		letter-spacing: var(--btn-letter-spacing);
-		text-transform: uppercase;
-		cursor: pointer;
-		white-space: nowrap;
-		border: 1px solid var(--border);
-		background: color-mix(in srgb, var(--surface) 75%, transparent);
-		color: var(--text-muted);
-		transition:
-			box-shadow 0.2s,
-			border-color 0.15s,
-			color 0.15s,
-			background 0.15s;
-	}
-
-	.action-btn-offline:hover:not(:disabled) {
-		border-color: var(--accent);
-		color: var(--text);
-		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-	}
-
-	.action-btn-offline:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.action-btn-offline.saved {
-		border-color: var(--success);
-		color: var(--success);
-	}
-
-	.action-btn-offline.saved:hover {
-		border-color: var(--score-bad);
-		color: var(--score-bad);
-		background: color-mix(in srgb, var(--score-bad) 8%, var(--surface));
-	}
-
 	.entry-list {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		padding: 0 1.5rem;
 	}
 
 	.entry-row {
@@ -653,26 +530,8 @@
 	}
 
 	@media (max-width: 768px) {
-		.detail-header {
-			flex-direction: column;
-			gap: 0.5rem;
-		}
-
-		.cover-hero {
-			width: 3.5rem;
-			height: 3.5rem;
-		}
-
-		.detail-actions {
-			flex-wrap: wrap;
-		}
-
-		.detail-panel {
-			padding: 0.8rem 0.8rem calc(var(--player-height) + 0.8rem);
-		}
-
-		.detail-title {
-			font-size: 1.2rem;
+		.entry-list {
+			padding: 0 0.8rem;
 		}
 
 		.entry-row {

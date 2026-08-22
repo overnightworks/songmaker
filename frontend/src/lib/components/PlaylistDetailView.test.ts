@@ -72,18 +72,39 @@ afterEach(async () => {
 	selectedPlaylistDetail.set(null);
 });
 
+function requireElement<T extends Element>(root: ParentNode, selector: string): T {
+	const element = root.querySelector<T>(selector);
+	if (!element) throw new Error(`Expected ${selector} to be rendered`);
+	return element;
+}
+
 describe('PlaylistDetailView header', () => {
-	it('keeps share and delete and has no Play or Shuffle in the header', async () => {
+	it('uses the collection header with a Play action and a … menu instead of a visible Share icon', async () => {
 		const target = document.createElement('div');
 		document.body.append(target);
 		mounted.push(mount(PlaylistDetailView, { target }));
 		await tick();
-		const actions = target.querySelector('.detail-actions');
-		expect(actions?.textContent).not.toMatch(/\bPlay\b/);
-		expect(actions?.textContent).not.toMatch(/\bShuffle\b/);
-		expect(target.querySelector('[aria-label="Delete Playlist"]')).not.toBeNull();
+		const header = requireElement(target, '.collection-header');
+		expect(header.querySelector('.play-btn')).not.toBeNull();
+		expect(header.querySelector('.collection-menu')).not.toBeNull();
+		expect(header.querySelector('.share-btn')).toBeNull();
 		expect(target.textContent).toContain('Tide');
-		expect(target.querySelector('.cover-hero .cover-initials')?.textContent).toBe('ND');
-		expect(target.querySelector('.cover-file-input')).toBeNull();
+		expect(header.querySelector('.header-cover-initials')?.textContent).toBe('ND');
+	});
+
+	it('lists Share playlist, Save offline, Rename, and Delete playlist in the menu', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
+		await tick();
+		const menu = requireElement<HTMLElement>(document.body, '.menu-panel');
+		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Playlist · Night Drive');
+		expect(menu.querySelector('.menu-row-label')?.textContent).toBe('Share playlist');
+		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
+			el.textContent?.trim()
+		);
+		expect(items).toEqual(['Save offline', 'Rename', 'Delete playlist']);
 	});
 });

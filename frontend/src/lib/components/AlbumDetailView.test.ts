@@ -2,24 +2,17 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
-import {
-	ALBUM_ART_EMPTY_INITIALS,
-	ALBUM_COVER_ALT_TYPE,
-	ALBUM_COVER_REMOVE_LABEL,
-	ALBUM_COVER_REPLACE_LABEL,
-	ALBUM_COVER_UPLOAD_LABEL
-} from '$lib/constants';
+import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ALT_TYPE } from '$lib/constants';
 import { albumList, selectedAlbumId, songList } from '$lib/stores/player';
 
 const uploadAlbumCover = vi.fn();
-const deleteAlbumCover = vi.fn();
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return {
 		...actual,
 		uploadAlbumCover: (...args: unknown[]) => uploadAlbumCover(...args),
-		deleteAlbumCover: (...args: unknown[]) => deleteAlbumCover(...args),
+		deleteAlbumCover: vi.fn(),
 		renameAlbum: vi.fn(),
 		shareAlbum: vi.fn(),
 		unshareAlbum: vi.fn(),
@@ -108,7 +101,6 @@ beforeEach(() => {
 	songList.set([song()]);
 	selectedAlbumId.set('a-local');
 	uploadAlbumCover.mockReset();
-	deleteAlbumCover.mockReset();
 });
 
 afterEach(async () => {
@@ -119,7 +111,19 @@ afterEach(async () => {
 	songList.set([]);
 });
 
-describe('AlbumDetailView cover hero', () => {
+function requireElement<T extends Element>(root: ParentNode, selector: string): T {
+	const element = root.querySelector<T>(selector);
+	if (!element) throw new Error(`Expected ${selector} to be rendered`);
+	return element;
+}
+
+async function openCollectionMenu(target: HTMLElement): Promise<HTMLElement> {
+	requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
+	await tick();
+	return requireElement<HTMLElement>(document.body, '.menu-panel');
+}
+
+describe('AlbumDetailView header', () => {
 	it('renders the albumId prop instead of the selected album', async () => {
 		albumList.set([
 			album({ id: 'a-local', title: 'Night Drive' }),
@@ -134,20 +138,27 @@ describe('AlbumDetailView cover hero', () => {
 		expect(target.textContent).not.toContain('Other Night');
 	});
 
-	it('keeps title beside a compact cover without Play Album', async () => {
+	it('shows the cover, title, and a single Play action beside the menu', async () => {
 		const target = await renderDetail();
-		expect(target.textContent).toContain('Night Drive');
-		expect(target.textContent).not.toContain('Play Album');
-		const header = target.querySelector('.detail-header');
-		expect(header?.querySelector('.cover-hero')).not.toBeNull();
-		expect(header?.querySelector('.detail-title')?.textContent).toContain('Night Drive');
-		expect(header?.querySelector('.action-btn-primary')).toBeNull();
-		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
-			ALBUM_COVER_UPLOAD_LABEL
-		);
+		const header = requireElement(target, '.collection-header');
+		expect(header.querySelector('.header-cover')).not.toBeNull();
+		expect(header.querySelector('.header-title')?.textContent).toContain('Night Drive');
+		expect(header.querySelector('.play-btn')?.textContent).toContain('Play');
+		expect(header.querySelector('.collection-menu')).not.toBeNull();
 	});
 
-	it('uploads a cover without replacing the title', async () => {
+	it('names the object and lists Share, Cover, Rename, Add to playlist, Delete in the menu', async () => {
+		const target = await renderDetail();
+		const menu = await openCollectionMenu(target);
+		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
+		expect(menu.querySelector('.menu-row-label')?.textContent).toBe('Share album');
+		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
+			el.textContent?.trim()
+		);
+		expect(items).toEqual(['Cover…', 'Rename', 'Add to playlist', 'Delete album']);
+	});
+
+	it('uploads a cover from the menu action', async () => {
 		uploadAlbumCover.mockResolvedValue(
 			album({
 				cover: {
@@ -157,45 +168,31 @@ describe('AlbumDetailView cover hero', () => {
 			})
 		);
 		const target = await renderDetail();
+		const menu = await openCollectionMenu(target);
 		const input = target.querySelector('.cover-file-input');
 		expect(input).toBeInstanceOf(HTMLInputElement);
 		if (!(input instanceof HTMLInputElement)) return;
+		requireElement<HTMLButtonElement>(menu, '.menu-item').click();
 		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
 		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
 		input.dispatchEvent(new Event('change', { bubbles: true }));
 		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledTimes(1));
 		await tick();
-		expect(target.textContent).toContain('Night Drive');
-		expect(target.textContent).not.toContain('Play Album');
 		expect(target.querySelector('img')?.getAttribute('alt')).toBe(
 			`${ALBUM_COVER_ALT_TYPE} Night Drive`
 		);
-		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
-			ALBUM_COVER_REPLACE_LABEL
-		);
 	});
 
-	it('removes a cover and returns to fallback art', async () => {
-		albumList.set([
-			album({
-				cover: {
-					card: '/api/albums/a-local/cover?variant=card&v=abc.jpg',
-					detail: '/api/albums/a-local/cover?variant=detail&v=abc.jpg'
-				}
-			})
-		]);
-		deleteAlbumCover.mockResolvedValue(album({ cover: null }));
+	it('renames the album through the menu, reusing the EditableTitle interaction', async () => {
 		const target = await renderDetail();
-		expect(target.querySelector('img')).not.toBeNull();
-		expect(
-			target.querySelector<HTMLButtonElement>('.cover-remove')?.getAttribute('aria-label')
-		).toBe(ALBUM_COVER_REMOVE_LABEL);
-		target.querySelector<HTMLButtonElement>('.cover-remove')?.click();
-		await vi.waitFor(() => expect(deleteAlbumCover).toHaveBeenCalledTimes(1));
+		const menu = await openCollectionMenu(target);
+		const renameItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
+			(el) => el.textContent?.trim() === 'Rename'
+		);
+		renameItem?.click();
 		await tick();
-		expect(target.querySelector('img')).toBeNull();
-		expect(target.querySelector('.cover-fallback')?.textContent).toBe('ND');
-		expect(target.querySelector('.cover-remove')).toBeNull();
+		expect(document.body.querySelector('.menu-panel')).toBeNull();
+		expect(target.querySelector('.editable-title-input')).not.toBeNull();
 	});
 });
 
