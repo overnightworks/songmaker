@@ -143,6 +143,10 @@ class AudioPlayer {
 			this.load(this.current, { autoplay: true });
 			return;
 		}
+		if (this.status === 'loading' || this.status === 'buffering') {
+			this.autoplayPending = true;
+			return;
+		}
 		this.audio.play().catch((err) => this.handlePlayRejection(err));
 	}
 
