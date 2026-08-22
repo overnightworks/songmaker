@@ -1,13 +1,10 @@
 <script lang="ts">
 	import { get } from 'svelte/store';
-	import { tick } from 'svelte';
 	import {
 		fetchSong,
 		generateSong,
 		renameSong,
 		scoreGeneration,
-		pickGeneration,
-		unpickGeneration,
 		deleteSong,
 		restoreSong,
 		shareSong,
@@ -15,9 +12,6 @@
 		shareGeneration,
 		unshareGeneration,
 		deleteGeneration,
-		rateGeneration,
-		keepGeneration,
-		unkeepGeneration,
 		uploadSongCover,
 		deleteSongCover
 	} from '$lib/api/client';
@@ -45,7 +39,6 @@
 		albumTrackNeighbors,
 		backToCollection,
 		compareAlbumTracks,
-		selectGeneration,
 		navigateToSongTab,
 		openCollectionEntry,
 		openLibraryWall,
@@ -99,7 +92,7 @@
 		sourceMode,
 		takesPerGenerate
 	} from '$lib/stores/recipe';
-	import { setGenerationActions } from '$lib/contexts/generation-actions';
+	import { setGenerationActions, takeActionsFor } from '$lib/contexts/generation-actions';
 	import type { GenerationItem } from '$lib/api/types';
 	import {
 		EXPIRY_WARN_DAYS,
@@ -127,13 +120,11 @@
 		EDITOR_UNSAVED_DISCARD_LABEL,
 		EDITOR_VIEW_COWRITER_LABEL,
 		EDITOR_VIEW_RECIPE_LABEL,
-		TAKE_INSPECTOR_LABEL,
 		TAKES_ERROR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
-	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import EditorHeader from './editor/EditorHeader.svelte';
 	import RecipeChips from './editor/RecipeChips.svelte';
 	import RecipePanel from './editor/RecipePanel.svelte';
@@ -141,7 +132,6 @@
 	import WriteColumn from './editor/WriteColumn.svelte';
 	import TakesList from './editor/TakesList.svelte';
 	import EditorSheet from './editor/EditorSheet.svelte';
-	import GenerationView from './GenerationView.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 
@@ -154,7 +144,6 @@
 	let coverBusy = $state(false);
 	let requestedParentAlbumId: string | null = $state(null);
 	let stackedExpanded = $state(false);
-	let inspectorSheet: HTMLDivElement | undefined = $state();
 
 	const song = $derived($selectedSong);
 	const inspected = $derived($selectedGeneration);
@@ -390,19 +379,13 @@
 
 	setGenerationActions({
 		score: onScore,
-		pick: onPick,
-		keep: onKeep,
+		...takeActionsFor(() => song),
 		del: onDeleteGeneration,
-		rate: onRate,
 		share: onGenShareEnable,
 		unshare: onGenShareDisable,
 		addToPlaylist: async (playlistId, genId) => {
 			await addGenerationToPlaylist(playlistId, genId);
 			addToast('Added to playlist', 'success');
-		},
-		pinSeed: (seed) => {
-			pinnedSeed.set(seed);
-			addToast(`Seed ${seed} pinned for next generation`, 'success');
 		},
 		clickVersion: onVersionClick,
 		useAsSource: (gen) => setSourceFromGeneration(gen, 'repaint')
@@ -434,23 +417,6 @@
 
 	function applyAgain(gen: GenerationItem): void {
 		applyAgainFromGeneration(gen);
-	}
-
-	function closeInspector(): void {
-		clearGenerationSelection();
-		persistLibraryHistory();
-	}
-
-	$effect(() => {
-		if (!inspected) return;
-		void tick().then(() => {
-			if (inspectorSheet) focusFirstIn(inspectorSheet);
-		});
-	});
-
-	function onInspectorKeydown(event: KeyboardEvent): void {
-		if (!inspected || !inspectorSheet) return;
-		handleFocusTrapKeydown(inspectorSheet, event, closeInspector);
 	}
 
 	async function onGenerate(): Promise<void> {
@@ -495,42 +461,6 @@
 			}
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
-		}
-	}
-
-	async function onPick(genId: string, picked: boolean): Promise<void> {
-		if (!song) return;
-		try {
-			if (picked) await pickGeneration(genId);
-			else await unpickGeneration(genId);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Pick failed', 'error');
-		}
-	}
-
-	async function onKeep(genId: string, kept: boolean): Promise<void> {
-		if (!song) return;
-		try {
-			if (kept) await keepGeneration(genId);
-			else await unkeepGeneration(genId);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Keep failed', 'error');
-		}
-	}
-
-	async function onRate(genId: string, rating: number, notes: string): Promise<void> {
-		if (!song) return;
-		try {
-			await rateGeneration(genId, rating, notes);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-			addToast('Rating saved', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Rating failed', 'error');
 		}
 	}
 
@@ -718,8 +648,6 @@
 	}
 </script>
 
-<svelte:window onkeydown={onInspectorKeydown} />
-
 {#if song}
 	<div class="detail-panel">
 		<EditorHeader
@@ -833,7 +761,6 @@
 					{latestVersionNumber}
 					{generateJob}
 					compact
-					onselect={(gen) => selectGeneration(gen, song)}
 					onagain={applyAgain}
 					onuseasreference={(gen) => setSourceFromGeneration(gen, 'repaint')}
 					onretry={() => {
@@ -869,7 +796,6 @@
 						{draftVersionNumber}
 						{latestVersionNumber}
 						{generateJob}
-						onselect={(gen) => selectGeneration(gen, song)}
 						onagain={applyAgain}
 						onuseasreference={(gen) => setSourceFromGeneration(gen, 'repaint')}
 						onretry={() => {
@@ -932,23 +858,6 @@
 		>
 			<RecipePanel onclose={() => recipeOpen.set(false)} />
 		</EditorSheet>
-	{/if}
-
-	{#if inspected}
-		<div class="inspector-modal">
-			<button class="inspector-backdrop" tabindex="-1" onclick={closeInspector} aria-label="Close"
-			></button>
-			<div
-				bind:this={inspectorSheet}
-				class="inspector-sheet"
-				role="dialog"
-				aria-modal="true"
-				aria-label={TAKE_INSPECTOR_LABEL}
-				tabindex="-1"
-			>
-				<GenerationView onclose={closeInspector} />
-			</div>
-		</div>
 	{/if}
 {/if}
 
@@ -1070,36 +979,6 @@
 
 	.expiry-digest-icon {
 		font-size: 1rem;
-	}
-
-	.inspector-modal {
-		position: fixed;
-		inset: 0;
-		z-index: 200;
-	}
-
-	.inspector-backdrop {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		border: 0;
-		background: color-mix(in srgb, #000 50%, transparent);
-		cursor: default;
-	}
-
-	.inspector-sheet {
-		position: absolute;
-		top: 5vh;
-		left: 50%;
-		transform: translateX(-50%);
-		width: min(720px, 92vw);
-		max-height: 90vh;
-		overflow-y: auto;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
-		padding: 0.8rem 1.2rem 1.2rem;
-		box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
 	}
 
 	@media (max-width: 900px) {

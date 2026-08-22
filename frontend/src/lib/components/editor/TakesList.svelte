@@ -15,16 +15,11 @@
 		TAKES_MOBILE_HINT
 	} from '$lib/constants';
 	import {
-		playGeneration,
-		playAlbumFromGeneration,
-		playLibraryFromGeneration,
-		queueContext,
-		selectedAlbumId,
+		playTakeAndShowNowPlaying,
 		removeGenerationFromSong,
 		replaceSongInList
 	} from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
-	import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { scoreColor } from '$lib/utils/scores';
 	import { getGenerationActions } from '$lib/contexts/generation-actions';
@@ -60,7 +55,6 @@
 		latestVersionNumber: number;
 		generateJob?: JobItem | null;
 		compact?: boolean;
-		onselect: (gen: GenerationItem) => void;
 		onagain: (gen: GenerationItem) => void;
 		onuseasreference: (gen: GenerationItem) => void;
 		onretry?: () => void;
@@ -76,7 +70,6 @@
 		latestVersionNumber,
 		generateJob = null,
 		compact = false,
-		onselect,
 		onagain,
 		onuseasreference,
 		onretry
@@ -148,28 +141,6 @@
 		return isGenPlaying(gen) && buffering;
 	}
 
-	async function playOrToggle(gen: GenerationItem): Promise<void> {
-		if (isGenPlaying(gen) && audioPlayer.status === 'playing') {
-			audioPlayer.toggle();
-			return;
-		}
-		try {
-			const albumId = $selectedAlbumId;
-			if (shouldUseQueueStream($queuePlaybackMode)) {
-				if (albumId) {
-					await playAlbumFromGeneration(albumId, song, gen);
-					return;
-				}
-				await playLibraryFromGeneration(gen);
-				return;
-			}
-			queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
-			playGeneration(gen, song, { restart: true });
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Playback failed', 'error');
-		}
-	}
-
 	function handleRowClick(gen: GenerationItem, e: MouseEvent): void {
 		if (e.ctrlKey || e.metaKey) {
 			toggleSelection(gen.id);
@@ -179,8 +150,7 @@
 			toggleSelection(gen.id);
 			return;
 		}
-		onselect(gen);
-		void playOrToggle(gen);
+		void playTakeAndShowNowPlaying(gen, song);
 	}
 
 	function handleRowKeydown(gen: GenerationItem, e: KeyboardEvent): void {
@@ -191,8 +161,7 @@
 			toggleSelection(gen.id);
 			return;
 		}
-		onselect(gen);
-		void playOrToggle(gen);
+		void playTakeAndShowNowPlaying(gen, song);
 	}
 
 	async function handleBulkDelete(): Promise<void> {

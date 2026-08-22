@@ -1,5 +1,6 @@
 import { setContext, getContext } from 'svelte';
-import type { GenerationItem, ShareResult } from '$lib/api/types';
+import type { GenerationItem, ShareResult, SongItem } from '$lib/api/types';
+import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
 
 export interface GenerationActions {
 	score: (genId: string) => void;
@@ -23,4 +24,30 @@ export function setGenerationActions(actions: GenerationActions): void {
 
 export function getGenerationActions(): GenerationActions {
 	return getContext<GenerationActions>(GENERATION_ACTIONS_KEY);
+}
+
+// stores/takeActions.ts is the one mutation owner for pick/keep/rate/pinSeed;
+// this bakes the actions' target song into that store's per-song API, so a
+// GenerationActions provider only has to supply its own bespoke handlers
+// (score, delete, share, ...). Takes a getter rather than a SongItem so the
+// provider's current song stays live across the provider's lifetime instead
+// of freezing at the moment setGenerationActions runs.
+export function takeActionsFor(
+	getSong: () => SongItem | null
+): Pick<GenerationActions, 'pick' | 'keep' | 'rate' | 'pinSeed'> {
+	return {
+		pick: (genId, picked) => {
+			const song = getSong();
+			if (song) void setPick(song.id, genId, picked);
+		},
+		keep: (genId, kept) => {
+			const song = getSong();
+			if (song) void setKeep(song.id, genId, kept);
+		},
+		rate: (genId, rating, notes) => {
+			const song = getSong();
+			return song ? rate(song.id, genId, rating, notes) : Promise.resolve();
+		},
+		pinSeed
+	};
 }

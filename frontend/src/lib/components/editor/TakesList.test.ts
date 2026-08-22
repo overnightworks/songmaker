@@ -37,13 +37,12 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
-		playLibraryFromGeneration: vi.fn(async () => undefined),
-		playAlbumFromGeneration: vi.fn(async () => undefined)
+		playTakeAndShowNowPlaying: vi.fn(async () => undefined)
 	};
 });
 
 import { addToast } from '$lib/stores/toast';
-import { playLibraryFromGeneration } from '$lib/stores/player';
+import { playTakeAndShowNowPlaying } from '$lib/stores/player';
 import TakesList from './TakesList.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -131,7 +130,7 @@ beforeEach(() => {
 	pinSeed.mockReset();
 	useAsSource.mockReset();
 	vi.mocked(addToast).mockClear();
-	vi.mocked(playLibraryFromGeneration).mockClear();
+	vi.mocked(playTakeAndShowNowPlaying).mockClear();
 	clearSelection();
 	const sheet = document.createElement('style');
 	sheet.dataset.hitboxStyles = 'true';
@@ -155,7 +154,6 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 		dirty: false,
 		draftVersionNumber: 4,
 		latestVersionNumber: 3,
-		onselect: vi.fn(),
 		onagain: vi.fn(),
 		onuseasreference: vi.fn(),
 		...overrides
@@ -241,18 +239,6 @@ describe('TakesList', () => {
 		expect(deleteVersion).toHaveBeenCalledWith('v1', true);
 	});
 
-	it('shows a toast instead of leaking an error when playback fails', async () => {
-		vi.mocked(playLibraryFromGeneration).mockRejectedValueOnce(new Error('422 unplayable'));
-		const { target } = await render();
-		const row = target.querySelector<HTMLElement>('.take-row');
-		row?.click();
-		await tick();
-		await Promise.resolve();
-		await Promise.resolve();
-
-		expect(addToast).toHaveBeenCalledWith('422 unplayable', 'error');
-	});
-
 	it('calls pick and keep from the take actions', async () => {
 		const { target } = await render();
 		const row = target.querySelectorAll('.take-row')[1];
@@ -263,14 +249,23 @@ describe('TakesList', () => {
 		expect(keep).toHaveBeenCalledWith('g2', true);
 	});
 
-	it("names the take on the row's menu and calls onselect on row click", async () => {
-		const { target, props } = await render();
+	it('plays the take and opens Now Playing on row click', async () => {
+		const { target } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
 		row?.click();
-		expect(props.onselect).toHaveBeenCalledTimes(1);
+		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'g1' }),
+			expect.objectContaining({ id: 's1' })
+		);
+	});
+
+	it("names the take on the row's menu, without also playing it", async () => {
+		const { target } = await render();
+		const row = target.querySelector<HTMLElement>('.take-row');
 		row?.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
 		await tick();
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Take · v3 · 3');
+		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
 	});
 
 	it('sizes pick and keep to the frequent hitbox on a coarse pointer', async () => {

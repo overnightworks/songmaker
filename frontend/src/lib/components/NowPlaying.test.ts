@@ -13,6 +13,7 @@ import {
 import {
 	albumList,
 	libraryQueueSkipped,
+	nowPlayingPanel,
 	queueContext,
 	setShuffle,
 	shuffleEnabled,
@@ -111,6 +112,7 @@ afterEach(async () => {
 	setShuffle(false);
 	setLibraryTakePool('picks');
 	libraryQueueSkipped.set([]);
+	nowPlayingPanel.set('queue');
 });
 
 async function renderSurface(
@@ -262,6 +264,16 @@ describe('NowPlaying', () => {
 		expect(tabs[1]?.getAttribute('aria-selected')).toBe('true');
 		expect(target.querySelector('.np-queue')).toBeNull();
 		expect(target.querySelector('.np-take')).not.toBeNull();
+	});
+
+	it('opens straight to the judging panel when a take row requested it', async () => {
+		songList.set([song()]);
+		nowPlayingPanel.set('take');
+		await renderSurface(info());
+		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+		expect(tabs[1]?.getAttribute('aria-selected')).toBe('true');
+		expect(target.querySelector('.np-take')).not.toBeNull();
+		expect(target.querySelector('.np-queue')).toBeNull();
 	});
 
 	it('wires the panel tabs to their panel via aria-controls/role=tabpanel', async () => {

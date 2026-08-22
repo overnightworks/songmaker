@@ -55,9 +55,6 @@ export const TAKES_ERROR = 'Failed to load takes';
 export const TAKES_DRAFT_BANNER_TEMPLATE = 'Draft — unsaved changes. Generate creates v{version}.';
 export const TAKES_GENERATING_LABEL = 'generating';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
-export const TAKE_INSPECTOR_CLOSE = 'Close';
-export const TAKE_INSPECTOR_LABEL = 'Take details';
-export const TAKE_FROM_RECIPE_PREFIX = 'from Recipe';
 export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 
 export const EDITOR_TABS_LABEL = 'Editor tabs';

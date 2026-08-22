@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { GenerationItem, SongItem } from '$lib/api/types';
-	import { NOW_PLAYING_TAKE_PREFIX } from '$lib/constants';
+	import { NOW_PLAYING_TAKE_PREFIX, TAKE_USE_AS_REFERENCE_LABEL } from '$lib/constants';
 	import {
 		NOW_PLAYING_DEVIATIONS_EMPTY,
 		NOW_PLAYING_DEVIATIONS_LABEL,
@@ -19,6 +19,9 @@
 		NOW_PLAYING_UNKEEP_LABEL,
 		NOW_PLAYING_UNPICK_LABEL
 	} from '$lib/constants/now-playing';
+	import { revealPlayingSong } from '$lib/stores/navigation';
+	import { nowPlayingOpen } from '$lib/stores/player';
+	import { pendingSource } from '$lib/stores/recipe';
 	import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
 	import { computeDiffByKey } from '$lib/utils/diff';
 	import { normalizeLyricsToken } from '$lib/utils/lyrics-normalize';
@@ -217,6 +220,17 @@
 		if (generation.seed == null) return;
 		pinSeed(generation.seed);
 	}
+
+	// Hands the take off to the editor's repaint/cover source (stores/recipe.ts
+	// pendingSource) and navigates there with the Recipe panel open. Now
+	// Playing closes first so the editor underneath is visible; pendingSource
+	// survives the navigation and is picked up once the song mounts, even if
+	// a dirty-draft guard defers the actual page change.
+	function onUseAsReference(): void {
+		pendingSource.set({ generation, mode: 'repaint' });
+		nowPlayingOpen.set(false);
+		void revealPlayingSong(song, generation.id);
+	}
 </script>
 
 <div class="np-take" aria-label="{NOW_PLAYING_TAKE_PREFIX} {generation.generation_number}">
@@ -320,12 +334,17 @@
 		{/if}
 	</section>
 
-	{#if generation.seed != null}
-		<button type="button" class="pin-seed" onclick={onPinSeed}>
-			{NOW_PLAYING_PIN_SEED_PREFIX}
-			{generation.seed}
+	<div class="take-links">
+		{#if generation.seed != null}
+			<button type="button" class="pin-seed" onclick={onPinSeed}>
+				{NOW_PLAYING_PIN_SEED_PREFIX}
+				{generation.seed}
+			</button>
+		{/if}
+		<button type="button" class="use-as-reference" onclick={onUseAsReference}>
+			{TAKE_USE_AS_REFERENCE_LABEL}
 		</button>
-	{/if}
+	</div>
 </div>
 
 <style>
@@ -502,7 +521,13 @@
 		opacity: 0.5;
 		cursor: default;
 	}
-	.pin-seed {
+	.take-links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.pin-seed,
+	.use-as-reference {
 		align-self: flex-start;
 		padding: 0.3rem 0.7rem;
 		border-radius: var(--btn-radius-pill);
@@ -515,7 +540,8 @@
 		letter-spacing: 0.4px;
 		cursor: pointer;
 	}
-	.pin-seed:hover {
+	.pin-seed:hover,
+	.use-as-reference:hover {
 		border-color: var(--primary);
 		color: var(--text);
 	}

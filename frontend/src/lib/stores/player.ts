@@ -28,7 +28,9 @@ import { addToast } from '$lib/stores/toast';
 import {
 	LIBRARY_TAKE_POOL_LABELS,
 	libraryTakePool,
+	queuePlaybackMode,
 	setLibraryTakePool,
+	shouldUseQueueStream,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -837,6 +839,53 @@ export function jumpToQueueIndex(index: number): void {
 		return;
 	}
 	playNativeIndex(ctx, index);
+}
+
+// Whether the Now Playing surface is mounted, and which of its right-panel
+// tabs it should open on. Owned here (not by PlayerBar, which only reads
+// them) so any surface — a take row, a deep link — can open Now Playing
+// straight to the judging panel without routing through PlayerBar's own
+// open/close click handlers.
+export const nowPlayingOpen = writable(false);
+export type NowPlayingPanel = 'queue' | 'take';
+export const nowPlayingPanel = writable<NowPlayingPanel>('queue');
+
+// The single playback entry point for a take row (TakesList, TakeStrip):
+// toggles pause if the row's take is already playing, otherwise starts it
+// through the active queue-playback mode (stream or classic), reporting any
+// failure as a toast instead of throwing into the caller.
+export async function playTake(gen: GenerationItem, song: SongItem): Promise<void> {
+	if (audioPlayer.current?.generation.id === gen.id && audioPlayer.status === 'playing') {
+		audioPlayer.toggle();
+		return;
+	}
+	try {
+		const albumId = get(selectedAlbumId);
+		if (shouldUseQueueStream(get(queuePlaybackMode))) {
+			if (albumId) {
+				await playAlbumFromGeneration(albumId, song, gen);
+				return;
+			}
+			await playLibraryFromGeneration(gen);
+			return;
+		}
+		queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
+		playGeneration(gen, song, { restart: true });
+	} catch (e) {
+		addToast(e instanceof Error ? e.message : 'Playback failed', 'error');
+	}
+}
+
+// TakesList's row body: play the take and surface Now Playing straight on
+// its judging panel. Distinct from playTake (used by TakeStrip's dedicated
+// play chip), which never opens Now Playing.
+export async function playTakeAndShowNowPlaying(
+	gen: GenerationItem,
+	song: SongItem
+): Promise<void> {
+	await playTake(gen, song);
+	nowPlayingPanel.set('take');
+	nowPlayingOpen.set(true);
 }
 
 export async function playNextSong(): Promise<void> {

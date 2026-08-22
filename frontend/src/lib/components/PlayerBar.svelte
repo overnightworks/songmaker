@@ -4,6 +4,8 @@
 		albumList,
 		idlePlayTarget,
 		navigateToPlaying,
+		nowPlayingOpen,
+		nowPlayingPanel,
 		playIdleStart,
 		playNextSong,
 		playPrevSong,
@@ -45,7 +47,6 @@
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
 
-	let nowPlayingOpen = $state(false);
 	let mobileTransport = $state(false);
 	let nowPlayingTrigger: HTMLButtonElement | undefined = $state();
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
@@ -181,12 +182,13 @@
 	function openNowPlaying(): void {
 		if (!current) return;
 		closeSidebar();
-		nowPlayingOpen = true;
+		nowPlayingPanel.set('queue');
+		nowPlayingOpen.set(true);
 	}
 
 	function closeNowPlaying(): void {
-		if (!nowPlayingOpen) return;
-		nowPlayingOpen = false;
+		if (!$nowPlayingOpen) return;
+		nowPlayingOpen.set(false);
 		queueMicrotask(() => nowPlayingTrigger?.focus());
 	}
 
@@ -196,7 +198,7 @@
 	}
 
 	$effect(() => {
-		if (!current) nowPlayingOpen = false;
+		if (!current) nowPlayingOpen.set(false);
 	});
 
 	$effect(() => {
@@ -210,7 +212,7 @@
 
 <footer
 	class="player-bar"
-	class:now-playing-open={nowPlayingOpen}
+	class:now-playing-open={$nowPlayingOpen}
 	class:mobile-transport={mobileTransport}
 	style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}
 >
@@ -315,14 +317,14 @@
 			disabled={!current}
 			aria-label={NOW_PLAYING_LABEL}
 			aria-haspopup="dialog"
-			aria-expanded={nowPlayingOpen}
+			aria-expanded={$nowPlayingOpen}
 		>
 			<span>{NOW_PLAYING_LABEL}</span>
 			<Icon name="chevron-up" size={16} />
 		</button>
 	</div>
 </footer>
-{#if nowPlayingOpen && current}
+{#if $nowPlayingOpen && current}
 	<NowPlaying
 		info={current}
 		onclose={closeNowPlaying}

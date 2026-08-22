@@ -10,7 +10,6 @@ import {
 	selectedAlbumId,
 	selectedSong,
 	selectSong as playerSelectSong,
-	selectGenerationInSidebar as playerSelectGeneration,
 	clearGenerationSelection as playerClearGeneration,
 	ensureGenerationsLoaded,
 	loadSongsForAlbum,
@@ -23,7 +22,7 @@ import {
 } from '$lib/stores/playlists';
 import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
 import { closeSidebar } from '$lib/stores/ui';
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import type { SongItem } from '$lib/api/types';
 import type { LibraryFilter } from '$lib/constants';
 import {
 	applyLibraryHistory,
@@ -305,13 +304,6 @@ function hydrateSongIntoLibrary(song: SongItem): void {
 
 export function deselectSong(): void {
 	goBack();
-}
-
-export function selectGeneration(gen: GenerationItem, song: SongItem): void {
-	playerSelectGeneration(gen, song);
-	openTakesTab();
-	setLibrarySurface('detail');
-	replaceLibraryHistory();
 }
 
 export function backToSong(): void {

@@ -386,21 +386,6 @@ describe('SongDetailView desktop vs compact layout', () => {
 });
 
 describe('SongDetailView recipe and takes', () => {
-	it('keeps the take inspector as a modal over the workspace', async () => {
-		selectedGenerationId.set('g1');
-		const target = await renderView();
-		expect(visibleText(target)).toContain('Local Only');
-		expect(target.querySelector('.inspector-modal')).not.toBeNull();
-		expect(target.querySelector('.inspector')).not.toBeNull();
-
-		const closeBtn = target.querySelector<HTMLButtonElement>('.inspector .close-btn');
-		if (!closeBtn) throw new Error('Expected inspector close');
-		closeBtn.click();
-		await tick();
-		expect(get(selectedGenerationId)).toBeNull();
-		expect(target.querySelector('.inspector-modal')).toBeNull();
-	});
-
 	it('lands a picked-up source in the Recipe panel', async () => {
 		const target = await renderView();
 		expect(get(recipeOpen)).toBe(false);
@@ -435,12 +420,12 @@ describe('SongDetailView recipe and takes', () => {
 		expect(get(recipeOpen)).toBe(true);
 	});
 
-	it('clears the inspector when bulk delete includes the inspected take', async () => {
+	it('clears the take highlight when bulk delete includes the highlighted take', async () => {
 		selectedGenerationId.set('g1');
 		persistLibraryHistory();
 		expect(history.state.generationId).toBe('g1');
 		const target = await renderView();
-		expect(target.querySelector('.inspector-modal')).not.toBeNull();
+		expect(target.querySelector('.take-row.inspected')).not.toBeNull();
 		toggleSelection('g1');
 		await tick();
 		clickNamed(target, 'Delete Selected');
@@ -449,19 +434,7 @@ describe('SongDetailView recipe and takes', () => {
 		await tick();
 		expect(get(selectedGenerationId)).toBeNull();
 		expect(history.state.generationId).toBeNull();
-		expect(target.querySelector('.inspector-modal')).toBeNull();
-	});
-
-	it('closes the inspector on Escape', async () => {
-		selectedGenerationId.set('g1');
-		const target = await renderView();
-		expect(target.querySelector('.inspector-modal')).not.toBeNull();
-
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		await tick();
-
-		expect(get(selectedGenerationId)).toBeNull();
-		expect(target.querySelector('.inspector-modal')).toBeNull();
+		expect(target.querySelector('.take-row.inspected')).toBeNull();
 	});
 });
 
