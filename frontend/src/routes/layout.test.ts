@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
-import { checkAuth, currentUser, authLoading } from '$lib/stores/auth';
+import { checkAuth, currentUser, authLoading, authCheckError } from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface } from '$lib/stores/libraryContext';
@@ -65,6 +65,7 @@ vi.mock('$lib/api/songs', () => ({
 
 import Layout from './+layout.svelte';
 import layoutSource from './+layout.svelte?raw';
+import { goto } from '$app/navigation';
 
 const VIEWPORT_PX = 320;
 const USER = { id: 'u1', username: 'felix', role: 'user' as const };
@@ -156,6 +157,7 @@ beforeEach(() => {
 		return USER;
 	});
 	openCollection.set({ kind: 'album', id: 'a1' });
+	vi.mocked(goto).mockClear();
 	const sheet = document.createElement('style');
 	sheet.dataset.hitboxStyles = 'true';
 	sheet.textContent = hitboxCss;
@@ -170,6 +172,7 @@ afterEach(async () => {
 	selectedSongId.set(null);
 	currentUser.set(null);
 	authLoading.set(false);
+	authCheckError.set(null);
 	closeSidebar();
 	audioPlayer.destroy();
 	vi.mocked(checkAuth).mockReset();
@@ -319,5 +322,49 @@ describe('global Escape', () => {
 		pressEscape(window);
 		await tick();
 		expect(get(selectedSongId)).toBe('s1');
+	});
+});
+
+describe('auth check failure', () => {
+	it('shows a retry-able error instead of navigating to /login on a transient failure', async () => {
+		currentUser.set(null);
+		authLoading.set(true);
+		authCheckError.set(null);
+		vi.mocked(checkAuth).mockImplementationOnce(async () => {
+			currentUser.set(null);
+			authLoading.set(false);
+			authCheckError.set('Too many requests. Retry in a moment to check your session.');
+			return null;
+		});
+		const target = mountLayout('/');
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(goto).not.toHaveBeenCalled();
+		expect(target.querySelector('.app-shell')).toBeNull();
+		const retry = requireElement<HTMLButtonElement>(target, '.auth-retry button');
+		expect(retry.textContent).toBe('Retry');
+		expect(target.querySelector('.auth-retry')?.textContent).toContain('Too many requests');
+	});
+
+	it('navigates to /login on a 401 (no known user, no check error)', async () => {
+		currentUser.set(null);
+		authLoading.set(true);
+		authCheckError.set(null);
+		vi.mocked(checkAuth).mockImplementationOnce(async () => {
+			currentUser.set(null);
+			authLoading.set(false);
+			authCheckError.set(null);
+			return null;
+		});
+		mountLayout('/');
+		await tick();
+		await Promise.resolve();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
 	});
 });

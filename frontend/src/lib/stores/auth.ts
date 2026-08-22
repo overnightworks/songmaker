@@ -1,21 +1,58 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import type { AuthUser } from '$lib/api/types';
 import { ApiError, fetchMe, login as apiLogin, logout as apiLogout } from '$lib/api/client';
+import {
+	AUTH_CHECK_NETWORK_ERROR,
+	AUTH_CHECK_RATE_LIMITED_ERROR,
+	AUTH_CHECK_SERVER_ERROR
+} from '$lib/constants/auth';
 
 export const currentUser = writable<AuthUser | null>(null);
 export const authLoading = writable(true);
 export const authError = writable('');
+export const authCheckError = writable<string | null>(null);
 export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
+
+export type AuthFailureKind = 'unauthenticated' | 'transient';
+
+/**
+ * A 401 or 403 on auth/me means the caller is logged out — 403 covers
+ * `get_current_user` returning "Account disabled" for a revoked account, which
+ * is permanent, not transient. Every other failure (429, 5xx, network) is
+ * transient. Mirrors `probeResourceAuth` in `resourceSync.ts`.
+ */
+export function classifyAuthFailure(error: unknown): AuthFailureKind {
+	if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+		return 'unauthenticated';
+	}
+	return 'transient';
+}
+
+function describeAuthCheckFailure(error: unknown): string {
+	if (error instanceof ApiError && error.status === 429) {
+		return AUTH_CHECK_RATE_LIMITED_ERROR;
+	}
+	if (error instanceof ApiError) {
+		return AUTH_CHECK_SERVER_ERROR;
+	}
+	return AUTH_CHECK_NETWORK_ERROR;
+}
 
 export async function checkAuth(): Promise<AuthUser | null> {
 	authLoading.set(true);
 	try {
 		const user = await fetchMe();
 		currentUser.set(user);
+		authCheckError.set(null);
 		return user;
-	} catch {
-		currentUser.set(null);
-		return null;
+	} catch (err) {
+		if (classifyAuthFailure(err) === 'unauthenticated') {
+			authCheckError.set(null);
+			currentUser.set(null);
+			return null;
+		}
+		authCheckError.set(describeAuthCheckFailure(err));
+		return get(currentUser);
 	} finally {
 		authLoading.set(false);
 	}

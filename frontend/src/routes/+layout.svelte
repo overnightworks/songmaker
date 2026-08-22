@@ -8,8 +8,9 @@
 	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
+	import { AUTH_CHECK_RETRY_LABEL } from '$lib/constants/auth';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
-	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
+	import { checkAuth, currentUser, authLoading, authCheckError, logout } from '$lib/stores/auth';
 	import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
 	import { openCollection } from '$lib/stores/collection';
 	import { selectedSongId } from '$lib/stores/player';
@@ -17,6 +18,7 @@
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 	import { dev, browser } from '$app/environment';
+	import { get } from 'svelte/store';
 
 	let { children } = $props();
 
@@ -28,6 +30,7 @@
 	);
 	const me = $derived($currentUser);
 	const hasPrivatePlayer = $derived(me !== null);
+	const authRetryable = $derived($authCheckError !== null && me === null);
 
 	let compact = $state(false);
 
@@ -62,18 +65,20 @@
 		const user = await checkAuth();
 		if (user) {
 			fetchCapabilities().catch(() => {});
+			return;
 		}
-		if (!user) {
-			try {
-				const { required } = await checkSetupRequired();
-				if (required) {
-					await goto('/setup', { replaceState: true });
-				} else {
-					await goto('/login', { replaceState: true });
-				}
-			} catch {
+		if (get(authCheckError)) {
+			return;
+		}
+		try {
+			const { required } = await checkSetupRequired();
+			if (required) {
+				await goto('/setup', { replaceState: true });
+			} else {
 				await goto('/login', { replaceState: true });
 			}
+		} catch {
+			await goto('/login', { replaceState: true });
 		}
 	}
 
@@ -102,6 +107,11 @@
 	{@render children()}
 {:else if $authLoading}
 	<div class="loading">Loading...</div>
+{:else if authRetryable}
+	<div class="auth-retry">
+		<p>{$authCheckError}</p>
+		<button type="button" onclick={initAuth}>{AUTH_CHECK_RETRY_LABEL}</button>
+	</div>
 {:else if me}
 	{#if compact}
 		<header class="mobile-strip">
@@ -166,6 +176,29 @@
 		height: 100dvh;
 		color: var(--text-muted);
 		font-size: 1.1rem;
+	}
+
+	.auth-retry {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 12px;
+		height: 100dvh;
+		color: var(--text-muted);
+		font-size: 1.1rem;
+		text-align: center;
+		padding: 0 24px;
+	}
+
+	.auth-retry button {
+		background: var(--accent);
+		color: var(--bg);
+		border: none;
+		border-radius: 6px;
+		padding: 8px 20px;
+		font-size: 0.95rem;
+		cursor: pointer;
 	}
 
 	.mobile-strip {
