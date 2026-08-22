@@ -149,7 +149,6 @@ export {
 	type LoraSamplePatch
 } from './loras';
 
-
 export async function uploadAlbumCover(albumId: string, file: File): Promise<AlbumItem> {
 	const form = new FormData();
 	form.append('file', file);
@@ -159,4 +158,3 @@ export async function uploadAlbumCover(albumId: string, file: File): Promise<Alb
 export async function deleteAlbumCover(albumId: string): Promise<AlbumItem> {
 	return apiFetch<AlbumItem>(`/api/albums/${albumId}/cover`, { method: 'DELETE' });
 }
-

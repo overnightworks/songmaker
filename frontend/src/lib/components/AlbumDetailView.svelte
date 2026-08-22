@@ -69,7 +69,9 @@
 		selectedAlbum ? `${ALBUM_COVER_ALT_TYPE} ${selectedAlbum.title}` : ALBUM_COVER_ALT_TYPE
 	);
 	const artFill = $derived(selectedAlbum ? usableAlbumPrimary(selectedAlbum.colors) : null);
-	const initials = $derived(selectedAlbum ? albumTitleInitials(selectedAlbum.title) : ALBUM_ART_EMPTY_INITIALS);
+	const initials = $derived(
+		selectedAlbum ? albumTitleInitials(selectedAlbum.title) : ALBUM_ART_EMPTY_INITIALS
+	);
 	let coverFailed = $state(false);
 	let coverBusy = $state(false);
 	let coverInput: HTMLInputElement | null = $state(null);

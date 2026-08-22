@@ -28,7 +28,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	};
 });
 vi.mock('$lib/api/songs', () => ({
-	fetchSongs: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
+	fetchSongs: vi
+		.fn()
+		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn(),
@@ -126,9 +128,9 @@ describe('AlbumDetailView cover hero', () => {
 		expect(header?.querySelector('.cover-hero')).not.toBeNull();
 		expect(header?.querySelector('.detail-title')?.textContent).toContain('Night Drive');
 		expect(header?.querySelector('.action-btn-primary')?.textContent).toContain('Play Album');
-		expect(
-			target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')
-		).toBe(ALBUM_COVER_UPLOAD_LABEL);
+		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
+			ALBUM_COVER_UPLOAD_LABEL
+		);
 	});
 
 	it('uploads a cover without replacing the title', async () => {
@@ -154,9 +156,9 @@ describe('AlbumDetailView cover hero', () => {
 		expect(target.querySelector('img')?.getAttribute('alt')).toBe(
 			`${ALBUM_COVER_ALT_TYPE} Night Drive`
 		);
-		expect(
-			target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')
-		).toBe(ALBUM_COVER_REPLACE_LABEL);
+		expect(target.querySelector<HTMLButtonElement>('.cover-hit')?.getAttribute('aria-label')).toBe(
+			ALBUM_COVER_REPLACE_LABEL
+		);
 	});
 
 	it('removes a cover and returns to fallback art', async () => {

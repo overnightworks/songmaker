@@ -386,12 +386,22 @@ describe('Admin API', () => {
 	});
 
 	it('uploadAlbumCover posts the file as multipart', async () => {
-		mockOk({ id: 'a1', cover: { card: '/api/albums/a1/cover?variant=card', detail: '/api/albums/a1/cover?variant=detail' } });
+		mockOk({
+			id: 'a1',
+			cover: {
+				card: '/api/albums/a1/cover?variant=card',
+				detail: '/api/albums/a1/cover?variant=detail'
+			}
+		});
 		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
 		await uploadAlbumCover('a1', file);
 		expect(mockFetch).toHaveBeenCalledWith(
 			'/api/albums/a1/cover',
-			expect.objectContaining({ method: 'POST', body: expect.any(FormData), credentials: 'include' })
+			expect.objectContaining({
+				method: 'POST',
+				body: expect.any(FormData),
+				credentials: 'include'
+			})
 		);
 	});
 
