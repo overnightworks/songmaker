@@ -3,6 +3,7 @@ import {
 	contrastRatio,
 	hexToRgb,
 	relativeLuminance,
+	usableAlbumPrimary,
 	WCAG_AA_NON_TEXT_RATIO,
 	WCAG_AA_NORMAL_TEXT_RATIO
 } from './contrast.ts';
@@ -57,6 +58,24 @@ describe('contrastRatio', () => {
 	it('rejects invalid hex', () => {
 		expect(() => hexToRgb('#12')).toThrow(/Invalid hex color/);
 		expect(() => relativeLuminance('blue')).toThrow(/Invalid hex color/);
+	});
+});
+
+describe('usableAlbumPrimary', () => {
+	it('returns a trimmed, parseable hex primary', () => {
+		expect(usableAlbumPrimary({ primary: ' #112233 ' })).toBe('#112233');
+	});
+
+	it('returns null when there is no primary color', () => {
+		expect(usableAlbumPrimary({})).toBeNull();
+	});
+
+	it('returns null for a blank primary', () => {
+		expect(usableAlbumPrimary({ primary: '   ' })).toBeNull();
+	});
+
+	it('returns null for an unparseable primary', () => {
+		expect(usableAlbumPrimary({ primary: 'not-a-color' })).toBeNull();
 	});
 });
 

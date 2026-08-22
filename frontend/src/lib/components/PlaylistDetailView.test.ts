@@ -28,12 +28,16 @@ vi.mock('$lib/services/offline', () => ({
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
 }));
+vi.mock('$lib/stores/navigation', () => ({
+	selectSong: vi.fn()
+}));
 
 import PlaylistDetailView from './PlaylistDetailView.svelte';
+import { selectSong } from '$lib/stores/navigation';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-function entry(): PlaylistEntryItem {
+function entry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntryItem {
 	return {
 		id: 'pe1',
 		position: 0,
@@ -43,14 +47,18 @@ function entry(): PlaylistEntryItem {
 		album_title: 'Night Drive',
 		artist: 'Artist',
 		generation_number: 1,
+		version_number: 1,
+		is_picked: false,
+		audio_duration: 180,
 		mp3_path: 'tide.mp3',
 		seed: 1,
 		model_mode: 'sft',
-		lyrics: null
+		lyrics: null,
+		...overrides
 	};
 }
 
-function detail(): PlaylistDetailItem {
+function detail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
 	return {
 		id: 'p1',
 		title: 'Night Drive',
@@ -58,32 +66,189 @@ function detail(): PlaylistDetailItem {
 		is_shared: false,
 		share_slug: null,
 		created_at: '2026-01-01T00:00:00+00:00',
-		entries: [entry()]
+		entries: [entry()],
+		...overrides
 	};
 }
 
 beforeEach(() => {
 	selectedPlaylistDetail.set(detail());
+	vi.mocked(selectSong).mockReset();
 });
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	selectedPlaylistDetail.set(null);
+	delete document.documentElement.dataset.pointer;
 });
 
+function requireElement<T extends Element>(root: ParentNode, selector: string): T {
+	const element = root.querySelector<T>(selector);
+	if (!element) throw new Error(`Expected ${selector} to be rendered`);
+	return element;
+}
+
 describe('PlaylistDetailView header', () => {
-	it('keeps share and delete and has no Play or Shuffle in the header', async () => {
+	it('uses the collection header with a Play action and a … menu instead of a visible Share icon', async () => {
 		const target = document.createElement('div');
 		document.body.append(target);
 		mounted.push(mount(PlaylistDetailView, { target }));
 		await tick();
-		const actions = target.querySelector('.detail-actions');
-		expect(actions?.textContent).not.toMatch(/\bPlay\b/);
-		expect(actions?.textContent).not.toMatch(/\bShuffle\b/);
-		expect(target.querySelector('[aria-label="Delete Playlist"]')).not.toBeNull();
+		const header = requireElement(target, '.collection-header');
+		expect(header.querySelector('.play-btn')).not.toBeNull();
+		expect(header.querySelector('.collection-menu')).not.toBeNull();
+		expect(header.querySelector('.share-btn')).toBeNull();
 		expect(target.textContent).toContain('Tide');
-		expect(target.querySelector('.cover-hero .cover-initials')?.textContent).toBe('ND');
-		expect(target.querySelector('.cover-file-input')).toBeNull();
+		expect(header.querySelector('.header-cover-initials')?.textContent).toBe('ND');
+	});
+
+	it('lists Share playlist, Save offline, Rename, and Delete playlist in the menu', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
+		await tick();
+		const menu = requireElement<HTMLElement>(document.body, '.menu-panel');
+		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Playlist · Night Drive');
+		expect(menu.querySelector('.menu-row-label')?.textContent).toBe('Share playlist');
+		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
+			el.textContent?.trim()
+		);
+		expect(items).toEqual(['Save offline', 'Rename', 'Delete playlist']);
+	});
+});
+
+describe('PlaylistDetailView row take traits', () => {
+	it('shows duration, version, and a pick star, since playlist rows are takes', async () => {
+		selectedPlaylistDetail.set(
+			detail({
+				entries: [entry({ version_number: 2, audio_duration: 195, is_picked: true })]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		const row = requireElement<HTMLElement>(target, '.entry-row');
+		expect(row.querySelector('.picked-star')).not.toBeNull();
+		expect(row.textContent).toContain('v2');
+		expect(row.textContent).toContain('3:15');
+	});
+
+	it('omits version and duration when the take does not carry them', async () => {
+		selectedPlaylistDetail.set(
+			detail({
+				entries: [entry({ version_number: null, audio_duration: null, is_picked: false })]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		const row = requireElement<HTMLElement>(target, '.entry-row');
+		expect(row.querySelector('.picked-star')).toBeNull();
+		const meta = row.querySelector('.entry-meta')?.textContent ?? '';
+		expect(meta).not.toContain('· v');
+		expect(meta).toBe('Artist · Gen #1');
+	});
+
+	it('omits duration when the version has none, since audio_duration defaults to 0', async () => {
+		selectedPlaylistDetail.set(
+			detail({
+				entries: [entry({ version_number: 1, audio_duration: 0, is_picked: false })]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		const row = requireElement<HTMLElement>(target, '.entry-row');
+		const meta = row.querySelector('.entry-meta')?.textContent ?? '';
+		expect(meta).not.toContain('0:00');
+		expect(meta).toContain('v1');
+	});
+});
+
+describe('PlaylistDetailView row overflow menu', () => {
+	it('offers Open song in editor for a take', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
+		await tick();
+
+		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
+		expect(menu.textContent?.trim()).toBe('Open song in editor');
+	});
+
+	it("opens the take's song in the editor and closes the menu", async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
+		await tick();
+		requireElement<HTMLButtonElement>(target, '.entry-overflow-item').click();
+		await tick();
+
+		expect(selectSong).toHaveBeenCalledWith('s1');
+		expect(target.querySelector('.entry-overflow-menu')).toBeNull();
+	});
+});
+
+describe('PlaylistDetailView compact row actions', () => {
+	it('moves Move up/down and Remove into the … menu instead of inline, keeping only Play and … inline', async () => {
+		document.documentElement.dataset.pointer = 'coarse';
+		selectedPlaylistDetail.set(
+			detail({
+				entries: [entry({ id: 'pe1', song_title: 'Tide' }), entry({ id: 'pe2', song_title: 'Ebb' })]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		expect(target.querySelector('.move-btn')).toBeNull();
+		expect(target.querySelector('.remove-btn')).toBeNull();
+
+		const rows = target.querySelectorAll<HTMLElement>('.entry-row');
+		const secondRowOverflow = requireElement<HTMLButtonElement>(rows[1], '.overflow-btn');
+		secondRowOverflow.click();
+		await tick();
+
+		const menu = requireElement<HTMLElement>(document.body, '.entry-overflow-menu');
+		const items = Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) =>
+			el.textContent?.trim()
+		);
+		expect(items).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
+	});
+
+	it('keeps Move up/down and Remove inline outside compact layout', async () => {
+		selectedPlaylistDetail.set(
+			detail({
+				entries: [entry({ id: 'pe1', song_title: 'Tide' }), entry({ id: 'pe2', song_title: 'Ebb' })]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		expect(target.querySelector('.move-btn')).not.toBeNull();
+		expect(target.querySelector('.remove-btn')).not.toBeNull();
+
+		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
+		await tick();
+		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
+		expect(menu.textContent?.trim()).toBe('Open song in editor');
 	});
 });

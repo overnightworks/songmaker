@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 import type { GenerationItem } from '$lib/api/types';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import {
@@ -9,6 +10,7 @@ import {
 	NOW_PLAYING_NO_LYRICS,
 	NOW_PLAYING_TAKE_PREFIX
 } from '$lib/constants';
+import { libraryQueueSkipped, queueContext, setShuffle, shuffleEnabled } from '$lib/stores/player';
 import NowPlaying from './NowPlaying.svelte';
 
 function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
@@ -111,5 +113,63 @@ describe('NowPlaying', () => {
 		);
 		go?.click();
 		expect(handlers.onGoToSong).toHaveBeenCalledOnce();
+	});
+
+	it('wires Previous and Next to the given handlers, respecting can-navigate flags', async () => {
+		const onprev = vi.fn();
+		const onnext = vi.fn();
+		target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(NowPlaying, {
+			target,
+			props: {
+				info: info(),
+				onclose: vi.fn(),
+				onGoToSong: vi.fn(),
+				canPrev: false,
+				canNext: true,
+				onprev,
+				onnext
+			}
+		});
+		await tick();
+
+		const previous = target.querySelector<HTMLButtonElement>('button[aria-label="Previous song"]');
+		const next = target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]');
+		expect(previous?.disabled).toBe(true);
+		expect(next?.disabled).toBe(false);
+		next?.click();
+		expect(onnext).toHaveBeenCalledOnce();
+		expect(onprev).not.toHaveBeenCalled();
+	});
+
+	it('omits Previous and Next when no handlers are given', async () => {
+		await renderSheet(info());
+		expect(target.querySelector('button[aria-label="Previous song"]')).toBeNull();
+		expect(target.querySelector('button[aria-label="Next song"]')).toBeNull();
+	});
+
+	it('toggles shuffle from the overlay, scoped to the current queue', async () => {
+		setShuffle(false);
+		queueContext.set({ type: 'album', albumId: 'a1' });
+		await renderSheet(info());
+		const shuffleBtn = target.querySelector<HTMLButtonElement>('[aria-pressed]');
+		expect(shuffleBtn?.getAttribute('aria-label')).toBe('Shuffle this album');
+		shuffleBtn?.click();
+		await tick();
+		expect(get(shuffleEnabled)).toBe(true);
+		expect(shuffleBtn?.getAttribute('aria-pressed')).toBe('true');
+		expect(shuffleBtn?.getAttribute('aria-label')).toBe('Disable shuffle (this album)');
+		setShuffle(false);
+		queueContext.set({ type: 'library' });
+	});
+
+	it('shows queue skip feedback while playing the library queue', async () => {
+		queueContext.set({ type: 'library' });
+		libraryQueueSkipped.set([{ generation_id: 'g2', song_id: 's2', reason: 'missing_file' }]);
+		await renderSheet(info());
+		expect(target.querySelector('.queue-feedback')?.textContent).toContain('1');
+		libraryQueueSkipped.set([]);
+		queueContext.set({ type: 'library' });
 	});
 });

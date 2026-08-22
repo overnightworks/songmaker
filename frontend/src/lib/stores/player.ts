@@ -23,6 +23,7 @@ import {
 	type StreamFallbackState
 } from '$lib/services/audioPlayer.svelte';
 import { setupMediaSessionHandlers, updateMediaSessionMetadata } from '$lib/services/mediaSession';
+import { type OpenCollection, openCollection } from '$lib/stores/collection';
 import { addToast } from '$lib/stores/toast';
 import {
 	LIBRARY_TAKE_POOL_LABELS,
@@ -36,7 +37,8 @@ import {
 	LIBRARY_SONG_PAGE_SIZE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
-	QUEUE_TAKE_MISSING_TOAST
+	QUEUE_TAKE_MISSING_TOAST,
+	RAIL_LIBRARY_LABEL
 } from '$lib/constants';
 
 // --- Data ---
@@ -486,33 +488,38 @@ export type IdlePlayTarget =
 	| { type: 'album'; label: string; albumId: string }
 	| { type: 'library'; label: string };
 
+// The idle target follows the single navigation collection (stores/collection.ts)
+// rather than the album/song selection tuple it used to: a song open inside an
+// album keeps that album as the idle target instead of falling back to the
+// library pool, because the open collection stays the album the whole time a
+// song within it is open (see navigation.ts's ensureCollectionMatchesSong).
 export function idlePlayTarget(input: {
+	collection: OpenCollection | null;
 	playlist: PlaylistDetailItem | null;
-	albumId: string | null;
-	songId: string | null;
 	albums: AlbumItem[];
-	poolLabel: string;
 }): IdlePlayTarget {
-	if (input.playlist !== null && input.songId === null && input.albumId === null) {
+	if (input.collection?.kind === 'playlist') {
+		// A playlist whose detail failed to load (or hasn't loaded yet) has no
+		// title to show and nothing to natively play — fall back to the named
+		// library target instead of an empty label and a dead Play button.
+		if (!input.playlist) return { type: 'library', label: RAIL_LIBRARY_LABEL };
 		return { type: 'playlist', label: input.playlist.title };
 	}
-	if (input.albumId !== null && input.songId === null) {
+	if (input.collection?.kind === 'album') {
 		return {
 			type: 'album',
-			label: albumTitle(input.albums, input.albumId),
-			albumId: input.albumId
+			label: albumTitle(input.albums, input.collection.id),
+			albumId: input.collection.id
 		};
 	}
-	return { type: 'library', label: input.poolLabel };
+	return { type: 'library', label: RAIL_LIBRARY_LABEL };
 }
 
 export async function playIdleStart(): Promise<void> {
 	const target = idlePlayTarget({
+		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
-		albumId: get(selectedAlbumId),
-		songId: get(selectedSongId),
-		albums: get(albumList),
-		poolLabel: poolLabel()
+		albums: get(albumList)
 	});
 	if (target.type === 'playlist') {
 		const playlist = get(selectedPlaylistDetail);
@@ -660,6 +667,9 @@ function toAlbumQueueEntry(song: SongItem, gen: GenerationItem): PlaylistEntryIt
 		album_title: song.album_title,
 		artist: song.artist,
 		generation_number: gen.generation_number,
+		version_number: gen.version_number,
+		is_picked: gen.is_picked,
+		audio_duration: song.audio_duration ?? null,
 		mp3_path: gen.mp3_path,
 		seed: gen.seed,
 		model_mode: gen.model_mode,

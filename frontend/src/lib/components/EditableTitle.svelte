@@ -12,7 +12,7 @@
 	let saving = $state(false);
 	let inputEl = $state<HTMLInputElement | null>(null);
 
-	function startEdit(): void {
+	export function startEdit(): void {
 		if (saving) return;
 		draft = value;
 		editing = true;

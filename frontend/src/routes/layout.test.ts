@@ -1,10 +1,14 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 
 import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { checkAuth, currentUser, authLoading } from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { selectedAlbumId } from '$lib/stores/player';
+import { openCollection } from '$lib/stores/collection';
+import { librarySurface } from '$lib/stores/libraryContext';
+import { selectedSongId } from '$lib/stores/player';
+import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { pageState } = vi.hoisted(() => ({
@@ -43,11 +47,34 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		logout: vi.fn()
 	};
 });
+vi.mock('$lib/api/library', () => ({
+	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
+}));
+vi.mock('$lib/api/albums', () => ({
+	fetchAlbum: vi.fn(),
+	fetchAlbums: vi
+		.fn()
+		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false })
+}));
+vi.mock('$lib/api/songs', () => ({
+	fetchSong: vi.fn(),
+	fetchSongs: vi
+		.fn()
+		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
+}));
 
 import Layout from './+layout.svelte';
+import layoutSource from './+layout.svelte?raw';
 
 const VIEWPORT_PX = 320;
 const USER = { id: 'u1', username: 'felix', role: 'user' as const };
+
+function extractRule(source: string, selector: string): string {
+	const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	const match = new RegExp(`${escaped}\\s*{([^}]*)}`).exec(source);
+	if (!match) throw new Error(`Expected rule ${selector} in stylesheet`);
+	return match[1];
+}
 
 let mounted: ReturnType<typeof mount> | undefined;
 const children = createRawSnippet(() => ({
@@ -128,7 +155,7 @@ beforeEach(() => {
 		authLoading.set(false);
 		return USER;
 	});
-	selectedAlbumId.set('a1');
+	openCollection.set({ kind: 'album', id: 'a1' });
 	const sheet = document.createElement('style');
 	sheet.dataset.hitboxStyles = 'true';
 	sheet.textContent = hitboxCss;
@@ -139,18 +166,24 @@ afterEach(async () => {
 	await unmountCurrentLayout();
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
-	selectedAlbumId.set(null);
+	openCollection.set(null);
+	selectedSongId.set(null);
 	currentUser.set(null);
 	authLoading.set(false);
+	closeSidebar();
 	audioPlayer.destroy();
 	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
 });
 
-describe('app shell header', () => {
+function pressEscape(target: EventTarget): void {
+	target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+}
+
+describe('app shell', () => {
 	it('keeps the private PlayerBar and body reservation visible while idle', async () => {
 		const target = await renderLayout('/');
-		const body = requireElement<HTMLElement>(target, '.app-body');
+		const body = requireElement<HTMLElement>(target, '.app-shell');
 
 		expect(audioPlayer.current).toBeNull();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
@@ -171,7 +204,7 @@ describe('app shell header', () => {
 		async (path) => {
 			const target = await renderLayout(path);
 			expect(target.querySelector('.player-bar')).toBeNull();
-			expect(target.querySelector('.app-body')).toBeNull();
+			expect(target.querySelector('.app-shell')).toBeNull();
 		}
 	);
 
@@ -184,7 +217,7 @@ describe('app shell header', () => {
 
 		expect(target.querySelector('.loading')).not.toBeNull();
 		expect(target.querySelector('.player-bar')).toBeNull();
-		expect(target.querySelector('.app-body')).toBeNull();
+		expect(target.querySelector('.app-shell')).toBeNull();
 	});
 
 	it('removes the PlayerBar and reservation after auth loss', async () => {
@@ -193,64 +226,98 @@ describe('app shell header', () => {
 		currentUser.set(null);
 		await tick();
 		expect(privateTarget.querySelector('.player-bar')).toBeNull();
-		expect(privateTarget.querySelector('.app-body')).toBeNull();
+		expect(privateTarget.querySelector('.app-shell')).toBeNull();
 	});
 
-	it('keeps Brand, Back, and the account menu trigger inside 320px', async () => {
+	it('keeps the mobile strip trigger and brand inside 320px', async () => {
 		const target = await renderLayout('/');
-		const header = requireElement<HTMLElement>(target, '.top-bar');
-		const back = requireElement<HTMLButtonElement>(header, '.back-btn');
-		const brand = requireElement<HTMLAnchorElement>(header, '.brand');
-		const trigger = requireElement<HTMLButtonElement>(
-			header,
-			'[data-hitbox="frequent"][aria-haspopup="dialog"]'
-		);
+		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
+		const trigger = requireElement<HTMLButtonElement>(strip, '.drawer-trigger');
+		const brand = requireElement<HTMLButtonElement>(strip, '.brand');
 
-		expect(header.querySelector('.header-nav')).toBeNull();
-		expect(header.querySelectorAll('.back-btn')).toHaveLength(1);
-		expect(header.querySelector('a[href="/loras"]')).toBeNull();
-		expect(header.querySelector('a[href="/settings"]')).toBeNull();
-		expect(header.querySelector('.logout')).toBeNull();
-		expect(back.tagName).toBe('BUTTON');
+		expect(target.querySelector('.rail')).toBeNull();
 		expect(brand.textContent).toBeTruthy();
 
-		const headerStyle = getComputedStyle(header);
-		const pad = px(headerStyle.paddingLeft) + px(headerStyle.paddingRight);
-		const gap = px(headerStyle.gap);
-		const leftGap = px(getComputedStyle(requireElement(header, '.top-left')).gap);
-		expect(px(getComputedStyle(brand).minWidth)).toBe(0);
+		const stripStyle = getComputedStyle(strip);
+		const pad = px(stripStyle.paddingLeft) + px(stripStyle.paddingRight);
+		const gap = px(stripStyle.gap);
 		expect(minUsedWidth(trigger)).toBe(HITBOX_FREQUENT_PX);
-		const used =
-			pad +
-			minUsedWidth(back) +
-			leftGap +
-			px(getComputedStyle(brand).minWidth) +
-			gap +
-			minUsedWidth(trigger);
+		const used = pad + minUsedWidth(trigger) + gap + px(getComputedStyle(brand).minWidth || '0');
 		expect(used).toBeLessThanOrEqual(VIEWPORT_PX);
 	});
 
-	it('keeps library back on home and uses the settings home link elsewhere', async () => {
-		const home = await renderLayout('/');
-		const homeBack = requireElement<HTMLButtonElement>(home, '.back-btn');
-		expect(homeBack.tagName).toBe('BUTTON');
-		expect(homeBack.getAttribute('aria-label')).toBe('Back');
-		if (mounted) await unmount(mounted);
-		mounted = undefined;
-		document.body.replaceChildren();
+	it('acts as the Library link when the mobile-strip brand is clicked', async () => {
+		librarySurface.set('detail');
+		const target = await renderLayout('/');
+		const brand = requireElement<HTMLButtonElement>(target, '.mobile-strip .brand');
+		expect(brand.getAttribute('aria-label')).toBe('Library');
+		brand.click();
+		await tick();
+		await Promise.resolve();
+		expect(get(librarySurface)).toBe('browse');
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
 
-		const voices = await renderLayout('/loras');
-		expect(voices.querySelector('.back-btn')).toBeNull();
-		expect(voices.querySelector('.brand')).not.toBeNull();
-		if (mounted) await unmount(mounted);
-		mounted = undefined;
-		document.body.replaceChildren();
+	it('opens the rail drawer from the trigger on every private route', async () => {
+		const target = await renderLayout('/loras');
+		expect(document.body.querySelector('.rail')).toBeNull();
+		requireElement<HTMLButtonElement>(target, '.drawer-trigger').click();
+		await tick();
+		const rail = requireElement<HTMLElement>(document.body, '.rail');
+		expect(requireElement<HTMLButtonElement>(rail, '.brand').textContent).toBeTruthy();
+	});
 
-		const settings = await renderLayout('/settings');
-		const settingsBack = requireElement<HTMLAnchorElement>(settings, '.back-btn');
-		expect(settingsBack.tagName).toBe('A');
-		expect(settingsBack.getAttribute('href')).toBe('/');
-		expect(settingsBack.getAttribute('aria-label')).toBe('Back to home');
-		expect(settings.querySelectorAll('.back-btn')).toHaveLength(1);
+	it('renders the rail inline instead of a drawer on wide layouts', async () => {
+		stubMatchMedia(false);
+		delete document.documentElement.dataset.pointer;
+		const target = await renderLayout('/');
+		expect(target.querySelector('.mobile-strip')).toBeNull();
+		expect(requireElement(target, '.rail')).toBeTruthy();
+	});
+
+	it('lays out the mobile app-shell as a flex column, mirroring desktop, so content below the fold stays reachable', () => {
+		const rule = extractRule(layoutSource, '.app-shell.mobile');
+		expect(rule).toContain('display: flex');
+		expect(rule).toContain('flex-direction: column');
+	});
+});
+
+describe('global Escape', () => {
+	it('goes from a song to its collection', async () => {
+		selectedSongId.set('s1');
+		await renderLayout('/');
+		pressEscape(window);
+		await tick();
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
+	it('goes from the collection to the Library wall', async () => {
+		selectedSongId.set(null);
+		librarySurface.set('detail');
+		await renderLayout('/');
+		pressEscape(window);
+		await tick();
+		expect(get(librarySurface)).toBe('browse');
+	});
+
+	it('does nothing while typing in a textarea', async () => {
+		selectedSongId.set('s1');
+		const target = await renderLayout('/');
+		const textarea = document.createElement('textarea');
+		target.append(textarea);
+		pressEscape(textarea);
+		await tick();
+		expect(get(selectedSongId)).toBe('s1');
+	});
+
+	it('does nothing while the rail drawer is open', async () => {
+		selectedSongId.set('s1');
+		await renderLayout('/');
+		sidebarOpen.set(true);
+		await tick();
+		pressEscape(window);
+		await tick();
+		expect(get(selectedSongId)).toBe('s1');
 	});
 });

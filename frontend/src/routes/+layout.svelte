@@ -4,13 +4,18 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
-	import HeaderMenu from '$lib/components/HeaderMenu.svelte';
+	import Rail from '$lib/components/shell/Rail.svelte';
+	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
-	import { APP_NAME } from '$lib/constants';
+	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
-	import { canGoBack, goBack, isLibraryWorkspacePath } from '$lib/stores/navigation';
-	import { initTheme } from '$lib/stores/ui';
+	import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
+	import { openCollection } from '$lib/stores/collection';
+	import { selectedSongId } from '$lib/stores/player';
+	import { sidebarOpen, toggleSidebar, initTheme } from '$lib/stores/ui';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 	import { dev, browser } from '$app/environment';
 
 	let { children } = $props();
@@ -21,10 +26,16 @@
 			page.url.pathname.startsWith('/share/') ||
 			page.url.pathname.startsWith('/legal')
 	);
-	const isSettings = $derived(page.url.pathname.startsWith('/settings'));
-	const hasLibraryBack = $derived(isLibraryWorkspacePath(page.url.pathname) && $canGoBack);
 	const me = $derived($currentUser);
 	const hasPrivatePlayer = $derived(me !== null);
+
+	let compact = $state(false);
+
+	$effect(() => {
+		return subscribeCompactLayout((value) => {
+			compact = value;
+		});
+	});
 
 	$effect(() => {
 		initTheme();
@@ -70,7 +81,16 @@
 		await logout();
 		window.location.href = '/login';
 	}
+
+	function onWindowKeydown(event: KeyboardEvent): void {
+		if (!shouldHandleGlobalEscape(event, document)) return;
+		const target = escapeLevelUpTarget($selectedSongId !== null, $openCollection !== null);
+		if (target === 'collection') backToCollection();
+		else if (target === 'wall') void openLibraryWall();
+	}
 </script>
+
+<svelte:window onkeydown={onWindowKeydown} />
 
 <svelte:head>
 	<title>{APP_NAME}</title>
@@ -83,21 +103,55 @@
 {:else if $authLoading}
 	<div class="loading">Loading...</div>
 {:else if me}
-	<header class="top-bar">
-		<div class="top-left">
-			{#if isSettings}
-				<a href="/" class="back-btn" aria-label="Back to home">←</a>
-			{:else if hasLibraryBack}
-				<button class="back-btn" onclick={goBack} aria-label="Back">←</button>
-			{/if}
-			<a href="/" class="brand" data-text={APP_NAME}>{APP_NAME}</a>
+	{#if compact}
+		<header class="mobile-strip">
+			<button
+				class="drawer-trigger"
+				data-hitbox="frequent"
+				data-hitbox-face
+				aria-haspopup="dialog"
+				aria-expanded={$sidebarOpen}
+				aria-label={RAIL_DRAWER_OPEN_LABEL}
+				onclick={toggleSidebar}
+			>
+				<svg
+					width="20"
+					height="20"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<line x1="4" y1="7" x2="20" y2="7" />
+					<line x1="4" y1="12" x2="20" y2="12" />
+					<line x1="4" y1="17" x2="20" y2="17" />
+				</svg>
+			</button>
+			<button
+				type="button"
+				class="brand"
+				onclick={() => openLibraryWall()}
+				aria-label={RAIL_LIBRARY_LABEL}
+				data-text={APP_NAME}>{APP_NAME}</button
+			>
+		</header>
+		<RailDrawer>
+			<Rail username={me.username} onlogout={handleLogout} />
+		</RailDrawer>
+		<div class="app-shell mobile" class:has-player={hasPrivatePlayer}>
+			{@render children()}
 		</div>
-		<HeaderMenu username={me.username} onlogout={handleLogout} />
-	</header>
-
-	<div class="app-body" class:has-player={hasPrivatePlayer}>
-		{@render children()}
-	</div>
+	{:else}
+		<div class="shell-row" class:has-player={hasPrivatePlayer}>
+			<Rail username={me.username} onlogout={handleLogout} />
+			<div class="app-shell desktop">
+				{@render children()}
+			</div>
+		</div>
+	{/if}
 
 	{#if hasPrivatePlayer}
 		<PlayerBar />
@@ -114,206 +168,63 @@
 		font-size: 1.1rem;
 	}
 
-	.top-bar {
+	.mobile-strip {
 		position: fixed;
 		top: 0;
 		left: 0;
 		right: 0;
 		height: var(--header-height);
-		background: var(--header-bg);
-		border-bottom: 2px solid transparent;
-		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0 16px;
-		min-width: 0;
-		z-index: 200;
-	}
-
-	.top-left {
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		min-width: 0;
-		flex-shrink: 1;
-	}
-
-	.back-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 20px;
-		cursor: pointer;
-		padding: 4px;
-		flex-shrink: 0;
-	}
-
-	.back-btn:hover {
-		color: var(--primary);
+		padding: 0 12px;
+		background: var(--header-bg);
+		border-bottom: 1px solid var(--border);
+		z-index: 200;
 	}
 
 	.brand {
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
 		font-family: var(--font-display);
-		font-size: 18px;
+		font-size: 16px;
 		font-weight: 700;
-		background: linear-gradient(90deg, var(--primary), var(--accent), var(--primary));
-		background-size: 200% 100%;
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
-		letter-spacing: 4px;
+		color: var(--accent);
+		letter-spacing: 3px;
 		text-transform: uppercase;
 		text-decoration: none;
-		position: relative;
-		text-shadow: none;
-		min-width: 0;
+	}
+
+	.shell-row {
+		display: flex;
+		height: 100dvh;
 		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
-	@media (prefers-reduced-motion: no-preference) {
-		.brand {
-			animation: brand-shimmer 4s ease-in-out infinite;
-		}
+	.shell-row.has-player {
+		height: calc(100dvh - var(--player-height));
 	}
 
-	@keyframes brand-shimmer {
-		0%,
-		100% {
-			background-position: 0% 50%;
-		}
-		50% {
-			background-position: 100% 50%;
-		}
+	.app-shell.desktop {
+		flex: 1;
+		min-width: 0;
+		min-height: 0;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
 	}
 
-	.brand::before,
-	.brand::after {
-		content: attr(data-text);
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		background: inherit;
-		background-size: inherit;
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
-		pointer-events: none;
-		opacity: 0;
-	}
-
-	@media (prefers-reduced-motion: no-preference) {
-		.brand::before {
-			color: var(--primary);
-			clip-path: inset(0 0 65% 0);
-			animation: brand-glitch-top 4s steps(2) infinite;
-		}
-
-		.brand::after {
-			color: var(--accent);
-			clip-path: inset(60% 0 0 0);
-			animation: brand-glitch-bottom 4s steps(2) infinite;
-		}
-
-		.brand:hover::before,
-		.brand:hover::after {
-			opacity: 0.8;
-			animation-duration: 0.2s;
-		}
-	}
-
-	@keyframes brand-glitch-top {
-		0%,
-		92% {
-			opacity: 0;
-			transform: translate(0);
-		}
-		93% {
-			opacity: 0.6;
-			transform: translate(2px, -1px);
-		}
-		94% {
-			opacity: 0;
-			transform: translate(-1px, 1px);
-		}
-		95%,
-		100% {
-			opacity: 0;
-			transform: translate(0);
-		}
-	}
-
-	@keyframes brand-glitch-bottom {
-		0%,
-		94% {
-			opacity: 0;
-			transform: translate(0);
-		}
-		95% {
-			opacity: 0.6;
-			transform: translate(-2px, 1px);
-		}
-		96% {
-			opacity: 0;
-			transform: translate(1px, -1px);
-		}
-		97%,
-		100% {
-			opacity: 0;
-			transform: translate(0);
-		}
-	}
-
-	.app-body {
+	.app-shell.mobile {
 		margin-top: var(--header-height);
 		height: calc(100dvh - var(--header-height));
-		display: flex;
 		overflow: hidden;
-		position: relative;
+		display: flex;
+		flex-direction: column;
 	}
 
-	@media (prefers-reduced-motion: no-preference) {
-		.app-body::before {
-			content: '';
-			position: fixed;
-			inset: 0;
-			background:
-				radial-gradient(ellipse at 20% 50%, var(--glow-accent), transparent 70%),
-				radial-gradient(ellipse at 80% 50%, var(--glow-primary), transparent 70%);
-			pointer-events: none;
-			z-index: 0;
-		}
-	}
-
-	.app-body.has-player {
+	.app-shell.mobile.has-player {
 		height: calc(100dvh - var(--header-height) - var(--player-height));
-	}
-
-	@media (max-width: 768px) {
-		.top-bar {
-			padding: 0 8px;
-			gap: 8px;
-		}
-
-		.brand {
-			font-size: 14px;
-			letter-spacing: 1px;
-		}
-	}
-
-	:global(html[data-pointer='coarse']) .top-bar {
-		padding: 0 8px;
-		gap: 8px;
-	}
-
-	:global(html[data-pointer='coarse']) .brand {
-		font-size: 14px;
-		letter-spacing: 1px;
 	}
 </style>

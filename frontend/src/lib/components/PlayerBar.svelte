@@ -10,39 +10,28 @@
 		canPlayPrevSong,
 		canPlayNextSong,
 		playStartNotice,
-		libraryQueueSkipped,
-		libraryQueueSkippedComplete,
 		queueContext,
 		retryLastPlayIntent,
-		selectedAlbumId,
-		selectedSongId,
-		songList,
-		shuffleEnabled,
-		toggleShuffle,
-		windowEnded
+		songList
 	} from '$lib/stores/player';
+	import { openCollection } from '$lib/stores/collection';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
-	import { LIBRARY_TAKE_POOL_LABELS, libraryTakePool } from '$lib/stores/playbackSettings';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
 		LIBRARY_QUEUE_LOADING_TITLE,
 		LIBRARY_QUEUE_PLAY_DETAIL,
 		LIBRARY_QUEUE_RETRY_DETAIL,
-		NOW_PLAYING_LABEL,
-		SHUFFLE_SCOPE_ALBUM,
-		SHUFFLE_SCOPE_LIBRARY,
-		SHUFFLE_SCOPE_PLAYLIST
+		NOW_PLAYING_LABEL
 	} from '$lib/constants';
-	import LibraryPoolControl from './LibraryPoolControl.svelte';
 	import NowPlaying from './NowPlaying.svelte';
 	import {
 		updateMediaSessionPlaybackState,
 		updateMediaSessionPositionState
 	} from '$lib/services/mediaSession';
 	import { formatTime } from '$lib/utils/format';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from './Icon.svelte';
-	import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 	import {
 		AudioVisualizer,
 		FFT_SIZE,
@@ -53,8 +42,11 @@
 		type VizColors
 	} from '$lib/utils/visualizer';
 
+	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
+
 	let nowPlayingOpen = $state(false);
-	let trackInfoButton: HTMLButtonElement | undefined = $state();
+	let mobileTransport = $state(false);
+	let nowPlayingTrigger: HTMLButtonElement | undefined = $state();
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
 	let audioCtx: AudioContext | undefined;
 	let analyser: AnalyserNode | undefined;
@@ -71,14 +63,7 @@
 	const errorMsg = $derived(audioPlayer.error);
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
-	const shuffle = $derived($shuffleEnabled);
-	const poolName = $derived(LIBRARY_TAKE_POOL_LABELS[$libraryTakePool]);
 	const startNotice = $derived($playStartNotice);
-	const skipped = $derived($queueContext.type === 'library' ? $libraryQueueSkipped : []);
-	const skippedComplete = $derived(
-		$queueContext.type === 'library' ? $libraryQueueSkippedComplete : true
-	);
-	const ended = $derived($windowEnded);
 
 	const isPlaying = $derived(status === 'playing');
 	const isLoading = $derived(status === 'loading' || status === 'buffering');
@@ -88,27 +73,23 @@
 	const ctx = $derived($queueContext);
 	const idleTarget = $derived(
 		idlePlayTarget({
+			collection: $openCollection,
 			playlist: $selectedPlaylistDetail,
-			albumId: $selectedAlbumId,
-			songId: $selectedSongId,
-			albums: $albumList,
-			poolLabel: poolName
+			albums: $albumList
 		})
 	);
-	const shuffleScope = $derived(
-		current
-			? ctx.type === 'playlist'
-				? SHUFFLE_SCOPE_PLAYLIST
-				: ctx.type === 'album'
-					? SHUFFLE_SCOPE_ALBUM
-					: SHUFFLE_SCOPE_LIBRARY
-			: idleTarget.label
-	);
 	const prevSong = $derived(canPlayPrevSong(current, songs, ctx));
-	const nextSong = $derived(canPlayNextSong(current, songs, ctx, shuffle));
+	const nextSong = $derived(canPlayNextSong(current, songs, ctx));
 	const progressPercent = $derived(
 		duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0
 	);
+
+	const coverUrl = $derived.by(() => {
+		if (!current) return null;
+		const song = songs.find((item) => item.id === current.songId);
+		const album = song ? $albumList.find((item) => item.id === song.album_id) : undefined;
+		return album?.cover?.card ?? null;
+	});
 
 	$effect(() => {
 		const playing = isPlaying;
@@ -204,12 +185,7 @@
 	function closeNowPlaying(): void {
 		if (!nowPlayingOpen) return;
 		nowPlayingOpen = false;
-		queueMicrotask(() => trackInfoButton?.focus());
-	}
-
-	function onTrackInfoClick(): void {
-		if (current) openNowPlaying();
-		else togglePlay();
+		queueMicrotask(() => nowPlayingTrigger?.focus());
 	}
 
 	function goToPlayingSong(): void {
@@ -220,6 +196,12 @@
 	$effect(() => {
 		if (!current) nowPlayingOpen = false;
 	});
+
+	$effect(() => {
+		return subscribeCompactLayout((value) => {
+			mobileTransport = value;
+		}, MOBILE_TRANSPORT_MEDIA);
+	});
 </script>
 
 <svelte:document onvisibilitychange={handleVisibilityChange} />
@@ -227,98 +209,86 @@
 <footer
 	class="player-bar"
 	class:now-playing-open={nowPlayingOpen}
+	class:mobile-transport={mobileTransport}
 	style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}
 >
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
+	<div class="mobile-progress" aria-hidden="true">
+		<div class="mobile-progress-fill" style:width="{progressPercent}%"></div>
+	</div>
 	<div class="player-content">
-		<div class="player-controls">
-			<div class="library-controls"><LibraryPoolControl /></div>
-			<div class="transport-controls">
-				<button
-					class="nav-btn"
-					onclick={playPrevSong}
-					disabled={!prevSong}
-					aria-label="Previous"
-					title="Previous"
-				>
-					<Icon name="skip-back" size={21} />
-				</button>
-				<button
-					class="play-btn"
-					class:loading={isLoading}
-					class:playing={isPlaying}
-					class:errored={isError}
-					onclick={togglePlay}
-					aria-label={isError ? 'Retry' : isPlaying ? 'Pause' : 'Play'}
-					title={isError && errorMsg ? errorMsg : ''}
-				>
-					<span
-						class="play-btn-face"
-						style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
-					>
-						{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
-								name="refresh-cw"
-								size={24}
-							/>{:else}<Icon name={isPlaying ? 'pause' : 'play'} size={26} />{/if}
-					</span>
-				</button>
-				<button
-					class="nav-btn"
-					onclick={playNextSong}
-					disabled={!nextSong}
-					aria-label="Next"
-					title="Next"
-				>
-					<Icon name="skip-forward" size={21} />
-				</button>
-			</div>
+		<div class="transport-controls">
 			<button
-				class="nav-btn mode-btn shuffle-control"
-				class:active={shuffle}
-				onclick={toggleShuffle}
-				aria-label={shuffle ? `Disable shuffle (${shuffleScope})` : `Shuffle ${shuffleScope}`}
-				aria-pressed={shuffle}
-				title={shuffle ? `Disable shuffle (${shuffleScope})` : `Shuffle ${shuffleScope}`}
+				class="nav-btn"
+				onclick={playPrevSong}
+				disabled={!prevSong}
+				aria-label="Previous"
+				title="Previous"
 			>
-				<Icon name="shuffle" size={20} />
+				<Icon name="skip-back" size={21} />
 			</button>
-			<div class="queue-feedback">
-				<QueueStreamFeedback {skipped} {skippedComplete} windowEnded={ended} />
-			</div>
-		</div>
-		<button
-			bind:this={trackInfoButton}
-			class="track-info"
-			onclick={onTrackInfoClick}
-			aria-label={current ? NOW_PLAYING_LABEL : `${LIBRARY_QUEUE_PLAY_DETAIL} ${idleTarget.label}`}
-			aria-haspopup={current ? 'dialog' : undefined}
-			aria-expanded={current ? nowPlayingOpen : undefined}
-		>
-			{#if current}
+			<button
+				class="play-btn"
+				class:loading={isLoading}
+				class:playing={isPlaying}
+				class:errored={isError}
+				onclick={togglePlay}
+				aria-label={isError ? 'Retry' : isPlaying ? 'Pause' : 'Play'}
+				title={isError && errorMsg ? errorMsg : ''}
+			>
 				<span
-					class="track-title"
-					class:glowing={isPlaying}
-					style={isPlaying ? titleGlowStyle(bassLevel, vizColors) : ''}>{current.songTitle}</span
+					class="play-btn-face"
+					style={isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : ''}
 				>
-				<span class="track-detail"
-					>{current.artist} · gen{current.generation.generation_number}{#if isLoading}<span
-							class="loading-text">Loading...</span
-						>{:else if isError}<span class="error-text">{errorMsg ?? 'Error'}</span>{/if}</span
-				>
-			{:else if startNotice === 'building'}
-				<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
-				<span class="track-detail">{idleTarget.label}</span>
-			{:else if startNotice === 'empty'}
-				<span class="track-title">{LIBRARY_QUEUE_EMPTY_TITLE}</span>
-				<span class="track-detail">{idleTarget.label}</span>
-			{:else if startNotice === 'error'}
-				<span class="track-title">{idleTarget.label} failed</span>
-				<span class="track-detail">{LIBRARY_QUEUE_RETRY_DETAIL}</span>
-			{:else}
-				<span class="track-title">{idleTarget.label}</span>
-				<span class="track-detail">{LIBRARY_QUEUE_PLAY_DETAIL}</span>
-			{/if}
-		</button>
+					{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
+							name="refresh-cw"
+							size={24}
+						/>{:else}<Icon name={isPlaying ? 'pause' : 'play'} size={26} />{/if}
+				</span>
+			</button>
+			<button
+				class="nav-btn"
+				onclick={playNextSong}
+				disabled={!nextSong}
+				aria-label="Next"
+				title="Next"
+			>
+				<Icon name="skip-forward" size={21} />
+			</button>
+		</div>
+		<div class="track-info" aria-live="polite">
+			<span class="track-cover" aria-hidden="true">
+				{#if coverUrl}
+					<img src={coverUrl} alt="" />
+				{/if}
+			</span>
+			<span class="track-text">
+				{#if current}
+					<span
+						class="track-title"
+						class:glowing={isPlaying}
+						style={isPlaying ? titleGlowStyle(bassLevel, vizColors) : ''}>{current.songTitle}</span
+					>
+					<span class="track-detail"
+						>{current.artist} · gen{current.generation.generation_number}{#if isLoading}<span
+								class="loading-text">Loading...</span
+							>{:else if isError}<span class="error-text">{errorMsg ?? 'Error'}</span>{/if}</span
+					>
+				{:else if startNotice === 'building'}
+					<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
+					<span class="track-detail">{idleTarget.label}</span>
+				{:else if startNotice === 'empty'}
+					<span class="track-title">{LIBRARY_QUEUE_EMPTY_TITLE}</span>
+					<span class="track-detail">{idleTarget.label}</span>
+				{:else if startNotice === 'error'}
+					<span class="track-title">{idleTarget.label} failed</span>
+					<span class="track-detail">{LIBRARY_QUEUE_RETRY_DETAIL}</span>
+				{:else}
+					<span class="track-title">{idleTarget.label}</span>
+					<span class="track-detail">{LIBRARY_QUEUE_PLAY_DETAIL}</span>
+				{/if}
+			</span>
+		</div>
 		<div class="timeline">
 			<span class="time">{formatTime(currentTime)}</span>
 			<input
@@ -336,10 +306,30 @@
 			/>
 			<span class="time">{formatTime(duration)}</span>
 		</div>
+		<button
+			bind:this={nowPlayingTrigger}
+			class="now-playing-btn"
+			onclick={openNowPlaying}
+			disabled={!current}
+			aria-label={NOW_PLAYING_LABEL}
+			aria-haspopup="dialog"
+			aria-expanded={nowPlayingOpen}
+		>
+			<span>{NOW_PLAYING_LABEL}</span>
+			<Icon name="chevron-up" size={16} />
+		</button>
 	</div>
 </footer>
 {#if nowPlayingOpen && current}
-	<NowPlaying info={current} onclose={closeNowPlaying} onGoToSong={goToPlayingSong} />
+	<NowPlaying
+		info={current}
+		onclose={closeNowPlaying}
+		onGoToSong={goToPlayingSong}
+		canPrev={Boolean(prevSong)}
+		canNext={Boolean(nextSong)}
+		onprev={playPrevSong}
+		onnext={playNextSong}
+	/>
 {/if}
 
 <style>
@@ -366,26 +356,17 @@
 		position: relative;
 		z-index: 1;
 		display: grid;
-		grid-template-columns: auto minmax(120px, 260px) minmax(100px, 1fr);
+		grid-template-columns: auto minmax(120px, 240px) minmax(100px, 1fr) auto;
 		align-items: center;
 		gap: 14px;
 		width: 100%;
 		min-width: 0;
 	}
-	.player-controls {
+	.transport-controls {
 		display: flex;
 		align-items: center;
 		gap: 6px;
 		flex-shrink: 0;
-		position: relative;
-	}
-	.library-controls,
-	.transport-controls {
-		display: flex;
-		align-items: center;
-	}
-	.transport-controls {
-		gap: 6px;
 	}
 	.play-btn {
 		width: 62px;
@@ -498,11 +479,6 @@
 		border-color: color-mix(in srgb, var(--primary) 65%, var(--border));
 		background: color-mix(in srgb, var(--primary) 12%, var(--surface));
 	}
-	.nav-btn.active {
-		color: var(--accent);
-		border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
-		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
-	}
 	.nav-btn:disabled {
 		color: var(--text-disabled);
 		cursor: default;
@@ -510,23 +486,31 @@
 	}
 	.track-info {
 		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-width: 0;
+		overflow: hidden;
+	}
+	.track-cover {
+		display: block;
+		width: 44px;
+		height: 44px;
+		flex-shrink: 0;
+		border-radius: var(--card-radius);
+		overflow: hidden;
+		background: var(--surface-hover);
+	}
+	.track-cover img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+	.track-text {
+		display: flex;
 		flex-direction: column;
 		min-width: 0;
 		overflow: hidden;
-		background: none;
-		border: 1px solid transparent;
-		cursor: pointer;
-		text-align: left;
-		padding: 0.45rem 0.6rem;
-		border-radius: var(--card-radius);
-		color: inherit;
-		transition:
-			background 0.15s,
-			border-color 0.15s;
-	}
-	.track-info:hover {
-		background: var(--surface-hover);
-		border-color: var(--border);
 	}
 	.track-title {
 		font-family: var(--font-display);
@@ -631,6 +615,31 @@
 		background: var(--text);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
 	}
+	.now-playing-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		flex-shrink: 0;
+		padding: 0.4rem 0.7rem;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-pill);
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.now-playing-btn:hover:not(:disabled) {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+	.now-playing-btn:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
 	.viz-fullscreen {
 		position: absolute;
 		left: 0;
@@ -642,13 +651,20 @@
 		pointer-events: none;
 		z-index: 0;
 	}
+	.mobile-progress {
+		display: none;
+	}
+	.mobile-progress-fill {
+		height: 100%;
+		background: linear-gradient(90deg, var(--primary), var(--accent));
+	}
 
 	@media (max-width: 900px) {
 		.player-bar {
 			padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
 		}
 		.player-content {
-			grid-template-columns: auto minmax(80px, 1fr) minmax(120px, 1.2fr);
+			grid-template-columns: auto minmax(80px, 1fr) minmax(90px, 1fr) auto;
 			gap: 10px;
 		}
 		.nav-btn {
@@ -659,201 +675,67 @@
 			width: 56px;
 			height: 56px;
 		}
-	}
-
-	@media (max-width: 640px), (any-pointer: coarse) {
-		.player-bar {
-			overflow: visible;
-		}
-		.player-content {
-			display: flex;
-			flex-direction: column;
-			gap: 8px;
-		}
-		.player-controls {
-			display: grid;
-			grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-			gap: 4px;
-			width: 100%;
-		}
-		.library-controls {
-			grid-column: 1;
-			grid-row: 1;
-			justify-self: start;
-		}
-		.transport-controls {
-			grid-column: 2;
-			grid-row: 1;
-			justify-self: center;
-			gap: 8px;
-		}
-		.shuffle-control {
-			grid-column: 3;
-			grid-row: 1;
-			justify-self: end;
-		}
-		.queue-feedback {
-			position: absolute;
-			right: 0;
-			bottom: calc(100% + 4px);
-		}
-		.track-info {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			justify-content: center;
-			gap: 0;
-			width: 100%;
-			text-align: center;
-			padding: 0 0.25rem;
-		}
-		.track-title {
-			font-size: 0.85rem;
-			width: 100%;
-			max-width: 100%;
-			min-width: 0;
-		}
-		.track-detail {
+		.now-playing-btn span {
 			display: none;
 		}
-		.timeline {
-			width: 100%;
-			gap: 6px;
-		}
-		.nav-btn {
-			position: relative;
-			width: 44px;
-			height: 44px;
-			min-width: 44px;
-			min-height: 44px;
-			border-color: transparent;
-			background: transparent;
-			isolation: isolate;
-		}
-		.nav-btn::before {
-			content: '';
-			position: absolute;
-			z-index: -1;
-			width: 36px;
-			height: 36px;
-			border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-			border-radius: 50%;
-			background: color-mix(in srgb, var(--surface) 70%, transparent);
-		}
-		.nav-btn:hover:not(:disabled),
-		.nav-btn.active {
-			border-color: transparent;
-			background: transparent;
-		}
-		.nav-btn:hover:not(:disabled)::before {
-			border-color: color-mix(in srgb, var(--primary) 65%, var(--border));
-			background: color-mix(in srgb, var(--primary) 12%, var(--surface));
-		}
-		.nav-btn.active::before {
-			border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
-			background: color-mix(in srgb, var(--accent) 14%, var(--surface));
-		}
-		.play-btn {
-			width: 56px;
-			height: 56px;
-			min-width: 56px;
-			min-height: 56px;
-		}
-		.play-btn-face {
-			transform: none !important;
-		}
-		.nav-btn :global(svg) {
-			position: relative;
-			z-index: 1;
-			width: 18px;
-			height: 18px;
-		}
-		.time {
-			font-size: 0.7rem;
-			min-width: 28px;
-		}
 	}
-	:global(html[data-pointer='coarse']) .player-bar {
+
+	/* One 64px transport row on mobile / coarse pointers: cover, title,
+	   play/pause, and the Now Playing chevron. Prev/Next move into the Now
+	   Playing overlay — see NowPlaying.svelte — and the interactive seek
+	   timeline is replaced by the decorative .mobile-progress line above.
+	   `.mobile-transport` is set from `subscribeCompactLayout` (JS mirrors
+	   the same media query so jsdom tests can drive it via data-pointer). */
+	.player-bar.mobile-transport {
 		overflow: visible;
+		padding: 0 14px env(safe-area-inset-bottom, 0px);
 	}
-	:global(html[data-pointer='coarse']) .player-content {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-	:global(html[data-pointer='coarse']) .player-controls {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-		gap: 4px;
-		width: 100%;
-	}
-	:global(html[data-pointer='coarse']) .library-controls {
-		grid-column: 1;
-		grid-row: 1;
-		justify-self: start;
-	}
-	:global(html[data-pointer='coarse']) .transport-controls {
-		grid-column: 2;
-		grid-row: 1;
-		justify-self: center;
-		gap: 8px;
-	}
-	:global(html[data-pointer='coarse']) .shuffle-control {
-		grid-column: 3;
-		grid-row: 1;
-		justify-self: end;
-	}
-	:global(html[data-pointer='coarse']) .queue-feedback {
+	.mobile-transport .mobile-progress {
+		display: block;
 		position: absolute;
+		left: 0;
 		right: 0;
-		bottom: calc(100% + 4px);
+		top: 0;
+		height: 2px;
+		background: color-mix(in srgb, var(--border) 45%, transparent);
+		z-index: 2;
 	}
-	:global(html[data-pointer='coarse']) .track-info {
-		flex-direction: column;
+	.mobile-transport .player-content {
+		display: flex;
 		align-items: center;
-		justify-content: center;
-		gap: 0;
-		width: 100%;
-		text-align: center;
-		padding: 0 0.25rem;
+		gap: 10px;
 	}
-	:global(html[data-pointer='coarse']) .track-title {
-		font-size: 0.85rem;
-		width: 100%;
-		max-width: 100%;
+	.mobile-transport .track-info {
+		order: 1;
+		flex: 1;
+		width: auto;
 		min-width: 0;
 	}
-	:global(html[data-pointer='coarse']) .track-detail {
+	.mobile-transport .track-cover {
+		width: 40px;
+		height: 40px;
+	}
+	.mobile-transport .transport-controls {
+		order: 2;
+		flex-shrink: 0;
+	}
+	.mobile-transport .nav-btn {
 		display: none;
 	}
-	:global(html[data-pointer='coarse']) .timeline {
-		width: 100%;
-		gap: 6px;
-	}
-	:global(html[data-pointer='coarse']) .nav-btn {
-		position: relative;
+	.mobile-transport .play-btn {
 		width: 44px;
 		height: 44px;
 		min-width: 44px;
 		min-height: 44px;
-		border-color: transparent;
-		background: transparent;
-		isolation: isolate;
 	}
-	:global(html[data-pointer='coarse']) .nav-btn::before {
-		content: '';
-		position: absolute;
-		z-index: -1;
-		width: 36px;
-		height: 36px;
-		border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-		border-radius: 50%;
-		background: color-mix(in srgb, var(--surface) 70%, transparent);
+	.mobile-transport .play-btn-face {
+		transform: none !important;
 	}
-	:global(html[data-pointer='coarse']) .nav-btn :global(svg) {
-		position: relative;
-		z-index: 1;
-		width: 18px;
-		height: 18px;
+	.mobile-transport .now-playing-btn {
+		order: 3;
+		flex-shrink: 0;
+	}
+	.mobile-transport .timeline {
+		display: none;
 	}
 </style>

@@ -430,6 +430,9 @@ export interface PlaylistEntryItem {
 	album_title: string;
 	artist: string;
 	generation_number: number;
+	version_number: number | null;
+	is_picked: boolean;
+	audio_duration: number | null;
 	mp3_path: string;
 	seed: number | null;
 	model_mode: string;

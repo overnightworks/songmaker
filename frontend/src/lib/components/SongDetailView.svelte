@@ -43,9 +43,12 @@
 	} from '$lib/stores/player';
 	import {
 		albumTrackNeighbors,
+		backToCollection,
+		compareAlbumTracks,
 		selectGeneration,
 		navigateToSongTab,
-		backToAlbum,
+		openCollectionEntry,
+		openLibraryWall,
 		clearGenerationSelection,
 		persistLibraryHistory,
 		detailTab,
@@ -53,6 +56,7 @@
 		openTakesSurface,
 		selectNeighborSong
 	} from '$lib/stores/navigation';
+	import { openCollection } from '$lib/stores/collection';
 	import {
 		isDirty,
 		versions,
@@ -75,6 +79,7 @@
 	import {
 		EXPIRY_WARN_DAYS,
 		LIBRARY_NARROW_MEDIA,
+		RAIL_LIBRARY_LABEL,
 		SONG_NEXT_LABEL,
 		SONG_PREVIOUS_LABEL,
 		SONG_SPLIT_PANE_GAP_PX,
@@ -96,8 +101,9 @@
 		canSplitSongPanes
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
-	import { hexToRgb } from '$lib/utils/contrast';
+	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import Breadcrumb from './Breadcrumb.svelte';
 	import GenerationsList from './GenerationsList.svelte';
 	import GenerationView from './GenerationView.svelte';
 	import SongEditor from './SongEditor.svelte';
@@ -168,6 +174,26 @@
 	const neighbors = $derived(
 		song ? albumTrackNeighbors(song.id, songs) : { previous: null, next: null }
 	);
+	const albumTracks = $derived(
+		song ? songs.filter((item) => item.album_id === song.album_id).sort(compareAlbumTracks) : []
+	);
+	const trackPosition = $derived(
+		song ? albumTracks.findIndex((item) => item.id === song.id) + 1 : 0
+	);
+	const trackTotal = $derived(albumTracks.length);
+	const collection = $derived($openCollection);
+	const breadcrumbItems = $derived(
+		song
+			? [
+					{ label: RAIL_LIBRARY_LABEL, onclick: () => void openLibraryWall() },
+					{
+						label: song.album_title,
+						onclick: collection ? () => openCollectionEntry(collection) : undefined
+					},
+					{ label: trackTotal > 0 ? `Track ${trackPosition} of ${trackTotal}` : song.title }
+				]
+			: []
+	);
 	const jobs = $derived($activeJobs);
 	const tab = $derived($detailTab);
 	const recipe = $derived(tab !== 'generations');
@@ -178,19 +204,6 @@
 	const cowriterModal = $derived(cowriterShowing && !split);
 
 	let editorSongId: string | null = null;
-
-	function usableAlbumPrimary(colors: Record<string, string>): string | null {
-		const primary = colors.primary;
-		if (typeof primary !== 'string') return null;
-		const value = primary.trim();
-		if (!value) return null;
-		try {
-			hexToRgb(value);
-		} catch {
-			return null;
-		}
-		return value;
-	}
 
 	$effect(() => {
 		void coverUrl;
@@ -616,7 +629,7 @@
 		try {
 			await deleteSong(songId);
 			removeSongFromList(songId);
-			backToAlbum();
+			backToCollection();
 			addUndoToast('Song deleted', {
 				label: 'Undo',
 				handler: async () => {
@@ -736,34 +749,34 @@
 					</h2>
 					{#if songRail}
 						<div class="song-rail">
-							<button
-								type="button"
-								class="song-neighbor"
-								data-hitbox="frequent"
-								data-hitbox-face
-								aria-label={SONG_PREVIOUS_LABEL}
-								disabled={!neighbors.previous}
-								onclick={() => neighbors.previous && selectNeighborSong(neighbors.previous)}
-							>
-								<Icon name="skip-back" size={14} />
-							</button>
-							<button type="button" class="song-album" onclick={() => backToAlbum()}>
-								{song.album_title}
-							</button>
-							<button
-								type="button"
-								class="song-neighbor"
-								data-hitbox="frequent"
-								data-hitbox-face
-								aria-label={SONG_NEXT_LABEL}
-								disabled={!neighbors.next}
-								onclick={() => neighbors.next && selectNeighborSong(neighbors.next)}
-							>
-								<Icon name="skip-forward" size={14} />
-							</button>
+							<Breadcrumb items={breadcrumbItems} />
+							<div class="song-neighbors">
+								<button
+									type="button"
+									class="song-neighbor"
+									data-hitbox="frequent"
+									data-hitbox-face
+									aria-label={SONG_PREVIOUS_LABEL}
+									disabled={!neighbors.previous}
+									onclick={() => neighbors.previous && selectNeighborSong(neighbors.previous)}
+								>
+									<Icon name="skip-back" size={14} />
+								</button>
+								<button
+									type="button"
+									class="song-neighbor"
+									data-hitbox="frequent"
+									data-hitbox-face
+									aria-label={SONG_NEXT_LABEL}
+									disabled={!neighbors.next}
+									onclick={() => neighbors.next && selectNeighborSong(neighbors.next)}
+								>
+									<Icon name="skip-forward" size={14} />
+								</button>
+							</div>
 						</div>
 					{:else}
-						<span class="song-album">{song.album_title}</span>
+						<Breadcrumb items={breadcrumbItems} />
 					{/if}
 				</div>
 			</div>
@@ -1193,11 +1206,23 @@
 
 	.song-rail {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
+		flex-direction: column;
+		align-items: flex-start;
 		gap: 0.35rem;
 		min-width: 0;
 		max-width: 100%;
+	}
+
+	.song-rail :global(.breadcrumb) {
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	.song-neighbors {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		flex-shrink: 0;
 	}
 
 	.song-neighbor {
@@ -1208,29 +1233,6 @@
 
 	.song-neighbor:disabled {
 		opacity: 0.4;
-	}
-
-	.song-album {
-		font-size: 0.87rem;
-		color: var(--text-muted);
-		min-width: 0;
-		white-space: normal;
-		overflow-wrap: anywhere;
-	}
-
-	button.song-album {
-		flex: 1 1 auto;
-		background: none;
-		border: none;
-		padding: 0;
-		text-align: left;
-		cursor: pointer;
-		font: inherit;
-		white-space: inherit;
-	}
-
-	button.song-album:hover {
-		color: var(--primary);
 	}
 
 	.detail-actions {

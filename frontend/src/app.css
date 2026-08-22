@@ -45,6 +45,7 @@
 	--font-body: 'Open Sans', Arial, sans-serif;
 	--player-height: calc(88px + env(safe-area-inset-bottom, 0px));
 	--header-height: 46px;
+	--rail-width: 264px;
 
 	/* Button tokens */
 	--btn-radius-pill: 16px;
@@ -82,18 +83,18 @@
 
 @media (max-width: 640px) {
 	:root {
-		--player-height: calc(144px + env(safe-area-inset-bottom, 0px));
+		--player-height: calc(64px + env(safe-area-inset-bottom, 0px));
 	}
 }
 
 @media (any-pointer: coarse) {
 	:root {
-		--player-height: calc(144px + env(safe-area-inset-bottom, 0px));
+		--player-height: calc(64px + env(safe-area-inset-bottom, 0px));
 	}
 }
 
 html[data-pointer='coarse'] {
-	--player-height: calc(144px + env(safe-area-inset-bottom, 0px));
+	--player-height: calc(64px + env(safe-area-inset-bottom, 0px));
 }
 
 [data-theme='light'] {

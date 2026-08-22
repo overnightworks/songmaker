@@ -1,24 +1,21 @@
 <script lang="ts">
 	import AgeStamp from './AgeStamp.svelte';
 	import SongNode from './SongNode.svelte';
-	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
+	import type { AlbumItem, SongItem } from '$lib/api/types';
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUMS_LOADING,
-		LIBRARY_RETRY_LABEL,
-		PLAYLIST_COVER_ALT_TYPE
+		LIBRARY_RETRY_LABEL
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
 	import type { AlbumSongsLoadState } from '$lib/stores/player';
-	import { hexToRgb } from '$lib/utils/contrast';
+	import { usableAlbumPrimary } from '$lib/utils/contrast';
 
 	interface Props {
-		album?: AlbumItem;
-		playlist?: PlaylistItem;
+		album: AlbumItem;
 		songs?: SongItem[];
 		expanded?: boolean;
 		selected: boolean;
-		variant?: 'card' | 'hit';
 		showCreatedAge?: boolean;
 		loadState?: AlbumSongsLoadState;
 		onselect: () => void;
@@ -27,25 +24,21 @@
 
 	let {
 		album,
-		playlist,
 		songs = [],
 		expanded = false,
 		selected,
-		variant = 'card',
 		showCreatedAge = true,
 		loadState,
 		onselect,
 		onretry
 	}: Props = $props();
 
-	const cardTitle = $derived(album?.title ?? playlist?.title ?? '');
-	const cardArtist = $derived(album?.artist ?? '');
-	const cardCount = $derived(album?.song_count ?? playlist?.entry_count ?? 0);
-	const cardCreatedAt = $derived(album?.created_at ?? playlist?.created_at ?? '');
-	const cardColors = $derived(album?.colors ?? {});
-	const cardCover = $derived(album?.cover ?? null);
-	const collectionKind = $derived(album ? 'album' : 'playlist');
-	const coverAltType = $derived(album ? ALBUM_COVER_ALT_TYPE : PLAYLIST_COVER_ALT_TYPE);
+	const cardTitle = $derived(album.title);
+	const cardArtist = $derived(album.artist);
+	const cardCount = $derived(album.song_count);
+	const cardCreatedAt = $derived(album.created_at);
+	const cardColors = $derived(album.colors ?? {});
+	const cardCover = $derived(album.cover ?? null);
 	const artFill = $derived(usableAlbumPrimary(cardColors));
 	const initials = $derived(titleInitials(cardTitle));
 	const coverUrl = $derived(cardCover?.card ?? null);
@@ -57,31 +50,11 @@
 	});
 
 	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
-	const coverAlt = $derived(`${coverAltType} ${cardTitle}`);
-
-	function usableAlbumPrimary(colors: Record<string, string>): string | null {
-		const primary = colors.primary;
-		if (typeof primary !== 'string') return null;
-		const value = primary.trim();
-		if (!value) return null;
-		try {
-			hexToRgb(value);
-		} catch {
-			return null;
-		}
-		return value;
-	}
+	const coverAlt = $derived(`${ALBUM_COVER_ALT_TYPE} ${cardTitle}`);
 </script>
 
 <div class="album-group">
-	<button
-		type="button"
-		class="album-card"
-		class:album-hit={variant === 'hit'}
-		class:selected
-		data-collection-kind={collectionKind}
-		onclick={onselect}
-	>
+	<button type="button" class="album-card album-hit" class:selected onclick={onselect}>
 		{#if showCover && coverUrl}
 			<span class="album-art">
 				<img src={coverUrl} alt={coverAlt} onerror={() => (coverFailed = true)} />

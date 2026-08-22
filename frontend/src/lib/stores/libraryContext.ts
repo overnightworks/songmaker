@@ -3,15 +3,9 @@ import { fetchAlbum } from '$lib/api/albums';
 import { ApiError } from '$lib/api/fetch';
 import type { LibrarySort } from '$lib/api/library';
 import { fetchSong } from '$lib/api/songs';
-import {
-	LIBRARY_DEFAULT_SECTION,
-	LIBRARY_HISTORY_KIND,
-	LIBRARY_SECTIONS,
-	LIBRARY_SHARES_HISTORY_SECTION,
-	type LibraryHistorySection,
-	type LibrarySection
-} from '$lib/constants';
-import { closeSharesInventory, openSharesInventory, sharesViewOpen } from '$lib/stores/shares';
+import { LIBRARY_DEFAULT_FILTER, LIBRARY_HISTORY_KIND, type LibraryFilter } from '$lib/constants';
+import { type OpenCollection, openCollection, setOpenCollection } from '$lib/stores/collection';
+import { closeSharesInventory, openSharesInventory } from '$lib/stores/shares';
 import { searchQuery } from '$lib/stores/filter';
 import {
 	libraryBrowse,
@@ -24,7 +18,6 @@ import {
 import {
 	albumList,
 	loadSongsForAlbum,
-	selectedAlbumId,
 	selectedGenerationId,
 	selectedSongId,
 	songList
@@ -33,18 +26,22 @@ import {
 	deselectPlaylist,
 	ensurePlaylistsLoaded,
 	loadPlaylistDetail,
-	selectedPlaylistDetail,
-	selectedPlaylistId
+	selectedPlaylistDetail
 } from '$lib/stores/playlists';
 import { CREATED_SORTS } from '$lib/utils/recency';
 
+// 'browse' shows the library wall (the LibraryWall component); 'detail' shows
+// whichever collection is currently open; 'create' shows the create form.
+// Song detail always wins over all three (see routes/+page.svelte).
 export type LibrarySurface = 'browse' | 'detail' | 'create';
 export type DetailTab = 'generations' | 'edit' | 'chat';
+
+type CollectionSnapshot = OpenCollection | null;
 
 export interface LibraryHistoryState {
 	kind: typeof LIBRARY_HISTORY_KIND;
 	index: number;
-	section: LibraryHistorySection;
+	filter: LibraryFilter;
 	surface: LibrarySurface;
 	query: string;
 	sort: LibrarySort;
@@ -52,43 +49,28 @@ export interface LibraryHistoryState {
 	songOffset: number;
 	searchCursor: string | null;
 	searchLoadedCount: number;
-	albumId: string | null;
+	collection: CollectionSnapshot;
 	songId: string | null;
 	generationId: string | null;
-	playlistId: string | null;
-	browseTrackAlbumId?: string | null;
-	expandedAlbumIds: string[];
 	scrollAnchor: number;
 	detailTab?: DetailTab;
 }
 
-export const librarySection = writable<LibrarySection>(LIBRARY_DEFAULT_SECTION);
+export const libraryFilter = writable<LibraryFilter>(LIBRARY_DEFAULT_FILTER);
 export const librarySurface = writable<LibrarySurface>('browse');
 export const detailTab = writable<DetailTab>('generations');
-export const expandedAlbumIds = writable<ReadonlySet<string>>(new Set());
 export const libraryScrollAnchor = writable(0);
-export const browseTrackAlbumId = writable<string | null>(null);
 
 const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail', 'create']);
 const DETAIL_TABS: ReadonlySet<DetailTab> = new Set(['generations', 'edit', 'chat']);
+const FILTERS: ReadonlySet<string> = new Set(['albums', 'playlists', 'shared']);
 
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
 let historyApplyGeneration = 0;
 
-const EMPTY_MODE_BAGS: Record<LibrarySection, LibraryHistoryState | null> = {
-	albums: null,
-	playlists: null
-};
-
-let modeBags: Record<LibrarySection, LibraryHistoryState | null> = { ...EMPTY_MODE_BAGS };
-
-export function isLibrarySection(value: unknown): value is LibrarySection {
-	return LIBRARY_SECTIONS.some((section) => section === value);
-}
-
-export function isLibraryHistorySection(value: unknown): value is LibraryHistorySection {
-	return isLibrarySection(value) || value === LIBRARY_SHARES_HISTORY_SECTION;
+export function isLibraryFilter(value: unknown): value is LibraryFilter {
+	return typeof value === 'string' && FILTERS.has(value);
 }
 
 export function isLibrarySort(value: unknown): value is LibrarySort {
@@ -102,7 +84,7 @@ export function isLibraryHistoryState(value: unknown): value is LibraryHistorySt
 	if (typeof state.index !== 'number' || !Number.isInteger(state.index) || state.index < 0) {
 		return false;
 	}
-	if (!isLibraryHistorySection(state.section)) return false;
+	if (!isLibraryFilter(state.filter)) return false;
 	if (!isLibrarySurface(state.surface)) return false;
 	if (typeof state.query !== 'string') return false;
 	if (!isLibrarySort(state.sort)) return false;
@@ -110,15 +92,9 @@ export function isLibraryHistoryState(value: unknown): value is LibraryHistorySt
 	if (typeof state.searchLoadedCount !== 'number' || state.searchLoadedCount < 0) return false;
 	if (typeof state.scrollAnchor !== 'number') return false;
 	if (!isIdOrNull(state.searchCursor)) return false;
-	if (!isIdOrNull(state.albumId)) return false;
+	if (!isCollectionSnapshot(state.collection)) return false;
 	if (!isIdOrNull(state.songId)) return false;
 	if (!isIdOrNull(state.generationId)) return false;
-	if (!isIdOrNull(state.playlistId)) return false;
-	if (state.browseTrackAlbumId !== undefined && !isIdOrNull(state.browseTrackAlbumId)) {
-		return false;
-	}
-	if (!Array.isArray(state.expandedAlbumIds)) return false;
-	if (!state.expandedAlbumIds.every((id) => typeof id === 'string')) return false;
 	if (state.detailTab !== undefined && !isDetailTab(state.detailTab)) return false;
 	return true;
 }
@@ -127,7 +103,7 @@ export function libraryRootState(): LibraryHistoryState {
 	return {
 		kind: LIBRARY_HISTORY_KIND,
 		index: 0,
-		section: LIBRARY_DEFAULT_SECTION,
+		filter: LIBRARY_DEFAULT_FILTER,
 		surface: 'browse',
 		query: '',
 		sort: 'newest',
@@ -135,27 +111,22 @@ export function libraryRootState(): LibraryHistoryState {
 		songOffset: 0,
 		searchCursor: null,
 		searchLoadedCount: 0,
-		albumId: null,
+		collection: null,
 		songId: null,
 		generationId: null,
-		playlistId: null,
-		browseTrackAlbumId: null,
-		expandedAlbumIds: [],
 		scrollAnchor: 0,
 		detailTab: 'generations'
 	};
 }
 
-export function libraryBrowseStateFrom(state: LibraryHistoryState): LibraryHistoryState {
+export function libraryWallStateFrom(state: LibraryHistoryState): LibraryHistoryState {
 	return {
 		...state,
 		index: 0,
 		surface: 'browse',
-		albumId: null,
+		collection: null,
 		songId: null,
-		generationId: null,
-		playlistId: null,
-		browseTrackAlbumId: null
+		generationId: null
 	};
 }
 
@@ -173,7 +144,7 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 	return {
 		kind: LIBRARY_HISTORY_KIND,
 		index,
-		section: get(sharesViewOpen) ? LIBRARY_SHARES_HISTORY_SECTION : get(librarySection),
+		filter: get(libraryFilter),
 		surface: get(librarySurface),
 		query,
 		sort: get(librarySort),
@@ -181,12 +152,9 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 		songOffset: browse.songOffset,
 		searchCursor: searchMatchesQuery ? search.nextCursor : null,
 		searchLoadedCount: searchMatchesQuery ? search.items.length : 0,
-		albumId: get(selectedAlbumId),
+		collection: get(openCollection),
 		songId: get(selectedSongId),
 		generationId: get(selectedGenerationId),
-		playlistId: get(selectedPlaylistId),
-		browseTrackAlbumId: get(browseTrackAlbumId),
-		expandedAlbumIds: [...get(expandedAlbumIds)],
 		scrollAnchor: get(libraryScrollAnchor),
 		detailTab: get(detailTab)
 	};
@@ -194,63 +162,35 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 
 export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
 	const generation = ++historyApplyGeneration;
-	if (state.section === LIBRARY_SHARES_HISTORY_SECTION) {
-		openSharesView();
-	} else {
-		closeSharesView();
-		librarySection.set(state.section);
-	}
-	if (state.section === 'playlists') {
-		syncLibrarySearch('');
-	}
+	if (state.filter === 'shared') openSharesInventory();
+	else closeSharesInventory();
+	libraryFilter.set(state.filter);
+	if (state.filter === 'playlists') syncLibrarySearch('');
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
 	detailTab.set(state.detailTab ?? 'generations');
-	expandedAlbumIds.set(new Set(state.expandedAlbumIds));
 	libraryScrollAnchor.set(state.scrollAnchor);
-	selectedAlbumId.set(state.albumId);
 	selectedSongId.set(state.songId);
 	selectedGenerationId.set(state.generationId);
-	browseTrackAlbumId.set(state.browseTrackAlbumId ?? null);
-	if (state.playlistId) {
-		try {
-			await loadPlaylistDetail(state.playlistId);
-		} catch (err) {
-			if (generation !== historyApplyGeneration) return false;
-			if (isNotFound(err)) deselectPlaylist();
-			else if (get(selectedPlaylistDetail)?.id !== state.playlistId) {
-				selectedPlaylistDetail.set(null);
-			}
-		}
-	} else {
-		deselectPlaylist();
-	}
+	await hydrateCollection(state.collection, generation);
 	if (generation !== historyApplyGeneration) return false;
-	if (state.section === 'playlists') {
+	if (state.filter === 'playlists') {
 		void ensurePlaylistsLoaded();
 	}
 	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
 	if (generation !== historyApplyGeneration) return false;
-	if (state.query.trim() && state.section !== 'playlists') {
+	if (state.query.trim() && state.filter !== 'playlists') {
 		await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
 	}
 	if (generation !== historyApplyGeneration) return false;
 	await hydrateSelectedResources(state, generation);
 	if (generation !== historyApplyGeneration) return false;
-	const albumIds = [
-		...new Set([
-			...(state.albumId ? [state.albumId] : []),
-			...(state.browseTrackAlbumId ? [state.browseTrackAlbumId] : []),
-			...state.expandedAlbumIds
-		])
-	];
-	if (albumIds.length > 0) {
-		await Promise.all(albumIds.map((albumId) => loadSongsForAlbum(albumId)));
+	if (state.collection?.kind === 'album') {
+		await loadSongsForAlbum(state.collection.id);
 	}
 	if (generation !== historyApplyGeneration) return false;
 	fallbackBrowseIfDetailGone(state.surface);
-	writeActiveModeBag(state);
 	return true;
 }
 
@@ -258,18 +198,43 @@ export function cancelLibraryHistoryApply(): void {
 	historyApplyGeneration += 1;
 }
 
+async function hydrateCollection(
+	collection: CollectionSnapshot,
+	generation: number
+): Promise<void> {
+	if (collection?.kind === 'playlist') {
+		try {
+			await loadPlaylistDetail(collection.id);
+		} catch (err) {
+			if (generation !== historyApplyGeneration) return;
+			if (isNotFound(err)) {
+				setOpenCollection(null);
+				selectedPlaylistDetail.set(null);
+			} else if (get(selectedPlaylistDetail)?.id !== collection.id) {
+				selectedPlaylistDetail.set(null);
+			}
+		}
+		return;
+	}
+	deselectPlaylist();
+	setOpenCollection(collection ?? null);
+}
+
 async function hydrateSelectedResources(
 	state: LibraryHistoryState,
 	generation: number
 ): Promise<void> {
-	if (state.albumId && !get(albumList).some((album) => album.id === state.albumId)) {
+	if (
+		state.collection?.kind === 'album' &&
+		!get(albumList).some((album) => album.id === state.collection?.id)
+	) {
 		try {
-			const album = await fetchAlbum(state.albumId);
+			const album = await fetchAlbum(state.collection.id);
 			if (generation !== historyApplyGeneration) return;
 			albumList.update((list) => upsertReplace(list, album));
 		} catch (err) {
 			if (generation !== historyApplyGeneration) return;
-			if (isNotFound(err)) selectedAlbumId.set(null);
+			if (isNotFound(err)) setOpenCollection(null);
 		}
 	}
 	if (!state.songId) return;
@@ -306,9 +271,8 @@ async function hydrateSongAlbum(albumId: string, generation: number): Promise<vo
 
 function fallbackBrowseIfDetailGone(intendedSurface: LibrarySurface): void {
 	if (intendedSurface !== 'detail') return;
-	if (get(selectedAlbumId) !== null) return;
+	if (get(openCollection) !== null) return;
 	if (get(selectedSongId) !== null) return;
-	if (get(selectedPlaylistId) !== null) return;
 	librarySurface.set('browse');
 }
 
@@ -326,103 +290,49 @@ export async function hydrateLibraryFromHistory(): Promise<boolean> {
 	return restoreLibraryBrowse(get(librarySort), 0, 0);
 }
 
-const EMPTY_SECTION_SCROLL: Record<LibraryHistorySection, number> = {
+const EMPTY_FILTER_SCROLL: Record<LibraryFilter, number> = {
 	albums: 0,
 	playlists: 0,
-	[LIBRARY_SHARES_HISTORY_SECTION]: 0
+	shared: 0
 };
 
-export const libraryScrollBySection = writable<Record<LibraryHistorySection, number>>({
-	...EMPTY_SECTION_SCROLL
+export const libraryScrollByFilter = writable<Record<LibraryFilter, number>>({
+	...EMPTY_FILTER_SCROLL
 });
 
-function currentScrollSlot(): LibraryHistorySection {
-	return get(sharesViewOpen) ? LIBRARY_SHARES_HISTORY_SECTION : get(librarySection);
-}
-
-function rememberLibraryScroll(slot: LibraryHistorySection): void {
-	libraryScrollBySection.update((anchors) => ({
+function rememberLibraryScroll(filter: LibraryFilter): void {
+	libraryScrollByFilter.update((anchors) => ({
 		...anchors,
-		[slot]: get(libraryScrollAnchor)
+		[filter]: get(libraryScrollAnchor)
 	}));
 }
 
-function restoreLibraryScroll(slot: LibraryHistorySection): void {
-	libraryScrollAnchor.set(get(libraryScrollBySection)[slot] ?? 0);
+function restoreLibraryScroll(filter: LibraryFilter): void {
+	libraryScrollAnchor.set(get(libraryScrollByFilter)[filter] ?? 0);
 }
 
-function showSharesView(open: boolean): void {
-	if (open === get(sharesViewOpen)) return;
-	const leaving = currentScrollSlot();
-	const entering = open ? LIBRARY_SHARES_HISTORY_SECTION : get(librarySection);
-	rememberLibraryScroll(leaving);
-	if (open) openSharesInventory();
-	else closeSharesInventory();
-	restoreLibraryScroll(entering);
-}
-
-export function openSharesView(): void {
-	showSharesView(true);
-}
-
-export function closeSharesView(): void {
-	showSharesView(false);
-}
-
-export function setLibrarySection(section: LibrarySection): LibraryHistoryState {
-	closeSharesView();
-	const previous = get(librarySection);
+export function setLibraryFilter(filter: LibraryFilter): LibraryHistoryState {
+	const previous = get(libraryFilter);
 	const index = libraryHistoryIndex();
-	rememberLibraryScroll(previous);
-	if (previous === section) {
-		restoreLibraryScroll(section);
-		if (section === 'playlists') {
-			void ensurePlaylistsLoaded();
-		}
+	if (previous === filter) {
 		return snapshotLibraryHistory(index);
 	}
-	rememberModeBag(previous);
-	const bag = modeSwitchState(section, index);
-	void applyLibraryHistory(bag);
-	return bag;
+	rememberLibraryScroll(previous);
+	if (filter === 'shared') openSharesInventory();
+	else closeSharesInventory();
+	libraryFilter.set(filter);
+	restoreLibraryScroll(filter);
+	if (filter === 'playlists') void ensurePlaylistsLoaded();
+	return snapshotLibraryHistory(index);
 }
 
 export function setLibrarySurface(surface: LibrarySurface): void {
 	librarySurface.set(surface);
 }
 
-export function hasLibrarySelection(): boolean {
-	return (
-		get(selectedAlbumId) !== null ||
-		get(selectedSongId) !== null ||
-		get(selectedGenerationId) !== null ||
-		get(selectedPlaylistId) !== null
-	);
-}
-
-export function toggleAlbumExpanded(albumId: string): void {
-	expandedAlbumIds.update((current) => {
-		const next = new Set(current);
-		if (next.has(albumId)) next.delete(albumId);
-		else next.add(albumId);
-		return next;
-	});
-	if (get(expandedAlbumIds).has(albumId)) void loadSongsForAlbum(albumId);
-}
-
-export function expandAlbum(albumId: string): void {
-	expandedAlbumIds.update((current) => {
-		if (current.has(albumId)) return current;
-		const next = new Set(current);
-		next.add(albumId);
-		return next;
-	});
-	void loadSongsForAlbum(albumId);
-}
-
 export function captureLibraryScroll(scrollTop: number): void {
 	libraryScrollAnchor.set(scrollTop);
-	rememberLibraryScroll(currentScrollSlot());
+	rememberLibraryScroll(get(libraryFilter));
 }
 
 export function albumIsExpanded(options: { searching: boolean; songHits: number }): boolean {
@@ -431,39 +341,17 @@ export function albumIsExpanded(options: { searching: boolean; songHits: number 
 
 export function resetLibraryContextForTests(): void {
 	historyApplyGeneration += 1;
-	librarySection.set(LIBRARY_DEFAULT_SECTION);
+	libraryFilter.set(LIBRARY_DEFAULT_FILTER);
 	librarySurface.set('browse');
 	detailTab.set('generations');
-	expandedAlbumIds.set(new Set());
 	libraryScrollAnchor.set(0);
-	browseTrackAlbumId.set(null);
-	libraryScrollBySection.set({ ...EMPTY_SECTION_SCROLL });
-	modeBags = { ...EMPTY_MODE_BAGS };
+	libraryScrollByFilter.set({ ...EMPTY_FILTER_SCROLL });
+	setOpenCollection(null);
 }
 
 function libraryHistoryIndex(): number {
 	const state = history.state;
 	return isLibraryHistoryState(state) ? state.index : 0;
-}
-
-function defaultModeBag(section: LibrarySection): LibraryHistoryState {
-	return { ...libraryRootState(), section };
-}
-
-function rememberModeBag(section: LibrarySection): void {
-	modeBags[section] = { ...snapshotLibraryHistory(libraryHistoryIndex()), section };
-}
-
-function modeSwitchState(section: LibrarySection, index: number): LibraryHistoryState {
-	return { ...(modeBags[section] ?? defaultModeBag(section)), index, section };
-}
-
-function writeActiveModeBag(state: LibraryHistoryState): void {
-	if (!isLibrarySection(state.section)) return;
-	modeBags[state.section] = {
-		...snapshotLibraryHistory(state.index),
-		section: state.section
-	};
 }
 
 function isLibrarySurface(value: unknown): value is LibrarySurface {
@@ -476,6 +364,16 @@ function isDetailTab(value: unknown): value is DetailTab {
 
 function isIdOrNull(value: unknown): value is string | null {
 	return value === null || typeof value === 'string';
+}
+
+function isCollectionSnapshot(value: unknown): value is CollectionSnapshot {
+	if (value === null) return true;
+	if (typeof value !== 'object') return false;
+	const collection = value as Record<string, unknown>;
+	return (
+		(collection.kind === 'album' || collection.kind === 'playlist') &&
+		typeof collection.id === 'string'
+	);
 }
 
 function upsertReplace<T extends { id: string }>(items: T[], item: T): T[] {

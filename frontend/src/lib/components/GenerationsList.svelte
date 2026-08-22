@@ -187,8 +187,17 @@
 		function onClick(): void {
 			overflowId = null;
 		}
+		function onKeydown(event: KeyboardEvent): void {
+			if (event.key !== 'Escape') return;
+			event.preventDefault();
+			overflowId = null;
+		}
 		document.addEventListener('click', onClick);
-		return () => document.removeEventListener('click', onClick);
+		document.addEventListener('keydown', onKeydown, true);
+		return () => {
+			document.removeEventListener('click', onClick);
+			document.removeEventListener('keydown', onKeydown, true);
+		};
 	});
 
 	async function handleBulkDelete(): Promise<void> {
@@ -440,6 +449,7 @@
 										<div
 											class="overflow-menu"
 											role="menu"
+											data-escape-overlay="true"
 											tabindex="-1"
 											onclick={(e) => e.stopPropagation()}
 											onkeydown={(e) => e.stopPropagation()}

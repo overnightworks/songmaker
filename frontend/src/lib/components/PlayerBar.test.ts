@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
-import { NOW_PLAYING_LABEL, NOW_PLAYING_NO_LYRICS } from '$lib/constants';
+import { NOW_PLAYING_LABEL, NOW_PLAYING_NO_LYRICS, RAIL_LIBRARY_LABEL } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { AlbumItem, PlaylistDetailItem } from '$lib/api/types';
 import {
@@ -13,6 +13,7 @@ import {
 	songList
 } from '$lib/stores/player';
 import * as playerStore from '$lib/stores/player';
+import { openCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
@@ -84,6 +85,9 @@ function playlistItem(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDeta
 				album_title: 'Nachtstrom',
 				artist: 'Artist',
 				generation_number: 1,
+				version_number: 1,
+				is_picked: false,
+				audio_duration: 180,
 				mp3_path: 'tide.mp3',
 				seed: 1,
 				model_mode: 'sft',
@@ -156,6 +160,7 @@ beforeEach(() => {
 	selectedAlbumId.set(null);
 	selectedSongId.set(null);
 	selectedPlaylistDetail.set(null);
+	openCollection.set(null);
 	playStartNotice.set('idle');
 });
 
@@ -169,9 +174,9 @@ afterEach(async () => {
 });
 
 describe('PlayerBar stream boundaries', () => {
-	it('keeps the existing Mix library start affordance available while idle', async () => {
+	it('names the library, never the take pool, as the idle Play target with no collection open', async () => {
 		queueContext.set({ type: 'library' });
-		selectedAlbumId.set(null);
+		openCollection.set(null);
 		selectedPlaylistDetail.set(null);
 		const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
 		component = mount(PlayerBar, { target });
@@ -179,40 +184,37 @@ describe('PlayerBar stream boundaries', () => {
 
 		expect(audioPlayer.current).toBeNull();
 		const play = target.querySelector<HTMLButtonElement>('button[aria-label="Play"]');
-		const trackInfo = target.querySelector<HTMLButtonElement>('button[aria-label="Play Mix"]');
 		expect(play?.disabled).toBe(false);
-		expect(trackInfo).not.toBeNull();
+		expect(target.querySelector('.track-title')?.textContent).toBe(RAIL_LIBRARY_LABEL);
 		play?.click();
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});
 
 	it('idle Play copy follows an open album interior', async () => {
-		selectedAlbumId.set('a1');
+		openCollection.set({ kind: 'album', id: 'a1' });
 		selectedSongId.set(null);
 		selectedPlaylistDetail.set(null);
 		albumList.set([albumItem()]);
 		vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
 		component = mount(PlayerBar, { target });
 		await tick();
-		expect(target.querySelector('button[aria-label="Play Nachtstrom"]')).not.toBeNull();
+		expect(target.querySelector('.track-title')?.textContent).toBe('Nachtstrom');
 		expect(target.textContent).toContain('Nachtstrom');
-		expect(target.querySelector('button[aria-label="Shuffle Nachtstrom"]')).not.toBeNull();
 	});
 
 	it('idle Play copy follows an open playlist interior', async () => {
-		selectedAlbumId.set(null);
+		openCollection.set({ kind: 'playlist', id: 'p1' });
 		selectedSongId.set(null);
 		selectedPlaylistDetail.set(playlistItem());
 		vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
 		component = mount(PlayerBar, { target });
 		await tick();
-		expect(target.querySelector('button[aria-label="Play Night Drive"]')).not.toBeNull();
+		expect(target.querySelector('.track-title')?.textContent).toBe('Night Drive');
 		expect(target.textContent).toContain('Night Drive');
-		expect(target.querySelector('button[aria-label="Shuffle Night Drive"]')).not.toBeNull();
 	});
 
 	it('pressing Play on an empty playlist shows the no-takes notice', async () => {
-		selectedAlbumId.set(null);
+		openCollection.set({ kind: 'playlist', id: 'p1' });
 		selectedSongId.set(null);
 		selectedPlaylistDetail.set(playlistItem({ entry_count: 0, entries: [] }));
 		component = mount(PlayerBar, { target });

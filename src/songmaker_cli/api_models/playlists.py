@@ -38,6 +38,9 @@ class PlaylistEntryResponse(BaseModel):
     album_title: str
     artist: str
     generation_number: int
+    version_number: int | None
+    is_picked: bool
+    audio_duration: int | None
     mp3_path: str
     seed: int | None
     model_mode: str
@@ -57,6 +60,9 @@ class PlaylistEntryResponse(BaseModel):
             album_title=album.title if album else "",
             artist=album.artist if album else "",
             generation_number=gen.generation_number,
+            version_number=gen.version.version_number if gen.version else None,
+            is_picked=gen.is_picked,
+            audio_duration=gen.version.audio_duration if gen.version else None,
             mp3_path=gen.mp3_path,
             seed=gen.seed,
             model_mode=gen.model_mode,

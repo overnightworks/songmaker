@@ -60,6 +60,7 @@ import {
 	retainRicherSong,
 	filteredSongs,
 	handlePlaybackEnded,
+	idlePlayTarget,
 	navigateToPlaying,
 	playGeneration,
 	toPlaybackInfo,
@@ -97,6 +98,8 @@ import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { ApiError } from '$lib/api/fetch';
 import { libraryTakePool, setLibraryTakePool } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { openCollection } from '$lib/stores/collection';
+import { RAIL_LIBRARY_LABEL } from '$lib/constants';
 
 async function rebuildStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
 	const rebuild = audioPlayer.onStreamRebuild;
@@ -187,6 +190,9 @@ function makePlaylistEntry(overrides: Partial<PlaylistEntryItem> = {}): Playlist
 		album_title: 'Album',
 		artist: 'Artist',
 		generation_number: 1,
+		version_number: 1,
+		is_picked: false,
+		audio_duration: 180,
 		mp3_path: 'a1/song_v1.mp3',
 		seed: 42,
 		model_mode: 'sft',
@@ -1171,6 +1177,7 @@ describe('native first play ignores stream settings', () => {
 	});
 
 	it('idle play on an empty playlist reports it like an empty pool', async () => {
+		openCollection.set({ kind: 'playlist', id: 'p1' });
 		selectedPlaylistDetail.set({
 			id: 'p1',
 			title: 'Night Drive',
@@ -1893,11 +1900,58 @@ describe('library take pool', () => {
 	});
 });
 
+describe('idlePlayTarget', () => {
+	const albums = [makeAlbum({ id: 'a1', title: 'Nachtstrom' })];
+	const playlist = {
+		id: 'p1',
+		title: 'Night Drive',
+		entry_count: 0,
+		is_shared: false,
+		share_slug: null,
+		created_at: '',
+		entries: []
+	};
+
+	it.each([
+		[
+			'none: falls back to the named library target',
+			null,
+			playlist,
+			{ type: 'library', label: RAIL_LIBRARY_LABEL }
+		],
+		[
+			'album: names the open album',
+			{ kind: 'album' as const, id: 'a1' },
+			playlist,
+			{ type: 'album', label: 'Nachtstrom', albumId: 'a1' }
+		],
+		[
+			'playlist: names the open playlist',
+			{ kind: 'playlist' as const, id: 'p1' },
+			playlist,
+			{ type: 'playlist', label: 'Night Drive' }
+		],
+		[
+			// A playlist whose detail failed to load (or hasn't loaded yet)
+			// has no title and nothing to natively play — fall back to the
+			// named library target instead of an empty label and dead Play.
+			'playlist: falls back to the library target when the detail failed to load',
+			{ kind: 'playlist' as const, id: 'p1' },
+			null,
+			{ type: 'library', label: RAIL_LIBRARY_LABEL }
+		]
+	])('%s', (_name, collection, playlistDetail, expected) => {
+		const target = idlePlayTarget({ collection, albums, playlist: playlistDetail });
+		expect(target).toEqual(expected);
+	});
+});
+
 describe('playIdleStart', () => {
 	beforeEach(() => {
 		selectedAlbumId.set(null);
 		selectedSongId.set(null);
 		selectedPlaylistDetail.set(null);
+		openCollection.set(null);
 		vi.mocked(fetchLibraryPoolQueue).mockResolvedValue(makePoolQueue());
 	});
 
@@ -1910,7 +1964,7 @@ describe('playIdleStart', () => {
 	it('starts the open album natively when album interior is selected with no song', async () => {
 		const song = makeSong({ generations: [makeGen({ is_picked: true })] });
 		songList.set([song]);
-		selectedAlbumId.set('a1');
+		openCollection.set({ kind: 'album', id: 'a1' });
 		await playIdleStart();
 		expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
 		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
@@ -1921,6 +1975,7 @@ describe('playIdleStart', () => {
 	});
 
 	it('starts the open playlist natively when playlist interior is selected', async () => {
+		openCollection.set({ kind: 'playlist', id: 'p1' });
 		selectedPlaylistDetail.set({
 			id: 'p1',
 			title: 'Night Drive',
@@ -1937,5 +1992,12 @@ describe('playIdleStart', () => {
 			expect.objectContaining({ songTitle: 'Listed' }),
 			{ restart: true }
 		);
+	});
+
+	it('falls back to the library pool when the open playlist detail failed to load', async () => {
+		openCollection.set({ kind: 'playlist', id: 'p1' });
+		selectedPlaylistDetail.set(null);
+		await playIdleStart();
+		expect(fetchLibraryPoolQueue).toHaveBeenCalled();
 	});
 });

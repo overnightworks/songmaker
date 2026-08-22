@@ -1,4 +1,4 @@
-import { mount, tick, unmount } from 'svelte';
+import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -7,13 +7,21 @@ import type {
 	PlaylistEntryItem,
 	SongItem
 } from '$lib/api/types';
-import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
+import {
+	HITBOX_COMPACT_PX,
+	HITBOX_FREQUENT_PX,
+	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
+	PLAYLIST_ENTRY_MOVE_UP_LABEL,
+	PLAYLIST_ENTRY_REMOVE_LABEL
+} from '$lib/constants';
 import { GENERATION_ACTIONS_KEY, type GenerationActions } from '$lib/contexts/generation-actions';
-import { librarySection, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
+import { openCollection } from '$lib/stores/collection';
 import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
-import { theme } from '$lib/stores/ui';
+import { currentUser, authLoading } from '$lib/stores/auth';
+import { closeSidebar, theme, toggleSidebar } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 vi.mock('$lib/api/library', () => ({
@@ -38,7 +46,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchPlaylists: vi.fn().mockResolvedValue([]),
 		fetchPlaylist: vi.fn(),
 		removeFromPlaylist: vi.fn().mockResolvedValue(undefined),
-		reorderPlaylistEntry: vi.fn().mockResolvedValue(undefined)
+		reorderPlaylistEntry: vi.fn().mockResolvedValue(undefined),
+		fetchCapabilities: vi.fn().mockResolvedValue({}),
+		checkSetupRequired: vi.fn()
 	};
 });
 vi.mock('$lib/api/queue-streams', () => ({
@@ -53,24 +63,56 @@ vi.mock('$lib/services/offline', () => ({
 	forgetPlaylistOfflineStream: vi.fn(),
 	loadSavedOfflinePlaylist: vi.fn().mockResolvedValue(null)
 }));
-vi.mock('$lib/stores/navigation', () => ({
-	selectAlbumOverview: vi.fn(),
-	selectLibrarySection: vi.fn(),
-	selectPlaylistView: vi.fn(),
-	selectSong: vi.fn(),
-	deselectPlaylistView: vi.fn(),
-	persistLibraryHistory: vi.fn()
-}));
+vi.mock('$lib/stores/navigation', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
+	return {
+		...actual,
+		backToCollection: vi.fn(),
+		openAlbum: vi.fn(),
+		openLibraryCreate: vi.fn(),
+		openLibraryWall: vi.fn(),
+		openPlaylist: vi.fn(),
+		selectLibraryFilter: vi.fn(),
+		selectSong: vi.fn(),
+		persistLibraryHistory: vi.fn()
+	};
+});
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
 }));
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn().mockResolvedValue(undefined),
+	afterNavigate: vi.fn()
+}));
+vi.mock('$app/environment', () => ({
+	browser: true,
+	dev: true
+}));
+vi.mock('$app/state', () => ({
+	page: { url: new URL('https://songmaker.test/') }
+}));
+vi.mock('$lib/stores/auth', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/stores/auth')>();
+	return {
+		...actual,
+		checkAuth: vi.fn(async () => {
+			const user = { id: 'u1', username: 'felix', role: 'user' as const };
+			actual.currentUser.set(user);
+			actual.authLoading.set(false);
+			return user;
+		})
+	};
+});
 
 import { removeFromPlaylist, reorderPlaylistEntry } from '$lib/api/client';
+import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
 import GenerationsList from './GenerationsList.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
-import SongList from './SongList.svelte';
+import LibraryWall from './LibraryWall.svelte';
+import PlayerBar from './PlayerBar.svelte';
 import ThemeToggle from './ThemeToggle.svelte';
+import Layout from '../../routes/+layout.svelte';
 
 type PointerKind = 'coarse' | 'fine';
 
@@ -80,16 +122,24 @@ const INVENTORY = [
 	{ name: 'keep', selector: '.keep-btn[data-hitbox="frequent"]' },
 	{
 		name: 'playlist-move-up',
-		selector: '.move-btn[data-hitbox="frequent"][aria-label$=" up"]'
+		selector: '.entry-overflow-item[data-hitbox="frequent"]',
+		text: PLAYLIST_ENTRY_MOVE_UP_LABEL
 	},
 	{
 		name: 'playlist-move-down',
-		selector: '.move-btn[data-hitbox="frequent"][aria-label$=" down"]'
+		selector: '.entry-overflow-item[data-hitbox="frequent"]',
+		text: PLAYLIST_ENTRY_MOVE_DOWN_LABEL
 	},
-	{ name: 'playlist-remove', selector: '.remove-btn[data-hitbox="frequent"]' },
-	{ name: 'new-song', selector: '[data-hitbox="frequent"][aria-label="New Song"]' },
-	{ name: 'new-playlist', selector: '[data-hitbox="frequent"][aria-label="New playlist"]' },
-	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' }
+	{
+		name: 'playlist-remove',
+		selector: '.entry-overflow-item[data-hitbox="frequent"]',
+		text: PLAYLIST_ENTRY_REMOVE_LABEL
+	},
+	{ name: 'new-album', selector: '[data-hitbox="frequent"][aria-label="New album"]' },
+	{ name: 'wall-tile-play', selector: '.wall-tile-play[data-hitbox="frequent"]' },
+	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' },
+	{ name: 'drawer-trigger', selector: '.drawer-trigger[data-hitbox="frequent"]' },
+	{ name: 'collection-menu', selector: '.menu-trigger[data-hitbox="frequent"]' }
 ] as const;
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -222,6 +272,9 @@ function playlistEntry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntr
 		album_title: 'Local Album',
 		artist: 'Artist',
 		generation_number: 1,
+		version_number: 1,
+		is_picked: false,
+		audio_duration: 180,
 		mp3_path: 'g1.mp3',
 		seed: 7,
 		model_mode: 'turbo',
@@ -272,10 +325,22 @@ function mockActions(): GenerationActions {
 	};
 }
 
-function requireButton(root: ParentNode, name: string, selector: string): HTMLButtonElement {
-	const el = root.querySelector<HTMLButtonElement>(selector);
-	if (!el) throw new Error(`${name} is missing (${selector})`);
+function requireButton(
+	root: ParentNode,
+	name: string,
+	selector: string,
+	text?: string
+): HTMLButtonElement {
+	const matches = Array.from(root.querySelectorAll<HTMLButtonElement>(selector));
+	const el = text === undefined ? matches[0] : matches.find((m) => m.textContent?.trim() === text);
+	if (!el) {
+		throw new Error(`${name} is missing (${selector}${text === undefined ? '' : ` "${text}"`})`);
+	}
 	return el;
+}
+
+function openEntryOverflowMenu(row: HTMLElement): void {
+	requireButton(row, 'entry-overflow-toggle', '.overflow-btn').click();
 }
 
 beforeEach(() => {
@@ -307,6 +372,22 @@ beforeEach(() => {
 	selectedPlaylistDetail.set(playlistDetail());
 	theme.set('dark');
 	document.documentElement.dataset.theme = 'dark';
+	vi.stubGlobal(
+		'matchMedia',
+		vi.fn(() => ({
+			matches: true,
+			media: '',
+			onchange: null,
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+			dispatchEvent: vi.fn()
+		}))
+	);
+	currentUser.set({ id: 'u1', username: 'felix', role: 'user' as const });
+	authLoading.set(false);
+	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 });
 
 afterEach(async () => {
@@ -316,9 +397,23 @@ afterEach(async () => {
 	resetLibrarySearchForTests();
 	resetLibraryContextForTests();
 	selectedPlaylistDetail.set(null);
+	currentUser.set(null);
+	closeSidebar();
+	openCollection.set(null);
+	vi.unstubAllGlobals();
 });
 
-async function renderInventory(): Promise<HTMLElement> {
+const layoutChildren = createRawSnippet(() => ({
+	render: () => `<div></div>`
+}));
+
+interface RenderedInventory {
+	root: HTMLElement;
+	genRoot: HTMLElement;
+	playlistPickerOnClose: ReturnType<typeof vi.fn>;
+}
+
+async function renderInventory(): Promise<RenderedInventory> {
 	const root = document.createElement('div');
 	document.body.append(root);
 
@@ -327,7 +422,10 @@ async function renderInventory(): Promise<HTMLElement> {
 	const playlistTarget = document.createElement('div');
 	const songTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
-	root.append(themeTarget, genTarget, playlistTarget, songTarget, pickerTarget);
+	const layoutTarget = document.createElement('div');
+	root.append(themeTarget, genTarget, playlistTarget, songTarget, pickerTarget, layoutTarget);
+
+	const playlistPickerOnClose = vi.fn();
 
 	mounted.push(mount(ThemeToggle, { target: themeTarget }));
 	mounted.push(
@@ -338,14 +436,20 @@ async function renderInventory(): Promise<HTMLElement> {
 		})
 	);
 	mounted.push(mount(PlaylistDetailView, { target: playlistTarget }));
-	mounted.push(mount(SongList, { target: songTarget, props: { onNewSong: vi.fn() } }));
+	mounted.push(mount(LibraryWall, { target: songTarget, props: { oncreate: vi.fn() } }));
 	mounted.push(
-		mount(PlaylistPicker, { target: pickerTarget, props: { onselect: vi.fn(), onclose: vi.fn() } })
+		mount(PlaylistPicker, {
+			target: pickerTarget,
+			props: { onselect: vi.fn(), onclose: playlistPickerOnClose }
+		})
 	);
+	mounted.push(mount(Layout, { target: layoutTarget, props: { children: layoutChildren } }));
 	await tick();
-	librarySection.set('playlists');
+	await Promise.resolve();
 	await tick();
-	return root;
+	toggleSidebar();
+	await tick();
+	return { root, genRoot: genTarget, playlistPickerOnClose };
 }
 
 describe('frequent action hitboxes', () => {
@@ -359,11 +463,22 @@ describe('frequent action hitboxes', () => {
 	});
 
 	it('names every frequent-action target and measures coarse and fine pointers', async () => {
-		const root = await renderInventory();
+		const { root } = await renderInventory();
+		const middleRow = root.querySelectorAll('.entry-row')[1];
+		if (!(middleRow instanceof HTMLElement)) {
+			throw new Error('playlist-move-up is missing a middle-row neighbor');
+		}
+		openEntryOverflowMenu(middleRow);
+		await tick();
 		const found: Array<{ name: string; el: HTMLButtonElement }> = [];
 
 		for (const target of INVENTORY) {
-			const el = requireButton(root, target.name, target.selector);
+			const el = requireButton(
+				root,
+				target.name,
+				target.selector,
+				'text' in target ? target.text : undefined
+			);
 			expect(el.tagName, `${target.name} is a button`).toBe('BUTTON');
 			found.push({ name: target.name, el });
 		}
@@ -385,17 +500,14 @@ describe('frequent action hitboxes', () => {
 		const siblingGroups: Array<Array<{ name: string; el: HTMLButtonElement }>> = [
 			found.filter((item) => item.name === 'pick' || item.name === 'keep')
 		];
-		const middleRow = root.querySelectorAll('.entry-row')[1];
-		if (!(middleRow instanceof HTMLElement)) {
-			throw new Error('playlist-move-up is missing a middle-row neighbor');
-		}
 		siblingGroups.push([
 			{
 				name: 'playlist-move-up',
 				el: requireButton(
 					middleRow,
 					'playlist-move-up',
-					'.move-btn[data-hitbox="frequent"][aria-label$=" up"]'
+					'.entry-overflow-item[data-hitbox="frequent"]',
+					PLAYLIST_ENTRY_MOVE_UP_LABEL
 				)
 			},
 			{
@@ -403,7 +515,8 @@ describe('frequent action hitboxes', () => {
 				el: requireButton(
 					middleRow,
 					'playlist-move-down',
-					'.move-btn[data-hitbox="frequent"][aria-label$=" down"]'
+					'.entry-overflow-item[data-hitbox="frequent"]',
+					PLAYLIST_ENTRY_MOVE_DOWN_LABEL
 				)
 			}
 		]);
@@ -425,24 +538,54 @@ describe('frequent action hitboxes', () => {
 		}
 	});
 
+	it('sizes the new-playlist create action to the frequent hitbox on the Playlists filter', async () => {
+		const { root } = await renderInventory();
+		libraryFilter.set('playlists');
+		await tick();
+		const newPlaylistBtn = requireButton(
+			root,
+			'new-playlist',
+			'[data-hitbox="frequent"][aria-label="New playlist"]'
+		);
+
+		setPointer('coarse');
+		const coarse = minBox(newPlaylistBtn, 'new-playlist');
+		expect(coarse.width).toBe(HITBOX_FREQUENT_PX);
+		expect(coarse.height).toBe(HITBOX_FREQUENT_PX);
+
+		setPointer('fine');
+		const fine = minBox(newPlaylistBtn, 'new-playlist');
+		expect(fine.width).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+		expect(fine.height).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+	});
+
 	it('keeps pick, keep, reorder, and remove on the same button hitbox for pointer and keyboard', async () => {
-		const root = await renderInventory();
+		const { root } = await renderInventory();
 		const pickBtn = requireButton(root, 'pick', '.pick-btn[data-hitbox="frequent"]');
 		const keepBtn = requireButton(root, 'keep', '.keep-btn[data-hitbox="frequent"]');
+		const secondRow = root.querySelectorAll('.entry-row')[1];
+		if (!(secondRow instanceof HTMLElement)) {
+			throw new Error('Second Track row is missing');
+		}
+		openEntryOverflowMenu(secondRow);
+		await tick();
 		const upBtn = requireButton(
-			root,
+			secondRow,
 			'playlist-move-up',
-			'.move-btn[data-hitbox="frequent"][aria-label="Move Second Track up"]'
+			'.entry-overflow-item[data-hitbox="frequent"]',
+			PLAYLIST_ENTRY_MOVE_UP_LABEL
 		);
 		const downBtn = requireButton(
-			root,
+			secondRow,
 			'playlist-move-down',
-			'.move-btn[data-hitbox="frequent"][aria-label="Move Second Track down"]'
+			'.entry-overflow-item[data-hitbox="frequent"]',
+			PLAYLIST_ENTRY_MOVE_DOWN_LABEL
 		);
 		const removeBtn = requireButton(
-			root,
+			secondRow,
 			'playlist-remove',
-			'.remove-btn[data-hitbox="frequent"][aria-label="Remove Second Track from playlist"]'
+			'.entry-overflow-item[data-hitbox="frequent"]',
+			PLAYLIST_ENTRY_REMOVE_LABEL
 		);
 		const themeBtn = requireButton(root, 'theme-toggle', '[aria-label="Toggle theme"]');
 
@@ -460,12 +603,83 @@ describe('frequent action hitboxes', () => {
 		upBtn.click();
 		await tick();
 		expect(reorderPlaylistEntry).toHaveBeenCalled();
-		removeBtn.click();
+
+		openEntryOverflowMenu(secondRow);
+		await tick();
+		const removeBtnAfterMove = requireButton(
+			secondRow,
+			'playlist-remove',
+			'.entry-overflow-item[data-hitbox="frequent"]',
+			PLAYLIST_ENTRY_REMOVE_LABEL
+		);
+		removeBtnAfterMove.click();
 		await tick();
 		expect(removeFromPlaylist).toHaveBeenCalled();
 
 		themeBtn.click();
 		await tick();
 		expect(document.documentElement.dataset.theme).toBe('light');
+	});
+});
+
+describe('PlayerBar mobile transport', () => {
+	// jsdom in this project's Vitest setup does not apply Svelte's scoped
+	// component <style> (confirmed empirically: getComputedStyle never
+	// reflects it here, even for rules that have long passed elsewhere in
+	// this file via the manually injected [data-hitbox] stylesheet), so the
+	// 44px mobile play-button rule cannot be asserted by computed style in
+	// this suite. What jsdom *can* verify is the wiring that switches the
+	// mobile layout on: the single `.mobile-transport` class the component
+	// derives from `subscribeCompactLayout`. The 44px value itself is a
+	// visual-review item (see docs/architecture.md's mobile bar contract).
+	it('applies the mobile transport layout only when the layout is compact', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlayerBar, { target }));
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(target.querySelector('.player-bar.mobile-transport')).not.toBeNull();
+	});
+});
+
+describe('Escape yields to an open popover before the global one-level-up shortcut', () => {
+	beforeEach(() => {
+		openCollection.set({ kind: 'album', id: 'a-local' });
+		vi.mocked(openLibraryWall).mockClear();
+		vi.mocked(backToCollection).mockClear();
+	});
+
+	function pressEscape(): void {
+		document.body.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+		);
+	}
+
+	it('closes the PlaylistPicker and does not run the global one-level-up navigation', async () => {
+		const { playlistPickerOnClose } = await renderInventory();
+
+		pressEscape();
+		await tick();
+
+		expect(playlistPickerOnClose).toHaveBeenCalledTimes(1);
+		expect(openLibraryWall).not.toHaveBeenCalled();
+		expect(backToCollection).not.toHaveBeenCalled();
+	});
+
+	it('closes the take overflow menu and does not run the global one-level-up navigation', async () => {
+		const { genRoot } = await renderInventory();
+		const overflowBtn = requireButton(genRoot, 'take-overflow', '.overflow-btn');
+		overflowBtn.click();
+		await tick();
+		expect(genRoot.querySelector('.overflow-menu')).not.toBeNull();
+
+		pressEscape();
+		await tick();
+
+		expect(genRoot.querySelector('.overflow-menu')).toBeNull();
+		expect(openLibraryWall).not.toHaveBeenCalled();
+		expect(backToCollection).not.toHaveBeenCalled();
 	});
 });

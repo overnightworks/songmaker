@@ -22,8 +22,8 @@ import SettingsLayout from './+layout.svelte';
 const VIEWPORT_PX = 320;
 const ADMIN = { id: 'u1', username: 'felix', role: 'admin' as const };
 const USER = { id: 'u2', username: 'jane', role: 'user' as const };
-const ADMIN_SECTIONS = ['Generation', 'Playback', 'Account', 'Admin', 'Cleanup', 'Legal'];
-const USER_SECTIONS = ['Generation', 'Playback', 'Account', 'Legal'];
+const ADMIN_SECTIONS = ['Generation', 'Playback', 'Voices', 'Account', 'Admin', 'Cleanup', 'Legal'];
+const USER_SECTIONS = ['Generation', 'Playback', 'Voices', 'Account', 'Legal'];
 
 let mounted: ReturnType<typeof mount> | undefined;
 const children = createRawSnippet(() => ({
@@ -146,6 +146,7 @@ describe('settings layout', () => {
 		expect(links.map((link) => link.getAttribute('href'))).toEqual([
 			'/settings/generation',
 			'/settings/playback',
+			'/settings/voices',
 			'/settings/account',
 			'/settings/users',
 			'/settings/cleanup',
@@ -154,5 +155,13 @@ describe('settings layout', () => {
 		expect(target.querySelector('.nav-link.active')?.getAttribute('href')).toBe(
 			'/settings/generation'
 		);
+	});
+
+	it('marks Voices current when the URL is /settings/voices', async () => {
+		pageState.url = new URL('https://songmaker.test/settings/voices');
+		const target = await renderLayout(false);
+		const active = target.querySelector('.nav-link.active');
+		expect(active?.getAttribute('href')).toBe('/settings/voices');
+		expect(active?.textContent?.trim()).toBe('Voices');
 	});
 });

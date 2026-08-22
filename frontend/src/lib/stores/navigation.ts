@@ -1,4 +1,4 @@
-import { derived, get } from 'svelte/store';
+import { get } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { fetchAlbum } from '$lib/api/albums';
@@ -6,8 +6,8 @@ import {
 	selectedSongId,
 	selectedGenerationId,
 	selectedAlbumId,
+	selectedSong,
 	selectSong as playerSelectSong,
-	selectAlbum as playerSelectAlbum,
 	selectGenerationInSidebar as playerSelectGeneration,
 	clearGenerationSelection as playerClearGeneration,
 	ensureGenerationsLoaded,
@@ -17,37 +17,26 @@ import {
 } from '$lib/stores/player';
 import {
 	deselectPlaylist as storeDeselectPlaylist,
-	selectPlaylist as storeSelectPlaylist,
-	selectedPlaylistId
+	loadPlaylistDetail
 } from '$lib/stores/playlists';
+import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
 import { closeSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
-import {
-	LIBRARY_BROWSE_WORKSPACE_AREAS,
-	LIBRARY_DETAIL_WORKSPACE_AREAS,
-	LIBRARY_KEEP_BROWSE_CLASS,
-	LIBRARY_SONG_WORKSPACE_AREAS,
-	type LibrarySection
-} from '$lib/constants';
+import type { LibraryFilter } from '$lib/constants';
 import {
 	applyLibraryHistory,
-	browseTrackAlbumId,
 	cancelLibraryHistoryApply,
-	closeSharesView,
 	detailTab,
-	expandAlbum,
 	isLibraryHistoryState,
-	libraryBrowseStateFrom,
 	libraryHistoryUrl,
-	libraryRootState,
-	librarySection,
 	librarySurface,
-	setLibrarySection,
+	libraryRootState,
+	libraryWallStateFrom,
+	setLibraryFilter,
 	setLibrarySurface,
 	snapshotLibraryHistory,
 	type DetailTab,
-	type LibraryHistoryState,
-	type LibrarySurface
+	type LibraryHistoryState
 } from '$lib/stores/libraryContext';
 
 export type { DetailTab };
@@ -85,10 +74,9 @@ function pushLibraryHistory(): void {
 				songOffset: leaving.songOffset,
 				searchCursor: leaving.searchCursor,
 				searchLoadedCount: leaving.searchLoadedCount,
-				expandedAlbumIds: leaving.expandedAlbumIds,
 				query: leaving.query,
 				sort: leaving.sort,
-				section: leaving.section
+				filter: leaving.filter
 			},
 			'',
 			urlFromState(current)
@@ -98,8 +86,8 @@ function pushLibraryHistory(): void {
 	history.pushState(next, '', urlFromState(next));
 }
 
-export function selectLibrarySection(section: LibrarySection): void {
-	const next = setLibrarySection(section);
+export function selectLibraryFilter(filter: LibraryFilter): void {
+	const next = setLibraryFilter(filter);
 	if (suppressPush) return;
 	history.replaceState(next, '', urlFromState(next));
 }
@@ -112,77 +100,84 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 	return pathname === '/';
 }
 
-export function selectAlbumOverview(albumId: string): void {
-	closeSharesView();
+// The rail context (and every other "song open" entry point — search hits,
+// ?song= deep links, history restore) never leaves the rail empty: whenever
+// the selected song's album is not the open collection, the collection
+// follows the song. Opening a collection explicitly (openAlbum/openPlaylist)
+// is unaffected — this only reacts to a *song* becoming current.
+function ensureCollectionMatchesSong(song: SongItem): void {
+	const current = get(openCollection);
+	if (current?.kind === 'album' && current.id === song.album_id) return;
+	setOpenCollection({ kind: 'album', id: song.album_id });
+}
+
+selectedSong.subscribe((song) => {
+	if (!song) return;
+	ensureCollectionMatchesSong(song);
+});
+
+export function openAlbum(albumId: string): void {
 	storeDeselectPlaylist();
-	if (get(librarySection) === 'playlists') {
-		playerSelectAlbum(albumId);
-		browseTrackAlbumId.set(null);
-	} else {
-		browseTrackAlbumId.set(albumId);
-		if (get(selectedSongId) === null) {
-			selectedAlbumId.set(albumId);
-		}
-	}
-	expandAlbum(albumId);
+	setOpenCollection({ kind: 'album', id: albumId });
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
+	void loadSongsForAlbum(albumId);
 	setLibrarySurface('detail');
 	closeSidebar();
 	pushLibraryHistory();
 }
 
-export function deselectAlbum(): void {
-	goBack();
+export function openPlaylist(playlistId: string): void {
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
+	void loadPlaylistDetail(playlistId);
+	setLibrarySurface('detail');
+	closeSidebar();
+	pushLibraryHistory();
 }
 
-export function backToAlbum(): void {
-	const songId = get(selectedSongId);
-	const song = songId ? get(songList).find((item) => item.id === songId) : undefined;
-	const albumId = song?.album_id ?? get(selectedAlbumId) ?? null;
+// The rail context's header and the collection crumb in a song's breadcrumb
+// share this: a song open inside the collection means "back to the
+// collection"; otherwise the collection is already the destination, so
+// re-opening it is a no-op that still refreshes its history entry.
+export function openCollectionEntry(collection: OpenCollection): void {
+	if (get(selectedSongId) !== null) {
+		backToCollection();
+		return;
+	}
+	if (collection.kind === 'album') openAlbum(collection.id);
+	else openPlaylist(collection.id);
+}
+
+export function backToCollection(): void {
 	suppressPush = true;
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	openTakesSurface();
-	if (albumId) {
-		playerSelectAlbum(albumId);
-		if (get(librarySection) === 'albums') {
-			browseTrackAlbumId.set(albumId);
-		} else {
-			browseTrackAlbumId.set(null);
-		}
-		setLibrarySurface('detail');
-		void loadSongsForAlbum(albumId);
-	} else {
-		browseTrackAlbumId.set(null);
-		setLibrarySurface('browse');
-	}
+	setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
 	suppressPush = false;
 	replaceLibraryHistory();
 }
 
 export function openLibraryCreate(): void {
 	setLibrarySurface('create');
+	closeSidebar();
 	pushLibraryHistory();
 }
 
-export function libraryKeepsBrowseColumn(input: {
-	surface: LibrarySurface;
-	section: LibrarySection;
-	sharesOpen: boolean;
-}): boolean {
-	return input.surface === 'detail' && input.section === 'albums' && !input.sharesOpen;
-}
-
-export function libraryWorkspaceGrid(input: { hasDetail: boolean; keepBrowse: boolean }): {
-	className: string;
-	areas: string;
-} {
-	if (input.hasDetail && input.keepBrowse) {
-		return { className: LIBRARY_KEEP_BROWSE_CLASS, areas: LIBRARY_SONG_WORKSPACE_AREAS };
+// The rail's "Library" link: leaves the open song (if any) but keeps the
+// open collection in the rail context (GitLab-style — the context persists
+// until another collection replaces it), and always pushes a fresh history
+// entry so the browser back button returns to whatever was open before.
+export async function openLibraryWall(): Promise<void> {
+	if (!isLibraryWorkspacePath(window.location.pathname)) {
+		await goto(resolve('/'));
 	}
-	if (input.hasDetail) {
-		return { className: '', areas: LIBRARY_DETAIL_WORKSPACE_AREAS };
-	}
-	return { className: '', areas: LIBRARY_BROWSE_WORKSPACE_AREAS };
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
+	setLibrarySurface('browse');
+	closeSidebar();
+	pushLibraryHistory();
 }
 
 export interface AlbumTrackNeighbors {
@@ -190,7 +185,7 @@ export interface AlbumTrackNeighbors {
 	next: SongItem | null;
 }
 
-function compareAlbumTracks(a: SongItem, b: SongItem): number {
+export function compareAlbumTracks(a: SongItem, b: SongItem): number {
 	if (a.track_number !== b.track_number) return a.track_number - b.track_number;
 	return a.id.localeCompare(b.id);
 }
@@ -239,19 +234,26 @@ function applySelectedSong(
 	pushLibraryHistory();
 }
 
-function selectedSongHistoryMode(): 'stack' | 'replace' {
-	const songId = get(selectedSongId);
-	if (get(librarySurface) !== 'detail' || songId === null) return 'stack';
-	const trackAlbumId = get(browseTrackAlbumId);
-	if (!trackAlbumId) return 'replace';
-	const song = get(songList).find((item) => item.id === songId);
-	if (!song || song.album_id !== trackAlbumId) return 'stack';
-	return 'replace';
+// Opening a song from the album interior (no song selected yet) always
+// pushes — it changes the visible surface from the track list to the song
+// editor. Once a song is open, moving to another song already inside the
+// same open collection (list clicks, previous/next) replaces the current
+// history entry, like selectNeighborSong. Selecting a song outside the open
+// collection (search hit, deep link, a different collection) pushes, since
+// it changes the rail context.
+function selectSongHistoryMode(
+	songId: string,
+	knownSong: SongItem | undefined
+): 'stack' | 'replace' {
+	if (get(selectedSongId) === null) return 'stack';
+	const collection = get(openCollection);
+	if (collection?.kind !== 'album') return 'stack';
+	const song = get(songList).find((item) => item.id === songId) ?? knownSong;
+	return song?.album_id === collection.id ? 'replace' : 'stack';
 }
 
 export function selectSong(songId: string, knownSong?: SongItem): void {
-	const historyMode = selectedSongHistoryMode();
-	applySelectedSong(songId, knownSong, historyMode, historyMode === 'replace' ? 'keep' : 'takes');
+	applySelectedSong(songId, knownSong, selectSongHistoryMode(songId, knownSong), 'takes');
 }
 
 export function selectNeighborSong(song: SongItem): void {
@@ -270,21 +272,6 @@ function hydrateSongIntoLibrary(song: SongItem): void {
 			);
 		})
 		.catch(() => undefined);
-}
-
-export function selectPlaylistView(playlistId: string): void {
-	playerSelectAlbum(null);
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	browseTrackAlbumId.set(null);
-	storeSelectPlaylist(playlistId);
-	setLibrarySurface('detail');
-	closeSidebar();
-	pushLibraryHistory();
-}
-
-export function deselectPlaylistView(): void {
-	goBack();
 }
 
 export function deselectSong(): void {
@@ -332,7 +319,7 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 	if (!isLibraryWorkspacePath(window.location.pathname)) {
 		await goto(resolve('/'));
 	}
-	applySelectedSong(song.id, song, selectedSongHistoryMode(), 'takes');
+	applySelectedSong(song.id, song, 'stack', 'takes');
 	selectedGenerationId.set(generationId);
 	persistLibraryHistory();
 }
@@ -348,11 +335,6 @@ export function goBack(): void {
 		replaceLibraryHistory();
 		return;
 	}
-	if (get(librarySurface) === 'browse' && browseSelectionFitsActiveMode()) {
-		setLibrarySurface('detail');
-		replaceLibraryHistory();
-		return;
-	}
 	const state = history.state;
 	if (isLibraryHistoryState(state) && state.index > 0) {
 		history.back();
@@ -360,7 +342,7 @@ export function goBack(): void {
 	}
 	const current = isLibraryHistoryState(state) ? state : snapshotLibraryHistory(0);
 	suppressPush = true;
-	void applyLibraryHistory(libraryBrowseStateFrom(current));
+	void applyLibraryHistory(libraryWallStateFrom(current));
 	openTakesSurface();
 	setLibrarySurface('browse');
 	suppressPush = false;
@@ -412,31 +394,4 @@ export function initNavigation(): () => void {
 export function resetNavigationForTests(): void {
 	suppressPush = false;
 	openTakesSurface();
-}
-
-export const canGoBack = derived(
-	[
-		selectedSongId,
-		selectedGenerationId,
-		selectedAlbumId,
-		selectedPlaylistId,
-		librarySurface,
-		librarySection
-	],
-	([$songId, $genId, $albumId, $playlistId, $surface, $section]) => {
-		if ($surface === 'create') return true;
-		if ($section === 'playlists') return $playlistId !== null || $surface === 'detail';
-		return $songId !== null || $genId !== null || $albumId !== null || $surface === 'detail';
-	}
-);
-
-function browseSelectionFitsActiveMode(): boolean {
-	if (get(librarySection) === 'playlists') {
-		return get(selectedPlaylistId) !== null;
-	}
-	return (
-		get(selectedAlbumId) !== null ||
-		get(selectedSongId) !== null ||
-		get(selectedGenerationId) !== null
-	);
 }

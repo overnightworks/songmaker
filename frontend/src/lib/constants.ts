@@ -19,9 +19,6 @@ export const LIBRARY_QUEUE_PLAY_DETAIL = 'Play';
 export const SHUFFLE_SCOPE_PLAYLIST = 'this playlist';
 export const SHUFFLE_SCOPE_ALBUM = 'this album';
 export const SHUFFLE_SCOPE_LIBRARY = 'all albums';
-export const LIBRARY_POOL_HELP =
-	'Mix: Picks and Keeps. Picks: the album take. Keeps: favorites, more than one per song. All: every playable take.';
-export const LIBRARY_POOL_HELP_LABEL = 'What Mix Picks Keeps All mean';
 
 export const QUEUE_STREAM_UNPLAYABLE_START_DETAIL = 'Requested take is not playable';
 
@@ -67,7 +64,11 @@ export const TAKE_FROM_RECIPE_PREFIX = 'from Recipe';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const LIBRARY_SEARCH_PLACEHOLDER = 'Search albums and songs';
+export const LIBRARY_PLAYLISTS_SEARCH_PLACEHOLDER = 'Search playlists';
+export const LIBRARY_SHARED_SEARCH_PLACEHOLDER = 'Search shared';
 export const LIBRARY_SEARCH_EMPTY = 'No albums or songs match';
+export const LIBRARY_PLAYLISTS_SEARCH_EMPTY = 'No playlists match';
+export const LIBRARY_SHARED_SEARCH_EMPTY = 'No shared items match';
 export const LIBRARY_SEARCH_LOADING = 'Searching…';
 export const LIBRARY_SEARCH_ERROR = 'Search failed';
 export const LIBRARY_RETRY_LABEL = 'Retry';
@@ -88,7 +89,6 @@ export const ALBUM_ART_EMPTY_INITIALS = '?';
 export const ALBUM_ART_INITIAL_COUNT = 2;
 export const ALBUM_COVER_ACCEPT = 'image/jpeg,image/png';
 export const ALBUM_COVER_ALT_TYPE = 'Album';
-export const PLAYLIST_COVER_ALT_TYPE = 'Playlist';
 export const ALBUM_COVER_UPLOAD_LABEL = 'Upload album cover';
 export const ALBUM_COVER_REPLACE_LABEL = 'Replace album cover';
 export const ALBUM_COVER_REMOVE_LABEL = 'Remove album cover';
@@ -96,32 +96,53 @@ export const SONG_COVER_ALT_TYPE = 'Song';
 export const SONG_COVER_UPLOAD_LABEL = 'Upload song cover';
 export const SONG_COVER_REPLACE_LABEL = 'Replace song cover';
 export const SONG_COVER_REMOVE_LABEL = 'Remove song cover';
-export const LIBRARY_KEEP_BROWSE_CLASS = 'keep-browse';
-export const LIBRARY_SONG_WORKSPACE_AREAS = 'nav browse detail';
-export const LIBRARY_DETAIL_WORKSPACE_AREAS = 'nav detail';
-export const LIBRARY_BROWSE_WORKSPACE_AREAS = 'nav browse';
 export const SONG_PREVIOUS_LABEL = 'Previous song';
 export const SONG_NEXT_LABEL = 'Next song';
 
 export const SETTINGS_NAV_LABEL = 'Settings sections';
 export const ADMIN_TABS_LABEL = 'Admin sections';
 
-export const LIBRARY_SECTIONS = ['albums', 'playlists'] as const;
-export type LibrarySection = (typeof LIBRARY_SECTIONS)[number];
-export const LIBRARY_DEFAULT_SECTION: LibrarySection = 'albums';
-export const LIBRARY_SECTION_LABELS: Record<LibrarySection, string> = {
-	albums: 'Studio',
-	playlists: 'Listen'
+export const COLLECTION_MENU_LABEL = 'More';
+export const COLLECTION_MENU_CLOSE_LABEL = 'Close menu';
+export const COLLECTION_MENU_SHARE_PREFIX = 'Share';
+export const COLLECTION_MENU_DELETE_PREFIX = 'Delete';
+export const COLLECTION_MENU_COVER_LABEL = 'Cover…';
+export const COLLECTION_MENU_COVER_REMOVE_LABEL = 'Remove cover';
+export const COLLECTION_MENU_RENAME_LABEL = 'Rename';
+export const COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
+export const COLLECTION_MENU_SAVE_OFFLINE_LABEL = 'Save offline';
+export const COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL = 'Saving…';
+export const COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL = 'Saved offline · Remove';
+
+export const RAIL_LIBRARY_LABEL = 'Library';
+export const RAIL_SETTINGS_LABEL = 'Settings';
+export const RAIL_SUMMARY_LOADING = '…';
+export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
+export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
+export const RAIL_CONTEXT_NO_TAKES = '—';
+export const RAIL_CONTEXT_ADD_SONG_LABEL = '+ Song';
+export const RAIL_CONTEXT_EMPTY = 'No album or playlist open — its tracks appear here.';
+
+export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
+export type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
+export const LIBRARY_DEFAULT_FILTER: LibraryFilter = 'albums';
+export const LIBRARY_FILTER_LABELS: Record<LibraryFilter, string> = {
+	albums: 'Albums',
+	playlists: 'Playlists',
+	shared: 'Shared'
 };
-export const LIBRARY_SECTION_NAV_LABEL = 'Library sections';
+export const LIBRARY_FILTER_NAV_LABEL = 'Library filter';
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
-export const LIBRARY_SHARES_HISTORY_SECTION = 'shared' as const;
-export type LibraryHistorySection = LibrarySection | typeof LIBRARY_SHARES_HISTORY_SECTION;
 export const LIBRARY_ALBUMS_EMPTY = 'No albums yet';
 export const LIBRARY_ALBUMS_LOADING = 'Loading albums…';
-export const LIBRARY_LISTEN_EMPTY = 'No albums or playlists';
+export const LIBRARY_PLAYLISTS_EMPTY = 'No playlists yet';
 export const LIBRARY_PLAYLISTS_LOADING = 'Loading playlists…';
 export const LIBRARY_PLAYLISTS_ERROR = 'Failed to load playlists';
+export const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
+export const PLAYLIST_ENTRY_OPEN_SONG_LABEL = 'Open song in editor';
+export const PLAYLIST_ENTRY_MOVE_UP_LABEL = 'Move up';
+export const PLAYLIST_ENTRY_MOVE_DOWN_LABEL = 'Move down';
+export const PLAYLIST_ENTRY_REMOVE_LABEL = 'Remove from playlist';
 export const LIBRARY_SHARES_LABEL = 'Shared';
 export const LIBRARY_SHARES_COUNT_SEP = ' · ';
 export const LIBRARY_SHARED_EMPTY = 'Nothing shared';
@@ -150,7 +171,7 @@ export const LIBRARY_SHARES_TYPE_EMPTY: Record<ShareInventoryType, string> = {
 	playlist: 'No shared playlists'
 };
 export const LIBRARY_NEW_PLAYLIST_LABEL = 'New playlist';
-export const LIBRARY_NEW_SONG_LABEL = 'New Song';
+export const LIBRARY_NEW_ALBUM_LABEL = 'New album';
 
 export function librarySharesStatusLabel(total: number): string {
 	return `${LIBRARY_SHARES_LABEL}${LIBRARY_SHARES_COUNT_SEP}${total}`;

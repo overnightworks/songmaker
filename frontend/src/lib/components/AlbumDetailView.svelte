@@ -15,6 +15,8 @@
 		songList,
 		selectedAlbumId,
 		loadSongsForAlbum,
+		playAlbum,
+		playAlbumFromGeneration,
 		addAlbumToList,
 		addSongsToList,
 		removeAlbumFromList,
@@ -22,25 +24,23 @@
 		updateAlbumInList
 	} from '$lib/stores/player';
 	import { selectSong } from '$lib/stores/navigation';
+	import { setOpenCollection } from '$lib/stores/collection';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
 		ALBUM_COVER_ALT_TYPE,
-		ALBUM_COVER_REMOVE_LABEL,
-		ALBUM_COVER_REPLACE_LABEL,
-		ALBUM_COVER_UPLOAD_LABEL,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
-	import { hexToRgb } from '$lib/utils/contrast';
+	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
-	import ActionButton from './ActionButton.svelte';
-	import EditableTitle from './EditableTitle.svelte';
+	import type { GenerationItem, SongItem } from '$lib/api/types';
+	import CollectionHeader from './CollectionHeader.svelte';
+	import Icon from './Icon.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
-	import ShareButton from './ShareButton.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
 	interface Props {
@@ -49,7 +49,7 @@
 
 	let { albumId }: Props = $props();
 
-	let playlistPickerFor = $state<string | null>(null);
+	let playlistPickerOpen = $state(false);
 	let showDeleteConfirm = $state(false);
 
 	const albums = $derived($albumList);
@@ -66,8 +66,6 @@
 					.sort((a, b) => a.track_number - b.track_number)
 			: []
 	);
-	const albumSongCount = $derived(selectedAlbum?.song_count ?? albumSongs.length);
-	const albumGenCount = $derived(albumSongs.reduce((sum, s) => sum + s.generation_count, 0));
 	const albumLoad = $derived(currentAlbumId ? $albumSongsLoad[currentAlbumId] : undefined);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
 	const coverAlt = $derived(
@@ -77,31 +75,11 @@
 	const initials = $derived(
 		selectedAlbum ? titleInitials(selectedAlbum.title) : ALBUM_ART_EMPTY_INITIALS
 	);
-	let coverFailed = $state(false);
 	let coverBusy = $state(false);
 	let coverInput: HTMLInputElement | null = $state(null);
 
-	$effect(() => {
-		void coverUrl;
-		coverFailed = false;
-	});
-
-	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
-	const coverActionLabel = $derived(
-		showCover ? ALBUM_COVER_REPLACE_LABEL : ALBUM_COVER_UPLOAD_LABEL
-	);
-
-	function usableAlbumPrimary(colors: Record<string, string>): string | null {
-		const primary = colors.primary;
-		if (typeof primary !== 'string') return null;
-		const value = primary.trim();
-		if (!value) return null;
-		try {
-			hexToRgb(value);
-		} catch {
-			return null;
-		}
-		return value;
+	function bestGeneration(song: SongItem): GenerationItem | undefined {
+		return song.generations.find((g) => g.is_picked) ?? song.generations[0];
 	}
 
 	async function onCoverFile(event: Event): Promise<void> {
@@ -113,7 +91,6 @@
 		try {
 			const updated = await uploadAlbumCover(selectedAlbum.id, file);
 			updateAlbumInList(selectedAlbum.id, () => updated);
-			coverFailed = false;
 			addToast('Cover saved', 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Cover upload failed', 'error');
@@ -122,13 +99,16 @@
 		}
 	}
 
+	function onCoverAction(): void {
+		coverInput?.click();
+	}
+
 	async function onCoverRemove(): Promise<void> {
 		if (!selectedAlbum) return;
 		coverBusy = true;
 		try {
 			const updated = await deleteAlbumCover(selectedAlbum.id);
 			updateAlbumInList(selectedAlbum.id, () => updated);
-			coverFailed = false;
 			addToast('Cover removed', 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Cover remove failed', 'error');
@@ -175,6 +155,7 @@
 			await deleteAlbum(albumId);
 			removeAlbumFromList(albumId);
 			removeSongsForAlbum(albumId);
+			setOpenCollection(null);
 			addUndoToast('Album deleted', {
 				label: 'Undo',
 				handler: async () => {
@@ -195,9 +176,9 @@
 	}
 
 	async function onAddToPlaylist(playlistId: string): Promise<void> {
-		if (!playlistPickerFor) return;
+		if (!currentAlbumId) return;
 		try {
-			const result = await addAlbumToPlaylist(playlistId, playlistPickerFor);
+			const result = await addAlbumToPlaylist(playlistId, currentAlbumId);
 			if (result.skipped.length > 0) {
 				addToast(`Added ${result.added_count}, skipped ${result.skipped.length}`, 'info');
 			} else {
@@ -206,103 +187,51 @@
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Failed to add', 'error');
 		} finally {
-			playlistPickerFor = null;
+			playlistPickerOpen = false;
 		}
+	}
+
+	function onRowPlay(song: SongItem): void {
+		if (!currentAlbumId) return;
+		const gen = bestGeneration(song);
+		if (!gen) return;
+		void playAlbumFromGeneration(currentAlbumId, song, gen);
 	}
 </script>
 
 {#if selectedAlbum}
 	<div class="detail-panel">
-		<div class="detail-header">
-			<div class="detail-identity">
-				<div class="cover-hero">
-					{#if showCover && coverUrl}
-						<img src={coverUrl} alt={coverAlt} onerror={() => (coverFailed = true)} />
-					{:else if artFill}
-						<span class="cover-fallback" style:background={artFill} aria-hidden="true"></span>
-					{:else}
-						<span class="cover-fallback cover-initials" aria-hidden="true">{initials}</span>
-					{/if}
-					<input
-						bind:this={coverInput}
-						class="cover-file-input"
-						type="file"
-						accept={ALBUM_COVER_ACCEPT}
-						onchange={onCoverFile}
-					/>
-					<button
-						type="button"
-						class="cover-hit"
-						onclick={() => coverInput?.click()}
-						disabled={coverBusy}
-						aria-label={coverActionLabel}
-					></button>
-					{#if showCover}
-						<button
-							type="button"
-							class="cover-remove"
-							onclick={onCoverRemove}
-							disabled={coverBusy}
-							aria-label={ALBUM_COVER_REMOVE_LABEL}
-						>
-							×
-						</button>
-					{/if}
-				</div>
-				<div class="detail-titles">
-					<h2 class="detail-title">
-						<EditableTitle
-							value={selectedAlbum.title}
-							onsave={onRenameAlbum}
-							ariaLabel="Album title"
-						/>
-					</h2>
-					<span class="detail-subtitle">
-						{albumSongCount} song{albumSongCount !== 1 ? 's' : ''} · {albumGenCount} generation{albumGenCount !==
-						1
-							? 's'
-							: ''}
-					</span>
-				</div>
-			</div>
-			<div class="detail-actions">
-				<ShareButton
-					isShared={selectedAlbum.is_shared}
-					shareSlug={selectedAlbum.share_slug}
-					onshare={onAlbumShareEnable}
-					onunshare={onAlbumShareDisable}
-				/>
-				<div class="picker-anchor">
-					<ActionButton
-						icon="list-plus"
-						label="Add to Playlist"
-						onclick={() => (playlistPickerFor = selectedAlbum.id)}
-					/>
-					{#if playlistPickerFor === selectedAlbum.id}
-						<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistPickerFor = null)} />
-					{/if}
-				</div>
-				<ActionButton
-					icon="trash"
-					label="Delete Album"
-					destructive
-					onclick={() => (showDeleteConfirm = true)}
-				/>
-			</div>
-		</div>
+		<CollectionHeader
+			kind="album"
+			title={selectedAlbum.title}
+			{coverUrl}
+			{coverAlt}
+			{initials}
+			{artFill}
+			onplay={() => currentAlbumId && playAlbum(currentAlbumId)}
+			onrename={onRenameAlbum}
+			isShared={selectedAlbum.is_shared}
+			shareSlug={selectedAlbum.share_slug}
+			onshare={onAlbumShareEnable}
+			onunshare={onAlbumShareDisable}
+			ondelete={() => (showDeleteConfirm = true)}
+			oncover={onCoverAction}
+			onremovecover={onCoverRemove}
+			onaddtoplaylist={() => (playlistPickerOpen = true)}
+		/>
+		<input
+			bind:this={coverInput}
+			class="cover-file-input"
+			type="file"
+			accept={ALBUM_COVER_ACCEPT}
+			disabled={coverBusy}
+			onchange={onCoverFile}
+		/>
 
-		{#if selectedAlbum.is_shared && selectedAlbum.share_slug}
-			<button
-				class="share-link"
-				onclick={() => {
-					const url = `${window.location.origin}/share/${selectedAlbum.share_slug}`;
-					navigator.clipboard.writeText(url);
-					addToast('Link copied', 'success');
-				}}
-				title="Click to copy share link"
-			>
-				{window.location.origin}/share/{selectedAlbum.share_slug}
-			</button>
+		{#if playlistPickerOpen}
+			<div class="picker-anchor">
+				<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistPickerOpen = false)} />
+			</div>
 		{/if}
 
 		<div class="item-list">
@@ -319,12 +248,23 @@
 				<p class="empty-tab">No songs in this album yet.</p>
 			{:else}
 				{#each albumSongs as s (s.id)}
-					<button class="item-row" onclick={() => selectSong(s.id)}>
-						<span class="item-title">{s.title}</span>
-						<span class="item-meta">
-							{s.generation_count} gen{s.generation_count !== 1 ? 's' : ''}
-						</span>
-					</button>
+					<div class="item-row">
+						<button
+							class="item-play"
+							data-hitbox="frequent"
+							disabled={s.generation_count === 0}
+							onclick={() => onRowPlay(s)}
+							aria-label={`Play ${s.title}`}
+						>
+							<Icon name="play" size={14} />
+						</button>
+						<button class="item-body" onclick={() => selectSong(s.id)}>
+							<span class="item-title">{s.title}</span>
+							<span class="item-meta">
+								{s.generation_count} gen{s.generation_count !== 1 ? 's' : ''}
+							</span>
+						</button>
+					</div>
 				{/each}
 			{/if}
 		</div>
@@ -351,7 +291,7 @@
 
 <style>
 	.detail-panel {
-		padding: 1.2rem 1.5rem calc(var(--player-height) + 1.2rem);
+		padding-bottom: var(--player-height);
 		display: flex;
 		flex-direction: column;
 		gap: 0.8rem;
@@ -360,56 +300,6 @@
 		width: 100%;
 		min-width: 0;
 		min-height: 0;
-	}
-
-	.detail-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-
-	.detail-identity {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		min-width: 0;
-		flex: 1;
-	}
-
-	.detail-titles {
-		min-width: 0;
-	}
-
-	.cover-hero {
-		position: relative;
-		width: 4.5rem;
-		height: 4.5rem;
-		flex-shrink: 0;
-		overflow: hidden;
-		background: var(--surface-hover);
-	}
-
-	.cover-hero img,
-	.cover-fallback {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		display: block;
-	}
-
-	.cover-fallback {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.cover-initials {
-		font-family: var(--font-display);
-		font-size: 1.1rem;
-		letter-spacing: 0.06em;
-		user-select: none;
 	}
 
 	.cover-file-input {
@@ -421,82 +311,71 @@
 		white-space: nowrap;
 	}
 
-	.cover-hit {
-		position: absolute;
-		inset: 0;
-		padding: 0;
-		border: none;
-		background: transparent;
-		cursor: pointer;
-	}
-
-	.cover-hit:focus-visible {
-		outline: 2px solid var(--accent);
-		outline-offset: -2px;
-	}
-
-	.cover-remove {
-		position: absolute;
-		top: 0;
-		right: 0;
-		z-index: 1;
-		width: 1.5rem;
-		height: 1.5rem;
-		padding: 0;
-		border: none;
-		background: color-mix(in srgb, var(--bg) 75%, transparent);
-		color: var(--text);
-		font-size: 1rem;
-		line-height: 1;
-		cursor: pointer;
-	}
-
-	.detail-title {
-		font-family: var(--font-display);
-		font-size: 1.73rem;
-		color: var(--text);
-		text-transform: uppercase;
-		letter-spacing: 2px;
-	}
-
-	.detail-subtitle {
-		font-size: 0.87rem;
-		color: var(--text-muted);
-	}
-
-	.detail-actions {
-		display: flex;
-		gap: 0.5rem;
-		align-items: center;
-	}
-
 	.picker-anchor {
 		position: relative;
+		margin: 0 1.5rem;
 	}
 
 	.item-list {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		padding: 0 1.5rem;
 	}
 
 	.item-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.6rem;
 		padding: 0.65rem 0.8rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
-		cursor: pointer;
-		text-align: left;
-		color: var(--text);
 		font-size: 0.93rem;
 	}
 
 	.item-row:hover {
 		border-color: var(--primary);
 		background: var(--surface-hover);
+	}
+
+	.item-play {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.9rem;
+		height: 1.9rem;
+		flex-shrink: 0;
+		border-radius: 50%;
+		border: 1px solid var(--border);
+		background: none;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+
+	.item-play:hover:not(:disabled) {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.item-play:disabled {
+		opacity: 0.35;
+		cursor: default;
+	}
+
+	.item-body {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		flex: 1;
+		min-width: 0;
+		background: none;
+		border: none;
+		padding: 0;
+		text-align: left;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
 	}
 
 	.item-title {
@@ -516,30 +395,18 @@
 		color: var(--text-subtle);
 		font-size: 0.87rem;
 		font-style: italic;
-		padding: 0.8rem 0;
+		padding: 0.8rem 1.5rem;
 	}
 
 	@media (max-width: 768px) {
-		.detail-header {
-			flex-direction: column;
-			gap: 0.5rem;
+		.item-list,
+		.picker-anchor {
+			padding-left: 0.8rem;
+			padding-right: 0.8rem;
 		}
 
-		.cover-hero {
-			width: 3.5rem;
-			height: 3.5rem;
-		}
-
-		.detail-actions {
-			flex-wrap: wrap;
-		}
-
-		.detail-panel {
-			padding: 0.8rem 0.8rem calc(var(--player-height) + 0.8rem);
-		}
-
-		.detail-title {
-			font-size: 1.2rem;
+		.empty-tab {
+			padding: 0.8rem;
 		}
 	}
 </style>
