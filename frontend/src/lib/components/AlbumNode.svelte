@@ -3,13 +3,12 @@
 	import SongNode from './SongNode.svelte';
 	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
 	import {
-		ALBUM_ART_EMPTY_INITIALS,
-		ALBUM_ART_INITIAL_COUNT,
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL,
 		PLAYLIST_COVER_ALT_TYPE
 	} from '$lib/constants';
+	import { titleInitials } from '$lib/utils/format';
 	import type { AlbumSongsLoadState } from '$lib/stores/player';
 	import { hexToRgb } from '$lib/utils/contrast';
 
@@ -48,7 +47,7 @@
 	const collectionKind = $derived(album ? 'album' : 'playlist');
 	const coverAltType = $derived(album ? ALBUM_COVER_ALT_TYPE : PLAYLIST_COVER_ALT_TYPE);
 	const artFill = $derived(usableAlbumPrimary(cardColors));
-	const initials = $derived(albumTitleInitials(cardTitle));
+	const initials = $derived(titleInitials(cardTitle));
 	const coverUrl = $derived(cardCover?.card ?? null);
 	let coverFailed = $state(false);
 
@@ -71,20 +70,6 @@
 			return null;
 		}
 		return value;
-	}
-
-	function albumTitleInitials(title: string): string {
-		const trimmed = title.trim();
-		if (!trimmed) return ALBUM_ART_EMPTY_INITIALS;
-		const words = trimmed.split(/\s+/);
-		if (words.length === 1) {
-			const letters = Array.from(words[0]).slice(0, ALBUM_ART_INITIAL_COUNT).join('');
-			return letters.toUpperCase() || ALBUM_ART_EMPTY_INITIALS;
-		}
-		const first = Array.from(words[0])[0];
-		const second = Array.from(words[1])[0];
-		if (!first) return ALBUM_ART_EMPTY_INITIALS;
-		return `${first}${second ?? ''}`.toUpperCase();
 	}
 </script>
 

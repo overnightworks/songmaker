@@ -21,7 +21,8 @@
 		loadSavedOfflinePlaylist,
 		type StreamProgress
 	} from '$lib/services/offline';
-	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_ART_INITIAL_COUNT } from '$lib/constants';
+	import { ALBUM_ART_EMPTY_INITIALS } from '$lib/constants';
+	import { titleInitials } from '$lib/utils/format';
 	import ActionButton from './ActionButton.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import Icon from './Icon.svelte';
@@ -30,22 +31,8 @@
 	const playlistDetail = $derived($selectedPlaylistDetail);
 	let reorderBusy = $state(false);
 	const initials = $derived(
-		playlistDetail ? playlistTitleInitials(playlistDetail.title) : ALBUM_ART_EMPTY_INITIALS
+		playlistDetail ? titleInitials(playlistDetail.title) : ALBUM_ART_EMPTY_INITIALS
 	);
-
-	function playlistTitleInitials(title: string): string {
-		const trimmed = title.trim();
-		if (!trimmed) return ALBUM_ART_EMPTY_INITIALS;
-		const words = trimmed.split(/\s+/);
-		if (words.length === 1) {
-			const letters = Array.from(words[0]).slice(0, ALBUM_ART_INITIAL_COUNT).join('');
-			return letters.toUpperCase() || ALBUM_ART_EMPTY_INITIALS;
-		}
-		const first = Array.from(words[0])[0];
-		const second = Array.from(words[1])[0];
-		if (!first) return ALBUM_ART_EMPTY_INITIALS;
-		return `${first}${second ?? ''}`.toUpperCase();
-	}
 
 	async function onPlaylistShareEnable() {
 		if (!playlistDetail) throw new Error('No playlist');
