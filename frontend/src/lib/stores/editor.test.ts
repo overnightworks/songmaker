@@ -26,21 +26,17 @@ import {
 	setDraftGenParams,
 	setDraftLyrics,
 	isDirty,
-	saving,
 	versions,
 	currentVersionIndex,
-	activeDiff,
-	status,
 	loadSongData,
 	loadVersion,
 	handleSave,
 	handleDeleteVersion,
-	handleDiffChange,
-	handleApply,
-	dismissAppliedDiff
+	discardDraft,
+	computeDraftVersionNumber
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
-import type { SongItem, VersionItem } from '$lib/api/types';
+import type { GenerationItem, SongItem, VersionItem } from '$lib/api/types';
 
 function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
@@ -78,6 +74,32 @@ function makeVersion(overrides: Partial<VersionItem> = {}): VersionItem {
 		bpm: 120,
 		audio_duration: 180,
 		key_scale: 'Am',
+		generation_params: null,
+		created_at: '',
+		...overrides
+	};
+}
+
+function makeGeneration(overrides: Partial<GenerationItem> = {}): GenerationItem {
+	return {
+		id: 'g1',
+		song_id: 's1',
+		version_id: 'v1',
+		version_number: 1,
+		generation_number: 1,
+		mp3_path: 'g1.mp3',
+		wav_path: null,
+		seed: null,
+		status: 'completed',
+		is_archived: false,
+		is_picked: false,
+		is_kept: false,
+		is_shared: false,
+		model_mode: 'turbo',
+		whisper_text: null,
+		whisper_cues: null,
+		version_lyrics: null,
+		scores: null,
 		generation_params: null,
 		created_at: '',
 		...overrides
@@ -158,31 +180,82 @@ describe('loadVersion', () => {
 });
 
 describe('handleSave', () => {
-	it('calls updateSong and resets dirty state', async () => {
+	it('calls updateSong, resets dirty state, and returns the saved song', async () => {
 		const { updateSong } = await import('$lib/api/client');
 		const mockUpdate = vi.mocked(updateSong);
-		mockUpdate.mockResolvedValueOnce(makeSong({ version_count: 2 }));
+		const saved = makeSong({ version_count: 2 });
+		mockUpdate.mockResolvedValueOnce(saved);
 
 		loadSongData(makeSong());
 		setDraftLyrics('new lyrics');
 		expect(get(isDirty)).toBe(true);
 
-		await handleSave('s1');
+		const result = await handleSave('s1');
 
 		expect(mockUpdate).toHaveBeenCalled();
 		expect(get(isDirty)).toBe(false);
-		expect(get(saving)).toBe(false);
+		expect(result).toBe(saved);
 	});
 
-	it('shows error on failure', async () => {
+	it('fails loud: rejects instead of swallowing the error', async () => {
 		const { updateSong } = await import('$lib/api/client');
 		vi.mocked(updateSong).mockRejectedValueOnce(new Error('Network error'));
 
 		loadSongData(makeSong());
-		await handleSave('s1');
+		setDraftLyrics('new lyrics');
 
-		expect(get(status)).toBe('Network error');
-		expect(get(saving)).toBe(false);
+		await expect(handleSave('s1')).rejects.toThrow('Network error');
+		expect(get(isDirty)).toBe(true);
+	});
+});
+
+describe('discardDraft', () => {
+	it('resets the draft to the last-saved values', () => {
+		loadSongData(makeSong({ lyrics: 'saved lyrics' }));
+		setDraftLyrics('unsaved edit');
+		expect(get(isDirty)).toBe(true);
+
+		discardDraft();
+
+		expect(get(editLyrics)).toBe('saved lyrics');
+		expect(get(isDirty)).toBe(false);
+	});
+});
+
+describe('computeDraftVersionNumber', () => {
+	it('predicts version_number + 1 for a normal save onto a version that already has takes', () => {
+		const versions = [makeVersion({ id: 'v2', version_number: 2 }), makeVersion({ id: 'v1' })];
+		const generations = [makeGeneration({ version_number: 2 })];
+
+		expect(computeDraftVersionNumber(versions, generations)).toBe(3);
+	});
+
+	it('predicts the current version number when the take-less latest version will be overwritten in place', () => {
+		// v1 has never been generated into — handleSave() overwrites it rather
+		// than creating v2.
+		const versions = [makeVersion({ id: 'v1', version_number: 1 })];
+		const generations: GenerationItem[] = [];
+
+		expect(computeDraftVersionNumber(versions, generations)).toBe(1);
+	});
+
+	it('predicts from the highest surviving version_number, not the count, after a middle version was deleted', () => {
+		// v2 was deleted; v1 and v3 remain, both with takes. song.version_count
+		// would now read 2, but the next save must land on v4.
+		const versions = [
+			makeVersion({ id: 'v3', version_number: 3 }),
+			makeVersion({ id: 'v1', version_number: 1 })
+		];
+		const generations = [
+			makeGeneration({ id: 'g1', version_number: 3 }),
+			makeGeneration({ id: 'g2', version_number: 1 })
+		];
+
+		expect(computeDraftVersionNumber(versions, generations)).toBe(4);
+	});
+
+	it('returns 1 when the song has no versions yet', () => {
+		expect(computeDraftVersionNumber([], [])).toBe(1);
 	});
 });
 
@@ -219,58 +292,10 @@ describe('handleDeleteVersion', () => {
 		expect(get(editLyrics)).toBe('unsaved on s2');
 	});
 
-	it('shows error on failure', async () => {
+	it('fails loud on failure', async () => {
 		const { deleteVersion } = await import('$lib/api/client');
 		vi.mocked(deleteVersion).mockRejectedValueOnce(new Error('fail'));
 
-		await handleDeleteVersion('s1', 'v1', false);
-
-		expect(get(status)).toBe('Delete failed');
-	});
-});
-
-describe('handleDiffChange', () => {
-	it('sets diff when pair provided', () => {
-		const v1 = makeVersion();
-		const v2 = makeVersion({ id: 'v2', version_number: 2 });
-		handleDiffChange([v1, v2]);
-		const diff = get(activeDiff);
-		expect(diff?.old.id).toBe('v1');
-		expect(diff?.new.id).toBe('v2');
-	});
-
-	it('clears diff when null', () => {
-		handleDiffChange(null);
-		expect(get(activeDiff)).toBeNull();
-	});
-});
-
-describe('handleApply', () => {
-	it('sets applied diff and updates fields', () => {
-		loadSongData(makeSong());
-		handleApply({ lyrics: 'new lyrics', prompt: 'new prompt' });
-		expect(get(editLyrics)).toBe('new lyrics');
-		expect(get(editPrompt)).toBe('new prompt');
-		const diff = get(activeDiff);
-		expect(diff).not.toBeNull();
-		expect(diff?.old.lyrics).toBe('hello');
-		expect(diff?.new.lyrics).toBe('new lyrics');
-	});
-
-	it('only updates provided fields', () => {
-		loadSongData(makeSong({ bpm: 120 }));
-		handleApply({ bpm: 140 });
-		expect(get(editBpm)).toBe(140);
-		expect(get(editLyrics)).toBe('hello');
-	});
-});
-
-describe('dismissAppliedDiff', () => {
-	it('clears applied diff', () => {
-		loadSongData(makeSong());
-		handleApply({ lyrics: 'changed' });
-		expect(get(activeDiff)).not.toBeNull();
-		dismissAppliedDiff();
-		expect(get(activeDiff)).toBeNull();
+		await expect(handleDeleteVersion('s1', 'v1', false)).rejects.toThrow('fail');
 	});
 });

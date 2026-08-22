@@ -229,7 +229,7 @@ describe('library history snapshot', () => {
 			songOffset: 200,
 			songId: 's1',
 			scrollAnchor: 240,
-			detailTab: 'generations'
+			detailTab: 'takes'
 		});
 		expect(isLibraryHistoryState(snap)).toBe(true);
 	});
@@ -415,11 +415,21 @@ describe('applyLibraryHistory', () => {
 
 	it('defaults a missing detailTab to the takes tab without failing restore', async () => {
 		const { detailTab: recordedTab, ...withoutDetailTab } = libraryRootState();
-		expect(recordedTab).toBe('generations');
-		detailTab.set('edit');
+		expect(recordedTab).toBe('takes');
+		detailTab.set('write');
 		await applyLibraryHistory(withoutDetailTab);
-		expect(get(detailTab)).toBe('generations');
+		expect(get(detailTab)).toBe('takes');
 		expect(get(librarySurface)).toBe('browse');
+	});
+
+	it('maps a pre-#100 detailTab (generations/edit/chat) to the new write/takes tabs', async () => {
+		detailTab.set('takes');
+		await applyLibraryHistory({ ...libraryRootState(), detailTab: 'generations' as never });
+		expect(get(detailTab)).toBe('takes');
+		await applyLibraryHistory({ ...libraryRootState(), detailTab: 'edit' as never });
+		expect(get(detailTab)).toBe('write');
+		await applyLibraryHistory({ ...libraryRootState(), detailTab: 'chat' as never });
+		expect(get(detailTab)).toBe('write');
 	});
 });
 

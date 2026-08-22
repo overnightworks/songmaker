@@ -1,7 +1,9 @@
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { fetchAlbum } from '$lib/api/albums';
+import { handleSave, isDirty } from '$lib/stores/editor';
+import { addToast } from '$lib/stores/toast';
 import {
 	selectedSongId,
 	selectedGenerationId,
@@ -100,6 +102,27 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 	return pathname === '/';
 }
 
+// A dirty editor draft blocks a song switch or leave (rail row, prev/next,
+// breadcrumb, Escape, Library) until the owner resolves it: the deferred
+// navigation is parked here, and SongDetailView — the only surface where a
+// draft can be dirty — renders the Save / Discard / Cancel confirm and
+// either runs the parked action (Discard, or Save then run it) or drops it
+// (Cancel).
+export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | null>(null);
+
+// The single gatekeeper for every navigation that would drop the current
+// editor draft: a dirty draft parks `action` in `pendingDirtyNavigation`
+// instead of running it (see the comment above), a clean draft runs it
+// immediately. Every song-switch/leave entry point must route through this
+// — never re-implement the if/else inline.
+async function guardDirtyNavigation(action: () => void | Promise<void>): Promise<void> {
+	if (get(isDirty)) {
+		pendingDirtyNavigation.set(action);
+		return;
+	}
+	await action();
+}
+
 // The rail context (and every other "song open" entry point — search hits,
 // ?song= deep links, history restore) never leaves the rail empty: whenever
 // the selected song's album is not the open collection, the collection
@@ -150,13 +173,15 @@ export function openCollectionEntry(collection: OpenCollection): void {
 }
 
 export function backToCollection(): void {
-	suppressPush = true;
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	openTakesSurface();
-	setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
-	suppressPush = false;
-	replaceLibraryHistory();
+	void guardDirtyNavigation(() => {
+		suppressPush = true;
+		selectedSongId.set(null);
+		selectedGenerationId.set(null);
+		openTakesTab();
+		setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
+		suppressPush = false;
+		replaceLibraryHistory();
+	});
 }
 
 export function openLibraryCreate(): void {
@@ -170,14 +195,16 @@ export function openLibraryCreate(): void {
 // until another collection replaces it), and always pushes a fresh history
 // entry so the browser back button returns to whatever was open before.
 export async function openLibraryWall(): Promise<void> {
-	if (!isLibraryWorkspacePath(window.location.pathname)) {
-		await goto(resolve('/'));
-	}
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	setLibrarySurface('browse');
-	closeSidebar();
-	pushLibraryHistory();
+	await guardDirtyNavigation(async () => {
+		if (!isLibraryWorkspacePath(window.location.pathname)) {
+			await goto(resolve('/'));
+		}
+		selectedSongId.set(null);
+		selectedGenerationId.set(null);
+		setLibrarySurface('browse');
+		closeSidebar();
+		pushLibraryHistory();
+	});
 }
 
 export interface AlbumTrackNeighbors {
@@ -224,7 +251,7 @@ function applySelectedSong(
 	}
 	playerSelectSong(songId);
 	ensureGenerationsLoaded(songId);
-	if (tab === 'takes') openTakesSurface();
+	if (tab === 'takes') openTakesTab();
 	setLibrarySurface('detail');
 	closeSidebar();
 	if (historyMode === 'replace') {
@@ -253,11 +280,13 @@ function selectSongHistoryMode(
 }
 
 export function selectSong(songId: string, knownSong?: SongItem): void {
-	applySelectedSong(songId, knownSong, selectSongHistoryMode(songId, knownSong), 'takes');
+	void guardDirtyNavigation(() =>
+		applySelectedSong(songId, knownSong, selectSongHistoryMode(songId, knownSong), 'takes')
+	);
 }
 
 export function selectNeighborSong(song: SongItem): void {
-	applySelectedSong(song.id, song, 'replace', 'keep');
+	void guardDirtyNavigation(() => applySelectedSong(song.id, song, 'replace', 'keep'));
 }
 
 function hydrateSongIntoLibrary(song: SongItem): void {
@@ -280,7 +309,7 @@ export function deselectSong(): void {
 
 export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 	playerSelectGeneration(gen, song);
-	openTakesSurface();
+	openTakesTab();
 	setLibrarySurface('detail');
 	replaceLibraryHistory();
 }
@@ -288,7 +317,7 @@ export function selectGeneration(gen: GenerationItem, song: SongItem): void {
 export function backToSong(): void {
 	suppressPush = true;
 	playerClearGeneration();
-	openTakesSurface();
+	openTakesTab();
 	setLibrarySurface('detail');
 	suppressPush = false;
 	replaceLibraryHistory();
@@ -307,21 +336,23 @@ export function switchTab(tab: DetailTab): void {
 	detailTab.set(tab);
 }
 
-export function openRecipeSurface(): void {
-	detailTab.set('edit');
+export function openWriteTab(): void {
+	detailTab.set('write');
 }
 
-export function openTakesSurface(): void {
-	detailTab.set('generations');
+export function openTakesTab(): void {
+	detailTab.set('takes');
 }
 
 export async function revealPlayingSong(song: SongItem, generationId: string): Promise<void> {
 	if (!isLibraryWorkspacePath(window.location.pathname)) {
 		await goto(resolve('/'));
 	}
-	applySelectedSong(song.id, song, 'stack', 'takes');
-	selectedGenerationId.set(generationId);
-	persistLibraryHistory();
+	await guardDirtyNavigation(() => {
+		applySelectedSong(song.id, song, 'stack', 'takes');
+		selectedGenerationId.set(generationId);
+		persistLibraryHistory();
+	});
 }
 
 export function goBack(): void {
@@ -343,10 +374,43 @@ export function goBack(): void {
 	const current = isLibraryHistoryState(state) ? state : snapshotLibraryHistory(0);
 	suppressPush = true;
 	void applyLibraryHistory(libraryWallStateFrom(current));
-	openTakesSurface();
+	openTakesTab();
 	setLibrarySurface('browse');
 	suppressPush = false;
 	replaceLibraryHistory();
+}
+
+// Browser Back/Forward has already committed the history change by the time
+// `popstate` fires — there is no pending entry left to park a cancellable
+// navigation into, unlike every other guarded path (see
+// `pendingDirtyNavigation` above). A dirty draft is saved instead; a failed
+// save surfaces a toast but never blocks the already-committed navigation.
+// Documented next to the dirty-guard paragraph in docs/architecture.md.
+//
+// `savingDraft` memoises the in-flight save: two popstates firing before the
+// first save settles (e.g. rapid Back/Back) await the same promise instead
+// of each POSTing the draft.
+let savingDraft: Promise<void> | null = null;
+
+async function saveDraft(songId: string): Promise<void> {
+	try {
+		await handleSave(songId);
+	} catch (e) {
+		addToast(e instanceof Error ? e.message : 'Save failed', 'error');
+	}
+}
+
+async function saveDirtyDraftBeforePopstate(): Promise<void> {
+	if (savingDraft) {
+		await savingDraft;
+		return;
+	}
+	const songId = get(selectedSongId);
+	if (!get(isDirty) || !songId) return;
+	savingDraft = saveDraft(songId).finally(() => {
+		savingDraft = null;
+	});
+	await savingDraft;
 }
 
 export function initNavigation(): () => void {
@@ -362,7 +426,7 @@ export function initNavigation(): () => void {
 			ensureGenerationsLoaded(songId);
 			if (genId) {
 				selectedGenerationId.set(genId);
-				openTakesSurface();
+				openTakesTab();
 			}
 			setLibrarySurface('detail');
 			suppressPush = false;
@@ -376,6 +440,7 @@ export function initNavigation(): () => void {
 	function onPopstate(e: PopStateEvent): void {
 		const state = e.state;
 		void (async () => {
+			await saveDirtyDraftBeforePopstate();
 			if (isLibraryHistoryState(state)) {
 				const applied = await applyLibraryHistory(state);
 				if (applied && state.songId) {
@@ -393,5 +458,6 @@ export function initNavigation(): () => void {
 
 export function resetNavigationForTests(): void {
 	suppressPush = false;
-	openTakesSurface();
+	pendingDirtyNavigation.set(null);
+	openTakesTab();
 }

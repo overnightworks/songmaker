@@ -44,6 +44,7 @@
 	--font-display: 'Oswald', Impact, sans-serif;
 	--font-body: 'Open Sans', Arial, sans-serif;
 	--player-height: calc(88px + env(safe-area-inset-bottom, 0px));
+	--editor-generate-bar-height: 64px;
 	--header-height: 46px;
 	--rail-width: 264px;
 

@@ -52,7 +52,10 @@ vi.mock('$lib/api/client', () => ({
 	addSongToPlaylist: vi.fn(),
 	addAlbumToPlaylist: vi.fn(),
 	removeFromPlaylist: vi.fn(),
-	reorderPlaylistEntry: vi.fn()
+	reorderPlaylistEntry: vi.fn(),
+	fetchVersions: vi.fn().mockResolvedValue([]),
+	updateSong: vi.fn(),
+	deleteVersion: vi.fn()
 }));
 
 import {
@@ -66,12 +69,17 @@ import {
 	openLibraryCreate,
 	openLibraryWall,
 	openPlaylist,
+	pendingDirtyNavigation,
 	resetNavigationForTests,
 	revealPlayingSong,
 	selectLibraryFilter,
 	selectNeighborSong,
 	selectSong
 } from './navigation';
+import { discardDraft, editLyrics, loadSongData, setDraftLyrics } from '$lib/stores/editor';
+import { updateSong } from '$lib/api/client';
+import { libraryRootState } from '$lib/stores/libraryContext';
+import { toasts } from '$lib/stores/toast';
 
 function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 	return {
@@ -131,6 +139,8 @@ beforeEach(() => {
 	fetchAlbum.mockReset();
 	fetchPlaylists.mockReset();
 	fetchPlaylist.mockReset();
+	vi.mocked(updateSong).mockReset();
+	toasts.set([]);
 	fetchPlaylists.mockResolvedValue([]);
 	fetchPlaylist.mockResolvedValue({
 		id: 'p1',
@@ -333,6 +343,105 @@ describe('backToCollection', () => {
 	});
 });
 
+describe('a dirty draft guards song switch / leave', () => {
+	afterEach(() => {
+		discardDraft();
+	});
+
+	it('defers selectSong instead of switching while the draft is dirty', () => {
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
+	it('runs the deferred switch on Discard', () => {
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+		songList.set([song({ id: 's1' }), song({ id: 's2', album_id: 'a1' })]);
+
+		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		discardDraft();
+		void get(pendingDirtyNavigation)?.();
+		pendingDirtyNavigation.set(null);
+
+		expect(get(selectedSongId)).toBe('s2');
+	});
+
+	it('stays put on Cancel', () => {
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		pendingDirtyNavigation.set(null);
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(editLyrics)).toBe('unsaved edit');
+	});
+
+	it('defers backToCollection and openLibraryWall the same way', async () => {
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		backToCollection();
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+		pendingDirtyNavigation.set(null);
+
+		await openLibraryWall();
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
+	it('defers selectNeighborSong the same way', () => {
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		selectNeighborSong(song({ id: 's2', album_id: 'a1' }));
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
+	it('defers revealPlayingSong the same way', async () => {
+		history.replaceState(null, '', '/');
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		await revealPlayingSong(song({ id: 's2', album_id: 'a1' }), 'g2');
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(selectedGenerationId)).toBeNull();
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
+	it('never prompts when the draft is clean', () => {
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+
+		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(pendingDirtyNavigation)).toBeNull();
+	});
+});
+
 describe('openCollectionEntry', () => {
 	it('goes back to the collection when a song inside it is open', () => {
 		openAlbum('a1');
@@ -406,6 +515,78 @@ describe('initNavigation', () => {
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+		cleanup();
+	});
+
+	it('auto-saves a dirty draft before applying a browser-back navigation', async () => {
+		history.replaceState(null, '', '/');
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+		vi.mocked(updateSong).mockResolvedValue(song({ id: 's1', lyrics: 'unsaved edit' }));
+
+		const cleanup = initNavigation();
+		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+
+		expect(updateSong).toHaveBeenCalledWith(
+			's1',
+			expect.objectContaining({ lyrics: 'unsaved edit' })
+		);
+		cleanup();
+	});
+
+	it('saves a dirty draft once when two popstates fire before the first save settles', async () => {
+		history.replaceState(null, '', '/');
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+		let resolveSave: (value: SongItem) => void = () => undefined;
+		vi.mocked(updateSong).mockReturnValue(
+			new Promise((resolve) => {
+				resolveSave = resolve;
+			})
+		);
+
+		const cleanup = initNavigation();
+		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
+		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
+		resolveSave(song({ id: 's1', lyrics: 'unsaved edit' }));
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+
+		expect(updateSong).toHaveBeenCalledTimes(1);
+		cleanup();
+	});
+
+	it('still applies the browser-back navigation when the auto-save fails', async () => {
+		history.replaceState(null, '', '/');
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+		setDraftLyrics('unsaved edit');
+		vi.mocked(updateSong).mockRejectedValue(new Error('Network error'));
+
+		const cleanup = initNavigation();
+		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+
+		expect(get(toasts).some((t) => t.type === 'error')).toBe(true);
+		cleanup();
+	});
+
+	it('does not attempt a save on browser-back when the draft is clean', async () => {
+		history.replaceState(null, '', '/');
+		openAlbum('a1');
+		selectSong('s1');
+		loadSongData(song({ id: 's1' }));
+
+		const cleanup = initNavigation();
+		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+
+		expect(updateSong).not.toHaveBeenCalled();
 		cleanup();
 	});
 });

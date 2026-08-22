@@ -1,26 +1,18 @@
 <script lang="ts">
-	import type { SongItem, GenerationItem } from '$lib/api/types';
+	import type { SongItem, GenerationItem, JobItem } from '$lib/api/types';
 	import {
 		EXPIRY_WARN_DAYS,
 		LIBRARY_RETRY_LABEL,
 		NOW_PLAYING_TAKE_PREFIX,
-		SONG_SURFACE_RECIPE,
-		TAKE_AGAIN_LABEL,
-		TAKE_AUDIO_COVER_LABEL,
-		TAKE_COPY_LINK_LABEL,
-		TAKE_DELETE_LABEL,
 		TAKE_KEEP_LABEL,
-		TAKE_OVERFLOW_LABEL,
 		TAKE_PICK_LABEL,
-		TAKE_PLAYLIST_LABEL,
-		TAKE_REMASTER_LABEL,
-		TAKE_REPAINT_LABEL,
-		TAKE_RESTORE_LABEL,
-		TAKE_SHARE_LABEL,
-		TAKE_UNSHARE_LABEL,
+		TAKES_DELETE_VERSION_LABEL,
+		TAKES_DRAFT_BANNER_TEMPLATE,
 		TAKES_EMPTY,
 		TAKES_ERROR,
-		TAKES_LOADING
+		TAKES_GENERATING_LABEL,
+		TAKES_LOADING,
+		TAKES_MOBILE_HINT
 	} from '$lib/constants';
 	import {
 		playGeneration,
@@ -45,26 +37,32 @@
 		selectionCount
 	} from '$lib/stores/selection';
 	import { addToast } from '$lib/stores/toast';
+	import { handleDeleteVersion } from '$lib/stores/editor';
 	import {
 		bulkDeleteGenerations,
+		cancelJob,
 		fetchSong,
 		remasterGeneration,
 		unarchiveGeneration
 	} from '$lib/api/client';
-	import AgeStamp from './AgeStamp.svelte';
-	import Icon from './Icon.svelte';
-	import PlaylistPicker from './PlaylistPicker.svelte';
-	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
+	import Icon from '../Icon.svelte';
+	import PlaylistPicker from '../PlaylistPicker.svelte';
+	import ConfirmDeleteDialog from '../ConfirmDeleteDialog.svelte';
+	import TakeMenu from './TakeMenu.svelte';
 
 	interface Props {
 		song: SongItem;
 		selectedId?: string | null;
 		loadStatus?: 'loading' | 'ready' | 'error';
 		loadError?: string | null;
+		dirty: boolean;
+		draftVersionNumber: number;
+		latestVersionNumber: number;
+		generateJob?: JobItem | null;
+		compact?: boolean;
 		onselect: (gen: GenerationItem) => void;
-		onagain?: (gen: GenerationItem) => void;
-		onrepaint?: (gen: GenerationItem) => void;
-		onaudiocover?: (gen: GenerationItem) => void;
+		onagain: (gen: GenerationItem) => void;
+		onuseasreference: (gen: GenerationItem) => void;
 		onretry?: () => void;
 	}
 
@@ -73,10 +71,14 @@
 		selectedId = null,
 		loadStatus = 'ready',
 		loadError = null,
+		dirty,
+		draftVersionNumber,
+		latestVersionNumber,
+		generateJob = null,
+		compact = false,
 		onselect,
 		onagain,
-		onrepaint,
-		onaudiocover,
+		onuseasreference,
 		onretry
 	}: Props = $props();
 
@@ -87,9 +89,9 @@
 		audioPlayer.status === 'loading' || audioPlayer.status === 'buffering'
 	);
 
-	let overflowId = $state<string | null>(null);
 	let playlistFor = $state<string | null>(null);
 	let deleteFor = $state<GenerationItem | null>(null);
+	let deleteVersionFor = $state<VersionGroup | null>(null);
 	let remasteringId = $state<string | null>(null);
 
 	interface VersionGroup {
@@ -106,8 +108,8 @@
 				map[key] = {
 					label:
 						gen.version_number !== null
-							? `${SONG_SURFACE_RECIPE} ${gen.version_number}`
-							: 'Unknown recipe',
+							? `v${gen.version_number} · ${countTakes(gen.version_number)} take${countTakes(gen.version_number) === 1 ? '' : 's'}`
+							: 'Unknown version',
 					versionNumber: gen.version_number,
 					generations: []
 				};
@@ -118,6 +120,19 @@
 		result.sort((a, b) => (b.versionNumber ?? -1) - (a.versionNumber ?? -1));
 		return result;
 	});
+
+	function countTakes(versionNumber: number): number {
+		return song.generations.filter((g) => g.version_number === versionNumber).length;
+	}
+
+	function formatDuration(gen: GenerationItem): string | null {
+		const seconds = gen.generation_params?.audio_duration;
+		if (seconds == null) return null;
+		const whole = Math.round(seconds);
+		const m = Math.floor(whole / 60);
+		const s = whole % 60;
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
 
 	function daysUntilExpiry(gen: GenerationItem): number | null {
 		if (gen.is_picked || gen.is_kept || !gen.expires_at) return null;
@@ -133,25 +148,29 @@
 		return isGenPlaying(gen) && buffering;
 	}
 
-	function playOrToggle(gen: GenerationItem): void {
+	async function playOrToggle(gen: GenerationItem): Promise<void> {
 		if (isGenPlaying(gen) && audioPlayer.status === 'playing') {
 			audioPlayer.toggle();
 			return;
 		}
-		const albumId = $selectedAlbumId;
-		if (shouldUseQueueStream($queuePlaybackMode)) {
-			if (albumId) {
-				void playAlbumFromGeneration(albumId, song, gen);
+		try {
+			const albumId = $selectedAlbumId;
+			if (shouldUseQueueStream($queuePlaybackMode)) {
+				if (albumId) {
+					await playAlbumFromGeneration(albumId, song, gen);
+					return;
+				}
+				await playLibraryFromGeneration(gen);
 				return;
 			}
-			void playLibraryFromGeneration(gen);
-			return;
+			queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
+			playGeneration(gen, song, { restart: true });
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Playback failed', 'error');
 		}
-		queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
-		playGeneration(gen, song, { restart: true });
 	}
 
-	function handleCardClick(gen: GenerationItem, e: MouseEvent): void {
+	function handleRowClick(gen: GenerationItem, e: MouseEvent): void {
 		if (e.ctrlKey || e.metaKey) {
 			toggleSelection(gen.id);
 			return;
@@ -161,10 +180,10 @@
 			return;
 		}
 		onselect(gen);
-		playOrToggle(gen);
+		void playOrToggle(gen);
 	}
 
-	function handleCardKeydown(gen: GenerationItem, e: KeyboardEvent): void {
+	function handleRowKeydown(gen: GenerationItem, e: KeyboardEvent): void {
 		if (e.target !== e.currentTarget) return;
 		if (e.key !== 'Enter' && e.key !== ' ') return;
 		e.preventDefault();
@@ -173,32 +192,8 @@
 			return;
 		}
 		onselect(gen);
-		playOrToggle(gen);
+		void playOrToggle(gen);
 	}
-
-	function toggleOverflow(genId: string, e: MouseEvent): void {
-		e.stopPropagation();
-		overflowId = overflowId === genId ? null : genId;
-		playlistFor = null;
-	}
-
-	$effect(() => {
-		if (!overflowId) return;
-		function onClick(): void {
-			overflowId = null;
-		}
-		function onKeydown(event: KeyboardEvent): void {
-			if (event.key !== 'Escape') return;
-			event.preventDefault();
-			overflowId = null;
-		}
-		document.addEventListener('click', onClick);
-		document.addEventListener('keydown', onKeydown, true);
-		return () => {
-			document.removeEventListener('click', onClick);
-			document.removeEventListener('keydown', onKeydown, true);
-		};
-	});
 
 	async function handleBulkDelete(): Promise<void> {
 		const ids = [...$selectedIds];
@@ -282,6 +277,28 @@
 			playlistFor = null;
 		}
 	}
+
+	async function onCancelGenerateJob(): Promise<void> {
+		if (!generateJob) return;
+		try {
+			await cancelJob(generateJob.id);
+		} catch {
+			/* best effort */
+		}
+	}
+
+	async function confirmDeleteVersion(): Promise<void> {
+		const group = deleteVersionFor;
+		deleteVersionFor = null;
+		const versionId = group?.generations[0]?.version_id;
+		if (!group || !versionId) return;
+		try {
+			await handleDeleteVersion(song.id, versionId, true);
+			addToast(`Deleted v${group.versionNumber}`, 'success');
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Delete failed', 'error');
+		}
+	}
 </script>
 
 {#if loadStatus === 'error' && song.generations.length === 0}
@@ -293,10 +310,10 @@
 	</div>
 {:else if loadStatus === 'loading' && song.generations.length === 0}
 	<div class="empty" role="status">{TAKES_LOADING}</div>
-{:else if song.generations.length === 0}
+{:else if song.generations.length === 0 && !dirty}
 	<div class="empty">{TAKES_EMPTY}</div>
 {:else}
-	<div class="gen-list">
+	<div class="takes-list">
 		{#if loadStatus === 'error'}
 			<div class="load-error" role="alert">
 				<span>{loadError || TAKES_ERROR}</span>
@@ -305,18 +322,57 @@
 				{/if}
 			</div>
 		{/if}
-		{#each groups as group (group.label)}
+
+		{#if dirty}
+			<div class="draft-banner">
+				{TAKES_DRAFT_BANNER_TEMPLATE.replace('{version}', String(draftVersionNumber))}
+			</div>
+		{/if}
+
+		{#if generateJob && (generateJob.status === 'queued' || generateJob.status === 'running')}
+			<div class="generating-row">
+				<span class="generating-label">
+					v{latestVersionNumber} · {TAKES_GENERATING_LABEL}
+					{#if generateJob.status === 'queued'}
+						{generateJob.queue_position ? `· queued #${generateJob.queue_position}` : '· queued'}
+					{/if}
+				</span>
+				<span class="generating-bar">
+					<span class="generating-fill" style="width: {Math.round(generateJob.progress * 100)}%"
+					></span>
+				</span>
+				<button type="button" class="generating-cancel" onclick={onCancelGenerateJob}>×</button>
+			</div>
+		{/if}
+
+		{#each groups as group (group.versionNumber ?? 'unknown')}
 			<div class="version-section">
-				<div class="version-header">{group.label}</div>
+				<div class="version-header-row">
+					<span class="version-header">{group.label}</span>
+					{#if group.versionNumber !== null}
+						<button
+							type="button"
+							class="version-delete-btn"
+							data-hitbox="frequent"
+							data-hitbox-face
+							onclick={() => (deleteVersionFor = group)}
+							aria-label={`${TAKES_DELETE_VERSION_LABEL} v${group.versionNumber}`}
+							title={TAKES_DELETE_VERSION_LABEL}
+						>
+							<Icon name="trash" size={12} />
+						</button>
+					{/if}
+				</div>
 				{#each group.generations as gen (gen.id)}
+					{@const duration = formatDuration(gen)}
 					<div
-						class="gen-card"
+						class="take-row"
 						class:playing={isGenPlaying(gen)}
 						class:buffering={isGenLoading(gen)}
 						class:selected={$selectedIds.has(gen.id)}
 						class:inspected={selectedId === gen.id}
-						onclick={(e) => handleCardClick(gen, e)}
-						onkeydown={(e) => handleCardKeydown(gen, e)}
+						onclick={(e) => handleRowClick(gen, e)}
+						onkeydown={(e) => handleRowKeydown(gen, e)}
 						role="button"
 						tabindex="0"
 						aria-pressed={selectedId === gen.id}
@@ -325,62 +381,43 @@
 							<span class="selection-checkbox">
 								<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
 							</span>
+						{:else}
+							<Icon name={isGenPlaying(gen) ? 'pause' : 'play'} size={14} />
 						{/if}
 
-						<div class="gen-info">
-							<span class="gen-name">
-								{#if gen.is_picked}<span class="picked-star">★</span>{/if}
-								{`${NOW_PLAYING_TAKE_PREFIX} ${gen.generation_number}`}
-							</span>
-							<AgeStamp createdAt={gen.created_at} />
-							{#if gen.seed}
-								<span class="gen-seed">seed:{gen.seed}</span>
-							{/if}
-							{#if gen.model_mode}
-								<span class="model-badge">{gen.model_mode}</span>
-							{/if}
-							{#if gen.is_archived}
-								<span class="expiry-badge archived" title="Archived — will be hard-deleted">
-									archived
-								</span>
-							{:else}
-								{@const daysLeft = daysUntilExpiry(gen)}
-								{#if daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS}
-									<span
-										class="expiry-badge warn"
-										title="Expires in {daysLeft} day{daysLeft === 1
-											? ''
-											: 's'} — pick or keep to preserve"
-									>
-										⏳ {daysLeft}d
-									</span>
-								{/if}
-							{/if}
-						</div>
+						<span class="take-label">
+							v{gen.version_number ?? '—'} · take {gen.generation_number}
+						</span>
 
-						<div class="gen-actions">
-							{#if gen.scores?.user_rating !== undefined}
-								<span class="score-badge {scoreColor('user_rating', gen.scores.user_rating)}">
-									{gen.scores.user_rating.toFixed(0)}
-								</span>
-							{/if}
-							{#if gen.scores?.audiobox_quality !== undefined}
+						{#if duration}
+							<span class="take-duration">{duration}</span>
+						{/if}
+
+						{#if gen.scores?.user_rating !== undefined}
+							<span class="score-badge {scoreColor('user_rating', gen.scores.user_rating)}">
+								{gen.scores.user_rating.toFixed(0)}
+							</span>
+						{/if}
+
+						{#if gen.is_archived}
+							<span class="expiry-badge archived" title="Archived — will be hard-deleted">
+								archived
+							</span>
+						{:else}
+							{@const daysLeft = daysUntilExpiry(gen)}
+							{#if daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS}
 								<span
-									class="score-mini {scoreColor('audiobox_quality', gen.scores.audiobox_quality)}"
+									class="expiry-badge warn"
+									title="Expires in {daysLeft} day{daysLeft === 1
+										? ''
+										: 's'} — pick or keep to preserve"
 								>
-									Q:{gen.scores.audiobox_quality.toFixed(1)}
+									⏳ {daysLeft}d
 								</span>
 							{/if}
-							{#if gen.scores?.audiobox_enjoyment !== undefined}
-								<span
-									class="score-mini {scoreColor(
-										'audiobox_enjoyment',
-										gen.scores.audiobox_enjoyment
-									)}"
-								>
-									E:{gen.scores.audiobox_enjoyment.toFixed(1)}
-								</span>
-							{/if}
+						{/if}
+
+						<span class="take-actions">
 							<button
 								type="button"
 								class="pick-btn"
@@ -393,7 +430,7 @@
 								aria-pressed={gen.is_picked}
 								aria-label={gen.is_picked ? 'Unpick' : TAKE_PICK_LABEL}
 							>
-								{TAKE_PICK_LABEL}
+								<Icon name={gen.is_picked ? 'star-filled' : 'star'} size={16} />
 							</button>
 							<button
 								type="button"
@@ -407,137 +444,35 @@
 								aria-pressed={gen.is_kept}
 								aria-label={gen.is_kept ? 'Unkeep' : TAKE_KEEP_LABEL}
 							>
-								{TAKE_KEEP_LABEL}
+								<Icon name={gen.is_kept ? 'heart-filled' : 'heart'} size={16} />
 							</button>
 							{#if !$selectionMode}
-								<button
-									type="button"
-									class="continue-btn"
-									onclick={(e) => {
-										e.stopPropagation();
-										onagain?.(gen);
-									}}>{TAKE_AGAIN_LABEL}</button
-								>
-								<button
-									type="button"
-									class="continue-btn"
-									onclick={(e) => {
-										e.stopPropagation();
-										onrepaint?.(gen);
-									}}>{TAKE_REPAINT_LABEL}</button
-								>
-								<button
-									type="button"
-									class="continue-btn"
-									onclick={(e) => {
-										e.stopPropagation();
-										onaudiocover?.(gen);
-									}}>{TAKE_AUDIO_COVER_LABEL}</button
-								>
-								<div class="overflow-anchor">
-									<button
-										type="button"
-										class="overflow-btn"
-										aria-haspopup="menu"
-										aria-expanded={overflowId === gen.id}
-										aria-label={TAKE_OVERFLOW_LABEL}
-										onclick={(e) => toggleOverflow(gen.id, e)}
-									>
-										<Icon name="more-horizontal" size={16} />
-									</button>
-									{#if overflowId === gen.id}
-										<div
-											class="overflow-menu"
-											role="menu"
-											data-escape-overlay="true"
-											tabindex="-1"
-											onclick={(e) => e.stopPropagation()}
-											onkeydown={(e) => e.stopPropagation()}
-										>
-											{#if gen.is_shared}
-												<button
-													type="button"
-													role="menuitem"
-													class="overflow-item"
-													onclick={() => {
-														overflowId = null;
-														void copyShareUrl(gen);
-													}}>{TAKE_COPY_LINK_LABEL}</button
-												>
-												<button
-													type="button"
-													role="menuitem"
-													class="overflow-item"
-													onclick={() => {
-														overflowId = null;
-														void onUnshare(gen);
-													}}>{TAKE_UNSHARE_LABEL}</button
-												>
-											{:else}
-												<button
-													type="button"
-													role="menuitem"
-													class="overflow-item"
-													onclick={() => {
-														overflowId = null;
-														void onShare(gen);
-													}}>{TAKE_SHARE_LABEL}</button
-												>
-											{/if}
-											<button
-												type="button"
-												role="menuitem"
-												class="overflow-item"
-												onclick={() => {
-													overflowId = null;
-													playlistFor = gen.id;
-												}}>{TAKE_PLAYLIST_LABEL}</button
-											>
-											<button
-												type="button"
-												role="menuitem"
-												class="overflow-item"
-												disabled={remasteringId === gen.id}
-												onclick={() => {
-													overflowId = null;
-													void onRemaster(gen);
-												}}>{TAKE_REMASTER_LABEL}</button
-											>
-											{#if gen.is_archived}
-												<button
-													type="button"
-													role="menuitem"
-													class="overflow-item"
-													onclick={() => {
-														overflowId = null;
-														void onRestore(gen);
-													}}>{TAKE_RESTORE_LABEL}</button
-												>
-											{/if}
-											<button
-												type="button"
-												role="menuitem"
-												class="overflow-item destructive"
-												onclick={() => {
-													overflowId = null;
-													deleteFor = gen;
-												}}>{TAKE_DELETE_LABEL}</button
-											>
-										</div>
-									{/if}
-									{#if playlistFor === gen.id}
-										<PlaylistPicker
-											onselect={onAddToPlaylist}
-											onclose={() => (playlistFor = null)}
-										/>
-									{/if}
-								</div>
+								<TakeMenu
+									{gen}
+									onagain={() => onagain(gen)}
+									onuseasreference={() => onuseasreference(gen)}
+									onshare={() => void onShare(gen)}
+									onunshare={() => void onUnshare(gen)}
+									oncopylink={() => void copyShareUrl(gen)}
+									onpinseed={() => gen.seed != null && actions.pinSeed(gen.seed)}
+									onaddtoplaylist={() => (playlistFor = gen.id)}
+									onremaster={() => void onRemaster(gen)}
+									onrestore={() => void onRestore(gen)}
+									ondelete={() => (deleteFor = gen)}
+								/>
+								{#if playlistFor === gen.id}
+									<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistFor = null)} />
+								{/if}
 							{/if}
-						</div>
+						</span>
 					</div>
 				{/each}
 			</div>
 		{/each}
+
+		{#if compact}
+			<p class="mobile-hint">{TAKES_MOBILE_HINT}</p>
+		{/if}
 
 		{#if $selectionMode}
 			<div class="selection-toolbar">
@@ -568,17 +503,93 @@
 	/>
 {/if}
 
+{#if deleteVersionFor}
+	<ConfirmDeleteDialog
+		title={`Delete v${deleteVersionFor.versionNumber}?`}
+		items={[
+			`${deleteVersionFor.generations.length} take${deleteVersionFor.generations.length !== 1 ? 's' : ''} will be deleted permanently`
+		]}
+		confirmLabel="Delete Version"
+		onconfirm={() => void confirmDeleteVersion()}
+		oncancel={() => (deleteVersionFor = null)}
+	/>
+{/if}
+
 <style>
-	.gen-list {
+	.takes-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.8rem;
+		gap: 0.6rem;
+	}
+
+	.draft-banner {
+		padding: 0.5rem 0.8rem;
+		background: rgba(220, 180, 20, 0.12);
+		border: 1px solid rgba(220, 180, 20, 0.4);
+		border-radius: var(--card-radius);
+		font-size: 0.8rem;
+		color: #d8b020;
+	}
+
+	.generating-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.5rem 0.8rem;
+		background: var(--surface);
+		border: 1px dashed var(--border);
+		border-radius: var(--card-radius);
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+
+	.generating-label {
+		flex-shrink: 0;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.4px;
+	}
+
+	.generating-bar {
+		flex: 1;
+		height: 4px;
+		background: var(--border);
+		border-radius: 2px;
+		overflow: hidden;
+	}
+
+	.generating-fill {
+		display: block;
+		height: 100%;
+		background: var(--score-ok);
+		transition: width 0.3s ease;
+	}
+
+	.generating-cancel {
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: 3px;
+		color: var(--text-muted);
+		cursor: pointer;
+		line-height: 1;
+		padding: 0.1rem 0.35rem;
+	}
+
+	.generating-cancel:hover {
+		color: var(--score-bad);
+		border-color: var(--score-bad);
 	}
 
 	.version-section {
 		display: flex;
 		flex-direction: column;
 		gap: 0.15rem;
+	}
+
+	.version-header-row {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
 	}
 
 	.version-header {
@@ -590,12 +601,26 @@
 		padding: 0.3rem 0;
 	}
 
-	.gen-card {
+	.version-delete-btn {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.7rem;
-		padding: 0.7rem 0.8rem;
+		justify-content: center;
+		background: none;
+		border: none;
+		color: var(--text-subtle);
+		cursor: pointer;
+		padding: 0.15rem;
+	}
+
+	.version-delete-btn:hover {
+		color: var(--score-bad);
+	}
+
+	.take-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.45rem 0.7rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
@@ -604,25 +629,26 @@
 		color: var(--text);
 		font: inherit;
 		width: 100%;
+		min-width: 0;
 	}
 
-	.gen-card:hover {
+	.take-row:hover {
 		border-color: rgba(160, 32, 240, 0.3);
 		background: var(--surface-hover);
 	}
 
-	.gen-card.playing {
+	.take-row.playing {
 		border-color: var(--accent);
 		background: rgba(160, 32, 240, 0.1);
 	}
 
-	.gen-card.buffering {
+	.take-row.buffering {
 		border-color: var(--accent);
 		animation: buffer-pulse 1.5s ease-in-out infinite;
 	}
 
-	.gen-card.selected,
-	.gen-card.inspected {
+	.take-row.selected,
+	.take-row.inspected {
 		border-color: var(--accent);
 		background: rgba(160, 32, 240, 0.05);
 	}
@@ -639,43 +665,41 @@
 		}
 	}
 
-	.gen-info {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		min-width: 0;
-	}
-
-	.gen-name {
+	.take-label {
 		font-family: var(--font-display);
-		font-size: 0.93rem;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-	}
-
-	.picked-star {
-		color: var(--accent);
-		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
-	}
-
-	.gen-seed {
-		font-size: 0.7rem;
-		color: var(--text-subtle);
+		font-size: 0.85rem;
+		letter-spacing: 0.3px;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.model-badge {
-		font-size: 0.6rem;
-		padding: 0.1rem 0.3rem;
-		border-radius: 3px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		color: var(--text-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
+	.take-duration {
+		font-size: 0.75rem;
+		color: var(--text-subtle);
+		flex: 1;
+		flex-shrink: 0;
+		white-space: nowrap;
+	}
+
+	.score-badge {
+		font-family: var(--font-display);
+		font-size: 0.95rem;
+		min-width: 24px;
+		text-align: center;
+	}
+
+	.score-badge.good {
+		color: var(--score-good);
+	}
+
+	.score-badge.ok {
+		color: var(--score-ok);
+	}
+
+	.score-badge.bad {
+		color: var(--score-bad);
 	}
 
 	.expiry-badge {
@@ -698,156 +722,34 @@
 		text-transform: uppercase;
 	}
 
-	.gen-actions {
+	.take-actions {
 		display: flex;
 		align-items: center;
-		flex-wrap: wrap;
-		gap: 0.4rem;
+		gap: 0.35rem;
 		flex-shrink: 0;
-	}
-
-	.score-badge {
-		font-family: var(--font-display);
-		font-size: 1.07rem;
-		min-width: 28px;
-		text-align: center;
-	}
-
-	.score-badge.good {
-		color: var(--score-good);
-	}
-
-	.score-badge.ok {
-		color: var(--score-ok);
-	}
-
-	.score-badge.bad {
-		color: var(--score-bad);
-	}
-
-	.score-mini {
-		font-size: 0.7rem;
-		font-family: var(--font-display);
-	}
-
-	.score-mini.good {
-		color: var(--score-good);
-	}
-
-	.score-mini.ok {
-		color: var(--score-ok);
-	}
-
-	.score-mini.bad {
-		color: var(--score-bad);
+		margin-left: auto;
 	}
 
 	.pick-btn,
-	.keep-btn,
-	.continue-btn {
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		padding: 0.15rem 0.45rem;
-		font-size: 0.7rem;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.4px;
-		color: var(--text-muted);
-		cursor: pointer;
-		line-height: 1.2;
-	}
-
-	.pick-btn:hover {
-		color: var(--accent);
-		border-color: var(--accent);
-	}
-
-	.pick-btn.picked {
-		color: var(--accent);
-		border-color: var(--accent);
-		background: rgba(160, 32, 240, 0.1);
-	}
-
-	.keep-btn:hover {
-		color: var(--keep);
-		border-color: var(--keep);
-	}
-
-	.keep-btn.kept {
-		color: var(--keep);
-		border-color: var(--keep);
-		background: color-mix(in srgb, var(--keep) 12%, transparent);
-	}
-
-	.continue-btn:hover {
-		color: var(--primary);
-		border-color: var(--primary);
-	}
-
-	.overflow-anchor {
-		position: relative;
-	}
-
-	.overflow-btn {
+	.keep-btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		background: none;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		color: var(--text-muted);
-		padding: 0.15rem 0.3rem;
-		cursor: pointer;
-	}
-
-	.overflow-btn:hover,
-	.overflow-btn[aria-expanded='true'] {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.overflow-menu {
-		position: absolute;
-		right: 0;
-		top: calc(100% + 4px);
-		z-index: 5;
-		min-width: 10rem;
-		display: flex;
-		flex-direction: column;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
-		padding: 0.25rem;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-	}
-
-	.overflow-item {
-		background: none;
 		border: none;
-		text-align: left;
-		padding: 0.4rem 0.55rem;
 		color: var(--text-muted);
-		font-size: 0.75rem;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.4px;
 		cursor: pointer;
-		border-radius: 3px;
+		padding: 0.15rem;
 	}
 
-	.overflow-item:hover:not(:disabled) {
-		background: var(--surface-hover);
-		color: var(--text);
+	.pick-btn:hover,
+	.pick-btn.picked {
+		color: var(--accent);
 	}
 
-	.overflow-item.destructive:hover:not(:disabled) {
-		color: var(--score-bad);
-	}
-
-	.overflow-item:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
+	.keep-btn:hover,
+	.keep-btn.kept {
+		color: var(--keep);
 	}
 
 	.selection-checkbox {
@@ -857,7 +759,7 @@
 		flex-shrink: 0;
 	}
 
-	.gen-card.selected .selection-checkbox {
+	.take-row.selected .selection-checkbox {
 		color: var(--accent);
 	}
 
@@ -908,6 +810,14 @@
 		letter-spacing: 0.5px;
 	}
 
+	.mobile-hint {
+		margin: 0;
+		text-align: center;
+		font-size: 0.72rem;
+		color: var(--text-subtle);
+		font-style: italic;
+	}
+
 	.empty,
 	.load-error {
 		padding: 2.7rem 1.3rem;
@@ -946,26 +856,8 @@
 	}
 
 	@media (max-width: 768px) {
-		.gen-card {
-			padding: 0.55rem 0.7rem;
-			gap: 0.55rem;
-		}
-
-		.score-mini {
-			display: none;
-		}
-
-		.gen-name {
-			font-size: 0.93rem;
-		}
-
-		.gen-seed {
-			font-size: 0.75rem;
-		}
-
-		.gen-actions {
-			flex-basis: 100%;
-			justify-content: flex-end;
+		.take-row {
+			padding: 0.55rem 0.6rem;
 		}
 	}
 </style>
