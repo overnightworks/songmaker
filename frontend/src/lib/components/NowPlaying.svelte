@@ -7,9 +7,22 @@
 		NOW_PLAYING_GO_TO_SONG,
 		NOW_PLAYING_LABEL,
 		NOW_PLAYING_NO_LYRICS,
-		NOW_PLAYING_TAKE_PREFIX
+		NOW_PLAYING_TAKE_PREFIX,
+		SHUFFLE_SCOPE_ALBUM,
+		SHUFFLE_SCOPE_LIBRARY,
+		SHUFFLE_SCOPE_PLAYLIST
 	} from '$lib/constants';
+	import {
+		libraryQueueSkipped,
+		libraryQueueSkippedComplete,
+		queueContext,
+		shuffleEnabled,
+		toggleShuffle,
+		windowEnded
+	} from '$lib/stores/player';
+	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import Icon from './Icon.svelte';
+	import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 
 	let {
 		info,
@@ -29,34 +42,25 @@
 	);
 	const takeLabel = $derived(`${NOW_PLAYING_TAKE_PREFIX} ${info.generation.generation_number}`);
 
+	const ctx = $derived($queueContext);
+	const shuffle = $derived($shuffleEnabled);
+	const shuffleScope = $derived(
+		ctx.type === 'playlist'
+			? SHUFFLE_SCOPE_PLAYLIST
+			: ctx.type === 'album'
+				? SHUFFLE_SCOPE_ALBUM
+				: SHUFFLE_SCOPE_LIBRARY
+	);
+	const skipped = $derived(ctx.type === 'library' ? $libraryQueueSkipped : []);
+	const skippedComplete = $derived(ctx.type === 'library' ? $libraryQueueSkippedComplete : true);
+
 	onMount(() => {
 		void tick().then(() => sheet?.focus());
 	});
 
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!sheet) return;
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			onclose();
-			return;
-		}
-		if (event.key !== 'Tab') return;
-		const focusable = Array.from(sheet.querySelectorAll<HTMLElement>('button:not(:disabled)'));
-		if (focusable.length === 0) {
-			event.preventDefault();
-			sheet.focus();
-			return;
-		}
-		const first = focusable[0];
-		const last = focusable[focusable.length - 1];
-		const active = document.activeElement;
-		if (event.shiftKey && (active === first || active === sheet || !sheet.contains(active))) {
-			event.preventDefault();
-			last.focus();
-		} else if (!event.shiftKey && (active === last || !sheet.contains(active))) {
-			event.preventDefault();
-			first.focus();
-		}
+		handleFocusTrapKeydown(sheet, event, onclose);
 	}
 </script>
 
@@ -83,16 +87,33 @@
 					{/if}
 					<p class="sheet-take">{takeLabel}</p>
 				</div>
-				<button
-					class="icon-btn"
-					style:min-width="{HITBOX_FREQUENT_PX}px"
-					style:min-height="{HITBOX_FREQUENT_PX}px"
-					onclick={onclose}
-					aria-label={NOW_PLAYING_CLOSE}
-				>
-					<Icon name="x" size={18} />
-				</button>
+				<div class="sheet-actions">
+					<button
+						class="icon-btn"
+						class:active={shuffle}
+						style:min-width="{HITBOX_FREQUENT_PX}px"
+						style:min-height="{HITBOX_FREQUENT_PX}px"
+						onclick={() => toggleShuffle()}
+						aria-pressed={shuffle}
+						aria-label={shuffle ? `Disable shuffle (${shuffleScope})` : `Shuffle ${shuffleScope}`}
+						title={shuffle ? `Disable shuffle (${shuffleScope})` : `Shuffle ${shuffleScope}`}
+					>
+						<Icon name="shuffle" size={18} />
+					</button>
+					<button
+						class="icon-btn"
+						style:min-width="{HITBOX_FREQUENT_PX}px"
+						style:min-height="{HITBOX_FREQUENT_PX}px"
+						onclick={onclose}
+						aria-label={NOW_PLAYING_CLOSE}
+					>
+						<Icon name="x" size={18} />
+					</button>
+				</div>
 			</header>
+			<div class="queue-feedback">
+				<QueueStreamFeedback {skipped} {skippedComplete} windowEnded={$windowEnded} />
+			</div>
 			{#if hasLyrics}
 				<div class="lyrics">{lyrics}</div>
 			{:else}
@@ -174,6 +195,12 @@
 		color: var(--text-muted);
 		overflow-wrap: anywhere;
 	}
+	.sheet-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex-shrink: 0;
+	}
 	.icon-btn,
 	.go-song {
 		cursor: pointer;
@@ -197,6 +224,14 @@
 		color: var(--text);
 		border-color: var(--border);
 		background: var(--surface-hover);
+	}
+	.icon-btn.active {
+		color: var(--accent);
+		border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+	}
+	.queue-feedback {
+		align-self: flex-start;
 	}
 	.lyrics,
 	.lyrics-empty {

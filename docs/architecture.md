@@ -127,53 +127,84 @@ User clicks "Generate"                    User clicks "Score"
 
 SvelteKit single-page app. All state in Svelte stores.
 
-The home library has two exclusive modes (Studio and Listen; internal section IDs
-`albums` and `playlists`). Studio is albums and songs. Listen is one mixed wall of
-albums and playlists as the same tile chrome (cover image when `cover` is present,
-otherwise `colors.primary` or title initials) — not a third tab. Share
-inventory is a complete server list of the current user's public slugs
-(`GET /api/library/shares`), opened from `Shared · N` in the header — including
-when mobile detail hides the library nav — not a third library tab. Membership is
-public slug reachability (`is_shared` plus slug, not soft-deleted; archived takes
-stay). `N` is the unfiltered server total; a type filter pages a subset without
-changing `N`. Old `history.state.section === 'shared'` still opens that inventory.
-Unshare stays the four resource DELETE endpoints. Studio browse starts as a wrapping
-album-card grid (title, artist, song count, created age, and that same cover or
-fallback chrome), not a nested song tree. Clicking a Studio album card does not
-clear an open song or Recipe/Takes; the browse column becomes that album's track
-list (rows, not album-sized tiles), and Cover/Rename/Share/Delete stay album
-chrome rather than a page that replaces the editor. If the open song belongs to a
-different album, the editor stays and browse still shows the clicked album's
-tracks. Clicking a Listen tile opens that collection's track interior (album or
-playlist: cover, title, tracks) without Recipe/Takes. Cards wrap with
-`minmax(0, …)` above 768px and stack at ≤768px (`LIBRARY_NARROW_MEDIA`); keep-browse
-is not a horizontal shelf. Search still lists song hits under album context;
-album-only hits may use card chrome. Desktop keeps compact Studio/Listen
-navigation in the sidebar. Opening a Studio song on the detail surface keeps a
-named browse column beside song detail (`nav browse detail`); after a Studio
-album click that column is the focused album's tracks. Listen interiors, Create,
-and Shared hide browse beside detail, so the inventory never sits beside
-`SongDetailView`. On viewports ≤768px, any detail hides browse and the song
-header offers album title plus previous/next track in that album — no extra
-column at 320 and no third Studio/Listen/Shared tab. Each mode keeps its
-last visible browse/detail context (selection, query, sort, loaded page, scroll,
-and song surface) in memory; switching Studio↔Listen replaces the current
-history entry and restores that mode's surface. Library context is also stored
-on `history.state` (`kind: 'songmaker'`) so browser-back and shell-back restore
-the same view. Older history blobs without `detailTab` default to Takes.
+The app shell is one navigation, not modes. A left `Rail` (264px, inline on
+wide layouts, behind a drawer with a 46px trigger strip on ≤768px or any
+coarse pointer) holds: the brand, a "Library" link, the context of the single
+open collection, and a bottom Settings link + user menu. The rail context
+(`RailContext.svelte`) shows the open album's tracks or the open playlist's
+entries — an equalizer marks the one actually playing, a left-accent border
+marks the selected/current row — and renders nothing when no collection is
+open. There is no Studio/Listen mode split and no third library tab for
+Shared; `LibraryWall.svelte` (the main-area library browser) filters by chips
+`Albums · Playlists · Shared` instead, backed by `libraryFilter` in
+`stores/libraryContext.ts`. Share inventory is the same complete server list
+of the current user's public slugs (`GET /api/library/shares`) as before,
+just reached via the Shared chip; membership, `N`, and the DELETE endpoints
+are unchanged.
+
+The single source of navigation truth for "what collection is open" is the
+leaf store `stores/collection.ts` (`openCollection: {kind: 'album'|'playlist',
+id} | null`), which nothing but `openAlbum`/`openPlaylist`/history restore in
+`stores/navigation.ts` and `loadPlaylistDetail` in `stores/playlists.ts`
+write. `playlists.ts`'s `selectedPlaylistId` is derived from it, not
+independently writable. Opening a song — whatever the entry point (rail row,
+search hit, `?song=` deep link, history restore) — always leaves the rail
+context pointing at that song's album: a module-level subscription in
+`navigation.ts` sets `openCollection` to the song's album whenever it doesn't
+already match, so the album is never unreachable while a song is open (the
+#93 defect this shell replaces). `selectedAlbumId` in `stores/player.ts` is a
+separate, narrower concept — the open *song's* album, used by the editor and
+queueing — never written from `openCollection`.
+
+A collection interior (`AlbumDetailView` / `PlaylistDetailView`) shares one
+header, `CollectionHeader.svelte`: cover, title, subtitle, a primary Play
+action, and a single `…` menu (`CollectionMenu.svelte`). There is no visible
+Share icon — the menu's first line names the object ("Album · <title>" /
+"Playlist · <title>"), then album entries are Share album · Cover… · Rename ·
+Add to playlist · Delete album, playlist entries are Share playlist · Save
+offline · Rename · Delete playlist. The Share row embeds the existing
+`ShareButton` component as its control (same toggle/clipboard/toast logic,
+not reimplemented); Rename forwards to the same `EditableTitle` click
+affordance the title itself uses, since `EditableTitle` exposes no external
+trigger. Album rows carry their own Play button (`playAlbumFromGeneration` on
+the song's picked/first generation) beside the existing click-to-open-song
+target.
+
+`PlayerBar` is transport-only: prev/play/next, a 44px cover, title/subtitle,
+the seek bar, and a "Now Playing" word-button with an up-chevron that opens
+the existing `NowPlaying` overlay. `idlePlayTarget` (in `stores/player.ts`)
+now takes the single `openCollection` instead of the old
+`albumId`/`songId`/`playlist` tuple, so a song open inside an album keeps
+that album as the idle Play target instead of falling back to the library
+pool. Shuffle and per-track queue-skip feedback (`QueueStreamFeedback`) live
+inside the `NowPlaying` overlay, not the bar; the take-pool picker
+(`LibraryPoolControl`) is deleted for this slice — `playbackSettings.
+libraryTakePool` still drives `playLibrary`, a picker UI returns in a later
+slice. `RailDrawer.svelte` and `CollectionMenu`'s dropdown share one focus
+trap, `lib/utils/focus-trap.ts` (Escape closes, Tab/Shift+Tab wrap at the
+edges).
+
+Library context — the open collection, filter, search, sort, loaded page,
+scroll, selected song/generation — lives on `history.state`
+(`kind: 'songmaker'`) so browser-back and the rail's Library link restore the
+same view; the Library link always pushes a fresh entry showing the wall
+while leaving the open collection in the rail (GitLab-style: it persists
+until another collection replaces it). Legacy history blobs from the old
+Studio/Listen section shape fail validation and fall back to the library
+root.
 
 | Layer | What | Key files |
 |-------|------|-----------|
 | Routes | Pages: main view, login, setup, settings | `src/routes/` |
-| Components | SongEditor, PlayerBar, SongList, take inspector (`GenerationView`), CoWriterPanel, etc. | `src/lib/components/` |
-| Stores | Reactive state: player, editor, filter, jobs, auth, settings, ui | `src/lib/stores/` |
+| Components | SongEditor, PlayerBar, LibraryWall, CollectionHeader/Menu, shell/Rail, take inspector (`GenerationView`), CoWriterPanel, etc. | `src/lib/components/` |
+| Stores | Reactive state: player, collection, libraryContext, navigation, editor, filter, jobs, auth, settings, ui | `src/lib/stores/` |
 | API client | Typed HTTP client, mirrors `songmaker_cli.api_models` | `src/lib/api/client.ts`, `types.ts` |
 
 The API client and `types.ts` are the frontend's contract with the backend. When `src/songmaker_cli/api_models/` changes, `types.ts` must match.
 
-Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new song/playlist, playlist-picker add, account-menu trigger) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). PlayerBar and SharedPlayer are out of this primitive's scope. On viewports ≤768px or any coarse pointer, the shell shows Brand/Back and one account overflow menu (theme, Voices, Settings, username, Logout) instead of inline header links; desktop keeps the same actions inline. Album, song, and playlist details use the app-shell back only — `goBack()` pops browser history when a Songmaker predecessor exists, otherwise restores library browse at `/`. A selected song stays on `SongDetailView` with two surfaces: Recipe (lyrics, prompt, params, Generate) and Takes (list plus in-song inspector). Selecting a take replaces the current history entry and does not push a page. List clicks and previous/next between songs also replace the current song history entry and keep Recipe/Takes; Back returns to the album overview or browse that opened the song, not through every neighbor. Go to song from Now Playing uses that same replace-or-stack rule, then opens Takes on the playing generation. Co-Writer is a Recipe drawer, not a peer tab. Desktop splits Recipe and Takes only when the panes box can give each column at least 360px after the split gap; otherwise the same Recipe | Takes switch as compact. Take rows wrap pick/keep onto their own row so seed text does not paint under the rating. The header is 46px so a 44px overflow-menu hitbox stays inside the 2px bottom border. Settings and Admin use that same compact media: a one-control section/tab selector and stacked action rows, so every control stays reachable at 320px without sideways scroll.
+Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new album/playlist, playlist-picker add) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). PlayerBar and SharedPlayer are out of this primitive's scope. A selected song stays on `SongDetailView` with two surfaces: Recipe (lyrics, prompt, params, Generate) and Takes (list plus in-song inspector). Selecting a take replaces the current history entry and does not push a page. List clicks and previous/next between songs also replace the current song history entry and keep Recipe/Takes; Back leaves the song for the rail's open collection (`backToCollection`), or the wall if none is open. Go to song from Now Playing opens the song and pins the rail context to its album, then opens Takes on the playing generation. Co-Writer is a Recipe drawer, not a peer tab. Desktop splits Recipe and Takes only when the panes box can give each column at least 360px after the split gap; otherwise the same Recipe | Takes switch as compact. Take rows wrap pick/keep onto their own row so seed text does not paint under the rating. Settings and Admin use that same compact media: a one-control section/tab selector and stacked action rows, so every control stays reachable at 320px without sideways scroll.
 
-The compact player title is the single entry to Now Playing. That sheet shows the playing take’s song, album/artist, take number, and the lyrics of the version that produced that generation — never the song’s latest draft.
+The "Now Playing" word-button in `PlayerBar` is the single entry to the Now Playing overlay. That sheet shows the playing take's song, album/artist, take number, and the lyrics of the version that produced that generation — never the song's latest draft.
 
 ### Backend (`src/songmaker_cli/`)
 

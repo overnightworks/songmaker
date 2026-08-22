@@ -19,11 +19,6 @@ export const LIBRARY_QUEUE_PLAY_DETAIL = 'Play';
 export const SHUFFLE_SCOPE_PLAYLIST = 'this playlist';
 export const SHUFFLE_SCOPE_ALBUM = 'this album';
 export const SHUFFLE_SCOPE_LIBRARY = 'all albums';
-// LIBRARY_POOL_HELP / LIBRARY_POOL_HELP_LABEL live with LibraryPoolControl,
-// deleted together with it once the transport-only PlayerBar lands.
-export const LIBRARY_POOL_HELP =
-	'Mix: Picks and Keeps. Picks: the album take. Keeps: favorites, more than one per song. All: every playable take.';
-export const LIBRARY_POOL_HELP_LABEL = 'What Mix Picks Keeps All mean';
 
 export const QUEUE_STREAM_UNPLAYABLE_START_DETAIL = 'Requested take is not playable';
 

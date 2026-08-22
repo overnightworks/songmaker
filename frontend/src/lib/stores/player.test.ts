@@ -60,6 +60,7 @@ import {
 	retainRicherSong,
 	filteredSongs,
 	handlePlaybackEnded,
+	idlePlayTarget,
 	navigateToPlaying,
 	playGeneration,
 	toPlaybackInfo,
@@ -97,6 +98,7 @@ import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { ApiError } from '$lib/api/fetch';
 import { libraryTakePool, setLibraryTakePool } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { openCollection } from '$lib/stores/collection';
 
 async function rebuildStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
 	const rebuild = audioPlayer.onStreamRebuild;
@@ -1171,6 +1173,7 @@ describe('native first play ignores stream settings', () => {
 	});
 
 	it('idle play on an empty playlist reports it like an empty pool', async () => {
+		openCollection.set({ kind: 'playlist', id: 'p1' });
 		selectedPlaylistDetail.set({
 			id: 'p1',
 			title: 'Night Drive',
@@ -1893,11 +1896,51 @@ describe('library take pool', () => {
 	});
 });
 
+describe('idlePlayTarget', () => {
+	const albums = [makeAlbum({ id: 'a1', title: 'Nachtstrom' })];
+	const playlist = {
+		id: 'p1',
+		title: 'Night Drive',
+		entry_count: 0,
+		is_shared: false,
+		share_slug: null,
+		created_at: '',
+		entries: []
+	};
+
+	it.each([
+		['none: falls back to the library pool label', null, { type: 'library', label: 'Picks' }],
+		[
+			'album: names the open album',
+			{ kind: 'album' as const, id: 'a1' },
+			{ type: 'album', label: 'Nachtstrom', albumId: 'a1' }
+		],
+		[
+			'playlist: names the open playlist',
+			{ kind: 'playlist' as const, id: 'p1' },
+			{ type: 'playlist', label: 'Night Drive' }
+		],
+		[
+			// Pins the #93 fix: a song open inside an album keeps the album as
+			// the idle target — because openCollection stays the album the
+			// whole time a song within it is open — instead of falling back
+			// to the library pool the way the old albumId/songId tuple did.
+			'song-inside-album: still targets the album, not the library pool',
+			{ kind: 'album' as const, id: 'a1' },
+			{ type: 'album', label: 'Nachtstrom', albumId: 'a1' }
+		]
+	])('%s', (_name, collection, expected) => {
+		const target = idlePlayTarget({ collection, albums, playlist, poolLabel: 'Picks' });
+		expect(target).toEqual(expected);
+	});
+});
+
 describe('playIdleStart', () => {
 	beforeEach(() => {
 		selectedAlbumId.set(null);
 		selectedSongId.set(null);
 		selectedPlaylistDetail.set(null);
+		openCollection.set(null);
 		vi.mocked(fetchLibraryPoolQueue).mockResolvedValue(makePoolQueue());
 	});
 
@@ -1910,7 +1953,7 @@ describe('playIdleStart', () => {
 	it('starts the open album natively when album interior is selected with no song', async () => {
 		const song = makeSong({ generations: [makeGen({ is_picked: true })] });
 		songList.set([song]);
-		selectedAlbumId.set('a1');
+		openCollection.set({ kind: 'album', id: 'a1' });
 		await playIdleStart();
 		expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
 		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
@@ -1921,6 +1964,7 @@ describe('playIdleStart', () => {
 	});
 
 	it('starts the open playlist natively when playlist interior is selected', async () => {
+		openCollection.set({ kind: 'playlist', id: 'p1' });
 		selectedPlaylistDetail.set({
 			id: 'p1',
 			title: 'Night Drive',

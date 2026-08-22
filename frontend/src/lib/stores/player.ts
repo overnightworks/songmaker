@@ -23,6 +23,7 @@ import {
 	type StreamFallbackState
 } from '$lib/services/audioPlayer.svelte';
 import { setupMediaSessionHandlers, updateMediaSessionMetadata } from '$lib/services/mediaSession';
+import { type OpenCollection, openCollection } from '$lib/stores/collection';
 import { addToast } from '$lib/stores/toast';
 import {
 	LIBRARY_TAKE_POOL_LABELS,
@@ -486,21 +487,25 @@ export type IdlePlayTarget =
 	| { type: 'album'; label: string; albumId: string }
 	| { type: 'library'; label: string };
 
+// The idle target follows the single navigation collection (stores/collection.ts)
+// rather than the album/song selection tuple it used to: a song open inside an
+// album keeps that album as the idle target instead of falling back to the
+// library pool, because the open collection stays the album the whole time a
+// song within it is open (see navigation.ts's ensureCollectionMatchesSong).
 export function idlePlayTarget(input: {
+	collection: OpenCollection | null;
 	playlist: PlaylistDetailItem | null;
-	albumId: string | null;
-	songId: string | null;
 	albums: AlbumItem[];
 	poolLabel: string;
 }): IdlePlayTarget {
-	if (input.playlist !== null && input.songId === null && input.albumId === null) {
-		return { type: 'playlist', label: input.playlist.title };
+	if (input.collection?.kind === 'playlist') {
+		return { type: 'playlist', label: input.playlist?.title ?? '' };
 	}
-	if (input.albumId !== null && input.songId === null) {
+	if (input.collection?.kind === 'album') {
 		return {
 			type: 'album',
-			label: albumTitle(input.albums, input.albumId),
-			albumId: input.albumId
+			label: albumTitle(input.albums, input.collection.id),
+			albumId: input.collection.id
 		};
 	}
 	return { type: 'library', label: input.poolLabel };
@@ -508,9 +513,8 @@ export function idlePlayTarget(input: {
 
 export async function playIdleStart(): Promise<void> {
 	const target = idlePlayTarget({
+		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
-		albumId: get(selectedAlbumId),
-		songId: get(selectedSongId),
 		albums: get(albumList),
 		poolLabel: poolLabel()
 	});
