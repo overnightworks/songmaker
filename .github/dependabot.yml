@@ -32,6 +32,11 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@vitest/*"
         update-types: ["version-update:semver-major"]
+      # Vite 8 (rolldown build errors — see #114 run log)
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@sveltejs/vite-plugin-svelte"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
