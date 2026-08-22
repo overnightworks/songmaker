@@ -154,6 +154,23 @@ describe('PlaylistDetailView row take traits', () => {
 		expect(meta).not.toContain('· v');
 		expect(meta).toBe('Artist · Gen #1');
 	});
+
+	it('omits duration when the version has none, since audio_duration defaults to 0', async () => {
+		selectedPlaylistDetail.set(
+			detail({
+				entries: [entry({ version_number: 1, audio_duration: 0, is_picked: false })]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		const row = requireElement<HTMLElement>(target, '.entry-row');
+		const meta = row.querySelector('.entry-meta')?.textContent ?? '';
+		expect(meta).not.toContain('0:00');
+		expect(meta).toContain('v1');
+	});
 });
 
 describe('PlaylistDetailView row overflow menu', () => {
