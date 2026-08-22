@@ -131,7 +131,7 @@ describe('shared playlist playback', () => {
 		audio.fire('ended');
 		await tick();
 
-		expect(target.textContent).toContain('Weitere Takes nicht geladen');
+		expect(target.textContent).toContain('More takes not loaded');
 		expect(target.querySelectorAll<HTMLButtonElement>('.track')[1].classList).toContain('active');
 	});
 
@@ -149,6 +149,6 @@ describe('shared playlist playback', () => {
 		await tick();
 
 		expect(target.querySelectorAll<HTMLButtonElement>('.track')[0].classList).toContain('active');
-		expect(target.textContent).not.toContain('Weitere Takes nicht geladen');
+		expect(target.textContent).not.toContain('More takes not loaded');
 	});
 });

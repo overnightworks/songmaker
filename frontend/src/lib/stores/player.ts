@@ -112,7 +112,7 @@ export function clearGenerationSelection(): void {
 }
 
 // --- Playback queue context ---
-type QueueContext =
+export type QueueContext =
 	| { type: 'library'; takes?: PlaybackInfo[]; index?: number }
 	| { type: 'album'; albumId: string; takes?: PlaybackInfo[]; index?: number }
 	| { type: 'playlist'; entries: PlaylistEntryItem[]; index: number };
@@ -727,7 +727,7 @@ function setAlbumQueueTakes(
 	});
 }
 
-function currentPlaylistIndex(
+export function currentPlaylistIndex(
 	ctx: { entries: PlaylistEntryItem[]; index: number },
 	current: PlaybackInfo | null = audioPlayer.current
 ): number {
@@ -745,6 +745,98 @@ function currentPlaylistIndex(
 			entry.mp3_path === current.generation.mp3_path
 	);
 	return idx >= 0 ? idx : ctx.index;
+}
+
+// --- Queue view model (Now Playing's queue panel) ---
+
+export interface QueueRowItem {
+	key: string;
+	songId: string;
+	songTitle: string;
+	generationId: string;
+	durationSec: number | null;
+	versionNumber: number | null;
+	generationNumber: number;
+}
+
+export interface QueueViewModel {
+	items: QueueRowItem[];
+	currentIndex: number;
+	upNext: QueueRowItem | null;
+}
+
+function nextQueueItem(items: QueueRowItem[], currentIndex: number): QueueRowItem | null {
+	if (items.length <= 1 || currentIndex < 0) return null;
+	return items[(currentIndex + 1) % items.length] ?? null;
+}
+
+function nativeQueueItem(take: PlaybackInfo, songs: SongItem[]): QueueRowItem {
+	return {
+		key: `${take.songId}:${take.generation.id}`,
+		songId: take.songId,
+		songTitle: take.songTitle,
+		generationId: take.generation.id,
+		// SongItem.audio_duration is the latest version's requested duration,
+		// not this specific take's actual length — PlaybackInfo carries no
+		// per-take duration (that lives only on the loaded <audio> element).
+		// Good enough for a queue row estimate; the transport's own progress
+		// bar shows the real duration once the take is playing.
+		durationSec: songs.find((s) => s.id === take.songId)?.audio_duration ?? null,
+		versionNumber: take.generation.version_number,
+		generationNumber: take.generation.generation_number
+	};
+}
+
+function playlistQueueItem(entry: PlaylistEntryItem): QueueRowItem {
+	return {
+		key: entry.id,
+		songId: entry.song_id,
+		songTitle: entry.song_title,
+		generationId: entry.generation_id,
+		durationSec: entry.audio_duration,
+		versionNumber: entry.version_number,
+		generationNumber: entry.generation_number
+	};
+}
+
+// Pure projection of the playback queue for Now Playing's queue panel. A
+// classic-mode context (library/album) whose native queue has not finished
+// building yet carries no `takes` — that renders "current only, no up next"
+// in the caller instead of an empty queue list, since the current take's
+// title/duration still come from the caller's own `PlaybackInfo` prop.
+export function buildQueueViewModel(
+	ctx: QueueContext,
+	current: PlaybackInfo | null,
+	songs: SongItem[]
+): QueueViewModel {
+	if (ctx.type === 'playlist') {
+		const items = ctx.entries.map(playlistQueueItem);
+		const currentIndex = currentPlaylistIndex(ctx, current);
+		return { items, currentIndex, upNext: nextQueueItem(items, currentIndex) };
+	}
+	if (!ctx.takes || ctx.takes.length === 0) {
+		return { items: [], currentIndex: -1, upNext: null };
+	}
+	const items = ctx.takes.map((take) => nativeQueueItem(take, songs));
+	const currentIndex = nativeTakeIndex(ctx, current);
+	return { items, currentIndex, upNext: nextQueueItem(items, currentIndex) };
+}
+
+// Plays the queue row at `index` in whatever queue context is active. A
+// shared-link stream, native (library/album), and playlist contexts each
+// keep their own index semantics, so this dispatches to the matching
+// internal player rather than duplicating that logic at the call site.
+export function jumpToQueueIndex(index: number): void {
+	if (audioPlayer.mode === 'stream') {
+		audioPlayer.seekToStreamTrack(index);
+		return;
+	}
+	const ctx = get(queueContext);
+	if (ctx.type === 'playlist') {
+		playPlaylistIndex(ctx, index, { restart: true });
+		return;
+	}
+	playNativeIndex(ctx, index);
 }
 
 export async function playNextSong(): Promise<void> {

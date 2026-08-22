@@ -32,24 +32,34 @@ export function shouldUseQueueStream(mode: QueuePlaybackMode): boolean {
 	return mode === 'stream';
 }
 
-export const LIBRARY_TAKE_POOLS = ['mix', 'picks', 'keeps', 'all'] as const;
+// The pool trio is one inclusivity scale, Picks -> + Keeps -> All takes.
+// "Keeps-only" is dropped from the UI; the backend pool value `mix` (Pick
+// union Keep) stays and now means "+ Keeps" here.
+export const LIBRARY_TAKE_POOLS = ['picks', 'mix', 'all'] as const;
 export type LibraryTakePool = (typeof LIBRARY_TAKE_POOLS)[number];
-export const DEFAULT_LIBRARY_TAKE_POOL: LibraryTakePool = 'mix';
+export const DEFAULT_LIBRARY_TAKE_POOL: LibraryTakePool = 'picks';
 
 export const LIBRARY_TAKE_POOL_LABELS: Record<LibraryTakePool, string> = {
-	mix: 'Mix',
 	picks: 'Picks',
-	keeps: 'Keeps',
-	all: 'All'
+	mix: '+ Keeps',
+	all: 'All takes'
 };
 
 const POOL_STORAGE_KEY = 'libraryTakePool';
 const VALID_POOLS: ReadonlySet<string> = new Set<string>(LIBRARY_TAKE_POOLS);
+// A pool value from before the trio migration: 'keeps' (keeps-only) is no
+// longer offered, and its closest surviving meaning is 'mix' (+ Keeps).
+const LEGACY_POOL_MIGRATIONS: Readonly<Record<string, LibraryTakePool>> = { keeps: 'mix' };
 
 function readStoredPool(): LibraryTakePool {
 	if (typeof window === 'undefined') return DEFAULT_LIBRARY_TAKE_POOL;
 	const stored = localStorage.getItem(POOL_STORAGE_KEY);
 	if (stored && VALID_POOLS.has(stored)) return stored as LibraryTakePool;
+	const migrated = stored ? LEGACY_POOL_MIGRATIONS[stored] : undefined;
+	if (migrated) {
+		localStorage.setItem(POOL_STORAGE_KEY, migrated);
+		return migrated;
+	}
 	return DEFAULT_LIBRARY_TAKE_POOL;
 }
 
