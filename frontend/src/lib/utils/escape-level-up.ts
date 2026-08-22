@@ -8,6 +8,15 @@
 // A popover whose ARIA role does not permit `aria-modal` (e.g. `role="menu"`
 // for the take overflow menu) marks itself `data-escape-overlay="true"`
 // instead, for the same purpose.
+//
+// A popover's own Escape handler typically runs (and unmounts the popover) in
+// the document capture phase, before this module's window-level bubble
+// listener ever gets to look at the DOM — by then `hasOpenOverlay()` sees
+// nothing and would wrongly also level up. So the same contract requires
+// every such handler to also call `event.preventDefault()` when it closes its
+// overlay; `defaultPrevented` survives the whole capture/target/bubble
+// dispatch on one Event, so checking it here reliably yields even after the
+// overlay is already gone from the DOM.
 export function isEditableElement(target: EventTarget | null): boolean {
 	if (!(target instanceof HTMLElement)) return false;
 	if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true;
@@ -20,10 +29,11 @@ export function hasOpenOverlay(root: Document | null): boolean {
 }
 
 export function shouldHandleGlobalEscape(
-	event: Pick<KeyboardEvent, 'key' | 'target'>,
+	event: Pick<KeyboardEvent, 'key' | 'target' | 'defaultPrevented'>,
 	root: Document | null
 ): boolean {
 	if (event.key !== 'Escape') return false;
+	if (event.defaultPrevented) return false;
 	if (isEditableElement(event.target)) return false;
 	if (hasOpenOverlay(root)) return false;
 	return true;

@@ -2,8 +2,14 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { albumList } from '$lib/stores/player';
 	import { openLibraryWall } from '$lib/stores/navigation';
-	import { ensurePlaylistsLoaded, playlistList } from '$lib/stores/playlists';
-	import { APP_NAME, RAIL_LIBRARY_LABEL, RAIL_SETTINGS_LABEL } from '$lib/constants';
+	import { libraryBrowse } from '$lib/stores/librarySearch';
+	import { ensurePlaylistsLoaded, playlistList, playlistLoad } from '$lib/stores/playlists';
+	import {
+		APP_NAME,
+		RAIL_LIBRARY_LABEL,
+		RAIL_SETTINGS_LABEL,
+		RAIL_SUMMARY_LOADING
+	} from '$lib/constants';
 	import { librarySummaryLabel } from '$lib/utils/format';
 	import RailContext from './RailContext.svelte';
 	import UserRow from './UserRow.svelte';
@@ -12,7 +18,20 @@
 
 	const albumCount = $derived($albumList.length);
 	const playlistCount = $derived($playlistList.length);
-	const summary = $derived(librarySummaryLabel(albumCount, playlistCount));
+
+	// Latches true the first time both lists have settled (ready or error) and
+	// never resets, so a later pagination/sort reload of either list doesn't
+	// blank the summary again — only the very first mount waits.
+	let summaryReady = $state(false);
+	$effect(() => {
+		const albumsSettled = $libraryBrowse.status === 'ready' || $libraryBrowse.status === 'error';
+		const playlistsSettled = $playlistLoad.status === 'ready' || $playlistLoad.status === 'error';
+		if (albumsSettled && playlistsSettled) summaryReady = true;
+	});
+
+	const summary = $derived(
+		summaryReady ? librarySummaryLabel(albumCount, playlistCount) : RAIL_SUMMARY_LOADING
+	);
 
 	$effect(() => {
 		void ensurePlaylistsLoaded();

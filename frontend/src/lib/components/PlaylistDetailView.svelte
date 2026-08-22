@@ -24,10 +24,14 @@
 	import { selectSong } from '$lib/stores/navigation';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
+		PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
+		PLAYLIST_ENTRY_MOVE_UP_LABEL,
 		PLAYLIST_ENTRY_OPEN_SONG_LABEL,
-		PLAYLIST_ENTRY_OVERFLOW_LABEL
+		PLAYLIST_ENTRY_OVERFLOW_LABEL,
+		PLAYLIST_ENTRY_REMOVE_LABEL
 	} from '$lib/constants';
 	import { formatTime, titleInitials } from '$lib/utils/format';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
@@ -36,9 +40,16 @@
 	let reorderBusy = $state(false);
 	let showDeleteConfirm = $state(false);
 	let overflowId = $state<string | null>(null);
+	let compact = $state(false);
 	const initials = $derived(
 		playlistDetail ? titleInitials(playlistDetail.title) : ALBUM_ART_EMPTY_INITIALS
 	);
+
+	$effect(() => {
+		return subscribeCompactLayout((value) => {
+			compact = value;
+		});
+	});
 
 	function toggleOverflow(entryId: string, e: MouseEvent): void {
 		e.stopPropagation();
@@ -318,53 +329,55 @@
 						</span>
 					</div>
 					<div class="entry-actions">
-						<div class="entry-controls">
-							{#if i > 0}
-								<button
-									class="move-btn"
-									data-hitbox="frequent"
-									data-hitbox-face
-									onclick={(e) => {
-										e.stopPropagation();
-										void onMoveEntry(entry.id, i - 1);
-									}}
-									disabled={reorderBusy}
-									title="Move up"
-									aria-label={`Move ${entry.song_title} up`}
-								>
-									<Icon name="chevron-up" size={14} />
-								</button>
-							{/if}
-							{#if i < playlistDetail.entries.length - 1}
-								<button
-									class="move-btn"
-									data-hitbox="frequent"
-									data-hitbox-face
-									onclick={(e) => {
-										e.stopPropagation();
-										void onMoveEntry(entry.id, i + 1);
-									}}
-									disabled={reorderBusy}
-									title="Move down"
-									aria-label={`Move ${entry.song_title} down`}
-								>
-									<Icon name="chevron-down" size={14} />
-								</button>
-							{/if}
-						</div>
-						<button
-							class="remove-btn"
-							data-hitbox="frequent"
-							data-hitbox-face
-							onclick={(e) => {
-								e.stopPropagation();
-								void onRemoveEntry(entry.id);
-							}}
-							title="Remove from playlist"
-							aria-label={`Remove ${entry.song_title} from playlist`}
-						>
-							<Icon name="x" size={14} />
-						</button>
+						{#if !compact}
+							<div class="entry-controls">
+								{#if i > 0}
+									<button
+										class="move-btn"
+										data-hitbox="frequent"
+										data-hitbox-face
+										onclick={(e) => {
+											e.stopPropagation();
+											void onMoveEntry(entry.id, i - 1);
+										}}
+										disabled={reorderBusy}
+										title={PLAYLIST_ENTRY_MOVE_UP_LABEL}
+										aria-label={`${PLAYLIST_ENTRY_MOVE_UP_LABEL} ${entry.song_title}`}
+									>
+										<Icon name="chevron-up" size={14} />
+									</button>
+								{/if}
+								{#if i < playlistDetail.entries.length - 1}
+									<button
+										class="move-btn"
+										data-hitbox="frequent"
+										data-hitbox-face
+										onclick={(e) => {
+											e.stopPropagation();
+											void onMoveEntry(entry.id, i + 1);
+										}}
+										disabled={reorderBusy}
+										title={PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
+										aria-label={`${PLAYLIST_ENTRY_MOVE_DOWN_LABEL} ${entry.song_title}`}
+									>
+										<Icon name="chevron-down" size={14} />
+									</button>
+								{/if}
+							</div>
+							<button
+								class="remove-btn"
+								data-hitbox="frequent"
+								data-hitbox-face
+								onclick={(e) => {
+									e.stopPropagation();
+									void onRemoveEntry(entry.id);
+								}}
+								title={PLAYLIST_ENTRY_REMOVE_LABEL}
+								aria-label={`${PLAYLIST_ENTRY_REMOVE_LABEL}: ${entry.song_title}`}
+							>
+								<Icon name="x" size={14} />
+							</button>
+						{/if}
 						<div class="entry-overflow-anchor">
 							<button
 								type="button"
@@ -395,6 +408,47 @@
 									>
 										{PLAYLIST_ENTRY_OPEN_SONG_LABEL}
 									</button>
+									{#if compact}
+										{#if i > 0}
+											<button
+												type="button"
+												role="menuitem"
+												class="entry-overflow-item"
+												disabled={reorderBusy}
+												onclick={() => {
+													overflowId = null;
+													void onMoveEntry(entry.id, i - 1);
+												}}
+											>
+												{PLAYLIST_ENTRY_MOVE_UP_LABEL}
+											</button>
+										{/if}
+										{#if i < playlistDetail.entries.length - 1}
+											<button
+												type="button"
+												role="menuitem"
+												class="entry-overflow-item"
+												disabled={reorderBusy}
+												onclick={() => {
+													overflowId = null;
+													void onMoveEntry(entry.id, i + 1);
+												}}
+											>
+												{PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
+											</button>
+										{/if}
+										<button
+											type="button"
+											role="menuitem"
+											class="entry-overflow-item"
+											onclick={() => {
+												overflowId = null;
+												void onRemoveEntry(entry.id);
+											}}
+										>
+											{PLAYLIST_ENTRY_REMOVE_LABEL}
+										</button>
+									{/if}
 								</div>
 							{/if}
 						</div>

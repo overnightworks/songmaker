@@ -4,8 +4,21 @@ import { get } from 'svelte/store';
 
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { libraryBrowse } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
+import { RAIL_SUMMARY_LOADING } from '$lib/constants';
+
+function readyLibraryBrowseState() {
+	return {
+		status: 'ready' as const,
+		error: null,
+		albumHasMore: false,
+		songHasMore: false,
+		albumOffset: 0,
+		songOffset: 0
+	};
+}
 
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn().mockResolvedValue(undefined),
@@ -63,6 +76,10 @@ beforeEach(() => {
 	albumList.set([]);
 	songList.set([]);
 	playlistList.set([]);
+	// Most tests below aren't about the initial-load flash — seed both lists
+	// as already settled so the summary renders immediately, like a real
+	// session past its first mount.
+	libraryBrowse.set(readyLibraryBrowseState());
 	history.replaceState(null, '', '/');
 });
 
@@ -90,6 +107,7 @@ describe('Rail', () => {
 				created_at: '2026-01-01T00:00:00+00:00'
 			}
 		]);
+		playlistLoad.set({ status: 'ready', error: null });
 		const target = await render();
 		expect(requireElement(target, '.brand').textContent).toBe('Hallucinai');
 		expect(target.textContent).toContain('1 album');
@@ -138,5 +156,21 @@ describe('Rail', () => {
 		await Promise.resolve();
 		expect(get(librarySurface)).toBe('browse');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
+	it('shows a loading placeholder instead of 0 albums · 0 playlists before either list has settled', async () => {
+		libraryBrowse.set({ ...readyLibraryBrowseState(), status: 'idle' });
+		albumList.set([]);
+		playlistList.set([]);
+		const target = await render();
+		expect(target.textContent).toContain(RAIL_SUMMARY_LOADING);
+		expect(target.textContent).not.toContain('0 album');
+
+		fetchPlaylists.mockResolvedValue([]);
+		libraryBrowse.set(readyLibraryBrowseState());
+		await vi.waitFor(() => expect(get(playlistLoad).status).toBe('ready'));
+		await tick();
+		expect(target.textContent).toContain('0 albums');
+		expect(target.textContent).toContain('0 playlists');
 	});
 });

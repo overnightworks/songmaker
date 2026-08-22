@@ -749,29 +749,31 @@
 					</h2>
 					{#if songRail}
 						<div class="song-rail">
-							<button
-								type="button"
-								class="song-neighbor"
-								data-hitbox="frequent"
-								data-hitbox-face
-								aria-label={SONG_PREVIOUS_LABEL}
-								disabled={!neighbors.previous}
-								onclick={() => neighbors.previous && selectNeighborSong(neighbors.previous)}
-							>
-								<Icon name="skip-back" size={14} />
-							</button>
 							<Breadcrumb items={breadcrumbItems} />
-							<button
-								type="button"
-								class="song-neighbor"
-								data-hitbox="frequent"
-								data-hitbox-face
-								aria-label={SONG_NEXT_LABEL}
-								disabled={!neighbors.next}
-								onclick={() => neighbors.next && selectNeighborSong(neighbors.next)}
-							>
-								<Icon name="skip-forward" size={14} />
-							</button>
+							<div class="song-neighbors">
+								<button
+									type="button"
+									class="song-neighbor"
+									data-hitbox="frequent"
+									data-hitbox-face
+									aria-label={SONG_PREVIOUS_LABEL}
+									disabled={!neighbors.previous}
+									onclick={() => neighbors.previous && selectNeighborSong(neighbors.previous)}
+								>
+									<Icon name="skip-back" size={14} />
+								</button>
+								<button
+									type="button"
+									class="song-neighbor"
+									data-hitbox="frequent"
+									data-hitbox-face
+									aria-label={SONG_NEXT_LABEL}
+									disabled={!neighbors.next}
+									onclick={() => neighbors.next && selectNeighborSong(neighbors.next)}
+								>
+									<Icon name="skip-forward" size={14} />
+								</button>
+							</div>
 						</div>
 					{:else}
 						<Breadcrumb items={breadcrumbItems} />
@@ -1204,16 +1206,23 @@
 
 	.song-rail {
 		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
+		flex-direction: column;
+		align-items: flex-start;
 		gap: 0.35rem;
 		min-width: 0;
 		max-width: 100%;
 	}
 
 	.song-rail :global(.breadcrumb) {
-		flex: 1 1 auto;
 		min-width: 0;
+		max-width: 100%;
+	}
+
+	.song-neighbors {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		flex-shrink: 0;
 	}
 
 	.song-neighbor {

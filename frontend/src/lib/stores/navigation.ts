@@ -234,14 +234,18 @@ function applySelectedSong(
 	pushLibraryHistory();
 }
 
-// Selecting a song already inside the open collection (e.g. clicking a
-// track in the currently open album) replaces the current history entry,
-// like selectNeighborSong. Selecting a song outside it (search hit, deep
-// link, a different collection) pushes, since it changes the rail context.
+// Opening a song from the album interior (no song selected yet) always
+// pushes — it changes the visible surface from the track list to the song
+// editor. Once a song is open, moving to another song already inside the
+// same open collection (list clicks, previous/next) replaces the current
+// history entry, like selectNeighborSong. Selecting a song outside the open
+// collection (search hit, deep link, a different collection) pushes, since
+// it changes the rail context.
 function selectSongHistoryMode(
 	songId: string,
 	knownSong: SongItem | undefined
 ): 'stack' | 'replace' {
+	if (get(selectedSongId) === null) return 'stack';
 	const collection = get(openCollection);
 	if (collection?.kind !== 'album') return 'stack';
 	const song = get(songList).find((item) => item.id === songId) ?? knownSong;

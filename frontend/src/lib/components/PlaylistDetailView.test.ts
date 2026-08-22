@@ -80,6 +80,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	selectedPlaylistDetail.set(null);
+	delete document.documentElement.dataset.pointer;
 });
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -200,5 +201,54 @@ describe('PlaylistDetailView row overflow menu', () => {
 
 		expect(selectSong).toHaveBeenCalledWith('s1');
 		expect(target.querySelector('.entry-overflow-menu')).toBeNull();
+	});
+});
+
+describe('PlaylistDetailView compact row actions', () => {
+	it('moves Move up/down and Remove into the … menu instead of inline, keeping only Play and … inline', async () => {
+		document.documentElement.dataset.pointer = 'coarse';
+		selectedPlaylistDetail.set(
+			detail({
+				entries: [entry({ id: 'pe1', song_title: 'Tide' }), entry({ id: 'pe2', song_title: 'Ebb' })]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		expect(target.querySelector('.move-btn')).toBeNull();
+		expect(target.querySelector('.remove-btn')).toBeNull();
+
+		const rows = target.querySelectorAll<HTMLElement>('.entry-row');
+		const secondRowOverflow = requireElement<HTMLButtonElement>(rows[1], '.overflow-btn');
+		secondRowOverflow.click();
+		await tick();
+
+		const menu = requireElement<HTMLElement>(document.body, '.entry-overflow-menu');
+		const items = Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) =>
+			el.textContent?.trim()
+		);
+		expect(items).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
+	});
+
+	it('keeps Move up/down and Remove inline outside compact layout', async () => {
+		selectedPlaylistDetail.set(
+			detail({
+				entries: [entry({ id: 'pe1', song_title: 'Tide' }), entry({ id: 'pe2', song_title: 'Ebb' })]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		expect(target.querySelector('.move-btn')).not.toBeNull();
+		expect(target.querySelector('.remove-btn')).not.toBeNull();
+
+		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
+		await tick();
+		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
+		expect(menu.textContent?.trim()).toBe('Open song in editor');
 	});
 });

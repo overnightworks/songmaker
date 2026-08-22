@@ -263,12 +263,22 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 		expect(history.state.index).toBe(before + 1);
 	});
 
-	it('replaces the current history entry when the song is already inside the open collection', () => {
+	it('pushes a new history entry when opening the first song from the album interior', () => {
 		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a1' })]);
 		openAlbum('a1');
 		const afterOpen = history.state.index;
+		selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		expect(history.state.index).toBe(afterOpen + 1);
+		expect(get(selectedSongId)).toBe('s1');
+	});
+
+	it('replaces the current history entry when moving to another song already inside the open collection', () => {
+		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a1' })]);
+		openAlbum('a1');
+		selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		const afterFirstSong = history.state.index;
 		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
-		expect(history.state.index).toBe(afterOpen);
+		expect(history.state.index).toBe(afterFirstSong);
 		expect(get(selectedSongId)).toBe('s2');
 	});
 
@@ -279,6 +289,19 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 		selectSong('s2', song({ id: 's2', album_id: 'a2' }));
 		expect(history.state.index).toBe(afterOpen + 1);
 		expect(get(selectedSongId)).toBe('s2');
+	});
+
+	it('lands back on the album, not the wall, after opening two tracks in a row (issue #99)', () => {
+		songList.set([song({ id: 's1', album_id: 'a1' }), song({ id: 's2', album_id: 'a1' })]);
+		const wallIndex = history.state?.index ?? 0;
+		openAlbum('a1');
+		const albumIndex = history.state.index;
+		expect(albumIndex).toBe(wallIndex + 1);
+		selectSong('s1', song({ id: 's1', album_id: 'a1' }));
+		const track1Index = history.state.index;
+		expect(track1Index).toBe(albumIndex + 1);
+		selectSong('s2', song({ id: 's2', album_id: 'a1' }));
+		expect(history.state.index).toBe(track1Index);
 	});
 });
 

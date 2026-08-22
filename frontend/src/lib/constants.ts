@@ -116,6 +116,7 @@ export const COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL = 'Saved offline · Remov
 
 export const RAIL_LIBRARY_LABEL = 'Library';
 export const RAIL_SETTINGS_LABEL = 'Settings';
+export const RAIL_SUMMARY_LOADING = '…';
 export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
 export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
 export const RAIL_CONTEXT_NO_TAKES = '—';
@@ -139,6 +140,9 @@ export const LIBRARY_PLAYLISTS_LOADING = 'Loading playlists…';
 export const LIBRARY_PLAYLISTS_ERROR = 'Failed to load playlists';
 export const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
 export const PLAYLIST_ENTRY_OPEN_SONG_LABEL = 'Open song in editor';
+export const PLAYLIST_ENTRY_MOVE_UP_LABEL = 'Move up';
+export const PLAYLIST_ENTRY_MOVE_DOWN_LABEL = 'Move down';
+export const PLAYLIST_ENTRY_REMOVE_LABEL = 'Remove from playlist';
 export const LIBRARY_SHARES_LABEL = 'Shared';
 export const LIBRARY_SHARES_COUNT_SEP = ' · ';
 export const LIBRARY_SHARED_EMPTY = 'Nothing shared';
