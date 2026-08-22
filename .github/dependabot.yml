@@ -8,6 +8,10 @@ updates:
       python-dependencies:
         patterns: ["*"]
     open-pull-requests-limit: 5
+    ignore:
+      # mcp 2.0 removed mcp.server.fastmcp
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -17,6 +21,10 @@ updates:
       npm-dependencies:
         patterns: ["*"]
     open-pull-requests-limit: 5
+    ignore:
+      # TypeScript 7 needs svelte-check's dual TS6+TS7 --tsgo setup
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
