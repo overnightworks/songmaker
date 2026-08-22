@@ -10,9 +10,12 @@
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, logout } from '$lib/stores/auth';
-	import { openLibraryWall } from '$lib/stores/navigation';
+	import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
+	import { openCollection } from '$lib/stores/collection';
+	import { selectedSongId } from '$lib/stores/player';
 	import { sidebarOpen, toggleSidebar, initTheme } from '$lib/stores/ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 	import { dev, browser } from '$app/environment';
 
 	let { children } = $props();
@@ -78,7 +81,16 @@
 		await logout();
 		window.location.href = '/login';
 	}
+
+	function onWindowKeydown(event: KeyboardEvent): void {
+		if (!shouldHandleGlobalEscape(event, document)) return;
+		const target = escapeLevelUpTarget($selectedSongId !== null, $openCollection !== null);
+		if (target === 'collection') backToCollection();
+		else if (target === 'wall') void openLibraryWall();
+	}
 </script>
+
+<svelte:window onkeydown={onWindowKeydown} />
 
 <svelte:head>
 	<title>{APP_NAME}</title>

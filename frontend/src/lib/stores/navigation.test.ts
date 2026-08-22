@@ -62,6 +62,7 @@ import {
 	initNavigation,
 	isLibraryWorkspacePath,
 	openAlbum,
+	openCollectionEntry,
 	openLibraryCreate,
 	openLibraryWall,
 	openPlaylist,
@@ -306,6 +307,21 @@ describe('backToCollection', () => {
 		openCollection.set(null);
 		backToCollection();
 		expect(get(librarySurface)).toBe('browse');
+	});
+});
+
+describe('openCollectionEntry', () => {
+	it('goes back to the collection when a song inside it is open', () => {
+		openAlbum('a1');
+		selectSong('s1');
+		openCollectionEntry({ kind: 'album', id: 'a1' });
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
+	it('opens the collection when no song is open', () => {
+		openCollectionEntry({ kind: 'playlist', id: 'p1' });
+		expect(get(openCollection)?.kind).toBe('playlist');
 	});
 });
 

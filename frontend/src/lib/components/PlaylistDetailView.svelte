@@ -33,11 +33,6 @@
 	const initials = $derived(
 		playlistDetail ? titleInitials(playlistDetail.title) : ALBUM_ART_EMPTY_INITIALS
 	);
-	const subtitle = $derived(
-		playlistDetail
-			? `${playlistDetail.entries.length} track${playlistDetail.entries.length !== 1 ? 's' : ''}`
-			: ''
-	);
 
 	async function onPlaylistShareEnable() {
 		if (!playlistDetail) throw new Error('No playlist');
@@ -237,7 +232,6 @@
 		<CollectionHeader
 			kind="playlist"
 			title={playlistDetail.title}
-			{subtitle}
 			coverUrl={null}
 			coverAlt=""
 			{initials}

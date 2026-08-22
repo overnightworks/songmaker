@@ -8,11 +8,9 @@
 		songList
 	} from '$lib/stores/player';
 	import {
-		backToCollection,
 		compareAlbumTracks,
-		openAlbum,
+		openCollectionEntry,
 		openLibraryCreate,
-		openPlaylist,
 		selectSong
 	} from '$lib/stores/navigation';
 	import { librarySurface } from '$lib/stores/libraryContext';
@@ -96,12 +94,7 @@
 	// which replaces history instead of pushing a fresh detail entry.
 	function onHeaderClick(): void {
 		if (!collection) return;
-		if (currentSongId !== null) {
-			backToCollection();
-			return;
-		}
-		if (collection.kind === 'album') openAlbum(collection.id);
-		else openPlaylist(collection.id);
+		openCollectionEntry(collection);
 	}
 </script>
 

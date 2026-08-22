@@ -1,13 +1,15 @@
 <script lang="ts">
 	import type { ShareResult } from '$lib/api/types';
+	import Breadcrumb from './Breadcrumb.svelte';
 	import CollectionMenu from './CollectionMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import Icon from './Icon.svelte';
+	import { RAIL_LIBRARY_LABEL } from '$lib/constants';
+	import { openLibraryWall } from '$lib/stores/navigation';
 
 	interface Props {
 		kind: 'album' | 'playlist';
 		title: string;
-		subtitle: string;
 		coverUrl: string | null;
 		coverAlt: string;
 		initials: string;
@@ -31,7 +33,6 @@
 	let {
 		kind,
 		title,
-		subtitle,
 		coverUrl,
 		coverAlt,
 		initials,
@@ -61,6 +62,10 @@
 	});
 
 	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
+	const breadcrumbItems = $derived([
+		{ label: RAIL_LIBRARY_LABEL, onclick: () => void openLibraryWall() },
+		{ label: title }
+	]);
 
 	// EditableTitle owns its own click-to-edit state and exposes no external
 	// trigger; the menu's "Rename" entry forwards to the same public
@@ -86,7 +91,7 @@
 		<h2 class="header-title" bind:this={titleContainer}>
 			<EditableTitle value={title} onsave={onrename} ariaLabel={`${kind} title`} />
 		</h2>
-		<span class="header-subtitle">{subtitle}</span>
+		<Breadcrumb items={breadcrumbItems} />
 	</div>
 	<div class="header-actions">
 		<button class="play-btn" onclick={onplay} aria-label="Play">
@@ -161,11 +166,6 @@
 		color: var(--text);
 		text-transform: uppercase;
 		letter-spacing: 1.5px;
-	}
-
-	.header-subtitle {
-		font-size: 0.87rem;
-		color: var(--text-muted);
 	}
 
 	.header-actions {

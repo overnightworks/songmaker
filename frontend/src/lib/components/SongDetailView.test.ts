@@ -569,7 +569,9 @@ describe('song header album rail', () => {
 		expect(target.querySelector('.song-rail')).toBeNull();
 		expect(target.querySelector(`[aria-label="${SONG_PREVIOUS_LABEL}"]`)).toBeNull();
 		expect(target.querySelector(`[aria-label="${SONG_NEXT_LABEL}"]`)).toBeNull();
-		expect(target.querySelector('span.song-album')?.textContent).toBe('Local Album');
+		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
+		expect(crumbs[0]).toBe('Library');
+		expect(crumbs[1]).toBe('Local Album');
 	});
 
 	it('shows album title and disabled ends without wrapping through neighbors', async () => {
@@ -585,7 +587,10 @@ describe('song header album rail', () => {
 		expect(next.disabled).toBe(false);
 		expect(prev.getAttribute('data-hitbox')).toBe('frequent');
 		expect(next.getAttribute('data-hitbox')).toBe('frequent');
-		expect(target.querySelector('button.song-album')?.textContent).toBe('Local Album');
+		const albumCrumb = Array.from(target.querySelectorAll('.crumb-link')).find(
+			(el) => el.textContent === 'Local Album'
+		);
+		expect(albumCrumb).toBeDefined();
 
 		document.documentElement.dataset.pointer = 'coarse';
 		expect(px(getComputedStyle(prev).minWidth)).toBe(HITBOX_FREQUENT_PX);
@@ -651,11 +656,27 @@ describe('song header album rail', () => {
 		if (!(header instanceof HTMLElement) || !(rail instanceof HTMLElement) || !prev || !next) {
 			throw new Error('Expected header song rail');
 		}
-		expect(rail.querySelector('button.song-album')?.textContent).toBe(longAlbumTitle);
+		const albumCrumb = Array.from(rail.querySelectorAll('.crumb-link')).find(
+			(el) => el.textContent === longAlbumTitle
+		);
+		expect(albumCrumb).toBeDefined();
 		expect(px(getComputedStyle(prev).minWidth)).toBe(HITBOX_FREQUENT_PX);
 		expect(px(getComputedStyle(next).minWidth)).toBe(HITBOX_FREQUENT_PX);
 		expect(header.scrollWidth).toBeLessThanOrEqual(320);
 		expect(rail.scrollWidth).toBeLessThanOrEqual(320);
+	});
+
+	it('shows Library › Album › Track n of m as the breadcrumb', async () => {
+		stubLibraryMedia({ narrow: false, compact: true });
+		const songs = albumSongs();
+		albumList.set([album()]);
+		songList.set(songs);
+		selectedSongId.set('s1');
+		const target = await renderView();
+		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
+		expect(crumbs[0]).toBe('Library');
+		expect(crumbs[1]).toBe('Local Album');
+		expect(crumbs[2]).toBe(`Track ${songs.findIndex((s) => s.id === 's1') + 1} of ${songs.length}`);
 	});
 
 	it('opens album overview from the album title', async () => {
@@ -664,7 +685,9 @@ describe('song header album rail', () => {
 		const cleanup = initNavigation();
 		selectSong('s1');
 		const target = await renderView();
-		const album = target.querySelector<HTMLButtonElement>('button.song-album');
+		const album = Array.from(target.querySelectorAll<HTMLButtonElement>('.crumb-link')).find(
+			(el) => el.textContent === 'Local Album'
+		);
 		if (!album) throw new Error('Expected album control');
 		album.click();
 		await tick();

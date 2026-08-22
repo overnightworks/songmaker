@@ -2,7 +2,9 @@ import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
+vi.mock('$lib/stores/navigation', () => ({ openLibraryWall: vi.fn() }));
 
+import { openLibraryWall } from '$lib/stores/navigation';
 import CollectionHeader from './CollectionHeader.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -19,7 +21,6 @@ function baseProps(): CollectionHeaderProps {
 	return {
 		kind: 'album',
 		title: 'Night Drive',
-		subtitle: '4 songs · 2 picks',
 		coverUrl: null,
 		coverAlt: 'Album Night Drive',
 		initials: 'ND',
@@ -65,13 +66,20 @@ afterEach(async () => {
 });
 
 describe('CollectionHeader', () => {
-	it('shows cover, title, subtitle, and calls onplay from the Play button', async () => {
+	it('shows cover, title, a Library › title breadcrumb, and calls onplay from the Play button', async () => {
 		const props = baseProps();
 		const target = await render(props);
 		expect(target.querySelector('.header-title')?.textContent).toContain('Night Drive');
-		expect(target.querySelector('.header-subtitle')?.textContent).toBe('4 songs · 2 picks');
+		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
+		expect(crumbs).toEqual(['Library', 'Night Drive']);
 		requireElement<HTMLButtonElement>(target, '.play-btn').click();
 		expect(props.onplay).toHaveBeenCalledTimes(1);
+	});
+
+	it('opens the Library wall from the breadcrumb', async () => {
+		const target = await render(baseProps());
+		requireElement<HTMLButtonElement>(target, '.crumb-link').click();
+		expect(openLibraryWall).toHaveBeenCalledTimes(1);
 	});
 
 	it('renders only Play and the … menu, no separate visible share icon', async () => {

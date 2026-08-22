@@ -19,7 +19,7 @@ import {
 	deselectPlaylist as storeDeselectPlaylist,
 	loadPlaylistDetail
 } from '$lib/stores/playlists';
-import { openCollection, setOpenCollection } from '$lib/stores/collection';
+import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
 import { closeSidebar } from '$lib/stores/ui';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import type { LibraryFilter } from '$lib/constants';
@@ -134,6 +134,19 @@ export function openPlaylist(playlistId: string): void {
 	setLibrarySurface('detail');
 	closeSidebar();
 	pushLibraryHistory();
+}
+
+// The rail context's header and the collection crumb in a song's breadcrumb
+// share this: a song open inside the collection means "back to the
+// collection"; otherwise the collection is already the destination, so
+// re-opening it is a no-op that still refreshes its history entry.
+export function openCollectionEntry(collection: OpenCollection): void {
+	if (get(selectedSongId) !== null) {
+		backToCollection();
+		return;
+	}
+	if (collection.kind === 'album') openAlbum(collection.id);
+	else openPlaylist(collection.id);
 }
 
 export function backToCollection(): void {

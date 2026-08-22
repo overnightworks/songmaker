@@ -66,10 +66,6 @@
 					.sort((a, b) => a.track_number - b.track_number)
 			: []
 	);
-	const albumSongCount = $derived(selectedAlbum?.song_count ?? albumSongs.length);
-	const albumPickCount = $derived(
-		albumSongs.filter((s) => s.generations.some((g) => g.is_picked)).length
-	);
 	const albumLoad = $derived(currentAlbumId ? $albumSongsLoad[currentAlbumId] : undefined);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
 	const coverAlt = $derived(
@@ -78,9 +74,6 @@
 	const artFill = $derived(selectedAlbum ? usableAlbumPrimary(selectedAlbum.colors) : null);
 	const initials = $derived(
 		selectedAlbum ? titleInitials(selectedAlbum.title) : ALBUM_ART_EMPTY_INITIALS
-	);
-	const subtitle = $derived(
-		`${albumSongCount} song${albumSongCount !== 1 ? 's' : ''} · ${albumPickCount} pick${albumPickCount !== 1 ? 's' : ''}`
 	);
 	let coverBusy = $state(false);
 	let coverInput: HTMLInputElement | null = $state(null);
@@ -224,7 +217,6 @@
 		<CollectionHeader
 			kind="album"
 			title={selectedAlbum.title}
-			{subtitle}
 			{coverUrl}
 			{coverAlt}
 			{initials}

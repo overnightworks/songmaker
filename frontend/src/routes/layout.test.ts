@@ -7,7 +7,8 @@ import { checkAuth, currentUser, authLoading } from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface } from '$lib/stores/libraryContext';
-import { closeSidebar } from '$lib/stores/ui';
+import { selectedSongId } from '$lib/stores/player';
+import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { pageState } = vi.hoisted(() => ({
@@ -166,6 +167,7 @@ afterEach(async () => {
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
 	openCollection.set(null);
+	selectedSongId.set(null);
 	currentUser.set(null);
 	authLoading.set(false);
 	closeSidebar();
@@ -173,6 +175,10 @@ afterEach(async () => {
 	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
 });
+
+function pressEscape(target: EventTarget): void {
+	target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+}
 
 describe('app shell', () => {
 	it('keeps the private PlayerBar and body reservation visible while idle', async () => {
@@ -273,5 +279,45 @@ describe('app shell', () => {
 		const rule = extractRule(layoutSource, '.app-shell.mobile');
 		expect(rule).toContain('display: flex');
 		expect(rule).toContain('flex-direction: column');
+	});
+});
+
+describe('global Escape', () => {
+	it('goes from a song to its collection', async () => {
+		selectedSongId.set('s1');
+		await renderLayout('/');
+		pressEscape(window);
+		await tick();
+		expect(get(selectedSongId)).toBeNull();
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
+	it('goes from the collection to the Library wall', async () => {
+		selectedSongId.set(null);
+		librarySurface.set('detail');
+		await renderLayout('/');
+		pressEscape(window);
+		await tick();
+		expect(get(librarySurface)).toBe('browse');
+	});
+
+	it('does nothing while typing in a textarea', async () => {
+		selectedSongId.set('s1');
+		const target = await renderLayout('/');
+		const textarea = document.createElement('textarea');
+		target.append(textarea);
+		pressEscape(textarea);
+		await tick();
+		expect(get(selectedSongId)).toBe('s1');
+	});
+
+	it('does nothing while the rail drawer is open', async () => {
+		selectedSongId.set('s1');
+		await renderLayout('/');
+		sidebarOpen.set(true);
+		await tick();
+		pressEscape(window);
+		await tick();
+		expect(get(selectedSongId)).toBe('s1');
 	});
 });
