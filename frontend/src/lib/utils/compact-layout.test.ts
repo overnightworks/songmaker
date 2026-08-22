@@ -94,4 +94,23 @@ describe('subscribeCompactLayout', () => {
 
 		stop();
 	});
+
+	it('queries the caller-supplied media string instead of the default', () => {
+		const matchMediaSpy = vi.fn((query: string) => ({
+			matches: false,
+			media: query,
+			onchange: null,
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+			dispatchEvent: vi.fn()
+		}));
+		vi.stubGlobal('matchMedia', matchMediaSpy);
+		const stop = subscribeCompactLayout(() => {}, '(max-width: 640px), (any-pointer: coarse)');
+
+		expect(matchMediaSpy).toHaveBeenCalledWith('(max-width: 640px), (any-pointer: coarse)');
+
+		stop();
+	});
 });

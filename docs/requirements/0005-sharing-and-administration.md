@@ -59,7 +59,7 @@ Quelle: OPERATOR — Issue #70 Locked-in.
 Quelle: OPERATOR — Issue #70 Locked-in (“bestätigt die konkrete Konsequenz”).
 
 ### REQ-SHARE-15: Share inventory is a secondary status and entry to the inventory, not a peer library working mode.
-Quelle: OPERATOR — Issue #70 Locked-in. Exact header chrome and Studio/Listen placement remain #39.
+Quelle: OPERATOR — Issue #70 Locked-in. Resolved by Issue #99: the library wall's `Shared` chip sits beside `Albums` and `Playlists` (single-select, same wall), not a separate Studio/Listen mode.
 
 ### REQ-SHARE-16: “Nothing shared” appears only after a complete server inventory response.
 Quelle: OPERATOR — Issue #70 Locked-in.
@@ -129,8 +129,9 @@ Quelle: OPERATOR — Issue #67, “Festgelegtes Verhalten”.
 
 ## Non-goals
 
-- Library, Studio, and Listen information architecture and exact header chrome
-  belong to Issue #39.
+- Library wall information architecture (the `Albums · Playlists · Shared`
+  chips, sort, and search) and collection-interior header chrome belong to
+  Issue #99 (superseding the earlier Issue #39 Studio/Listen split).
 - Recipe versus Takes naming belongs to Issue #69; this document uses “audio
   take”.
 - This revision does not define public-share player queue membership, order, or

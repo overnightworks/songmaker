@@ -170,15 +170,28 @@ A collection interior (`AlbumDetailView` / `PlaylistDetailView`) shares one
 header, `CollectionHeader.svelte`: cover, title, subtitle, a primary Play
 action, and a single `…` menu (`CollectionMenu.svelte`). There is no visible
 Share icon — the menu's first line names the object ("Album · <title>" /
-"Playlist · <title>"), then album entries are Share album · Cover… · Rename ·
-Add to playlist · Delete album, playlist entries are Share playlist · Save
-offline · Rename · Delete playlist. The Share row embeds the existing
-`ShareButton` component as its control (same toggle/clipboard/toast logic,
-not reimplemented); Rename forwards to the same `EditableTitle` click
-affordance the title itself uses, since `EditableTitle` exposes no external
-trigger. Album rows carry their own Play button (`playAlbumFromGeneration` on
-the song's picked/first generation) beside the existing click-to-open-song
-target.
+"Playlist · <title>"), then album entries are Share album · Cover… · Remove
+cover (only when a cover is set) · Rename · Add to playlist · Delete album,
+playlist entries are Share playlist · Save offline · Rename · Delete
+playlist. The Share row embeds the existing `ShareButton` component as its
+control (same toggle/clipboard/toast logic, not reimplemented); Rename
+forwards to the same `EditableTitle` click affordance the title itself uses
+(`EditableTitle` exposes an imperative `startEdit()` via `bind:this` for
+exactly this). Album rows carry their own Play button
+(`playAlbumFromGeneration` on the song's picked/first generation) beside the
+existing click-to-open-song target. Album rows are songs — clicking the row
+body opens the song in the editor. Playlist rows are takes — clicking the row
+plays it, since the editor is an edit view and Now Playing is the play view,
+and there is no click target that means both; each row shows the take's
+duration and version and a `★` when it is that song's picked generation
+(`PlaylistEntryResponse.version_number`/`is_picked`/`audio_duration`, sourced
+from the entry's generation and its version), and the row's `…` menu carries
+one action, "Open song in editor" (`selectSong` on the take's song). `CollectionHeader` and `SongDetailView`
+both show a `Breadcrumb`: the collection interior is `Library › <title>`,
+the song editor is `Library › <album title> › Track <n> of <m>` (falling
+back to the song's own title when it is not part of a countable album
+track list); each crumb before the current one is a button that jumps
+straight back to that level (`openLibraryWall` / the open collection).
 
 `PlayerBar` is transport-only: prev/play/next, a 44px cover, title/subtitle,
 the seek bar, and a "Now Playing" word-button with an up-chevron that opens
@@ -190,9 +203,31 @@ pool. Shuffle and per-track queue-skip feedback (`QueueStreamFeedback`) live
 inside the `NowPlaying` overlay, not the bar; the take-pool picker
 (`LibraryPoolControl`) is deleted for this slice — `playbackSettings.
 libraryTakePool` still drives `playLibrary`, a picker UI returns in a later
-slice. `RailDrawer.svelte` and `CollectionMenu`'s dropdown share one focus
-trap, `lib/utils/focus-trap.ts` (Escape closes, Tab/Shift+Tab wrap at the
-edges).
+slice. At ≤640px viewport width or any coarse pointer, the bar collapses to
+one 64px transport row: cover, title/subtitle, a 44×44px play/pause button,
+and the Now Playing chevron — Previous/Next and the seek timeline are not in
+the bar at that size, since Previous/Next live inside the `NowPlaying`
+overlay and the timeline becomes the decorative `.mobile-progress` line
+along the bar's top edge. `PlayerBar` tracks this breakpoint in script via
+`subscribeCompactLayout` (its own media string, not the shared 768px
+`COMPACT_LAYOUT_MEDIA`) and applies one `.mobile-transport` class, rather
+than duplicating the ruleset under both a `@media` block and a
+`[data-pointer="coarse"]` selector. `RailDrawer.svelte` and
+`CollectionMenu`'s dropdown share one focus trap, `lib/utils/focus-trap.ts`
+(Escape closes, Tab/Shift+Tab wrap at the edges).
+
+Escape is also a global "one level up" shortcut, mounted once in
+`+layout.svelte` (`lib/utils/escape-level-up.ts`): from a song it goes to
+that song's collection interior, from a collection interior it goes to the
+library wall, and it is a no-op at the wall. It yields — does nothing —
+whenever an editable element has focus (an input, textarea, or
+contenteditable) or an overlay is open, so it never fights a component that
+already owns Escape for its own popover. "Overlay open" is detected as any
+element in the document carrying `aria-modal="true"` (dialogs, drawers, the
+`CollectionMenu`/`PlaylistPicker` popovers, the Co-Writer modal drawer) or
+`data-escape-overlay="true"` for a popover whose ARIA role does not permit
+`aria-modal` (the take overflow menu's `role="menu"`); either marker is the
+whole contract, checked live in the DOM rather than tracked separately.
 
 Library context — the open collection, filter, search, sort, loaded page,
 scroll, selected song/generation — lives on `history.state`

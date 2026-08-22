@@ -35,7 +35,7 @@
 		LIBRARY_RETRY_LABEL
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
-	import { hexToRgb } from '$lib/utils/contrast';
+	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import type { GenerationItem, SongItem } from '$lib/api/types';
 	import CollectionHeader from './CollectionHeader.svelte';
@@ -77,19 +77,6 @@
 	);
 	let coverBusy = $state(false);
 	let coverInput: HTMLInputElement | null = $state(null);
-
-	function usableAlbumPrimary(colors: Record<string, string>): string | null {
-		const primary = colors.primary;
-		if (typeof primary !== 'string') return null;
-		const value = primary.trim();
-		if (!value) return null;
-		try {
-			hexToRgb(value);
-		} catch {
-			return null;
-		}
-		return value;
-	}
 
 	function bestGeneration(song: SongItem): GenerationItem | undefined {
 		return song.generations.find((g) => g.is_picked) ?? song.generations[0];
@@ -261,29 +248,22 @@
 				<p class="empty-tab">No songs in this album yet.</p>
 			{:else}
 				{#each albumSongs as s (s.id)}
-					<div
-						class="item-row"
-						role="button"
-						tabindex="0"
-						onclick={() => selectSong(s.id)}
-						onkeydown={(e) => e.key === 'Enter' && selectSong(s.id)}
-					>
+					<div class="item-row">
 						<button
 							class="item-play"
 							data-hitbox="frequent"
 							disabled={s.generation_count === 0}
-							onclick={(e) => {
-								e.stopPropagation();
-								onRowPlay(s);
-							}}
+							onclick={() => onRowPlay(s)}
 							aria-label={`Play ${s.title}`}
 						>
 							<Icon name="play" size={14} />
 						</button>
-						<span class="item-title">{s.title}</span>
-						<span class="item-meta">
-							{s.generation_count} gen{s.generation_count !== 1 ? 's' : ''}
-						</span>
+						<button class="item-body" onclick={() => selectSong(s.id)}>
+							<span class="item-title">{s.title}</span>
+							<span class="item-meta">
+								{s.generation_count} gen{s.generation_count !== 1 ? 's' : ''}
+							</span>
+						</button>
 					</div>
 				{/each}
 			{/if}
@@ -351,9 +331,6 @@
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
-		cursor: pointer;
-		text-align: left;
-		color: var(--text);
 		font-size: 0.93rem;
 	}
 
@@ -373,6 +350,7 @@
 		border: 1px solid var(--border);
 		background: none;
 		color: var(--text-muted);
+		cursor: pointer;
 	}
 
 	.item-play:hover:not(:disabled) {
@@ -383,6 +361,21 @@
 	.item-play:disabled {
 		opacity: 0.35;
 		cursor: default;
+	}
+
+	.item-body {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		flex: 1;
+		min-width: 0;
+		background: none;
+		border: none;
+		padding: 0;
+		text-align: left;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
 	}
 
 	.item-title {

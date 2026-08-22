@@ -7,10 +7,12 @@ export function readCompactLayout(
 	return media.matches || root.dataset.pointer === 'coarse';
 }
 
-export function subscribeCompactLayout(onChange: (compact: boolean) => void): () => void {
+export function subscribeCompactLayout(
+	onChange: (compact: boolean) => void,
+	mediaQuery: string = COMPACT_LAYOUT_MEDIA
+): () => void {
 	if (typeof window === 'undefined') return () => {};
-	const media =
-		typeof window.matchMedia === 'function' ? window.matchMedia(COMPACT_LAYOUT_MEDIA) : null;
+	const media = typeof window.matchMedia === 'function' ? window.matchMedia(mediaQuery) : null;
 	const sync = () => {
 		onChange(
 			media ? readCompactLayout(media) : document.documentElement.dataset.pointer === 'coarse'

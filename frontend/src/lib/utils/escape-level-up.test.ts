@@ -51,6 +51,15 @@ describe('hasOpenOverlay', () => {
 		dialog.remove();
 	});
 
+	it('finds a data-escape-overlay popover whose role does not permit aria-modal', () => {
+		const menu = document.createElement('div');
+		menu.setAttribute('role', 'menu');
+		menu.setAttribute('data-escape-overlay', 'true');
+		document.body.append(menu);
+		expect(hasOpenOverlay(document)).toBe(true);
+		menu.remove();
+	});
+
 	it('reports no overlay when none is mounted', () => {
 		expect(hasOpenOverlay(document)).toBe(false);
 	});

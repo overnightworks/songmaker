@@ -28,12 +28,16 @@ vi.mock('$lib/services/offline', () => ({
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
 }));
+vi.mock('$lib/stores/navigation', () => ({
+	selectSong: vi.fn()
+}));
 
 import PlaylistDetailView from './PlaylistDetailView.svelte';
+import { selectSong } from '$lib/stores/navigation';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-function entry(): PlaylistEntryItem {
+function entry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntryItem {
 	return {
 		id: 'pe1',
 		position: 0,
@@ -43,14 +47,18 @@ function entry(): PlaylistEntryItem {
 		album_title: 'Night Drive',
 		artist: 'Artist',
 		generation_number: 1,
+		version_number: 1,
+		is_picked: false,
+		audio_duration: 180,
 		mp3_path: 'tide.mp3',
 		seed: 1,
 		model_mode: 'sft',
-		lyrics: null
+		lyrics: null,
+		...overrides
 	};
 }
 
-function detail(): PlaylistDetailItem {
+function detail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
 	return {
 		id: 'p1',
 		title: 'Night Drive',
@@ -58,12 +66,14 @@ function detail(): PlaylistDetailItem {
 		is_shared: false,
 		share_slug: null,
 		created_at: '2026-01-01T00:00:00+00:00',
-		entries: [entry()]
+		entries: [entry()],
+		...overrides
 	};
 }
 
 beforeEach(() => {
 	selectedPlaylistDetail.set(detail());
+	vi.mocked(selectSong).mockReset();
 });
 
 afterEach(async () => {
@@ -106,5 +116,72 @@ describe('PlaylistDetailView header', () => {
 			el.textContent?.trim()
 		);
 		expect(items).toEqual(['Save offline', 'Rename', 'Delete playlist']);
+	});
+});
+
+describe('PlaylistDetailView row take traits', () => {
+	it('shows duration, version, and a pick star, since playlist rows are takes', async () => {
+		selectedPlaylistDetail.set(
+			detail({
+				entries: [entry({ version_number: 2, audio_duration: 195, is_picked: true })]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		const row = requireElement<HTMLElement>(target, '.entry-row');
+		expect(row.querySelector('.picked-star')).not.toBeNull();
+		expect(row.textContent).toContain('v2');
+		expect(row.textContent).toContain('3:15');
+	});
+
+	it('omits version and duration when the take does not carry them', async () => {
+		selectedPlaylistDetail.set(
+			detail({
+				entries: [entry({ version_number: null, audio_duration: null, is_picked: false })]
+			})
+		);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		const row = requireElement<HTMLElement>(target, '.entry-row');
+		expect(row.querySelector('.picked-star')).toBeNull();
+		const meta = row.querySelector('.entry-meta')?.textContent ?? '';
+		expect(meta).not.toContain('· v');
+		expect(meta).toBe('Artist · Gen #1');
+	});
+});
+
+describe('PlaylistDetailView row overflow menu', () => {
+	it('offers Open song in editor for a take', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
+		await tick();
+
+		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
+		expect(menu.textContent?.trim()).toBe('Open song in editor');
+	});
+
+	it("opens the take's song in the editor and closes the menu", async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
+		await tick();
+		requireElement<HTMLButtonElement>(target, '.entry-overflow-item').click();
+		await tick();
+
+		expect(selectSong).toHaveBeenCalledWith('s1');
+		expect(target.querySelector('.entry-overflow-menu')).toBeNull();
 	});
 });

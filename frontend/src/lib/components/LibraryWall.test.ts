@@ -236,7 +236,7 @@ describe('LibraryWall filter chips', () => {
 		requireElement<HTMLButtonElement>(root, '#library-filter-playlists').click();
 		await tick();
 		expect(root.textContent).toContain('Night Drive');
-		expect(root.querySelector('.search')).toBeNull();
+		expect(root.querySelector('.search')).not.toBeNull();
 	});
 
 	it('shows an empty state for a filter with nothing in it', async () => {
@@ -330,6 +330,39 @@ describe('LibraryWall create actions', () => {
 });
 
 describe('LibraryWall shared filter', () => {
+	it('opens a remote inventory album via fetchAlbum, then hydrateAndOpenAlbum', async () => {
+		const remote = album({ id: 'a-remote', title: 'Remote Shared', is_shared: true });
+		fetchAlbum.mockResolvedValue(remote);
+		fetchShares.mockResolvedValue({
+			items: [
+				shareItem({
+					id: 'a-remote',
+					title: 'Remote Shared',
+					public_path: '/share/remote'
+				})
+			],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		const root = await render();
+		requireElement<HTMLButtonElement>(root, '#library-filter-shared').click();
+		await tick();
+		await tick();
+
+		requireElement<HTMLButtonElement>(
+			root,
+			`[aria-label="${LIBRARY_SHARES_OPEN_LABEL} Remote Shared"]`
+		).click();
+		await Promise.resolve();
+		await tick();
+
+		expect(fetchAlbum).toHaveBeenCalledWith('a-remote');
+		expect(get(albumList).some((item) => item.id === 'a-remote')).toBe(true);
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a-remote' });
+	});
+
 	it('renders the share inventory with open and unshare actions', async () => {
 		fetchShares.mockResolvedValue({
 			items: [shareItem()],
@@ -399,6 +432,80 @@ describe('LibraryWall shared filter', () => {
 
 		expect(unshareAlbum).not.toHaveBeenCalled();
 		expect(get(albumList).find((item) => item.id === 'a-local')?.is_shared).toBe(true);
+	});
+});
+
+describe('LibraryWall toolbar consistency', () => {
+	it('keeps chips, sort, and search in the same order for every filter', async () => {
+		playlistList.set([playlist()]);
+		fetchShares.mockResolvedValue({
+			items: [shareItem()],
+			total: 1,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		const root = await render();
+
+		for (const id of ['albums', 'playlists', 'shared']) {
+			requireElement<HTMLButtonElement>(root, `#library-filter-${id}`).click();
+			await tick();
+			await tick();
+			const controls = requireElement<HTMLElement>(root, '.wall-controls');
+			const order = Array.from(controls.children).map((child) =>
+				child.matches('.filter-chips')
+					? 'chips'
+					: child.matches('.sort-select')
+						? 'sort'
+						: child.matches('.search')
+							? 'search'
+							: 'other'
+			);
+			expect(order.slice(0, 3), `order for ${id}`).toEqual(['chips', 'sort', 'search']);
+		}
+	});
+
+	it('filters playlists by title', async () => {
+		playlistList.set([
+			playlist({ id: 'p1', title: 'Night Drive' }),
+			playlist({ id: 'p2', title: 'Sunrise' })
+		]);
+		const root = await render();
+		requireElement<HTMLButtonElement>(root, '#library-filter-playlists').click();
+		await tick();
+
+		const input = requireElement<HTMLInputElement>(root, '.search');
+		input.value = 'sun';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+
+		expect(root.textContent).toContain('Sunrise');
+		expect(root.textContent).not.toContain('Night Drive');
+	});
+
+	it('filters the Shared inventory rows by name', async () => {
+		fetchShares.mockResolvedValue({
+			items: [
+				shareItem({ id: 'a-local', title: 'Local Album' }),
+				shareItem({ id: 'a-other', title: 'Other Record' })
+			],
+			total: 2,
+			offset: 0,
+			limit: 50,
+			has_more: false
+		});
+		const root = await render();
+		requireElement<HTMLButtonElement>(root, '#library-filter-shared').click();
+		await tick();
+		await tick();
+
+		const input = requireElement<HTMLInputElement>(root, '.search');
+		input.value = 'other';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+
+		expect(root.textContent).toContain('Other Record');
+		expect(root.textContent).not.toContain('Local Album');
 	});
 });
 

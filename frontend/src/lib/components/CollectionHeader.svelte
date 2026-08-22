@@ -53,7 +53,7 @@
 		offlineProgressLabel = null
 	}: Props = $props();
 
-	let titleContainer: HTMLElement | undefined = $state();
+	let editableTitle: EditableTitle | undefined = $state();
 	let coverFailed = $state(false);
 
 	$effect(() => {
@@ -67,13 +67,8 @@
 		{ label: title }
 	]);
 
-	// EditableTitle owns its own click-to-edit state and exposes no external
-	// trigger; the menu's "Rename" entry forwards to the same public
-	// interaction (clicking the title button) instead of duplicating the
-	// rename UI.
 	function triggerRename(): void {
-		const button = titleContainer?.querySelector<HTMLButtonElement>('.editable-title-display');
-		button?.click();
+		editableTitle?.startEdit();
 	}
 </script>
 
@@ -88,8 +83,13 @@
 		{/if}
 	</span>
 	<div class="header-titles">
-		<h2 class="header-title" bind:this={titleContainer}>
-			<EditableTitle value={title} onsave={onrename} ariaLabel={`${kind} title`} />
+		<h2 class="header-title">
+			<EditableTitle
+				bind:this={editableTitle}
+				value={title}
+				onsave={onrename}
+				ariaLabel={`${kind} title`}
+			/>
 		</h2>
 		<Breadcrumb items={breadcrumbItems} />
 	</div>

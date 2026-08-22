@@ -76,7 +76,7 @@
 	import Icon from './Icon.svelte';
 
 	import { CREATED_SORT_LABELS, CREATED_SORTS, compareByCreatedAt } from '$lib/utils/recency';
-	import { hexToRgb } from '$lib/utils/contrast';
+	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { albumSummaryLabel, playlistSummaryLabel, titleInitials } from '$lib/utils/format';
 	import {
 		ALBUM_COVER_ALT_TYPE,
@@ -97,6 +97,10 @@
 		LIBRARY_SEARCH_ERROR,
 		LIBRARY_SEARCH_LOADING,
 		LIBRARY_SEARCH_PLACEHOLDER,
+		LIBRARY_PLAYLISTS_SEARCH_EMPTY,
+		LIBRARY_PLAYLISTS_SEARCH_PLACEHOLDER,
+		LIBRARY_SHARED_SEARCH_EMPTY,
+		LIBRARY_SHARED_SEARCH_PLACEHOLDER,
 		LIBRARY_SHARES_ALL_LABEL,
 		LIBRARY_SHARES_FILTER_LABEL,
 		LIBRARY_SHARES_COPY_LABEL,
@@ -170,6 +174,25 @@
 	const orderedPlaylists = $derived(
 		[...playlists].sort((a, b) => compareByCreatedAt(a, b, createdSort))
 	);
+	const filteredPlaylists = $derived(
+		search.trim()
+			? orderedPlaylists.filter((p) => p.title.toLowerCase().includes(search.trim().toLowerCase()))
+			: orderedPlaylists
+	);
+	const filteredShareItems = $derived(
+		search.trim()
+			? sharesState.items.filter((item) =>
+					shareRowLabel(item).toLowerCase().includes(search.trim().toLowerCase())
+				)
+			: sharesState.items
+	);
+	const searchPlaceholder = $derived(
+		filter === 'playlists'
+			? LIBRARY_PLAYLISTS_SEARCH_PLACEHOLDER
+			: filter === 'shared'
+				? LIBRARY_SHARED_SEARCH_PLACEHOLDER
+				: LIBRARY_SEARCH_PLACEHOLDER
+	);
 
 	let browseEl = $state<HTMLElement | null>(null);
 
@@ -193,19 +216,6 @@
 			list.some((item) => item.id === album.id) ? list : [...list, album]
 		);
 		openAlbum(album.id);
-	}
-
-	function tileCoverFill(colors: Record<string, string>): string | null {
-		const primary = colors.primary;
-		if (typeof primary !== 'string') return null;
-		const value = primary.trim();
-		if (!value) return null;
-		try {
-			hexToRgb(value);
-		} catch {
-			return null;
-		}
-		return value;
 	}
 
 	function albumPickCount(songs: SongItem[]): number {
@@ -255,7 +265,7 @@
 	function onSearchInput(event: Event): void {
 		const value = (event.target as HTMLInputElement).value;
 		searchQuery.set(value);
-		syncLibrarySearch(value);
+		if (filter === 'albums') syncLibrarySearch(value);
 		persistLibraryHistory();
 	}
 
@@ -361,17 +371,15 @@
 					<option value={option}>{CREATED_SORT_LABELS[option]}</option>
 				{/each}
 			</select>
-			{#if filter === 'albums'}
-				<input
-					class="search"
-					type="text"
-					placeholder={LIBRARY_SEARCH_PLACEHOLDER}
-					value={search}
-					oninput={onSearchInput}
-					aria-label={LIBRARY_SEARCH_PLACEHOLDER}
-					aria-busy={searching && searchState.status === 'loading'}
-				/>
-			{/if}
+			<input
+				class="search"
+				type="text"
+				placeholder={searchPlaceholder}
+				value={search}
+				oninput={onSearchInput}
+				aria-label={searchPlaceholder}
+				aria-busy={searching && searchState.status === 'loading'}
+			/>
 			{#if filter === 'albums'}
 				<button
 					class="new-btn"
@@ -405,7 +413,6 @@
 				<AlbumNode
 					album={group.album}
 					songs={group.songs}
-					variant="hit"
 					showCreatedAge={group.songs.length === 0}
 					expanded={albumIsExpanded({ searching: true, songHits: group.songs.length })}
 					selected={currentCollection?.kind === 'album' && currentCollection.id === group.album.id}
@@ -473,8 +480,10 @@
 						? LIBRARY_SHARES_TYPE_EMPTY[sharesState.typeFilter]
 						: LIBRARY_SHARED_EMPTY}
 				</p>
+			{:else if sharesPageComplete && search.trim() && filteredShareItems.length === 0}
+				<p class="empty">{LIBRARY_SHARED_SEARCH_EMPTY}</p>
 			{:else}
-				{#each sharesState.items as item (item.type + item.id)}
+				{#each filteredShareItems as item (item.type + item.id)}
 					<div class="share-row">
 						<button
 							class="share-open"
@@ -519,7 +528,7 @@
 		{:else if filter === 'albums'}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
 				{#each albumGroups as group (group.album.id)}
-					{@const fill = tileCoverFill(group.album.colors)}
+					{@const fill = usableAlbumPrimary(group.album.colors)}
 					{@const coverUrl = group.album.cover?.card ?? null}
 					<div
 						class="wall-tile"
@@ -595,9 +604,9 @@
 				>
 			{/if}
 		{:else if filter === 'playlists'}
-			{#if orderedPlaylists.length > 0}
+			{#if filteredPlaylists.length > 0}
 				<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
-					{#each orderedPlaylists as playlist (playlist.id)}
+					{#each filteredPlaylists as playlist (playlist.id)}
 						<div
 							class="wall-tile"
 							class:selected={currentCollection?.kind === 'playlist' &&
@@ -638,6 +647,8 @@
 			{:else if playlistStatus.status === 'error'}
 				<p class="empty" role="alert">{playlistStatus.error || LIBRARY_PLAYLISTS_ERROR}</p>
 				<button class="retry-btn" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
+			{:else if search.trim() && orderedPlaylists.length > 0}
+				<p class="empty">{LIBRARY_PLAYLISTS_SEARCH_EMPTY}</p>
 			{:else}
 				<p class="empty">{LIBRARY_PLAYLISTS_EMPTY}</p>
 			{/if}

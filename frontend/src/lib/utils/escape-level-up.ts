@@ -1,8 +1,13 @@
 // Global Escape = one level up (song -> collection interior, collection -> the
 // wall). Mounted once in +layout.svelte. Yields whenever a dialog, drawer, or
-// menu is open (every such overlay in this codebase renders `aria-modal`) or
-// while an editable element has focus, so it never fights a component that
-// already owns Escape for its own overlay.
+// menu is open, or while an editable element has focus, so it never fights a
+// component that already owns Escape for its own overlay. The contract: any
+// component that owns an overlay (dialog, drawer, dropdown menu, popover)
+// marks its open root `aria-modal="true"` and closes itself on Escape — that
+// marker is what this module checks for; it does not track overlays itself.
+// A popover whose ARIA role does not permit `aria-modal` (e.g. `role="menu"`
+// for the take overflow menu) marks itself `data-escape-overlay="true"`
+// instead, for the same purpose.
 export function isEditableElement(target: EventTarget | null): boolean {
 	if (!(target instanceof HTMLElement)) return false;
 	if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true;
@@ -11,7 +16,7 @@ export function isEditableElement(target: EventTarget | null): boolean {
 
 export function hasOpenOverlay(root: Document | null): boolean {
 	if (!root) return false;
-	return root.querySelector('[aria-modal="true"]') !== null;
+	return root.querySelector('[aria-modal="true"], [data-escape-overlay="true"]') !== null;
 }
 
 export function shouldHandleGlobalEscape(

@@ -3,12 +3,8 @@
 	import { albumList } from '$lib/stores/player';
 	import { openLibraryWall } from '$lib/stores/navigation';
 	import { ensurePlaylistsLoaded, playlistList } from '$lib/stores/playlists';
-	import {
-		APP_NAME,
-		RAIL_LIBRARY_LABEL,
-		RAIL_SETTINGS_LABEL,
-		librarySummaryLabel
-	} from '$lib/constants';
+	import { APP_NAME, RAIL_LIBRARY_LABEL, RAIL_SETTINGS_LABEL } from '$lib/constants';
+	import { librarySummaryLabel } from '$lib/utils/format';
 	import RailContext from './RailContext.svelte';
 	import UserRow from './UserRow.svelte';
 

@@ -64,7 +64,11 @@ export const TAKE_FROM_RECIPE_PREFIX = 'from Recipe';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const LIBRARY_SEARCH_PLACEHOLDER = 'Search albums and songs';
+export const LIBRARY_PLAYLISTS_SEARCH_PLACEHOLDER = 'Search playlists';
+export const LIBRARY_SHARED_SEARCH_PLACEHOLDER = 'Search shared';
 export const LIBRARY_SEARCH_EMPTY = 'No albums or songs match';
+export const LIBRARY_PLAYLISTS_SEARCH_EMPTY = 'No playlists match';
+export const LIBRARY_SHARED_SEARCH_EMPTY = 'No shared items match';
 export const LIBRARY_SEARCH_LOADING = 'Searching…';
 export const LIBRARY_SEARCH_ERROR = 'Search failed';
 export const LIBRARY_RETRY_LABEL = 'Retry';
@@ -85,7 +89,6 @@ export const ALBUM_ART_EMPTY_INITIALS = '?';
 export const ALBUM_ART_INITIAL_COUNT = 2;
 export const ALBUM_COVER_ACCEPT = 'image/jpeg,image/png';
 export const ALBUM_COVER_ALT_TYPE = 'Album';
-export const PLAYLIST_COVER_ALT_TYPE = 'Playlist';
 export const ALBUM_COVER_UPLOAD_LABEL = 'Upload album cover';
 export const ALBUM_COVER_REPLACE_LABEL = 'Replace album cover';
 export const ALBUM_COVER_REMOVE_LABEL = 'Remove album cover';
@@ -119,12 +122,6 @@ export const RAIL_CONTEXT_NO_TAKES = '—';
 export const RAIL_CONTEXT_ADD_SONG_LABEL = '+ Song';
 export const RAIL_CONTEXT_EMPTY = 'No album or playlist open — its tracks appear here.';
 
-export function librarySummaryLabel(albumCount: number, playlistCount: number): string {
-	const albums = `${albumCount} album${albumCount === 1 ? '' : 's'}`;
-	const playlists = `${playlistCount} playlist${playlistCount === 1 ? '' : 's'}`;
-	return `${albums} · ${playlists}`;
-}
-
 export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
 export type LibraryFilter = (typeof LIBRARY_FILTERS)[number];
 export const LIBRARY_DEFAULT_FILTER: LibraryFilter = 'albums';
@@ -140,6 +137,8 @@ export const LIBRARY_ALBUMS_LOADING = 'Loading albums…';
 export const LIBRARY_PLAYLISTS_EMPTY = 'No playlists yet';
 export const LIBRARY_PLAYLISTS_LOADING = 'Loading playlists…';
 export const LIBRARY_PLAYLISTS_ERROR = 'Failed to load playlists';
+export const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
+export const PLAYLIST_ENTRY_OPEN_SONG_LABEL = 'Open song in editor';
 export const LIBRARY_SHARES_LABEL = 'Shared';
 export const LIBRARY_SHARES_COUNT_SEP = ' · ';
 export const LIBRARY_SHARED_EMPTY = 'Nothing shared';

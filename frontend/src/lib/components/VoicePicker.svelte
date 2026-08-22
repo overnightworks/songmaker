@@ -46,7 +46,7 @@
 		{/each}
 	</select>
 	{#if available.length === 0}
-		<a class="hint" href="/loras">Create a voice</a>
+		<a class="hint" href="/settings/voices">Create a voice</a>
 	{/if}
 </div>
 

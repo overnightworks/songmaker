@@ -8,6 +8,7 @@
 		playlistLoad
 	} from '$lib/stores/playlists';
 	import { addToast } from '$lib/stores/toast';
+	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		LIBRARY_PLAYLISTS_ERROR,
 		LIBRARY_PLAYLISTS_LOADING,
@@ -37,9 +38,18 @@
 		}
 	}
 
+	function handleKeydown(event: KeyboardEvent): void {
+		if (!menuRef) return;
+		handleFocusTrapKeydown(menuRef, event, onclose);
+	}
+
 	$effect(() => {
 		document.addEventListener('click', handleClickOutside, true);
-		return () => document.removeEventListener('click', handleClickOutside, true);
+		document.addEventListener('keydown', handleKeydown, true);
+		return () => {
+			document.removeEventListener('click', handleClickOutside, true);
+			document.removeEventListener('keydown', handleKeydown, true);
+		};
 	});
 
 	async function handleCreate(): Promise<void> {
@@ -57,7 +67,14 @@
 	}
 </script>
 
-<div class="picker" bind:this={menuRef}>
+<div
+	class="picker"
+	bind:this={menuRef}
+	role="dialog"
+	aria-modal="true"
+	aria-label="Add to Playlist"
+	tabindex="-1"
+>
 	<div class="picker-header">Add to Playlist</div>
 	<div class="picker-list">
 		{#if load.status === 'loading' && playlists.length === 0}

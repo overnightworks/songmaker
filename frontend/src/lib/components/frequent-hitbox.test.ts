@@ -12,6 +12,7 @@ import { GENERATION_ACTIONS_KEY, type GenerationActions } from '$lib/contexts/ge
 import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
+import { openCollection } from '$lib/stores/collection';
 import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { currentUser, authLoading } from '$lib/stores/auth';
 import { closeSidebar, theme, toggleSidebar } from '$lib/stores/ui';
@@ -56,15 +57,20 @@ vi.mock('$lib/services/offline', () => ({
 	forgetPlaylistOfflineStream: vi.fn(),
 	loadSavedOfflinePlaylist: vi.fn().mockResolvedValue(null)
 }));
-vi.mock('$lib/stores/navigation', () => ({
-	openAlbum: vi.fn(),
-	openLibraryCreate: vi.fn(),
-	openLibraryWall: vi.fn(),
-	openPlaylist: vi.fn(),
-	selectLibraryFilter: vi.fn(),
-	selectSong: vi.fn(),
-	persistLibraryHistory: vi.fn()
-}));
+vi.mock('$lib/stores/navigation', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
+	return {
+		...actual,
+		backToCollection: vi.fn(),
+		openAlbum: vi.fn(),
+		openLibraryCreate: vi.fn(),
+		openLibraryWall: vi.fn(),
+		openPlaylist: vi.fn(),
+		selectLibraryFilter: vi.fn(),
+		selectSong: vi.fn(),
+		persistLibraryHistory: vi.fn()
+	};
+});
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
 }));
@@ -93,10 +99,12 @@ vi.mock('$lib/stores/auth', async (importOriginal) => {
 });
 
 import { removeFromPlaylist, reorderPlaylistEntry } from '$lib/api/client';
+import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
 import GenerationsList from './GenerationsList.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
 import LibraryWall from './LibraryWall.svelte';
+import PlayerBar from './PlayerBar.svelte';
 import ThemeToggle from './ThemeToggle.svelte';
 import Layout from '../../routes/+layout.svelte';
 
@@ -252,6 +260,9 @@ function playlistEntry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntr
 		album_title: 'Local Album',
 		artist: 'Artist',
 		generation_number: 1,
+		version_number: 1,
+		is_picked: false,
+		audio_duration: 180,
 		mp3_path: 'g1.mp3',
 		seed: 7,
 		model_mode: 'turbo',
@@ -364,6 +375,7 @@ afterEach(async () => {
 	selectedPlaylistDetail.set(null);
 	currentUser.set(null);
 	closeSidebar();
+	openCollection.set(null);
 	vi.unstubAllGlobals();
 });
 
@@ -371,7 +383,13 @@ const layoutChildren = createRawSnippet(() => ({
 	render: () => `<div></div>`
 }));
 
-async function renderInventory(): Promise<HTMLElement> {
+interface RenderedInventory {
+	root: HTMLElement;
+	genRoot: HTMLElement;
+	playlistPickerOnClose: ReturnType<typeof vi.fn>;
+}
+
+async function renderInventory(): Promise<RenderedInventory> {
 	const root = document.createElement('div');
 	document.body.append(root);
 
@@ -382,6 +400,8 @@ async function renderInventory(): Promise<HTMLElement> {
 	const pickerTarget = document.createElement('div');
 	const layoutTarget = document.createElement('div');
 	root.append(themeTarget, genTarget, playlistTarget, songTarget, pickerTarget, layoutTarget);
+
+	const playlistPickerOnClose = vi.fn();
 
 	mounted.push(mount(ThemeToggle, { target: themeTarget }));
 	mounted.push(
@@ -394,7 +414,10 @@ async function renderInventory(): Promise<HTMLElement> {
 	mounted.push(mount(PlaylistDetailView, { target: playlistTarget }));
 	mounted.push(mount(LibraryWall, { target: songTarget, props: { oncreate: vi.fn() } }));
 	mounted.push(
-		mount(PlaylistPicker, { target: pickerTarget, props: { onselect: vi.fn(), onclose: vi.fn() } })
+		mount(PlaylistPicker, {
+			target: pickerTarget,
+			props: { onselect: vi.fn(), onclose: playlistPickerOnClose }
+		})
 	);
 	mounted.push(mount(Layout, { target: layoutTarget, props: { children: layoutChildren } }));
 	await tick();
@@ -402,7 +425,7 @@ async function renderInventory(): Promise<HTMLElement> {
 	await tick();
 	toggleSidebar();
 	await tick();
-	return root;
+	return { root, genRoot: genTarget, playlistPickerOnClose };
 }
 
 describe('frequent action hitboxes', () => {
@@ -416,7 +439,7 @@ describe('frequent action hitboxes', () => {
 	});
 
 	it('names every frequent-action target and measures coarse and fine pointers', async () => {
-		const root = await renderInventory();
+		const { root } = await renderInventory();
 		const found: Array<{ name: string; el: HTMLButtonElement }> = [];
 
 		for (const target of INVENTORY) {
@@ -483,7 +506,7 @@ describe('frequent action hitboxes', () => {
 	});
 
 	it('sizes the new-playlist create action to the frequent hitbox on the Playlists filter', async () => {
-		const root = await renderInventory();
+		const { root } = await renderInventory();
 		libraryFilter.set('playlists');
 		await tick();
 		const newPlaylistBtn = requireButton(
@@ -504,7 +527,7 @@ describe('frequent action hitboxes', () => {
 	});
 
 	it('keeps pick, keep, reorder, and remove on the same button hitbox for pointer and keyboard', async () => {
-		const root = await renderInventory();
+		const { root } = await renderInventory();
 		const pickBtn = requireButton(root, 'pick', '.pick-btn[data-hitbox="frequent"]');
 		const keepBtn = requireButton(root, 'keep', '.keep-btn[data-hitbox="frequent"]');
 		const upBtn = requireButton(
@@ -545,5 +568,67 @@ describe('frequent action hitboxes', () => {
 		themeBtn.click();
 		await tick();
 		expect(document.documentElement.dataset.theme).toBe('light');
+	});
+});
+
+describe('PlayerBar mobile transport', () => {
+	// jsdom in this project's Vitest setup does not apply Svelte's scoped
+	// component <style> (confirmed empirically: getComputedStyle never
+	// reflects it here, even for rules that have long passed elsewhere in
+	// this file via the manually injected [data-hitbox] stylesheet), so the
+	// 44px mobile play-button rule cannot be asserted by computed style in
+	// this suite. What jsdom *can* verify is the wiring that switches the
+	// mobile layout on: the single `.mobile-transport` class the component
+	// derives from `subscribeCompactLayout`. The 44px value itself is a
+	// visual-review item (see docs/architecture.md's mobile bar contract).
+	it('applies the mobile transport layout only when the layout is compact', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlayerBar, { target }));
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(target.querySelector('.player-bar.mobile-transport')).not.toBeNull();
+	});
+});
+
+describe('Escape yields to an open popover before the global one-level-up shortcut', () => {
+	beforeEach(() => {
+		openCollection.set({ kind: 'album', id: 'a-local' });
+		vi.mocked(openLibraryWall).mockClear();
+		vi.mocked(backToCollection).mockClear();
+	});
+
+	function pressEscape(): void {
+		document.body.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+		);
+	}
+
+	it('closes the PlaylistPicker and does not run the global one-level-up navigation', async () => {
+		const { playlistPickerOnClose } = await renderInventory();
+
+		pressEscape();
+		await tick();
+
+		expect(playlistPickerOnClose).toHaveBeenCalledTimes(1);
+		expect(openLibraryWall).not.toHaveBeenCalled();
+		expect(backToCollection).not.toHaveBeenCalled();
+	});
+
+	it('closes the take overflow menu and does not run the global one-level-up navigation', async () => {
+		const { genRoot } = await renderInventory();
+		const overflowBtn = requireButton(genRoot, 'take-overflow', '.overflow-btn');
+		overflowBtn.click();
+		await tick();
+		expect(genRoot.querySelector('.overflow-menu')).not.toBeNull();
+
+		pressEscape();
+		await tick();
+
+		expect(genRoot.querySelector('.overflow-menu')).toBeNull();
+		expect(openLibraryWall).not.toHaveBeenCalled();
+		expect(backToCollection).not.toHaveBeenCalled();
 	});
 });

@@ -21,8 +21,13 @@
 		loadSavedOfflinePlaylist,
 		type StreamProgress
 	} from '$lib/services/offline';
-	import { ALBUM_ART_EMPTY_INITIALS } from '$lib/constants';
-	import { titleInitials } from '$lib/utils/format';
+	import { selectSong } from '$lib/stores/navigation';
+	import {
+		ALBUM_ART_EMPTY_INITIALS,
+		PLAYLIST_ENTRY_OPEN_SONG_LABEL,
+		PLAYLIST_ENTRY_OVERFLOW_LABEL
+	} from '$lib/constants';
+	import { formatTime, titleInitials } from '$lib/utils/format';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
@@ -30,9 +35,38 @@
 	const playlistDetail = $derived($selectedPlaylistDetail);
 	let reorderBusy = $state(false);
 	let showDeleteConfirm = $state(false);
+	let overflowId = $state<string | null>(null);
 	const initials = $derived(
 		playlistDetail ? titleInitials(playlistDetail.title) : ALBUM_ART_EMPTY_INITIALS
 	);
+
+	function toggleOverflow(entryId: string, e: MouseEvent): void {
+		e.stopPropagation();
+		overflowId = overflowId === entryId ? null : entryId;
+	}
+
+	function openSongInEditor(songId: string): void {
+		overflowId = null;
+		selectSong(songId);
+	}
+
+	$effect(() => {
+		if (!overflowId) return;
+		function onClick(): void {
+			overflowId = null;
+		}
+		function onKeydown(event: KeyboardEvent): void {
+			if (event.key !== 'Escape') return;
+			event.preventDefault();
+			overflowId = null;
+		}
+		document.addEventListener('click', onClick);
+		document.addEventListener('keydown', onKeydown, true);
+		return () => {
+			document.removeEventListener('click', onClick);
+			document.removeEventListener('keydown', onKeydown, true);
+		};
+	});
 
 	async function onPlaylistShareEnable() {
 		if (!playlistDetail) throw new Error('No playlist');
@@ -273,9 +307,14 @@
 						{/if}
 					</span>
 					<div class="entry-info">
-						<span class="entry-title">{entry.song_title}</span>
+						<span class="entry-title">
+							{#if entry.is_picked}<span class="picked-star">★</span>{/if}
+							{entry.song_title}
+						</span>
 						<span class="entry-meta">
-							{entry.artist} · Gen #{entry.generation_number}
+							{entry.artist} · Gen #{entry.generation_number}{#if entry.version_number !== null}
+								· v{entry.version_number}{/if}{#if entry.audio_duration !== null}
+								· {formatTime(entry.audio_duration)}{/if}
 						</span>
 					</div>
 					<div class="entry-actions">
@@ -326,6 +365,39 @@
 						>
 							<Icon name="x" size={14} />
 						</button>
+						<div class="entry-overflow-anchor">
+							<button
+								type="button"
+								class="overflow-btn"
+								data-hitbox="frequent"
+								data-hitbox-face
+								aria-haspopup="menu"
+								aria-expanded={overflowId === entry.id}
+								aria-label={`${PLAYLIST_ENTRY_OVERFLOW_LABEL} for ${entry.song_title}`}
+								onclick={(e) => toggleOverflow(entry.id, e)}
+							>
+								<Icon name="more-horizontal" size={16} />
+							</button>
+							{#if overflowId === entry.id}
+								<div
+									class="entry-overflow-menu"
+									role="menu"
+									data-escape-overlay="true"
+									tabindex="-1"
+									onclick={(e) => e.stopPropagation()}
+									onkeydown={(e) => e.stopPropagation()}
+								>
+									<button
+										type="button"
+										role="menuitem"
+										class="entry-overflow-item"
+										onclick={() => openSongInEditor(entry.song_id)}
+									>
+										{PLAYLIST_ENTRY_OPEN_SONG_LABEL}
+									</button>
+								</div>
+							{/if}
+						</div>
 					</div>
 				</div>
 			{/each}
@@ -494,6 +566,11 @@
 		font-size: 1rem;
 	}
 
+	.picked-star {
+		color: var(--accent);
+		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
+	}
+
 	.entry-meta {
 		font-size: 0.75rem;
 		color: var(--text-subtle);
@@ -514,6 +591,62 @@
 
 	.remove-btn:hover {
 		color: var(--score-bad);
+	}
+
+	.entry-overflow-anchor {
+		position: relative;
+	}
+
+	.overflow-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		color: var(--text-muted);
+		padding: 0.15rem 0.3rem;
+		cursor: pointer;
+	}
+
+	.overflow-btn:hover,
+	.overflow-btn[aria-expanded='true'] {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	.entry-overflow-menu {
+		position: absolute;
+		right: 0;
+		top: calc(100% + 4px);
+		z-index: 5;
+		min-width: 10rem;
+		display: flex;
+		flex-direction: column;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		padding: 0.25rem;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	}
+
+	.entry-overflow-item {
+		background: none;
+		border: none;
+		text-align: left;
+		padding: 0.4rem 0.55rem;
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.4px;
+		cursor: pointer;
+		border-radius: 3px;
+	}
+
+	.entry-overflow-item:hover {
+		background: var(--surface-hover);
+		color: var(--text);
 	}
 
 	.empty-tab {

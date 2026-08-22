@@ -18,6 +18,10 @@ export function playlistSummaryLabel(entryCount: number): string {
 	return pluralize(entryCount, 'track');
 }
 
+export function librarySummaryLabel(albumCount: number, playlistCount: number): string {
+	return `${pluralize(albumCount, 'album')} · ${pluralize(playlistCount, 'playlist')}`;
+}
+
 export function titleInitials(title: string): string {
 	const trimmed = title.trim();
 	if (!trimmed) return ALBUM_ART_EMPTY_INITIALS;

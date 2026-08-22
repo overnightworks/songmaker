@@ -30,6 +30,7 @@
 		updateMediaSessionPositionState
 	} from '$lib/services/mediaSession';
 	import { formatTime } from '$lib/utils/format';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from './Icon.svelte';
 	import {
 		AudioVisualizer,
@@ -41,7 +42,10 @@
 		type VizColors
 	} from '$lib/utils/visualizer';
 
+	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
+
 	let nowPlayingOpen = $state(false);
+	let mobileTransport = $state(false);
 	let nowPlayingTrigger: HTMLButtonElement | undefined = $state();
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
 	let audioCtx: AudioContext | undefined;
@@ -192,6 +196,12 @@
 	$effect(() => {
 		if (!current) nowPlayingOpen = false;
 	});
+
+	$effect(() => {
+		return subscribeCompactLayout((value) => {
+			mobileTransport = value;
+		}, MOBILE_TRANSPORT_MEDIA);
+	});
 </script>
 
 <svelte:document onvisibilitychange={handleVisibilityChange} />
@@ -199,6 +209,7 @@
 <footer
 	class="player-bar"
 	class:now-playing-open={nowPlayingOpen}
+	class:mobile-transport={mobileTransport}
 	style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}
 >
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
@@ -672,66 +683,14 @@
 	/* One 64px transport row on mobile / coarse pointers: cover, title,
 	   play/pause, and the Now Playing chevron. Prev/Next move into the Now
 	   Playing overlay — see NowPlaying.svelte — and the interactive seek
-	   timeline is replaced by the decorative .mobile-progress line above. */
-	@media (max-width: 640px), (any-pointer: coarse) {
-		.player-bar {
-			overflow: visible;
-			padding: 0 14px env(safe-area-inset-bottom, 0px);
-		}
-		.mobile-progress {
-			display: block;
-			position: absolute;
-			left: 0;
-			right: 0;
-			top: 0;
-			height: 2px;
-			background: color-mix(in srgb, var(--border) 45%, transparent);
-			z-index: 2;
-		}
-		.player-content {
-			display: flex;
-			align-items: center;
-			gap: 10px;
-		}
-		.track-info {
-			order: 1;
-			flex: 1;
-			width: auto;
-			min-width: 0;
-		}
-		.track-cover {
-			width: 40px;
-			height: 40px;
-		}
-		.transport-controls {
-			order: 2;
-			flex-shrink: 0;
-		}
-		.nav-btn {
-			display: none;
-		}
-		.play-btn {
-			width: 40px;
-			height: 40px;
-			min-width: 40px;
-			min-height: 40px;
-		}
-		.play-btn-face {
-			transform: none !important;
-		}
-		.now-playing-btn {
-			order: 3;
-			flex-shrink: 0;
-		}
-		.timeline {
-			display: none;
-		}
-	}
-	:global(html[data-pointer='coarse']) .player-bar {
+	   timeline is replaced by the decorative .mobile-progress line above.
+	   `.mobile-transport` is set from `subscribeCompactLayout` (JS mirrors
+	   the same media query so jsdom tests can drive it via data-pointer). */
+	.player-bar.mobile-transport {
 		overflow: visible;
 		padding: 0 14px env(safe-area-inset-bottom, 0px);
 	}
-	:global(html[data-pointer='coarse']) .mobile-progress {
+	.mobile-transport .mobile-progress {
 		display: block;
 		position: absolute;
 		left: 0;
@@ -741,42 +700,42 @@
 		background: color-mix(in srgb, var(--border) 45%, transparent);
 		z-index: 2;
 	}
-	:global(html[data-pointer='coarse']) .player-content {
+	.mobile-transport .player-content {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 	}
-	:global(html[data-pointer='coarse']) .track-info {
+	.mobile-transport .track-info {
 		order: 1;
 		flex: 1;
 		width: auto;
 		min-width: 0;
 	}
-	:global(html[data-pointer='coarse']) .track-cover {
+	.mobile-transport .track-cover {
 		width: 40px;
 		height: 40px;
 	}
-	:global(html[data-pointer='coarse']) .transport-controls {
+	.mobile-transport .transport-controls {
 		order: 2;
 		flex-shrink: 0;
 	}
-	:global(html[data-pointer='coarse']) .nav-btn {
+	.mobile-transport .nav-btn {
 		display: none;
 	}
-	:global(html[data-pointer='coarse']) .play-btn {
-		width: 40px;
-		height: 40px;
-		min-width: 40px;
-		min-height: 40px;
+	.mobile-transport .play-btn {
+		width: 44px;
+		height: 44px;
+		min-width: 44px;
+		min-height: 44px;
 	}
-	:global(html[data-pointer='coarse']) .play-btn-face {
+	.mobile-transport .play-btn-face {
 		transform: none !important;
 	}
-	:global(html[data-pointer='coarse']) .now-playing-btn {
+	.mobile-transport .now-playing-btn {
 		order: 3;
 		flex-shrink: 0;
 	}
-	:global(html[data-pointer='coarse']) .timeline {
+	.mobile-transport .timeline {
 		display: none;
 	}
 </style>

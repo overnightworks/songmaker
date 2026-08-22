@@ -146,7 +146,7 @@ describe('settings layout', () => {
 		expect(links.map((link) => link.getAttribute('href'))).toEqual([
 			'/settings/generation',
 			'/settings/playback',
-			'/loras',
+			'/settings/voices',
 			'/settings/account',
 			'/settings/users',
 			'/settings/cleanup',
@@ -155,5 +155,13 @@ describe('settings layout', () => {
 		expect(target.querySelector('.nav-link.active')?.getAttribute('href')).toBe(
 			'/settings/generation'
 		);
+	});
+
+	it('marks Voices current when the URL is /settings/voices', async () => {
+		pageState.url = new URL('https://songmaker.test/settings/voices');
+		const target = await renderLayout(false);
+		const active = target.querySelector('.nav-link.active');
+		expect(active?.getAttribute('href')).toBe('/settings/voices');
+		expect(active?.textContent?.trim()).toBe('Voices');
 	});
 });

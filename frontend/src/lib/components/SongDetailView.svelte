@@ -101,7 +101,7 @@
 		canSplitSongPanes
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
-	import { hexToRgb } from '$lib/utils/contrast';
+	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Breadcrumb from './Breadcrumb.svelte';
 	import GenerationsList from './GenerationsList.svelte';
@@ -204,19 +204,6 @@
 	const cowriterModal = $derived(cowriterShowing && !split);
 
 	let editorSongId: string | null = null;
-
-	function usableAlbumPrimary(colors: Record<string, string>): string | null {
-		const primary = colors.primary;
-		if (typeof primary !== 'string') return null;
-		const value = primary.trim();
-		if (!value) return null;
-		try {
-			hexToRgb(value);
-		} catch {
-			return null;
-		}
-		return value;
-	}
 
 	$effect(() => {
 		void coverUrl;

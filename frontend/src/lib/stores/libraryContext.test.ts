@@ -5,7 +5,12 @@ import type { AlbumItem, GenerationItem, PlaylistDetailItem, SongItem } from '$l
 import { LIBRARY_HISTORY_KIND } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import { searchQuery } from '$lib/stores/filter';
-import { libraryBrowse, librarySort, resetLibrarySearchForTests } from '$lib/stores/librarySearch';
+import {
+	libraryBrowse,
+	librarySearch,
+	librarySort,
+	resetLibrarySearchForTests
+} from '$lib/stores/librarySearch';
 import { albumList, selectedGenerationId, selectedSongId, songList } from '$lib/stores/player';
 import {
 	playlistLoad,
@@ -229,6 +234,27 @@ describe('library history snapshot', () => {
 		expect(isLibraryHistoryState(snap)).toBe(true);
 	});
 
+	it('does not snapshot a previous search page count onto a new query', () => {
+		searchQuery.set('new');
+		librarySearch.set({
+			q: 'old',
+			status: 'ready',
+			error: null,
+			items: [
+				{ type: 'album', album: album({ id: 'a1' }) },
+				{ type: 'album', album: album({ id: 'a2' }) }
+			],
+			hasMore: true,
+			nextCursor: 'cursor-old'
+		});
+
+		const snap = snapshotLibraryHistory(1);
+
+		expect(snap.query).toBe('new');
+		expect(snap.searchLoadedCount).toBe(0);
+		expect(snap.searchCursor).toBeNull();
+	});
+
 	it('rejects legacy section-based blobs so restore falls back to root', () => {
 		expect(isLibraryHistoryState(null)).toBe(false);
 		expect(
@@ -282,6 +308,22 @@ describe('applyLibraryHistory', () => {
 		await applyLibraryHistory(state);
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a9' });
 		expect(get(albumList).some((a) => a.id === 'a9')).toBe(true);
+	});
+
+	it('restores browse pages even when a search query is replayed', async () => {
+		fetchAlbums.mockResolvedValue(emptyPage([album()]));
+		searchLibrary.mockResolvedValue({
+			items: [{ type: 'album', album: album({ id: 'a-hit' }) }],
+			next_cursor: null,
+			has_more: false
+		});
+
+		await applyLibraryHistory({ ...libraryRootState(), query: 'Tide' });
+
+		expect(fetchAlbums).toHaveBeenCalled();
+		expect(searchLibrary).toHaveBeenCalled();
+		expect(get(albumList).map((item) => item.id)).toEqual(['a1']);
+		expect(get(librarySearch).items).toHaveLength(1);
 	});
 
 	it('hydrates a playlist collection via loadPlaylistDetail', async () => {

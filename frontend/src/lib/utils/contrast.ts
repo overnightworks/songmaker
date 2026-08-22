@@ -37,6 +37,23 @@ export function hexToRgb(hex: string): readonly [number, number, number] {
 	];
 }
 
+// An album's stored `colors.primary` swatch, usable as a CSS fill only when
+// it is a non-empty, parseable hex color. Shared by every surface that falls
+// back to this swatch when an album has no cover image (library wall tiles,
+// album detail art, song detail art).
+export function usableAlbumPrimary(colors: Record<string, string>): string | null {
+	const primary = colors.primary;
+	if (typeof primary !== 'string') return null;
+	const value = primary.trim();
+	if (!value) return null;
+	try {
+		hexToRgb(value);
+	} catch {
+		return null;
+	}
+	return value;
+}
+
 function channelToLinear(channel: number): number {
 	const srgb = channel / SRGB_CHANNEL_MAX;
 	if (srgb <= SRGB_LINEAR_CUTOFF) {
