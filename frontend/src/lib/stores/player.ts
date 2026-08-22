@@ -112,7 +112,7 @@ export function clearGenerationSelection(): void {
 }
 
 // --- Playback queue context ---
-type QueueContext =
+export type QueueContext =
 	| { type: 'library'; takes?: PlaybackInfo[]; index?: number }
 	| { type: 'album'; albumId: string; takes?: PlaybackInfo[]; index?: number }
 	| { type: 'playlist'; entries: PlaylistEntryItem[]; index: number };

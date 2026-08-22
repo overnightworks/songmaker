@@ -16,6 +16,7 @@
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
+	import { closeSidebar } from '$lib/stores/ui';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
@@ -179,6 +180,7 @@
 
 	function openNowPlaying(): void {
 		if (!current) return;
+		closeSidebar();
 		nowPlayingOpen = true;
 	}
 

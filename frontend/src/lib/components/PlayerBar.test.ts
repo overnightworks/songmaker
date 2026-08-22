@@ -15,6 +15,8 @@ import {
 import * as playerStore from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
+import { get } from 'svelte/store';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
 
@@ -340,7 +342,7 @@ describe('PlayerBar Now Playing', () => {
 		title?.click();
 		await tick();
 
-		const sheet = document.querySelector('.now-playing-sheet');
+		const sheet = document.querySelector('.now-playing');
 		expect(sheet?.textContent).toContain('Tide');
 		expect(sheet?.textContent).toContain('old verse');
 		expect(sheet?.textContent).not.toContain('second verse');
@@ -360,8 +362,20 @@ describe('PlayerBar Now Playing', () => {
 		await tick();
 		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
 		await tick();
-		expect(document.querySelector('.now-playing-sheet')?.textContent).toContain(
-			NOW_PLAYING_NO_LYRICS
-		);
+		expect(document.querySelector('.now-playing')?.textContent).toContain(NOW_PLAYING_NO_LYRICS);
+	});
+
+	it('closes the drawer when Now Playing opens', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+		toggleSidebar();
+		expect(get(sidebarOpen)).toBe(true);
+
+		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_LABEL}"]`)?.click();
+		await tick();
+
+		expect(get(sidebarOpen)).toBe(false);
+		sidebarOpen.set(false);
 	});
 });
