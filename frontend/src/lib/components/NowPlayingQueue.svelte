@@ -9,7 +9,8 @@
 	import {
 		NOW_PLAYING_QUEUE_TAB,
 		NOW_PLAYING_UP_NEXT_PREFIX,
-		nowPlayingQueueHeading
+		nowPlayingQueueHeading,
+		nowPlayingTakeLabel
 	} from '$lib/constants/now-playing';
 	import { formatTime } from '$lib/utils/format';
 	import QueueStreamFeedback from './QueueStreamFeedback.svelte';
@@ -78,6 +79,9 @@
 					>
 						<span class="queue-position">{index === queue.currentIndex ? '' : index + 1}</span>
 						<span class="queue-title">{item.songTitle}</span>
+						<span class="queue-take">
+							{nowPlayingTakeLabel(item.versionNumber, item.generationNumber)}
+						</span>
 						<span class="queue-duration"
 							>{item.durationSec != null ? formatTime(item.durationSec) : ''}</span
 						>
@@ -198,6 +202,11 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.queue-take {
+		flex-shrink: 0;
+		color: var(--text-subtle);
+		font-size: 0.72rem;
 	}
 	.queue-duration {
 		flex-shrink: 0;

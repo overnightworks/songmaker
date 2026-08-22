@@ -12,6 +12,8 @@ function item(overrides: Partial<QueueRowItem> = {}): QueueRowItem {
 		songTitle: 'Tide',
 		generationId: 'g1',
 		durationSec: 195,
+		versionNumber: 2,
+		generationNumber: 3,
 		...overrides
 	};
 }
@@ -104,5 +106,27 @@ describe('NowPlayingQueue', () => {
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.textContent).toContain('Tide');
 		expect(target.textContent).not.toContain('Up next');
+	});
+
+	it('labels a versioned row with version and take number', async () => {
+		const queue: QueueViewModel = {
+			items: [item({ versionNumber: 2, generationNumber: 3 })],
+			currentIndex: 0,
+			upNext: null
+		};
+		await render({ queue });
+		expect(target.querySelector('.queue-take')?.textContent?.trim()).toBe('v2 · take 3');
+	});
+
+	it('labels a library-pool row (no version) with take number only, never "vnull"', async () => {
+		const queue: QueueViewModel = {
+			items: [item({ versionNumber: null, generationNumber: 4 })],
+			currentIndex: 0,
+			upNext: null
+		};
+		await render({ queue });
+		const label = target.querySelector('.queue-take')?.textContent?.trim();
+		expect(label).toBe('take 4');
+		expect(label).not.toContain('vnull');
 	});
 });

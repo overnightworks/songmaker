@@ -2014,7 +2014,10 @@ describe('buildQueueViewModel', () => {
 
 	it('exposes the current item and up next for a native library/album queue', () => {
 		const songs = [makeSong({ id: 's1', audio_duration: 200 }), makeSong({ id: 's2' })];
-		const current = makePlayback(makeGen({ id: 'g1' }), songs[0]);
+		const current = makePlayback(
+			makeGen({ id: 'g1', version_number: 3, generation_number: 2 }),
+			songs[0]
+		);
 		const next = makePlayback(makeGen({ id: 'g2' }), songs[1]);
 		const ctx = { type: 'library' as const, takes: [current, next], index: 0 };
 
@@ -2022,8 +2025,21 @@ describe('buildQueueViewModel', () => {
 
 		expect(vm.items.map((item) => item.generationId)).toEqual(['g1', 'g2']);
 		expect(vm.items[0]?.durationSec).toBe(200);
+		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 3, generationNumber: 2 }));
 		expect(vm.currentIndex).toBe(0);
 		expect(vm.upNext).toEqual(expect.objectContaining({ generationId: 'g2' }));
+	});
+
+	it('carries no version number for a native take with no version (library pool)', () => {
+		const song = makeSong();
+		const current = makePlayback(makeGen({ version_number: null, generation_number: 5 }), song);
+		const ctx = { type: 'library' as const, takes: [current], index: 0 };
+
+		const vm = buildQueueViewModel(ctx, current, [song]);
+
+		expect(vm.items[0]).toEqual(
+			expect.objectContaining({ versionNumber: null, generationNumber: 5 })
+		);
 	});
 
 	it('has no up next for a single-item native queue', () => {
@@ -2038,7 +2054,13 @@ describe('buildQueueViewModel', () => {
 
 	it('exposes the current item and up next for a playlist queue', () => {
 		const entries = [
-			makePlaylistEntry({ id: 'e1', generation_id: 'g1', song_title: 'First' }),
+			makePlaylistEntry({
+				id: 'e1',
+				generation_id: 'g1',
+				song_title: 'First',
+				version_number: 4,
+				generation_number: 1
+			}),
 			makePlaylistEntry({ id: 'e2', generation_id: 'g2', song_title: 'Second' })
 		];
 		const ctx = { type: 'playlist' as const, entries, index: 0 };
@@ -2046,6 +2068,7 @@ describe('buildQueueViewModel', () => {
 		const vm = buildQueueViewModel(ctx, null, []);
 
 		expect(vm.currentIndex).toBe(0);
+		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 4, generationNumber: 1 }));
 		expect(vm.upNext).toEqual(expect.objectContaining({ generationId: 'g2' }));
 	});
 });

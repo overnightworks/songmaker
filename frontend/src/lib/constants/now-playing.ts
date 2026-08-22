@@ -6,6 +6,16 @@ export const NOW_PLAYING_QUEUE_TAB = 'Queue';
 export const NOW_PLAYING_TAKE_TAB = 'This take';
 export const NOW_PLAYING_RIGHT_PANEL_LABEL = 'Now Playing panel';
 
+// Queue row take label: "v<N> · take <k>", or just "take <k>" when the row
+// carries no version (library-pool items have version_number: null).
+export function nowPlayingTakeLabel(
+	versionNumber: number | null,
+	generationNumber: number
+): string {
+	const takePart = `take ${generationNumber}`;
+	return versionNumber != null ? `v${versionNumber} · ${takePart}` : takePart;
+}
+
 export const NOW_PLAYING_UP_NEXT_PREFIX = 'Up next:';
 export const NOW_PLAYING_SHUFFLE_LABEL_PREFIX = 'Shuffle';
 export const NOW_PLAYING_SHUFFLE_DISABLE_PREFIX = 'Disable shuffle';

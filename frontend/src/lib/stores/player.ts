@@ -755,6 +755,8 @@ export interface QueueRowItem {
 	songTitle: string;
 	generationId: string;
 	durationSec: number | null;
+	versionNumber: number | null;
+	generationNumber: number;
 }
 
 export interface QueueViewModel {
@@ -779,7 +781,9 @@ function nativeQueueItem(take: PlaybackInfo, songs: SongItem[]): QueueRowItem {
 		// per-take duration (that lives only on the loaded <audio> element).
 		// Good enough for a queue row estimate; the transport's own progress
 		// bar shows the real duration once the take is playing.
-		durationSec: songs.find((s) => s.id === take.songId)?.audio_duration ?? null
+		durationSec: songs.find((s) => s.id === take.songId)?.audio_duration ?? null,
+		versionNumber: take.generation.version_number,
+		generationNumber: take.generation.generation_number
 	};
 }
 
@@ -789,7 +793,9 @@ function playlistQueueItem(entry: PlaylistEntryItem): QueueRowItem {
 		songId: entry.song_id,
 		songTitle: entry.song_title,
 		generationId: entry.generation_id,
-		durationSec: entry.audio_duration
+		durationSec: entry.audio_duration,
+		versionNumber: entry.version_number,
+		generationNumber: entry.generation_number
 	};
 }
 
