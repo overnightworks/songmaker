@@ -7,7 +7,13 @@ import type {
 	PlaylistEntryItem,
 	SongItem
 } from '$lib/api/types';
-import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
+import {
+	HITBOX_COMPACT_PX,
+	HITBOX_FREQUENT_PX,
+	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
+	PLAYLIST_ENTRY_MOVE_UP_LABEL,
+	PLAYLIST_ENTRY_REMOVE_LABEL
+} from '$lib/constants';
 import { GENERATION_ACTIONS_KEY, type GenerationActions } from '$lib/contexts/generation-actions';
 import { libraryFilter, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
@@ -116,13 +122,19 @@ const INVENTORY = [
 	{ name: 'keep', selector: '.keep-btn[data-hitbox="frequent"]' },
 	{
 		name: 'playlist-move-up',
-		selector: '.move-btn[data-hitbox="frequent"][aria-label$=" up"]'
+		selector: '.entry-overflow-item[data-hitbox="frequent"]',
+		text: PLAYLIST_ENTRY_MOVE_UP_LABEL
 	},
 	{
 		name: 'playlist-move-down',
-		selector: '.move-btn[data-hitbox="frequent"][aria-label$=" down"]'
+		selector: '.entry-overflow-item[data-hitbox="frequent"]',
+		text: PLAYLIST_ENTRY_MOVE_DOWN_LABEL
 	},
-	{ name: 'playlist-remove', selector: '.remove-btn[data-hitbox="frequent"]' },
+	{
+		name: 'playlist-remove',
+		selector: '.entry-overflow-item[data-hitbox="frequent"]',
+		text: PLAYLIST_ENTRY_REMOVE_LABEL
+	},
 	{ name: 'new-album', selector: '[data-hitbox="frequent"][aria-label="New album"]' },
 	{ name: 'wall-tile-play', selector: '.wall-tile-play[data-hitbox="frequent"]' },
 	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' },
@@ -313,10 +325,22 @@ function mockActions(): GenerationActions {
 	};
 }
 
-function requireButton(root: ParentNode, name: string, selector: string): HTMLButtonElement {
-	const el = root.querySelector<HTMLButtonElement>(selector);
-	if (!el) throw new Error(`${name} is missing (${selector})`);
+function requireButton(
+	root: ParentNode,
+	name: string,
+	selector: string,
+	text?: string
+): HTMLButtonElement {
+	const matches = Array.from(root.querySelectorAll<HTMLButtonElement>(selector));
+	const el = text === undefined ? matches[0] : matches.find((m) => m.textContent?.trim() === text);
+	if (!el) {
+		throw new Error(`${name} is missing (${selector}${text === undefined ? '' : ` "${text}"`})`);
+	}
 	return el;
+}
+
+function openEntryOverflowMenu(row: HTMLElement): void {
+	requireButton(row, 'entry-overflow-toggle', '.overflow-btn').click();
 }
 
 beforeEach(() => {
@@ -440,10 +464,21 @@ describe('frequent action hitboxes', () => {
 
 	it('names every frequent-action target and measures coarse and fine pointers', async () => {
 		const { root } = await renderInventory();
+		const middleRow = root.querySelectorAll('.entry-row')[1];
+		if (!(middleRow instanceof HTMLElement)) {
+			throw new Error('playlist-move-up is missing a middle-row neighbor');
+		}
+		openEntryOverflowMenu(middleRow);
+		await tick();
 		const found: Array<{ name: string; el: HTMLButtonElement }> = [];
 
 		for (const target of INVENTORY) {
-			const el = requireButton(root, target.name, target.selector);
+			const el = requireButton(
+				root,
+				target.name,
+				target.selector,
+				'text' in target ? target.text : undefined
+			);
 			expect(el.tagName, `${target.name} is a button`).toBe('BUTTON');
 			found.push({ name: target.name, el });
 		}
@@ -465,17 +500,14 @@ describe('frequent action hitboxes', () => {
 		const siblingGroups: Array<Array<{ name: string; el: HTMLButtonElement }>> = [
 			found.filter((item) => item.name === 'pick' || item.name === 'keep')
 		];
-		const middleRow = root.querySelectorAll('.entry-row')[1];
-		if (!(middleRow instanceof HTMLElement)) {
-			throw new Error('playlist-move-up is missing a middle-row neighbor');
-		}
 		siblingGroups.push([
 			{
 				name: 'playlist-move-up',
 				el: requireButton(
 					middleRow,
 					'playlist-move-up',
-					'.move-btn[data-hitbox="frequent"][aria-label$=" up"]'
+					'.entry-overflow-item[data-hitbox="frequent"]',
+					PLAYLIST_ENTRY_MOVE_UP_LABEL
 				)
 			},
 			{
@@ -483,7 +515,8 @@ describe('frequent action hitboxes', () => {
 				el: requireButton(
 					middleRow,
 					'playlist-move-down',
-					'.move-btn[data-hitbox="frequent"][aria-label$=" down"]'
+					'.entry-overflow-item[data-hitbox="frequent"]',
+					PLAYLIST_ENTRY_MOVE_DOWN_LABEL
 				)
 			}
 		]);
@@ -530,20 +563,29 @@ describe('frequent action hitboxes', () => {
 		const { root } = await renderInventory();
 		const pickBtn = requireButton(root, 'pick', '.pick-btn[data-hitbox="frequent"]');
 		const keepBtn = requireButton(root, 'keep', '.keep-btn[data-hitbox="frequent"]');
+		const secondRow = root.querySelectorAll('.entry-row')[1];
+		if (!(secondRow instanceof HTMLElement)) {
+			throw new Error('Second Track row is missing');
+		}
+		openEntryOverflowMenu(secondRow);
+		await tick();
 		const upBtn = requireButton(
-			root,
+			secondRow,
 			'playlist-move-up',
-			'.move-btn[data-hitbox="frequent"][aria-label="Move Second Track up"]'
+			'.entry-overflow-item[data-hitbox="frequent"]',
+			PLAYLIST_ENTRY_MOVE_UP_LABEL
 		);
 		const downBtn = requireButton(
-			root,
+			secondRow,
 			'playlist-move-down',
-			'.move-btn[data-hitbox="frequent"][aria-label="Move Second Track down"]'
+			'.entry-overflow-item[data-hitbox="frequent"]',
+			PLAYLIST_ENTRY_MOVE_DOWN_LABEL
 		);
 		const removeBtn = requireButton(
-			root,
+			secondRow,
 			'playlist-remove',
-			'.remove-btn[data-hitbox="frequent"][aria-label="Remove Second Track from playlist"]'
+			'.entry-overflow-item[data-hitbox="frequent"]',
+			PLAYLIST_ENTRY_REMOVE_LABEL
 		);
 		const themeBtn = requireButton(root, 'theme-toggle', '[aria-label="Toggle theme"]');
 
@@ -561,7 +603,16 @@ describe('frequent action hitboxes', () => {
 		upBtn.click();
 		await tick();
 		expect(reorderPlaylistEntry).toHaveBeenCalled();
-		removeBtn.click();
+
+		openEntryOverflowMenu(secondRow);
+		await tick();
+		const removeBtnAfterMove = requireButton(
+			secondRow,
+			'playlist-remove',
+			'.entry-overflow-item[data-hitbox="frequent"]',
+			PLAYLIST_ENTRY_REMOVE_LABEL
+		);
+		removeBtnAfterMove.click();
 		await tick();
 		expect(removeFromPlaylist).toHaveBeenCalled();
 

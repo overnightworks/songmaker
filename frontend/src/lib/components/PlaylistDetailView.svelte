@@ -404,6 +404,7 @@
 										type="button"
 										role="menuitem"
 										class="entry-overflow-item"
+										data-hitbox="frequent"
 										onclick={() => openSongInEditor(entry.song_id)}
 									>
 										{PLAYLIST_ENTRY_OPEN_SONG_LABEL}
@@ -414,6 +415,7 @@
 												type="button"
 												role="menuitem"
 												class="entry-overflow-item"
+												data-hitbox="frequent"
 												disabled={reorderBusy}
 												onclick={() => {
 													overflowId = null;
@@ -428,6 +430,7 @@
 												type="button"
 												role="menuitem"
 												class="entry-overflow-item"
+												data-hitbox="frequent"
 												disabled={reorderBusy}
 												onclick={() => {
 													overflowId = null;
@@ -441,6 +444,7 @@
 											type="button"
 											role="menuitem"
 											class="entry-overflow-item"
+											data-hitbox="frequent"
 											onclick={() => {
 												overflowId = null;
 												void onRemoveEntry(entry.id);
@@ -685,6 +689,9 @@
 	}
 
 	.entry-overflow-item {
+		display: flex;
+		align-items: center;
+		min-height: var(--hitbox-frequent);
 		background: none;
 		border: none;
 		text-align: left;
