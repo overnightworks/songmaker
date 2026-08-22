@@ -21,10 +21,7 @@
 		loadSavedOfflinePlaylist,
 		type StreamProgress
 	} from '$lib/services/offline';
-	import {
-		ALBUM_ART_EMPTY_INITIALS,
-		ALBUM_ART_INITIAL_COUNT
-	} from '$lib/constants';
+	import { ALBUM_ART_EMPTY_INITIALS, ALBUM_ART_INITIAL_COUNT } from '$lib/constants';
 	import ActionButton from './ActionButton.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import Icon from './Icon.svelte';
