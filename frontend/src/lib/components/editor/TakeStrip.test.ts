@@ -2,27 +2,15 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
-const { playGeneration, playLibraryFromGeneration, playAlbumFromGeneration } = vi.hoisted(() => ({
-	playGeneration: vi.fn(),
-	playLibraryFromGeneration: vi.fn(async () => undefined),
-	playAlbumFromGeneration: vi.fn(async () => undefined)
-}));
-
 vi.mock('$lib/stores/player', async (importOriginal) => {
-	const { writable } = await import('svelte/store');
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
-		playGeneration,
-		playLibraryFromGeneration,
-		playAlbumFromGeneration,
-		selectedAlbumId: writable(null),
-		queueContext: writable({ type: 'library' })
+		playTake: vi.fn(async () => undefined)
 	};
 });
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 
-import { addToast } from '$lib/stores/toast';
+import { playTake } from '$lib/stores/player';
 import TakeStrip from './TakeStrip.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -30,10 +18,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
-	playGeneration.mockClear();
-	playLibraryFromGeneration.mockClear();
-	playAlbumFromGeneration.mockClear();
-	vi.mocked(addToast).mockClear();
+	vi.mocked(playTake).mockClear();
 });
 
 function gen(overrides: Partial<GenerationItem> = {}): GenerationItem {
@@ -116,24 +101,13 @@ describe('TakeStrip', () => {
 		expect(target.querySelector('.badge.picked')).not.toBeNull();
 	});
 
-	it('plays the take on click instead of opening the inspector', async () => {
+	it('plays the take on click instead of opening Now Playing', async () => {
 		const picked = gen({ id: 'g1', is_picked: true });
 		const { target } = await render([picked]);
 		target.querySelector<HTMLButtonElement>('.take-chip')?.click();
 		await tick();
 		await Promise.resolve();
-		expect(playLibraryFromGeneration).toHaveBeenCalledWith(picked);
-	});
-
-	it('shows a toast instead of leaking an error when playback fails', async () => {
-		playLibraryFromGeneration.mockRejectedValueOnce(new Error('422 unplayable'));
-		const archived = gen({ id: 'g1', is_archived: true });
-		const { target } = await render([archived]);
-		target.querySelector<HTMLButtonElement>('.take-chip')?.click();
-		await tick();
-		await Promise.resolve();
-		await Promise.resolve();
-		expect(addToast).toHaveBeenCalledWith('422 unplayable', 'error');
+		expect(playTake).toHaveBeenCalledWith(picked, expect.objectContaining({ id: 's1' }));
 	});
 
 	it('renders nothing when there are no takes', async () => {

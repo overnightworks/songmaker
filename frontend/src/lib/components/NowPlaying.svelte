@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
+	import { get } from 'svelte/store';
 	import type { PlaybackInfo } from '$lib/services/playbackTypes';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
@@ -34,6 +35,7 @@
 		jumpToQueueIndex,
 		libraryQueueSkipped,
 		libraryQueueSkippedComplete,
+		nowPlayingPanel,
 		queueContext,
 		shuffleEnabled,
 		songList,
@@ -71,8 +73,14 @@
 
 	let root: HTMLDivElement | undefined = $state();
 	let stacked = $state(false);
-	let rightPanelTab: 'queue' | 'take' = $state('queue');
+	// Seeded once from the shared request store, not bound to it: a take-row
+	// click (playTakeAndShowNowPlaying) leaves it on 'take' before opening
+	// this surface, while PlayerBar's own Now Playing button opens on 'queue'
+	// (see openNowPlaying). Each open is a fresh mount, so this stays correct
+	// without the tab flipping under the listener while the panel is open.
+	let rightPanelTab: 'queue' | 'take' = $state(get(nowPlayingPanel));
 	let mobilePanelOpen = $state(false);
+	let mobilePanelSeeded = false;
 	let mobileSheet: HTMLDivElement | undefined = $state();
 	let queueTabBtn: HTMLButtonElement | undefined = $state();
 	let takeTabBtn: HTMLButtonElement | undefined = $state();
@@ -83,6 +91,9 @@
 		[info.albumTitle, info.artist].filter((part) => part.length > 0).join(' · ')
 	);
 	const takeLabel = $derived(`${NOW_PLAYING_TAKE_PREFIX} ${info.generation.generation_number}`);
+	const mobileTriggerLabel = $derived(
+		rightPanelTab === 'take' ? NOW_PLAYING_TAKE_TAB : NOW_PLAYING_QUEUE_TAB
+	);
 
 	const ctx = $derived($queueContext);
 	const songs = $derived($songList);
@@ -152,7 +163,19 @@
 	$effect(() => {
 		return subscribeCompactLayout((value) => {
 			stacked = value;
-			if (!value) mobilePanelOpen = false;
+			if (!value) {
+				mobilePanelOpen = false;
+				return;
+			}
+			// Seed the sheet open state from the requested panel exactly once per
+			// mount — a take-row click (rightPanelTab === 'take') should land the
+			// user straight in the judging sheet on a stacked layout, the same
+			// way it opens the "This take" tab on desktop. Later stacked/unstacked
+			// toggles (resize, pointer-type change) must not reopen it.
+			if (!mobilePanelSeeded) {
+				mobilePanelSeeded = true;
+				if (rightPanelTab === 'take') mobilePanelOpen = true;
+			}
 		}, NOW_PLAYING_STACKED_MEDIA);
 	});
 
@@ -401,7 +424,7 @@
 					>
 				{/if}
 				<span class="trigger-label"
-					>{NOW_PLAYING_QUEUE_TAB}
+					>{mobileTriggerLabel}
 					<Icon name="chevron-up" size={14} /></span
 				>
 			</button>

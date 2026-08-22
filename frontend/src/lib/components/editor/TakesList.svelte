@@ -15,16 +15,12 @@
 		TAKES_MOBILE_HINT
 	} from '$lib/constants';
 	import {
-		playGeneration,
-		playAlbumFromGeneration,
-		playLibraryFromGeneration,
-		queueContext,
-		selectedAlbumId,
+		playTakeAndShowNowPlaying,
 		removeGenerationFromSong,
-		replaceSongInList
+		replaceSongInList,
+		selectedGenerationId
 	} from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
-	import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { scoreColor } from '$lib/utils/scores';
 	import { getGenerationActions } from '$lib/contexts/generation-actions';
@@ -52,7 +48,6 @@
 
 	interface Props {
 		song: SongItem;
-		selectedId?: string | null;
 		loadStatus?: 'loading' | 'ready' | 'error';
 		loadError?: string | null;
 		dirty: boolean;
@@ -60,7 +55,6 @@
 		latestVersionNumber: number;
 		generateJob?: JobItem | null;
 		compact?: boolean;
-		onselect: (gen: GenerationItem) => void;
 		onagain: (gen: GenerationItem) => void;
 		onuseasreference: (gen: GenerationItem) => void;
 		onretry?: () => void;
@@ -68,7 +62,6 @@
 
 	let {
 		song,
-		selectedId = null,
 		loadStatus = 'ready',
 		loadError = null,
 		dirty,
@@ -76,7 +69,6 @@
 		latestVersionNumber,
 		generateJob = null,
 		compact = false,
-		onselect,
 		onagain,
 		onuseasreference,
 		onretry
@@ -148,28 +140,6 @@
 		return isGenPlaying(gen) && buffering;
 	}
 
-	async function playOrToggle(gen: GenerationItem): Promise<void> {
-		if (isGenPlaying(gen) && audioPlayer.status === 'playing') {
-			audioPlayer.toggle();
-			return;
-		}
-		try {
-			const albumId = $selectedAlbumId;
-			if (shouldUseQueueStream($queuePlaybackMode)) {
-				if (albumId) {
-					await playAlbumFromGeneration(albumId, song, gen);
-					return;
-				}
-				await playLibraryFromGeneration(gen);
-				return;
-			}
-			queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
-			playGeneration(gen, song, { restart: true });
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Playback failed', 'error');
-		}
-	}
-
 	function handleRowClick(gen: GenerationItem, e: MouseEvent): void {
 		if (e.ctrlKey || e.metaKey) {
 			toggleSelection(gen.id);
@@ -179,8 +149,7 @@
 			toggleSelection(gen.id);
 			return;
 		}
-		onselect(gen);
-		void playOrToggle(gen);
+		void playTakeAndShowNowPlaying(gen, song);
 	}
 
 	function handleRowKeydown(gen: GenerationItem, e: KeyboardEvent): void {
@@ -191,20 +160,19 @@
 			toggleSelection(gen.id);
 			return;
 		}
-		onselect(gen);
-		void playOrToggle(gen);
+		void playTakeAndShowNowPlaying(gen, song);
 	}
 
 	async function handleBulkDelete(): Promise<void> {
 		const ids = [...$selectedIds];
 		if (ids.length === 0) return;
-		const inspectedTakeId = selectedId;
+		const openGenerationId = $selectedGenerationId;
 		try {
 			await bulkDeleteGenerations(ids);
 			for (const id of ids) {
 				removeGenerationFromSong(song.id, id);
 			}
-			if (inspectedTakeId !== null && ids.includes(inspectedTakeId)) {
+			if (openGenerationId !== null && ids.includes(openGenerationId)) {
 				clearGenerationSelection();
 				persistLibraryHistory();
 			}
@@ -370,12 +338,10 @@
 						class:playing={isGenPlaying(gen)}
 						class:buffering={isGenLoading(gen)}
 						class:selected={$selectedIds.has(gen.id)}
-						class:inspected={selectedId === gen.id}
 						onclick={(e) => handleRowClick(gen, e)}
 						onkeydown={(e) => handleRowKeydown(gen, e)}
 						role="button"
 						tabindex="0"
-						aria-pressed={selectedId === gen.id}
 					>
 						{#if $selectionMode}
 							<span class="selection-checkbox">
@@ -647,8 +613,7 @@
 		animation: buffer-pulse 1.5s ease-in-out infinite;
 	}
 
-	.take-row.selected,
-	.take-row.inspected {
+	.take-row.selected {
 		border-color: var(--accent);
 		background: rgba(160, 32, 240, 0.05);
 	}

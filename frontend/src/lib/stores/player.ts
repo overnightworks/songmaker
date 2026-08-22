@@ -28,10 +28,13 @@ import { addToast } from '$lib/stores/toast';
 import {
 	LIBRARY_TAKE_POOL_LABELS,
 	libraryTakePool,
+	queuePlaybackMode,
 	setLibraryTakePool,
+	shouldUseQueueStream,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { closeSidebar } from '$lib/stores/ui';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	LIBRARY_SONG_PAGE_SIZE,
@@ -100,11 +103,6 @@ export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	})();
 	songGenerationLoads.set(songId, load);
 	await load;
-}
-
-export function selectGenerationInSidebar(gen: GenerationItem, song: SongItem): void {
-	selectedSongId.set(song.id);
-	selectedGenerationId.set(gen.id);
 }
 
 export function clearGenerationSelection(): void {
@@ -837,6 +835,81 @@ export function jumpToQueueIndex(index: number): void {
 		return;
 	}
 	playNativeIndex(ctx, index);
+}
+
+// Whether the Now Playing surface is mounted, and which of its right-panel
+// tabs it should open on. Owned here (not by PlayerBar, which only reads
+// them) so any surface — a take row, a deep link — can open Now Playing
+// straight to the judging panel without routing through PlayerBar's own
+// open/close click handlers.
+export const nowPlayingOpen = writable(false);
+export type NowPlayingPanel = 'queue' | 'take';
+export const nowPlayingPanel = writable<NowPlayingPanel>('queue');
+
+// The element to return focus to when Now Playing closes. PlayerBar
+// registers its own "Now Playing" button here once on mount — every opener
+// (PlayerBar's button, a TakesList row, NowPlayingTake's "Use as reference")
+// shares that single restore target instead of each tracking its own.
+let nowPlayingFocusTrigger: HTMLElement | null = null;
+
+export function registerNowPlayingTrigger(el: HTMLElement | null): void {
+	nowPlayingFocusTrigger = el;
+}
+
+// The single open/close owner for Now Playing: every surface that opens or
+// closes it (PlayerBar's button, a TakesList row via playTakeAndShowNowPlaying,
+// NowPlayingTake's "Use as reference") routes through these two functions
+// instead of poking `nowPlayingOpen`/`nowPlayingPanel` directly, so closing
+// the mobile rail drawer on open and restoring focus on close happen exactly
+// once, the same way, regardless of entry point.
+export function openNowPlaying(panel: NowPlayingPanel): void {
+	closeSidebar();
+	nowPlayingPanel.set(panel);
+	nowPlayingOpen.set(true);
+}
+
+export function closeNowPlaying(): void {
+	if (!get(nowPlayingOpen)) return;
+	nowPlayingOpen.set(false);
+	const trigger = nowPlayingFocusTrigger;
+	queueMicrotask(() => trigger?.focus());
+}
+
+// The single playback entry point for a take row (TakesList, TakeStrip):
+// toggles pause if the row's take is already playing, otherwise starts it
+// through the active queue-playback mode (stream or classic), reporting any
+// failure as a toast instead of throwing into the caller.
+export async function playTake(gen: GenerationItem, song: SongItem): Promise<void> {
+	if (audioPlayer.current?.generation.id === gen.id && audioPlayer.status === 'playing') {
+		audioPlayer.toggle();
+		return;
+	}
+	try {
+		const albumId = get(selectedAlbumId);
+		if (shouldUseQueueStream(get(queuePlaybackMode))) {
+			if (albumId) {
+				await playAlbumFromGeneration(albumId, song, gen);
+				return;
+			}
+			await playLibraryFromGeneration(gen);
+			return;
+		}
+		queueContext.set(albumId ? { type: 'album', albumId } : { type: 'library' });
+		playGeneration(gen, song, { restart: true });
+	} catch (e) {
+		addToast(e instanceof Error ? e.message : 'Playback failed', 'error');
+	}
+}
+
+// TakesList's row body: play the take and surface Now Playing straight on
+// its judging panel. Distinct from playTake (used by TakeStrip's dedicated
+// play chip), which never opens Now Playing.
+export async function playTakeAndShowNowPlaying(
+	gen: GenerationItem,
+	song: SongItem
+): Promise<void> {
+	await playTake(gen, song);
+	openNowPlaying('take');
 }
 
 export async function playNextSong(): Promise<void> {

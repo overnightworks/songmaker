@@ -51,7 +51,13 @@ import {
 	songList
 } from '$lib/stores/player';
 import { clearSelection, toggleSelection } from '$lib/stores/selection';
-import { pendingSource, recipeModel, recipeOpen, coWriterOpen } from '$lib/stores/recipe';
+import {
+	pendingSource,
+	recipeModel,
+	recipeOpen,
+	coWriterOpen,
+	sourceGeneration
+} from '$lib/stores/recipe';
 
 const fetchAlbum = vi.fn();
 const uploadSongCover = vi.fn();
@@ -386,21 +392,6 @@ describe('SongDetailView desktop vs compact layout', () => {
 });
 
 describe('SongDetailView recipe and takes', () => {
-	it('keeps the take inspector as a modal over the workspace', async () => {
-		selectedGenerationId.set('g1');
-		const target = await renderView();
-		expect(visibleText(target)).toContain('Local Only');
-		expect(target.querySelector('.inspector-modal')).not.toBeNull();
-		expect(target.querySelector('.inspector')).not.toBeNull();
-
-		const closeBtn = target.querySelector<HTMLButtonElement>('.inspector .close-btn');
-		if (!closeBtn) throw new Error('Expected inspector close');
-		closeBtn.click();
-		await tick();
-		expect(get(selectedGenerationId)).toBeNull();
-		expect(target.querySelector('.inspector-modal')).toBeNull();
-	});
-
 	it('lands a picked-up source in the Recipe panel', async () => {
 		const target = await renderView();
 		expect(get(recipeOpen)).toBe(false);
@@ -435,12 +426,11 @@ describe('SongDetailView recipe and takes', () => {
 		expect(get(recipeOpen)).toBe(true);
 	});
 
-	it('clears the inspector when bulk delete includes the inspected take', async () => {
+	it('clears the open take from history when bulk delete includes it', async () => {
 		selectedGenerationId.set('g1');
 		persistLibraryHistory();
 		expect(history.state.generationId).toBe('g1');
 		const target = await renderView();
-		expect(target.querySelector('.inspector-modal')).not.toBeNull();
 		toggleSelection('g1');
 		await tick();
 		clickNamed(target, 'Delete Selected');
@@ -449,19 +439,6 @@ describe('SongDetailView recipe and takes', () => {
 		await tick();
 		expect(get(selectedGenerationId)).toBeNull();
 		expect(history.state.generationId).toBeNull();
-		expect(target.querySelector('.inspector-modal')).toBeNull();
-	});
-
-	it('closes the inspector on Escape', async () => {
-		selectedGenerationId.set('g1');
-		const target = await renderView();
-		expect(target.querySelector('.inspector-modal')).not.toBeNull();
-
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		await tick();
-
-		expect(get(selectedGenerationId)).toBeNull();
-		expect(target.querySelector('.inspector-modal')).toBeNull();
 	});
 });
 
@@ -593,6 +570,51 @@ describe('SongDetailView unsaved-draft guard', () => {
 		await tick();
 
 		expect(addToast).toHaveBeenCalledWith('Saved version 5', 'success');
+	});
+
+	it('cross-song Use as Reference: Cancel leaves it unapplied and drops the pending source', async () => {
+		songList.set(albumSongs());
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+
+		const targetGen = generation({ id: 'g-last', song_id: 's-last' });
+		pendingSource.set({ generation: targetGen, mode: 'repaint' });
+		selectSong(
+			's-last',
+			song({ id: 's-last', album_id: 'a-local', title: 'Last', generations: [targetGen] })
+		);
+		await tick();
+		expect(get(sourceGeneration)).toBeNull();
+
+		clickNamed(target, 'Cancel');
+		await tick();
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(pendingSource)).toBeNull();
+		expect(get(sourceGeneration)).toBeNull();
+	});
+
+	it('cross-song Use as Reference: Discard applies the source once the target song opens', async () => {
+		songList.set(albumSongs());
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+
+		const targetGen = generation({ id: 'g-last', song_id: 's-last' });
+		pendingSource.set({ generation: targetGen, mode: 'repaint' });
+		selectSong(
+			's-last',
+			song({ id: 's-last', album_id: 'a-local', title: 'Last', generations: [targetGen] })
+		);
+		await tick();
+		clickNamed(target, 'Discard');
+		await tick();
+		await tick();
+
+		expect(get(selectedSongId)).toBe('s-last');
+		expect(get(sourceGeneration)).toEqual(targetGen);
+		expect(get(pendingSource)).toBeNull();
 	});
 });
 

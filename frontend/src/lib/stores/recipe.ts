@@ -30,8 +30,10 @@ export const repaintStrength = writable(0.5);
 export const coverStrength = writable(0.7);
 export const coverNoiseStrength = writable(0);
 
-// A take handed off from outside the editor (e.g. a future Now Playing "Use
-// as source" action) lands here until the editor picks it up.
+// A take handed off from outside the editor — Now Playing's "Use as
+// reference" — lands here until its target song opens in SongDetailView,
+// which applies it (or drops it if the user cancels the navigation there
+// instead) and clears the store either way.
 export const pendingSource = writable<PendingSource | null>(null);
 
 export function seedRecipeModel(activeModelIds: readonly string[]): void {

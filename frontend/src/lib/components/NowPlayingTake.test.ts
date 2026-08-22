@@ -8,8 +8,15 @@ vi.mock('$lib/stores/takeActions', () => ({
 	rate: vi.fn().mockResolvedValue(undefined),
 	pinSeed: vi.fn()
 }));
+vi.mock('$lib/stores/navigation', () => ({
+	revealPlayingSong: vi.fn().mockResolvedValue(undefined)
+}));
 
+import { get } from 'svelte/store';
 import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
+import { revealPlayingSong } from '$lib/stores/navigation';
+import { nowPlayingOpen } from '$lib/stores/player';
+import { pendingSource } from '$lib/stores/recipe';
 import NowPlayingTake from './NowPlayingTake.svelte';
 
 function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
@@ -66,6 +73,8 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	vi.clearAllMocks();
+	nowPlayingOpen.set(false);
+	pendingSource.set(null);
 });
 
 async function render(
@@ -225,5 +234,19 @@ describe('NowPlayingTake', () => {
 	it('omits the pin seed action when the take has no seed', async () => {
 		await render({ generation: generation({ seed: null }) });
 		expect(target.querySelector('.pin-seed')).toBeNull();
+	});
+
+	it('use as reference sets the recipe source, closes Now Playing, and navigates to the song', async () => {
+		nowPlayingOpen.set(true);
+		const gen = generation();
+		const withSong = song();
+		await render({ generation: gen, song: withSong });
+
+		target.querySelector<HTMLButtonElement>('.use-as-reference')?.click();
+		await tick();
+
+		expect(get(pendingSource)).toEqual({ generation: gen, mode: 'repaint' });
+		expect(get(nowPlayingOpen)).toBe(false);
+		expect(revealPlayingSong).toHaveBeenCalledWith(withSong, gen.id);
 	});
 });

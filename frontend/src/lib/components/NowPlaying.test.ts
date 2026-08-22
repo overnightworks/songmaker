@@ -13,6 +13,7 @@ import {
 import {
 	albumList,
 	libraryQueueSkipped,
+	nowPlayingPanel,
 	queueContext,
 	setShuffle,
 	shuffleEnabled,
@@ -111,6 +112,7 @@ afterEach(async () => {
 	setShuffle(false);
 	setLibraryTakePool('picks');
 	libraryQueueSkipped.set([]);
+	nowPlayingPanel.set('queue');
 });
 
 async function renderSurface(
@@ -264,6 +266,16 @@ describe('NowPlaying', () => {
 		expect(target.querySelector('.np-take')).not.toBeNull();
 	});
 
+	it('opens straight to the judging panel when a take row requested it', async () => {
+		songList.set([song()]);
+		nowPlayingPanel.set('take');
+		await renderSurface(info());
+		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+		expect(tabs[1]?.getAttribute('aria-selected')).toBe('true');
+		expect(target.querySelector('.np-take')).not.toBeNull();
+		expect(target.querySelector('.np-queue')).toBeNull();
+	});
+
 	it('wires the panel tabs to their panel via aria-controls/role=tabpanel', async () => {
 		songList.set([song()]);
 		await renderSurface(info());
@@ -324,6 +336,26 @@ describe('NowPlaying', () => {
 		target.querySelector<HTMLButtonElement>('.mobile-sheet-backdrop')?.click();
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
+	});
+
+	it('labels the stacked trigger Queue and keeps the sheet closed when the queue panel is requested', async () => {
+		document.documentElement.dataset.pointer = 'coarse';
+		await renderSurface(info());
+		expect(target.querySelector('.mobile-sheet')).toBeNull();
+		expect(target.querySelector('.mobile-panel-trigger')?.textContent).toContain('Queue');
+	});
+
+	it('seeds the sheet open from a take-row request on a stacked layout, never labelling the trigger Queue', async () => {
+		document.documentElement.dataset.pointer = 'coarse';
+		songList.set([song()]);
+		nowPlayingPanel.set('take');
+		await renderSurface(info());
+
+		expect(target.querySelector('.mobile-sheet')).not.toBeNull();
+		expect(target.querySelector('.np-take')).not.toBeNull();
+		const triggerText = target.querySelector('.mobile-panel-trigger')?.textContent ?? '';
+		expect(triggerText).toContain('This take');
+		expect(triggerText).not.toContain('Queue');
 	});
 
 	it('moves focus into the mobile sheet when it opens', async () => {

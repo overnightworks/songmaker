@@ -2,8 +2,11 @@
 	import { onDestroy, untrack } from 'svelte';
 	import {
 		albumList,
+		closeNowPlaying,
 		idlePlayTarget,
 		navigateToPlaying,
+		nowPlayingOpen,
+		openNowPlaying,
 		playIdleStart,
 		playNextSong,
 		playPrevSong,
@@ -11,12 +14,12 @@
 		canPlayNextSong,
 		playStartNotice,
 		queueContext,
+		registerNowPlayingTrigger,
 		retryLastPlayIntent,
 		songList
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
-	import { closeSidebar } from '$lib/stores/ui';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
@@ -45,7 +48,6 @@
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
 
-	let nowPlayingOpen = $state(false);
 	let mobileTransport = $state(false);
 	let nowPlayingTrigger: HTMLButtonElement | undefined = $state();
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
@@ -178,16 +180,9 @@
 		});
 	}
 
-	function openNowPlaying(): void {
+	function onOpenNowPlayingClick(): void {
 		if (!current) return;
-		closeSidebar();
-		nowPlayingOpen = true;
-	}
-
-	function closeNowPlaying(): void {
-		if (!nowPlayingOpen) return;
-		nowPlayingOpen = false;
-		queueMicrotask(() => nowPlayingTrigger?.focus());
+		openNowPlaying('queue');
 	}
 
 	function goToPlayingSong(): void {
@@ -196,7 +191,12 @@
 	}
 
 	$effect(() => {
-		if (!current) nowPlayingOpen = false;
+		if (!current) closeNowPlaying();
+	});
+
+	$effect(() => {
+		registerNowPlayingTrigger(nowPlayingTrigger ?? null);
+		return () => registerNowPlayingTrigger(null);
 	});
 
 	$effect(() => {
@@ -210,7 +210,7 @@
 
 <footer
 	class="player-bar"
-	class:now-playing-open={nowPlayingOpen}
+	class:now-playing-open={$nowPlayingOpen}
 	class:mobile-transport={mobileTransport}
 	style={isPlaying ? boxShadowStyle(energyLevel, vizColors) : ''}
 >
@@ -311,18 +311,18 @@
 		<button
 			bind:this={nowPlayingTrigger}
 			class="now-playing-btn"
-			onclick={openNowPlaying}
+			onclick={onOpenNowPlayingClick}
 			disabled={!current}
 			aria-label={NOW_PLAYING_LABEL}
 			aria-haspopup="dialog"
-			aria-expanded={nowPlayingOpen}
+			aria-expanded={$nowPlayingOpen}
 		>
 			<span>{NOW_PLAYING_LABEL}</span>
 			<Icon name="chevron-up" size={16} />
 		</button>
 	</div>
 </footer>
-{#if nowPlayingOpen && current}
+{#if $nowPlayingOpen && current}
 	<NowPlaying
 		info={current}
 		onclose={closeNowPlaying}

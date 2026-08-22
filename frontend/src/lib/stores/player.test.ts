@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
+import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -63,8 +64,15 @@ import {
 	handlePlaybackEnded,
 	idlePlayTarget,
 	jumpToQueueIndex,
+	closeNowPlaying,
 	navigateToPlaying,
+	nowPlayingOpen,
+	nowPlayingPanel,
+	openNowPlaying,
 	playGeneration,
+	playTake,
+	playTakeAndShowNowPlaying,
+	registerNowPlayingTrigger,
 	toPlaybackInfo,
 	chooseLibraryTakePool,
 	playStartNotice,
@@ -81,7 +89,6 @@ import {
 	playPlaylistEntries,
 	queueContext,
 	selectAlbum,
-	selectGenerationInSidebar,
 	selectSong,
 	selectedAlbumId,
 	selectedGeneration,
@@ -269,7 +276,12 @@ afterEach(() => {
 	windowEnded.set(false);
 	audioPlayer.mode = 'classic';
 	audioPlayer.currentTime = 0;
+	audioPlayer.status = 'idle';
 	toasts.set([]);
+	nowPlayingOpen.set(false);
+	nowPlayingPanel.set('queue');
+	registerNowPlayingTrigger(null);
+	sidebarOpen.set(false);
 	localStorage.removeItem('queueShuffleEnabled');
 	localStorage.removeItem('libraryTakePool');
 });
@@ -473,14 +485,6 @@ describe('browsing state', () => {
 		songList.set([makeSong(), makeSong({ id: 's2', album_id: 'a2' })]);
 		selectedAlbumId.set(null);
 		expect(get(filteredSongs)).toHaveLength(2);
-	});
-
-	it('selectGenerationInSidebar sets song and gen', () => {
-		const gen = makeGen();
-		const song = makeSong();
-		selectGenerationInSidebar(gen, song);
-		expect(get(selectedSongId)).toBe('s1');
-		expect(get(selectedGenerationId)).toBe('g1');
 	});
 
 	it('clearGenerationSelection clears gen id', () => {
@@ -2116,5 +2120,94 @@ describe('jumpToQueueIndex', () => {
 
 		expect(seekToStreamTrack).toHaveBeenCalledWith(2);
 		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+});
+
+describe('playTake', () => {
+	it('plays the take through the classic queue path', async () => {
+		const gen = makeGen();
+		const song = makeSong();
+
+		await playTake(gen, song);
+
+		expect(audioPlayer.load).toHaveBeenCalledWith(expect.objectContaining({ generation: gen }), {
+			restart: true
+		});
+		expect(get(queueContext)).toEqual({ type: 'library' });
+	});
+
+	it('toggles pause instead of restarting when the row take is already playing', async () => {
+		const gen = makeGen();
+		const song = makeSong();
+		audioPlayer.current = toPlaybackInfo(gen, song);
+		audioPlayer.status = 'playing';
+		const toggle = vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {});
+
+		await playTake(gen, song);
+
+		expect(toggle).toHaveBeenCalledOnce();
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('reports a toast instead of throwing when the queue-stream path fails', async () => {
+		setQueuePlaybackMode('stream');
+		vi.mocked(fetchLibraryPoolQueue).mockRejectedValueOnce(new Error('offline'));
+
+		await playTake(makeGen(), makeSong());
+
+		expect(get(toasts)).toEqual([expect.objectContaining({ type: 'error' })]);
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+});
+
+describe('playTakeAndShowNowPlaying', () => {
+	it('plays the take and opens Now Playing on the judging panel', async () => {
+		const gen = makeGen();
+		const song = makeSong();
+
+		await playTakeAndShowNowPlaying(gen, song);
+
+		expect(audioPlayer.load).toHaveBeenCalledWith(expect.objectContaining({ generation: gen }), {
+			restart: true
+		});
+		expect(get(nowPlayingPanel)).toBe('take');
+		expect(get(nowPlayingOpen)).toBe(true);
+	});
+});
+
+describe('openNowPlaying / closeNowPlaying', () => {
+	it('openNowPlaying closes the sidebar and opens on the requested panel', () => {
+		toggleSidebar();
+		expect(get(sidebarOpen)).toBe(true);
+
+		openNowPlaying('take');
+
+		expect(get(sidebarOpen)).toBe(false);
+		expect(get(nowPlayingPanel)).toBe('take');
+		expect(get(nowPlayingOpen)).toBe(true);
+	});
+
+	it('closeNowPlaying closes and restores focus to the registered trigger', async () => {
+		const trigger = document.createElement('button');
+		document.body.append(trigger);
+		registerNowPlayingTrigger(trigger);
+		openNowPlaying('queue');
+
+		closeNowPlaying();
+		await Promise.resolve();
+
+		expect(get(nowPlayingOpen)).toBe(false);
+		expect(document.activeElement).toBe(trigger);
+		trigger.remove();
+	});
+
+	it('closeNowPlaying is a no-op while Now Playing is already closed', () => {
+		const trigger = document.createElement('button');
+		registerNowPlayingTrigger(trigger);
+		const focusSpy = vi.spyOn(trigger, 'focus');
+
+		closeNowPlaying();
+
+		expect(focusSpy).not.toHaveBeenCalled();
 	});
 });
