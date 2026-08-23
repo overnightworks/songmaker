@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, field_validator
 
+from songmaker_cli.api_models.fields import ComputedTimestamp
 from songmaker_cli.api_models.generation_params import (
     BaseGenerationParams,
 )
@@ -220,6 +221,21 @@ class SharedGenerationResponse(BaseModel):
     lyrics: str | None
 
 
+def generation_expiry(gen: Generation) -> datetime | None:
+    """When cleanup will delete this generation, or None if it is safe.
+
+    Picked and kept generations never expire. An archived generation is
+    hard-deleted after the archive grace period; everything else is
+    archived once the retention window since creation has passed.
+    """
+    if gen.is_picked or gen.is_kept:
+        return None
+    settings = get_settings()
+    if gen.is_archived and gen.archived_at:
+        return gen.archived_at + timedelta(days=settings.generation_hard_delete_days)
+    return gen.created_at + timedelta(days=settings.generation_retention_days)
+
+
 class GenerationResponse(BaseModel):
     id: str
     song_id: str
@@ -232,7 +248,7 @@ class GenerationResponse(BaseModel):
     status: str
     is_archived: bool
     archived_at: str | None = None
-    expires_at: str | None = None
+    expires_at: ComputedTimestamp = None
     is_picked: bool
     is_kept: bool
     is_shared: bool = False
@@ -272,19 +288,8 @@ class GenerationResponse(BaseModel):
             gen.generation_params, "generation", gen.id,
         )
 
-        settings = get_settings()
         archived_iso = gen.archived_at.isoformat() if gen.archived_at else None
-        expires_at: datetime | None = None
-        if gen.is_picked or gen.is_kept:
-            expires_at = None
-        elif gen.is_archived and gen.archived_at:
-            expires_at = gen.archived_at + timedelta(
-                days=settings.generation_hard_delete_days,
-            )
-        else:
-            expires_at = gen.created_at + timedelta(
-                days=settings.generation_retention_days,
-            )
+        expiry = generation_expiry(gen)
 
         return cls(
             id=gen.id,
@@ -298,7 +303,7 @@ class GenerationResponse(BaseModel):
             status=gen.status,
             is_archived=gen.is_archived,
             archived_at=archived_iso,
-            expires_at=expires_at.isoformat() if expires_at else None,
+            expires_at=expiry.isoformat() if expiry else None,
             is_picked=gen.is_picked,
             is_kept=gen.is_kept,
             is_shared=gen.is_shared,
