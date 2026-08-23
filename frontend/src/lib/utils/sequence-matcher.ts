@@ -21,10 +21,10 @@ export class SequenceMatcher {
 	private readonly b2j: Map<string, number[]>;
 	private matchingBlocks: Match[] | null = null;
 
-	constructor(a: string, b: string, autojunk = true) {
+	constructor(a: string, b: string) {
 		this.a = a;
 		this.b = b;
-		this.b2j = buildB2J(b, autojunk);
+		this.b2j = buildB2J(b);
 	}
 
 	findLongestMatch(alo = 0, ahi = this.a.length, blo = 0, bhi = this.b.length): Match {
@@ -119,7 +119,7 @@ export class SequenceMatcher {
 	}
 }
 
-function buildB2J(b: string, autojunk: boolean): Map<string, number[]> {
+function buildB2J(b: string): Map<string, number[]> {
 	const b2j = new Map<string, number[]>();
 	for (let i = 0; i < b.length; i++) {
 		const elt = b[i];
@@ -128,7 +128,7 @@ function buildB2J(b: string, autojunk: boolean): Map<string, number[]> {
 		else b2j.set(elt, [i]);
 	}
 
-	if (autojunk && b.length >= AUTOJUNK_MIN_LENGTH) {
+	if (b.length >= AUTOJUNK_MIN_LENGTH) {
 		const ntest = Math.floor(b.length / 100) + 1;
 		for (const [elt, indices] of b2j) {
 			if (indices.length > ntest) b2j.delete(elt);

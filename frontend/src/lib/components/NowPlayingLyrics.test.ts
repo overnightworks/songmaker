@@ -17,6 +17,17 @@ function cue(start: number, end: number, text: string): WhisperCue {
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
 
+// jsdom has no scrollIntoView; define a no-op once so vi.spyOn has a real
+// implementation to wrap, then restoreAllMocks can clean the spy up after
+// each test without leaving the raw prototype assignment behind.
+if (typeof HTMLElement.prototype.scrollIntoView !== 'function') {
+	HTMLElement.prototype.scrollIntoView = () => {};
+}
+
+function stubScrollIntoView() {
+	return vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+}
+
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
@@ -104,12 +115,11 @@ describe('NowPlayingLyrics', () => {
 	it('scrolls the active line into view, smoothly by default', async () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];
-		const scrollIntoView = vi.fn();
+		const scrollIntoView = stubScrollIntoView();
 		vi.stubGlobal(
 			'matchMedia',
 			vi.fn(() => ({ matches: false }))
 		);
-		HTMLElement.prototype.scrollIntoView = scrollIntoView;
 		audioPlayer.currentTime = 0.5;
 
 		await render({ lyrics, cues, whisperText: null });
@@ -123,12 +133,11 @@ describe('NowPlayingLyrics', () => {
 	it('scrolls the active line instantly when prefers-reduced-motion is set', async () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];
-		const scrollIntoView = vi.fn();
+		const scrollIntoView = stubScrollIntoView();
 		vi.stubGlobal(
 			'matchMedia',
 			vi.fn(() => ({ matches: true }))
 		);
-		HTMLElement.prototype.scrollIntoView = scrollIntoView;
 		audioPlayer.currentTime = 0.5;
 
 		await render({ lyrics, cues, whisperText: null });

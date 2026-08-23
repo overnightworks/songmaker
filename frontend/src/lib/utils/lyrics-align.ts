@@ -13,8 +13,8 @@ import type { WhisperCue } from '$lib/api/types';
 import { normalizeLyricsToken } from './lyrics-normalize';
 import { SequenceMatcher } from './sequence-matcher';
 
-export const MIN_RATIO = 0.72;
-export const AMBIGUITY_MARGIN = 0.12;
+const MIN_RATIO = 0.72;
+const AMBIGUITY_MARGIN = 0.12;
 
 const SECTION_MARKER = /^\[[^[\]]+\]$/;
 
@@ -34,7 +34,7 @@ interface PreparedCue {
 	normalizedText: string;
 }
 
-export function splitLyricsLines(lyrics: string): string[] {
+function splitLyricsLines(lyrics: string): string[] {
 	return lyrics.split(/\r?\n/);
 }
 
@@ -65,34 +65,37 @@ function ratio(cueText: string, lineText: string): number {
 // Searches candidateLineIndices from floorPos onward for the best-matching
 // line for one cue. Returns the winning position within candidateLineIndices
 // (not the line index itself), or null when no line clears MIN_RATIO or the
-// match is ambiguous.
+// match is ambiguous. Each remaining line is scored once into `scores`; best
+// and second-best are both derived from that single pass.
 function chooseCandidatePosition(
 	candidateLineIndices: number[],
 	floorPos: number,
 	normalizedLines: string[],
 	cueNormalizedText: string
 ): number | null {
-	let bestPos: number | null = null;
+	const scores = candidateLineIndices
+		.slice(floorPos)
+		.map((lineIndex) => ratio(cueNormalizedText, normalizedLines[lineIndex]));
+
+	let bestOffset: number | null = null;
 	let bestScore = -Infinity;
-	for (let pos = floorPos; pos < candidateLineIndices.length; pos++) {
-		const score = ratio(cueNormalizedText, normalizedLines[candidateLineIndices[pos]]);
-		if (score > bestScore) {
-			bestScore = score;
-			bestPos = pos;
+	for (let offset = 0; offset < scores.length; offset++) {
+		if (scores[offset] > bestScore) {
+			bestScore = scores[offset];
+			bestOffset = offset;
 		}
 	}
-	if (bestPos === null || bestScore < MIN_RATIO) return null;
+	if (bestOffset === null || bestScore < MIN_RATIO) return null;
 
-	const bestText = normalizedLines[candidateLineIndices[bestPos]];
+	const bestText = normalizedLines[candidateLineIndices[floorPos + bestOffset]];
 	let secondBestScore = -Infinity;
-	for (let pos = floorPos; pos < candidateLineIndices.length; pos++) {
-		if (normalizedLines[candidateLineIndices[pos]] === bestText) continue;
-		const score = ratio(cueNormalizedText, normalizedLines[candidateLineIndices[pos]]);
-		if (score > secondBestScore) secondBestScore = score;
+	for (let offset = 0; offset < scores.length; offset++) {
+		if (normalizedLines[candidateLineIndices[floorPos + offset]] === bestText) continue;
+		if (scores[offset] > secondBestScore) secondBestScore = scores[offset];
 	}
 	if (secondBestScore !== -Infinity && bestScore - secondBestScore < AMBIGUITY_MARGIN) return null;
 
-	return bestPos;
+	return floorPos + bestOffset;
 }
 
 // Maps whisper_cues onto the display lines of `lyrics` (split with the same

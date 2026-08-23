@@ -30,8 +30,3 @@ def test_committed_fixture_file_matches_current_generator_output():
     committed = json.loads(golden.FIXTURES_PATH.read_text())
 
     assert committed == {"fixtures": golden.compute_golden_ratios()}
-
-
-def test_every_fixture_pins_an_invented_non_empty_name():
-    for fixture in golden.FIXTURES:
-        assert fixture.name

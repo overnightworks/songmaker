@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
-import { activeLyricLineIndex, alignLyricsToCues, splitLyricsLines } from './lyrics-align';
+import { activeLyricLineIndex, alignLyricsToCues } from './lyrics-align';
 
 // Invented lyric-like lines, never real lyrics. Deliberately far apart in
 // SequenceMatcher.ratio() (verified by hand against Python's difflib) from
@@ -94,7 +94,7 @@ describe('alignLyricsToCues', () => {
 		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2), cue(2, 3, LINE_3), cue(3, 4, LINE_2)];
 
 		const aligned = alignLyricsToCues(lyrics, cues);
-		const lines = splitLyricsLines(lyrics);
+		const lines = lyrics.split('\n');
 
 		expect(aligned[lines.indexOf(LINE_1)].interval).toEqual({ start: 0, end: 1 });
 		expect(aligned[lines.indexOf(LINE_2)].interval).toEqual({ start: 1, end: 2 });

@@ -53,7 +53,7 @@
 			<div class="lyrics lyrics-synced" bind:this={container}>
 				{#each alignedLines as line, index (index)}
 					<p class="lyrics-line" class:active={index === activeIndex} data-line-index={index}>
-						{line.text.length > 0 ? line.text : ' '}
+						{line.text}
 					</p>
 				{/each}
 			</div>
@@ -74,7 +74,7 @@
 		flex-direction: column;
 		gap: 0.8rem;
 		min-width: 0;
-		min-height: 0;
+		min-height: 6rem;
 	}
 	.lyrics-heading {
 		margin: 0;
@@ -93,6 +93,8 @@
 		overflow-wrap: anywhere;
 	}
 	.lyrics {
+		flex: 1;
+		min-height: 0;
 		white-space: pre-wrap;
 		font-family: var(--font-body);
 		font-size: 1rem;
