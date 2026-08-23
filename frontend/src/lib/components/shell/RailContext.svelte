@@ -7,19 +7,13 @@
 		setShuffle,
 		songList
 	} from '$lib/stores/player';
-	import {
-		compareAlbumTracks,
-		openCollectionEntry,
-		openLibraryCreate,
-		selectSong
-	} from '$lib/stores/navigation';
+	import { compareAlbumTracks, openCollectionEntry, selectSong } from '$lib/stores/navigation';
 	import { librarySurface } from '$lib/stores/libraryContext';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { titleInitials } from '$lib/utils/format';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
-		RAIL_CONTEXT_ADD_SONG_LABEL,
 		RAIL_CONTEXT_EMPTY,
 		RAIL_CONTEXT_NO_TAKES
 	} from '$lib/constants';
@@ -144,9 +138,6 @@
 					<span class="context-row-meta">{trackMeta(song)}</span>
 				</button>
 			{/each}
-			<button type="button" class="context-row context-add" onclick={openLibraryCreate}>
-				{RAIL_CONTEXT_ADD_SONG_LABEL}
-			</button>
 		</div>
 	</div>
 {:else if collection?.kind === 'playlist' && playlistDetail}
@@ -278,11 +269,6 @@
 		flex-shrink: 0;
 		font-size: 0.68rem;
 		color: var(--text-subtle);
-	}
-
-	.context-add {
-		color: var(--text-subtle);
-		font-style: italic;
 	}
 
 	.context-empty {

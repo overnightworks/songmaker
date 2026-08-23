@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { GenerationItem, PlaylistDetailItem, SongItem } from '$lib/api/types';
+import { ALBUM_ADD_SONG_LABEL } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList, selectedSongId, songList } from '$lib/stores/player';
@@ -161,9 +162,14 @@ describe('RailContext', () => {
 		const target = await render();
 		const rows = target.querySelectorAll('.context-row-title');
 		expect(Array.from(rows).map((row) => row.textContent)).toEqual(['Tide', 'Ebb']);
-		expect(target.querySelector('.context-add')?.textContent).toContain('+ Song');
 		const selected = target.querySelector('.context-row.selected .context-row-title');
 		expect(selected?.textContent).toBe('Ebb');
+	});
+
+	it('is navigation only — creating a song lives in the album header, not the rail', async () => {
+		openCollection.set({ kind: 'album', id: 'a1' });
+		const target = await render();
+		expect(target.textContent).not.toContain(ALBUM_ADD_SONG_LABEL);
 	});
 
 	it('shows a take/pick summary per track', async () => {

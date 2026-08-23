@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 vi.mock('$lib/stores/navigation', () => ({ openLibraryWall: vi.fn() }));
 
+import { ALBUM_ADD_SONG_LABEL } from '$lib/constants';
 import { openLibraryWall } from '$lib/stores/navigation';
 import CollectionHeader from './CollectionHeader.svelte';
 
@@ -144,6 +145,25 @@ describe('CollectionHeader', () => {
 		await tick();
 		expect(props.ondelete).toHaveBeenCalledTimes(1);
 		expect(document.body.querySelector('.menu-panel')).toBeNull();
+	});
+
+	it('offers Add song next to the collection menu only when the surface can create one', async () => {
+		// #141/6: the rail is navigation — creating a song is a header action.
+		const withoutCreate = await render(baseProps());
+		expect(withoutCreate.querySelector('.add-song-btn')).toBeNull();
+		if (mounted) await unmount(mounted);
+
+		const onaddsong = vi.fn();
+		const target = await render({ ...baseProps(), onaddsong });
+		const addSong = requireElement<HTMLButtonElement>(target, '.add-song-btn');
+		expect(addSong.textContent?.trim()).toBe(ALBUM_ADD_SONG_LABEL);
+
+		// Sizing itself is pinned once for the shared mechanism in
+		// frequent-hitbox.test.ts; here the contract is that this control opts in.
+		expect(addSong.dataset.hitbox).toBe('frequent');
+
+		addSong.click();
+		expect(onaddsong).toHaveBeenCalledTimes(1);
 	});
 
 	it('forwards Rename in the menu to the title EditableTitle interaction', async () => {

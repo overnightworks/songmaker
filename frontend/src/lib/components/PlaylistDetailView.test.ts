@@ -187,7 +187,7 @@ describe('PlaylistDetailView row take traits', () => {
 		expect(row.querySelector('.picked-star')).toBeNull();
 		const meta = row.querySelector('.entry-meta')?.textContent ?? '';
 		expect(meta).not.toContain('· v');
-		expect(meta).toBe('Artist · Gen #1');
+		expect(meta).toBe('Artist · take 1');
 	});
 
 	it('omits duration when the version has none, since audio_duration defaults to 0', async () => {
@@ -219,7 +219,9 @@ describe('PlaylistDetailView row overflow menu', () => {
 		await tick();
 
 		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
-		expect(menu.textContent?.trim()).toBe('Open song in editor');
+		expect(
+			Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) => el.textContent?.trim())
+		).toContain('Open song in editor');
 	});
 
 	it("opens the take's song in the editor and closes the menu", async () => {
@@ -238,7 +240,7 @@ describe('PlaylistDetailView row overflow menu', () => {
 	});
 });
 
-describe('PlaylistDetailView compact row actions', () => {
+describe('PlaylistDetailView row actions', () => {
 	it('moves Move up/down and Remove into the … menu instead of inline, keeping only Play and … inline', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
 		openPlaylistDetail(
@@ -266,7 +268,10 @@ describe('PlaylistDetailView compact row actions', () => {
 		expect(items).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
 	});
 
-	it('keeps Move up/down and Remove inline outside compact layout', async () => {
+	it('keeps reorder and remove in the … menu on a fine pointer too', async () => {
+		// #141/7: one place per row for these actions at every width, so the
+		// row itself never grows a second, width-dependent action set.
+		document.documentElement.dataset.pointer = 'fine';
 		openPlaylistDetail(
 			detail({
 				entries: [entry({ id: 'pe1', song_title: 'Tide' }), entry({ id: 'pe2', song_title: 'Ebb' })]
@@ -277,13 +282,16 @@ describe('PlaylistDetailView compact row actions', () => {
 		mounted.push(mount(PlaylistDetailView, { target }));
 		await tick();
 
-		expect(target.querySelector('.move-btn')).not.toBeNull();
-		expect(target.querySelector('.remove-btn')).not.toBeNull();
+		expect(target.querySelector('.move-btn')).toBeNull();
+		expect(target.querySelector('.remove-btn')).toBeNull();
 
-		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
+		const rows = target.querySelectorAll<HTMLElement>('.entry-row');
+		requireElement<HTMLButtonElement>(rows[1], '.overflow-btn').click();
 		await tick();
 		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
-		expect(menu.textContent?.trim()).toBe('Open song in editor');
+		expect(
+			Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) => el.textContent?.trim())
+		).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
 	});
 });
 
