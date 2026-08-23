@@ -248,6 +248,12 @@ class SongScores:
             for key in SCORERS[run.scorer].output_keys
         )
 
+    @property
+    def any_scorer_timed_out(self) -> bool:
+        """True when a scorer blew its budget. Its call was abandoned, not
+        stopped, so whatever process ran it is no longer clean."""
+        return any(run.outcome is ScorerOutcome.TIMED_OUT for run in self.runs)
+
     def outcome_summary(self) -> str:
         """Every scorer's outcome in one line, for the job log."""
         return ", ".join(str(run) for run in self.runs) if self.runs else "no scorers ran"

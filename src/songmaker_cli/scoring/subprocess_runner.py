@@ -287,6 +287,25 @@ class ScorerProcess:
         self._kill()
         raise TimeoutError(f"Scoring timed out after {config.pipeline_timeout}s")
 
+    def recycle(self) -> None:
+        """Kill the child so the next request gets a clean one.
+
+        A scorer over budget is abandoned, not stopped — a Python thread
+        cannot be killed. That thread keeps holding the child's model globals
+        and GPU memory, where ``release_gpu()`` would free nothing and the
+        next ``ScoreRequest`` would run beside it. Killing the process is the
+        only way to reclaim it.
+        """
+        with self._pipe_lock:
+            if not self.alive:
+                self._cleanup_dead()
+                return
+            log.warning(
+                "Recycling scorer subprocess (PID %d) — a scorer over budget still runs in it",
+                self._process.pid,
+            )
+            self._kill()
+
     def release_gpu(self, timeout: int = 30) -> None:
         if not self.alive:
             return

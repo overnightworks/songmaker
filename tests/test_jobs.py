@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -592,11 +593,16 @@ def _audio_dir_with_mp3(tmp_path: Path) -> Path:
     return audio_dir
 
 
-def _scoring_result(with_whisper: bool = False) -> SongScores:
-    """A finished scoring run: emotional_dynamics always, text_accuracy on request."""
+def _scoring_result(
+    with_whisper: bool = False, timed_out: bool = False,
+) -> SongScores:
+    """A finished scoring run: emotional_dynamics always, text_accuracy on
+    request, and optionally a scorer that blew its budget."""
     from songmaker_cli.api_models.whisper import WhisperCue
 
     runs = [ScorerRun(scorer="emotional_dynamics", outcome=ScorerOutcome.OK)]
+    if timed_out:
+        runs.append(ScorerRun(scorer="text_accuracy", outcome=ScorerOutcome.TIMED_OUT))
     text_accuracy = None
     if with_whisper:
         text_accuracy = TextAccuracyScore(
@@ -618,6 +624,67 @@ def _scoring_result(with_whisper: bool = False) -> SongScores:
         text_accuracy=text_accuracy,
         runs=tuple(runs),
     )
+
+
+@pytest.fixture()
+def live_scorer_process():
+    """A really spawned scorer child. Each test stubs the scoring call itself
+    — the child's pid is the evidence here, not the scores."""
+    from songmaker_cli.scoring.subprocess_runner import ScorerProcess
+
+    process = ScorerProcess()
+    process._ensure_started()
+    yield process
+    process.shutdown()
+
+
+def test_scoring_job_recycles_the_child_a_scorer_was_left_running_in(
+    seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A scorer over budget is abandoned, not stopped — it keeps holding the
+    child's models and GPU memory. This run's values are kept; the child is
+    not, so nothing of it outlives the request."""
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+    pid_before = live_scorer_process._process.pid
+    monkeypatch.setattr(
+        live_scorer_process, "score",
+        lambda *_args, **_kwargs: _scoring_result(timed_out=True),
+    )
+
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    with seeded_db() as session:
+        assert get_job(session, "j2").status == "completed"
+        stored = session.query(Score).filter_by(generation_id="g1").one()
+        assert stored.value["dynamics"] == 55.0
+
+    with pytest.raises(OSError):
+        os.kill(pid_before, 0)
+    live_scorer_process._ensure_started()
+    assert live_scorer_process._process.pid != pid_before
+
+
+def test_scoring_job_keeps_the_child_when_every_scorer_stayed_in_budget(
+    seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+    pid_before = live_scorer_process._process.pid
+    monkeypatch.setattr(
+        live_scorer_process, "score", lambda *_args, **_kwargs: _scoring_result(),
+    )
+
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    assert live_scorer_process.alive
+    assert live_scorer_process._process.pid == pid_before
 
 
 def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
