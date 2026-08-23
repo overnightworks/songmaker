@@ -1,7 +1,6 @@
 // Shared guards, shell facts and name matchers for the browser flows.
 
 import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
-import { COLLECTION_ROW_PAUSE_ACTION, COLLECTION_ROW_PLAY_ACTION } from '../src/lib/constants';
 
 /** The two shells the same flow drives — also the Playwright project names. */
 export type Shell = 'desktop' | 'mobile';
@@ -14,8 +13,8 @@ export const MOBILE_VIEWPORT = { width: 390, height: 844 };
 export const NARROW_VIEWPORT = { width: 320, height: 844 };
 
 /**
- * What the library flow costs the API per shell, measured on the first green
- * run plus ~20% headroom. Both projects share one IP rate-limit window, so a
+ * What the library flow costs the API per shell: 25 `/api` requests measured on
+ * a green run, 32 budgeted. Both projects share one IP rate-limit window, so a
  * flow that suddenly needs more round trips is a regression — find the extra
  * requests instead of raising these numbers.
  */
@@ -48,11 +47,13 @@ export function workspace(page: Page): Locator {
 	return page.getByRole('main');
 }
 
-/** Every collection row, in screen order. */
-export function playableRows(page: Page): Locator {
-	return workspace(page).getByRole('button', {
-		name: nameStartingWith(`${COLLECTION_ROW_PLAY_ACTION} `, `${COLLECTION_ROW_PAUSE_ACTION} `)
-	});
+/**
+ * The open playlist's entries, in screen order — the rows themselves, since a
+ * row now carries two controls (▶ plays, the row body plays and judges) and
+ * neither of them alone is the entry.
+ */
+export function playlistEntryRows(page: Page): Locator {
+	return workspace(page).getByRole('listitem');
 }
 
 export function containing(title: string): RegExp {

@@ -80,6 +80,8 @@ import {
 	playGeneration,
 	playTake,
 	playTakeAndShowNowPlaying,
+	playPlaylistEntry,
+	playPlaylistEntryAndShowNowPlaying,
 	registerNowPlayingTrigger,
 	toPlaybackInfo,
 	chooseLibraryTakePool,
@@ -1088,6 +1090,19 @@ describe('canPlay predicates', () => {
 	});
 });
 
+// jsdom gives the player no media element, so its own play/pause/toggle are
+// no-ops and a stopped take would be indistinguishable from a running one.
+// This puts the loaded take into the playing state and lets a toggle move it
+// out again, the way a real element does — so a click that pauses is visible
+// as a status, not as a spied call.
+function startPlayingWithoutAnAudioElement(): void {
+	audioPlayer.status = 'playing';
+	vi.mocked(audioPlayer.load).mockClear();
+	vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {
+		audioPlayer.status = audioPlayer.status === 'playing' ? 'paused' : 'playing';
+	});
+}
+
 describe('playPlaylistFrom', () => {
 	it('sets playlist context and triggers load', () => {
 		const entries = [
@@ -1164,6 +1179,52 @@ describe('playPlaylistFrom', () => {
 		expect(audioPlayer.current).toBeNull();
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(queueContext)).toEqual({ type: 'library' });
+	});
+});
+
+describe('a clicked playlist row', () => {
+	const entries = [
+		makePlaylistEntry({ id: 'pe1', song_title: 'First', generation_id: 'g10', mp3_path: 'x.mp3' }),
+		makePlaylistEntry({ id: 'pe2', song_title: 'Second', generation_id: 'g11', mp3_path: 'y.mp3' })
+	];
+
+	it('plays from that entry and shows the take in Now Playing', async () => {
+		await playPlaylistEntryAndShowNowPlaying(makePlaylist(entries), 1);
+
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
+		expect(get(nowPlayingOpen)).toBe(true);
+		expect(get(nowPlayingPanel)).toBe('take');
+	});
+
+	it('leaves Now Playing alone when only the row play button was used', () => {
+		playPlaylistEntry(makePlaylist(entries), 1);
+
+		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
+		expect(get(nowPlayingOpen)).toBe(false);
+	});
+
+	it('toggles playback rather than restarting the entry that is already playing', () => {
+		const toggle = vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {});
+		playPlaylistEntry(makePlaylist(entries), 1);
+		vi.mocked(audioPlayer.load).mockClear();
+
+		playPlaylistEntry(makePlaylist(entries), 1);
+
+		expect(toggle).toHaveBeenCalledTimes(1);
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('leaves the entry it is already playing playing, and does not start it over', async () => {
+		await playPlaylistEntryAndShowNowPlaying(makePlaylist(entries), 1);
+		startPlayingWithoutAnAudioElement();
+		closeNowPlaying();
+
+		await playPlaylistEntryAndShowNowPlaying(makePlaylist(entries), 1);
+
+		expect(audioPlayer.status).toBe('playing');
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(nowPlayingOpen)).toBe(true);
+		expect(get(nowPlayingPanel)).toBe('take');
 	});
 });
 
@@ -2567,6 +2628,20 @@ describe('playTakeAndShowNowPlaying', () => {
 			restart: true
 		});
 		expect(get(nowPlayingPanel)).toBe('take');
+		expect(get(nowPlayingOpen)).toBe(true);
+	});
+
+	it('leaves the take it is already playing playing, and does not start it over', async () => {
+		const gen = makeGen();
+		const song = makeSong();
+		await playTakeAndShowNowPlaying(gen, song);
+		startPlayingWithoutAnAudioElement();
+		closeNowPlaying();
+
+		await playTakeAndShowNowPlaying(gen, song);
+
+		expect(audioPlayer.status).toBe('playing');
+		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(nowPlayingOpen)).toBe(true);
 	});
 });

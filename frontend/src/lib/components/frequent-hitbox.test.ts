@@ -105,6 +105,7 @@ vi.mock('$lib/stores/auth', async (importOriginal) => {
 
 import { removeFromPlaylist, reorderPlaylistEntry } from '$lib/api/client';
 import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
+import AlbumDetailView from './AlbumDetailView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
 import LibraryWall from './LibraryWall.svelte';
@@ -131,6 +132,8 @@ const INVENTORY = [
 		selector: '.entry-overflow-item[data-hitbox="frequent"]',
 		text: PLAYLIST_ENTRY_REMOVE_LABEL
 	},
+	{ name: 'playlist-row-play', selector: '.entry-play[data-hitbox="frequent"]' },
+	{ name: 'album-row-play', selector: '.item-play[data-hitbox="frequent"]' },
 	{ name: 'new-album', selector: '[data-hitbox="frequent"][aria-label="New album"]' },
 	{ name: 'wall-tile-play', selector: '.wall-tile-play[data-hitbox="frequent"]' },
 	{ name: 'playlist-picker-add', selector: '.picker-add[data-hitbox="frequent"]' },
@@ -401,16 +404,28 @@ async function renderInventory(): Promise<RenderedInventory> {
 
 	const themeTarget = document.createElement('div');
 	const playlistTarget = document.createElement('div');
+	const albumTarget = document.createElement('div');
 	const songTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
 	const layoutTarget = document.createElement('div');
 	const playerTarget = document.createElement('div');
-	root.append(themeTarget, playlistTarget, songTarget, pickerTarget, layoutTarget, playerTarget);
+	root.append(
+		themeTarget,
+		playlistTarget,
+		albumTarget,
+		songTarget,
+		pickerTarget,
+		layoutTarget,
+		playerTarget
+	);
 
 	const playlistPickerOnClose = vi.fn();
 
 	mounted.push(mount(ThemeToggle, { target: themeTarget }));
 	mounted.push(mount(PlaylistDetailView, { target: playlistTarget }));
+	// The album interior is asked for by id rather than by opening it, since the
+	// playlist interior above needs the open collection to stay its own.
+	mounted.push(mount(AlbumDetailView, { target: albumTarget, props: { albumId: 'a-local' } }));
 	mounted.push(mount(LibraryWall, { target: songTarget, props: { oncreate: vi.fn() } }));
 	mounted.push(
 		mount(PlaylistPicker, {

@@ -45,7 +45,8 @@ Decisions from the epic body (2026-08-22), translated to English:
   | Song | Generate | "Share song (its pick)" |
   | Take | ★ Pick / ♥ Keep | "Share take" |
 
-  Rail rows carry no actions. No help text under Recipe chips (hover + tooltip only).
+  Rail rows carry no actions besides the row itself. No help text under Recipe chips (hover + tooltip only).
+- **One click rule** (operator decision A, 2026-08-23): a click opens the object, ▶ plays only. A song row opens the editor; its ▶ plays the pick (greyed out without one). A take row — editor takes list, playlist interior, rail playlist rows, queue — plays the take **and** opens Now Playing on "This take", which on desktop is the docked panel, so no place is lost; a row body never pauses (only ▶ and the transport do); "Go to song" stays the bridge into the editor. Take rows show version/duration/★, song rows title/take count. Share pages stay play-only.
 - **Player bar** is transport-only: Shuffle · Prev · Play · Next · Cover · Title · Progress · "Now Playing". The pool trio lives in Now Playing's Queue panel, not the bar. (Shuffle moved to the bar in #141; the bar's "Now Playing" is a disclosure toggle for the docked panel and a dialog trigger for the full surface — #140.)
 - **Pool** is one inclusivity scale: `Picks` (default) → `+ Keeps` → `All takes`. "Keeps-only" is dropped; the API value `mix` (Pick ∪ Keep) stays and now means `+ Keeps`.
 - **Editor**: tabs Write | Takes. Recipe collapses to labeled chips (Model · Takes · BPM · Duration · Key · Voice · Seed · LM · DiT · Repaint); expands into Sound / Text / Reproduce with a preset row on top. Takes render compact (Play · Version · Score · ★/♥ · Duration), grouped by version, with a draft banner. Version chips and the take inspector are dropped. Co-Writer is a mode of the Write column (Chat | Lyrics tabs); takes there collapse into strips with ★/♥ badges.
