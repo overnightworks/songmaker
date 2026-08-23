@@ -22,6 +22,7 @@ from songmaker_cli.claude.provider import (
     is_available,
     parse_json_response,
 )
+from songmaker_cli.constants import SECRET_ENV_KEYS
 
 
 @pytest.fixture(autouse=True)
@@ -29,6 +30,15 @@ def _clear_claude_clients():
     clear_client_cache()
     yield
     clear_client_cache()
+
+
+def _leaked_secret_env_values() -> dict[str, str]:
+    """A value per SECRET_ENV_KEYS entry, shaped so DSN-parsing settings
+    modules imported by other fixtures during teardown don't choke on it."""
+    values = dict.fromkeys(SECRET_ENV_KEYS, "leaked-value")
+    values["DATABASE_URL"] = "postgresql://leaked:leaked@leaked-host/leaked"
+    values["REDIS_URL"] = "redis://leaked-host:6379/0"
+    return values
 
 # ── call_claude routing ─────────────────────────────────────────────
 
@@ -164,6 +174,24 @@ def test_call_cli_success() -> None:
     assert result.text == "cli response"
 
 
+def test_call_cli_strips_secrets_from_child_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key, value in _leaked_secret_env_values().items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    mock_proc = MagicMock(returncode=0, stdout='{"result": "ok"}', stderr="")
+
+    with (
+        patch("songmaker_cli.claude.provider._find_claude_binary", return_value="/usr/bin/claude"),
+        patch("subprocess.run", return_value=mock_proc) as mock_run,
+    ):
+        _call_cli("hello")
+
+    child_env = mock_run.call_args.kwargs["env"]
+    for key in SECRET_ENV_KEYS:
+        assert key not in child_env
+    assert child_env["PATH"] == "/usr/bin"
+
+
 def test_call_cli_with_system_prompt() -> None:
     mock_proc = MagicMock(returncode=0, stdout='{"result": "ok"}', stderr="")
 
@@ -199,6 +227,29 @@ def test_acall_cli_keeps_prompt_and_system_out_of_argv() -> None:
     assert "secret prompt" not in command
     assert "secret system" not in command
     proc.communicate.assert_awaited_once_with(b"secret system\n\nsecret prompt")
+
+
+def test_acall_cli_strips_secrets_from_child_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key, value in _leaked_secret_env_values().items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    proc = MagicMock(returncode=0)
+    proc.communicate = AsyncMock(return_value=(b'{"result":"ok"}', b""))
+    create = AsyncMock(return_value=proc)
+
+    with (
+        patch(
+            "songmaker_cli.claude.provider._find_claude_binary",
+            return_value="/usr/bin/claude",
+        ),
+        patch("asyncio.create_subprocess_exec", create),
+    ):
+        asyncio.run(_acall_cli("hello"))
+
+    child_env = create.call_args.kwargs["env"]
+    for key in SECRET_ENV_KEYS:
+        assert key not in child_env
+    assert child_env["PATH"] == "/usr/bin"
 
 
 def test_call_cli_passes_model() -> None:

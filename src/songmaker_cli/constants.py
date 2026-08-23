@@ -432,3 +432,19 @@ LORA_ACTIVE_STATUSES: Final[frozenset[LoraStatus]] = frozenset({
     LoraStatus.TRAINING,
     LoraStatus.EXPORTING,
 })
+
+# Env var names stripped from the environment of every child process this
+# package spawns (currently the Claude CLI, in claude/provider.py). The
+# acestep_worker package keeps an identical tuple of the same name in
+# acestep_worker/constants.py — it cannot import this module (see
+# CLAUDE.md "Engine packages are independent") — and
+# tests/test_secret_scrub_parity.py pins the two as equal sets.
+SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
+    "ANTHROPIC_API_KEY",
+    "SESSION_SECRET",
+    "SONGMAKER_INTERNAL_TOKEN",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "POSTGRES_PASSWORD",
+    "HF_TOKEN",
+)
