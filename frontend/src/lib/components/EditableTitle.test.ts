@@ -2,6 +2,7 @@ import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import EditableTitle from './EditableTitle.svelte';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -9,18 +10,6 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 	const element = root.querySelector<T>(selector);
 	if (!element) throw new Error(`Expected ${selector} to be rendered`);
 	return element;
-}
-
-function accessibleName(element: Element): string {
-	return element.getAttribute('aria-label')?.trim() ?? element.textContent?.trim() ?? '';
-}
-
-function getByRoleButton(root: ParentNode, name: string): HTMLButtonElement {
-	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
-		(el) => accessibleName(el) === name
-	);
-	if (!button) throw new Error(`Expected a button named "${name}"`);
-	return button;
 }
 
 type EditableTitleProps = ComponentProps<typeof EditableTitle>;

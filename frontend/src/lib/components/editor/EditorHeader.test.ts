@@ -4,6 +4,7 @@ import type { SongItem } from '$lib/api/types';
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import EditorHeader from './EditorHeader.svelte';
+import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
 function px(value: string): number {
 	const resolved = value.startsWith('var(')
@@ -100,26 +101,6 @@ function defaultProps() {
 		generating: false,
 		compact: false
 	};
-}
-
-function accessibleName(element: Element): string {
-	return element.getAttribute('aria-label')?.trim() ?? element.textContent?.trim() ?? '';
-}
-
-function getByRoleHeading(root: ParentNode, name: string): HTMLHeadingElement {
-	const heading = Array.from(
-		root.querySelectorAll<HTMLHeadingElement>('h1, h2, h3, h4, h5, h6')
-	).find((el) => accessibleName(el) === name);
-	if (!heading) throw new Error(`Expected a heading named "${name}"`);
-	return heading;
-}
-
-function getByRoleButton(root: ParentNode, name: string): HTMLButtonElement {
-	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
-		(el) => accessibleName(el) === name
-	);
-	if (!button) throw new Error(`Expected a button named "${name}"`);
-	return button;
 }
 
 async function render(overrides: Partial<ReturnType<typeof defaultProps>> = {}) {

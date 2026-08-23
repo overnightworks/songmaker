@@ -59,6 +59,8 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await expect(surface.getByRole('heading', { name: LIBRARY_FILTER_LABELS.albums })).toBeVisible();
 
 	await surface.getByRole('button', { name: nameStartingWith(library.albumTitle) }).click();
+	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
+
 	await surface
 		.getByRole('button', { name: collectionRowPlayLabel(library.pickedSongTitle) })
 		.click();

@@ -7,6 +7,7 @@ vi.mock('$lib/stores/navigation', () => ({ openLibraryWall: vi.fn() }));
 import { ALBUM_ADD_SONG_LABEL } from '$lib/constants';
 import { openLibraryWall } from '$lib/stores/navigation';
 import CollectionHeader from './CollectionHeader.svelte';
+import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -14,26 +15,6 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 	const element = root.querySelector<T>(selector);
 	if (!element) throw new Error(`Expected ${selector} to be rendered`);
 	return element;
-}
-
-function accessibleName(element: Element): string {
-	return element.getAttribute('aria-label')?.trim() ?? element.textContent?.trim() ?? '';
-}
-
-function getByRoleHeading(root: ParentNode, name: string): HTMLHeadingElement {
-	const heading = Array.from(
-		root.querySelectorAll<HTMLHeadingElement>('h1, h2, h3, h4, h5, h6')
-	).find((el) => accessibleName(el) === name);
-	if (!heading) throw new Error(`Expected a heading named "${name}"`);
-	return heading;
-}
-
-function getByRoleButton(root: ParentNode, name: string): HTMLButtonElement {
-	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
-		(el) => accessibleName(el) === name
-	);
-	if (!button) throw new Error(`Expected a button named "${name}"`);
-	return button;
 }
 
 type CollectionHeaderProps = ComponentProps<typeof CollectionHeader>;
