@@ -625,7 +625,7 @@ class ScorerSchemaItem(BaseModel):
     output_keys: list[str]
     needs_audio: bool
     device: str
-    after_gpu: bool
+    host: str
 
 
 class ScoringSchemaResponse(BaseModel):
@@ -642,7 +642,7 @@ class ScoringSchemaResponse(BaseModel):
                     output_keys=list(spec.output_keys),
                     needs_audio=spec.needs_audio,
                     device=spec.device,
-                    after_gpu=spec.after_gpu,
+                    host=spec.host.value,
                 )
                 for spec in SCORERS.values()
             ],
