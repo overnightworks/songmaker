@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
 import golden from './lyrics-align.fixtures.json';
-import { activeLyricLineIndex, alignLyricsToCues } from './lyrics-align';
+import { activeLyricLineIndices, alignLyricsToCues } from './lyrics-align';
 
 // Invented lyric-like lines, never real lyrics. Deliberately far apart in
 // SequenceMatcher.ratio() (verified by hand against Python's difflib) from
@@ -162,17 +162,15 @@ describe('alignLyricsToCues without word timestamps (cue window fallback)', () =
 		expect(aligned[0].interval).toEqual({ start: 1, end: 2 });
 		expect(aligned[1].interval).toBeNull();
 	});
-	it('splits a cue that covers two lines into a share for each, in order', () => {
+	it('gives every line a cue covers the whole cue span, never an invented share', () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 
 		const aligned = alignLyricsToCues(lyrics, [cue(0, 6.3, `${LINE_1} ${LINE_2}`)]);
-		const [first, second] = aligned.map((line) => line.interval);
 
-		expect(first?.start).toBe(0);
-		expect(second?.end).toBe(6.3);
-		expect(first?.end).toBe(second?.start);
-		expect(first?.end).toBeGreaterThan(0);
-		expect(first?.end).toBeLessThan(6.3);
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 6.3 },
+			{ start: 0, end: 6.3 }
+		]);
 	});
 
 	it('leaves the lines outside a cue window dark (false-positive precision)', () => {
@@ -318,7 +316,7 @@ describe('golden alignments from scripts/lyric_alignment_golden.py', () => {
 	});
 });
 
-describe('activeLyricLineIndex', () => {
+describe('activeLyricLineIndices', () => {
 	const lines = [
 		{ text: LINE_1, interval: { start: 0, end: 1 } },
 		{ text: '', interval: null },
@@ -326,30 +324,39 @@ describe('activeLyricLineIndex', () => {
 	];
 
 	it('is active exactly at an interval start (inclusive)', () => {
-		expect(activeLyricLineIndex(lines, 0)).toBe(0);
+		expect(activeLyricLineIndices(lines, 0)).toEqual([0]);
 	});
 
 	it('is not active exactly at an interval end (exclusive)', () => {
-		expect(activeLyricLineIndex(lines, 1)).toBeNull();
+		expect(activeLyricLineIndices(lines, 1)).toEqual([]);
 	});
 
 	it('has no active line in the gap between two intervals', () => {
-		expect(activeLyricLineIndex(lines, 1.2)).toBeNull();
+		expect(activeLyricLineIndices(lines, 1.2)).toEqual([]);
 	});
 
 	it('has no active line before the first interval', () => {
-		expect(activeLyricLineIndex(lines, -1)).toBeNull();
+		expect(activeLyricLineIndices(lines, -1)).toEqual([]);
 	});
 
 	it('has no active line after the last interval', () => {
-		expect(activeLyricLineIndex(lines, 5)).toBeNull();
+		expect(activeLyricLineIndices(lines, 5)).toEqual([]);
 	});
 
 	it('is active in the middle of an interval', () => {
-		expect(activeLyricLineIndex(lines, 2)).toBe(2);
+		expect(activeLyricLineIndices(lines, 2)).toEqual([2]);
 	});
 
 	it('has no active line for an alignment with no matched lines at all', () => {
-		expect(activeLyricLineIndex([{ text: LINE_1, interval: null }], 0)).toBeNull();
+		expect(activeLyricLineIndices([{ text: LINE_1, interval: null }], 0)).toEqual([]);
+	});
+
+	it('lights every line of a cue window together, in display order', () => {
+		const window = [
+			{ text: LINE_1, interval: { start: 0, end: 3 } },
+			{ text: LINE_2, interval: { start: 0, end: 3 } }
+		];
+
+		expect(activeLyricLineIndices(window, 1.5)).toEqual([0, 1]);
 	});
 });

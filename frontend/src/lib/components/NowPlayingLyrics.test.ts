@@ -135,6 +135,20 @@ describe('NowPlayingLyrics', () => {
 		expect(Array.from(lines).some((line) => line.classList.contains('active'))).toBe(false);
 	});
 
+	it('lights every line of a cue window at once', async () => {
+		const lyrics = [LINE_1, LINE_2].join('\n');
+		const cues = [cue(0, 6.3, `${LINE_1} ${LINE_2}`)];
+		audioPlayer.currentTime = 3;
+
+		await render({ lyrics, cues, whisperText: null });
+
+		const lines = target.querySelectorAll('.lyrics-line');
+		expect(Array.from(lines).map((line) => line.classList.contains('active'))).toEqual([
+			true,
+			true
+		]);
+	});
+
 	it('scrolls the active line into view, smoothly by default', async () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];

@@ -5,7 +5,7 @@
 		NOW_PLAYING_LYRICS_RESCORE_HINT,
 		NOW_PLAYING_LYRICS_ROW_LABEL
 	} from '$lib/constants/now-playing';
-	import { activeLyricLineIndex, alignLyricsToCues } from '$lib/utils/lyrics-align';
+	import { activeLyricLineIndices, alignLyricsToCues } from '$lib/utils/lyrics-align';
 
 	let {
 		lyrics,
@@ -28,13 +28,17 @@
 		if (cues == null || cues.length === 0) return null;
 		return alignLyricsToCues(lyrics, cues);
 	});
-	const activeIndex = $derived(
-		alignedLines ? activeLyricLineIndex(alignedLines, audioPlayer.currentTime) : null
+	// A cue window puts one span on several lines, so more than one line can be
+	// active at a time. The scroll target is derived as a plain index so the
+	// effect below runs on a change of line, not on every playback tick.
+	const activeIndices = $derived(
+		alignedLines ? activeLyricLineIndices(alignedLines, audioPlayer.currentTime) : []
 	);
+	const scrollTargetIndex = $derived(activeIndices.length > 0 ? activeIndices[0] : null);
 	const showRescoreHint = $derived(hasLyrics && !hasCues && Boolean(whisperText));
 
 	$effect(() => {
-		const index = activeIndex;
+		const index = scrollTargetIndex;
 		if (index === null || !container) return;
 		const el = container.querySelector<HTMLElement>(`[data-line-index="${index}"]`);
 		if (!el || typeof el.scrollIntoView !== 'function') return;
@@ -52,7 +56,11 @@
 		{#if alignedLines}
 			<div class="lyrics lyrics-synced" bind:this={container}>
 				{#each alignedLines as line, index (index)}
-					<p class="lyrics-line" class:active={index === activeIndex} data-line-index={index}>
+					<p
+						class="lyrics-line"
+						class:active={activeIndices.includes(index)}
+						data-line-index={index}
+					>
 						{line.text}
 					</p>
 				{/each}

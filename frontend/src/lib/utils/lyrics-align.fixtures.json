@@ -1704,12 +1704,12 @@
 			],
 			"intervals": [
 				{
-					"end": 3.0476190476190474,
+					"end": 6.0,
 					"start": 0.0
 				},
 				{
 					"end": 6.0,
-					"start": 3.0476190476190474
+					"start": 0.0
 				},
 				{
 					"end": 9.5,
@@ -1717,7 +1717,7 @@
 				}
 			],
 			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights\nanother mile of rusted signs",
-			"name": "cue window: a segment covering two lines splits its span between them"
+			"name": "cue window: both lines of a two-line window carry the whole cue span"
 		},
 		{
 			"cues": [
@@ -1729,20 +1729,20 @@
 			],
 			"intervals": [
 				{
-					"end": 4.164835164835164,
+					"end": 10.0,
 					"start": 1.0
 				},
 				{
-					"end": 7.230769230769231,
-					"start": 4.164835164835164
+					"end": 10.0,
+					"start": 1.0
 				},
 				{
 					"end": 10.0,
-					"start": 7.230769230769231
+					"start": 1.0
 				}
 			],
 			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights\nanother mile of rusted signs",
-			"name": "cue window: a segment covering three lines splits its span three ways"
+			"name": "cue window: all three lines of a three-line window carry the whole cue span"
 		},
 		{
 			"cues": [

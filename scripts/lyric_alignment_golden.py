@@ -342,32 +342,9 @@ def align_against_cue_windows(
         ))
         if chosen is None:
             continue
-        intervals.update(split_cue_span(cue, line_texts, chosen))
+        for position in range(chosen.first, chosen.last + 1):
+            intervals[position] = Interval(cue.start, cue.end)
         floor_position = chosen.last + 1
-    return intervals
-
-
-def split_cue_span(
-    cue: Cue, line_texts: list[str], window: Candidate,
-) -> dict[int, Interval]:
-    total_length = sum(
-        len(line_texts[position]) for position in range(window.first, window.last + 1)
-    )
-    span = cue.end - cue.start
-    intervals: dict[int, Interval] = {}
-
-    consumed_length = 0
-    for position in range(window.first, window.last + 1):
-        start = (
-            cue.start if position == window.first
-            else cue.start + (span * consumed_length) / total_length
-        )
-        consumed_length += len(line_texts[position])
-        end = (
-            cue.end if position == window.last
-            else cue.start + (span * consumed_length) / total_length
-        )
-        intervals[position] = Interval(start, end)
     return intervals
 
 
@@ -505,7 +482,7 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         (Cue(0.0, 3.0, "silver rain falls on the roof"),),
     ),
     AlignmentFixture(
-        "cue window: a segment covering two lines splits its span between them",
+        "cue window: both lines of a two-line window carry the whole cue span",
         "\n".join([LINE_1, LINE_2, LINE_3]),
         (
             Cue(0.0, 6.0, f"{LINE_1} {LINE_2}"),
@@ -513,7 +490,7 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         ),
     ),
     AlignmentFixture(
-        "cue window: a segment covering three lines splits its span three ways",
+        "cue window: all three lines of a three-line window carry the whole cue span",
         "\n".join([LINE_1, LINE_2, LINE_3]),
         (Cue(1.0, 10.0, f"{LINE_1} {LINE_2} {LINE_3}"),),
     ),

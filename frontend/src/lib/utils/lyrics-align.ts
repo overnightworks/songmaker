@@ -15,9 +15,10 @@
 // segment cues, and a segment follows breathing pauses rather than line
 // breaks, so one cue routinely covers up to three lyric lines. Cues are
 // walked in playback order and each takes the best-matching run of up to
-// three still-unconsumed lines, whose intervals split the cue span in
-// proportion to their length. That split is an approximation within a span
-// we know was sung — only a re-score buys real per-line timing.
+// three still-unconsumed lines, and every line of that run carries the whole
+// cue span. Nothing in such a take says where inside the cue one line ends
+// and the next begins, so those lines light together rather than on invented
+// per-line timing (#45); only a re-score buys real per-line intervals.
 //
 // Both paths share the same accept rule: the best candidate must clear
 // MIN_RATIO, and it must beat every rival — a candidate that neither
@@ -317,31 +318,10 @@ function alignAgainstCueWindows(
 			)
 		);
 		if (chosen === null) continue;
-		splitCueSpan(cue, lineTexts, chosen, assign);
+		for (let position = chosen.from; position <= chosen.to; position++) {
+			assign(position, { start: cue.start, end: cue.end });
+		}
 		floorPosition = chosen.to + 1;
-	}
-}
-
-function splitCueSpan(
-	cue: PreparedCue,
-	lineTexts: string[],
-	window: Candidate,
-	assign: (linePosition: number, interval: LyricLineInterval) => void
-): void {
-	let totalLength = 0;
-	for (let position = window.from; position <= window.to; position++) {
-		totalLength += lineTexts[position].length;
-	}
-	const span = cue.end - cue.start;
-
-	let consumedLength = 0;
-	for (let position = window.from; position <= window.to; position++) {
-		const start =
-			position === window.from ? cue.start : cue.start + (span * consumedLength) / totalLength;
-		consumedLength += lineTexts[position].length;
-		const end =
-			position === window.to ? cue.end : cue.start + (span * consumedLength) / totalLength;
-		assign(position, { start, end });
 	}
 }
 
@@ -372,16 +352,19 @@ export function alignLyricsToCues(lyrics: string, cues: WhisperCue[]): AlignedLy
 	return rawLines.map((text, index) => ({ text, interval: intervals[index] }));
 }
 
-// The active line at `currentTime`, or null between cues / before the first
-// / after the last — a gap is never a guess. Interval is half-open [start,
-// end): a boundary time belongs to the line that starts there.
-export function activeLyricLineIndex(
+// Every line active at `currentTime`, in display order, and none at all
+// between cues / before the first / after the last — a gap is never a guess.
+// Interval is half-open [start, end): a boundary time belongs to the line
+// that starts there. A cue window puts the same span on each of its lines, so
+// those light together.
+export function activeLyricLineIndices(
 	lines: AlignedLyricLine[],
 	currentTime: number
-): number | null {
+): number[] {
+	const active: number[] = [];
 	for (let index = 0; index < lines.length; index++) {
 		const interval = lines[index].interval;
-		if (interval && currentTime >= interval.start && currentTime < interval.end) return index;
+		if (interval && currentTime >= interval.start && currentTime < interval.end) active.push(index);
 	}
-	return null;
+	return active;
 }
