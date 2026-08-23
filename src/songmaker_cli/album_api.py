@@ -29,6 +29,7 @@ from songmaker_cli.api_models import (
     StatusResponse,
     TitleUpdateRequest,
 )
+from songmaker_cli.api_models.songs import UnplayableSongSummary
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,
@@ -62,6 +63,7 @@ from songmaker_cli.db.queries import (
     set_album_cover_key,
     soft_delete_album,
 )
+from songmaker_cli.db.queries.sharing import songs_without_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 log = logging.getLogger(__name__)
@@ -213,12 +215,16 @@ def api_share_album(
     album = get_album(session, album_id)
     check_album_access(album, user)
     album = enable_album_sharing(session, album_id)
+    missing = songs_without_playable_take(session, album_id)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.ALBUM, album_id)
     session.commit()
     base_url = str(request.base_url).rstrip("/")
     return ShareResponse(
         share_url=f"{base_url}/share/{album.share_slug}",
         share_slug=album.share_slug,
+        songs_without_playable_take=[
+            UnplayableSongSummary(id=song.id, title=song.title) for song in missing
+        ],
     )
 
 

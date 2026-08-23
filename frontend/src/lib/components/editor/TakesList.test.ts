@@ -98,7 +98,12 @@ function mockActions(): GenerationActions {
 		keep,
 		del: vi.fn(),
 		rate: vi.fn(async () => undefined),
-		share: vi.fn(async () => ({ status: 'ok', share_url: '', share_slug: '' })),
+		share: vi.fn(async () => ({
+			status: 'ok',
+			share_url: '',
+			share_slug: '',
+			songs_without_playable_take: []
+		})),
 		unshare: vi.fn(async () => undefined),
 		addToPlaylist,
 		pinSeed,

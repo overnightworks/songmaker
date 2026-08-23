@@ -76,6 +76,7 @@ _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "MemoryBundleResponse": "MemoryBundle",
     "RateResponse": "RateResult",
     "CleanupResponse": "CleanupResult",
+    "UnplayableSongSummary": "UnplayableSongSummary",
     "ShareResponse": "ShareResult",
     "ShareInventoryItem": "ShareInventoryItem",
     "SharedSongItem": "SharedAlbumSongPayload",
@@ -158,6 +159,7 @@ _EMIT_ORDER: list[str] = [
     "MemoryBundle",
     "RateResult",
     "CleanupResult",
+    "UnplayableSongSummary",
     "ShareResult",
     "ShareInventoryItem",
     "SharedAlbumSongPayload",
@@ -380,6 +382,7 @@ def generate() -> str:
         WorkerInfo,
         WorkerPoolResponse,
     )
+    from songmaker_cli.api_models.songs import UnplayableSongSummary
 
     models: dict[str, type[BaseModel]] = {
         "VersionGenerationParams": GenerationParams,
@@ -419,6 +422,7 @@ def generate() -> str:
         "MemoryBundle": MemoryBundleResponse,
         "RateResult": RateResponse,
         "CleanupResult": CleanupResponse,
+        "UnplayableSongSummary": UnplayableSongSummary,
         "ShareResult": ShareResponse,
         "ShareInventoryItem": ShareInventoryItem,
         "SharedAlbumSongPayload": SharedSongItem,

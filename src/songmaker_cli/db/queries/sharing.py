@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TypeVar
 
+from sqlalchemy import ColumnElement, and_
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.constants import (
@@ -57,6 +58,44 @@ def disable_sharing(session: Session, model_class: type[T], entity_id: str) -> T
     session.flush()
     log.info("Disabled sharing for %s %s", model_class.__name__.lower(), entity_id)
     return entity
+
+
+def is_playable_take(gen: Generation) -> bool:
+    """A generation the public share page can actually play: non-archived,
+    with a real (non-empty) mp3 file. The single owner of "is this take
+    playable" -- both `_picked_generation` (sharing_api.py) and
+    `songs_without_playable_take` below must agree with this, or a song can
+    silently vanish from /shared/{slug} without the owner being warned."""
+    return bool(gen.mp3_path) and not gen.is_archived
+
+
+def playable_take_filter() -> ColumnElement[bool]:
+    """SQLAlchemy criteria mirroring `is_playable_take()`, for queries that
+    can't load full Generation rows into Python."""
+    return and_(
+        Generation.mp3_path.isnot(None),
+        Generation.mp3_path != "",
+        Generation.is_archived.is_(False),
+    )
+
+
+def songs_without_playable_take(session: Session, album_id: str) -> list[Song]:
+    """Songs on the album with no playable take (see `is_playable_take`) --
+    a song failing this check is silently absent from the /shared/{slug}
+    payload."""
+    has_take = (
+        session.query(Generation.song_id)
+        .filter(Generation.song_id == Song.id)
+        .filter(playable_take_filter())
+        .exists()
+    )
+    return (
+        session.query(Song)
+        .filter(Song.album_id == album_id)
+        .filter(~has_take)
+        .order_by(Song.track_number)
+        .all()
+    )
 
 
 def count_shared_inventory(session: Session, user_id: str) -> int:

@@ -86,7 +86,12 @@ function defaultProps() {
 		onselectnext: vi.fn(),
 		isShared: false,
 		shareSlug: null,
-		onshare: vi.fn(async () => ({ status: 'ok', share_url: '', share_slug: 's' })),
+		onshare: vi.fn(async () => ({
+			status: 'ok',
+			share_url: '',
+			share_slug: 's',
+			songs_without_playable_take: []
+		})),
 		onunshare: vi.fn(async () => undefined),
 		onaddtoplaylist: vi.fn(),
 		ondeletesong: vi.fn(),
