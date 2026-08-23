@@ -99,12 +99,12 @@ def score_lyrical_coherence(
     n_intended = len(intended.splitlines())
     n_transcribed = len(transcribed.splitlines())
     log.debug("Sending %d intended + %d transcribed lines to Claude", n_intended, n_transcribed)
-    from songmaker_cli.settings import get_settings
-    settings = get_settings()
-    scoring_model = (config.claude_scoring_model if config and config.claude_scoring_model
-                     else settings.claude_scoring_model)
-    api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
-    response = call_claude(prompt, api_key=api_key, model=scoring_model)
+    effective_config = config if isinstance(config, PipelineConfig) else PipelineConfig()
+    api_key = (
+        effective_config.anthropic_api_key.get_secret_value()
+        if effective_config.anthropic_api_key else None
+    )
+    response = call_claude(prompt, api_key=api_key, model=effective_config.claude_scoring_model)
     log.debug("Claude response: %d chars", len(response.text))
     data = parse_json_response(response.text)
 

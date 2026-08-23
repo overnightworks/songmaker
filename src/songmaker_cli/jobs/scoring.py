@@ -96,6 +96,7 @@ def run_scoring_job(
             claude_scoring_model=resolved_model,
             scorer_timeout=settings.scorer_timeout_seconds,
             text_accuracy_timeout=settings.text_accuracy_timeout_seconds,
+            anthropic_api_key=settings.anthropic_api_key,
         )
         meta = SongMeta(**meta_kwargs) if meta_kwargs else None
 

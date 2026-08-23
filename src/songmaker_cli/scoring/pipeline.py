@@ -8,7 +8,9 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Final
+
+from pydantic import SecretStr
 
 if TYPE_CHECKING:
     import numpy as np
@@ -54,9 +56,30 @@ class AudioData:
     sr: int
 
 
+# Mirrors Settings.claude_scoring_model's default (songmaker_cli/settings.py).
+# Duplicated deliberately: the scorer subprocess drops SECRET_ENV_KEYS from its
+# own os.environ at spawn (scoring/subprocess_runner.py) and must never
+# construct Settings() itself afterward — Settings.database_url has no
+# default, so a post-scrub get_settings() call would raise instead of
+# degrading gracefully. The parent process still resolves the deployed model
+# (DB override or this same Settings default) via
+# db.queries.settings.get_claude_scoring_model() and always fills
+# claude_scoring_model explicitly before sending a ScoreRequest across the
+# pipe; this constant only covers direct/test calls that skip that step.
+CLAUDE_SCORING_MODEL_DEFAULT: Final = "claude-opus-4-6"
+
+
 @dataclass(frozen=True)
 class PipelineConfig:
-    """Configuration passed to all scorers."""
+    """Configuration passed to all scorers.
+
+    Deliberately self-contained: every scorer that runs inside the scorer
+    subprocess reads its configuration — including secrets such as
+    ``anthropic_api_key`` — from this object, never from ``get_settings()``.
+    The parent process resolves Settings and fills these fields before
+    sending a ``ScoreRequest`` across the pipe to the child, whose own
+    ``os.environ`` has had ``SECRET_ENV_KEYS`` scrubbed at spawn.
+    """
 
     whisper_model: str = "large-v3"  # turbo is faster but hallucinates on ~5% of songs
     whisper_device: str = ""
@@ -64,7 +87,8 @@ class PipelineConfig:
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
     text_accuracy_timeout: int = TEXT_ACCURACY_TIMEOUT_SECONDS
     pipeline_timeout: int = 0
-    claude_scoring_model: str = ""
+    claude_scoring_model: str = CLAUDE_SCORING_MODEL_DEFAULT
+    anthropic_api_key: SecretStr | None = None
 
     def __post_init__(self) -> None:
         if self.pipeline_timeout <= 0:

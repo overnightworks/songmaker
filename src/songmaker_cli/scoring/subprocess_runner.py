@@ -65,6 +65,25 @@ class ShutdownRequest:
     pass
 
 
+@dataclass(frozen=True)
+class EnvProbeRequest:
+    """Ask the child which of ``keys`` are still set in its own os.environ.
+
+    A spawned process's environment cannot be observed from outside it (and
+    must not be — that is the whole point of the scrub). This round-trip is
+    the only way a test can drive the real ``_child_main`` and verify
+    ``_scrub_secret_env_vars()`` actually ran, rather than re-implementing
+    the scrub in a test-only stand-in.
+    """
+
+    keys: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class EnvProbeResponse:
+    present: frozenset[str]
+
+
 def _cleanup_gpu_and_exit(_signum: int, _frame: object) -> None:
     try:
         import torch
@@ -136,6 +155,12 @@ def _child_main(conn: Connection) -> None:
         if isinstance(request, ReleaseGpuRequest):
             _release_scorer_models()
             conn.send(ReleaseGpuResponse(success=True))
+            continue
+
+        if isinstance(request, EnvProbeRequest):
+            conn.send(EnvProbeResponse(
+                present=frozenset(key for key in request.keys if key in os.environ),
+            ))
             continue
 
         if isinstance(request, ScoreRequest):

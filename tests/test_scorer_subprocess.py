@@ -5,7 +5,6 @@ from __future__ import annotations
 import multiprocessing
 import os
 import signal
-from multiprocessing.connection import Connection
 from pathlib import Path
 
 import pytest
@@ -13,6 +12,8 @@ import pytest
 from songmaker_cli.constants import SECRET_ENV_KEYS
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.subprocess_runner import (
+    EnvProbeRequest,
+    EnvProbeResponse,
     ReleaseGpuRequest,
     ReleaseGpuResponse,
     ScoreRequest,
@@ -20,7 +21,6 @@ from songmaker_cli.scoring.subprocess_runner import (
     ScorerProcess,
     ShutdownRequest,
     _child_main,
-    _scrub_secret_env_vars,
     get_scorer_process,
     set_scorer_process,
 )
@@ -83,7 +83,7 @@ def _run_child_with_messages(messages: list, timeout: float = 10.0) -> list:
         while parent_conn.poll(timeout=timeout):
             resp = parent_conn.recv()
             responses.append(resp)
-            if isinstance(resp, (ScoreResponse, ReleaseGpuResponse)):
+            if isinstance(resp, (ScoreResponse, ReleaseGpuResponse, EnvProbeResponse)):
                 break
 
     proc.join(timeout=5)
@@ -162,30 +162,22 @@ def test_child_handles_score_error(tmp_path: Path) -> None:
 _TEST_MARKER_KEY = "SONGMAKER_TEST_NON_SECRET_MARKER"
 
 
-def _env_probe_child(conn: Connection, keys: list[str]) -> None:
-    _scrub_secret_env_vars()
-    conn.send({key: os.environ.get(key) for key in keys})
-    conn.close()
-
-
 def test_scorer_child_drops_secret_env_keys_at_spawn() -> None:
     """The scorer child inherits the full parent env at spawn (multiprocessing
-    has no env= parameter), so it must scrub secrets itself, first thing.
+    has no env= parameter), so _child_main must scrub secrets itself, first
+    thing. Drives the real _child_main (via _run_child_with_messages) rather
+    than a test-only stand-in, so deleting the scrub call site fails this.
     """
-    probed_keys = [*SECRET_ENV_KEYS, _TEST_MARKER_KEY]
+    probed_keys = (*SECRET_ENV_KEYS, _TEST_MARKER_KEY)
     previous = {key: os.environ.get(key) for key in probed_keys}
     for key in SECRET_ENV_KEYS:
         os.environ[key] = "leaked-secret-value"
     os.environ[_TEST_MARKER_KEY] = "visible-non-secret"
     try:
-        parent_conn, child_conn = _ctx.Pipe()
-        proc = _ctx.Process(target=_env_probe_child, args=(child_conn, probed_keys))
-        proc.start()
-        child_conn.close()
-        assert parent_conn.poll(timeout=10)
-        seen = parent_conn.recv()
-        proc.join(timeout=5)
-        parent_conn.close()
+        responses = _run_child_with_messages([
+            EnvProbeRequest(keys=probed_keys),
+            ShutdownRequest(),
+        ])
     finally:
         for key, value in previous.items():
             if value is None:
@@ -193,9 +185,12 @@ def test_scorer_child_drops_secret_env_keys_at_spawn() -> None:
             else:
                 os.environ[key] = value
 
+    probe_responses = [r for r in responses if isinstance(r, EnvProbeResponse)]
+    assert len(probe_responses) == 1
+    present = probe_responses[0].present
     for key in SECRET_ENV_KEYS:
-        assert seen[key] is None, f"{key} leaked into the scorer child's environment"
-    assert seen[_TEST_MARKER_KEY] == "visible-non-secret"
+        assert key not in present, f"{key} leaked into the scorer child's environment"
+    assert _TEST_MARKER_KEY in present
 
 
 # ── ScorerProcess class ──────────────────────────────────────────

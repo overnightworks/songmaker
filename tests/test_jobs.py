@@ -624,6 +624,47 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
         assert gen.whisper_cues is None
 
 
+def test_scoring_job_passes_anthropic_api_key_via_config(
+    seeded_db, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The scorer subprocess scrubs ANTHROPIC_API_KEY from its own
+    environment at spawn, so jobs/scoring.py must resolve it here in the
+    parent process and carry it across the pipe on PipelineConfig — the
+    only way lyrical_coherence can reach it inside the child.
+    """
+    from pydantic import SecretStr
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "parent-resolved-key")
+
+    audio_dir = tmp_path / "audio"
+    mp3_file = audio_dir / "user1" / "g1.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3")
+
+    with seeded_db() as session:
+        session.add(Generation(
+            id="g1", song_id="s1", version_id="v1", generation_number=1,
+            mp3_path="user1/g1.mp3", seed=42,
+        ))
+        session.commit()
+
+    captured: dict = {}
+
+    def _capture_score(mp3_path, meta=None, scorers=None, config=None,
+                       job_id=None, on_progress=None):
+        captured["config"] = config
+        return _scoring_result()
+
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process",
+        return_value=MagicMock(score=_capture_score),
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    config = captured["config"]
+    assert config.anthropic_api_key == SecretStr("parent-resolved-key")
+
+
 def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
     mp3_file = audio_dir / "user1" / "g1.mp3"
