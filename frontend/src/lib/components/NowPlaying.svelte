@@ -3,15 +3,8 @@
 	import type { PlaybackInfo } from '$lib/services/playbackTypes';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
-		SHUFFLE_SCOPE_ALBUM,
-		SHUFFLE_SCOPE_LIBRARY,
-		SHUFFLE_SCOPE_PLAYLIST
-	} from '$lib/constants';
-	import {
 		NOW_PLAYING_QUEUE_TAB,
 		NOW_PLAYING_RIGHT_PANEL_LABEL,
-		NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
-		NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 		NOW_PLAYING_TAKE_TAB
 	} from '$lib/constants/now-playing';
 	import {
@@ -25,6 +18,7 @@
 		nowPlayingPanel,
 		queueContext,
 		shuffleEnabled,
+		shuffleLabel,
 		songList,
 		toggleShuffle,
 		windowEnded
@@ -72,18 +66,6 @@
 	const songs = $derived($songList);
 	const shuffle = $derived($shuffleEnabled);
 	const pool = $derived($libraryTakePool);
-	const shuffleScope = $derived(
-		ctx.type === 'playlist'
-			? SHUFFLE_SCOPE_PLAYLIST
-			: ctx.type === 'album'
-				? SHUFFLE_SCOPE_ALBUM
-				: SHUFFLE_SCOPE_LIBRARY
-	);
-	const shuffleLabel = $derived(
-		shuffle
-			? `${NOW_PLAYING_SHUFFLE_DISABLE_PREFIX} (${shuffleScope})`
-			: `${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${shuffleScope}`
-	);
 	const skipped = $derived(ctx.type === 'library' ? $libraryQueueSkipped : []);
 	const skippedComplete = $derived(ctx.type === 'library' ? $libraryQueueSkippedComplete : true);
 	const queueVm = $derived(buildQueueViewModel(ctx, audioPlayer.current, songs));
@@ -207,7 +189,7 @@
 	{onprev}
 	{onnext}
 	{shuffle}
-	{shuffleLabel}
+	shuffleLabel={$shuffleLabel}
 	onToggleShuffle={() => toggleShuffle()}
 	{onGoToSong}
 	upNextTitle={queueVm.upNext?.songTitle ?? null}

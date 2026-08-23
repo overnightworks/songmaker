@@ -15,7 +15,10 @@
 		queueContext,
 		registerNowPlayingTrigger,
 		retryLastPlayIntent,
-		songList
+		shuffleEnabled,
+		shuffleLabel,
+		songList,
+		toggleShuffle
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -123,7 +126,7 @@
 				>{current.songTitle}</span
 			>
 			<span class="track-detail"
-				>{current.artist} · gen{current.generation.generation_number}{#if isLoading}<span
+				>{current.artist} · take {current.generation.generation_number}{#if isLoading}<span
 						class="loading-text">Loading...</span
 					>{:else if isError}<span class="error-text">{errorMsg ?? 'Error'}</span>{/if}</span
 			>
@@ -155,6 +158,9 @@
 	canNext={Boolean(nextSong)}
 	onPrev={playPrevSong}
 	onNext={playNextSong}
+	shuffle={$shuffleEnabled}
+	shuffleLabel={$shuffleLabel}
+	onToggleShuffle={() => void toggleShuffle()}
 	onTogglePlay={togglePlay}
 	onSeek={(seconds) => audioPlayer.seek(seconds)}
 	{trackInfo}
