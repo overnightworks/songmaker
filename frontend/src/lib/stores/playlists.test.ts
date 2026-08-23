@@ -2,12 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { createPlaylist, fetchPlaylist, fetchPlaylists } from '$lib/api/client';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
+import { toasts } from '$lib/stores/toast';
+import { ApiError } from '$lib/api/fetch';
 import type { PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import {
 	createNewPlaylist,
 	ensurePlaylistsLoaded,
 	loadPlaylistDetail,
 	loadPlaylists,
+	playlistDetailLoad,
 	playlistList,
 	playlistLoad,
 	resetPlaylistsForTests,
@@ -42,10 +45,12 @@ function makeDetail(id: string): PlaylistDetailItem {
 
 beforeEach(() => {
 	resetPlaylistsForTests();
+	toasts.set([]);
 });
 
 afterEach(() => {
 	resetPlaylistsForTests();
+	toasts.set([]);
 	vi.restoreAllMocks();
 	vi.useRealTimers();
 });
@@ -78,6 +83,7 @@ describe('loadPlaylistDetail', () => {
 
 		expect(fetchPlaylist).toHaveBeenCalledTimes(1);
 		expect(get(selectedPlaylistDetail)?.id).toBe('a');
+		expect(get(playlistDetailLoad).status).toBe('ready');
 	});
 
 	it('reuses a still-fresh detail instead of refetching on reopen', async () => {
@@ -110,6 +116,27 @@ describe('loadPlaylistDetail', () => {
 		await loadPlaylistDetail('a', { forceRefresh: true });
 
 		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
+	});
+
+	it('never leaves the previous playlist rows under a rate-limited open', async () => {
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a'));
+		await loadPlaylistDetail('a');
+		expect(get(selectedPlaylistDetail)?.id).toBe('a');
+
+		vi.mocked(fetchPlaylist).mockRejectedValueOnce(
+			new ApiError(429, 'Too many requests', '/api/playlists/b')
+		);
+		await loadPlaylistDetail('b');
+
+		expect(get(selectedPlaylistId)).toBe('b');
+		expect(get(selectedPlaylistDetail)).toBeNull();
+		expect(get(playlistDetailLoad)).toEqual({
+			status: 'error',
+			error: 'Too many requests'
+		});
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: 'Too many requests', type: 'error' })
+		]);
 	});
 });
 

@@ -15,6 +15,7 @@ import {
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
+import { addToast } from '$lib/stores/toast';
 
 export type PlaylistLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -38,6 +39,7 @@ export const selectedPlaylistId = derived(openCollection, ($collection) =>
 );
 export const selectedPlaylistDetail = writable<PlaylistDetailItem | null>(null);
 export const playlistLoad = writable<PlaylistLoadState>({ status: 'idle', error: null });
+export const playlistDetailLoad = writable<PlaylistLoadState>({ status: 'idle', error: null });
 
 export const selectedPlaylist = derived(
 	[playlistList, selectedPlaylistId],
@@ -109,6 +111,7 @@ export function resetPlaylistsForTests(): void {
 	setOpenCollection(null);
 	selectedPlaylistDetail.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
+	playlistDetailLoad.set({ status: 'idle', error: null });
 	playlistDetailRequest += 1;
 	playlistDetailCache.clear();
 	playlistDetailInflight.clear();
@@ -138,12 +141,23 @@ export async function loadPlaylistDetail(
 		const fresh = freshPlaylistDetail(id);
 		if (fresh) {
 			selectedPlaylistDetail.set(fresh);
+			playlistDetailLoad.set({ status: 'ready', error: null });
 			return;
 		}
 	}
-	const detail = await fetchPlaylistDetailDeduped(id);
-	if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
-	selectedPlaylistDetail.set(detail);
+	playlistDetailLoad.set({ status: 'loading', error: null });
+	try {
+		const detail = await fetchPlaylistDetailDeduped(id);
+		if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
+		selectedPlaylistDetail.set(detail);
+		playlistDetailLoad.set({ status: 'ready', error: null });
+	} catch (err) {
+		if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
+		const message = playlistErrorMessage(err);
+		selectedPlaylistDetail.set(null);
+		playlistDetailLoad.set({ status: 'error', error: message });
+		addToast(message, 'error');
+	}
 }
 
 export function deselectPlaylist(): void {
@@ -152,6 +166,7 @@ export function deselectPlaylist(): void {
 		setOpenCollection(null);
 	}
 	selectedPlaylistDetail.set(null);
+	playlistDetailLoad.set({ status: 'idle', error: null });
 }
 
 // Every local write to selectedPlaylistDetail must also refresh the detail

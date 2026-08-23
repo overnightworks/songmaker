@@ -1,8 +1,18 @@
 import { mount, tick, unmount } from 'svelte';
+import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PlaylistDetailItem, PlaylistEntryItem } from '$lib/api/types';
-import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { ApiError } from '$lib/api/fetch';
+import { LIBRARY_RETRY_LABEL } from '$lib/constants';
+import { setOpenCollection } from '$lib/stores/collection';
+import {
+	loadPlaylistDetail,
+	playlistDetailLoad,
+	playlistList,
+	resetPlaylistsForTests,
+	selectedPlaylistDetail
+} from '$lib/stores/playlists';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -10,7 +20,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		...actual,
 		sharePlaylist: vi.fn(),
 		unsharePlaylist: vi.fn(),
-		createQueueStreamSnapshot: vi.fn()
+		createQueueStreamSnapshot: vi.fn(),
+		fetchPlaylist: vi.fn()
 	};
 });
 vi.mock('$lib/api/queue-streams', () => ({
@@ -34,6 +45,7 @@ vi.mock('$lib/stores/navigation', () => ({
 
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import { selectSong } from '$lib/stores/navigation';
+import { fetchPlaylist } from '$lib/api/client';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -71,15 +83,35 @@ function detail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem
 	};
 }
 
+// The header now renders from the lightweight playlist in playlistList
+// (see PlaylistDetailView.svelte), not from the detail fetch — every test
+// opening a playlist must seed both, the way navigation.openPlaylist does.
+function openPlaylistDetail(d: PlaylistDetailItem): void {
+	playlistList.set([
+		{
+			id: d.id,
+			title: d.title,
+			entry_count: d.entry_count,
+			is_shared: d.is_shared,
+			share_slug: d.share_slug,
+			created_at: d.created_at
+		}
+	]);
+	setOpenCollection({ kind: 'playlist', id: d.id });
+	selectedPlaylistDetail.set(d);
+	playlistDetailLoad.set({ status: 'ready', error: null });
+}
+
 beforeEach(() => {
-	selectedPlaylistDetail.set(detail());
+	vi.mocked(fetchPlaylist).mockReset();
+	openPlaylistDetail(detail());
 	vi.mocked(selectSong).mockReset();
 });
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
-	selectedPlaylistDetail.set(null);
+	resetPlaylistsForTests();
 	delete document.documentElement.dataset.pointer;
 });
 
@@ -122,7 +154,7 @@ describe('PlaylistDetailView header', () => {
 
 describe('PlaylistDetailView row take traits', () => {
 	it('shows duration, version, and a pick star, since playlist rows are takes', async () => {
-		selectedPlaylistDetail.set(
+		openPlaylistDetail(
 			detail({
 				entries: [entry({ version_number: 2, audio_duration: 195, is_picked: true })]
 			})
@@ -139,7 +171,7 @@ describe('PlaylistDetailView row take traits', () => {
 	});
 
 	it('omits version and duration when the take does not carry them', async () => {
-		selectedPlaylistDetail.set(
+		openPlaylistDetail(
 			detail({
 				entries: [entry({ version_number: null, audio_duration: null, is_picked: false })]
 			})
@@ -157,7 +189,7 @@ describe('PlaylistDetailView row take traits', () => {
 	});
 
 	it('omits duration when the version has none, since audio_duration defaults to 0', async () => {
-		selectedPlaylistDetail.set(
+		openPlaylistDetail(
 			detail({
 				entries: [entry({ version_number: 1, audio_duration: 0, is_picked: false })]
 			})
@@ -207,7 +239,7 @@ describe('PlaylistDetailView row overflow menu', () => {
 describe('PlaylistDetailView compact row actions', () => {
 	it('moves Move up/down and Remove into the … menu instead of inline, keeping only Play and … inline', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
-		selectedPlaylistDetail.set(
+		openPlaylistDetail(
 			detail({
 				entries: [entry({ id: 'pe1', song_title: 'Tide' }), entry({ id: 'pe2', song_title: 'Ebb' })]
 			})
@@ -233,7 +265,7 @@ describe('PlaylistDetailView compact row actions', () => {
 	});
 
 	it('keeps Move up/down and Remove inline outside compact layout', async () => {
-		selectedPlaylistDetail.set(
+		openPlaylistDetail(
 			detail({
 				entries: [entry({ id: 'pe1', song_title: 'Tide' }), entry({ id: 'pe2', song_title: 'Ebb' })]
 			})
@@ -250,5 +282,74 @@ describe('PlaylistDetailView compact row actions', () => {
 		await tick();
 		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
 		expect(menu.textContent?.trim()).toBe('Open song in editor');
+	});
+});
+
+function addPlaylistToList(item: { id: string; title: string; entry_count: number }): void {
+	playlistList.set([
+		...get(playlistList),
+		{
+			id: item.id,
+			title: item.title,
+			entry_count: item.entry_count,
+			is_shared: false,
+			share_slug: null,
+			created_at: '2026-01-01T00:00:00+00:00'
+		}
+	]);
+}
+
+describe('PlaylistDetailView load failure (#139)', () => {
+	it('shows an inline error with Retry and never the previous playlist rows on a rate-limited reopen', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+		expect(target.querySelector('.entry-row')).not.toBeNull();
+
+		addPlaylistToList({ id: 'p2', title: 'Party Mix', entry_count: 3 });
+		vi.mocked(fetchPlaylist).mockRejectedValueOnce(
+			new ApiError(429, 'Too many requests', '/api/playlists/p2')
+		);
+		await loadPlaylistDetail('p2');
+		await tick();
+
+		const header = requireElement(target, '.collection-header');
+		expect(header.textContent).toContain('Party Mix');
+		expect(target.querySelector('.entry-row')).toBeNull();
+		expect(requireElement(target, '[role="alert"]').textContent).toBe('Too many requests');
+		expect(requireElement<HTMLButtonElement>(target, '.retry-btn').textContent).toBe(
+			LIBRARY_RETRY_LABEL
+		);
+	});
+
+	it('reloads the playlist detail when Retry is clicked', async () => {
+		addPlaylistToList({ id: 'p2', title: 'Party Mix', entry_count: 1 });
+		vi.mocked(fetchPlaylist).mockRejectedValueOnce(
+			new ApiError(429, 'Too many requests', '/api/playlists/p2')
+		);
+		await loadPlaylistDetail('p2');
+
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+		requireElement<HTMLButtonElement>(target, '.retry-btn');
+
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(
+			detail({
+				id: 'p2',
+				title: 'Party Mix',
+				entries: [entry({ id: 'pe2', song_title: 'Solstice' })]
+			})
+		);
+		requireElement<HTMLButtonElement>(target, '.retry-btn').click();
+		for (let i = 0; i < 5; i += 1) {
+			await Promise.resolve();
+		}
+		await tick();
+
+		expect(target.querySelector('.retry-btn')).toBeNull();
+		expect(target.textContent).toContain('Solstice');
 	});
 });

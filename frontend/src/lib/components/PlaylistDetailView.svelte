@@ -2,11 +2,15 @@
 	import { sharePlaylist, unsharePlaylist, createQueueStreamSnapshot } from '$lib/api/client';
 	import { playPlaylistEntries, setShuffle } from '$lib/stores/player';
 	import {
+		selectedPlaylist,
 		selectedPlaylistDetail,
+		playlistDetailLoad,
+		loadPlaylistDetail,
 		deletePlaylist,
 		renamePlaylist,
 		removePlaylistEntry,
-		movePlaylistEntry
+		movePlaylistEntry,
+		updatePlaylistInList
 	} from '$lib/stores/playlists';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { addToast } from '$lib/stores/toast';
@@ -24,6 +28,7 @@
 	import { selectSong } from '$lib/stores/navigation';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
+		LIBRARY_RETRY_LABEL,
 		PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 		PLAYLIST_ENTRY_MOVE_UP_LABEL,
 		PLAYLIST_ENTRY_OPEN_SONG_LABEL,
@@ -36,13 +41,24 @@
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
 
-	const playlistDetail = $derived($selectedPlaylistDetail);
+	// The header renders from the lightweight playlist (already in the
+	// library list) so a slow or failed detail fetch never leaves the
+	// previous playlist's header+rows mismatched under the new title (#139).
+	// The entry list renders from the detail only once it matches this
+	// playlist's id.
+	const playlistMeta = $derived($selectedPlaylist);
+	const playlistDetail = $derived(
+		$selectedPlaylistDetail && $selectedPlaylistDetail.id === playlistMeta?.id
+			? $selectedPlaylistDetail
+			: null
+	);
+	const detailLoad = $derived($playlistDetailLoad);
 	let reorderBusy = $state(false);
 	let showDeleteConfirm = $state(false);
 	let overflowId = $state<string | null>(null);
 	let compact = $state(false);
 	const initials = $derived(
-		playlistDetail ? titleInitials(playlistDetail.title) : ALBUM_ART_EMPTY_INITIALS
+		playlistMeta ? titleInitials(playlistMeta.title) : ALBUM_ART_EMPTY_INITIALS
 	);
 
 	$effect(() => {
@@ -80,25 +96,27 @@
 	});
 
 	async function onPlaylistShareEnable() {
-		if (!playlistDetail) throw new Error('No playlist');
-		const result = await sharePlaylist(playlistDetail.id);
-		selectedPlaylistDetail.update((d) =>
-			d ? { ...d, is_shared: true, share_slug: result.share_slug } : d
-		);
+		if (!playlistMeta) throw new Error('No playlist');
+		const result = await sharePlaylist(playlistMeta.id);
+		updatePlaylistInList(playlistMeta.id, (p) => ({
+			...p,
+			is_shared: true,
+			share_slug: result.share_slug
+		}));
 		await refreshSharesAfterMutation();
 		return result;
 	}
 
 	async function onPlaylistShareDisable() {
-		if (!playlistDetail) return;
-		await unsharePlaylist(playlistDetail.id);
-		selectedPlaylistDetail.update((d) => (d ? { ...d, is_shared: false, share_slug: null } : d));
+		if (!playlistMeta) return;
+		await unsharePlaylist(playlistMeta.id);
+		updatePlaylistInList(playlistMeta.id, (p) => ({ ...p, is_shared: false, share_slug: null }));
 		await refreshSharesAfterMutation();
 	}
 
 	async function onPlaylistDelete(): Promise<void> {
-		if (!playlistDetail) return;
-		const playlistId = playlistDetail.id;
+		if (!playlistMeta) return;
+		const playlistId = playlistMeta.id;
 		const saved = await loadSavedOfflinePlaylist(playlistId).catch(() => null);
 		try {
 			await deletePlaylist(playlistId);
@@ -120,9 +138,9 @@
 	}
 
 	async function onPlaylistRename(newTitle: string): Promise<void> {
-		if (!playlistDetail) return;
+		if (!playlistMeta) return;
 		try {
-			await renamePlaylist(playlistDetail.id, newTitle);
+			await renamePlaylist(playlistMeta.id, newTitle);
 		} catch {
 			addToast('Rename failed', 'error');
 			throw new Error('Rename failed');
@@ -197,14 +215,14 @@
 		let cancelled = false;
 		offlineSavedStreamUrl = null;
 		offlineSavedSnapshotId = null;
-		const detail = $selectedPlaylistDetail;
-		if (!detail) {
+		const id = playlistMeta?.id;
+		if (!id) {
 			offlineProgress = null;
 			return () => {
 				cancelled = true;
 			};
 		}
-		void loadSavedOfflinePlaylist(detail.id).then((meta) => {
+		void loadSavedOfflinePlaylist(id).then((meta) => {
 			if (cancelled || !meta) return;
 			offlineSavedStreamUrl = meta.stream_url;
 			offlineSavedSnapshotId = meta.snapshot_id;
@@ -251,13 +269,13 @@
 	}
 
 	async function onRemoveOffline(): Promise<void> {
-		if (!playlistDetail || !offlineSavedStreamUrl || !offlineSavedSnapshotId) return;
+		if (!playlistMeta || !offlineSavedStreamUrl || !offlineSavedSnapshotId) return;
 		try {
 			await unpinQueueStream(offlineSavedSnapshotId).catch(() => {
 				addToast('Server unpin failed — the download is removed locally.', 'info');
 			});
 			await removeStream(offlineSavedStreamUrl, offlineSavedSnapshotId);
-			await forgetPlaylistOfflineStream(playlistDetail.id);
+			await forgetPlaylistOfflineStream(playlistMeta.id);
 			offlineSavedStreamUrl = null;
 			offlineSavedSnapshotId = null;
 			addToast('Offline copy removed', 'info');
@@ -272,19 +290,19 @@
 	}
 </script>
 
-{#if playlistDetail}
+{#if playlistMeta}
 	<div class="detail-panel">
 		<CollectionHeader
 			kind="playlist"
-			title={playlistDetail.title}
+			title={playlistMeta.title}
 			coverUrl={null}
 			coverAlt=""
 			{initials}
 			artFill={null}
 			onplay={() => playEntry(0)}
 			onrename={onPlaylistRename}
-			isShared={playlistDetail.is_shared}
-			shareSlug={playlistDetail.share_slug}
+			isShared={playlistMeta.is_shared}
+			shareSlug={playlistMeta.share_slug}
 			onshare={onPlaylistShareEnable}
 			onunshare={onPlaylistShareDisable}
 			ondelete={() => (showDeleteConfirm = true)}
@@ -295,183 +313,192 @@
 		/>
 
 		<div class="entry-list">
-			{#each playlistDetail.entries as entry, i (entry.id)}
-				<div
-					class="entry-row"
-					class:playing={isEntryCurrent(entry)}
-					onclick={() => playEntry(i)}
-					onkeydown={(e) => onEntryKeydown(e, i)}
-					role="button"
-					tabindex="0"
-					aria-label={`${isEntryPlaying(entry) ? 'Pause' : 'Play'} ${entry.song_title}`}
+			{#if detailLoad.status === 'loading' && !playlistDetail}
+				<p class="empty-tab" role="status">Loading playlist…</p>
+			{:else if detailLoad.status === 'error' && !playlistDetail}
+				<p class="empty-tab" role="alert">{detailLoad.error}</p>
+				<button
+					class="retry-btn"
+					onclick={() => playlistMeta && loadPlaylistDetail(playlistMeta.id)}
+					>{LIBRARY_RETRY_LABEL}</button
 				>
-					<span
-						class="entry-play"
-						class:playing={isEntryPlaying(entry)}
-						class:loading={isEntryLoading(entry)}
-						aria-hidden="true"
+			{:else if playlistDetail}
+				{#each playlistDetail.entries as entry, i (entry.id)}
+					<div
+						class="entry-row"
+						class:playing={isEntryCurrent(entry)}
+						onclick={() => playEntry(i)}
+						onkeydown={(e) => onEntryKeydown(e, i)}
+						role="button"
+						tabindex="0"
+						aria-label={`${isEntryPlaying(entry) ? 'Pause' : 'Play'} ${entry.song_title}`}
 					>
-						{#if isEntryLoading(entry)}
-							<span class="spinner"></span>
-						{:else}
-							<Icon name={isEntryPlaying(entry) ? 'pause' : 'play'} size={16} />
-						{/if}
-					</span>
-					<div class="entry-info">
-						<span class="entry-title">
-							{#if entry.is_picked}<span class="picked-star">★</span>{/if}
-							{entry.song_title}
+						<span
+							class="entry-play"
+							class:playing={isEntryPlaying(entry)}
+							class:loading={isEntryLoading(entry)}
+							aria-hidden="true"
+						>
+							{#if isEntryLoading(entry)}
+								<span class="spinner"></span>
+							{:else}
+								<Icon name={isEntryPlaying(entry) ? 'pause' : 'play'} size={16} />
+							{/if}
 						</span>
-						<span class="entry-meta">
-							{entry.artist} · Gen #{entry.generation_number}{#if entry.version_number !== null}
-								· v{entry.version_number}{/if}{#if entry.audio_duration !== null && entry.audio_duration > 0}
-								· {formatTime(entry.audio_duration)}{/if}
-						</span>
-					</div>
-					<div class="entry-actions">
-						{#if !compact}
-							<div class="entry-controls">
-								{#if i > 0}
-									<button
-										class="move-btn"
-										data-hitbox="frequent"
-										data-hitbox-face
-										onclick={(e) => {
-											e.stopPropagation();
-											void onMoveEntry(entry.id, i - 1);
-										}}
-										disabled={reorderBusy}
-										title={PLAYLIST_ENTRY_MOVE_UP_LABEL}
-										aria-label={`${PLAYLIST_ENTRY_MOVE_UP_LABEL} ${entry.song_title}`}
-									>
-										<Icon name="chevron-up" size={14} />
-									</button>
-								{/if}
-								{#if i < playlistDetail.entries.length - 1}
-									<button
-										class="move-btn"
-										data-hitbox="frequent"
-										data-hitbox-face
-										onclick={(e) => {
-											e.stopPropagation();
-											void onMoveEntry(entry.id, i + 1);
-										}}
-										disabled={reorderBusy}
-										title={PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
-										aria-label={`${PLAYLIST_ENTRY_MOVE_DOWN_LABEL} ${entry.song_title}`}
-									>
-										<Icon name="chevron-down" size={14} />
-									</button>
-								{/if}
-							</div>
-							<button
-								class="remove-btn"
-								data-hitbox="frequent"
-								data-hitbox-face
-								onclick={(e) => {
-									e.stopPropagation();
-									void onRemoveEntry(entry.id);
-								}}
-								title={PLAYLIST_ENTRY_REMOVE_LABEL}
-								aria-label={`${PLAYLIST_ENTRY_REMOVE_LABEL}: ${entry.song_title}`}
-							>
-								<Icon name="x" size={14} />
-							</button>
-						{/if}
-						<div class="entry-overflow-anchor">
-							<button
-								type="button"
-								class="overflow-btn"
-								data-hitbox="frequent"
-								data-hitbox-face
-								aria-haspopup="menu"
-								aria-expanded={overflowId === entry.id}
-								aria-label={`${PLAYLIST_ENTRY_OVERFLOW_LABEL} for ${entry.song_title}`}
-								onclick={(e) => toggleOverflow(entry.id, e)}
-							>
-								<Icon name="more-horizontal" size={16} />
-							</button>
-							{#if overflowId === entry.id}
-								<div
-									class="entry-overflow-menu"
-									role="menu"
-									data-escape-overlay="true"
-									tabindex="-1"
-									onclick={(e) => e.stopPropagation()}
-									onkeydown={(e) => e.stopPropagation()}
+						<div class="entry-info">
+							<span class="entry-title">
+								{#if entry.is_picked}<span class="picked-star">★</span>{/if}
+								{entry.song_title}
+							</span>
+							<span class="entry-meta">
+								{entry.artist} · Gen #{entry.generation_number}{#if entry.version_number !== null}
+									· v{entry.version_number}{/if}{#if entry.audio_duration !== null && entry.audio_duration > 0}
+									· {formatTime(entry.audio_duration)}{/if}
+							</span>
+						</div>
+						<div class="entry-actions">
+							{#if !compact}
+								<div class="entry-controls">
+									{#if i > 0}
+										<button
+											class="move-btn"
+											data-hitbox="frequent"
+											data-hitbox-face
+											onclick={(e) => {
+												e.stopPropagation();
+												void onMoveEntry(entry.id, i - 1);
+											}}
+											disabled={reorderBusy}
+											title={PLAYLIST_ENTRY_MOVE_UP_LABEL}
+											aria-label={`${PLAYLIST_ENTRY_MOVE_UP_LABEL} ${entry.song_title}`}
+										>
+											<Icon name="chevron-up" size={14} />
+										</button>
+									{/if}
+									{#if i < playlistDetail.entries.length - 1}
+										<button
+											class="move-btn"
+											data-hitbox="frequent"
+											data-hitbox-face
+											onclick={(e) => {
+												e.stopPropagation();
+												void onMoveEntry(entry.id, i + 1);
+											}}
+											disabled={reorderBusy}
+											title={PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
+											aria-label={`${PLAYLIST_ENTRY_MOVE_DOWN_LABEL} ${entry.song_title}`}
+										>
+											<Icon name="chevron-down" size={14} />
+										</button>
+									{/if}
+								</div>
+								<button
+									class="remove-btn"
+									data-hitbox="frequent"
+									data-hitbox-face
+									onclick={(e) => {
+										e.stopPropagation();
+										void onRemoveEntry(entry.id);
+									}}
+									title={PLAYLIST_ENTRY_REMOVE_LABEL}
+									aria-label={`${PLAYLIST_ENTRY_REMOVE_LABEL}: ${entry.song_title}`}
 								>
-									<button
-										type="button"
-										role="menuitem"
-										class="entry-overflow-item"
-										data-hitbox="frequent"
-										onclick={() => openSongInEditor(entry.song_id)}
+									<Icon name="x" size={14} />
+								</button>
+							{/if}
+							<div class="entry-overflow-anchor">
+								<button
+									type="button"
+									class="overflow-btn"
+									data-hitbox="frequent"
+									data-hitbox-face
+									aria-haspopup="menu"
+									aria-expanded={overflowId === entry.id}
+									aria-label={`${PLAYLIST_ENTRY_OVERFLOW_LABEL} for ${entry.song_title}`}
+									onclick={(e) => toggleOverflow(entry.id, e)}
+								>
+									<Icon name="more-horizontal" size={16} />
+								</button>
+								{#if overflowId === entry.id}
+									<div
+										class="entry-overflow-menu"
+										role="menu"
+										data-escape-overlay="true"
+										tabindex="-1"
+										onclick={(e) => e.stopPropagation()}
+										onkeydown={(e) => e.stopPropagation()}
 									>
-										{PLAYLIST_ENTRY_OPEN_SONG_LABEL}
-									</button>
-									{#if compact}
-										{#if i > 0}
-											<button
-												type="button"
-												role="menuitem"
-												class="entry-overflow-item"
-												data-hitbox="frequent"
-												disabled={reorderBusy}
-												onclick={() => {
-													overflowId = null;
-													void onMoveEntry(entry.id, i - 1);
-												}}
-											>
-												{PLAYLIST_ENTRY_MOVE_UP_LABEL}
-											</button>
-										{/if}
-										{#if i < playlistDetail.entries.length - 1}
-											<button
-												type="button"
-												role="menuitem"
-												class="entry-overflow-item"
-												data-hitbox="frequent"
-												disabled={reorderBusy}
-												onclick={() => {
-													overflowId = null;
-													void onMoveEntry(entry.id, i + 1);
-												}}
-											>
-												{PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
-											</button>
-										{/if}
 										<button
 											type="button"
 											role="menuitem"
 											class="entry-overflow-item"
 											data-hitbox="frequent"
-											onclick={() => {
-												overflowId = null;
-												void onRemoveEntry(entry.id);
-											}}
+											onclick={() => openSongInEditor(entry.song_id)}
 										>
-											{PLAYLIST_ENTRY_REMOVE_LABEL}
+											{PLAYLIST_ENTRY_OPEN_SONG_LABEL}
 										</button>
-									{/if}
-								</div>
-							{/if}
+										{#if compact}
+											{#if i > 0}
+												<button
+													type="button"
+													role="menuitem"
+													class="entry-overflow-item"
+													data-hitbox="frequent"
+													disabled={reorderBusy}
+													onclick={() => {
+														overflowId = null;
+														void onMoveEntry(entry.id, i - 1);
+													}}
+												>
+													{PLAYLIST_ENTRY_MOVE_UP_LABEL}
+												</button>
+											{/if}
+											{#if i < playlistDetail.entries.length - 1}
+												<button
+													type="button"
+													role="menuitem"
+													class="entry-overflow-item"
+													data-hitbox="frequent"
+													disabled={reorderBusy}
+													onclick={() => {
+														overflowId = null;
+														void onMoveEntry(entry.id, i + 1);
+													}}
+												>
+													{PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
+												</button>
+											{/if}
+											<button
+												type="button"
+												role="menuitem"
+												class="entry-overflow-item"
+												data-hitbox="frequent"
+												onclick={() => {
+													overflowId = null;
+													void onRemoveEntry(entry.id);
+												}}
+											>
+												{PLAYLIST_ENTRY_REMOVE_LABEL}
+											</button>
+										{/if}
+									</div>
+								{/if}
+							</div>
 						</div>
 					</div>
-				</div>
-			{/each}
-			{#if playlistDetail.entries.length === 0}
-				<p class="empty-tab">No tracks in this playlist yet.</p>
+				{/each}
+				{#if playlistDetail.entries.length === 0}
+					<p class="empty-tab">No tracks in this playlist yet.</p>
+				{/if}
 			{/if}
 		</div>
 	</div>
 {/if}
 
-{#if showDeleteConfirm && playlistDetail}
+{#if showDeleteConfirm && playlistMeta}
 	<ConfirmDeleteDialog
-		title={`Delete "${playlistDetail.title}"?`}
-		items={[
-			`${playlistDetail.entries.length} track${playlistDetail.entries.length !== 1 ? 's' : ''}`
-		]}
+		title={`Delete "${playlistMeta.title}"?`}
+		items={[`${playlistMeta.entry_count} track${playlistMeta.entry_count !== 1 ? 's' : ''}`]}
 		confirmLabel="Delete Playlist"
 		onconfirm={() => {
 			showDeleteConfirm = false;
@@ -715,6 +742,24 @@
 		font-size: 0.87rem;
 		font-style: italic;
 		padding: 0.8rem 0;
+	}
+
+	.retry-btn {
+		display: block;
+		margin: 0.4rem 0 0.8rem;
+		padding: 6px 12px;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		color: var(--text-muted);
+		font-size: var(--label-font-size);
+		font-family: var(--font-body);
+		cursor: pointer;
+	}
+
+	.retry-btn:hover {
+		border-color: var(--primary);
+		color: var(--primary);
 	}
 
 	@media (max-width: 768px) {
