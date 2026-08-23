@@ -88,7 +88,13 @@
 		text-decoration: underline;
 	}
 
+	/* The destination the reader is already headed to must never lose
+	   characters under normal pressure: it stops shrinking and caps its own
+	   width instead, so a long title ellipsizes in place rather than
+	   surrendering the room a link already gives up ahead of it (#185/2). */
 	.crumb-current {
 		color: var(--text);
+		flex-shrink: 0;
+		max-width: 60%;
 	}
 </style>

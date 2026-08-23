@@ -86,6 +86,15 @@ describe('Breadcrumb', () => {
 		expect(minSquarePx(link, 'crumb link').width).toBe(HITBOX_COMPACT_PX);
 	});
 
+	it('never shrinks the current crumb, capping its width instead', async () => {
+		const root = await renderStyledTrail();
+		const current = root.querySelector('.crumb-current');
+		if (!current) throw new Error('no current crumb rendered');
+		const style = getComputedStyle(current);
+		expect(Number(style.flexShrink)).toBe(0);
+		expect(style.maxWidth).toBe('60%');
+	});
+
 	it('ellipsizes every crumb label in a block of its own', async () => {
 		const root = await renderStyledTrail();
 		const labels = Array.from(root.querySelectorAll('.crumb-label'));

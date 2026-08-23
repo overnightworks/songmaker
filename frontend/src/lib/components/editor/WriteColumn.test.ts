@@ -230,6 +230,20 @@ describe("WriteColumn Co-Writer at the editor's own width", () => {
 		expect(chat.querySelector('.input-area')).not.toBeNull();
 	});
 
+	// jsdom computes no layout, so a share of a real window's height can only
+	// be read back out of the declaration, not out of getComputedStyle: this
+	// pins the clamp itself rather than a number it can't produce. Docking Now
+	// Playing narrows the editor below the two-up floor right where the
+	// header wraps to three lines, and a bare 60dvh ran past `.editor-body`'s
+	// own visible height there — the composer sat behind a scroll of the
+	// wrong container (#185). The browser gate at 1100×800 and 1280×800 with
+	// the dock open reads the composer against the real cascade.
+	it('bounds the stacked chat height to what a narrowed editor actually has, not just the window', () => {
+		expect(writeColumnSource).toMatch(
+			/\.cowriter-mode:not\(\.compact\) \.cowriter-chat \{\s*height: min\(60dvh, calc\(100dvh - \d+px\)\);/
+		);
+	});
+
 	it('gives the stacked take strip the whole row it scrolls sideways in', async () => {
 		const { target } = await render({ coWriterOpen: true, compact: false });
 		const takes = target.querySelector('.cowriter-takes');

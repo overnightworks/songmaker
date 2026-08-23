@@ -246,10 +246,27 @@
 	/* Stacked, the chat column would be as tall as the whole conversation: its
 	   message list would never reach a bound to scroll in and the composer
 	   would sit below the fold, out of reach. A share of the viewport gives it
-	   that bound. Two-up it takes its height from the row instead, and the
-	   compact sheet already gives it the full one. */
+	   that bound — but the viewport isn't `.editor-body`'s own box: docking Now
+	   Playing narrows the editor below the two-up floor exactly where the
+	   header wraps to three lines, and 60dvh of the full window ran past
+	   `.editor-body`'s own visible height there, leaving the composer behind a
+	   scroll of the wrong container (#185). `.editor-body` reports no size of
+	   its own to style against — it isn't a container, WriteColumn is one of
+	   its children, sharing it with the Recipe chip row above `.cowriter-mode`
+	   — so the second bound is the same chrome sum measured directly at
+	   1100×800 and 1280×800 with the dock open, the width band this rule
+	   actually governs: two-up crosses the 680px container threshold below and
+	   overrides this back to `auto`. From the viewport's top: the wrapped
+	   header (147.75px) + the panel's own padding and the gaps around
+	   `.editor-body` (~56px) + the Recipe chip row this song's params render
+	   above the chat column (~69px) + the player bar's reserved height
+	   (`--player-height`, 88px) ≈ 441px. 100dvh minus that is the room `.cowriter-chat`
+	   actually has below its own top before the fold, and 60dvh remains the
+	   cap on a window tall enough to make it the smaller side. A song whose
+	   params render a taller (wrapped) chip row eats into this margin — the
+	   same approximation the wrapped-header estimate already carries. */
 	.cowriter-mode:not(.compact) .cowriter-chat {
-		height: 60dvh;
+		height: min(60dvh, calc(100dvh - 441px));
 	}
 
 	@container editor (min-width: 680px) {
