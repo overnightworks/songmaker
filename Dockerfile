@@ -38,6 +38,9 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 RUN useradd --create-home --shell /bin/bash songmaker
+# Both are volume mount points. Docker seeds an empty named volume from
+# whichever image mounts it first — as root when that image lacks the
+# directory, which the app can never chown back under cap_drop: ALL.
 RUN mkdir -p /app/data/queue-streams /app/data/audio
 RUN chown -R songmaker:songmaker /app
 USER songmaker
