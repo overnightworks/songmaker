@@ -16,7 +16,7 @@ import {
 	openSharesInventory,
 	patchSharesFromSong,
 	refreshShareCount,
-	resetSharesForTests,
+	resetShares,
 	setShareTypeFilter,
 	shareCount,
 	shareInventory,
@@ -84,11 +84,11 @@ function song(overrides: Partial<SongItem> = {}): SongItem {
 beforeEach(() => {
 	fetchShares.mockReset();
 	fetchShares.mockResolvedValue(page());
-	resetSharesForTests();
+	resetShares();
 });
 
 afterEach(() => {
-	resetSharesForTests();
+	resetShares();
 });
 
 describe('share count', () => {
@@ -156,6 +156,29 @@ describe('share count', () => {
 
 		expect(fetchShares).toHaveBeenCalledTimes(2);
 	});
+
+	it('force bypasses an in-flight refresh so a second mutation wins', async () => {
+		// Two quick share/unshare mutations both force-refresh the count. The
+		// first's request must not be adopted by the second -- the request
+		// that is still current when it resolves wins (#139).
+		let resolveFirst: ((value: ReturnType<typeof page>) => void) | undefined;
+		fetchShares.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveFirst = resolve;
+				})
+		);
+		fetchShares.mockResolvedValueOnce(page({ total: 9 }));
+
+		const first = refreshShareCount({ force: true });
+		const second = refreshShareCount({ force: true });
+		await second;
+		resolveFirst?.(page({ total: 1 }));
+		await first;
+
+		expect(fetchShares).toHaveBeenCalledTimes(2);
+		expect(get(shareCount).total).toBe(9);
+	});
 });
 
 describe('share inventory', () => {
@@ -206,6 +229,26 @@ describe('share inventory', () => {
 
 		expect(fetchShares).toHaveBeenCalledTimes(1);
 		expect(get(shareInventory).items).toHaveLength(1);
+	});
+
+	it('force bypasses an in-flight load so a second mutation wins', async () => {
+		let resolveFirst: ((value: ReturnType<typeof page>) => void) | undefined;
+		fetchShares.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveFirst = resolve;
+				})
+		);
+		fetchShares.mockResolvedValueOnce(page({ items: [item({ id: 'second' })], total: 1 }));
+
+		const first = loadShareInventory({ reset: true, force: true });
+		const second = loadShareInventory({ reset: true, force: true });
+		await second;
+		resolveFirst?.(page({ items: [item({ id: 'first' })], total: 1 }));
+		await first;
+
+		expect(fetchShares).toHaveBeenCalledTimes(2);
+		expect(get(shareInventory).items.map((row) => row.id)).toEqual(['second']);
 	});
 
 	it('keeps N from the server when a type filter is applied', async () => {
