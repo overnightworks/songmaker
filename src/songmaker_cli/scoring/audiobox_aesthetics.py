@@ -10,13 +10,12 @@ Scores audio on four dimensions (1-10 each):
 from __future__ import annotations
 
 import logging
-import os
 import threading
-from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Final
 
+from songmaker_cli.env_override import temporary_env_override
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import AudioBoxScore, SharedScorerData
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
@@ -47,8 +46,7 @@ def clear_cache() -> None:
     log.info("Cleared AudioBox model cache")
 
 
-@contextmanager
-def _force_cpu_env() -> Iterator[None]:
+def _force_cpu_env() -> AbstractContextManager[None]:
     """Temporarily hide CUDA devices to force CPU model loading.
 
     Must be used under _predictor_lock for thread safety.
@@ -58,20 +56,8 @@ def _force_cpu_env() -> Iterator[None]:
     Known limitation: AesPredictor has no explicit device parameter, so
     env mutation is the only way to force CPU. If upstream adds device
     support, replace this with direct device passing.
-
-    The visibility that is taken away here is process state, not
-    configuration: it is removed and put back exactly as found, so it
-    must not be routed through Settings.
     """
-    hidden_devices = os.environ.pop(_CUDA_VISIBLE_DEVICES, None)
-    os.environ[_CUDA_VISIBLE_DEVICES] = ""
-    try:
-        yield
-    finally:
-        if hidden_devices is None:
-            os.environ.pop(_CUDA_VISIBLE_DEVICES, None)
-        else:
-            os.environ[_CUDA_VISIBLE_DEVICES] = hidden_devices
+    return temporary_env_override(_CUDA_VISIBLE_DEVICES, "")
 
 
 @register("audiobox")

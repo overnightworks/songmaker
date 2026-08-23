@@ -37,45 +37,38 @@ def test_clean_codebase_returns_zero(
     assert "No silent-fallback smells" in out
 
 
-def test_env_read_outside_settings_caught(
+@pytest.mark.parametrize(("statement", "is_read"), [
+    ("value = os.environ.get('FOO')", True),
+    ("value = os.environ.pop('FOO', None)", True),
+    ("value = os.environ.setdefault('FOO', 'fallback')", True),
+    ("value = os.getenv('FOO')", True),
+    ("value = os.environ['FOO']", True),
+    ("if os.environ['FOO'] == 'on':", True),
+    ("os.environ['FOO'] = 'value'", False),
+    ("del os.environ['FOO']", False),
+    ("os.environ['PATH'] += ':/opt/bin'", False),
+    ("child_env = os.environ.copy()", False),
+])
+def test_only_reads_of_the_environment_are_reported(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str], statement: str, is_read: bool,
 ) -> None:
-    _seed(tmp_path, {
-        "songmaker_cli/foo.py": "import os\nx = os.environ.get('FOO')\n",
-    })
+    """Reading configuration belongs in Settings; changing process state
+    does not, so writes and deletes pass."""
+    _seed(tmp_path, {"songmaker_cli/foo.py": f"import os\n{statement}\n"})
     rc = _run(monkeypatch, tmp_path)
     out = capsys.readouterr().out
-    assert rc == 1
-    assert "env-read-outside-settings" in out
-    assert "songmaker_cli/foo.py:2" in out
-
-
-def test_env_subscript_read_caught(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    _seed(tmp_path, {
-        "songmaker_cli/foo.py": "import os\nkey = os.environ['API_KEY']\n",
-    })
-    rc = _run(monkeypatch, tmp_path)
-    assert rc == 1
-    assert "env-read-outside-settings" in capsys.readouterr().out
-
-
-def test_env_write_is_process_state_not_a_read(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
-) -> None:
-    _seed(tmp_path, {
-        "songmaker_cli/foo.py": "import os\nos.environ['CUDA_VISIBLE_DEVICES'] = ''\n",
-    })
-    assert _run(monkeypatch, tmp_path) == 0
+    assert rc == (1 if is_read else 0)
+    if is_read:
+        assert "env-read-outside-settings" in out
+        assert "songmaker_cli/foo.py:2" in out
 
 
 @pytest.mark.parametrize("rel_path", [
     "songmaker_cli/settings.py",
     "acestep_worker/settings.py",
     "songmaker_cli/db/migrations/env.py",
+    "songmaker_cli/env_override.py",
 ])
 def test_env_owning_roles_may_read_the_environment(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, rel_path: str,

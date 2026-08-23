@@ -7,8 +7,9 @@ Run from the project root:
 Each rule is a regex, scoped to the files whose role it governs. There
 is no exemption list: a hit is a defect to fix, and a legitimate
 exception is expressed in the code itself — as the file's role (a
-settings module owns env reads) or as a named type (``ComputedTimestamp``
-owns a timestamp whose None is real).
+settings module owns env reads, ``env_override.py`` owns the one
+save-and-restore idiom) or as a named type (``ComputedTimestamp`` owns a
+timestamp whose None is real).
 
 The rules encode the lessons of the no-silent-fallbacks-v2 cleanup:
 
@@ -38,6 +39,7 @@ from pathlib import Path
 
 PACKAGE_SETTINGS_MODULE = r"^src/[^/]+/settings\.py$"
 ALEMBIC_ENV_MODULE = r"^src/[^/]+/db/migrations/env\.py$"
+ENV_OVERRIDE_MODULE = r"^src/[^/]+/env_override\.py$"
 
 
 @dataclass
@@ -65,15 +67,25 @@ class Rule:
 RULES: list[Rule] = [
     Rule(
         name="env-read-outside-settings",
-        pattern=r"os\.(environ\.get|getenv)\(|os\.environ\[[^\]]+\](?!\s*=[^=])",
+        pattern=(
+            r"os\.(environ\.(get|pop|setdefault)|getenv)\("
+            r"|(?<!del )os\.environ\[[^\]]+\](?!\s*[-+*/|&^]?=[^=])"
+        ),
         description=(
             "Env vars must be read via the settings module of the package "
-            "that needs them. Only that module (src/<package>/settings.py) "
-            "and the Alembic migration env.py, which runs before Settings "
-            "exists, may read the environment directly. Writing os.environ "
-            "is process state, not configuration, and is left alone."
+            "that needs them — including the reads that carry a fallback "
+            "(get/pop/setdefault). Three roles are out of scope: the "
+            "package's settings.py, the Alembic migration env.py (it runs "
+            "before Settings exists), and env_override.py, which owns the "
+            "one idiom that legitimately reads and writes live process "
+            "state. Plain writes and deletes are process state, not "
+            "configuration, and are not reported."
         ),
-        exempt_roles=(PACKAGE_SETTINGS_MODULE, ALEMBIC_ENV_MODULE),
+        exempt_roles=(
+            PACKAGE_SETTINGS_MODULE,
+            ALEMBIC_ENV_MODULE,
+            ENV_OVERRIDE_MODULE,
+        ),
     ),
     Rule(
         name="next-iter-fallback",
