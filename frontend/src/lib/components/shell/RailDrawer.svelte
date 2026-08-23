@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
-	import { RAIL_DRAWER_CLOSE_LABEL } from '$lib/constants';
+	import { RAIL_DRAWER_CLOSE_LABEL, RAIL_DRAWER_LABEL } from '$lib/constants';
 	import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 
@@ -40,7 +40,7 @@
 			class="drawer-panel"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Navigation"
+			aria-label={RAIL_DRAWER_LABEL}
 			tabindex="-1"
 		>
 			{@render children()}

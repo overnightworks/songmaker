@@ -10,6 +10,7 @@ vi.mock('$app/navigation', () => ({
 	}
 }));
 
+import { RAIL_DRAWER_LABEL } from '$lib/constants';
 import { closeSidebar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import RailDrawer from './RailDrawer.svelte';
 
@@ -46,6 +47,9 @@ describe('RailDrawer', () => {
 		expect(get(sidebarOpen)).toBe(true);
 		const panel = requireElement(document.body, '.drawer-panel');
 		expect(panel.textContent).toContain('Library');
+		// The drawer is one of several overlays the shell can open, so a flow
+		// scopes to it by name rather than by "the open dialog".
+		expect(panel.getAttribute('aria-label')).toBe(RAIL_DRAWER_LABEL);
 	});
 
 	it('closes on backdrop click and traps focus inside', async () => {

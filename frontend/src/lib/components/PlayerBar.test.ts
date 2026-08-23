@@ -1,7 +1,14 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
-import { NOW_PLAYING_LABEL, NOW_PLAYING_NO_LYRICS, RAIL_LIBRARY_LABEL } from '$lib/constants';
+import {
+	NOW_PLAYING_LABEL,
+	NOW_PLAYING_NO_LYRICS,
+	RAIL_LIBRARY_LABEL,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL,
+	TRANSPORT_RETRY_LABEL
+} from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { AlbumItem, PlaylistDetailItem } from '$lib/api/types';
 import {
@@ -350,6 +357,41 @@ describe('PlayerBar shuffle', () => {
 
 		expect(target.querySelector('.player-bar.mobile-transport')).not.toBeNull();
 		expect(shuffleButton().dataset.hitbox).toBe('frequent');
+	});
+});
+
+describe('PlayerBar transport labels', () => {
+	function playButton(): HTMLButtonElement {
+		const button = target.querySelector<HTMLButtonElement>('.play-btn');
+		if (!button) throw new Error('Expected a play control in the transport bar');
+		return button;
+	}
+
+	async function press(): Promise<void> {
+		playButton().click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+	}
+
+	it('names the transport button after the state its click leaves', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
+
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+		await press();
+		audio.fire('canplay');
+		await tick();
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PAUSE_LABEL);
+
+		await press();
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
+
+		vi.spyOn(audio, 'play').mockRejectedValue(new Error('decode failed'));
+		await press();
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_RETRY_LABEL);
 	});
 });
 
