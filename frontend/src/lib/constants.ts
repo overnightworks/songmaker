@@ -198,6 +198,9 @@ export const ALBUM_ADD_SONG_GLYPH = '+';
 export const RAIL_LIBRARY_LABEL = 'Library';
 export const RAIL_SETTINGS_LABEL = 'Settings';
 export const RAIL_SUMMARY_LOADING = '…';
+// The drawer the compact shell puts the rail in — its accessible name, which
+// is how a flow scopes to it while another overlay may be open.
+export const RAIL_DRAWER_LABEL = 'Navigation';
 export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
 export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
 export const RAIL_CONTEXT_NO_TAKES = '—';

@@ -18,6 +18,7 @@ import {
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
 	playlistEntryOverflowLabel,
+	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
 	TAKE_OVERFLOW_LABEL,
@@ -71,11 +72,16 @@ test.afterEach(() => {
 });
 
 /**
- * The album header has to read on the narrowest phone: the whole title on one
- * readable line, its breadcrumb on the line below. Both are addressed by role
- * alone — the album surface carries exactly one heading and one breadcrumb,
- * and the rename control inside the heading owns the heading's accessible
- * name, so the album's own title cannot select it.
+ * The album header has to survive the narrowest phone. What is pinned is the
+ * floor the header promises its title (`.header-titles` in
+ * CollectionHeaderFrame.svelte wraps the action cluster onto its own row
+ * rather than shrinking the title past this) and the breadcrumb sitting on the
+ * line below it — not that the rendered title is untruncated, which the
+ * header's own ellipsis makes unmeasurable from outside.
+ *
+ * Both are addressed by role alone: the album surface carries exactly one
+ * heading and one breadcrumb, and the rename control inside the heading owns
+ * the heading's accessible name, so the album's own title cannot select it.
  */
 async function expectHeaderReadsAtNarrowest(page: Page, albumTitle: string): Promise<void> {
 	const surface = workspace(page);
@@ -130,7 +136,7 @@ async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 		return;
 	}
 	await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-	const drawer = page.getByRole('dialog');
+	const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
 	// The rail's Library row carries the library summary after the label; the
 	// wordmark above it is named "Library" and nothing else.
 	await drawer.getByRole('button', { name: nameStartingWith(`${RAIL_LIBRARY_LABEL} `) }).click();
