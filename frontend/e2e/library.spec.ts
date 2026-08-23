@@ -4,11 +4,12 @@
 
 import { expect, test } from '@playwright/test';
 import {
+	collectionRowPlayLabel,
 	LIBRARY_FILTER_LABELS,
 	NOW_PLAYING_CLOSE,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
-	PLAYLIST_ENTRY_OVERFLOW_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
+	playlistEntryOverflowLabel,
 	RAIL_LIBRARY_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_PLAYLIST_LABEL
@@ -23,9 +24,7 @@ import {
 	FlowGuard,
 	LIBRARY_FLOW_API_REQUEST_BUDGET,
 	nameStartingWith,
-	playableRow,
 	playableRows,
-	playRowLabel,
 	workspace
 } from './helpers';
 import { readSeededLibrary } from './seed';
@@ -55,7 +54,9 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await expect(surface.getByRole('heading', { name: LIBRARY_FILTER_LABELS.albums })).toBeVisible();
 
 	await surface.getByRole('button', { name: nameStartingWith(library.albumTitle) }).click();
-	await surface.getByRole('button', { name: playRowLabel(library.pickedSongTitle) }).click();
+	await surface
+		.getByRole('button', { name: collectionRowPlayLabel(library.pickedSongTitle) })
+		.click();
 
 	const transport = page.getByRole('contentinfo');
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
@@ -85,8 +86,8 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		containing(library.pickedSongTitle)
 	]);
 
-	await playableRow(page, firstPlaylistSong)
-		.getByRole('button', { name: PLAYLIST_ENTRY_OVERFLOW_LABEL })
+	await surface
+		.getByRole('button', { name: playlistEntryOverflowLabel(firstPlaylistSong) })
 		.click();
 	await surface.getByRole('menuitem', { name: PLAYLIST_ENTRY_MOVE_DOWN_LABEL }).click();
 	await expect(entryRows).toHaveText([
@@ -95,8 +96,8 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		containing(library.pickedSongTitle)
 	]);
 
-	await playableRow(page, library.pickedSongTitle)
-		.getByRole('button', { name: PLAYLIST_ENTRY_OVERFLOW_LABEL })
+	await surface
+		.getByRole('button', { name: playlistEntryOverflowLabel(library.pickedSongTitle) })
 		.click();
 	await surface.getByRole('menuitem', { name: PLAYLIST_ENTRY_REMOVE_LABEL }).click();
 	await expect(entryRows).toHaveText([

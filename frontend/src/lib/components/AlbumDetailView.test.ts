@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
-import { ALBUM_ART_EMPTY_INITIALS, ALBUM_COVER_ALT_TYPE } from '$lib/constants';
+import {
+	ALBUM_ART_EMPTY_INITIALS,
+	ALBUM_COVER_ALT_TYPE,
+	collectionRowPlayLabel
+} from '$lib/constants';
 import { albumList, selectedAlbumId, songList } from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 
@@ -279,6 +283,15 @@ describe('AlbumDetailView song row Play', () => {
 		songList.set([song({ generations: [], generation_count: 2 })]);
 		const target = await renderDetail();
 		expect(requireElement(target, '.item-meta').textContent?.trim()).toBe('2 takes');
+	});
+
+	it('names the row play action after the song it starts', async () => {
+		songList.set([song({ title: 'Tide', generations: [generation()], generation_count: 1 })]);
+		const target = await renderDetail();
+
+		expect(requireElement(target, '.item-play').getAttribute('aria-label')).toBe(
+			collectionRowPlayLabel('Tide')
+		);
 	});
 
 	it('disables Play when the song has no generations', async () => {

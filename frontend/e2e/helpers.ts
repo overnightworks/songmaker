@@ -1,6 +1,7 @@
 // Shared guards and name matchers for the browser flows.
 
 import { expect, type Locator, type Page } from '@playwright/test';
+import { COLLECTION_ROW_PAUSE_ACTION, COLLECTION_ROW_PLAY_ACTION } from '../src/lib/constants';
 
 // The desktop library flow measured 26 /api requests on its first green run;
 // this is that plus 20% headroom. A flow that suddenly costs more round trips
@@ -8,11 +9,6 @@ import { expect, type Locator, type Page } from '@playwright/test';
 export const LIBRARY_FLOW_API_REQUEST_BUDGET = 32;
 
 const API_PATH_PREFIX = '/api';
-
-// AlbumDetailView and PlaylistDetailView build their row labels inline rather
-// than from a constant, so the flows mirror the wording here.
-const PLAY_LABEL = 'Play';
-const PAUSE_LABEL = 'Pause';
 
 function escapeForRegExp(literal: string): string {
 	return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -31,22 +27,11 @@ export function workspace(page: Page): Locator {
 	return page.getByRole('main');
 }
 
-/** Every collection row, in screen order — labelled "Play <title>", or "Pause <title>" while playing. */
+/** Every collection row, in screen order. */
 export function playableRows(page: Page): Locator {
 	return workspace(page).getByRole('button', {
-		name: nameStartingWith(`${PLAY_LABEL} `, `${PAUSE_LABEL} `)
+		name: nameStartingWith(`${COLLECTION_ROW_PLAY_ACTION} `, `${COLLECTION_ROW_PAUSE_ACTION} `)
 	});
-}
-
-/** One collection row, whichever of the two labels it currently carries. */
-export function playableRow(page: Page, title: string): Locator {
-	return workspace(page).getByRole('button', {
-		name: new RegExp(`^(${PLAY_LABEL}|${PAUSE_LABEL}) ${escapeForRegExp(title)}$`)
-	});
-}
-
-export function playRowLabel(title: string): string {
-	return `${PLAY_LABEL} ${title}`;
 }
 
 export function containing(title: string): RegExp {
