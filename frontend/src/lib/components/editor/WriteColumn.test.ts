@@ -22,6 +22,8 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import WriteColumn from './WriteColumn.svelte';
 import writeColumnSource from './WriteColumn.svelte?raw';
+import coWriterPanelSource from '../CoWriterPanel.svelte?raw';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -85,6 +87,7 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	clearComponentStyles();
 });
 
 async function render(overrides: Partial<Record<string, unknown>> = {}) {
@@ -205,5 +208,24 @@ describe("WriteColumn Co-Writer at the editor's own width", () => {
 		expect(writeColumnSource).toMatch(
 			/@container editor \(min-width: 680px\) \{\s*\.cowriter-mode \{\s*flex: 1;\s*min-height: 0;/
 		);
+	});
+
+	// jsdom knows no container queries, so a mounted Co-Writer here is the
+	// stacked one: the case where the chat column has no row to take a height
+	// from. Reading the values out of the real cascade is what tells the
+	// difference between a column the conversation scrolls inside and one that
+	// grows past the fold, taking the composer with it.
+	it('gives the stacked chat column a bound its conversation scrolls inside', async () => {
+		const { target } = await render({ coWriterOpen: true, compact: false });
+		const chat = target.querySelector('.cowriter-chat');
+		if (!chat) throw new Error('Expected a chat column');
+		injectComponentStyles(writeColumnSource, 'WriteColumn.svelte', chat);
+		const messages = chat.querySelector('.messages');
+		if (!messages) throw new Error('Expected a message list');
+		injectComponentStyles(coWriterPanelSource, 'CoWriterPanel.svelte', messages);
+
+		expect(getComputedStyle(chat).height).not.toBe('auto');
+		expect(getComputedStyle(messages).overflowY).toBe('auto');
+		expect(chat.querySelector('.input-area')).not.toBeNull();
 	});
 });

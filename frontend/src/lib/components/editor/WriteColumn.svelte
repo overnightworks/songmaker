@@ -243,10 +243,23 @@
 		min-height: 0;
 	}
 
+	/* Stacked, the chat column would be as tall as the whole conversation: its
+	   message list would never reach a bound to scroll in and the composer
+	   would sit below the fold, out of reach. A share of the viewport gives it
+	   that bound. Two-up it takes its height from the row instead, and the
+	   compact sheet already gives it the full one. */
+	.cowriter-mode:not(.compact) .cowriter-chat {
+		height: 60dvh;
+	}
+
 	@container editor (min-width: 680px) {
 		.cowriter-mode {
 			flex: 1;
 			min-height: 0;
+		}
+
+		.cowriter-mode:not(.compact) .cowriter-chat {
+			height: auto;
 		}
 
 		.cowriter-columns {
