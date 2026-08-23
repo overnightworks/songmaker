@@ -1503,6 +1503,50 @@
 		{
 			"cues": [
 				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "hold"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "the"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "line"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "until"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [null, null],
+			"lyrics": "hold the line\nhold the line until the morning",
+			"name": "word path: a line that opens the next one leaves both dark when only one was sung"
+		},
+		{
+			"cues": [
+				{
 					"end": 4.0,
 					"start": 0.0,
 					"text": "the lantern hums quietly tonight the lantern hums calmly tonight",

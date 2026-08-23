@@ -249,6 +249,11 @@ function collectWithGrowingWindow(
 	return candidates;
 }
 
+// Neighbouring lines are resolved as a pair whenever they claim the same
+// words — a line that is the opening of the next one otherwise takes that
+// opening for itself and leaves the line actually sung dark. The claim goes
+// to whichever of the two wins by AMBIGUITY_MARGIN; if neither does, the take
+// cannot say which line was sung there and both stay dark.
 function alignAgainstWords(
 	words: PreparedWord[],
 	lineTexts: string[],
@@ -257,11 +262,37 @@ function alignAgainstWords(
 	const wordTexts = words.map((word) => word.normalizedText);
 
 	let cursor = 0;
+	let lostToPredecessor = -1;
+	let remembered: { linePosition: number; cursor: number; candidate: Candidate | null } | null =
+		null;
+
+	const claimOf = (linePosition: number): Candidate | null => {
+		if (linePosition >= lineTexts.length) return null;
+		if (remembered?.linePosition === linePosition && remembered.cursor === cursor) {
+			return remembered.candidate;
+		}
+		const candidate = chooseCandidate(
+			collectWithGrowingWindow(wordTexts, cursor, lineTexts[linePosition])
+		);
+		remembered = { linePosition, cursor, candidate };
+		return candidate;
+	};
+
 	for (let linePosition = 0; linePosition < lineTexts.length; linePosition++) {
-		const lineText = lineTexts[linePosition];
-		const chosen = chooseCandidate(collectWithGrowingWindow(wordTexts, cursor, lineText));
-		if (chosen === null) continue;
-		const sung = matchedWordRange(wordTexts, chosen, lineText);
+		if (linePosition === lostToPredecessor) continue;
+		const claim = claimOf(linePosition);
+		if (claim === null) continue;
+
+		const nextClaim = claimOf(linePosition + 1);
+		if (nextClaim !== null && overlaps(nextClaim, claim)) {
+			if (nextClaim.score - claim.score >= AMBIGUITY_MARGIN) continue;
+			if (claim.score - nextClaim.score < AMBIGUITY_MARGIN) {
+				lostToPredecessor = linePosition + 1;
+				continue;
+			}
+		}
+
+		const sung = matchedWordRange(wordTexts, claim, lineTexts[linePosition]);
 		assign(linePosition, { start: words[sung.from].start, end: words[sung.to].end });
 		cursor = sung.to + 1;
 	}

@@ -283,6 +283,14 @@ describe('alignLyricsToCues with word timestamps', () => {
 		]);
 	});
 
+	it('leaves both dark when a line is the opening of the next one and only one was sung', () => {
+		const lyrics = ['hold the line', CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, CHORUS)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, null]);
+	});
+
 	it('never lights a line when no run of words matches it (false-positive precision)', () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 

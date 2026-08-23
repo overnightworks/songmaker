@@ -286,13 +286,37 @@ def align_against_words(
     intervals: dict[int, Interval] = {}
 
     cursor = 0
-    for line_position, line_text in enumerate(line_texts):
-        chosen = choose_candidate(
-            collect_with_growing_window(word_texts, cursor, line_text),
+    lost_to_predecessor = -1
+    remembered: tuple[int, int, Candidate | None] | None = None
+
+    def claim_of(line_position: int) -> Candidate | None:
+        nonlocal remembered
+        if line_position >= len(line_texts):
+            return None
+        if remembered is not None and remembered[:2] == (line_position, cursor):
+            return remembered[2]
+        candidate = choose_candidate(
+            collect_with_growing_window(word_texts, cursor, line_texts[line_position]),
         )
-        if chosen is None:
+        remembered = (line_position, cursor, candidate)
+        return candidate
+
+    for line_position, line_text in enumerate(line_texts):
+        if line_position == lost_to_predecessor:
             continue
-        first, last = matched_word_range(word_texts, chosen, line_text)
+        claim = claim_of(line_position)
+        if claim is None:
+            continue
+
+        next_claim = claim_of(line_position + 1)
+        if next_claim is not None and _overlaps(next_claim, claim):
+            if next_claim.score - claim.score >= AMBIGUITY_MARGIN:
+                continue
+            if claim.score - next_claim.score < AMBIGUITY_MARGIN:
+                lost_to_predecessor = line_position + 1
+                continue
+
+        first, last = matched_word_range(word_texts, claim, line_text)
         intervals[line_position] = Interval(words[first].start, words[last].end)
         cursor = last + 1
     return intervals
@@ -459,6 +483,11 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         "cue window: a two-word line is not lit by a cue that merely resembles it",
         "\n".join(["yeah", LINE_1]),
         (Cue(0.0, 0.5, "year"), Cue(0.5, 3.0, LINE_1)),
+    ),
+    AlignmentFixture(
+        "word path: a line that opens the next one leaves both dark when only one was sung",
+        "\n".join(["hold the line", CHORUS]),
+        (_sung_cue(0.0, 0.4, CHORUS),),
     ),
     AlignmentFixture(
         "word path: a phrase sung twice takes the clearly better reading",
