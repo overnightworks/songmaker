@@ -136,6 +136,15 @@ def test_child_handles_score_request(tmp_path: Path) -> None:
 
 
 def test_child_handles_score_error(tmp_path: Path) -> None:
+    """The child reports a pipeline failure via ScoreResponse.error rather
+    than crashing or hanging.
+
+    Uses the ``silence`` scorer (needs_audio, no model weights) rather than
+    ``text_accuracy``: a missing mp3_path fails inside ``load_audio`` before
+    any scorer runs, so this pins the same error-handling contract without
+    ever reaching faster-whisper's ~6s model load, which starved the 10s
+    poll budget under load (issue #184).
+    """
     from songmaker_cli.scoring.pipeline import PipelineConfig
 
     missing = tmp_path / "nonexistent.mp3"
@@ -144,7 +153,7 @@ def test_child_handles_score_error(tmp_path: Path) -> None:
         ScoreRequest(
             mp3_path=missing,
             meta=None,
-            scorers=["text_accuracy"],
+            scorers=["silence"],
             config=PipelineConfig(device="cpu"),
         ),
         ShutdownRequest(),
@@ -152,9 +161,8 @@ def test_child_handles_score_error(tmp_path: Path) -> None:
     score_responses = [r for r in responses if isinstance(r, ScoreResponse)]
     assert len(score_responses) == 1
     resp = score_responses[0]
-    assert resp.error is not None or (
-        resp.scores is not None and resp.scores.text_accuracy is None
-    )
+    assert resp.error is not None
+    assert resp.scores is None
 
 
 # ── Secret env scrubbing ─────────────────────────────────────────
