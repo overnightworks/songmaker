@@ -48,9 +48,17 @@ jobs:
           base="http://localhost:${WEB_PORT}"
           cookies="$(mktemp)"
 
-          # curl -fsS already asserts the 200; no music/scoring worker in this
-          # stack, so /health legitimately reports "degraded" — that's expected.
-          curl -fsS --retry 10 --retry-delay 2 --retry-connrefused "$base/health"
+          # /health always returns 200 regardless of body, so assert the body:
+          # no music/scoring worker runs in this stack, so "degraded" is
+          # expected, but db and redis must both be reachable.
+          health="$(curl -fsS --retry 10 --retry-delay 2 --retry-connrefused "$base/health")"
+          db_ok="$(jq -r '.db' <<<"$health")"
+          redis_ok="$(jq -r '.redis' <<<"$health")"
+          [ "$db_ok" = "ok" ] && [ "$redis_ok" = "ok" ] || {
+            echo "expected db=ok redis=ok, got db=$db_ok redis=$redis_ok" >&2
+            echo "$health" >&2
+            exit 1
+          }
 
           setup_required="$(curl -fsS "$base/api/auth/setup-required" | jq -r '.required')"
           [ "$setup_required" = "false" ] || {
