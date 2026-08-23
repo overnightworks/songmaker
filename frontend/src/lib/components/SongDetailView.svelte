@@ -904,8 +904,9 @@
 	   carries two of them — the song menu's full-viewport backdrop and the
 	   compact Generate bar — which would re-anchor to the editor.
 
-	   680px is the two-up floor: two 20rem columns plus the 1.2rem gap. Below
-	   it the editor stacks, as it does in the compact shell. */
+	   The two-up floor is two 20rem columns plus the 1.2rem gap — 659.2px,
+	   rounded up to a round 680. Below it the editor stacks, as it does in the
+	   compact shell. */
 	.editor-body {
 		container: editor / inline-size;
 		display: flex;
@@ -988,6 +989,12 @@
 			flex: 1;
 			min-height: 0;
 		}
+
+		/* Only two-up does the column get a height of its own to scroll in;
+		   stacked it runs on and `.editor-body` scrolls instead. */
+		.takes-column {
+			overflow-y: auto;
+		}
 	}
 
 	.takes-column {
@@ -995,7 +1002,6 @@
 		flex-direction: column;
 		gap: 0.6rem;
 		min-width: 0;
-		overflow-y: auto;
 	}
 
 	.expiry-digest {

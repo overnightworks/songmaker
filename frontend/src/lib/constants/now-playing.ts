@@ -89,16 +89,6 @@ export const NOW_PLAYING_STACKED_MEDIA = `(max-width: ${NOW_PLAYING_STACKED_MAX_
 export const NOW_PLAYING_SURFACE_KINDS = ['docked', 'full'] as const;
 export type NowPlayingSurfaceKind = (typeof NOW_PLAYING_SURFACE_KINDS)[number];
 
-// Docking beside the workspace instead of covering it costs the workspace
-// NOW_PLAYING_DOCKED_WIDTH_PX. Since #185 the editor answers to its own width
-// rather than the viewport's, so that cost is a column it folds, never an
-// action pushed outside `main` — which is what forced a dock threshold of its
-// own (1440) while the editor still read the viewport. One width now decides
-// both: wide enough for Now Playing's three columns is wide enough to stand
-// them beside the workspace. Named "cannot dock" so it composes with
-// subscribeCompactLayout, which ORs in the data-pointer='coarse' override:
-// too narrow, or any touch pointer, and there is no docked panel.
-export const NOW_PLAYING_UNDOCKED_MEDIA = NOW_PLAYING_STACKED_MEDIA;
 export const NOW_PLAYING_DOCKED_WIDTH_PX = 400;
 export const NOW_PLAYING_EXPAND_LABEL = 'Expand';
 export const NOW_PLAYING_COLLAPSE_LABEL = 'Collapse';
