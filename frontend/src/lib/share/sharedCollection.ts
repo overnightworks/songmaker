@@ -25,8 +25,6 @@ export interface SharedCollectionView {
 	artist: string;
 	albumTitle: string | null;
 	year: string | null;
-	takeNumber: number | null;
-	seed: number | null;
 	cover: SharedCover | null;
 	tracks: SharedTrack[];
 }
@@ -84,8 +82,6 @@ export function fromSharedAlbum(payload: SharedAlbumPayload): SharedCollectionVi
 		artist: payload.artist,
 		albumTitle: null,
 		year: payload.year || null,
-		takeNumber: null,
-		seed: null,
 		cover: payload.cover ?? null,
 		tracks: payload.songs.map((song) => ({
 			key: song.id,
@@ -103,8 +99,6 @@ export function fromSharedPlaylist(payload: SharedPlaylistPayload): SharedCollec
 		artist: '',
 		albumTitle: null,
 		year: null,
-		takeNumber: null,
-		seed: null,
 		cover: null,
 		tracks: payload.entries.map((entry) => ({
 			key: entry.entry_id,
@@ -122,8 +116,6 @@ export function fromSharedSong(payload: SharedSongPayload): SharedCollectionView
 		artist: payload.artist,
 		albumTitle: payload.album_title || null,
 		year: null,
-		takeNumber: null,
-		seed: null,
 		cover: payload.cover ?? null,
 		tracks: [{ key: 'single', title: payload.title, subtitle: null, audioUrl: payload.audio_url }]
 	};
@@ -136,8 +128,6 @@ export function fromSharedGeneration(payload: SharedGenerationPayload): SharedCo
 		artist: payload.artist,
 		albumTitle: payload.album_title || null,
 		year: null,
-		takeNumber: payload.generation_number,
-		seed: payload.seed,
 		cover: null,
 		tracks: [{ key: 'single', title: payload.title, subtitle: null, audioUrl: payload.audio_url }]
 	};
