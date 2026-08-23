@@ -59,7 +59,10 @@ describe('Breadcrumb', () => {
 	// the browser gate on #185 shows the trail beside a docked Now Playing.
 	async function renderStyledTrail(): Promise<HTMLElement> {
 		injectHitboxStyles();
-		const root = await render([{ label: 'Sommerlicht', onclick: vi.fn() }, { label: 'Track 2 of 3' }]);
+		const root = await render([
+			{ label: 'Sommerlicht', onclick: vi.fn() },
+			{ label: 'Track 2 of 3' }
+		]);
 		const scoped = root.querySelector('.crumb');
 		if (!scoped) throw new Error('no crumb rendered');
 		injectComponentStyles(breadcrumbSource, 'Breadcrumb.svelte', scoped);
