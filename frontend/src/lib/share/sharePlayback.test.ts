@@ -102,7 +102,8 @@ function streamManifest(windowed: boolean): QueueStreamManifest {
 				song_title: 'First',
 				artist: 'Artist',
 				album_title: 'Album',
-				lyrics: 'verse one',
+				// public_queue_stream_manifest() redacts lyrics on a share stream.
+				lyrics: null,
 				generation_number: 1,
 				mp3_path: 's1.mp3',
 				audio_url: '/shared/slug/audio/s1.mp3',
@@ -121,7 +122,7 @@ function streamManifest(windowed: boolean): QueueStreamManifest {
 				song_title: 'Second',
 				artist: 'Artist',
 				album_title: 'Album',
-				lyrics: 'verse two',
+				lyrics: null,
 				generation_number: 1,
 				mp3_path: 's2.mp3',
 				audio_url: '/shared/slug/audio/s2.mp3',

@@ -47,6 +47,11 @@
 		// whisper data). Absent/null means "no cues yet" — static lyrics.
 		lyricsCues = null,
 		whisperText = null,
+		// #138: the resolved take's lyrics, for callers whose `info` cannot
+		// carry them. A share page in stream mode builds `info` from the
+		// public queue-stream manifest, which redacts `lyrics` — the text
+		// comes from the share payload instead.
+		lyricsText = null,
 		rightPanel
 	}: {
 		info: PlaybackInfo;
@@ -75,6 +80,7 @@
 		lyricsEmptyLabel?: string;
 		lyricsCues?: WhisperCue[] | null;
 		whisperText?: string | null;
+		lyricsText?: string | null;
 		rightPanel: Snippet;
 	} = $props();
 
@@ -254,7 +260,7 @@
 
 			<section class="np-lyrics-col">
 				<NowPlayingLyrics
-					lyrics={info.lyrics}
+					lyrics={lyricsText ?? info.lyrics}
 					cues={lyricsCues}
 					{whisperText}
 					emptyLabel={lyricsEmptyLabel}
