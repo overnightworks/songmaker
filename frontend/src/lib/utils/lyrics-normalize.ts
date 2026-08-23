@@ -25,12 +25,11 @@ const FULL_CASEFOLD_OVERRIDES: ReadonlyMap<string, string> = new Map([
 	['ß', 'ss'], // U+00DF LATIN SMALL LETTER SHARP S; toLowerCase('ẞ') also yields 'ß'
 	['ς', 'σ'] // U+03C2 GREEK SMALL LETTER FINAL SIGMA
 ]);
-const FULL_CASEFOLD_PATTERN = new RegExp(`[${[...FULL_CASEFOLD_OVERRIDES.keys()].join('')}]`, 'g');
 
 function casefold(text: string): string {
-	return text
-		.toLowerCase()
-		.replace(FULL_CASEFOLD_PATTERN, (char) => FULL_CASEFOLD_OVERRIDES.get(char) as string);
+	return Array.from(text.toLowerCase())
+		.map((char) => FULL_CASEFOLD_OVERRIDES.get(char) ?? char)
+		.join('');
 }
 
 function isWordInternalApostrophe(text: string, index: number): boolean {
