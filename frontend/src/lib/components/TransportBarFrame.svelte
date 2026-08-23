@@ -74,7 +74,6 @@
 
 	let nowPlayingTrigger: HTMLButtonElement | undefined = $state();
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
-	let audioCtx: AudioContext | undefined;
 	let analyser: AnalyserNode | undefined;
 	let frequencyData: Uint8Array<ArrayBuffer> | undefined;
 	let waveformData: Uint8Array<ArrayBuffer> | undefined;
@@ -106,20 +105,21 @@
 		});
 	});
 
+	// Borrowed, never owned: the audio graph outlives this bar, which the app
+	// unmounts whenever the full Now Playing surface takes over the transport.
+	// Building or closing a context here would tear the playing element's
+	// output out of its graph for good (issue #140).
 	function connectAnalyser(): void {
-		const audio = audioPlayer.getElement();
-		if (!audio || audioCtx) return;
+		if (analyser) return;
 		if (!playbackVisualizerAllowed()) return;
 		try {
-			audioCtx = new AudioContext();
-			analyser = audioCtx.createAnalyser();
-			analyser.fftSize = FFT_SIZE;
-			analyser.smoothingTimeConstant = 0.82;
-			const source = audioCtx.createMediaElementSource(audio);
-			source.connect(analyser);
-			analyser.connect(audioCtx.destination);
-			frequencyData = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
-			waveformData = new Uint8Array(analyser.fftSize) as Uint8Array<ArrayBuffer>;
+			const borrowed = audioPlayer.getAnalyser();
+			if (!borrowed) return;
+			borrowed.fftSize = FFT_SIZE;
+			borrowed.smoothingTimeConstant = 0.82;
+			frequencyData = new Uint8Array(borrowed.frequencyBinCount) as Uint8Array<ArrayBuffer>;
+			waveformData = new Uint8Array(borrowed.fftSize) as Uint8Array<ArrayBuffer>;
+			analyser = borrowed;
 		} catch (e) {
 			console.warn('Audio visualizer unavailable:', e);
 		}
@@ -128,9 +128,9 @@
 	function startVisualizerLoop(): void {
 		if (!vizCanvas) return;
 		if (!playbackVisualizerAllowed()) return;
-		if (!audioCtx) connectAnalyser();
+		connectAnalyser();
 		if (!analyser || !frequencyData || !waveformData) return;
-		if (audioCtx?.state === 'suspended') audioCtx.resume();
+		audioPlayer.resumeAudioGraph();
 		vizColors = readVizColors();
 		viz.startLoop(vizCanvas, analyser, frequencyData, waveformData, vizColors, (bass, energy) => {
 			bassLevel = bass;
@@ -166,7 +166,6 @@
 
 	onDestroy(() => {
 		viz.destroy();
-		if (audioCtx) audioCtx.close();
 	});
 </script>
 

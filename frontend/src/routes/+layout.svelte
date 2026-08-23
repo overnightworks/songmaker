@@ -22,7 +22,7 @@
 		selectedSongId
 	} from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { NOW_PLAYING_STACKED_MEDIA } from '$lib/constants/now-playing';
+	import { NOW_PLAYING_UNDOCKED_MEDIA } from '$lib/constants/now-playing';
 	import { sidebarOpen, toggleSidebar, initTheme } from '$lib/stores/ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
@@ -49,15 +49,15 @@
 		});
 	});
 
-	// Whatever is wide enough not to stack Now Playing's three columns is wide
-	// enough to dock it beside the workspace — one breakpoint, both decisions.
-	// The compact shell switches at COMPACT_LAYOUT_MAX_PX (768), never wider
-	// than NOW_PLAYING_STACKED_MAX_PX (1099), so a docked panel can never end
-	// up in the mobile branch, which has no `.shell-row` to hold it.
+	// One fact for "is there room to dock": wide enough for the workspace to
+	// give up NOW_PLAYING_DOCKED_WIDTH_PX, and a fine pointer. The compact
+	// shell switches at COMPACT_LAYOUT_MAX_PX (768), far below the dock
+	// threshold (1440), so a docked panel can never end up in the mobile
+	// branch, which has no `.shell-row` to hold it.
 	$effect(() => {
 		return subscribeCompactLayout((value) => {
 			nowPlayingDockable.set(!value);
-		}, NOW_PLAYING_STACKED_MEDIA);
+		}, NOW_PLAYING_UNDOCKED_MEDIA);
 	});
 
 	// One fact behind every layout that reserves room for the transport bar:

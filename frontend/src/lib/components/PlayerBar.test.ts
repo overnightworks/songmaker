@@ -489,6 +489,63 @@ describe('PlayerBar Now Playing', () => {
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 	});
 
+	// The full surface unmounts the bar. If the bar owned the audio graph, that
+	// would close the context bound to the playing <audio> element and silence
+	// it for the rest of the session (browser gate on #140).
+	it('leaves the playing element its audio graph when the bar makes way for the full surface', async () => {
+		const analyser = {
+			fftSize: 2048,
+			smoothingTimeConstant: 0,
+			frequencyBinCount: 1024,
+			connect: vi.fn(),
+			getByteFrequencyData: vi.fn(),
+			getByteTimeDomainData: vi.fn()
+		};
+		const context = {
+			state: 'running',
+			destination: {},
+			createAnalyser: vi.fn(() => analyser),
+			createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
+			resume: vi.fn(),
+			close: vi.fn()
+		};
+		audioContextConstructor.mockImplementation(() => context);
+		// A fine pointer on a wide viewport: the only shape that draws a
+		// visualizer at all, and so the only one that builds a graph.
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+		);
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+		target.querySelector<HTMLButtonElement>('.play-btn')?.click();
+		await tick();
+		audio.fire('canplay');
+		await tick();
+		await Promise.resolve();
+		await tick();
+		expect(context.createMediaElementSource).toHaveBeenCalledOnce();
+
+		nowPlayingSurface.set('full');
+		await tick();
+		expect(target.querySelector('.player-bar')).toBeNull();
+		expect(context.close).not.toHaveBeenCalled();
+
+		closeNowPlaying();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		// The remounted bar borrows the same analyser instead of rebuilding a
+		// graph the element can never be handed to twice.
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+		expect(context.createMediaElementSource).toHaveBeenCalledOnce();
+		expect(audioContextConstructor).toHaveBeenCalledOnce();
+	});
+
 	it('returns focus to the transport bar trigger the bar remounts with', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		component = mount(PlayerBar, { target });

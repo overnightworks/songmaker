@@ -17,7 +17,11 @@ import {
 	selectedSongId,
 	songList
 } from '$lib/stores/player';
-import { NOW_PLAYING_DOCKED_WIDTH_PX, NOW_PLAYING_EXPAND_LABEL } from '$lib/constants/now-playing';
+import {
+	NOW_PLAYING_DOCK_MIN_PX,
+	NOW_PLAYING_DOCKED_WIDTH_PX,
+	NOW_PLAYING_EXPAND_LABEL
+} from '$lib/constants/now-playing';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
@@ -249,9 +253,32 @@ function playing(songTitle = 'Tide'): PlaybackInfo {
 	};
 }
 
-/** A wide, fine-pointer viewport: the one that can host the docked panel. */
-async function renderDesktopLayout(): Promise<HTMLElement> {
-	stubMatchMedia(false);
+// Evaluates the one media feature these layout subscriptions use, so a test
+// can name a viewport width instead of a blanket true/false. A fine-pointer
+// device never matches `(any-pointer: coarse)`; the `data-pointer` override
+// that stands in for touch is applied by subscribeCompactLayout itself.
+function stubMatchMediaAtWidth(width: number): void {
+	vi.stubGlobal(
+		'matchMedia',
+		vi.fn((query: string) => {
+			const maxWidth = /max-width:\s*(\d+)px/.exec(query);
+			return {
+				matches: maxWidth !== null && width <= Number(maxWidth[1]),
+				media: query,
+				onchange: null,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+				dispatchEvent: vi.fn()
+			};
+		})
+	);
+}
+
+/** A fine-pointer viewport, wide enough for the docked panel unless told otherwise. */
+async function renderDesktopLayout(width = NOW_PLAYING_DOCK_MIN_PX): Promise<HTMLElement> {
+	stubMatchMediaAtWidth(width);
 	delete document.documentElement.dataset.pointer;
 	return renderLayout('/');
 }
@@ -528,6 +555,20 @@ describe('docked Now Playing', () => {
 		closeNowPlaying();
 		await tick();
 		expect(document.documentElement.dataset.nowPlaying).toBeUndefined();
+	});
+
+	// Docking costs the workspace 400px, which the editor's takes column and
+	// header cannot give up below the threshold — its take actions would land
+	// outside `main`, which is `overflow: hidden`, and become unreachable.
+	it('takes the whole screen on a viewport too narrow to spare the panel its width', async () => {
+		audioPlayer.current = playing();
+		const target = await renderDesktopLayout(NOW_PLAYING_DOCK_MIN_PX - 1);
+
+		openNowPlaying('queue');
+		await tick();
+
+		expect(target.querySelector('.now-playing.docked')).toBeNull();
+		expect(requireElement(target, '.now-playing').getAttribute('aria-modal')).toBe('true');
 	});
 
 	it('opens full screen on a compact viewport, which has no room to dock', async () => {
