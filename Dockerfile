@@ -38,7 +38,7 @@ COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 RUN useradd --create-home --shell /bin/bash songmaker
-RUN mkdir -p /app/data/queue-streams
+RUN mkdir -p /app/data/queue-streams /app/data/audio
 RUN chown -R songmaker:songmaker /app
 USER songmaker
 
