@@ -51,14 +51,67 @@ def test_env_read_outside_settings_caught(
     assert "songmaker_cli/foo.py:2" in out
 
 
-def test_env_read_in_settings_allowlisted(
+def test_env_subscript_read_caught(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _seed(tmp_path, {
+        "songmaker_cli/foo.py": "import os\nkey = os.environ['API_KEY']\n",
+    })
+    rc = _run(monkeypatch, tmp_path)
+    assert rc == 1
+    assert "env-read-outside-settings" in capsys.readouterr().out
+
+
+def test_env_write_is_process_state_not_a_read(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     _seed(tmp_path, {
-        "songmaker_cli/settings.py": "import os\nos.environ.get('X')\n",
+        "songmaker_cli/foo.py": "import os\nos.environ['CUDA_VISIBLE_DEVICES'] = ''\n",
+    })
+    assert _run(monkeypatch, tmp_path) == 0
+
+
+@pytest.mark.parametrize("rel_path", [
+    "songmaker_cli/settings.py",
+    "acestep_worker/settings.py",
+    "songmaker_cli/db/migrations/env.py",
+])
+def test_env_owning_roles_may_read_the_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, rel_path: str,
+) -> None:
+    _seed(tmp_path, {rel_path: "import os\nos.environ.get('X')\n"})
+    assert _run(monkeypatch, tmp_path) == 0
+
+
+def test_a_settings_named_api_model_is_not_an_env_owner(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _seed(tmp_path, {
+        "songmaker_cli/api_models/settings.py": "import os\nos.environ.get('X')\n",
     })
     rc = _run(monkeypatch, tmp_path)
-    assert rc == 0
+    assert rc == 1
+    assert "env-read-outside-settings" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(("rel_path", "line"), [
+    ("songmaker_cli/api_models/songs.py", "    expires_at: str | None = None"),
+    ("songmaker_cli/api_models/settings.py", "    updated_at: str | None = None"),
+    ("acestep_worker/task_store.py", "def complete(self, r: dict[str, Any]) -> None: ..."),
+    ("songmaker_cli/claude/provider.py", "x = os.getenv('FOO')"),
+])
+def test_no_file_or_line_buys_an_exemption(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    capsys: pytest.CaptureFixture[str], rel_path: str, line: str,
+) -> None:
+    """Every path that used to sit in the allowlist is now judged like
+    any other file — the only way out is fixing the code."""
+    _seed(tmp_path, {rel_path: "\n" * 200 + line + "\n"})
+    rc = _run(monkeypatch, tmp_path)
+    assert rc == 1
+    assert rel_path in capsys.readouterr().out
 
 
 def test_next_iter_caught(
@@ -138,8 +191,8 @@ def test_engine_isolation_does_not_fire_on_songmaker_cli_itself(
 
 
 def test_real_codebase_passes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The actual src/ directory should be clean — this is the
-    invariant the rest of the no-silent-fallbacks-v2 work guarantees."""
+    """The actual src/ directory is clean with no exemptions at all —
+    every rule below is enforced on every file it governs."""
     project_root = Path(__file__).resolve().parents[1]
     monkeypatch.chdir(project_root)
     assert checker.main(["src/"]) == 0

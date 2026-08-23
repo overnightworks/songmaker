@@ -4,10 +4,11 @@ Run from the project root:
 
     python scripts/check_no_silent_fallbacks.py src/
 
-Each rule is a regex with a per-rule allowlist of legitimate exceptions.
-A new instance of any pattern outside the allowlist fails the build —
-the contributor must either fix the code or extend the allowlist with a
-brief justification in the commit message.
+Each rule is a regex, scoped to the files whose role it governs. There
+is no exemption list: a hit is a defect to fix, and a legitimate
+exception is expressed in the code itself — as the file's role (a
+settings module owns env reads) or as a named type (``ComputedTimestamp``
+owns a timestamp whose None is real).
 
 The rules encode the lessons of the no-silent-fallbacks-v2 cleanup:
 
@@ -35,6 +36,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+PACKAGE_SETTINGS_MODULE = r"^src/[^/]+/settings\.py$"
+ALEMBIC_ENV_MODULE = r"^src/[^/]+/db/migrations/env\.py$"
+
 
 @dataclass
 class Rule:
@@ -42,40 +46,34 @@ class Rule:
     pattern: str
     description: str
     paths: tuple[str, ...] = ()
-    allowlist: set[str] = field(default_factory=set)
+    exempt_roles: tuple[str, ...] = ()
     _compiled: re.Pattern[str] = field(init=False)
+    _exempt: tuple[re.Pattern[str], ...] = field(init=False)
 
     def __post_init__(self) -> None:
         self._compiled = re.compile(self.pattern)
+        self._exempt = tuple(re.compile(role) for role in self.exempt_roles)
 
     def applies_to(self, rel_path: str) -> bool:
+        if any(role.search(rel_path) for role in self._exempt):
+            return False
         if not self.paths:
             return True
         return any(rel_path.startswith(p) for p in self.paths)
-
-    def is_allowlisted(self, rel_path: str, lineno: int) -> bool:
-        if rel_path in self.allowlist:
-            return True
-        return f"{rel_path}:{lineno}" in self.allowlist
 
 
 RULES: list[Rule] = [
     Rule(
         name="env-read-outside-settings",
-        pattern=r"os\.(environ\.get|environ\[|getenv)\(",
+        pattern=r"os\.(environ\.get|getenv)\(|os\.environ\[[^\]]+\](?!\s*=[^=])",
         description=(
-            "Env vars must be read via Settings (settings.py / "
-            "acestep_engine/settings.py / acestep_worker/settings.py)."
+            "Env vars must be read via the settings module of the package "
+            "that needs them. Only that module (src/<package>/settings.py) "
+            "and the Alembic migration env.py, which runs before Settings "
+            "exists, may read the environment directly. Writing os.environ "
+            "is process state, not configuration, and is left alone."
         ),
-        allowlist={
-            "src/songmaker_cli/settings.py",
-            "src/songmaker_cli/db/migrations/env.py",
-            "src/songmaker_cli/scoring/audiobox_aesthetics.py",
-            "src/songmaker_cli/claude/provider.py",
-            "src/acestep_worker/settings.py",
-            "src/acestep_worker/subprocess_runner.py",
-            "src/acestep_engine/settings.py",
-        },
+        exempt_roles=(PACKAGE_SETTINGS_MODULE, ALEMBIC_ENV_MODULE),
     ),
     Rule(
         name="next-iter-fallback",
@@ -104,9 +102,6 @@ RULES: list[Rule] = [
             "Function signature uses dict[str, Any] for what should be a "
             "domain object. Define a Pydantic model."
         ),
-        allowlist={
-            "src/acestep_worker/task_store.py",
-        },
     ),
     Rule(
         name="optional-on-default-utcnow-column",
@@ -114,20 +109,10 @@ RULES: list[Rule] = [
         description=(
             "Timestamp field marked Optional but the underlying DB column "
             "is NOT NULL with default=_utcnow. Drop the | None and the "
-            "matching `if x else None` in from_orm."
+            "matching `if x else None` in from_orm. A timestamp the "
+            "response computes, whose None is a real answer, is declared "
+            "as ComputedTimestamp (api_models/fields.py)."
         ),
-        allowlist={
-            # GenerationResponse.expires_at is a computed field, not a DB
-            # column — returns None for picked/kept generations since they
-            # never expire. Legitimate nullable. Line-number keyed: any
-            # edit above these lines in songs.py needs to shift them too
-            # (see #136 for the fragility of this allowlist scheme).
-            "src/songmaker_cli/api_models/songs.py:235",
-            "src/songmaker_cli/api_models/songs.py:277",
-            # An absent memory row is represented as an empty scope with no
-            # update timestamp; this is a computed response field.
-            "src/songmaker_cli/api_models/settings.py:237",
-        },
     ),
     Rule(
         name="engine-isolation-violation",
@@ -163,8 +148,6 @@ def _scan_file(path: Path, rel_path: str, rules: Iterable[Rule]) -> list[_Hit]:
     for lineno, line in enumerate(text.splitlines(), start=1):
         for rule in rules:
             if not rule.applies_to(rel_path):
-                continue
-            if rule.is_allowlisted(rel_path, lineno):
                 continue
             if rule._compiled.search(line):
                 hits.append(_Hit(rule=rule, rel_path=rel_path, lineno=lineno, line=line))

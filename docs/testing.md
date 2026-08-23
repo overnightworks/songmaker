@@ -53,6 +53,25 @@ while issue #31 remains open. The live checks are:
 | Requirement witnesses | fixed GitHub repo/issue/comment re-fetch · exact identity, URL, author, timestamp, and approval-body match |
 | Acceptance evidence | #42-A1 runs the marked Pick-replacement API test and retains its commit-bound JSON report for 30 days |
 
+### No-silent-fallbacks check
+
+`scripts/check_no_silent_fallbacks.py src/` has no exemption list. A reported
+line is a defect to fix, and a legitimate exception is expressed in the code
+instead:
+
+- **Env reads** belong to the settings module of the package that needs them.
+  The rule skips `src/<package>/settings.py` and the Alembic migration
+  `env.py` (which runs before Settings exists) — by path, not by name, so
+  `api_models/settings.py` is still judged. Writing `os.environ` is process
+  state, not configuration, and is not reported.
+- **A nullable timestamp** that the response computes is declared as
+  `ComputedTimestamp` (`api_models/fields.py`). Plain `datetime | None` on a
+  timestamp field still fails, because that is how a NOT NULL column gets
+  misdescribed.
+
+`tests/test_check_no_silent_fallbacks.py` runs the checker over the real
+`src/` tree and over seeded files at every path that used to be exempt.
+
 ### Acceptance evidence pilot
 
 #42-A1 is one Pytest integration proof for `ACC-CURATION-02` →
