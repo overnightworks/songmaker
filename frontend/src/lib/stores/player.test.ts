@@ -1755,6 +1755,48 @@ describe('playAlbumSong', () => {
 		expect(get(queueContext)).toEqual(expect.objectContaining({ type: 'album', albumId: 'a2' }));
 	});
 
+	it('skips an archived take, which its row offers no way to play', async () => {
+		const listed = makeSong({ id: 's-arch', album_id: 'a3', generations: [], generation_count: 2 });
+		songList.set([listed]);
+		vi.mocked(fetchSong).mockResolvedValueOnce(
+			makeSong({
+				id: 's-arch',
+				album_id: 'a3',
+				generation_count: 2,
+				generations: [
+					makeGen({ id: 'g-arch', song_id: 's-arch', is_picked: true, is_archived: true }),
+					makeGen({ id: 'g-live', song_id: 's-arch', mp3_path: 'a3/live.mp3' })
+				]
+			})
+		);
+
+		await playAlbumSong('a3', listed);
+
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g-live' }) }),
+			{ restart: true }
+		);
+	});
+
+	it('says so when every take on the song is archived', async () => {
+		const listed = makeSong({ id: 's-all-arch', generations: [], generation_count: 1 });
+		songList.set([listed]);
+		vi.mocked(fetchSong).mockResolvedValueOnce(
+			makeSong({
+				id: 's-all-arch',
+				generation_count: 1,
+				generations: [makeGen({ id: 'g-only', song_id: 's-all-arch', is_archived: true })]
+			})
+		);
+
+		await playAlbumSong('a1', listed);
+
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: ALBUM_ROW_NO_TAKE_TOAST, type: 'error' })
+		]);
+	});
+
 	it('says so instead of failing silently when the song has no take', async () => {
 		const empty = makeSong({ id: 's-empty', generations: [], generation_count: 0 });
 		songList.set([empty]);
@@ -2117,6 +2159,19 @@ describe('buildQueueViewModel', () => {
 		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 3, generationNumber: 2 }));
 		expect(vm.currentIndex).toBe(0);
 		expect(vm.upNext).toEqual(expect.objectContaining({ generationId: 'g2' }));
+	});
+
+	it('names the version on an album queue row, which knows it from its entry', () => {
+		// The album queue is built from playlist-shaped entries; dropping their
+		// version left rows reading "take 2" where every other surface says
+		// "v3 · take 2".
+		const song = makeSong({ id: 's1' });
+		const entry = makePlaylistEntry({ version_number: 3, generation_number: 2 });
+		const ctx = { type: 'playlist' as const, entries: [entry], index: 0 };
+
+		const vm = buildQueueViewModel(ctx, null, [song]);
+
+		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 3, generationNumber: 2 }));
 	});
 
 	it("reads a native row's duration from the take, falling back to the song", () => {

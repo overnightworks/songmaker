@@ -673,8 +673,11 @@ export function playPrevGeneration(): void {
 	}
 }
 
+// Archived takes are not playable (their rows offer no play affordance), so
+// they never stand in as a song's take in a queue either.
 function bestGen(song: SongItem): GenerationItem | undefined {
-	return song.generations.find((g) => g.is_picked) ?? song.generations[0];
+	const playable = song.generations.filter((gen) => !gen.is_archived);
+	return playable.find((gen) => gen.is_picked) ?? playable[0];
 }
 
 function toAlbumQueueEntry(song: SongItem, gen: GenerationItem): PlaylistEntryItem {
@@ -1215,7 +1218,7 @@ function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 		id: entry.generation_id,
 		song_id: entry.song_id,
 		version_id: null,
-		version_number: null,
+		version_number: entry.version_number,
 		generation_number: entry.generation_number,
 		mp3_path: entry.mp3_path,
 		wav_path: null,
