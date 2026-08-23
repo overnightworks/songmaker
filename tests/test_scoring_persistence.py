@@ -116,6 +116,34 @@ def test_scorer_without_a_value_keeps_the_stored_score(
     assert stored["silence_gaps"] == 0
 
 
+def test_timed_out_text_accuracy_keeps_the_stored_transcript(
+    scored_generation, tmp_path: Path,
+) -> None:
+    """whisper_text/whisper_cues belong to text_accuracy — a run without a
+    transcript must not blank the one the generation already has."""
+    with scored_generation() as session:
+        gen = session.query(Generation).filter_by(id=GENERATION_ID).one()
+        gen.whisper_text = "hallo welt"
+        gen.whisper_cues = [{"start": 0.0, "end": 1.0, "text": "hallo welt"}]
+        session.commit()
+
+    result = SongScores(
+        silence=FRESH_SILENCE,
+        runs=(
+            _run("text_accuracy", ScorerOutcome.TIMED_OUT),
+            _run("silence", ScorerOutcome.OK),
+        ),
+    )
+
+    _score(scored_generation, result, tmp_path / "audio")
+
+    with scored_generation() as session:
+        gen = session.query(Generation).filter_by(id=GENERATION_ID).one()
+        assert gen.whisper_text == "hallo welt"
+        assert gen.whisper_cues == [{"start": 0.0, "end": 1.0, "text": "hallo welt"}]
+        assert session.query(Job).filter_by(id=JOB_ID).one().status == "completed"
+
+
 def test_successful_scorer_overwrites_the_stored_score(
     scored_generation, tmp_path: Path,
 ) -> None:

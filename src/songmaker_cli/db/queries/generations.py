@@ -97,6 +97,7 @@ def save_scores(
     existing = (
         session.query(Score)
         .filter_by(generation_id=generation_id, scorer="batch")
+        .with_for_update()
         .first()
     )
     if existing is None:

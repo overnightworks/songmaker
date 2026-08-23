@@ -625,10 +625,12 @@ def test_text_accuracy_has_its_own_timeout_budget() -> None:
     assert config.text_accuracy_timeout > config.scorer_timeout
 
 
-def test_watchdog_outlives_the_slowest_scorer_budget() -> None:
+def test_watchdog_outlives_the_concurrent_phase_plus_the_deferred_phase() -> None:
+    """Deferred scorers start only after the slowest concurrent one finishes,
+    so the watchdog must cover both budgets, not just the slowest single one."""
     config = PipelineConfig(scorer_timeout=120, text_accuracy_timeout=900)
 
-    assert config.pipeline_timeout > 900
+    assert config.pipeline_timeout > 900 + 120
 
 
 def test_explicit_pipeline_timeout_is_kept() -> None:

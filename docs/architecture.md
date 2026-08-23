@@ -527,9 +527,11 @@ score blob, so one slow scorer erased the previous result.
 **Timeouts are per scorer.** `SCORER_TIMEOUT_SECONDS` (120) is the default
 budget; `TEXT_ACCURACY_TIMEOUT_SECONDS` (300) gives Whisper its own, because a
 cold model load counts against it. The outer subprocess watchdog is derived
-from the slowest scorer budget plus headroom, never below
-`SCORING_PIPELINE_TIMEOUT_SECONDS` — otherwise a per-scorer budget would be
-unreachable and the whole run would be killed instead of the one scorer.
+from the run's phase structure — the slowest concurrent scorer, plus one
+scorer budget for the deferred scorers that follow it, plus headroom — and
+never drops below `SCORING_PIPELINE_TIMEOUT_SECONDS`. If it fired first the
+subprocess would be SIGKILLed and even the values the run did produce would be
+lost. It must stay under `ARQ_JOB_TIMEOUT`.
 
 `whisper_cues` is a JSON list of `{start, end, text}` from faster-whisper segments (start/end in seconds), each optionally carrying `words`, the same shape one level finer, from `word_timestamps=True` (#142). `null` means never scored or a legacy row; a list (including `[]`) means text_accuracy ran and stored whatever usable cues it produced. A cue without `words` was scored before word timestamps existed and gets them only through a re-score (#132) — the key is omitted rather than stored as `null`, so those rows keep their original shape. `whisper_text` is the same cue texts joined with newlines. Missing timings are not invented.
 

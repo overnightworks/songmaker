@@ -78,12 +78,19 @@ class PipelineConfig:
         return self.scorer_timeout
 
     def _watchdog_timeout(self) -> int:
-        """Outer budget for the whole run — must outlive the slowest scorer,
-        otherwise its own budget is unreachable and the run is killed whole."""
-        slowest = max(self.scorer_timeout, self.text_accuracy_timeout)
+        """Outer budget for the whole run.
+
+        A run is two sequential phases: the concurrent CPU/GPU phase, bounded
+        by its slowest scorer, then the deferred scorers that consume its
+        output. The watchdog must outlive both plus audio load and thread
+        joins — if it fires first the subprocess is killed and even the values
+        this run did produce are lost.
+        """
+        concurrent_phase = max(self.scorer_timeout, self.text_accuracy_timeout)
+        deferred_phase = self.scorer_timeout
         return max(
             SCORING_PIPELINE_TIMEOUT_SECONDS,
-            slowest + SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS,
+            concurrent_phase + deferred_phase + SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS,
         )
 
 
