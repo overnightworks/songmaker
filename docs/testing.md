@@ -207,9 +207,13 @@ frontend/src/
 ├── lib/share/*.test.ts            Pure sharedCollection adapters; SharePlayback's classic/stream
 │                                  dispatch, shuffle, and callback ownership
 ├── lib/utils/*.test.ts            Chat context, contrast, diff, and format helpers
-└── routes/share/**/page.test.ts   Album/playlist/song/take share pages through their real
-                                   +page.svelte entry points (loading/error/retry, stream vs
-                                   classic playback, windowed-stream stop, Now Playing)
+├── routes/share/**/page.test.ts   Album/playlist/song/take share pages through their real
+│                                  +page.svelte entry points (loading/error/retry, stream vs
+│                                  classic playback, windowed-stream stop, Now Playing)
+└── service-worker.test.ts         The build-time worker-chunk precache injection
+                                   (`scripts/inject-worker-precache.mjs`): the placeholder rewrite,
+                                   the build failures it refuses to pass on, and that
+                                   `service-worker.ts` still carries the placeholder it rewrites
 ```
 
 ```
@@ -246,6 +250,11 @@ frontend/e2e/
   the worker boundary — reactive `$state` cues from a share page — fails in the test too
 - **Runes need a `.svelte.ts` module**: `src/tests/reactive-fixtures.svelte.ts` hands a plain
   `.test.ts` a real `$state` proxy or props a mounted component follows when the test changes them
+- **The service worker's worker precache is a build artifact**: Vite bundles Web Workers in a pass
+  whose output never reaches the client manifest `$service-worker`'s `build` list comes from, so
+  `pnpm build` runs `scripts/inject-worker-precache.mjs` to rewrite the hashed chunk paths into the
+  built file. Unit tests cover the injection; the artifact itself is proven by `pnpm build` and
+  `grep workers/ frontend/build/service-worker.js`
 
 ## Adding Tests for New Features
 
