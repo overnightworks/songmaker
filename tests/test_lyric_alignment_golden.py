@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = PROJECT_ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
@@ -14,11 +16,13 @@ if str(SCRIPTS) not in sys.path:
 import lyric_alignment_golden as golden  # noqa: E402
 
 
-def test_golden_ratio_generation_is_deterministic():
-    first = golden.compute_golden_ratios()
-    second = golden.compute_golden_ratios()
-
-    assert first == second
+@pytest.mark.parametrize(
+    "generate",
+    [golden.compute_golden_ratios, golden.compute_golden_alignments],
+    ids=["ratios", "alignments"],
+)
+def test_golden_generation_is_deterministic(generate):
+    assert generate() == generate()
 
 
 def test_committed_fixture_file_matches_current_generator_output():
@@ -29,4 +33,7 @@ def test_committed_fixture_file_matches_current_generator_output():
 
     committed = json.loads(golden.FIXTURES_PATH.read_text())
 
-    assert committed == {"fixtures": golden.compute_golden_ratios()}
+    assert committed == {
+        "alignments": golden.compute_golden_alignments(),
+        "fixtures": golden.compute_golden_ratios(),
+    }

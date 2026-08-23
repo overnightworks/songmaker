@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
-import { activeLyricLineIndex, alignLyricsToCues } from './lyrics-align';
+import golden from './lyrics-align.fixtures.json';
+import { activeLyricLineIndices, alignLyricsToCues } from './lyrics-align';
 
 // Invented lyric-like lines, never real lyrics. Deliberately far apart in
 // SequenceMatcher.ratio() (verified by hand against Python's difflib) from
@@ -10,11 +11,33 @@ const LINE_1 = 'the lantern hums quietly tonight';
 const LINE_2 = 'we count the fading city lights';
 const LINE_3 = 'another mile of rusted signs';
 
+const CHORUS = 'hold the line until the morning';
+const RIVER = 'the river carries every promise home';
+const CHORUS_TAIL = 'until the morning';
+const CHORUS_SLIP = 'hold the line until the mornin';
+const NESTED_LONG = 'i wanted you to stay tonight';
+const NESTED_SHORT = 'i wanted you to stay';
+const RAIN_FALLS = 'silver rain falls on the roof';
+const RAIN_CALLS = 'silver rain calls on the roof';
+const RAIN_WALLS = 'silver rain walls on the roof';
+
 function cue(start: number, end: number, text: string): WhisperCue {
 	return { start, end, text };
 }
 
-describe('alignLyricsToCues', () => {
+// A cue as a take scored with word timestamps carries it: one word every
+// `secondsPerWord` seconds from `start`. Only powers of two are used as the
+// pace so every expected boundary is an exact binary fraction.
+function sungCue(start: number, secondsPerWord: number, text: string): WhisperCue {
+	const words = text.split(' ').map((word, index) => ({
+		start: start + index * secondsPerWord,
+		end: start + (index + 1) * secondsPerWord,
+		text: word
+	}));
+	return { start: words[0].start, end: words[words.length - 1].end, text, words };
+}
+
+describe('alignLyricsToCues without word timestamps (cue window fallback)', () => {
 	it('maps exact-text cues onto their lines in playback order', () => {
 		const lyrics = [LINE_1, LINE_2, LINE_3].join('\n');
 		const cues = [cue(0, 1.2, LINE_1), cue(1.2, 2.5, LINE_2), cue(2.5, 3.8, LINE_3)];
@@ -147,9 +170,303 @@ describe('alignLyricsToCues', () => {
 		expect(aligned[0].interval).toEqual({ start: 1, end: 2 });
 		expect(aligned[1].interval).toBeNull();
 	});
+	it('gives every line a cue covers the whole cue span, never an invented share', () => {
+		const lyrics = [LINE_1, LINE_2].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [cue(0, 6.3, `${LINE_1} ${LINE_2}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 6.3 },
+			{ start: 0, end: 6.3 }
+		]);
+	});
+
+	it('leaves the lines outside a cue window dark (false-positive precision)', () => {
+		const lyrics = [LINE_1, LINE_2, LINE_3].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [cue(0, 3, LINE_1)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([{ start: 0, end: 3 }, null, null]);
+	});
 });
 
-describe('activeLyricLineIndex', () => {
+describe('alignLyricsToCues with word timestamps', () => {
+	it('gives every line the span of its own first and last sung word', () => {
+		const lyrics = [LINE_1, LINE_2, LINE_3].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${LINE_1} ${LINE_2} ${LINE_3}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 2.5 },
+			{ start: 2.5, end: 5.5 },
+			{ start: 5.5, end: 8 }
+		]);
+	});
+
+	it('leaves a line the singer skipped dark and times the next one correctly', () => {
+		const lyrics = [LINE_1, LINE_2, LINE_3].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${LINE_1} ${LINE_3}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 2.5 },
+			null,
+			{ start: 2.5, end: 5 }
+		]);
+	});
+
+	it('leaves adlib words between two lines out of both intervals', () => {
+		const lyrics = [LINE_1, LINE_2].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [
+			sungCue(0, 0.5, `${LINE_1} ooh yeah come on ${LINE_2}`)
+		]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 2.5 },
+			{ start: 4.5, end: 7.5 }
+		]);
+	});
+
+	it('lights a repeated chorus line at each of its repeats', () => {
+		const lyrics = [LINE_1, CHORUS, LINE_3, CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [
+			sungCue(0, 0.5, `${LINE_1} ${CHORUS} ${LINE_3} ${CHORUS}`)
+		]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 2.5 },
+			{ start: 2.5, end: 5.5 },
+			{ start: 5.5, end: 8 },
+			{ start: 8, end: 11 }
+		]);
+	});
+
+	// The repeat itself is not independent evidence, but a differently-worded
+	// line elsewhere in the take still is: this pins that the relaxation for
+	// repeats did not reopen the #45 ambiguity rule.
+	it('still leaves a line dark when a differently-worded reading rivals it', () => {
+		const aligned = alignLyricsToCues(LINE_1, [
+			sungCue(0, 0.5, `${LINE_1} the lantern hums quietly tonite`)
+		]);
+
+		expect(aligned[0].interval).toBeNull();
+	});
+
+	it('starts a line at its own first sung word, not at foreign words before it', () => {
+		const lyrics = [LINE_1, LINE_2].join('\n');
+		const filler = new Array(30).fill('la').join(' ');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${LINE_1} ${filler} ${LINE_2}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 2.5 },
+			{ start: 17.5, end: 20.5 }
+		]);
+	});
+
+	it('still finds the lines behind a long stretch of unmatched words', () => {
+		const lyrics = [LINE_1, LINE_2, LINE_3].join('\n');
+		const filler = new Array(96).fill('la').join(' ');
+
+		const aligned = alignLyricsToCues(lyrics, [
+			sungCue(0, 0.5, `${LINE_1} ${filler} ${LINE_2} ${LINE_3}`)
+		]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 2.5 },
+			{ start: 50.5, end: 53.5 },
+			{ start: 53.5, end: 56 }
+		]);
+	});
+
+	it('leaves a two-word line dark when the take only sings something like it', () => {
+		const lyrics = ['yeah', LINE_1].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `a year ago ${LINE_1}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, { start: 1.5, end: 4 }]);
+	});
+
+	it('lights a two-word line where the take sings it word for word', () => {
+		const lyrics = ['yeah', LINE_1].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `yeah ${LINE_1}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 0.5 },
+			{ start: 0.5, end: 3 }
+		]);
+	});
+
+	it('leaves the opening words to the line that was sung, not to its prefix', () => {
+		const lyrics = ['hold the line', CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, CHORUS)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, { start: 0, end: 3 }]);
+	});
+
+	it('never lets a sub-phrase steal the opening of a later, non-adjacent line', () => {
+		const lyrics = ['hold the line', LINE_3, CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${LINE_3} ${CHORUS}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			null,
+			{ start: 0, end: 2.5 },
+			{ start: 2.5, end: 5.5 }
+		]);
+	});
+
+	it('gives two identical lines in a row their own successive renditions', () => {
+		const lyrics = [CHORUS, CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${CHORUS} ${CHORUS}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 3 },
+			{ start: 3, end: 6 }
+		]);
+	});
+
+	it('gives a line nested in its neighbour its own rendition when both were sung', () => {
+		const lyrics = [NESTED_LONG, NESTED_SHORT].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${NESTED_LONG} ${NESTED_SHORT}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 3 },
+			{ start: 3, end: 5.5 }
+		]);
+	});
+
+	it('never lets an unsung line take the rendition of a near-duplicate further down', () => {
+		const lyrics = [RAIN_FALLS, LINE_3, RAIN_CALLS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${LINE_3} ${RAIN_CALLS}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			null,
+			{ start: 0, end: 2.5 },
+			{ start: 2.5, end: 5.5 }
+		]);
+	});
+
+	it('lights every line of a take built from repeated lines, in order', () => {
+		const lines = [RIVER, RIVER, CHORUS, CHORUS, RIVER, LINE_2, CHORUS, CHORUS];
+
+		const aligned = alignLyricsToCues(lines.join('\n'), [sungCue(0, 0.5, lines.join(' '))]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 3 },
+			{ start: 3, end: 6 },
+			{ start: 6, end: 9 },
+			{ start: 9, end: 12 },
+			{ start: 12, end: 15 },
+			{ start: 15, end: 18 },
+			{ start: 18, end: 21 },
+			{ start: 21, end: 24 }
+		]);
+	});
+
+	it('never lets a tail of a later line steal that line\u2019s words', () => {
+		const aligned = alignLyricsToCues([CHORUS_TAIL, CHORUS].join('\n'), [sungCue(0, 0.5, CHORUS)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, { start: 0, end: 3 }]);
+	});
+
+	it('keeps a tail line dark even with a verse between it and its owner', () => {
+		const lyrics = [CHORUS_TAIL, LINE_3, CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${LINE_3} ${CHORUS}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			null,
+			{ start: 0, end: 2.5 },
+			{ start: 2.5, end: 5.5 }
+		]);
+	});
+
+	it('lights both renditions in order when one drops a letter', () => {
+		const lyrics = [CHORUS, CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${CHORUS_SLIP} ${CHORUS}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 3 },
+			{ start: 3, end: 6 }
+		]);
+	});
+
+	it('keeps a prefix line dark when only the long line was sung, slip and all', () => {
+		const lyrics = [NESTED_LONG, NESTED_SHORT, LINE_3, NESTED_LONG].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [
+			sungCue(0, 0.5, `${NESTED_LONG}x ${LINE_3} ${NESTED_LONG}`)
+		]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 3 },
+			null,
+			{ start: 3, end: 5.5 },
+			{ start: 5.5, end: 8.5 }
+		]);
+	});
+
+	it('leaves a run to neither of two lines too alike to tell apart', () => {
+		const lyrics = [RAIN_FALLS, RAIN_CALLS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, RAIN_FALLS)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, null]);
+	});
+
+	it('leaves a run to none of three lines too alike to tell apart', () => {
+		const lyrics = [RAIN_FALLS, RAIN_CALLS, RAIN_WALLS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, RAIN_FALLS)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, null, null]);
+	});
+
+	it('leaves the run dark even when the take sings the later of two alike lines', () => {
+		const lyrics = [RAIN_FALLS, RAIN_CALLS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, RAIN_CALLS)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, null]);
+	});
+
+	it('never lights a line when no run of words matches it (false-positive precision)', () => {
+		const lyrics = [LINE_1, LINE_2].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [
+			sungCue(0, 0.5, 'a totally unrelated kitchen inventory list')
+		]);
+
+		expect(aligned.every((line) => line.interval === null)).toBe(true);
+	});
+
+	it('aligns against the words alone when only some segments carry them', () => {
+		const lyrics = [LINE_1, LINE_2].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, LINE_1), cue(2.5, 5, LINE_2)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([{ start: 0, end: 2.5 }, null]);
+	});
+});
+
+describe('golden alignments from scripts/lyric_alignment_golden.py', () => {
+	it.each(golden.alignments)('matches the reference implementation — $name', (fixture) => {
+		const aligned = alignLyricsToCues(fixture.lyrics, fixture.cues as WhisperCue[]);
+
+		expect(aligned.map((line) => line.interval)).toEqual(fixture.intervals);
+	});
+});
+
+describe('activeLyricLineIndices', () => {
 	const lines = [
 		{ text: LINE_1, interval: { start: 0, end: 1 } },
 		{ text: '', interval: null },
@@ -157,30 +474,39 @@ describe('activeLyricLineIndex', () => {
 	];
 
 	it('is active exactly at an interval start (inclusive)', () => {
-		expect(activeLyricLineIndex(lines, 0)).toBe(0);
+		expect(activeLyricLineIndices(lines, 0)).toEqual([0]);
 	});
 
 	it('is not active exactly at an interval end (exclusive)', () => {
-		expect(activeLyricLineIndex(lines, 1)).toBeNull();
+		expect(activeLyricLineIndices(lines, 1)).toEqual([]);
 	});
 
 	it('has no active line in the gap between two intervals', () => {
-		expect(activeLyricLineIndex(lines, 1.2)).toBeNull();
+		expect(activeLyricLineIndices(lines, 1.2)).toEqual([]);
 	});
 
 	it('has no active line before the first interval', () => {
-		expect(activeLyricLineIndex(lines, -1)).toBeNull();
+		expect(activeLyricLineIndices(lines, -1)).toEqual([]);
 	});
 
 	it('has no active line after the last interval', () => {
-		expect(activeLyricLineIndex(lines, 5)).toBeNull();
+		expect(activeLyricLineIndices(lines, 5)).toEqual([]);
 	});
 
 	it('is active in the middle of an interval', () => {
-		expect(activeLyricLineIndex(lines, 2)).toBe(2);
+		expect(activeLyricLineIndices(lines, 2)).toEqual([2]);
 	});
 
 	it('has no active line for an alignment with no matched lines at all', () => {
-		expect(activeLyricLineIndex([{ text: LINE_1, interval: null }], 0)).toBeNull();
+		expect(activeLyricLineIndices([{ text: LINE_1, interval: null }], 0)).toEqual([]);
+	});
+
+	it('lights every line of a cue window together, in display order', () => {
+		const window = [
+			{ text: LINE_1, interval: { start: 0, end: 3 } },
+			{ text: LINE_2, interval: { start: 0, end: 3 } }
+		];
+
+		expect(activeLyricLineIndices(window, 1.5)).toEqual([0, 1]);
 	});
 });

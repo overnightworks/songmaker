@@ -1,4 +1,2840 @@
 {
+	"alignments": [
+		{
+			"cues": [
+				{
+					"end": 6.9,
+					"start": 0.5,
+					"text": "the lantern hums quietly tonight we count the fading city lights another mile of rusted signs",
+					"words": [
+						{
+							"end": 0.9,
+							"start": 0.5,
+							"text": "the"
+						},
+						{
+							"end": 1.3,
+							"start": 0.9,
+							"text": "lantern"
+						},
+						{
+							"end": 1.7,
+							"start": 1.3,
+							"text": "hums"
+						},
+						{
+							"end": 2.1,
+							"start": 1.7,
+							"text": "quietly"
+						},
+						{
+							"end": 2.5,
+							"start": 2.1,
+							"text": "tonight"
+						},
+						{
+							"end": 2.9,
+							"start": 2.5,
+							"text": "we"
+						},
+						{
+							"end": 3.3,
+							"start": 2.9,
+							"text": "count"
+						},
+						{
+							"end": 3.7,
+							"start": 3.3,
+							"text": "the"
+						},
+						{
+							"end": 4.1,
+							"start": 3.7,
+							"text": "fading"
+						},
+						{
+							"end": 4.5,
+							"start": 4.1,
+							"text": "city"
+						},
+						{
+							"end": 4.9,
+							"start": 4.5,
+							"text": "lights"
+						},
+						{
+							"end": 5.3,
+							"start": 4.9,
+							"text": "another"
+						},
+						{
+							"end": 5.7,
+							"start": 5.3,
+							"text": "mile"
+						},
+						{
+							"end": 6.1,
+							"start": 5.7,
+							"text": "of"
+						},
+						{
+							"end": 6.5,
+							"start": 6.1,
+							"text": "rusted"
+						},
+						{
+							"end": 6.9,
+							"start": 6.5,
+							"text": "signs"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.5,
+					"start": 0.5
+				},
+				{
+					"end": 4.9,
+					"start": 2.5
+				},
+				{
+					"end": 6.9,
+					"start": 4.9
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights\nanother mile of rusted signs",
+			"name": "word path: one segment spanning three lines lights each line separately"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.5,
+					"start": 1.0,
+					"text": "the lantern hums quietly tonight another mile of rusted signs",
+					"words": [
+						{
+							"end": 1.35,
+							"start": 1.0,
+							"text": "the"
+						},
+						{
+							"end": 1.7,
+							"start": 1.35,
+							"text": "lantern"
+						},
+						{
+							"end": 2.05,
+							"start": 1.7,
+							"text": "hums"
+						},
+						{
+							"end": 2.4,
+							"start": 2.05,
+							"text": "quietly"
+						},
+						{
+							"end": 2.75,
+							"start": 2.4,
+							"text": "tonight"
+						},
+						{
+							"end": 3.1,
+							"start": 2.75,
+							"text": "another"
+						},
+						{
+							"end": 3.45,
+							"start": 3.1,
+							"text": "mile"
+						},
+						{
+							"end": 3.8,
+							"start": 3.45,
+							"text": "of"
+						},
+						{
+							"end": 4.15,
+							"start": 3.8,
+							"text": "rusted"
+						},
+						{
+							"end": 4.5,
+							"start": 4.15,
+							"text": "signs"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.75,
+					"start": 1.0
+				},
+				null,
+				{
+					"end": 4.5,
+					"start": 2.75
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights\nanother mile of rusted signs",
+			"name": "word path: a line the singer skipped stays dark"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.5,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight ooh yeah come on we count the fading city lights",
+					"words": [
+						{
+							"end": 0.3,
+							"start": 0.0,
+							"text": "the"
+						},
+						{
+							"end": 0.6,
+							"start": 0.3,
+							"text": "lantern"
+						},
+						{
+							"end": 0.9,
+							"start": 0.6,
+							"text": "hums"
+						},
+						{
+							"end": 1.2,
+							"start": 0.9,
+							"text": "quietly"
+						},
+						{
+							"end": 1.5,
+							"start": 1.2,
+							"text": "tonight"
+						},
+						{
+							"end": 1.8,
+							"start": 1.5,
+							"text": "ooh"
+						},
+						{
+							"end": 2.1,
+							"start": 1.8,
+							"text": "yeah"
+						},
+						{
+							"end": 2.4,
+							"start": 2.1,
+							"text": "come"
+						},
+						{
+							"end": 2.7,
+							"start": 2.4,
+							"text": "on"
+						},
+						{
+							"end": 3.0,
+							"start": 2.7,
+							"text": "we"
+						},
+						{
+							"end": 3.3,
+							"start": 3.0,
+							"text": "count"
+						},
+						{
+							"end": 3.6,
+							"start": 3.3,
+							"text": "the"
+						},
+						{
+							"end": 3.9,
+							"start": 3.6,
+							"text": "fading"
+						},
+						{
+							"end": 4.2,
+							"start": 3.9,
+							"text": "city"
+						},
+						{
+							"end": 4.5,
+							"start": 4.2,
+							"text": "lights"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 1.5,
+					"start": 0.0
+				},
+				{
+					"end": 4.5,
+					"start": 2.7
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights",
+			"name": "word path: adlib words between two lines belong to no line"
+		},
+		{
+			"cues": [
+				{
+					"end": 11.9,
+					"start": 2.0,
+					"text": "the lantern hums quietly tonight hold the line until the morning another mile of rusted signs hold the line until the morning",
+					"words": [
+						{
+							"end": 2.45,
+							"start": 2.0,
+							"text": "the"
+						},
+						{
+							"end": 2.9,
+							"start": 2.45,
+							"text": "lantern"
+						},
+						{
+							"end": 3.35,
+							"start": 2.9,
+							"text": "hums"
+						},
+						{
+							"end": 3.8,
+							"start": 3.35,
+							"text": "quietly"
+						},
+						{
+							"end": 4.25,
+							"start": 3.8,
+							"text": "tonight"
+						},
+						{
+							"end": 4.7,
+							"start": 4.25,
+							"text": "hold"
+						},
+						{
+							"end": 5.15,
+							"start": 4.7,
+							"text": "the"
+						},
+						{
+							"end": 5.6,
+							"start": 5.15,
+							"text": "line"
+						},
+						{
+							"end": 6.05,
+							"start": 5.6,
+							"text": "until"
+						},
+						{
+							"end": 6.5,
+							"start": 6.05,
+							"text": "the"
+						},
+						{
+							"end": 6.95,
+							"start": 6.5,
+							"text": "morning"
+						},
+						{
+							"end": 7.4,
+							"start": 6.95,
+							"text": "another"
+						},
+						{
+							"end": 7.85,
+							"start": 7.4,
+							"text": "mile"
+						},
+						{
+							"end": 8.3,
+							"start": 7.85,
+							"text": "of"
+						},
+						{
+							"end": 8.75,
+							"start": 8.3,
+							"text": "rusted"
+						},
+						{
+							"end": 9.2,
+							"start": 8.75,
+							"text": "signs"
+						},
+						{
+							"end": 9.65,
+							"start": 9.2,
+							"text": "hold"
+						},
+						{
+							"end": 10.1,
+							"start": 9.65,
+							"text": "the"
+						},
+						{
+							"end": 10.55,
+							"start": 10.1,
+							"text": "line"
+						},
+						{
+							"end": 11.0,
+							"start": 10.55,
+							"text": "until"
+						},
+						{
+							"end": 11.45,
+							"start": 11.0,
+							"text": "the"
+						},
+						{
+							"end": 11.9,
+							"start": 11.45,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 4.25,
+					"start": 2.0
+				},
+				null,
+				{
+					"end": 6.95,
+					"start": 4.25
+				},
+				null,
+				null,
+				{
+					"end": 9.2,
+					"start": 6.95
+				},
+				{
+					"end": 11.9,
+					"start": 9.2
+				}
+			],
+			"lyrics": "[verse]\nthe lantern hums quietly tonight\n[chorus]\nhold the line until the morning\n\n[verse]\nanother mile of rusted signs\nhold the line until the morning",
+			"name": "word path: a repeated chorus line takes its own repeat in order"
+		},
+		{
+			"cues": [
+				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "a totally unrelated kitchen inventory list",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "a"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "totally"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "unrelated"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "kitchen"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "inventory"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "list"
+						}
+					]
+				}
+			],
+			"intervals": [null, null],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights",
+			"name": "word path: words that match no line leave every line dark"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.6,
+					"start": 0.2,
+					"text": "the lantern hums quietly tonight we count the fading city lights",
+					"words": [
+						{
+							"end": 0.6,
+							"start": 0.2,
+							"text": "the"
+						},
+						{
+							"end": 1.0,
+							"start": 0.6,
+							"text": "lantern"
+						},
+						{
+							"end": 1.4,
+							"start": 1.0,
+							"text": "hums"
+						},
+						{
+							"end": 1.8,
+							"start": 1.4,
+							"text": "quietly"
+						},
+						{
+							"end": 2.2,
+							"start": 1.8,
+							"text": "tonight"
+						},
+						{
+							"end": 2.6,
+							"start": 2.2,
+							"text": "we"
+						},
+						{
+							"end": 3.0,
+							"start": 2.6,
+							"text": "count"
+						},
+						{
+							"end": 3.4,
+							"start": 3.0,
+							"text": "the"
+						},
+						{
+							"end": 3.8,
+							"start": 3.4,
+							"text": "fading"
+						},
+						{
+							"end": 4.2,
+							"start": 3.8,
+							"text": "city"
+						},
+						{
+							"end": 4.6,
+							"start": 4.2,
+							"text": "lights"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				null,
+				{
+					"end": 2.2,
+					"start": 0.2
+				},
+				null,
+				{
+					"end": 4.6,
+					"start": 2.2
+				}
+			],
+			"lyrics": "[intro]\n\nthe lantern hums quietly tonight\n[verse]\nwe count the fading city lights",
+			"name": "word path: section markers and blank lines never take an interval"
+		},
+		{
+			"cues": [
+				{
+					"end": 16.4,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la we count the fading city lights",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "the"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "lantern"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "hums"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "quietly"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "tonight"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "la"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "la"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "la"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "la"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "la"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "la"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "la"
+						},
+						{
+							"end": 5.2,
+							"start": 4.8,
+							"text": "la"
+						},
+						{
+							"end": 5.6,
+							"start": 5.2,
+							"text": "la"
+						},
+						{
+							"end": 6.0,
+							"start": 5.6,
+							"text": "la"
+						},
+						{
+							"end": 6.4,
+							"start": 6.0,
+							"text": "la"
+						},
+						{
+							"end": 6.8,
+							"start": 6.4,
+							"text": "la"
+						},
+						{
+							"end": 7.2,
+							"start": 6.8,
+							"text": "la"
+						},
+						{
+							"end": 7.6,
+							"start": 7.2,
+							"text": "la"
+						},
+						{
+							"end": 8.0,
+							"start": 7.6,
+							"text": "la"
+						},
+						{
+							"end": 8.4,
+							"start": 8.0,
+							"text": "la"
+						},
+						{
+							"end": 8.8,
+							"start": 8.4,
+							"text": "la"
+						},
+						{
+							"end": 9.2,
+							"start": 8.8,
+							"text": "la"
+						},
+						{
+							"end": 9.6,
+							"start": 9.2,
+							"text": "la"
+						},
+						{
+							"end": 10.0,
+							"start": 9.6,
+							"text": "la"
+						},
+						{
+							"end": 10.4,
+							"start": 10.0,
+							"text": "la"
+						},
+						{
+							"end": 10.8,
+							"start": 10.4,
+							"text": "la"
+						},
+						{
+							"end": 11.2,
+							"start": 10.8,
+							"text": "la"
+						},
+						{
+							"end": 11.6,
+							"start": 11.2,
+							"text": "la"
+						},
+						{
+							"end": 12.0,
+							"start": 11.6,
+							"text": "la"
+						},
+						{
+							"end": 12.4,
+							"start": 12.0,
+							"text": "la"
+						},
+						{
+							"end": 12.8,
+							"start": 12.4,
+							"text": "la"
+						},
+						{
+							"end": 13.2,
+							"start": 12.8,
+							"text": "la"
+						},
+						{
+							"end": 13.6,
+							"start": 13.2,
+							"text": "la"
+						},
+						{
+							"end": 14.0,
+							"start": 13.6,
+							"text": "la"
+						},
+						{
+							"end": 14.4,
+							"start": 14.0,
+							"text": "we"
+						},
+						{
+							"end": 14.8,
+							"start": 14.4,
+							"text": "count"
+						},
+						{
+							"end": 15.2,
+							"start": 14.8,
+							"text": "the"
+						},
+						{
+							"end": 15.6,
+							"start": 15.2,
+							"text": "fading"
+						},
+						{
+							"end": 16.0,
+							"start": 15.6,
+							"text": "city"
+						},
+						{
+							"end": 16.4,
+							"start": 16.0,
+							"text": "lights"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 16.4,
+					"start": 14.0
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights",
+			"name": "word path: a run padded with foreign words starts at the line's own first word"
+		},
+		{
+			"cues": [
+				{
+					"end": 44.8,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la we count the fading city lights another mile of rusted signs",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "the"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "lantern"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "hums"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "quietly"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "tonight"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "la"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "la"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "la"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "la"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "la"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "la"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "la"
+						},
+						{
+							"end": 5.2,
+							"start": 4.8,
+							"text": "la"
+						},
+						{
+							"end": 5.6,
+							"start": 5.2,
+							"text": "la"
+						},
+						{
+							"end": 6.0,
+							"start": 5.6,
+							"text": "la"
+						},
+						{
+							"end": 6.4,
+							"start": 6.0,
+							"text": "la"
+						},
+						{
+							"end": 6.8,
+							"start": 6.4,
+							"text": "la"
+						},
+						{
+							"end": 7.2,
+							"start": 6.8,
+							"text": "la"
+						},
+						{
+							"end": 7.6,
+							"start": 7.2,
+							"text": "la"
+						},
+						{
+							"end": 8.0,
+							"start": 7.6,
+							"text": "la"
+						},
+						{
+							"end": 8.4,
+							"start": 8.0,
+							"text": "la"
+						},
+						{
+							"end": 8.8,
+							"start": 8.4,
+							"text": "la"
+						},
+						{
+							"end": 9.2,
+							"start": 8.8,
+							"text": "la"
+						},
+						{
+							"end": 9.6,
+							"start": 9.2,
+							"text": "la"
+						},
+						{
+							"end": 10.0,
+							"start": 9.6,
+							"text": "la"
+						},
+						{
+							"end": 10.4,
+							"start": 10.0,
+							"text": "la"
+						},
+						{
+							"end": 10.8,
+							"start": 10.4,
+							"text": "la"
+						},
+						{
+							"end": 11.2,
+							"start": 10.8,
+							"text": "la"
+						},
+						{
+							"end": 11.6,
+							"start": 11.2,
+							"text": "la"
+						},
+						{
+							"end": 12.0,
+							"start": 11.6,
+							"text": "la"
+						},
+						{
+							"end": 12.4,
+							"start": 12.0,
+							"text": "la"
+						},
+						{
+							"end": 12.8,
+							"start": 12.4,
+							"text": "la"
+						},
+						{
+							"end": 13.2,
+							"start": 12.8,
+							"text": "la"
+						},
+						{
+							"end": 13.6,
+							"start": 13.2,
+							"text": "la"
+						},
+						{
+							"end": 14.0,
+							"start": 13.6,
+							"text": "la"
+						},
+						{
+							"end": 14.4,
+							"start": 14.0,
+							"text": "la"
+						},
+						{
+							"end": 14.8,
+							"start": 14.4,
+							"text": "la"
+						},
+						{
+							"end": 15.2,
+							"start": 14.8,
+							"text": "la"
+						},
+						{
+							"end": 15.6,
+							"start": 15.2,
+							"text": "la"
+						},
+						{
+							"end": 16.0,
+							"start": 15.6,
+							"text": "la"
+						},
+						{
+							"end": 16.4,
+							"start": 16.0,
+							"text": "la"
+						},
+						{
+							"end": 16.8,
+							"start": 16.4,
+							"text": "la"
+						},
+						{
+							"end": 17.2,
+							"start": 16.8,
+							"text": "la"
+						},
+						{
+							"end": 17.6,
+							"start": 17.2,
+							"text": "la"
+						},
+						{
+							"end": 18.0,
+							"start": 17.6,
+							"text": "la"
+						},
+						{
+							"end": 18.4,
+							"start": 18.0,
+							"text": "la"
+						},
+						{
+							"end": 18.8,
+							"start": 18.4,
+							"text": "la"
+						},
+						{
+							"end": 19.2,
+							"start": 18.8,
+							"text": "la"
+						},
+						{
+							"end": 19.6,
+							"start": 19.2,
+							"text": "la"
+						},
+						{
+							"end": 20.0,
+							"start": 19.6,
+							"text": "la"
+						},
+						{
+							"end": 20.4,
+							"start": 20.0,
+							"text": "la"
+						},
+						{
+							"end": 20.8,
+							"start": 20.4,
+							"text": "la"
+						},
+						{
+							"end": 21.2,
+							"start": 20.8,
+							"text": "la"
+						},
+						{
+							"end": 21.6,
+							"start": 21.2,
+							"text": "la"
+						},
+						{
+							"end": 22.0,
+							"start": 21.6,
+							"text": "la"
+						},
+						{
+							"end": 22.4,
+							"start": 22.0,
+							"text": "la"
+						},
+						{
+							"end": 22.8,
+							"start": 22.4,
+							"text": "la"
+						},
+						{
+							"end": 23.2,
+							"start": 22.8,
+							"text": "la"
+						},
+						{
+							"end": 23.6,
+							"start": 23.2,
+							"text": "la"
+						},
+						{
+							"end": 24.0,
+							"start": 23.6,
+							"text": "la"
+						},
+						{
+							"end": 24.4,
+							"start": 24.0,
+							"text": "la"
+						},
+						{
+							"end": 24.8,
+							"start": 24.4,
+							"text": "la"
+						},
+						{
+							"end": 25.2,
+							"start": 24.8,
+							"text": "la"
+						},
+						{
+							"end": 25.6,
+							"start": 25.2,
+							"text": "la"
+						},
+						{
+							"end": 26.0,
+							"start": 25.6,
+							"text": "la"
+						},
+						{
+							"end": 26.4,
+							"start": 26.0,
+							"text": "la"
+						},
+						{
+							"end": 26.8,
+							"start": 26.4,
+							"text": "la"
+						},
+						{
+							"end": 27.2,
+							"start": 26.8,
+							"text": "la"
+						},
+						{
+							"end": 27.6,
+							"start": 27.2,
+							"text": "la"
+						},
+						{
+							"end": 28.0,
+							"start": 27.6,
+							"text": "la"
+						},
+						{
+							"end": 28.4,
+							"start": 28.0,
+							"text": "la"
+						},
+						{
+							"end": 28.8,
+							"start": 28.4,
+							"text": "la"
+						},
+						{
+							"end": 29.2,
+							"start": 28.8,
+							"text": "la"
+						},
+						{
+							"end": 29.6,
+							"start": 29.2,
+							"text": "la"
+						},
+						{
+							"end": 30.0,
+							"start": 29.6,
+							"text": "la"
+						},
+						{
+							"end": 30.4,
+							"start": 30.0,
+							"text": "la"
+						},
+						{
+							"end": 30.8,
+							"start": 30.4,
+							"text": "la"
+						},
+						{
+							"end": 31.2,
+							"start": 30.8,
+							"text": "la"
+						},
+						{
+							"end": 31.6,
+							"start": 31.2,
+							"text": "la"
+						},
+						{
+							"end": 32.0,
+							"start": 31.6,
+							"text": "la"
+						},
+						{
+							"end": 32.4,
+							"start": 32.0,
+							"text": "la"
+						},
+						{
+							"end": 32.8,
+							"start": 32.4,
+							"text": "la"
+						},
+						{
+							"end": 33.2,
+							"start": 32.8,
+							"text": "la"
+						},
+						{
+							"end": 33.6,
+							"start": 33.2,
+							"text": "la"
+						},
+						{
+							"end": 34.0,
+							"start": 33.6,
+							"text": "la"
+						},
+						{
+							"end": 34.4,
+							"start": 34.0,
+							"text": "la"
+						},
+						{
+							"end": 34.8,
+							"start": 34.4,
+							"text": "la"
+						},
+						{
+							"end": 35.2,
+							"start": 34.8,
+							"text": "la"
+						},
+						{
+							"end": 35.6,
+							"start": 35.2,
+							"text": "la"
+						},
+						{
+							"end": 36.0,
+							"start": 35.6,
+							"text": "la"
+						},
+						{
+							"end": 36.4,
+							"start": 36.0,
+							"text": "la"
+						},
+						{
+							"end": 36.8,
+							"start": 36.4,
+							"text": "la"
+						},
+						{
+							"end": 37.2,
+							"start": 36.8,
+							"text": "la"
+						},
+						{
+							"end": 37.6,
+							"start": 37.2,
+							"text": "la"
+						},
+						{
+							"end": 38.0,
+							"start": 37.6,
+							"text": "la"
+						},
+						{
+							"end": 38.4,
+							"start": 38.0,
+							"text": "la"
+						},
+						{
+							"end": 38.8,
+							"start": 38.4,
+							"text": "la"
+						},
+						{
+							"end": 39.2,
+							"start": 38.8,
+							"text": "la"
+						},
+						{
+							"end": 39.6,
+							"start": 39.2,
+							"text": "la"
+						},
+						{
+							"end": 40.0,
+							"start": 39.6,
+							"text": "la"
+						},
+						{
+							"end": 40.4,
+							"start": 40.0,
+							"text": "la"
+						},
+						{
+							"end": 40.8,
+							"start": 40.4,
+							"text": "we"
+						},
+						{
+							"end": 41.2,
+							"start": 40.8,
+							"text": "count"
+						},
+						{
+							"end": 41.6,
+							"start": 41.2,
+							"text": "the"
+						},
+						{
+							"end": 42.0,
+							"start": 41.6,
+							"text": "fading"
+						},
+						{
+							"end": 42.4,
+							"start": 42.0,
+							"text": "city"
+						},
+						{
+							"end": 42.8,
+							"start": 42.4,
+							"text": "lights"
+						},
+						{
+							"end": 43.2,
+							"start": 42.8,
+							"text": "another"
+						},
+						{
+							"end": 43.6,
+							"start": 43.2,
+							"text": "mile"
+						},
+						{
+							"end": 44.0,
+							"start": 43.6,
+							"text": "of"
+						},
+						{
+							"end": 44.4,
+							"start": 44.0,
+							"text": "rusted"
+						},
+						{
+							"end": 44.8,
+							"start": 44.4,
+							"text": "signs"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 42.8,
+					"start": 40.4
+				},
+				{
+					"end": 44.8,
+					"start": 42.8
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights\nanother mile of rusted signs",
+			"name": "word path: a long stretch of unmatched words does not hide the lines behind it"
+		},
+		{
+			"cues": [
+				{
+					"end": 3.2,
+					"start": 0.0,
+					"text": "a year ago the lantern hums quietly tonight",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "a"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "year"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "ago"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "the"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "lantern"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "hums"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "quietly"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "tonight"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 3.2,
+					"start": 1.2
+				}
+			],
+			"lyrics": "yeah\nthe lantern hums quietly tonight",
+			"name": "word path: a two-word line is not lit by words that merely resemble it"
+		},
+		{
+			"cues": [
+				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "yeah the lantern hums quietly tonight",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "yeah"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "the"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "lantern"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "hums"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "quietly"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "tonight"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 0.4,
+					"start": 0.0
+				},
+				{
+					"end": 2.4,
+					"start": 0.4
+				}
+			],
+			"lyrics": "yeah\nthe lantern hums quietly tonight",
+			"name": "word path: a two-word line is lit where the take sings it word for word"
+		},
+		{
+			"cues": [
+				{
+					"end": 0.5,
+					"start": 0.0,
+					"text": "year"
+				},
+				{
+					"end": 3.0,
+					"start": 0.5,
+					"text": "the lantern hums quietly tonight"
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 3.0,
+					"start": 0.5
+				}
+			],
+			"lyrics": "yeah\nthe lantern hums quietly tonight",
+			"name": "cue window: a two-word line is not lit by a cue that merely resembles it"
+		},
+		{
+			"cues": [
+				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "hold"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "the"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "line"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "until"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 2.4,
+					"start": 0.0
+				}
+			],
+			"lyrics": "hold the line\nhold the line until the morning",
+			"name": "word path: a line that opens the next one leaves those words to the sung line"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.8,
+					"start": 0.0,
+					"text": "hold the line until the morning hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "hold"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "the"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "line"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "until"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "morning"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "hold"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "the"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "line"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "until"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "the"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				{
+					"end": 4.8,
+					"start": 2.4
+				}
+			],
+			"lyrics": "hold the line until the morning\nhold the line until the morning",
+			"name": "word path: two identical lines in a row take successive renditions"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.4,
+					"start": 0.0,
+					"text": "i wanted you to stay tonight i wanted you to stay",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "i"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "wanted"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "you"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "to"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "stay"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "tonight"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "i"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "wanted"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "you"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "to"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "stay"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				{
+					"end": 4.4,
+					"start": 2.4
+				}
+			],
+			"lyrics": "i wanted you to stay tonight\ni wanted you to stay",
+			"name": "word path: a line nested in its neighbour takes its own rendition"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.4,
+					"start": 0.0,
+					"text": "another mile of rusted signs silver rain calls on the roof",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "another"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "mile"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "of"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "rusted"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "signs"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "silver"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "rain"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "calls"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "on"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "the"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "roof"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 4.4,
+					"start": 2.0
+				}
+			],
+			"lyrics": "silver rain falls on the roof\nanother mile of rusted signs\nsilver rain calls on the roof",
+			"name": "word path: a near-duplicate line elsewhere never takes another line's rendition"
+		},
+		{
+			"cues": [
+				{
+					"end": 19.2,
+					"start": 0.0,
+					"text": "the river carries every promise home the river carries every promise home hold the line until the morning hold the line until the morning the river carries every promise home we count the fading city lights hold the line until the morning hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "the"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "river"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "carries"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "every"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "promise"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "home"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "the"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "river"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "carries"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "every"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "promise"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "home"
+						},
+						{
+							"end": 5.2,
+							"start": 4.8,
+							"text": "hold"
+						},
+						{
+							"end": 5.6,
+							"start": 5.2,
+							"text": "the"
+						},
+						{
+							"end": 6.0,
+							"start": 5.6,
+							"text": "line"
+						},
+						{
+							"end": 6.4,
+							"start": 6.0,
+							"text": "until"
+						},
+						{
+							"end": 6.8,
+							"start": 6.4,
+							"text": "the"
+						},
+						{
+							"end": 7.2,
+							"start": 6.8,
+							"text": "morning"
+						},
+						{
+							"end": 7.6,
+							"start": 7.2,
+							"text": "hold"
+						},
+						{
+							"end": 8.0,
+							"start": 7.6,
+							"text": "the"
+						},
+						{
+							"end": 8.4,
+							"start": 8.0,
+							"text": "line"
+						},
+						{
+							"end": 8.8,
+							"start": 8.4,
+							"text": "until"
+						},
+						{
+							"end": 9.2,
+							"start": 8.8,
+							"text": "the"
+						},
+						{
+							"end": 9.6,
+							"start": 9.2,
+							"text": "morning"
+						},
+						{
+							"end": 10.0,
+							"start": 9.6,
+							"text": "the"
+						},
+						{
+							"end": 10.4,
+							"start": 10.0,
+							"text": "river"
+						},
+						{
+							"end": 10.8,
+							"start": 10.4,
+							"text": "carries"
+						},
+						{
+							"end": 11.2,
+							"start": 10.8,
+							"text": "every"
+						},
+						{
+							"end": 11.6,
+							"start": 11.2,
+							"text": "promise"
+						},
+						{
+							"end": 12.0,
+							"start": 11.6,
+							"text": "home"
+						},
+						{
+							"end": 12.4,
+							"start": 12.0,
+							"text": "we"
+						},
+						{
+							"end": 12.8,
+							"start": 12.4,
+							"text": "count"
+						},
+						{
+							"end": 13.2,
+							"start": 12.8,
+							"text": "the"
+						},
+						{
+							"end": 13.6,
+							"start": 13.2,
+							"text": "fading"
+						},
+						{
+							"end": 14.0,
+							"start": 13.6,
+							"text": "city"
+						},
+						{
+							"end": 14.4,
+							"start": 14.0,
+							"text": "lights"
+						},
+						{
+							"end": 14.8,
+							"start": 14.4,
+							"text": "hold"
+						},
+						{
+							"end": 15.2,
+							"start": 14.8,
+							"text": "the"
+						},
+						{
+							"end": 15.6,
+							"start": 15.2,
+							"text": "line"
+						},
+						{
+							"end": 16.0,
+							"start": 15.6,
+							"text": "until"
+						},
+						{
+							"end": 16.4,
+							"start": 16.0,
+							"text": "the"
+						},
+						{
+							"end": 16.8,
+							"start": 16.4,
+							"text": "morning"
+						},
+						{
+							"end": 17.2,
+							"start": 16.8,
+							"text": "hold"
+						},
+						{
+							"end": 17.6,
+							"start": 17.2,
+							"text": "the"
+						},
+						{
+							"end": 18.0,
+							"start": 17.6,
+							"text": "line"
+						},
+						{
+							"end": 18.4,
+							"start": 18.0,
+							"text": "until"
+						},
+						{
+							"end": 18.8,
+							"start": 18.4,
+							"text": "the"
+						},
+						{
+							"end": 19.2,
+							"start": 18.8,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				{
+					"end": 4.8,
+					"start": 2.4
+				},
+				{
+					"end": 7.2,
+					"start": 4.8
+				},
+				{
+					"end": 9.6,
+					"start": 7.2
+				},
+				{
+					"end": 12.0,
+					"start": 9.6
+				},
+				{
+					"end": 14.4,
+					"start": 12.0
+				},
+				{
+					"end": 16.8,
+					"start": 14.4
+				},
+				{
+					"end": 19.2,
+					"start": 16.8
+				}
+			],
+			"lyrics": "the river carries every promise home\nthe river carries every promise home\nhold the line until the morning\nhold the line until the morning\nthe river carries every promise home\nwe count the fading city lights\nhold the line until the morning\nhold the line until the morning",
+			"name": "word path: a take built from repeated lines lights every one of them in order"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.4,
+					"start": 0.0,
+					"text": "another mile of rusted signs hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "another"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "mile"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "of"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "rusted"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "signs"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "hold"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "the"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "line"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "until"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "the"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 4.4,
+					"start": 2.0
+				}
+			],
+			"lyrics": "hold the line\nanother mile of rusted signs\nhold the line until the morning",
+			"name": "word path: a sub-phrase of a later line never steals that line's opening"
+		},
+		{
+			"cues": [
+				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "hold"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "the"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "line"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "until"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 2.4,
+					"start": 0.0
+				}
+			],
+			"lyrics": "until the morning\nhold the line until the morning",
+			"name": "word path: a tail of a later line never steals that line's words"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.4,
+					"start": 0.0,
+					"text": "another mile of rusted signs hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "another"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "mile"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "of"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "rusted"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "signs"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "hold"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "the"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "line"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "until"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "the"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 4.4,
+					"start": 2.0
+				}
+			],
+			"lyrics": "until the morning\nanother mile of rusted signs\nhold the line until the morning",
+			"name": "word path: a tail of a later line stays dark across a verse between them"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.8,
+					"start": 0.0,
+					"text": "hold the line until the mornin hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "hold"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "the"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "line"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "until"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "mornin"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "hold"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "the"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "line"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "until"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "the"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				{
+					"end": 4.8,
+					"start": 2.4
+				}
+			],
+			"lyrics": "hold the line until the morning\nhold the line until the morning",
+			"name": "word path: two renditions differing by a dropped letter light in order"
+		},
+		{
+			"cues": [
+				{
+					"end": 6.8,
+					"start": 0.0,
+					"text": "i wanted you to stay tonightx another mile of rusted signs i wanted you to stay tonight",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "i"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "wanted"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "you"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "to"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "stay"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "tonightx"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "another"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "mile"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "of"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "rusted"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "signs"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "i"
+						},
+						{
+							"end": 5.2,
+							"start": 4.8,
+							"text": "wanted"
+						},
+						{
+							"end": 5.6,
+							"start": 5.2,
+							"text": "you"
+						},
+						{
+							"end": 6.0,
+							"start": 5.6,
+							"text": "to"
+						},
+						{
+							"end": 6.4,
+							"start": 6.0,
+							"text": "stay"
+						},
+						{
+							"end": 6.8,
+							"start": 6.4,
+							"text": "tonight"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				null,
+				{
+					"end": 4.4,
+					"start": 2.4
+				},
+				{
+					"end": 6.8,
+					"start": 4.4
+				}
+			],
+			"lyrics": "i wanted you to stay tonight\ni wanted you to stay\nanother mile of rusted signs\ni wanted you to stay tonight",
+			"name": "word path: a prefix line stays dark when only the slipped long line was sung"
+		},
+		{
+			"cues": [
+				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "silver rain falls on the roof",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "silver"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "rain"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "falls"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "on"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "roof"
+						}
+					]
+				}
+			],
+			"intervals": [null, null],
+			"lyrics": "silver rain falls on the roof\nsilver rain calls on the roof",
+			"name": "word path: two lines too alike to tell apart leave the run to neither"
+		},
+		{
+			"cues": [
+				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "silver rain falls on the roof",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "silver"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "rain"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "falls"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "on"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "roof"
+						}
+					]
+				}
+			],
+			"intervals": [null, null, null],
+			"lyrics": "silver rain falls on the roof\nsilver rain calls on the roof\nsilver rain walls on the roof",
+			"name": "word path: three lines too alike to tell apart leave the run to none of them"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.0,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight the lantern hums calmly tonight",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "the"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "lantern"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "hums"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "quietly"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "tonight"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "the"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "lantern"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "hums"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "calmly"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "tonight"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.0,
+					"start": 0.0
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight",
+			"name": "word path: a phrase sung twice takes the clearly better reading"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.0,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight the lantern hums quietly tonite",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "the"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "lantern"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "hums"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "quietly"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "tonight"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "the"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "lantern"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "hums"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "quietly"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "tonite"
+						}
+					]
+				}
+			],
+			"intervals": [null],
+			"lyrics": "the lantern hums quietly tonight",
+			"name": "word path: two readings too alike to tell apart leave the line dark"
+		},
+		{
+			"cues": [
+				{
+					"end": 3.0,
+					"start": 0.0,
+					"text": "silver rain falls on the roof"
+				}
+			],
+			"intervals": [null, null],
+			"lyrics": "silver rain falls on the roof\nsilver rain calls on the roof",
+			"name": "cue window: two lines too alike to tell apart stay dark"
+		},
+		{
+			"cues": [
+				{
+					"end": 6.0,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight we count the fading city lights"
+				},
+				{
+					"end": 9.5,
+					"start": 6.0,
+					"text": "another mile of rusted signs"
+				}
+			],
+			"intervals": [
+				{
+					"end": 6.0,
+					"start": 0.0
+				},
+				{
+					"end": 6.0,
+					"start": 0.0
+				},
+				{
+					"end": 9.5,
+					"start": 6.0
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights\nanother mile of rusted signs",
+			"name": "cue window: both lines of a two-line window carry the whole cue span"
+		},
+		{
+			"cues": [
+				{
+					"end": 10.0,
+					"start": 1.0,
+					"text": "the lantern hums quietly tonight we count the fading city lights another mile of rusted signs"
+				}
+			],
+			"intervals": [
+				{
+					"end": 10.0,
+					"start": 1.0
+				},
+				{
+					"end": 10.0,
+					"start": 1.0
+				},
+				{
+					"end": 10.0,
+					"start": 1.0
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights\nanother mile of rusted signs",
+			"name": "cue window: all three lines of a three-line window carry the whole cue span"
+		},
+		{
+			"cues": [
+				{
+					"end": 3.25,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight"
+				},
+				{
+					"end": 6.5,
+					"start": 3.25,
+					"text": "we count the fading city lights"
+				}
+			],
+			"intervals": [
+				{
+					"end": 3.25,
+					"start": 0.0
+				},
+				{
+					"end": 6.5,
+					"start": 3.25
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights",
+			"name": "cue window: one cue per line keeps the cue span untouched"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.0,
+					"start": 0.0,
+					"text": "a totally unrelated kitchen inventory list"
+				}
+			],
+			"intervals": [null, null],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights",
+			"name": "cue window: a segment matching no line leaves every line dark"
+		},
+		{
+			"cues": [
+				{
+					"end": 3.0,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight"
+				},
+				{
+					"end": 6.0,
+					"start": 3.0,
+					"text": "another mile of rusted signs"
+				}
+			],
+			"intervals": [
+				{
+					"end": 3.0,
+					"start": 0.0
+				},
+				null,
+				{
+					"end": 6.0,
+					"start": 3.0
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights\nanother mile of rusted signs",
+			"name": "cue window: a skipped line stays dark and the next cue still lands"
+		}
+	],
 	"fixtures": [
 		{
 			"cue": "hello there my friend",

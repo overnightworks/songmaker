@@ -140,6 +140,7 @@ from songmaker_cli.api_models.songs import (
 )
 from songmaker_cli.api_models.whisper import (
     WhisperCue,
+    WhisperWordCue,
     stored_whisper_cues,
 )
 from songmaker_cli.api_models.workers import (
@@ -351,6 +352,7 @@ __all__ = [
     "WorkerInfo",
     "WorkerPoolResponse",
     "WhisperCue",
+    "WhisperWordCue",
     "WorkerRegisterRequest",
     "WorkerRegisterResponse",
     "stored_whisper_cues",

@@ -110,10 +110,17 @@ export interface TrackScores {
 	user_notes?: string;
 }
 
+export interface WhisperWordCue {
+	start: number;
+	end: number;
+	text: string;
+}
+
 export interface WhisperCue {
 	start: number;
 	end: number;
 	text: string;
+	words?: WhisperWordCue[] | null;
 }
 
 export interface GenerationItem {

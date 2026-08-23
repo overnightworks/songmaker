@@ -844,8 +844,8 @@ def test_generation_whisper_cues_roundtrip(seeded_session: Session) -> None:
     ]
     d = GenerationResponse.from_orm(gen).model_dump()
     assert d["whisper_cues"] == [
-        {"start": 0.0, "end": 1.25, "text": "hello world"},
-        {"start": 1.25, "end": 2.5, "text": "goodbye moon"},
+        {"start": 0.0, "end": 1.25, "text": "hello world", "words": None},
+        {"start": 1.25, "end": 2.5, "text": "goodbye moon", "words": None},
     ]
     assert all(isinstance(cue, dict) for cue in d["whisper_cues"])
     typed = GenerationResponse.from_orm(gen).whisper_cues

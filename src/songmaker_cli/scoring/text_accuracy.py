@@ -8,7 +8,7 @@ import threading
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from songmaker_cli.api_models.whisper import WhisperCue
+from songmaker_cli.api_models.whisper import WhisperCue, WhisperWordCue
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SharedScorerData, TextAccuracyScore
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
@@ -207,6 +207,31 @@ def _as_seconds(value: object) -> float | None:
     return float(value)
 
 
+def _word_cue_from_whisper_word(word: object) -> WhisperWordCue | None:
+    raw_text = getattr(word, "word", None)
+    if not isinstance(raw_text, str):
+        return None
+    text = raw_text.strip()
+    if not text:
+        return None
+    start = _as_seconds(getattr(word, "start", None))
+    end = _as_seconds(getattr(word, "end", None))
+    if start is None or end is None:
+        raise ValueError("Whisper word is missing start or end")
+    return WhisperWordCue(start=start, end=end, text=text)
+
+
+def _word_cues_from_whisper_segment(segment: object) -> list[WhisperWordCue] | None:
+    raw_words = getattr(segment, "words", None)
+    if raw_words is None:
+        return None
+    word_cues = [
+        cue for cue in (_word_cue_from_whisper_word(word) for word in raw_words)
+        if cue is not None
+    ]
+    return word_cues or None
+
+
 def _cue_from_whisper_segment(segment: object) -> WhisperCue | None:
     raw_text = getattr(segment, "text", None)
     if not isinstance(raw_text, str):
@@ -218,7 +243,10 @@ def _cue_from_whisper_segment(segment: object) -> WhisperCue | None:
     end = _as_seconds(getattr(segment, "end", None))
     if start is None or end is None:
         raise ValueError("Whisper segment is missing start or end")
-    return WhisperCue(start=start, end=end, text=text)
+    return WhisperCue(
+        start=start, end=end, text=text,
+        words=_word_cues_from_whisper_segment(segment),
+    )
 
 
 def _transcribe(
@@ -233,6 +261,7 @@ def _transcribe(
         "condition_on_previous_text": False,
         "beam_size": WHISPER_BEAM_SIZE,
         "temperature": WHISPER_TEMPERATURE,
+        "word_timestamps": True,
     }
     if initial_prompt:
         kwargs["initial_prompt"] = initial_prompt

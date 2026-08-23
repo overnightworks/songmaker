@@ -41,6 +41,7 @@ _RESPONSE_MODEL_NAMES: dict[str, str] = {
     "AlbumCoverUrls": "AlbumCoverUrls",
     "AlbumResponse": "AlbumItem",
     "WhisperCue": "WhisperCue",
+    "WhisperWordCue": "WhisperWordCue",
     "GenerationResponse": "GenerationItem",
     "VersionResponse": "VersionItem",
     "SongResponse": "SongItem",
@@ -115,6 +116,7 @@ _EMIT_ORDER: list[str] = [
     "GenerationParams",
     "VersionGenerationParams",
     "TrackScores",
+    "WhisperWordCue",
     "WhisperCue",
     "GenerationItem",
     "VersionItem",
@@ -354,6 +356,7 @@ def generate() -> str:
         UserResponse,
         VersionResponse,
         WhisperCue,
+        WhisperWordCue,
         WorkerEphemeralState,
         WorkerIdentity,
         WorkerInfo,
@@ -362,6 +365,7 @@ def generate() -> str:
 
     models: dict[str, type[BaseModel]] = {
         "VersionGenerationParams": GenerationParams,
+        "WhisperWordCue": WhisperWordCue,
         "WhisperCue": WhisperCue,
         "GenerationItem": GenerationResponse,
         "VersionItem": VersionResponse,
