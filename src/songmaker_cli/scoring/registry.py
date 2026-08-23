@@ -47,9 +47,6 @@ class ScorerSpec:
     needs_audio: bool = True
     device: str = DEVICE_CPU
     host: ScorerHost = ScorerHost.CHILD
-    # Consumes another scorer's output, so it can only run once that scorer
-    # is done. Reported by /scoring/schema; see the invariant below.
-    after_gpu: bool = False
 
 
 SCORERS: dict[str, ScorerSpec] = {
@@ -64,7 +61,6 @@ SCORERS: dict[str, ScorerSpec] = {
         output_keys=("lyrical_coherence", "lyrical_summary"),
         needs_audio=False,
         host=ScorerHost.PARENT,
-        after_gpu=True,
     ),
     "emotional_dynamics": ScorerSpec(
         name="emotional_dynamics",
@@ -104,9 +100,4 @@ VALID_SCORER_NAMES: frozenset[str] = frozenset(SCORERS.keys())
 
 CHILD_SCORER_NAMES: frozenset[str] = frozenset(
     name for name, spec in SCORERS.items() if spec.host is ScorerHost.CHILD
-)
-
-assert all(spec.host is ScorerHost.PARENT for spec in SCORERS.values() if spec.after_gpu), (
-    "a scorer that consumes another scorer's output runs in the parent, on the "
-    "result the child returned — the child itself schedules no second phase"
 )

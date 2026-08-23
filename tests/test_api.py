@@ -1349,7 +1349,8 @@ def test_scoring_schema_endpoint(client: TestClient) -> None:
     by_name = {s["name"]: s for s in body["scorers"]}
     assert by_name["audiobox"]["device"] == "gpu"
     assert by_name["audiobox"]["needs_audio"] is False
-    assert by_name["lyrical_coherence"]["after_gpu"] is True
+    assert by_name["lyrical_coherence"]["host"] == "parent"
+    assert by_name["audiobox"]["host"] == "child"
     assert "audiobox_enjoyment" in by_name["audiobox"]["output_keys"]
     assert "silence_gaps" in by_name["silence"]["output_keys"]
 
