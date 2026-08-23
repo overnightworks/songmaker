@@ -2,7 +2,8 @@
 
 Drives:
 - @register decorator validation in pipeline.py
-- needs_audio / device / after_gpu metadata for the pipeline scheduler
+- needs_audio / device metadata for the child's pipeline scheduler
+- host: which process runs a scorer (see ScorerHost)
 - output_keys for SongScores.to_dict()
 - VALID_SCORER_NAMES used by ScoreRequest validation
 - /scoring/schema API endpoint
@@ -11,6 +12,7 @@ Drives:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Final
 
 DEVICE_CPU: Final[str] = "cpu"
@@ -20,6 +22,23 @@ DEVICE_GPU: Final[str] = "gpu"
 # model load counts against it (see PipelineConfig.timeout_for).
 TEXT_ACCURACY_SCORER: Final[str] = "text_accuracy"
 
+# Named because the worker parent runs it itself, on the result the scorer
+# child returned (see ScorerHost and jobs/scoring.py).
+LYRICAL_COHERENCE_SCORER: Final[str] = "lyrical_coherence"
+
+
+class ScorerHost(StrEnum):
+    """Which process runs a scorer.
+
+    The scorer child loads third-party model weights and is spawned without
+    any secret in its environment, so a scorer that calls an external
+    service runs in the worker parent instead — on the result the child
+    already returned.
+    """
+
+    CHILD = "child"
+    PARENT = "parent"
+
 
 @dataclass(frozen=True)
 class ScorerSpec:
@@ -27,6 +46,9 @@ class ScorerSpec:
     output_keys: tuple[str, ...]
     needs_audio: bool = True
     device: str = DEVICE_CPU
+    host: ScorerHost = ScorerHost.CHILD
+    # Consumes another scorer's output, so it can only run once that scorer
+    # is done. Reported by /scoring/schema; see the invariant below.
     after_gpu: bool = False
 
 
@@ -37,10 +59,11 @@ SCORERS: dict[str, ScorerSpec] = {
         needs_audio=False,
         device=DEVICE_CPU,
     ),
-    "lyrical_coherence": ScorerSpec(
-        name="lyrical_coherence",
+    LYRICAL_COHERENCE_SCORER: ScorerSpec(
+        name=LYRICAL_COHERENCE_SCORER,
         output_keys=("lyrical_coherence", "lyrical_summary"),
         needs_audio=False,
+        host=ScorerHost.PARENT,
         after_gpu=True,
     ),
     "emotional_dynamics": ScorerSpec(
@@ -78,3 +101,12 @@ SCORERS: dict[str, ScorerSpec] = {
 }
 
 VALID_SCORER_NAMES: frozenset[str] = frozenset(SCORERS.keys())
+
+CHILD_SCORER_NAMES: frozenset[str] = frozenset(
+    name for name, spec in SCORERS.items() if spec.host is ScorerHost.CHILD
+)
+
+assert all(spec.host is ScorerHost.PARENT for spec in SCORERS.values() if spec.after_gpu), (
+    "a scorer that consumes another scorer's output runs in the parent, on the "
+    "result the child returned — the child itself schedules no second phase"
+)

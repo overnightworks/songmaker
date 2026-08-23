@@ -27,7 +27,12 @@ STORED_SCORES: dict[str, object] = {
     "detected_language": "de",
     "silence_gaps": 3,
     "silence_longest": 4.0,
+    "lyrical_coherence": 7,
+    "lyrical_summary": "coherent enough",
 }
+
+COHERENT_VERDICT = '{"score": 9, "issues": [], "summary": "great"}'
+
 
 FRESH_SILENCE = SilenceScore(
     total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
@@ -74,6 +79,22 @@ def scored_generation(tmp_path: Path):
     mp3.parent.mkdir(parents=True)
     mp3.write_bytes(b"fake-mp3")
     return factory
+
+
+@pytest.fixture(autouse=True)
+def claude_call():
+    """The parent judges lyrical coherence in this process, so every run here
+    goes through this mock: no test reaches the real provider, and a run that
+    must not be judged at all can prove the call never happened."""
+    with patch("songmaker_cli.scoring.lyrical_coherence.call_claude") as call:
+        call.return_value = _verdict(COHERENT_VERDICT)
+        yield call
+
+
+def _verdict(text: str):
+    from songmaker_cli.claude.provider import ClaudeResponse
+
+    return ClaudeResponse(text=text)
 
 
 def _score(db_factory, result: SongScores, audio_dir: Path) -> dict[str, object]:
@@ -174,18 +195,68 @@ def test_successful_scorer_drops_a_key_it_no_longer_emits(
 
 
 def test_run_where_every_scorer_failed_leaves_all_scores_intact(
+    scored_generation, tmp_path: Path, claude_call,
+) -> None:
+    """Without a transcription the parent judge is skipped too, so this run
+    writes nothing at all."""
+    result = SongScores(runs=(_run("text_accuracy", ScorerOutcome.TIMED_OUT),))
+
+    stored = _score(scored_generation, result, tmp_path / "audio")
+
+    assert stored == STORED_SCORES
+    claude_call.assert_not_called()
+
+
+def test_coherence_judged_in_the_parent_is_stored_with_the_childs_scores(
     scored_generation, tmp_path: Path,
 ) -> None:
+    """lyrical_coherence runs here, after the child returned — its verdict
+    lands in the same score row as the scores the child produced."""
     result = SongScores(
+        text_accuracy=_text_accuracy(detected_language="en"),
+        runs=(_run("text_accuracy", ScorerOutcome.OK),),
+    )
+
+    stored = _score(scored_generation, result, tmp_path / "audio")
+
+    assert stored["lyrical_coherence"] == 9
+    assert stored["lyrical_summary"] == "great"
+    assert stored["text_accuracy"] == 50.0
+
+
+def test_a_failed_judgement_keeps_the_stored_coherence_score(
+    scored_generation, tmp_path: Path, claude_call,
+) -> None:
+    claude_call.side_effect = RuntimeError("Claude unreachable")
+    result = SongScores(
+        text_accuracy=_text_accuracy(),
+        runs=(_run("text_accuracy", ScorerOutcome.OK),),
+    )
+
+    stored = _score(scored_generation, result, tmp_path / "audio")
+
+    assert stored["lyrical_coherence"] == STORED_SCORES["lyrical_coherence"]
+    assert stored["lyrical_summary"] == STORED_SCORES["lyrical_summary"]
+
+
+def test_a_run_without_a_transcript_keeps_the_stored_coherence_score(
+    scored_generation, tmp_path: Path, claude_call,
+) -> None:
+    """The judge reads the transcription out of the child's result; without
+    one it is skipped, exactly as it was inside the pipeline."""
+    result = SongScores(
+        silence=FRESH_SILENCE,
         runs=(
-            _run("text_accuracy", ScorerOutcome.TIMED_OUT),
-            _run("lyrical_coherence", ScorerOutcome.SKIPPED),
+            _run("text_accuracy", ScorerOutcome.FAILED),
+            _run("silence", ScorerOutcome.OK),
         ),
     )
 
     stored = _score(scored_generation, result, tmp_path / "audio")
 
-    assert stored == STORED_SCORES
+    claude_call.assert_not_called()
+    assert stored["lyrical_coherence"] == STORED_SCORES["lyrical_coherence"]
+    assert stored["silence_gaps"] == 0
 
 
 def test_first_scoring_run_creates_the_score_row(tmp_path: Path) -> None:

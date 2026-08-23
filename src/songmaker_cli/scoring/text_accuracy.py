@@ -10,7 +10,7 @@ from pathlib import Path
 
 from songmaker_cli.api_models.whisper import WhisperCue, WhisperWordCue
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.models import SharedScorerData, TextAccuracyScore
+from songmaker_cli.scoring.models import TextAccuracyScore
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
@@ -34,13 +34,13 @@ def clear_cache() -> None:
 @register("text_accuracy")
 def score_text_accuracy(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,
+    config: PipelineConfig | None = None,
 ) -> TextAccuracyScore:
     """Transcribe with Whisper and compare to intended lyrics.
 
-    Stores the transcription in shared_data["whisper_text"] so that
-    downstream scorers (lyrical_coherence) can access it without
-    going through the filesystem. When no intended lyrics are
+    The transcription travels on the returned score (see
+    ``TextAccuracyScore.transcript``), which is what the generation stores
+    and what the coherence judge reads. When no intended lyrics are
     available, transcription still runs and the similarity ratio is
     reported as 0.0.
     """
@@ -71,9 +71,6 @@ def score_text_accuracy(
         log.warning("Whisper hallucination detected — no real vocals in %s", mp3_path.name)
         trans_lines = ()
         cues = []
-
-    if shared_data is not None:
-        shared_data.whisper_text = "\n".join(trans_lines)
 
     return TextAccuracyScore(
         similarity_ratio=round(ratio, 3),

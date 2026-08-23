@@ -193,13 +193,28 @@ class ScorerProcess:
         self._process: multiprocessing.Process | None = None
         self._conn: Connection | None = None
         self._pipe_lock = threading.Lock()
+        # A scorer over budget was abandoned inside this child and still runs
+        # there. Set and read under _pipe_lock, so the next request — even a
+        # concurrent one — cannot reuse the child it tainted.
+        self._tainted = False
 
     @property
     def alive(self) -> bool:
         return self._process is not None and self._process.is_alive()
 
     def _ensure_started(self) -> Connection:
-        if self.alive and self._conn is not None:
+        """The connection to a child fit to serve a request.
+
+        A tainted child is never handed out: whatever the job that tainted it
+        did or did not get around to, the next request gets a fresh process.
+        """
+        if self._tainted and self.alive:
+            log.warning(
+                "Scorer subprocess (PID %d) still runs a scorer over budget — replacing it",
+                self._process.pid,
+            )
+            self._kill()
+        elif self.alive and self._conn is not None:
             return self._conn
         self._cleanup_dead()
         parent_conn, child_conn = _ctx.Pipe()
@@ -207,6 +222,7 @@ class ScorerProcess:
         self._process.start()
         child_conn.close()
         self._conn = parent_conn
+        self._tainted = False
         log.info("Scorer subprocess started (PID %d)", self._process.pid)
         return parent_conn
 
@@ -245,7 +261,9 @@ class ScorerProcess:
                 )
                 try:
                     conn.send(request)
-                    return self._poll_response(conn, scorers, config, on_progress)
+                    scores = self._poll_response(conn, scorers, config, on_progress)
+                    self._tainted = scores.any_child_scorer_timed_out
+                    return scores
                 except (BrokenPipeError, EOFError, ConnectionResetError):
                     if attempt == 2:
                         raise RuntimeError("Scorer subprocess crashed twice — aborting")
@@ -286,6 +304,26 @@ class ScorerProcess:
         )
         self._kill()
         raise TimeoutError(f"Scoring timed out after {config.pipeline_timeout}s")
+
+    def recycle(self) -> None:
+        """Kill the child now, rather than leaving it to the next request.
+
+        A scorer over budget is abandoned, not stopped — a Python thread
+        cannot be killed. That thread keeps holding the child's model globals
+        and its GPU memory, and killing the process is the only way to
+        reclaim them. ``_ensure_started`` would replace a tainted child
+        anyway; calling this right after a run frees the GPU immediately
+        instead of at the next request, which may be minutes away.
+        """
+        with self._pipe_lock:
+            if not self.alive:
+                self._cleanup_dead()
+                return
+            log.warning(
+                "Recycling scorer subprocess (PID %d) — a scorer over budget still runs in it",
+                self._process.pid,
+            )
+            self._kill()
 
     def release_gpu(self, timeout: int = 30) -> None:
         if not self.alive:

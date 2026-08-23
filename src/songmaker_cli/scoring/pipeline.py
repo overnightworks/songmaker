@@ -10,13 +10,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
-from pydantic import SecretStr
-
 if TYPE_CHECKING:
     import numpy as np
 
 from songmaker_cli.constants import (
-    CLAUDE_SCORING_MODEL_DEFAULT,
     SCORER_TIMEOUT_SECONDS,
     SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS,
     SCORING_PIPELINE_TIMEOUT_SECONDS,
@@ -25,12 +22,13 @@ from songmaker_cli.constants import (
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
     SCORE_TYPES,
+    ScorerExecution,
     ScorerOutcome,
     ScorerRun,
-    SharedScorerData,
     SongScores,
 )
 from songmaker_cli.scoring.registry import (
+    CHILD_SCORER_NAMES,
     DEVICE_CPU,
     DEVICE_GPU,
     SCORERS,
@@ -59,14 +57,14 @@ class AudioData:
 
 @dataclass(frozen=True)
 class PipelineConfig:
-    """Configuration passed to all scorers.
+    """Configuration passed to all scorers in the scorer child.
 
-    Deliberately self-contained: every scorer that runs inside the scorer
-    subprocess reads its configuration — including secrets such as
-    ``anthropic_api_key`` — from this object, never from ``get_settings()``.
-    The parent process resolves Settings and fills these fields before
-    sending a ``ScoreRequest`` across the pipe to the child, whose own
-    ``os.environ`` has had ``SECRET_ENV_KEYS`` scrubbed at spawn.
+    Deliberately self-contained: every scorer reads its configuration from
+    this object, never from ``get_settings()``. The parent process resolves
+    Settings and fills these fields before sending a ``ScoreRequest`` across
+    the pipe to the child, whose own ``os.environ`` has had
+    ``SECRET_ENV_KEYS`` scrubbed at spawn. No field here is a secret — every
+    scorer that needs one runs in the parent (see ``ScorerHost``).
     """
 
     whisper_model: str = "large-v3"  # turbo is faster but hallucinates on ~5% of songs
@@ -75,8 +73,6 @@ class PipelineConfig:
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
     text_accuracy_timeout: int = TEXT_ACCURACY_TIMEOUT_SECONDS
     pipeline_timeout: int = 0
-    claude_scoring_model: str = CLAUDE_SCORING_MODEL_DEFAULT
-    anthropic_api_key: SecretStr | None = None
 
     def __post_init__(self) -> None:
         if self.pipeline_timeout <= 0:
@@ -90,33 +86,32 @@ class PipelineConfig:
         return self.scorer_timeout
 
     def _watchdog_timeout(self) -> int:
-        """Outer budget for the whole run.
+        """Outer budget for the whole child run.
 
-        A run is two sequential phases: the concurrent CPU/GPU phase, bounded
-        by its slowest scorer, then the deferred scorers that consume its
-        output. The watchdog must outlive both plus audio load and thread
+        The child runs its scorers concurrently, so the run is bounded by its
+        slowest one. The watchdog must outlive that plus audio load and thread
         joins — if it fires first the subprocess is killed and even the values
         this run did produce are lost.
         """
-        concurrent_phase = max(self.scorer_timeout, self.text_accuracy_timeout)
-        deferred_phase = self.scorer_timeout
+        slowest_scorer = max(self.scorer_timeout, self.text_accuracy_timeout)
         return max(
             SCORING_PIPELINE_TIMEOUT_SECONDS,
-            concurrent_phase + deferred_phase + SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS,
+            slowest_scorer + SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS,
         )
 
 
 ScorerFunc = Callable[
-    [Path, SongMeta | None, AudioData | None, PipelineConfig, SharedScorerData], object,
+    [Path, SongMeta | None, AudioData | None, PipelineConfig], object,
 ]
 
 
 class ScorerRegistry:
-    """Registry of scorer functions. Supports lazy loading and test isolation.
+    """Registry of the scorer functions this child runs. Supports lazy
+    loading and test isolation.
 
-    Metadata (needs_audio, device, after_gpu, output_keys) lives in the
-    SCORERS table in scoring/registry.py — this class only holds the
-    function refs populated at module-import time by @register.
+    Metadata (needs_audio, device, host, output_keys) lives in the SCORERS
+    table in scoring/registry.py — this class only holds the function refs
+    populated at module-import time by @register.
     """
 
     def __init__(self, *, autoload: bool = False) -> None:
@@ -127,14 +122,15 @@ class ScorerRegistry:
     def register(self, name: str) -> Callable[[ScorerFunc], ScorerFunc]:
         """Decorator to register a scorer function.
 
-        The name must exist in SCORERS (scoring/registry.py).
+        The name must be a child-hosted scorer in SCORERS
+        (scoring/registry.py) — a parent-hosted one never runs here.
         """
 
         def decorator(func: ScorerFunc) -> ScorerFunc:
-            if name not in VALID_SCORER_NAMES:
+            if name not in CHILD_SCORER_NAMES:
                 raise ValueError(
-                    f"Scorer name '{name}' does not match any SongScores field. "
-                    f"Valid names: {sorted(VALID_SCORER_NAMES)}"
+                    f"Scorer name '{name}' is not a scorer this process runs. "
+                    f"Valid names: {sorted(CHILD_SCORER_NAMES)}"
                 )
             self._scorers[name] = func
             return func
@@ -156,10 +152,6 @@ class ScorerRegistry:
         spec = SCORERS.get(name)
         return spec.device == DEVICE_GPU if spec else False
 
-    def scorer_after_gpu(self, name: str) -> bool:
-        spec = SCORERS.get(name)
-        return spec.after_gpu if spec else False
-
     def all_names(self) -> list[str]:
         return list(self._scorers.keys())
 
@@ -167,7 +159,6 @@ class ScorerRegistry:
         "songmaker_cli.scoring.audiobox_aesthetics",
         "songmaker_cli.scoring.bpm_accuracy",
         "songmaker_cli.scoring.emotional_dynamics",
-        "songmaker_cli.scoring.lyrical_coherence",
         "songmaker_cli.scoring.silence_detection",
         "songmaker_cli.scoring.spectral_quality",
         "songmaker_cli.scoring.text_accuracy",
@@ -227,55 +218,41 @@ class ScorerDependencyUnavailable(Exception):
     """
 
 
-@dataclass(frozen=True)
-class _ScorerExecution:
-    """What one scorer produced, and how it ended."""
-
-    run: ScorerRun
-    value: object | None = None
-
-
-def _run_with_timeout(
-    func: ScorerFunc, mp3_path: Path, meta: SongMeta | None,
-    audio_data: AudioData | None, config: PipelineConfig,
-    shared_data: SharedScorerData, timeout: int, name: str,
-) -> object:
-    """Run a scorer with a thread-based timeout.
+def _call_with_timeout(call: Callable[[], object], timeout: int, name: str) -> object:
+    """Run a scorer call with a thread-based timeout.
 
     Uses ThreadPoolExecutor instead of SIGALRM because SIGALRM is unsafe
-    with C extensions (numpy, torch, librosa) that hold the GIL.
+    with C extensions (numpy, torch, librosa) that hold the GIL. A thread
+    cannot be killed, so a scorer over budget is abandoned, not stopped.
     """
     if timeout <= 0:
-        return func(mp3_path, meta, audio_data, config, shared_data)
+        return call()
 
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(func, mp3_path, meta, audio_data, config, shared_data)
-        try:
-            return future.result(timeout=timeout)
-        except FuturesTimeout:
-            raise _ScorerTimeout(f"Scorer '{name}' timed out after {timeout}s")
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        return pool.submit(call).result(timeout=timeout)
+    except FuturesTimeout:
+        raise _ScorerTimeout(f"Scorer '{name}' timed out after {timeout}s")
+    finally:
+        # wait=False: the budget is a ceiling. Joining here would hand the
+        # scorer that blew it exactly the time the timeout just denied it.
+        pool.shutdown(wait=False)
 
 
-def _ended(name: str, outcome: ScorerOutcome, detail: str) -> _ScorerExecution:
-    return _ScorerExecution(run=ScorerRun(scorer=name, outcome=outcome, detail=detail))
+def _ended(name: str, outcome: ScorerOutcome, detail: str) -> ScorerExecution:
+    return ScorerExecution(run=ScorerRun(scorer=name, outcome=outcome, detail=detail))
 
 
-def _run_scorer(
-    func: ScorerFunc, mp3_path: Path, meta: SongMeta | None,
-    audio_data: AudioData | None, config: PipelineConfig,
-    shared_data: SharedScorerData, name: str,
-) -> _ScorerExecution:
+def run_scorer(name: str, call: Callable[[], object], timeout: int) -> ScorerExecution:
     """Run one scorer under its own time budget and classify how it ended.
 
     Never raises — a scorer's fate is data, so one scorer cannot abort the
-    run and only a successful one may overwrite a stored score.
+    run and only a successful one may overwrite a stored score. Used for
+    both the child's own scorers and the parent-hosted ones.
     """
-    timeout = config.timeout_for(name)
     log.info("Running scorer: %s (budget %ds)", name, timeout)
     try:
-        value = _run_with_timeout(
-            func, mp3_path, meta, audio_data, config, shared_data, timeout, name,
-        )
+        value = _call_with_timeout(call, timeout, name)
     except _ScorerTimeout as exc:
         log.error("Scorer '%s' timed out after %ds — keeping its stored score", name, timeout)
         return _ended(name, ScorerOutcome.TIMED_OUT, str(exc))
@@ -296,20 +273,32 @@ def _run_scorer(
             name, ScorerOutcome.FAILED,
             f"returned {type(value).__name__}, expected {expected_type.__name__}",
         )
-    return _ScorerExecution(run=ScorerRun(scorer=name, outcome=ScorerOutcome.OK), value=value)
+    return ScorerExecution(run=ScorerRun(scorer=name, outcome=ScorerOutcome.OK), value=value)
 
 
-def _unrunnable(name: str, reg: ScorerRegistry) -> _ScorerExecution | None:
+def _unrunnable(name: str, reg: ScorerRegistry) -> ScorerExecution | None:
     """Classify a requested scorer that has no registered function.
 
-    A known scorer whose module could not be imported is skipped; a name that
-    is not a scorer at all is a caller mistake and only warns.
+    A child scorer whose module could not be imported is skipped; a name this
+    process does not run at all is a caller mistake and only warns.
     """
-    if name in VALID_SCORER_NAMES:
+    if name in CHILD_SCORER_NAMES:
         log.warning("Scorer '%s' is not registered — skipping", name)
         return _ended(name, ScorerOutcome.SKIPPED, "scorer not registered")
     log.warning("Unknown scorer: %s (available: %s)", name, ", ".join(reg.all_names()))
     return None
+
+
+def _scorer_call(
+    name: str,
+    reg: ScorerRegistry,
+    mp3_path: Path,
+    meta: SongMeta | None,
+    audio_data: AudioData | None,
+    config: PipelineConfig,
+) -> Callable[[], object]:
+    func = reg.get(name)
+    return lambda: func(mp3_path, meta, audio_data, config)
 
 
 def _submit_scorers(
@@ -320,21 +309,22 @@ def _submit_scorers(
     meta: SongMeta | None,
     audio_data: AudioData | None,
     config: PipelineConfig,
-    shared_data: SharedScorerData,
-) -> list[Future[_ScorerExecution]]:
+) -> list[Future[ScorerExecution]]:
     return [
         pool.submit(
-            _run_scorer, reg.get(name), mp3_path, meta, audio_data,
-            config, shared_data, name,
+            run_scorer,
+            name,
+            _scorer_call(name, reg, mp3_path, meta, audio_data, config),
+            config.timeout_for(name),
         )
         for name in names
     ]
 
 
 def _collect_futures(
-    futures: list[Future[_ScorerExecution]],
+    futures: list[Future[ScorerExecution]],
     on_scorer_done: Callable[[str], None],
-) -> list[_ScorerExecution]:
+) -> list[ScorerExecution]:
     executions = []
     for future in as_completed(futures):
         execution = future.result()
@@ -344,7 +334,7 @@ def _collect_futures(
 
 
 def _aggregate(
-    executions: list[_ScorerExecution], requested_order: list[str],
+    executions: list[ScorerExecution], requested_order: list[str],
 ) -> SongScores:
     """Build the run's SongScores, with runs ordered as the caller asked."""
     by_scorer = {execution.run.scorer: execution for execution in executions}
@@ -367,7 +357,7 @@ def run_scoring_pipeline(
     registry: ScorerRegistry | None = None,
     on_progress: Callable[[int, int, str], None] | None = None,
 ) -> SongScores:
-    """Run all (or selected) scorers on an MP3 and return aggregated scores.
+    """Run all (or selected) child scorers on an MP3 and return aggregated scores.
 
     Audio is loaded once and shared across all scorers. Every scorer reports
     its own outcome (ok / failed / skipped / timed out) in ``SongScores.runs``;
@@ -376,8 +366,6 @@ def run_scoring_pipeline(
     Execution strategy for parallelism:
     1. Independent CPU scorers run concurrently in a thread pool
     2. GPU scorers run sequentially in the main thread (VRAM contention)
-    3. Scorers that consume another scorer's output (after_gpu) run once the
-       GPU and CPU phases are done, so their input is actually there
     CPU and GPU phases overlap — CPU scorers execute during GPU inference.
     """
     reg = registry or default_registry
@@ -387,7 +375,7 @@ def run_scoring_pipeline(
     if config is None:
         config = PipelineConfig()
 
-    executions: list[_ScorerExecution] = []
+    executions: list[ScorerExecution] = []
     runnable: list[str] = []
     for name in scorers:
         if reg.get(name) is not None:
@@ -401,8 +389,7 @@ def run_scoring_pipeline(
     audio_data = load_audio(mp3_path) if any_needs_audio else None
 
     gpu_names = [n for n in runnable if reg.scorer_uses_gpu(n)]
-    deferred_names = [n for n in runnable if reg.scorer_after_gpu(n)]
-    cpu_names = [n for n in runnable if n not in gpu_names and n not in deferred_names]
+    cpu_names = [n for n in runnable if n not in gpu_names]
 
     completed_count = 0
 
@@ -412,24 +399,19 @@ def run_scoring_pipeline(
         if on_progress:
             on_progress(completed_count, len(runnable), name)
 
-    shared_data = SharedScorerData()
-
     with ThreadPoolExecutor(max_workers=min(max(len(cpu_names), 1), os.cpu_count() or 4)) as pool:
         cpu_futures = _submit_scorers(
-            pool, cpu_names, reg, mp3_path, meta, audio_data, config, shared_data,
+            pool, cpu_names, reg, mp3_path, meta, audio_data, config,
         )
 
         for name in gpu_names:
-            executions.append(_run_scorer(
-                reg.get(name), mp3_path, meta, audio_data, config, shared_data, name,
+            executions.append(run_scorer(
+                name,
+                _scorer_call(name, reg, mp3_path, meta, audio_data, config),
+                config.timeout_for(name),
             ))
             _on_scorer_done(name)
 
         executions.extend(_collect_futures(cpu_futures, _on_scorer_done))
-
-        deferred_futures = _submit_scorers(
-            pool, deferred_names, reg, mp3_path, meta, audio_data, config, shared_data,
-        )
-        executions.extend(_collect_futures(deferred_futures, _on_scorer_done))
 
     return _aggregate(executions, scorers)

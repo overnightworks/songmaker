@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -562,11 +563,46 @@ def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:
 # ── run_scoring_job ─────────────────────────────────────────────────
 
 
-def _scoring_result(with_whisper: bool = False) -> SongScores:
-    """A finished scoring run: emotional_dynamics always, text_accuracy on request."""
+@pytest.fixture(autouse=True)
+def stubbed_claude_judge():
+    """The scoring job judges lyrical coherence in this process, right after
+    the scorer child returns — no test may reach the real Claude CLI or API."""
+    from songmaker_cli.claude.provider import ClaudeResponse
+
+    with patch(
+        "songmaker_cli.scoring.lyrical_coherence.call_claude",
+        return_value=ClaudeResponse(text='{"score": 6, "issues": [], "summary": "fine"}'),
+    ) as judge:
+        yield judge
+
+
+def _seed_generation(db_factory) -> None:
+    with db_factory() as session:
+        session.add(Generation(
+            id="g1", song_id="s1", version_id="v1", generation_number=1,
+            mp3_path="user1/g1.mp3", seed=42,
+        ))
+        session.commit()
+
+
+def _audio_dir_with_mp3(tmp_path: Path) -> Path:
+    audio_dir = tmp_path / "audio"
+    mp3_file = audio_dir / "user1" / "g1.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3")
+    return audio_dir
+
+
+def _scoring_result(
+    with_whisper: bool = False, timed_out: bool = False,
+) -> SongScores:
+    """A finished scoring run: emotional_dynamics always, text_accuracy on
+    request, and optionally a scorer that blew its budget."""
     from songmaker_cli.api_models.whisper import WhisperCue
 
     runs = [ScorerRun(scorer="emotional_dynamics", outcome=ScorerOutcome.OK)]
+    if timed_out:
+        runs.append(ScorerRun(scorer="text_accuracy", outcome=ScorerOutcome.TIMED_OUT))
     text_accuracy = None
     if with_whisper:
         text_accuracy = TextAccuracyScore(
@@ -590,18 +626,143 @@ def _scoring_result(with_whisper: bool = False) -> SongScores:
     )
 
 
-def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
-    audio_dir = tmp_path / "audio"
-    mp3_file = audio_dir / "user1" / "g1.mp3"
-    mp3_file.parent.mkdir(parents=True, exist_ok=True)
-    mp3_file.write_bytes(b"fake-mp3")
+@pytest.fixture()
+def live_scorer_process():
+    """A really spawned scorer child. Each test stubs the scoring call itself
+    — the child's pid is the evidence here, not the scores."""
+    from songmaker_cli.scoring.subprocess_runner import ScorerProcess
+
+    process = ScorerProcess()
+    process._ensure_started()
+    yield process
+    process.shutdown()
+
+
+def test_scoring_job_recycles_the_child_a_scorer_was_left_running_in(
+    seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A scorer over budget is abandoned, not stopped — it keeps holding the
+    child's models and GPU memory. This run's values are kept; the child is
+    not, so nothing of it outlives the request."""
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+    pid_before = live_scorer_process._process.pid
+    monkeypatch.setattr(
+        live_scorer_process, "score",
+        lambda *_args, **_kwargs: _scoring_result(timed_out=True),
+    )
+
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
     with seeded_db() as session:
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="user1/g1.mp3", seed=42,
-        ))
-        session.commit()
+        assert get_job(session, "j2").status == "completed"
+        stored = session.query(Score).filter_by(generation_id="g1").one()
+        assert stored.value["dynamics"] == 55.0
+
+    with pytest.raises(OSError):
+        os.kill(pid_before, 0)
+    live_scorer_process._ensure_started()
+    assert live_scorer_process._process.pid != pid_before
+
+
+def test_scoring_job_keeps_the_child_when_every_scorer_stayed_in_budget(
+    seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+    pid_before = live_scorer_process._process.pid
+    monkeypatch.setattr(
+        live_scorer_process, "score", lambda *_args, **_kwargs: _scoring_result(),
+    )
+
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    assert live_scorer_process.alive
+    assert live_scorer_process._process.pid == pid_before
+
+
+def test_a_cancelled_job_still_keeps_its_tainted_child_out_of_the_next_request(
+    seeded_db, tmp_path: Path, live_scorer_process,
+) -> None:
+    """A job cancelled while scoring returns before it can recycle anything.
+    The child it left a scorer running in must still not serve the next
+    request — ScorerProcess refuses to hand it out."""
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+    from songmaker_cli.scoring.subprocess_runner import ScorerProcess
+
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+    pid_before = live_scorer_process._process.pid
+
+    def _cancel_and_report_a_timeout(*_args, **_kwargs) -> SongScores:
+        _cancel_job(seeded_db, "j2")
+        return _scoring_result(timed_out=True)
+
+    with (
+        patch(
+            "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+        ),
+        patch.object(
+            ScorerProcess, "_poll_response", side_effect=_cancel_and_report_a_timeout,
+        ),
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    with seeded_db() as session:
+        assert get_job(session, "j2").status == "cancelled"
+    assert live_scorer_process._process.pid == pid_before, (
+        "the cancelled job returned before it could recycle anything"
+    )
+
+    live_scorer_process.score(
+        audio_dir / "user1" / "g1.mp3", scorers=[], config=PipelineConfig(device="cpu"),
+    )
+
+    assert live_scorer_process._process.pid != pid_before
+
+
+def test_scoring_job_keeps_the_child_when_only_the_parents_judge_timed_out(
+    seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
+    stubbed_claude_judge, caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The coherence judge runs here, not in the child. When it blows its
+    budget the abandoned thread is this process's problem — killing the child
+    would reclaim nothing, so it keeps running."""
+    import logging
+    import time
+
+    monkeypatch.setenv("SCORER_TIMEOUT_SECONDS", "1")
+    stubbed_claude_judge.side_effect = lambda *_args, **_kwargs: time.sleep(2)
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+    pid_before = live_scorer_process._process.pid
+    monkeypatch.setattr(
+        live_scorer_process, "score",
+        lambda *_args, **_kwargs: _scoring_result(with_whisper=True),
+    )
+
+    with (
+        caplog.at_level(logging.INFO),
+        patch(
+            "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+        ),
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    assert "lyrical_coherence=timed_out" in caplog.text
+    assert live_scorer_process.alive
+    assert live_scorer_process._process.pid == pid_before
+
+
+def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
 
     mock_result = _scoring_result()
 
@@ -624,59 +785,102 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
         assert gen.whisper_cues is None
 
 
-def test_scoring_job_passes_anthropic_api_key_via_config(
+def test_scoring_job_judges_coherence_here_and_sends_no_secret_to_the_child(
     seeded_db, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The scorer subprocess scrubs ANTHROPIC_API_KEY from its own
-    environment at spawn, so jobs/scoring.py must resolve it here in the
-    parent process and carry it across the pipe on PipelineConfig — the
-    only way lyrical_coherence can reach it inside the child.
+    """The scorer child is spawned with ANTHROPIC_API_KEY scrubbed and loads
+    third-party model weights, so the key must not cross the pipe at all:
+    this process judges coherence itself, on the result the child returned.
     """
     from pydantic import SecretStr
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "parent-resolved-key")
-
-    audio_dir = tmp_path / "audio"
-    mp3_file = audio_dir / "user1" / "g1.mp3"
-    mp3_file.parent.mkdir(parents=True, exist_ok=True)
-    mp3_file.write_bytes(b"fake-mp3")
-
-    with seeded_db() as session:
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="user1/g1.mp3", seed=42,
-        ))
-        session.commit()
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
 
     captured: dict = {}
 
     def _capture_score(mp3_path, meta=None, scorers=None, config=None,
                        job_id=None, on_progress=None):
-        captured["config"] = config
-        return _scoring_result()
+        captured["child_config"] = config
+        return _scoring_result(with_whisper=True)
 
-    with patch(
-        "songmaker_cli.jobs.get_scorer_process",
-        return_value=MagicMock(score=_capture_score),
+    def _capture_judge(scores, meta, config):
+        captured["judged"] = scores
+        captured["judge_config"] = config
+        return scores
+
+    with (
+        patch(
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=MagicMock(score=_capture_score),
+        ),
+        patch("songmaker_cli.jobs.scoring.judge_lyrical_coherence", _capture_judge),
     ):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
-    config = captured["config"]
-    assert config.anthropic_api_key == SecretStr("parent-resolved-key")
+    assert captured["judge_config"].api_key == SecretStr("parent-resolved-key")
+    assert captured["judged"].text_accuracy is not None
+    assert not any(
+        isinstance(value, SecretStr) for value in vars(captured["child_config"]).values()
+    )
+
+
+def test_scoring_job_never_asks_the_child_for_the_parent_hosted_scorer(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+
+    captured: dict = {}
+
+    def _capture_score(mp3_path, meta=None, scorers=None, config=None,
+                       job_id=None, on_progress=None):
+        captured["scorers"] = scorers
+        return _scoring_result()
+
+    with (
+        patch(
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=MagicMock(score=_capture_score),
+        ),
+        patch(
+            "songmaker_cli.jobs.scoring.judge_lyrical_coherence",
+            side_effect=lambda scores, meta, config: scores,
+        ) as judge,
+    ):
+        run_scoring_job(
+            "j2", "g1", ["silence", "lyrical_coherence"],
+            db_factory=seeded_db, audio_dir=audio_dir,
+        )
+
+    assert captured["scorers"] == ["silence"]
+    judge.assert_called_once()
+
+
+def test_scoring_job_skips_the_judge_when_coherence_was_not_requested(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+
+    with (
+        patch(
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=MagicMock(score=MagicMock(return_value=_scoring_result())),
+        ),
+        patch("songmaker_cli.jobs.scoring.judge_lyrical_coherence") as judge,
+    ):
+        run_scoring_job(
+            "j2", "g1", ["silence"], db_factory=seeded_db, audio_dir=audio_dir,
+        )
+
+    judge.assert_not_called()
 
 
 def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
-    audio_dir = tmp_path / "audio"
-    mp3_file = audio_dir / "user1" / "g1.mp3"
-    mp3_file.parent.mkdir(parents=True, exist_ok=True)
-    mp3_file.write_bytes(b"fake-mp3")
-
-    with seeded_db() as session:
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="user1/g1.mp3", seed=42,
-        ))
-        session.commit()
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
 
     mock_result = _scoring_result(with_whisper=True)
 
@@ -690,6 +894,7 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
 
     with seeded_db() as session:
         gen = get_generation(session, "g1")
+        assert gen.whisper_text == mock_result.text_accuracy.transcript
         assert gen.whisper_text == "hello\nworld"
         assert gen.whisper_cues == [
             {"start": 0.0, "end": 0.8, "text": "hello"},
@@ -790,17 +995,8 @@ def test_scoring_job_uses_configured_per_scorer_budgets(
     monkeypatch.setenv("SCORER_TIMEOUT_SECONDS", "45")
     monkeypatch.setenv("TEXT_ACCURACY_TIMEOUT_SECONDS", "600")
 
-    audio_dir = tmp_path / "audio"
-    mp3_file = audio_dir / "user1" / "g1.mp3"
-    mp3_file.parent.mkdir(parents=True, exist_ok=True)
-    mp3_file.write_bytes(b"fake-mp3")
-
-    with seeded_db() as session:
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="user1/g1.mp3", seed=42,
-        ))
-        session.commit()
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
 
     captured: dict = {}
 
@@ -849,17 +1045,8 @@ def test_scoring_job_mp3_not_found(seeded_db, tmp_path: Path) -> None:
 
 
 def test_scoring_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Path) -> None:
-    audio_dir = tmp_path / "audio"
-    mp3_file = audio_dir / "user1" / "g1.mp3"
-    mp3_file.parent.mkdir(parents=True, exist_ok=True)
-    mp3_file.write_bytes(b"fake-mp3")
-
-    with seeded_db() as session:
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="user1/g1.mp3", seed=42,
-        ))
-        session.commit()
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
 
     _cancel_job(seeded_db, "j2")
     scorer = MagicMock(score=MagicMock(return_value=_scoring_result()))
@@ -875,17 +1062,8 @@ def test_scoring_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Path)
 
 
 def test_scoring_job_cancel_during_run_skips_finalize(seeded_db, tmp_path: Path) -> None:
-    audio_dir = tmp_path / "audio"
-    mp3_file = audio_dir / "user1" / "g1.mp3"
-    mp3_file.parent.mkdir(parents=True, exist_ok=True)
-    mp3_file.write_bytes(b"fake-mp3")
-
-    with seeded_db() as session:
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="user1/g1.mp3", seed=42,
-        ))
-        session.commit()
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
 
     def _score_and_cancel(mp3_path, meta=None, scorers=None, config=None,
                           job_id=None, on_progress=None):
@@ -910,17 +1088,8 @@ def test_scoring_job_cancel_during_run_skips_finalize(seeded_db, tmp_path: Path)
 
 
 def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
-    audio_dir = tmp_path / "audio"
-    mp3_file = audio_dir / "user1" / "g1.mp3"
-    mp3_file.parent.mkdir(parents=True, exist_ok=True)
-    mp3_file.write_bytes(b"fake-mp3")
-
-    with seeded_db() as session:
-        session.add(Generation(
-            id="g1", song_id="s1", version_id="v1", generation_number=1,
-            mp3_path="user1/g1.mp3", seed=42,
-        ))
-        session.commit()
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
 
     with (
         patch(
