@@ -208,6 +208,7 @@
 		sheetLabel={SHARE_NOW_PLAYING_SHEET_LABEL}
 		showTakeLabel={false}
 		lyricsEmptyLabel={SHARE_NOW_PLAYING_NO_LYRICS}
+		lyricsCues={playback.currentCues}
 		{rightPanel}
 	/>
 {/if}

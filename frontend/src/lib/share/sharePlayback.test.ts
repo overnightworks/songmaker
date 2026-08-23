@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { QueueStreamManifest } from '$lib/api/types';
+import type { QueueStreamManifest, SharedAlbumSongPayload, WhisperCue } from '$lib/api/types';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { fromSharedAlbum, type SharedCollectionView } from './sharedCollection';
@@ -48,6 +48,27 @@ class FakeAudio {
 	}
 }
 
+const CUES: WhisperCue[] = [{ start: 0, end: 3, text: 'verse one' }];
+
+function albumSong(
+	id: string,
+	title: string,
+	trackNumber: number,
+	audioUrl: string | null,
+	audioDuration: number | null
+): SharedAlbumSongPayload {
+	return {
+		id,
+		title,
+		track_number: trackNumber,
+		audio_url: audioUrl,
+		generation_id: audioUrl ? `gen-${id}` : null,
+		audio_duration: audioDuration,
+		lyrics: audioUrl ? 'verse one' : null,
+		whisper_cues: audioUrl ? CUES : null
+	};
+}
+
 function albumView(): SharedCollectionView {
 	return fromSharedAlbum({
 		title: 'Album',
@@ -55,9 +76,9 @@ function albumView(): SharedCollectionView {
 		subtitle: '',
 		year: '',
 		songs: [
-			{ id: 's1', title: 'First', track_number: 1, audio_url: '/shared/slug/audio/s1.mp3' },
-			{ id: 's2', title: 'Second', track_number: 2, audio_url: '/shared/slug/audio/s2.mp3' },
-			{ id: 's3', title: 'Third (unpicked)', track_number: 3, audio_url: null }
+			albumSong('s1', 'First', 1, '/shared/slug/audio/s1.mp3', 128),
+			albumSong('s2', 'Second', 2, '/shared/slug/audio/s2.mp3', 96),
+			albumSong('s3', 'Third (unpicked)', 3, null, null)
 		]
 	});
 }
@@ -148,6 +169,14 @@ describe('start()', () => {
 		playback.stop();
 	});
 
+	it('shows each row its payload duration without a stream manifest', () => {
+		const playback = new SharePlayback();
+		playback.start(albumView(), null);
+
+		expect(playback.queueRows.map((r) => r.durationSec)).toEqual([128, 96]);
+		playback.stop();
+	});
+
 	it('installs onAuthLost: null since a share owner never receives an auth-recovery callback', () => {
 		const playback = new SharePlayback();
 		playback.start(albumView(), null);
@@ -168,6 +197,18 @@ describe('toggle() and classic playback', () => {
 		expect(audioPlayer.current?.songId).toBe('s1');
 		expect(fakeAudio.src).toBe('/shared/slug/audio/s1.mp3');
 		expect(playback.currentTrack?.key).toBe('s1');
+		playback.stop();
+	});
+
+	it('exposes the playing take cues so the shared Now Playing can follow the words', () => {
+		const playback = new SharePlayback();
+		const view = albumView();
+		playback.start(view, null);
+
+		expect(playback.currentCues).toBeNull();
+		playback.toggle(view.tracks[0]);
+
+		expect(playback.currentCues).toEqual(CUES);
 		playback.stop();
 	});
 
