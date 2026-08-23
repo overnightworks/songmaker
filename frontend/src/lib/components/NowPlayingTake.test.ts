@@ -18,7 +18,7 @@ vi.mock('$lib/stores/navigation', () => ({
 
 import { get } from 'svelte/store';
 import { TAKE_RESCORING_LABEL } from '$lib/constants';
-import { NOW_PLAYING_LYRICS_RESCORE_HINT } from '$lib/constants/now-playing';
+import { NOW_PLAYING_RESCORE_ACTION_LABEL } from '$lib/constants/now-playing';
 import { activeJobs } from '$lib/stores/jobs';
 import { pinSeed, rate, rescore, setKeep, setPick } from '$lib/stores/takeActions';
 import { revealPlayingSong } from '$lib/stores/navigation';
@@ -194,14 +194,14 @@ describe('NowPlayingTake', () => {
 		// #141/9: without cues the lyrics cannot follow the audio, and the panel
 		// says why instead of leaving the listener to guess.
 		await render({ generation: generation({ whisper_cues: null }) });
-		expect(target.textContent).toContain(NOW_PLAYING_LYRICS_RESCORE_HINT);
+		expect(target.textContent).toContain(NOW_PLAYING_RESCORE_ACTION_LABEL);
 	});
 
 	it('re-scores the take from the hint, once', async () => {
 		await render({ generation: generation({ whisper_cues: null }) });
 		const hint = target.querySelector<HTMLButtonElement>('.rescore-hint');
 		if (!hint) throw new Error('Expected the re-score hint button');
-		expect(hint.textContent?.trim()).toBe(NOW_PLAYING_LYRICS_RESCORE_HINT);
+		expect(hint.textContent?.trim()).toBe(NOW_PLAYING_RESCORE_ACTION_LABEL);
 
 		hint.click();
 		await tick();
@@ -245,7 +245,7 @@ describe('NowPlayingTake', () => {
 				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
 			})
 		});
-		expect(target.textContent).not.toContain(NOW_PLAYING_LYRICS_RESCORE_HINT);
+		expect(target.textContent).not.toContain(NOW_PLAYING_RESCORE_ACTION_LABEL);
 	});
 
 	it.each(['.badge-btn', '.pin-seed', '.use-as-reference', '.rescore-hint'])(

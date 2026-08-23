@@ -98,7 +98,6 @@ const addToPlaylist = vi.fn(async () => undefined);
 
 function mockActions(): GenerationActions {
 	return {
-		score: vi.fn(),
 		pick,
 		keep,
 		del: vi.fn(),
