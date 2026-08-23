@@ -236,6 +236,7 @@
 		<button
 			bind:this={nowPlayingTrigger}
 			class="now-playing-btn"
+			data-hitbox="frequent"
 			onclick={onOpenNowPlaying}
 			disabled={nowPlayingDisabled}
 			aria-label={NOW_PLAYING_LABEL}

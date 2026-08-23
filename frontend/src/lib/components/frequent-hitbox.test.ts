@@ -138,7 +138,8 @@ const INVENTORY = [
 	{ name: 'collection-menu', selector: '.menu-trigger[data-hitbox="frequent"]' },
 	{ name: 'library-filter-chip', selector: '.filter-chip[data-hitbox="frequent"]' },
 	{ name: 'library-sort-select', selector: '.sort-select[data-hitbox="frequent"]' },
-	{ name: 'breadcrumb-link', selector: '.crumb-link[data-hitbox="frequent"]' }
+	{ name: 'breadcrumb-link', selector: '.crumb-link[data-hitbox="frequent"]' },
+	{ name: 'now-playing-trigger', selector: '.now-playing-btn[data-hitbox="frequent"]' }
 ] as const;
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -401,7 +402,8 @@ async function renderInventory(): Promise<RenderedInventory> {
 	const songTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
 	const layoutTarget = document.createElement('div');
-	root.append(themeTarget, playlistTarget, songTarget, pickerTarget, layoutTarget);
+	const playerTarget = document.createElement('div');
+	root.append(themeTarget, playlistTarget, songTarget, pickerTarget, layoutTarget, playerTarget);
 
 	const playlistPickerOnClose = vi.fn();
 
@@ -415,6 +417,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 		})
 	);
 	mounted.push(mount(Layout, { target: layoutTarget, props: { children: layoutChildren } }));
+	mounted.push(mount(PlayerBar, { target: playerTarget }));
 	await tick();
 	await Promise.resolve();
 	await tick();
