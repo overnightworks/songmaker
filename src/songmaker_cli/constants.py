@@ -258,6 +258,14 @@ RATE_LIMIT_SETTING_KEYS = frozenset({
     SETTING_MAX_USER_ACTIVE_JOBS,
 })
 
+# Response compression
+GZIP_MINIMUM_SIZE_BYTES: Final[int] = 1024
+# zlib's own default (6) trades ~0.5pp less reduction than level 9 for
+# roughly a third of the CPU time on a typical ~24 KB whisper_cues JSON
+# payload (measured: level 6 -> 3855 bytes / 0.25ms avg; level 9 -> 3728
+# bytes / 0.70ms avg). Not worth the extra CPU per request for that.
+GZIP_COMPRESS_LEVEL: Final[int] = 6
+
 # SSE streaming
 SSE_POLL_INTERVAL_SECONDS = 1
 RESOURCE_EVENT_STREAM_PATH: Final[str] = "/api/resource-events/stream"

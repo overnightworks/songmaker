@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -22,7 +23,11 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.middleware import AuthenticatedUser, get_current_user
+from songmaker_cli.middleware import (
+    AuthenticatedUser,
+    SelectiveGZipMiddleware,
+    get_current_user,
+)
 
 _DEFAULT_USER_ID = "u-test"
 
@@ -84,6 +89,91 @@ def unauthed_client(tmp_path: Path) -> TestClient:
     app.state.ctx = ctx
     app.include_router(router)
     yield TestClient(app)
+
+
+def _whisper_cues_payload(word_count: int) -> list[dict]:
+    """A realistic word-level Whisper transcript, sized like a real take.
+
+    Mirrors the shape ACE-Step scoring actually stores: one segment per line,
+    each carrying its own word timestamps -- this is the field issue #172
+    measured at ~22 KB raw per take.
+    """
+    words = [
+        {"start": i * 0.4, "end": i * 0.4 + 0.35, "text": f"word{i}"}
+        for i in range(word_count)
+    ]
+    segment_size = 8
+    return [
+        {
+            "start": segment[0]["start"],
+            "end": segment[-1]["end"],
+            "text": " ".join(w["text"] for w in segment),
+            "words": segment,
+        }
+        for segment in (
+            words[i:i + segment_size] for i in range(0, len(words), segment_size)
+        )
+    ]
+
+
+@pytest.fixture()
+def gzip_client(tmp_path: Path) -> TestClient:
+    """Same wiring as `client`, plus the real gzip middleware under test.
+
+    Seeds gen1's `whisper_cues` with a realistic-size transcript so the
+    `/api/songs/s1` payload matches the share-page scenario issue #172
+    measured (~22 KB raw per take of word-level Whisper cues).
+    """
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        session.add(User(
+            id=_DEFAULT_USER_ID, username="test_user",
+            password_hash="unused", role="user",
+        ))
+        session.flush()
+        _seed_db(session, owner_id=_DEFAULT_USER_ID)
+        gen1 = session.get(Generation, "g1")
+        gen1.whisper_text = " ".join(f"word{i}" for i in range(300))
+        gen1.whisper_cues = _whisper_cues_payload(300)
+        session.commit()
+
+    ctx = AppContext(
+        db=factory,
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        session_secret=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
+    from songmaker_cli.api import router
+    app = FastAPI()
+    app.state.ctx = ctx
+    app.dependency_overrides[get_current_user] = _fake_user(
+        _DEFAULT_USER_ID, "test_user", "user",
+    )
+    app.include_router(router)
+    app.add_middleware(
+        SelectiveGZipMiddleware,
+        minimum_size=GZIP_MINIMUM_SIZE_BYTES,
+        compresslevel=GZIP_COMPRESS_LEVEL,
+    )
+    yield TestClient(app)
+
+
+def test_song_detail_response_is_gzip_compressed(gzip_client: TestClient) -> None:
+    resp = gzip_client.get("/api/songs/s1", headers={"Accept-Encoding": "gzip"})
+    assert resp.status_code == 200
+    assert resp.headers.get("content-encoding") == "gzip"
+    compressed_bytes = int(resp.headers["content-length"])
+    decompressed_bytes = len(resp.content)
+    assert compressed_bytes < decompressed_bytes
+
+
+def test_song_detail_response_uncompressed_without_client_support(
+    gzip_client: TestClient,
+) -> None:
+    resp = gzip_client.get("/api/songs/s1", headers={"Accept-Encoding": "identity"})
+    assert resp.status_code == 200
+    assert "content-encoding" not in resp.headers
 
 
 def _make_authed_client(
