@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { ShareResult } from '$lib/api/types';
 	import CollectionHeaderFrame from './CollectionHeaderFrame.svelte';
 	import Breadcrumb from './Breadcrumb.svelte';
@@ -29,6 +30,8 @@
 		offlineSaved?: boolean;
 		offlineSaving?: boolean;
 		offlineProgressLabel?: string | null;
+		/** Album-only metadata editor (subtitle/year) rendered under the title. */
+		metaEditor?: Snippet;
 	}
 
 	let {
@@ -52,7 +55,8 @@
 		onsaveoffline,
 		offlineSaved = false,
 		offlineSaving = false,
-		offlineProgressLabel = null
+		offlineProgressLabel = null,
+		metaEditor
 	}: Props = $props();
 
 	let editableTitle: EditableTitle | undefined = $state();
@@ -83,6 +87,7 @@
 			ariaLabel={`${kind} title`}
 		/>
 	</h2>
+	{#if metaEditor}{@render metaEditor()}{/if}
 	<Breadcrumb items={breadcrumbItems} />
 {/snippet}
 

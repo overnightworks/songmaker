@@ -2,10 +2,10 @@
 	import {
 		deleteAlbum,
 		deleteAlbumCover,
-		renameAlbum,
 		restoreAlbum,
 		shareAlbum,
 		unshareAlbum,
+		updateAlbum,
 		uploadAlbumCover
 	} from '$lib/api/client';
 	import { fetchSongs } from '$lib/api/songs';
@@ -31,6 +31,8 @@
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
 		ALBUM_COVER_ALT_TYPE,
+		ALBUM_YEAR_MAX,
+		ALBUM_YEAR_MIN,
 		collectionRowPlayLabel,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL
@@ -39,6 +41,7 @@
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import type { SongItem } from '$lib/api/types';
+	import AlbumMetaEditor from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import Icon from './Icon.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
@@ -118,11 +121,44 @@
 		if (!selectedAlbum) return;
 		const albumId = selectedAlbum.id;
 		try {
-			const updated = await renameAlbum(albumId, newTitle);
+			const updated = await updateAlbum(albumId, { title: newTitle });
 			updateAlbumInList(albumId, () => updated);
 			addToast('Album renamed', 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Rename failed', 'error');
+			throw e;
+		}
+	}
+
+	async function onSaveAlbumSubtitle(newSubtitle: string): Promise<void> {
+		if (!selectedAlbum) return;
+		const albumId = selectedAlbum.id;
+		try {
+			const updated = await updateAlbum(albumId, { subtitle: newSubtitle });
+			updateAlbumInList(albumId, () => updated);
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Update failed', 'error');
+			throw e;
+		}
+	}
+
+	async function onSaveAlbumYear(newYear: string): Promise<void> {
+		if (!selectedAlbum) return;
+		const albumId = selectedAlbum.id;
+		const year = newYear ? Number(newYear) : null;
+		if (newYear && !Number.isInteger(year)) {
+			addToast('Year must be a whole number', 'error');
+			throw new Error('Year must be a whole number');
+		}
+		if (year !== null && (year < ALBUM_YEAR_MIN || year > ALBUM_YEAR_MAX)) {
+			addToast(`Year must be between ${ALBUM_YEAR_MIN} and ${ALBUM_YEAR_MAX}`, 'error');
+			throw new Error('Year out of range');
+		}
+		try {
+			const updated = await updateAlbum(albumId, { year });
+			updateAlbumInList(albumId, () => updated);
+		} catch (e) {
+			addToast(e instanceof Error ? e.message : 'Update failed', 'error');
 			throw e;
 		}
 	}
@@ -214,7 +250,16 @@
 			onremovecover={onCoverRemove}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
 			onaddsong={openLibraryCreate}
-		/>
+		>
+			{#snippet metaEditor()}
+				<AlbumMetaEditor
+					subtitle={selectedAlbum.subtitle}
+					year={selectedAlbum.year}
+					onsavesubtitle={onSaveAlbumSubtitle}
+					onsaveyear={onSaveAlbumYear}
+				/>
+			{/snippet}
+		</CollectionHeader>
 		<input
 			bind:this={coverInput}
 			class="cover-file-input"

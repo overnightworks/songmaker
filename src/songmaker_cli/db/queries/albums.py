@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import Album, Generation, Song
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
+from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 from songmaker_cli.db.soft_delete import include_deleted
 from songmaker_cli.settings import get_settings
@@ -112,13 +113,33 @@ def create_album(
     return album
 
 
-def rename_album(session: Session, album_id: str, title: str) -> Album:
+def update_album(
+    session: Session,
+    album_id: str,
+    title: str | None = None,
+    subtitle: str | _Unset = UNSET,
+    year: str | _Unset = UNSET,
+) -> Album:
+    """Partially update album metadata.
+
+    `title` of `None` and `subtitle`/`year` of `UNSET` leave that field
+    untouched, letting callers update title, subtitle, and year independently.
+    """
     album = session.query(Album).filter_by(id=album_id).first()
     if not album:
         raise ValueError(f"Album not found: {album_id}")
-    album.title = title
+    applied: dict[str, str] = {}
+    if title is not None:
+        album.title = title
+        applied["title"] = title
+    if not isinstance(subtitle, _Unset):
+        album.subtitle = subtitle
+        applied["subtitle"] = subtitle
+    if not isinstance(year, _Unset):
+        album.year = year
+        applied["year"] = year
     session.flush()
-    log.info("Renamed album %s to %r", album_id, title)
+    log.info("Updated album %s: %s", album_id, applied)
     return album
 
 

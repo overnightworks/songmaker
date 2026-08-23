@@ -1,4 +1,4 @@
-import { mount, tick, unmount, type ComponentProps } from 'svelte';
+import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
@@ -193,6 +193,27 @@ describe('CollectionHeader', () => {
 		expect(heading.tagName).toBe('H2');
 		const editButton = getByRoleButton(heading, 'Edit playlist title');
 		expect(editButton.textContent?.trim()).toBe('Late Night Mix');
+	});
+
+	it('renders the album-only metaEditor snippet under the title, above the breadcrumb', async () => {
+		const metaEditor = createRawSnippet(() => ({
+			render: () => `<p class="album-meta-stub">Live at the Roxy · 1994</p>`
+		}));
+		const target = await render({ ...baseProps(), metaEditor });
+		const heading = getByRoleHeading(target, 'Night Drive');
+		expect(heading.tagName).toBe('H2');
+		const titles = requireElement(target, '.header-titles');
+		const stub = requireElement(titles, '.album-meta-stub');
+		expect(stub.textContent).toBe('Live at the Roxy · 1994');
+		const breadcrumb = requireElement(titles, 'nav');
+		expect(
+			stub.compareDocumentPosition(breadcrumb) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+
+	it('renders no metaEditor area when the caller passes none, as playlists do', async () => {
+		const target = await render({ ...baseProps(), kind: 'playlist' as const });
+		expect(target.querySelector('.album-meta-stub')).toBeNull();
 	});
 
 	it('forwards Rename in the menu to the title EditableTitle interaction', async () => {

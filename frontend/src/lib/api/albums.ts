@@ -25,11 +25,19 @@ export async function createAlbum(title: string, artist: string = ''): Promise<A
 	});
 }
 
-export async function renameAlbum(albumId: string, title: string): Promise<AlbumItem> {
-	return apiFetch<AlbumItem>(`/api/albums/${albumId}/title`, {
+/**
+ * Update album title, subtitle, and/or year independently. A field left
+ * out of `fields` is left unchanged server-side; passing `null` for year
+ * clears it, and an empty string clears the subtitle.
+ */
+export async function updateAlbum(
+	albumId: string,
+	fields: { title?: string; subtitle?: string; year?: number | null }
+): Promise<AlbumItem> {
+	return apiFetch<AlbumItem>(`/api/albums/${albumId}`, {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ title })
+		body: JSON.stringify(fields)
 	});
 }
 

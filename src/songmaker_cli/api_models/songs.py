@@ -93,6 +93,9 @@ def _safe_json_dict(value: object, entity_type: str, entity_id: str) -> dict | N
 _VALID_REPAINT_MODES = frozenset({"conservative", "balanced", "aggressive"})
 _VALID_MODEL_MODES = MODEL_AVAILABLE_MODES
 
+ALBUM_YEAR_MIN = 1900
+ALBUM_YEAR_MAX = 2100
+
 
 GenerationParams = BaseGenerationParams
 
@@ -493,6 +496,18 @@ def _best_generation(generations: list[Generation]) -> Generation | None:
 class AlbumCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     artist: str = Field("", max_length=200)
+
+
+class AlbumUpdateRequest(BaseModel):
+    """Partial update for album metadata — title, subtitle, and year.
+
+    A field absent from the request body is left unchanged. An explicit
+    empty subtitle clears it. Title, if present, must be non-blank.
+    """
+
+    title: str | None = Field(None, max_length=200)
+    subtitle: str | None = Field(None, max_length=400)
+    year: int | None = Field(None, ge=ALBUM_YEAR_MIN, le=ALBUM_YEAR_MAX)
 
 
 class SongCreateRequest(BaseModel):
