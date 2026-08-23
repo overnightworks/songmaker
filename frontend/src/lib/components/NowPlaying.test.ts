@@ -25,7 +25,20 @@ import {
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { setLibraryTakePool } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { HITBOX_FREQUENT_PX } from '$lib/constants';
+import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import NowPlaying from './NowPlaying.svelte';
+
+// jsdom reports a length declared as a custom property verbatim, so a
+// hitbox measurement has to resolve the token itself.
+function px(value: string): number {
+	const resolved = value.startsWith('var(')
+		? getComputedStyle(document.documentElement)
+				.getPropertyValue(value.slice('var('.length, -1).trim())
+				.trim()
+		: value;
+	return Number.parseFloat(resolved);
+}
 
 function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 	return {
@@ -187,6 +200,25 @@ async function renderSurface(playback: PlaybackInfo) {
 }
 
 describe('NowPlaying', () => {
+	it('sizes the Queue | This take tabs to the frequent hitbox on a coarse pointer', async () => {
+		// #163/6: the two tabs are the only way into the queue on a phone.
+		const sheet = document.createElement('style');
+		sheet.dataset.hitboxStyles = 'true';
+		sheet.textContent = hitboxCss;
+		document.head.append(sheet);
+		await renderSurface(info());
+		document.documentElement.dataset.pointer = 'coarse';
+
+		const tabs = Array.from(
+			target.querySelectorAll<HTMLButtonElement>('.panel-toggle [role="tab"]')
+		);
+		expect(tabs).toHaveLength(2);
+		for (const tab of tabs) {
+			expect(px(getComputedStyle(tab).minHeight), tab.textContent ?? '').toBe(HITBOX_FREQUENT_PX);
+		}
+		sheet.remove();
+	});
+
 	it('shows the playing take and its version lyrics, not a later draft', async () => {
 		songList.set([song()]);
 		await renderSurface(info({ lyrics: 'old verse' }));

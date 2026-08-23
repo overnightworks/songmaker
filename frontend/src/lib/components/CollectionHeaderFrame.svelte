@@ -41,7 +41,7 @@
 		{@render titleArea()}
 	</div>
 	<div class="header-actions">
-		<button class="play-btn" onclick={onplay} aria-label="Play">
+		<button class="play-btn" data-hitbox="text" onclick={onplay} aria-label="Play">
 			<Icon name="play" size={16} />
 			<span>Play</span>
 		</button>

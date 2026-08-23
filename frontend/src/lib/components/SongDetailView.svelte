@@ -379,10 +379,9 @@
 		del: onDeleteGeneration,
 		share: onGenShareEnable,
 		unshare: onGenShareDisable,
-		addToPlaylist: async (playlistId, genId) => {
-			await addGenerationToPlaylist(playlistId, genId);
-			addToast('Added to playlist', 'success');
-		},
+		// Plain mutation: the take row that asked for it owns the outcome the
+		// listener sees, success and failure alike (#163/3).
+		addToPlaylist: addGenerationToPlaylist,
 		clickVersion: onVersionClick,
 		useAsSource: (gen) => setSourceFromGeneration(gen, 'repaint')
 	});
@@ -713,6 +712,7 @@
 				<button
 					type="button"
 					class="tab-btn"
+					data-hitbox="text"
 					role="tab"
 					aria-selected={tab === 'write'}
 					class:active={tab === 'write'}
@@ -723,6 +723,7 @@
 				<button
 					type="button"
 					class="tab-btn"
+					data-hitbox="text"
 					role="tab"
 					aria-selected={tab === 'takes'}
 					class:active={tab === 'takes'}

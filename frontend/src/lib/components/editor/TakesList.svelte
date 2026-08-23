@@ -134,6 +134,40 @@
 		return song.generations.filter((g) => g.version_number === versionNumber).length;
 	}
 
+	// The row has room for one number, so it shows the take's headline score:
+	// the listener's own rating when they gave one, otherwise the
+	// highest-ranked automatic score the take actually carries. "Carries"
+	// means the scorer produced a value — a take scored by only some of the
+	// scorers still has a headline, instead of falling back to no pill at all
+	// (#163/4). Ranked as the This-take panel reads, so row and panel never
+	// disagree about what matters. BPM is not in the list: it names the tempo
+	// that was detected, not how good the take is.
+	const HEADLINE_SCORES = [
+		{ key: 'user_rating', label: 'Rating', digits: 0 },
+		{ key: 'text_accuracy', label: 'Lyrics sung', digits: 0 },
+		{ key: 'dynamics', label: 'Dynamics', digits: 0 },
+		{ key: 'audiobox_quality', label: 'Quality', digits: 2 },
+		{ key: 'audiobox_enjoyment', label: 'Enjoyment', digits: 2 },
+		{ key: 'lyrical_coherence', label: 'Coherence', digits: 0 }
+	] as const;
+
+	interface HeadlineScore {
+		label: string;
+		text: string;
+		color: string;
+	}
+
+	function headlineScore(gen: GenerationItem): HeadlineScore | null {
+		const scores = gen.scores;
+		if (!scores) return null;
+		for (const { key, label, digits } of HEADLINE_SCORES) {
+			const value = scores[key];
+			if (value === undefined) continue;
+			return { label, text: value.toFixed(digits), color: scoreColor(key, value) };
+		}
+		return null;
+	}
+
 	function formatDuration(gen: GenerationItem): string | null {
 		const seconds = gen.generation_params?.audio_duration;
 		if (seconds == null) return null;
@@ -359,6 +393,7 @@
 				</div>
 				{#each group.generations as gen (gen.id)}
 					{@const duration = formatDuration(gen)}
+					{@const headline = headlineScore(gen)}
 					<!-- `role` and `tabindex` move together with rowIsActionable, which the
 					     a11y check cannot narrow through a dynamic role. -->
 					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -374,49 +409,54 @@
 						tabindex={rowIsActionable(gen) ? 0 : undefined}
 						title={gen.is_archived ? TAKE_ARCHIVED_TITLE : undefined}
 					>
-						{#if $selectionMode}
-							<span class="selection-checkbox">
-								<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
+						<span class="take-body">
+							{#if $selectionMode}
+								<span class="selection-checkbox">
+									<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
+								</span>
+							{:else if !gen.is_archived}
+								<Icon name={isGenPlaying(gen) ? 'pause' : 'play'} size={14} />
+							{/if}
+
+							<span class="take-label">
+								{nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
 							</span>
-						{:else if !gen.is_archived}
-							<Icon name={isGenPlaying(gen) ? 'pause' : 'play'} size={14} />
-						{/if}
 
-						<span class="take-label">
-							{nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
-						</span>
+							{#if duration}
+								<span class="take-duration">{duration}</span>
+							{/if}
 
-						{#if duration}
-							<span class="take-duration">{duration}</span>
-						{/if}
-
-						{#if gen.scores?.user_rating !== undefined}
-							<span class="score-badge {scoreColor('user_rating', gen.scores.user_rating)}">
-								{gen.scores.user_rating.toFixed(0)}
-							</span>
-						{/if}
-
-						{#if $rescoringTakeIds.has(gen.id)}
-							<span class="rescoring-badge">{TAKE_RESCORING_LABEL}</span>
-						{/if}
-
-						{#if gen.is_archived}
-							<span class="expiry-badge archived" title="Archived — will be hard-deleted">
-								archived
-							</span>
-						{:else}
-							{@const daysLeft = daysUntilExpiry(gen)}
-							{#if daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS}
+							{#if headline}
 								<span
-									class="expiry-badge warn"
-									title="Expires in {daysLeft} day{daysLeft === 1
-										? ''
-										: 's'} — pick or keep to preserve"
+									class="score-badge {headline.color}"
+									title={`${headline.label} ${headline.text}`}
 								>
-									⏳ {daysLeft}d
+									{headline.text}
 								</span>
 							{/if}
-						{/if}
+
+							{#if $rescoringTakeIds.has(gen.id)}
+								<span class="rescoring-badge">{TAKE_RESCORING_LABEL}</span>
+							{/if}
+
+							{#if gen.is_archived}
+								<span class="expiry-badge archived" title="Archived — will be hard-deleted">
+									archived
+								</span>
+							{:else}
+								{@const daysLeft = daysUntilExpiry(gen)}
+								{#if daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS}
+									<span
+										class="expiry-badge warn"
+										title="Expires in {daysLeft} day{daysLeft === 1
+											? ''
+											: 's'} — pick or keep to preserve"
+									>
+										⏳ {daysLeft}d
+									</span>
+								{/if}
+							{/if}
+						</span>
 
 						<span class="take-actions">
 							<button
@@ -631,6 +671,7 @@
 
 	.take-row {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.6rem;
 		padding: 0.45rem 0.7rem;
@@ -675,6 +716,20 @@
 			border-color: var(--accent);
 			box-shadow: 0 0 12px rgba(160, 32, 240, 0.15);
 		}
+	}
+
+	/* Everything that describes the take, and nothing that acts on it: this is
+	   what a tap on the row hits. It keeps a floor of --take-body-min, so a row
+	   too narrow to hold both wraps its actions onto their own line instead of
+	   letting three 44px touch targets take the row's centre — on 320px that
+	   turned a tap meant for the row into a Pick or Keep (#163/2). */
+	.take-body {
+		--take-body-min: 11rem;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		flex: 1 1 var(--take-body-min);
+		min-width: var(--take-body-min);
 	}
 
 	.take-label {

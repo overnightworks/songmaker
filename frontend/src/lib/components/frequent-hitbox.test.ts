@@ -141,6 +141,7 @@ const INVENTORY = [
 	{ name: 'collection-menu', selector: '.menu-trigger[data-hitbox="frequent"]' },
 	{ name: 'library-filter-chip', selector: '.filter-chip[data-hitbox="frequent"]' },
 	{ name: 'library-sort-select', selector: '.sort-select[data-hitbox="frequent"]' },
+	{ name: 'library-search', selector: '.search[data-hitbox="text"]', shape: 'text' },
 	{ name: 'breadcrumb-link', selector: '.crumb-link[data-hitbox="frequent"]' },
 	{ name: 'now-playing-trigger', selector: '.now-playing-btn[data-hitbox="frequent"]' }
 ] as const;
@@ -168,10 +169,14 @@ function parsePx(value: string, label: string): number {
 	return px;
 }
 
-function minBox(el: Element, name: string): { width: number; height: number } {
+function minBox(
+	el: Element,
+	name: string,
+	heightOnly = false
+): { width: number | null; height: number } {
 	const style = getComputedStyle(el);
 	return {
-		width: parsePx(style.minWidth, `${name} min-width`),
+		width: heightOnly ? null : parsePx(style.minWidth, `${name} min-width`),
 		height: parsePx(style.minHeight, `${name} min-height`)
 	};
 }
@@ -201,11 +206,12 @@ function layoutAlongParent(
 	const column = isColumn(parent);
 	let cursor = 0;
 	return items.map(({ name, el }) => {
-		const box = minBox(el, name);
+		const { width, height } = minBox(el, name);
+		if (width === null) throw new Error(`${name} has no measurable min-width`);
 		const rect = column
-			? { name, left: 0, right: box.width, top: cursor, bottom: cursor + box.height }
-			: { name, left: cursor, right: cursor + box.width, top: 0, bottom: box.height };
-		cursor += (column ? box.height : box.width) + gap;
+			? { name, left: 0, right: width, top: cursor, bottom: cursor + height }
+			: { name, left: cursor, right: cursor + width, top: 0, bottom: height };
+		cursor += (column ? height : width) + gap;
 		return rect;
 	});
 }
@@ -461,7 +467,7 @@ describe('frequent action hitboxes', () => {
 		}
 		openEntryOverflowMenu(middleRow);
 		await tick();
-		const found: Array<{ name: string; el: HTMLElement }> = [];
+		const found: Array<{ name: string; el: HTMLElement; shape?: string }> = [];
 
 		for (const target of INVENTORY) {
 			const el = requireButton(
@@ -470,20 +476,26 @@ describe('frequent action hitboxes', () => {
 				target.selector,
 				'text' in target ? target.text : undefined
 			);
-			found.push({ name: target.name, el });
+			found.push({ name: target.name, el, shape: 'shape' in target ? target.shape : undefined });
 		}
 
+		// A labelled control's width is its label's, so only its height is
+		// measured; an icon target has to be square at both pointer sizes.
 		setPointer('fine');
-		for (const { name, el } of found) {
-			const box = minBox(el, name);
-			expect(box.width, `${name} fine width`).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+		for (const { name, el, shape } of found) {
+			const box = minBox(el, name, shape === 'text');
+			if (box.width !== null) {
+				expect(box.width, `${name} fine width`).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+			}
 			expect(box.height, `${name} fine height`).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 		}
 
 		setPointer('coarse');
-		for (const { name, el } of found) {
-			const box = minBox(el, name);
-			expect(box.width, `${name} coarse width`).toBe(HITBOX_FREQUENT_PX);
+		for (const { name, el, shape } of found) {
+			const box = minBox(el, name, shape === 'text');
+			if (box.width !== null) {
+				expect(box.width, `${name} coarse width`).toBe(HITBOX_FREQUENT_PX);
+			}
 			expect(box.height, `${name} coarse height`).toBe(HITBOX_FREQUENT_PX);
 		}
 

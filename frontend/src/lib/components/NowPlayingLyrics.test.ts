@@ -42,6 +42,20 @@ function stubScrollIntoView() {
 	return vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
 }
 
+// jsdom does no layout, so a scroll box has to be given its measurements.
+// Returns the scrollTop spy, the one metric a test moves.
+function stubScrollBox(metrics: { scrollHeight: number; clientHeight: number }) {
+	vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(metrics.scrollHeight);
+	vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(metrics.clientHeight);
+	return vi.spyOn(Element.prototype, 'scrollTop', 'get').mockReturnValue(0);
+}
+
+function lyricsBox(): HTMLElement {
+	const box = target.querySelector<HTMLElement>('.lyrics');
+	if (!box) throw new Error('Expected the lyrics box');
+	return box;
+}
+
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
@@ -158,6 +172,40 @@ describe('NowPlayingLyrics', () => {
 			true,
 			true
 		]);
+	});
+
+	it('fades its bottom edge while more lyrics follow below the visible box', async () => {
+		// #163/8: docked beside the workspace the box is far shorter than the
+		// lyrics, and a hard cut through the middle of a line reads as broken
+		// text rather than as "scroll for the rest".
+		stubScrollBox({ scrollHeight: 600, clientHeight: 200 });
+		await render({ lyrics: [LINE_1, LINE_2].join('\n'), cues: null, whisperText: null });
+
+		expect(lyricsBox().classList.contains('more-below')).toBe(true);
+	});
+
+	it('drops the fade once the last line has been scrolled to', async () => {
+		const scrollTop = stubScrollBox({ scrollHeight: 600, clientHeight: 200 });
+		await render({ lyrics: [LINE_1, LINE_2].join('\n'), cues: null, whisperText: null });
+
+		scrollTop.mockReturnValue(400);
+		lyricsBox().dispatchEvent(new Event('scroll'));
+		await tick();
+
+		expect(lyricsBox().classList.contains('more-below')).toBe(false);
+	});
+
+	it('never fades lyrics that fit', async () => {
+		stubScrollBox({ scrollHeight: 200, clientHeight: 200 });
+		await render({ lyrics: LINE_1, cues: null, whisperText: null });
+
+		expect(lyricsBox().classList.contains('more-below')).toBe(false);
+	});
+
+	it("keeps the take's own line breaks in unsynced lyrics", async () => {
+		await render({ lyrics: [LINE_1, LINE_2].join('\n'), cues: null, whisperText: null });
+
+		expect(target.querySelector('.lyrics-text')?.textContent).toBe([LINE_1, LINE_2].join('\n'));
 	});
 
 	it('scrolls the active line into view, smoothly by default', async () => {

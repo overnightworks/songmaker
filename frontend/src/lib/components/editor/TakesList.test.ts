@@ -388,6 +388,33 @@ describe('TakesList', () => {
 		expect(row.querySelector('.rescoring-badge')).toBeNull();
 	});
 
+	it('keeps every action out of the row body, so a tap on the row plays it', async () => {
+		// #163/2: on a 320px screen the three 44px touch targets used to sit
+		// across the row's centre, and a tap meant for the row toggled Pick or
+		// Keep. The body is one element the actions are never inside of, which
+		// is also what lets the actions wrap onto their own line when the row
+		// runs out of width.
+		const { target } = await render();
+		const row = target.querySelector<HTMLElement>('.take-row');
+		if (!row) throw new Error('Expected a take row');
+		const body = row.querySelector<HTMLElement>('.take-body');
+		if (!body) throw new Error('Expected the take row body');
+
+		expect(body.querySelector('.take-label')).not.toBeNull();
+		expect(body.querySelector('.take-duration')).not.toBeNull();
+		expect(body.querySelector('button')).toBeNull();
+		expect(row.querySelector('.take-actions')?.parentElement).toBe(row);
+
+		body.click();
+		await tick();
+		expect(pick).not.toHaveBeenCalled();
+		expect(keep).not.toHaveBeenCalled();
+		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'g1' }),
+			expect.objectContaining({ id: 's1' })
+		);
+	});
+
 	it('sizes pick and keep to the frequent hitbox on a coarse pointer', async () => {
 		const { target } = await render();
 		const pickBtn = target.querySelector<HTMLButtonElement>('.pick-btn');
@@ -476,6 +503,53 @@ describe('TakesList archived takes', () => {
 			expect.objectContaining({ id: 'g1' }),
 			expect.objectContaining({ id: 's1' })
 		);
+	});
+});
+
+describe('TakesList score pill', () => {
+	// #163/4: a take is scored by seven scorers that can land one at a time, so
+	// "scored" is never all-or-nothing. The row shows the highest-ranked score
+	// the take actually carries instead of hiding the pill until a rating
+	// exists.
+	const cases = [
+		{ name: 'the rating the listener gave', scores: { user_rating: 82 }, text: '82' },
+		{
+			name: 'the rating even when automatic scores exist too',
+			scores: { user_rating: 82, text_accuracy: 41 },
+			text: '82'
+		},
+		{ name: 'lyrics sung when unrated', scores: { text_accuracy: 87 }, text: '87' },
+		{
+			name: 'dynamics when neither rating nor transcript exist',
+			scores: { dynamics: 54, audiobox_quality: 8.15, audiobox_enjoyment: 7.46 },
+			text: '54'
+		},
+		{
+			name: 'quality on its own two-decimal scale',
+			scores: { audiobox_quality: 8.15 },
+			text: '8.15'
+		}
+	];
+
+	it.each(cases)('shows $name', async ({ scores, text }) => {
+		const { target } = await render({
+			song: song({ generations: [generation({ id: 'g1', scores })] })
+		});
+		expect(target.querySelector('.score-badge')?.textContent?.trim()).toBe(text);
+	});
+
+	it('names the metric behind the number', async () => {
+		const { target } = await render({
+			song: song({ generations: [generation({ id: 'g1', scores: { dynamics: 54 } })] })
+		});
+		expect(target.querySelector('.score-badge')?.getAttribute('title')).toBe('Dynamics 54');
+	});
+
+	it('shows no pill for a take that carries no score at all', async () => {
+		const { target } = await render({
+			song: song({ generations: [generation({ id: 'g1', scores: { detected_language: 'en' } })] })
+		});
+		expect(target.querySelector('.score-badge')).toBeNull();
 	});
 });
 

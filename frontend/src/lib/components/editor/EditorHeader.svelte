@@ -198,8 +198,7 @@
 			<button
 				type="button"
 				class="view-toggle"
-				data-hitbox="frequent"
-				data-hitbox-face
+				data-hitbox="text"
 				aria-pressed={coWriterOpen}
 				onclick={ontogglecowriter}
 			>
@@ -208,8 +207,7 @@
 			<button
 				type="button"
 				class="view-toggle"
-				data-hitbox="frequent"
-				data-hitbox-face
+				data-hitbox="text"
 				aria-pressed={recipeOpen}
 				onclick={ontogglerecipe}
 			>
@@ -222,6 +220,7 @@
 				type="button"
 				class="generate-btn"
 				class:generating
+				data-hitbox="text"
 				onclick={ongenerate}
 				disabled={generateDisabled}
 				title={generateTitle}
@@ -238,6 +237,7 @@
 			type="button"
 			class="generate-btn"
 			class:generating
+			data-hitbox="text"
 			onclick={ongenerate}
 			disabled={generateDisabled}
 			title={generateTitle}

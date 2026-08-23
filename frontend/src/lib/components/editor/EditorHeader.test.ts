@@ -165,17 +165,36 @@ describe('EditorHeader', () => {
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Song · Sommerlicht');
 	});
 
-	it('sizes the view toggles to the frequent hitbox on a coarse pointer', async () => {
+	it('grows the view toggles to the touch height on a coarse pointer, keeping their label width', async () => {
 		const { target } = await render();
 		const toggle = target.querySelector<HTMLButtonElement>('.view-toggle');
 		if (!toggle) throw new Error('Expected a view toggle button');
 		document.documentElement.dataset.pointer = 'coarse';
-		const coarse = getComputedStyle(toggle);
-		expect(px(coarse.minWidth)).toBe(HITBOX_FREQUENT_PX);
-		expect(px(coarse.minHeight)).toBe(HITBOX_FREQUENT_PX);
+		expect(px(getComputedStyle(toggle).minHeight)).toBe(HITBOX_FREQUENT_PX);
 		document.documentElement.dataset.pointer = 'fine';
-		const fine = getComputedStyle(toggle);
-		expect(px(fine.minWidth)).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+		expect(px(getComputedStyle(toggle).minHeight)).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+	});
+
+	it('draws no hitbox face across a labelled control', async () => {
+		// #163/1: the face is a fixed 24/44px box, so on a text label it cuts
+		// straight through the word. Labelled buttons carry their own border.
+		const { target } = await render();
+		for (const labelled of target.querySelectorAll('.view-toggle, .generate-btn')) {
+			expect(
+				labelled.hasAttribute('data-hitbox-face'),
+				`${labelled.textContent?.trim()} draws a face over its label`
+			).toBe(false);
+		}
+	});
+
+	it('sizes Generate to the frequent hitbox on a coarse pointer, in both its places', async () => {
+		for (const compact of [false, true]) {
+			const { target } = await render({ compact });
+			const generate = target.querySelector<HTMLButtonElement>('.generate-btn');
+			if (!generate) throw new Error('Expected the Generate button');
+			document.documentElement.dataset.pointer = 'coarse';
+			expect(px(getComputedStyle(generate).minHeight)).toBe(HITBOX_FREQUENT_PX);
+		}
 	});
 
 	it('saves a version from the song menu', async () => {
