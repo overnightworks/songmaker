@@ -23,6 +23,7 @@ import type { GenerationItem, SongItem } from '$lib/api/types';
 import WriteColumn from './WriteColumn.svelte';
 import writeColumnSource from './WriteColumn.svelte?raw';
 import coWriterPanelSource from '../CoWriterPanel.svelte?raw';
+import takeStripSource from './TakeStrip.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -227,5 +228,21 @@ describe("WriteColumn Co-Writer at the editor's own width", () => {
 		expect(getComputedStyle(chat).height).not.toBe('auto');
 		expect(getComputedStyle(messages).overflowY).toBe('auto');
 		expect(chat.querySelector('.input-area')).not.toBeNull();
+	});
+
+	it('gives the stacked take strip the whole row it scrolls sideways in', async () => {
+		const { target } = await render({ coWriterOpen: true, compact: false });
+		const takes = target.querySelector('.cowriter-takes');
+		if (!takes) throw new Error('Expected a take strip column');
+		injectComponentStyles(writeColumnSource, 'WriteColumn.svelte', takes);
+		const strip = takes.querySelector('.take-strip');
+		if (!strip) throw new Error('Expected a take strip');
+		injectComponentStyles(takeStripSource, 'TakeStrip.svelte', strip);
+
+		// Centred, the strip sized to its chips rather than to the row, so
+		// nothing ever overflowed it and the editor body clipped the chips past
+		// the fold away instead.
+		expect(getComputedStyle(takes).alignItems).toBe('stretch');
+		expect(getComputedStyle(strip).overflowX).toBe('auto');
 	});
 });

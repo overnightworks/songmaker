@@ -269,6 +269,7 @@
 
 		.cowriter-takes {
 			width: 7rem;
+			align-items: center;
 		}
 
 		.cowriter-takes :global(.take-strip) {
@@ -314,10 +315,15 @@
 		flex: 1;
 	}
 
+	/* Stacked, the strip is a row that scrolls sideways, so it has to fill the
+	   width it is given: centred, it sized to its 14 chips instead and the
+	   editor body clipped the ones past the fold away — scrollable only in
+	   name, since nothing overflowed the strip itself (#185). Centring is the
+	   two-up column's rule, where the chips sit above one another. */
 	.cowriter-takes {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
+		align-items: stretch;
 		gap: 0.4rem;
 		min-width: 0;
 	}
