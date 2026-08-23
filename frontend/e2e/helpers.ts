@@ -5,9 +5,10 @@ import { expect, type Locator, type Page, type TestInfo } from '@playwright/test
 /** The two shells the same flow drives — also the Playwright project names. */
 export type Shell = 'desktop' | 'mobile';
 
-// Above 1099px Now Playing keeps its three columns and above 768px the shell
-// keeps its rail; the mobile viewport is a phone in portrait, and the narrow
-// one is the smallest screen the album header still has to read on.
+// Above 1099px Now Playing keeps its three columns and docks beside the
+// workspace rather than covering it, and above 768px the shell keeps its rail;
+// the mobile viewport is a phone in portrait, and the narrow one is the
+// smallest screen the album header still has to read on.
 export const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
 export const MOBILE_VIEWPORT = { width: 390, height: 844 };
 export const NARROW_VIEWPORT = { width: 320, height: 844 };

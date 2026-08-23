@@ -186,12 +186,26 @@
 		resize: vertical;
 	}
 
+	/* Filling a fixed height only works where every part has a column of its
+	   own to scroll in: the compact sheet, which shows one at a time, and the
+	   editor above its two-up floor. Stacked, they run on and the workspace
+	   scrolls — sharing one height squeezed the lyrics column below its
+	   content, which then spilled over the take strip (#185). */
 	.cowriter-mode {
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
-		height: 100%;
 		min-height: 0;
+		flex-shrink: 0;
+	}
+
+	.cowriter-mode.compact {
+		height: 100%;
+		flex-shrink: 1;
+	}
+
+	.cowriter-mode.compact .cowriter-columns {
+		flex: 1;
 	}
 
 	.mobile-subtabs {
@@ -218,16 +232,68 @@
 		border-color: var(--primary);
 	}
 
+	/* Chat, lyrics and the take strip stand side by side only where the editor
+	   has the room for them (the `editor` container SongDetailView owns, #185).
+	   Below that — and in the compact sheet, which is outside that container —
+	   they stack, and the strip goes back to scrolling sideways. */
 	.cowriter-columns {
 		display: grid;
-		grid-template-columns: 1fr 1fr auto;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 1rem;
-		flex: 1;
 		min-height: 0;
 	}
 
-	.cowriter-mode.compact .cowriter-columns {
-		grid-template-columns: 1fr;
+	/* Stacked, the chat column would be as tall as the whole conversation: its
+	   message list would never reach a bound to scroll in and the composer
+	   would sit below the fold, out of reach. A share of the viewport gives it
+	   that bound — but the viewport isn't `.editor-body`'s own box: docking Now
+	   Playing narrows the editor below the two-up floor exactly where the
+	   header wraps to three lines, and 60dvh of the full window ran past
+	   `.editor-body`'s own visible height there, leaving the composer behind a
+	   scroll of the wrong container (#185). `.editor-body` reports no size of
+	   its own to style against — it isn't a container, WriteColumn is one of
+	   its children, sharing it with the Recipe chip row above `.cowriter-mode`
+	   — so the second bound is the same chrome sum measured directly at
+	   1100×800 and 1280×800 with the dock open, the width band this rule
+	   actually governs: two-up crosses the 680px container threshold below and
+	   overrides this back to `auto`. From the viewport's top: the wrapped
+	   header (147.75px) + the panel's own padding and the gaps around
+	   `.editor-body` (~56px) + the Recipe chip row this song's params render
+	   above the chat column (~69px) + the player bar's reserved height
+	   (`--player-height`, 88px) ≈ 441px. 100dvh minus that is the room `.cowriter-chat`
+	   actually has below its own top before the fold, and 60dvh remains the
+	   cap on a window tall enough to make it the smaller side. A song whose
+	   params render a taller (wrapped) chip row eats into this margin — the
+	   same approximation the wrapped-header estimate already carries. */
+	.cowriter-mode:not(.compact) .cowriter-chat {
+		height: min(60dvh, calc(100dvh - 441px));
+	}
+
+	@container editor (min-width: 680px) {
+		.cowriter-mode {
+			flex: 1;
+			min-height: 0;
+		}
+
+		.cowriter-mode:not(.compact) .cowriter-chat {
+			height: auto;
+		}
+
+		.cowriter-columns {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+			flex: 1;
+		}
+
+		.cowriter-takes {
+			width: 7rem;
+			align-items: center;
+		}
+
+		.cowriter-takes :global(.take-strip) {
+			flex-direction: column;
+			overflow-x: visible;
+			overflow-y: auto;
+		}
 	}
 
 	.cowriter-chat,
@@ -266,18 +332,17 @@
 		flex: 1;
 	}
 
+	/* Stacked, the strip is a row that scrolls sideways, so it has to fill the
+	   width it is given: centred, it sized to its 14 chips instead and the
+	   editor body clipped the ones past the fold away — scrollable only in
+	   name, since nothing overflowed the strip itself (#185). Centring is the
+	   two-up column's rule, where the chips sit above one another. */
 	.cowriter-takes {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
+		align-items: stretch;
 		gap: 0.4rem;
-		width: 7rem;
-	}
-
-	.cowriter-takes :global(.take-strip) {
-		flex-direction: column;
-		overflow-x: visible;
-		overflow-y: auto;
+		min-width: 0;
 	}
 
 	.takes-heading {

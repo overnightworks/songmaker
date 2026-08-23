@@ -552,9 +552,13 @@
 		color: var(--primary);
 	}
 
+	/* Sound / Text / Reproduce are three equal groups, so they need no
+	   threshold at all: as many as fit the width the panel actually has, one
+	   below a readable 13rem each (#185). This also holds in the compact
+	   sheet, which renders outside the editor's size container. */
 	.recipe-groups {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
 		gap: 1rem;
 	}
 
@@ -712,11 +716,5 @@
 		text-align: right;
 		font-size: 0.7rem;
 		color: var(--text-subtle);
-	}
-
-	@media (max-width: 900px) {
-		.recipe-groups {
-			grid-template-columns: 1fr;
-		}
 	}
 </style>

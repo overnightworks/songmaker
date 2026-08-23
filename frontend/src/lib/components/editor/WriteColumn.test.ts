@@ -21,6 +21,10 @@ import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import WriteColumn from './WriteColumn.svelte';
+import writeColumnSource from './WriteColumn.svelte?raw';
+import coWriterPanelSource from '../CoWriterPanel.svelte?raw';
+import takeStripSource from './TakeStrip.svelte?raw';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -84,6 +88,7 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	clearComponentStyles();
 });
 
 async function render(overrides: Partial<Record<string, unknown>> = {}) {
@@ -178,5 +183,80 @@ describe('WriteColumn Co-Writer mode', () => {
 			loadSpy.mockRestore();
 			audioPlayer.current = null;
 		}
+	});
+});
+
+describe("WriteColumn Co-Writer at the editor's own width", () => {
+	// jsdom computes no grid layout, so this pins the stylesheet; the browser
+	// gate on #185 reads the Co-Writer beside a docked Now Playing.
+	it('stacks chat, lyrics and the take strip until the editor has room for three', () => {
+		expect(writeColumnSource).toMatch(
+			/\.cowriter-columns \{[^}]*grid-template-columns: minmax\(0, 1fr\);/
+		);
+		expect(writeColumnSource).toMatch(
+			/@container editor \(min-width: 680px\) \{[^@]*\.cowriter-columns \{\s*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\) auto;/
+		);
+	});
+
+	it('lets the stacked parts run on rather than share one squeezed height', () => {
+		// Sharing it cut the lyrics column below its content, which then spilled
+		// over the take strip; only a part with a column of its own, or alone in
+		// the compact sheet, can scroll in place.
+		const stacked = /\n\t\.cowriter-mode \{([^}]*)\}/.exec(writeColumnSource)?.[1];
+		expect(stacked).toBeDefined();
+		expect(stacked).not.toMatch(/\bheight: 100%/);
+		expect(writeColumnSource).toMatch(/\.cowriter-mode\.compact \{\s*height: 100%;/);
+		expect(writeColumnSource).toMatch(
+			/@container editor \(min-width: 680px\) \{\s*\.cowriter-mode \{\s*flex: 1;\s*min-height: 0;/
+		);
+	});
+
+	// jsdom knows no container queries, so a mounted Co-Writer here is the
+	// stacked one: the case where the chat column has no row to take a height
+	// from. Reading the values out of the real cascade is what tells the
+	// difference between a column the conversation scrolls inside and one that
+	// grows past the fold, taking the composer with it.
+	it('gives the stacked chat column a bound its conversation scrolls inside', async () => {
+		const { target } = await render({ coWriterOpen: true, compact: false });
+		const chat = target.querySelector('.cowriter-chat');
+		if (!chat) throw new Error('Expected a chat column');
+		injectComponentStyles(writeColumnSource, 'WriteColumn.svelte', chat);
+		const messages = chat.querySelector('.messages');
+		if (!messages) throw new Error('Expected a message list');
+		injectComponentStyles(coWriterPanelSource, 'CoWriterPanel.svelte', messages);
+
+		expect(getComputedStyle(chat).height).not.toBe('auto');
+		expect(getComputedStyle(messages).overflowY).toBe('auto');
+		expect(chat.querySelector('.input-area')).not.toBeNull();
+	});
+
+	// jsdom computes no layout, so a share of a real window's height can only
+	// be read back out of the declaration, not out of getComputedStyle: this
+	// pins the clamp itself rather than a number it can't produce. Docking Now
+	// Playing narrows the editor below the two-up floor right where the
+	// header wraps to three lines, and a bare 60dvh ran past `.editor-body`'s
+	// own visible height there — the composer sat behind a scroll of the
+	// wrong container (#185). The browser gate at 1100×800 and 1280×800 with
+	// the dock open reads the composer against the real cascade.
+	it('bounds the stacked chat height to what a narrowed editor actually has, not just the window', () => {
+		expect(writeColumnSource).toMatch(
+			/\.cowriter-mode:not\(\.compact\) \.cowriter-chat \{\s*height: min\(60dvh, calc\(100dvh - \d+px\)\);/
+		);
+	});
+
+	it('gives the stacked take strip the whole row it scrolls sideways in', async () => {
+		const { target } = await render({ coWriterOpen: true, compact: false });
+		const takes = target.querySelector('.cowriter-takes');
+		if (!takes) throw new Error('Expected a take strip column');
+		injectComponentStyles(writeColumnSource, 'WriteColumn.svelte', takes);
+		const strip = takes.querySelector('.take-strip');
+		if (!strip) throw new Error('Expected a take strip');
+		injectComponentStyles(takeStripSource, 'TakeStrip.svelte', strip);
+
+		// Centred, the strip sized to its chips rather than to the row, so
+		// nothing ever overflowed it and the editor body clipped the chips past
+		// the fold away instead.
+		expect(getComputedStyle(takes).alignItems).toBe('stretch');
+		expect(getComputedStyle(strip).overflowX).toBe('auto');
 	});
 });

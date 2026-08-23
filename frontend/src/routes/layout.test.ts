@@ -18,9 +18,9 @@ import {
 	songList
 } from '$lib/stores/player';
 import {
-	NOW_PLAYING_DOCK_MIN_PX,
 	NOW_PLAYING_DOCKED_WIDTH_PX,
-	NOW_PLAYING_EXPAND_LABEL
+	NOW_PLAYING_EXPAND_LABEL,
+	NOW_PLAYING_STACKED_MAX_PX
 } from '$lib/constants/now-playing';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import type { GenerationItem, SongItem } from '$lib/api/types';
@@ -276,8 +276,12 @@ function stubMatchMediaAtWidth(width: number): void {
 	);
 }
 
-/** A fine-pointer viewport, wide enough for the docked panel unless told otherwise. */
-async function renderDesktopLayout(width = NOW_PLAYING_DOCK_MIN_PX): Promise<HTMLElement> {
+/**
+ * A fine-pointer viewport, wide enough for the docked panel unless told
+ * otherwise — by default the narrowest one that is, a pixel past the width at
+ * which Now Playing stops standing its three columns side by side (#185).
+ */
+async function renderDesktopLayout(width = NOW_PLAYING_STACKED_MAX_PX + 1): Promise<HTMLElement> {
 	stubMatchMediaAtWidth(width);
 	delete document.documentElement.dataset.pointer;
 	return renderLayout('/');
@@ -557,12 +561,11 @@ describe('docked Now Playing', () => {
 		expect(document.documentElement.dataset.nowPlaying).toBeUndefined();
 	});
 
-	// Docking costs the workspace 400px, which the editor's takes column and
-	// header cannot give up below the threshold — its take actions would land
-	// outside `main`, which is `overflow: hidden`, and become unreachable.
+	// Too narrow for Now Playing's own three columns is too narrow to stand
+	// them beside the workspace: one threshold, not two (#185).
 	it('takes the whole screen on a viewport too narrow to spare the panel its width', async () => {
 		audioPlayer.current = playing();
-		const target = await renderDesktopLayout(NOW_PLAYING_DOCK_MIN_PX - 1);
+		const target = await renderDesktopLayout(NOW_PLAYING_STACKED_MAX_PX);
 
 		openNowPlaying('queue');
 		await tick();

@@ -30,6 +30,7 @@ import {
 } from '$lib/stores/recipe';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import RecipePanel from './RecipePanel.svelte';
+import recipePanelSource from './RecipePanel.svelte?raw';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -164,5 +165,15 @@ describe('RecipePanel', () => {
 		const presetSelect = target.querySelector<HTMLSelectElement>('.preset-select-label select');
 		expect(presetSelect).not.toBeNull();
 		expect(presetSelect?.value).toBe('');
+	});
+});
+
+describe("RecipePanel at the editor's own width", () => {
+	// jsdom computes no grid layout, so this pins the stylesheet; the browser
+	// gate on #185 opens the panel beside a docked Now Playing.
+	it('packs Sound / Text / Reproduce into as many columns as it is wide', () => {
+		expect(recipePanelSource).toMatch(
+			/\.recipe-groups \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(13rem, 1fr\)\);/
+		);
 	});
 });
