@@ -19,6 +19,7 @@ const NESTED_LONG = 'i wanted you to stay tonight';
 const NESTED_SHORT = 'i wanted you to stay';
 const RAIN_FALLS = 'silver rain falls on the roof';
 const RAIN_CALLS = 'silver rain calls on the roof';
+const RAIN_WALLS = 'silver rain walls on the roof';
 
 function cue(start: number, end: number, text: string): WhisperCue {
 	return { start, end, text };
@@ -412,6 +413,30 @@ describe('alignLyricsToCues with word timestamps', () => {
 			{ start: 3, end: 5.5 },
 			{ start: 5.5, end: 8.5 }
 		]);
+	});
+
+	it('leaves a run to neither of two lines too alike to tell apart', () => {
+		const lyrics = [RAIN_FALLS, RAIN_CALLS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, RAIN_FALLS)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, null]);
+	});
+
+	it('leaves a run to none of three lines too alike to tell apart', () => {
+		const lyrics = [RAIN_FALLS, RAIN_CALLS, RAIN_WALLS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, RAIN_FALLS)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, null, null]);
+	});
+
+	it('leaves the run dark even when the take sings the later of two alike lines', () => {
+		const lyrics = [RAIN_FALLS, RAIN_CALLS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, RAIN_CALLS)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, null]);
 	});
 
 	it('never lights a line when no run of words matches it (false-positive precision)', () => {

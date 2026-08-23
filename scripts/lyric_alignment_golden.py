@@ -318,12 +318,13 @@ def collect_with_growing_window(
 
 
 def another_line_reads_run_as_well(
-    line_texts: list[str], line_position: int, run: Candidate,
+    line_texts: list[str], floor_position: int, line_position: int, run: Candidate,
 ) -> bool:
     return any(
-        line_texts[other] != line_texts[line_position]
+        other != line_position
+        and line_texts[other] != line_texts[line_position]
         and run.score - score_against_lyrics(run.text, line_texts[other]) < AMBIGUITY_MARGIN
-        for other in range(line_position + 1, len(line_texts))
+        for other in range(floor_position, len(line_texts))
     )
 
 
@@ -396,12 +397,13 @@ def align_against_words(
         return claims[key]
 
     cursor = 0
+    floor_position = 0
 
     for line_position, line_text in enumerate(line_texts):
         claim = claim_of(line_position, cursor)
         if claim is None:
             continue
-        if another_line_reads_run_as_well(line_texts, line_position, claim):
+        if another_line_reads_run_as_well(line_texts, floor_position, line_position, claim):
             continue
 
         first, last = matched_word_range(word_texts, claim, line_text)
@@ -415,6 +417,7 @@ def align_against_words(
             continue
 
         intervals[line_position] = Interval(words[first].start, words[last].end)
+        floor_position = line_position + 1
         cursor = last + 1
     return intervals
 
@@ -490,6 +493,7 @@ NESTED_LONG: Final = "i wanted you to stay tonight"
 NESTED_SHORT: Final = "i wanted you to stay"
 RAIN_FALLS: Final = "silver rain falls on the roof"
 RAIN_CALLS: Final = "silver rain calls on the roof"
+RAIN_WALLS: Final = "silver rain walls on the roof"
 
 
 def _words(start: float, per_word: float, text: str) -> tuple[WordCue, ...]:
@@ -616,6 +620,16 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         "word path: a prefix line stays dark when only the slipped long line was sung",
         "\n".join([NESTED_LONG, NESTED_SHORT, LINE_3, NESTED_LONG]),
         (_sung_cue(0.0, 0.4, f"{NESTED_LONG}x {LINE_3} {NESTED_LONG}"),),
+    ),
+    AlignmentFixture(
+        "word path: two lines too alike to tell apart leave the run to neither",
+        "\n".join([RAIN_FALLS, RAIN_CALLS]),
+        (_sung_cue(0.0, 0.4, RAIN_FALLS),),
+    ),
+    AlignmentFixture(
+        "word path: three lines too alike to tell apart leave the run to none of them",
+        "\n".join([RAIN_FALLS, RAIN_CALLS, RAIN_WALLS]),
+        (_sung_cue(0.0, 0.4, RAIN_FALLS),),
     ),
     AlignmentFixture(
         "word path: a phrase sung twice takes the clearly better reading",

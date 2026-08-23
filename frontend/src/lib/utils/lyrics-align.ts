@@ -311,16 +311,22 @@ function collectWithGrowingWindow(
 }
 
 // #52's rival definition covers lines, not only candidates: a run belongs to
-// this line only while no other line still waiting for one reads it just as
-// well. A line carrying the same text is never a rival — the take simply
-// sings those words more than once, and the renditions are handed out in
-// order.
+// this line only while no other line still in play reads it just as well. In
+// play means from the floor onwards — every line the take has not yet moved
+// past, above this one as well as below, which is the same set the cue window
+// path competes over. Scanning only downwards would hand a run that a group
+// of lines read alike to whichever of them comes last, and lighting a line
+// the take never sang is the one thing this alignment must not do. A line
+// carrying the same text is never a rival: the take simply sings those words
+// more than once, and the renditions are handed out in order.
 function anotherLineReadsRunAsWell(
 	lineTexts: string[],
+	floorPosition: number,
 	linePosition: number,
 	run: Candidate
 ): boolean {
-	for (let other = linePosition + 1; other < lineTexts.length; other++) {
+	for (let other = floorPosition; other < lineTexts.length; other++) {
+		if (other === linePosition) continue;
 		if (lineTexts[other] === lineTexts[linePosition]) continue;
 		if (run.score - scoreAgainstLyrics(run.text, lineTexts[other]) < AMBIGUITY_MARGIN) return true;
 	}
@@ -413,11 +419,15 @@ function alignAgainstWords(
 	};
 
 	let cursor = 0;
+	// The first line the take has not moved past: assigning a line drops every
+	// line above it out of the running, exactly as the cue window path's floor
+	// does.
+	let floorPosition = 0;
 
 	for (let linePosition = 0; linePosition < lineTexts.length; linePosition++) {
 		const claim = claimOf(linePosition, cursor);
 		if (claim === null) continue;
-		if (anotherLineReadsRunAsWell(lineTexts, linePosition, claim)) continue;
+		if (anotherLineReadsRunAsWell(lineTexts, floorPosition, linePosition, claim)) continue;
 
 		const sung = matchedWordRange(wordTexts, claim, lineTexts[linePosition]);
 		const stranded = contestingLines(wordTexts, lineTexts, linePosition, claim, cursor).some(
@@ -426,6 +436,7 @@ function alignAgainstWords(
 		if (stranded) continue;
 
 		assign(linePosition, { start: words[sung.from].start, end: words[sung.to].end });
+		floorPosition = linePosition + 1;
 		cursor = sung.to + 1;
 	}
 }

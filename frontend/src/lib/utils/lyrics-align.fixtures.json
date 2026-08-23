@@ -2484,6 +2484,94 @@
 		{
 			"cues": [
 				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "silver rain falls on the roof",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "silver"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "rain"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "falls"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "on"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "roof"
+						}
+					]
+				}
+			],
+			"intervals": [null, null],
+			"lyrics": "silver rain falls on the roof\nsilver rain calls on the roof",
+			"name": "word path: two lines too alike to tell apart leave the run to neither"
+		},
+		{
+			"cues": [
+				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "silver rain falls on the roof",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "silver"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "rain"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "falls"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "on"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "roof"
+						}
+					]
+				}
+			],
+			"intervals": [null, null, null],
+			"lyrics": "silver rain falls on the roof\nsilver rain calls on the roof\nsilver rain walls on the roof",
+			"name": "word path: three lines too alike to tell apart leave the run to none of them"
+		},
+		{
+			"cues": [
+				{
 					"end": 4.0,
 					"start": 0.0,
 					"text": "the lantern hums quietly tonight the lantern hums calmly tonight",
