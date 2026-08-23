@@ -165,7 +165,7 @@ def run_scoring_job(
             "Scored: %s (%d metrics written) — %s",
             mp3_path_rel, len(scores_dict), song_scores.outcome_summary(),
         )
-        if song_scores.any_scorer_timed_out:
+        if song_scores.any_child_scorer_timed_out:
             log.warning(
                 "Scoring job %s left a scorer running past its budget — recycling the child",
                 job_id,

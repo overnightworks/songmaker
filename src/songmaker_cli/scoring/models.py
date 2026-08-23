@@ -8,7 +8,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from songmaker_cli.api_models.whisper import WhisperCue
-from songmaker_cli.scoring.registry import SCORERS
+from songmaker_cli.scoring.registry import SCORERS, ScorerHost
 
 
 class ScorerOutcome(StrEnum):
@@ -249,10 +249,18 @@ class SongScores:
         )
 
     @property
-    def any_scorer_timed_out(self) -> bool:
-        """True when a scorer blew its budget. Its call was abandoned, not
-        stopped, so whatever process ran it is no longer clean."""
-        return any(run.outcome is ScorerOutcome.TIMED_OUT for run in self.runs)
+    def any_child_scorer_timed_out(self) -> bool:
+        """True when a scorer inside the scorer child blew its budget.
+
+        Its call was abandoned, not stopped, so that child still runs it and
+        is no longer clean. A parent-hosted scorer over budget leaves its
+        thread here instead — killing the child would reclaim nothing.
+        """
+        return any(
+            run.outcome is ScorerOutcome.TIMED_OUT
+            and SCORERS[run.scorer].host is ScorerHost.CHILD
+            for run in self.runs
+        )
 
     def outcome_summary(self) -> str:
         """Every scorer's outcome in one line, for the job log."""

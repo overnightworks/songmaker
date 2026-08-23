@@ -687,6 +687,39 @@ def test_scoring_job_keeps_the_child_when_every_scorer_stayed_in_budget(
     assert live_scorer_process._process.pid == pid_before
 
 
+def test_scoring_job_keeps_the_child_when_only_the_parents_judge_timed_out(
+    seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
+    stubbed_claude_judge, caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The coherence judge runs here, not in the child. When it blows its
+    budget the abandoned thread is this process's problem — killing the child
+    would reclaim nothing, so it keeps running."""
+    import logging
+    import time
+
+    monkeypatch.setenv("SCORER_TIMEOUT_SECONDS", "1")
+    stubbed_claude_judge.side_effect = lambda *_args, **_kwargs: time.sleep(2)
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+    pid_before = live_scorer_process._process.pid
+    monkeypatch.setattr(
+        live_scorer_process, "score",
+        lambda *_args, **_kwargs: _scoring_result(with_whisper=True),
+    )
+
+    with (
+        caplog.at_level(logging.INFO),
+        patch(
+            "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+        ),
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    assert "lyrical_coherence=timed_out" in caplog.text
+    assert live_scorer_process.alive
+    assert live_scorer_process._process.pid == pid_before
+
+
 def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
     _seed_generation(seeded_db)
     audio_dir = _audio_dir_with_mp3(tmp_path)
