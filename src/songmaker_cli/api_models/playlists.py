@@ -152,6 +152,9 @@ class SharedPlaylistEntryResponse(BaseModel):
     artist: str
     generation_number: int
     audio_url: str | None
+    generation_id: str | None
+    audio_duration: int | None
+    lyrics: str | None
 
 
 class SharedPlaylistResponse(BaseModel):

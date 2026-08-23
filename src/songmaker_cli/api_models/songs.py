@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -42,6 +43,32 @@ def generation_version_lyrics(gen: Generation) -> str | None:
     if not lyrics:
         return None
     return lyrics
+
+
+@dataclass(frozen=True)
+class SharePickMedia:
+    """The generation, duration, and lyrics behind a share payload's audio.
+
+    Null across all three fields when there is no playable generation —
+    same "no pick" honesty as `audio_url: null` on the surrounding response.
+    """
+
+    generation_id: str | None
+    audio_duration: int | None
+    lyrics: str | None
+
+
+_NO_SHARE_PICK_MEDIA = SharePickMedia(generation_id=None, audio_duration=None, lyrics=None)
+
+
+def share_pick_media(gen: Generation | None) -> SharePickMedia:
+    if gen is None or not gen.mp3_path:
+        return _NO_SHARE_PICK_MEDIA
+    return SharePickMedia(
+        generation_id=gen.id,
+        audio_duration=gen.version.audio_duration if gen.version else None,
+        lyrics=generation_version_lyrics(gen),
+    )
 
 
 def _safe_json_dict(value: object, entity_type: str, entity_id: str) -> dict | None:
@@ -136,6 +163,9 @@ class SharedSongItem(BaseModel):
     title: str
     track_number: int
     audio_url: str | None
+    generation_id: str | None
+    audio_duration: int | None
+    lyrics: str | None
 
 
 class SharedAlbumResponse(BaseModel):
@@ -169,6 +199,9 @@ class SharedSongResponse(BaseModel):
     artist: str
     album_title: str
     audio_url: str | None
+    generation_id: str | None
+    audio_duration: int | None
+    lyrics: str | None
 
     cover: AlbumCoverUrls | None = None
 
@@ -180,6 +213,9 @@ class SharedGenerationResponse(BaseModel):
     generation_number: int
     seed: int | None
     audio_url: str | None
+    generation_id: str | None
+    audio_duration: int | None
+    lyrics: str | None
 
 
 class GenerationResponse(BaseModel):

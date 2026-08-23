@@ -372,7 +372,7 @@ def get_song_by_slug(session: Session, slug: str) -> Song | None:
     return (
         session.query(Song)
         .options(
-            joinedload(Song.generations),
+            joinedload(Song.generations).joinedload(Generation.version),
             joinedload(Song.album),
         )
         .filter_by(share_slug=slug, is_shared=True)

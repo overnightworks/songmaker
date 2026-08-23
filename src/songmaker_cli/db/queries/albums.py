@@ -109,7 +109,8 @@ def get_album_by_slug(session: Session, slug: str) -> Album | None:
         session.query(Album)
         .options(
             joinedload(Album.songs)
-            .joinedload(Song.generations),
+            .joinedload(Song.generations)
+            .joinedload(Generation.version),
         )
         .filter_by(share_slug=slug, is_shared=True)
         .first()

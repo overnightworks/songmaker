@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.auth import hash_password, sign_session_id
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.models import Album, Generation, Playlist, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 
 
 def _seed_sharing_data(session) -> None:
@@ -193,6 +195,205 @@ def test_shared_audio_not_found_bad_slug(sharing_app: TestClient) -> None:
     unauthed = TestClient(sharing_app.app, cookies={})
     resp = unauthed.get("/shared/bad-slug/audio/admin_user/g1.mp3")
     assert resp.status_code == 404
+
+
+# ── Share payload media fields (#128) ───────────────────────────────
+
+
+def _count_queries(engine, statement_contains: str) -> tuple[list[str], Callable]:
+    """Register a query-count probe; caller removes it via the returned handle."""
+    queries: list[str] = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany) -> None:
+        if statement_contains.lower() in statement.lower():
+            queries.append(statement)
+
+    event.listen(engine, "before_cursor_execute", _record)
+    return queries, _record
+
+
+def _seed_multi_track_album(session) -> None:
+    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    session.add(admin)
+    session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
+    for i in range(4):
+        song_id = f"s{i}"
+        session.add(Song(id=song_id, title=f"Song {i}", album_id="test_album", track_number=i))
+        session.add(Version(
+            id=f"v{i}", song_id=song_id, version_number=1,
+            lyrics=f"Lyrics {i}", audio_duration=100 + i,
+        ))
+        session.add(Generation(
+            id=f"g{i}", song_id=song_id, version_id=f"v{i}", generation_number=1,
+            mp3_path=f"admin_user/g{i}.mp3", seed=1, is_picked=True,
+        ))
+    session.add(Song(id="s_no_pick", title="No Pick", album_id="test_album", track_number=4))
+
+
+def test_shared_album_view_includes_pick_media(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_multi_track_album)
+    login_and_csrf(client, "admin", "admin12345")
+    resp = client.post("/api/albums/test_album/share")
+    slug = resp.json()["share_slug"]
+
+    unauthed = TestClient(client.app, cookies={})
+    data = unauthed.get(f"/shared/{slug}").json()
+
+    songs_by_id = {song["id"]: song for song in data["songs"]}
+    for i in range(4):
+        song = songs_by_id[f"s{i}"]
+        assert song["generation_id"] == f"g{i}"
+        assert song["audio_duration"] == 100 + i
+        assert song["lyrics"] == f"Lyrics {i}"
+
+    no_pick = songs_by_id["s_no_pick"]
+    assert no_pick["audio_url"] is None
+    assert no_pick["generation_id"] is None
+    assert no_pick["audio_duration"] is None
+    assert no_pick["lyrics"] is None
+
+
+def test_shared_album_view_warms_versions_in_one_query(tmp_path: Path) -> None:
+    client, factory = make_test_app(tmp_path, seed_db=_seed_multi_track_album)
+    login_and_csrf(client, "admin", "admin12345")
+    resp = client.post("/api/albums/test_album/share")
+    slug = resp.json()["share_slug"]
+
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    queries, handle = _count_queries(engine, "versions")
+    try:
+        unauthed = TestClient(client.app, cookies={})
+        resp = unauthed.get(f"/shared/{slug}")
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert resp.status_code == 200
+    assert len(resp.json()["songs"]) == 5
+    assert len(queries) == 1, (
+        f"expected one warm-up query for all four picks' versions, got {len(queries)}: {queries}"
+    )
+
+
+def _seed_song_with_pick(session) -> None:
+    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    session.add(admin)
+    session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
+    session.add(Song(id="s1", title="Song One", album_id="test_album", track_number=1))
+    session.add(Version(
+        id="v1", song_id="s1", version_number=1, lyrics="Hello", audio_duration=180,
+    ))
+    session.add(Generation(
+        id="g1", song_id="s1", version_id="v1", generation_number=1,
+        mp3_path="admin_user/g1.mp3", seed=42, is_picked=True,
+    ))
+
+
+def test_shared_song_view_includes_pick_media(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_song_with_pick)
+    login_and_csrf(client, "admin", "admin12345")
+    resp = client.post("/api/songs/s1/share")
+    slug = resp.json()["share_slug"]
+
+    unauthed = TestClient(client.app, cookies={})
+    data = unauthed.get(f"/shared/song/{slug}").json()
+
+    assert data["generation_id"] == "g1"
+    assert data["audio_duration"] == 180
+    assert data["lyrics"] == "Hello"
+
+
+def test_shared_song_view_without_pick_returns_null_media(tmp_path: Path) -> None:
+    def _seed(session) -> None:
+        admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+        session.add(admin)
+        session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
+        session.add(Song(id="s1", title="No Pick", album_id="test_album", track_number=1))
+
+    client, _ = make_test_app(tmp_path, seed_db=_seed)
+    login_and_csrf(client, "admin", "admin12345")
+    resp = client.post("/api/songs/s1/share")
+    slug = resp.json()["share_slug"]
+
+    unauthed = TestClient(client.app, cookies={})
+    data = unauthed.get(f"/shared/song/{slug}").json()
+
+    assert data["audio_url"] is None
+    assert data["generation_id"] is None
+    assert data["audio_duration"] is None
+    assert data["lyrics"] is None
+
+
+def test_shared_generation_view_includes_pick_media(sharing_app: TestClient) -> None:
+    resp = sharing_app.post("/api/generations/g1/share")
+    slug = resp.json()["share_slug"]
+
+    unauthed = TestClient(sharing_app.app, cookies={})
+    data = unauthed.get(f"/shared/gen/{slug}").json()
+
+    assert data["generation_id"] == "g1"
+    assert data["audio_duration"] == 0
+    assert data["lyrics"] == "Hello"
+
+
+def _seed_playlist_with_entries(session) -> None:
+    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    session.add(admin)
+    session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
+    session.add(Playlist(id="pl1", title="My Playlist"))
+    for i in range(3):
+        song_id = f"s{i}"
+        session.add(Song(id=song_id, title=f"Song {i}", album_id="test_album", track_number=i))
+        session.add(Version(
+            id=f"v{i}", song_id=song_id, version_number=1,
+            lyrics=f"Lyrics {i}", audio_duration=100 + i,
+        ))
+        session.add(Generation(
+            id=f"g{i}", song_id=song_id, version_id=f"v{i}", generation_number=1,
+            mp3_path=f"admin_user/g{i}.mp3", seed=1,
+        ))
+        session.add(PlaylistEntry(id=f"e{i}", playlist_id="pl1", generation_id=f"g{i}", position=i))
+
+
+def test_shared_playlist_view_includes_pick_media(tmp_path: Path) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
+    login_and_csrf(client, "admin", "admin12345")
+    resp = client.post("/api/playlists/pl1/share")
+    slug = resp.json()["share_slug"]
+
+    unauthed = TestClient(client.app, cookies={})
+    data = unauthed.get(f"/shared/playlist/{slug}").json()
+
+    entries_by_id = {e["entry_id"]: e for e in data["entries"]}
+    for i in range(3):
+        entry = entries_by_id[f"e{i}"]
+        assert entry["generation_id"] == f"g{i}"
+        assert entry["audio_duration"] == 100 + i
+        assert entry["lyrics"] == f"Lyrics {i}"
+
+
+def test_shared_playlist_view_warms_versions_in_one_query(tmp_path: Path) -> None:
+    client, factory = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
+    login_and_csrf(client, "admin", "admin12345")
+    resp = client.post("/api/playlists/pl1/share")
+    slug = resp.json()["share_slug"]
+
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    queries, handle = _count_queries(engine, "versions")
+    try:
+        unauthed = TestClient(client.app, cookies={})
+        resp = unauthed.get(f"/shared/playlist/{slug}")
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert resp.status_code == 200
+    assert len(resp.json()["entries"]) == 3
+    assert len(queries) == 1, (
+        f"expected one warm-up query for all three entries' versions, got {len(queries)}: {queries}"
+    )
 
 
 # ── Rate limiting ──────────────────────────────────────────────────

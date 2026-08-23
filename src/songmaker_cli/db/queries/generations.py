@@ -256,6 +256,7 @@ def get_generation_by_slug(session: Session, slug: str) -> Generation | None:
         .options(
             joinedload(Generation.scores),
             joinedload(Generation.rating),
+            joinedload(Generation.version),
             joinedload(Generation.song).joinedload(Song.album),
         )
         .filter_by(share_slug=slug, is_shared=True)
