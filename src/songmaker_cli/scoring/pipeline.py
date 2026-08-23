@@ -8,7 +8,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Final
+from typing import TYPE_CHECKING, Callable
 
 from pydantic import SecretStr
 
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     import numpy as np
 
 from songmaker_cli.constants import (
+    CLAUDE_SCORING_MODEL_DEFAULT,
     SCORER_TIMEOUT_SECONDS,
     SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS,
     SCORING_PIPELINE_TIMEOUT_SECONDS,
@@ -54,19 +55,6 @@ class AudioData:
 
     audio: np.ndarray
     sr: int
-
-
-# Mirrors Settings.claude_scoring_model's default (songmaker_cli/settings.py).
-# Duplicated deliberately: the scorer subprocess drops SECRET_ENV_KEYS from its
-# own os.environ at spawn (scoring/subprocess_runner.py) and must never
-# construct Settings() itself afterward — Settings.database_url has no
-# default, so a post-scrub get_settings() call would raise instead of
-# degrading gracefully. The parent process still resolves the deployed model
-# (DB override or this same Settings default) via
-# db.queries.settings.get_claude_scoring_model() and always fills
-# claude_scoring_model explicitly before sending a ScoreRequest across the
-# pipe; this constant only covers direct/test calls that skip that step.
-CLAUDE_SCORING_MODEL_DEFAULT: Final = "claude-opus-4-6"
 
 
 @dataclass(frozen=True)

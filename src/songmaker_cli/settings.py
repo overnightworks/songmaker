@@ -22,6 +22,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
+    CLAUDE_SCORING_MODEL_DEFAULT,
     COVER_UPLOAD_BODY_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
     REIMPORT_BODY_MAX_BYTES,
@@ -140,7 +141,7 @@ class Settings(BaseSettings):
 
     # ── Claude ────────────────────────────────────────────────────────
     claude_chat_model: str = "claude-opus-4-6"
-    claude_scoring_model: str = "claude-opus-4-6"
+    claude_scoring_model: str = CLAUDE_SCORING_MODEL_DEFAULT
     anthropic_api_key: SecretStr | None = None
     xai_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None

@@ -95,6 +95,9 @@ WHISPER_TEMPERATURE = 0.0
 
 SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
 SETTING_CLAUDE_SCORING_MODEL = "claude_scoring_model"
+# Shared by Settings.claude_scoring_model and scoring.pipeline.PipelineConfig
+# (the latter must not import Settings post-scrub — see docs/security.md).
+CLAUDE_SCORING_MODEL_DEFAULT = "claude-opus-4-6"
 SETTING_COWRITER_PROVIDER = "cowriter_provider"
 SETTING_COWRITER_MODEL = "cowriter_model"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105
