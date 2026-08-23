@@ -94,6 +94,7 @@ export function groupSearchHits(hits: LibrarySearchHit[]): LibraryAlbumGroup[] {
 					year: '',
 					colors: {},
 					song_count: 0,
+					picked_count: 0,
 					is_shared: false,
 					share_slug: null,
 					created_at: hit.song.created_at
