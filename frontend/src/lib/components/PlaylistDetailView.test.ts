@@ -4,7 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PlaylistDetailItem, PlaylistEntryItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
-import { LIBRARY_RETRY_LABEL } from '$lib/constants';
+import {
+	collectionRowPlayLabel,
+	LIBRARY_RETRY_LABEL,
+	playlistEntryOverflowLabel
+} from '$lib/constants';
 import { setOpenCollection } from '$lib/stores/collection';
 import {
 	loadPlaylistDetail,
@@ -266,6 +270,20 @@ describe('PlaylistDetailView row actions', () => {
 			el.textContent?.trim()
 		);
 		expect(items).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
+	});
+
+	it('names the row and its … menu after the song they act on', async () => {
+		openPlaylistDetail(detail({ entries: [entry({ id: 'pe1', song_title: 'Tide' })] }));
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		const row = requireElement<HTMLElement>(target, '.entry-row');
+		expect(row.getAttribute('aria-label')).toBe(collectionRowPlayLabel('Tide'));
+		expect(requireElement(row, '.overflow-btn').getAttribute('aria-label')).toBe(
+			playlistEntryOverflowLabel('Tide')
+		);
 	});
 
 	it('keeps reorder and remove in the … menu on a fine pointer too', async () => {

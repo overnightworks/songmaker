@@ -31,6 +31,7 @@
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
 		ALBUM_COVER_ALT_TYPE,
+		collectionRowPlayLabel,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL
 	} from '$lib/constants';
@@ -249,7 +250,7 @@
 							data-hitbox="frequent"
 							disabled={s.generation_count === 0}
 							onclick={() => onRowPlay(s)}
-							aria-label={`Play ${s.title}`}
+							aria-label={collectionRowPlayLabel(s.title)}
 						>
 							<Icon name="play" size={14} />
 						</button>

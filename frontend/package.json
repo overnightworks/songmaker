@@ -16,11 +16,13 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:coverage": "vitest run --coverage",
+		"test:e2e": "playwright test",
 		"generate:types": "cd .. && python scripts/generate_types.py",
 		"check:types-sync": "cd .. && python scripts/generate_types.py --check"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
+		"@playwright/test": "1.62.1",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.55.0",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",

@@ -30,6 +30,20 @@ export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';
 export const ALBUM_ROW_NO_TAKE_TOAST = 'No take to play for this song yet';
 export const ALBUM_ROW_ARCHIVED_ONLY_TOAST = 'No playable take — all takes are archived';
 
+// A collection row announces the action its click performs, then the title:
+// "Play Tide", "Pause Tide". One owner for the format — the album detail, the
+// playlist detail and the e2e flows that find rows by name all read it here.
+export const COLLECTION_ROW_PLAY_ACTION = 'Play';
+export const COLLECTION_ROW_PAUSE_ACTION = 'Pause';
+
+export function collectionRowPlayLabel(title: string): string {
+	return `${COLLECTION_ROW_PLAY_ACTION} ${title}`;
+}
+
+export function collectionRowPauseLabel(title: string): string {
+	return `${COLLECTION_ROW_PAUSE_ACTION} ${title}`;
+}
+
 export const NOW_PLAYING_LABEL = 'Now Playing';
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
@@ -198,6 +212,10 @@ export const LIBRARY_PLAYLISTS_EMPTY = 'No playlists yet';
 export const LIBRARY_PLAYLISTS_LOADING = 'Loading playlists…';
 export const LIBRARY_PLAYLISTS_ERROR = 'Failed to load playlists';
 export const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
+
+export function playlistEntryOverflowLabel(songTitle: string): string {
+	return `${PLAYLIST_ENTRY_OVERFLOW_LABEL} for ${songTitle}`;
+}
 export const PLAYLIST_ENTRY_OPEN_SONG_LABEL = 'Open song in editor';
 export const PLAYLIST_ENTRY_MOVE_UP_LABEL = 'Move up';
 export const PLAYLIST_ENTRY_MOVE_DOWN_LABEL = 'Move down';

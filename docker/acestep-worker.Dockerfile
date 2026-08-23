@@ -19,4 +19,10 @@ COPY --chown=songmaker src/acestep_engine/ src/acestep_engine/
 COPY --chown=songmaker src/acestep_worker/ src/acestep_worker/
 RUN uv sync --frozen --no-dev --extra acestep-worker
 
+# The audiofiles volume is shared with the web container and the other
+# workers, and Docker seeds an empty named volume from whichever image
+# mounts it first — as root when that image lacks the directory. Every
+# image that mounts it must carry it, owned by songmaker.
+RUN mkdir -p /app/data/audio
+
 ENTRYPOINT ["uv", "run", "python", "-m", "acestep_worker"]

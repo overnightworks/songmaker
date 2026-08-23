@@ -29,12 +29,14 @@
 	import { selectSong } from '$lib/stores/navigation';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
+		collectionRowPauseLabel,
+		collectionRowPlayLabel,
 		LIBRARY_RETRY_LABEL,
 		PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 		PLAYLIST_ENTRY_MOVE_UP_LABEL,
 		PLAYLIST_ENTRY_OPEN_SONG_LABEL,
-		PLAYLIST_ENTRY_OVERFLOW_LABEL,
-		PLAYLIST_ENTRY_REMOVE_LABEL
+		PLAYLIST_ENTRY_REMOVE_LABEL,
+		playlistEntryOverflowLabel
 	} from '$lib/constants';
 	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 	import { formatTime, titleInitials } from '$lib/utils/format';
@@ -345,7 +347,9 @@
 						onkeydown={(e) => onEntryKeydown(e, i)}
 						role="button"
 						tabindex="0"
-						aria-label={`${isEntryPlaying(entry) ? 'Pause' : 'Play'} ${entry.song_title}`}
+						aria-label={isEntryPlaying(entry)
+							? collectionRowPauseLabel(entry.song_title)
+							: collectionRowPlayLabel(entry.song_title)}
 					>
 						<span
 							class="entry-play"
@@ -381,7 +385,7 @@
 									data-hitbox-face
 									aria-haspopup="menu"
 									aria-expanded={overflowId === entry.id}
-									aria-label={`${PLAYLIST_ENTRY_OVERFLOW_LABEL} for ${entry.song_title}`}
+									aria-label={playlistEntryOverflowLabel(entry.song_title)}
 									onclick={(e) => toggleOverflow(entry.id, e)}
 								>
 									<Icon name="more-horizontal" size={16} />

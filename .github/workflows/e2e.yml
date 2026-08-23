@@ -28,7 +28,7 @@ env:
 
 jobs:
   smoke:
-    name: Boot stack + smoke
+    name: Boot stack + desktop flow
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -75,6 +75,40 @@ jobs:
 
           me_status="$(curl -sS -o /tmp/me.json -w '%{http_code}' -b "$cookies" "$base/api/auth/me")"
           [ "$me_status" = "200" ] || { echo "me failed: $me_status" >&2; cat /tmp/me.json >&2; exit 1; }
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Desktop library flow
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:${{ env.WEB_PORT }}
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-playwright-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 14
 
       - name: Dump compose logs
         if: failure()

@@ -23,4 +23,10 @@ COPY --chown=songmaker alembic.ini ./
 COPY --chown=songmaker scripts/arq_healthcheck.py scripts/
 RUN uv sync --frozen --no-dev --extra server
 
+# The audiofiles volume is shared with the web container and the other
+# workers, and Docker seeds an empty named volume from whichever image
+# mounts it first — as root when that image lacks the directory. Every
+# image that mounts it must carry it, owned by songmaker.
+RUN mkdir -p /app/data/audio
+
 ENTRYPOINT ["/app/.venv/bin/arq"]

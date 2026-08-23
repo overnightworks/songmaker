@@ -3,3 +3,8 @@ build/
 dist/
 node_modules/
 pnpm-lock.yaml
+playwright-report/
+test-results/
+blob-report/
+e2e/.artifacts/
+e2e/fixtures/
