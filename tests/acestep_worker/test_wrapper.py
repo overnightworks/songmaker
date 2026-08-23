@@ -297,6 +297,7 @@ def test_get_task_known(tmp_path: Path) -> None:
             if resp.json()["state"] == "done":
                 break
     assert resp.json()["state"] == "done"
+    assert resp.json()["result"]["seed"] == 42
 
 
 def test_stream_task_unknown(tmp_path: Path) -> None:
