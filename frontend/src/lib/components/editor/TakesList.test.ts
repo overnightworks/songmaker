@@ -10,7 +10,12 @@ import {
 	TAKES_MOBILE_HINT
 } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
-import { clearSelection } from '$lib/stores/selection';
+import { get } from 'svelte/store';
+import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
+
+function enterSelectionMode(): void {
+	toggleSelection('selection-mode-seed');
+}
 
 function px(value: string): number {
 	const resolved = value.startsWith('var(')
@@ -368,6 +373,45 @@ describe('TakesList archived takes', () => {
 		archivedRow.click();
 		await tick();
 		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+	});
+
+	it('opens its menu and playlist picker unclipped, with no stacking context on the row', async () => {
+		// #141: `opacity` on the row would create a stacking context and clip
+		// the row's own popovers under the next row.
+		const { target } = await renderWithArchived();
+		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
+		if (!archivedRow) throw new Error('Expected the archived take row');
+		expect(getComputedStyle(archivedRow).opacity).not.toBe('0.55');
+
+		openTakeMenu(archivedRow);
+		await tick();
+		expect(archivedRow.querySelector('.overflow-menu')).not.toBeNull();
+		clickMenuItem(archivedRow, TAKE_PLAYLIST_LABEL);
+		await tick();
+
+		const picker = archivedRow.querySelector('.picker');
+		expect(picker, 'the playlist picker renders inside the archived row').not.toBeNull();
+		expect(picker?.parentElement?.classList.contains('take-picker-anchor')).toBe(true);
+		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+	});
+
+	it('stops announcing itself as a button while it cannot act', async () => {
+		const { target } = await renderWithArchived();
+		const [playable, archived] = Array.from(target.querySelectorAll<HTMLElement>('.take-row'));
+		expect(playable.getAttribute('role')).toBe('button');
+		expect(archived.getAttribute('role')).toBeNull();
+		expect(archived.getAttribute('tabindex')).toBeNull();
+	});
+
+	it('is a button again in selection mode, where ticking it still does something', async () => {
+		const { target } = await renderWithArchived();
+		enterSelectionMode();
+		await tick();
+		const archived = target.querySelectorAll<HTMLElement>('.take-row')[1];
+		expect(archived.getAttribute('role')).toBe('button');
+		archived.click();
+		await tick();
+		expect(get(selectedIds).has('g-arch')).toBe(true);
 	});
 
 	it('still plays a take that is not archived', async () => {

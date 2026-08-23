@@ -151,6 +151,13 @@
 		return isGenPlaying(gen) && buffering;
 	}
 
+	// An archived take has nothing for a row activation to do, so the row stops
+	// announcing itself as a button — except in selection mode, where ticking
+	// it is still a real action.
+	function rowIsActionable(gen: GenerationItem): boolean {
+		return $selectionMode || !gen.is_archived;
+	}
+
 	function handleRowClick(gen: GenerationItem, e: MouseEvent): void {
 		if (e.ctrlKey || e.metaKey) {
 			toggleSelection(gen.id);
@@ -346,6 +353,9 @@
 				</div>
 				{#each group.generations as gen (gen.id)}
 					{@const duration = formatDuration(gen)}
+					<!-- `role` and `tabindex` move together with rowIsActionable, which the
+					     a11y check cannot narrow through a dynamic role. -->
+					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<div
 						class="take-row"
 						class:playing={isGenPlaying(gen)}
@@ -354,8 +364,8 @@
 						class:archived={gen.is_archived}
 						onclick={(e) => handleRowClick(gen, e)}
 						onkeydown={(e) => handleRowKeydown(gen, e)}
-						role="button"
-						tabindex="0"
+						role={rowIsActionable(gen) ? 'button' : undefined}
+						tabindex={rowIsActionable(gen) ? 0 : undefined}
 						title={gen.is_archived ? TAKE_ARCHIVED_TITLE : undefined}
 					>
 						{#if $selectionMode}
@@ -726,9 +736,17 @@
 		position: relative;
 	}
 
+	/* Dims the row's own identity, never the row box: `opacity` on the row
+	   would create a stacking context and clip its own popovers (take menu,
+	   playlist picker) under the next row. */
 	.take-row.archived {
-		opacity: 0.55;
 		cursor: default;
+	}
+
+	.take-row.archived .take-label,
+	.take-row.archived .take-duration,
+	.take-row.archived .score-badge {
+		color: var(--text-disabled);
 	}
 
 	.take-row.archived:hover {
