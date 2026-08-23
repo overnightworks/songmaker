@@ -2,6 +2,8 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Breadcrumb from './Breadcrumb.svelte';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { clearHitboxStyles, injectHitboxStyles } from '$lib/test-utils/hitbox';
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -10,6 +12,8 @@ afterEach(async () => {
 	if (component) await unmount(component);
 	component = undefined;
 	document.body.replaceChildren();
+	clearComponentStyles();
+	clearHitboxStyles();
 });
 
 async function render(items: { label: string; onclick?: () => void }[]): Promise<HTMLElement> {
@@ -49,11 +53,36 @@ describe('Breadcrumb', () => {
 		expect(root.querySelector('.crumb')?.tagName).toBe('SPAN');
 	});
 
-	// jsdom computes no flex layout, so this pins the stylesheet; the browser
-	// gate on #185 shows the trail beside a docked Now Playing.
-	it('lets a linked crumb give up room, keeping only the separators pinned', () => {
-		expect(breadcrumbSource).not.toMatch(/\.crumb-link \{[^}]*flex-shrink: 0;/);
-		expect(breadcrumbSource).toMatch(/\.crumb:not\(:first-child\)::before \{[^}]*flex-shrink: 0;/);
-		expect(breadcrumbSource).toMatch(/\.crumb \{[^}]*text-overflow: ellipsis;/);
+	// The trail's own stylesheet has to out-rank the global hitbox sheet, which
+	// pins every `frequent` target, so these read the values out of the real
+	// cascade rather than out of the source. jsdom still computes no layout;
+	// the browser gate on #185 shows the trail beside a docked Now Playing.
+	async function renderStyledTrail(): Promise<HTMLElement> {
+		injectHitboxStyles();
+		const root = await render([{ label: 'Sommerlicht', onclick: vi.fn() }, { label: 'Track 2 of 3' }]);
+		const scoped = root.querySelector('.crumb');
+		if (!scoped) throw new Error('no crumb rendered');
+		injectComponentStyles(breadcrumbSource, 'Breadcrumb.svelte', scoped);
+		return root;
+	}
+
+	it('lets a linked crumb give up the room the current crumb needs', async () => {
+		const root = await renderStyledTrail();
+		const link = root.querySelector('.crumb-link');
+		expect(link && getComputedStyle(link).flexShrink).toBe('1');
+	});
+
+	it('ellipsizes every crumb label in a block of its own', async () => {
+		const root = await renderStyledTrail();
+		const labels = Array.from(root.querySelectorAll('.crumb-label'));
+		expect(labels).toHaveLength(2);
+		for (const label of labels) {
+			const style = getComputedStyle(label);
+			expect([style.display, style.overflow, style.textOverflow]).toEqual([
+				'block',
+				'hidden',
+				'ellipsis'
+			]);
+		}
 	});
 });
