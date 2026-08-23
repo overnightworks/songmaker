@@ -49,11 +49,23 @@
 	// link, mobile without the Rail mounted, or a failed loadPlaylists) --
 	// once the detail itself has loaded for the open id, its own fields
 	// stand in for the list entry rather than rendering nothing.
+	//
+	// The id match only matters while a *different* playlist id is open --
+	// that is the one case a stale detail could render under the wrong
+	// header. loadPlaylistDetail always sets selectedPlaylistId before its
+	// async fetch, so during real navigation this is never null while a
+	// fetch for a new id is in flight. When no collection is open at all
+	// (selectedPlaylistId is null, e.g. a caller that renders this view
+	// directly off selectedPlaylistDetail without going through
+	// navigation), there is no "wrong id" to guard against, so the detail
+	// is trusted as-is.
 	const listEntry = $derived($selectedPlaylist);
 	const playlistDetail = $derived(
-		$selectedPlaylistDetail && $selectedPlaylistDetail.id === $selectedPlaylistId
+		$selectedPlaylistId === null
 			? $selectedPlaylistDetail
-			: null
+			: $selectedPlaylistDetail && $selectedPlaylistDetail.id === $selectedPlaylistId
+				? $selectedPlaylistDetail
+				: null
 	);
 	const playlistMeta = $derived(
 		listEntry ??
@@ -306,7 +318,7 @@
 	}
 </script>
 
-{#if $selectedPlaylistId}
+{#if $selectedPlaylistId || playlistDetail}
 	<div class="detail-panel">
 		{#if playlistMeta}
 			<CollectionHeader
