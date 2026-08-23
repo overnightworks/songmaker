@@ -860,3 +860,41 @@ def test_score_lyrical_coherence_happy_path(tmp_path: Path) -> None:
 
     assert result.score == 9
     assert result.summary == "great"
+
+
+def test_score_lyrical_coherence_reads_api_key_from_config_not_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The scorer subprocess scrubs ANTHROPIC_API_KEY from its own
+    environment at spawn (see subprocess_runner.py's _scrub_secret_env_vars),
+    so lyrical_coherence must source the key from PipelineConfig — filled by
+    the parent process before the ScoreRequest crosses the pipe — never from
+    get_settings()/os.environ inside the child.
+    """
+    from pydantic import SecretStr
+
+    from songmaker_cli.claude.provider import ClaudeResponse
+    from songmaker_cli.scoring.lyrical_coherence import score_lyrical_coherence
+    from songmaker_cli.scoring.models import SharedScorerData
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    mp3 = tmp_path / "test.mp3"
+    mp3.write_bytes(b"fake")
+    meta = SongMeta(prompt="test", lyrics="[verse]\nhello world\ngoodbye moon")
+    shared_data = SharedScorerData(whisper_text="hello world\ngoodbye moon")
+    config = PipelineConfig(
+        claude_scoring_model="test-model",
+        anthropic_api_key=SecretStr("config-supplied-key"),
+    )
+    mock_response = ClaudeResponse(text='{"score": 7, "issues": [], "summary": "ok"}')
+
+    with patch(
+        "songmaker_cli.scoring.lyrical_coherence.call_claude", return_value=mock_response,
+    ) as mock_call_claude:
+        score_lyrical_coherence(mp3, meta=meta, config=config, shared_data=shared_data)
+
+    mock_call_claude.assert_called_once()
+    assert mock_call_claude.call_args.kwargs["api_key"] == "config-supplied-key"
+    assert mock_call_claude.call_args.kwargs["model"] == "test-model"

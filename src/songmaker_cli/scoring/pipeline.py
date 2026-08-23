@@ -10,10 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
+from pydantic import SecretStr
+
 if TYPE_CHECKING:
     import numpy as np
 
 from songmaker_cli.constants import (
+    CLAUDE_SCORING_MODEL_DEFAULT,
     SCORER_TIMEOUT_SECONDS,
     SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS,
     SCORING_PIPELINE_TIMEOUT_SECONDS,
@@ -56,7 +59,15 @@ class AudioData:
 
 @dataclass(frozen=True)
 class PipelineConfig:
-    """Configuration passed to all scorers."""
+    """Configuration passed to all scorers.
+
+    Deliberately self-contained: every scorer that runs inside the scorer
+    subprocess reads its configuration — including secrets such as
+    ``anthropic_api_key`` — from this object, never from ``get_settings()``.
+    The parent process resolves Settings and fills these fields before
+    sending a ``ScoreRequest`` across the pipe to the child, whose own
+    ``os.environ`` has had ``SECRET_ENV_KEYS`` scrubbed at spawn.
+    """
 
     whisper_model: str = "large-v3"  # turbo is faster but hallucinates on ~5% of songs
     whisper_device: str = ""
@@ -64,7 +75,8 @@ class PipelineConfig:
     scorer_timeout: int = SCORER_TIMEOUT_SECONDS
     text_accuracy_timeout: int = TEXT_ACCURACY_TIMEOUT_SECONDS
     pipeline_timeout: int = 0
-    claude_scoring_model: str = ""
+    claude_scoring_model: str = CLAUDE_SCORING_MODEL_DEFAULT
+    anthropic_api_key: SecretStr | None = None
 
     def __post_init__(self) -> None:
         if self.pipeline_timeout <= 0:

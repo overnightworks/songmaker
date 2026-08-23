@@ -9,8 +9,11 @@ from pathlib import Path
 
 import pytest
 
+from songmaker_cli.constants import SECRET_ENV_KEYS
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.subprocess_runner import (
+    EnvProbeRequest,
+    EnvProbeResponse,
     ReleaseGpuRequest,
     ReleaseGpuResponse,
     ScoreRequest,
@@ -80,7 +83,7 @@ def _run_child_with_messages(messages: list, timeout: float = 10.0) -> list:
         while parent_conn.poll(timeout=timeout):
             resp = parent_conn.recv()
             responses.append(resp)
-            if isinstance(resp, (ScoreResponse, ReleaseGpuResponse)):
+            if isinstance(resp, (ScoreResponse, ReleaseGpuResponse, EnvProbeResponse)):
                 break
 
     proc.join(timeout=5)
@@ -152,6 +155,42 @@ def test_child_handles_score_error(tmp_path: Path) -> None:
     assert resp.error is not None or (
         resp.scores is not None and resp.scores.text_accuracy is None
     )
+
+
+# ── Secret env scrubbing ─────────────────────────────────────────
+
+_TEST_MARKER_KEY = "SONGMAKER_TEST_NON_SECRET_MARKER"
+
+
+def test_scorer_child_drops_secret_env_keys_at_spawn() -> None:
+    """The scorer child inherits the full parent env at spawn (multiprocessing
+    has no env= parameter), so _child_main must scrub secrets itself, first
+    thing. Drives the real _child_main (via _run_child_with_messages) rather
+    than a test-only stand-in, so deleting the scrub call site fails this.
+    """
+    probed_keys = (*SECRET_ENV_KEYS, _TEST_MARKER_KEY)
+    previous = {key: os.environ.get(key) for key in probed_keys}
+    for key in SECRET_ENV_KEYS:
+        os.environ[key] = "leaked-secret-value"
+    os.environ[_TEST_MARKER_KEY] = "visible-non-secret"
+    try:
+        responses = _run_child_with_messages([
+            EnvProbeRequest(keys=probed_keys),
+            ShutdownRequest(),
+        ])
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    probe_responses = [r for r in responses if isinstance(r, EnvProbeResponse)]
+    assert len(probe_responses) == 1
+    present = probe_responses[0].present
+    for key in SECRET_ENV_KEYS:
+        assert key not in present, f"{key} leaked into the scorer child's environment"
+    assert _TEST_MARKER_KEY in present
 
 
 # ── ScorerProcess class ──────────────────────────────────────────
