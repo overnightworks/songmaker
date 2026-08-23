@@ -131,8 +131,9 @@ def _accepts_gzip(accept_encoding: str) -> bool:
             continue
         qvalue = _DEFAULT_QVALUE
         for param in parts[1:]:
-            if param.startswith(_QVALUE_PARAM_PREFIX):
-                qvalue = _qvalue(param[len(_QVALUE_PARAM_PREFIX):])
+            lowered_param = param.lower()
+            if lowered_param.startswith(_QVALUE_PARAM_PREFIX):
+                qvalue = _qvalue(lowered_param[len(_QVALUE_PARAM_PREFIX):])
         if coding == _GZIP_CODING:
             gzip_qvalue = qvalue
         elif coding == _WILDCARD_CODING:

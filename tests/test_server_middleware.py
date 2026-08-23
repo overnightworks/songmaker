@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
 from songmaker_cli.middleware import SelectiveGZipMiddleware
+from songmaker_cli.middleware.gzip import _accepts_gzip
 
 _LARGE_JSON_PAYLOAD = {"lyrics": "la " * 1000}
 _TINY_JSON_PAYLOAD = {"status": "ok"}
@@ -96,10 +97,21 @@ def test_compressible_response_gets_vary_even_without_client_gzip_support(
     assert resp.headers.get("vary") == "Accept-Encoding"
 
 
-def test_gzip_q0_is_treated_as_client_does_not_support_gzip(client: TestClient) -> None:
-    resp = client.get("/api/songs/s1", headers={"Accept-Encoding": "gzip;q=0, deflate"})
-    assert resp.status_code == 200
-    assert "content-encoding" not in resp.headers
+@pytest.mark.parametrize(
+    ("accept_encoding", "expects_gzip"),
+    [
+        ("", False),
+        ("*", True),
+        ("*;q=0", False),
+        ("*;q=0, gzip", True),
+        ("gzip;q=0", False),
+        ("gzip;Q=0", False),
+        ("identity;q=0", False),
+        ("br, gzip;q=0.8", True),
+    ],
+)
+def test_accepts_gzip_negotiation(accept_encoding: str, expects_gzip: bool) -> None:
+    assert _accepts_gzip(accept_encoding) is expects_gzip
 
 
 def test_audio_response_is_never_gzip_compressed(client: TestClient) -> None:
