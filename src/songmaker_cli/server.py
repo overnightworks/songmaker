@@ -24,7 +24,12 @@ from fastapi.staticfiles import StaticFiles
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import find_project_root
-from songmaker_cli.constants import APP_NAME, GZIP_MINIMUM_SIZE_BYTES, PWA_ICON_PATHS
+from songmaker_cli.constants import (
+    APP_NAME,
+    GZIP_COMPRESS_LEVEL,
+    GZIP_MINIMUM_SIZE_BYTES,
+    PWA_ICON_PATHS,
+)
 from songmaker_cli.health_api import _compute_script_hashes
 from songmaker_cli.lifecycle import (
     auto_setup_admin,
@@ -205,7 +210,11 @@ def create_app(
     else:
         cors_kwargs["allow_origin_regex"] = r"^https?://(localhost|127\.0\.0\.1)(:(8080|5173))?$"
     app.add_middleware(CORSMiddleware, **cors_kwargs)
-    app.add_middleware(SelectiveGZipMiddleware, minimum_size=GZIP_MINIMUM_SIZE_BYTES)
+    app.add_middleware(
+        SelectiveGZipMiddleware,
+        minimum_size=GZIP_MINIMUM_SIZE_BYTES,
+        compresslevel=GZIP_COMPRESS_LEVEL,
+    )
     app.add_middleware(ResourceStreamDeadlineMiddleware)
 
     @app.exception_handler(RequestValidationError)

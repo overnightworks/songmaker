@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import GZIP_MINIMUM_SIZE_BYTES
+from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -151,7 +151,11 @@ def gzip_client(tmp_path: Path) -> TestClient:
         _DEFAULT_USER_ID, "test_user", "user",
     )
     app.include_router(router)
-    app.add_middleware(SelectiveGZipMiddleware, minimum_size=GZIP_MINIMUM_SIZE_BYTES)
+    app.add_middleware(
+        SelectiveGZipMiddleware,
+        minimum_size=GZIP_MINIMUM_SIZE_BYTES,
+        compresslevel=GZIP_COMPRESS_LEVEL,
+    )
     yield TestClient(app)
 
 

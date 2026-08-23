@@ -331,7 +331,7 @@ whose `lyrics` a public stream manifest redacts. A take scored without
 
 | Layer | Responsibility | Key files |
 |-------|---------------|-----------|
-| HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS only, never binary media or byte ranges), SPA fallback | `server.py`, `middleware/gzip.py` |
+| HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS by Content-Type, never binary media or a `Content-Range` response, proper `Accept-Encoding` q-value negotiation), SPA fallback | `server.py`, `middleware/gzip.py` |
 | Auth | Session dependencies, login/setup/logout, password change, brute-force protection | `middleware/auth.py`, `auth_api.py`, `auth.py` |
 | API | REST endpoints split by domain: albums, songs, generations, playlists, library search/shares, LoRAs, chat, settings, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `library_api.py`, `lora_api.py`, `chat_api.py`, `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
