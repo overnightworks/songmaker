@@ -2,19 +2,25 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
-vi.mock('$lib/stores/takeActions', () => ({
+// rescoringTakeIds stays real so the pending state is driven the way the app
+// drives it: by the scoring job sitting in the jobs store.
+vi.mock('$lib/stores/takeActions', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/takeActions')>()),
 	setPick: vi.fn().mockResolvedValue(undefined),
 	setKeep: vi.fn().mockResolvedValue(undefined),
 	rate: vi.fn().mockResolvedValue(undefined),
-	pinSeed: vi.fn()
+	pinSeed: vi.fn(),
+	rescore: vi.fn().mockResolvedValue(undefined)
 }));
 vi.mock('$lib/stores/navigation', () => ({
 	revealPlayingSong: vi.fn().mockResolvedValue(undefined)
 }));
 
 import { get } from 'svelte/store';
+import { TAKE_RESCORING_LABEL } from '$lib/constants';
 import { NOW_PLAYING_LYRICS_RESCORE_HINT } from '$lib/constants/now-playing';
-import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
+import { activeJobs } from '$lib/stores/jobs';
+import { pinSeed, rate, rescore, setKeep, setPick } from '$lib/stores/takeActions';
 import { revealPlayingSong } from '$lib/stores/navigation';
 import { nowPlayingOpen } from '$lib/stores/player';
 import { pendingSource } from '$lib/stores/recipe';
@@ -76,6 +82,7 @@ afterEach(async () => {
 	vi.clearAllMocks();
 	nowPlayingOpen.set(false);
 	pendingSource.set(null);
+	activeJobs.set([]);
 });
 
 async function render(
@@ -190,6 +197,48 @@ describe('NowPlayingTake', () => {
 		expect(target.textContent).toContain(NOW_PLAYING_LYRICS_RESCORE_HINT);
 	});
 
+	it('re-scores the take from the hint, once', async () => {
+		await render({ generation: generation({ whisper_cues: null }) });
+		const hint = target.querySelector<HTMLButtonElement>('.rescore-hint');
+		if (!hint) throw new Error('Expected the re-score hint button');
+		expect(hint.textContent?.trim()).toBe(NOW_PLAYING_LYRICS_RESCORE_HINT);
+
+		hint.click();
+		await tick();
+
+		expect(rescore).toHaveBeenCalledTimes(1);
+		expect(rescore).toHaveBeenCalledWith('s1', 'g1');
+	});
+
+	it('reports the take as re-scoring while its scoring job runs', async () => {
+		activeJobs.set([
+			{
+				job: {
+					id: 'j1',
+					type: 'score',
+					status: 'running',
+					progress: 0.2,
+					error: null,
+					error_type: null,
+					started_at: null,
+					completed_at: null
+				},
+				songId: 's1',
+				genId: 'g1'
+			}
+		]);
+		await render({ generation: generation({ whisper_cues: null }) });
+		const hint = target.querySelector<HTMLButtonElement>('.rescore-hint');
+		if (!hint) throw new Error('Expected the re-score hint button');
+
+		expect(hint.textContent?.trim()).toBe(TAKE_RESCORING_LABEL);
+		expect(hint.disabled).toBe(true);
+
+		hint.click();
+		await tick();
+		expect(rescore).not.toHaveBeenCalled();
+	});
+
 	it('drops the re-score hint once the take has cues', async () => {
 		await render({
 			generation: generation({
@@ -199,7 +248,7 @@ describe('NowPlayingTake', () => {
 		expect(target.textContent).not.toContain(NOW_PLAYING_LYRICS_RESCORE_HINT);
 	});
 
-	it.each(['.badge-btn', '.pin-seed', '.use-as-reference'])(
+	it.each(['.badge-btn', '.pin-seed', '.use-as-reference', '.rescore-hint'])(
 		'opts %s into the frequent hitbox',
 		async (selector) => {
 			// Sizing itself is pinned once for the shared mechanism in

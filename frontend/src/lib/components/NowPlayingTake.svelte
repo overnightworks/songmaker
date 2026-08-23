@@ -1,6 +1,10 @@
 <script lang="ts">
 	import type { GenerationItem, SongItem } from '$lib/api/types';
-	import { NOW_PLAYING_TAKE_PREFIX, TAKE_USE_AS_REFERENCE_LABEL } from '$lib/constants';
+	import {
+		NOW_PLAYING_TAKE_PREFIX,
+		TAKE_RESCORING_LABEL,
+		TAKE_USE_AS_REFERENCE_LABEL
+	} from '$lib/constants';
 	import {
 		NOW_PLAYING_DEVIATIONS_EMPTY,
 		NOW_PLAYING_DEVIATIONS_LABEL,
@@ -23,7 +27,14 @@
 	import { revealPlayingSong } from '$lib/stores/navigation';
 	import { closeNowPlaying } from '$lib/stores/player';
 	import { pendingSource } from '$lib/stores/recipe';
-	import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
+	import {
+		pinSeed,
+		rate,
+		rescore,
+		rescoringTakeIds,
+		setKeep,
+		setPick
+	} from '$lib/stores/takeActions';
 	import { computeDiffByKey } from '$lib/utils/diff';
 	import { normalizeLyricsToken } from '$lib/utils/lyrics-normalize';
 	import { scoreColor } from '$lib/utils/scores';
@@ -47,8 +58,10 @@
 
 	const scores = $derived(generation.scores);
 	// #141/9: without cues the lyrics cannot follow the audio — the panel says
-	// so instead of leaving the listener to wonder why nothing highlights.
+	// so instead of leaving the listener to wonder why nothing highlights, and
+	// the sentence is the button that fixes it.
 	const hasCues = $derived((generation.whisper_cues?.length ?? 0) > 0);
+	const rescoring = $derived($rescoringTakeIds.has(generation.id));
 
 	const scoreEntries = $derived.by((): ScoreEntry[] => {
 		if (!scores) return [];
@@ -220,6 +233,10 @@
 		}
 	}
 
+	function onRescore(): void {
+		void rescore(song.id, generation.id);
+	}
+
 	function onPinSeed(): void {
 		if (generation.seed == null) return;
 		pinSeed(generation.seed);
@@ -293,7 +310,15 @@
 	<section class="take-section">
 		<h4 class="section-title">{NOW_PLAYING_DEVIATIONS_LABEL}</h4>
 		{#if !hasCues}
-			<p class="rescore-hint">{NOW_PLAYING_LYRICS_RESCORE_HINT}</p>
+			<button
+				type="button"
+				class="rescore-hint"
+				data-hitbox="frequent"
+				disabled={rescoring}
+				onclick={onRescore}
+			>
+				{rescoring ? TAKE_RESCORING_LABEL : NOW_PLAYING_LYRICS_RESCORE_HINT}
+			</button>
 		{/if}
 		{#if !hasTranscript}
 			<p class="empty-note">{NOW_PLAYING_DEVIATIONS_UNAVAILABLE}</p>
@@ -434,9 +459,26 @@
 		font-style: italic;
 	}
 	.rescore-hint {
+		align-self: flex-start;
 		margin: 0;
+		padding: 0;
+		border: none;
+		background: none;
+		text-align: left;
+		font-family: var(--font-body);
 		font-size: 0.78rem;
-		color: var(--text-muted);
+		color: var(--accent);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+	}
+	.rescore-hint:hover:not(:disabled) {
+		color: var(--text);
+	}
+	.rescore-hint:disabled {
+		color: var(--text-subtle);
+		text-decoration: none;
+		cursor: default;
 	}
 	.scores-grid {
 		display: grid;

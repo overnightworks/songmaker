@@ -7,6 +7,8 @@ import {
 	HITBOX_FREQUENT_PX,
 	TAKE_ARCHIVED_TITLE,
 	TAKE_PLAYLIST_LABEL,
+	TAKE_RESCORE_LABEL,
+	TAKE_RESCORING_LABEL,
 	TAKES_MOBILE_HINT
 } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
@@ -34,6 +36,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		cancelJob: vi.fn(),
 		remasterGeneration: vi.fn(),
 		unarchiveGeneration: vi.fn(),
+		scoreGeneration: vi.fn(),
 		fetchSong: vi.fn(),
 		deleteVersion: vi.fn(),
 		fetchVersions: vi.fn().mockResolvedValue([])
@@ -52,7 +55,9 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	};
 });
 
+import { scoreGeneration } from '$lib/api/client';
 import { addToast } from '$lib/stores/toast';
+import { activeJobs } from '$lib/stores/jobs';
 import { playTakeAndShowNowPlaying } from '$lib/stores/player';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import TakesList from './TakesList.svelte';
@@ -179,6 +184,15 @@ beforeEach(() => {
 	playlistLoad.set({ status: 'ready', error: null });
 	vi.mocked(addToast).mockClear();
 	vi.mocked(playTakeAndShowNowPlaying).mockClear();
+	activeJobs.set([]);
+	// The scoring job streams its progress over server-sent events jsdom does
+	// not implement.
+	vi.stubGlobal(
+		'EventSource',
+		class {
+			close(): void {}
+		}
+	);
 	clearSelection();
 	const sheet = document.createElement('style');
 	sheet.dataset.hitboxStyles = 'true';
@@ -191,6 +205,8 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
+	activeJobs.set([]);
+	vi.unstubAllGlobals();
 	clearSelection();
 });
 
@@ -338,6 +354,39 @@ describe('TakesList', () => {
 
 		expect(addToPlaylist).toHaveBeenCalledWith('p1', 'g1');
 		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+	});
+
+	it('re-scores the take from its own menu and marks the row until the job ends', async () => {
+		vi.mocked(scoreGeneration).mockResolvedValue({
+			id: 'j1',
+			type: 'score',
+			status: 'queued',
+			progress: 0,
+			error: null,
+			error_type: null,
+			started_at: null,
+			completed_at: null
+		});
+		const { target } = await render();
+		const row = target.querySelector<HTMLElement>('.take-row');
+		if (!row) throw new Error('Expected a take row');
+		expect(row.querySelector('.rescoring-badge')).toBeNull();
+
+		openTakeMenu(row);
+		await tick();
+		clickMenuItem(row, TAKE_RESCORE_LABEL);
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(scoreGeneration).toHaveBeenCalledTimes(1);
+		expect(scoreGeneration).toHaveBeenCalledWith('g1');
+		expect(row.querySelector('.rescoring-badge')?.textContent).toBe(TAKE_RESCORING_LABEL);
+		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+
+		activeJobs.set([]);
+		await tick();
+		expect(row.querySelector('.rescoring-badge')).toBeNull();
 	});
 
 	it('sizes pick and keep to the frequent hitbox on a coarse pointer', async () => {

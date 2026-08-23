@@ -7,6 +7,7 @@
 		TAKE_ARCHIVED_TITLE,
 		TAKE_KEEP_LABEL,
 		TAKE_PICK_LABEL,
+		TAKE_RESCORING_LABEL,
 		TAKES_DELETE_VERSION_LABEL,
 		TAKES_DRAFT_BANNER_TEMPLATE,
 		TAKES_EMPTY,
@@ -23,6 +24,7 @@
 		selectedGenerationId
 	} from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
+	import { rescore, rescoringTakeIds } from '$lib/stores/takeActions';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { scoreColor } from '$lib/utils/scores';
 	import { getGenerationActions } from '$lib/contexts/generation-actions';
@@ -390,6 +392,10 @@
 							</span>
 						{/if}
 
+						{#if $rescoringTakeIds.has(gen.id)}
+							<span class="rescoring-badge">{TAKE_RESCORING_LABEL}</span>
+						{/if}
+
 						{#if gen.is_archived}
 							<span class="expiry-badge archived" title="Archived — will be hard-deleted">
 								archived
@@ -448,6 +454,8 @@
 									onpinseed={() => gen.seed != null && actions.pinSeed(gen.seed)}
 									onaddtoplaylist={() => (playlistFor = gen.id)}
 									onremaster={() => void onRemaster(gen)}
+									onrescore={() => void rescore(song.id, gen.id)}
+									rescoring={$rescoringTakeIds.has(gen.id)}
 									onrestore={() => void onRestore(gen)}
 									ondelete={() => (deleteFor = gen)}
 								/>
@@ -700,6 +708,18 @@
 
 	.score-badge.bad {
 		color: var(--score-bad);
+	}
+
+	.rescoring-badge {
+		font-size: 0.6rem;
+		padding: 0.1rem 0.35rem;
+		border-radius: 3px;
+		letter-spacing: 0.3px;
+		background: color-mix(in srgb, var(--accent) 14%, transparent);
+		border: 1px solid var(--accent);
+		color: var(--accent);
+		white-space: nowrap;
+		flex-shrink: 0;
 	}
 
 	.expiry-badge {

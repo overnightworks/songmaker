@@ -8,21 +8,45 @@ vi.mock('$lib/api/client', () => ({
 	unpickGeneration: vi.fn(),
 	keepGeneration: vi.fn(),
 	unkeepGeneration: vi.fn(),
-	rateGeneration: vi.fn()
+	rateGeneration: vi.fn(),
+	scoreGeneration: vi.fn()
 }));
 
+import type { JobStatus } from '$lib/api/client';
 import {
 	fetchSong,
 	keepGeneration,
 	pickGeneration,
 	rateGeneration,
+	scoreGeneration,
 	unkeepGeneration,
 	unpickGeneration
 } from '$lib/api/client';
 import { pinnedSeed } from '$lib/stores/editor';
 import { songList } from '$lib/stores/player';
 import { toasts } from '$lib/stores/toast';
-import { pinSeed, rate, setKeep, setPick } from './takeActions';
+import { activeJobs } from '$lib/stores/jobs';
+import { pinSeed, rate, rescore, rescoringTakeIds, setKeep, setPick } from './takeActions';
+
+// The score job's progress arrives over a server-sent event stream jsdom does
+// not implement, so the store gets an EventSource that records nothing.
+class SilentEventSource {
+	close(): void {}
+}
+
+function scoreJob(overrides: Partial<JobStatus> = {}): JobStatus {
+	return {
+		id: 'j1',
+		type: 'score',
+		status: 'queued',
+		progress: 0,
+		error: null,
+		error_type: null,
+		started_at: null,
+		completed_at: null,
+		...overrides
+	};
+}
 
 function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
 	return {
@@ -74,12 +98,16 @@ beforeEach(() => {
 	songList.set([]);
 	toasts.set([]);
 	pinnedSeed.set(null);
+	activeJobs.set([]);
+	vi.stubGlobal('EventSource', SilentEventSource);
 	vi.clearAllMocks();
 });
 
 afterEach(() => {
 	songList.set([]);
 	pinnedSeed.set(null);
+	activeJobs.set([]);
+	vi.unstubAllGlobals();
 });
 
 describe('setPick', () => {
@@ -184,6 +212,42 @@ describe('pinSeed', () => {
 		expect(get(pinnedSeed)).toBe(48113);
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({ message: 'Seed 48113 pinned for next generation', type: 'success' })
+		]);
+	});
+});
+
+describe('rescore', () => {
+	it('marks the take as re-scoring until its scoring job leaves the queue', async () => {
+		vi.mocked(scoreGeneration).mockResolvedValue(scoreJob());
+
+		await rescore('s1', 'g1');
+
+		expect(scoreGeneration).toHaveBeenCalledWith('g1');
+		expect(get(rescoringTakeIds).has('g1')).toBe(true);
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: 'Re-scoring…', type: 'info' })
+		]);
+
+		activeJobs.set([]);
+		expect(get(rescoringTakeIds).has('g1')).toBe(false);
+	});
+
+	it('leaves other takes unmarked while one is re-scoring', async () => {
+		vi.mocked(scoreGeneration).mockResolvedValue(scoreJob());
+
+		await rescore('s1', 'g1');
+
+		expect(get(rescoringTakeIds).has('g2')).toBe(false);
+	});
+
+	it('toasts the error and marks nothing when the job is rejected', async () => {
+		vi.mocked(scoreGeneration).mockRejectedValue(new Error('queue is full'));
+
+		await rescore('s1', 'g1');
+
+		expect(get(rescoringTakeIds).size).toBe(0);
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: 'queue is full', type: 'error' })
 		]);
 	});
 });
