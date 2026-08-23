@@ -274,22 +274,6 @@ function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; sta
 	return { items: [start, ...rest], startIndex: 0 };
 }
 
-function streamLoadOpts(
-	restart: boolean,
-	track: QueueStreamManifest['tracks'][number] | undefined,
-	resumeAtTrackTime: number | undefined
-): { restart: boolean; resumeAt?: number } {
-	if (resumeAtTrackTime === undefined || !track) return { restart };
-	return { restart, resumeAt: track.start_offset + resumeAtTrackTime };
-}
-
-function showWindowedNotice(trackCount: number): void {
-	addToast(
-		`Streaming the first ${trackCount} tracks — the queue is longer than one stream allows.`,
-		'info'
-	);
-}
-
 // A failed stream start remembers what the listener actually asked for, so the
 // "press play to retry" affordance replays that exact intent instead of falling
 // back to an unrotated default queue (which starts at library track 1).
@@ -415,37 +399,6 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 		queueContext.set({ type: 'album', albumId: ctx.albumId, takes, index });
 	}
 	loadNativeTake(takes[index]);
-}
-
-export async function playStreamEntries(
-	entries: PlaylistEntryItem[],
-	startIndex: number,
-	opts: { restart?: boolean; resumeAtTrackTime?: number }
-): Promise<void> {
-	clearWindowEnd();
-	clearLibraryQueueSkipFeedback();
-	let manifest: QueueStreamManifest;
-	try {
-		manifest = await createQueueStreamSnapshot(
-			entries.map((entry) => ({
-				generation_id: entry.generation_id,
-				entry_id: entry.id
-			}))
-		);
-	} catch {
-		retryPlayIntent = () => playStreamEntries(entries, startIndex, opts);
-		addToast('Stream unavailable. Press play to retry.', 'error');
-		return;
-	}
-	retryPlayIntent = null;
-	audioPlayer.loadStream(
-		manifest,
-		startIndex,
-		streamLoadOpts(opts.restart ?? true, manifest.tracks[startIndex], opts.resumeAtTrackTime)
-	);
-	if (manifest.windowed) {
-		showWindowedNotice(manifest.tracks.length);
-	}
 }
 
 export async function playLibraryFromGeneration(
