@@ -155,9 +155,7 @@ def run_scoring_job(
             if text_accuracy is not None:
                 gen_record = session.query(GenModel).filter_by(id=gen_id).first()
                 if gen_record:
-                    gen_record.whisper_text = "\n".join(
-                        text_accuracy.transcribed_line_texts,
-                    )
+                    gen_record.whisper_text = text_accuracy.transcript
                     gen_record.whisper_cues = [
                         cue.model_dump() for cue in text_accuracy.whisper_cues
                     ]

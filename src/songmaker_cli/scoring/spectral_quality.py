@@ -20,7 +20,7 @@ from songmaker_cli.constants import (
     SPECTRAL_WINDOW_SECONDS,
 )
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.models import SharedScorerData, SpectralQualityScore
+from songmaker_cli.scoring.models import SpectralQualityScore
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 log = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 @register("spectral_quality")
 def score_spectral_quality(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,
+    config: PipelineConfig | None = None,
 ) -> SpectralQualityScore:
     """Detect noise artifacts by analyzing spectral flatness across the song."""
     if audio_data is None:

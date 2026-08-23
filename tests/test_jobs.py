@@ -754,6 +754,7 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
 
     with seeded_db() as session:
         gen = get_generation(session, "g1")
+        assert gen.whisper_text == mock_result.text_accuracy.transcript
         assert gen.whisper_text == "hello\nworld"
         assert gen.whisper_cues == [
             {"start": 0.0, "end": 0.8, "text": "hello"},

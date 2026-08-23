@@ -95,8 +95,9 @@ WHISPER_TEMPERATURE = 0.0
 
 SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
 SETTING_CLAUDE_SCORING_MODEL = "claude_scoring_model"
-# Shared by Settings.claude_scoring_model and scoring.pipeline.PipelineConfig
-# (the latter must not import Settings post-scrub — see docs/security.md).
+# Default for Settings.claude_scoring_model, which the DB setting overrides
+# (get_claude_scoring_model). The scoring job resolves the model there and
+# hands it to the coherence judge on CoherenceJudgeConfig.
 CLAUDE_SCORING_MODEL_DEFAULT = "claude-opus-4-6"
 SETTING_COWRITER_PROVIDER = "cowriter_provider"
 SETTING_COWRITER_MODEL = "cowriter_model"

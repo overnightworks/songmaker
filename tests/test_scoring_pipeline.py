@@ -220,7 +220,7 @@ def test_run_pipeline(mock_load: object, clean_registry: ScorerRegistry, fake_mp
     @clean_registry.register("silence")
     def mock_silence(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.5, longest_gap_seconds=0.3, gap_count=1,
@@ -239,14 +239,14 @@ def test_pipeline_handles_scorer_failure(
     @clean_registry.register("text_accuracy")
     def broken_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> None:
         raise RuntimeError("boom")
 
     @clean_registry.register("silence")
     def ok_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
@@ -264,7 +264,7 @@ def test_pipeline_filters_by_name(
     @clean_registry.register("silence")
     def scorer_a(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         return SilenceScore(
             total_silence_seconds=0.0, longest_gap_seconds=0.0, gap_count=0,
@@ -273,7 +273,7 @@ def test_pipeline_filters_by_name(
     @clean_registry.register("bpm_accuracy")
     def scorer_b(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> BpmAccuracyScore:
         return BpmAccuracyScore(
             detected_bpm=120, requested_bpm=120,
@@ -311,7 +311,7 @@ def test_pipeline_rejects_wrong_return_type(
     @clean_registry.register("silence")
     def wrong_type_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> str:
         return "not a SilenceScore"  # type: ignore[return-value]
 
@@ -337,7 +337,7 @@ def test_cpu_scorers_run_concurrently(
     @clean_registry.register("silence")
     def slow_silence(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         time.sleep(SLEEP_SECONDS)
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
@@ -345,7 +345,7 @@ def test_cpu_scorers_run_concurrently(
     @clean_registry.register("bpm_accuracy")
     def slow_bpm(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> BpmAccuracyScore:
         time.sleep(SLEEP_SECONDS)
         return BpmAccuracyScore(
@@ -355,7 +355,7 @@ def test_cpu_scorers_run_concurrently(
     @clean_registry.register("emotional_dynamics")
     def slow_dynamics(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> EmotionalDynamicsScore:
         time.sleep(SLEEP_SECONDS)
         return EmotionalDynamicsScore(
@@ -384,7 +384,7 @@ def test_gpu_scorers_run_sequentially_with_cpu_overlap(
     @clean_registry.register("silence")
     def cpu_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         time.sleep(SLEEP_SECONDS)
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
@@ -392,7 +392,7 @@ def test_gpu_scorers_run_sequentially_with_cpu_overlap(
     @clean_registry.register("audiobox")
     def gpu_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> AudioBoxScore:
         time.sleep(SLEEP_SECONDS)
         return AudioBoxScore(
@@ -419,14 +419,14 @@ def test_gpu_scorer_failure_does_not_block_cpu(
     @clean_registry.register("audiobox")
     def broken_gpu(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> None:
         raise RuntimeError("GPU exploded")
 
     @clean_registry.register("silence")
     def ok_cpu(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
@@ -444,7 +444,7 @@ def test_pipeline_reports_a_known_but_unregistered_scorer_as_skipped(
     @clean_registry.register("silence")
     def ok_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
@@ -485,7 +485,7 @@ def test_timed_out_scorer_reports_timeout_and_no_value(
     @clean_registry.register("bpm_accuracy")
     def scorer_over_budget(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> BpmAccuracyScore:
         time.sleep(OVER_BUDGET_SECONDS)
         return BpmAccuracyScore(
@@ -509,7 +509,7 @@ def test_failed_scorer_reports_failure_with_reason(
     @clean_registry.register("silence")
     def broken_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> SilenceScore:
         raise RuntimeError("boom")
 
@@ -527,7 +527,7 @@ def test_scorer_with_unavailable_dependency_is_skipped_not_failed(
     @clean_registry.register("text_accuracy")
     def needs_vocals(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> object:
         raise ScorerDependencyUnavailable("no transcript")
 
@@ -547,7 +547,7 @@ def test_wrong_return_type_counts_as_failure(
     @clean_registry.register("silence")
     def wrong_type_scorer(
         mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None, shared_data: object = None,
+        config: object = None,
     ) -> object:
         return "not a SilenceScore"
 

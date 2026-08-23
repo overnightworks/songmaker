@@ -9,14 +9,14 @@ import numpy as np
 
 from songmaker_cli.constants import SILENCE_MIN_GAP_SECONDS, SILENCE_TOP_DB, SILENCE_TRIM_SECONDS
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.models import SharedScorerData, SilenceScore
+from songmaker_cli.scoring.models import SilenceScore
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
 
 
 @register("silence")
 def score_silence(
     mp3_path: Path, meta: SongMeta | None = None, audio_data: AudioData | None = None,
-    config: PipelineConfig | None = None, shared_data: SharedScorerData | None = None,
+    config: PipelineConfig | None = None,
 ) -> SilenceScore:
     """Detect problematic silence gaps in the interior of a song."""
     if audio_data is None:

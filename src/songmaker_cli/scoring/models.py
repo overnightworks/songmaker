@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import dataclass, fields, replace
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -54,17 +54,6 @@ class ScorerExecution:
     value: object | None = None
 
 
-@dataclass
-class SharedScorerData:
-    """Data one scorer publishes for another inside the same child run.
-
-    Mutable: scorers write fields during execution. Not frozen because
-    GPU-phase scorers populate data that CPU-phase scorers read.
-    """
-
-    whisper_text: str | None = field(default=None)
-
-
 @dataclass(frozen=True)
 class TextAccuracyScore:
     """Whisper transcription vs intended lyrics."""
@@ -82,6 +71,12 @@ class TextAccuracyScore:
     @property
     def transcribed_lines(self) -> int:
         return len(self.transcribed_line_texts)
+
+    @property
+    def transcript(self) -> str:
+        """What Whisper heard, as one text — the form the coherence judge
+        reads and the generation stores."""
+        return "\n".join(self.transcribed_line_texts)
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {

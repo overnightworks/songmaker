@@ -500,18 +500,13 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
     )
     config = PipelineConfig(device="cpu", whisper_model="base")
 
-    from songmaker_cli.scoring.models import SharedScorerData
-    shared_data = SharedScorerData()
     with patch("songmaker_cli.scoring.text_accuracy._get_whisper_model", return_value=mock_model):
-        result = score_text_accuracy(
-            tmp_path / "test.mp3", meta=meta, config=config, shared_data=shared_data,
-        )
+        result = score_text_accuracy(tmp_path / "test.mp3", meta=meta, config=config)
 
     assert isinstance(result, TextAccuracyScore)
     assert result.similarity_ratio > 0
     assert result.detected_language == "en"
-    assert shared_data.whisper_text is not None
-    assert "hello world" in shared_data.whisper_text
+    assert result.transcript == "hello world\ngoodbye moon"
     assert result.whisper_cues == (
         WhisperCue(start=0.0, end=1.1, text="hello world"),
         WhisperCue(start=1.1, end=2.4, text="goodbye moon"),
@@ -519,7 +514,6 @@ def test_score_text_accuracy_full(tmp_path: Path) -> None:
 
 
 def test_score_text_accuracy_no_meta(tmp_path: Path) -> None:
-    from songmaker_cli.scoring.models import SharedScorerData
     from songmaker_cli.scoring.pipeline import PipelineConfig
     from songmaker_cli.scoring.text_accuracy import score_text_accuracy
 
@@ -530,15 +524,12 @@ def test_score_text_accuracy_no_meta(tmp_path: Path) -> None:
         iter([_whisper_segment("la la la", 0.2, 1.8)]), info,
     )
     config = PipelineConfig(device="cpu", whisper_model="base")
-    shared = SharedScorerData()
 
     with patch(
         "songmaker_cli.scoring.text_accuracy._get_whisper_model",
         return_value=mock_model,
     ):
-        result = score_text_accuracy(
-            tmp_path / "test.mp3", meta=None, config=config, shared_data=shared,
-        )
+        result = score_text_accuracy(tmp_path / "test.mp3", meta=None, config=config)
 
     assert isinstance(result, TextAccuracyScore)
     assert result.similarity_ratio == 0.0
@@ -547,7 +538,7 @@ def test_score_text_accuracy_no_meta(tmp_path: Path) -> None:
     assert result.whisper_cues == (
         WhisperCue(start=0.2, end=1.8, text="la la la"),
     )
-    assert shared.whisper_text == "la la la"
+    assert result.transcript == "la la la"
     call_kwargs = mock_model.transcribe.call_args[1]
     assert call_kwargs["language"] is None
     assert "initial_prompt" not in call_kwargs
@@ -630,13 +621,16 @@ def _child_result(*transcribed: str) -> SongScores:
     )
 
 
-def _judge(scores: SongScores, meta: SongMeta | None, **config: object) -> SongScores:
+def _judge(scores: SongScores, meta: SongMeta | None, **overrides: object) -> SongScores:
     from songmaker_cli.scoring.lyrical_coherence import (
         CoherenceJudgeConfig,
         judge_lyrical_coherence,
     )
 
-    return judge_lyrical_coherence(scores, meta, CoherenceJudgeConfig(**config))
+    config = CoherenceJudgeConfig(
+        **{"model": "claude-test", "api_key": None, "timeout": 60, **overrides},
+    )
+    return judge_lyrical_coherence(scores, meta, config)
 
 
 def _claude_answers(text: str) -> object:
@@ -646,6 +640,18 @@ def _claude_answers(text: str) -> object:
         "songmaker_cli.scoring.lyrical_coherence.call_claude",
         return_value=ClaudeResponse(text=text),
     )
+
+
+def test_the_judge_reads_the_same_transcript_the_generation_stores() -> None:
+    """One owner for the text: TextAccuracyScore.transcript. The judge sees
+    exactly what ends up in Generation.whisper_text."""
+    child_result = _child_result("hello world", "goodbye moon")
+
+    with _claude_answers('{"score": 9, "issues": [], "summary": "great"}') as claude:
+        _judge(child_result, SongMeta(prompt="test", lyrics=_LYRICS))
+
+    assert child_result.text_accuracy.transcript in claude.call_args.args[0]
+    assert child_result.text_accuracy.transcript == "hello world\ngoodbye moon"
 
 
 def test_judge_is_skipped_when_the_song_has_no_lyrics() -> None:
@@ -708,21 +714,26 @@ def test_judge_failure_leaves_the_stored_coherence_score_alone() -> None:
     assert "lyrical_coherence" not in judged.refreshed_output_keys()
 
 
-def test_judge_gives_up_on_its_own_time_budget() -> None:
+def test_judge_gives_up_when_its_time_budget_runs_out() -> None:
+    """The budget is a ceiling: the job moves on when it expires instead of
+    waiting for the call that blew it."""
     import time
 
     def _hang(*_args: object, **_kwargs: object) -> None:
-        time.sleep(1.2)
+        time.sleep(2)
 
+    started = time.monotonic()
     with patch("songmaker_cli.scoring.lyrical_coherence.call_claude", side_effect=_hang):
         judged = _judge(
             _child_result("hello world"),
             SongMeta(prompt="test", lyrics=_LYRICS),
             timeout=1,
         )
+    elapsed = time.monotonic() - started
 
-    assert judged.lyrical_coherence is None
     assert judged.runs[-1].outcome is ScorerOutcome.TIMED_OUT
+    assert judged.lyrical_coherence is None
+    assert elapsed < 2, f"waited {elapsed:.2f}s for a call it had given up on"
 
 
 def test_judge_uses_the_key_and_model_from_its_config_not_the_environment(

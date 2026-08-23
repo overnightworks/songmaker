@@ -25,7 +25,6 @@ from songmaker_cli.scoring.models import (
     ScorerExecution,
     ScorerOutcome,
     ScorerRun,
-    SharedScorerData,
     SongScores,
 )
 from songmaker_cli.scoring.registry import (
@@ -102,7 +101,7 @@ class PipelineConfig:
 
 
 ScorerFunc = Callable[
-    [Path, SongMeta | None, AudioData | None, PipelineConfig, SharedScorerData], object,
+    [Path, SongMeta | None, AudioData | None, PipelineConfig], object,
 ]
 
 
@@ -223,17 +222,21 @@ def _call_with_timeout(call: Callable[[], object], timeout: int, name: str) -> o
     """Run a scorer call with a thread-based timeout.
 
     Uses ThreadPoolExecutor instead of SIGALRM because SIGALRM is unsafe
-    with C extensions (numpy, torch, librosa) that hold the GIL.
+    with C extensions (numpy, torch, librosa) that hold the GIL. A thread
+    cannot be killed, so a scorer over budget is abandoned, not stopped.
     """
     if timeout <= 0:
         return call()
 
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(call)
-        try:
-            return future.result(timeout=timeout)
-        except FuturesTimeout:
-            raise _ScorerTimeout(f"Scorer '{name}' timed out after {timeout}s")
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        return pool.submit(call).result(timeout=timeout)
+    except FuturesTimeout:
+        raise _ScorerTimeout(f"Scorer '{name}' timed out after {timeout}s")
+    finally:
+        # wait=False: the budget is a ceiling. Joining here would hand the
+        # scorer that blew it exactly the time the timeout just denied it.
+        pool.shutdown(wait=False)
 
 
 def _ended(name: str, outcome: ScorerOutcome, detail: str) -> ScorerExecution:
@@ -293,10 +296,9 @@ def _scorer_call(
     meta: SongMeta | None,
     audio_data: AudioData | None,
     config: PipelineConfig,
-    shared_data: SharedScorerData,
 ) -> Callable[[], object]:
     func = reg.get(name)
-    return lambda: func(mp3_path, meta, audio_data, config, shared_data)
+    return lambda: func(mp3_path, meta, audio_data, config)
 
 
 def _submit_scorers(
@@ -307,13 +309,12 @@ def _submit_scorers(
     meta: SongMeta | None,
     audio_data: AudioData | None,
     config: PipelineConfig,
-    shared_data: SharedScorerData,
 ) -> list[Future[ScorerExecution]]:
     return [
         pool.submit(
             run_scorer,
             name,
-            _scorer_call(name, reg, mp3_path, meta, audio_data, config, shared_data),
+            _scorer_call(name, reg, mp3_path, meta, audio_data, config),
             config.timeout_for(name),
         )
         for name in names
@@ -398,17 +399,15 @@ def run_scoring_pipeline(
         if on_progress:
             on_progress(completed_count, len(runnable), name)
 
-    shared_data = SharedScorerData()
-
     with ThreadPoolExecutor(max_workers=min(max(len(cpu_names), 1), os.cpu_count() or 4)) as pool:
         cpu_futures = _submit_scorers(
-            pool, cpu_names, reg, mp3_path, meta, audio_data, config, shared_data,
+            pool, cpu_names, reg, mp3_path, meta, audio_data, config,
         )
 
         for name in gpu_names:
             executions.append(run_scorer(
                 name,
-                _scorer_call(name, reg, mp3_path, meta, audio_data, config, shared_data),
+                _scorer_call(name, reg, mp3_path, meta, audio_data, config),
                 config.timeout_for(name),
             ))
             _on_scorer_done(name)

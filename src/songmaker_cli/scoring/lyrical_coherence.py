@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from pydantic import SecretStr
 
 from songmaker_cli.claude.provider import call_claude, parse_json_response
-from songmaker_cli.constants import CLAUDE_SCORING_MODEL_DEFAULT, SCORER_TIMEOUT_SECONDS
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
     LyricalCoherenceScore,
@@ -33,11 +32,13 @@ log = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class CoherenceJudgeConfig:
     """What the parent needs to reach Claude, resolved from Settings and the
-    DB by the caller — the judge itself reads neither."""
+    DB by the caller — the judge itself reads neither, and defaults none of
+    it: which model judges a song is a configured decision, not a fallback.
+    ``api_key=None`` selects the Claude CLI backend."""
 
-    model: str = CLAUDE_SCORING_MODEL_DEFAULT
-    api_key: SecretStr | None = None
-    timeout: int = SCORER_TIMEOUT_SECONDS
+    model: str
+    api_key: SecretStr | None
+    timeout: int
 
 
 JUDGE_PROMPT = (  # noqa: E501
@@ -116,7 +117,7 @@ def _judge(
         raise ScorerDependencyUnavailable(
             "No Whisper transcription in this run — text_accuracy produced none",
         )
-    transcribed = "\n".join(transcription.transcribed_line_texts)
+    transcribed = transcription.transcript
     if not transcribed:
         log.info("Empty Whisper transcription (no vocals detected) — skipping coherence check")
         return LyricalCoherenceScore(
