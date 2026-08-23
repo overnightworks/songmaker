@@ -780,6 +780,593 @@
 		{
 			"cues": [
 				{
+					"end": 44.8,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la la we count the fading city lights another mile of rusted signs",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "the"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "lantern"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "hums"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "quietly"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "tonight"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "la"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "la"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "la"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "la"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "la"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "la"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "la"
+						},
+						{
+							"end": 5.2,
+							"start": 4.8,
+							"text": "la"
+						},
+						{
+							"end": 5.6,
+							"start": 5.2,
+							"text": "la"
+						},
+						{
+							"end": 6.0,
+							"start": 5.6,
+							"text": "la"
+						},
+						{
+							"end": 6.4,
+							"start": 6.0,
+							"text": "la"
+						},
+						{
+							"end": 6.8,
+							"start": 6.4,
+							"text": "la"
+						},
+						{
+							"end": 7.2,
+							"start": 6.8,
+							"text": "la"
+						},
+						{
+							"end": 7.6,
+							"start": 7.2,
+							"text": "la"
+						},
+						{
+							"end": 8.0,
+							"start": 7.6,
+							"text": "la"
+						},
+						{
+							"end": 8.4,
+							"start": 8.0,
+							"text": "la"
+						},
+						{
+							"end": 8.8,
+							"start": 8.4,
+							"text": "la"
+						},
+						{
+							"end": 9.2,
+							"start": 8.8,
+							"text": "la"
+						},
+						{
+							"end": 9.6,
+							"start": 9.2,
+							"text": "la"
+						},
+						{
+							"end": 10.0,
+							"start": 9.6,
+							"text": "la"
+						},
+						{
+							"end": 10.4,
+							"start": 10.0,
+							"text": "la"
+						},
+						{
+							"end": 10.8,
+							"start": 10.4,
+							"text": "la"
+						},
+						{
+							"end": 11.2,
+							"start": 10.8,
+							"text": "la"
+						},
+						{
+							"end": 11.6,
+							"start": 11.2,
+							"text": "la"
+						},
+						{
+							"end": 12.0,
+							"start": 11.6,
+							"text": "la"
+						},
+						{
+							"end": 12.4,
+							"start": 12.0,
+							"text": "la"
+						},
+						{
+							"end": 12.8,
+							"start": 12.4,
+							"text": "la"
+						},
+						{
+							"end": 13.2,
+							"start": 12.8,
+							"text": "la"
+						},
+						{
+							"end": 13.6,
+							"start": 13.2,
+							"text": "la"
+						},
+						{
+							"end": 14.0,
+							"start": 13.6,
+							"text": "la"
+						},
+						{
+							"end": 14.4,
+							"start": 14.0,
+							"text": "la"
+						},
+						{
+							"end": 14.8,
+							"start": 14.4,
+							"text": "la"
+						},
+						{
+							"end": 15.2,
+							"start": 14.8,
+							"text": "la"
+						},
+						{
+							"end": 15.6,
+							"start": 15.2,
+							"text": "la"
+						},
+						{
+							"end": 16.0,
+							"start": 15.6,
+							"text": "la"
+						},
+						{
+							"end": 16.4,
+							"start": 16.0,
+							"text": "la"
+						},
+						{
+							"end": 16.8,
+							"start": 16.4,
+							"text": "la"
+						},
+						{
+							"end": 17.2,
+							"start": 16.8,
+							"text": "la"
+						},
+						{
+							"end": 17.6,
+							"start": 17.2,
+							"text": "la"
+						},
+						{
+							"end": 18.0,
+							"start": 17.6,
+							"text": "la"
+						},
+						{
+							"end": 18.4,
+							"start": 18.0,
+							"text": "la"
+						},
+						{
+							"end": 18.8,
+							"start": 18.4,
+							"text": "la"
+						},
+						{
+							"end": 19.2,
+							"start": 18.8,
+							"text": "la"
+						},
+						{
+							"end": 19.6,
+							"start": 19.2,
+							"text": "la"
+						},
+						{
+							"end": 20.0,
+							"start": 19.6,
+							"text": "la"
+						},
+						{
+							"end": 20.4,
+							"start": 20.0,
+							"text": "la"
+						},
+						{
+							"end": 20.8,
+							"start": 20.4,
+							"text": "la"
+						},
+						{
+							"end": 21.2,
+							"start": 20.8,
+							"text": "la"
+						},
+						{
+							"end": 21.6,
+							"start": 21.2,
+							"text": "la"
+						},
+						{
+							"end": 22.0,
+							"start": 21.6,
+							"text": "la"
+						},
+						{
+							"end": 22.4,
+							"start": 22.0,
+							"text": "la"
+						},
+						{
+							"end": 22.8,
+							"start": 22.4,
+							"text": "la"
+						},
+						{
+							"end": 23.2,
+							"start": 22.8,
+							"text": "la"
+						},
+						{
+							"end": 23.6,
+							"start": 23.2,
+							"text": "la"
+						},
+						{
+							"end": 24.0,
+							"start": 23.6,
+							"text": "la"
+						},
+						{
+							"end": 24.4,
+							"start": 24.0,
+							"text": "la"
+						},
+						{
+							"end": 24.8,
+							"start": 24.4,
+							"text": "la"
+						},
+						{
+							"end": 25.2,
+							"start": 24.8,
+							"text": "la"
+						},
+						{
+							"end": 25.6,
+							"start": 25.2,
+							"text": "la"
+						},
+						{
+							"end": 26.0,
+							"start": 25.6,
+							"text": "la"
+						},
+						{
+							"end": 26.4,
+							"start": 26.0,
+							"text": "la"
+						},
+						{
+							"end": 26.8,
+							"start": 26.4,
+							"text": "la"
+						},
+						{
+							"end": 27.2,
+							"start": 26.8,
+							"text": "la"
+						},
+						{
+							"end": 27.6,
+							"start": 27.2,
+							"text": "la"
+						},
+						{
+							"end": 28.0,
+							"start": 27.6,
+							"text": "la"
+						},
+						{
+							"end": 28.4,
+							"start": 28.0,
+							"text": "la"
+						},
+						{
+							"end": 28.8,
+							"start": 28.4,
+							"text": "la"
+						},
+						{
+							"end": 29.2,
+							"start": 28.8,
+							"text": "la"
+						},
+						{
+							"end": 29.6,
+							"start": 29.2,
+							"text": "la"
+						},
+						{
+							"end": 30.0,
+							"start": 29.6,
+							"text": "la"
+						},
+						{
+							"end": 30.4,
+							"start": 30.0,
+							"text": "la"
+						},
+						{
+							"end": 30.8,
+							"start": 30.4,
+							"text": "la"
+						},
+						{
+							"end": 31.2,
+							"start": 30.8,
+							"text": "la"
+						},
+						{
+							"end": 31.6,
+							"start": 31.2,
+							"text": "la"
+						},
+						{
+							"end": 32.0,
+							"start": 31.6,
+							"text": "la"
+						},
+						{
+							"end": 32.4,
+							"start": 32.0,
+							"text": "la"
+						},
+						{
+							"end": 32.8,
+							"start": 32.4,
+							"text": "la"
+						},
+						{
+							"end": 33.2,
+							"start": 32.8,
+							"text": "la"
+						},
+						{
+							"end": 33.6,
+							"start": 33.2,
+							"text": "la"
+						},
+						{
+							"end": 34.0,
+							"start": 33.6,
+							"text": "la"
+						},
+						{
+							"end": 34.4,
+							"start": 34.0,
+							"text": "la"
+						},
+						{
+							"end": 34.8,
+							"start": 34.4,
+							"text": "la"
+						},
+						{
+							"end": 35.2,
+							"start": 34.8,
+							"text": "la"
+						},
+						{
+							"end": 35.6,
+							"start": 35.2,
+							"text": "la"
+						},
+						{
+							"end": 36.0,
+							"start": 35.6,
+							"text": "la"
+						},
+						{
+							"end": 36.4,
+							"start": 36.0,
+							"text": "la"
+						},
+						{
+							"end": 36.8,
+							"start": 36.4,
+							"text": "la"
+						},
+						{
+							"end": 37.2,
+							"start": 36.8,
+							"text": "la"
+						},
+						{
+							"end": 37.6,
+							"start": 37.2,
+							"text": "la"
+						},
+						{
+							"end": 38.0,
+							"start": 37.6,
+							"text": "la"
+						},
+						{
+							"end": 38.4,
+							"start": 38.0,
+							"text": "la"
+						},
+						{
+							"end": 38.8,
+							"start": 38.4,
+							"text": "la"
+						},
+						{
+							"end": 39.2,
+							"start": 38.8,
+							"text": "la"
+						},
+						{
+							"end": 39.6,
+							"start": 39.2,
+							"text": "la"
+						},
+						{
+							"end": 40.0,
+							"start": 39.6,
+							"text": "la"
+						},
+						{
+							"end": 40.4,
+							"start": 40.0,
+							"text": "la"
+						},
+						{
+							"end": 40.8,
+							"start": 40.4,
+							"text": "we"
+						},
+						{
+							"end": 41.2,
+							"start": 40.8,
+							"text": "count"
+						},
+						{
+							"end": 41.6,
+							"start": 41.2,
+							"text": "the"
+						},
+						{
+							"end": 42.0,
+							"start": 41.6,
+							"text": "fading"
+						},
+						{
+							"end": 42.4,
+							"start": 42.0,
+							"text": "city"
+						},
+						{
+							"end": 42.8,
+							"start": 42.4,
+							"text": "lights"
+						},
+						{
+							"end": 43.2,
+							"start": 42.8,
+							"text": "another"
+						},
+						{
+							"end": 43.6,
+							"start": 43.2,
+							"text": "mile"
+						},
+						{
+							"end": 44.0,
+							"start": 43.6,
+							"text": "of"
+						},
+						{
+							"end": 44.4,
+							"start": 44.0,
+							"text": "rusted"
+						},
+						{
+							"end": 44.8,
+							"start": 44.4,
+							"text": "signs"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 42.8,
+					"start": 40.4
+				},
+				{
+					"end": 44.8,
+					"start": 42.8
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights\nanother mile of rusted signs",
+			"name": "word path: a long stretch of unmatched words does not hide the lines behind it"
+		},
+		{
+			"cues": [
+				{
 					"end": 4.0,
 					"start": 0.0,
 					"text": "the lantern hums quietly tonight the lantern hums calmly tonight",

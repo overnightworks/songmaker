@@ -248,6 +248,29 @@ def choose_candidate(candidates: list[Candidate]) -> Candidate | None:
     return best
 
 
+def collect_with_growing_window(
+    word_texts: list[str], cursor: int, line_text: str,
+) -> list[Candidate]:
+    candidates: list[Candidate] = []
+    scanned = cursor
+    plausible = False
+
+    while scanned < len(word_texts) and not plausible:
+        limit = min(len(word_texts), scanned + WORD_STREAM_LOOKAHEAD)
+        for candidate in collect_candidates(
+            word_texts,
+            scanned,
+            limit,
+            len(word_texts),
+            len(line_text),
+            lambda candidate_text, line=line_text: ratio(candidate_text, line),
+        ):
+            candidates.append(candidate)
+            plausible = plausible or candidate.score >= MIN_RATIO
+        scanned = limit
+    return candidates
+
+
 def align_against_words(
     words: list[WordCue], line_texts: list[str],
 ) -> dict[int, Interval]:
@@ -256,14 +279,9 @@ def align_against_words(
 
     cursor = 0
     for line_position, line_text in enumerate(line_texts):
-        chosen = choose_candidate(collect_candidates(
-            word_texts,
-            cursor,
-            min(len(word_texts), cursor + WORD_STREAM_LOOKAHEAD),
-            len(word_texts),
-            len(line_text),
-            lambda candidate_text, line=line_text: ratio(candidate_text, line),
-        ))
+        chosen = choose_candidate(
+            collect_with_growing_window(word_texts, cursor, line_text),
+        )
         if chosen is None:
             continue
         first, last = matched_word_range(word_texts, chosen, line_text)
@@ -413,6 +431,11 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         "word path: a run padded with foreign words starts at the line's own first word",
         "\n".join([LINE_1, LINE_2]),
         (_sung_cue(0.0, 0.4, f"{LINE_1} {' '.join(['la'] * 30)} {LINE_2}"),),
+    ),
+    AlignmentFixture(
+        "word path: a long stretch of unmatched words does not hide the lines behind it",
+        "\n".join([LINE_1, LINE_2, LINE_3]),
+        (_sung_cue(0.0, 0.4, f"{LINE_1} {' '.join(['la'] * 96)} {LINE_2} {LINE_3}"),),
     ),
     AlignmentFixture(
         "word path: a phrase sung twice takes the clearly better reading",

@@ -35,11 +35,10 @@ import { SequenceMatcher } from './sequence-matcher';
 const MIN_RATIO = 0.72;
 const AMBIGUITY_MARGIN = 0.12;
 const MAX_WINDOW_LINES = 3;
-// A line whose rendition does not begin within this many transcript words of
-// the previous line's last word counts as not sung. Consecutive lines follow
-// each other directly in the stream, so this is room for roughly three lines
-// of adlibs or skipped text — and it keeps the search linear in the length of
-// the take instead of quadratic.
+// How far past the previous line's last word the search looks before it has
+// to grow. Consecutive lines follow each other directly in the stream, so one
+// step is already room for roughly three lines of adlibs or skipped text, and
+// a line that sits right where it is expected costs only this one step.
 const WORD_STREAM_LOOKAHEAD = 24;
 // A candidate scoring below this can neither win nor, as a rival, block the
 // winner, so it never has to be looked at. ratio() is 2 · matched /
@@ -206,6 +205,37 @@ function chooseCandidate(candidates: Candidate[]): Candidate | null {
 	return best;
 }
 
+// Candidates for one line, taken a horizon at a time until the take offers a
+// plausible reading of it or the stream runs out. A stretch of adlibbed or
+// mistranscribed words must not hide every line behind it, and only a line
+// the take has no reading for at all pays for scanning the rest of the take.
+function collectWithGrowingWindow(
+	wordTexts: string[],
+	cursor: number,
+	lineText: string
+): Candidate[] {
+	const candidates: Candidate[] = [];
+	let scanned = cursor;
+	let plausible = false;
+
+	while (scanned < wordTexts.length && !plausible) {
+		const limit = Math.min(wordTexts.length, scanned + WORD_STREAM_LOOKAHEAD);
+		for (const candidate of collectCandidates(
+			wordTexts,
+			scanned,
+			limit,
+			wordTexts.length,
+			lineText.length,
+			(candidateText) => ratio(candidateText, lineText)
+		)) {
+			candidates.push(candidate);
+			if (candidate.score >= MIN_RATIO) plausible = true;
+		}
+		scanned = limit;
+	}
+	return candidates;
+}
+
 function alignAgainstWords(
 	words: PreparedWord[],
 	lineTexts: string[],
@@ -216,16 +246,7 @@ function alignAgainstWords(
 	let cursor = 0;
 	for (let linePosition = 0; linePosition < lineTexts.length; linePosition++) {
 		const lineText = lineTexts[linePosition];
-		const chosen = chooseCandidate(
-			collectCandidates(
-				wordTexts,
-				cursor,
-				Math.min(wordTexts.length, cursor + WORD_STREAM_LOOKAHEAD),
-				wordTexts.length,
-				lineText.length,
-				(candidateText) => ratio(candidateText, lineText)
-			)
-		);
+		const chosen = chooseCandidate(collectWithGrowingWindow(wordTexts, cursor, lineText));
 		if (chosen === null) continue;
 		const sung = matchedWordRange(wordTexts, chosen, lineText);
 		assign(linePosition, { start: words[sung.from].start, end: words[sung.to].end });

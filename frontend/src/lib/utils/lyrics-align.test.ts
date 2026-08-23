@@ -249,6 +249,21 @@ describe('alignLyricsToCues with word timestamps', () => {
 		]);
 	});
 
+	it('still finds the lines behind a long stretch of unmatched words', () => {
+		const lyrics = [LINE_1, LINE_2, LINE_3].join('\n');
+		const filler = new Array(96).fill('la').join(' ');
+
+		const aligned = alignLyricsToCues(lyrics, [
+			sungCue(0, 0.5, `${LINE_1} ${filler} ${LINE_2} ${LINE_3}`)
+		]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 2.5 },
+			{ start: 50.5, end: 53.5 },
+			{ start: 53.5, end: 56 }
+		]);
+	});
+
 	it('never lights a line when no run of words matches it (false-positive precision)', () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 
