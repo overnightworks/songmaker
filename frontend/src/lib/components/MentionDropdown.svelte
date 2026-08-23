@@ -2,9 +2,7 @@
 	import type { SongItem, VersionItem } from '$lib/api/types';
 
 	type MentionItem =
-		| { type: 'album' }
-		| { type: 'version'; item: VersionItem }
-		| { type: 'song'; item: SongItem };
+		{ type: 'album' } | { type: 'version'; item: VersionItem } | { type: 'song'; item: SongItem };
 
 	interface Props {
 		items: MentionItem[];

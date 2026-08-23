@@ -31,12 +31,7 @@ import { cancelAlbumSongLoads, selectedSongId } from '$lib/stores/player';
 import { clearAuth } from '$lib/stores/auth';
 
 export type ResourceSyncStatus =
-	| 'disconnected'
-	| 'connecting'
-	| 'bootstrapping'
-	| 'live'
-	| 'reconnecting'
-	| 'error';
+	'disconnected' | 'connecting' | 'bootstrapping' | 'live' | 'reconnecting' | 'error';
 
 export type ResourceAuthProbe = 'ok' | 'unauthorized' | 'retryable';
 
