@@ -92,7 +92,7 @@ describe('TakeStrip', () => {
 		const labels = Array.from(target.querySelectorAll('.take-chip-label')).map(
 			(el) => el.textContent
 		);
-		expect(labels).toEqual(['v3-2', 'v3-1', 'v2-1']);
+		expect(labels).toEqual(['v3 · take 2', 'v3 · take 1', 'v2 · take 1']);
 	});
 
 	it('shows a pick or keep badge', async () => {

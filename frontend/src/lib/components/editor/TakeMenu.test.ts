@@ -1,7 +1,12 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem } from '$lib/api/types';
-import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
+import {
+	HITBOX_COMPACT_PX,
+	HITBOX_FREQUENT_PX,
+	TAKE_AGAIN_LABEL,
+	TAKE_PLAYLIST_LABEL
+} from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import TakeMenu from './TakeMenu.svelte';
 
@@ -87,6 +92,18 @@ describe('TakeMenu', () => {
 	it('names the take on the first row', async () => {
 		const { target } = await render();
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Take · v3 · 2');
+	});
+
+	it('names its actions in full, not in single-word shorthand', async () => {
+		// #141/11: "Again"/"Playlist" read as nouns; the menu says what happens.
+		const { target } = await render();
+		const labels = Array.from(target.querySelectorAll('.overflow-item')).map((el) =>
+			el.textContent?.trim()
+		);
+		expect(labels).toContain(TAKE_AGAIN_LABEL);
+		expect(labels).toContain(TAKE_PLAYLIST_LABEL);
+		expect(TAKE_AGAIN_LABEL).toBe('Generate again');
+		expect(TAKE_PLAYLIST_LABEL).toBe('Add to playlist');
 	});
 
 	it('offers Share when not shared, and Unshare/Copy link when shared', async () => {

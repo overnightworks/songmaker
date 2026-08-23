@@ -13,6 +13,7 @@ vi.mock('$lib/stores/navigation', () => ({
 }));
 
 import { get } from 'svelte/store';
+import { NOW_PLAYING_LYRICS_RESCORE_HINT } from '$lib/constants/now-playing';
 import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
 import { revealPlayingSong } from '$lib/stores/navigation';
 import { nowPlayingOpen } from '$lib/stores/player';
@@ -180,6 +181,30 @@ describe('NowPlayingTake', () => {
 			generation: generation({ whisper_text: null })
 		});
 		expect(target.textContent).toContain('No transcript to compare against yet');
+	});
+
+	it('asks for a re-score while the take has no lyric cues', async () => {
+		// #141/9: without cues the lyrics cannot follow the audio, and the panel
+		// says why instead of leaving the listener to guess.
+		await render({ generation: generation({ whisper_cues: null }) });
+		expect(target.textContent).toContain(NOW_PLAYING_LYRICS_RESCORE_HINT);
+	});
+
+	it('drops the re-score hint once the take has cues', async () => {
+		await render({
+			generation: generation({
+				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
+			})
+		});
+		expect(target.textContent).not.toContain(NOW_PLAYING_LYRICS_RESCORE_HINT);
+	});
+
+	it('sizes the pick, keep, seed, and reference actions to the frequent hitbox', async () => {
+		await render({});
+		const optedIn = Array.from(target.querySelectorAll('[data-hitbox="frequent"]')).map((el) =>
+			Array.from(el.classList).find((name) => !name.startsWith('svelte-'))
+		);
+		expect(optedIn).toEqual(['badge-btn', 'badge-btn', 'pin-seed', 'use-as-reference']);
 	});
 
 	it('flips pick through takeActions', async () => {

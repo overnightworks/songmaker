@@ -7,6 +7,7 @@
 		NOW_PLAYING_DEVIATIONS_UNAVAILABLE,
 		NOW_PLAYING_DEVIATION_ADDED_TITLE,
 		NOW_PLAYING_KEEP_LABEL,
+		NOW_PLAYING_LYRICS_RESCORE_HINT,
 		NOW_PLAYING_LYRICS_ROW_LABEL,
 		NOW_PLAYING_PICK_LABEL,
 		NOW_PLAYING_PIN_SEED_PREFIX,
@@ -45,6 +46,9 @@
 	}
 
 	const scores = $derived(generation.scores);
+	// #141/9: without cues the lyrics cannot follow the audio — the panel says
+	// so instead of leaving the listener to wonder why nothing highlights.
+	const hasCues = $derived((generation.whisper_cues?.length ?? 0) > 0);
 
 	const scoreEntries = $derived.by((): ScoreEntry[] => {
 		if (!scores) return [];
@@ -246,6 +250,7 @@
 			<button
 				type="button"
 				class="badge-btn"
+				data-hitbox="frequent"
 				class:on={generation.is_picked}
 				onclick={onTogglePick}
 				aria-pressed={generation.is_picked}
@@ -257,6 +262,7 @@
 			<button
 				type="button"
 				class="badge-btn"
+				data-hitbox="frequent"
 				class:on={generation.is_kept}
 				onclick={onToggleKeep}
 				aria-pressed={generation.is_kept}
@@ -286,6 +292,9 @@
 
 	<section class="take-section">
 		<h4 class="section-title">{NOW_PLAYING_DEVIATIONS_LABEL}</h4>
+		{#if !hasCues}
+			<p class="rescore-hint">{NOW_PLAYING_LYRICS_RESCORE_HINT}</p>
+		{/if}
 		{#if !hasTranscript}
 			<p class="empty-note">{NOW_PLAYING_DEVIATIONS_UNAVAILABLE}</p>
 		{:else if !hasDeviations}
@@ -330,7 +339,13 @@
 			rows="2"
 		></textarea>
 		{#if ratingDirty}
-			<button type="button" class="rating-save" onclick={onSaveRating} disabled={ratingSaving}>
+			<button
+				type="button"
+				class="rating-save"
+				data-hitbox="frequent"
+				onclick={onSaveRating}
+				disabled={ratingSaving}
+			>
 				{ratingSaving ? NOW_PLAYING_RATING_SAVING : NOW_PLAYING_RATING_SAVE}
 			</button>
 		{/if}
@@ -338,12 +353,17 @@
 
 	<div class="take-links">
 		{#if generation.seed != null}
-			<button type="button" class="pin-seed" onclick={onPinSeed}>
+			<button type="button" class="pin-seed" data-hitbox="frequent" onclick={onPinSeed}>
 				{NOW_PLAYING_PIN_SEED_PREFIX}
 				{generation.seed}
 			</button>
 		{/if}
-		<button type="button" class="use-as-reference" onclick={onUseAsReference}>
+		<button
+			type="button"
+			class="use-as-reference"
+			data-hitbox="frequent"
+			onclick={onUseAsReference}
+		>
 			{TAKE_USE_AS_REFERENCE_LABEL}
 		</button>
 	</div>
@@ -412,6 +432,11 @@
 		font-size: 0.78rem;
 		color: var(--text-subtle);
 		font-style: italic;
+	}
+	.rescore-hint {
+		margin: 0;
+		font-size: 0.78rem;
+		color: var(--text-muted);
 	}
 	.scores-grid {
 		display: grid;

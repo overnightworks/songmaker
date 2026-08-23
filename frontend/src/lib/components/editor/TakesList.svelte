@@ -1,9 +1,10 @@
 <script lang="ts">
 	import type { SongItem, GenerationItem, JobItem } from '$lib/api/types';
 	import {
+		COARSE_POINTER_MEDIA,
 		EXPIRY_WARN_DAYS,
 		LIBRARY_RETRY_LABEL,
-		NOW_PLAYING_TAKE_PREFIX,
+		TAKE_ARCHIVED_TITLE,
 		TAKE_KEEP_LABEL,
 		TAKE_PICK_LABEL,
 		TAKES_DELETE_VERSION_LABEL,
@@ -14,6 +15,7 @@
 		TAKES_LOADING,
 		TAKES_MOBILE_HINT
 	} from '$lib/constants';
+	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 	import {
 		playTakeAndShowNowPlaying,
 		removeGenerationFromSong,
@@ -41,6 +43,7 @@
 		remasterGeneration,
 		unarchiveGeneration
 	} from '$lib/api/client';
+	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from '../Icon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
 	import ConfirmDeleteDialog from '../ConfirmDeleteDialog.svelte';
@@ -54,7 +57,6 @@
 		draftVersionNumber: number;
 		latestVersionNumber: number;
 		generateJob?: JobItem | null;
-		compact?: boolean;
 		onagain: (gen: GenerationItem) => void;
 		onuseasreference: (gen: GenerationItem) => void;
 		onretry?: () => void;
@@ -68,7 +70,6 @@
 		draftVersionNumber,
 		latestVersionNumber,
 		generateJob = null,
-		compact = false,
 		onagain,
 		onuseasreference,
 		onretry
@@ -80,6 +81,16 @@
 	const buffering = $derived(
 		audioPlayer.status === 'loading' || audioPlayer.status === 'buffering'
 	);
+
+	// "Tap play" is touch copy: a narrow desktop window is compact but still
+	// has a mouse, so the hint asks the pointer, not the layout width.
+	let touchPointer = $state(false);
+
+	$effect(() => {
+		return subscribeCompactLayout((value) => {
+			touchPointer = value;
+		}, COARSE_POINTER_MEDIA);
+	});
 
 	let playlistFor = $state<string | null>(null);
 	let deleteFor = $state<GenerationItem | null>(null);
@@ -149,6 +160,7 @@
 			toggleSelection(gen.id);
 			return;
 		}
+		if (gen.is_archived) return;
 		void playTakeAndShowNowPlaying(gen, song);
 	}
 
@@ -160,6 +172,7 @@
 			toggleSelection(gen.id);
 			return;
 		}
+		if (gen.is_archived) return;
 		void playTakeAndShowNowPlaying(gen, song);
 	}
 
@@ -338,21 +351,23 @@
 						class:playing={isGenPlaying(gen)}
 						class:buffering={isGenLoading(gen)}
 						class:selected={$selectedIds.has(gen.id)}
+						class:archived={gen.is_archived}
 						onclick={(e) => handleRowClick(gen, e)}
 						onkeydown={(e) => handleRowKeydown(gen, e)}
 						role="button"
 						tabindex="0"
+						title={gen.is_archived ? TAKE_ARCHIVED_TITLE : undefined}
 					>
 						{#if $selectionMode}
 							<span class="selection-checkbox">
 								<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
 							</span>
-						{:else}
+						{:else if !gen.is_archived}
 							<Icon name={isGenPlaying(gen) ? 'pause' : 'play'} size={14} />
 						{/if}
 
 						<span class="take-label">
-							v{gen.version_number ?? '—'} · take {gen.generation_number}
+							{nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
 						</span>
 
 						{#if duration}
@@ -427,7 +442,17 @@
 									ondelete={() => (deleteFor = gen)}
 								/>
 								{#if playlistFor === gen.id}
-									<PlaylistPicker onselect={onAddToPlaylist} onclose={() => (playlistFor = null)} />
+									<div
+										class="take-picker-anchor"
+										onclick={(e) => e.stopPropagation()}
+										onkeydown={(e) => e.stopPropagation()}
+										role="presentation"
+									>
+										<PlaylistPicker
+											onselect={onAddToPlaylist}
+											onclose={() => (playlistFor = null)}
+										/>
+									</div>
 								{/if}
 							{/if}
 						</span>
@@ -436,7 +461,7 @@
 			</div>
 		{/each}
 
-		{#if compact}
+		{#if touchPointer}
 			<p class="mobile-hint">{TAKES_MOBILE_HINT}</p>
 		{/if}
 
@@ -457,7 +482,7 @@
 
 {#if deleteFor}
 	<ConfirmDeleteDialog
-		title={`Delete ${NOW_PLAYING_TAKE_PREFIX} #${deleteFor.generation_number}?`}
+		title={`Delete take ${deleteFor.generation_number}?`}
 		items={['Audio files will be permanently deleted']}
 		confirmLabel="Delete Take"
 		onconfirm={() => {
@@ -693,6 +718,22 @@
 		gap: 0.35rem;
 		flex-shrink: 0;
 		margin-left: auto;
+	}
+
+	/* The picker is `position: absolute` against its anchor — without one it
+	   escapes the row and lands wherever the nearest positioned ancestor is. */
+	.take-picker-anchor {
+		position: relative;
+	}
+
+	.take-row.archived {
+		opacity: 0.55;
+		cursor: default;
+	}
+
+	.take-row.archived:hover {
+		border-color: var(--border);
+		background: var(--surface);
 	}
 
 	.pick-btn,
