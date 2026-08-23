@@ -15,13 +15,22 @@ from typing import Final
 # — the two packages cannot share an import, so
 # tests/test_secret_scrub_parity.py pins the two as equal sets.
 #
-# HF_TOKEN is included even though the acestep-worker *process* itself
-# reads it (via WorkerSettings.hf_token, in downloads.py) to authenticate
-# model downloads from Hugging Face. The ACE-Step HTTP subprocess started
-# by subprocess_runner.py never downloads models itself — downloads run
-# in-process in acestep_worker before the subprocess is started — so the
-# subprocess has no legitimate use for HF_TOKEN and it is scrubbed like
-# every other secret here.
+# HF_TOKEN: the ACE-Step subprocess *does* call Hugging Face itself — see
+# vendor/acestep/acestep/api/model_download.py:download_from_huggingface,
+# invoked at subprocess startup (startup_model_init.py, for the DiT and VAE
+# models) and at request time (llm_readiness.py, runtime_helpers.py,
+# startup_llm_init.py, sample_format_routes.py, for LM models). That call
+# passes no explicit token=, so huggingface_hub would pick up HF_TOKEN from
+# the environment implicitly if it were present. But every repo ID the
+# subprocess can resolve (via MODEL_REPO_MAPPING / DEFAULT_REPO_ID in
+# model_download.py) is public and answers anonymously; the only two gated
+# repos in the ACE-Step catalog (ACE-Step/acestep-v15-turbo and
+# ACE-Step/acestep-5Hz-lm-1.7B) are fetched exclusively by
+# acestep_worker.downloads.run_download, which passes token= explicitly and
+# does not depend on ambient env. So scrubbing HF_TOKEN here does not break
+# any download this deployment performs — it only means the subprocess's
+# own Hugging Face requests go out anonymously and are subject to Hugging
+# Face's stricter unauthenticated rate limits.
 SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
     "ANTHROPIC_API_KEY",
     "SESSION_SECRET",

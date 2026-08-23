@@ -13,9 +13,25 @@ from __future__ import annotations
 from acestep_worker.constants import SECRET_ENV_KEYS as WORKER_SECRET_ENV_KEYS
 from songmaker_cli.constants import SECRET_ENV_KEYS as CLI_SECRET_ENV_KEYS
 
+EXPECTED_SECRET_ENV_KEYS = frozenset({
+    "ANTHROPIC_API_KEY",
+    "SESSION_SECRET",
+    "SONGMAKER_INTERNAL_TOKEN",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "POSTGRES_PASSWORD",
+    "HF_TOKEN",
+})
+
 
 def test_secret_env_keys_are_identical_sets() -> None:
     assert set(CLI_SECRET_ENV_KEYS) == set(WORKER_SECRET_ENV_KEYS)
+
+
+def test_secret_env_keys_match_the_known_secret_set() -> None:
+    """Guards against both lists agreeing on the wrong thing, e.g. `()`."""
+    assert set(CLI_SECRET_ENV_KEYS) == EXPECTED_SECRET_ENV_KEYS
+    assert set(WORKER_SECRET_ENV_KEYS) == EXPECTED_SECRET_ENV_KEYS
 
 
 def test_secret_env_keys_have_no_internal_duplicates() -> None:
