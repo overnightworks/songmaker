@@ -10,12 +10,23 @@
 	import {
 		albumList,
 		buildQueueViewModel,
+		canPlayNextSong,
+		canPlayPrevSong,
 		chooseLibraryTakePool,
+		closeNowPlaying,
+		dockNowPlaying,
 		ensureGenerationsLoaded,
+		escapeNowPlaying,
+		expandNowPlaying,
 		jumpToQueueIndex,
 		libraryQueueSkipped,
 		libraryQueueSkippedComplete,
+		navigateToPlaying,
+		nowPlayingDockable,
 		nowPlayingPanel,
+		nowPlayingSurface,
+		playNextSong,
+		playPrevSong,
 		queueContext,
 		shuffleEnabled,
 		shuffleLabel,
@@ -30,23 +41,10 @@
 	import NowPlayingQueue from './NowPlayingQueue.svelte';
 	import NowPlayingTake from './NowPlayingTake.svelte';
 
-	let {
-		info,
-		onclose,
-		onGoToSong,
-		canPrev = false,
-		canNext = false,
-		onprev,
-		onnext
-	}: {
-		info: PlaybackInfo;
-		onclose: () => void;
-		onGoToSong: () => void;
-		canPrev?: boolean;
-		canNext?: boolean;
-		onprev?: () => void;
-		onnext?: () => void;
-	} = $props();
+	// The app's Now Playing surface owns its own transport and navigation
+	// wiring — every one of its actions is a player-store action, so the mount
+	// site only has to say which take is playing.
+	let { info }: { info: PlaybackInfo } = $props();
 
 	// Seeded once from the shared request store, not bound to it: a take-row
 	// click (playTakeAndShowNowPlaying) leaves it on 'take' before opening
@@ -61,8 +59,13 @@
 		rightPanelTab === 'take' ? NOW_PLAYING_TAKE_TAB : NOW_PLAYING_QUEUE_TAB
 	);
 
+	// 'closed' never reaches here: the layout only mounts this surface while
+	// Now Playing is open.
+	const surface = $derived($nowPlayingSurface === 'docked' ? 'docked' : 'full');
 	const ctx = $derived($queueContext);
 	const songs = $derived($songList);
+	const canPrev = $derived(canPlayPrevSong(audioPlayer.current, songs, ctx));
+	const canNext = $derived(canPlayNextSong(audioPlayer.current, songs, ctx));
 	const shuffle = $derived($shuffleEnabled);
 	const isLibraryQueue = $derived(ctx.type === 'library');
 	// Only the library queue is built from a take pool, so only it hands the
@@ -123,6 +126,11 @@
 
 	function onChoosePool(next: LibraryTakePool): void {
 		void chooseLibraryTakePool(next);
+	}
+
+	function goToSong(): void {
+		closeNowPlaying();
+		void navigateToPlaying();
 	}
 </script>
 
@@ -187,15 +195,19 @@
 <NowPlayingFrame
 	{info}
 	{coverUrl}
-	{onclose}
+	{surface}
+	onclose={closeNowPlaying}
+	onExpand={expandNowPlaying}
+	onCollapse={$nowPlayingDockable ? dockNowPlaying : undefined}
+	onEscape={escapeNowPlaying}
 	{canPrev}
 	{canNext}
-	{onprev}
-	{onnext}
+	onprev={playPrevSong}
+	onnext={playNextSong}
 	{shuffle}
 	shuffleLabel={$shuffleLabel}
 	onToggleShuffle={() => toggleShuffle()}
-	{onGoToSong}
+	onGoToSong={goToSong}
 	upNextTitle={queueVm.upNext?.songTitle ?? null}
 	rightPanelLabel={mobileTriggerLabel}
 	sheetLabel={NOW_PLAYING_RIGHT_PANEL_LABEL}

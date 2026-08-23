@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
+import type { AlbumItem, GenerationItem, PlaylistEntryItem, SongItem } from '$lib/api/types';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import {
 	NOW_PLAYING_CLOSE,
@@ -13,12 +13,16 @@ import {
 import {
 	albumList,
 	libraryQueueSkipped,
+	nowPlayingDockable,
 	nowPlayingPanel,
+	nowPlayingSurface,
 	queueContext,
+	selectedSongId,
 	setShuffle,
 	shuffleEnabled,
 	songList
 } from '$lib/stores/player';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { setLibraryTakePool } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import NowPlaying from './NowPlaying.svelte';
@@ -82,6 +86,26 @@ function info(overrides: Partial<PlaybackInfo> = {}): PlaybackInfo {
 	};
 }
 
+function playlistEntry(id: string, songTitle: string): PlaylistEntryItem {
+	return {
+		id,
+		position: 0,
+		generation_id: `g-${id}`,
+		song_id: `s-${id}`,
+		song_title: songTitle,
+		album_title: 'Nachtstrom',
+		artist: 'Artist',
+		generation_number: 1,
+		version_number: 1,
+		is_picked: false,
+		audio_duration: 180,
+		mp3_path: `${id}.mp3`,
+		seed: 1,
+		model_mode: 'sft',
+		lyrics: null
+	};
+}
+
 function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	return {
 		id: 'a1',
@@ -98,14 +122,48 @@ function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	};
 }
 
+// jsdom implements no media playback, and this surface's transport really
+// does drive the queue — stub the element so a Next press stays as quiet and
+// deterministic as the state it changes.
+class SilentAudio {
+	paused = true;
+	ended = false;
+	currentTime = 0;
+	duration = 0;
+	readyState = 0;
+	src = '';
+	preload = '';
+	crossOrigin: string | null = null;
+	addEventListener() {}
+	removeAttribute() {}
+	load() {}
+	pause() {}
+	play() {
+		return Promise.resolve();
+	}
+}
+
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
+
+beforeEach(() => {
+	vi.stubGlobal(
+		'Audio',
+		vi.fn(() => new SilentAudio())
+	);
+});
 
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
+	vi.restoreAllMocks();
 	document.body.replaceChildren();
 	document.documentElement.dataset.pointer = '';
+	audioPlayer.current = null;
+	audioPlayer.destroy();
+	selectedSongId.set(null);
+	nowPlayingSurface.set('closed');
+	nowPlayingDockable.set(false);
 	songList.set([]);
 	albumList.set([]);
 	queueContext.set({ type: 'library' });
@@ -114,37 +172,18 @@ afterEach(async () => {
 	setLibraryTakePool('picks');
 	libraryQueueSkipped.set([]);
 	nowPlayingPanel.set('queue');
+	vi.unstubAllGlobals();
 });
 
-async function renderSurface(
-	playback: PlaybackInfo,
-	handlers: {
-		onclose?: ReturnType<typeof vi.fn>;
-		onGoToSong?: ReturnType<typeof vi.fn>;
-		canPrev?: boolean;
-		canNext?: boolean;
-		onprev?: ReturnType<typeof vi.fn>;
-		onnext?: ReturnType<typeof vi.fn>;
-	} = {}
-) {
+// The surface reads what is playing and what the queue allows from the player
+// store, so a test arranges playback rather than handing it callbacks.
+async function renderSurface(playback: PlaybackInfo) {
+	audioPlayer.current = playback;
+	nowPlayingSurface.set('full');
 	target = document.createElement('div');
 	document.body.append(target);
-	const onclose = handlers.onclose ?? vi.fn();
-	const onGoToSong = handlers.onGoToSong ?? vi.fn();
-	mounted = mount(NowPlaying, {
-		target,
-		props: {
-			info: playback,
-			onclose,
-			onGoToSong,
-			canPrev: handlers.canPrev,
-			canNext: handlers.canNext,
-			onprev: handlers.onprev,
-			onnext: handlers.onnext
-		}
-	});
+	mounted = mount(NowPlaying, { target, props: { info: playback } });
 	await tick();
-	return { onclose, onGoToSong };
 }
 
 describe('NowPlaying', () => {
@@ -186,42 +225,76 @@ describe('NowPlaying', () => {
 		expect(target.querySelector('.lyrics')?.textContent).toContain('old verse');
 	});
 
-	it('closes on Escape and the close button', async () => {
-		const handlers = await renderSurface(info());
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		expect(handlers.onclose).toHaveBeenCalledOnce();
+	it('closes on the close button', async () => {
+		await renderSurface(info());
 
 		target.querySelector<HTMLButtonElement>(`button[aria-label="${NOW_PLAYING_CLOSE}"]`)?.click();
-		expect(handlers.onclose).toHaveBeenCalledTimes(2);
+
+		expect(get(nowPlayingSurface)).toBe('closed');
 	});
 
-	it('goes to the playing song', async () => {
-		const handlers = await renderSurface(info());
+	it('closes on Escape where no docked panel fits', async () => {
+		await renderSurface(info());
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	it('steps back to the docked panel on Escape where one fits', async () => {
+		nowPlayingDockable.set(true);
+		await renderSurface(info());
+
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+		expect(get(nowPlayingSurface)).toBe('docked');
+	});
+
+	it('goes to the playing song and leaves Now Playing behind', async () => {
+		songList.set([song()]);
+		await renderSurface(info());
+
 		const go = Array.from(target.querySelectorAll('button')).find(
 			(button) => button.textContent === NOW_PLAYING_GO_TO_SONG
 		);
 		go?.click();
-		expect(handlers.onGoToSong).toHaveBeenCalledOnce();
+
+		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s1'));
+		expect(get(nowPlayingSurface)).toBe('closed');
 	});
 
-	it('wires Previous and Next to the given handlers, respecting can-navigate flags', async () => {
-		const onprev = vi.fn();
-		const onnext = vi.fn();
-		await renderSurface(info(), { canPrev: false, canNext: true, onprev, onnext });
-
-		const previous = target.querySelector<HTMLButtonElement>('button[aria-label="Previous song"]');
-		const next = target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]');
-		expect(previous?.disabled).toBe(true);
-		expect(next?.disabled).toBe(false);
-		next?.click();
-		expect(onnext).toHaveBeenCalledOnce();
-		expect(onprev).not.toHaveBeenCalled();
-	});
-
-	it('omits Previous and Next when no handlers are given', async () => {
+	it('offers Previous and Next only as far as the playing queue reaches', async () => {
+		albumList.set([album()]);
+		songList.set([song()]);
+		queueContext.set({ type: 'album', albumId: 'a1' });
 		await renderSurface(info());
-		expect(target.querySelector('button[aria-label="Previous song"]')).toBeNull();
-		expect(target.querySelector('button[aria-label="Next song"]')).toBeNull();
+		expect(
+			target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
+		).toBe(true);
+
+		songList.set([song(), song({ id: 's2', title: 'Second' })]);
+		await tick();
+
+		expect(
+			target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
+		).toBe(false);
+	});
+
+	it('Next moves the playing queue on to its next entry', async () => {
+		queueContext.set({
+			type: 'playlist',
+			playlist: { id: 'p1', title: 'Night Drive' },
+			entries: [playlistEntry('pe1', 'Tide'), playlistEntry('pe2', 'Second')],
+			index: 0
+		});
+		await renderSurface(info());
+
+		target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.click();
+
+		await vi.waitFor(() => {
+			const ctx = get(queueContext);
+			expect(ctx.type === 'playlist' && ctx.index).toBe(1);
+		});
 	});
 
 	it('toggles shuffle from the overlay, scoped to the current queue', async () => {
@@ -350,6 +423,19 @@ describe('NowPlaying', () => {
 		expect(target.textContent).not.toContain('Up next');
 	});
 
+	it('renders the docked panel inline, with no transport and no sheet to open', async () => {
+		nowPlayingDockable.set(true);
+		songList.set([song()]);
+		await renderSurface(info());
+		nowPlayingSurface.set('docked');
+		await tick();
+
+		expect(target.querySelector('.now-playing.docked')).not.toBeNull();
+		expect(target.querySelector('.np-right-col')).not.toBeNull();
+		expect(target.querySelector('.mobile-panel-trigger')).toBeNull();
+		expect(target.querySelector('.transport')).toBeNull();
+	});
+
 	it('stacks into a single column and opens the panel as a sheet on a narrow/coarse layout', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
 		await renderSurface(info());
@@ -400,7 +486,7 @@ describe('NowPlaying', () => {
 
 	it('scopes the mobile sheet focus trap to the sheet, not the whole surface, on Escape', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
-		const handlers = await renderSurface(info());
+		await renderSurface(info());
 
 		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
 		await tick();
@@ -409,6 +495,6 @@ describe('NowPlaying', () => {
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
-		expect(handlers.onclose).not.toHaveBeenCalled();
+		expect(get(nowPlayingSurface)).toBe('full');
 	});
 });

@@ -38,6 +38,9 @@
 		trackInfo: Snippet<[titleGlowStyle: string]>;
 		nowPlayingOpen: boolean;
 		onOpenNowPlaying: () => void;
+		// A docked Now Playing is a panel in the page, not a popup: the trigger
+		// is then a plain disclosure and must not promise a dialog.
+		nowPlayingDocked?: boolean;
 		nowPlayingDisabled: boolean;
 		onNowPlayingTriggerBind?: (el: HTMLButtonElement | undefined) => void;
 		mobileTransport: boolean;
@@ -63,6 +66,7 @@
 		trackInfo,
 		nowPlayingOpen,
 		onOpenNowPlaying,
+		nowPlayingDocked = false,
 		nowPlayingDisabled,
 		onNowPlayingTriggerBind,
 		mobileTransport
@@ -70,7 +74,6 @@
 
 	let nowPlayingTrigger: HTMLButtonElement | undefined = $state();
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
-	let audioCtx: AudioContext | undefined;
 	let analyser: AnalyserNode | undefined;
 	let frequencyData: Uint8Array<ArrayBuffer> | undefined;
 	let waveformData: Uint8Array<ArrayBuffer> | undefined;
@@ -86,8 +89,12 @@
 	const playFaceStyle = $derived(isPlaying ? `transform: scale(${1 + bassLevel * 0.15})` : '');
 	const trackTitleGlowStyle = $derived(isPlaying ? titleGlowStyle(bassLevel, vizColors) : '');
 
+	// Reported on unmount too: the app hides the whole bar under the
+	// full-screen Now Playing surface, and an owner that kept the detached
+	// button would hand focus to an element no longer on the page.
 	$effect(() => {
 		onNowPlayingTriggerBind?.(nowPlayingTrigger);
+		return () => onNowPlayingTriggerBind?.(undefined);
 	});
 
 	$effect(() => {
@@ -98,20 +105,21 @@
 		});
 	});
 
+	// Borrowed, never owned: the audio graph outlives this bar, which the app
+	// unmounts whenever the full Now Playing surface takes over the transport.
+	// Building or closing a context here would tear the playing element's
+	// output out of its graph for good (issue #140).
 	function connectAnalyser(): void {
-		const audio = audioPlayer.getElement();
-		if (!audio || audioCtx) return;
+		if (analyser) return;
 		if (!playbackVisualizerAllowed()) return;
 		try {
-			audioCtx = new AudioContext();
-			analyser = audioCtx.createAnalyser();
-			analyser.fftSize = FFT_SIZE;
-			analyser.smoothingTimeConstant = 0.82;
-			const source = audioCtx.createMediaElementSource(audio);
-			source.connect(analyser);
-			analyser.connect(audioCtx.destination);
-			frequencyData = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
-			waveformData = new Uint8Array(analyser.fftSize) as Uint8Array<ArrayBuffer>;
+			const borrowed = audioPlayer.getAnalyser();
+			if (!borrowed) return;
+			borrowed.fftSize = FFT_SIZE;
+			borrowed.smoothingTimeConstant = 0.82;
+			frequencyData = new Uint8Array(borrowed.frequencyBinCount) as Uint8Array<ArrayBuffer>;
+			waveformData = new Uint8Array(borrowed.fftSize) as Uint8Array<ArrayBuffer>;
+			analyser = borrowed;
 		} catch (e) {
 			console.warn('Audio visualizer unavailable:', e);
 		}
@@ -120,9 +128,9 @@
 	function startVisualizerLoop(): void {
 		if (!vizCanvas) return;
 		if (!playbackVisualizerAllowed()) return;
-		if (!audioCtx) connectAnalyser();
+		connectAnalyser();
 		if (!analyser || !frequencyData || !waveformData) return;
-		if (audioCtx?.state === 'suspended') audioCtx.resume();
+		audioPlayer.resumeAudioGraph();
 		vizColors = readVizColors();
 		viz.startLoop(vizCanvas, analyser, frequencyData, waveformData, vizColors, (bass, energy) => {
 			bassLevel = bass;
@@ -158,7 +166,6 @@
 
 	onDestroy(() => {
 		viz.destroy();
-		if (audioCtx) audioCtx.close();
 	});
 </script>
 
@@ -249,7 +256,7 @@
 			onclick={onOpenNowPlaying}
 			disabled={nowPlayingDisabled}
 			aria-label={NOW_PLAYING_LABEL}
-			aria-haspopup="dialog"
+			aria-haspopup={nowPlayingDocked ? undefined : 'dialog'}
 			aria-expanded={nowPlayingOpen}
 		>
 			<span>{NOW_PLAYING_LABEL}</span>

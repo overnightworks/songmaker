@@ -6,6 +6,7 @@
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
 	import Rail from '$lib/components/shell/Rail.svelte';
 	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
+	import NowPlaying from '$lib/components/NowPlaying.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
 	import { AUTH_CHECK_RETRY_LABEL } from '$lib/constants/auth';
@@ -13,7 +14,15 @@
 	import { checkAuth, currentUser, authLoading, authCheckError, logout } from '$lib/stores/auth';
 	import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
 	import { openCollection } from '$lib/stores/collection';
-	import { selectedSongId } from '$lib/stores/player';
+	import {
+		escapeNowPlaying,
+		nowPlayingDockable,
+		nowPlayingOpen,
+		nowPlayingSurface,
+		selectedSongId
+	} from '$lib/stores/player';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { NOW_PLAYING_UNDOCKED_MEDIA } from '$lib/constants/now-playing';
 	import { sidebarOpen, toggleSidebar, initTheme } from '$lib/stores/ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
@@ -38,6 +47,33 @@
 		return subscribeCompactLayout((value) => {
 			compact = value;
 		});
+	});
+
+	// One fact for "is there room to dock": wide enough for the workspace to
+	// give up NOW_PLAYING_DOCKED_WIDTH_PX, and a fine pointer. The compact
+	// shell switches at COMPACT_LAYOUT_MAX_PX (768), far below the dock
+	// threshold (1440), so a docked panel can never end up in the mobile
+	// branch, which has no `.shell-row` to hold it.
+	$effect(() => {
+		return subscribeCompactLayout((value) => {
+			nowPlayingDockable.set(!value);
+		}, NOW_PLAYING_UNDOCKED_MEDIA);
+	});
+
+	// One fact behind every layout that reserves room for the transport bar:
+	// while the full surface hides the app's bar, the bar takes no room. The
+	// attribute is the only thing this file owns — app.css, which owns
+	// --player-height, owns the `html[data-now-playing='full']` value that
+	// collapses it, so the shell rows, the toast stack, the queue-stream chip,
+	// the editor's bottom padding and Now Playing's own sheet all follow from
+	// one declaration instead of each carrying its own exception.
+	$effect(() => {
+		const barHidden = hasPrivatePlayer && $nowPlayingSurface === 'full';
+		if (!browser) return;
+		const root = document.documentElement;
+		if (barHidden) root.dataset.nowPlaying = 'full';
+		else delete root.dataset.nowPlaying;
+		return () => delete root.dataset.nowPlaying;
 	});
 
 	$effect(() => {
@@ -89,13 +125,27 @@
 
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!shouldHandleGlobalEscape(event, document)) return;
-		const target = escapeLevelUpTarget($selectedSongId !== null, $openCollection !== null);
-		if (target === 'collection') backToCollection();
+		const target = escapeLevelUpTarget(
+			$nowPlayingSurface === 'docked',
+			$selectedSongId !== null,
+			$openCollection !== null
+		);
+		if (target === 'now-playing') escapeNowPlaying();
+		else if (target === 'collection') backToCollection();
 		else if (target === 'wall') void openLibraryWall();
 	}
 </script>
 
 <svelte:window onkeydown={onWindowKeydown} />
+
+<!-- One Now Playing instance, rendered where its surface belongs: the docked
+	panel is a column of the desktop shell row, the full surface covers the
+	viewport from wherever it is mounted. -->
+{#snippet nowPlayingView()}
+	{#if $nowPlayingOpen && audioPlayer.current}
+		<NowPlaying info={audioPlayer.current} />
+	{/if}
+{/snippet}
 
 <svelte:head>
 	<title>{APP_NAME}</title>
@@ -154,12 +204,14 @@
 		<div class="app-shell mobile" class:has-player={hasPrivatePlayer}>
 			{@render children()}
 		</div>
+		{@render nowPlayingView()}
 	{:else}
 		<div class="shell-row" class:has-player={hasPrivatePlayer}>
 			<Rail username={me.username} onlogout={handleLogout} />
 			<div class="app-shell desktop">
 				{@render children()}
 			</div>
+			{@render nowPlayingView()}
 		</div>
 	{/if}
 

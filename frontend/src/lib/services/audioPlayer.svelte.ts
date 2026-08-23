@@ -68,6 +68,7 @@ class AudioPlayer {
 	private streamEndSignaled = false;
 	private streamCanNext = $state(false);
 	private streamCanPrev = $state(false);
+	private audioGraph: { context: AudioContext; analyser: AnalyserNode } | null = null;
 
 	// Read-only view of the active callback set. Mutation only ever happens
 	// through swapCallbacks/restoreCallbacks — this getter exists for
@@ -86,6 +87,48 @@ class AudioPlayer {
 
 	getElement(): HTMLAudioElement | null {
 		return this.audio;
+	}
+
+	// The Web Audio graph belongs to the <audio> element, not to whatever
+	// happens to be drawing a visualizer. An element can be handed to
+	// createMediaElementSource exactly once, and closing the context that owns
+	// that source routes the element's output into a dead graph for the rest
+	// of the session — silent playback that still reports itself as playing.
+	// So the player owns the graph for the element's whole life and a bar that
+	// comes and goes (the full Now Playing surface unmounts it) only borrows
+	// this analyser; it never builds or closes one.
+	//
+	// Built on first request rather than with the element, so a device that
+	// never draws a visualizer never routes its audio through Web Audio at all.
+	// Null where there is no element or no Web Audio; a browser that refuses a
+	// context throws, and the caller decides whether that is fatal.
+	getAnalyser(): AnalyserNode | null {
+		if (this.audioGraph) return this.audioGraph.analyser;
+		const el = this.audio;
+		if (!el || typeof AudioContext === 'undefined') return null;
+		const context = new AudioContext();
+		try {
+			const analyser = context.createAnalyser();
+			context.createMediaElementSource(el).connect(analyser);
+			analyser.connect(context.destination);
+			this.audioGraph = { context, analyser };
+			return analyser;
+		} catch (e) {
+			void context.close();
+			throw e;
+		}
+	}
+
+	// A context starts suspended until a user gesture, and while it carries
+	// the element's output a suspended one is silence.
+	resumeAudioGraph(): void {
+		if (this.audioGraph?.context.state === 'suspended') void this.audioGraph.context.resume();
+	}
+
+	private closeAudioGraph(): void {
+		if (!this.audioGraph) return;
+		void this.audioGraph.context.close();
+		this.audioGraph = null;
 	}
 
 	// Installs `next` as the active callback set and returns the set it
@@ -317,6 +360,8 @@ class AudioPlayer {
 
 	destroy(): void {
 		this.streamEndSignaled = false;
+		// The graph is bound to this element for good, so it goes with it.
+		this.closeAudioGraph();
 		if (!this.audio) {
 			this.streamEngine.clear();
 			this.syncStreamBoundaries();

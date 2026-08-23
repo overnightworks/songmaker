@@ -1,0 +1,127 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>NowPlayingDocked</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Open+Sans:wght@400;600&display=swap');
+body{margin:0;background:#f4f4f6;color:#1a1a1e;font-family:'Open Sans',Arial,sans-serif;font-size:15px}
+a{color:#7a18c0}a:hover{color:#5c1090}
+.disp{font-family:'Oswald',Impact,sans-serif;text-transform:uppercase;letter-spacing:1px}
+.logo{font-family:'Oswald',Impact,sans-serif;text-transform:uppercase;letter-spacing:4px;font-weight:700;color:#a020f0;font-size:16px}
+.muted{color:#555}.dim{color:#999}
+.pill{border:1px solid #d0d0d4;border-radius:16px;padding:3px 10px;font-size:12px;background:#fff}
+.pill.on{background:#7a18c0;color:#fff;border-color:#7a18c0}
+.tile{background:#fff;border:1px solid #d0d0d4;border-radius:6px;overflow:hidden}
+.cover{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:'Oswald',Impact,sans-serif;font-size:28px;color:#fff}
+.row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #e8e8ec;background:#fff}
+.ic{width:20px;height:20px;stroke:#555;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.accent{stroke:#7a18c0}.ic.red{stroke:#d41a0a;fill:#d41a0a}
+.btn{border:1px solid #d0d0d4;border-radius:16px;padding:7px 16px;font-size:13px;background:#fff;letter-spacing:.5px}
+.btn.gen{background:#7a18c0;color:#fff;border-color:#7a18c0;font-family:'Oswald',Impact,sans-serif;text-transform:uppercase;letter-spacing:1px;font-size:14px}
+.player{position:absolute;left:0;right:0;bottom:0;height:88px;background:#fff;border-top:1px solid #d0d0d4;display:flex;align-items:center;gap:16px;padding:0 20px}
+.play{width:48px;height:48px;border-radius:50%;border:2px solid #d41a0a;display:flex;align-items:center;justify-content:center}
+.note{background:#fff7d6;border:1px solid #e6d48a;border-radius:4px;padding:8px 10px;font-size:12px;color:#5a4a00}
+</style></head><body>
+<div style="position:relative;width:1440px;height:900px;background:#f4f4f6;overflow:hidden">
+
+  <!-- Rail: navigation only, untouched by the panel -->
+  <div style="position:absolute;top:0;bottom:88px;left:0;width:264px;background:#fff;border-right:1px solid #d0d0d4;display:flex;flex-direction:column">
+    <div style="height:46px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #e8e8ec"><span class="logo">Hallucinai</span></div>
+    <div style="padding:8px"><div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:4px;background:#f0e8fa"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg><span class="disp" style="font-size:13px">Library</span><span class="dim" style="margin-left:auto;font-size:12px">14 albums · 3 playlists</span></div></div>
+    <div style="margin:6px 8px 0;border-top:1px solid #e8e8ec;padding-top:8px;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px"><div class="cover" style="width:28px;background:#7a18c0;font-size:12px">SO</div><span class="disp" style="font-size:14px;font-weight:700">Sommerlicht</span></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 10px 7px 14px;border-left:3px solid #7a18c0;background:#f0e8fa"><svg class="ic accent" viewBox="0 0 24 24"><rect x="4" y="10" width="3" height="10"></rect><rect x="10.5" y="4" width="3" height="16"></rect><rect x="17" y="13" width="3" height="7"></rect></svg><span style="font-size:14px">Sommerlicht</span><span class="dim" style="margin-left:auto;font-size:11px">v3 · 3 takes</span></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 10px 7px 17px"><span style="font-size:14px">Two Tab Proof</span><span class="dim" style="margin-left:auto;font-size:11px">1 take</span></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 10px 7px 17px"><span style="font-size:14px">Nachtfahrt</span><span class="dim" style="margin-left:auto;font-size:11px">—</span></div>
+    </div>
+    <div style="margin-top:auto;border-top:1px solid #e8e8ec;padding:8px">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px"><span style="font-size:13px">Settings</span></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px"><span style="font-size:13px">felix</span></div>
+    </div>
+  </div>
+
+  <!-- Editor: still open, still readable, 400px narrower -->
+  <div style="position:absolute;top:0;bottom:88px;left:264px;right:400px;padding:18px 24px;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div style="display:flex;flex-direction:column;gap:2px"><span class="disp" style="font-size:24px;font-weight:700">Sommerlicht</span><span class="dim" style="font-size:12px">Sommerlicht · Track 1 of 3</span></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+        <span style="display:flex;align-items:center;gap:6px;border:1px solid #d0d0d4;border-radius:16px;padding:0 12px;height:34px;font-size:12px;background:#fff">Co-Writer</span>
+        <span style="display:flex;align-items:center;gap:6px;border:1px solid #d0d0d4;border-radius:16px;padding:0 12px;height:34px;font-size:12px;background:#fff">Recipe</span>
+        <span class="disp" style="display:flex;align-items:center;height:34px;padding:0 22px;background:#7a18c0;color:#fff;font-size:14px;font-weight:700;border-radius:16px;letter-spacing:1px">Generate</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="border:1px solid #d0d0d4;border-radius:16px;padding:5px 11px;background:#fff;font-size:12px"><span class="dim" style="font-size:10px;letter-spacing:.5px;text-transform:uppercase">Model</span> <b>Turbo</b></span>
+      <span style="border:1px solid #d0d0d4;border-radius:16px;padding:5px 11px;background:#fff;font-size:12px"><span class="dim" style="font-size:10px;letter-spacing:.5px;text-transform:uppercase">Takes</span> <b>×2</b></span>
+      <span style="border:1px solid #d0d0d4;border-radius:16px;padding:5px 11px;background:#fff;font-size:12px"><span class="dim" style="font-size:10px;letter-spacing:.5px;text-transform:uppercase">BPM</span> <b>108</b></span>
+      <span style="border:1px solid #d0d0d4;border-radius:16px;padding:5px 11px;background:#fff;font-size:12px"><span class="dim" style="font-size:10px;letter-spacing:.5px;text-transform:uppercase">Duration</span> <b>195 s</b></span>
+      <span style="border:1px solid #d0d0d4;border-radius:16px;padding:5px 11px;background:#fff;font-size:12px"><span class="dim" style="font-size:10px;letter-spacing:.5px;text-transform:uppercase">Seed</span> <b>Random</b></span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:20px;flex-grow:1;min-height:0">
+      <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+        <span class="disp muted" style="font-size:12px">Lyrics · v3</span>
+        <div style="border:1px solid #d0d0d4;background:#fff;padding:12px;font-family:monospace;font-size:13px;line-height:1.6;flex-grow:1;overflow:hidden">[Verse]<br>Der Tag faengt an wie ein Versprechen,<br>Fenster auf, die Luft schmeckt weit.<br>Alles, was uns gestern schwer war,<br>traegt das Licht heut wie Konfetti fort.<br><br>[Chorus]<br>Sommerlicht! Auf allen Daechern,<br>Sommerlicht! In deinem Lachen,<br>wir sind heller als die Sorgen,<br>heut gehoert der Tag nur uns.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+        <span class="disp muted" style="font-size:12px">v3 · 3 takes</span>
+        <div class="tile">
+          <div class="row" style="border-left:3px solid #7a18c0;background:#f0e8fa"><svg class="ic accent" viewBox="0 0 24 24"><rect x="4" y="10" width="3" height="10"></rect><rect x="10.5" y="4" width="3" height="16"></rect><rect x="17" y="13" width="3" height="7"></rect></svg><span style="font-size:14px">v3 · take 3</span><span class="dim" style="margin-left:auto;font-size:12px">3:15</span><svg class="ic accent" viewBox="0 0 24 24" style="fill:#7a18c0"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg></div>
+          <div class="row"><svg class="ic" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg><span style="font-size:14px">v3 · take 2</span><span class="dim" style="margin-left:auto;font-size:12px">3:12</span></div>
+          <div class="row"><svg class="ic" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg><span style="font-size:14px">v3 · take 1</span><span class="dim" style="margin-left:auto;font-size:12px">3:18</span></div>
+        </div>
+        <div class="note">A take row plays the take <b>and</b> opens this panel on “This take”. The editor never closes.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Now Playing, docked: 400px, no transport of its own -->
+  <div style="position:absolute;top:0;bottom:88px;right:0;width:400px;background:#0d0d0d;color:#e0e0e0;border-left:1px solid #d0d0d4;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:14px 16px 0">
+      <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+        <span style="color:#888;font-size:11px;letter-spacing:1px;text-transform:uppercase">Now Playing</span>
+        <span class="disp" style="font-size:17px;font-weight:700;color:#fff">Sommerlicht</span>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+        <span class="disp" style="border:1px solid #333;border-radius:4px;padding:6px 12px;font-size:12px;color:#ccc">Expand</span>
+        <svg class="ic" style="stroke:#e0e0e0" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+      </div>
+    </div>
+    <div style="padding:14px 16px 18px;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+      <div class="cover" style="width:220px;align-self:center;background:#7a18c0;font-size:40px;border-radius:6px">SO</div>
+      <div style="display:flex;flex-direction:column;gap:3px;align-items:center;text-align:center">
+        <span class="disp" style="font-size:18px;color:#fff">Sommerlicht</span>
+        <span style="color:#888;font-size:12px">Sommerlicht · Leonardo</span>
+        <span style="color:#888;font-size:12px">Take 3</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <span style="color:#555;font-size:11px;letter-spacing:1px;text-transform:uppercase">Lyrics</span>
+        <div style="font-size:13px;line-height:1.7;color:#777">Der Tag faengt an wie ein Versprechen,<br>Fenster auf, die Luft schmeckt weit.<br><span style="color:#fff;font-weight:600">Alles, was uns gestern schwer war,</span><br>traegt das Licht heut wie Konfetti fort.</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <span class="disp" style="flex:1;text-align:center;border:1px solid #333;border-radius:4px;padding:6px;font-size:12px;color:#999">Queue</span>
+        <span class="disp" style="flex:1;text-align:center;border:1px solid #ff3220;border-radius:4px;padding:6px;font-size:12px;color:#ff3220;background:#2a0f0c">This take</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <span style="color:#888;font-size:11px;letter-spacing:1px;text-transform:uppercase">v3 · take 3</span>
+        <div style="display:flex;gap:6px">
+          <span style="flex:1;border-left:2px solid #7a18c0;padding:6px 8px;background:#161616"><span style="display:block;color:#666;font-size:10px;letter-spacing:.5px;text-transform:uppercase">Lyrics sung</span><b style="color:#fff">92%</b></span>
+          <span style="flex:1;border-left:2px solid #7a18c0;padding:6px 8px;background:#161616"><span style="display:block;color:#666;font-size:10px;letter-spacing:.5px;text-transform:uppercase">Quality</span><b style="color:#fff">8.35</b></span>
+          <span style="flex:1;border-left:2px solid #7a18c0;padding:6px 8px;background:#161616"><span style="display:block;color:#666;font-size:10px;letter-spacing:.5px;text-transform:uppercase">BPM</span><b style="color:#fff">108</b></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- One player, never two: the panel has no transport, the bar keeps it all -->
+  <div class="player" style="background:#0d0d0d;border-top:2px solid #7a18c0;color:#e0e0e0">
+    <svg class="ic" style="stroke:#e0e0e0" viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"></path><path d="m18 2 4 4-4 4"></path><path d="M2 18h1.97a4 4 0 0 0 3.3-1.73l5.46-8.54A4 4 0 0 1 16.03 6H22"></path><path d="M2 6h1.97a4 4 0 0 1 3.6 2.2"></path><path d="M22 18h-6.04a4 4 0 0 1-3.3-1.73l-.54-.84"></path></svg>
+    <svg class="ic" style="stroke:#e0e0e0" viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+    <div class="play" style="border-color:#ff3220"><svg class="ic" style="stroke:#ff3220;fill:#ff3220" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg></div>
+    <svg class="ic" style="stroke:#e0e0e0" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+    <div class="cover" style="width:44px;background:#7a18c0;font-size:16px;border-radius:4px">SO</div>
+    <div style="display:flex;flex-direction:column;gap:2px"><span class="disp" style="font-size:14px;color:#fff">Sommerlicht</span><span style="color:#888;font-size:12px">Leonardo · take 3</span></div>
+    <span style="color:#888;font-size:12px;margin-left:20px">1:12</span>
+    <div style="flex-grow:1;height:3px;background:#333;border-radius:2px"><div style="width:38%;height:3px;background:#ff3220;border-radius:2px"></div></div>
+    <span style="color:#888;font-size:12px">3:15</span>
+    <span class="disp" style="display:flex;align-items:center;gap:6px;border:1px solid #7a18c0;border-radius:16px;padding:7px 14px;font-size:12px;color:#fff;background:#1a0d24">Now Playing<svg class="ic" style="stroke:#e0e0e0;width:14px;height:14px" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"></polyline></svg></span>
+  </div>
+</div>
+</body></html>
