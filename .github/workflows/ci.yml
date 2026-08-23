@@ -26,6 +26,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Check uv.lock is in sync with pyproject.toml
+        run: uv lock --check
+
       - name: Cache pip packages
         uses: actions/cache@v6
         with:
