@@ -37,7 +37,7 @@ Tests run in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All tes
 - **CI PostgreSQL contract**: `tests/test_postgresql.py` runs serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, transactional rollback, and retention gaps; SQLite tests do not stand in for these guarantees.
 - **Resource-event transport**: `tests/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 
-GitHub workflows (`.github/workflows/ci.yml`, `security.yml`,
+GitHub workflows (`.github/workflows/ci.yml`, `e2e.yml`, `security.yml`,
 `requirements.yml`, and `requirement-witnesses.yml`) run on push/PR to `main`.
 Security and live requirement-witness verification also run weekly. The
 requirement workflows are separate visible checks, not enforced merge gates
@@ -48,6 +48,7 @@ while issue #31 remains open. The live checks are:
 | Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/generate_types.py --check` · pytest + 90% coverage |
 | PostgreSQL contract | Serial PostgreSQL 16 tests for dialect-specific migrations, concurrency, rollback, and event retention gaps |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
+| E2E | Boots the CI stack (`docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |
 | Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit · `pnpm audit --prod` |
 | Requirements | strict offline requirement/acceptance schema · exact bytes and linear history · exact PR/push base · derived PRODUCT view |
 | Requirement witnesses | fixed GitHub repo/issue/comment re-fetch · exact identity, URL, author, timestamp, and approval-body match |
@@ -84,6 +85,38 @@ no-clobber collisions, permission preservation, full planned-contract checks,
 same-byte foreign ownership, bounded ignored-directory scans, the final expected
 delta, and rollback/manual-recovery behavior at every write boundary. They never
 create a real approval or make a network request.
+
+## End-to-end flows
+
+`frontend/e2e/` drives the real stack — Postgres, Redis, migrations and the web
+container from `docker-compose.ci.yml` — through the click paths an operator
+walks by hand, in Chromium at 1440. Unit tests keep missing those: every
+operator bug from 2026-08-23 (dead picker, ▶ after an album switch, shuffle,
+429 storm) passed them.
+
+What a flow proves that a unit test cannot: the album pick really plays (the
+transport offers Pause, not Retry), Now Playing opens on the judged take, a
+take reaches a playlist and can be reordered and pruned there, shuffle toggles,
+and a share link serves the album to a logged-out visitor. Any 429 or 5xx
+response, failed request, browser console error or uncaught page exception
+fails the flow, and each flow holds a named `/api` request budget.
+
+- **One login per run.** Global setup authenticates once, seeds an album, songs,
+  takes, a pick and a share link through the public API, and hands its session
+  to every attempt as storage state. Mutable fixtures (the playlist) are seeded
+  per attempt so a retry starts clean.
+- **Selectors are roles and accessible names** from `frontend/src/lib/constants.ts`.
+  No `data-testid`. A row that cannot be found by its accessible name is an
+  accessibility defect, not a selector problem.
+- **Locally, never point them at port 8080** — that is the operator's stack.
+  Boot the CI stack on its own port and project (`WEB_PORT=18080`), run
+  `E2E_BASE_URL=http://localhost:18080 pnpm test:e2e`, then `down -v`.
+- Re-running against a warm stack trips the app's IP rate limit (120 requests
+  per window) and the flow reports 429s. That is the guard working, not
+  flakiness — reset the stack or wait out the window.
+
+`frontend/e2e/README.md` has the exact commands, the audio fixture, and the
+budget rule.
 
 ## Test Structure
 
@@ -137,6 +170,15 @@ frontend/src/
 └── routes/share/**/page.test.ts   Album/playlist/song/take share pages through their real
                                    +page.svelte entry points (loading/error/retry, stream vs
                                    classic playback, windowed-stream stop, Now Playing)
+```
+
+```
+frontend/e2e/
+├── global-setup.ts                One login per run, seeds the library, saves the storage state
+├── seed.ts                        Public-API seeding: per-run library, per-attempt playlist
+├── helpers.ts                     Response/console/request guards, /api budget, name matchers
+├── library.spec.ts                Desktop library flow at 1440
+└── fixtures/take.mp3              3-second tone imported as a real take
 ```
 
 ## Testing Patterns
