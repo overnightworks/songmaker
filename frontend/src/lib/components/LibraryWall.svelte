@@ -115,6 +115,7 @@
 		LIBRARY_SHARED_EMPTY,
 		LIBRARY_SHARED_LOADING,
 		NOW_PLAYING_TAKE_PREFIX,
+		collectionRowPlayLabel,
 		librarySharesStatusLabel,
 		type LibraryFilter
 	} from '$lib/constants';
@@ -569,7 +570,7 @@
 							class="wall-tile-play"
 							data-hitbox="frequent"
 							data-hitbox-face
-							aria-label={`Play ${group.album.title}`}
+							aria-label={collectionRowPlayLabel(group.album.title)}
 							onclick={() => onPlayAlbum(group.album.id)}
 						>
 							<Icon name="play" size={16} />
@@ -639,7 +640,7 @@
 								class="wall-tile-play"
 								data-hitbox="frequent"
 								data-hitbox-face
-								aria-label={`Play ${playlist.title}`}
+								aria-label={collectionRowPlayLabel(playlist.title)}
 								onclick={() => onPlayPlaylist(playlist)}
 							>
 								<Icon name="play" size={16} />

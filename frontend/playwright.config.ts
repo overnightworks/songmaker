@@ -1,13 +1,13 @@
 import { defineConfig } from '@playwright/test';
+import { DESKTOP_VIEWPORT, MOBILE_VIEWPORT, type Shell } from './e2e/helpers';
 import { BASE_URL, STORAGE_STATE_FILE } from './e2e/seed';
-
-// The flows drive the desktop layout; below 1099px Now Playing stacks and
-// below 768px the whole shell turns compact (see lib/constants.ts).
-const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
 
 export default defineConfig({
 	testDir: './e2e',
 	globalSetup: './e2e/global-setup.ts',
+	// One stack, one IP rate-limit window, one seeded library: running the two
+	// shells back to back keeps the run's request cost additive and measurable
+	// instead of a burst that trips the app's own 429 guard.
 	fullyParallel: false,
 	workers: 1,
 	forbidOnly: Boolean(process.env.CI),
@@ -22,8 +22,17 @@ export default defineConfig({
 	},
 	projects: [
 		{
-			name: 'desktop',
+			name: 'desktop' satisfies Shell,
 			use: { browserName: 'chromium', viewport: DESKTOP_VIEWPORT }
+		},
+		{
+			name: 'mobile' satisfies Shell,
+			use: {
+				browserName: 'chromium',
+				viewport: MOBILE_VIEWPORT,
+				isMobile: true,
+				hasTouch: true
+			}
 		}
 	]
 });

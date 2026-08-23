@@ -429,6 +429,68 @@ export interface ShareInventoryItem {
 	is_archived?: boolean | null;
 }
 
+export interface SharedAlbumSongPayload {
+	id: string;
+	title: string;
+	track_number: number;
+	audio_url: string | null;
+	generation_id: string | null;
+	audio_duration: number | null;
+	lyrics: string | null;
+	whisper_cues: WhisperCue[] | null;
+}
+
+export interface SharedAlbumPayload {
+	title: string;
+	artist: string;
+	subtitle: string;
+	year: string;
+	songs: SharedAlbumSongPayload[];
+	cover?: AlbumCoverUrls | null;
+}
+
+export interface SharedSongPayload {
+	title: string;
+	artist: string;
+	album_title: string;
+	audio_url: string | null;
+	generation_id: string | null;
+	audio_duration: number | null;
+	lyrics: string | null;
+	whisper_cues: WhisperCue[] | null;
+	cover?: AlbumCoverUrls | null;
+}
+
+export interface SharedGenerationPayload {
+	title: string;
+	artist: string;
+	album_title: string;
+	generation_number: number;
+	seed: number | null;
+	audio_url: string | null;
+	generation_id: string | null;
+	audio_duration: number | null;
+	lyrics: string | null;
+	whisper_cues: WhisperCue[] | null;
+}
+
+export interface SharedPlaylistEntryPayload {
+	entry_id: string;
+	song_title: string;
+	artist: string;
+	generation_number: number;
+	audio_url: string | null;
+	generation_id: string | null;
+	audio_duration: number | null;
+	lyrics: string | null;
+	whisper_cues: WhisperCue[] | null;
+}
+
+export interface SharedPlaylistPayload {
+	title: string;
+	entries: SharedPlaylistEntryPayload[];
+}
+
 export interface PlaylistEntryItem {
 	id: string;
 	position: number;

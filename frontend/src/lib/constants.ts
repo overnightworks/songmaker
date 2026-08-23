@@ -31,8 +31,8 @@ export const ALBUM_ROW_NO_TAKE_TOAST = 'No take to play for this song yet';
 export const ALBUM_ROW_ARCHIVED_ONLY_TOAST = 'No playable take — all takes are archived';
 
 // A collection row announces the action its click performs, then the title:
-// "Play Tide", "Pause Tide". One owner for the format — the album detail, the
-// playlist detail and the e2e flows that find rows by name all read it here.
+// "Play Tide", "Pause Tide". Every surface that renders such a row, and every
+// flow that finds one by name, builds the label here.
 export const COLLECTION_ROW_PLAY_ACTION = 'Play';
 export const COLLECTION_ROW_PAUSE_ACTION = 'Pause';
 
@@ -43,6 +43,13 @@ export function collectionRowPlayLabel(title: string): string {
 export function collectionRowPauseLabel(title: string): string {
 	return `${COLLECTION_ROW_PAUSE_ACTION} ${title}`;
 }
+
+// The transport's play button is named after the state its click leaves:
+// "Pause" while audio is really playing, "Retry" once it errored, otherwise
+// "Play". A flow reads the name to tell a sounding take from a dead one.
+export const TRANSPORT_PLAY_LABEL = 'Play';
+export const TRANSPORT_PAUSE_LABEL = 'Pause';
+export const TRANSPORT_RETRY_LABEL = 'Retry';
 
 export const NOW_PLAYING_LABEL = 'Now Playing';
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
@@ -191,6 +198,9 @@ export const ALBUM_ADD_SONG_GLYPH = '+';
 export const RAIL_LIBRARY_LABEL = 'Library';
 export const RAIL_SETTINGS_LABEL = 'Settings';
 export const RAIL_SUMMARY_LOADING = '…';
+// The drawer the compact shell puts the rail in — its accessible name, which
+// is how a flow scopes to it while another overlay may be open.
+export const RAIL_DRAWER_LABEL = 'Navigation';
 export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
 export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
 export const RAIL_CONTEXT_NO_TAKES = '—';

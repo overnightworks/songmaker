@@ -1,22 +1,43 @@
 // Pure adapters from the four `/shared/*` payload shapes to one collection
 // model the share surface renders. No stores, no fetch — see
 // docs/architecture.md's share section for the surface this feeds.
+//
+// The payload shapes themselves are generated from the Pydantic share models
+// (scripts/generate_types.py), so a new field on a share response reaches the
+// share surface without a second, hand-maintained copy of the contract here.
 
-import type { GenerationItem } from '$lib/api/types';
+import type {
+	AlbumCoverUrls,
+	GenerationItem,
+	SharedAlbumPayload,
+	SharedAlbumSongPayload,
+	SharedGenerationPayload,
+	SharedPlaylistEntryPayload,
+	SharedPlaylistPayload,
+	SharedSongPayload,
+	WhisperCue
+} from '$lib/api/types';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 
-export type SharedCollectionKind = 'album' | 'playlist' | 'song' | 'take';
+export type {
+	SharedAlbumPayload,
+	SharedAlbumSongPayload,
+	SharedGenerationPayload,
+	SharedPlaylistEntryPayload,
+	SharedPlaylistPayload,
+	SharedSongPayload
+};
 
-export interface SharedCover {
-	card: string;
-	detail: string;
-}
+export type SharedCollectionKind = 'album' | 'playlist' | 'song' | 'take';
 
 export interface SharedTrack {
 	key: string;
 	title: string;
 	subtitle: string | null;
 	audioUrl: string | null;
+	durationSec: number | null;
+	lyrics: string | null;
+	cues: WhisperCue[] | null;
 }
 
 export interface SharedCollectionView {
@@ -25,54 +46,32 @@ export interface SharedCollectionView {
 	artist: string;
 	albumTitle: string | null;
 	year: string | null;
-	cover: SharedCover | null;
+	cover: AlbumCoverUrls | null;
 	tracks: SharedTrack[];
 }
 
-export interface SharedAlbumSongPayload {
-	id: string;
-	title: string;
-	track_number: number;
-	audio_url: string | null;
-}
+// The media half of every share payload — one take's duration, lyrics, and
+// cues, named identically across all four responses.
+type SharedTakeMedia = Pick<
+	SharedSongPayload,
+	'audio_url' | 'audio_duration' | 'lyrics' | 'whisper_cues'
+>;
 
-export interface SharedAlbumPayload {
-	title: string;
-	artist: string;
-	subtitle: string;
-	year: string;
-	songs: SharedAlbumSongPayload[];
-	cover?: SharedCover | null;
-}
-
-export interface SharedPlaylistEntryPayload {
-	entry_id: string;
-	song_title: string;
-	artist: string;
-	generation_number: number;
-	audio_url: string | null;
-}
-
-export interface SharedPlaylistPayload {
-	title: string;
-	entries: SharedPlaylistEntryPayload[];
-}
-
-export interface SharedSongPayload {
-	title: string;
-	artist: string;
-	album_title: string;
-	audio_url: string | null;
-	cover?: SharedCover | null;
-}
-
-export interface SharedGenerationPayload {
-	title: string;
-	artist: string;
-	album_title: string;
-	generation_number: number;
-	seed: number | null;
-	audio_url: string | null;
+function sharedTrack(
+	key: string,
+	title: string,
+	subtitle: string | null,
+	media: SharedTakeMedia
+): SharedTrack {
+	return {
+		key,
+		title,
+		subtitle,
+		audioUrl: media.audio_url,
+		durationSec: media.audio_duration,
+		lyrics: media.lyrics,
+		cues: media.whisper_cues
+	};
 }
 
 export function fromSharedAlbum(payload: SharedAlbumPayload): SharedCollectionView {
@@ -83,12 +82,7 @@ export function fromSharedAlbum(payload: SharedAlbumPayload): SharedCollectionVi
 		albumTitle: null,
 		year: payload.year || null,
 		cover: payload.cover ?? null,
-		tracks: payload.songs.map((song) => ({
-			key: song.id,
-			title: song.title,
-			subtitle: null,
-			audioUrl: song.audio_url
-		}))
+		tracks: payload.songs.map((song) => sharedTrack(song.id, song.title, null, song))
 	};
 }
 
@@ -100,14 +94,13 @@ export function fromSharedPlaylist(payload: SharedPlaylistPayload): SharedCollec
 		albumTitle: null,
 		year: null,
 		cover: null,
-		tracks: payload.entries.map((entry) => ({
-			key: entry.entry_id,
-			title: entry.song_title,
-			subtitle: entry.artist,
-			audioUrl: entry.audio_url
-		}))
+		tracks: payload.entries.map((entry) =>
+			sharedTrack(entry.entry_id, entry.song_title, entry.artist, entry)
+		)
 	};
 }
+
+const SINGLE_TRACK_KEY = 'single';
 
 export function fromSharedSong(payload: SharedSongPayload): SharedCollectionView {
 	return {
@@ -117,7 +110,7 @@ export function fromSharedSong(payload: SharedSongPayload): SharedCollectionView
 		albumTitle: payload.album_title || null,
 		year: null,
 		cover: payload.cover ?? null,
-		tracks: [{ key: 'single', title: payload.title, subtitle: null, audioUrl: payload.audio_url }]
+		tracks: [sharedTrack(SINGLE_TRACK_KEY, payload.title, null, payload)]
 	};
 }
 
@@ -129,7 +122,7 @@ export function fromSharedGeneration(payload: SharedGenerationPayload): SharedCo
 		albumTitle: payload.album_title || null,
 		year: null,
 		cover: null,
-		tracks: [{ key: 'single', title: payload.title, subtitle: null, audioUrl: payload.audio_url }]
+		tracks: [sharedTrack(SINGLE_TRACK_KEY, payload.title, null, payload)]
 	};
 }
 
@@ -164,7 +157,9 @@ const SHARE_MODEL_MODE = 'sft';
 // A synthetic PlaybackInfo for classic (non-stream) share playback: audioPlayer
 // only needs a stable identity (generation.id) and display fields, never a
 // real generation row — see audioPlayer.loadUrl(), which takes the audio URL
-// directly instead of resolving one from generation.mp3_path.
+// directly instead of resolving one from generation.mp3_path. The lyrics and
+// cues are the shared take's own, so Now Playing follows the words on a share
+// page exactly as it does in the app.
 export function trackPlaybackInfo(
 	collection: SharedCollectionView,
 	track: SharedTrack
@@ -187,8 +182,8 @@ export function trackPlaybackInfo(
 		is_shared: true,
 		model_mode: SHARE_MODEL_MODE,
 		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
+		whisper_cues: track.cues,
+		version_lyrics: track.lyrics,
 		scores: null,
 		generation_params: null,
 		created_at: ''
@@ -199,6 +194,6 @@ export function trackPlaybackInfo(
 		songTitle: track.title,
 		artist,
 		albumTitle,
-		lyrics: null
+		lyrics: track.lyrics
 	};
 }

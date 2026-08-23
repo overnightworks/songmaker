@@ -11,9 +11,14 @@ Drives:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Final
 
-DEVICE_CPU = "cpu"
-DEVICE_GPU = "gpu"
+DEVICE_CPU: Final[str] = "cpu"
+DEVICE_GPU: Final[str] = "gpu"
+
+# Named because its time budget is configured separately — a cold Whisper
+# model load counts against it (see PipelineConfig.timeout_for).
+TEXT_ACCURACY_SCORER: Final[str] = "text_accuracy"
 
 
 @dataclass(frozen=True)
@@ -26,8 +31,8 @@ class ScorerSpec:
 
 
 SCORERS: dict[str, ScorerSpec] = {
-    "text_accuracy": ScorerSpec(
-        name="text_accuracy",
+    TEXT_ACCURACY_SCORER: ScorerSpec(
+        name=TEXT_ACCURACY_SCORER,
         output_keys=("text_accuracy", "detected_language"),
         needs_audio=False,
         device=DEVICE_CPU,

@@ -10,6 +10,22 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `library.spec.ts` | Wall → album → play the pick → judge a take → add it to a playlist → reorder and prune the playlist → shuffle → open the public album link logged out |
 
+Two Chromium projects walk that flow: **`desktop`** at 1440×900 and
+**`mobile`** at 390×844 with touch input. The spec is written once for the
+steps both shells share, and spells out the mobile expectation wherever the
+compact shell differs:
+
+| Compact shell | What the mobile project pins                                                    |
+| ------------- | ------------------------------------------------------------------------------- |
+| Rail          | The header opens it as a drawer, and the drawer's Library row closes it again   |
+| Song editor   | Opens on **Write**; the takes arrive through the **Takes** tab                  |
+| Now Playing   | Stacks, so the judging panel is a sheet — and Escape closes sheet, then overlay |
+| Transport     | One 64px row, with a play control at least the frequent-hitbox size             |
+| Album header  | Still a readable title over its breadcrumb when the shell narrows to 320        |
+
+`fullyParallel: false` with one worker: both shells hit one stack behind one IP
+rate-limit window, so their cost stays additive instead of a burst.
+
 ## How a run is set up
 
 `global-setup.ts` logs in **once** with the stack's admin account, seeds a
@@ -36,10 +52,11 @@ ffmpeg -y -f lavfi -i "sine=frequency=440:sample_rate=22050:duration=3" \
 browser console error, and on any uncaught page exception. It also counts what
 the flow costs the API and holds it under a named budget.
 
-**The budget is a ceiling, not a knob.** It was measured on the first green run
-and carries 20% headroom. A flow that suddenly needs more round trips is a
-regression — find the extra requests instead of raising the number. The
-measured count is printed on every run.
+**The budget is a ceiling, not a knob.** Each shell has its own, measured on
+the first green run and carrying ~20% headroom: 26 `/api` requests measured per
+shell, 32 budgeted. A flow that suddenly needs more round trips is a regression
+— find the extra requests instead of raising the number. The measured count is
+printed on every run.
 
 Selectors are roles and accessible names, imported from `src/lib/constants.ts`
 — never `data-testid`. A flow that cannot find an element by its accessible
@@ -61,7 +78,8 @@ docker compose -f docker-compose.yml -f docker-compose.ci.yml \
   up -d --build --wait postgres redis migrate songmaker-web
 
 cd frontend
-E2E_BASE_URL=http://localhost:18080 pnpm test:e2e
+E2E_BASE_URL=http://localhost:18080 pnpm test:e2e            # both shells
+E2E_BASE_URL=http://localhost:18080 pnpm test:e2e --project=mobile
 
 cd .. && docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v
 ```

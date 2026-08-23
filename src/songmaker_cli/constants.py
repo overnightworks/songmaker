@@ -198,8 +198,15 @@ PRESET_GLOBAL_DEFAULTS_NAME = "__global_defaults__"
 # wrote (each container has its own /tmp).
 WORKER_SHARED_TMP_DIRNAME = ".tmp"
 
-# Scoring subprocess
+# Scoring subprocess. Each scorer runs under its own budget; text_accuracy
+# gets a larger one because a cold Whisper model load counts against it.
+# The pipeline watchdog must outlive the slowest single scorer plus the
+# dependent scorers that run after it, otherwise the per-scorer budget is
+# unreachable and the whole run is killed instead of one scorer.
 SCORING_PIPELINE_TIMEOUT_SECONDS = 240
+SCORING_PIPELINE_TIMEOUT_HEADROOM_SECONDS = 120
+SCORER_TIMEOUT_SECONDS = 120
+TEXT_ACCURACY_TIMEOUT_SECONDS = 300
 
 # arq worker
 ARQ_QUEUE_KEY = "arq:queue"
@@ -432,3 +439,19 @@ LORA_ACTIVE_STATUSES: Final[frozenset[LoraStatus]] = frozenset({
     LoraStatus.TRAINING,
     LoraStatus.EXPORTING,
 })
+
+# Env var names stripped from the environment of every child process this
+# package spawns (currently the Claude CLI, in claude/provider.py). The
+# acestep_worker package keeps an identical tuple of the same name in
+# acestep_worker/constants.py — it cannot import this module (see
+# CLAUDE.md "Engine packages are independent") — and
+# tests/test_secret_scrub_parity.py pins the two as equal sets.
+SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
+    "ANTHROPIC_API_KEY",
+    "SESSION_SECRET",
+    "SONGMAKER_INTERNAL_TOKEN",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "POSTGRES_PASSWORD",
+    "HF_TOKEN",
+)

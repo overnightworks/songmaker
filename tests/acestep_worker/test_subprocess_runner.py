@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from acestep_worker.constants import SECRET_ENV_KEYS
 from acestep_worker.model_cache import LoadedModel
 from acestep_worker.subprocess_runner import (
     SubprocessHandle,
@@ -67,15 +68,13 @@ def test_build_env_unknown_mode() -> None:
 
 
 def test_build_env_strips_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "secret")
-    monkeypatch.setenv("SESSION_SECRET", "secret2")
-    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret3")
+    for key in SECRET_ENV_KEYS:
+        monkeypatch.setenv(key, "leaked-value")
     env = build_env("sft", port=8101, vram_budget_gb=24.0)
     assert env["ACESTEP_API_PORT"] == "8101"
     assert env["ACESTEP_CONFIG_PATH"] == "acestep-v15-sft"
-    assert "ANTHROPIC_API_KEY" not in env
-    assert "SESSION_SECRET" not in env
-    assert "SONGMAKER_INTERNAL_TOKEN" not in env
+    for key in SECRET_ENV_KEYS:
+        assert key not in env
 
 
 def test_build_env_binds_configured_gpu() -> None:

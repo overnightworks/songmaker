@@ -16,12 +16,11 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
+from acestep_worker.constants import SECRET_ENV_KEYS
 from acestep_worker.model_cache import LoadedModel, Loader, Unloader
 from acestep_worker.settings import get_worker_settings
 
 log = logging.getLogger(__name__)
-
-SECRET_ENV_KEYS = ("ANTHROPIC_API_KEY", "SESSION_SECRET", "SONGMAKER_INTERNAL_TOKEN")
 
 SUBPROCESS_BIND_HOST: Final = "127.0.0.1"
 

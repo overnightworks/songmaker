@@ -18,6 +18,7 @@ from songmaker_cli.db.queries import (
 )
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.pipeline import PipelineConfig
+from songmaker_cli.settings import get_settings
 
 from ._runtime import _job_is_terminal, _sanitize_error, _update_job
 
@@ -89,7 +90,13 @@ def run_scoring_job(
         if not scorer.alive:
             log.info("Scorer subprocess not running — spawning before scoring")
 
-        config = PipelineConfig(device=device, claude_scoring_model=resolved_model)
+        settings = get_settings()
+        config = PipelineConfig(
+            device=device,
+            claude_scoring_model=resolved_model,
+            scorer_timeout=settings.scorer_timeout_seconds,
+            text_accuracy_timeout=settings.text_accuracy_timeout_seconds,
+        )
         meta = SongMeta(**meta_kwargs) if meta_kwargs else None
 
         def _score_progress(completed: int, total: int, scorer_name: str) -> None:
@@ -116,7 +123,10 @@ def run_scoring_job(
             if lock_active_job(session, job_id) is None:
                 log.info("Scoring job %s stopping because job is terminal", job_id)
                 return
-            save_scores(session, gen_id, scores_dict)
+            save_scores(
+                session, gen_id, scores_dict,
+                refreshed_keys=song_scores.refreshed_output_keys(),
+            )
             if text_accuracy is not None:
                 gen_record = session.query(GenModel).filter_by(id=gen_id).first()
                 if gen_record:
@@ -128,7 +138,10 @@ def run_scoring_job(
                     ]
             session.commit()
 
-        log.info("Scored: %s (%d metrics)", mp3_path_rel, len(scores_dict))
+        log.info(
+            "Scored: %s (%d metrics written) — %s",
+            mp3_path_rel, len(scores_dict), song_scores.outcome_summary(),
+        )
         _update_job(db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
 
     except TimeoutError as exc:
