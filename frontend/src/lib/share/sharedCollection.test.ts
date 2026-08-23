@@ -260,7 +260,7 @@ describe('collectionSubtitle', () => {
 		expect(collectionSubtitle(view)).toBe('Artist · Album');
 	});
 
-	it('shows artist, album, and take number for a take', () => {
+	it('shows artist and album for a take, never the internal take number', () => {
 		const view = fromSharedGeneration({
 			title: 'Solo',
 			artist: 'Artist',
@@ -269,6 +269,6 @@ describe('collectionSubtitle', () => {
 			seed: null,
 			audio_url: '/a.mp3'
 		});
-		expect(collectionSubtitle(view)).toBe('Artist · Album · take 3');
+		expect(collectionSubtitle(view)).toBe('Artist · Album');
 	});
 });

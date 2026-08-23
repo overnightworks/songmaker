@@ -64,7 +64,7 @@ afterEach(async () => {
 });
 
 describe('shared generation (take) page', () => {
-	it('renders a one-track collection carrying the take number', async () => {
+	it('renders a one-track collection for a shared take without exposing the internal take number', async () => {
 		mockFetch.mockResolvedValueOnce({
 			ok: true,
 			status: 200,
@@ -82,7 +82,8 @@ describe('shared generation (take) page', () => {
 		component = mount(Page, { target });
 
 		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(1));
-		expect(target.textContent).toContain('take 3');
+		expect(target.textContent).toContain('Artist · Album');
+		expect(target.textContent).not.toContain('take 3');
 
 		target.querySelector<HTMLButtonElement>('.track-row')?.click();
 		await vi.waitFor(() => expect(target.querySelector('.player-bar')).not.toBeNull());

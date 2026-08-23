@@ -217,7 +217,8 @@
 		max-width: 600px;
 		margin: 0 auto;
 		padding: 2rem 1rem;
-		min-height: 100dvh;
+		height: 100dvh;
+		overflow-y: auto;
 		font-family: var(--font-body, 'Open Sans', sans-serif);
 		color: var(--text, #e0e0e0);
 		position: relative;

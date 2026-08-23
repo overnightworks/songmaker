@@ -1,47 +1,78 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
+	import { tick } from 'svelte';
 	import { APP_NAME } from '$lib/constants';
+	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import LegalContent from '../LegalContent.svelte';
 
 	let legalSection: string | null = $state(null);
+	let modal: HTMLDivElement | undefined = $state();
+
+	function closeLegal(): void {
+		legalSection = null;
+	}
+
+	$effect(() => {
+		if (!legalSection) return;
+		void tick().then(() => {
+			if (modal) focusFirstIn(modal);
+		});
+	});
 
 	function onWindowKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Escape' || !legalSection) return;
-		event.preventDefault();
-		legalSection = null;
+		if (!legalSection || !modal) return;
+		handleFocusTrapKeydown(modal, event, closeLegal);
 	}
 </script>
 
 <svelte:window onkeydown={onWindowKeydown} />
 
 <p class="powered">
-	Powered by <a href="/">{APP_NAME}</a>
-	· <button class="link-btn" onclick={() => (legalSection = 'impressum')}>Impressum</button>
-	· <button class="link-btn" onclick={() => (legalSection = 'datenschutz')}>Datenschutz</button>
-	·
-	<button class="link-btn" onclick={() => (legalSection = 'nutzungsbedingungen')}
-		>Nutzungsbedingungen</button
+	<span class="footer-item">Powered by <a href="/">{APP_NAME}</a></span>
+	<span class="footer-item"
+		><button class="link-btn" onclick={() => (legalSection = 'impressum')}>Impressum</button></span
 	>
+	<span class="footer-item"
+		><button class="link-btn" onclick={() => (legalSection = 'datenschutz')}>Datenschutz</button
+		></span
+	>
+	<span class="footer-item">
+		<button class="link-btn" onclick={() => (legalSection = 'nutzungsbedingungen')}
+			>Nutzungsbedingungen</button
+		>
+	</span>
 </p>
 
 {#if legalSection}
 	<div class="legal-overlay">
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="legal-backdrop" onclick={() => (legalSection = null)}></div>
-		<div class="legal-modal" role="dialog" aria-modal="true" aria-label="Legal information">
-			<LegalContent initialSection={legalSection} onback={() => (legalSection = null)} />
+		<button class="legal-backdrop" tabindex="-1" onclick={closeLegal} aria-label="Close"></button>
+		<div
+			bind:this={modal}
+			class="legal-modal"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Legal information"
+			tabindex="-1"
+		>
+			<LegalContent initialSection={legalSection} onback={closeLegal} />
 		</div>
 	</div>
 {/if}
 
 <style>
 	.powered {
-		text-align: center;
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
 		margin-top: 3rem;
 		padding-bottom: calc(var(--player-height, 88px) + 1rem);
 		font-size: 0.75rem;
 		color: var(--text-subtle, #888);
+	}
+
+	.footer-item:not(:first-child)::before {
+		content: '·';
+		margin: 0 0.35em;
 	}
 
 	.powered a {
@@ -81,8 +112,11 @@
 	.legal-backdrop {
 		position: absolute;
 		inset: 0;
+		width: 100%;
+		border: 0;
 		background: rgba(0, 0, 0, 0.8);
 		backdrop-filter: blur(4px);
+		cursor: default;
 	}
 
 	.legal-modal {
