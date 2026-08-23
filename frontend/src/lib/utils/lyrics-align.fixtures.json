@@ -2159,6 +2159,331 @@
 		{
 			"cues": [
 				{
+					"end": 2.4,
+					"start": 0.0,
+					"text": "hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "hold"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "the"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "line"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "until"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 2.4,
+					"start": 0.0
+				}
+			],
+			"lyrics": "until the morning\nhold the line until the morning",
+			"name": "word path: a tail of a later line never steals that line's words"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.4,
+					"start": 0.0,
+					"text": "another mile of rusted signs hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "another"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "mile"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "of"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "rusted"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "signs"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "hold"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "the"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "line"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "until"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "the"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 4.4,
+					"start": 2.0
+				}
+			],
+			"lyrics": "until the morning\nanother mile of rusted signs\nhold the line until the morning",
+			"name": "word path: a tail of a later line stays dark across a verse between them"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.8,
+					"start": 0.0,
+					"text": "hold the line until the mornin hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "hold"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "the"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "line"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "until"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "mornin"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "hold"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "the"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "line"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "until"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "the"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				{
+					"end": 4.8,
+					"start": 2.4
+				}
+			],
+			"lyrics": "hold the line until the morning\nhold the line until the morning",
+			"name": "word path: two renditions differing by a dropped letter light in order"
+		},
+		{
+			"cues": [
+				{
+					"end": 6.8,
+					"start": 0.0,
+					"text": "i wanted you to stay tonightx another mile of rusted signs i wanted you to stay tonight",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "i"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "wanted"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "you"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "to"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "stay"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "tonightx"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "another"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "mile"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "of"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "rusted"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "signs"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "i"
+						},
+						{
+							"end": 5.2,
+							"start": 4.8,
+							"text": "wanted"
+						},
+						{
+							"end": 5.6,
+							"start": 5.2,
+							"text": "you"
+						},
+						{
+							"end": 6.0,
+							"start": 5.6,
+							"text": "to"
+						},
+						{
+							"end": 6.4,
+							"start": 6.0,
+							"text": "stay"
+						},
+						{
+							"end": 6.8,
+							"start": 6.4,
+							"text": "tonight"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				null,
+				{
+					"end": 4.4,
+					"start": 2.4
+				},
+				{
+					"end": 6.8,
+					"start": 4.4
+				}
+			],
+			"lyrics": "i wanted you to stay tonight\ni wanted you to stay\nanother mile of rusted signs\ni wanted you to stay tonight",
+			"name": "word path: a prefix line stays dark when only the slipped long line was sung"
+		},
+		{
+			"cues": [
+				{
 					"end": 4.0,
 					"start": 0.0,
 					"text": "the lantern hums quietly tonight the lantern hums calmly tonight",

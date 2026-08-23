@@ -13,6 +13,8 @@ const LINE_3 = 'another mile of rusted signs';
 
 const CHORUS = 'hold the line until the morning';
 const RIVER = 'the river carries every promise home';
+const CHORUS_TAIL = 'until the morning';
+const CHORUS_SLIP = 'hold the line until the mornin';
 const NESTED_LONG = 'i wanted you to stay tonight';
 const NESTED_SHORT = 'i wanted you to stay';
 const RAIN_FALLS = 'silver rain falls on the roof';
@@ -365,6 +367,50 @@ describe('alignLyricsToCues with word timestamps', () => {
 			{ start: 15, end: 18 },
 			{ start: 18, end: 21 },
 			{ start: 21, end: 24 }
+		]);
+	});
+
+	it('never lets a tail of a later line steal that line\u2019s words', () => {
+		const aligned = alignLyricsToCues([CHORUS_TAIL, CHORUS].join('\n'), [sungCue(0, 0.5, CHORUS)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([null, { start: 0, end: 3 }]);
+	});
+
+	it('keeps a tail line dark even with a verse between it and its owner', () => {
+		const lyrics = [CHORUS_TAIL, LINE_3, CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${LINE_3} ${CHORUS}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			null,
+			{ start: 0, end: 2.5 },
+			{ start: 2.5, end: 5.5 }
+		]);
+	});
+
+	it('lights both renditions in order when one drops a letter', () => {
+		const lyrics = [CHORUS, CHORUS].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [sungCue(0, 0.5, `${CHORUS_SLIP} ${CHORUS}`)]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 3 },
+			{ start: 3, end: 6 }
+		]);
+	});
+
+	it('keeps a prefix line dark when only the long line was sung, slip and all', () => {
+		const lyrics = [NESTED_LONG, NESTED_SHORT, LINE_3, NESTED_LONG].join('\n');
+
+		const aligned = alignLyricsToCues(lyrics, [
+			sungCue(0, 0.5, `${NESTED_LONG}x ${LINE_3} ${NESTED_LONG}`)
+		]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 3 },
+			null,
+			{ start: 3, end: 5.5 },
+			{ start: 5.5, end: 8.5 }
 		]);
 	});
 

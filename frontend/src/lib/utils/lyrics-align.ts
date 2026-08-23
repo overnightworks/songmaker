@@ -40,6 +40,17 @@ const MAX_WINDOW_LINES = 3;
 // a real rendition from a coincidence — "yeah" already scores 0.75 against a
 // sung "year". Such a line is lit only where the take sings it word for word.
 const VERBATIM_MAX_TOKENS = 2;
+// How alike two runs of the same length must read to count as the same words
+// sung twice, rather than as two different readings. Whisper drops a
+// consonant on one rendition and not the other ("…until the mornin" against
+// "…until the morning"), and a repeat is never independent evidence of where
+// a line was sung — it only decides, in playback order, which rendition each
+// line takes. The tolerance applies only where the lyrics really do ask for
+// those words more than once; for a line the lyrics carry once, two readings
+// that close are the ambiguity #45 refuses to guess at, and for lyric lines
+// themselves (the cue window path) only word-for-word repetition counts —
+// near-identical lines are different lines, not slips of a transcript.
+const REPEAT_MIN_RATIO = 0.88;
 // How far past the previous line's last word the search looks before it has
 // to grow. Consecutive lines follow each other directly in the stream, so one
 // step is already room for roughly three lines of adlibs or skipped text, and
@@ -198,31 +209,56 @@ function overlaps(candidate: Candidate, other: Candidate): boolean {
 	return candidate.from <= other.to && candidate.to >= other.from;
 }
 
-// Every run of units that spells the winner word for word, wherever it sits
-// in the stream — read off the stream itself rather than off the candidates
-// that happened to be collected, so a repeat just outside the search window
-// still dominates the shifted views of it that reach inside.
-function repeatsOfWinner(unitTexts: string[], winner: Candidate): Candidate[] {
+// Runs of the same length that read the winner back, wherever they sit in
+// the stream — read off the stream itself rather than off the candidates that
+// happened to be collected, so a repeat just outside the search window still
+// dominates the shifted views of it that reach inside. The scan reaches one
+// run past the collected candidates, which is as far as a repeat can sit and
+// still overlap one of them.
+function repeatsOfWinner(
+	unitTexts: string[],
+	candidates: Candidate[],
+	winner: Candidate,
+	tolerateSlips: boolean
+): Candidate[] {
 	const length = winner.to - winner.from + 1;
+	let earliestStart = winner.from;
+	let latestEnd = winner.to;
+	for (const candidate of candidates) {
+		if (candidate.from < earliestStart) earliestStart = candidate.from;
+		if (candidate.to > latestEnd) latestEnd = candidate.to;
+	}
+
 	const repeats: Candidate[] = [];
-	for (let from = 0; from + length <= unitTexts.length; from++) {
-		let spellsWinner = true;
-		for (let offset = 0; offset < length && spellsWinner; offset++) {
-			spellsWinner = unitTexts[from + offset] === unitTexts[winner.from + offset];
+	const first = Math.max(0, earliestStart - length + 1);
+	const last = Math.min(unitTexts.length - length, latestEnd);
+	for (let from = first; from <= last; from++) {
+		const text = unitTexts.slice(from, from + length).join(' ');
+		if (!tolerateSlips) {
+			if (text !== winner.text) continue;
+		} else {
+			const reach =
+				(2 * Math.min(text.length, winner.text.length)) / (text.length + winner.text.length);
+			if (reach < REPEAT_MIN_RATIO) continue;
+			if (ratio(text, winner.text) < REPEAT_MIN_RATIO) continue;
 		}
-		if (spellsWinner) repeats.push({ ...winner, from, to: from + length - 1 });
+		repeats.push({ ...winner, from, to: from + length - 1, text });
 	}
 	return repeats;
 }
 
-function chooseCandidate(unitTexts: string[], candidates: Candidate[]): Candidate | null {
+function chooseCandidate(
+	unitTexts: string[],
+	candidates: Candidate[],
+	tolerateSlips: boolean
+): Candidate | null {
 	let best: Candidate | null = null;
 	for (const candidate of candidates) {
 		if (best === null || candidate.score > best.score) best = candidate;
 	}
 	if (best === null || best.score < MIN_RATIO) return null;
 
-	const repeats = repeatsOfWinner(unitTexts, best);
+	const repeats = repeatsOfWinner(unitTexts, candidates, best, tolerateSlips);
 	let rivalScore = -Infinity;
 	for (const candidate of candidates) {
 		if (repeats.some((repeat) => overlaps(candidate, repeat))) continue;
@@ -230,7 +266,17 @@ function chooseCandidate(unitTexts: string[], candidates: Candidate[]): Candidat
 	}
 	if (rivalScore !== -Infinity && best.score - rivalScore < AMBIGUITY_MARGIN) return null;
 
-	return best;
+	// Of several renditions of the same words, this line takes the earliest
+	// still in reach; the later ones are left for the lines that come after.
+	let earliest = best;
+	for (const candidate of candidates) {
+		if (candidate.score < MIN_RATIO || candidate.from >= earliest.from) continue;
+		if (!repeats.some((repeat) => repeat.from === candidate.from && repeat.to === candidate.to)) {
+			continue;
+		}
+		earliest = candidate;
+	}
+	return earliest;
 }
 
 // Candidates for one line, taken a horizon at a time until the take offers a
@@ -281,40 +327,52 @@ function anotherLineReadsRunAsWell(
 	return false;
 }
 
-// The converse of the rival test. This line's run can be the opening of a
-// longer phrase that a line further down sings: extending the run word by
-// word, any waiting line that reads the longer phrase at MIN_RATIO and reads
-// it better than this line does has a claim on those words. Lines carrying
-// this line's own text are not contenders — the take simply sings them again.
+// The converse of the rival test. This line's run can be a slice of a longer
+// phrase that a line further down sings — its opening, its tail, or a piece
+// in the middle. Every phrase that contains the run is therefore read back:
+// any waiting line that reads such a phrase at MIN_RATIO and reads it better
+// than this line does has a claim on those words. Lines carrying this line's
+// own text are not contenders — the take simply sings them again.
 function contestingLines(
 	wordTexts: string[],
 	lineTexts: string[],
 	linePosition: number,
-	run: Candidate
+	run: Candidate,
+	floor: number
 ): number[] {
 	const waiting: number[] = [];
 	for (let other = linePosition + 1; other < lineTexts.length; other++) {
 		if (lineTexts[other] !== lineTexts[linePosition]) waiting.push(other);
 	}
 	if (waiting.length === 0) return [];
-	const longestWaiting = Math.max(...waiting.map((other) => lineTexts[other].length));
+	const maxPhraseLength =
+		Math.max(...waiting.map((other) => lineTexts[other].length)) * LENGTH_FACTOR_MAX;
 
 	const contesting: number[] = [];
-	let phrase = run.text;
-	for (let end = run.to + 1; end < wordTexts.length; end++) {
-		phrase = `${phrase} ${wordTexts[end]}`;
-		if (phrase.length > longestWaiting * LENGTH_FACTOR_MAX) break;
-		const ownReading = scoreAgainstLyrics(phrase, lineTexts[linePosition]);
-		for (const other of waiting) {
-			if (contesting.includes(other)) continue;
-			const lyricLength = lineTexts[other].length;
-			// ratio() cannot exceed this, so a line whose length alone rules out
-			// both MIN_RATIO and beating this line's own reading is skipped
-			// unscored. Exact, not a heuristic.
-			const reach = (2 * Math.min(phrase.length, lyricLength)) / (phrase.length + lyricLength);
-			if (reach < MIN_RATIO || reach <= ownReading) continue;
-			const reading = scoreAgainstLyrics(phrase, lineTexts[other]);
-			if (reading >= MIN_RATIO && reading > ownReading) contesting.push(other);
+	let opening = '';
+	for (let first = run.from; first >= floor; first--) {
+		if (first < run.from) {
+			opening = opening === '' ? wordTexts[first] : `${wordTexts[first]} ${opening}`;
+		}
+		let phrase = opening === '' ? run.text : `${opening} ${run.text}`;
+		if (phrase.length > maxPhraseLength) break;
+
+		for (let last = run.to; last < wordTexts.length; last++) {
+			if (last > run.to) phrase = `${phrase} ${wordTexts[last]}`;
+			if (phrase.length > maxPhraseLength) break;
+			if (first === run.from && last === run.to) continue;
+			const ownReading = scoreAgainstLyrics(phrase, lineTexts[linePosition]);
+			for (const other of waiting) {
+				if (contesting.includes(other)) continue;
+				const lyricLength = lineTexts[other].length;
+				// ratio() cannot exceed this, so a line whose length alone rules
+				// out both MIN_RATIO and beating this line's own reading is
+				// skipped unscored. Exact, not a heuristic.
+				const reach = (2 * Math.min(phrase.length, lyricLength)) / (phrase.length + lyricLength);
+				if (reach < MIN_RATIO || reach <= ownReading) continue;
+				const reading = scoreAgainstLyrics(phrase, lineTexts[other]);
+				if (reading >= MIN_RATIO && reading > ownReading) contesting.push(other);
+			}
 		}
 	}
 	return contesting;
@@ -332,6 +390,12 @@ function alignAgainstWords(
 	assign: (linePosition: number, interval: LyricLineInterval) => void
 ): void {
 	const wordTexts = words.map((word) => word.normalizedText);
+	// Whether the lyrics ask for this line's words more than once. Only then
+	// are two near-identical readings two renditions rather than a choice the
+	// take cannot make.
+	const lyricsRepeatTheLine = lineTexts.map(
+		(text) => lineTexts.filter((other) => other === text).length > 1
+	);
 	const claims = new Map<string, Candidate | null>();
 
 	const claimOf = (linePosition: number, from: number): Candidate | null => {
@@ -341,7 +405,8 @@ function alignAgainstWords(
 		if (known !== undefined) return known;
 		const claim = chooseCandidate(
 			wordTexts,
-			collectWithGrowingWindow(wordTexts, from, lineTexts[linePosition])
+			collectWithGrowingWindow(wordTexts, from, lineTexts[linePosition]),
+			lyricsRepeatTheLine[linePosition]
 		);
 		claims.set(key, claim);
 		return claim;
@@ -355,7 +420,7 @@ function alignAgainstWords(
 		if (anotherLineReadsRunAsWell(lineTexts, linePosition, claim)) continue;
 
 		const sung = matchedWordRange(wordTexts, claim, lineTexts[linePosition]);
-		const stranded = contestingLines(wordTexts, lineTexts, linePosition, claim).some(
+		const stranded = contestingLines(wordTexts, lineTexts, linePosition, claim, cursor).some(
 			(other) => claimOf(other, sung.to + 1) === null
 		);
 		if (stranded) continue;
@@ -382,7 +447,8 @@ function alignAgainstCueWindows(
 				MAX_WINDOW_LINES,
 				cue.normalizedText.length,
 				(candidateText) => scoreAgainstLyrics(cue.normalizedText, candidateText)
-			)
+			),
+			false
 		);
 		if (chosen === null) continue;
 		for (let position = chosen.from; position <= chosen.to; position++) {
