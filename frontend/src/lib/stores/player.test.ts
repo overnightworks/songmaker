@@ -22,6 +22,7 @@ import {
 } from '$lib/api/client';
 import { toasts } from '$lib/stores/toast';
 import {
+	ALBUM_ROW_NO_TAKE_TOAST,
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
 	QUEUE_TAKE_MISSING_TOAST
@@ -79,6 +80,7 @@ import {
 	libraryQueueSkipped,
 	libraryQueueSkippedComplete,
 	playAlbum,
+	playAlbumSong,
 	playIdleStart,
 	playLibrary,
 	playLibraryFromGeneration,
@@ -699,6 +701,42 @@ describe('playback dispatch', () => {
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
 			expect.objectContaining({ songTitle: 'Second' })
 		);
+	});
+
+	it('restores the playlist order when shuffle is turned off', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		const entries = [
+			makePlaylistEntry({ id: 'pe1', position: 0, generation_id: 'g1', song_title: 'First' }),
+			makePlaylistEntry({
+				id: 'pe2',
+				position: 1,
+				generation_id: 'g2',
+				song_title: 'Second',
+				mp3_path: 'b.mp3'
+			}),
+			makePlaylistEntry({
+				id: 'pe3',
+				position: 2,
+				generation_id: 'g3',
+				song_title: 'Third',
+				mp3_path: 'c.mp3'
+			})
+		];
+		await playPlaylistEntries(entries, 2, { restart: true });
+		const inOrder = get(queueContext);
+		if (inOrder.type !== 'playlist') throw new Error('expected a playlist queue');
+		expect(inOrder.entries.map((entry) => entry.id)).toEqual(['pe1', 'pe2', 'pe3']);
+
+		await toggleShuffle();
+		const shuffled = get(queueContext);
+		if (shuffled.type !== 'playlist') throw new Error('expected a playlist queue');
+		expect(shuffled.entries[0]?.id).toBe('pe3');
+		expect(shuffled.entries.map((entry) => entry.id)).not.toEqual(['pe1', 'pe2', 'pe3']);
+
+		await toggleShuffle();
+		const restored = get(queueContext);
+		if (restored.type !== 'playlist') throw new Error('expected a playlist queue');
+		expect(restored.entries.map((entry) => entry.id)).toEqual(['pe1', 'pe2', 'pe3']);
 	});
 
 	it('playNextSong wraps playlist playback at the end', async () => {
@@ -1396,7 +1434,7 @@ describe('playLibraryFromGeneration', () => {
 
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({
-				message: '+ Keeps queue failed. Tap play to retry.',
+				message: '+ Keeps queue failed. Press play to retry.',
 				type: 'error'
 			})
 		]);
@@ -1681,6 +1719,52 @@ describe('playAlbumFromGeneration', () => {
 			{ restart: true }
 		);
 		expect(get(queueContext)).toEqual(expect.objectContaining({ type: 'album', albumId: 'a1' }));
+	});
+});
+
+describe('playAlbumSong', () => {
+	beforeEach(() => {
+		setQueuePlaybackMode('classic');
+		toasts.set([]);
+	});
+
+	it('loads the takes of a song whose album was just switched to, then plays its pick', async () => {
+		// #141/4: the album list only carries generation_count, so a row's play
+		// button on a freshly opened album has no take to hand the player yet.
+		const picked = makeGen({ id: 'g-pick', song_id: 's9', is_picked: true, mp3_path: 'b/p.mp3' });
+		const listed = makeSong({ id: 's9', album_id: 'a2', generations: [], generation_count: 2 });
+		songList.set([listed]);
+		vi.mocked(fetchSong).mockResolvedValueOnce(
+			makeSong({
+				id: 's9',
+				album_id: 'a2',
+				generation_count: 2,
+				generations: [makeGen({ id: 'g-first', song_id: 's9' }), picked]
+			})
+		);
+
+		await playAlbumSong('a2', listed);
+
+		expect(fetchSong).toHaveBeenCalledWith('s9');
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({
+				generation: expect.objectContaining({ id: 'g-pick' })
+			}),
+			{ restart: true }
+		);
+		expect(get(queueContext)).toEqual(expect.objectContaining({ type: 'album', albumId: 'a2' }));
+	});
+
+	it('says so instead of failing silently when the song has no take', async () => {
+		const empty = makeSong({ id: 's-empty', generations: [], generation_count: 0 });
+		songList.set([empty]);
+
+		await playAlbumSong('a1', empty);
+
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: ALBUM_ROW_NO_TAKE_TOAST, type: 'error' })
+		]);
 	});
 });
 
@@ -2033,6 +2117,33 @@ describe('buildQueueViewModel', () => {
 		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 3, generationNumber: 2 }));
 		expect(vm.currentIndex).toBe(0);
 		expect(vm.upNext).toEqual(expect.objectContaining({ generationId: 'g2' }));
+	});
+
+	it("reads a native row's duration from the take, falling back to the song", () => {
+		const song = makeSong({ id: 's1', audio_duration: 200 });
+		const ownDuration = makePlayback(
+			makeGen({ id: 'g1', generation_params: { audio_duration: 141 } }),
+			song
+		);
+		const noOwnDuration = makePlayback(makeGen({ id: 'g2' }), song);
+		const ctx = { type: 'library' as const, takes: [ownDuration, noOwnDuration], index: 0 };
+
+		const vm = buildQueueViewModel(ctx, ownDuration, [song]);
+
+		expect(vm.items.map((item) => item.durationSec)).toEqual([141, 200]);
+	});
+
+	it("reads a playlist row's duration from the entry, falling back to the song", () => {
+		const song = makeSong({ id: 's1', audio_duration: 200 });
+		const entries = [
+			makePlaylistEntry({ id: 'e1', generation_id: 'g1', audio_duration: 141 }),
+			makePlaylistEntry({ id: 'e2', generation_id: 'g2', audio_duration: null })
+		];
+		const ctx = { type: 'playlist' as const, entries, index: 0 };
+
+		const vm = buildQueueViewModel(ctx, null, [song]);
+
+		expect(vm.items.map((item) => item.durationSec)).toEqual([141, 200]);
 	});
 
 	it('carries no version number for a native take with no version (library pool)', () => {

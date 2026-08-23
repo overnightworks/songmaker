@@ -17,7 +17,7 @@ export const QUEUE_STREAM_EMPTY_POOL_PREFIX = 'No playable takes in pool';
 
 export const LIBRARY_QUEUE_LOADING_TITLE = 'Loading';
 export const LIBRARY_QUEUE_EMPTY_TITLE = 'No takes';
-export const LIBRARY_QUEUE_RETRY_DETAIL = 'Tap play';
+export const LIBRARY_QUEUE_RETRY_DETAIL = 'Press play to retry';
 export const LIBRARY_QUEUE_PLAY_DETAIL = 'Play';
 export const SHUFFLE_SCOPE_PLAYLIST = 'this playlist';
 export const SHUFFLE_SCOPE_ALBUM = 'this album';
@@ -27,13 +27,15 @@ export const QUEUE_STREAM_UNPLAYABLE_START_DETAIL = 'Requested take is not playa
 
 export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';
 
+export const ALBUM_ROW_NO_TAKE_TOAST = 'No take to play for this song yet';
+
 export const NOW_PLAYING_LABEL = 'Now Playing';
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
 export const NOW_PLAYING_TAKE_PREFIX = 'Take';
 
-export const TAKE_AGAIN_LABEL = 'Again';
+export const TAKE_AGAIN_LABEL = 'Generate again';
 export const TAKE_USE_AS_REFERENCE_LABEL = 'Use as reference';
 export const TAKE_PICK_LABEL = 'Pick';
 export const TAKE_KEEP_LABEL = 'Keep';
@@ -42,9 +44,10 @@ export const TAKE_SHARE_LABEL = 'Share take';
 export const TAKE_UNSHARE_LABEL = 'Unshare';
 export const TAKE_COPY_LINK_LABEL = 'Copy link';
 export const TAKE_PIN_SEED_LABEL = 'Pin seed';
-export const TAKE_PLAYLIST_LABEL = 'Playlist';
+export const TAKE_PLAYLIST_LABEL = 'Add to playlist';
 export const TAKE_REMASTER_LABEL = 'Remaster';
 export const TAKE_RESTORE_LABEL = 'Restore';
+export const TAKE_ARCHIVED_TITLE = 'Archived take — restore to play';
 export const TAKE_DELETE_LABEL = 'Delete';
 export const TAKE_SCORE_LABEL = 'Score';
 export const TAKE_SCORING_LABEL = 'Scoring...';
@@ -132,6 +135,9 @@ export const HITBOX_COMPACT_PX = 24;
 
 export const COMPACT_LAYOUT_MAX_PX = 768;
 export const COMPACT_LAYOUT_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px), (any-pointer: coarse)`;
+// A narrow desktop window is compact but still has a mouse — touch-only copy
+// ("Tap play") asks this instead of the compact query.
+export const COARSE_POINTER_MEDIA = '(any-pointer: coarse)';
 export const LIBRARY_NARROW_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px)`;
 export const LIBRARY_ALBUM_CARD_TRACK_MAX_PX = 208;
 export const ALBUM_ART_EMPTY_INITIALS = '?';
@@ -162,6 +168,7 @@ export const COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
 export const COLLECTION_MENU_SAVE_OFFLINE_LABEL = 'Save offline';
 export const COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL = 'Saving…';
 export const COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL = 'Saved offline · Remove';
+export const ALBUM_ADD_SONG_LABEL = '+ Song';
 
 export const RAIL_LIBRARY_LABEL = 'Library';
 export const RAIL_SETTINGS_LABEL = 'Settings';
@@ -169,7 +176,6 @@ export const RAIL_SUMMARY_LOADING = '…';
 export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
 export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
 export const RAIL_CONTEXT_NO_TAKES = '—';
-export const RAIL_CONTEXT_ADD_SONG_LABEL = '+ Song';
 export const RAIL_CONTEXT_EMPTY = 'No album or playlist open — its tracks appear here.';
 
 export const LIBRARY_FILTERS = ['albums', 'playlists', 'shared'] as const;
