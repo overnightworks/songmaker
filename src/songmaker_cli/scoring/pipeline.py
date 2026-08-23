@@ -367,7 +367,15 @@ def run_scoring_pipeline(
     1. Independent CPU scorers run concurrently in a thread pool
     2. GPU scorers run sequentially in the main thread (VRAM contention)
     CPU and GPU phases overlap — CPU scorers execute during GPU inference.
+
+    Raises FileNotFoundError if there is no audio file to score. Without that
+    check the outcome depends on which scorer modules happened to import: a
+    request naming only unregistered scorers never reaches ``load_audio``, so
+    an unreadable generation would come back as a clean, empty success.
     """
+    if not mp3_path.is_file():
+        raise FileNotFoundError(f"No audio file to score at {mp3_path}")
+
     reg = registry or default_registry
     reg.ensure_loaded()
     if scorers is None:

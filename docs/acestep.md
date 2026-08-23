@@ -106,6 +106,8 @@ python:3.12-slim
 
 **The rule:** if you edit any `docker/base/*.Dockerfile`, run `scripts/build_images.sh` first before `docker compose up --build`. Otherwise compose fails with `manifest unknown` for `FROM songmaker/acestep-base:latest`.
 
+**Who gets the GPU:** only `songmaker-acestep-worker-N` (`runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES` pinned to its `GPU_ID`). `songmaker-scoring-worker` is given no GPU device and defaults to `SCORING_DEVICE=cpu`, so it carries CPU torch and never touches VRAM. Generation VRAM therefore has exactly one owner and needs no cross-container arbitration. Setting `SCORING_DEVICE=cuda` would break that assumption: the scoring worker would additionally need GPU access in `docker-compose.yml` and a release/verify protocol against the acestep-worker, neither of which exists today (issues #161, #182).
+
 **The inner ACE-Step venv is baked into `acestep-base` at `/opt/acestep/.venv`.** Pre-Phase-8, it lived in a host bind mount that uv re-resynced from scratch on every fresh container (5–15 minute model-load gate). Now it's in the image. The bind mount on `acestep-worker` only carries `./vendor/acestep/checkpoints` → `/opt/acestep/checkpoints` (the multi-GB model weights). The upstream source tree, the `.venv`, and everything else under `vendor/acestep/` is COPYed into the image at build time.
 
 The old `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. The Python settings defaults are `ARQ_JOB_TIMEOUT=1000` and `ACESTEP_STARTUP_TIMEOUT_SECONDS=900`, matching `.env.docker.example`. `docker-compose.yml` currently supplies shorter 300-second fallbacks when those env vars are unset, so set the longer values in `.env` for Docker deployments that cold-load xl-turbo or vLLM on fresh containers.

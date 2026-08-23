@@ -44,16 +44,6 @@ class ScoreResponse:
 
 
 @dataclass(frozen=True)
-class ReleaseGpuRequest:
-    pass
-
-
-@dataclass(frozen=True)
-class ReleaseGpuResponse:
-    success: bool
-
-
-@dataclass(frozen=True)
 class ScoreProgressUpdate:
     completed: int
     total: int
@@ -94,30 +84,6 @@ def _cleanup_gpu_and_exit(_signum: int, _frame: object) -> None:
     raise SystemExit(0)
 
 
-def _release_scorer_models() -> None:
-    import gc
-
-    try:
-        from songmaker_cli.scoring.text_accuracy import clear_cache as clear_whisper
-        clear_whisper()
-    except ImportError:
-        pass
-
-    try:
-        from songmaker_cli.scoring.audiobox_aesthetics import clear_cache as clear_audiobox
-        clear_audiobox()
-    except ImportError:
-        pass
-
-    gc.collect()
-    try:
-        import torch
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except ImportError:
-        pass
-
-
 def _scrub_secret_env_vars() -> None:
     """Drop SECRET_ENV_KEYS from this process's own environment.
 
@@ -151,11 +117,6 @@ def _child_main(conn: Connection) -> None:
         if isinstance(request, ShutdownRequest):
             conn.close()
             break
-
-        if isinstance(request, ReleaseGpuRequest):
-            _release_scorer_models()
-            conn.send(ReleaseGpuResponse(success=True))
-            continue
 
         if isinstance(request, EnvProbeRequest):
             conn.send(EnvProbeResponse(
@@ -323,17 +284,6 @@ class ScorerProcess:
                 "Recycling scorer subprocess (PID %d) — a scorer over budget still runs in it",
                 self._process.pid,
             )
-            self._kill()
-
-    def release_gpu(self, timeout: int = 30) -> None:
-        if not self.alive:
-            return
-        assert self._conn is not None
-        self._conn.send(ReleaseGpuRequest())
-        if self._conn.poll(timeout=timeout):
-            self._conn.recv()
-        else:
-            log.warning("release_gpu timed out — killing subprocess")
             self._kill()
 
     def shutdown(self) -> None:
