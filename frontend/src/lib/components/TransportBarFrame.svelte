@@ -38,6 +38,9 @@
 		trackInfo: Snippet<[titleGlowStyle: string]>;
 		nowPlayingOpen: boolean;
 		onOpenNowPlaying: () => void;
+		// A docked Now Playing is a panel in the page, not a popup: the trigger
+		// is then a plain disclosure and must not promise a dialog.
+		nowPlayingDocked?: boolean;
 		nowPlayingDisabled: boolean;
 		onNowPlayingTriggerBind?: (el: HTMLButtonElement | undefined) => void;
 		mobileTransport: boolean;
@@ -63,6 +66,7 @@
 		trackInfo,
 		nowPlayingOpen,
 		onOpenNowPlaying,
+		nowPlayingDocked = false,
 		nowPlayingDisabled,
 		onNowPlayingTriggerBind,
 		mobileTransport
@@ -253,7 +257,7 @@
 			onclick={onOpenNowPlaying}
 			disabled={nowPlayingDisabled}
 			aria-label={NOW_PLAYING_LABEL}
-			aria-haspopup="dialog"
+			aria-haspopup={nowPlayingDocked ? undefined : 'dialog'}
 			aria-expanded={nowPlayingOpen}
 		>
 			<span>{NOW_PLAYING_LABEL}</span>

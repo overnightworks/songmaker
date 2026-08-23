@@ -29,7 +29,6 @@
 		LIBRARY_QUEUE_PLAY_DETAIL,
 		LIBRARY_QUEUE_RETRY_DETAIL
 	} from '$lib/constants';
-	import NowPlaying from './NowPlaying.svelte';
 	import TransportBarFrame from './TransportBarFrame.svelte';
 	import {
 		updateMediaSessionPlaybackState,
@@ -55,6 +54,7 @@
 	const isError = $derived(status === 'error');
 
 	const songs = $derived($songList);
+	const docked = $derived($nowPlayingSurface === 'docked');
 	const ctx = $derived($queueContext);
 	const idleTarget = $derived(
 		idlePlayTarget({
@@ -83,9 +83,12 @@
 		});
 	}
 
-	function onOpenNowPlayingClick(): void {
+	// The docked panel is a disclosure the bar owns: the same press that opened
+	// it puts it away again. A dialog surface only ever opens from here.
+	function onNowPlayingClick(): void {
 		if (!current) return;
-		openNowPlaying('queue');
+		if (docked) closeNowPlaying();
+		else openNowPlaying('queue');
 	}
 
 	$effect(() => {
@@ -163,14 +166,12 @@
 		onSeek={(seconds) => audioPlayer.seek(seconds)}
 		{trackInfo}
 		nowPlayingOpen={$nowPlayingOpen}
-		onOpenNowPlaying={onOpenNowPlayingClick}
+		onOpenNowPlaying={onNowPlayingClick}
+		nowPlayingDocked={docked}
 		nowPlayingDisabled={!current}
 		onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
 		{mobileTransport}
 	/>
-{/if}
-{#if $nowPlayingOpen && current}
-	<NowPlaying info={current} />
 {/if}
 
 <style>

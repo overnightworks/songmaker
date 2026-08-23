@@ -56,6 +56,19 @@ export const NOW_PLAYING_Z_INDEX = 350;
 export const NOW_PLAYING_STACKED_MAX_PX = 1099;
 export const NOW_PLAYING_STACKED_MEDIA = `(max-width: ${NOW_PLAYING_STACKED_MAX_PX}px), (any-pointer: coarse)`;
 
+// The two surfaces Now Playing can show as. The player store adds 'closed'
+// on top of them; the frame only ever renders one of these two.
+export const NOW_PLAYING_SURFACE_KINDS = ['docked', 'full'] as const;
+export type NowPlayingSurfaceKind = (typeof NOW_PLAYING_SURFACE_KINDS)[number];
+
+// Above that same breakpoint Now Playing can dock beside the workspace
+// instead of covering it: one column of the stacked content (cover, lyrics,
+// Queue / This take) wide enough to read, narrow enough to leave the editor
+// its space. Whatever does not stack, docks.
+export const NOW_PLAYING_DOCKED_WIDTH_PX = 400;
+export const NOW_PLAYING_EXPAND_LABEL = 'Expand';
+export const NOW_PLAYING_COLLAPSE_LABEL = 'Collapse';
+
 // Queue-stream skip/progress feedback (QueueStreamFeedback). One owner for
 // this surface's copy, kept alongside the rest of Now Playing's strings.
 export const NOW_PLAYING_STREAM_SKIPPED_SUFFIX = 'takes skipped';

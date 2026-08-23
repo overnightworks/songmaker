@@ -6,6 +6,7 @@
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
 	import Rail from '$lib/components/shell/Rail.svelte';
 	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
+	import NowPlaying from '$lib/components/NowPlaying.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
 	import { AUTH_CHECK_RETRY_LABEL } from '$lib/constants/auth';
@@ -13,7 +14,15 @@
 	import { checkAuth, currentUser, authLoading, authCheckError, logout } from '$lib/stores/auth';
 	import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
 	import { openCollection } from '$lib/stores/collection';
-	import { escapeNowPlaying, nowPlayingSurface, selectedSongId } from '$lib/stores/player';
+	import {
+		escapeNowPlaying,
+		nowPlayingDockable,
+		nowPlayingOpen,
+		nowPlayingSurface,
+		selectedSongId
+	} from '$lib/stores/player';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { NOW_PLAYING_STACKED_MEDIA } from '$lib/constants/now-playing';
 	import { sidebarOpen, toggleSidebar, initTheme } from '$lib/stores/ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
@@ -38,6 +47,14 @@
 		return subscribeCompactLayout((value) => {
 			compact = value;
 		});
+	});
+
+	// Whatever is wide enough not to stack Now Playing's three columns is wide
+	// enough to dock it beside the workspace — one breakpoint, both decisions.
+	$effect(() => {
+		return subscribeCompactLayout((value) => {
+			nowPlayingDockable.set(!value);
+		}, NOW_PLAYING_STACKED_MEDIA);
 	});
 
 	$effect(() => {
@@ -102,6 +119,15 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
+<!-- One Now Playing instance, rendered where its surface belongs: the docked
+	panel is a column of the desktop shell row, the full surface covers the
+	viewport from wherever it is mounted. -->
+{#snippet nowPlayingView()}
+	{#if $nowPlayingOpen && audioPlayer.current}
+		<NowPlaying info={audioPlayer.current} />
+	{/if}
+{/snippet}
+
 <svelte:head>
 	<title>{APP_NAME}</title>
 	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -159,12 +185,14 @@
 		<div class="app-shell mobile" class:has-player={hasPrivatePlayer}>
 			{@render children()}
 		</div>
+		{@render nowPlayingView()}
 	{:else}
 		<div class="shell-row" class:has-player={hasPrivatePlayer}>
 			<Rail username={me.username} onlogout={handleLogout} />
 			<div class="app-shell desktop">
 				{@render children()}
 			</div>
+			{@render nowPlayingView()}
 		</div>
 	{/if}
 

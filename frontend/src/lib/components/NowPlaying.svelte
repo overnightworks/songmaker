@@ -14,13 +14,17 @@
 		canPlayPrevSong,
 		chooseLibraryTakePool,
 		closeNowPlaying,
+		dockNowPlaying,
 		ensureGenerationsLoaded,
 		escapeNowPlaying,
+		expandNowPlaying,
 		jumpToQueueIndex,
 		libraryQueueSkipped,
 		libraryQueueSkippedComplete,
 		navigateToPlaying,
+		nowPlayingDockable,
 		nowPlayingPanel,
+		nowPlayingSurface,
 		playNextSong,
 		playPrevSong,
 		queueContext,
@@ -55,10 +59,13 @@
 		rightPanelTab === 'take' ? NOW_PLAYING_TAKE_TAB : NOW_PLAYING_QUEUE_TAB
 	);
 
+	// 'closed' never reaches here: the layout only mounts this surface while
+	// Now Playing is open.
+	const surface = $derived($nowPlayingSurface === 'docked' ? 'docked' : 'full');
 	const ctx = $derived($queueContext);
 	const songs = $derived($songList);
-	const canPrev = $derived(Boolean(canPlayPrevSong(audioPlayer.current, songs, ctx)));
-	const canNext = $derived(Boolean(canPlayNextSong(audioPlayer.current, songs, ctx)));
+	const canPrev = $derived(canPlayPrevSong(audioPlayer.current, songs, ctx));
+	const canNext = $derived(canPlayNextSong(audioPlayer.current, songs, ctx));
 	const shuffle = $derived($shuffleEnabled);
 	const isLibraryQueue = $derived(ctx.type === 'library');
 	// Only the library queue is built from a take pool, so only it hands the
@@ -188,7 +195,10 @@
 <NowPlayingFrame
 	{info}
 	{coverUrl}
+	{surface}
 	onclose={closeNowPlaying}
+	onExpand={expandNowPlaying}
+	onCollapse={$nowPlayingDockable ? dockNowPlaying : undefined}
 	onEscape={escapeNowPlaying}
 	{canPrev}
 	{canNext}

@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { NOW_PLAYING_SURFACE_KINDS, type NowPlayingSurfaceKind } from '$lib/constants/now-playing';
 
 export type QueuePlaybackMode = 'classic' | 'stream';
 
@@ -76,25 +77,21 @@ export function setLibraryTakePool(pool: LibraryTakePool): void {
 // viewport has room for both, and it survives the session so the next open
 // lands where they last were. A compact viewport offers only the full surface
 // and never writes here.
-export const DESKTOP_NOW_PLAYING_SURFACES = ['docked', 'full'] as const;
-export type DesktopNowPlayingSurface = (typeof DESKTOP_NOW_PLAYING_SURFACES)[number];
-export const DEFAULT_DESKTOP_NOW_PLAYING_SURFACE: DesktopNowPlayingSurface = 'docked';
+export const DEFAULT_DESKTOP_NOW_PLAYING_SURFACE: NowPlayingSurfaceKind = 'docked';
 
 const DESKTOP_SURFACE_STORAGE_KEY = 'nowPlayingDesktopSurface';
-const VALID_DESKTOP_SURFACES: ReadonlySet<string> = new Set<string>(DESKTOP_NOW_PLAYING_SURFACES);
+const VALID_DESKTOP_SURFACES: ReadonlySet<string> = new Set<string>(NOW_PLAYING_SURFACE_KINDS);
 
-function readStoredDesktopSurface(): DesktopNowPlayingSurface {
+function readStoredDesktopSurface(): NowPlayingSurfaceKind {
 	if (typeof window === 'undefined') return DEFAULT_DESKTOP_NOW_PLAYING_SURFACE;
 	const stored = localStorage.getItem(DESKTOP_SURFACE_STORAGE_KEY);
-	if (stored && VALID_DESKTOP_SURFACES.has(stored)) return stored as DesktopNowPlayingSurface;
+	if (stored && VALID_DESKTOP_SURFACES.has(stored)) return stored as NowPlayingSurfaceKind;
 	return DEFAULT_DESKTOP_NOW_PLAYING_SURFACE;
 }
 
-export const desktopNowPlayingSurface = writable<DesktopNowPlayingSurface>(
-	readStoredDesktopSurface()
-);
+export const desktopNowPlayingSurface = writable<NowPlayingSurfaceKind>(readStoredDesktopSurface());
 
-export function setDesktopNowPlayingSurface(surface: DesktopNowPlayingSurface): void {
+export function setDesktopNowPlayingSurface(surface: NowPlayingSurfaceKind): void {
 	desktopNowPlayingSurface.set(surface);
 	if (typeof window !== 'undefined') {
 		localStorage.setItem(DESKTOP_SURFACE_STORAGE_KEY, surface);

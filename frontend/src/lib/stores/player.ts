@@ -33,7 +33,6 @@ import {
 	setDesktopNowPlayingSurface,
 	setLibraryTakePool,
 	shouldUseQueueStream,
-	type DesktopNowPlayingSurface,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -53,7 +52,8 @@ import {
 } from '$lib/constants';
 import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
-	NOW_PLAYING_SHUFFLE_LABEL_PREFIX
+	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
+	type NowPlayingSurfaceKind
 } from '$lib/constants/now-playing';
 
 // --- Data ---
@@ -849,7 +849,7 @@ export function jumpToQueueIndex(index: number): void {
 // opens on. Owned here (not by PlayerBar or the layout, which only read them)
 // so any surface — a take row, a deep link — can open Now Playing straight to
 // the judging panel without routing through PlayerBar's own click handlers.
-export type NowPlayingSurface = 'closed' | 'docked' | 'full';
+export type NowPlayingSurface = 'closed' | NowPlayingSurfaceKind;
 export const nowPlayingSurface = writable<NowPlayingSurface>('closed');
 export const nowPlayingOpen = derived(nowPlayingSurface, (surface) => surface !== 'closed');
 export type NowPlayingPanel = 'queue' | 'take';
@@ -920,7 +920,7 @@ export function dockNowPlaying(): void {
 	chooseDesktopSurface('docked');
 }
 
-function chooseDesktopSurface(surface: DesktopNowPlayingSurface): void {
+function chooseDesktopSurface(surface: NowPlayingSurfaceKind): void {
 	setDesktopNowPlayingSurface(surface);
 	nowPlayingSurface.set(surface);
 }

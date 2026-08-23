@@ -26,6 +26,7 @@ The target UI replaces the current Studio/Listen mode split with one navigation 
 | `NowPlaying.html` | Now Playing, full screen | [#101](https://github.com/FlexOr2/songmaker/issues/101) |
 | `NowPlayingJudge.html` | Now Playing, own-take judging panel (scores, deviations, ★/♥, seed) | [#101](https://github.com/FlexOr2/songmaker/issues/101) |
 | `NowPlayingMobile.html` | Now Playing, mobile | [#101](https://github.com/FlexOr2/songmaker/issues/101) |
+| `NowPlayingDocked.html` | Now Playing docked beside the editor, desktop | [#140](https://github.com/FlexOr2/songmaker/issues/140) |
 
 Slice order: #99 (shell) first, then #100 (Editor) and #101 (Now Playing) in parallel, then [#102](https://github.com/FlexOr2/songmaker/issues/102) (acceptance: cross-surface browser evidence, deadweight audit, docs update, closes the epic).
 
@@ -45,11 +46,12 @@ Decisions from the epic body (2026-08-22), translated to English:
   | Take | ★ Pick / ♥ Keep | "Share take" |
 
   Rail rows carry no actions. No help text under Recipe chips (hover + tooltip only).
-- **Player bar** is transport-only: Prev · Play · Next · Cover · Title · Progress · "Now Playing" expand. Pool and Shuffle live in Now Playing, not the bar.
+- **Player bar** is transport-only: Shuffle · Prev · Play · Next · Cover · Title · Progress · "Now Playing". The pool trio lives in Now Playing's Queue panel, not the bar. (Shuffle moved to the bar in #141; the bar's "Now Playing" is a disclosure toggle for the docked panel and a dialog trigger for the full surface — #140.)
 - **Pool** is one inclusivity scale: `Picks` (default) → `+ Keeps` → `All takes`. "Keeps-only" is dropped; the API value `mix` (Pick ∪ Keep) stays and now means `+ Keeps`.
 - **Editor**: tabs Write | Takes. Recipe collapses to labeled chips (Model · Takes · BPM · Duration · Key · Voice · Seed · LM · DiT · Repaint); expands into Sound / Text / Reproduce with a preset row on top. Takes render compact (Play · Version · Score · ★/♥ · Duration), grouped by version, with a draft banner. Version chips and the take inspector are dropped. Co-Writer is a mode of the Write column (Chat | Lyrics tabs); takes there collapse into strips with ★/♥ badges.
 - **Views vs. Action**: one header row, identical across every Editor state. Left: title/subtitle with the object's actions next to it (Share, `…` menu). Right: the views Co-Writer · Recipe (independent, stackable toggles), a divider, then the single action Generate. No second toolbar row. Model and takes-per-generate are Recipe settings (chips under the title, Sound group in the panel) — never duplicated next to the Generate button. Settings → Generation owns presets/defaults; the Recipe panel's top row is "Preset: Default ▾ · Save as preset" to apply one. Mobile: views become icons at the top (opening sheets), the action is a fixed bottom bar.
-- **Now Playing**: full screen over the player bar. Cover, running lyrics (static here; live sync comes from #45), queue with the Picks/+Keeps/All-takes pool trio, and Shuffle. For the user's own takes: scores, sung-vs-lyrics deviations, ★/♥, seed pinning, reference. Now Playing has no write functions.
+- **Now Playing** (revised by #140, 2026-08-23): two surfaces, one instance. On a desktop-sized viewport it **docks** as a 400px column beside the rail and the editor — cover, running lyrics, Queue / This take — and neither covers the workspace nor traps focus. "Expand" grows it to the full screen; Escape shrinks it back, then closes it. The chosen mode is remembered. Below the docking breakpoint (or on a coarse pointer) it is full screen as before. Cover, running lyrics (static here; live sync comes from #45), queue with the Picks/+Keeps/All-takes pool trio, and Shuffle. For the user's own takes: scores, sung-vs-lyrics deviations, ★/♥, seed pinning, reference. Now Playing has no write functions.
+- **One player, never two** (#140): the docked panel has no transport of its own — the bar beside it keeps seek, shuffle, prev/next and play. The full surface carries the only transport, and the bar is hidden underneath it on desktop and mobile alike.
 - **Mobile**: rail becomes a drawer; Editor tabs are Write | Takes; Recipe and Co-Writer open as sheets; a 64px bar; Now Playing is full screen. No third tab, no third column anywhere.
 - **Copy and icons**: all UI copy is English. Icons are reserved for Play, Share, Search, Delete, and the `…` menu — navigation is always a word, never an icon alone.
 

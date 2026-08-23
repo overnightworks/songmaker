@@ -357,6 +357,19 @@ describe('NowPlaying', () => {
 		expect(target.textContent).not.toContain('Up next');
 	});
 
+	it('renders the docked panel inline, with no transport and no sheet to open', async () => {
+		nowPlayingDockable.set(true);
+		songList.set([song()]);
+		await renderSurface(info());
+		nowPlayingSurface.set('docked');
+		await tick();
+
+		expect(target.querySelector('.now-playing.docked')).not.toBeNull();
+		expect(target.querySelector('.np-right-col')).not.toBeNull();
+		expect(target.querySelector('.mobile-panel-trigger')).toBeNull();
+		expect(target.querySelector('.transport')).toBeNull();
+	});
+
 	it('stacks into a single column and opens the panel as a sheet on a narrow/coarse layout', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
 		await renderSurface(info());
