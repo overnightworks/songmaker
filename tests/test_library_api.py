@@ -22,7 +22,7 @@ from songmaker_cli.constants import (
     LIBRARY_SORT_TITLE,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.models import Album, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Song, User, Version
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
 USER_A = "user-a"
@@ -495,3 +495,60 @@ def test_oldest_sort_is_created_at_ascending(alice: TestClient) -> None:
     )
     ids = [_hit_id(i) for i in resp.json()["items"]]
     assert ids[0] == "alice-own"
+
+
+def test_search_album_hit_includes_picked_count(tmp_path: Path) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="picks-album", title="Picks Album",
+            owner=USER_A, created_at=_ts(1),
+        )
+        _add_song(
+            session, song_id="picks-picked", title="Picked Song",
+            album_id="picks-album", created_at=_ts(2),
+        )
+        session.add(Generation(
+            id="g-picked", song_id="picks-picked", generation_number=1,
+            mp3_path=f"{USER_A}/g-picked.mp3", seed=1, is_picked=True,
+        ))
+        _add_song(
+            session, song_id="picks-unpicked", title="Unpicked Song",
+            album_id="picks-album", created_at=_ts(3),
+        )
+        session.commit()
+
+    resp = client.get("/api/library/search", params={"q": "Picks Album"})
+    assert resp.status_code == 200
+    album_hit = next(
+        item for item in resp.json()["items"]
+        if item["type"] == LIBRARY_ITEM_ALBUM and item["album"]["id"] == "picks-album"
+    )
+    assert album_hit["album"]["picked_count"] == 1
+
+
+def test_search_album_hit_excludes_archived_pick(tmp_path: Path) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        _add_album(
+            session, album_id="archived-picks-album", title="Archived Picks Album",
+            owner=USER_A, created_at=_ts(1),
+        )
+        _add_song(
+            session, song_id="ap-song", title="Archived Pick Song",
+            album_id="archived-picks-album", created_at=_ts(2),
+        )
+        session.add(Generation(
+            id="g-archived-pick", song_id="ap-song", generation_number=1,
+            mp3_path=f"{USER_A}/g-archived-pick.mp3", seed=1,
+            is_picked=True, is_archived=True,
+        ))
+        session.commit()
+
+    resp = client.get("/api/library/search", params={"q": "Archived Picks Album"})
+    assert resp.status_code == 200
+    album_hit = next(
+        item for item in resp.json()["items"]
+        if item["type"] == LIBRARY_ITEM_ALBUM and item["album"]["id"] == "archived-picks-album"
+    )
+    assert album_hit["album"]["picked_count"] == 0
