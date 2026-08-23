@@ -126,6 +126,14 @@ beforeEach(() => {
 	closeNowPlaying();
 	vi.spyOn(audioPlayer, 'load').mockImplementation((playback) => {
 		audioPlayer.current = playback;
+		audioPlayer.status = 'playing';
+	});
+	// jsdom leaves the player without a media element, so its own play/pause are
+	// no-ops and a stopped take would look exactly like a running one. These
+	// stubs move the status the way a real element does, so what a click did to
+	// playback is readable as state instead of as a spied call.
+	vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {
+		audioPlayer.status = audioPlayer.status === 'playing' ? 'paused' : 'playing';
 	});
 });
 
@@ -137,6 +145,7 @@ afterEach(async () => {
 	queueContext.set({ type: 'library' });
 	setShuffle(false);
 	closeNowPlaying();
+	audioPlayer.status = 'idle';
 	delete document.documentElement.dataset.pointer;
 });
 
@@ -313,9 +322,22 @@ describe('PlaylistDetailView row actions', () => {
 		expect(get(nowPlayingOpen)).toBe(false);
 	});
 
+	it('never pauses the take its row body is clicked on while that take plays', async () => {
+		const target = await renderTwoEntryPlaylist();
+		const row = target.querySelectorAll<HTMLElement>('.entry-row')[1];
+		requireElement<HTMLButtonElement>(row, '.entry-info').click();
+		await tick();
+		closeNowPlaying();
+
+		requireElement<HTMLButtonElement>(row, '.entry-info').click();
+		await tick();
+
+		expect(audioPlayer.status).toBe('playing');
+		expect(get(nowPlayingOpen)).toBe(true);
+	});
+
 	it('pauses the playing entry from its play button instead of restarting it', async () => {
 		const target = await renderTwoEntryPlaylist();
-		const toggle = vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {});
 
 		const play = target.querySelectorAll<HTMLElement>('.entry-row .entry-play')[1];
 		play.click();
@@ -324,7 +346,7 @@ describe('PlaylistDetailView row actions', () => {
 		play.click();
 		await tick();
 
-		expect(toggle).toHaveBeenCalledTimes(1);
+		expect(audioPlayer.status).toBe('paused');
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 

@@ -222,6 +222,14 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	const takeRow = surface.getByRole('button', { name: library.takeLabel });
 	await takeRow.click();
 	await expectTakeShownInNowPlaying(page, shell, library.pickedSongTitle);
+	// A row body never stops the music: the take that was already playing when
+	// the row was clicked is still playing after it.
+	await expect(
+		shellTransport(page, shell, library.pickedSongTitle).getByRole('button', {
+			name: TRANSPORT_PAUSE_LABEL,
+			exact: true
+		})
+	).toBeVisible();
 	await closeNowPlaying(page, shell);
 
 	await takeRow.getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();

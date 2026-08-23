@@ -13,8 +13,8 @@ export const MOBILE_VIEWPORT = { width: 390, height: 844 };
 export const NARROW_VIEWPORT = { width: 320, height: 844 };
 
 /**
- * What the library flow costs the API per shell, measured on the first green
- * run plus ~20% headroom. Both projects share one IP rate-limit window, so a
+ * What the library flow costs the API per shell: 25 `/api` requests measured on
+ * a green run, 32 budgeted. Both projects share one IP rate-limit window, so a
  * flow that suddenly needs more round trips is a regression — find the extra
  * requests instead of raising these numbers.
  */

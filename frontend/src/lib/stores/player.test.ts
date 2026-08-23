@@ -1090,6 +1090,19 @@ describe('canPlay predicates', () => {
 	});
 });
 
+// jsdom gives the player no media element, so its own play/pause/toggle are
+// no-ops and a stopped take would be indistinguishable from a running one.
+// This puts the loaded take into the playing state and lets a toggle move it
+// out again, the way a real element does — so a click that pauses is visible
+// as a status, not as a spied call.
+function startPlayingWithoutAnAudioElement(): void {
+	audioPlayer.status = 'playing';
+	vi.mocked(audioPlayer.load).mockClear();
+	vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {
+		audioPlayer.status = audioPlayer.status === 'playing' ? 'paused' : 'playing';
+	});
+}
+
 describe('playPlaylistFrom', () => {
 	it('sets playlist context and triggers load', () => {
 		const entries = [
@@ -1199,6 +1212,19 @@ describe('a clicked playlist row', () => {
 
 		expect(toggle).toHaveBeenCalledTimes(1);
 		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('leaves the entry it is already playing playing, and does not start it over', async () => {
+		await playPlaylistEntryAndShowNowPlaying(makePlaylist(entries), 1);
+		startPlayingWithoutAnAudioElement();
+		closeNowPlaying();
+
+		await playPlaylistEntryAndShowNowPlaying(makePlaylist(entries), 1);
+
+		expect(audioPlayer.status).toBe('playing');
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(nowPlayingOpen)).toBe(true);
+		expect(get(nowPlayingPanel)).toBe('take');
 	});
 });
 
@@ -2602,6 +2628,20 @@ describe('playTakeAndShowNowPlaying', () => {
 			restart: true
 		});
 		expect(get(nowPlayingPanel)).toBe('take');
+		expect(get(nowPlayingOpen)).toBe(true);
+	});
+
+	it('leaves the take it is already playing playing, and does not start it over', async () => {
+		const gen = makeGen();
+		const song = makeSong();
+		await playTakeAndShowNowPlaying(gen, song);
+		startPlayingWithoutAnAudioElement();
+		closeNowPlaying();
+
+		await playTakeAndShowNowPlaying(gen, song);
+
+		expect(audioPlayer.status).toBe('playing');
+		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(nowPlayingOpen)).toBe(true);
 	});
 });

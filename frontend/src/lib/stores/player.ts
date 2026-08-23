@@ -965,26 +965,44 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 // What a click on a take row means, wherever that row lives (the click rule
 // of issue #140): play the take and surface Now Playing straight on its
 // judging panel. The editor's takes list and a playlist's rows differ only in
-// how playback starts, so both hand that start to this one action. A row's
-// dedicated ▶ calls the play action underneath instead, because it promises
-// playback and nothing else.
-async function playTakeRow(startPlayback: () => void | Promise<void>): Promise<void> {
-	await startPlayback();
+// how playback starts, so both hand that start to this one action.
+//
+// A row body never stops the music. The take a row stands for is left
+// running, and a paused one picks up where it stands rather than starting
+// over, so clicking the row that is already loaded only brings up the panel.
+// Pausing belongs to the row's own ▶ and to the transport.
+async function playTakeRow(row: {
+	alreadyLoaded: boolean;
+	start: () => void | Promise<void>;
+}): Promise<void> {
+	if (row.alreadyLoaded) audioPlayer.play();
+	else await row.start();
 	openNowPlaying('take');
+}
+
+// Whether a take is the one the transport holds. The generation's id settles
+// it: a take row hands over the generation itself, unlike a playlist entry,
+// which names a file that a re-import can change under the same id.
+function isTakeCurrent(gen: GenerationItem): boolean {
+	return audioPlayer.current?.generation.id === gen.id;
 }
 
 export async function playTakeAndShowNowPlaying(
 	gen: GenerationItem,
 	song: SongItem
 ): Promise<void> {
-	await playTakeRow(() => playTake(gen, song));
+	await playTakeRow({ alreadyLoaded: isTakeCurrent(gen), start: () => playTake(gen, song) });
 }
 
 export async function playPlaylistEntryAndShowNowPlaying(
 	playlist: PlaylistDetailItem,
 	index: number
 ): Promise<void> {
-	await playTakeRow(() => playPlaylistEntry(playlist, index));
+	const entry = playlist.entries[index];
+	await playTakeRow({
+		alreadyLoaded: entry !== undefined && isPlaylistEntryCurrent(entry),
+		start: () => playPlaylistEntry(playlist, index)
+	});
 }
 
 export async function playNextSong(): Promise<void> {
