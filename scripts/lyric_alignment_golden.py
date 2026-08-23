@@ -241,9 +241,10 @@ def choose_candidate(candidates: list[Candidate]) -> Candidate | None:
     if best is None or best.score < MIN_RATIO:
         return None
 
+    repeats = [candidate for candidate in candidates if candidate.text == best.text]
     rival_score = float("-inf")
     for candidate in candidates:
-        if _overlaps(candidate, best) or candidate.text == best.text:
+        if any(_overlaps(candidate, repeat) for repeat in repeats):
             continue
         rival_score = max(rival_score, candidate.score)
     if rival_score != float("-inf") and best.score - rival_score < AMBIGUITY_MARGIN:
@@ -418,7 +419,7 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         (_sung_cue(0.0, 0.3, f"{LINE_1} ooh yeah come on {LINE_2}"),),
     ),
     AlignmentFixture(
-        "word path: only the last of two identical chorus renditions is lit",
+        "word path: a repeated chorus line takes its own repeat in order",
         "\n".join(["[verse]", LINE_1, "[chorus]", CHORUS, "", "[verse]", LINE_3, CHORUS]),
         (_sung_cue(2.0, 0.45, f"{LINE_1} {CHORUS} {LINE_3} {CHORUS}"),),
     ),

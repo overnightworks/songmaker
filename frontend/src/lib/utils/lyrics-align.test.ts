@@ -220,12 +220,7 @@ describe('alignLyricsToCues with word timestamps', () => {
 		]);
 	});
 
-	// Precision over recall (#142 review): a rendition of a repeated chorus
-	// line has, further along the take, a differently-worded reading of the
-	// repeat that scores within the margin of it, so the take cannot say which
-	// of the two the first chorus line was sung on and it stays dark. The last
-	// repeat has no such rival behind it and is lit.
-	it('lights only the last of two identical chorus renditions', () => {
+	it('lights a repeated chorus line at each of its repeats', () => {
 		const lyrics = [LINE_1, CHORUS, LINE_3, CHORUS].join('\n');
 
 		const aligned = alignLyricsToCues(lyrics, [
@@ -234,10 +229,21 @@ describe('alignLyricsToCues with word timestamps', () => {
 
 		expect(aligned.map((line) => line.interval)).toEqual([
 			{ start: 0, end: 2.5 },
-			null,
+			{ start: 2.5, end: 5.5 },
 			{ start: 5.5, end: 8 },
 			{ start: 8, end: 11 }
 		]);
+	});
+
+	// The repeat itself is not independent evidence, but a differently-worded
+	// line elsewhere in the take still is: this pins that the relaxation for
+	// repeats did not reopen the #45 ambiguity rule.
+	it('still leaves a line dark when a differently-worded reading rivals it', () => {
+		const aligned = alignLyricsToCues(LINE_1, [
+			sungCue(0, 0.5, `${LINE_1} the lantern hums quietly tonite`)
+		]);
+
+		expect(aligned[0].interval).toBeNull();
 	});
 
 	it('starts a line at its own first sung word, not at foreign words before it', () => {
