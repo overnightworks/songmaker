@@ -102,6 +102,26 @@ function defaultProps() {
 	};
 }
 
+function accessibleName(element: Element): string {
+	return element.getAttribute('aria-label')?.trim() ?? element.textContent?.trim() ?? '';
+}
+
+function getByRoleHeading(root: ParentNode, name: string): HTMLHeadingElement {
+	const heading = Array.from(
+		root.querySelectorAll<HTMLHeadingElement>('h1, h2, h3, h4, h5, h6')
+	).find((el) => accessibleName(el) === name);
+	if (!heading) throw new Error(`Expected a heading named "${name}"`);
+	return heading;
+}
+
+function getByRoleButton(root: ParentNode, name: string): HTMLButtonElement {
+	const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+		(el) => accessibleName(el) === name
+	);
+	if (!button) throw new Error(`Expected a button named "${name}"`);
+	return button;
+}
+
 async function render(overrides: Partial<ReturnType<typeof defaultProps>> = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
@@ -182,6 +202,14 @@ describe('EditorHeader', () => {
 		);
 		item?.click();
 		expect(onsaveversion).toHaveBeenCalledTimes(1);
+	});
+
+	it('announces the song title as the heading name, with a separately named edit button', async () => {
+		const { target } = await render({ song: song({ title: 'Sommerlicht' }) });
+		const heading = getByRoleHeading(target, 'Sommerlicht');
+		expect(heading.tagName).toBe('H2');
+		const editButton = getByRoleButton(heading, 'Edit song title');
+		expect(editButton.textContent?.trim()).toBe('Sommerlicht');
 	});
 
 	it('moves Generate to a fixed bottom bar and drops it from the header row in compact mode', async () => {

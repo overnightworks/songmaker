@@ -139,7 +139,7 @@
 		</div>
 		<div class="song-heading">
 			<div class="title-row">
-				<h2 class="song-title">
+				<h2 class="song-title" aria-label={song.title}>
 					<EditableTitle
 						bind:this={titleEditor}
 						value={song.title}
