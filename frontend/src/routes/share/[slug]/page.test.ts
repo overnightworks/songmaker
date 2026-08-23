@@ -357,10 +357,10 @@ describe('shared album page', () => {
 		expect(target.querySelectorAll('.queue-take')).toHaveLength(0);
 	});
 
-	// The app hides its transport bar under the full Now Playing surface
-	// (issue #140). A share listener keeps theirs: the public page has no
-	// docked panel and no second player to reconcile.
-	it('keeps the transport bar under its Now Playing surface', async () => {
+	// The app collapses --player-height to 0 under its full Now Playing surface
+	// (issue #140). A share listener keeps their bar and the room it takes:
+	// the public page has no docked panel and no second player to reconcile.
+	it('keeps the transport bar, and the room it takes, under its Now Playing surface', async () => {
 		mockFetch
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => album })
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(false) });
@@ -377,7 +377,7 @@ describe('shared album page', () => {
 		const surface = target.querySelector('.now-playing');
 		expect(surface).not.toBeNull();
 		expect(surface?.getAttribute('aria-modal')).toBe('true');
-		expect(surface?.classList.contains('over-transport-bar')).toBe(true);
 		expect(target.querySelector('.player-bar')).not.toBeNull();
+		expect(document.documentElement.dataset.nowPlaying).toBeUndefined();
 	});
 });

@@ -60,10 +60,6 @@
 		// public queue-stream manifest, which redacts `lyrics` — the text
 		// comes from the share payload instead.
 		lyricsText = null,
-		// True where a transport bar stays visible under the surface. The share
-		// page keeps its own bar; the app hides its bar so Now Playing carries
-		// the only transport ("one player, never two") and owns the viewport.
-		transportBarBelow = false,
 		rightPanel
 	}: {
 		info: PlaybackInfo;
@@ -107,7 +103,6 @@
 		lyricsCues?: WhisperCue[] | null;
 		whisperText?: string | null;
 		lyricsText?: string | null;
-		transportBarBelow?: boolean;
 		rightPanel: Snippet;
 	} = $props();
 
@@ -191,7 +186,6 @@
 	bind:this={root}
 	class="now-playing"
 	class:docked={isDocked}
-	class:over-transport-bar={transportBarBelow}
 	class:stacked
 	role={isDocked ? 'complementary' : 'dialog'}
 	aria-modal={isDocked ? undefined : 'true'}
@@ -379,7 +373,9 @@
 <style>
 	.now-playing {
 		position: fixed;
-		inset: 0;
+		/* Whatever room the transport bar takes right now — the app collapses
+		   that to zero while this surface is up, a share page keeps its bar. */
+		inset: 0 0 var(--player-height);
 		display: flex;
 		flex-direction: column;
 		background: var(--bg);
@@ -644,7 +640,7 @@
 	}
 	.mobile-sheet-backdrop {
 		position: fixed;
-		inset: 0;
+		inset: 0 0 var(--player-height);
 		width: 100%;
 		border: 0;
 		background: color-mix(in srgb, #000 42%, transparent);
@@ -654,7 +650,7 @@
 		position: fixed;
 		left: 0;
 		right: 0;
-		bottom: 0;
+		bottom: var(--player-height);
 		max-height: min(70vh, 32rem);
 		padding: 0.9rem 1rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
 		background: var(--header-bg);
@@ -665,14 +661,9 @@
 		min-height: 0;
 	}
 
-	.now-playing.over-transport-bar,
-	.now-playing.over-transport-bar .mobile-sheet-backdrop,
-	.now-playing.over-transport-bar .mobile-sheet {
-		bottom: var(--player-height);
-	}
-
 	.now-playing.docked {
 		position: relative;
+		inset: auto;
 		flex: none;
 		height: 100%;
 		border-left: 1px solid var(--border);

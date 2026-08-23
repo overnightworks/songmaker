@@ -51,10 +51,28 @@
 
 	// Whatever is wide enough not to stack Now Playing's three columns is wide
 	// enough to dock it beside the workspace — one breakpoint, both decisions.
+	// The compact shell switches at COMPACT_LAYOUT_MAX_PX (768), never wider
+	// than NOW_PLAYING_STACKED_MAX_PX (1099), so a docked panel can never end
+	// up in the mobile branch, which has no `.shell-row` to hold it.
 	$effect(() => {
 		return subscribeCompactLayout((value) => {
 			nowPlayingDockable.set(!value);
 		}, NOW_PLAYING_STACKED_MEDIA);
+	});
+
+	// One fact behind every layout that reserves room for the transport bar:
+	// while the full surface hides the app's bar, the bar takes no room. The
+	// `:global` rule below turns that into `--player-height: 0px`, so the
+	// shell rows, the toast stack, the queue-stream chip, the editor's bottom
+	// padding and Now Playing's own sheet all collapse together instead of
+	// each carrying its own exception.
+	$effect(() => {
+		const barHidden = hasPrivatePlayer && $nowPlayingSurface === 'full';
+		if (!browser) return;
+		const root = document.documentElement;
+		if (barHidden) root.dataset.nowPlaying = 'full';
+		else delete root.dataset.nowPlaying;
+		return () => delete root.dataset.nowPlaying;
 	});
 
 	$effect(() => {
@@ -261,6 +279,13 @@
 		letter-spacing: 3px;
 		text-transform: uppercase;
 		text-decoration: none;
+	}
+
+	/* app.css holds the bar's resting height; this is the one place that says
+	   it takes no room at all. A share page keeps its own bar and never
+	   carries the attribute. */
+	:global(html[data-now-playing='full']) {
+		--player-height: 0px;
 	}
 
 	.shell-row {

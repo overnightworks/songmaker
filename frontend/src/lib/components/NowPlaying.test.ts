@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
+import type { AlbumItem, GenerationItem, PlaylistEntryItem, SongItem } from '$lib/api/types';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import {
 	NOW_PLAYING_CLOSE,
@@ -17,11 +17,11 @@ import {
 	nowPlayingPanel,
 	nowPlayingSurface,
 	queueContext,
+	selectedSongId,
 	setShuffle,
 	shuffleEnabled,
 	songList
 } from '$lib/stores/player';
-import * as playerStore from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { setLibraryTakePool } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -86,6 +86,26 @@ function info(overrides: Partial<PlaybackInfo> = {}): PlaybackInfo {
 	};
 }
 
+function playlistEntry(id: string, songTitle: string): PlaylistEntryItem {
+	return {
+		id,
+		position: 0,
+		generation_id: `g-${id}`,
+		song_id: `s-${id}`,
+		song_title: songTitle,
+		album_title: 'Nachtstrom',
+		artist: 'Artist',
+		generation_number: 1,
+		version_number: 1,
+		is_picked: false,
+		audio_duration: 180,
+		mp3_path: `${id}.mp3`,
+		seed: 1,
+		model_mode: 'sft',
+		lyrics: null
+	};
+}
+
 function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	return {
 		id: 'a1',
@@ -102,8 +122,36 @@ function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	};
 }
 
+// jsdom implements no media playback, and this surface's transport really
+// does drive the queue — stub the element so a Next press stays as quiet and
+// deterministic as the state it changes.
+class SilentAudio {
+	paused = true;
+	ended = false;
+	currentTime = 0;
+	duration = 0;
+	readyState = 0;
+	src = '';
+	preload = '';
+	crossOrigin: string | null = null;
+	addEventListener() {}
+	removeAttribute() {}
+	load() {}
+	pause() {}
+	play() {
+		return Promise.resolve();
+	}
+}
+
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
+
+beforeEach(() => {
+	vi.stubGlobal(
+		'Audio',
+		vi.fn(() => new SilentAudio())
+	);
+});
 
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
@@ -112,6 +160,8 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	document.documentElement.dataset.pointer = '';
 	audioPlayer.current = null;
+	audioPlayer.destroy();
+	selectedSongId.set(null);
 	nowPlayingSurface.set('closed');
 	nowPlayingDockable.set(false);
 	songList.set([]);
@@ -122,6 +172,7 @@ afterEach(async () => {
 	setLibraryTakePool('picks');
 	libraryQueueSkipped.set([]);
 	nowPlayingPanel.set('queue');
+	vi.unstubAllGlobals();
 });
 
 // The surface reads what is playing and what the queue allows from the player
@@ -200,7 +251,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('goes to the playing song and leaves Now Playing behind', async () => {
-		const navigate = vi.spyOn(playerStore, 'navigateToPlaying').mockResolvedValue();
+		songList.set([song()]);
 		await renderSurface(info());
 
 		const go = Array.from(target.querySelectorAll('button')).find(
@@ -208,12 +259,11 @@ describe('NowPlaying', () => {
 		);
 		go?.click();
 
-		expect(navigate).toHaveBeenCalledOnce();
+		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s1'));
 		expect(get(nowPlayingSurface)).toBe('closed');
 	});
 
 	it('offers Previous and Next only as far as the playing queue reaches', async () => {
-		const next = vi.spyOn(playerStore, 'playNextSong').mockResolvedValue();
 		albumList.set([album()]);
 		songList.set([song()]);
 		queueContext.set({ type: 'album', albumId: 'a1' });
@@ -225,10 +275,26 @@ describe('NowPlaying', () => {
 		songList.set([song(), song({ id: 's2', title: 'Second' })]);
 		await tick();
 
-		const nextButton = target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]');
-		expect(nextButton?.disabled).toBe(false);
-		nextButton?.click();
-		expect(next).toHaveBeenCalledOnce();
+		expect(
+			target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
+		).toBe(false);
+	});
+
+	it('Next moves the playing queue on to its next entry', async () => {
+		queueContext.set({
+			type: 'playlist',
+			playlist: { id: 'p1', title: 'Night Drive' },
+			entries: [playlistEntry('pe1', 'Tide'), playlistEntry('pe2', 'Second')],
+			index: 0
+		});
+		await renderSurface(info());
+
+		target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.click();
+
+		await vi.waitFor(() => {
+			const ctx = get(queueContext);
+			expect(ctx.type === 'playlist' && ctx.index).toBe(1);
+		});
 	});
 
 	it('toggles shuffle from the overlay, scoped to the current queue', async () => {

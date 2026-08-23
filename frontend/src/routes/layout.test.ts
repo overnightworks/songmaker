@@ -497,6 +497,29 @@ describe('docked Now Playing', () => {
 		expect(requireElement(target, '.cover-title').textContent).toBe('Second');
 	});
 
+	// One owner for "the room the transport bar takes right now": the shell
+	// rows, the toast stack, the queue-stream chip and Now Playing's own sheet
+	// all read --player-height, so hiding the bar has to collapse that one
+	// value rather than leave each surface its own exception.
+	it('collapses the reserved transport-bar height while the full surface hides the bar', async () => {
+		audioPlayer.current = playing();
+		await renderDesktopLayout();
+		openNowPlaying('queue');
+		await tick();
+		expect(document.documentElement.dataset.nowPlaying).toBeUndefined();
+
+		nowPlayingSurface.set('full');
+		await tick();
+		expect(document.documentElement.dataset.nowPlaying).toBe('full');
+		expect(extractRule(layoutSource, ":global(html[data-now-playing='full'])")).toContain(
+			'--player-height: 0px'
+		);
+
+		closeNowPlaying();
+		await tick();
+		expect(document.documentElement.dataset.nowPlaying).toBeUndefined();
+	});
+
 	it('opens full screen on a compact viewport, which has no room to dock', async () => {
 		audioPlayer.current = playing();
 		const target = await renderLayout('/');
