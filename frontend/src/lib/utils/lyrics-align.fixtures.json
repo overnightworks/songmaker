@@ -1787,6 +1787,293 @@
 		{
 			"cues": [
 				{
+					"end": 19.2,
+					"start": 0.0,
+					"text": "the river carries every promise home the river carries every promise home hold the line until the morning hold the line until the morning the river carries every promise home we count the fading city lights hold the line until the morning hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "the"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "river"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "carries"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "every"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "promise"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "home"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "the"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "river"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "carries"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "every"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "promise"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "home"
+						},
+						{
+							"end": 5.2,
+							"start": 4.8,
+							"text": "hold"
+						},
+						{
+							"end": 5.6,
+							"start": 5.2,
+							"text": "the"
+						},
+						{
+							"end": 6.0,
+							"start": 5.6,
+							"text": "line"
+						},
+						{
+							"end": 6.4,
+							"start": 6.0,
+							"text": "until"
+						},
+						{
+							"end": 6.8,
+							"start": 6.4,
+							"text": "the"
+						},
+						{
+							"end": 7.2,
+							"start": 6.8,
+							"text": "morning"
+						},
+						{
+							"end": 7.6,
+							"start": 7.2,
+							"text": "hold"
+						},
+						{
+							"end": 8.0,
+							"start": 7.6,
+							"text": "the"
+						},
+						{
+							"end": 8.4,
+							"start": 8.0,
+							"text": "line"
+						},
+						{
+							"end": 8.8,
+							"start": 8.4,
+							"text": "until"
+						},
+						{
+							"end": 9.2,
+							"start": 8.8,
+							"text": "the"
+						},
+						{
+							"end": 9.6,
+							"start": 9.2,
+							"text": "morning"
+						},
+						{
+							"end": 10.0,
+							"start": 9.6,
+							"text": "the"
+						},
+						{
+							"end": 10.4,
+							"start": 10.0,
+							"text": "river"
+						},
+						{
+							"end": 10.8,
+							"start": 10.4,
+							"text": "carries"
+						},
+						{
+							"end": 11.2,
+							"start": 10.8,
+							"text": "every"
+						},
+						{
+							"end": 11.6,
+							"start": 11.2,
+							"text": "promise"
+						},
+						{
+							"end": 12.0,
+							"start": 11.6,
+							"text": "home"
+						},
+						{
+							"end": 12.4,
+							"start": 12.0,
+							"text": "we"
+						},
+						{
+							"end": 12.8,
+							"start": 12.4,
+							"text": "count"
+						},
+						{
+							"end": 13.2,
+							"start": 12.8,
+							"text": "the"
+						},
+						{
+							"end": 13.6,
+							"start": 13.2,
+							"text": "fading"
+						},
+						{
+							"end": 14.0,
+							"start": 13.6,
+							"text": "city"
+						},
+						{
+							"end": 14.4,
+							"start": 14.0,
+							"text": "lights"
+						},
+						{
+							"end": 14.8,
+							"start": 14.4,
+							"text": "hold"
+						},
+						{
+							"end": 15.2,
+							"start": 14.8,
+							"text": "the"
+						},
+						{
+							"end": 15.6,
+							"start": 15.2,
+							"text": "line"
+						},
+						{
+							"end": 16.0,
+							"start": 15.6,
+							"text": "until"
+						},
+						{
+							"end": 16.4,
+							"start": 16.0,
+							"text": "the"
+						},
+						{
+							"end": 16.8,
+							"start": 16.4,
+							"text": "morning"
+						},
+						{
+							"end": 17.2,
+							"start": 16.8,
+							"text": "hold"
+						},
+						{
+							"end": 17.6,
+							"start": 17.2,
+							"text": "the"
+						},
+						{
+							"end": 18.0,
+							"start": 17.6,
+							"text": "line"
+						},
+						{
+							"end": 18.4,
+							"start": 18.0,
+							"text": "until"
+						},
+						{
+							"end": 18.8,
+							"start": 18.4,
+							"text": "the"
+						},
+						{
+							"end": 19.2,
+							"start": 18.8,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				{
+					"end": 4.8,
+					"start": 2.4
+				},
+				{
+					"end": 7.2,
+					"start": 4.8
+				},
+				{
+					"end": 9.6,
+					"start": 7.2
+				},
+				{
+					"end": 12.0,
+					"start": 9.6
+				},
+				{
+					"end": 14.4,
+					"start": 12.0
+				},
+				{
+					"end": 16.8,
+					"start": 14.4
+				},
+				{
+					"end": 19.2,
+					"start": 16.8
+				}
+			],
+			"lyrics": "the river carries every promise home\nthe river carries every promise home\nhold the line until the morning\nhold the line until the morning\nthe river carries every promise home\nwe count the fading city lights\nhold the line until the morning\nhold the line until the morning",
+			"name": "word path: a take built from repeated lines lights every one of them in order"
+		},
+		{
+			"cues": [
+				{
 					"end": 4.0,
 					"start": 0.0,
 					"text": "the lantern hums quietly tonight the lantern hums calmly tonight",

@@ -12,6 +12,7 @@ const LINE_2 = 'we count the fading city lights';
 const LINE_3 = 'another mile of rusted signs';
 
 const CHORUS = 'hold the line until the morning';
+const RIVER = 'the river carries every promise home';
 const NESTED_LONG = 'i wanted you to stay tonight';
 const NESTED_SHORT = 'i wanted you to stay';
 const RAIN_FALLS = 'silver rain falls on the roof';
@@ -335,6 +336,23 @@ describe('alignLyricsToCues with word timestamps', () => {
 			null,
 			{ start: 0, end: 2.5 },
 			{ start: 2.5, end: 5.5 }
+		]);
+	});
+
+	it('lights every line of a take built from repeated lines, in order', () => {
+		const lines = [RIVER, RIVER, CHORUS, CHORUS, RIVER, LINE_2, CHORUS, CHORUS];
+
+		const aligned = alignLyricsToCues(lines.join('\n'), [sungCue(0, 0.5, lines.join(' '))]);
+
+		expect(aligned.map((line) => line.interval)).toEqual([
+			{ start: 0, end: 3 },
+			{ start: 3, end: 6 },
+			{ start: 6, end: 9 },
+			{ start: 9, end: 12 },
+			{ start: 12, end: 15 },
+			{ start: 15, end: 18 },
+			{ start: 18, end: 21 },
+			{ start: 21, end: 24 }
 		]);
 	});
 

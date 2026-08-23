@@ -220,6 +220,12 @@ function chooseCandidate(candidates: Candidate[]): Candidate | null {
 // plausible reading of it or the stream runs out. A stretch of adlibbed or
 // mistranscribed words must not hide every line behind it, and only a line
 // the take has no reading for at all pays for scanning the rest of the take.
+//
+// Scanning also continues while a candidate reaches past the words looked at
+// so far. Otherwise a run that starts inside the window and ends beyond it
+// would be collected while the repeat it is a shifted view of — starting one
+// word later — would not, and that half-seen repeat would then count as a
+// rival instead of being dominated by the reading it belongs to.
 function collectWithGrowingWindow(
 	wordTexts: string[],
 	cursor: number,
@@ -228,8 +234,9 @@ function collectWithGrowingWindow(
 	const candidates: Candidate[] = [];
 	let scanned = cursor;
 	let plausible = false;
+	let furthestEnd = -1;
 
-	while (scanned < wordTexts.length && !plausible) {
+	while (scanned < wordTexts.length) {
 		const limit = Math.min(wordTexts.length, scanned + WORD_STREAM_LOOKAHEAD);
 		for (const candidate of collectCandidates(
 			wordTexts,
@@ -241,8 +248,10 @@ function collectWithGrowingWindow(
 		)) {
 			candidates.push(candidate);
 			if (candidate.score >= MIN_RATIO) plausible = true;
+			if (candidate.to > furthestEnd) furthestEnd = candidate.to;
 		}
 		scanned = limit;
+		if (plausible && furthestEnd < scanned) break;
 	}
 	return candidates;
 }

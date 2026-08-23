@@ -259,8 +259,9 @@ def collect_with_growing_window(
     candidates: list[Candidate] = []
     scanned = cursor
     plausible = False
+    furthest_end = -1
 
-    while scanned < len(word_texts) and not plausible:
+    while scanned < len(word_texts):
         limit = min(len(word_texts), scanned + WORD_STREAM_LOOKAHEAD)
         for candidate in collect_candidates(
             word_texts,
@@ -272,7 +273,10 @@ def collect_with_growing_window(
         ):
             candidates.append(candidate)
             plausible = plausible or candidate.score >= MIN_RATIO
+            furthest_end = max(furthest_end, candidate.last)
         scanned = limit
+        if plausible and furthest_end < scanned:
+            break
     return candidates
 
 
@@ -398,6 +402,7 @@ LINE_1: Final = "the lantern hums quietly tonight"
 LINE_2: Final = "we count the fading city lights"
 LINE_3: Final = "another mile of rusted signs"
 CHORUS: Final = "hold the line until the morning"
+RIVER: Final = "the river carries every promise home"
 NESTED_LONG: Final = "i wanted you to stay tonight"
 NESTED_SHORT: Final = "i wanted you to stay"
 RAIN_FALLS: Final = "silver rain falls on the roof"
@@ -496,6 +501,13 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         "word path: a near-duplicate line elsewhere never takes another line's rendition",
         "\n".join([RAIN_FALLS, LINE_3, RAIN_CALLS]),
         (_sung_cue(0.0, 0.4, f"{LINE_3} {RAIN_CALLS}"),),
+    ),
+    AlignmentFixture(
+        "word path: a take built from repeated lines lights every one of them in order",
+        "\n".join([RIVER, RIVER, CHORUS, CHORUS, RIVER, LINE_2, CHORUS, CHORUS]),
+        (_sung_cue(0.0, 0.4, " ".join(
+            [RIVER, RIVER, CHORUS, CHORUS, RIVER, LINE_2, CHORUS, CHORUS],
+        )),),
     ),
     AlignmentFixture(
         "word path: a phrase sung twice takes the clearly better reading",
