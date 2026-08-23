@@ -25,7 +25,7 @@ def temporary_env_override(key: str, value: str) -> Iterator[None]:
     state shared with every thread, so the caller owns serializing
     overlapping overrides.
     """
-    previous = os.environ.pop(key, None)
+    previous = os.environ.get(key)
     os.environ[key] = value
     try:
         yield

@@ -46,6 +46,8 @@ def test_clean_codebase_returns_zero(
     ("if os.environ['FOO'] == 'on':", True),
     ("os.environ['FOO'] = 'value'", False),
     ("del os.environ['FOO']", False),
+    ("del  os.environ['FOO']", False),
+    ("del\tos.environ['FOO']", False),
     ("os.environ['PATH'] += ':/opt/bin'", False),
     ("child_env = os.environ.copy()", False),
 ])

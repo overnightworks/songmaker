@@ -69,7 +69,7 @@ RULES: list[Rule] = [
         name="env-read-outside-settings",
         pattern=(
             r"os\.(environ\.(get|pop|setdefault)|getenv)\("
-            r"|(?<!del )os\.environ\[[^\]]+\](?!\s*[-+*/|&^]?=[^=])"
+            r"|^(?!\s*del\s).*os\.environ\[[^\]]+\](?!\s*[-+*/|&^]?=[^=])"
         ),
         description=(
             "Env vars must be read via the settings module of the package "
