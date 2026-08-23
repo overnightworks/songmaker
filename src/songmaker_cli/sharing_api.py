@@ -19,7 +19,11 @@ from songmaker_cli.api_models import (
     SharedSongItem,
     SharedSongResponse,
 )
-from songmaker_cli.api_models.songs import public_album_cover_urls, public_song_cover_urls
+from songmaker_cli.api_models.songs import (
+    public_album_cover_urls,
+    public_song_cover_urls,
+    share_pick_media,
+)
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth import get_client_ip
 from songmaker_cli.constants import (
@@ -45,6 +49,7 @@ from songmaker_cli.db.queries import (
     get_playlist_by_slug,
     get_song_by_slug,
 )
+from songmaker_cli.db.queries.sharing import warm_generation_versions
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
     build_queue_stream_snapshot,
@@ -220,29 +225,33 @@ def get_shared_album(
         raise HTTPException(404, "Not found")
     ctx: AppContext = request.app.state.ctx
     songs = sorted(album.songs, key=lambda s: s.track_number)
-    picked_by_song = {s.id: _picked_filename(s) for s in songs}
+    picked_by_song = {s.id: _picked_generation(s) for s in songs}
+    warm_generation_versions(
+        db, [gen.id for gen in picked_by_song.values() if gen is not None],
+    )
     cover = None
     if (
         album.cover_key
         and album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key)
     ):
         cover = public_album_cover_urls(slug, album.cover_key)
-    response = SharedAlbumResponse.from_orm(
-        album,
-        songs=[
-            SharedSongItem(
-                id=s.id,
-                title=s.title,
-                track_number=s.track_number,
-                audio_url=(
-                    f"/shared/{slug}/audio/{picked_by_song[s.id]}"
-                    if picked_by_song[s.id] else None
-                ),
-            )
-            for s in songs
-        ],
-        cover=cover,
-    )
+    song_items = []
+    for s in songs:
+        gen = picked_by_song[s.id]
+        media = share_pick_media(gen)
+        song_items.append(SharedSongItem(
+            id=s.id,
+            title=s.title,
+            track_number=s.track_number,
+            audio_url=(
+                f"/shared/{slug}/audio/{gen.mp3_path}"
+                if gen and gen.mp3_path else None
+            ),
+            generation_id=media.generation_id,
+            audio_duration=media.audio_duration,
+            lyrics=media.lyrics,
+        ))
+    response = SharedAlbumResponse.from_orm(album, songs=song_items, cover=cover)
     return JSONResponse(response.model_dump())
 
 
@@ -348,7 +357,9 @@ def get_shared_song(
     song = get_song_by_slug(db, slug)
     if not song:
         raise HTTPException(404, "Not found")
-    picked_path = _picked_filename(song)
+    gen = _picked_generation(song)
+    warm_generation_versions(db, [gen.id] if gen is not None else [])
+    media = share_pick_media(gen)
     cover = None
     if (
         song.cover_key
@@ -360,10 +371,13 @@ def get_shared_song(
         artist=song.album.artist if song.album else "",
         album_title=song.album.title if song.album else "",
         audio_url=(
-            f"/shared/song/{slug}/audio/{picked_path}"
-            if picked_path else None
+            f"/shared/song/{slug}/audio/{gen.mp3_path}"
+            if gen and gen.mp3_path else None
         ),
         cover=cover,
+        generation_id=media.generation_id,
+        audio_duration=media.audio_duration,
+        lyrics=media.lyrics,
     )
     return JSONResponse(response.model_dump())
 
@@ -428,6 +442,7 @@ def get_shared_generation(
     gen = get_generation_by_slug(db, slug)
     if not gen:
         raise HTTPException(404, "Not found")
+    media = share_pick_media(gen)
     response = SharedGenerationResponse(
         title=gen.song.title if gen.song else "",
         artist=gen.song.album.artist if gen.song and gen.song.album else "",
@@ -438,6 +453,9 @@ def get_shared_generation(
             f"/shared/gen/{slug}/audio/{gen.mp3_path}"
             if gen.mp3_path else None
         ),
+        generation_id=media.generation_id,
+        audio_duration=media.audio_duration,
+        lyrics=media.lyrics,
     )
     return JSONResponse(response.model_dump())
 
@@ -474,27 +492,29 @@ def get_shared_playlist(
     if not playlist:
         raise HTTPException(404, "Not found")
     entries = sorted(playlist.entries, key=lambda e: e.position)
-    response = SharedPlaylistResponse(
-        title=playlist.title,
-        entries=[
-            SharedPlaylistEntryResponse(
-                entry_id=e.id,
-                song_title=e.generation.song.title if e.generation and e.generation.song else "",
-                artist=(
-                    e.generation.song.album.artist
-                    if e.generation and e.generation.song and e.generation.song.album
-                    else ""
-                ),
-                generation_number=e.generation.generation_number if e.generation else 0,
-                audio_url=(
-                    f"/shared/playlist/{slug}/audio/{e.generation.mp3_path}"
-                    if e.generation else None
-                ),
-            )
-            for e in entries
-            if e.generation is not None
-        ],
+    warm_generation_versions(
+        db, [e.generation.id for e in entries if e.generation is not None],
     )
+    entry_items = []
+    for e in entries:
+        if e.generation is None:
+            continue
+        gen = e.generation
+        media = share_pick_media(gen)
+        entry_items.append(SharedPlaylistEntryResponse(
+            entry_id=e.id,
+            song_title=gen.song.title if gen.song else "",
+            artist=gen.song.album.artist if gen.song and gen.song.album else "",
+            generation_number=gen.generation_number,
+            audio_url=(
+                f"/shared/playlist/{slug}/audio/{gen.mp3_path}"
+                if gen.mp3_path else None
+            ),
+            generation_id=media.generation_id,
+            audio_duration=media.audio_duration,
+            lyrics=media.lyrics,
+        ))
+    response = SharedPlaylistResponse(title=playlist.title, entries=entry_items)
     return JSONResponse(response.model_dump())
 
 

@@ -48,6 +48,24 @@ def enable_sharing(session: Session, model_class: type[T], entity_id: str) -> T:
     return entity
 
 
+def warm_generation_versions(session: Session, generation_ids: list[str]) -> None:
+    """Populate `.version` on already-loaded `Generation` rows in one query.
+
+    Share payload builders read `gen.version.lyrics`/`.audio_duration` for
+    every picked generation on a page (an album's tracks, a playlist's
+    entries). `Generation.version` lazy-loads by default, so without this
+    warm-up each row would trigger its own SELECT. Re-querying the same
+    generations with `Generation.version` joined populates the relationship
+    on the instances already in the session's identity map, so the later
+    `.version` access is free.
+    """
+    if not generation_ids:
+        return
+    session.query(Generation).options(joinedload(Generation.version)).filter(
+        Generation.id.in_(generation_ids),
+    ).all()
+
+
 def disable_sharing(session: Session, model_class: type[T], entity_id: str) -> T:
     entity = session.query(model_class).filter_by(id=entity_id).first()
     if not entity:
