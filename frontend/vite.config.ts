@@ -18,6 +18,10 @@ export default defineConfig({
 			'/audio': {
 				target: API_TARGET,
 				changeOrigin: true
+			},
+			'/shared': {
+				target: API_TARGET,
+				changeOrigin: true
 			}
 		}
 	}

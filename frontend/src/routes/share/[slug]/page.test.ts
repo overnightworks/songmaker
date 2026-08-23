@@ -2,6 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-album' } } }));
 
@@ -22,6 +23,7 @@ class FakeAudio {
 	addEventListener(name: string, listener: (event: Event) => void) {
 		this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
 	}
+	removeAttribute() {}
 	load() {
 		this.fire('loadstart');
 	}
@@ -94,10 +96,11 @@ beforeEach(() => {
 	);
 	vi.stubGlobal(
 		'matchMedia',
-		vi.fn(() => ({ matches: true }))
+		vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
 	);
 	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 	setQueuePlaybackMode('stream');
+	audioPlayer.destroy();
 });
 
 afterEach(async () => {
@@ -109,7 +112,7 @@ afterEach(async () => {
 	vi.restoreAllMocks();
 });
 
-describe('shared album recovery', () => {
+describe('shared album page', () => {
 	it('shows loading during retry and can recover into the album', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 		const target = document.createElement('div');
@@ -138,8 +141,25 @@ describe('shared album recovery', () => {
 			})
 		});
 		await vi.waitFor(() => {
-			expect(target.querySelector('h1')?.textContent).toBe('Recovered album');
+			expect(target.querySelector('.header-title')?.textContent).toBe('Recovered album');
 		});
+	});
+
+	it('hides songs without a pick instead of showing a disabled row', async () => {
+		mockFetch.mockResolvedValueOnce({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				...album,
+				songs: [...album.songs, { id: 's3', title: 'Unpicked', track_number: 3, audio_url: null }]
+			})
+		});
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+		expect(target.textContent).not.toContain('Unpicked');
 	});
 
 	it('passes windowed manifests through and stops without wrapping', async () => {
@@ -149,15 +169,16 @@ describe('shared album recovery', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
 
-		target.querySelectorAll<HTMLButtonElement>('.track')[1].click();
-		await vi.waitFor(() => expect(target.querySelector('.shared-player')).not.toBeNull());
+		target.querySelectorAll<HTMLButtonElement>('.track-row')[1].click();
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 		audio.fire('ended');
 		await tick();
 
-		expect(target.textContent).toContain('More takes not loaded');
-		expect(target.querySelectorAll<HTMLButtonElement>('.track')[1].classList).toContain('active');
+		expect(target.querySelectorAll<HTMLButtonElement>('.track-row')[1].classList).toContain(
+			'current'
+		);
 	});
 
 	it('keeps direct non-windowed album playback wrapping', async () => {
@@ -166,15 +187,16 @@ describe('shared album recovery', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
 
-		target.querySelectorAll<HTMLButtonElement>('.track')[1].click();
-		await vi.waitFor(() => expect(target.querySelector('.shared-player')).not.toBeNull());
+		target.querySelectorAll<HTMLButtonElement>('.track-row')[1].click();
+		await vi.waitFor(() => expect(target.querySelector('.player-bar')).not.toBeNull());
 		audio.fire('ended');
 		await tick();
 
-		expect(target.querySelectorAll<HTMLButtonElement>('.track')[0].classList).toContain('active');
-		expect(target.textContent).not.toContain('More takes not loaded');
+		expect(target.querySelectorAll<HTMLButtonElement>('.track-row')[0].classList).toContain(
+			'current'
+		);
 	});
 
 	it('renders a cover image when the shared album includes one', async () => {
@@ -192,8 +214,8 @@ describe('shared album recovery', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelector('.share-cover')).not.toBeNull());
-		const img = target.querySelector<HTMLImageElement>('.share-cover');
+		await vi.waitFor(() => expect(target.querySelector('.header-cover img')).not.toBeNull());
+		const img = target.querySelector<HTMLImageElement>('.header-cover img');
 		expect(img?.getAttribute('src')).toContain('variant=detail');
 		expect(img?.getAttribute('alt')).toBe('Album Shared album');
 	});
@@ -213,10 +235,58 @@ describe('shared album recovery', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelector('.share-cover')).not.toBeNull());
+		await vi.waitFor(() => expect(target.querySelector('.header-cover img')).not.toBeNull());
 		target.querySelector('img')?.dispatchEvent(new Event('error'));
 		await tick();
-		expect(target.querySelector('.share-cover')).toBeNull();
-		expect(target.querySelector('h1')?.textContent).toBe('Shared album');
+		expect(target.querySelector('.header-cover img')).toBeNull();
+		expect(target.querySelector('.header-title')?.textContent).toBe('Shared album');
+	});
+
+	it('opens Now Playing showing the manifest queue', async () => {
+		mockFetch
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => album })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(false) });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+
+		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+
+		target.querySelector<HTMLButtonElement>('.now-playing-btn')?.click();
+		await tick();
+		// jsdom's stubbed matchMedia matches every query, so Now Playing always
+		// renders its stacked (mobile) layout here — open the queue sheet to
+		// reach the same NowPlayingQueue content the desktop layout renders
+		// inline.
+		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
+		await tick();
+
+		expect(target.querySelector('.now-playing')).not.toBeNull();
+		const queueTitles = Array.from(target.querySelectorAll('.queue-title')).map(
+			(el) => el.textContent
+		);
+		expect(queueTitles).toEqual(['First', 'Second']);
+	});
+
+	it('never shows an internal take number to a public listener', async () => {
+		mockFetch
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => album })
+			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(false) });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+
+		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+		target.querySelector<HTMLButtonElement>('.now-playing-btn')?.click();
+		await tick();
+		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
+		await tick();
+
+		expect(target.querySelector('.cover-meta')?.textContent).not.toContain('Take');
+		expect(target.querySelectorAll('.queue-take')).toHaveLength(0);
 	});
 });

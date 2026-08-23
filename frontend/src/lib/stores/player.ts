@@ -1130,10 +1130,6 @@ async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStre
 	}
 }
 
-audioPlayer.onStreamRebuild = rebuildQueueStream;
-audioPlayer.onCurrentChange = updateMediaSessionMetadata;
-audioPlayer.onPlaybackStarted = clearWindowEnd;
-
 setupMediaSessionHandlers({
 	play: () => audioPlayer.play(),
 	pause: () => audioPlayer.pause(),
@@ -1393,11 +1389,19 @@ export function handlePlaybackEnded(reason: 'normal' | 'window-end' = 'normal'):
 	void playNextSong();
 }
 
-audioPlayer.onEnded = handlePlaybackEnded;
-
-audioPlayer.onAuthLost = async () => {
-	const { clearAuth } = await import('$lib/stores/auth');
-	const { goto } = await import('$app/navigation');
-	clearAuth();
-	await goto('/login');
-};
+// The app's single callback set for the singleton audioPlayer, installed
+// once as one typed object (see AudioPlayerCallbacks) rather than five
+// scattered assignments — a share route swaps in its own set on mount and
+// restores this one on destroy.
+audioPlayer.swapCallbacks({
+	onEnded: handlePlaybackEnded,
+	onPlaybackStarted: clearWindowEnd,
+	onAuthLost: async () => {
+		const { clearAuth } = await import('$lib/stores/auth');
+		const { goto } = await import('$app/navigation');
+		clearAuth();
+		await goto('/login');
+	},
+	onStreamRebuild: rebuildQueueStream,
+	onCurrentChange: updateMediaSessionMetadata
+});

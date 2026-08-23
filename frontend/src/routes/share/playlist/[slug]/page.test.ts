@@ -2,6 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-playlist' } } }));
 
@@ -20,6 +21,7 @@ class FakeAudio {
 	addEventListener(name: string, listener: (event: Event) => void) {
 		this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
 	}
+	removeAttribute() {}
 	load() {
 		this.fire('loadstart');
 	}
@@ -101,10 +103,11 @@ beforeEach(() => {
 	);
 	vi.stubGlobal(
 		'matchMedia',
-		vi.fn(() => ({ matches: true }))
+		vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
 	);
 	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 	setQueuePlaybackMode('stream');
+	audioPlayer.destroy();
 });
 
 afterEach(async () => {
@@ -116,7 +119,18 @@ afterEach(async () => {
 	vi.restoreAllMocks();
 });
 
-describe('shared playlist playback', () => {
+describe('shared playlist page', () => {
+	it('shows each entry with its own artist', async () => {
+		mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => playlist });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+		expect(target.textContent).toContain('First');
+		expect(target.textContent).toContain('Artist');
+	});
+
 	it('passes windowed manifests through and stops without wrapping', async () => {
 		mockFetch
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => playlist })
@@ -124,15 +138,16 @@ describe('shared playlist playback', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
 
-		target.querySelectorAll<HTMLButtonElement>('.track')[1].click();
-		await vi.waitFor(() => expect(target.querySelector('.shared-player')).not.toBeNull());
+		target.querySelectorAll<HTMLButtonElement>('.track-row')[1].click();
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 		audio.fire('ended');
 		await tick();
 
-		expect(target.textContent).toContain('More takes not loaded');
-		expect(target.querySelectorAll<HTMLButtonElement>('.track')[1].classList).toContain('active');
+		expect(target.querySelectorAll<HTMLButtonElement>('.track-row')[1].classList).toContain(
+			'current'
+		);
 	});
 
 	it('keeps direct non-windowed playlist playback wrapping', async () => {
@@ -141,14 +156,15 @@ describe('shared playlist playback', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
 
-		target.querySelectorAll<HTMLButtonElement>('.track')[1].click();
-		await vi.waitFor(() => expect(target.querySelector('.shared-player')).not.toBeNull());
+		target.querySelectorAll<HTMLButtonElement>('.track-row')[1].click();
+		await vi.waitFor(() => expect(target.querySelector('.player-bar')).not.toBeNull());
 		audio.fire('ended');
 		await tick();
 
-		expect(target.querySelectorAll<HTMLButtonElement>('.track')[0].classList).toContain('active');
-		expect(target.textContent).not.toContain('More takes not loaded');
+		expect(target.querySelectorAll<HTMLButtonElement>('.track-row')[0].classList).toContain(
+			'current'
+		);
 	});
 });

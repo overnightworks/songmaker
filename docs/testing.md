@@ -120,14 +120,23 @@ tests/acestep_worker/
 frontend/src/
 ├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA,
 │                                  resource-event decimal SSE payloads
-├── lib/components/*.test.ts       Component tests: library, share status, frequent-action hitboxes
+├── lib/components/*.test.ts       Component tests: library, share status, frequent-action hitboxes,
+│                                  components/share/share-import-boundary.test.ts (grep gate: nothing
+│                                  under lib/share or components/share runtime-imports
+│                                  stores/player|navigation|editor|takeActions|auth)
 ├── lib/stores/*.test.ts           Store coverage: admin polling, auth, editor, filter,
 │                                  health, jobs, library search/context, resource sync
 │                                  (hello/snapshot interleavings, replay, stale fetch,
 │                                  bootstrap disconnect, resync, focus, retry, cleanup),
 │                                  navigation, LoRA, player, playlists, toast
-├── lib/services/*.test.ts         Audio player service tests
-└── lib/utils/*.test.ts            Chat context, contrast, diff, and format helpers
+├── lib/services/*.test.ts         Audio player service tests (incl. swapCallbacks/restoreCallbacks,
+│                                  loadUrl, unload)
+├── lib/share/*.test.ts            Pure sharedCollection adapters; SharePlayback's classic/stream
+│                                  dispatch, shuffle, and callback ownership
+├── lib/utils/*.test.ts            Chat context, contrast, diff, and format helpers
+└── routes/share/**/page.test.ts   Album/playlist/song/take share pages through their real
+                                   +page.svelte entry points (loading/error/retry, stream vs
+                                   classic playback, windowed-stream stop, Now Playing)
 ```
 
 ## Testing Patterns

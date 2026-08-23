@@ -25,18 +25,22 @@
 		onJump,
 		skipped = [],
 		skippedComplete = true,
-		windowEnded = false
+		windowEnded = false,
+		showTakeLabel = true
 	}: {
 		ctx: QueueContext;
 		queue: QueueViewModel;
 		contextLabel: string | null;
 		currentSongTitle: string;
-		pool: LibraryTakePool;
-		onChoosePool: (pool: LibraryTakePool) => void;
+		pool?: LibraryTakePool;
+		onChoosePool?: (pool: LibraryTakePool) => void;
 		onJump: (index: number) => void;
 		skipped?: QueueStreamSkipItem[];
 		skippedComplete?: boolean;
 		windowEnded?: boolean;
+		// Off for a public share queue — there is no real per-row take number to
+		// show (see SharedCollection.svelte), and versionNumber is always null.
+		showTakeLabel?: boolean;
 	} = $props();
 
 	const heading = $derived(nowPlayingQueueHeading(ctx.type === 'library' ? null : contextLabel));
@@ -54,7 +58,7 @@
 							class="pool-pill"
 							class:on={pool === option}
 							aria-pressed={pool === option}
-							onclick={() => onChoosePool(option)}
+							onclick={() => onChoosePool?.(option)}
 						>
 							{LIBRARY_TAKE_POOL_LABELS[option]}
 						</button>
@@ -79,9 +83,11 @@
 					>
 						<span class="queue-position">{index === queue.currentIndex ? '' : index + 1}</span>
 						<span class="queue-title">{item.songTitle}</span>
-						<span class="queue-take">
-							{nowPlayingTakeLabel(item.versionNumber, item.generationNumber)}
-						</span>
+						{#if showTakeLabel}
+							<span class="queue-take">
+								{nowPlayingTakeLabel(item.versionNumber, item.generationNumber)}
+							</span>
+						{/if}
 						<span class="queue-duration"
 							>{item.durationSec != null ? formatTime(item.durationSec) : ''}</span
 						>
