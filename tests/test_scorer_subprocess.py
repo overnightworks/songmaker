@@ -14,8 +14,6 @@ from songmaker_cli.scoring.models import ScorerOutcome, ScorerRun, SongScores
 from songmaker_cli.scoring.subprocess_runner import (
     EnvProbeRequest,
     EnvProbeResponse,
-    ReleaseGpuRequest,
-    ReleaseGpuResponse,
     ScoreRequest,
     ScoreResponse,
     ScorerProcess,
@@ -83,7 +81,7 @@ def _run_child_with_messages(messages: list, timeout: float = 10.0) -> list:
         while parent_conn.poll(timeout=timeout):
             resp = parent_conn.recv()
             responses.append(resp)
-            if isinstance(resp, (ScoreResponse, ReleaseGpuResponse, EnvProbeResponse)):
+            if isinstance(resp, (ScoreResponse, EnvProbeResponse)):
                 break
 
     proc.join(timeout=5)
@@ -101,16 +99,6 @@ def test_child_handles_shutdown() -> None:
     proc.join(timeout=10)
     assert not proc.is_alive()
     parent_conn.close()
-
-
-def test_child_handles_release_gpu() -> None:
-    responses = _run_child_with_messages([
-        ReleaseGpuRequest(),
-        ShutdownRequest(),
-    ])
-    assert len(responses) == 1
-    assert isinstance(responses[0], ReleaseGpuResponse)
-    assert responses[0].success is True
 
 
 def test_child_handles_score_request(tmp_path: Path) -> None:
@@ -227,20 +215,6 @@ def test_scorer_process_score_empty_scorers(tmp_path: Path) -> None:
         assert isinstance(result, SongScores)
     finally:
         sp.shutdown()
-
-
-def test_scorer_process_release_gpu() -> None:
-    sp = ScorerProcess()
-    sp._ensure_started()
-    try:
-        sp.release_gpu(timeout=10)
-    finally:
-        sp.shutdown()
-
-
-def test_scorer_process_release_gpu_noop_when_dead() -> None:
-    sp = ScorerProcess()
-    sp.release_gpu()
 
 
 def _slow_child_main(conn):

@@ -368,9 +368,12 @@ Audio file serving uses `.resolve()` + `.is_relative_to()` to prevent directory 
 
 ## GPU Resource Safety
 
-- **Per-job cleanup**: Both generation and scoring jobs call `gc.collect()` + `torch.cuda.empty_cache()` in a `finally` block, ensuring VRAM is released even on failure.
-- **Mode-switch cleanup**: The GPU queue clears scoring models before generation and vice versa, with VRAM verification (waits up to 10s for release).
+- **Isolation by container**: `songmaker-acestep-worker-0` is the only container given a GPU (`runtime: nvidia`, `NVIDIA_VISIBLE_DEVICES: "0"`). `songmaker-scoring-worker` is given no GPU device and runs with `SCORING_DEVICE=cpu`, so scorer models and ACE-Step cannot contend for the same VRAM. There is no cross-container release handshake, because with CPU scoring there is nothing to release.
+- **Generation VRAM**: The acestep-worker owns its own budget end to end — an LRU model cache bounded by `VRAM_BUDGET_GB` that evicts to fit an incoming load, and NVML heartbeats (`acestep_worker/gpu_util.py`) reporting live used/total GB to the control plane.
+- **Scorer subprocess**: The child installs a SIGTERM handler that calls `torch.cuda.empty_cache()` before exiting, so the kill paths above (timeout, taint, `recycle()`) release device memory rather than orphaning it. On CPU that handler is a no-op; it exists for the CUDA case.
 - **ACE-Step lifecycle**: The acestep-worker container manages the ACE-Step HTTP subprocess, sending SIGTERM (with SIGKILL fallback) on model switch, worker restart, or shutdown. See `docs/acestep.md` for the worker pool architecture.
+
+Moving scoring onto the GPU (`SCORING_DEVICE=cuda`) would put two containers on one device and does need an arbitration protocol — a scorer-side release plus a verified-free check before generation. That protocol is not built; see issues #161 and #182.
 
 ## Known Limitations
 
