@@ -164,6 +164,27 @@ describe('NowPlaying', () => {
 		expect(target.querySelector('.lyrics')).toBeNull();
 	});
 
+	it('follows the lyrics with the resolved take once whisper_cues are loaded (#45)', async () => {
+		const gen = generation({
+			version_lyrics: 'old verse',
+			whisper_cues: [{ start: 0, end: 1, text: 'old verse' }]
+		});
+		songList.set([song({ generations: [gen] })]);
+		await renderSurface(info({ lyrics: 'old verse', generation: gen }));
+
+		expect(target.querySelectorAll('.lyrics-line')).toHaveLength(1);
+	});
+
+	it('stays static for a thin library-pool item until its song resolves whisper_cues', async () => {
+		// info.generation mirrors what a library-pool click builds before
+		// ensureGenerationsLoaded resolves it against songList — whisper_cues
+		// stubbed null, songList not yet carrying the real generation.
+		await renderSurface(info({ lyrics: 'old verse' }));
+
+		expect(target.querySelector('.lyrics-line')).toBeNull();
+		expect(target.querySelector('.lyrics')?.textContent).toContain('old verse');
+	});
+
 	it('closes on Escape and the close button', async () => {
 		const handlers = await renderSurface(info());
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

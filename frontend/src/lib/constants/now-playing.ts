@@ -30,6 +30,9 @@ export const NOW_PLAYING_DEVIATIONS_LABEL = 'Sung vs. lyrics';
 export const NOW_PLAYING_DEVIATIONS_EMPTY = 'Sung text matches the lyrics';
 export const NOW_PLAYING_DEVIATIONS_UNAVAILABLE = 'No transcript to compare against yet';
 export const NOW_PLAYING_LYRICS_ROW_LABEL = 'Lyrics';
+// #45: shown instead of synced highlighting when a take has whisper_text but
+// no whisper_cues yet (scored before #44 landed) — lyrics stay static.
+export const NOW_PLAYING_LYRICS_RESCORE_HINT = 'Re-score this take to follow the lyrics.';
 
 export const NOW_PLAYING_PICK_LABEL = 'Pick';
 export const NOW_PLAYING_UNPICK_LABEL = 'Unpick';
