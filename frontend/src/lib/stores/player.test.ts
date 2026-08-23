@@ -22,6 +22,7 @@ import {
 } from '$lib/api/client';
 import { toasts } from '$lib/stores/toast';
 import {
+	ALBUM_ROW_ARCHIVED_ONLY_TOAST,
 	ALBUM_ROW_NO_TAKE_TOAST,
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
@@ -1684,6 +1685,26 @@ describe('playAlbumFromGeneration', () => {
 		toasts.set([]);
 	});
 
+	it('keeps the version on an album queue row, which is built from playlist-shaped entries', async () => {
+		// The album queue round-trips its takes through PlaylistEntryItem, and
+		// that conversion used to drop version_number — leaving rows reading
+		// "take 2" where every other take surface says "v3 · take 2".
+		const gen = makeGen({
+			id: 'g-v3',
+			song_id: 's1',
+			version_number: 3,
+			generation_number: 2,
+			is_picked: true
+		});
+		const song = makeSong({ id: 's1', track_number: 1, generations: [gen], generation_count: 1 });
+		songList.set([song]);
+
+		await playAlbumFromGeneration('a1', song, gen);
+
+		const vm = buildQueueViewModel(get(queueContext), audioPlayer.current, get(songList));
+		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 3, generationNumber: 2 }));
+	});
+
 	it('loads the clicked take natively without concat', async () => {
 		const picked = makeGen({ id: 'g-pick', is_picked: true, song_id: 's1' });
 		const clicked = makeGen({
@@ -1778,14 +1799,14 @@ describe('playAlbumSong', () => {
 		);
 	});
 
-	it('says so when every take on the song is archived', async () => {
-		const listed = makeSong({ id: 's-all-arch', generations: [], generation_count: 1 });
+	it('reports an all-archived song as archived, not as having no take', async () => {
+		const listed = makeSong({ id: 's-arch-only', generations: [], generation_count: 1 });
 		songList.set([listed]);
 		vi.mocked(fetchSong).mockResolvedValueOnce(
 			makeSong({
-				id: 's-all-arch',
+				id: 's-arch-only',
 				generation_count: 1,
-				generations: [makeGen({ id: 'g-only', song_id: 's-all-arch', is_archived: true })]
+				generations: [makeGen({ id: 'g-a', song_id: 's-arch-only', is_archived: true })]
 			})
 		);
 
@@ -1793,7 +1814,7 @@ describe('playAlbumSong', () => {
 
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: ALBUM_ROW_NO_TAKE_TOAST, type: 'error' })
+			expect.objectContaining({ message: ALBUM_ROW_ARCHIVED_ONLY_TOAST, type: 'error' })
 		]);
 	});
 
@@ -1807,6 +1828,67 @@ describe('playAlbumSong', () => {
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({ message: ALBUM_ROW_NO_TAKE_TOAST, type: 'error' })
 		]);
+	});
+});
+
+describe('playAlbum start track', () => {
+	beforeEach(() => {
+		setQueuePlaybackMode('classic');
+		toasts.set([]);
+	});
+
+	it('starts on the first track that yields a playable take, skipping a fully archived one', async () => {
+		// generation_count counts archived takes, so track 1 looks playable
+		// from the list alone — the album must keep walking, not give up.
+		const archivedOnly = makeSong({
+			id: 's1',
+			track_number: 1,
+			generation_count: 2,
+			generations: [
+				makeGen({ id: 'g1a', song_id: 's1', is_picked: true, is_archived: true }),
+				makeGen({ id: 'g1b', song_id: 's1', is_archived: true })
+			]
+		});
+		const playable = makeSong({
+			id: 's2',
+			title: 'Two',
+			track_number: 2,
+			generation_count: 1,
+			generations: [makeGen({ id: 'g2', song_id: 's2', is_picked: true, mp3_path: 'a1/s2.mp3' })]
+		});
+		songList.set([archivedOnly, playable]);
+
+		await playAlbum('a1');
+
+		expect(get(toasts)).toEqual([]);
+		expect(get(playStartNotice)).toBe('idle');
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) }),
+			expect.anything()
+		);
+	});
+
+	it('reports nothing playable only when no track yields a take', async () => {
+		songList.set([
+			makeSong({
+				id: 's1',
+				track_number: 1,
+				generation_count: 1,
+				generations: [makeGen({ id: 'g1', song_id: 's1', is_archived: true })]
+			}),
+			makeSong({
+				id: 's2',
+				title: 'Two',
+				track_number: 2,
+				generation_count: 1,
+				generations: [makeGen({ id: 'g2', song_id: 's2', is_archived: true })]
+			})
+		]);
+
+		await playAlbum('a1');
+
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(playStartNotice)).toBe('empty');
 	});
 });
 
@@ -2159,19 +2241,6 @@ describe('buildQueueViewModel', () => {
 		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 3, generationNumber: 2 }));
 		expect(vm.currentIndex).toBe(0);
 		expect(vm.upNext).toEqual(expect.objectContaining({ generationId: 'g2' }));
-	});
-
-	it('names the version on an album queue row, which knows it from its entry', () => {
-		// The album queue is built from playlist-shaped entries; dropping their
-		// version left rows reading "take 2" where every other surface says
-		// "v3 · take 2".
-		const song = makeSong({ id: 's1' });
-		const entry = makePlaylistEntry({ version_number: 3, generation_number: 2 });
-		const ctx = { type: 'playlist' as const, entries: [entry], index: 0 };
-
-		const vm = buildQueueViewModel(ctx, null, [song]);
-
-		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 3, generationNumber: 2 }));
 	});
 
 	it("reads a native row's duration from the take, falling back to the song", () => {

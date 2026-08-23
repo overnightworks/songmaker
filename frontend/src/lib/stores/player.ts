@@ -36,6 +36,7 @@ import {
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
 import {
+	ALBUM_ROW_ARCHIVED_ONLY_TOAST,
 	ALBUM_ROW_NO_TAKE_TOAST,
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	LIBRARY_SONG_PAGE_SIZE,
@@ -1042,6 +1043,27 @@ export async function playPrevSong(): Promise<void> {
 	}
 }
 
+// The album's opening take, which is not always the opening track's:
+// `generation_count` counts archived takes too, so a track whose takes are
+// all archived is skipped rather than taken as proof the album is
+// unplayable. Returns null both when nothing is playable and when a newer
+// play start superseded this one — the caller separates the two with its
+// own playStartIsCurrent check.
+async function firstPlayableAlbumTake(
+	albumId: string,
+	seq: number
+): Promise<{ song: SongItem; gen: GenerationItem } | null> {
+	for (const song of albumSongsInOrder(albumId)) {
+		if (song.generation_count === 0) continue;
+		await ensureGenerationsLoaded(song.id);
+		if (!playStartIsCurrent(seq)) return null;
+		const fresh = get(songList).find((item) => item.id === song.id) ?? song;
+		const gen = bestGen(fresh);
+		if (gen) return { song: fresh, gen };
+	}
+	return null;
+}
+
 export async function playAlbum(albumId: string): Promise<void> {
 	const { seq } = beginPlayStart();
 	clearWindowEnd();
@@ -1052,28 +1074,23 @@ export async function playAlbum(albumId: string): Promise<void> {
 		await loadSongsForAlbum(albumId);
 		if (!playStartIsCurrent(seq)) return;
 	}
-	const startSong = albumSongsInOrder(albumId).find((song) => song.generation_count > 0);
-	if (startSong) await ensureGenerationsLoaded(startSong.id);
+	const start = await firstPlayableAlbumTake(albumId, seq);
 	if (!playStartIsCurrent(seq)) return;
-	const freshStart = startSong
-		? (get(songList).find((item) => item.id === startSong.id) ?? startSong)
-		: undefined;
-	const startGen = freshStart ? bestGen(freshStart) : undefined;
-	if (!freshStart || !startGen) {
+	if (!start) {
 		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId));
 		return;
 	}
 	playStartNotice.set('idle');
 	playNativeAlbumTakes(
 		albumId,
-		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(freshStart, startGen))],
+		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(start.song, start.gen))],
 		0
 	);
 	await loadSongsForAlbum(albumId);
 	if (!playStartIsCurrent(seq)) return;
 	const entries = await collectAlbumEntries(albumId, seq);
 	if (entries === null || !playStartIsCurrent(seq)) return;
-	setAlbumQueueTakes(albumId, entries, startGen.id);
+	setAlbumQueueTakes(albumId, entries, start.gen.id);
 }
 
 // A song row's play button inside an album. The row only knows the song's
@@ -1091,7 +1108,10 @@ export async function playAlbumSong(albumId: string, song: SongItem): Promise<vo
 	const fresh = get(songList).find((item) => item.id === song.id) ?? song;
 	const gen = bestGen(fresh);
 	if (!gen) {
-		addToast(ALBUM_ROW_NO_TAKE_TOAST, 'error');
+		addToast(
+			fresh.generations.length > 0 ? ALBUM_ROW_ARCHIVED_ONLY_TOAST : ALBUM_ROW_NO_TAKE_TOAST,
+			'error'
+		);
 		return;
 	}
 	await playAlbumFromGeneration(albumId, fresh, gen);
