@@ -28,16 +28,31 @@ const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time'] as const;
 const ALBUM_TITLE_PREFIX = 'E2E Album';
 const PLAYLIST_TITLE_PREFIX = 'E2E Playlist';
 
+function runMarker(): string {
+	return Date.now().toString(36);
+}
+
+export interface SeededTake {
+	songTitle: string;
+	takeId: string;
+}
+
+/** Seeded once per run: nothing the flows do mutates it. */
 export interface SeededLibrary {
 	albumTitle: string;
 	albumShareUrl: string;
-	playlistTitle: string;
-	/** Its take is the album pick — played from the album row, added to the playlist by hand. */
+	/** Its take is the album pick — played from the album row, added to a playlist by hand. */
 	pickedSongTitle: string;
-	/** Titles of the takes seeded into the playlist, in playlist order. */
-	playlistSongTitles: string[];
+	/** Takes a per-attempt playlist starts with, in playlist order. */
+	playlistTakes: SeededTake[];
 	/** Row label of a reimported take, which carries no version. */
 	takeLabel: string;
+}
+
+/** Seeded per attempt, because the flow reorders and prunes it. */
+export interface SeededPlaylist {
+	title: string;
+	songTitles: string[];
 }
 
 interface CreatedResource {
@@ -62,6 +77,7 @@ class SeedApi {
 		private readonly csrfToken: string
 	) {}
 
+	/** The one login of the run. Everything after it reuses the session. */
 	static async login(api: APIRequestContext): Promise<SeedApi> {
 		const response = await api.post('/api/auth/login', {
 			data: { username: requiredEnv('ADMIN_USERNAME'), password: requiredEnv('ADMIN_PASSWORD') }
@@ -69,9 +85,14 @@ class SeedApi {
 		if (!response.ok()) {
 			throw new Error(`Login failed: ${response.status()} ${await response.text()}`);
 		}
+		return SeedApi.fromSession(api, 'Login set no CSRF cookie');
+	}
+
+	/** Seeds from a context that already carries the run's session, without logging in again. */
+	static async fromSession(api: APIRequestContext, missingCookieError?: string): Promise<SeedApi> {
 		const { cookies } = await api.storageState();
 		const csrf = cookies.find((cookie) => cookie.name === CSRF_COOKIE);
-		if (!csrf) throw new Error('Login set no CSRF cookie');
+		if (!csrf) throw new Error(missingCookieError ?? 'Context carries no CSRF cookie');
 		return new SeedApi(api, csrf.value);
 	}
 
@@ -102,9 +123,7 @@ class SeedApi {
 
 export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary> {
 	const seed = await SeedApi.login(api);
-	const runMarker = Date.now().toString(36);
-	const albumTitle = `${ALBUM_TITLE_PREFIX} ${runMarker}`;
-	const playlistTitle = `${PLAYLIST_TITLE_PREFIX} ${runMarker}`;
+	const albumTitle = `${ALBUM_TITLE_PREFIX} ${runMarker()}`;
 	const takeAudio = readFileSync(TAKE_FIXTURE);
 
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
@@ -127,27 +146,45 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 	}
 
 	const [pickedSongTitle, ...playlistSongTitles] = SONG_TITLES;
-	await seed.postJson(`/api/generations/${takeBySongTitle.get(pickedSongTitle)}/pick`, {});
-
-	const playlist = await seed.postJson<CreatedResource>('/api/playlists', {
-		title: playlistTitle
-	});
-	for (const title of playlistSongTitles) {
-		await seed.postJson(`/api/playlists/${playlist.id}/entries/generation`, {
-			generation_id: takeBySongTitle.get(title)
-		});
-	}
+	await seed.postJson(`/api/generations/${takeId(takeBySongTitle, pickedSongTitle)}/pick`, {});
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
 
 	return {
 		albumTitle,
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
-		playlistTitle,
 		pickedSongTitle,
-		playlistSongTitles,
+		playlistTakes: playlistSongTitles.map((songTitle) => ({
+			songTitle,
+			takeId: takeId(takeBySongTitle, songTitle)
+		})),
 		takeLabel: nowPlayingTakeLabel(null, 1)
 	};
+}
+
+function takeId(takes: Map<string, string>, songTitle: string): string {
+	const id = takes.get(songTitle);
+	if (!id) throw new Error(`No take seeded for "${songTitle}"`);
+	return id;
+}
+
+/**
+ * A fresh playlist for one test attempt. The flow adds, reorders and removes
+ * entries, so a retry must not inherit the previous attempt's order.
+ */
+export async function seedPlaylist(
+	api: APIRequestContext,
+	library: SeededLibrary
+): Promise<SeededPlaylist> {
+	const seed = await SeedApi.fromSession(api);
+	const title = `${PLAYLIST_TITLE_PREFIX} ${runMarker()}`;
+	const playlist = await seed.postJson<CreatedResource>('/api/playlists', { title });
+	for (const take of library.playlistTakes) {
+		await seed.postJson(`/api/playlists/${playlist.id}/entries/generation`, {
+			generation_id: take.takeId
+		});
+	}
+	return { title, songTitles: library.playlistTakes.map((take) => take.songTitle) };
 }
 
 export function writeSeededLibrary(library: SeededLibrary): void {

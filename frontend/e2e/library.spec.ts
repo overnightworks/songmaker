@@ -27,12 +27,16 @@ import {
 	playableRows,
 	workspace
 } from './helpers';
-import { readSeededLibrary } from './seed';
+import { readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
 
 let guard: FlowGuard;
+let playlist: SeededPlaylist;
 
-test.beforeEach(({ page }) => {
+test.beforeEach(async ({ page, request }) => {
 	guard = new FlowGuard(page);
+	// A fresh playlist per attempt: the flow reorders and prunes this one, so
+	// a retry must not start from the previous attempt's order.
+	playlist = await seedPlaylist(request, readSeededLibrary());
 });
 
 // After the flow, not at its end: a rate-limited or failed response usually
@@ -47,7 +51,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	browser
 }) => {
 	const library = readSeededLibrary();
-	const [firstPlaylistSong, secondPlaylistSong] = library.playlistSongTitles;
+	const [firstPlaylistSong, secondPlaylistSong] = playlist.songTitles;
 	const surface = workspace(page);
 
 	await page.goto('/');
@@ -73,11 +77,11 @@ test('plays the album pick, curates a playlist and serves the public album link'
 
 	await takeRow.getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
 	await surface.getByRole('menuitem', { name: TAKE_PLAYLIST_LABEL }).click();
-	await surface.getByRole('button', { name: nameStartingWith(library.playlistTitle) }).click();
+	await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
 	await surface.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true }).click();
 	await surface.getByRole('radio', { name: LIBRARY_FILTER_LABELS.playlists }).click();
-	await surface.getByRole('button', { name: nameStartingWith(library.playlistTitle) }).click();
+	await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
 	const entryRows = playableRows(page);
 	await expect(entryRows).toHaveText([
