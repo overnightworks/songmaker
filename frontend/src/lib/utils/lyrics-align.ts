@@ -1,20 +1,54 @@
 // Deterministic lyric↔Whisper-cue alignment (issue #45, contract confirmed
-// on #52). Pure and offline-testable: no player state, no DOM coupling. The
-// Now Playing lyrics column is the sole consumer.
+// on #52, word timestamps added on #142). Pure and offline-testable: no
+// player state, no DOM coupling. The Now Playing lyrics column is the sole
+// consumer. scripts/lyric_alignment_golden.py holds the reference
+// implementation both paths are pinned against.
 //
-// greedy_monotone: cues are assigned to lyric lines in playback-time order,
-// each cue to at most one still-unassigned line, never revisiting an
-// earlier line. A cue is skipped (no match) when its best candidate falls
-// below MIN_RATIO, or when the best and the best differently-worded
-// competitor are too close to call (AMBIGUITY_MARGIN) — identical-text
-// repeats (e.g. a chorus) are never competitors to each other, so a
-// repeated line is never blocked from matching by its own echo.
+// Two paths, chosen by what the take was scored with:
+//
+// words — a take scored with word timestamps carries a word stream. Lyric
+// lines are walked in order and each one takes the best-matching run of
+// still-unconsumed words, so the interval is the line's own first…last sung
+// word. The cursor never moves backwards.
+//
+// cue windows (fallback) — a take scored before word timestamps carries only
+// segment cues, and a segment follows breathing pauses rather than line
+// breaks, so one cue routinely covers up to three lyric lines. Cues are
+// walked in playback order and each takes the best-matching run of up to
+// three still-unconsumed lines, whose intervals split the cue span in
+// proportion to their length. That split is an approximation within a span
+// we know was sung — only a re-score buys real per-line timing.
+//
+// Both paths share the same accept rule: the best candidate must clear
+// MIN_RATIO, and it must beat every rival — a candidate that neither
+// overlaps it nor merely echoes its words — by AMBIGUITY_MARGIN. An echo is
+// a candidate whose text contains the winner's or is contained in it: the
+// same phrase sung twice, or the same phrase with a shifted boundary. Those
+// cannot say where the line was sung, and under a forward-only cursor the
+// earliest reading is the right one, so a repeated chorus is never blocked
+// by its own repeat. Anything short of that leaves the line dark: a missed
+// highlight is a gap, a wrong one is a lie.
 import type { WhisperCue } from '$lib/api/types';
 import { normalizeLyricsToken } from './lyrics-normalize';
 import { SequenceMatcher } from './sequence-matcher';
 
 const MIN_RATIO = 0.72;
 const AMBIGUITY_MARGIN = 0.12;
+const MAX_WINDOW_LINES = 3;
+// A line whose rendition does not begin within this many transcript words of
+// the previous line's last word counts as not sung. Consecutive lines follow
+// each other directly in the stream, so this is room for roughly three lines
+// of adlibs or skipped text — and it keeps the search linear in the length of
+// the take instead of quadratic.
+const WORD_STREAM_LOOKAHEAD = 24;
+// A candidate scoring below this can neither win nor, as a rival, block the
+// winner, so it never has to be looked at. ratio() is 2 · matched /
+// (lengthA + lengthB), which bounds that score by length alone: only
+// candidates within these factors of the text they are scored against can
+// reach it. Skipping the rest is exact, not a heuristic.
+const RELEVANT_RATIO = MIN_RATIO - AMBIGUITY_MARGIN;
+const LENGTH_FACTOR_MIN = RELEVANT_RATIO / (2 - RELEVANT_RATIO);
+const LENGTH_FACTOR_MAX = (2 - RELEVANT_RATIO) / RELEVANT_RATIO;
 
 const SECTION_MARKER = /^\[[^[\]]+\]$/;
 
@@ -32,6 +66,22 @@ interface PreparedCue {
 	start: number;
 	end: number;
 	normalizedText: string;
+	words: PreparedWord[];
+}
+
+interface PreparedWord {
+	start: number;
+	end: number;
+	normalizedText: string;
+}
+
+// One run of consecutive units (words, or lyric lines) scored against the
+// text it is a candidate for. `from` and `to` are inclusive unit indices.
+interface Candidate {
+	from: number;
+	to: number;
+	text: string;
+	score: number;
 }
 
 function splitLyricsLines(lyrics: string): string[] {
@@ -53,49 +103,150 @@ function prepareCues(cues: WhisperCue[]): PreparedCue[] {
 		.map(({ cue }) => ({
 			start: cue.start,
 			end: cue.end,
-			normalizedText: normalizeLyricsToken(cue.text)
+			normalizedText: normalizeLyricsToken(cue.text),
+			words: prepareWords(cue)
 		}))
 		.filter((cue) => cue.normalizedText.length > 0);
 }
 
-function ratio(cueText: string, lineText: string): number {
-	return new SequenceMatcher(cueText, lineText).ratio();
+function prepareWords(cue: WhisperCue): PreparedWord[] {
+	if (!cue.words) return [];
+	return cue.words
+		.map((word) => ({
+			start: word.start,
+			end: word.end,
+			normalizedText: normalizeLyricsToken(word.text)
+		}))
+		.filter((word) => word.normalizedText.length > 0);
 }
 
-// Searches candidateLineIndices from floorPos onward for the best-matching
-// line for one cue. Returns the winning position within candidateLineIndices
-// (not the line index itself), or null when no line clears MIN_RATIO or the
-// match is ambiguous. Each remaining line is scored once into `scores`; best
-// and second-best are both derived from that single pass.
-function chooseCandidatePosition(
-	candidateLineIndices: number[],
-	floorPos: number,
-	normalizedLines: string[],
-	cueNormalizedText: string
-): number | null {
-	const scores = candidateLineIndices
-		.slice(floorPos)
-		.map((lineIndex) => ratio(cueNormalizedText, normalizedLines[lineIndex]));
+function ratio(transcribedText: string, lyricText: string): number {
+	return new SequenceMatcher(transcribedText, lyricText).ratio();
+}
 
-	let bestOffset: number | null = null;
-	let bestScore = -Infinity;
-	for (let offset = 0; offset < scores.length; offset++) {
-		if (scores[offset] > bestScore) {
-			bestScore = scores[offset];
-			bestOffset = offset;
+// Every run of up to `maxUnits` consecutive units starting at or after
+// `firstStart` and before `startLimit`, scored against a text of
+// `targetLength` characters — runs that length alone rules out are skipped.
+function collectCandidates(
+	unitTexts: string[],
+	firstStart: number,
+	startLimit: number,
+	maxUnits: number,
+	targetLength: number,
+	score: (candidateText: string) => number
+): Candidate[] {
+	const minLength = targetLength * LENGTH_FACTOR_MIN;
+	const maxLength = targetLength * LENGTH_FACTOR_MAX;
+	const candidates: Candidate[] = [];
+
+	for (let from = firstStart; from < startLimit; from++) {
+		let text = '';
+		for (let to = from; to < unitTexts.length && to - from < maxUnits; to++) {
+			text = to === from ? unitTexts[to] : `${text} ${unitTexts[to]}`;
+			if (text.length > maxLength) break;
+			if (text.length < minLength) continue;
+			candidates.push({ from, to, text, score: score(text) });
 		}
 	}
-	if (bestOffset === null || bestScore < MIN_RATIO) return null;
+	return candidates;
+}
 
-	const bestText = normalizedLines[candidateLineIndices[floorPos + bestOffset]];
-	let secondBestScore = -Infinity;
-	for (let offset = 0; offset < scores.length; offset++) {
-		if (normalizedLines[candidateLineIndices[floorPos + offset]] === bestText) continue;
-		if (scores[offset] > secondBestScore) secondBestScore = scores[offset];
+function overlaps(candidate: Candidate, other: Candidate): boolean {
+	return candidate.from <= other.to && candidate.to >= other.from;
+}
+
+function echoes(candidateText: string, bestText: string): boolean {
+	return bestText.includes(candidateText) || candidateText.includes(bestText);
+}
+
+function chooseCandidate(candidates: Candidate[]): Candidate | null {
+	let best: Candidate | null = null;
+	for (const candidate of candidates) {
+		if (best === null || candidate.score > best.score) best = candidate;
 	}
-	if (secondBestScore !== -Infinity && bestScore - secondBestScore < AMBIGUITY_MARGIN) return null;
+	if (best === null || best.score < MIN_RATIO) return null;
 
-	return floorPos + bestOffset;
+	let rivalScore = -Infinity;
+	for (const candidate of candidates) {
+		if (overlaps(candidate, best) || echoes(candidate.text, best.text)) continue;
+		if (candidate.score > rivalScore) rivalScore = candidate.score;
+	}
+	if (rivalScore !== -Infinity && best.score - rivalScore < AMBIGUITY_MARGIN) return null;
+
+	return best;
+}
+
+function alignAgainstWords(
+	words: PreparedWord[],
+	lineTexts: string[],
+	assign: (linePosition: number, interval: LyricLineInterval) => void
+): void {
+	const wordTexts = words.map((word) => word.normalizedText);
+
+	let cursor = 0;
+	for (let linePosition = 0; linePosition < lineTexts.length; linePosition++) {
+		const lineText = lineTexts[linePosition];
+		const chosen = chooseCandidate(
+			collectCandidates(
+				wordTexts,
+				cursor,
+				Math.min(wordTexts.length, cursor + WORD_STREAM_LOOKAHEAD),
+				wordTexts.length,
+				lineText.length,
+				(candidateText) => ratio(candidateText, lineText)
+			)
+		);
+		if (chosen === null) continue;
+		assign(linePosition, { start: words[chosen.from].start, end: words[chosen.to].end });
+		cursor = chosen.to + 1;
+	}
+}
+
+function alignAgainstCueWindows(
+	cues: PreparedCue[],
+	lineTexts: string[],
+	assign: (linePosition: number, interval: LyricLineInterval) => void
+): void {
+	let floorPosition = 0;
+	for (const cue of cues) {
+		if (floorPosition >= lineTexts.length) break;
+		const chosen = chooseCandidate(
+			collectCandidates(
+				lineTexts,
+				floorPosition,
+				lineTexts.length,
+				MAX_WINDOW_LINES,
+				cue.normalizedText.length,
+				(candidateText) => ratio(cue.normalizedText, candidateText)
+			)
+		);
+		if (chosen === null) continue;
+		splitCueSpan(cue, lineTexts, chosen, assign);
+		floorPosition = chosen.to + 1;
+	}
+}
+
+function splitCueSpan(
+	cue: PreparedCue,
+	lineTexts: string[],
+	window: Candidate,
+	assign: (linePosition: number, interval: LyricLineInterval) => void
+): void {
+	let totalLength = 0;
+	for (let position = window.from; position <= window.to; position++) {
+		totalLength += lineTexts[position].length;
+	}
+	const span = cue.end - cue.start;
+
+	let consumedLength = 0;
+	for (let position = window.from; position <= window.to; position++) {
+		const start =
+			position === window.from ? cue.start : cue.start + (span * consumedLength) / totalLength;
+		consumedLength += lineTexts[position].length;
+		const end =
+			position === window.to ? cue.end : cue.start + (span * consumedLength) / totalLength;
+		assign(position, { start, end });
+	}
 }
 
 // Maps whisper_cues onto the display lines of `lyrics` (split with the same
@@ -110,23 +261,17 @@ export function alignLyricsToCues(lyrics: string, cues: WhisperCue[]): AlignedLy
 	const candidateLineIndices = rawLines
 		.map((_, index) => index)
 		.filter((index) => normalizedLines[index].length > 0);
+	const lineTexts = candidateLineIndices.map((index) => normalizedLines[index]);
 
 	const intervals: (LyricLineInterval | null)[] = new Array(rawLines.length).fill(null);
-	const preparedCues = prepareCues(cues);
+	const assign = (linePosition: number, interval: LyricLineInterval) => {
+		intervals[candidateLineIndices[linePosition]] = interval;
+	};
 
-	let floorPos = 0;
-	for (const cue of preparedCues) {
-		if (floorPos >= candidateLineIndices.length) break;
-		const chosenPos = chooseCandidatePosition(
-			candidateLineIndices,
-			floorPos,
-			normalizedLines,
-			cue.normalizedText
-		);
-		if (chosenPos === null) continue;
-		intervals[candidateLineIndices[chosenPos]] = { start: cue.start, end: cue.end };
-		floorPos = chosenPos + 1;
-	}
+	const preparedCues = prepareCues(cues);
+	const words = preparedCues.flatMap((cue) => cue.words);
+	if (words.length > 0) alignAgainstWords(words, lineTexts, assign);
+	else alignAgainstCueWindows(preparedCues, lineTexts, assign);
 
 	return rawLines.map((text, index) => ({ text, interval: intervals[index] }));
 }

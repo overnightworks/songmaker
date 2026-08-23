@@ -359,8 +359,34 @@ def test_get_generation_returns_typed_whisper_cues(client: TestClient) -> None:
     body = resp.json()
     assert body["whisper_text"] == "hello world"
     assert body["whisper_cues"] == [
-        {"start": 0.0, "end": 1.25, "text": "hello world"},
+        {"start": 0.0, "end": 1.25, "text": "hello world", "words": None},
     ]
+
+
+def test_get_generation_returns_word_cues_of_a_take_scored_with_them(
+    client: TestClient,
+) -> None:
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        gen = session.query(Generation).filter_by(id="g1").one()
+        gen.whisper_cues = [{
+            "start": 0.0, "end": 1.25, "text": "hello world",
+            "words": [
+                {"start": 0.0, "end": 0.6, "text": "hello"},
+                {"start": 0.6, "end": 1.25, "text": "world"},
+            ],
+        }]
+        session.commit()
+
+    resp = client.get("/api/generations/g1")
+    assert resp.status_code == 200
+    assert resp.json()["whisper_cues"] == [{
+        "start": 0.0, "end": 1.25, "text": "hello world",
+        "words": [
+            {"start": 0.0, "end": 0.6, "text": "hello"},
+            {"start": 0.6, "end": 1.25, "text": "world"},
+        ],
+    }]
 
 
 def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path) -> None:

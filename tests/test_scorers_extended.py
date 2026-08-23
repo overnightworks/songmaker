@@ -12,7 +12,7 @@ import pytest
 librosa = pytest.importorskip("librosa")
 
 from conftest import read_wav, write_wav
-from songmaker_cli.api_models.whisper import WhisperCue
+from songmaker_cli.api_models.whisper import WhisperCue, WhisperWordCue
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import AudioBoxScore, SpectralQualityScore, TextAccuracyScore
 from songmaker_cli.scoring.pipeline import AudioData
@@ -273,11 +273,22 @@ def test_get_whisper_model_default_cache() -> None:
     ta.clear_cache()
 
 
-def _whisper_segment(text: str, start: float, end: float) -> MagicMock:
+def _whisper_word(text: str, start: float, end: float) -> MagicMock:
+    word = MagicMock()
+    word.word = text
+    word.start = start
+    word.end = end
+    return word
+
+
+def _whisper_segment(
+    text: str, start: float, end: float, words: list[MagicMock] | None = None,
+) -> MagicMock:
     seg = MagicMock()
     seg.text = text
     seg.start = start
     seg.end = end
+    seg.words = words
     return seg
 
 
@@ -313,6 +324,97 @@ def test_transcribe_keeps_segment_start_end() -> None:
         WhisperCue(start=0.12, end=0.80, text="hello"),
         WhisperCue(start=0.80, end=1.64, text="world"),
     ]
+
+
+def test_transcribe_asks_whisper_for_word_timestamps() -> None:
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (iter([]), MagicMock(language="en"))
+
+    _transcribe(Path("test.mp3"), "en", mock_model)
+
+    assert mock_model.transcribe.call_args.kwargs["word_timestamps"] is True
+
+
+def test_transcribe_keeps_the_word_timestamps_of_a_segment() -> None:
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (
+        iter([_whisper_segment("hello world", 0.0, 1.25, [
+            _whisper_word(" hello", 0.0, 0.6),
+            _whisper_word(" world", 0.6, 1.25),
+        ])]),
+        MagicMock(language="en"),
+    )
+
+    _text, cues, _lang = _transcribe(Path("test.mp3"), "en", mock_model)
+
+    assert cues == [WhisperCue(start=0.0, end=1.25, text="hello world", words=[
+        WhisperWordCue(start=0.0, end=0.6, text="hello"),
+        WhisperWordCue(start=0.6, end=1.25, text="world"),
+    ])]
+
+
+def test_transcribe_leaves_a_segment_without_word_timestamps_wordless() -> None:
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (
+        iter([_whisper_segment("hello world", 0.0, 1.25)]),
+        MagicMock(language="en"),
+    )
+
+    _text, cues, _lang = _transcribe(Path("test.mp3"), "en", mock_model)
+
+    assert cues[0].words is None
+
+
+def test_transcribe_drops_blank_words_and_keeps_the_rest() -> None:
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (
+        iter([_whisper_segment("hello", 0.0, 1.0, [
+            _whisper_word("   ", 0.0, 0.2),
+            _whisper_word(" hello", 0.2, 1.0),
+        ])]),
+        MagicMock(language="en"),
+    )
+
+    _text, cues, _lang = _transcribe(Path("test.mp3"), "en", mock_model)
+
+    assert cues[0].words == [WhisperWordCue(start=0.2, end=1.0, text="hello")]
+
+
+def test_transcribe_leaves_a_segment_of_only_blank_words_wordless() -> None:
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (
+        iter([_whisper_segment("hello", 0.0, 1.0, [_whisper_word("  ", 0.0, 1.0)])]),
+        MagicMock(language="en"),
+    )
+
+    _text, cues, _lang = _transcribe(Path("test.mp3"), "en", mock_model)
+
+    assert cues[0].words is None
+
+
+def test_transcribe_missing_word_timing_is_rejected() -> None:
+    from songmaker_cli.scoring.text_accuracy import _transcribe
+
+    word = _whisper_word(" hello", 0.0, 1.0)
+    word.end = None
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = (
+        iter([_whisper_segment("hello", 0.0, 1.0, [word])]),
+        MagicMock(language="en"),
+    )
+
+    with pytest.raises(ValueError, match="Whisper word is missing start or end"):
+        _transcribe(Path("test.mp3"), "en", mock_model)
 
 
 def test_transcribe_skips_empty_text_segments() -> None:

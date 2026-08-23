@@ -14,6 +14,17 @@ function cue(start: number, end: number, text: string): WhisperCue {
 	return { start, end, text };
 }
 
+// One segment carrying word timestamps: a word every `secondsPerWord`
+// seconds, as a take scored with word timestamps delivers them.
+function sungCue(start: number, secondsPerWord: number, text: string): WhisperCue {
+	const words = text.split(' ').map((word, index) => ({
+		start: start + index * secondsPerWord,
+		end: start + (index + 1) * secondsPerWord,
+		text: word
+	}));
+	return { start: words[0].start, end: words[words.length - 1].end, text, words };
+}
+
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
 
@@ -93,6 +104,18 @@ describe('NowPlayingLyrics', () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];
 		audioPlayer.currentTime = 1.5;
+
+		await render({ lyrics, cues, whisperText: null });
+
+		const lines = target.querySelectorAll('.lyrics-line');
+		expect(lines[0].classList.contains('active')).toBe(false);
+		expect(lines[1].classList.contains('active')).toBe(true);
+	});
+
+	it('highlights each line at its own words when one segment covers both', async () => {
+		const lyrics = [LINE_1, LINE_2].join('\n');
+		const cues = [sungCue(0, 0.5, `${LINE_1} ${LINE_2}`)];
+		audioPlayer.currentTime = 3;
 
 		await render({ lyrics, cues, whisperText: null });
 
