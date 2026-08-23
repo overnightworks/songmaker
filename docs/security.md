@@ -178,6 +178,14 @@ closes the owner before the logout request.
 - **CLI backend**: All known tools disabled via `--disallowedTools` denylist. Note: `--tools ""` and `--allowedTools ""` do not reliably block tools in current Claude CLI versions, so a comprehensive denylist is used instead. This list must be updated when new tools are added to Claude Code.
 - **API backend**: Uses the Anthropic Python SDK with `max_tokens=1024` to limit response cost.
 
+## Child Process Secret Scrubbing
+
+Two packages spawn external child processes that must not inherit every secret in the parent's environment: `songmaker_cli.claude.provider` (the Claude CLI, for chat) and `acestep_worker.subprocess_runner` (the ACE-Step HTTP subprocess). Both scrub `os.environ.copy()` with a `SECRET_ENV_KEYS` tuple before passing `env=` to the child, covering `ANTHROPIC_API_KEY`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `POSTGRES_PASSWORD`, and `HF_TOKEN`.
+
+`acestep_worker` cannot import from `songmaker_cli` (engine packages are independent — see CLAUDE.md), so each package keeps its own `SECRET_ENV_KEYS` tuple: `songmaker_cli/constants.py` and `acestep_worker/constants.py`. `tests/test_secret_scrub_parity.py` imports both and asserts they name the same set, so the two cannot silently drift apart the way they did before issue #157 (the Claude CLI child inherited `SONGMAKER_INTERNAL_TOKEN` because the two lists disagreed).
+
+`HF_TOKEN` is scrubbed from the ACE-Step subprocess even though the acestep-worker *container* legitimately holds it: `acestep_worker.downloads.hf_snapshot_download` reads `HF_TOKEN` (via `WorkerSettings.hf_token`) to authenticate model downloads from Hugging Face, but that download runs in-process in `acestep_worker` before the ACE-Step subprocess is ever started. The subprocess itself never calls Hugging Face and has no legitimate use for the token, so it gets no exception — see `acestep_worker/constants.py` for the reasoning next to the list.
+
 ## Admin Session Management
 
 The admin sessions endpoint (`GET /api/admin/sessions`) returns SHA256 hashes of session tokens, not the raw tokens. This prevents session hijacking via the admin panel. Force-logout (`DELETE /api/admin/sessions/{hash}`) looks up sessions by hash.
