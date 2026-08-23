@@ -6,7 +6,7 @@ import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { libraryBrowse } from '$lib/stores/librarySearch';
 import { albumList, songList } from '$lib/stores/player';
-import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
+import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 import { RAIL_SUMMARY_LOADING } from '$lib/constants';
 
 function readyLibraryBrowseState() {
@@ -72,7 +72,7 @@ async function render(): Promise<HTMLElement> {
 beforeEach(() => {
 	fetchPlaylists.mockReset().mockResolvedValue([]);
 	resetLibraryContextForTests();
-	resetPlaylistsForTests();
+	resetPlaylists();
 	albumList.set([]);
 	songList.set([]);
 	playlistList.set([]);
@@ -88,7 +88,7 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	resetLibraryContextForTests();
-	resetPlaylistsForTests();
+	resetPlaylists();
 });
 
 describe('Rail', () => {

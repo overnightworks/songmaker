@@ -6,6 +6,8 @@ import {
 	AUTH_CHECK_RATE_LIMITED_ERROR,
 	AUTH_CHECK_SERVER_ERROR
 } from '$lib/constants/auth';
+import { resetPlaylists } from '$lib/stores/playlists';
+import { resetShares } from '$lib/stores/shares';
 
 export const currentUser = writable<AuthUser | null>(null);
 export const authLoading = writable(true);
@@ -80,8 +82,14 @@ export async function login(username: string, password: string): Promise<AuthUse
 	}
 }
 
+// Every per-user cache (playlist detail cache, share count/inventory
+// cache) lives in module state, not the session -- without this, a
+// logout/401 followed by a different user's login on the same tab could
+// briefly serve the previous user's cached playlist or share data.
 export function clearAuth(): void {
 	currentUser.set(null);
+	resetPlaylists();
+	resetShares();
 }
 
 export async function logout(): Promise<void> {
