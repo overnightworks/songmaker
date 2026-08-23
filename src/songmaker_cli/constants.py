@@ -258,6 +258,9 @@ RATE_LIMIT_SETTING_KEYS = frozenset({
     SETTING_MAX_USER_ACTIVE_JOBS,
 })
 
+# Response compression
+GZIP_MINIMUM_SIZE_BYTES: Final[int] = 1024
+
 # SSE streaming
 SSE_POLL_INTERVAL_SECONDS = 1
 RESOURCE_EVENT_STREAM_PATH: Final[str] = "/api/resource-events/stream"
