@@ -1048,7 +1048,9 @@ export async function playPrevSong(): Promise<void> {
 // all archived is skipped rather than taken as proof the album is
 // unplayable. Returns null both when nothing is playable and when a newer
 // play start superseded this one — the caller separates the two with its
-// own playStartIsCurrent check.
+// own playStartIsCurrent check. A rejected load (e.g. 429) is left
+// uncaught here and propagates to the caller, which mirrors
+// playAlbumSong's handling of the same call.
 async function firstPlayableAlbumTake(
 	albumId: string,
 	seq: number
@@ -1074,7 +1076,15 @@ export async function playAlbum(albumId: string): Promise<void> {
 		await loadSongsForAlbum(albumId);
 		if (!playStartIsCurrent(seq)) return;
 	}
-	const start = await firstPlayableAlbumTake(albumId, seq);
+	let start: { song: SongItem; gen: GenerationItem } | null;
+	try {
+		start = await firstPlayableAlbumTake(albumId, seq);
+	} catch (err) {
+		if (!playStartIsCurrent(seq)) return;
+		playStartNotice.set('idle');
+		addToast(albumSongsErrorMessage(err), 'error');
+		return;
+	}
 	if (!playStartIsCurrent(seq)) return;
 	if (!start) {
 		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId));

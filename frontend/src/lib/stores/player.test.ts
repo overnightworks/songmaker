@@ -1890,6 +1890,56 @@ describe('playAlbum start track', () => {
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(playStartNotice)).toBe('empty');
 	});
+
+	it('toasts and returns the notice to idle when a take load is rejected', async () => {
+		songList.set([makeSong({ id: 's1', track_number: 1, generation_count: 1, generations: [] })]);
+		vi.mocked(fetchSong).mockRejectedValueOnce(
+			new ApiError(429, 'Too many requests', '/api/songs/s1')
+		);
+
+		await playAlbum('a1');
+
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(playStartNotice)).toBe('idle');
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: 'Too many requests', type: 'error' })
+		]);
+	});
+
+	it('leaves a superseded start silent when its take load is rejected', async () => {
+		songList.set([
+			makeSong({ id: 's1', album_id: 'a1', track_number: 1, generation_count: 1, generations: [] }),
+			makeSong({
+				id: 's2',
+				album_id: 'a2',
+				title: 'Two',
+				track_number: 1,
+				generations: [makeGen({ id: 'g2', song_id: 's2', is_picked: true })]
+			})
+		]);
+		let rejectFirst: ((err: unknown) => void) | undefined;
+		vi.mocked(fetchSong).mockImplementationOnce(
+			() =>
+				new Promise((_resolve, reject) => {
+					rejectFirst = reject;
+				})
+		);
+
+		const first = playAlbum('a1');
+		await vi.waitFor(() => expect(rejectFirst).toEqual(expect.any(Function)));
+
+		await playAlbum('a2');
+		rejectFirst?.(new ApiError(429, 'Too many requests', '/api/songs/s1'));
+		await first;
+
+		expect(get(toasts)).toEqual([]);
+		expect(get(playStartNotice)).toBe('idle');
+		expect(audioPlayer.load).toHaveBeenCalledTimes(1);
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) }),
+			{ restart: true }
+		);
+	});
 });
 
 describe('shuffle rebuilds the playing queue', () => {
