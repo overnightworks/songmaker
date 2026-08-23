@@ -50,9 +50,29 @@
 	// The lyrics box is only as tall as the column allows — in the 400px docked
 	// panel long lyrics are cut at its bottom edge, mid-line, which reads as
 	// broken rather than as scrollable. The fade names the cut as "there is
-	// more below"; scrolling re-answers the same question, and a new take
-	// re-measures from scratch (#163/8).
-	let moreBelow = $derived(renderedLineCount > 0 && overflowsBelow(container));
+	// more below" and lifts at the last line (#163/8).
+	let moreBelow = $state(false);
+
+	// Three things change the answer: scrolling (handled on the element), new
+	// lyrics, and the box changing size — docking, expanding, collapsing or a
+	// rotated phone all resize it without remounting anything, so a measurement
+	// taken once would keep a fade over text that now fits, or leave a cut edge
+	// unmarked.
+	$effect(() => {
+		const el = container;
+		const lines = renderedLineCount;
+		if (!el || lines === 0) {
+			moreBelow = false;
+			return;
+		}
+		const measure = () => {
+			moreBelow = overflowsBelow(el);
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
 
 	$effect(() => {
 		const index = scrollTargetIndex;

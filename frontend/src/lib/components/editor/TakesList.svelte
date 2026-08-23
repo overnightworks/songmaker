@@ -30,7 +30,7 @@
 	// path to the same mutation back in the tree.
 	import { rescore, rescoringTakeIds } from '$lib/stores/takeActions';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { scoreColor } from '$lib/utils/scores';
+	import { formatScore, scoreColor, scoreReadings } from '$lib/utils/scores';
 	import { getGenerationActions } from '$lib/contexts/generation-actions';
 	import {
 		selectionMode,
@@ -134,38 +134,26 @@
 		return song.generations.filter((g) => g.version_number === versionNumber).length;
 	}
 
-	// The row has room for one number, so it shows the take's headline score:
-	// the listener's own rating when they gave one, otherwise the
-	// highest-ranked automatic score the take actually carries. "Carries"
-	// means the scorer produced a value — a take scored by only some of the
-	// scorers still has a headline, instead of falling back to no pill at all
-	// (#163/4). Ranked as the This-take panel reads, so row and panel never
-	// disagree about what matters. BPM is not in the list: it names the tempo
-	// that was detected, not how good the take is.
-	const HEADLINE_SCORES = [
-		{ key: 'user_rating', label: 'Rating', digits: 0 },
-		{ key: 'text_accuracy', label: 'Lyrics sung', digits: 0 },
-		{ key: 'dynamics', label: 'Dynamics', digits: 0 },
-		{ key: 'audiobox_quality', label: 'Quality', digits: 2 },
-		{ key: 'audiobox_enjoyment', label: 'Enjoyment', digits: 2 },
-		{ key: 'lyrical_coherence', label: 'Coherence', digits: 0 }
-	] as const;
-
 	interface HeadlineScore {
 		label: string;
 		text: string;
 		color: string;
 	}
 
+	// The row has room for one number, so it shows the take's headline score:
+	// the highest-ranked metric the take actually carries, read off the shared
+	// table in utils/scores.ts — the listener's own rating when they gave one,
+	// otherwise the most telling automatic score. A take only some scorers have
+	// reached still gets a pill instead of nothing (#163/4).
 	function headlineScore(gen: GenerationItem): HeadlineScore | null {
-		const scores = gen.scores;
-		if (!scores) return null;
-		for (const { key, label, digits } of HEADLINE_SCORES) {
-			const value = scores[key];
-			if (value === undefined) continue;
-			return { label, text: value.toFixed(digits), color: scoreColor(key, value) };
-		}
-		return null;
+		const [reading] = scoreReadings(gen.scores);
+		if (!reading) return null;
+		const { metric, value } = reading;
+		return {
+			label: metric.label,
+			text: formatScore(metric, value, 'pill'),
+			color: scoreColor(metric.key, value)
+		};
 	}
 
 	function formatDuration(gen: GenerationItem): string | null {

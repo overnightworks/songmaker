@@ -10,18 +10,13 @@ import {
 	HITBOX_FREQUENT_PX,
 	collectionRowPlayLabel
 } from '$lib/constants';
-import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
-
-// jsdom reports a length declared as a custom property verbatim, so a
-// hitbox measurement has to resolve the token itself.
-function px(value: string): number {
-	const resolved = value.startsWith('var(')
-		? getComputedStyle(document.documentElement)
-				.getPropertyValue(value.slice('var('.length, -1).trim())
-				.trim()
-		: value;
-	return Number.parseFloat(resolved);
-}
+import {
+	clearHitboxStyles,
+	clearPointer,
+	injectHitboxStyles,
+	minHeightPx,
+	setPointer
+} from '$lib/test-utils/hitbox';
 import { albumList, selectedAlbumId, songList } from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 
@@ -174,6 +169,8 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	clearHitboxStyles();
+	clearPointer();
 	selectedAlbumId.set(null);
 	albumList.set([]);
 	songList.set([]);
@@ -219,17 +216,12 @@ describe('AlbumDetailView header', () => {
 	it('sizes Play to the frequent hitbox on a coarse pointer', async () => {
 		// #163/6: the album header's Play is the shortest path to hearing the
 		// album, and on a phone it has to be reachable with a thumb.
-		const sheet = document.createElement('style');
-		sheet.dataset.hitboxStyles = 'true';
-		sheet.textContent = hitboxCss;
-		document.head.append(sheet);
+		injectHitboxStyles();
 		const target = await renderDetail();
 		const play = requireElement(target, '.play-btn');
-		document.documentElement.dataset.pointer = 'coarse';
+		setPointer('coarse');
 
-		expect(px(getComputedStyle(play).minHeight)).toBe(HITBOX_FREQUENT_PX);
-		sheet.remove();
-		delete document.documentElement.dataset.pointer;
+		expect(minHeightPx(play, 'album Play')).toBe(HITBOX_FREQUENT_PX);
 	});
 
 	it('names the object and lists Share, Cover, Rename, Add to playlist, Delete in the menu', async () => {

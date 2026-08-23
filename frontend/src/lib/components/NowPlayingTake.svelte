@@ -38,7 +38,7 @@
 	} from '$lib/stores/takeActions';
 	import { computeDiffByKey } from '$lib/utils/diff';
 	import { normalizeLyricsToken } from '$lib/utils/lyrics-normalize';
-	import { scoreColor } from '$lib/utils/scores';
+	import { formatScore, scoreColor, scoreReadings } from '$lib/utils/scores';
 	import Icon from './Icon.svelte';
 
 	let {
@@ -64,46 +64,18 @@
 	const hasCues = $derived((generation.whisper_cues?.length ?? 0) > 0);
 	const rescoring = $derived($rescoringTakeIds.has(generation.id));
 
+	// One table, both take surfaces: the same metrics under the same names and
+	// in the same order as the editor row's score pill (utils/scores.ts). The
+	// panel has room for each scorer's own scale, so it keeps it.
 	const scoreEntries = $derived.by((): ScoreEntry[] => {
-		if (!scores) return [];
-		const entries: ScoreEntry[] = [];
-		if (scores.user_rating !== undefined)
-			entries.push({
-				label: 'Rating',
-				value: scores.user_rating.toFixed(0),
-				color: scoreColor('user_rating', scores.user_rating)
-			});
-		if (scores.text_accuracy !== undefined)
-			entries.push({
-				label: 'Lyrics sung',
-				value: scores.text_accuracy.toFixed(0) + '%',
-				color: scoreColor('text_accuracy', scores.text_accuracy)
-			});
-		if (scores.dynamics !== undefined)
-			entries.push({
-				label: 'Dynamics',
-				value: scores.dynamics.toFixed(0),
-				color: scoreColor('dynamics', scores.dynamics)
-			});
-		if (scores.audiobox_quality !== undefined)
-			entries.push({
-				label: 'Quality',
-				value: scores.audiobox_quality.toFixed(2),
-				color: scoreColor('audiobox_quality', scores.audiobox_quality)
-			});
-		if (scores.audiobox_enjoyment !== undefined)
-			entries.push({
-				label: 'Enjoyment',
-				value: scores.audiobox_enjoyment.toFixed(2),
-				color: scoreColor('audiobox_enjoyment', scores.audiobox_enjoyment)
-			});
-		if (scores.lyrical_coherence !== undefined)
-			entries.push({
-				label: 'Coherence',
-				value: String(scores.lyrical_coherence),
-				color: scoreColor('lyrical_coherence', scores.lyrical_coherence)
-			});
-		if (scores.bpm_detected !== undefined) {
+		const entries: ScoreEntry[] = scoreReadings(scores).map(({ metric, value }) => ({
+			label: metric.label,
+			value: formatScore(metric, value, 'panel'),
+			color: scoreColor(metric.key, value)
+		}));
+		// BPM colours itself from how far the take drifted from the requested
+		// tempo, not from a score threshold, so it stays the panel's own entry.
+		if (scores?.bpm_detected !== undefined) {
 			const dev = scores.bpm_deviation ?? 0;
 			entries.push({
 				label: 'BPM',

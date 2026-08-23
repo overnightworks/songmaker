@@ -21,7 +21,15 @@ import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collecti
 import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { currentUser, authLoading } from '$lib/stores/auth';
 import { closeSidebar, theme, toggleSidebar } from '$lib/stores/ui';
-import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
+import { HITBOX_STYLE } from '$lib/styles/hitbox';
+import {
+	clearHitboxStyles,
+	clearPointer,
+	injectHitboxStyles,
+	minHeightPx,
+	minSquarePx,
+	setPointer
+} from '$lib/test-utils/hitbox';
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
@@ -113,8 +121,6 @@ import PlayerBar from './PlayerBar.svelte';
 import ThemeToggle from './ThemeToggle.svelte';
 import Layout from '../../routes/+layout.svelte';
 
-type PointerKind = 'coarse' | 'fine';
-
 const INVENTORY = [
 	{ name: 'theme-toggle', selector: '[data-hitbox="frequent"][aria-label="Toggle theme"]' },
 	{
@@ -148,39 +154,6 @@ const INVENTORY = [
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-function setPointer(kind: PointerKind): void {
-	document.documentElement.dataset.pointer = kind;
-}
-
-function clearPointer(): void {
-	delete document.documentElement.dataset.pointer;
-}
-
-function parsePx(value: string, label: string): number {
-	const resolved = value.startsWith('var(')
-		? getComputedStyle(document.documentElement)
-				.getPropertyValue(value.slice('var('.length, -1).trim())
-				.trim()
-		: value;
-	const px = Number.parseFloat(resolved);
-	if (!Number.isFinite(px)) {
-		throw new Error(`${label} is not a pixel length: ${value}`);
-	}
-	return px;
-}
-
-function minBox(
-	el: Element,
-	name: string,
-	heightOnly = false
-): { width: number | null; height: number } {
-	const style = getComputedStyle(el);
-	return {
-		width: heightOnly ? null : parsePx(style.minWidth, `${name} min-width`),
-		height: parsePx(style.minHeight, `${name} min-height`)
-	};
-}
-
 function parseGap(parent: Element): number {
 	const value = getComputedStyle(parent).gap;
 	const gap = Number.parseFloat(value);
@@ -206,8 +179,7 @@ function layoutAlongParent(
 	const column = isColumn(parent);
 	let cursor = 0;
 	return items.map(({ name, el }) => {
-		const { width, height } = minBox(el, name);
-		if (width === null) throw new Error(`${name} has no measurable min-width`);
+		const { width, height } = minSquarePx(el, name);
 		const rect = column
 			? { name, left: 0, right: width, top: cursor, bottom: cursor + height }
 			: { name, left: cursor, right: cursor + width, top: 0, bottom: height };
@@ -335,10 +307,7 @@ function openEntryOverflowMenu(row: HTMLElement): void {
 }
 
 beforeEach(() => {
-	const sheet = document.createElement('style');
-	sheet.dataset.hitboxStyles = 'true';
-	sheet.textContent = hitboxCss;
-	document.head.append(sheet);
+	injectHitboxStyles();
 	resetLibrarySearchForTests();
 	resetLibraryContextForTests();
 	albumList.set([
@@ -385,6 +354,7 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	clearHitboxStyles();
 	clearPointer();
 	resetLibrarySearchForTests();
 	resetLibraryContextForTests();
@@ -454,9 +424,9 @@ describe('frequent action hitboxes', () => {
 		const style = getComputedStyle(document.documentElement);
 		expect(style.getPropertyValue('--hitbox-frequent').trim()).toBe(`${HITBOX_FREQUENT_PX}px`);
 		expect(style.getPropertyValue('--hitbox-compact').trim()).toBe(`${HITBOX_COMPACT_PX}px`);
-		expect(hitboxCss).toContain(`--hitbox-frequent: ${HITBOX_FREQUENT_PX}px`);
-		expect(hitboxCss).toContain(`--hitbox-compact: ${HITBOX_COMPACT_PX}px`);
-		expect(hitboxCss).toContain('@media (any-pointer: coarse)');
+		expect(HITBOX_STYLE).toContain(`--hitbox-frequent: ${HITBOX_FREQUENT_PX}px`);
+		expect(HITBOX_STYLE).toContain(`--hitbox-compact: ${HITBOX_COMPACT_PX}px`);
+		expect(HITBOX_STYLE).toContain('@media (any-pointer: coarse)');
 	});
 
 	it('names every frequent-action target and measures coarse and fine pointers', async () => {
@@ -479,24 +449,24 @@ describe('frequent action hitboxes', () => {
 			found.push({ name: target.name, el, shape: 'shape' in target ? target.shape : undefined });
 		}
 
-		// A labelled control's width is its label's, so only its height is
-		// measured; an icon target has to be square at both pointer sizes.
+		// A labelled control's width is its label's, so only its height is a
+		// hitbox promise; an icon target has to be square at both pointer sizes.
 		setPointer('fine');
 		for (const { name, el, shape } of found) {
-			const box = minBox(el, name, shape === 'text');
-			if (box.width !== null) {
-				expect(box.width, `${name} fine width`).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
-			}
-			expect(box.height, `${name} fine height`).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+			expect(minHeightPx(el, name), `${name} fine height`).toBeGreaterThanOrEqual(
+				HITBOX_COMPACT_PX
+			);
+			if (shape === 'text') continue;
+			expect(minSquarePx(el, name).width, `${name} fine width`).toBeGreaterThanOrEqual(
+				HITBOX_COMPACT_PX
+			);
 		}
 
 		setPointer('coarse');
 		for (const { name, el, shape } of found) {
-			const box = minBox(el, name, shape === 'text');
-			if (box.width !== null) {
-				expect(box.width, `${name} coarse width`).toBe(HITBOX_FREQUENT_PX);
-			}
-			expect(box.height, `${name} coarse height`).toBe(HITBOX_FREQUENT_PX);
+			expect(minHeightPx(el, name), `${name} coarse height`).toBe(HITBOX_FREQUENT_PX);
+			if (shape === 'text') continue;
+			expect(minSquarePx(el, name).width, `${name} coarse width`).toBe(HITBOX_FREQUENT_PX);
 		}
 
 		const siblingGroups: Array<Array<{ name: string; el: HTMLElement }>> = [];
@@ -549,12 +519,12 @@ describe('frequent action hitboxes', () => {
 		);
 
 		setPointer('coarse');
-		const coarse = minBox(newPlaylistBtn, 'new-playlist');
+		const coarse = minSquarePx(newPlaylistBtn, 'new-playlist');
 		expect(coarse.width).toBe(HITBOX_FREQUENT_PX);
 		expect(coarse.height).toBe(HITBOX_FREQUENT_PX);
 
 		setPointer('fine');
-		const fine = minBox(newPlaylistBtn, 'new-playlist');
+		const fine = minSquarePx(newPlaylistBtn, 'new-playlist');
 		expect(fine.width).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 		expect(fine.height).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 	});

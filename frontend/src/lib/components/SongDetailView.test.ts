@@ -29,7 +29,14 @@ import {
 	TAKE_AGAIN_LABEL,
 	TAKE_PLAYLIST_LABEL
 } from '$lib/constants';
-import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
+import {
+	clearHitboxStyles,
+	clearPointer,
+	injectHitboxStyles,
+	minHeightPx,
+	minSquarePx,
+	setPointer
+} from '$lib/test-utils/hitbox';
 import {
 	editGenParams,
 	editLyrics,
@@ -265,16 +272,6 @@ function stubLibraryMedia(options: { narrow: boolean; compact?: boolean }): void
 	);
 }
 
-function px(value: string): number {
-	const resolved = value.startsWith('var(')
-		? getComputedStyle(document.documentElement)
-				.getPropertyValue(value.slice('var('.length, -1).trim())
-				.trim()
-		: value;
-	const parsed = Number.parseFloat(resolved);
-	return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	return {
 		id: 'a-local',
@@ -346,7 +343,8 @@ afterEach(async () => {
 	selectedAlbumId.set(null);
 	songList.set([]);
 	albumList.set([]);
-	delete document.documentElement.dataset.pointer;
+	clearHitboxStyles();
+	clearPointer();
 	vi.unstubAllGlobals();
 });
 
@@ -411,20 +409,16 @@ describe('SongDetailView desktop vs compact layout', () => {
 
 	it('sizes the Write | Takes tabs to the frequent hitbox on a coarse pointer', async () => {
 		// #163/6: the tabs are how a phone moves through the editor at all.
-		const sheet = document.createElement('style');
-		sheet.dataset.hitboxStyles = 'true';
-		sheet.textContent = hitboxCss;
-		document.head.append(sheet);
+		injectHitboxStyles();
 		stubLibraryMedia({ narrow: false, compact: true });
 		const target = await renderView();
-		document.documentElement.dataset.pointer = 'coarse';
+		setPointer('coarse');
 
 		const tabs = Array.from(target.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
 		expect(tabs).toHaveLength(2);
 		for (const tab of tabs) {
-			expect(px(getComputedStyle(tab).minHeight), tab.textContent ?? '').toBe(HITBOX_FREQUENT_PX);
+			expect(minHeightPx(tab, tab.textContent ?? 'tab')).toBe(HITBOX_FREQUENT_PX);
 		}
-		document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	});
 });
 
@@ -732,14 +726,7 @@ describe('recipe params from a take', () => {
 
 describe('song header album rail', () => {
 	beforeEach(() => {
-		const sheet = document.createElement('style');
-		sheet.dataset.hitboxStyles = 'true';
-		sheet.textContent = hitboxCss;
-		document.head.append(sheet);
-	});
-
-	afterEach(() => {
-		document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
+		injectHitboxStyles();
 	});
 
 	it('hides previous/next when browse is shown', async () => {
@@ -773,9 +760,9 @@ describe('song header album rail', () => {
 		);
 		expect(albumCrumb).toBeDefined();
 
-		document.documentElement.dataset.pointer = 'coarse';
-		expect(px(getComputedStyle(prev).minWidth)).toBe(HITBOX_FREQUENT_PX);
-		expect(px(getComputedStyle(next).minWidth)).toBe(HITBOX_FREQUENT_PX);
+		setPointer('coarse');
+		expect(minSquarePx(prev, 'previous song').width).toBe(HITBOX_FREQUENT_PX);
+		expect(minSquarePx(next, 'next song').width).toBe(HITBOX_FREQUENT_PX);
 
 		selectedSongId.set('s-first');
 		await tick();
@@ -841,8 +828,8 @@ describe('song header album rail', () => {
 			(el) => el.textContent === longAlbumTitle
 		);
 		expect(albumCrumb).toBeDefined();
-		expect(px(getComputedStyle(prev).minWidth)).toBe(HITBOX_FREQUENT_PX);
-		expect(px(getComputedStyle(next).minWidth)).toBe(HITBOX_FREQUENT_PX);
+		expect(minSquarePx(prev, 'previous song').width).toBe(HITBOX_FREQUENT_PX);
+		expect(minSquarePx(next, 'next song').width).toBe(HITBOX_FREQUENT_PX);
 		expect(headerEl.scrollWidth).toBeLessThanOrEqual(320);
 		expect(rail.scrollWidth).toBeLessThanOrEqual(320);
 	});

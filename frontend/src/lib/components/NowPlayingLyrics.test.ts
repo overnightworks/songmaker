@@ -45,9 +45,35 @@ function stubScrollIntoView() {
 // jsdom does no layout, so a scroll box has to be given its measurements.
 // Returns the scrollTop spy, the one metric a test moves.
 function stubScrollBox(metrics: { scrollHeight: number; clientHeight: number }) {
-	vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(metrics.scrollHeight);
-	vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(metrics.clientHeight);
-	return vi.spyOn(Element.prototype, 'scrollTop', 'get').mockReturnValue(0);
+	return {
+		scrollHeight: vi
+			.spyOn(Element.prototype, 'scrollHeight', 'get')
+			.mockReturnValue(metrics.scrollHeight),
+		clientHeight: vi
+			.spyOn(Element.prototype, 'clientHeight', 'get')
+			.mockReturnValue(metrics.clientHeight),
+		scrollTop: vi.spyOn(Element.prototype, 'scrollTop', 'get').mockReturnValue(0)
+	};
+}
+
+// Lets a test play the part the browser plays: the box changed size, here is
+// the callback again. Returns a trigger for every observer the component made.
+function stubResizeObserver(): () => void {
+	const callbacks: ResizeObserverCallback[] = [];
+	vi.stubGlobal(
+		'ResizeObserver',
+		class {
+			constructor(callback: ResizeObserverCallback) {
+				callbacks.push(callback);
+			}
+			observe(): void {}
+			unobserve(): void {}
+			disconnect(): void {}
+		}
+	);
+	return () => {
+		for (const callback of callbacks) callback([], {} as ResizeObserver);
+	};
 }
 
 function lyricsBox(): HTMLElement {
@@ -185,14 +211,34 @@ describe('NowPlayingLyrics', () => {
 	});
 
 	it('drops the fade once the last line has been scrolled to', async () => {
-		const scrollTop = stubScrollBox({ scrollHeight: 600, clientHeight: 200 });
+		const scrollBox = stubScrollBox({ scrollHeight: 600, clientHeight: 200 });
 		await render({ lyrics: [LINE_1, LINE_2].join('\n'), cues: null, whisperText: null });
 
-		scrollTop.mockReturnValue(400);
+		scrollBox.scrollTop.mockReturnValue(400);
 		lyricsBox().dispatchEvent(new Event('scroll'));
 		await tick();
 
 		expect(lyricsBox().classList.contains('more-below')).toBe(false);
+	});
+
+	it('re-measures when the box changes size, without waiting for a scroll', async () => {
+		// #163/8 review: docking, expanding or collapsing Now Playing resizes
+		// the box without remounting it. A fade measured once would stay over
+		// text that now fits, or leave a fresh cut edge unmarked.
+		const scrollBox = stubScrollBox({ scrollHeight: 600, clientHeight: 200 });
+		const resize = stubResizeObserver();
+		await render({ lyrics: [LINE_1, LINE_2].join('\n'), cues: null, whisperText: null });
+		expect(lyricsBox().classList.contains('more-below')).toBe(true);
+
+		scrollBox.clientHeight.mockReturnValue(600);
+		resize();
+		await tick();
+		expect(lyricsBox().classList.contains('more-below')).toBe(false);
+
+		scrollBox.clientHeight.mockReturnValue(200);
+		resize();
+		await tick();
+		expect(lyricsBox().classList.contains('more-below')).toBe(true);
 	});
 
 	it('never fades lyrics that fit', async () => {
