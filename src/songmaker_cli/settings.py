@@ -25,6 +25,8 @@ from songmaker_cli.constants import (
     COVER_UPLOAD_BODY_MAX_BYTES,
     JSON_REQUEST_BODY_MAX_BYTES,
     REIMPORT_BODY_MAX_BYTES,
+    SCORER_TIMEOUT_SECONDS,
+    TEXT_ACCURACY_TIMEOUT_SECONDS,
 )
 
 
@@ -118,6 +120,8 @@ class Settings(BaseSettings):
     music_max_jobs: int = 2
     scoring_max_jobs: int = 1
     scoring_device: str = "cpu"
+    scorer_timeout_seconds: int = SCORER_TIMEOUT_SECONDS
+    text_accuracy_timeout_seconds: int = TEXT_ACCURACY_TIMEOUT_SECONDS
     stale_job_threshold_seconds: int = 1100
 
     # ── Soft delete ───────────────────────────────────────────────────

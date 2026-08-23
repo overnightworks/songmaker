@@ -1,11 +1,49 @@
-"""Score dataclasses for the scoring pipeline."""
+"""Score models for the scoring pipeline — values plus per-scorer outcomes."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.scoring.registry import SCORERS
+
+
+class ScorerOutcome(StrEnum):
+    """What happened to a single scorer during one pipeline run."""
+
+    OK = "ok"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    TIMED_OUT = "timed_out"
+
+
+class ScorerRun(BaseModel):
+    """One scorer's fate in a pipeline run, with the reason when it produced
+    no value. Only an ``OK`` run may overwrite a stored score."""
+
+    model_config = ConfigDict(frozen=True)
+
+    scorer: str
+    outcome: ScorerOutcome
+    detail: str = ""
+
+    @field_validator("scorer")
+    @classmethod
+    def _must_be_a_known_scorer(cls, value: str) -> str:
+        if value not in SCORERS:
+            raise ValueError(f"Unknown scorer: {value}")
+        return value
+
+    @property
+    def produced_value(self) -> bool:
+        return self.outcome is ScorerOutcome.OK
+
+    def __str__(self) -> str:
+        reason = f" ({self.detail})" if self.detail else ""
+        return f"{self.scorer}={self.outcome}{reason}"
 
 
 @dataclass
@@ -171,6 +209,7 @@ class SongScores:
     bpm_accuracy: BpmAccuracyScore | None = None
     silence: SilenceScore | None = None
     spectral_quality: SpectralQualityScore | None = None
+    runs: tuple[ScorerRun, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {}
@@ -179,6 +218,23 @@ class SongScores:
             if score is not None:
                 result.update(score.to_dict())
         return result
+
+    def refreshed_output_keys(self) -> frozenset[str]:
+        """Score keys owned by the scorers that produced a value in this run.
+
+        Persisting replaces exactly these keys, so a scorer that failed,
+        timed out, or was skipped keeps its previously stored value.
+        """
+        return frozenset(
+            key
+            for run in self.runs
+            if run.produced_value
+            for key in SCORERS[run.scorer].output_keys
+        )
+
+    def outcome_summary(self) -> str:
+        """Every scorer's outcome in one line, for the job log."""
+        return ", ".join(str(run) for run in self.runs) if self.runs else "no scorers ran"
 
 
 _TO_DICT_ORDER: tuple[str, ...] = (
@@ -193,4 +249,20 @@ _TO_DICT_ORDER: tuple[str, ...] = (
 
 assert frozenset(_TO_DICT_ORDER) == frozenset(SCORERS.keys()), (
     "_TO_DICT_ORDER must contain exactly the scorer names from SCORERS"
+)
+
+SCORE_TYPES: dict[str, type] = {
+    "text_accuracy": TextAccuracyScore,
+    "lyrical_coherence": LyricalCoherenceScore,
+    "emotional_dynamics": EmotionalDynamicsScore,
+    "audiobox": AudioBoxScore,
+    "bpm_accuracy": BpmAccuracyScore,
+    "silence": SilenceScore,
+    "spectral_quality": SpectralQualityScore,
+}
+
+_SCORE_FIELD_NAMES = frozenset(f.name for f in fields(SongScores)) - {"runs"}
+
+assert frozenset(SCORE_TYPES) == _SCORE_FIELD_NAMES == frozenset(SCORERS.keys()), (
+    "SCORE_TYPES, the SongScores score fields, and SCORERS must name the same scorers"
 )

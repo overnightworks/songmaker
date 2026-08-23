@@ -34,6 +34,13 @@ from songmaker_cli.jobs import (
     run_scoring_job,
 )
 from songmaker_cli.scheduler import GenerationTaskResultDTO
+from songmaker_cli.scoring.models import (
+    EmotionalDynamicsScore,
+    ScorerOutcome,
+    ScorerRun,
+    SongScores,
+    TextAccuracyScore,
+)
 
 
 def _run(coro):
@@ -555,22 +562,32 @@ def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:
 # ── run_scoring_job ─────────────────────────────────────────────────
 
 
-def _mock_scores(with_whisper: bool = False):
+def _scoring_result(with_whisper: bool = False) -> SongScores:
+    """A finished scoring run: emotional_dynamics always, text_accuracy on request."""
     from songmaker_cli.api_models.whisper import WhisperCue
 
-    scores = MagicMock()
-    scores.to_dict.return_value = {"dynamics": 55.0}
+    runs = [ScorerRun(scorer="emotional_dynamics", outcome=ScorerOutcome.OK)]
+    text_accuracy = None
     if with_whisper:
-        ta = MagicMock()
-        ta.transcribed_line_texts = ["hello", "world"]
-        ta.whisper_cues = (
-            WhisperCue(start=0.0, end=0.8, text="hello"),
-            WhisperCue(start=0.8, end=1.6, text="world"),
+        text_accuracy = TextAccuracyScore(
+            similarity_ratio=0.9,
+            intended_line_texts=("hello", "world"),
+            transcribed_line_texts=("hello", "world"),
+            whisper_cues=(
+                WhisperCue(start=0.0, end=0.8, text="hello"),
+                WhisperCue(start=0.8, end=1.6, text="world"),
+            ),
         )
-        scores.text_accuracy = ta
-    else:
-        scores.text_accuracy = None
-    return scores
+        runs.append(ScorerRun(scorer="text_accuracy", outcome=ScorerOutcome.OK))
+
+    return SongScores(
+        emotional_dynamics=EmotionalDynamicsScore(
+            pitch_cv=0.3, rms_contrast=2.0, onset_rate_cv=0.2,
+            overall_expressiveness=0.55,
+        ),
+        text_accuracy=text_accuracy,
+        runs=tuple(runs),
+    )
 
 
 def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
@@ -586,7 +603,7 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
         ))
         session.commit()
 
-    mock_result = _mock_scores()
+    mock_result = _scoring_result()
 
     with (
         patch(
@@ -620,7 +637,7 @@ def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
         ))
         session.commit()
 
-    mock_result = _mock_scores(with_whisper=True)
+    mock_result = _scoring_result(with_whisper=True)
 
     with (
         patch(
@@ -667,7 +684,7 @@ def test_scoring_job_uses_generation_version_not_latest(
     def _capture_score(mp3_path, meta=None, scorers=None, config=None,
                        job_id=None, on_progress=None):
         captured["meta"] = meta
-        return _mock_scores(with_whisper=True)
+        return _scoring_result(with_whisper=True)
 
     with patch(
         "songmaker_cli.jobs.get_scorer_process",
@@ -702,7 +719,7 @@ def test_scoring_job_no_version_still_scores(seeded_db, tmp_path: Path) -> None:
     def _capture_score(mp3_path, meta=None, scorers=None, config=None,
                        job_id=None, on_progress=None):
         captured["meta"] = meta
-        return _mock_scores(with_whisper=True)
+        return _scoring_result(with_whisper=True)
 
     with patch(
         "songmaker_cli.jobs.get_scorer_process",
@@ -724,6 +741,43 @@ def test_scoring_job_no_version_still_scores(seeded_db, tmp_path: Path) -> None:
     assert meta is not None
     assert meta.lyrics == ""
     assert meta.vocal_language == "en"
+
+
+def test_scoring_job_uses_configured_per_scorer_budgets(
+    seeded_db, tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.setenv("SCORER_TIMEOUT_SECONDS", "45")
+    monkeypatch.setenv("TEXT_ACCURACY_TIMEOUT_SECONDS", "600")
+
+    audio_dir = tmp_path / "audio"
+    mp3_file = audio_dir / "user1" / "g1.mp3"
+    mp3_file.parent.mkdir(parents=True, exist_ok=True)
+    mp3_file.write_bytes(b"fake-mp3")
+
+    with seeded_db() as session:
+        session.add(Generation(
+            id="g1", song_id="s1", version_id="v1", generation_number=1,
+            mp3_path="user1/g1.mp3", seed=42,
+        ))
+        session.commit()
+
+    captured: dict = {}
+
+    def _capture_score(mp3_path, meta=None, scorers=None, config=None,
+                       job_id=None, on_progress=None):
+        captured["config"] = config
+        return _scoring_result()
+
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process",
+        return_value=MagicMock(score=_capture_score),
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    config = captured["config"]
+    assert config.timeout_for("text_accuracy") == 600
+    assert config.timeout_for("silence") == 45
+    assert config.pipeline_timeout > 600
 
 
 def test_scoring_job_generation_not_found(seeded_db) -> None:
@@ -767,7 +821,7 @@ def test_scoring_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Path)
         session.commit()
 
     _cancel_job(seeded_db, "j2")
-    scorer = MagicMock(score=MagicMock(return_value=_mock_scores()))
+    scorer = MagicMock(score=MagicMock(return_value=_scoring_result()))
     with patch("songmaker_cli.jobs.get_scorer_process", return_value=scorer):
         run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
 
@@ -799,7 +853,7 @@ def test_scoring_job_cancel_during_run_skips_finalize(seeded_db, tmp_path: Path)
         _cancel_job(seeded_db, "j2")
         if on_progress:
             on_progress(2, 2, "silence")
-        return _mock_scores()
+        return _scoring_result()
 
     with patch(
         "songmaker_cli.jobs.get_scorer_process",

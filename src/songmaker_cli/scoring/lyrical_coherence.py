@@ -13,7 +13,12 @@ from pathlib import Path
 from songmaker_cli.claude.provider import call_claude, parse_json_response
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import LyricalCoherenceScore, SharedScorerData
-from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
+from songmaker_cli.scoring.pipeline import (
+    AudioData,
+    PipelineConfig,
+    ScorerDependencyUnavailable,
+    register,
+)
 
 log = logging.getLogger(__name__)
 
@@ -69,11 +74,15 @@ def score_lyrical_coherence(
     Requires text_accuracy to run first — reads transcription from shared_data.
     """
     if meta is None or not meta.lyrics:
-        raise ValueError("No lyrics metadata — cannot judge lyrical coherence")
+        raise ScorerDependencyUnavailable(
+            "No lyrics metadata — cannot judge lyrical coherence",
+        )
 
     transcribed = shared_data.whisper_text if shared_data else None
     if transcribed is None:
-        raise ValueError("No Whisper transcription in pipeline. Run text_accuracy first.")
+        raise ScorerDependencyUnavailable(
+            "No Whisper transcription in pipeline — text_accuracy produced none",
+        )
     if not transcribed:
         log.info("Empty Whisper transcription (no vocals detected) — skipping coherence check")
         return LyricalCoherenceScore(
