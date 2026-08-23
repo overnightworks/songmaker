@@ -16,6 +16,19 @@ log = logging.getLogger(__name__)
 IP_RATE_WINDOW = 60
 STATIC_ASSET_PREFIX = "/_app/"
 
+# Health checks and static PWA root assets are fetched by infrastructure,
+# the browser, and the service worker outside of user-driven navigation --
+# they must not compete with `/api/*` calls for the per-IP budget. No API
+# path belongs in this allowlist.
+RATE_LIMIT_EXEMPT_PATHS = frozenset({
+    "/health",
+    "/manifest.webmanifest",
+    "/robots.txt",
+    "/favicon.svg",
+    "/service-worker.js",
+})
+RATE_LIMIT_EXEMPT_ICON_PREFIX = "/icon-"
+
 
 class IpRateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, **kwargs):  # type: ignore[no-untyped-def]
@@ -33,7 +46,12 @@ class IpRateLimitMiddleware(BaseHTTPMiddleware):
         return self._limiter
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        if request.url.path.startswith(STATIC_ASSET_PREFIX):
+        path = request.url.path
+        if (
+            path.startswith(STATIC_ASSET_PREFIX)
+            or path in RATE_LIMIT_EXEMPT_PATHS
+            or path.startswith(RATE_LIMIT_EXEMPT_ICON_PREFIX)
+        ):
             return await call_next(request)
         from songmaker_cli.auth import get_client_ip
         ctx: AppContext = request.app.state.ctx
