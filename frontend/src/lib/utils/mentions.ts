@@ -1,9 +1,7 @@
 import type { SongItem, VersionItem } from '$lib/api/types';
 
 export type MentionItem =
-	| { type: 'album' }
-	| { type: 'version'; item: VersionItem }
-	| { type: 'song'; item: SongItem };
+	{ type: 'album' } | { type: 'version'; item: VersionItem } | { type: 'song'; item: SongItem };
 
 const VERSION_MENTION_RE = /^v(?:ersion)?\s*(\d*)$/i;
 

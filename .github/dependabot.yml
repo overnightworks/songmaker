@@ -17,6 +17,12 @@ updates:
       npm-dependencies:
         patterns: ["*"]
     open-pull-requests-limit: 5
+    # frontend/package.json pins pnpm.overrides.cookie to 1.1.1: @sveltejs/kit's
+    # loose `cookie: '>=0.7.0'` range lets pnpm resolve cookie 2.x, which
+    # renamed parse/serialize and breaks `pnpm build` against kit's runtime
+    # import (no fixed kit release exists yet — see PR #130/issue #112).
+    # Not a dependabot ignore: kit itself isn't a major bump, so there is no
+    # matching semver-major rule to add here.
     ignore:
       # TypeScript 7 needs svelte-check's dual TS6+TS7 --tsgo setup
       - dependency-name: "typescript"
