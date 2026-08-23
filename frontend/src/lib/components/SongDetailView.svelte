@@ -4,7 +4,6 @@
 		fetchSong,
 		generateSong,
 		renameSong,
-		scoreGeneration,
 		deleteSong,
 		restoreSong,
 		shareSong,
@@ -376,7 +375,6 @@
 	}
 
 	setGenerationActions({
-		score: onScore,
 		...takeActionsFor(() => song),
 		del: onDeleteGeneration,
 		share: onGenShareEnable,
@@ -459,16 +457,6 @@
 			}
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
-		}
-	}
-
-	async function onScore(genId: string): Promise<void> {
-		if (!song) return;
-		try {
-			const job = await scoreGeneration(genId);
-			trackJob(job, { songId: song.id, genId });
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Scoring failed', 'error');
 		}
 	}
 

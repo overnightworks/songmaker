@@ -3,7 +3,6 @@ import type { GenerationItem, ShareResult, SongItem } from '$lib/api/types';
 import { pinSeed, rate, setKeep, setPick } from '$lib/stores/takeActions';
 
 export interface GenerationActions {
-	score: (genId: string) => void;
 	pick: (genId: string, picked: boolean) => void;
 	keep: (genId: string, kept: boolean) => void;
 	del: (genId: string) => void;
@@ -29,7 +28,7 @@ export function getGenerationActions(): GenerationActions {
 // stores/takeActions.ts is the one mutation owner for pick/keep/rate/pinSeed;
 // this bakes the actions' target song into that store's per-song API, so a
 // GenerationActions provider only has to supply its own bespoke handlers
-// (score, delete, share, ...). Takes a getter rather than a SongItem so the
+// (delete, share, ...). Takes a getter rather than a SongItem so the
 // provider's current song stays live across the provider's lifetime instead
 // of freezing at the moment setGenerationActions runs.
 export function takeActionsFor(

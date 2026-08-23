@@ -2,7 +2,7 @@
 	import type { WhisperCue } from '$lib/api/types';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
-		NOW_PLAYING_LYRICS_RESCORE_HINT,
+		NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
 		NOW_PLAYING_LYRICS_ROW_LABEL
 	} from '$lib/constants/now-playing';
 	import { activeLyricLineIndices, alignLyricsToCues } from '$lib/utils/lyrics-align';
@@ -35,7 +35,7 @@
 		alignedLines ? activeLyricLineIndices(alignedLines, audioPlayer.currentTime) : []
 	);
 	const scrollTargetIndex = $derived(activeIndices.length > 0 ? activeIndices[0] : null);
-	const showRescoreHint = $derived(hasLyrics && !hasCues && Boolean(whisperText));
+	const showUnsyncedNote = $derived(hasLyrics && !hasCues && Boolean(whisperText));
 
 	$effect(() => {
 		const index = scrollTargetIndex;
@@ -68,8 +68,8 @@
 		{:else}
 			<div class="lyrics">{lyrics}</div>
 		{/if}
-		{#if showRescoreHint}
-			<p class="lyrics-hint">{NOW_PLAYING_LYRICS_RESCORE_HINT}</p>
+		{#if showUnsyncedNote}
+			<p class="lyrics-unsynced">{NOW_PLAYING_LYRICS_UNSYNCED_NOTE}</p>
 		{/if}
 	{:else}
 		<p class="lyrics-empty">{emptyLabel}</p>
@@ -125,7 +125,7 @@
 		color: var(--text-muted);
 		font-size: 0.85rem;
 	}
-	.lyrics-hint {
+	.lyrics-unsynced {
 		margin: 0;
 		font-size: 0.78rem;
 		color: var(--text-subtle);

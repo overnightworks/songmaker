@@ -30,9 +30,12 @@ export const NOW_PLAYING_DEVIATIONS_LABEL = 'Sung vs. lyrics';
 export const NOW_PLAYING_DEVIATIONS_EMPTY = 'Sung text matches the lyrics';
 export const NOW_PLAYING_DEVIATIONS_UNAVAILABLE = 'No transcript to compare against yet';
 export const NOW_PLAYING_LYRICS_ROW_LABEL = 'Lyrics';
-// #45: shown instead of synced highlighting when a take has whisper_text but
-// no whisper_cues yet (scored before #44 landed) — lyrics stay static.
-export const NOW_PLAYING_LYRICS_RESCORE_HINT = 'Re-score this take to follow the lyrics.';
+// #45: a take scored before #44 landed has whisper_text but no whisper_cues,
+// so its lyrics stay static instead of following the audio. The lyrics panel
+// only names that state — it also renders for a public share listener, who
+// cannot re-score anything. The take panel owns the action that fixes it.
+export const NOW_PLAYING_LYRICS_UNSYNCED_NOTE = "Lyrics aren't synced for this take.";
+export const NOW_PLAYING_RESCORE_ACTION_LABEL = 'Re-score this take to follow the lyrics.';
 
 export const NOW_PLAYING_PICK_LABEL = 'Pick';
 export const NOW_PLAYING_UNPICK_LABEL = 'Unpick';
