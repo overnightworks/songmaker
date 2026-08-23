@@ -1,4 +1,4 @@
-import { derived } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import {
 	fetchSong,
 	keepGeneration,
@@ -8,7 +8,7 @@ import {
 	unkeepGeneration,
 	unpickGeneration
 } from '$lib/api/client';
-import { JOB_TYPE_SCORE, TAKE_RESCORING_LABEL } from '$lib/constants';
+import { JOB_TYPE_SCORE, TAKE_RESCORE_QUEUED_TOAST } from '$lib/constants';
 import { pinnedSeed } from '$lib/stores/editor';
 import { activeJobs, trackJob } from '$lib/stores/jobs';
 import { upsertSongInList } from '$lib/stores/player';
@@ -61,28 +61,55 @@ export async function rate(
 	}
 }
 
+// A take is marked as re-scoring from the moment the request leaves, not from
+// the moment a job comes back: the server does not deduplicate scoring jobs, so
+// a second click during the round trip would buy a second run of the whole
+// scorer pipeline. trackJob takes over synchronously on success, which keeps
+// rescoringTakeIds continuous across the handover.
+const rescoreRequestsInFlight = writable(new Set<string>());
+
+function markRequestInFlight(genId: string): void {
+	rescoreRequestsInFlight.update((ids) => new Set(ids).add(genId));
+}
+
+function clearRequestInFlight(genId: string): void {
+	rescoreRequestsInFlight.update((ids) => {
+		const remaining = new Set(ids);
+		remaining.delete(genId);
+		return remaining;
+	});
+}
+
 // Scoring runs as a background job, so this returns once the job is accepted,
 // not once the take has its new scores. The job's own completion refreshes the
 // song (stores/jobs.ts), which is what puts the fresh scores and whisper cues
 // on the take.
 export async function rescore(songId: string, genId: string): Promise<void> {
+	if (get(rescoreRequestsInFlight).has(genId)) return;
+	markRequestInFlight(genId);
 	try {
 		const job = await scoreGeneration(genId);
 		trackJob(job, { songId, genId });
-		addToast(TAKE_RESCORING_LABEL, 'info');
+		addToast(TAKE_RESCORE_QUEUED_TOAST, 'info');
 	} catch (e) {
 		addToast(e instanceof Error ? e.message : 'Re-score failed', 'error');
+	} finally {
+		clearRequestInFlight(genId);
 	}
 }
 
-// Which takes the user is still waiting on a re-score for.
-export const rescoringTakeIds = derived(activeJobs, (jobs) => {
-	const ids = new Set<string>();
-	for (const entry of jobs) {
-		if (entry.job.type === JOB_TYPE_SCORE && entry.genId) ids.add(entry.genId);
+// Which takes the user is still waiting on a re-score for: the request is in
+// flight, or its job is.
+export const rescoringTakeIds = derived(
+	[activeJobs, rescoreRequestsInFlight],
+	([jobs, inFlight]) => {
+		const ids = new Set(inFlight);
+		for (const entry of jobs) {
+			if (entry.job.type === JOB_TYPE_SCORE && entry.genId) ids.add(entry.genId);
+		}
+		return ids;
 	}
-	return ids;
-});
+);
 
 export function pinSeed(seed: number): void {
 	pinnedSeed.set(seed);

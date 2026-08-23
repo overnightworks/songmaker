@@ -225,7 +225,7 @@ describe('rescore', () => {
 		expect(scoreGeneration).toHaveBeenCalledWith('g1');
 		expect(get(rescoringTakeIds).has('g1')).toBe(true);
 		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: 'Re-scoring…', type: 'info' })
+			expect.objectContaining({ message: 'Re-scoring this take…', type: 'info' })
 		]);
 
 		activeJobs.set([]);
@@ -238,6 +238,41 @@ describe('rescore', () => {
 		await rescore('s1', 'g1');
 
 		expect(get(rescoringTakeIds).has('g2')).toBe(false);
+	});
+
+	it('asks for one scoring job however often the take is clicked mid-request', async () => {
+		let acceptRequest: (job: JobStatus) => void = () => {};
+		vi.mocked(scoreGeneration).mockReturnValue(
+			new Promise<JobStatus>((resolve) => {
+				acceptRequest = resolve;
+			})
+		);
+
+		const first = rescore('s1', 'g1');
+		const second = rescore('s1', 'g1');
+		const third = rescore('s1', 'g1');
+
+		expect(scoreGeneration).toHaveBeenCalledTimes(1);
+		expect(get(rescoringTakeIds).has('g1')).toBe(true);
+
+		acceptRequest(scoreJob());
+		await Promise.all([first, second, third]);
+
+		expect(scoreGeneration).toHaveBeenCalledTimes(1);
+		expect(get(rescoringTakeIds).has('g1')).toBe(true);
+	});
+
+	it('lets the take be re-scored again after a rejected request', async () => {
+		vi.mocked(scoreGeneration).mockRejectedValueOnce(new Error('queue is full'));
+
+		await rescore('s1', 'g1');
+		expect(get(rescoringTakeIds).has('g1')).toBe(false);
+
+		vi.mocked(scoreGeneration).mockResolvedValueOnce(scoreJob());
+		await rescore('s1', 'g1');
+
+		expect(scoreGeneration).toHaveBeenCalledTimes(2);
+		expect(get(rescoringTakeIds).has('g1')).toBe(true);
 	});
 
 	it('toasts the error and marks nothing when the job is rejected', async () => {

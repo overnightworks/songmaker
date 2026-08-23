@@ -17,7 +17,7 @@ vi.mock('$lib/stores/navigation', () => ({
 }));
 
 import { get } from 'svelte/store';
-import { TAKE_RESCORING_LABEL } from '$lib/constants';
+import { TAKE_RESCORE_LABEL, TAKE_RESCORING_LABEL } from '$lib/constants';
 import { NOW_PLAYING_RESCORE_ACTION_LABEL } from '$lib/constants/now-playing';
 import { activeJobs } from '$lib/stores/jobs';
 import { pinSeed, rate, rescore, setKeep, setPick } from '$lib/stores/takeActions';
@@ -239,6 +239,60 @@ describe('NowPlayingTake', () => {
 		expect(rescore).not.toHaveBeenCalled();
 	});
 
+	it('offers Re-score even when the take already has cues', async () => {
+		// A take scored before word timestamps carries segment-only cues, whose
+		// lines light together — re-scoring is exactly what buys per-line timing,
+		// so the entry cannot hang off the missing-cues hint.
+		await render({
+			generation: generation({
+				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
+			})
+		});
+		const entry = target.querySelector<HTMLButtonElement>('.rescore');
+		if (!entry) throw new Error('Expected the Re-score entry');
+		expect(entry.textContent?.trim()).toBe(TAKE_RESCORE_LABEL);
+		expect(target.querySelector('.rescore-hint')).toBeNull();
+
+		entry.click();
+		await tick();
+
+		expect(rescore).toHaveBeenCalledTimes(1);
+		expect(rescore).toHaveBeenCalledWith('s1', 'g1');
+	});
+
+	it('reports the Re-score entry as re-scoring while its scoring job runs', async () => {
+		activeJobs.set([
+			{
+				job: {
+					id: 'j1',
+					type: 'score',
+					status: 'running',
+					progress: 0.2,
+					error: null,
+					error_type: null,
+					started_at: null,
+					completed_at: null
+				},
+				songId: 's1',
+				genId: 'g1'
+			}
+		]);
+		await render({
+			generation: generation({
+				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
+			})
+		});
+		const entry = target.querySelector<HTMLButtonElement>('.rescore');
+		if (!entry) throw new Error('Expected the Re-score entry');
+
+		expect(entry.textContent?.trim()).toBe(TAKE_RESCORING_LABEL);
+		expect(entry.disabled).toBe(true);
+
+		entry.click();
+		await tick();
+		expect(rescore).not.toHaveBeenCalled();
+	});
+
 	it('drops the re-score hint once the take has cues', async () => {
 		await render({
 			generation: generation({
@@ -248,7 +302,7 @@ describe('NowPlayingTake', () => {
 		expect(target.textContent).not.toContain(NOW_PLAYING_RESCORE_ACTION_LABEL);
 	});
 
-	it.each(['.badge-btn', '.pin-seed', '.use-as-reference', '.rescore-hint'])(
+	it.each(['.badge-btn', '.pin-seed', '.use-as-reference', '.rescore-hint', '.rescore'])(
 		'opts %s into the frequent hitbox',
 		async (selector) => {
 			// Sizing itself is pinned once for the shared mechanism in

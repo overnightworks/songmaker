@@ -2,6 +2,7 @@
 	import type { GenerationItem, SongItem } from '$lib/api/types';
 	import {
 		NOW_PLAYING_TAKE_PREFIX,
+		TAKE_RESCORE_LABEL,
 		TAKE_RESCORING_LABEL,
 		TAKE_USE_AS_REFERENCE_LABEL
 	} from '$lib/constants';
@@ -391,6 +392,15 @@
 		>
 			{TAKE_USE_AS_REFERENCE_LABEL}
 		</button>
+		<button
+			type="button"
+			class="rescore"
+			data-hitbox="frequent"
+			disabled={rescoring}
+			onclick={onRescore}
+		>
+			{rescoring ? TAKE_RESCORING_LABEL : TAKE_RESCORE_LABEL}
+		</button>
 	</div>
 </div>
 
@@ -596,7 +606,8 @@
 		gap: 0.5rem;
 	}
 	.pin-seed,
-	.use-as-reference {
+	.use-as-reference,
+	.rescore {
 		align-self: flex-start;
 		padding: 0.3rem 0.7rem;
 		border-radius: var(--btn-radius-pill);
@@ -610,8 +621,13 @@
 		cursor: pointer;
 	}
 	.pin-seed:hover,
-	.use-as-reference:hover {
+	.use-as-reference:hover,
+	.rescore:hover:not(:disabled) {
 		border-color: var(--primary);
 		color: var(--text);
+	}
+	.rescore:disabled {
+		color: var(--text-subtle);
+		cursor: default;
 	}
 </style>

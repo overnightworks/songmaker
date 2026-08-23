@@ -24,6 +24,10 @@
 		selectedGenerationId
 	} from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
+	// Re-score comes straight from its owner rather than through
+	// GenerationActions: Now Playing has no such context and calls the same
+	// function, and routing one surface through the context would put a second
+	// path to the same mutation back in the tree.
 	import { rescore, rescoringTakeIds } from '$lib/stores/takeActions';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { scoreColor } from '$lib/utils/scores';

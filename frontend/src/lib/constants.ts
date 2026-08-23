@@ -73,6 +73,7 @@ export const TAKE_ARCHIVED_TITLE = 'Archived take — restore to play';
 export const TAKE_DELETE_LABEL = 'Delete';
 export const TAKE_RESCORE_LABEL = 'Re-score';
 export const TAKE_RESCORING_LABEL = 'Re-scoring…';
+export const TAKE_RESCORE_QUEUED_TOAST = 'Re-scoring this take…';
 export const TAKES_EMPTY = 'No takes yet';
 export const TAKES_LOADING = 'Loading takes…';
 export const TAKES_ERROR = 'Failed to load takes';
