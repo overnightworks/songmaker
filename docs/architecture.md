@@ -207,10 +207,12 @@ The bar itself steps aside under the full surface on every viewport: "one
 player, never two" means the full-screen Now Playing carries the only
 transport, so `PlayerBar` renders no `TransportBarFrame` while
 `nowPlayingSurface` is `'full'`. `--player-height` is the single fact behind
-that: it means "the room the transport bar takes right now", `app.css` holds
-its resting value (88px, 64px compact), and `+layout.svelte` collapses it to
-`0px` through one `:global(html[data-now-playing='full'])` rule while the
-app's bar is hidden. Everything that reserves space for the bar — the shell
+that: it means "the room the transport bar takes right now", and `app.css`
+owns every one of its values — the resting 88px, the 64px compact/coarse
+overrides, and `html[data-now-playing='full'] { --player-height: 0px }` for
+while the app's bar is hidden. That last rule ties with
+`html[data-pointer='coarse']` on specificity, so it sits directly below it and
+wins on source order; `+layout.svelte` owns only the attribute it keys on. Everything that reserves space for the bar — the shell
 rows, `ToastContainer`, `QueueStreamFeedback`, the editor's bottom padding,
 the collection views and Now Playing's own sheet — follows from it instead of
 carrying its own exception. A share page keeps its bar and never carries the

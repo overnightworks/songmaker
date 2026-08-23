@@ -98,6 +98,18 @@ html[data-pointer='coarse'] {
 	--player-height: calc(64px + env(safe-area-inset-bottom, 0px));
 }
 
+/* --player-height is the room the transport bar takes right now. The app's
+   full-screen Now Playing surface hides that bar, so it takes no room at all
+   and everything that reserves space for it — the shell rows, the toast
+   stack, the queue-stream chip, the editor's bottom padding, the collection
+   views, Now Playing's own sheet — collapses from here. routes/+layout.svelte
+   sets the attribute; a share page keeps its bar and never carries it. Stays
+   below the coarse-pointer rule above: same specificity, so source order is
+   what decides. */
+html[data-now-playing='full'] {
+	--player-height: 0px;
+}
+
 [data-theme='light'] {
 	--primary: #d41a0a;
 	--accent: #7a18c0;

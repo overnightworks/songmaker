@@ -62,10 +62,11 @@
 
 	// One fact behind every layout that reserves room for the transport bar:
 	// while the full surface hides the app's bar, the bar takes no room. The
-	// `:global` rule below turns that into `--player-height: 0px`, so the
-	// shell rows, the toast stack, the queue-stream chip, the editor's bottom
-	// padding and Now Playing's own sheet all collapse together instead of
-	// each carrying its own exception.
+	// attribute is the only thing this file owns — app.css, which owns
+	// --player-height, owns the `html[data-now-playing='full']` value that
+	// collapses it, so the shell rows, the toast stack, the queue-stream chip,
+	// the editor's bottom padding and Now Playing's own sheet all follow from
+	// one declaration instead of each carrying its own exception.
 	$effect(() => {
 		const barHidden = hasPrivatePlayer && $nowPlayingSurface === 'full';
 		if (!browser) return;
@@ -279,13 +280,6 @@
 		letter-spacing: 3px;
 		text-transform: uppercase;
 		text-decoration: none;
-	}
-
-	/* app.css holds the bar's resting height; this is the one place that says
-	   it takes no room at all. A share page keeps its own bar and never
-	   carries the attribute. */
-	:global(html[data-now-playing='full']) {
-		--player-height: 0px;
 	}
 
 	.shell-row {

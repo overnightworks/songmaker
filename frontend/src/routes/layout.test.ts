@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -75,6 +78,10 @@ vi.mock('$lib/api/songs', () => ({
 import Layout from './+layout.svelte';
 import layoutSource from './+layout.svelte?raw';
 import { goto } from '$app/navigation';
+
+// `?raw` yields an empty string for a stylesheet under this vitest config
+// (CSS processing is off), so app.css is read from disk instead.
+const appCss = readFileSync(join(process.cwd(), 'src/app.css'), 'utf8');
 
 const VIEWPORT_PX = 320;
 const USER = { id: 'u1', username: 'felix', role: 'user' as const };
@@ -511,8 +518,11 @@ describe('docked Now Playing', () => {
 		nowPlayingSurface.set('full');
 		await tick();
 		expect(document.documentElement.dataset.nowPlaying).toBe('full');
-		expect(extractRule(layoutSource, ":global(html[data-now-playing='full'])")).toContain(
-			'--player-height: 0px'
+		expect(extractRule(appCss, "html[data-now-playing='full']")).toContain('--player-height: 0px');
+		// Same specificity as the coarse-pointer override of the same variable,
+		// so only source order makes the collapse win.
+		expect(appCss.indexOf("html[data-now-playing='full']")).toBeGreaterThan(
+			appCss.indexOf("html[data-pointer='coarse']")
 		);
 
 		closeNowPlaying();
