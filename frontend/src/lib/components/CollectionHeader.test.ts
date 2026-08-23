@@ -30,7 +30,12 @@ function baseProps(): CollectionHeaderProps {
 		onrename: vi.fn().mockResolvedValue(undefined),
 		isShared: false,
 		shareSlug: null,
-		onshare: vi.fn().mockResolvedValue({ status: 'ok', share_url: 'https://x/y', share_slug: 'y' }),
+		onshare: vi.fn().mockResolvedValue({
+			status: 'ok',
+			share_url: 'https://x/y',
+			share_slug: 'y',
+			songs_without_playable_take: []
+		}),
 		onunshare: vi.fn().mockResolvedValue(undefined),
 		ondelete: vi.fn(),
 		oncover: vi.fn(),
