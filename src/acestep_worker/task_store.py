@@ -4,10 +4,15 @@ import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
 from uuid import uuid4
 
-from acestep_worker.models import TaskKind, TaskSnapshot, TaskState, WorkerTaskEvent
+from acestep_worker.models import (
+    TaskKind,
+    TaskResult,
+    TaskSnapshot,
+    TaskState,
+    WorkerTaskEvent,
+)
 
 TERMINAL_RETENTION_SECONDS = 60.0
 _TERMINAL_STATES: frozenset[TaskState] = frozenset({"done", "error"})
@@ -23,7 +28,7 @@ class _Task:
     kind: TaskKind
     state: TaskState = "pending"
     progress: float = 0.0
-    result: dict[str, Any] | None = None
+    result: TaskResult | None = None
     error: str | None = None
     created_at: datetime = field(default_factory=_now)
     updated_at: datetime = field(default_factory=_now)
@@ -69,7 +74,7 @@ class TaskStore:
     async def update_progress(self, task_id: str, progress: float) -> None:
         await self._update(task_id, progress=progress)
 
-    async def complete(self, task_id: str, result: dict[str, Any]) -> None:
+    async def complete(self, task_id: str, result: TaskResult) -> None:
         await self._update(
             task_id, state="done", progress=1.0, result=result, terminal=True
         )
@@ -83,7 +88,7 @@ class TaskStore:
         *,
         state: TaskState | None = None,
         progress: float | None = None,
-        result: dict[str, Any] | None = None,
+        result: TaskResult | None = None,
         error: str | None = None,
         terminal: bool = False,
     ) -> None:

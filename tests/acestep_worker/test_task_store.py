@@ -5,11 +5,16 @@ from datetime import timedelta
 
 import pytest
 
+from acestep_worker.models import GenerationTaskResult
 from acestep_worker.task_store import TaskStore, _now
 
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def _generated(audio_path: str = "/x.wav", seed: int = 42) -> GenerationTaskResult:
+    return GenerationTaskResult(mode="sft", audio_path=audio_path, seed=seed)
 
 
 def test_create_returns_unique_ids() -> None:
@@ -84,14 +89,40 @@ def test_complete_terminal() -> None:
     async def go():
         store = TaskStore()
         task_id = await store.create("generate")
-        await store.complete(task_id, {"audio_path": "/x.wav"})
+        await store.complete(task_id, _generated())
         return await store.get(task_id)
 
     snap = _run(go())
     assert snap is not None
     assert snap.state == "done"
     assert snap.progress == 1.0
-    assert snap.result == {"audio_path": "/x.wav"}
+    assert snap.result == _generated()
+
+
+def test_done_event_carries_the_result_as_json() -> None:
+    async def go():
+        store = TaskStore()
+        task_id = await store.create("generate")
+        events = []
+
+        async def consume():
+            async for ev in store.subscribe(task_id):
+                events.append(ev)
+
+        consumer = asyncio.create_task(consume())
+        await asyncio.sleep(0)
+        await store.complete(task_id, _generated(audio_path="/out.wav", seed=99))
+        await consumer
+        return events
+
+    events = _run(go())
+    assert events[-1].data["result"] == {
+        "mode": "sft",
+        "audio_path": "/out.wav",
+        "seed": 99,
+        "cot_caption": "",
+        "cot_lyrics": "",
+    }
 
 
 def test_fail_terminal() -> None:
@@ -130,7 +161,7 @@ def test_subscribe_replays_initial_then_terminal() -> None:
         await asyncio.sleep(0)
         await store.mark_running(task_id)
         await store.update_progress(task_id, 0.5)
-        await store.complete(task_id, {"ok": True})
+        await store.complete(task_id, _generated())
         await consumer
         return events
 
@@ -154,7 +185,7 @@ def test_subscribe_already_terminal_yields_only_initial() -> None:
     async def go():
         store = TaskStore()
         task_id = await store.create("generate")
-        await store.complete(task_id, {"x": 1})
+        await store.complete(task_id, _generated())
         events = []
         async for ev in store.subscribe(task_id):
             events.append(ev)
@@ -195,7 +226,7 @@ def test_subscribe_progress_then_done() -> None:
         consumer = asyncio.create_task(consume())
         await asyncio.sleep(0)
         await store.update_progress(task_id, 0.3)
-        await store.complete(task_id, {"size": 100})
+        await store.complete(task_id, _generated())
         await consumer
         return events
 
@@ -227,7 +258,7 @@ def test_cleanup_terminal_drops_old() -> None:
     async def go():
         store = TaskStore(retention_seconds=0.0)
         task_id = await store.create("generate")
-        await store.complete(task_id, {"x": 1})
+        await store.complete(task_id, _generated())
         store._tasks[task_id].terminal_at = _now() - timedelta(seconds=10)
         dropped = await store.cleanup_terminal()
         size = await store.size()

@@ -70,12 +70,36 @@ class WorkerTaskEvent(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
 
 
+class GenerationTaskResult(BaseModel):
+    mode: str
+    audio_path: str
+    seed: int
+    cot_caption: str = ""
+    cot_lyrics: str = ""
+
+
+class TrainLoraTaskResult(BaseModel):
+    mode: str
+    adapter_dir: str
+    num_samples: int = 0
+    final_loss: float | None = None
+
+
+class DownloadTaskResult(BaseModel):
+    mode: str
+    size_bytes: int
+
+
+TaskResult = GenerationTaskResult | TrainLoraTaskResult | DownloadTaskResult
+"""What a finished task hands back — one model per ``TaskKind``."""
+
+
 class TaskSnapshot(BaseModel):
     task_id: str
     kind: TaskKind
     state: TaskState
     progress: float = 0.0
-    result: dict[str, Any] | None = None
+    result: TaskResult | None = None
     error: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -95,14 +119,6 @@ class LoadedModelsResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
-
-
-class GenerationTaskResult(BaseModel):
-    mode: str
-    audio_path: str
-    seed: int
-    cot_caption: str = ""
-    cot_lyrics: str = ""
 
 
 class TrainLoraRequest(BaseModel):
@@ -125,13 +141,6 @@ class TrainLoraRequest(BaseModel):
     training_seed: int = 42
     gradient_checkpointing: bool = False
     poll_interval_seconds: float = 5.0
-
-
-class TrainLoraTaskResult(BaseModel):
-    mode: str
-    adapter_dir: str
-    num_samples: int = 0
-    final_loss: float | None = None
 
 
 class TrainLoraResponse(BaseModel):

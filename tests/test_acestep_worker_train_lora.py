@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from acestep_worker.heartbeat import HeartbeatLoop
 from acestep_worker.model_cache import LoadedModel, ModelCache
-from acestep_worker.models import TrainLoraRequest
+from acestep_worker.models import TrainLoraRequest, TrainLoraTaskResult
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import (
     WorkerDeps,
@@ -61,11 +61,11 @@ def _make_deps(tmp_path: Path, with_train_runner: bool = True) -> WorkerDeps:
         await store.update_progress(task_id, 0.5)
         await store.complete(
             task_id,
-            {
-                "mode": request.mode,
-                "adapter_dir": str(Path(request.output_dir) / "final"),
-                "num_samples": 3,
-            },
+            TrainLoraTaskResult(
+                mode=request.mode,
+                adapter_dir=str(Path(request.output_dir) / "final"),
+                num_samples=3,
+            ),
         )
 
     deps = WorkerDeps(
@@ -170,7 +170,9 @@ def test_train_lora_pins_mode_from_eviction(tmp_path: Path) -> None:
         await release_event.wait()
         await store.complete(
             task_id,
-            {"mode": request.mode, "adapter_dir": "/tmp/x", "num_samples": 0},
+            TrainLoraTaskResult(
+                mode=request.mode, adapter_dir="/tmp/x", num_samples=0,
+            ),
         )
 
     deps.train_lora_runner = blocking_runner
@@ -277,7 +279,7 @@ def test_default_train_lora_runner_dispatches(tmp_path: Path) -> None:
     assert snap is not None
     assert snap.state == "done"
     assert snap.result is not None
-    assert snap.result["adapter_dir"].endswith("final")
+    assert snap.result.adapter_dir.endswith("final")
 
 
 def test_default_train_lora_runner_fails_on_preprocess_error(tmp_path: Path) -> None:

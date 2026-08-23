@@ -419,7 +419,7 @@ async def default_train_lora_runner(
             num_samples=scan_result.num_samples,
             final_loss=final_loss,
         )
-        await task_store.complete(task_id, payload.model_dump())
+        await task_store.complete(task_id, payload)
         del loop
     except asyncio.CancelledError:
         try:
@@ -479,7 +479,7 @@ async def default_generate_runner(
             cot_caption=result.cot_caption,
             cot_lyrics=result.cot_lyrics,
         )
-        await task_store.complete(task_id, payload.model_dump())
+        await task_store.complete(task_id, payload)
     except Exception as exc:
         log.exception("Generation failed for task %s", task_id)
         await task_store.fail(task_id, f"{type(exc).__name__}: {exc}")
