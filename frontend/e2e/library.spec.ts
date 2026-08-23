@@ -25,6 +25,7 @@ import {
 	LIBRARY_FLOW_API_REQUEST_BUDGET,
 	nameStartingWith,
 	playableRows,
+	TRANSPORT_PAUSE_LABEL,
 	workspace
 } from './helpers';
 import { readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
@@ -65,6 +66,10 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	const transport = page.getByRole('contentinfo');
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
 	await expect(transport.getByText(library.takeLabel)).toBeVisible();
+	// The pick is audible, not merely selected: the button offers to pause it.
+	await expect(
+		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+	).toBeVisible();
 
 	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
 	const takeRow = surface.getByRole('button', { name: library.takeLabel });

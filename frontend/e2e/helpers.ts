@@ -10,6 +10,12 @@ export const LIBRARY_FLOW_API_REQUEST_BUDGET = 32;
 
 const API_PATH_PREFIX = '/api';
 
+// The transport's play button renames itself after the state it will leave:
+// "Pause" only while audio is really playing, "Retry" once it errored (see
+// TransportBarFrame.svelte). Asserting it is how a flow proves a click
+// produced sound rather than a dead take.
+export const TRANSPORT_PAUSE_LABEL = 'Pause';
+
 function escapeForRegExp(literal: string): string {
 	return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -50,6 +56,11 @@ export class FlowGuard {
 	constructor(page: Page) {
 		page.on('request', (request) => {
 			if (new URL(request.url()).pathname.startsWith(API_PATH_PREFIX)) this.apiRequests += 1;
+		});
+		page.on('requestfailed', (request) => {
+			this.failures.push(
+				`request failed: ${request.url()} (${request.failure()?.errorText ?? 'unknown'})`
+			);
 		});
 		page.on('response', (response) => {
 			const status = response.status();
