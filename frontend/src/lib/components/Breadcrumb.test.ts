@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Breadcrumb from './Breadcrumb.svelte';
+import breadcrumbSource from './Breadcrumb.svelte?raw';
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -46,5 +47,13 @@ describe('Breadcrumb', () => {
 	it('renders a crumb with no onclick as static text, not a button', async () => {
 		const root = await render([{ label: 'Library' }, { label: 'Album', onclick: vi.fn() }]);
 		expect(root.querySelector('.crumb')?.tagName).toBe('SPAN');
+	});
+
+	// jsdom computes no flex layout, so this pins the stylesheet; the browser
+	// gate on #185 shows the trail beside a docked Now Playing.
+	it('lets a linked crumb give up room, keeping only the separators pinned', () => {
+		expect(breadcrumbSource).not.toMatch(/\.crumb-link \{[^}]*flex-shrink: 0;/);
+		expect(breadcrumbSource).toMatch(/\.crumb:not\(:first-child\)::before \{[^}]*flex-shrink: 0;/);
+		expect(breadcrumbSource).toMatch(/\.crumb \{[^}]*text-overflow: ellipsis;/);
 	});
 });

@@ -638,7 +638,7 @@
 </script>
 
 {#if song}
-	<div class="detail-panel">
+	<div class="detail-panel" class:compact>
 		<EditorHeader
 			{song}
 			{coverUrl}
@@ -678,103 +678,70 @@
 			{compact}
 		/>
 
-		{#if song.is_shared && song.share_slug}
-			<button
-				type="button"
-				class="share-link"
-				onclick={() => {
-					const url = `${window.location.origin}/share/song/${song.share_slug}`;
-					navigator.clipboard.writeText(url);
-					addToast('Link copied', 'success');
-				}}
-				title="Click to copy share link"
-			>
-				{window.location.origin}/share/song/{song.share_slug}
-			</button>
-		{/if}
-
-		<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
-		{#if $recipeOpen && !compact}
-			{#if stacked && !stackedExpanded}
-				<EditorStacked {chips} onexpand={() => (stackedExpanded = true)} />
-			{:else}
-				<RecipePanel
-					onclose={() => {
-						if (stacked) stackedExpanded = false;
-						else recipeOpen.set(false);
-					}}
-				/>
-			{/if}
-		{/if}
-
-		{#if compact}
-			<div class="editor-tabs" role="tablist" aria-label={EDITOR_TABS_LABEL}>
+		<div class="editor-body">
+			{#if song.is_shared && song.share_slug}
 				<button
 					type="button"
-					class="tab-btn"
-					data-hitbox="text"
-					role="tab"
-					aria-selected={tab === 'write'}
-					class:active={tab === 'write'}
-					onclick={() => switchTab('write')}
-				>
-					{EDITOR_TAB_WRITE_LABEL}
-				</button>
-				<button
-					type="button"
-					class="tab-btn"
-					data-hitbox="text"
-					role="tab"
-					aria-selected={tab === 'takes'}
-					class:active={tab === 'takes'}
-					onclick={() => switchTab('takes')}
-				>
-					{EDITOR_TAB_TAKES_LABEL} · {song.generations.length}
-				</button>
-			</div>
-			{#if tab === 'write'}
-				<WriteColumn
-					{song}
-					allSongs={songs}
-					coWriterOpen={false}
-					{compact}
-					onturncompleted={() => {}}
-				/>
-			{:else}
-				{@render expiryDigest()}
-				<TakesList
-					{song}
-					loadStatus={takesStatus}
-					loadError={takesError}
-					{dirty}
-					{draftVersionNumber}
-					{latestVersionNumber}
-					{generateJob}
-					onagain={applyAgain}
-					onuseasreference={(gen) => setSourceFromGeneration(gen, 'repaint')}
-					onretry={() => {
-						if (song) void refreshTakes(song.id);
+					class="share-link"
+					onclick={() => {
+						const url = `${window.location.origin}/share/song/${song.share_slug}`;
+						navigator.clipboard.writeText(url);
+						addToast('Link copied', 'success');
 					}}
-				/>
+					title="Click to copy share link"
+				>
+					{window.location.origin}/share/song/{song.share_slug}
+				</button>
 			{/if}
-		{:else if $coWriterOpen}
-			<WriteColumn
-				{song}
-				allSongs={songs}
-				coWriterOpen={true}
-				{compact}
-				onturncompleted={onTurnCompleted}
-			/>
-		{:else}
-			<div class="editor-columns">
-				<WriteColumn
-					{song}
-					allSongs={songs}
-					coWriterOpen={false}
-					{compact}
-					onturncompleted={() => {}}
-				/>
-				<div class="takes-column">
+
+			<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
+			{#if $recipeOpen && !compact}
+				{#if stacked && !stackedExpanded}
+					<EditorStacked {chips} onexpand={() => (stackedExpanded = true)} />
+				{:else}
+					<RecipePanel
+						onclose={() => {
+							if (stacked) stackedExpanded = false;
+							else recipeOpen.set(false);
+						}}
+					/>
+				{/if}
+			{/if}
+
+			{#if compact}
+				<div class="editor-tabs" role="tablist" aria-label={EDITOR_TABS_LABEL}>
+					<button
+						type="button"
+						class="tab-btn"
+						data-hitbox="text"
+						role="tab"
+						aria-selected={tab === 'write'}
+						class:active={tab === 'write'}
+						onclick={() => switchTab('write')}
+					>
+						{EDITOR_TAB_WRITE_LABEL}
+					</button>
+					<button
+						type="button"
+						class="tab-btn"
+						data-hitbox="text"
+						role="tab"
+						aria-selected={tab === 'takes'}
+						class:active={tab === 'takes'}
+						onclick={() => switchTab('takes')}
+					>
+						{EDITOR_TAB_TAKES_LABEL} · {song.generations.length}
+					</button>
+				</div>
+				{#if tab === 'write'}
+					<WriteColumn
+						{song}
+						allSongs={songs}
+						coWriterOpen={false}
+						{compact}
+						onturncompleted={() => {}}
+					/>
+				{:else}
 					{@render expiryDigest()}
 					<TakesList
 						{song}
@@ -790,9 +757,44 @@
 							if (song) void refreshTakes(song.id);
 						}}
 					/>
+				{/if}
+			{:else if $coWriterOpen}
+				<WriteColumn
+					{song}
+					allSongs={songs}
+					coWriterOpen={true}
+					{compact}
+					onturncompleted={onTurnCompleted}
+				/>
+			{:else}
+				<div class="editor-columns">
+					<WriteColumn
+						{song}
+						allSongs={songs}
+						coWriterOpen={false}
+						{compact}
+						onturncompleted={() => {}}
+					/>
+					<div class="takes-column">
+						{@render expiryDigest()}
+						<TakesList
+							{song}
+							loadStatus={takesStatus}
+							loadError={takesError}
+							{dirty}
+							{draftVersionNumber}
+							{latestVersionNumber}
+							{generateJob}
+							onagain={applyAgain}
+							onuseasreference={(gen) => setSourceFromGeneration(gen, 'repaint')}
+							onretry={() => {
+								if (song) void refreshTakes(song.id);
+							}}
+						/>
+					</div>
 				</div>
-			</div>
-		{/if}
+			{/if}
+		</div>
 	</div>
 
 	{#snippet expiryDigest()}
@@ -891,6 +893,40 @@
 		min-height: 0;
 	}
 
+	/* Everything under the header answers to the width the editor actually
+	   has — docking Now Playing takes NOW_PLAYING_DOCKED_WIDTH_PX out of
+	   `main`, and these columns must fold for that exactly as they fold for a
+	   smaller screen (#185). Named `editor`, so WriteColumn, RecipePanel and
+	   the takes column can all ask the same question.
+
+	   It deliberately starts below the header: a size container also becomes
+	   the containing block for `position: fixed` descendants, and the header
+	   carries two of them — the song menu's full-viewport backdrop and the
+	   compact Generate bar — which would re-anchor to the editor.
+
+	   680px is the two-up floor: two 20rem columns plus the 1.2rem gap. Below
+	   it the editor stacks, as it does in the compact shell. */
+	.editor-body {
+		container: editor / inline-size;
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+		min-width: 0;
+	}
+
+	/* On a desktop shell the header stays put and everything under it scrolls
+	   here: this fills the editor's height while the columns stand side by
+	   side, each scrolling in place, and scrolls itself once they stack or the
+	   Recipe panel grows taller than the room there is — so a take row is
+	   always reachable rather than clipped. The compact shell keeps its own
+	   rule: the whole panel scrolls in `main`, whose bottom padding is what
+	   clears the sticky Generate bar. */
+	.detail-panel:not(.compact) .editor-body {
+		flex: 1;
+		min-height: 0;
+		overflow: hidden auto;
+	}
+
 	.share-link {
 		font-size: 0.75rem;
 		color: var(--text-subtle);
@@ -937,12 +973,21 @@
 		border-bottom: 2px solid var(--primary);
 	}
 
+	/* One column by default, two where the editor has the room for two — never
+	   a track with a floor of its own, which is what pushed a take row's
+	   actions outside `main` (#185). */
 	.editor-columns {
 		display: grid;
-		grid-template-columns: minmax(320px, 1fr) minmax(360px, 1fr);
+		grid-template-columns: minmax(0, 1fr);
 		gap: 1.2rem;
-		flex: 1;
-		min-height: 0;
+	}
+
+	@container editor (min-width: 680px) {
+		.editor-columns {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			flex: 1;
+			min-height: 0;
+		}
 	}
 
 	.takes-column {
@@ -967,12 +1012,6 @@
 
 	.expiry-digest-icon {
 		font-size: 1rem;
-	}
-
-	@media (max-width: 900px) {
-		.editor-columns {
-			grid-template-columns: 1fr;
-		}
 	}
 
 	@media (max-width: 768px) {

@@ -257,12 +257,16 @@
 		min-width: 0;
 	}
 
+	/* The identity keeps a real basis so the row wraps instead of squeezing:
+	   with a basis of 0 the views and Generate always won the line, and a
+	   docked Now Playing left the title box and the breadcrumb a sliver of it
+	   (#185). Cover (4.5rem) plus gap plus the heading's own floor below. */
 	.detail-identity {
 		display: flex;
 		align-items: flex-start;
 		gap: 0.75rem;
 		min-width: 0;
-		flex: 1;
+		flex: 1 1 22rem;
 	}
 
 	.cover-hero {
@@ -334,9 +338,11 @@
 		cursor: pointer;
 	}
 
+	/* What the title and its breadcrumb trail need to still read as a heading
+	   rather than as two ellipses. */
 	.song-heading {
 		min-width: 0;
-		flex: 1 1 12rem;
+		flex: 1 1 16rem;
 	}
 
 	.title-row {
@@ -486,6 +492,12 @@
 		.detail-header {
 			flex-direction: column;
 			gap: 6px;
+		}
+
+		/* Stacked, the header's main axis is vertical, where the identity's
+		   row basis would read as a height instead of a width. */
+		.detail-identity {
+			flex: 0 0 auto;
 		}
 
 		.cover-hero {

@@ -10,6 +10,7 @@ import {
 	setPointer
 } from '$lib/test-utils/hitbox';
 import EditorHeader from './EditorHeader.svelte';
+import editorHeaderSource from './EditorHeader.svelte?raw';
 import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -215,5 +216,16 @@ describe('EditorHeader', () => {
 		const { target } = await render({ compact: true });
 		expect(target.querySelector('.detail-header .generate-btn')).toBeNull();
 		expect(target.querySelector('.editor-generate-bar .generate-btn')).not.toBeNull();
+	});
+});
+
+describe('EditorHeader in a narrow editor', () => {
+	// jsdom computes no flex layout, so this pins the stylesheet; the browser
+	// gate on #185 — 1100 and 1280 with Now Playing docked — is the proof.
+	it('gives the title and breadcrumb a floor the actions have to wrap around', () => {
+		expect(editorHeaderSource).toMatch(/\.detail-header \{[^}]*flex-wrap: wrap;/);
+		// With a basis of 0 the views and Generate always won the line and left
+		// the identity a sliver of it.
+		expect(editorHeaderSource).toMatch(/\.detail-identity \{[^}]*flex: 1 1 22rem;/);
 	});
 });

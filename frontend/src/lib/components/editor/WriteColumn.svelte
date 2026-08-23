@@ -186,12 +186,26 @@
 		resize: vertical;
 	}
 
+	/* Filling a fixed height only works where every part has a column of its
+	   own to scroll in: the compact sheet, which shows one at a time, and the
+	   editor above its two-up floor. Stacked, they run on and the workspace
+	   scrolls — sharing one height squeezed the lyrics column below its
+	   content, which then spilled over the take strip (#185). */
 	.cowriter-mode {
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
-		height: 100%;
 		min-height: 0;
+		flex-shrink: 0;
+	}
+
+	.cowriter-mode.compact {
+		height: 100%;
+		flex-shrink: 1;
+	}
+
+	.cowriter-mode.compact .cowriter-columns {
+		flex: 1;
 	}
 
 	.mobile-subtabs {
@@ -218,16 +232,37 @@
 		border-color: var(--primary);
 	}
 
+	/* Chat, lyrics and the take strip stand side by side only where the editor
+	   has the room for them (the `editor` container SongDetailView owns, #185).
+	   Below that — and in the compact sheet, which is outside that container —
+	   they stack, and the strip goes back to scrolling sideways. */
 	.cowriter-columns {
 		display: grid;
-		grid-template-columns: 1fr 1fr auto;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 1rem;
-		flex: 1;
 		min-height: 0;
 	}
 
-	.cowriter-mode.compact .cowriter-columns {
-		grid-template-columns: 1fr;
+	@container editor (min-width: 680px) {
+		.cowriter-mode {
+			flex: 1;
+			min-height: 0;
+		}
+
+		.cowriter-columns {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+			flex: 1;
+		}
+
+		.cowriter-takes {
+			width: 7rem;
+		}
+
+		.cowriter-takes :global(.take-strip) {
+			flex-direction: column;
+			overflow-x: visible;
+			overflow-y: auto;
+		}
 	}
 
 	.cowriter-chat,
@@ -271,13 +306,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 0.4rem;
-		width: 7rem;
-	}
-
-	.cowriter-takes :global(.take-strip) {
-		flex-direction: column;
-		overflow-x: visible;
-		overflow-y: auto;
+		min-width: 0;
 	}
 
 	.takes-heading {

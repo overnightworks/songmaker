@@ -51,9 +51,9 @@
 
 	// One fact for "is there room to dock": wide enough for the workspace to
 	// give up NOW_PLAYING_DOCKED_WIDTH_PX, and a fine pointer. The compact
-	// shell switches at COMPACT_LAYOUT_MAX_PX (768), far below the dock
-	// threshold (1440), so a docked panel can never end up in the mobile
-	// branch, which has no `.shell-row` to hold it.
+	// shell switches at COMPACT_LAYOUT_MAX_PX (768), below the dock threshold
+	// (NOW_PLAYING_STACKED_MAX_PX, 1099), so a docked panel can never end up
+	// in the mobile branch, which has no `.shell-row` to hold it.
 	$effect(() => {
 		return subscribeCompactLayout((value) => {
 			nowPlayingDockable.set(!value);

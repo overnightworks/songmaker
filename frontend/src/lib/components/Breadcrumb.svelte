@@ -53,6 +53,9 @@
 		flex-shrink: 0;
 	}
 
+	/* A linked crumb gives room up like any other: pinned at its full width it
+	   took the whole line from the current crumb, which is the one the reader
+	   needs (#185). Everything here ellipsizes, so the trail stays legible. */
 	.crumb-link {
 		background: none;
 		border: none;
@@ -60,7 +63,6 @@
 		font: inherit;
 		color: var(--text-muted);
 		cursor: pointer;
-		flex-shrink: 0;
 	}
 
 	.crumb-link:hover {

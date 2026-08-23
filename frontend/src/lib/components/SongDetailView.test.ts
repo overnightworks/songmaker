@@ -11,6 +11,7 @@ import type {
 } from '$lib/api/types';
 import {
 	ALBUM_COVER_ALT_TYPE,
+	COMPACT_LAYOUT_MAX_PX,
 	COMPACT_LAYOUT_MEDIA,
 	EDITOR_GENERATE_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
@@ -144,6 +145,10 @@ vi.mock('$lib/stores/toast', () => ({
 
 import SongDetailView from './SongDetailView.svelte';
 import songDetailViewSource from './SongDetailView.svelte?raw';
+import editorHeaderSource from './editor/EditorHeader.svelte?raw';
+import recipePanelSource from './editor/RecipePanel.svelte?raw';
+import takesListSource from './editor/TakesList.svelte?raw';
+import writeColumnSource from './editor/WriteColumn.svelte?raw';
 import { addGenerationToPlaylist } from '$lib/api/client';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { addToast } from '$lib/stores/toast';
@@ -996,6 +1001,54 @@ describe('SongDetailView cover hero', () => {
 			'/api/albums/a-local/cover?variant=detail'
 		);
 		expect(target.querySelector('.cover-remove')).toBeNull();
+	});
+});
+
+describe('the editor answers to its own width, not the viewport', () => {
+	// jsdom computes no layout, so these pin the stylesheet; the browser gate
+	// on #185 — 1100 and 1280 with Now Playing docked — is the real proof.
+	it('makes the body under the header the size container its columns query', () => {
+		expect(songDetailViewSource).toMatch(/\.editor-body \{[^}]*container: editor \/ inline-size;/);
+		// The header is deliberately left outside it: a size container is also
+		// the containing block for the fixed overlays the header carries.
+		expect(songDetailViewSource).not.toMatch(/\.detail-panel \{[^}]*container:/);
+	});
+
+	it('stacks Write and Takes until the editor itself has room for both', () => {
+		expect(songDetailViewSource).toMatch(
+			/\.editor-columns \{[^}]*grid-template-columns: minmax\(0, 1fr\);/
+		);
+		expect(songDetailViewSource).toMatch(
+			/@container editor \(min-width: 680px\) \{\s*\.editor-columns \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/
+		);
+		// No track with a pixel floor of its own — the takes column's 360px
+		// was what pushed a take row's actions outside `main`.
+		expect(songDetailViewSource).not.toMatch(/minmax\(\d+px/);
+	});
+
+	it('scrolls the body under the header rather than clipping a stacked column', () => {
+		expect(songDetailViewSource).toMatch(
+			/\.detail-panel:not\(\.compact\) \.editor-body \{[^}]*overflow: hidden auto;/
+		);
+		// The compact shell keeps its own rule: `main` scrolls the whole panel,
+		// whose bottom padding is what clears the sticky Generate bar.
+		expect(songDetailViewSource).not.toMatch(/\n\t\.editor-body \{[^}]*overflow:/);
+	});
+
+	it('asks the viewport nothing but whether the shell is compact', () => {
+		const editorStylesheets = {
+			SongDetailView: songDetailViewSource,
+			EditorHeader: editorHeaderSource,
+			RecipePanel: recipePanelSource,
+			TakesList: takesListSource,
+			WriteColumn: writeColumnSource
+		};
+		for (const [component, source] of Object.entries(editorStylesheets)) {
+			const widthQueries = source.match(/@media \([^)]*width[^)]*\)/g) ?? [];
+			expect(widthQueries, component).toEqual(
+				widthQueries.map(() => `@media (max-width: ${COMPACT_LAYOUT_MAX_PX}px)`)
+			);
+		}
 	});
 });
 

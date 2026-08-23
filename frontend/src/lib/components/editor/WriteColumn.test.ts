@@ -21,6 +21,7 @@ import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import WriteColumn from './WriteColumn.svelte';
+import writeColumnSource from './WriteColumn.svelte?raw';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -178,5 +179,31 @@ describe('WriteColumn Co-Writer mode', () => {
 			loadSpy.mockRestore();
 			audioPlayer.current = null;
 		}
+	});
+});
+
+describe("WriteColumn Co-Writer at the editor's own width", () => {
+	// jsdom computes no grid layout, so this pins the stylesheet; the browser
+	// gate on #185 reads the Co-Writer beside a docked Now Playing.
+	it('stacks chat, lyrics and the take strip until the editor has room for three', () => {
+		expect(writeColumnSource).toMatch(
+			/\.cowriter-columns \{[^}]*grid-template-columns: minmax\(0, 1fr\);/
+		);
+		expect(writeColumnSource).toMatch(
+			/@container editor \(min-width: 680px\) \{[^@]*\.cowriter-columns \{\s*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\) auto;/
+		);
+	});
+
+	it('lets the stacked parts run on rather than share one squeezed height', () => {
+		// Sharing it cut the lyrics column below its content, which then spilled
+		// over the take strip; only a part with a column of its own, or alone in
+		// the compact sheet, can scroll in place.
+		const stacked = /\n\t\.cowriter-mode \{([^}]*)\}/.exec(writeColumnSource)?.[1];
+		expect(stacked).toBeDefined();
+		expect(stacked).not.toMatch(/\bheight: 100%/);
+		expect(writeColumnSource).toMatch(/\.cowriter-mode\.compact \{\s*height: 100%;/);
+		expect(writeColumnSource).toMatch(
+			/@container editor \(min-width: 680px\) \{\s*\.cowriter-mode \{\s*flex: 1;\s*min-height: 0;/
+		);
 	});
 });
