@@ -55,11 +55,20 @@ function workingWorker(): FakeAlignmentWorker {
 	return worker;
 }
 
+// A platform that refuses the worker outright: a stricter CSP or a chunk
+// served with the wrong MIME type makes the constructor itself throw.
+function RefusedWorker(): never {
+	throw new DOMException('Blocked by policy', 'SecurityError');
+}
+
+/** What a platform without workers at all — SSR, jsdom — offers. */
+const NO_WORKER = undefined;
+
 // The service keeps one worker and one in-flight take per module instance, so
 // each test starts from a fresh copy of it.
-async function loadService(withWorker: boolean) {
+async function loadService(workerConstructor: unknown) {
 	FakeAlignmentWorker.latest = null;
-	vi.stubGlobal('Worker', withWorker ? FakeAlignmentWorker : undefined);
+	vi.stubGlobal('Worker', workerConstructor);
 	vi.resetModules();
 	return await import('./lyricsAlignment.svelte');
 }
@@ -71,13 +80,13 @@ afterEach(() => {
 
 describe('alignInWorker', () => {
 	it('aligns the take with the same pure function when the platform has no worker', async () => {
-		const { alignInWorker } = await loadService(false);
+		const { alignInWorker } = await loadService(NO_WORKER);
 
 		await expect(alignInWorker(LYRICS, CUES)).resolves.toEqual(alignLyricsToCues(LYRICS, CUES));
 	});
 
 	it('resolves with the lines the worker sends back for the take it was given', async () => {
-		const { alignInWorker } = await loadService(true);
+		const { alignInWorker } = await loadService(FakeAlignmentWorker);
 
 		const aligned = alignInWorker(LYRICS, CUES);
 		const [request] = workingWorker().requests;
@@ -90,7 +99,7 @@ describe('alignInWorker', () => {
 	it('sends cues held in reactive state across the worker boundary', async () => {
 		// Share pages read the playing take's cues off `$state`, and a proxy
 		// cannot be structured-cloned — the take has to cross as plain data.
-		const { alignInWorker } = await loadService(true);
+		const { alignInWorker } = await loadService(FakeAlignmentWorker);
 
 		const aligned = alignInWorker(LYRICS, stateProxy(CUES));
 		const [request] = workingWorker().requests;
@@ -101,7 +110,7 @@ describe('alignInWorker', () => {
 	});
 
 	it('settles a superseded take with no lines and answers only the latest one', async () => {
-		const { alignInWorker } = await loadService(true);
+		const { alignInWorker } = await loadService(FakeAlignmentWorker);
 
 		const superseded = alignInWorker(LYRICS, CUES);
 		const latest = alignInWorker(LYRICS, CUES.slice(0, 1));
@@ -116,7 +125,7 @@ describe('alignInWorker', () => {
 	});
 
 	it('reuses the one worker across takes', async () => {
-		const { alignInWorker } = await loadService(true);
+		const { alignInWorker } = await loadService(FakeAlignmentWorker);
 
 		alignInWorker(LYRICS, CUES);
 		const first = workingWorker();
@@ -125,10 +134,20 @@ describe('alignInWorker', () => {
 		expect(workingWorker()).toBe(first);
 	});
 
+	it('aligns the take on the main thread when no worker can be constructed', async () => {
+		// The constructor throws where the caller cannot catch it, so the take
+		// would otherwise take the whole panel down with it.
+		const { alignInWorker } = await loadService(RefusedWorker);
+		const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		await expect(alignInWorker(LYRICS, CUES)).resolves.toEqual(alignLyricsToCues(LYRICS, CUES));
+		expect(logged).toHaveBeenCalled();
+	});
+
 	it('aligns the take in flight on the main thread when the worker fails', async () => {
 		// An offline listener whose cache never held the worker chunk gets the
 		// pre-#158 behaviour rather than lyrics that never follow.
-		const { alignInWorker } = await loadService(true);
+		const { alignInWorker } = await loadService(FakeAlignmentWorker);
 		const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const aligned = alignInWorker(LYRICS, CUES);
@@ -139,7 +158,7 @@ describe('alignInWorker', () => {
 	});
 
 	it('starts a fresh worker for the take after a failed one', async () => {
-		const { alignInWorker } = await loadService(true);
+		const { alignInWorker } = await loadService(FakeAlignmentWorker);
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		alignInWorker(LYRICS, CUES);

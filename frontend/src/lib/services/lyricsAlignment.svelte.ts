@@ -77,13 +77,23 @@ export function alignInWorker(
 	const takeCues = $state.snapshot(cues) as WhisperCue[];
 	if (typeof Worker === 'undefined') return Promise.resolve(alignLyricsToCues(lyrics, takeCues));
 
-	worker ??= startWorker();
+	// Constructing a worker can fail outright — a stricter CSP, a chunk served
+	// with the wrong MIME type — and it throws where the caller can no longer
+	// catch it, so the take takes the same road as a worker that dies later.
+	let running: Worker;
+	try {
+		running = worker ??= startWorker();
+	} catch (cause) {
+		console.error(`Lyrics alignment worker could not start, aligning on the main thread: ${cause}`);
+		return Promise.resolve(alignLyricsToCues(lyrics, takeCues));
+	}
+
 	supersedeAwaited();
 	const id = ++lastRequestId;
 	const aligned = new Promise<AlignedLyricLine[] | null>((resolve) => {
 		awaited = { id, lyrics, cues: takeCues, resolve };
 	});
-	worker.postMessage({ id, lyrics, cues: takeCues } satisfies AlignmentRequest);
+	running.postMessage({ id, lyrics, cues: takeCues } satisfies AlignmentRequest);
 	return aligned;
 }
 
