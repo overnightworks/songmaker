@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from songmaker_cli.constants import SECRET_ENV_KEYS
-from songmaker_cli.scoring.models import SongScores
+from songmaker_cli.scoring.models import ScorerOutcome, ScorerRun, SongScores
 from songmaker_cli.scoring.subprocess_runner import (
     EnvProbeRequest,
     EnvProbeResponse,
@@ -292,6 +292,63 @@ def test_scorer_process_restarts_after_kill(tmp_path: Path) -> None:
     assert isinstance(result, SongScores)
     assert sp.alive
     assert sp._process.pid != old_pid
+    sp.shutdown()
+
+
+def _empty_config():
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+
+    return PipelineConfig(device="cpu")
+
+
+def _run_returning(result: SongScores, sp: ScorerProcess, mp3: Path) -> None:
+    """Drive one real request whose result is canned, so a test can pin what
+    the reported outcomes do to the child without running a real scorer."""
+    from unittest.mock import patch
+
+    with patch.object(ScorerProcess, "_poll_response", return_value=result):
+        sp.score(mp3, scorers=[], config=_empty_config())
+
+
+def test_a_child_that_timed_out_a_scorer_is_not_reused_by_the_next_request(
+    tmp_path: Path,
+) -> None:
+    """The scorer was abandoned, not stopped, so it still runs in that child.
+    The next request gets a fresh one even if nobody recycled it — a job
+    cancelled before it could is exactly that case."""
+    mp3 = tmp_path / "test.mp3"
+    mp3.write_bytes(b"fake")
+    timed_out = SongScores(
+        runs=(ScorerRun(scorer="text_accuracy", outcome=ScorerOutcome.TIMED_OUT),),
+    )
+
+    sp = ScorerProcess()
+    _run_returning(timed_out, sp, mp3)
+    tainted_pid = sp._process.pid
+
+    result = sp.score(mp3, scorers=[], config=_empty_config())
+
+    assert isinstance(result, SongScores)
+    assert sp._process.pid != tainted_pid
+    sp.shutdown()
+
+
+def test_a_child_that_kept_every_scorer_in_budget_serves_the_next_request(
+    tmp_path: Path,
+) -> None:
+    mp3 = tmp_path / "test.mp3"
+    mp3.write_bytes(b"fake")
+    clean = SongScores(
+        runs=(ScorerRun(scorer="text_accuracy", outcome=ScorerOutcome.OK),),
+    )
+
+    sp = ScorerProcess()
+    _run_returning(clean, sp, mp3)
+    first_pid = sp._process.pid
+
+    sp.score(mp3, scorers=[], config=_empty_config())
+
+    assert sp._process.pid == first_pid
     sp.shutdown()
 
 

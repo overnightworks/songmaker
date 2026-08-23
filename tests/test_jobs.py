@@ -687,6 +687,46 @@ def test_scoring_job_keeps_the_child_when_every_scorer_stayed_in_budget(
     assert live_scorer_process._process.pid == pid_before
 
 
+def test_a_cancelled_job_still_keeps_its_tainted_child_out_of_the_next_request(
+    seeded_db, tmp_path: Path, live_scorer_process,
+) -> None:
+    """A job cancelled while scoring returns before it can recycle anything.
+    The child it left a scorer running in must still not serve the next
+    request — ScorerProcess refuses to hand it out."""
+    from songmaker_cli.scoring.pipeline import PipelineConfig
+    from songmaker_cli.scoring.subprocess_runner import ScorerProcess
+
+    _seed_generation(seeded_db)
+    audio_dir = _audio_dir_with_mp3(tmp_path)
+    pid_before = live_scorer_process._process.pid
+
+    def _cancel_and_report_a_timeout(*_args, **_kwargs) -> SongScores:
+        _cancel_job(seeded_db, "j2")
+        return _scoring_result(timed_out=True)
+
+    with (
+        patch(
+            "songmaker_cli.jobs.get_scorer_process", return_value=live_scorer_process,
+        ),
+        patch.object(
+            ScorerProcess, "_poll_response", side_effect=_cancel_and_report_a_timeout,
+        ),
+    ):
+        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
+
+    with seeded_db() as session:
+        assert get_job(session, "j2").status == "cancelled"
+    assert live_scorer_process._process.pid == pid_before, (
+        "the cancelled job returned before it could recycle anything"
+    )
+
+    live_scorer_process.score(
+        audio_dir / "user1" / "g1.mp3", scorers=[], config=PipelineConfig(device="cpu"),
+    )
+
+    assert live_scorer_process._process.pid != pid_before
+
+
 def test_scoring_job_keeps_the_child_when_only_the_parents_judge_timed_out(
     seeded_db, tmp_path: Path, live_scorer_process, monkeypatch: pytest.MonkeyPatch,
     stubbed_claude_judge, caplog: pytest.LogCaptureFixture,
