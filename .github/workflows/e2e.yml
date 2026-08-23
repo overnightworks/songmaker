@@ -1,0 +1,93 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COMPOSE_FILES: -f docker-compose.yml -f docker-compose.ci.yml
+  WEB_PORT: 8080
+  # Throwaway values for an ephemeral, single-run CI database — never reused,
+  # never real secrets.
+  POSTGRES_PASSWORD: e2e-ci-postgres-password
+  SESSION_SECRET: e2e-ci-session-secret-do-not-reuse-anywhere-else
+  SONGMAKER_INTERNAL_TOKEN: e2e-ci-internal-token
+  ADMIN_USERNAME: e2e-ci-admin
+  # Must pass check_password_strength (src/songmaker_cli/auth.py).
+  ADMIN_PASSWORD: "E2eCiSmoke#2026!"
+
+jobs:
+  smoke:
+    name: Boot stack + smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Reset stack
+        run: docker compose $COMPOSE_FILES down -v
+
+      - name: Boot stack
+        run: docker compose $COMPOSE_FILES up -d --build --wait postgres redis migrate songmaker-web
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          base="http://localhost:${WEB_PORT}"
+          cookies="$(mktemp)"
+
+          # /health always returns 200 regardless of body, so assert the body:
+          # no music/scoring worker runs in this stack, so "degraded" is
+          # expected, but db and redis must both be reachable.
+          health="$(curl -fsS --retry 10 --retry-delay 2 --retry-connrefused "$base/health")"
+          db_ok="$(jq -r '.db' <<<"$health")"
+          redis_ok="$(jq -r '.redis' <<<"$health")"
+          [ "$db_ok" = "ok" ] && [ "$redis_ok" = "ok" ] || {
+            echo "expected db=ok redis=ok, got db=$db_ok redis=$redis_ok" >&2
+            echo "$health" >&2
+            exit 1
+          }
+
+          setup_required="$(curl -fsS "$base/api/auth/setup-required" | jq -r '.required')"
+          [ "$setup_required" = "false" ] || {
+            echo "expected setup-required=false (admin auto-setup from ADMIN_* env), got $setup_required" >&2
+            exit 1
+          }
+
+          login_status="$(curl -sS -o /tmp/login.json -w '%{http_code}' -c "$cookies" \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
+            "$base/api/auth/login")"
+          [ "$login_status" = "200" ] || { echo "login failed: $login_status" >&2; cat /tmp/login.json >&2; exit 1; }
+          grep -q session_id "$cookies" || { echo "no session cookie set on login" >&2; exit 1; }
+
+          me_status="$(curl -sS -o /tmp/me.json -w '%{http_code}' -b "$cookies" "$base/api/auth/me")"
+          [ "$me_status" = "200" ] || { echo "me failed: $me_status" >&2; cat /tmp/me.json >&2; exit 1; }
+
+      - name: Dump compose logs
+        if: failure()
+        run: docker compose $COMPOSE_FILES logs --no-color > compose-logs.txt
+
+      - name: Upload compose logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-compose-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: compose-logs.txt
+          retention-days: 14
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose $COMPOSE_FILES down -v
