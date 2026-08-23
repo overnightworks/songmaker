@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
 
+from songmaker_cli.constants import SECRET_ENV_KEYS
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import PipelineConfig
@@ -98,7 +99,25 @@ def _release_scorer_models() -> None:
         pass
 
 
+def _scrub_secret_env_vars() -> None:
+    """Drop SECRET_ENV_KEYS from this process's own environment.
+
+    multiprocessing's spawn start method has no ``env=`` parameter — unlike
+    subprocess.Popen, the child inherits the parent's full os.environ at
+    spawn time (see claude/provider.py's ``_scrub_env`` and
+    acestep_worker/subprocess_runner.py's ``build_env`` for the equivalent
+    scrub on subprocesses that do accept ``env=``). This is the child-side
+    equivalent: called first thing in ``_child_main``, before any import
+    that might read the environment on its own.
+    """
+    for key in SECRET_ENV_KEYS:
+        if key in os.environ:
+            del os.environ[key]
+
+
 def _child_main(conn: Connection) -> None:
+    _scrub_secret_env_vars()
+
     from songmaker_cli.scoring.pipeline import default_registry, run_scoring_pipeline
 
     signal.signal(signal.SIGTERM, _cleanup_gpu_and_exit)

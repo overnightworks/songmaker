@@ -5,10 +5,12 @@ from __future__ import annotations
 import multiprocessing
 import os
 import signal
+from multiprocessing.connection import Connection
 from pathlib import Path
 
 import pytest
 
+from songmaker_cli.constants import SECRET_ENV_KEYS
 from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.subprocess_runner import (
     ReleaseGpuRequest,
@@ -18,6 +20,7 @@ from songmaker_cli.scoring.subprocess_runner import (
     ScorerProcess,
     ShutdownRequest,
     _child_main,
+    _scrub_secret_env_vars,
     get_scorer_process,
     set_scorer_process,
 )
@@ -152,6 +155,47 @@ def test_child_handles_score_error(tmp_path: Path) -> None:
     assert resp.error is not None or (
         resp.scores is not None and resp.scores.text_accuracy is None
     )
+
+
+# ── Secret env scrubbing ─────────────────────────────────────────
+
+_TEST_MARKER_KEY = "SONGMAKER_TEST_NON_SECRET_MARKER"
+
+
+def _env_probe_child(conn: Connection, keys: list[str]) -> None:
+    _scrub_secret_env_vars()
+    conn.send({key: os.environ.get(key) for key in keys})
+    conn.close()
+
+
+def test_scorer_child_drops_secret_env_keys_at_spawn() -> None:
+    """The scorer child inherits the full parent env at spawn (multiprocessing
+    has no env= parameter), so it must scrub secrets itself, first thing.
+    """
+    probed_keys = [*SECRET_ENV_KEYS, _TEST_MARKER_KEY]
+    previous = {key: os.environ.get(key) for key in probed_keys}
+    for key in SECRET_ENV_KEYS:
+        os.environ[key] = "leaked-secret-value"
+    os.environ[_TEST_MARKER_KEY] = "visible-non-secret"
+    try:
+        parent_conn, child_conn = _ctx.Pipe()
+        proc = _ctx.Process(target=_env_probe_child, args=(child_conn, probed_keys))
+        proc.start()
+        child_conn.close()
+        assert parent_conn.poll(timeout=10)
+        seen = parent_conn.recv()
+        proc.join(timeout=5)
+        parent_conn.close()
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    for key in SECRET_ENV_KEYS:
+        assert seen[key] is None, f"{key} leaked into the scorer child's environment"
+    assert seen[_TEST_MARKER_KEY] == "visible-non-secret"
 
 
 # ── ScorerProcess class ──────────────────────────────────────────
