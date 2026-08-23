@@ -30,7 +30,7 @@
 	<span class="song-name">{song.title}</span>
 	<AgeStamp createdAt={song.created_at} />
 	<span class="song-meta">
-		{song.generation_count} gen{song.generation_count !== 1 ? 's' : ''}
+		{song.generation_count} take{song.generation_count !== 1 ? 's' : ''}
 	</span>
 </div>
 
