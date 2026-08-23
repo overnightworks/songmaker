@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import Album, Generation, Song
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
+from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
 from songmaker_cli.db.soft_delete import include_deleted
 from songmaker_cli.settings import get_settings
@@ -112,13 +113,6 @@ def create_album(
     return album
 
 
-class _Unset:
-    """Sentinel distinguishing "field not provided" from an explicit clear."""
-
-
-UNSET = _Unset()
-
-
 def update_album(
     session: Session,
     album_id: str,
@@ -134,16 +128,18 @@ def update_album(
     album = session.query(Album).filter_by(id=album_id).first()
     if not album:
         raise ValueError(f"Album not found: {album_id}")
+    applied: dict[str, str] = {}
     if title is not None:
         album.title = title
+        applied["title"] = title
     if not isinstance(subtitle, _Unset):
         album.subtitle = subtitle
+        applied["subtitle"] = subtitle
     if not isinstance(year, _Unset):
         album.year = year
+        applied["year"] = year
     session.flush()
-    log.info(
-        "Updated album %s (title=%r subtitle=%r year=%r)", album_id, title, subtitle, year,
-    )
+    log.info("Updated album %s: %s", album_id, applied)
     return album
 
 

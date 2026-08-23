@@ -116,6 +116,22 @@ describe('EditableTitle', () => {
 		await vi.waitFor(() => expect(onsave).toHaveBeenCalledWith(''));
 	});
 
+	it('keeps the field in edit mode with the draft intact when onsave rejects', async () => {
+		const onsave = vi.fn().mockRejectedValue(new Error('save failed'));
+		const target = await render({ value: 'Night Drive', onsave });
+		requireElement<HTMLButtonElement>(target, '.editable-title-display').click();
+		await tick();
+		const input = requireElement<HTMLInputElement>(target, '.editable-title-input');
+		input.value = 'Sunset Drive';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await vi.waitFor(() => expect(onsave).toHaveBeenCalledWith('Sunset Drive'));
+		await tick();
+		const stillEditing = requireElement<HTMLInputElement>(target, '.editable-title-input');
+		expect(stillEditing.value).toBe('Sunset Drive');
+		expect(stillEditing.disabled).toBe(false);
+	});
+
 	it('shows the placeholder in place of an empty value and keeps it clickable', async () => {
 		const target = await render({
 			value: '',

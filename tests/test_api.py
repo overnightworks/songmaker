@@ -217,7 +217,7 @@ def test_rename_song_not_found(client: TestClient) -> None:
 
 
 def test_rename_album(client: TestClient) -> None:
-    resp = client.put("/api/albums/rock/title", json={"title": "Metal Album"})
+    resp = client.put("/api/albums/rock", json={"title": "Metal Album"})
     assert resp.status_code == 200
     assert resp.json()["title"] == "Metal Album"
     after = client.get("/api/albums/rock")
@@ -225,28 +225,28 @@ def test_rename_album(client: TestClient) -> None:
 
 
 def test_rename_album_strips_whitespace(client: TestClient) -> None:
-    resp = client.put("/api/albums/rock/title", json={"title": "  Metal  "})
+    resp = client.put("/api/albums/rock", json={"title": "  Metal  "})
     assert resp.status_code == 200
     assert resp.json()["title"] == "Metal"
 
 
 def test_rename_album_rejects_empty(client: TestClient) -> None:
-    resp = client.put("/api/albums/rock/title", json={"title": ""})
+    resp = client.put("/api/albums/rock", json={"title": ""})
     assert resp.status_code == 422
 
 
 def test_rename_album_rejects_whitespace_only(client: TestClient) -> None:
-    resp = client.put("/api/albums/rock/title", json={"title": "   "})
+    resp = client.put("/api/albums/rock", json={"title": "   "})
     assert resp.status_code == 422
 
 
 def test_rename_album_rejects_too_long(client: TestClient) -> None:
-    resp = client.put("/api/albums/rock/title", json={"title": "x" * 201})
+    resp = client.put("/api/albums/rock", json={"title": "x" * 201})
     assert resp.status_code == 422
 
 
 def test_rename_album_not_found(client: TestClient) -> None:
-    resp = client.put("/api/albums/nonexistent/title", json={"title": "Metal"})
+    resp = client.put("/api/albums/nonexistent", json={"title": "Metal"})
     assert resp.status_code == 404
 
 
@@ -321,7 +321,7 @@ def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
     app.include_router(router)
     tc = TestClient(app)
 
-    resp = tc.put("/api/albums/other/title", json={"title": "Hijacked"})
+    resp = tc.put("/api/albums/other", json={"title": "Hijacked"})
     assert resp.status_code == 404
     with factory() as session:
         assert session.query(Album).filter_by(id="other").first().title == "Other Album"

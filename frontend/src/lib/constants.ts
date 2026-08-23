@@ -197,10 +197,12 @@ export const ALBUM_ADD_SONG_GLYPH = '+';
 
 export const ALBUM_SUBTITLE_LABEL = 'Album subtitle';
 export const ALBUM_SUBTITLE_PLACEHOLDER = 'Add subtitle';
+export const ALBUM_SUBTITLE_MAX_LENGTH = 400;
 export const ALBUM_YEAR_LABEL = 'Album year';
 export const ALBUM_YEAR_PLACEHOLDER = 'Add year';
 export const ALBUM_YEAR_MIN = 1900;
 export const ALBUM_YEAR_MAX = 2100;
+export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
 
 export const RAIL_LIBRARY_LABEL = 'Library';
 export const RAIL_SETTINGS_LABEL = 'Settings';

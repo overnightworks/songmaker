@@ -15,7 +15,7 @@ from conftest import login_and_csrf, make_test_app
 from sqlalchemy import event
 
 from songmaker_cli.auth import hash_password
-from songmaker_cli.db.models import Album, Generation, Song, User, Version
+from songmaker_cli.db.models import Album, AuditLog, Generation, Song, User, Version
 
 _ADMIN_USER = "admin"
 _ADMIN_PASSWORD = "admin12345"
@@ -154,7 +154,7 @@ def metadata_client(tmp_path: Path):
 
 def test_update_album_subtitle(metadata_client) -> None:
     client, _ = metadata_client
-    resp = client.put("/api/albums/meta-album/title", json={"subtitle": "Live at the Roxy"})
+    resp = client.put("/api/albums/meta-album", json={"subtitle": "Live at the Roxy"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["subtitle"] == "Live at the Roxy"
@@ -164,14 +164,14 @@ def test_update_album_subtitle(metadata_client) -> None:
 
 def test_update_album_subtitle_empty_clears(metadata_client) -> None:
     client, _ = metadata_client
-    resp = client.put("/api/albums/meta-album/title", json={"subtitle": ""})
+    resp = client.put("/api/albums/meta-album", json={"subtitle": ""})
     assert resp.status_code == 200
     assert resp.json()["subtitle"] == ""
 
 
 def test_update_album_year(metadata_client) -> None:
     client, _ = metadata_client
-    resp = client.put("/api/albums/meta-album/title", json={"year": 2010})
+    resp = client.put("/api/albums/meta-album", json={"year": 2010})
     assert resp.status_code == 200
     body = resp.json()
     assert body["year"] == "2010"
@@ -180,7 +180,7 @@ def test_update_album_year(metadata_client) -> None:
 
 def test_update_album_year_below_range_rejected(metadata_client) -> None:
     client, _ = metadata_client
-    resp = client.put("/api/albums/meta-album/title", json={"year": 1899})
+    resp = client.put("/api/albums/meta-album", json={"year": 1899})
     assert resp.status_code == 422
     after = client.get("/api/albums/meta-album")
     assert after.json()["year"] == "1999"
@@ -188,13 +188,13 @@ def test_update_album_year_below_range_rejected(metadata_client) -> None:
 
 def test_update_album_year_above_range_rejected(metadata_client) -> None:
     client, _ = metadata_client
-    resp = client.put("/api/albums/meta-album/title", json={"year": 2101})
+    resp = client.put("/api/albums/meta-album", json={"year": 2101})
     assert resp.status_code == 422
 
 
 def test_update_album_fields_are_independent(metadata_client) -> None:
     client, _ = metadata_client
-    resp = client.put("/api/albums/meta-album/title", json={"subtitle": "New Sub"})
+    resp = client.put("/api/albums/meta-album", json={"subtitle": "New Sub"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["title"] == "Meta Album"
@@ -203,12 +203,20 @@ def test_update_album_fields_are_independent(metadata_client) -> None:
 
 def test_update_album_no_fields_leaves_metadata_unchanged(metadata_client) -> None:
     client, _ = metadata_client
-    resp = client.put("/api/albums/meta-album/title", json={})
+    resp = client.put("/api/albums/meta-album", json={})
     assert resp.status_code == 200
     body = resp.json()
     assert body["title"] == "Meta Album"
     assert body["subtitle"] == "Old Subtitle"
     assert body["year"] == "1999"
+
+
+def test_update_album_no_fields_writes_no_audit_row(metadata_client) -> None:
+    client, factory = metadata_client
+    resp = client.put("/api/albums/meta-album", json={})
+    assert resp.status_code == 200
+    with factory() as session:
+        assert session.query(AuditLog).filter_by(resource_id="meta-album").count() == 0
 
 
 def test_update_album_metadata_other_user_blocked(tmp_path: Path) -> None:
@@ -229,7 +237,7 @@ def test_update_album_metadata_other_user_blocked(tmp_path: Path) -> None:
 
     client, factory = make_test_app(tmp_path, seed_db=_seed)
     login_and_csrf(client, "intruder", "intruder12345")
-    resp = client.put("/api/albums/theirs/title", json={"subtitle": "Hijacked"})
+    resp = client.put("/api/albums/theirs", json={"subtitle": "Hijacked"})
     assert resp.status_code == 404
     with factory() as session:
         assert session.query(Album).filter_by(id="theirs").first().subtitle == "Untouched"

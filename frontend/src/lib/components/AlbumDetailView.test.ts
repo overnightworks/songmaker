@@ -6,13 +6,14 @@ import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import {
 	ALBUM_ART_EMPTY_INITIALS,
 	ALBUM_COVER_ALT_TYPE,
+	ALBUM_YEAR_MIN,
 	collectionRowPlayLabel
 } from '$lib/constants';
 import { albumList, selectedAlbumId, songList } from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 
 const uploadAlbumCover = vi.fn();
-const updateAlbumMetadata = vi.fn();
+const updateAlbum = vi.fn();
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -20,8 +21,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		...actual,
 		uploadAlbumCover: (...args: unknown[]) => uploadAlbumCover(...args),
 		deleteAlbumCover: vi.fn(),
-		renameAlbum: vi.fn(),
-		updateAlbumMetadata: (...args: unknown[]) => updateAlbumMetadata(...args),
+		updateAlbum: (...args: unknown[]) => updateAlbum(...args),
 		shareAlbum: vi.fn(),
 		unshareAlbum: vi.fn(),
 		deleteAlbum: vi.fn().mockResolvedValue(undefined),
@@ -153,7 +153,7 @@ beforeEach(() => {
 	songList.set([song()]);
 	selectedAlbumId.set('a-local');
 	uploadAlbumCover.mockReset();
-	updateAlbumMetadata.mockReset();
+	updateAlbum.mockReset();
 	vi.mocked(selectSong).mockReset();
 	vi.mocked(playAlbumSong).mockReset();
 });
@@ -274,9 +274,9 @@ describe('AlbumDetailView subtitle and year', () => {
 		expect(target.querySelector('.album-meta')?.textContent).toContain('1994');
 	});
 
-	it('saves an edited subtitle through updateAlbumMetadata and updates the store', async () => {
+	it('saves an edited subtitle through updateAlbum and updates the store', async () => {
 		albumList.set([album({ subtitle: 'Old Subtitle', year: '1999' })]);
-		updateAlbumMetadata.mockResolvedValue(album({ subtitle: 'New Subtitle', year: '1999' }));
+		updateAlbum.mockResolvedValue(album({ subtitle: 'New Subtitle', year: '1999' }));
 		const target = await renderDetail();
 		requireElement<HTMLButtonElement>(target, '.album-meta .editable-title-display').click();
 		await tick();
@@ -285,15 +285,15 @@ describe('AlbumDetailView subtitle and year', () => {
 		input.dispatchEvent(new Event('input', { bubbles: true }));
 		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 		await vi.waitFor(() =>
-			expect(updateAlbumMetadata).toHaveBeenCalledWith('a-local', { subtitle: 'New Subtitle' })
+			expect(updateAlbum).toHaveBeenCalledWith('a-local', { subtitle: 'New Subtitle' })
 		);
 		await tick();
 		expect(get(albumList)[0].subtitle).toBe('New Subtitle');
 	});
 
-	it('saves an edited year as a number through updateAlbumMetadata', async () => {
+	it('saves an edited year as a number through updateAlbum', async () => {
 		albumList.set([album({ subtitle: '', year: '1999' })]);
-		updateAlbumMetadata.mockResolvedValue(album({ subtitle: '', year: '2005' }));
+		updateAlbum.mockResolvedValue(album({ subtitle: '', year: '2005' }));
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
 			'.album-meta .editable-title-display'
@@ -305,14 +305,12 @@ describe('AlbumDetailView subtitle and year', () => {
 		input.value = '2005';
 		input.dispatchEvent(new Event('input', { bubbles: true }));
 		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-		await vi.waitFor(() =>
-			expect(updateAlbumMetadata).toHaveBeenCalledWith('a-local', { year: 2005 })
-		);
+		await vi.waitFor(() => expect(updateAlbum).toHaveBeenCalledWith('a-local', { year: 2005 }));
 	});
 
-	it('clears the year through updateAlbumMetadata when emptied', async () => {
+	it('clears the year through updateAlbum when emptied', async () => {
 		albumList.set([album({ subtitle: '', year: '1999' })]);
-		updateAlbumMetadata.mockResolvedValue(album({ subtitle: '', year: '' }));
+		updateAlbum.mockResolvedValue(album({ subtitle: '', year: '' }));
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
 			'.album-meta .editable-title-display'
@@ -324,12 +322,10 @@ describe('AlbumDetailView subtitle and year', () => {
 		input.value = '';
 		input.dispatchEvent(new Event('input', { bubbles: true }));
 		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-		await vi.waitFor(() =>
-			expect(updateAlbumMetadata).toHaveBeenCalledWith('a-local', { year: null })
-		);
+		await vi.waitFor(() => expect(updateAlbum).toHaveBeenCalledWith('a-local', { year: null }));
 	});
 
-	it('rejects a non-numeric year without calling updateAlbumMetadata', async () => {
+	it('rejects a non-numeric year without calling updateAlbum', async () => {
 		albumList.set([album({ subtitle: '', year: '1999' })]);
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
@@ -343,7 +339,24 @@ describe('AlbumDetailView subtitle and year', () => {
 		input.dispatchEvent(new Event('input', { bubbles: true }));
 		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 		await tick();
-		expect(updateAlbumMetadata).not.toHaveBeenCalled();
+		expect(updateAlbum).not.toHaveBeenCalled();
+	});
+
+	it('rejects a year outside the plausible range without calling updateAlbum', async () => {
+		albumList.set([album({ subtitle: '', year: '1999' })]);
+		const target = await renderDetail();
+		const displays = target.querySelectorAll<HTMLButtonElement>(
+			'.album-meta .editable-title-display'
+		);
+		displays[displays.length - 1].click();
+		await tick();
+		const inputs = target.querySelectorAll<HTMLInputElement>('.album-meta .editable-title-input');
+		const input = inputs[inputs.length - 1];
+		input.value = String(ALBUM_YEAR_MIN - 1);
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await tick();
+		expect(updateAlbum).not.toHaveBeenCalled();
 	});
 });
 

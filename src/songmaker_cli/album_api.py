@@ -48,6 +48,7 @@ from songmaker_cli.covers import (
     write_album_cover,
 )
 from songmaker_cli.db.queries import (
+    UNSET,
     RestoreWindowExpiredError,
     cleanup_album,
     count_albums,
@@ -63,7 +64,6 @@ from songmaker_cli.db.queries import (
     soft_delete_album,
     update_album,
 )
-from songmaker_cli.db.queries.albums import UNSET
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 
@@ -134,7 +134,7 @@ def api_create_album(
     return AlbumResponse.from_orm(album, picked_count=0)
 
 
-@router.put("/albums/{album_id}/title")
+@router.put("/albums/{album_id}")
 def api_update_album(
     album_id: str, req: AlbumUpdateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
@@ -144,11 +144,15 @@ def api_update_album(
 
     Each field is independently optional: a field absent from the request
     body is left unchanged, letting the header commit one edited field at a
-    time (as EditableTitle already does for title).
+    time (as EditableTitle already does for title). A request with no
+    fields at all is a no-op -- no audit row, no commit.
     """
     album = get_album(session, album_id)
     check_album_access(album, user)
     fields_set = req.model_fields_set
+    if not fields_set:
+        picked_counts = count_picked_songs_by_album(session, [album.id])
+        return AlbumResponse.from_orm(album, picked_count=picked_counts.get(album.id, 0))
 
     title: str | None = None
     if "title" in fields_set:

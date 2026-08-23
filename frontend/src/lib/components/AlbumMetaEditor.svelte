@@ -2,8 +2,10 @@
 	import EditableTitle from './EditableTitle.svelte';
 	import {
 		ALBUM_SUBTITLE_LABEL,
+		ALBUM_SUBTITLE_MAX_LENGTH,
 		ALBUM_SUBTITLE_PLACEHOLDER,
 		ALBUM_YEAR_LABEL,
+		ALBUM_YEAR_MAX_LENGTH,
 		ALBUM_YEAR_PLACEHOLDER
 	} from '$lib/constants';
 
@@ -25,7 +27,7 @@
 			ariaLabel={ALBUM_SUBTITLE_LABEL}
 			allowEmpty
 			placeholder={ALBUM_SUBTITLE_PLACEHOLDER}
-			maxlength={400}
+			maxlength={ALBUM_SUBTITLE_MAX_LENGTH}
 		/>
 	</span>
 	<span class="album-meta-sep" aria-hidden="true">·</span>
@@ -36,7 +38,7 @@
 			ariaLabel={ALBUM_YEAR_LABEL}
 			allowEmpty
 			placeholder={ALBUM_YEAR_PLACEHOLDER}
-			maxlength={4}
+			maxlength={ALBUM_YEAR_MAX_LENGTH}
 			inputmode="numeric"
 		/>
 	</span>

@@ -200,6 +200,8 @@ describe('CollectionHeader', () => {
 			render: () => `<p class="album-meta-stub">Live at the Roxy · 1994</p>`
 		}));
 		const target = await render({ ...baseProps(), metaEditor });
+		const heading = getByRoleHeading(target, 'Night Drive');
+		expect(heading.tagName).toBe('H2');
 		const titles = requireElement(target, '.header-titles');
 		const stub = requireElement(titles, '.album-meta-stub');
 		expect(stub.textContent).toBe('Live at the Roxy · 1994');
@@ -209,7 +211,7 @@ describe('CollectionHeader', () => {
 		).toBeTruthy();
 	});
 
-	it('omits the metaEditor area for playlists, which never pass one', async () => {
+	it('renders no metaEditor area when the caller passes none, as playlists do', async () => {
 		const target = await render({ ...baseProps(), kind: 'playlist' as const });
 		expect(target.querySelector('.album-meta-stub')).toBeNull();
 	});

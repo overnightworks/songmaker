@@ -2,11 +2,10 @@
 	import {
 		deleteAlbum,
 		deleteAlbumCover,
-		renameAlbum,
 		restoreAlbum,
 		shareAlbum,
 		unshareAlbum,
-		updateAlbumMetadata,
+		updateAlbum,
 		uploadAlbumCover
 	} from '$lib/api/client';
 	import { fetchSongs } from '$lib/api/songs';
@@ -32,6 +31,8 @@
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
 		ALBUM_COVER_ALT_TYPE,
+		ALBUM_YEAR_MAX,
+		ALBUM_YEAR_MIN,
 		collectionRowPlayLabel,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL
@@ -120,7 +121,7 @@
 		if (!selectedAlbum) return;
 		const albumId = selectedAlbum.id;
 		try {
-			const updated = await renameAlbum(albumId, newTitle);
+			const updated = await updateAlbum(albumId, { title: newTitle });
 			updateAlbumInList(albumId, () => updated);
 			addToast('Album renamed', 'success');
 		} catch (e) {
@@ -133,7 +134,7 @@
 		if (!selectedAlbum) return;
 		const albumId = selectedAlbum.id;
 		try {
-			const updated = await updateAlbumMetadata(albumId, { subtitle: newSubtitle });
+			const updated = await updateAlbum(albumId, { subtitle: newSubtitle });
 			updateAlbumInList(albumId, () => updated);
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Update failed', 'error');
@@ -149,8 +150,12 @@
 			addToast('Year must be a whole number', 'error');
 			throw new Error('Year must be a whole number');
 		}
+		if (year !== null && (year < ALBUM_YEAR_MIN || year > ALBUM_YEAR_MAX)) {
+			addToast(`Year must be between ${ALBUM_YEAR_MIN} and ${ALBUM_YEAR_MAX}`, 'error');
+			throw new Error('Year out of range');
+		}
 		try {
-			const updated = await updateAlbumMetadata(albumId, { year });
+			const updated = await updateAlbum(albumId, { year });
 			updateAlbumInList(albumId, () => updated);
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Update failed', 'error');
