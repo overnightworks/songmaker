@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 from typing import Generator
@@ -295,6 +296,21 @@ def test_pipeline_warns_on_unknown_scorer(
     with caplog.at_level(logging.WARNING):
         run_scoring_pipeline(fake_mp3, scorers=["nonexistent"], registry=clean_registry)
     assert "Unknown scorer" in caplog.text
+
+
+def test_pipeline_rejects_a_missing_audio_file(
+    clean_registry: ScorerRegistry, tmp_path: Path,
+) -> None:
+    """No audio file is rejected outright, not scored as an empty success.
+
+    The scorers that would have opened the file are the same ones that may be
+    absent, so leaving this to ``load_audio`` made a missing generation score
+    clean wherever those modules failed to import.
+    """
+    missing = tmp_path / "nonexistent.mp3"
+
+    with pytest.raises(FileNotFoundError, match=re.escape(str(missing))):
+        run_scoring_pipeline(missing, scorers=["silence"], registry=clean_registry)
 
 
 # ── Type validation tests ─────────────────────────────────────────
