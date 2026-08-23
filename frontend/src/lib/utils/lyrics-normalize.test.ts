@@ -5,6 +5,14 @@ describe('normalizeLyricsToken', () => {
 	it.each([
 		['drops trailing punctuation', 'Rahmen,', 'rahmen'],
 		['casefolds without altering an otherwise-equal word', 'Rahmen', 'rahmen'],
+		['casefolds German eszett to ss, matching Python str.casefold()', 'Straße', 'strasse'],
+		['casefolds capital eszett (ẞ) to ss as well', 'GROẞE', 'grosse'],
+		['casefolds a Greek word-final sigma to the regular sigma, matching Python', 'λόγος', 'λόγοσ'],
+		[
+			'leaves Turkish İ as toLowerCase already agrees with Python casefold (i + combining dot)',
+			'İstanbul',
+			'i̇stanbul'
+		],
 		['keeps a straight word-internal apostrophe', "don't", "don't"],
 		['unifies a curly right single quote to a straight apostrophe', 'don’t', "don't"],
 		['unifies a curly reversed-9 quote to a straight apostrophe', 'don‛t', "don't"],
@@ -21,5 +29,6 @@ describe('normalizeLyricsToken', () => {
 	it('treats differently-punctuated/cased tokens as equal keys', () => {
 		expect(normalizeLyricsToken('Rahmen,')).toBe(normalizeLyricsToken('rahmen'));
 		expect(normalizeLyricsToken('don’t')).toBe(normalizeLyricsToken("don't"));
+		expect(normalizeLyricsToken('Straße')).toBe(normalizeLyricsToken('strasse'));
 	});
 });
