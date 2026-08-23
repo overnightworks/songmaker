@@ -49,7 +49,6 @@ from songmaker_cli.db.queries import (
     get_playlist_by_slug,
     get_song_by_slug,
 )
-from songmaker_cli.db.queries.sharing import warm_generation_versions
 from songmaker_cli.middleware import AuthenticatedUser, get_current_user
 from songmaker_cli.queue_streams import (
     build_queue_stream_snapshot,
@@ -226,9 +225,6 @@ def get_shared_album(
     ctx: AppContext = request.app.state.ctx
     songs = sorted(album.songs, key=lambda s: s.track_number)
     picked_by_song = {s.id: _picked_generation(s) for s in songs}
-    warm_generation_versions(
-        db, [gen.id for gen in picked_by_song.values() if gen is not None],
-    )
     cover = None
     if (
         album.cover_key
@@ -358,7 +354,6 @@ def get_shared_song(
     if not song:
         raise HTTPException(404, "Not found")
     gen = _picked_generation(song)
-    warm_generation_versions(db, [gen.id] if gen is not None else [])
     media = share_pick_media(gen)
     cover = None
     if (
@@ -492,9 +487,6 @@ def get_shared_playlist(
     if not playlist:
         raise HTTPException(404, "Not found")
     entries = sorted(playlist.entries, key=lambda e: e.position)
-    warm_generation_versions(
-        db, [e.generation.id for e in entries if e.generation is not None],
-    )
     entry_items = []
     for e in entries:
         if e.generation is None:

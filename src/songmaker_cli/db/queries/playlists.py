@@ -251,6 +251,9 @@ def get_playlist_by_slug(session: Session, slug: str) -> Playlist | None:
             .joinedload(PlaylistEntry.generation)
             .joinedload(Generation.song)
             .joinedload(Song.album),
+            joinedload(Playlist.entries)
+            .joinedload(PlaylistEntry.generation)
+            .joinedload(Generation.version),
         )
         .filter_by(share_slug=slug, is_shared=True)
         .first()
