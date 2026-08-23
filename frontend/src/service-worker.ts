@@ -1,7 +1,7 @@
 /// <reference types="@sveltejs/kit" />
 /// <reference lib="webworker" />
 
-import { build, files, version } from '$service-worker';
+import { base, build, files, version } from '$service-worker';
 import {
 	OFFLINE_STREAMS_CACHE,
 	requestPathname,
@@ -14,8 +14,16 @@ declare const self: ServiceWorkerGlobalScope;
 /** Versioned cache name for the SvelteKit app shell. */
 const APP_SHELL_CACHE = `app-shell-${version}`;
 
-/** Every precacheable URL: app bundle + static files. */
-const PRECACHE_URLS = new Set([...build, ...files]);
+/**
+ * The hashed Web Worker chunks, rewritten into the built file by
+ * `scripts/inject-worker-precache.mjs`. Vite bundles workers in a pass whose
+ * output never reaches the client manifest that `build` is generated from, so
+ * the finished build is the only place these paths exist.
+ */
+const WORKER_CHUNKS = '__SONGMAKER_WORKER_CHUNKS__'.split(',').map((chunk) => base + chunk);
+
+/** Every precacheable URL: app bundle + worker chunks + static files. */
+const PRECACHE_URLS = new Set([...build, ...WORKER_CHUNKS, ...files]);
 
 // ── Install: precache the app shell ───────────────────────────────────────
 
