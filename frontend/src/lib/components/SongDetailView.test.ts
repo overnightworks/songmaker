@@ -26,9 +26,17 @@ import {
 	SONG_COVER_UPLOAD_LABEL,
 	SONG_NEXT_LABEL,
 	SONG_PREVIOUS_LABEL,
-	TAKE_AGAIN_LABEL
+	TAKE_AGAIN_LABEL,
+	TAKE_PLAYLIST_LABEL
 } from '$lib/constants';
-import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
+import {
+	clearHitboxStyles,
+	clearPointer,
+	injectHitboxStyles,
+	minHeightPx,
+	minSquarePx,
+	setPointer
+} from '$lib/test-utils/hitbox';
 import {
 	editGenParams,
 	editLyrics,
@@ -124,7 +132,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		deleteSongCover: (...args: unknown[]) => deleteSongCover(...args),
 		deleteAlbumCover: (...args: unknown[]) => deleteAlbumCover(...args),
 		updateSong: vi.fn(),
-		deleteVersion: vi.fn()
+		deleteVersion: vi.fn(),
+		addGenerationToPlaylist: vi.fn().mockResolvedValue(undefined),
+		fetchPlaylists: vi.fn().mockResolvedValue([])
 	};
 });
 vi.mock('$lib/stores/toast', () => ({
@@ -134,6 +144,8 @@ vi.mock('$lib/stores/toast', () => ({
 
 import SongDetailView from './SongDetailView.svelte';
 import songDetailViewSource from './SongDetailView.svelte?raw';
+import { addGenerationToPlaylist } from '$lib/api/client';
+import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { addToast } from '$lib/stores/toast';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -260,16 +272,6 @@ function stubLibraryMedia(options: { narrow: boolean; compact?: boolean }): void
 	);
 }
 
-function px(value: string): number {
-	const resolved = value.startsWith('var(')
-		? getComputedStyle(document.documentElement)
-				.getPropertyValue(value.slice('var('.length, -1).trim())
-				.trim()
-		: value;
-	const parsed = Number.parseFloat(resolved);
-	return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
 	return {
 		id: 'a-local',
@@ -309,6 +311,18 @@ beforeEach(() => {
 	selectedGenerationId.set(null);
 	fetchAlbum.mockReset();
 	fetchAlbum.mockResolvedValue(album());
+	playlistList.set([
+		{
+			id: 'p1',
+			title: 'Night Drive',
+			entry_count: 0,
+			is_shared: false,
+			share_slug: null,
+			created_at: '2026-01-01T00:00:00+00:00'
+		}
+	]);
+	playlistLoad.set({ status: 'ready', error: null });
+	vi.mocked(addGenerationToPlaylist).mockClear();
 	uploadSongCover.mockReset();
 	deleteSongCover.mockReset();
 	deleteAlbumCover.mockReset();
@@ -329,7 +343,8 @@ afterEach(async () => {
 	selectedAlbumId.set(null);
 	songList.set([]);
 	albumList.set([]);
-	delete document.documentElement.dataset.pointer;
+	clearHitboxStyles();
+	clearPointer();
 	vi.unstubAllGlobals();
 });
 
@@ -390,6 +405,45 @@ describe('SongDetailView desktop vs compact layout', () => {
 		expect(get(detailTab)).toBe('write');
 		expect(target.querySelector('.lyrics-area')).not.toBeNull();
 		expect(target.querySelector('.takes-list')).toBeNull();
+	});
+
+	it('sizes the Write | Takes tabs to the frequent hitbox on a coarse pointer', async () => {
+		// #163/6: the tabs are how a phone moves through the editor at all.
+		injectHitboxStyles();
+		stubLibraryMedia({ narrow: false, compact: true });
+		const target = await renderView();
+		setPointer('coarse');
+
+		const tabs = Array.from(target.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+		expect(tabs).toHaveLength(2);
+		for (const tab of tabs) {
+			expect(minHeightPx(tab, tab.textContent ?? 'tab')).toBe(HITBOX_FREQUENT_PX);
+		}
+	});
+});
+
+describe('SongDetailView adding a take to a playlist', () => {
+	it('reports the one add with exactly one toast', async () => {
+		// #163/3: the take row shows the outcome, success and failure alike, so
+		// the action it calls stays a plain mutation. Two owners meant two
+		// toasts for a single entry.
+		const target = await renderView();
+		const row = target.querySelector<HTMLElement>('.take-row');
+		if (!row) throw new Error('Expected a take row');
+		row.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+		await tick();
+		const addItem = Array.from(row.querySelectorAll<HTMLButtonElement>('.overflow-item')).find(
+			(el) => el.textContent?.trim() === TAKE_PLAYLIST_LABEL
+		);
+		if (!addItem) throw new Error(`Expected a "${TAKE_PLAYLIST_LABEL}" menu item`);
+		addItem.click();
+		await tick();
+		row.querySelector<HTMLButtonElement>('.picker-item')?.click();
+		// The picker closes once the add has fully settled, toast included.
+		await vi.waitFor(() => expect(row.querySelector('.picker')).toBeNull());
+
+		expect(addGenerationToPlaylist).toHaveBeenCalledWith('p1', 'g1');
+		expect(vi.mocked(addToast).mock.calls).toEqual([['Added to playlist', 'success']]);
 	});
 });
 
@@ -672,14 +726,7 @@ describe('recipe params from a take', () => {
 
 describe('song header album rail', () => {
 	beforeEach(() => {
-		const sheet = document.createElement('style');
-		sheet.dataset.hitboxStyles = 'true';
-		sheet.textContent = hitboxCss;
-		document.head.append(sheet);
-	});
-
-	afterEach(() => {
-		document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
+		injectHitboxStyles();
 	});
 
 	it('hides previous/next when browse is shown', async () => {
@@ -713,9 +760,9 @@ describe('song header album rail', () => {
 		);
 		expect(albumCrumb).toBeDefined();
 
-		document.documentElement.dataset.pointer = 'coarse';
-		expect(px(getComputedStyle(prev).minWidth)).toBe(HITBOX_FREQUENT_PX);
-		expect(px(getComputedStyle(next).minWidth)).toBe(HITBOX_FREQUENT_PX);
+		setPointer('coarse');
+		expect(minSquarePx(prev, 'previous song').width).toBe(HITBOX_FREQUENT_PX);
+		expect(minSquarePx(next, 'next song').width).toBe(HITBOX_FREQUENT_PX);
 
 		selectedSongId.set('s-first');
 		await tick();
@@ -781,8 +828,8 @@ describe('song header album rail', () => {
 			(el) => el.textContent === longAlbumTitle
 		);
 		expect(albumCrumb).toBeDefined();
-		expect(px(getComputedStyle(prev).minWidth)).toBe(HITBOX_FREQUENT_PX);
-		expect(px(getComputedStyle(next).minWidth)).toBe(HITBOX_FREQUENT_PX);
+		expect(minSquarePx(prev, 'previous song').width).toBe(HITBOX_FREQUENT_PX);
+		expect(minSquarePx(next, 'next song').width).toBe(HITBOX_FREQUENT_PX);
 		expect(headerEl.scrollWidth).toBeLessThanOrEqual(320);
 		expect(rail.scrollWidth).toBeLessThanOrEqual(320);
 	});

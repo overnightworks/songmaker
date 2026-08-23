@@ -42,8 +42,8 @@
 		PLAYLIST_ENTRY_REMOVE_LABEL,
 		playlistEntryOverflowLabel
 	} from '$lib/constants';
-	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
-	import { formatTime, titleInitials } from '$lib/utils/format';
+	import { nowPlayingTakeMeta } from '$lib/constants/now-playing';
+	import { titleInitials } from '$lib/utils/format';
 	import type { PlaylistEntryItem } from '$lib/api/types';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
@@ -347,11 +347,12 @@
 									{entry.song_title}
 								</span>
 								<span class="entry-meta">
-									{entry.artist} · {nowPlayingTakeLabel(
-										entry.version_number,
-										entry.generation_number
-									)}{#if entry.audio_duration !== null && entry.audio_duration > 0}
-										· {formatTime(entry.audio_duration)}{/if}
+									{nowPlayingTakeMeta({
+										artist: entry.artist,
+										versionNumber: entry.version_number,
+										generationNumber: entry.generation_number,
+										durationSec: entry.audio_duration
+									})}
 								</span>
 							</button>
 							<div class="entry-actions">

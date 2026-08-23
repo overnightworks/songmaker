@@ -11,21 +11,18 @@ import {
 	TAKE_RESCORING_LABEL,
 	TAKES_MOBILE_HINT
 } from '$lib/constants';
-import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
+import {
+	clearHitboxStyles,
+	clearPointer,
+	injectHitboxStyles,
+	minSquarePx,
+	setPointer
+} from '$lib/test-utils/hitbox';
 import { get } from 'svelte/store';
 import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
 
 function enterSelectionMode(): void {
 	toggleSelection('selection-mode-seed');
-}
-
-function px(value: string): number {
-	const resolved = value.startsWith('var(')
-		? getComputedStyle(document.documentElement)
-				.getPropertyValue(value.slice('var('.length, -1).trim())
-				.trim()
-		: value;
-	return Number.parseFloat(resolved);
 }
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -193,17 +190,14 @@ beforeEach(() => {
 		}
 	);
 	clearSelection();
-	const sheet = document.createElement('style');
-	sheet.dataset.hitboxStyles = 'true';
-	sheet.textContent = hitboxCss;
-	document.head.append(sheet);
+	injectHitboxStyles();
 });
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
-	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
-	delete document.documentElement.dataset.pointer;
+	clearHitboxStyles();
+	clearPointer();
 	activeJobs.set([]);
 	vi.unstubAllGlobals();
 	clearSelection();
@@ -388,17 +382,42 @@ describe('TakesList', () => {
 		expect(row.querySelector('.rescoring-badge')).toBeNull();
 	});
 
+	it('keeps every action out of the row body, so a tap on the row plays it', async () => {
+		// #163/2: on a 320px screen the three 44px touch targets used to sit
+		// across the row's centre, and a tap meant for the row toggled Pick or
+		// Keep. The body is one element the actions are never inside of, which
+		// is also what lets the actions wrap onto their own line when the row
+		// runs out of width.
+		const { target } = await render();
+		const row = target.querySelector<HTMLElement>('.take-row');
+		if (!row) throw new Error('Expected a take row');
+		const body = row.querySelector<HTMLElement>('.take-body');
+		if (!body) throw new Error('Expected the take row body');
+
+		expect(body.querySelector('.take-label')).not.toBeNull();
+		expect(body.querySelector('.take-duration')).not.toBeNull();
+		expect(body.querySelector('button')).toBeNull();
+		expect(row.querySelector('.take-actions')?.parentElement).toBe(row);
+
+		body.click();
+		await tick();
+		expect(pick).not.toHaveBeenCalled();
+		expect(keep).not.toHaveBeenCalled();
+		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'g1' }),
+			expect.objectContaining({ id: 's1' })
+		);
+	});
+
 	it('sizes pick and keep to the frequent hitbox on a coarse pointer', async () => {
 		const { target } = await render();
 		const pickBtn = target.querySelector<HTMLButtonElement>('.pick-btn');
 		if (!pickBtn) throw new Error('Expected pick button');
-		document.documentElement.dataset.pointer = 'coarse';
-		const style = getComputedStyle(pickBtn);
-		expect(px(style.minWidth)).toBe(HITBOX_FREQUENT_PX);
-		expect(px(style.minHeight)).toBe(HITBOX_FREQUENT_PX);
-		document.documentElement.dataset.pointer = 'fine';
-		const fineStyle = getComputedStyle(pickBtn);
-		expect(px(fineStyle.minWidth)).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+		setPointer('coarse');
+		expect(minSquarePx(pickBtn, 'pick').width).toBe(HITBOX_FREQUENT_PX);
+		expect(minSquarePx(pickBtn, 'pick').height).toBe(HITBOX_FREQUENT_PX);
+		setPointer('fine');
+		expect(minSquarePx(pickBtn, 'pick').width).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 	});
 });
 
@@ -476,6 +495,75 @@ describe('TakesList archived takes', () => {
 			expect.objectContaining({ id: 'g1' }),
 			expect.objectContaining({ id: 's1' })
 		);
+	});
+});
+
+describe('TakesList score pill', () => {
+	// #163/4: a take is scored by seven scorers that can land one at a time, so
+	// "scored" is never all-or-nothing. The row shows the highest-ranked score
+	// the take actually carries instead of hiding the pill until a rating
+	// exists — and shows every one of them on the same 0-100 scale, since one
+	// unlabelled number cannot say which scale it is on.
+	const cases = [
+		{ name: 'the rating the listener gave', scores: { user_rating: 82 }, text: '82' },
+		{
+			name: 'the rating even when automatic scores exist too',
+			scores: { user_rating: 82, text_accuracy: 41 },
+			text: '82'
+		},
+		{ name: 'lyrics sung when unrated', scores: { text_accuracy: 87 }, text: '87' },
+		{
+			name: 'dynamics when neither rating nor transcript exist',
+			scores: { dynamics: 54, audiobox_quality: 8.15, audiobox_enjoyment: 7.46 },
+			text: '54'
+		},
+		{
+			name: 'quality out of ten as a score out of a hundred',
+			scores: { audiobox_quality: 8.15 },
+			text: '82'
+		},
+		{
+			name: 'enjoyment out of ten as a score out of a hundred',
+			scores: { audiobox_enjoyment: 7.46 },
+			text: '75'
+		},
+		{
+			name: 'coherence out of ten as a score out of a hundred',
+			scores: { lyrical_coherence: 7 },
+			text: '70'
+		}
+	];
+
+	it.each(cases)('shows $name', async ({ scores, text }) => {
+		const { target } = await render({
+			song: song({ generations: [generation({ id: 'g1', scores })] })
+		});
+		expect(target.querySelector('.score-badge')?.textContent?.trim()).toBe(text);
+	});
+
+	it("colours the pill from the scorer's own scale, not from the shown number", async () => {
+		// 4.5 out of 10 is 'ok' (threshold 4), while 45 out of 100 would be too
+		// — the thresholds are read on the raw value.
+		const { target } = await render({
+			song: song({ generations: [generation({ id: 'g1', scores: { audiobox_quality: 4.5 } })] })
+		});
+		const pill = target.querySelector('.score-badge');
+		expect(pill?.textContent?.trim()).toBe('45');
+		expect(pill?.classList.contains('ok')).toBe(true);
+	});
+
+	it('names the metric behind the number', async () => {
+		const { target } = await render({
+			song: song({ generations: [generation({ id: 'g1', scores: { dynamics: 54 } })] })
+		});
+		expect(target.querySelector('.score-badge')?.getAttribute('title')).toBe('Dynamics 54');
+	});
+
+	it('shows no pill for a take that carries no score at all', async () => {
+		const { target } = await render({
+			song: song({ generations: [generation({ id: 'g1', scores: { detected_language: 'en' } })] })
+		});
+		expect(target.querySelector('.score-badge')).toBeNull();
 	});
 });
 

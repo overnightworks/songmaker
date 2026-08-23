@@ -7,8 +7,16 @@ import {
 	ALBUM_ART_EMPTY_INITIALS,
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_YEAR_MIN,
+	HITBOX_FREQUENT_PX,
 	collectionRowPlayLabel
 } from '$lib/constants';
+import {
+	clearHitboxStyles,
+	clearPointer,
+	injectHitboxStyles,
+	minHeightPx,
+	setPointer
+} from '$lib/test-utils/hitbox';
 import { albumList, selectedAlbumId, songList } from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 
@@ -161,6 +169,8 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	clearHitboxStyles();
+	clearPointer();
 	selectedAlbumId.set(null);
 	albumList.set([]);
 	songList.set([]);
@@ -201,6 +211,17 @@ describe('AlbumDetailView header', () => {
 		expect(header.querySelector('.header-title')?.textContent).toContain('Night Drive');
 		expect(header.querySelector('.play-btn')?.textContent).toContain('Play');
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
+	});
+
+	it('sizes Play to the frequent hitbox on a coarse pointer', async () => {
+		// #163/6: the album header's Play is the shortest path to hearing the
+		// album, and on a phone it has to be reachable with a thumb.
+		injectHitboxStyles();
+		const target = await renderDetail();
+		const play = requireElement(target, '.play-btn');
+		setPointer('coarse');
+
+		expect(minHeightPx(play, 'album Play')).toBe(HITBOX_FREQUENT_PX);
 	});
 
 	it('names the object and lists Share, Cover, Rename, Add to playlist, Delete in the menu', async () => {

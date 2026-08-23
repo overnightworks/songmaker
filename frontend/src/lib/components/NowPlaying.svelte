@@ -146,6 +146,7 @@
 			bind:this={queueTabBtn}
 			type="button"
 			id="np-tab-queue"
+			data-hitbox="text"
 			role="tab"
 			class:on={rightPanelTab === 'queue'}
 			aria-selected={rightPanelTab === 'queue'}
@@ -159,6 +160,7 @@
 			bind:this={takeTabBtn}
 			type="button"
 			id="np-tab-take"
+			data-hitbox="text"
 			role="tab"
 			class:on={rightPanelTab === 'take'}
 			aria-selected={rightPanelTab === 'take'}

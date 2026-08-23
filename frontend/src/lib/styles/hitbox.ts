@@ -49,6 +49,31 @@ html[data-pointer='fine'] [data-hitbox='frequent'] {
 	min-height: var(--hitbox-compact);
 }
 
+/* A labelled control carries its own width — its label — and its own border,
+   so only its height has to grow to the touch target. Giving it the square
+   'frequent' box instead would clamp a width the layout owns (the library
+   search field's floor, a tab's share of the row) and invite a hitbox face
+   across the label, which is the one place a fixed 24/44px face never fits
+   (#163/1, #163/6). */
+[data-hitbox='text'] {
+	box-sizing: border-box;
+	min-height: var(--hitbox-compact);
+}
+
+@media (any-pointer: coarse) {
+	[data-hitbox='text'] {
+		min-height: var(--hitbox-frequent);
+	}
+}
+
+html[data-pointer='coarse'] [data-hitbox='text'] {
+	min-height: var(--hitbox-frequent);
+}
+
+html[data-pointer='fine'] [data-hitbox='text'] {
+	min-height: var(--hitbox-compact);
+}
+
 [data-hitbox='frequent'][data-hitbox-face] {
 	background: transparent;
 	border-style: none;

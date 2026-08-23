@@ -375,6 +375,7 @@
 			</select>
 			<input
 				class="search"
+				data-hitbox="text"
 				type="text"
 				placeholder={searchPlaceholder}
 				value={search}

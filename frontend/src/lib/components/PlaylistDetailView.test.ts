@@ -200,8 +200,10 @@ describe('PlaylistDetailView row take traits', () => {
 
 		const row = requireElement<HTMLElement>(target, '.entry-row');
 		expect(row.querySelector('.picked-star')).not.toBeNull();
-		expect(row.textContent).toContain('v2');
-		expect(row.textContent).toContain('3:15');
+		// #163/5: the separators are the formatter's, not the markup's — written
+		// in the template, the one before the duration lost its leading space
+		// and the row read "take 1· 3:15".
+		expect(row.querySelector('.entry-meta')?.textContent).toBe('Artist · v2 · take 1 · 3:15');
 	});
 
 	it('omits version and duration when the take does not carry them', async () => {

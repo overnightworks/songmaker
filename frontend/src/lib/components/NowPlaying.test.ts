@@ -25,6 +25,13 @@ import {
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { setLibraryTakePool } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { HITBOX_FREQUENT_PX } from '$lib/constants';
+import {
+	clearHitboxStyles,
+	injectHitboxStyles,
+	minHeightPx,
+	setPointer
+} from '$lib/test-utils/hitbox';
 import NowPlaying from './NowPlaying.svelte';
 
 function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
@@ -158,6 +165,7 @@ afterEach(async () => {
 	mounted = undefined;
 	vi.restoreAllMocks();
 	document.body.replaceChildren();
+	clearHitboxStyles();
 	document.documentElement.dataset.pointer = '';
 	audioPlayer.current = null;
 	audioPlayer.destroy();
@@ -187,6 +195,21 @@ async function renderSurface(playback: PlaybackInfo) {
 }
 
 describe('NowPlaying', () => {
+	it('sizes the Queue | This take tabs to the frequent hitbox on a coarse pointer', async () => {
+		// #163/6: the two tabs are the only way into the queue on a phone.
+		injectHitboxStyles();
+		await renderSurface(info());
+		setPointer('coarse');
+
+		const tabs = Array.from(
+			target.querySelectorAll<HTMLButtonElement>('.panel-toggle [role="tab"]')
+		);
+		expect(tabs).toHaveLength(2);
+		for (const tab of tabs) {
+			expect(minHeightPx(tab, tab.textContent ?? 'tab')).toBe(HITBOX_FREQUENT_PX);
+		}
+	});
+
 	it('shows the playing take and its version lyrics, not a later draft', async () => {
 		songList.set([song()]);
 		await renderSurface(info({ lyrics: 'old verse' }));

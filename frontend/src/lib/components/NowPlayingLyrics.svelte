@@ -21,6 +21,10 @@
 
 	let container: HTMLDivElement | undefined = $state();
 
+	// Sub-pixel rounding leaves a fraction of a pixel unscrolled at the very
+	// end; anything under this counts as "the reader has seen the last line".
+	const SCROLL_END_TOLERANCE_PX = 1;
+
 	const hasLyrics = $derived(lyrics != null && lyrics.length > 0);
 	const hasCues = $derived(cues != null && cues.length > 0);
 	const alignedLines = $derived.by(() => {
@@ -36,6 +40,39 @@
 	);
 	const scrollTargetIndex = $derived(activeIndices.length > 0 ? activeIndices[0] : null);
 	const showUnsyncedNote = $derived(hasLyrics && !hasCues && Boolean(whisperText));
+	const renderedLineCount = $derived(alignedLines?.length ?? (hasLyrics ? 1 : 0));
+
+	function overflowsBelow(el: HTMLElement | undefined): boolean {
+		if (!el) return false;
+		return el.scrollHeight - el.clientHeight - el.scrollTop > SCROLL_END_TOLERANCE_PX;
+	}
+
+	// The lyrics box is only as tall as the column allows — in the 400px docked
+	// panel long lyrics are cut at its bottom edge, mid-line, which reads as
+	// broken rather than as scrollable. The fade names the cut as "there is
+	// more below" and lifts at the last line (#163/8).
+	let moreBelow = $state(false);
+
+	// Three things change the answer: scrolling (handled on the element), new
+	// lyrics, and the box changing size — docking, expanding, collapsing or a
+	// rotated phone all resize it without remounting anything, so a measurement
+	// taken once would keep a fade over text that now fits, or leave a cut edge
+	// unmarked.
+	$effect(() => {
+		const el = container;
+		const lines = renderedLineCount;
+		if (!el || lines === 0) {
+			moreBelow = false;
+			return;
+		}
+		const measure = () => {
+			moreBelow = overflowsBelow(el);
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
 
 	$effect(() => {
 		const index = scrollTargetIndex;
@@ -53,8 +90,14 @@
 <div class="np-lyrics">
 	<p class="lyrics-heading">{NOW_PLAYING_LYRICS_ROW_LABEL}</p>
 	{#if hasLyrics}
-		{#if alignedLines}
-			<div class="lyrics lyrics-synced" bind:this={container}>
+		<div
+			class="lyrics"
+			class:lyrics-synced={alignedLines !== null}
+			class:more-below={moreBelow}
+			bind:this={container}
+			onscroll={() => (moreBelow = overflowsBelow(container))}
+		>
+			{#if alignedLines}
 				{#each alignedLines as line, index (index)}
 					<p
 						class="lyrics-line"
@@ -64,10 +107,10 @@
 						{line.text}
 					</p>
 				{/each}
-			</div>
-		{:else}
-			<div class="lyrics">{lyrics}</div>
-		{/if}
+			{:else}
+				<p class="lyrics-text">{lyrics}</p>
+			{/if}
+		</div>
 		{#if showUnsyncedNote}
 			<p class="lyrics-unsynced">{NOW_PLAYING_LYRICS_UNSYNCED_NOTE}</p>
 		{/if}
@@ -101,16 +144,26 @@
 		overflow-wrap: anywhere;
 	}
 	.lyrics {
+		--lyrics-fade: 2.5rem;
 		flex: 1;
 		min-height: 0;
-		white-space: pre-wrap;
+		/* Keeps the line that follows the audio out of the faded strip, so a
+		   synced line is never read half-transparent. */
+		scroll-padding-block-end: var(--lyrics-fade);
 		font-family: var(--font-body);
 		font-size: 1rem;
 		line-height: 1.6;
 		color: var(--text);
 	}
-	.lyrics-synced {
-		white-space: normal;
+	.lyrics.more-below {
+		mask-image: linear-gradient(to bottom, #000 calc(100% - var(--lyrics-fade)), transparent);
+	}
+
+	/* The take's own line breaks are the lyrics' shape — an unscored take has
+	   no cues to split them by, so the raw text keeps them verbatim. */
+	.lyrics-text {
+		margin: 0;
+		white-space: pre-wrap;
 	}
 	.lyrics-line {
 		margin: 0 0 0.5rem;

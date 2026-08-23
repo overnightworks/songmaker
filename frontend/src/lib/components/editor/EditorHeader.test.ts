@@ -2,33 +2,27 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SongItem } from '$lib/api/types';
 import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
-import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
+import {
+	clearHitboxStyles,
+	clearPointer,
+	injectHitboxStyles,
+	minHeightPx,
+	setPointer
+} from '$lib/test-utils/hitbox';
 import EditorHeader from './EditorHeader.svelte';
 import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
-
-function px(value: string): number {
-	const resolved = value.startsWith('var(')
-		? getComputedStyle(document.documentElement)
-				.getPropertyValue(value.slice('var('.length, -1).trim())
-				.trim()
-		: value;
-	return Number.parseFloat(resolved);
-}
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
-	const sheet = document.createElement('style');
-	sheet.dataset.hitboxStyles = 'true';
-	sheet.textContent = hitboxCss;
-	document.head.append(sheet);
+	injectHitboxStyles();
 });
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
-	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
-	delete document.documentElement.dataset.pointer;
+	clearHitboxStyles();
+	clearPointer();
 });
 
 function song(overrides: Partial<SongItem> = {}): SongItem {
@@ -165,17 +159,36 @@ describe('EditorHeader', () => {
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Song · Sommerlicht');
 	});
 
-	it('sizes the view toggles to the frequent hitbox on a coarse pointer', async () => {
+	it('grows the view toggles to the touch height on a coarse pointer, keeping their label width', async () => {
 		const { target } = await render();
 		const toggle = target.querySelector<HTMLButtonElement>('.view-toggle');
 		if (!toggle) throw new Error('Expected a view toggle button');
-		document.documentElement.dataset.pointer = 'coarse';
-		const coarse = getComputedStyle(toggle);
-		expect(px(coarse.minWidth)).toBe(HITBOX_FREQUENT_PX);
-		expect(px(coarse.minHeight)).toBe(HITBOX_FREQUENT_PX);
-		document.documentElement.dataset.pointer = 'fine';
-		const fine = getComputedStyle(toggle);
-		expect(px(fine.minWidth)).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+		setPointer('coarse');
+		expect(minHeightPx(toggle, 'view toggle')).toBe(HITBOX_FREQUENT_PX);
+		setPointer('fine');
+		expect(minHeightPx(toggle, 'view toggle')).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+	});
+
+	it('draws no hitbox face across a labelled control', async () => {
+		// #163/1: the face is a fixed 24/44px box, so on a text label it cuts
+		// straight through the word. Labelled buttons carry their own border.
+		const { target } = await render();
+		for (const labelled of target.querySelectorAll('.view-toggle, .generate-btn')) {
+			expect(
+				labelled.hasAttribute('data-hitbox-face'),
+				`${labelled.textContent?.trim()} draws a face over its label`
+			).toBe(false);
+		}
+	});
+
+	it('sizes Generate to the frequent hitbox on a coarse pointer, in both its places', async () => {
+		for (const compact of [false, true]) {
+			const { target } = await render({ compact });
+			const generate = target.querySelector<HTMLButtonElement>('.generate-btn');
+			if (!generate) throw new Error('Expected the Generate button');
+			setPointer('coarse');
+			expect(minHeightPx(generate, 'Generate')).toBe(HITBOX_FREQUENT_PX);
+		}
 	});
 
 	it('saves a version from the song menu', async () => {
